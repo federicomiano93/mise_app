@@ -28,10 +28,12 @@ import styles from './AllergenSections.module.css';
 // is untouched by that, so nothing of it is written (the display switch is never a data switch, C12, C115).
 //
 // ⚠️⚠️ THE PACK TEXT PROPOSES, IT NEVER DECLARES (C105). It runs by itself, with no button: after a 450 ms pause in typing, and
-// at once when the box is left with a text it has not read yet (but never between the press and the release of a tap on the
-// sections, see `requestPropose`: it waits for the tap to finish). NEVER on the first draw (C107): a saved item can hold pack text
-// that says «latte» and a milk box somebody deliberately unticked. Leaving the box untouched proposes nothing for the same
-// reason. The state word of the pack fold is NEVER green: green means «somebody verified this».
+// at Save (`flushProposal`). ⚠️ DIFFERENCE FROM THE CURRENT APP, ON PURPOSE: LEAVING THE BOX DOES NOT PROPOSE (the current app
+// does, C106) — the boxes still move within 450 ms of the last keystroke, but a blur can no longer race a tap on a tick box.
+// A proposal never lands inside a tap on the sections either: a press holds it until its click (see `pressStarted`). NEVER on
+// the first draw (C107): a saved item can hold pack text that says «latte» and a milk box somebody deliberately unticked.
+// Leaving the box untouched proposes nothing for the same reason. The state word of the pack fold is NEVER green: green means
+// «somebody verified this».
 //
 // ⚠️ FOLDS OPEN CLOSED ON EVERY OPEN and are never remembered. The answer (the status line and the note about what the app
 // ticked) stays outside the allergen fold: the app moves boxes by itself while that fold is shut, and a change nobody is told
@@ -41,6 +43,8 @@ import styles from './AllergenSections.module.css';
 // 2026). The other help text waits for the shared «?» (T14).
 
 export const PAUSE_MS = 450;
+// After a finger lifts with no click following (a scroll, a release off the box), a held proposal runs after this long.
+export const RELEASE_FALLBACK_MS = 700;
 
 // What the card may ask of these sections from outside: open the nutrition fold so a refused box can take the focus.
 export interface AllergenControls {
@@ -135,49 +139,68 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
     timer.current = null;
   };
 
-  // ⚠️ A PROPOSAL NEVER LANDS BETWEEN THE PRESS AND THE RELEASE OF A TAP ON THE SECTIONS. Pressing a tick box straight from the
-  // pack box blurs the text, and a proposal run by that blur would re-draw the box ticked before the click arrives, so the click
-  // would flip it OFF — and a box a person flipped is theirs for good. While a press is down a proposal only WAITS; it runs
-  // after the release, once the click of the same tap has been delivered (so the person's tick lands first and protects itself).
-  const pointerDown = useRef(false);
+  // ⚠️ A PROPOSAL NEVER LANDS INSIDE A TAP ON THE SECTIONS. A finger's order is pointerdown, pointerup, mousedown (the text box
+  // blurs HERE), mouseup, click, change: a proposal that landed before the click would re-draw the box ticked, the click would
+  // flip it OFF, and a box a person flipped is theirs for good. So a press (pointerdown anywhere in the sections) HOLDS the
+  // proposal until its CLICK: the pause timer only marks it `deferred`. The press ends at whichever comes first, all listened
+  // for on the window in CAPTURE, once per press: the click (a capture listener on the window runs BEFORE the checkbox's own
+  // handlers, so the run waits a zero-delay timeout for its change to land first), a pointercancel, or — when the finger lifted
+  // and no click followed (a scroll, a release off the box) — a 700 ms fallback after the pointerup.
+  const pressed = useRef(false);
   const deferred = useRef(false);
-  const afterRelease = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const afterPress = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fallback = useRef<ReturnType<typeof setTimeout> | null>(null);
   const stopListening = useRef<(() => void) | null>(null);
-  function requestPropose() {
-    stopTimer();
-    if (pointerDown.current) {
+  function runDeferred() {
+    afterPress.current = null;
+    if (!deferred.current) return;
+    deferred.current = false;
+    if (latest.current.packText !== lastRead.current) propose();
+  }
+  function endPress() {
+    pressed.current = false;
+    if (fallback.current !== null) clearTimeout(fallback.current);
+    fallback.current = null;
+    stopListening.current?.();
+  }
+  function pressEnded() {
+    endPress();
+    if (deferred.current && afterPress.current === null) afterPress.current = setTimeout(runDeferred, 0);
+  }
+  function onPause() {
+    timer.current = null;
+    if (pressed.current) {
       deferred.current = true;
       return;
     }
     propose();
   }
-  function pressed() {
-    pointerDown.current = true;
+  function pressStarted() {
+    pressed.current = true;
+    if (fallback.current !== null) clearTimeout(fallback.current);
+    fallback.current = null;
     if (stopListening.current) return;
-    const released = () => {
-      stopListening.current?.();
-      pointerDown.current = false;
-      if (!deferred.current) return;
-      afterRelease.current = setTimeout(() => {
-        afterRelease.current = null;
-        if (deferred.current) {
-          deferred.current = false;
-          propose();
-        }
-      }, 0);
+    const lifted = () => {
+      if (fallback.current !== null) clearTimeout(fallback.current);
+      fallback.current = setTimeout(() => {
+        endPress();
+        runDeferred();
+      }, RELEASE_FALLBACK_MS);
     };
-    window.addEventListener('pointerup', released, true);
-    window.addEventListener('pointercancel', released, true);
+    window.addEventListener('click', pressEnded, true);
+    window.addEventListener('pointercancel', pressEnded, true);
+    window.addEventListener('pointerup', lifted, true);
     stopListening.current = () => {
-      window.removeEventListener('pointerup', released, true);
-      window.removeEventListener('pointercancel', released, true);
+      window.removeEventListener('click', pressEnded, true);
+      window.removeEventListener('pointercancel', pressEnded, true);
+      window.removeEventListener('pointerup', lifted, true);
       stopListening.current = null;
     };
   }
   useEffect(() => () => {
     stopTimer();
-    stopListening.current?.();
-    if (afterRelease.current !== null) clearTimeout(afterRelease.current);
+    endPress();
+    if (afterPress.current !== null) clearTimeout(afterPress.current);
   }, []);
 
   function propose() {
@@ -195,6 +218,9 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
     // Save asks for this first: whatever is waiting is run now, whether the pause or a press is what it waits for.
     flushProposal: () => {
       stopTimer();
+      endPress();
+      if (afterPress.current !== null) clearTimeout(afterPress.current);
+      afterPress.current = null;
       deferred.current = false;
       if (latest.current.packText !== lastRead.current) propose();
     },
@@ -267,7 +293,7 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
   if (!allergens && !nutrition) return null;
 
   return (
-    <div className={styles.sections} onPointerDownCapture={pressed}>
+    <div className={styles.sections} onPointerDownCapture={pressStarted}>
       {allergens ? (
         <>
           <Fold
@@ -288,10 +314,8 @@ export function AllergenSections({ working, opened, now, onChange, refusedNutrie
               onChange={event => {
                 emit(withPackText(latest.current, event.target.value));
                 stopTimer();
-                timer.current = setTimeout(requestPropose, PAUSE_MS);
-              }}
-              onBlur={() => {
-                if (latest.current.packText !== lastRead.current) requestPropose();
+                deferred.current = false;
+                timer.current = setTimeout(onPause, PAUSE_MS);
               }}
             />
             {/* ⚠️ THE FINDINGS ARE ABOUT THIS PACK, so they are on the card and not behind a «?». A live region, there before it

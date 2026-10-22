@@ -192,12 +192,19 @@ describe('the pack text proposes, it never declares', () => {
     expect(contains(region, 'Milk')).toBeChecked();
   });
 
-  it('leaving the box proposes at once', async () => {
+  it('⚠️ leaving the box does NOT propose by itself (a difference from the current app, on purpose): the proposal comes at the pause', async () => {
     const { region, user } = await open('/suppliers/ingredient/i-plain');
     await user.click(packHead(region));
     await user.click(allergenHead(region));
-    await user.type(packBox(region), 'latte');
-    await user.tab();
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    fireEvent.change(packBox(region), { target: { value: 'latte' } });
+    act(() => { packBox(region).focus(); });
+    act(() => { packBox(region).blur(); });
+    expect(packBox(region)).not.toHaveFocus();
+    expect(contains(region, 'Milk')).not.toBeChecked();
+    act(() => { vi.advanceTimersByTime(449); });
+    expect(contains(region, 'Milk')).not.toBeChecked();
+    act(() => { vi.advanceTimersByTime(1); });
     expect(contains(region, 'Milk')).toBeChecked();
   });
 
@@ -219,12 +226,10 @@ describe('the pack text proposes, it never declares', () => {
     const { region, user } = await open('/suppliers/ingredient/i-plain');
     await user.click(packHead(region));
     await user.type(packBox(region), 'zzzz');
-    await user.tab();
-    expect(region.getByText(/It recognised no allergen words in this text\. That does NOT mean/)).toBeInTheDocument();
+    expect(await region.findByText(/It recognised no allergen words in this text\. That does NOT mean/)).toBeInTheDocument();
     await user.clear(packBox(region));
     await user.type(packBox(region), 'emulsionante: lecitine');
-    await user.tab();
-    expect(region.getByText(/“lecitine” could be .* — the pack does not say which\./)).toBeInTheDocument();
+    expect(await region.findByText(/“lecitine” could be .* — the pack does not say which\./)).toBeInTheDocument();
     expect(region.queryByText(/recognised no allergen words/)).not.toBeInTheDocument();
   });
 
@@ -235,8 +240,7 @@ describe('the pack text proposes, it never declares', () => {
     await user.click(allergenHead(region));
     expect(checkedBox(region)).toBeChecked();
     await user.type(packBox(region), 'latte');
-    await user.tab();
-    expect(contains(region, 'Milk')).toBeChecked();
+    await waitFor(() => { expect(contains(region, 'Milk')).toBeChecked(); });
     expect(checkedBox(region)).not.toBeChecked();
     expect(region.getByText('The verification has lapsed: the app changed 1 box from the ingredient list. Check the allergens and tick «I have checked…» again.')).toBeInTheDocument();
     // The old date is gone with it: the status reads «not checked» and a save writes no stamp.
@@ -250,10 +254,9 @@ describe('the pack text proposes, it never declares', () => {
     await user.click(packHead(region));
     await user.click(allergenHead(region));
     await user.type(packBox(region), 'latte');
-    await user.tab();
+    await waitFor(() => { expect(contains(region, 'Milk')).toBeChecked(); });
     await user.clear(packBox(region));
-    await user.tab();
-    expect(contains(region, 'Milk')).not.toBeChecked();
+    await waitFor(() => { expect(contains(region, 'Milk')).not.toBeChecked(); });
     expect(region.getByText('The verification has lapsed: the app changed the boxes from the ingredient list. Check the allergens and tick «I have checked…» again.')).toBeInTheDocument();
   });
 
@@ -264,7 +267,7 @@ describe('the pack text proposes, it never declares', () => {
     await user.click(contains(region, 'Milk'));
     await user.type(packBox(region), 'latte');
     await user.clear(packBox(region));
-    await user.tab();
+    await new Promise(resolve => { setTimeout(resolve, 600); });
     expect(contains(region, 'Milk')).toBeChecked();
   });
 });
@@ -450,7 +453,53 @@ describe('⚠️ a tap on a tick box straight from the pack box never undoes its
     expect(region.queryByText(/The app has ticked/)).not.toBeInTheDocument();
   });
 
-  it('a press held down on a tick box lets the pause go by without a proposal; the release runs it', async () => {
+  // ⚠️ A FINGER'S ORDER (user-event's touch pointer): pointerdown, pointerup, mousedown (the text box blurs), mouseup, click. The
+  // mouse order above never showed the failure these catch.
+  it('⚠️ S1: a TOUCH tap on Milk «has» right after typing «latte» leaves Milk ticked, as the person\'s', async () => {
+    const { region, user } = await open('/suppliers/ingredient/i-plain');
+    await user.click(packHead(region));
+    await user.click(allergenHead(region));
+    await user.type(packBox(region), 'farina di grano tenero, latte');
+    await user.pointer({ keys: '[TouchA]', target: contains(region, 'Milk') });
+    expect(contains(region, 'Milk')).toBeChecked();
+    // Past the pause: it must have found the box already the person's, so the app owns none of the ticks.
+    await waitFor(() => { expect(contains(region, 'Wheat')).toBeChecked(); });
+    expect(contains(region, 'Milk')).toBeChecked();
+    expect(region.getByText('The app has ticked 1 box from the ingredient list. Open Allergens and check it.')).toBeInTheDocument();
+  });
+
+  it('⚠️ S2: on a verified item, «latte» typed and a TOUCH tap at once on «I have checked» to untick it leaves it unticked, and Save stamps nothing', async () => {
+    const view = await open('/suppliers/ingredient/i-verified');
+    const { region, user } = view;
+    await user.click(packHead(region));
+    await user.click(allergenHead(region));
+    expect(checkedBox(region)).toBeChecked();
+    await user.type(packBox(region), 'latte');
+    await user.pointer({ keys: '[TouchA]', target: checkedBox(region) });
+    await waitFor(() => { expect(contains(region, 'Milk')).toBeChecked(); });
+    expect(checkedBox(region)).not.toBeChecked();
+    await saveAndConfirm(view);
+    expect(saved(view.source)).toMatchObject({ allergens: ['milk'], allergensCheckedAt: '' });
+  });
+
+  it('S3: a press held down (pointerdown only) on a tick box lets the pause go by without a proposal; its click runs it and keeps the tick', async () => {
+    const { region, user } = await open('/suppliers/ingredient/i-plain');
+    await user.click(packHead(region));
+    await user.click(allergenHead(region));
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    fireEvent.change(packBox(region), { target: { value: 'latte' } });
+    const eggs = region.getByRole('checkbox', { name: 'Eggs has' });
+    fireEvent.pointerDown(eggs);
+    act(() => { vi.advanceTimersByTime(5000); });
+    expect(contains(region, 'Milk')).not.toBeChecked();
+    fireEvent.click(eggs);
+    expect(contains(region, 'Milk')).not.toBeChecked();
+    act(() => { vi.advanceTimersByTime(1); });
+    expect(contains(region, 'Milk')).toBeChecked();
+    expect(eggs).toBeChecked();
+  });
+
+  it('S4: a press released with no click (a scroll, a release off the box) runs the held proposal after about 700 ms', async () => {
     const { region, user } = await open('/suppliers/ingredient/i-plain');
     await user.click(packHead(region));
     await user.click(allergenHead(region));
@@ -459,8 +508,9 @@ describe('⚠️ a tap on a tick box straight from the pack box never undoes its
     const eggs = region.getByRole('checkbox', { name: 'Eggs has' });
     fireEvent.pointerDown(eggs);
     act(() => { vi.advanceTimersByTime(1000); });
-    expect(contains(region, 'Milk')).not.toBeChecked();
     fireEvent.pointerUp(eggs);
+    act(() => { vi.advanceTimersByTime(699); });
+    expect(contains(region, 'Milk')).not.toBeChecked();
     act(() => { vi.advanceTimersByTime(1); });
     expect(contains(region, 'Milk')).toBeChecked();
   });
@@ -536,7 +586,7 @@ describe('the nutrition check only looks at what was changed, and only when it i
     await user.click(region.getByRole('button', { name: /^Valori nutrizionali/ }));
     await user.type(region.getByRole('textbox', { name: 'Energia (kJ)' }), '1.550');
     await user.click(region.getByRole('button', { name: 'Salva' }));
-    expect(region.getByText('Scrivilo senza il separatore delle migliaia — per es. 1550.')).toBeInTheDocument();
+    expect(region.getByText('Scrivilo senza il separatore delle migliaia — per esempio 1550.')).toBeInTheDocument();
   });
 
   it('«0x10» is refused as not a number', async () => {
