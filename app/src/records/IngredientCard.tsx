@@ -6,7 +6,7 @@ import { useBlocker } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import type { NutrientKey } from '@mise/shared/allergen-model';
 import { FALLBACK_MONEY } from '@mise/shared/currency';
-import { nutritionOn } from '@mise/shared/venue-features';
+import { allergensOn, nutritionOn } from '@mise/shared/venue-features';
 import type { Money } from '@mise/shared/currency';
 import { formatSummary, usesLegacyCard } from '@mise/shared/pack-format';
 import type { PackTranslate } from '@mise/shared/pack-format';
@@ -338,7 +338,9 @@ export function IngredientCard({
       mayPrice: priceActive, priceDirty, pricePatch: patch,
     });
     // ⚠️ ONLY THE GROUPS THAT CHANGED are added, and `now` is taken once, here (the model's header).
-    const payload = { ...built.payload, ...allergenPayload(allergenCopy, opened, kind, new Date().toISOString()) };
+    const payload = { ...built.payload, ...allergenPayload(
+      allergenCopy, opened, kind, new Date().toISOString(), { allergens: allergensOn(location), nutrition: nutritionOn(location) },
+    ) };
     busy.current = true;
     let ok = false;
     try {

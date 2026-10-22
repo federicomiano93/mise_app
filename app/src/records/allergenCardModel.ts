@@ -94,8 +94,8 @@ export function tickByHand(working: AllergenWorking, code: AllergenCode, column:
 
 export const withChecked = (working: AllergenWorking, checked: boolean): AllergenWorking => ({ ...working, checked });
 
-// The pack text as typed. ⚠️ NOTHING IS PROPOSED HERE: the boxes move on a pause in typing or when the box is left
-// (`proposeFromPack`), never per keystroke and never on the first draw (C106, C107).
+// The pack text as typed. ⚠️ NOTHING IS PROPOSED HERE: the boxes move on a pause in typing (`proposeFromPack`), never per
+// keystroke, never on leaving the box and never on the first draw (C106, C107).
 export const withPackText = (working: AllergenWorking, packText: string): AllergenWorking => ({ ...working, packText });
 
 export function withNutrient(working: AllergenWorking, key: NutrientKey, typed: string): AllergenWorking {
@@ -185,7 +185,8 @@ export interface NutritionRefusal {
 }
 
 const PLAIN_NUMBER = /^(\d+(\.\d*)?|\.\d+)$/;
-const THOUSANDS = /^\d{1,3}[.,]\d{3}$/;
+// A leading zero is never a thousands group: «0,125» is 0.125.
+const THOUSANDS = /^[1-9]\d{0,2}[.,]\d{3}$/;
 
 export function nutritionRefusal(working: AllergenWorking, baseline: AllergenWorking): NutritionRefusal | null {
   for (const key of NUTRIENT_KEYS) {
@@ -227,8 +228,19 @@ const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.str
 // What Save adds to the ingredient's payload (see the header): all five keys for a new ingredient, nothing for packaging, and
 // for an existing ingredient only the groups whose values differ from what is stored. Both sides go through
 // buildAllergenFields, so a stored list in another order or with an unknown code is not «a change».
+//
+// ⚠️ A HIDDEN PANEL IS NEVER WRITTEN FOR AN EXISTING ITEM, even if its copy differs from the stored one: another phone may have
+// hidden the panel while this card was open, and what the card holds of a panel nobody can see is not something a person chose
+// (a refused «abc» in the nutrition boxes would otherwise be saved as null). `shown` is read by the card at the moment of the
+// save. A NEW ingredient still writes all five (C99).
+export interface PanelsShown {
+  readonly allergens: boolean;
+  readonly nutrition: boolean;
+}
+
 export function allergenPayload(
   working: AllergenWorking, item: ItemLike | null, kind: CardKind, now: string,
+  shown: PanelsShown = { allergens: true, nutrition: true },
 ): Partial<AllergenFields> {
   if (kind === 'packaging') return {};
   const draft = allergenDraft(working, item, now);
@@ -241,13 +253,13 @@ export function allergenPayload(
     packIngredients: item.packIngredients,
   });
   const out: Partial<AllergenFields> = {};
-  if (!same(draft.allergens, stored.allergens) || !same(draft.mayContain, stored.mayContain)
-    || draft.allergensCheckedAt !== stored.allergensCheckedAt) {
+  if (shown.allergens && (!same(draft.allergens, stored.allergens) || !same(draft.mayContain, stored.mayContain)
+    || draft.allergensCheckedAt !== stored.allergensCheckedAt)) {
     out.allergens = draft.allergens;
     out.mayContain = draft.mayContain;
     out.allergensCheckedAt = draft.allergensCheckedAt;
   }
-  if (draft.packIngredients !== stored.packIngredients) out.packIngredients = draft.packIngredients;
-  if (!same(draft.nutrition, stored.nutrition)) out.nutrition = draft.nutrition;
+  if (shown.allergens && draft.packIngredients !== stored.packIngredients) out.packIngredients = draft.packIngredients;
+  if (shown.nutrition && !same(draft.nutrition, stored.nutrition)) out.nutrition = draft.nutrition;
   return out;
 }

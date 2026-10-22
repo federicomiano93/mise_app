@@ -227,6 +227,26 @@ describe('⚠️ what a save writes (Mise 2: only the groups that changed)', () 
     expect(allergenDirty(w, allergenWorkingFrom(item, MONEY))).toBe(false);
   });
 
+  test('⚠️ a hidden panel is never written for an existing item, however much its copy differs; a shown one still is', () => {
+    const item = declared();
+    let w = allergenWorkingFrom(item, MONEY);
+    w = withNutrient(w, 'salt', '0,02');
+    w = withPackText(tickByHand(w, 'eggs', 'contains', true), 'Farina e uova');
+    const both = { allergens: true, nutrition: true };
+    expect(Object.keys(allergenPayload(w, item, 'ingredient', NOW, both)).sort())
+      .toStrictEqual(['allergens', 'allergensCheckedAt', 'mayContain', 'nutrition', 'packIngredients']);
+    expect(Object.keys(allergenPayload(w, item, 'ingredient', NOW, { allergens: false, nutrition: true })).sort())
+      .toStrictEqual(['nutrition']);
+    expect(Object.keys(allergenPayload(w, item, 'ingredient', NOW, { allergens: true, nutrition: false })).sort())
+      .toStrictEqual(['allergens', 'allergensCheckedAt', 'mayContain', 'packIngredients']);
+    expect(allergenPayload(w, item, 'ingredient', NOW, { allergens: false, nutrition: false })).toStrictEqual({});
+  });
+
+  test('a NEW ingredient writes all five even when both panels are hidden (C99)', () => {
+    expect(allergenPayload(allergenWorkingFrom(null, MONEY), null, 'ingredient', NOW, { allergens: false, nutrition: false }))
+      .toStrictEqual({ allergens: [], mayContain: [], allergensCheckedAt: '', nutrition: EMPTY_NUTRITION, packIngredients: '' });
+  });
+
   test('a stored list in another order, with an unknown code, is not a change', () => {
     const item = declared({ allergens: ['milk', 'gluten', 'gluten-wheat'], mayContain: ['soybeans', 'milk'] });
     expect(allergenPayload(allergenWorkingFrom(item, MONEY), item, 'ingredient', NOW)).toStrictEqual({});
@@ -280,7 +300,7 @@ describe('nutrition (C112–C114, T11)', () => {
     for (const key of ['kj', 'kcal'] as const) {
       expect(nutritionRefusal(withNutrient(w, key, '1,550'), w)).toStrictEqual({ key, reason: 'thousands' });
       expect(nutritionRefusal(withNutrient(w, key, ' 1.550 '), w)).toStrictEqual({ key, reason: 'thousands' });
-      for (const fine of ['1550', '1,5', '12,25', '340']) expect(nutritionRefusal(withNutrient(w, key, fine), w), fine).toBeNull();
+      for (const fine of ['1550', '1,5', '12,25', '340', '0,125', '0.125']) expect(nutritionRefusal(withNutrient(w, key, fine), w), fine).toBeNull();
     }
     // The other six boxes have no such rule: «1,550 g of fat» is 1.55.
     expect(nutritionRefusal(withNutrient(w, 'fat', '1,550'), w)).toBeNull();
