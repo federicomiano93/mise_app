@@ -86,7 +86,7 @@ import { mountHelpButtons } from './help-button.js';
 import {
   ALLERGENS, ALLERGEN_GROUPS, NUTRIENTS,
   allergenState, checkedAt, isDeclared,
-  missingNutrients, buildAllergenFields,
+  missingNutrients, buildAllergenFields, nutritionRefusal,
 } from './allergen-model.js';
 // ⚠️⚠️ THE FOOD WORDS ON THIS FORM FOLLOW THE VENUE'S COUNTRY, NEVER THE SCREEN, and
 // that is Federico's decision of 23 Aug 2026: «gli allergeni ed etichette devono essere
@@ -112,7 +112,7 @@ import { currentSession } from './firebase.js';
 // Reading the pack's own ingredient list. PURE, and also from js/ ROOT: the
 // vocabulary it walks is the same one a label is built from, so a second copy is
 // the copy that quietly disagrees about what is in somebody's food.
-import { readPackIngredients, reconcileTicks, tickKey } from './allergen-match.js';
+import { readPackIngredients, reconcileTicks, tickKey, keepsAppTick, RECENT_APP_TICK_MS } from './allergen-match.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 
 const TRASH_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>';
@@ -1042,6 +1042,13 @@ function priceHistoryBlock(item, actions) {
   ]);
 }
 
+// The pause in typing after which the pack text proposes ticks, and how long after a finger
+// lifts with no click a held proposal stops waiting for one (see the press hold in allergenBlock).
+const PROPOSE_PAUSE_MS = 450;
+const PRESS_FALLBACK_MS = 700;
+// Space on a focused tick box toggles it on the key-up, like a tap.
+const isSpace = event => event.key === ' ' || event.key === 'Spacebar';
+
 // ── Allergens and nutrition ───────────────────────────────────────────────────
 //
 // ⚠️ THE TICK THAT SAYS "I HAVE CHECKED THIS" IS A DELIBERATE ACT, NOT A SIDE
@@ -1121,14 +1128,30 @@ function allergenBlock(item, panels, actions = {}) {
   checked.checked = isDeclared(item);
   const status = el('p', { class: 'alg-status' });
 
+  // ⚠️⚠️ TEXT BOXES WITH THE DECIMAL KEYBOARD, LIKE THE PRICE BOXES — NOT type="number". A
+  // number box hands the page only what the BROWSER made of the typing, and measured on
+  // Chromium (23 Oct 2026) that is: «1.550» → 1.55 in every locale, «1,550» → 1.55 on an
+  // Italian phone, «12,5» → 125 on an English one, «abc» → nothing at all. An Italian pack
+  // prints energy as «1.550 kJ», so the box saved a thousandth of it on the label, with no
+  // sign of anything wrong. As text, the card sees what was typed: «12,5» and «12.5» both
+  // read (typedDecimal), and what cannot be read for sure is refused on Save, on its box
+  // (nutritionRefusal). Shown in the venue's layout («12,5» in Italy), never grouped.
   const nutrients = new Map();
+  const openedNutrition = {};
+  const nutRefusals = new Map();
   const nutritionGrid = el('div', { class: 'alg-nutrition' });
   for (const n of NUTRIENTS) {
+    const stored = item?.nutrition ? item.nutrition[n.key] : null;
     const input = el('input', {
-      type: 'number', inputmode: 'decimal', step: 'any', min: '0', class: 'mgmt-input alg-num',
-      value: item?.nutrition && item.nutrition[n.key] != null ? String(item.nutrition[n.key]) : '',
+      type: 'text', inputmode: 'decimal', autocomplete: 'off', class: 'mgmt-input alg-num',
+      value: stored != null ? localNumber(String(stored), false) : '',
     });
     nutrients.set(n.key, input);
+    openedNutrition[n.key] = input.value;
+    const refusal = refusalMessage(input, '');
+    refusal.node.classList.add('alg-nut-error');
+    input.addEventListener('input', refusal.clear);
+    nutRefusals.set(n.key, refusal);
     // ⚠️ THE NUTRIENT NAMES ARE LABEL WORDS AS MUCH AS THE ALLERGENS ARE: «Energia»,
     // «di cui acidi grassi saturi» are printed on the declaration, so they follow the
     // country. The UNIT does not — kJ, g and kcal are the same symbols in both.
@@ -1136,6 +1159,9 @@ function allergenBlock(item, panels, actions = {}) {
       el('span', { class: 'alg-nut-label', text: `${nutrientName(n, lang)} (${n.unit})` }),
       input,
     ]));
+    // The message is the next item of the grid, across both columns (orders.css .alg-nut-error),
+    // and right after its box in reading order.
+    nutritionGrid.appendChild(refusal.node);
   }
 
   // ── The pack's own ingredient list, and what the app makes of it ────────────
@@ -1168,6 +1194,10 @@ function allergenBlock(item, panels, actions = {}) {
   // INGREDIENT ARRIVES FULLY DECLARED — everything already stored belongs to whoever
   // stored it, so opening a saved product and typing can never lose a declaration.
   let appOwned = new Set();
+  // When the app added each tick it owns (tickKey → performance.now()), for keepsAppTick.
+  const appTickedAt = new Map();
+  // When the app last moved any box (performance.now()), for the «I have checked» listener below.
+  let lastMoveAt = -Infinity;
   // Which ticks a person has moved, either way. Never proposed or withdrawn again.
   const humanTouched = new Set();
   // How many the app is currently proposing, so the folded header can say so.
@@ -1194,6 +1224,11 @@ function allergenBlock(item, panels, actions = {}) {
       if (pair.may.checked) current.may.push(code);
     }
     const next = reconcileTicks({ proposal, current, appOwned, humanTouched });
+    // When the app added each of its ticks: kept for one it already owned, stamped now for a
+    // new one, dropped for one it no longer owns (keepsAppTick reads it).
+    const at = performance.now();
+    for (const key of next.appOwned) if (!appOwned.has(key)) appTickedAt.set(key, at);
+    for (const key of [...appTickedAt.keys()]) if (!next.appOwned.has(key)) appTickedAt.delete(key);
     appOwned = next.appOwned;
     const wantContains = new Set(next.contains);
     const wantMay = new Set(next.may);
@@ -1205,6 +1240,7 @@ function allergenBlock(item, panels, actions = {}) {
     // Both directions count: a tick the app ADDED was never checked by anybody, and a
     // tick it TOOK BACK means the stamp now covers a list that no longer exists. The
     // person confirms again — and when they do, read() stamps TODAY, not the old date.
+    if (next.added || next.removed) lastMoveAt = at;
     if ((next.added || next.removed) && checked.checked) {
       checked.checked = false;
       stampVoided = true;
@@ -1224,6 +1260,7 @@ function allergenBlock(item, panels, actions = {}) {
   function suggest({ touchBoxes = true } = {}) {
     packResult.replaceChildren();
     const text = packBox.value;
+    if (touchBoxes) lastRead = text;
     const out = readPackIngredients(text);
 
     if (!out.hasText) {
@@ -1284,15 +1321,97 @@ function allergenBlock(item, panels, actions = {}) {
   // the box stutter under somebody's thumb. 450ms is long enough to be a pause in
   // typing and short enough to feel immediate after a paste.
   //
-  // ⚠️ AND IMMEDIATELY ON `change`, which is what a paste and leaving the box both
-  // raise — a person who types and taps straight to the ticks must not race the timer.
+  // ⚠️⚠️ AND NEVER ON LEAVING THE BOX (`change`) — that is what used to untick an allergen.
+  // A finger's order is pointerdown, pointerup, mousedown — the text box blurs HERE and
+  // `change` ticked Milk — then click, which flipped the same box straight back OFF, and a
+  // box a person flipped is theirs for good. Typing «…latte» and tapping «Milk has» at once
+  // left Milk unticked; tapping «I have checked» at once stamped a list nobody had seen. The
+  // boxes still move within 450ms of the last keystroke (a paste raises `input` too), and
+  // Save runs whatever is still waiting (flush below).
+  //
+  // ⚠️⚠️ AND A PROPOSAL NEVER LANDS INSIDE A TAP ON THESE SECTIONS. A press (pointerdown
+  // anywhere in the block, or Space on a focused tick box) HOLDS it until the tap's CLICK:
+  // the pause only marks it `deferred`. The press ends at whichever comes first, listened
+  // for on the window in CAPTURE, once per press: the click (a capture listener on the window
+  // runs BEFORE the box's own handlers, so the run waits a zero-delay timeout for its change
+  // to land first), a pointercancel (a scroll took the finger), or — when the finger lifted
+  // and no click followed (a release off the box) — PRESS_FALLBACK_MS after the pointerup
+  // (after the key-up, for Space). A tap that still lands just as the app ticked the same box
+  // keeps it ticked (keepsAppTick, in the boxes' listener below). Same design as Mise 2
+  // (app/src/records/AllergenSections.tsx).
   let pending = null;
-  const scheduleSuggest = () => {
+  // What the boxes were last proposed from: Save runs a proposal only when the text moved since.
+  let lastRead = packBox.value;
+  let pressed = false;
+  let deferred = false;
+  let afterPress = null;
+  let fallback = null;
+  let stopListening = null;
+  function propose() {
     clearTimeout(pending);
-    pending = setTimeout(suggest, 450);
-  };
-  packBox.addEventListener('input', scheduleSuggest);
-  packBox.addEventListener('change', () => { clearTimeout(pending); suggest(); });
+    pending = null;
+    deferred = false;
+    suggest();
+  }
+  function onPause() {
+    pending = null;
+    if (pressed) { deferred = true; return; }
+    propose();
+  }
+  function runDeferred() {
+    afterPress = null;
+    // A second press already down (a quick double tap) holds it in turn; its end runs it.
+    if (pressed || !deferred) return;
+    deferred = false;
+    if (packBox.value !== lastRead) propose();
+  }
+  function endPress() {
+    pressed = false;
+    clearTimeout(fallback);
+    fallback = null;
+    if (stopListening) stopListening();
+  }
+  function pressEnded() {
+    endPress();
+    if (deferred && afterPress === null) afterPress = setTimeout(runDeferred, 0);
+  }
+  function pressStarted() {
+    pressed = true;
+    clearTimeout(fallback);
+    fallback = null;
+    if (stopListening) return;
+    const lifted = () => {
+      clearTimeout(fallback);
+      fallback = setTimeout(() => { endPress(); runDeferred(); }, PRESS_FALLBACK_MS);
+    };
+    const liftedKey = event => { if (isSpace(event)) lifted(); };
+    window.addEventListener('click', pressEnded, true);
+    window.addEventListener('pointercancel', pressEnded, true);
+    window.addEventListener('pointerup', lifted, true);
+    window.addEventListener('keyup', liftedKey, true);
+    stopListening = () => {
+      window.removeEventListener('click', pressEnded, true);
+      window.removeEventListener('pointercancel', pressEnded, true);
+      window.removeEventListener('pointerup', lifted, true);
+      window.removeEventListener('keyup', liftedKey, true);
+      stopListening = null;
+    };
+  }
+  // Save asks for this first: whatever is still waiting — the pause, or a press — runs NOW,
+  // so what is checked and written is what the screen shows.
+  function flush() {
+    clearTimeout(pending);
+    pending = null;
+    endPress();
+    clearTimeout(afterPress);
+    afterPress = null;
+    deferred = false;
+    if (packBox.value !== lastRead) propose();
+  }
+  packBox.addEventListener('input', () => {
+    clearTimeout(pending);
+    pending = setTimeout(onPause, PROPOSE_PAUSE_MS);
+  });
 
   // ── Photograph the packet instead of typing it ──────────────────────────────
   //
@@ -1361,7 +1480,10 @@ function allergenBlock(item, panels, actions = {}) {
       if (pair.may.checked) may.push(code);
     }
     const nutrition = {};
-    for (const [key, input] of nutrients) nutrition[key] = input.value === '' ? null : input.value;
+    for (const [key, input] of nutrients) {
+      const typed = typedDecimal(input.value);
+      nutrition[key] = typed === '' ? null : typed;
+    }
     // ⚠️ The stamp is KEPT when it exists, so re-saving does not silently move
     // the verification date and make a two-year-old check look like today's.
     //
@@ -1480,14 +1602,29 @@ function allergenBlock(item, panels, actions = {}) {
     for (const column of ['contains', 'may']) {
       pair[column].addEventListener('change', () => {
         const key = tickKey(code, column);
+        // ⚠️ A tap that landed as the app ticked this very box meant «tick it»: it stays
+        // ticked, and is the person's from now on (keepsAppTick says why).
+        if (keepsAppTick({ key, on: pair[column].checked, appOwned, tickedAt: appTickedAt, now: performance.now() })) {
+          pair[column].checked = true;
+        }
         humanTouched.add(key);
         appOwned.delete(key);
+        appTickedAt.delete(key);
         refresh();
       });
     }
   }
   nutrients.forEach(input => input.addEventListener('input', refresh));
-  checked.addEventListener('change', refresh);
+  // ⚠️ A TICK OF «I HAVE CHECKED» THAT LANDS AS THE APP MOVES A BOX IS NOT A VERIFICATION OF
+  // THE NEW LIST. The press hold covers a proposal that lands DURING a tap; this covers one that
+  // lands just BEFORE it — the pause ends, the app ticks Milk (and clears this box on a verified
+  // record), and a finger already on its way ticks it straight back over a list nobody has seen.
+  // So a tick within RECENT_APP_TICK_MS of the app moving a box is undone; a second tap, after
+  // a look, verifies. Unticking is always allowed: it can only ask for a fresh check.
+  checked.addEventListener('change', () => {
+    if (checked.checked && performance.now() - lastMoveAt < RECENT_APP_TICK_MS) checked.checked = false;
+    refresh();
+  });
   refresh();
   // ⚠️ SHOWS, NEVER TOUCHES. The first draw only marks up whatever text is stored —
   // see the note on suggest() for why re-ticking on open would erase a correction.
@@ -1559,6 +1696,7 @@ function allergenBlock(item, panels, actions = {}) {
     }));
   }
 
+  const nutFold = {};
   if (panels.nutrition) {
     root.appendChild(fold({
       title: t('orders.section.nutrition'),
@@ -1569,14 +1707,37 @@ function allergenBlock(item, panels, actions = {}) {
         el('p', { class: 'alg-nut-title', text: t('orders.per100G') }),
         nutritionGrid,
       ],
+      control: nutFold,
     }));
+  }
+
+  // The press hold (see the pause above): any press inside these sections, in CAPTURE so it
+  // is heard before the box under the finger does anything.
+  root.addEventListener('pointerdown', pressStarted, true);
+  root.addEventListener('keydown', event => {
+    if (isSpace(event) && event.target && event.target.type === 'checkbox') pressStarted();
+  }, true);
+
+  // Save asks this after flush(): the first nutrition box it must refuse is opened, said and
+  // focused (P20), and true comes back so nothing is written. A box nobody changed never
+  // refuses — nor does any box while the venue keeps nutrition switched off, since none can change.
+  function refuseNutrition() {
+    const typed = {};
+    for (const [key, input] of nutrients) typed[key] = input.value;
+    const wrong = nutritionRefusal(typed, openedNutrition);
+    if (!wrong) return false;
+    const refusal = nutRefusals.get(wrong.key);
+    refusal.node.textContent = t(wrong.reason === 'thousands' ? 'orders.nutrition.noThousands' : 'orders.nutrition.invalid');
+    if (nutFold.open) nutFold.open();
+    refusal.show();
+    return true;
   }
 
   // ⚠️ THE «?» BUTTONS ARE FILLED LAST, once every host this form builds exists. The
   // module's own pass runs at page load, long before this overlay is created.
   mountHelpButtons(root);
 
-  return { root, read };
+  return { root, read, flush, refuseNutrition };
 }
 
 // One collapsible section: a head that is the whole tap target, whatever must stay
@@ -1631,16 +1792,18 @@ function invoiceNameBlock(value) {
   ];
 }
 
-function fold({ title, state, above, body, help }) {
+// `control`, when given, gets an open() — for a refusal on Save that must show the box it points at.
+function fold({ title, state, above, body, help, control }) {
   const inner = el('div', { class: 'mgmt-fold-body', hidden: 'hidden' }, body);
+  const setOpen = open => {
+    inner.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+    btn.classList.toggle('mgmt-fold-head--open', open);
+  };
+  if (control) control.open = () => setOpen(true);
   const btn = el('button', {
     type: 'button', class: 'mgmt-fold-head', 'aria-expanded': 'false',
-    onClick: () => {
-      const open = inner.hidden;
-      inner.hidden = !open;
-      btn.setAttribute('aria-expanded', String(open));
-      btn.classList.toggle('mgmt-fold-head--open', open);
-    },
+    onClick: () => setOpen(inner.hidden),
   }, [
     el('span', { class: 'mgmt-fold-label', text: title }),
     state,
@@ -2122,6 +2285,7 @@ export function buildIngredientForm({
     if (price && price.needsPackWeight()) { weight.markNeededAs(t('orders.legacyCard.packNeeded')); return; }
     const unreadableBox = price && price.unreadable();
     if (unreadableBox) { unreadableBox.show(); return; }
+    if (!isBox() && allergens.refuseNutrition()) return;
     save.disabled = true;
 
     // Every price field is in the patch, as a number or as null, because this is a MERGE write: a field
@@ -2165,6 +2329,11 @@ export function buildIngredientForm({
 
   const save = el('button', { type: 'button', class: 'app-header-save', onClick: async () => {
     if (save.disabled) return;
+    // ⚠️ FIRST, a proposal still waiting on the pack text (the pause has not ended) runs now,
+    // so the ticks checked and written below are the ones on the screen. Leaving the text box
+    // no longer proposes (see allergenBlock), so without this a pack typed and saved at once
+    // would be saved with no ticks from it.
+    allergens.flush();
     // The supplier is no longer required — only the name is.
     if (!name.value.trim()) { name.focus(); return; }
     if (legacyCard) { await saveLegacyCard(); return; }
@@ -2196,6 +2365,8 @@ export function buildIngredientForm({
     // Text in a price box that is not a number would be saved as «no price»: refused on that box.
     const unreadableBox = price && price.unreadable();
     if (unreadableBox) { unreadableBox.show(); return; }
+    // A nutrition figure that cannot be read for sure («1.550» kJ, «abc») is refused on its box.
+    if (!isBox() && allergens.refuseNutrition()) return;
     save.disabled = true;
 
     // Every price field is in the patch, as a number or as null, because this is

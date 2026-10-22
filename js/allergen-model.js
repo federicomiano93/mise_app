@@ -202,6 +202,33 @@ export function normalizeNutrition(raw) {
   return out;
 }
 
+// The first nutrition box Save must refuse, and why — or null. `typed` and `opened` map each
+// nutrient key to the TEXT of its box now and when the card opened.
+//   'thousands' — a kJ or kcal figure written with a thousands separator, «1.550» or «1,550»:
+//     that is how Italian packs print energy, and read as a decimal it is 1.55 kJ, a thousand
+//     times too low on every label the ingredient feeds. Never guessed at either way.
+//   'invalid'   — text that is not a plain number of 0 or more («abc», «1.234,5», «-3»): it
+//     would be saved as «not filled in», a figure typed and then lost without anybody told.
+// ⚠️ ONLY A BOX SOMEBODY CHANGED is judged: a stored value the card opened with never blocks
+// the save of something else. A leading zero is never a thousands group: «0,125» is 0.125.
+// Same rule and wording as Mise 2 (app/src/records/allergenCardModel.ts nutritionRefusal).
+const PLAIN_NUMBER = /^(\d+(\.\d*)?|\.\d+)$/;
+const THOUSANDS = /^[1-9]\d{0,2}[.,]\d{3}$/;
+
+export function nutritionRefusal(typed, opened) {
+  for (const key of NUTRIENT_KEYS) {
+    const raw = String((typed && typed[key]) ?? '').trim();
+    if (raw === String((opened && opened[key]) ?? '').trim()) continue;
+    if ((key === 'kj' || key === 'kcal') && THOUSANDS.test(raw)) return { key, reason: 'thousands' };
+    // One decimal mark, either one — the same reading as typedDecimal() in js/currency.js.
+    const text = raw.replace(',', '.');
+    if (text === '') continue;
+    // Number() would take «0x10», «1e3» and «Infinity»: only digits with one decimal mark are a figure.
+    if (!PLAIN_NUMBER.test(text)) return { key, reason: 'invalid' };
+  }
+  return null;
+}
+
 // Every one of the seven present. A partial nutrition table cannot be printed —
 // the declaration is defined as a whole — so there is no "mostly filled in".
 export function hasFullNutrition(ingredient) {
