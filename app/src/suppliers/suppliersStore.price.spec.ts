@@ -101,6 +101,17 @@ describe('the suppliers store: reading a price before a card opens (C28)', () =>
     expect(store.getSnapshot().pricesFromServer).toBe(true);
   });
 
+  test('⚠️ a price stream that dies AFTER the server answered is no longer «from the server» (the card reads again)', async () => {
+    const source = seeded();
+    const { store } = started(source);
+    await tick();
+    expect(store.getSnapshot().pricesFromServer).toBe(true);
+    source.refusePrices = true;
+    source.push();
+    expect(store.getSnapshot().pricesReadable).toBe(false);
+    expect(store.getSnapshot().pricesFromServer).toBe(false);
+  });
+
   test('a refused price watch is never «from the server»', async () => {
     const { store } = started(fakeSuppliersSource({ refusePrices: true }));
     await tick();

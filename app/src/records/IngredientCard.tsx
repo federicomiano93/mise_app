@@ -265,7 +265,9 @@ export function IngredientCard({
   async function save() {
     if (deleting || busy.current || askingLeave.current || leavingClean.current) return;
     const current = workingRef.current;
-    const state = priceRef.current;
+    // The right to write prices is read NOW: Food cost switched off on another phone while this card is open must not send a
+    // price the rules refuse, taking the whole ingredient save down with it.
+    const state = priceActive ? priceRef.current : null;
     const priceDirty = state ? isPriceDirty(state, opened) : false;
     // C84: the card's own refusals first, then the price's (the weight a price by weight needs, then an unreadable price box).
     const wrong = firstRefusal(current, opened, { mayPrice: priceActive, lang: language, priceDirty });
@@ -704,9 +706,9 @@ export function IngredientCard({
           />
         ) : null}
         {legacyPrice && opened ? (
-          <div className={styles.priceBlock}>
+          <div role="group" aria-label={t('sup.price.generic', { currency: money.symbol })} className={styles.priceBlock}>
             <p className={styles.readonly}>{formatPricePerUnit(opened, money, sharedTranslate(t))}</p>
-            {opened.vatRate == null ? null : <p className={styles.readonly}>{`${t('sup.price.vat.label')}: ${String(opened.vatRate)}%`}</p>}
+            {opened.vatRate == null ? null : <p className={styles.readonly}>{t('sup.price.legacy.vat', { rate: String(opened.vatRate) })}</p>}
             <p className={styles.hint}>{t('sup.price.legacy.note')}</p>
           </div>
         ) : null}

@@ -1454,4 +1454,5 @@ export const it: Messages = {
   'sup.price.openFailed': 'Non è stato possibile aprire la scheda ingrediente. Riprova.',
   'sup.price.history.failed': 'Non è stato possibile caricare lo storico prezzi di «{name}». Controlla la connessione e riprova.',
   'sup.price.legacy.note': 'Questo prezzo è salvato in un formato di prima. Qui si vede soltanto: salvando la scheda resta esattamente com’è.',
+  'sup.price.legacy.vat': 'IVA: {rate}%',
 };

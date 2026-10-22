@@ -35,6 +35,12 @@ export function PriceHistory({ id, money, read, onFailed }: Props) {
     return () => { mounted.current = false; };
   }, []);
   const [state, setState] = useState<'idle' | 'loading' | readonly Entry[]>('idle');
+  // The button the person pressed is gone once the answer is drawn: focus moves to the answer, not back to the page (P18).
+  const answer = useRef<HTMLElement | null>(null);
+  const answered = typeof state !== 'string';
+  useEffect(() => {
+    if (answered) answer.current?.focus();
+  }, [answered]);
 
   function show() {
     if (state !== 'idle') return;
@@ -63,9 +69,9 @@ export function PriceHistory({ id, money, read, onFailed }: Props) {
           {t(state === 'loading' ? 'sup.price.history.loading' : 'sup.price.history.show')}
         </Button>
       ) : state.length === 0 ? (
-        <p className={styles.hint}>{t('sup.price.history.empty')}</p>
+        <p ref={node => { answer.current = node; }} tabIndex={-1} className={styles.hint}>{t('sup.price.history.empty')}</p>
       ) : (
-        <ul className={styles.historyList}>
+        <ul ref={node => { answer.current = node; }} tabIndex={-1} aria-labelledby={labelId} className={styles.historyList}>
           {state.map((entry, index) => (
             <li key={String(entry.id ?? index)} className={styles.historyRow}>
               <span>{formatPricePerUnit(entry, money, shared)}</span>

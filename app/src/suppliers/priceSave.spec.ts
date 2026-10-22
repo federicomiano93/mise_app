@@ -39,15 +39,14 @@ describe('priceWriteOf: untouched means unchanged', () => {
 describe('priceWriteOf: the date moves only with the money (F4)', () => {
   test('a VAT-only change writes the price, KEEPS its date and plants no history', () => {
     const write = priceWriteOf(flourKg, pricePatch(storedPriceInput(flourKg, 10), NOW), 's1', NOW);
-    expect(write?.doc.vatRate).toBe(10);
-    expect(write?.doc.priceUpdatedAt).toBe(THEN);
+    // Only the VAT (and the retired keys drained): the money and the date are left as the database holds them.
+    expect(write?.doc).toEqual({ vatRate: 10, packPrice: null, packSize: null });
     expect(write?.history).toBeNull();
   });
 
   test('a basis-only tap (the same money remembered another way) keeps the date and plants no history', () => {
     const write = priceWriteOf(cartonBags, { ...pricePatch(storedPriceInput(cartonBags, 4), NOW, '2.5 kg'), priceBasis: 'rate' }, 's1', NOW);
-    expect(write?.doc.priceBasis).toBe('rate');
-    expect(write?.doc.priceUpdatedAt).toBe(THEN);
+    expect(write?.doc).toEqual({ priceBasis: 'rate', packPrice: null, packSize: null });
     expect(write?.history).toBeNull();
   });
 
@@ -55,7 +54,7 @@ describe('priceWriteOf: the date moves only with the money (F4)', () => {
     const write = priceWriteOf(cartonBags, pricePatch(singleFromCaseInput(cartonBags, 4), NOW, '2.5 kg'), 's1', NOW);
     expect(write).not.toBeNull();
     expect(write?.doc.caseCount).toBeNull();
-    expect(write?.doc.priceUpdatedAt).toBe(THEN);
+    expect('priceUpdatedAt' in (write?.doc ?? {})).toBe(false);
     expect(write?.history).toBeNull();
   });
 
@@ -63,11 +62,23 @@ describe('priceWriteOf: the date moves only with the money (F4)', () => {
     expect(priceWriteOf(flourKg, pricePatch({ priceUnit: 'kg', pricePerUnit: '2.00', vatRate: 4 }, NOW), 's1', NOW)).toBeNull();
   });
 
-  test('a stored price with no date takes today, with no history (the money did not move)', () => {
+  test('a stored price with no date stays undated while its money does not move', () => {
     const undated = { ...flourKg, priceUpdatedAt: null };
-    const write = priceWriteOf(undated, pricePatch(storedPriceInput(undated, 4), NOW), 's1', NOW);
-    expect(write?.doc.priceUpdatedAt).toBe(NOW);
-    expect(write?.history).toBeNull();
+    expect(priceWriteOf(undated, pricePatch(storedPriceInput(undated, 4), NOW), 's1', NOW)).toBeNull();
+    const vat = priceWriteOf(undated, pricePatch(storedPriceInput(undated, 10), NOW), 's1', NOW);
+    expect(vat?.doc).toEqual({ vatRate: 10, packPrice: null, packSize: null });
+  });
+
+  test('a rate stored with more decimals than the card writes is not rewritten by an untouched save', () => {
+    const tin = { id: 't', weight: '', ...pricePatch({ priceUnit: 'pcs', pricePerUnit: 0.25 }, THEN), pricePerUnit: 3.333333 };
+    expect(priceWriteOf(tin, pricePatch(storedPriceInput(tin, null), NOW), 's1', NOW)).toBeNull();
+  });
+
+  test('a VAT-only save never carries the money it opened on (a newer price written meanwhile survives the merge)', () => {
+    const write = priceWriteOf(flourKg, pricePatch(storedPriceInput(flourKg, 10), NOW), 's1', NOW);
+    for (const key of ['priceUnit', 'pricePerUnit', 'unitWeightKg', 'priceUpdatedAt', 'casePrice', 'caseCount']) {
+      expect(key in (write?.doc ?? {})).toBe(false);
+    }
   });
 });
 

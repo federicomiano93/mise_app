@@ -14,6 +14,11 @@
 //     ordinary rename, put that old price back over a newer one written meanwhile on another phone — or from an invoice.
 //     Untouched means unchanged, at the database too. The retired pack keys (packPrice, packSize) do not count as a
 //     change on their own: they are drained by the next save that does move the price, as everything else of it is.
+//   • ⚠️ A SAVE THAT DID NOT MOVE THE MONEY WRITES ONLY THE KEYS IT CHANGED (review of 22 Oct 2026). The patch is rebuilt
+//     from the copy the card opened on, so writing all of it would put that copy's money back over a newer price written
+//     meanwhile (an invoice import on the PC while a tablet changes only the VAT), under the old date and with no history.
+//     A number equal to the stored one within rounding is not a change (pricePatch rounds a 6-decimal rate to 4), and the
+//     date is never written on its own: an undated price stays undated until its money moves.
 
 import { keepPriceDate, priceChanged, priceRecord, PRICE_FIELDS } from '@mise/shared/price-model';
 import type { PricePatch } from '@mise/shared/price-model';
@@ -23,6 +28,11 @@ import type { IngredientPriceWrite } from './suppliersSource';
 const RETIRED = new Set<string>(['packPrice', 'packSize']);
 
 const same = (a: unknown, b: unknown): boolean => (a ?? null) === (b ?? null);
+// The same within rounding — the tolerance price-model's priceChanged uses for the money.
+const sameValue = (a: unknown, b: unknown): boolean =>
+  typeof a === 'number' && typeof b === 'number'
+    ? Math.abs(a - b) <= Math.max(1e-6, Math.abs(a) * 1e-4)
+    : same(a, b);
 
 // Whether writing `patch` would change any price key of `before` (a missing key and a null one are the same absence).
 // `priceBasis` counts only when the patch carries it: a patch without it leaves the stored basis alone (merge).
@@ -44,6 +54,16 @@ export function priceWriteOf(
   const stamped = patch.priceUpdatedAt == null ? patch : { ...patch, priceUpdatedAt: nowIso };
   const dated = keepPriceDate(before, stamped);
   if (!priceDiffers(before, dated)) return null;
+  if (before !== null && !priceChanged(before, dated)) {
+    const stored: Readonly<Record<string, unknown>> = before;
+    const changed = (PRICE_FIELDS as readonly string[]).filter(key =>
+      !RETIRED.has(key) && key !== 'priceUpdatedAt' && key in dated && !sameValue(stored[key], (dated as Record<string, unknown>)[key]));
+    if (changed.length === 0) return null;
+    const doc: Record<string, unknown> = {};
+    for (const key of changed) doc[key] = (dated as Record<string, unknown>)[key];
+    for (const key of RETIRED) if (key in dated) doc[key] = null;
+    return { doc, history: null };
+  }
   const record = dated.pricePerUnit !== null && priceChanged(before, dated);
   return {
     doc: dated,

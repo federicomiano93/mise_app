@@ -306,7 +306,11 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
         source.watchPrices((map, readable, meta) => {
           prices = map;
           pricesReadable = readable;
-          if (readable && meta?.fromServer) pricesFromServer = true;
+          // ⚠️ A STREAM THAT DIED IS NO LONGER «THE SERVER ANSWERED» (review of 22 Oct 2026): the list has lost every price, so
+          // a price writer's card must read its own price again before it opens (parity C28), as the current app's
+          // needsPriceRead does on the live readability — or a VAT-only save would merge «no price» over the real one.
+          if (!readable) pricesFromServer = false;
+          else if (meta?.fromServer) pricesFromServer = true;
           relayIngredients();
           changed();
         }),
