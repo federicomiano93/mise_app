@@ -19,19 +19,17 @@ const report = (vulnerabilities) => ({
   metadata: { vulnerabilities: {}, dependencies: { prod: 1, dev: 673, optional: 30, peer: 0, peerOptional: 0, total: 673 } },
 });
 
-// Today's tree, in short: the two accepted highs, the chains that carry them, a moderate.
+// Today's tree, in short: the accepted high, the chain that carries it, a moderate.
 const today = () => ({
   'basic-ftp': { severity: 'high', via: [advisory('GHSA-c475-qrg2-pj4r', 'high', ['CWE-1333'])] },
   'get-uri': { severity: 'high', via: ['basic-ftp'] },
-  braces: { severity: 'high', via: [advisory('GHSA-vfj7-8cjw-p6xm', 'high', ['CWE-674'])] },
-  chokidar: { severity: 'high', via: ['braces'] },
   uuid: { severity: 'moderate', via: [advisory('GHSA-w5hq-g745-h8pq', 'moderate', ['CWE-787'])] },
 });
 
-test('today\'s tree passes, and says which highs it accepted', () => {
+test('today\'s tree passes, and says which high it accepted', () => {
   const v = judge(report(today()));
   assert.equal(v.ok, true, v.problems.join('\n'));
-  assert.deepEqual(v.accepted.sort(), ['GHSA-c475-qrg2-pj4r', 'GHSA-vfj7-8cjw-p6xm']);
+  assert.deepEqual(v.accepted.sort(), ['GHSA-c475-qrg2-pj4r']);
 });
 
 test('a hijacked package fails even though it is only HIGH (debug@4.4.2, September 2025)', () => {
@@ -47,8 +45,8 @@ test('malicious code fails at ANY severity, and the allowlist never excuses it',
     assert.deepEqual(v.problems, [`MALICIOUS CODE — GHSA-aaaa-bbbb-cccc ${severity} x: an advisory`], severity);
   }
   const tree = today();
-  tree.braces.via[0].cwe = ['CWE-674', 'CWE-506'];
-  assert.match(judge(report(tree)).problems.join('\n'), /MALICIOUS CODE — GHSA-vfj7-8cjw-p6xm/);
+  tree['basic-ftp'].via[0].cwe = ['CWE-1333', 'CWE-506'];
+  assert.match(judge(report(tree)).problems.join('\n'), /MALICIOUS CODE — GHSA-c475-qrg2-pj4r/);
 });
 
 test('a NEW high or critical fails until somebody looks at it; a plain moderate does not', () => {
@@ -65,17 +63,17 @@ test('a high with no GHSA link cannot slip through the allowlist', () => {
 
 // The review proved it: offline mode, or dev packages omitted (firebase-tools is a devDependency),
 // gives a well-formed report with NOTHING in it — which, unchecked, reads as «clean».
-test('an audit that saw nothing fails: the two accepted advisories must be reported every run', () => {
+test('an audit that saw nothing fails: the accepted advisory must be reported every run', () => {
   const blind = judge(report({}));
   assert.equal(blind.ok, false);
-  assert.equal(blind.problems.filter((p) => /was not reported: the audit checked nothing/.test(p)).length, 2);
+  assert.equal(blind.problems.filter((p) => /was not reported: the audit checked nothing/.test(p)).length, 1);
   const tree = today();
-  delete tree.braces;
+  delete tree['basic-ftp'];
   assert.deepEqual(judge(report(tree)).problems,
-    ['GHSA-vfj7-8cjw-p6xm was not reported: the audit checked nothing, or this ALLOWED entry is stale — remove it']);
+    ['GHSA-c475-qrg2-pj4r was not reported: the audit checked nothing, or this ALLOWED entry is stale — remove it']);
   // Seen at a lower severity after a re-rating, it still proves the audit looked.
   const rerated = today();
-  rerated.braces.via[0].severity = 'moderate';
+  rerated['basic-ftp'].via[0].severity = 'moderate';
   assert.equal(judge(report(rerated)).ok, true);
 });
 
@@ -117,7 +115,7 @@ test('the script exits 1 on a problem, 0 on today\'s tree, and says why npm fail
   assert.match(source, /'npm audit --json --include=dev --offline=false'/);
 });
 
-test('the allowlist is exactly the two measured advisories, each with its reason', () => {
-  assert.deepEqual([...ALLOWED.keys()].sort(), ['GHSA-c475-qrg2-pj4r', 'GHSA-vfj7-8cjw-p6xm']);
+test('the allowlist is exactly the measured advisory, with its reason', () => {
+  assert.deepEqual([...ALLOWED.keys()].sort(), ['GHSA-c475-qrg2-pj4r']);
   for (const [id, why] of ALLOWED) assert.ok(why.length > 60, `${id}: say why it cannot hurt CI and cannot be fixed`);
 });
