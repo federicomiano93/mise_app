@@ -63,11 +63,21 @@ function monthRef(monthId) {
 
 // The month on screen, live — so a count typed on the phone in the storeroom
 // appears on the one in the office without either being reloaded.
+//
+// ⚠️ WITH WHERE IT CAME FROM: `fromServer` is false for the phone's own copy, which
+// can be days old. A count held over from an earlier visit is sent only once the
+// SERVER says the month is open (js/inventory/inventory-outbox.js, `held`) — and
+// without includeMetadataChanges a server answer identical to that copy would never
+// be reported at all.
 export async function watchMonth(monthId, onChange, onError) {
   await authReady;
   return onSnapshot(
     monthRef(monthId),
-    snap => onChange(snap.exists() ? { id: snap.id, ...snap.data() } : null),
+    { includeMetadataChanges: true },
+    snap => onChange(
+      snap.exists() ? { id: snap.id, ...snap.data() } : null,
+      { fromServer: !snap.metadata.fromCache },
+    ),
     err => {
       console.error(`watchMonth(${monthId}) failed:`, err);
       if (onError) onError(err);

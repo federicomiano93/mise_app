@@ -21,7 +21,7 @@ import {
 // ⚠️ Where a tab's ingredients really come from. A screen reading
 // recipe.ingredients directly would see the tab's own leftover copy.
 import { effectiveRecipe } from './calculator-catalogue-link.js';
-import { canCalculate } from './calculator-recipe-source.js';
+import { canCalculate, sheetRecipe } from './calculator-recipe-source.js';
 import { getConfig } from './calculator-config-store.js';
 import { el } from './calculator-render.js';
 import { placeResult } from './result-place.js';
@@ -281,7 +281,11 @@ export function calc(id) {
   }
 
   const pct = leaveningPctFor(recipe);
-  const spec = recipeSpec(source);
+  // ⚠️ THE SPEC IS BUILT FROM sheetRecipe(), THE SAME RECIPE THE SAVED DOUGH IS BUILT FROM.
+  // The resolved recipe alone carries no baselinePct (it lives on the tab), so a spec built
+  // from it scaled pro-rata: the leavening knob moved the % on screen and changed nothing,
+  // while Dough history stored the grams AT the knob's % — the screen and the log disagreed.
+  const spec = recipeSpec(sheetRecipe(recipe, source));
   if (isProRata(recipe.logic)) spec.leaveningKey = null; // pure pro-rata, no leavening adjust
   const scaled = scaleRecipe(spec, target, pct);
   const rows = source.ingredients.map((ing, i) => ({ name: ing.label, grams: scaled[i] || 0 }));
