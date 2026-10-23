@@ -648,7 +648,10 @@ input:is([type="number"], [inputmode="decimal"], [inputmode="numeric"]) {
   resize: vertical;
 }
 .fb-area:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
-.fb-area-invalid { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
+.fb-area-invalid { border-color: var(--danger); background: var(--error-bg); }
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  .fb-area-invalid { background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
+}
 .fb-error { margin: 0; font-size: 14px; font-weight: 600; color: var(--error); }
 
 /* ── The − / + text-size pair of a full-screen recipe (js/zoom-steps.js, one copy per
@@ -1341,7 +1344,10 @@ body[data-card="foodcost"] .app-header.app-header--save {
   color: var(--danger);
   cursor: pointer;
 }
-.bz-del-icon:active { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.bz-del-icon:active { background: var(--error-bg); }
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  .bz-del-icon:active { background: color-mix(in srgb, var(--danger) 12%, transparent); }
+}
 .bz-del-icon:disabled { opacity: 0.5; cursor: default; }
 .bz-del-icon:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 
@@ -1779,6 +1785,10 @@ body[data-card="foodcost"] .app-header.app-header--save {
   font-size: 15px;
 }
 .set-row .set-select { flex-shrink: 0; max-width: 55%; }
+/* A locked number box (an employee on a venue-wide setting): recessed like a value printed on the card, the
+   number still at full contrast — the line under it says who can change it. Without this the
+   field's own background hid the browser's disabled look and it read as editable. */
+.set-input:disabled { background: var(--surface-2); border-style: dashed; cursor: default; }
 /* A compact button at the end of a row (btn-primary is full width by default). */
 /* 44px button + the row's 12px padding top and bottom, held from the first paint. */
 .set-row--version { min-height: 68px; }
