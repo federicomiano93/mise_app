@@ -9,7 +9,7 @@ import { weekdayLabel } from './pastries-model.js';
 import { t, onLanguageChange } from '../i18n.js';
 import {
   initPastries, getDays, getItems, getNote, getCounts, saveDay, setItemQuantity,
-  setSyncErrorHandler,
+  setSyncErrorHandler, daysReady,
 } from './pastries-store.js';
 import { renderStrip } from './pastries-strip.js';
 import { renderDay } from './pastries-day.js';
@@ -17,7 +17,7 @@ import { renderEditor } from './pastries-editor.js';
 import { renderLogs } from './pastries-logs.js';
 import {
   initPastryLogs, stopPastryLogs, getVisibleLogs, confirmDay, removeLog, tonightsRecord,
-  setLogsErrorHandler, isConfirmedTonight, watchConfirmations,
+  setLogsErrorHandler, isConfirmedTonight, watchConfirmations, confirmationsReady,
 } from './pastries-logs-store.js';
 import { provingDayFor } from './pastries-model.js';
 import { LOG_VISIBLE_DAYS, workDate } from './pastries-log-model.js';
@@ -135,6 +135,41 @@ async function requestEdit(day) {
   return true;
 }
 
+// ── Waiting for the first answers ────────────────────────────────────────────
+//
+// ⚠️ NOTHING ON THE DAY IS CHANGED OR RECORDED BEFORE BOTH ANSWERS ARE IN: the
+// seven days, and tonight's confirmations. Until then the list on screen is
+// only this phone's own copy — EMPTY on a new phone or a cleared browser — and
+// «not confirmed» only means «nobody has said yet». It is drawn at once, so the
+// first paint never waits, but:
+// - the pencil WAITS for the answers (saying so) and then opens the editor. The
+//   editor copies the day once and Save writes the whole day back, so an editor
+//   opened on the empty copy was a way to wipe the real list (found 11 Oct
+//   2026). The answers also come after the venue's language is set
+//   (js/firebase.js sets it before the session is ready, and the data waits for
+//   the session), so the editor can no longer open in the wrong language either;
+// - a row ignores a tap and Confirm is disabled (pastries-day.js), so neither a
+//   quick fix nor tonight's record can be written from that copy.
+// Each store counts a failed stream as an answer, so nothing waits for ever.
+function ready() {
+  return daysReady() && confirmationsReady();
+}
+
+let readyWaiters = [];
+
+function whenReady() {
+  if (ready()) return Promise.resolve();
+  return new Promise(resolve => { readyWaiters.push(resolve); });
+}
+
+// Called from repaint(), which both stores call on every answer.
+function releaseReadyWaiters() {
+  if (!ready() || !readyWaiters.length) return;
+  const waiting = readyWaiters;
+  readyWaiters = [];
+  waiting.forEach(resolve => resolve());
+}
+
 // ── The 4am roll ─────────────────────────────────────────────────────────────
 //
 // A confirmed list unlocks when the work date moves on. Nothing about that is
@@ -194,7 +229,7 @@ function showDay(day, opts = {}) {
   // A NEW view, because the day itself changed. A snapshot for the day already
   // on screen goes through dayView.update() instead — see repaint().
   dayView = renderDay({
-    day, items: getItems(day), note: getNote(day), locked: lockedFor(day), app,
+    day, items: getItems(day), note: getNote(day), locked: lockedFor(day), ready: ready(), app,
   });
   swap(dayView.node, opts);
 }
@@ -261,6 +296,15 @@ function toast(msg) {
   t._t = setTimeout(() => t.classList.remove('show'), 2600);
 }
 
+// Takes the toast down only while it still says `text`: the answer that ends a
+// wait can be a broken stream, whose «Live sync interrupted» must stay.
+function hideToast(text) {
+  const node = document.getElementById('pasToast');
+  if (node.textContent !== text) return;
+  clearTimeout(node._t);
+  node.classList.remove('show');
+}
+
 // Repaint after the data changed underneath — a Firestore snapshot, or this
 // device's own optimistic write. The editor is deliberately NOT repainted: it
 // holds a working copy someone is typing into, and replacing it would delete
@@ -269,10 +313,17 @@ function toast(msg) {
 // ⚠️ IT UPDATES THE VIEW IN PLACE rather than rebuilding it. Rebuilding ran
 // swap(), which sets scrollTop = 0 — so every snapshot, several times a minute,
 // threw away where the person had scrolled to.
+//
+// The waiting pencil is released in `finally`: a repaint that throws (the store
+// reports it and carries on) must not leave the pencil waiting for ever.
 function repaint() {
-  if (strip) strip.setCounts(getCounts());
-  if (view === 'day' && dayView) {
-    dayView.update(getItems(shownDay), getNote(shownDay), lockedFor(shownDay));
+  try {
+    if (strip) strip.setCounts(getCounts());
+    if (view === 'day' && dayView) {
+      dayView.update(getItems(shownDay), getNote(shownDay), lockedFor(shownDay), ready());
+    }
+  } finally {
+    releaseReadyWaiters();
   }
 }
 
@@ -350,11 +401,37 @@ backBtn.addEventListener('click', handleBack);
 // cosmetic: the one screen that can change everything would have been the one
 // screen that never asked.
 saveBtn.addEventListener('click', () => headerSave?.());
+let pencilWaiting = false;   // a tap is already waiting for the answers; more taps add nothing
+let waitToastText = null;    // what the «not arrived yet» toast said, so only it is taken down
+
+// A tap that has to wait says so — and so does every further tap while it
+// waits, since the toast hides itself after a few seconds: on a slow signal the
+// editor would otherwise open by itself later, after taps that seemed to do
+// nothing. The message goes as soon as the answer is in — it would contradict
+// the list.
+function sayStillWaiting() {
+  waitToastText = t('past.listNotLoadedYet');
+  toast(waitToastText);
+}
+
 editBtn.addEventListener('click', async () => {
   if (view !== 'day') return;
-  if (!(await requestEdit(shownDay))) return;
-  if (view !== 'day') return;   // the dialog takes time; the screen may have moved on
-  openEditor(shownDay);
+  if (pencilWaiting) { sayStillWaiting(); return; }
+  const day = shownDay;
+  const waited = !ready();
+  if (waited) sayStillWaiting();
+  pencilWaiting = true;
+  try {
+    await whenReady();
+  } finally {
+    pencilWaiting = false;
+  }
+  if (waited) hideToast(waitToastText);
+  // The wait and the dialog both take time; the screen may have moved on.
+  if (view !== 'day' || shownDay !== day) return;
+  if (!(await requestEdit(day))) return;
+  if (view !== 'day' || shownDay !== day) return;
+  openEditor(day);
 });
 
 strip = renderStrip({
