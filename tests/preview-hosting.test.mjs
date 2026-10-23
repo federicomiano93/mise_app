@@ -63,8 +63,8 @@ test('Mise 2 is built in a job with no Google identity, and only its built files
   assert.doesNotMatch(deployJob, /npm (ci|run)\b|\bnpx\b|\bvite\b/,
     'the job holding the credential builds nothing');
   assert.deepEqual([...deployJob.matchAll(/npm install[^\n]*/g)].map(m => m[0]),
-    ['npm install --global firebase-tools@15.26.0'],
-    'the one package the credential job installs is the pinned firebase-tools');
+    ['npm install --global --ignore-scripts firebase-tools@15.26.0'],
+    'the one package the credential job installs is the pinned firebase-tools, with no install scripts');
   assert.match(deployJob, /uses: actions\/download-artifact@v8\n\s+with:\n\s+name: mise2-site\n\s+path: \$\{\{ runner\.temp \}\}\/mise2-site/);
   // Moved in BEFORE the symlink check, so the check covers it too.
   const stage = deployJob.slice(deployJob.indexOf('Stage only the app\'s files'));

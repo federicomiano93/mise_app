@@ -82,6 +82,76 @@ test('the order is stable between two runs', () => {
   assert.deepEqual(one, ['Butter', 'Flour'], 'equal weights break by name');
 });
 
+// ── Rows with no weight ──────────────────────────────────────────────────────
+//
+// ⚠️⚠️ Until 13 Oct 2026 a row with no weight (a pinch, «to taste», pieces, a weight
+// nobody wrote) was SKIPPED here while its allergens still reached «Contains» — a
+// label saying «Contains: Mustard» with no mustard in its ingredient list. The law
+// asks for every ingredient; under 2% they may go in any order after the rest.
+
+const MUSTARD = { id: 'MUSTARD', name: 'Mustard', allergens: ['mustard'], allergensCheckedAt: STAMP };
+const withMustard = () => ({ ...ingredients(), MUSTARD });
+const pinchOf = (label, refId, kind = 'ingredient') => ({ label, grams: 1, unit: 'pinch', kind, refId });
+
+test('⚠️⚠️ a pinch of an allergen is IN the list, after every weighed ingredient', () => {
+  const r = recipe('R1', [pinchOf('Mustard', 'MUSTARD'), row('Flour', 'FLOUR', 1000), row('Water', 'WATER', 600)]);
+  const out = flattenIngredients(r, { ingredients: withMustard() });
+  assert.deepEqual(out.map(i => i.name), ['Flour', 'Water', 'Mustard']);
+  assert.equal(out.find(i => i.name === 'Mustard').grams, 0, 'it has no weight to rank by');
+
+  const label = buildLabel(r, { ingredients: withMustard() }, { shows: 'allergens' });
+  assert.equal(label.ok, true);
+  assert.match(ingredientLine(label), /MUSTARD/, 'listed AND emphasised as an allergen');
+  assert.match(containsLine(label), /Mustard/, 'the summary and the list now agree');
+});
+
+test('a row with a weighable unit and no weight written is listed too, at the end', () => {
+  const r = recipe('R1', [{ label: 'Butter', grams: '', unit: 'g', kind: 'ingredient', refId: 'BUTTER' }, row('Flour', 'FLOUR', 500)]);
+  assert.deepEqual(flattenIngredients(r, { ingredients: ingredients() }).map(i => i.name), ['Flour', 'Butter']);
+});
+
+test('the weightless tail is ordered by name, the same on every run', () => {
+  const r = recipe('R1', [pinchOf('Salt', 'SALT'), row('Flour', 'FLOUR', 500), pinchOf('Mustard', 'MUSTARD')]);
+  assert.deepEqual(flattenIngredients(r, { ingredients: withMustard() }).map(i => i.name), ['Flour', 'Mustard', 'Salt']);
+});
+
+test('weighed in one row and a pinch in another is ONE line, at its weighed place', () => {
+  const r = recipe('R1', [row('Flour', 'FLOUR', 500), pinchOf('Salt', 'SALT'), row('Salt', 'SALT', 600)]);
+  const out = flattenIngredients(r, { ingredients: ingredients() });
+  assert.deepEqual(out.map(i => i.name), ['Salt', 'Flour']);
+  assert.equal(out.filter(i => i.name === 'Salt').length, 1);
+});
+
+test('⚠️ a sub-recipe used by the pinch still names every ingredient it holds', () => {
+  const spice = recipe('SPICE', [row('Butter', 'BUTTER', 50), pinchOf('Mustard', 'MUSTARD')]);
+  const r = recipe('R1', [row('Flour', 'FLOUR', 500), pinchOf('Spice', 'SPICE', 'recipe')]);
+  const out = flattenIngredients(r, { ingredients: withMustard(), recipes: { SPICE: spice } });
+  assert.deepEqual(out.map(i => i.name), ['Flour', 'Butter', 'Mustard']);
+  assert.equal(out.find(i => i.name === 'Spice'), undefined, 'still flattened, never named');
+});
+
+test('⚠️ a weighed sub-recipe with NOTHING weighable inside still names its ingredients', () => {
+  const dust = recipe('DUST', [pinchOf('Mustard', 'MUSTARD')]);
+  const r = recipe('R1', [row('Flour', 'FLOUR', 500), row('Dust', 'DUST', 10, 'recipe')]);
+  const out = flattenIngredients(r, { ingredients: withMustard(), recipes: { DUST: dust } });
+  assert.deepEqual(out.map(i => i.name), ['Flour', 'Mustard']);
+});
+
+test('the nutrition table is still worked out from the weighed rows alone', () => {
+  // MUSTARD has no nutrition table: had the 0 g line been asked for one, a pinch
+  // would refuse the whole declaration.
+  const plain = bread();
+  const pinch = recipe('BREAD', [...bread().ingredients, pinchOf('Mustard', 'MUSTARD')], { name: 'Test bread' });
+  assert.deepEqual(nutritionPer100g(pinch, { ingredients: withMustard() }), nutritionPer100g(plain, { ingredients: ingredients() }));
+});
+
+test('a recipe made ONLY of weightless rows is still «no ingredients with a weight»', () => {
+  const r = recipe('R1', [pinchOf('Mustard', 'MUSTARD'), pinchOf('Salt', 'SALT')]);
+  const label = buildLabel(r, { ingredients: withMustard() });
+  assert.equal(label.ok, false);
+  assert.equal(label.reason, 'no-ingredients');
+});
+
 test('a cycle and an over-deep nesting do not hang it', () => {
   const self = recipe('R1', [row('itself', 'R1', 100, 'recipe')]);
   assert.deepEqual(flattenIngredients(self, { ingredients: ingredients(), recipes: { R1: self } }), []);
