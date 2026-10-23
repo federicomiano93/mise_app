@@ -27,13 +27,14 @@
 /* The phone variant (FormDialog's `phoneFull`): below 700px the form takes the whole screen, with no scrim showing round it;
    from 700px it is the card above. The height is the one token (--vh100), never a viewport unit of its own. */
 @media (max-width: 699.98px) {
+  /* Edge to edge, but inside the notch and the home indicator (index.html has viewport-fit=cover). */
   .overlayFull {
-    padding: 0;
+    padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
   }
 
   .modalFull {
     max-width: none;
-    min-height: var(--vh100);
+    min-height: calc(var(--vh100) - env(safe-area-inset-top) - env(safe-area-inset-bottom));
     margin: 0;
     border-radius: 0;
     box-shadow: none;

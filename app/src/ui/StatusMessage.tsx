@@ -41,7 +41,9 @@ export function StatusMessageProvider({ children }: { children: ReactNode }) {
   return (
     <StatusMessageContext.Provider value={say}>
       {children}
-      <div role="status" className={styles.region}>
+      {/* ⚠️ data-react-aria-top-layer: a modal (FormDialog, Dialog) hides everything outside it from assistive technology, except
+          elements marked so — a message said while a form is open must still be heard, and (z-index) seen above it. */}
+      <div role="status" className={styles.region} data-react-aria-top-layer="true">
         {shown === null ? null : <p key={shown.id} className={styles.message}>{shown.text}</p>}
       </div>
     </StatusMessageContext.Provider>

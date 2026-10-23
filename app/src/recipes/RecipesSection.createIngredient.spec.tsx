@@ -10,6 +10,19 @@ import type { FakeSuppliersSource } from '../testing/fakeSuppliersSource';
 import { LOAD, recipe, renderRecipes } from '../testing/renderRecipes';
 import { RECIPES_KEY } from './recipesStore';
 
+// A switch the failing-card spec flips: the card's pack words are asked for while it is drawn.
+const boom = vi.hoisted(() => ({ on: false }));
+vi.mock('@mise/shared/record-choices', async importOriginal => {
+  const original = await importOriginal<typeof import('@mise/shared/record-choices')>();
+  return {
+    ...original,
+    packChoices: (...args: Parameters<typeof original.packChoices>) => {
+      if (boom.on) throw new Error('the card cannot be drawn');
+      return original.packChoices(...args);
+    },
+  };
+});
+
 // Step 3e, T15: «+ Add “…” as an ingredient» in the recipe editor — the doors (the suggestions' last row and the chooser's last
 // button), the SAME ingredient card as «Ingredients & suppliers» above the editor, what Back does, what Save links, and that no
 // money is read anywhere.
@@ -17,6 +30,7 @@ import { RECIPES_KEY } from './recipesStore';
 beforeAll(async () => { await import('./RecipesSection'); }, 60_000);
 beforeEach(() => { window.localStorage.clear(); });
 afterEach(() => {
+  boom.on = false;
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   window.localStorage.clear();
@@ -179,9 +193,11 @@ describe('the card', () => {
     expect(region.getByRole('textbox', { name: 'Name in the message' })).toHaveValue('Rye flour');
     expect(region.queryByRole('combobox', { name: /type|kind/i })).not.toBeInTheDocument();
     expect(region.queryByRole('button', { name: /photo/i })).not.toBeInTheDocument();
+    // The cursor starts on the card's title, as when the same card opens on its own screen.
+    await waitFor(() => { expect(region.getByRole('heading', { name: 'New ingredient' })).toHaveFocus(); });
   });
 
-  it('⚠️ has no price section for an employee, nor for a manager with Food cost off; a manager with it on has one', async () => {
+  it('⚠️ has no price section for an employee', async () => {
     const employee = await open('/recipes/new', { session: EMPLOYEE });
     expect((await openCard(employee)).queryByRole('combobox', { name: 'How it is bought' })).not.toBeInTheDocument();
   });
@@ -354,6 +370,64 @@ describe('Save in the card', () => {
     await saveCard(view, region);
     await screen.findByText('Could not save “Rye flour”. Check your network and try again.');
     expect(ingredientBoxes(view.region)[0]).toHaveValue('Rye flour');
+    // Still linked to the id it was saved under: Save recipe writes the link.
+    const madeId = suppliers.writes.find(write => write.op === 'ingredient-save')!.id;
+    await view.user.type(amountBoxes(view.region)[0]!, '300');
+    await view.user.click(within(view.region).getByRole('button', { name: 'Save' }));
+    await view.user.click(within(await screen.findByRole('alertdialog', { name: 'Save recipe?' })).getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(view.source.recipeWrites).toHaveLength(1); });
+    const row = (view.source.recipeWrites[0]!.data!.ingredients as Record<string, unknown>[])[0]!;
+    expect(linkOf(row)).toMatchObject({ kind: 'ingredient', refId: madeId });
+  });
+
+  it('⚠️ a message said while the card is open is in the accessibility tree and above it', async () => {
+    const view = await startRecipe();
+    const region = await openCard(view);
+    await view.user.selectOptions(region.getByRole('combobox', { name: 'Supplier' }), '+ New supplier…');
+    const dialog = within(await screen.findByRole('dialog', { name: 'New supplier' }));
+    await view.user.type(dialog.getByRole('textbox', { name: 'Name on invoices' }), 'Latteria Rossi');
+    await view.user.click(dialog.getByRole('button', { name: 'Save' }));
+    await view.user.click(within(await screen.findByRole('alertdialog', { name: 'Save supplier?' })).getByRole('button', { name: 'Save' }));
+    const said = await screen.findByText('Supplier saved.');
+    expect(said.closest('[aria-hidden="true"]')).toBeNull();
+    expect(said.closest('[role="status"]')).toHaveAttribute('data-react-aria-top-layer');
+  });
+});
+
+describe('a card that cannot be drawn', () => {
+  it('⚠️ is closed and said, the editor keeps its typed rows, and moving on works afterwards', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const view = await open('/recipes/new', { entries: ['/recipes', '/recipes/new'] });
+    await view.user.type(within(view.region).getByRole('textbox', { name: 'Recipe name' }), 'Rye bread');
+    await view.user.type(amountBoxes(view.region)[0]!, '300');
+    await view.user.type(ingredientBoxes(view.region)[0]!, 'Rye flour');
+    boom.on = true;
+    await view.user.click(screen.getByRole('option', { name: CREATE }));
+    await screen.findByText('The ingredient card could not be opened. Please try again.');
+    boom.on = false;
+    errors.mockRestore();
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'New ingredient' })).not.toBeInTheDocument(); });
+    expect(screen.queryByText('This part didn’t load.')).not.toBeInTheDocument();
+    expect(within(view.region).getByRole('textbox', { name: 'Recipe name' })).toHaveValue('Rye bread');
+    expect(ingredientBoxes(view.region)[0]).toHaveValue('Rye flour');
+    expect(amountBoxes(view.region)[0]).toHaveValue(300);
+    // Nothing is blocked as «a card is open» any more: a move asks the editor's own question, as for any unsaved recipe.
+    act(() => { void view.router.navigate(-1); });
+    expect(await discardQuestion()).toBeInTheDocument();
+  });
+
+  it('the card can be opened and backed out of again and again', async () => {
+    const view = await open('/recipes/new', { entries: ['/recipes', '/recipes/new'] });
+    await typeInto(view, 'Rye flour');
+    for (let round = 0; round < 2; round += 1) {
+      await view.user.click(screen.getByRole('option', { name: /^[+] Add «Rye flou/ }));
+      await cardRegion();
+      await act(async () => { await view.router.navigate(-1); });
+      await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'New ingredient' })).not.toBeInTheDocument(); });
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      await waitFor(() => { expect(ingredientBoxes(view.region)[0]).toHaveFocus(); });
+      await view.user.type(ingredientBoxes(view.region)[0]!, '{Backspace}x');
+    }
   });
 });
 
@@ -395,13 +469,18 @@ describe('the one import from suppliers/', () => {
   it('⚠️ no file under recipes/ imports ../suppliers/ except CreateIngredientOverlay', () => {
     const here = __dirname;
     const offenders: string[] = [];
-    for (const file of readdirSync(here)) {
+    const allowed: string[] = [];
+    // Every file under recipes/ (folders too): a static import, an import() and a bare '../suppliers', with either quote.
+    for (const file of readdirSync(here, { recursive: true, encoding: 'utf8' })) {
       if (!/\.tsx?$/.test(file) || /\.spec\./.test(file)) continue;
       const source = readFileSync(join(here, file), 'utf8');
-      for (const match of source.matchAll(/from\s+'(\.\.\/suppliers\/[^']*)'/g)) {
-        if (match[1] !== '../suppliers/CreateIngredientOverlay') offenders.push(`${file}: ${match[1]}`);
+      for (const match of source.matchAll(/(?:from|import)\s*\(?\s*['"](\.\.\/suppliers[^'"]*)['"]/g)) {
+        if (match[1] === '../suppliers/CreateIngredientOverlay') allowed.push(file);
+        else offenders.push(`${file}: ${match[1]}`);
       }
     }
     expect(offenders).toEqual([]);
+    // The guard finds the two imports that exist (the editor's overlay, the section's provider), so it is not blind.
+    expect(allowed.sort()).toEqual(['RecipeEditor.tsx', 'RecipesSection.tsx']);
   });
 });

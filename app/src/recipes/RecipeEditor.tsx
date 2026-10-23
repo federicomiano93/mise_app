@@ -26,6 +26,7 @@ import {
 import type { Chosen, DropPosition, Row, Working } from './editorModel';
 import { IngredientRow } from './IngredientRow';
 import { LinkDialog } from './LinkDialog';
+import { CardBoundary } from './CardBoundary';
 import { ReorderRows } from './ReorderRows';
 import { NEW_OPENER, recipeOpener, useHandBack } from './handBack';
 import { FROM_EDITOR, cameFromDuplicate, carryOwner, forgetHandover, hasTypedCopy, peekHandedOver, typedCopyOf, withTypedCopy, withoutTypedCopy } from './photoCarry';
@@ -161,14 +162,15 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     latestBlocker.current = blocker;
     if (blocker.state !== 'blocked') {
       askingLeave.current = false;
-      cardBlocked.current = false;
       return;
     }
-    // ⚠️ reset() lands a render later, and closing the card renders at once: without this flag that render would find the card gone
-    // and the move still blocked, and ask the EDITOR's question for a move that was already turned back.
-    if (cardBlocked.current) return;
+    // ⚠️ reset() lands a render later, and closing the card renders at once: without this that render would find the card gone
+    // and the move still blocked, and ask the EDITOR's question for a move that was already turned back. It is remembered WHICH
+    // blocked move was turned back (each one has its own reset function), not that one was: a flag cleared by a later render
+    // could swallow the next Back for good if two came faster than React renders.
+    if (turnedBack.current === blocker.reset) return;
     if (creatingRef.current) {
-      cardBlocked.current = true;
+      turnedBack.current = blocker.reset;
       blocker.reset();
       cardBack.current?.();
       return;
@@ -243,7 +245,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   // recipe until Save recipe.
   const [creating, setCreating] = useState<{ token: number; key: number; name: string; from: 'suggest' | 'chooser' } | null>(null);
   const creatingRef = useRef(false);
-  const cardBlocked = useRef(false);
+  const turnedBack = useRef<(() => void) | null>(null);
   const cardBack = useRef<(() => void) | null>(null);
   const tokens = useRef(0);
   const workingRef = useRef(working);
@@ -639,6 +641,12 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
         />
       )}
       {creating === null ? null : (
+        <CardBoundary onFail={() => {
+          creatingRef.current = false;
+          cardBack.current = null;
+          setCreating(null);
+          say(t('sup.price.openFailed'));
+        }}>
         <CreateIngredientOverlay
           key={creating.token}
           open
@@ -655,6 +663,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
             else linkTo(key, { kind: 'ingredient', refId: made.id, name: made.name });
           }}
         />
+        </CardBoundary>
       )}
       {confirmDialog}
       {deleteDialog}
