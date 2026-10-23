@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v682';
+const CACHE_NAME = 'theitalianclub-v685';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -149,11 +149,11 @@ const ASSET_HASHES = {
   "./suppliers.html": '0f24580d8d5a1e05',
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
-  "./dist/i18n.js": 'e65b997e06b885bd',
+  "./dist/i18n.js": 'ec9076fc5297afe6',
   "./dist/index.js": '260b3eb5d851b110',
   "./dist/calculator.js": 'dbac674aad83bbb2',
-  "./dist/orders.js": '8d0fa0b5da469879',
-  "./dist/suppliers.js": 'bb611698ce9a514b',
+  "./dist/orders.js": '192f0f90dfda040d',
+  "./dist/suppliers.js": 'd85ef1e20ae09f3f',
   "./dist/install-guide.js": '86df880954faeae9',
   "./js/allergen-model.js": 'a9ad7592da832a56',
   "./js/calculator-config.js": '2a04f05879932378',
@@ -162,7 +162,7 @@ const ASSET_HASHES = {
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/firebase.js": '4aeddee49dce8a21',
   "./js/i18n-dom.js": '24249af4367511e5',
-  "./js/i18n.js": 'f5d59efe9ee19ea1',
+  "./js/i18n.js": 'e7355bc1c52e0623',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/local-data.js": '91aa7f1699c897a1',
   "./js/location.js": '6aaf53615a8739d1',
@@ -175,7 +175,7 @@ const ASSET_HASHES = {
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/sw-update.js": '2ffc253aa03eff0f',
   "./js/update-gate.js": '1801738b3e6def2d',
-  "./dist/catalogue.js": '6365abfe1e93a534',
+  "./dist/catalogue.js": '9350a88dc7d2c4e7',
   "./dist/pastries.js": '542ddb995c74b911',
   "./dist/foodcost.js": '7c528cc0d5521d53',
   "./dist/inventory.js": 'caee82bcb52584c8',
@@ -183,7 +183,7 @@ const ASSET_HASHES = {
   "./dist/tokens.css": '86359636bea1c94f',
   "./dist/auth.css": '58cd14bdbf808ecc',
   "./dist/style.css": '97ba2c33e071292d',
-  "./dist/orders.css": 'a51af9d47d76ff97',
+  "./dist/orders.css": 'dc27c1f5c1840cea',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -198,7 +198,7 @@ const ASSET_HASHES = {
   "./catalogue.html": 'd7e133a7e7180865',
   "./dist/catalogue.css": '6a1f7d98c3506d8b',
   "./dist/label-print.css": 'c96c56dfef069675',
-  "./dist/records.css": 'e15955849eb3fde0',
+  "./dist/records.css": '0285e69618b83eed',
   "./pastries.html": '7f35bf54c3ee54db',
   "./dist/pastries.css": '636ec96ab272ae23',
   "./foodcost.html": '59bab773b490ded3',
