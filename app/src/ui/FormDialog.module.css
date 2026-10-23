@@ -23,3 +23,19 @@
 .dialog:focus-visible {
   outline: none;
 }
+
+/* The phone variant (FormDialog's `phoneFull`): below 700px the form takes the whole screen, with no scrim showing round it;
+   from 700px it is the card above. The height is the one token (--vh100), never a viewport unit of its own. */
+@media (max-width: 699.98px) {
+  .overlayFull {
+    padding: 0;
+  }
+
+  .modalFull {
+    max-width: none;
+    min-height: var(--vh100);
+    margin: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+}

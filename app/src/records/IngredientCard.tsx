@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { ReactNode, Ref } from 'react';
+import type { MutableRefObject, ReactNode, Ref } from 'react';
 import { Check, Trash2 } from 'lucide-react';
 import { flushSync } from 'react-dom';
 import { useBlocker } from 'react-router';
@@ -52,9 +52,22 @@ export interface NewSupplierHost {
   onDirty(dirty: boolean): void;
 }
 
+// What a screen that draws the card in a dialog ABOVE itself (the Recipe catalogue's «+ Add … as an ingredient») gives it.
+export interface IngredientCardHost {
+  // The card has (or no longer has) edits of its own.
+  onDirty(dirty: boolean): void;
+  // The card keeps its own Back here while it is on screen: it asks «Discard changes?» if something was typed, and then calls
+  // `onLeave`. The host calls it when the person leaves by another road (the browser's Back).
+  backRef: MutableRefObject<(() => void) | null>;
+}
+
 type Props = {
   // The item as the list held it when the card opened, or null for a new one. Only read once, by the first render.
   item: ItemLike | null;
+  // A NEW item's name, already typed elsewhere (a recipe row): the card STARTS from it, so an untouched card is not dirty.
+  presetName?: string;
+  // Hosted above another screen: the card then registers no router blocker (see LeaveBlocker) and reports through this.
+  host?: IngredientCardHost;
   // The kind it is filed under: fixed while the card is open, and sent as `kind`.
   kind: CardKind;
   // A supplier to start a NEW item on; never applied to an existing one.
@@ -108,7 +121,7 @@ type Refused = RefusedField | PriceBox | 'priceWeight';
 //
 // ⚠️ THE FOOD WORDS (the categories, the package words, the carton word) COME FROM THE VENUE'S COUNTRY, never from `t()`.
 export function IngredientCard({
-  item, kind, preset, suppliers, categories, packs, language, titleRef, onSave, onLeave, onDelete, deleting = false, renderNewSupplier, watchRefusedSupplier,
+  item, presetName, host, kind, preset, suppliers, categories, packs, language, titleRef, onSave, onLeave, onDelete, deleting = false, renderNewSupplier, watchRefusedSupplier,
   mayPrice = false, country, money = FALLBACK_MONEY, readHistory,
 }: Props) {
   const { t, locale } = useT();
@@ -125,7 +138,8 @@ export function IngredientCard({
   const legacyPrice = mayPrice && usesLegacyCard(opened);
   const priceActive = mayPrice && !legacyPrice;
   const [baseline] = useState<Working>(() => {
-    const first = workingFrom(opened, { supplierIds, preset, mayPrice: priceActive, lang: language });
+    const started = workingFrom(opened, { supplierIds, preset, mayPrice: priceActive, lang: language });
+    const first = !opened && presetName ? { ...started, name: presetName.slice(0, NAME_MAX) } : started;
     // C46: a case priced by an explicit size opens with the weight box empty, its unit menu on that unit (the size itself is
     // only a placeholder: an untouched Save writes nothing new).
     const hint = priceActive ? weightHintOf(opened, weightText(first)) : null;
@@ -221,34 +235,13 @@ export function IngredientCard({
 
   // ⚠️ EVERY WAY OUT GOES THROUGH THE ROUTER'S BLOCKER, not through the Back button: the browser's Back, another row picked in
   // the split's list, the rail and the tab bar all navigate. Staying on the same address is never blocked.
+  // ⚠️ HOSTED ABOVE ANOTHER SCREEN (`host`, the Recipe catalogue's «+ Add … as an ingredient») THERE IS NO BLOCKER AT ALL: the
+  // router asks only the LAST blocker registered, so one here would silence the editor underneath. That editor then turns every
+  // move into «close this card» and calls the card's own Back (host.backRef), which asks when something was typed.
   const shouldBlock = useCallback<BlockerFunction>(
     ({ currentLocation, nextLocation }) => !leavingClean.current && unsaved() && currentLocation.pathname !== nextLocation.pathname,
     [],
   );
-  const blocker = useBlocker(shouldBlock);
-  const latestBlocker = useRef(blocker);
-  useEffect(() => {
-    latestBlocker.current = blocker;
-    if (blocker.state !== 'blocked') {
-      askingLeave.current = false;
-      return;
-    }
-    if (askingLeave.current) return;
-    askingLeave.current = true;
-    void (async () => {
-      try {
-        const discard = await discardQuestion();
-        if (!mounted.current) return;
-        const current = latestBlocker.current;
-        if (current.state !== 'blocked') return;
-        if (discard) current.proceed();
-        else current.reset();
-      } catch (error) {
-        askingLeave.current = false;
-        throw error;
-      }
-    })();
-  });
 
   // ⚠️ THE BACK BUTTON ASKS FOR ITSELF, BEFORE IT NAVIGATES: its navigate(-1) is a POP, and the router's blocker fails
   // silently on a POP to an entry it did not create (a page opened by its address).
@@ -266,6 +259,15 @@ export function IngredientCard({
     leavingClean.current = true;
     onLeave();
   }
+
+  // Hosted: the host reaches this card's Back (the question included) through its ref, and hears whether the card has typing.
+  useEffect(() => {
+    if (!host) return undefined;
+    const ref = host.backRef;
+    ref.current = () => { void back(); };
+    return () => { ref.current = null; };
+  });
+  useEffect(() => { host?.onDirty(dirty); }, [dirty]);
 
   // ── Save ─────────────────────────────────────────────────────────────────────────────────────────────────────
   const nameBox = useRef<HTMLInputElement>(null);
@@ -396,7 +398,7 @@ export function IngredientCard({
     return all.sort((a, b) => a.name.localeCompare(b.name));
   }, [suppliers, made, heldSupplier, openLabels]);
 
-  const host: NewSupplierHost = {
+  const supplierHost: NewSupplierHost = {
     onSaved(one) {
       setCreatingSupplier(false);
       dialogDirtyRef.current = false;
@@ -801,8 +803,49 @@ export function IngredientCard({
       {confirmDialog}
       {alertDialog}
       {creatingSupplier && renderNewSupplier ? (
-        <FormDialog label={t('sup.newSupplier')}>{renderNewSupplier(host)}</FormDialog>
+        <FormDialog label={t('sup.newSupplier')}>{renderNewSupplier(supplierHost)}</FormDialog>
       ) : null}
+      {host ? null : <LeaveBlocker shouldBlock={shouldBlock} ask={discardQuestion} asking={askingLeave} />}
     </section>
   );
+}
+
+// The router's blocker for a card drawn as a page (see the note on shouldBlock): asks «Discard changes?» when a navigation is
+// blocked, and lets it go on or puts it back. A component of its own so that a hosted card can leave it out (SupplierCard's shape).
+function LeaveBlocker({ shouldBlock, ask, asking }: {
+  shouldBlock: BlockerFunction;
+  ask: () => Promise<boolean>;
+  asking: { current: boolean };
+}) {
+  const blocker = useBlocker(shouldBlock);
+  const latestBlocker = useRef(blocker);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  useEffect(() => {
+    latestBlocker.current = blocker;
+    if (blocker.state !== 'blocked') {
+      asking.current = false;
+      return;
+    }
+    if (asking.current) return;
+    asking.current = true;
+    void (async () => {
+      try {
+        const discard = await ask();
+        // The card went away while the question was open: the router has dropped its blocker.
+        if (!mounted.current) return;
+        const current = latestBlocker.current;
+        if (current.state !== 'blocked') return;
+        if (discard) current.proceed();
+        else current.reset();
+      } catch (error) {
+        asking.current = false;
+        throw error;
+      }
+    })();
+  });
+  return null;
 }
