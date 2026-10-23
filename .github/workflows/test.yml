@@ -87,7 +87,13 @@ jobs:
       # and the opposite of what a safety net is for. 15.26.0 is the version the
       # checks were verified against locally before this workflow was written.
       # Raise it deliberately, and re-run the suite locally when you do.
-      - run: npm install --global firebase-tools@15.26.0
+      #
+      # `--ignore-scripts`: exactly the install the two jobs that hold a Google
+      # credential use (deploy-functions below, preview.yml), so this job proves on
+      # every push that firebase-tools still runs the emulator without its install
+      # scripts. (The deploy commands are proven by each PR's Preview run and, for
+      # functions, by deploy-functions after the merge.) Change one, change all three.
+      - run: npm install --global --ignore-scripts firebase-tools@15.26.0
 
       # --project demo-theitalianclub: firebase-tools treats a `demo-` prefix as
       # offline-only — it looks for no credentials and can reach no real Firebase
@@ -185,10 +191,79 @@ jobs:
       id-token: write
 
     steps:
+      # No git credential left in the workspace: the deploy needs none.
       - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v5
         with:
           node-version: '22'
+
+      # Reproducible: the lockfile decides, not whatever npm feels like today.
+      # `--ignore-scripts`: see the firebase-tools step below. Measured on the
+      # 10 Oct 2026 lockfile: the only install scripts are @firebase/util's (it
+      # rewrites a stub that returns `undefined` into one that returns `undefined`
+      # when FIREBASE_WEBAPP_CONFIG is unset) and protobufjs's (a warning) — the two
+      # installs came out file-for-file identical otherwise.
+      - name: Install
+        run: npm ci --ignore-scripts
+        working-directory: functions
+
+      # ⚠️ `--audit-level=high` ON PURPOSE, AND THIS IS A JUDGEMENT WORTH RE-READING.
+      #
+      # ⚠️ THE REASON IT WAS FIRST WRITTEN IS GONE, AND THE LEVEL STAYS ANYWAY.
+      # It was set to `high` because the install then carried 8 MODERATE advisories,
+      # all the same unreachable `uuid` issue inside Google's own chain, with no
+      # fixed version — a permanently red job teaches people to ignore it. On
+      # 10 Sep 2026 firebase-functions went 6.5.0 → 7.3.2 and firebase-admin
+      # 13.6.0 → 14.3.0, and the tree is now CLEAN: `npm audit` reports 0.
+      #
+      # So `moderate` is finally reachable — and it is still not what this job
+      # wants, for a reason that has nothing to do with how clean the tree is.
+      # THIS JOB DEPLOYS THE FUNCTIONS; GITHUB PAGES DEPLOYS THE APP, in its own
+      # workflow this file cannot see. A blocked deploy here therefore does not
+      # stop a release — it ships the app WITHOUT the server half, which is
+      # exactly the split that went unnoticed for hours on 13 Aug 2026. Paying
+      # that price for a moderate advisory nobody can act on before Monday is a
+      # bad trade; Dependabot already reports every moderate, which is how the
+      # `qs` chain closed in the commit before this one was found in the first
+      # place — a nightly failure nobody had to be looking for.
+      #
+      # A HIGH or CRITICAL still stops the deploy. Raise the level to `moderate`
+      # only together with a way to hold BOTH halves back, never on its own.
+      - name: Vulnerability check (P11)
+        run: npm audit --audit-level=high
+        working-directory: functions
+
+      # ⚠️ NO PACKAGE IN THIS JOB RUNS CODE WHILE IT INSTALLS, AND EVERYTHING IS
+      # INSTALLED BEFORE THE SIGN-IN. The sign-in below writes a short-lived
+      # credential to the LIVE project into the workspace and points
+      # GOOGLE_APPLICATION_CREDENTIALS at it. This global install has no lockfile
+      # (firebase-tools ships none), so its ~670 packages are resolved afresh on
+      # every run, and npm runs install scripts by default — the usual way a
+      # hijacked npm package steals whatever it finds on the machine. Until
+      # October 2026 this install ran inside the Deploy step, and the `npm ci`
+      # above ran, AFTER the sign-in.
+      #
+      # ⚠️ `--ignore-scripts` IS THE PROTECTION, THE ORDER ONLY HELPS. A script
+      # allowed to run before the sign-in could leave a process behind that waits
+      # for the credential file to appear, so the order alone would not do. Every
+      # install in this job skips install scripts, and nothing is installed after
+      # the sign-in (both pinned by tests/ci-install-before-sign-in.test.mjs).
+      #
+      # It costs nothing here, measured on 15.26.0: the only install scripts in its
+      # tree are protobufjs's (prints a version warning), re2's (an optional native
+      # regex engine that only the local hosting emulator uses, falling back to
+      # JavaScript's own) and fsevents's (macOS only). The `rules` job installs it
+      # the same way, which proves on every push that the emulator still runs.
+      #
+      # What it does NOT cover: the code of firebase-tools and of the functions'
+      # packages still RUNS with the credential during the deploy — it is the
+      # deploy. The functions' lockfile fixes every version under them; for
+      # firebase-tools the pin fixes only firebase-tools itself, not the ~670
+      # packages under it.
+      - name: Install firebase-tools (before the sign-in, no install scripts)
+        run: npm install --global --ignore-scripts firebase-tools@15.26.0
 
       # ⚠️ THE TRUST IS PINNED TO THIS REPOSITORY, on Google's side, in TWO
       # PLACES. Both must name it or the exchange fails:
@@ -223,38 +298,5 @@ jobs:
           workload_identity_provider: projects/27778450817/locations/global/workloadIdentityPools/github-pool/providers/github-provider
           service_account: github-deploy@bakery-app-ebf90.iam.gserviceaccount.com
 
-      # Reproducible: the lockfile decides, not whatever npm feels like today.
-      - name: Install
-        run: npm ci
-        working-directory: functions
-
-      # ⚠️ `--audit-level=high` ON PURPOSE, AND THIS IS A JUDGEMENT WORTH RE-READING.
-      #
-      # ⚠️ THE REASON IT WAS FIRST WRITTEN IS GONE, AND THE LEVEL STAYS ANYWAY.
-      # It was set to `high` because the install then carried 8 MODERATE advisories,
-      # all the same unreachable `uuid` issue inside Google's own chain, with no
-      # fixed version — a permanently red job teaches people to ignore it. On
-      # 10 Sep 2026 firebase-functions went 6.5.0 → 7.3.2 and firebase-admin
-      # 13.6.0 → 14.3.0, and the tree is now CLEAN: `npm audit` reports 0.
-      #
-      # So `moderate` is finally reachable — and it is still not what this job
-      # wants, for a reason that has nothing to do with how clean the tree is.
-      # THIS JOB DEPLOYS THE FUNCTIONS; GITHUB PAGES DEPLOYS THE APP, in its own
-      # workflow this file cannot see. A blocked deploy here therefore does not
-      # stop a release — it ships the app WITHOUT the server half, which is
-      # exactly the split that went unnoticed for hours on 13 Aug 2026. Paying
-      # that price for a moderate advisory nobody can act on before Monday is a
-      # bad trade; Dependabot already reports every moderate, which is how the
-      # `qs` chain closed in the commit before this one was found in the first
-      # place — a nightly failure nobody had to be looking for.
-      #
-      # A HIGH or CRITICAL still stops the deploy. Raise the level to `moderate`
-      # only together with a way to hold BOTH halves back, never on its own.
-      - name: Vulnerability check (P11)
-        run: npm audit --audit-level=high
-        working-directory: functions
-
       - name: Deploy
-        run: |
-          npm install --global firebase-tools@15.26.0
-          firebase deploy --only functions --project bakery-app-ebf90 --non-interactive
+        run: firebase deploy --only functions --project bakery-app-ebf90 --non-interactive
