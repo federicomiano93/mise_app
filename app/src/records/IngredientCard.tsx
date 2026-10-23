@@ -10,7 +10,7 @@ import { allergensOn, nutritionOn } from '@mise/shared/venue-features';
 import type { Money } from '@mise/shared/currency';
 import { formatSummary, usesLegacyCard } from '@mise/shared/pack-format';
 import type { PackTranslate } from '@mise/shared/pack-format';
-import { formatPricePerUnit, pricePatch as pricePatchOf } from '@mise/shared/price-model';
+import { pricePatch as pricePatchOf } from '@mise/shared/price-model';
 import type { PriceBasis, PricePatch } from '@mise/shared/price-model';
 import { WEIGHT_UNIT_CHOICES } from '@mise/shared/pack-size';
 import type { WeightUnit } from '@mise/shared/pack-size';
@@ -27,7 +27,7 @@ import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import {
   BRAND_MAX, CATEGORY_MAX, NAME_MAX, NEW_CHOICE, NO_SUPPLIER_ID, PACK_WORD_MAX, SHORT_NAME_MAX,
-  buildSave, firstRefusal, formState, isDirty, labelOf, weightText, withFormat, withInner, workingFrom,
+  buildSave, firstRefusal, formState, isDirty, labelOf, readChoice, weightText, withFormat, withInner, workingFrom,
 } from './ingredientCardModel';
 import type { CardKind, ChoiceState, ItemLike, RefusedField, Working } from './ingredientCardModel';
 import { AllergenSections } from './AllergenSections';
@@ -37,9 +37,15 @@ import type { AllergenWorking, NutritionRefusal } from './allergenCardModel';
 import { PriceHistory } from './PriceHistory';
 import { PriceSection } from './PriceSection';
 import type { PriceBox } from './PriceSection';
+import { LegacyPriceSection } from './LegacyPriceSection';
+import {
+  UNIT_MAX, buildLegacySave, isLegacyEdited, isLegacyProductEdited, legacyPatch, legacyProductFrom, legacyProductRefusal,
+  legacyRefusal, legacySends, legacyStateFrom, legacyView as buildLegacyView,
+} from './legacyPriceModel';
+import type { LegacyBox, LegacyCtx, LegacyPriceState, LegacyProduct } from './legacyPriceModel';
 import {
   chooseVat, followFormat, isPriceDirty, isPriceEdited, priceCtxOf, priceRefusal, priceStateFrom, priceView, readPrice,
-  recompute, sharedTranslate, tapBasis, typeBox, typePieceKg, typeRate, typeUnit, weightHintOf,
+  recompute, tapBasis, typeBox, typePieceKg, typeRate, typeUnit, weightHintOf,
 } from './priceCardModel';
 import type { PriceFacts, PriceState } from './priceCardModel';
 import styles from './IngredientCard.module.css';
@@ -76,6 +82,8 @@ type Props = {
   // The words «Category» offers, and «what is inside the case» offers: the venue's lists in its OUTPUT language.
   categories: readonly string[];
   packs: readonly string[];
+  // The words the card of before's «Order unit» offers (the venue's own list); only that card reads it.
+  orderUnits?: readonly string[];
   // The venue's OUTPUT language (shared/market.ts outputLanguage): the carton word and the default package word follow it.
   language: string;
   titleRef: Ref<HTMLHeadingElement>;
@@ -107,8 +115,9 @@ type Props = {
   readHistory?: (id: string) => Promise<readonly Readonly<Record<string, unknown>>[]>;
 };
 
-// A Save refused on a price box, or on the weight box with the price's own sentence.
-type Refused = RefusedField | PriceBox | 'priceWeight';
+// A Save refused on a price box, or on the weight box with the price's own sentence (`legacyPackWeight`: the card of before's
+// own sentence), or on a «+ New …» box of the card of before's two menus.
+type Refused = RefusedField | PriceBox | LegacyBox | 'priceWeight' | 'legacyPackWeight' | 'legacyPack' | 'legacyUnit';
 
 // An ingredient's or packaging item's card, product data (parity C36–C57, C80–C81, C84–C97). Driven only by its props, so the
 // Recipe catalogue can open the same card later.
@@ -121,7 +130,7 @@ type Refused = RefusedField | PriceBox | 'priceWeight';
 //
 // ⚠️ THE FOOD WORDS (the categories, the package words, the carton word) COME FROM THE VENUE'S COUNTRY, never from `t()`.
 export function IngredientCard({
-  item, presetName, host, kind, preset, suppliers, categories, packs, language, titleRef, onSave, onLeave, onDelete, deleting = false, renderNewSupplier, watchRefusedSupplier,
+  item, presetName, host, kind, preset, suppliers, categories, packs, orderUnits = [], language, titleRef, onSave, onLeave, onDelete, deleting = false, renderNewSupplier, watchRefusedSupplier,
   mayPrice = false, country, money = FALLBACK_MONEY, readHistory,
 }: Props) {
   const { t, locale } = useT();
@@ -133,10 +142,11 @@ export function IngredientCard({
 
   const [opened] = useState(item);
   const supplierIds = suppliers.map(supplier => String(supplier.id));
-  // ⚠️ AN OLD PRICE SHAPE (decision T4) IS SHOWN, NEVER EDITED: the price section is then read-only, the format opens as for an
-  // employee, and Save sends no price at all (the product data still saves).
-  const legacyPrice = mayPrice && usesLegacyCard(opened);
-  const priceActive = mayPrice && !legacyPrice;
+  // ⚠️ AN OLD PRICE SHAPE (decision T4) KEEPS THE CARD OF BEFORE (step 3e-5, legacyPriceModel.ts): decided ONCE, when the card
+  // opens, for somebody who may write prices (an employee never gets it, C11). The new price block is then never drawn, the
+  // format opens as for an employee and the two menus «Package» and «Order unit» replace «Single | Case».
+  const [legacyCard] = useState(() => mayPrice && opened !== null && usesLegacyCard(opened));
+  const priceActive = mayPrice && !legacyCard;
   const [baseline] = useState<Working>(() => {
     const started = workingFrom(opened, { supplierIds, preset, mayPrice: priceActive, lang: language });
     const first = !opened && presetName ? { ...started, name: presetName.slice(0, NAME_MAX) } : started;
@@ -159,6 +169,18 @@ export function IngredientCard({
     : null));
   const priceRef = useRef(price);
 
+  // ── The card of before's working copy (step 3e-5): its price boxes and its two menus, made once at open ──
+  const [legacyOpened] = useState<LegacyPriceState>(() => legacyStateFrom(opened, kind === 'packaging' ? 'pcs' : null, money));
+  const [legacy, setLegacy] = useState<LegacyPriceState>(legacyOpened);
+  const legacyRef = useRef(legacy);
+  const [productOpened] = useState<LegacyProduct>(() => legacyProductFrom(opened));
+  const [product, setProduct] = useState<LegacyProduct>(productOpened);
+  const productRef = useRef(product);
+  // What the block reads of the card NOW: the item as opened, and the weight, package word and order unit as they stand.
+  const legacyCtxOf = (current: Working, menus: LegacyProduct): LegacyCtx => ({
+    item: opened, weight: weightText(current), packUnit: readChoice(menus.pack), orderUnit: readChoice(menus.unit), locale, money, country,
+  });
+
   // ── The pack list, allergens and nutrition's working copy (step 3e-4) ──
   // ⚠️ MADE ONCE, WHEN THE CARD OPENS, like the rest: the model's header says what a save writes from it.
   const [allergenBaseline] = useState<AllergenWorking>(() => allergenWorkingFrom(opened, money));
@@ -167,13 +189,17 @@ export function IngredientCard({
   const nutrientBoxes: NutrientBoxes = useRef({});
   const allergenControls = useRef<AllergenControls | null>(null);
   const [refusedNutrient, setRefusedNutrient] = useState<NutritionRefusal | null>(null);
-  const dirtyOf = (current: Working, state: PriceState | null, allergenCopy: AllergenWorking = allergenRef.current) =>
+  const dirtyOf = (
+    current: Working, state: PriceState | null, allergenCopy: AllergenWorking = allergenRef.current,
+    legacyNow: LegacyPriceState = legacyRef.current, menusNow: LegacyProduct = productRef.current,
+  ) =>
     isDirty(current, baseline, state ? isPriceEdited(state, ctxOf(current, state)) : false)
-    || allergenDirty(allergenCopy, allergenBaseline);
+    || allergenDirty(allergenCopy, allergenBaseline)
+    || (legacyCard && (isLegacyEdited(legacyNow, legacyOpened) || isLegacyProductEdited(menusNow, productOpened)));
 
   // ⚠️ DIRTY IS «DIFFERENT FROM THE COPY TAKEN AT OPEN», also kept in a ref: the router's blocker reads it at the moment of a
   // navigation, and a state value read there could be one render behind.
-  const dirty = dirtyOf(working, price, allergenWork);
+  const dirty = dirtyOf(working, price, allergenWork, legacy, product);
   const dirtyRef = useRef(false);
   // ⚠️ THE SUPPLIER FORM OPEN ABOVE HAS TYPING: the router asks only its LAST blocker, so this card's is the only one (the
   // supplier form registers none in a dialog) and it counts that typing too — one question, for both.
@@ -191,7 +217,7 @@ export function IngredientCard({
     workingRef.current = next;
     dirtyRef.current = dirtyOf(next, state);
     setWorking(next);
-    if (clears && (refused === clears || (clears === 'weight' && refused === 'priceWeight'))) setRefused(null);
+    if (clears && (refused === clears || (clears === 'weight' && (refused === 'priceWeight' || refused === 'legacyPackWeight')))) setRefused(null);
   };
   function priceEvent(run: (state: PriceState, ctx: ReturnType<typeof ctxOf>) => PriceState, clears?: PriceBox) {
     const state = priceRef.current;
@@ -203,6 +229,21 @@ export function IngredientCard({
     setPrice(next);
     dirtyRef.current = dirtyOf(current, next);
     if (clears && refused === clears) setRefused(null);
+  }
+  // The card of before's price boxes: set the matching field; typing in a refused box clears its sentence.
+  function legacyEvent(change: Partial<LegacyPriceState>, clears?: LegacyBox) {
+    const next = { ...legacyRef.current, ...change };
+    legacyRef.current = next;
+    setLegacy(next);
+    dirtyRef.current = dirtyOf(workingRef.current, priceRef.current);
+    if (clears ? refused === clears : refused === 'legacyPackWeight') setRefused(null);
+  }
+  // The card of before's two menus («Package», «Order unit»).
+  function changeProduct(next: LegacyProduct, clears: Refused) {
+    productRef.current = next;
+    setProduct(next);
+    dirtyRef.current = dirtyOf(workingRef.current, priceRef.current);
+    if (refused === clears) setRefused(null);
   }
   function changeAllergen(next: AllergenWorking) {
     const previous = allergenRef.current;
@@ -279,12 +320,18 @@ export function IngredientCard({
   const rateBox = useRef<HTMLInputElement>(null);
   const priceBox = useRef<HTMLInputElement>(null);
   const pieceBox = useRef<HTMLInputElement>(null);
+  const casePriceBox = useRef<HTMLInputElement>(null);
+  const caseCountBox = useRef<HTMLInputElement>(null);
+  const caseSizeBox = useRef<HTMLInputElement>(null);
+  const legacyPackBox = useRef<HTMLInputElement>(null);
+  const legacyUnitBox = useRef<HTMLInputElement>(null);
 
   function show(field: Refused) {
     setRefused(field);
     const target = {
-      name: nameBox, weight: weightBox, priceWeight: weightBox, category: categoryBox, inner: innerBox, count: countBox,
-      innerEmpty: innerMenu, rate: rateBox, box: priceBox, pieceKg: pieceBox,
+      name: nameBox, weight: weightBox, priceWeight: weightBox, legacyPackWeight: weightBox, category: categoryBox, inner: innerBox,
+      count: countBox, innerEmpty: innerMenu, rate: rateBox, box: priceBox, pieceKg: pieceBox, casePrice: casePriceBox,
+      caseCount: caseCountBox, caseSize: caseSizeBox, legacyPack: legacyPackBox, legacyUnit: legacyUnitBox,
     }[field].current;
     // Save is at the top, so the box can be far above the fold on a phone.
     target?.focus();
@@ -315,9 +362,18 @@ export function IngredientCard({
     const state = priceActive ? priceRef.current : null;
     const priceDirty = state ? isPriceDirty(state, opened) : false;
     // C84: the card's own refusals first, then the price's (the weight a price by weight needs, then an unreadable price box).
-    const wrong = firstRefusal(current, opened, { mayPrice: priceActive, lang: language, priceDirty });
+    // The card of before (C83): its own product refusals, then — only while the right to write prices still stands — the price's.
+    const menus = productRef.current;
+    const legacyNow = legacyCard && opened ? legacyRef.current : null;
+    const wrong = legacyNow ? legacyProductRefusal(current, menus) : firstRefusal(current, opened, { mayPrice: priceActive, lang: language, priceDirty });
     if (wrong) {
       show(wrong);
+      return;
+    }
+    const legacyCtx = legacyCtxOf(current, menus);
+    const wrongLegacy = legacyNow && mayPrice ? legacyRefusal(legacyNow, legacyCtx) : null;
+    if (wrongLegacy) {
+      show(wrongLegacy === 'packWeight' ? 'legacyPackWeight' : wrongLegacy);
       return;
     }
     const ctx = state ? ctxOf(current, state) : null;
@@ -334,11 +390,19 @@ export function IngredientCard({
       showNutrient(wrongNutrient);
       return;
     }
-    const patch = state && ctx ? pricePatchOf(readPrice(state, ctx), new Date().toISOString(), weightText(current)) : null;
-    const built = buildSave({
-      working: current, item: opened, kind, lang: language, startSupplierId: baseline.supplierId,
-      mayPrice: priceActive, priceDirty, pricePatch: patch,
-    });
+    // The card of before hands the store a price only when a price box or menu moved, or the weight did (legacySends), and only
+    // for whoever may write prices NOW; it never reports a unit change (the order unit is a menu a person chose).
+    const patch = legacyNow
+      ? (mayPrice && legacySends(legacyNow, legacyOpened, weightText(current), weightText(baseline))
+        ? legacyPatch(legacyNow, legacyOpened, legacyCtx, new Date().toISOString())
+        : null)
+      : (state && ctx ? pricePatchOf(readPrice(state, ctx), new Date().toISOString(), weightText(current)) : null);
+    const built = legacyNow && opened
+      ? { payload: buildLegacySave({ working: current, product: menus, item: opened, kind, startSupplierId: baseline.supplierId }), unitChangedFrom: '' }
+      : buildSave({
+        working: current, item: opened, kind, lang: language, startSupplierId: baseline.supplierId,
+        mayPrice: priceActive, priceDirty, pricePatch: patch,
+      });
     // ⚠️ ONLY THE GROUPS THAT CHANGED are added, and `now` is taken once, here (the model's header).
     const payload = { ...built.payload, ...allergenPayload(
       allergenCopy, opened, kind, new Date().toISOString(), { allergens: allergensOn(location), nutrition: nutritionOn(location) },
@@ -437,8 +501,10 @@ export function IngredientCard({
   const titleKey: MessageKey = kind === 'packaging'
     ? (opened ? 'sup.editPackaging' : 'sup.newPackaging')
     : (opened ? 'sup.editIngredient' : 'sup.newIngredient');
-  const carton = working.format === 'carton';
-  const weightRefused = refused === 'weight' || refused === 'priceWeight';
+  const carton = working.format === 'carton' && !legacyCard;
+  const weightRefused = refused === 'weight' || refused === 'priceWeight' || refused === 'legacyPackWeight';
+  const legacyDrawn = legacyCard && mayPrice;
+  const legacyViewNow = legacyDrawn ? buildLegacyView(legacy, legacyCtxOf(working, product), t) : null;
   const weightHint = priceActive ? weightHintOf(opened, weightText(working)) : null;
   const view = price ? priceView(price, ctxOf(working, price), t) : null;
 
@@ -462,6 +528,47 @@ export function IngredientCard({
   };
   const categoryWords = lists(working.category, categories);
   const packWords = lists(working.inner, packs);
+
+  // The card of before's two «+ New …» menus: «Package» (the venue's package words) and «Order unit» (its order units).
+  const legacyMenu = (which: 'pack' | 'unit') => {
+    const isPack = which === 'pack';
+    const state = product[which];
+    const field = isPack ? 'legacyPack' : 'legacyUnit';
+    const words = lists(state, isPack ? packs : orderUnits);
+    return (
+      <div className={styles.field}>
+        <label htmlFor={id(`legacy-${which}`)} className={styles.label}>{t(isPack ? 'sup.ing.pack' : 'sup.legacy.orderUnit')}</label>
+        <select
+          id={id(`legacy-${which}`)}
+          className={styles.box}
+          value={state.choice}
+          onChange={event => { changeProduct({ ...product, [which]: { choice: event.target.value, typed: state.typed } }, field); }}
+        >
+          <option value="">{t('sup.ing.choiceNone')}</option>
+          {words.map(word => <option key={word} value={word}>{word}</option>)}
+          <option value={NEW_CHOICE}>{t(isPack ? 'sup.ing.newPack' : 'sup.legacy.newUnit')}</option>
+        </select>
+        {state.choice === NEW_CHOICE ? (
+          <input
+            ref={isPack ? legacyPackBox : legacyUnitBox}
+            type="text"
+            autoComplete="off"
+            autoFocus
+            className={styles.box}
+            maxLength={isPack ? PACK_WORD_MAX : UNIT_MAX}
+            placeholder={t(isPack ? 'sup.ing.packPlaceholder' : 'sup.legacy.unitPlaceholder')}
+            aria-label={t(isPack ? 'sup.ing.packNewAria' : 'sup.legacy.unitAria')}
+            {...aria(field, id(`legacy-${which}-error`))}
+            value={state.typed}
+            onChange={event => { changeProduct({ ...product, [which]: { choice: NEW_CHOICE, typed: event.target.value } }, field); }}
+          />
+        ) : null}
+        <p id={id(`legacy-${which}-error`)} role="status" className={refused === field ? styles.error : styles.quiet}>
+          {refused === field ? t(isPack ? 'sup.ing.packBlank' : 'sup.legacy.unitBlank') : ''}
+        </p>
+      </div>
+    );
+  };
 
   const aria = (field: Refused, errorId: string, ...more: string[]) => ({
     'aria-invalid': refused === field ? true : undefined,
@@ -629,7 +736,9 @@ export function IngredientCard({
               </select>
             </div>
             <p id={id('weight-error')} role="status" className={weightRefused ? styles.error : styles.quiet}>
-              {refused === 'weight' ? t('sup.ing.weightInvalid') : (refused === 'priceWeight' ? t('sup.price.weightNeeded') : '')}
+              {refused === 'weight'
+                ? t('sup.ing.weightInvalid')
+                : (refused === 'priceWeight' ? t('sup.price.weightNeeded') : (refused === 'legacyPackWeight' ? t('sup.legacy.packNeeded') : ''))}
             </p>
             {working.weight.legacy === '' ? null : (
               <div className={styles.legacy}>
@@ -648,28 +757,32 @@ export function IngredientCard({
             )}
           </div>
 
-          <div className={styles.field}>
-            <span id={id('pack-label')} className={styles.label}>{t('sup.ing.pack')}</span>
-            {/* ⚠️ NOT A <label>: a label around two buttons would press the first one when its text is tapped. */}
-            <div role="group" aria-labelledby={id('pack-label')} className={styles.segments}>
-              {(['single', 'carton'] as const).map(format => (
-                <button
-                  key={format}
-                  type="button"
-                  className={styles.segment}
-                  aria-pressed={working.format === format}
-                  onClick={() => {
-                    update(withFormat(working, format, language));
-                    // A sentence about the case's count or word means nothing once the case is gone, and must not come back.
-                    if (format === 'single' && (refused === 'count' || refused === 'inner' || refused === 'innerEmpty')) setRefused(null);
-                  }}
-                >
-                  {t(format === 'single' ? 'sup.ing.formatSingle' : 'sup.ing.formatCarton')}
-                </button>
-              ))}
+          {legacyCard ? legacyMenu('pack') : (
+            <div className={styles.field}>
+              <span id={id('pack-label')} className={styles.label}>{t('sup.ing.pack')}</span>
+              {/* ⚠️ NOT A <label>: a label around two buttons would press the first one when its text is tapped. */}
+              <div role="group" aria-labelledby={id('pack-label')} className={styles.segments}>
+                {(['single', 'carton'] as const).map(format => (
+                  <button
+                    key={format}
+                    type="button"
+                    className={styles.segment}
+                    aria-pressed={working.format === format}
+                    onClick={() => {
+                      update(withFormat(working, format, language));
+                      // A sentence about the case's count or word means nothing once the case is gone, and must not come back.
+                      if (format === 'single' && (refused === 'count' || refused === 'inner' || refused === 'innerEmpty')) setRefused(null);
+                    }}
+                  >
+                    {t(format === 'single' ? 'sup.ing.formatSingle' : 'sup.ing.formatCarton')}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
+
+        {legacyCard ? <div className={styles.pair}>{legacyMenu('unit')}</div> : null}
 
         {carton ? (
           <div role="group" aria-labelledby={id('contains-label')} className={styles.field}>
@@ -762,12 +875,26 @@ export function IngredientCard({
             ) : null}
           />
         ) : null}
-        {legacyPrice && opened ? (
-          <div role="group" aria-label={t('sup.price.generic', { currency: money.symbol })} className={styles.priceBlock}>
-            <p className={styles.readonly}>{formatPricePerUnit(opened, money, sharedTranslate(t))}</p>
-            {opened.vatRate == null ? null : <p className={styles.readonly}>{t('sup.price.legacy.vat', { rate: String(opened.vatRate) })}</p>}
-            <p className={styles.hint}>{t('sup.price.legacy.note')}</p>
-          </div>
+        {legacyViewNow ? (
+          <LegacyPriceSection
+            view={legacyViewNow}
+            refused={refused === 'rate' || refused === 'pieceKg' || refused === 'casePrice' || refused === 'caseCount' || refused === 'caseSize' ? refused : null}
+            boxRefs={{ rate: rateBox, pieceKg: pieceBox, casePrice: casePriceBox, caseCount: caseCountBox, caseSize: caseSizeBox }}
+            onUnit={unit => { legacyEvent({ unit }); }}
+            onBox={(box, text) => { legacyEvent({ [box]: text }, box); }}
+            onItemUnit={caseItemUnit => { legacyEvent({ caseItemUnit }); }}
+            onVat={vat => { legacyEvent({ vat }); }}
+            history={opened && readHistory ? (
+              <PriceHistory
+                id={String(opened.id)}
+                money={money}
+                read={readHistory}
+                onFailed={() => {
+                  void alert({ message: t('sup.price.history.failed', { name: labelOf(opened) }), okLabel: t('common.ok') });
+                }}
+              />
+            ) : null}
+          />
         ) : null}
 
         {/* Packaging has none of it (parity C80). Each panel is read live from the venue's switches inside. */}
