@@ -358,6 +358,14 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   does — and a new ingredient writes all five. The pack text proposes after a 450 ms pause or at once on leaving the box, never on the
   first draw. The folds open closed on every open. Mise 2 has no «?» sheet yet, so ONE safety sentence («This only ticks boxes…») is
   drawn inline under the pack box; the other help text waits for the shared «?».
+  ⚠️ **The one exception to «a feature never imports another feature's folder»** (T15, «+ Add "…" as an ingredient»): `recipes/` may
+  import `../suppliers/CreateIngredientOverlay` and NOTHING else from `suppliers/` (`RecipesSection.createIngredient.spec.tsx`
+  fails on any other). The overlay draws `records/IngredientCard` hosted (`host`: no router blocker of its own, its Back handed
+  to the editor through a ref) in a `FormDialog` (`phoneFull`: a card from 700px, the whole screen below). It saves through
+  the **write-only Suppliers store** (`SuppliersWritesProvider`: created, never started, so it opens no listener and reads no
+  price — the Catalogue loads no money); `CreateIngredientProvider` sits inside the Catalogue's `StatusMessageProvider` and
+  says the store's refusals there. The ingredients and suppliers the card needs are handed in by the editor from the
+  Catalogue's own store.
 - `settings/` — the Settings page (today: the Account card).
 - `styles/` — `tokens.css` (every colour, size, radius, shadow) and `base.css`.
 - `testing/` — `renderApp`, the fake session store and other spec helpers.

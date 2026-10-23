@@ -21,6 +21,9 @@ export type Linking = {
   onSeeAll: (key: number, typed: string) => void;
   // The link line was tapped: the chooser.
   onOpen: (key: number) => void;
+  // «+ Add "…" as an ingredient» under the suggestions (the person may add records), and what a tap on it does.
+  mayCreate: boolean;
+  onCreate: (key: number, name: string) => void;
 };
 
 type Props = {
@@ -28,7 +31,7 @@ type Props = {
   nameInvalid: boolean;
   amountInvalid: boolean;
   // The boxes under the editor's hand, so a refused save can put the cursor in the first one that is wrong.
-  register: (key: number, box: 'name' | 'amount', node: HTMLInputElement | null) => void;
+  register: (key: number, box: 'name' | 'amount' | 'link', node: HTMLInputElement | HTMLButtonElement | null) => void;
   onChange: (key: number, fields: Row) => void;
   onRemove: (key: number) => void;
   linking: Linking;
@@ -57,6 +60,8 @@ export function IngredientRow({ item, nameInvalid, amountInvalid, register, onCh
     linked: link,
     onPick: chosen => { linking.onPick(key, chosen); },
     onSeeAll: typed => { linking.onSeeAll(key, typed); },
+    mayCreate: linking.mayCreate,
+    onCreate: name => { linking.onCreate(key, name); },
   });
   const grams = row.grams === '' || row.grams === undefined || row.grams === null ? '' : String(row.grams);
 
@@ -114,6 +119,7 @@ export function IngredientRow({ item, nameInvalid, amountInvalid, register, onCh
       {suggest.list}
       {/* What this row points at, and the button that changes it. A row with no link is not an error: it stays perfectly usable. */}
       <button
+        ref={node => { register(key, 'link', node); }}
         type="button"
         className={styles.link}
         data-linked={link !== null}

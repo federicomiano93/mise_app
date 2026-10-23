@@ -439,6 +439,7 @@ export const en = {
   'fc.labourPctLine': 'Labour {labour}%  ·  everything {total}% of the net price',
   'fc.packagingPerNote': 'Boxes, bags, labels — how many for each piece, pack or kilo you sell. They add cost but no weight.',
   'cat.suggest.seeAll': 'See all ({n})',
+  'cat.createIngredient': '+ Add «{name}» as an ingredient',
   'ui.recipes': 'Recipes',
   'ui.delete': 'Delete',
 

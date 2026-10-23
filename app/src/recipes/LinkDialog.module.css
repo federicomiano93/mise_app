@@ -102,3 +102,8 @@
   padding: var(--s3);
   color: var(--ink-2);
 }
+
+.create {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
