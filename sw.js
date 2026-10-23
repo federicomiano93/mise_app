@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v680';
+const CACHE_NAME = 'theitalianclub-v685';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -15,7 +15,7 @@ const CACHE_NAME = 'theitalianclub-v680';
 // itself failed.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 69-file precache, i.e.
+// small — activate() only happens after a successful 67-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -94,11 +94,6 @@ const ASSETS = [
   './js/sections.js',
   './js/sw-update.js',
   './js/update-gate.js',
-  // The recipe export's two libraries. They are not inside any bundle (BUILD_CONFIG.lazyVendorFiles):
-  // the Calculator's bundle import()s them from ../js/vendor/ when somebody taps Export. Listed here
-  // so that tap works with no signal; served from this cache by the fetch handler like any ASSET.
-  './js/vendor/jspdf.esm.js',
-  './js/vendor/write-excel-file.esm.js',
   './dist/catalogue.js',
   './dist/pastries.js',
   './dist/foodcost.js',
@@ -154,20 +149,20 @@ const ASSET_HASHES = {
   "./suppliers.html": '0f24580d8d5a1e05',
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
-  "./dist/i18n.js": 'f15af44f10e33d3b',
-  "./dist/index.js": '57a736a03901c5dd',
-  "./dist/calculator.js": 'bba1efb8a7a4776b',
-  "./dist/orders.js": '1f8f1d0ce2cc02d8',
-  "./dist/suppliers.js": '63831e51cfc1d9b3',
+  "./dist/i18n.js": '7380b5dee6beb878',
+  "./dist/index.js": '260b3eb5d851b110',
+  "./dist/calculator.js": '2f988c345b57059d',
+  "./dist/orders.js": '515deaac1b4e6ffe',
+  "./dist/suppliers.js": '245436b96e0fc146',
   "./dist/install-guide.js": '86df880954faeae9',
   "./js/allergen-model.js": 'a9ad7592da832a56',
-  "./js/calculator-config.js": 'dbac2c303371d302',
+  "./js/calculator-config.js": '55c116c1374d6a99',
   "./js/credentials.js": 'b805f88d003ea918',
   "./js/currency.js": '241b1dbdf4cc465f',
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/firebase.js": '4aeddee49dce8a21',
   "./js/i18n-dom.js": '24249af4367511e5',
-  "./js/i18n.js": 'ad2d2afae35c1d0c',
+  "./js/i18n.js": '61399ae3af6fbf89',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/local-data.js": '91aa7f1699c897a1',
   "./js/location.js": '6aaf53615a8739d1',
@@ -180,17 +175,15 @@ const ASSET_HASHES = {
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/sw-update.js": '2ffc253aa03eff0f',
   "./js/update-gate.js": '1801738b3e6def2d',
-  "./js/vendor/jspdf.esm.js": 'c59e9f48f24c403f',
-  "./js/vendor/write-excel-file.esm.js": '9c9b6920e629cb74',
-  "./dist/catalogue.js": '8f1fe6aee40caf27',
-  "./dist/pastries.js": 'f28377a9f3adcd4e',
-  "./dist/foodcost.js": '7084a84a14fb48ef',
-  "./dist/inventory.js": 'bac42c8abb8c1a3d',
+  "./dist/catalogue.js": '415f2b3ed9aad8d2',
+  "./dist/pastries.js": '542ddb995c74b911',
+  "./dist/foodcost.js": '7c528cc0d5521d53',
+  "./dist/inventory.js": 'caee82bcb52584c8',
   "./qr.png": '761a95e5bc25e2ba',
-  "./dist/tokens.css": 'd88b3a4c45b4b8a7',
+  "./dist/tokens.css": 'f01dbf224edf4ea3',
   "./dist/auth.css": '58cd14bdbf808ecc',
-  "./dist/style.css": '2ea7421efdb25b15',
-  "./dist/orders.css": 'a51af9d47d76ff97',
+  "./dist/style.css": 'd1ba83fcbe1ce109',
+  "./dist/orders.css": 'dc27c1f5c1840cea',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -203,11 +196,11 @@ const ASSET_HASHES = {
   "./fonts/atkinson-next-digits.woff2": '99ffa5b0e9a45a2b',
   "./js/splash-init.js": 'c68474ad53893e48',
   "./catalogue.html": 'd7e133a7e7180865',
-  "./dist/catalogue.css": 'ac6b5f2843dc7902',
+  "./dist/catalogue.css": '6a1f7d98c3506d8b',
   "./dist/label-print.css": 'c96c56dfef069675',
-  "./dist/records.css": 'e15955849eb3fde0',
+  "./dist/records.css": '0285e69618b83eed',
   "./pastries.html": '7f35bf54c3ee54db',
-  "./dist/pastries.css": 'bd6b926af0a75ce7',
+  "./dist/pastries.css": '636ec96ab272ae23',
   "./foodcost.html": '59bab773b490ded3',
   "./dist/foodcost.css": '92d3e004797ffba6',
   "./inventory.html": '4caee7fc2b8256a8',
@@ -245,7 +238,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 69 files.
+// project's post-deploy sweep, which already asks the live site for all 67 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

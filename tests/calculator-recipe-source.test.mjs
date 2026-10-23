@@ -149,6 +149,47 @@ test('what counts as weighable', () => {
   assert.equal(isWeighable(null), false);
 });
 
+// ⚠️⚠️ THE CATALOGUE STORES THE NUMBER AS TYPED, IN ITS OWN UNIT. «Flour 1 kg» is
+// { grams: 1, unit: 'kg' }. Copied raw it read as 1 g, and a 1720 g dough of
+// Flour 1 kg / Water 700 g / Salt 20 g came out 2 g of flour and ~1670 g of water.
+test('⚠️ a kg row reaches the Calculator in grams', () => {
+  const kg = {
+    'cat-1': {
+      name: 'Bread',
+      ingredients: [
+        { rid: 'r-flour', label: 'Flour', grams: 1, unit: 'kg' },
+        { rid: 'r-water', label: 'Water', grams: 700, unit: 'g' },
+        { rid: 'r-salt', label: 'Salt', grams: 20, unit: 'g' },
+      ],
+    },
+  };
+  const r = resolveRecipe({ catalogueId: 'cat-1' }, kg);
+  assert.equal(canCalculate(r), true);
+  assert.deepEqual(r.ingredients.map(i => i.grams), [1000, 700, 20]);
+});
+
+test('kg is read loosely, and a fractional kg has no float tail', () => {
+  const rows = [
+    { rid: 'a', label: 'A', grams: 1.5, unit: 'kg' },
+    { rid: 'b', label: 'B', grams: 1.005, unit: ' KG ' },
+    { rid: 'c', label: 'C', grams: 250, unit: 'gr' },
+    { rid: 'd', label: 'D', grams: 30 },
+    { rid: 'e', label: 'E', grams: '0.4', unit: 'Kg' },
+  ];
+  const r = resolveRecipe({ catalogueId: 'x' }, { x: { name: 'X', ingredients: rows } });
+  assert.deepEqual(r.ingredients.map(i => i.grams), [1500, 1005, 250, 30, 400]);
+});
+
+test('volume rows are still refused, not converted', () => {
+  const ml = { x: { name: 'X', ingredients: [
+    { rid: 'a', label: 'Flour', grams: 1, unit: 'kg' },
+    { rid: 'b', label: 'Milk', grams: 0.5, unit: 'l' },
+  ] } };
+  const r = resolveRecipe({ catalogueId: 'x' }, ml);
+  assert.equal(r.problem, PROBLEMS.unweighable);
+  assert.equal(r.problemRow, 'Milk');
+});
+
 // ── ⚠️ THE COST TRAP ─────────────────────────────────────────────────────────
 
 // The Catalogue is built for 500+ recipes and the Calculator needs three. A
