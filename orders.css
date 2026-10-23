@@ -2244,7 +2244,13 @@ a.home-reminder {
    .lab-size-custom): a field label can wrap to two lines at 296px, and with the default
    stretch the box beside it would then start lower. Bottom-aligned, the BOXES share a line
    and a long label only grows upward. */
-.alg-nutrition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: end; }
+.alg-nutrition { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; align-items: end; grid-auto-flow: row dense; }
+/* A refused nutrition figure's message: the grid item right after its box, across both
+   columns. ⚠️ `dense` above is what keeps the NEXT box beside the refused one — without it
+   the message would push every box after it down a row and the pairs would re-shuffle.
+   Scoped under .alg-nutrition so it outranks .mgmt-field-error's margin further down: the
+   grid's own gap is the space above it. */
+.alg-nutrition .alg-nut-error { grid-column: 1 / -1; margin: 0; }
 
 /* Two fields that belong together, side by side — «Come si acquista» and the rate.
    ⚠️ THE SAME GRID AS .alg-nutrition ABOVE, deliberately: identical values, three

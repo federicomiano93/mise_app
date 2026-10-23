@@ -174,6 +174,7 @@ body {
   color: var(--pas-text);
 }
 .pas-row-main:focus-visible { outline: 2px solid var(--pas-accent); outline-offset: -2px; }
+.pas-row-main[aria-disabled="true"] { cursor: default; }
 .pas-row[data-open="true"] .pas-row-main { background: var(--pas-accent-light); }
 
 .pas-row-name { flex: 1; min-width: 0; font-size: 20px; overflow-wrap: anywhere; }
@@ -470,8 +471,11 @@ input.pas-qty.pas-invalid {
   font-weight: 600;
   cursor: pointer;
 }
-.pas-confirm-btn:active { transform: scale(.97); }
+.pas-confirm-btn:active:not(:disabled) { transform: scale(.97); }
 .pas-confirm-btn:focus-visible { outline: 2px solid var(--pas-accent); outline-offset: 2px; }
+/* Disabled only until the day's first answer is in (pastries-day.js): a second
+   or two on a new phone, never once the list has loaded. */
+.pas-confirm-btn:disabled { opacity: .6; cursor: default; }
 
 /* The list is recorded for tonight: the tick says so, and Edit is the way back
    in. Deliberately NOT green — a day already done must never read as one still

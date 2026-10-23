@@ -95,6 +95,113 @@ test('⚠️ the print host is built on demand and removed when printing ends', 
   assert.match(src, /removeEventListener\('afterprint'/, 'and the listener must go with it');
 });
 
+test('⚠️⚠️ the host outlives `afterprint` until the person is back in the page (Android, 13 Oct 2026)', async () => {
+  // Driven on the lab tablet: Android fires `afterprint` as soon as print() hands
+  // over, BEFORE its print screen lays the page out. A host removed on that event
+  // left nothing to print — the tablet offered a BLANK page. Run for real against a
+  // small fake page, because the order of three events is the whole fix.
+  const page = fakePage();
+  const { printSheet } = await import('../js/catalogue/label-print.js');
+  const resolved = resolveLabel(sample(), DEFAULT_PROFILE, {}, 'en');
+  try {
+    printSheet(resolved, { sizeId: 'p76x51' });
+    assert.equal(page.prints, 1);
+    assert.equal(page.hosts().length, 1, 'the host is in the page when print() is called');
+
+    page.fire('afterprint');
+    assert.equal(page.hosts().length, 1, '⚠️ afterprint alone must NOT remove the host — that is the blank page');
+
+    page.fire('pointerdown');
+    assert.equal(page.hosts().length, 0, 'the first tap back in the page removes it');
+    assert.equal(page.listenerCount(), 0, 'and every listener goes with it');
+
+    // A key works too.
+    printSheet(resolved);
+    page.fire('afterprint');
+    page.fire('keydown');
+    assert.equal(page.hosts().length, 0);
+    assert.equal(page.listenerCount(), 0);
+
+    // A tap BEFORE afterprint is not «back in the page»: nothing is removed.
+    printSheet(resolved);
+    page.fire('pointerdown');
+    assert.equal(page.hosts().length, 1);
+
+    // A second Print replaces the first host and leaves only its own listeners.
+    printSheet(resolved);
+    assert.equal(page.hosts().length, 1);
+    assert.equal(page.listenerCount(), 1, 'only the new host\'s afterprint is waiting');
+    page.fire('afterprint');
+    page.fire('pointerdown');
+    assert.equal(page.hosts().length, 0);
+    assert.equal(page.listenerCount(), 0);
+  } finally {
+    page.restore();
+  }
+});
+
+test('⚠️⚠️ the label and the declaration are never machine-translated (13 Oct 2026)', async () => {
+  // Found on the lab tablet: Chrome offered to translate the page (the app's
+  // language was not the tablet's), and a yes would have rewritten the allergen
+  // names on screen AND on the printed sheet. The country decides these words.
+  const page = fakePage();
+  try {
+    const { buildSheet } = await import('../js/catalogue/label-print.js');
+    const sheet = buildSheet(resolveLabel(sample(), DEFAULT_PROFILE, {}, 'it'));
+    assert.equal(sheet.attrs.translate, 'no', 'the sheet — preview and print — carries translate="no"');
+  } finally {
+    page.restore();
+  }
+  assert.match(codeOf(read('js/catalogue/label-view.js')), /el\('div', \{ class: 'lab-card', translate: 'no' \}\)/);
+  const detail = codeOf(read('js/catalogue/catalogue-detail.js'));
+  for (const cls of ['cat-decl-list', 'cat-decl-contains', 'cat-decl-traces']) {
+    assert.match(detail, new RegExp(`class: '${cls}', translate: 'no'`), `${cls} must carry translate="no"`);
+  }
+});
+
+// Just enough of a document and window for printSheet(): elements that can be
+// appended and removed, and a window whose listeners can be fired and counted.
+function fakePage() {
+  const saved = { window: globalThis.window, document: globalThis.document };
+  const listeners = [];
+  const node = (tag) => {
+    const n = {
+      tagName: tag, children: [], parent: null, style: {}, dataset: {}, attrs: {},
+      className: '', textContent: '',
+      setAttribute(k, v) { this.attrs[k] = String(v); if (k === 'id') this.id = String(v); },
+      appendChild(c) { c.parent = this; this.children.push(c); return c; },
+      remove() { if (this.parent) this.parent.children = this.parent.children.filter(c => c !== this); this.parent = null; },
+      addEventListener() {},
+    };
+    return n;
+  };
+  const body = node('body');
+  globalThis.document = {
+    body,
+    createElement: node,
+    createTextNode: (text) => ({ text, parent: null }),
+    getElementById: (id) => body.children.find(c => c.id === id) || null,
+  };
+  const page = {
+    prints: 0,
+    hosts: () => body.children.filter(c => c.id === 'labelPrint'),
+    listenerCount: () => listeners.length,
+    fire(type) { for (const l of listeners.filter(x => x.type === type)) l.fn(); },
+    restore() { globalThis.window = saved.window; globalThis.document = saved.document; },
+  };
+  globalThis.window = {
+    // The capture flag is part of a listener's identity, as in a real browser: added
+    // with `true` and removed without it, the listener would stay.
+    addEventListener(type, fn, capture = false) { listeners.push({ type, fn, capture: !!capture }); },
+    removeEventListener(type, fn, capture = false) {
+      const i = listeners.findIndex(x => x.type === type && x.fn === fn && x.capture === !!capture);
+      if (i !== -1) listeners.splice(i, 1);
+    },
+    print() { page.prints += 1; },
+  };
+  return page;
+}
+
 test('⚠️ the print host is not called .preview-overlay', () => {
   // That class is in BUSY_SELECTORS (js/update-gate.js): a node carrying it postpones
   // a compulsory update for as long as it exists. The same trap is already documented
