@@ -131,22 +131,36 @@ export function isLegacyProductEdited(product: LegacyProduct, opened: LegacyProd
     !== JSON.stringify([choiceKey(opened.pack), choiceKey(opened.unit)]);
 }
 
+// A «bag of …» case whose stored size is not what the weight says NOW: the card says «the price updates when you save», and the
+// save must then really re-price it — also when the weight was changed BEFORE this card opened (an employee's card has no price
+// and leaves the case at the old size; review of 24 Oct 2026). Read in the card's live context.
+export function packRepriced(state: LegacyPriceState, ctx: LegacyCtx): boolean {
+  if (!inCase(state) || state.caseItemUnit !== PACK_ITEM) return false;
+  const stored = ctx.item ? storedCaseOf(ctx.item) : null;
+  const current = packBaseOf(ctx.weight);
+  return Boolean(stored && stored.caseItemUnit === PACK_ITEM && current
+    && (current.size !== stored.caseItemSize || current.priceUnit !== ctx.item?.priceUnit));
+}
+
 // Does this save hand a price to the store at all? (The header's difference.) Only when a price box or menu moved, or the weight
-// did — a «bag of …» case copies its size from the weight at save time, which is how the original re-prices it.
-export function legacySends(state: LegacyPriceState, opened: LegacyPriceState, weightNow: string, weightOpened: string): boolean {
-  return isLegacyEdited(state, opened) || weightNow !== weightOpened;
+// did, or a «bag of …» case's size no longer matches the weight (packRepriced) — a «bag of …» case copies its size from the weight
+// at save time, which is how the original re-prices it.
+export function legacySends(state: LegacyPriceState, opened: LegacyPriceState, weightNow: string, weightOpened: string, ctx: LegacyCtx): boolean {
+  return isLegacyEdited(state, opened) || weightNow !== weightOpened || packRepriced(state, ctx);
 }
 
 // ── Reading ──────────────────────────────────────────────────────────────────
 
 // The input pricePatch reads — the original's read(), box for box. The four case boxes are only read as a case when the menu says
 // so: pricePatch writes them all as null otherwise, which is what clears an old case.
-// ⚠️ DIFFERENCE FROM THE CURRENT APP, ON PURPOSE — A RATE BOX NOBODY TYPED IN KEEPS EVERY DECIMAL (`opened`, the state the card
-// opened with): pricePatch rounds a typed rate to four decimals, so the original re-saved a stored 1.666667 as 1.6667 on any save.
-// Here the rate is the stored figure exactly until a person types in its box (`keepRate`); a typed rate is rounded as always.
+// ⚠️ DIFFERENCE FROM THE CURRENT APP, ON PURPOSE — A RATE BOX NOBODY TYPED IN KEEPS ITS DECIMALS (`opened`, the state the card
+// opened with): pricePatch rounds a typed rate to four decimals, so the original re-saved a stored 1.666667 as 1.6667 on any save,
+// and a straw at 0.001745 switched from «By the case» to «each» as 0.0017. Here the rate is the stored figure (to the six decimals
+// the case rates are kept in) until a person types in its box (`keepRate`), whatever the unit menu says; a typed rate is rounded
+// as always.
 export function readLegacy(state: LegacyPriceState, opened?: LegacyPriceState): PriceInput {
   return {
-    ...(opened && state.rate === opened.rate && state.unit === opened.unit ? { keepRate: true } : {}),
+    ...(opened && state.rate === opened.rate ? { keepRate: true } : {}),
     priceUnit: state.unit || null,
     pricePerUnit: typedDecimal(state.rate),
     unitWeightKg: typedDecimal(state.pieceKg),
@@ -254,19 +268,17 @@ function itemOptions(state: LegacyPriceState, ctx: LegacyCtx, t: LegacyT): Legac
   return options;
 }
 
-export function legacyView(state: LegacyPriceState, ctx: LegacyCtx, t: LegacyT): LegacyView {
+// `opened`: the state the card opened with, so the live line reads the rate exactly as Save will (keepRate).
+export function legacyView(state: LegacyPriceState, ctx: LegacyCtx, t: LegacyT, opened?: LegacyPriceState): LegacyView {
   const { item, money } = ctx;
   const sharedT = sharedTranslate(t);
   const currency = money.symbol;
   const shown = shownBoxes(state);
   const caseMode = inCase(state);
 
-  // A saved «bag of …» case whose size the weight no longer says: the size it was priced at is not in the price yet.
-  const stored = item ? storedCaseOf(item) : null;
-  const savedPack = stored && stored.caseItemUnit === PACK_ITEM ? stored : null;
-  const current = packBaseOf(ctx.weight);
-  const packChanged = Boolean(caseMode && state.caseItemUnit === PACK_ITEM && savedPack && current
-    && (current.size !== savedPack.caseItemSize || current.priceUnit !== item?.priceUnit));
+  // A saved «bag of …» case whose size the weight no longer says: the size it was priced at is not in the price yet — and Save
+  // re-prices it (legacySends counts the same test).
+  const packChanged = packRepriced(state, ctx);
 
   // The VAT menu: «— not stated», the country's rates, and a stored rate the list lacks (never changed by opening the card).
   const vatChoices = vatRatesFor(ctx.country);
@@ -280,7 +292,7 @@ export function legacyView(state: LegacyPriceState, ctx: LegacyCtx, t: LegacyT):
   }
 
   // The live line: what a kilo of this costs while the boxes are being typed into, so a misplaced decimal point shows before Save.
-  const draft = pricePatch(readLegacy(state), '', ctx.weight);
+  const draft = pricePatch(readLegacy(state, opened), '', ctx.weight);
   let summary: LegacyView['summary'];
   let vatLine = '';
   if (draft.pricePerUnit === null) {

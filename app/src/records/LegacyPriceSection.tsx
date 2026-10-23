@@ -80,13 +80,13 @@ export function LegacyPriceSection({ view, refused, boxRefs, onUnit, onBox, onIt
       {row.shown ? (
         <div role="group" aria-labelledby={id('contains-label')} className={styles.field}>
           <span id={id('contains-label')} className={styles.label}>{row.label}</span>
-          <div className={styles.caseRow}>
+          <div className={`${styles.caseRow} ${styles.caseRowWrap}`}>
             {box('caseCount', row.count.value, { label: row.count.label, className: `${styles.box} ${styles.count}` })}
             {row.times ? <span aria-hidden="true" className={styles.times}>×</span> : null}
             {row.size.shown
               ? box('caseSize', row.size.value, { label: row.size.label, className: `${styles.box} ${styles.count}` })
               : null}
-            <div className={styles.inner}>
+            <div className={`${styles.inner} ${styles.caseItem}`}>
               <select
                 className={styles.box}
                 aria-label={row.item.label}

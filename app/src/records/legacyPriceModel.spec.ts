@@ -87,7 +87,7 @@ function openCard(item: ItemLike, { money = MONEY, t = tEn, locale = 'en-GB', co
     set(next: Partial<LegacyPriceState>) { price = { ...price, ...next }; },
     setWorking(next: Partial<Working>) { working = { ...working, ...next }; },
     setProduct(next: Partial<LegacyProduct>) { product = { ...product, ...next }; },
-    view: () => legacyView(price, ctx(), t),
+    view: () => legacyView(price, ctx(), t, openedPrice),
     edited: () => isLegacyEdited(price, openedPrice) || isLegacyProductEdited(product, openedProduct),
     // The card's Save: refusals in order, then what reaches the store.
     save() {
@@ -96,7 +96,7 @@ function openCard(item: ItemLike, { money = MONEY, t = tEn, locale = 'en-GB', co
       const refusedPrice = legacyRefusal(price, ctx());
       if (refusedPrice) return { refused: refusedPrice } as const;
       const payload = buildLegacySave({ working, product, item, kind: 'ingredient', startSupplierId: baseline.supplierId });
-      const sends = legacySends(price, openedPrice, weightText(working), weightText(baseline));
+      const sends = legacySends(price, openedPrice, weightText(working), weightText(baseline), ctx());
       const patch = sends ? legacyPatch(price, openedPrice, ctx(), NOW) : null;
       const write = patch ? priceWriteOf(item, patch, String(payload.supplierId), NOW) : null;
       return { payload, patch, write } as const;
@@ -198,6 +198,18 @@ describe('an untouched card', () => {
     card.set({ rate: '1,666667' });
     expect(saved(card).patch?.pricePerUnit, 'retyped: four decimals, as the original').toBe(1.6667);
     expect(saved(card).write?.doc.pricePerUnit, 'the store sees the same money and leaves the rate alone').toBeUndefined();
+  });
+
+  test('review 24 Oct: switching the unit menu without typing keeps the rate\'s six decimals, and the live line shows that rate', () => {
+    const straw: ItemLike = { ...BASE, unit: 'scatola', weight: 'scatola', priceUnit: 'pcs', pricePerUnit: 0.001745, casePrice: 3.49, caseCount: 2000, caseItemUnit: 'pcs' };
+    const card = openCard(straw);
+    expect(card.price.unit).toBe(CASE_MODE);
+    card.set({ unit: 'pcs' });
+    expect(card.view().rate.value).toBe('0.001745');
+    expect(saved(card).patch?.pricePerUnit, 'not 0.0017').toBe(0.001745);
+    expect(saved(card).write?.history, 'the money did not move: no history').toBeNull();
+    const fine = openCard(FINE_RATE);
+    expect(fine.view().summary.main, 'the line reads as Save will').toMatch(/1\.666667 \/ kg/);
   });
 
   test('a VAT-only change writes only the VAT: no money, no date, no history', () => {
@@ -303,6 +315,19 @@ describe('«bag of 2.5 kg» — one package of the weight', () => {
     expect(write?.doc.caseItemSize, 'the save re-sizes the case').toBe(3);
     expect(write?.doc.pricePerUnit, '20 / (4 × 3 kg), six decimals').toBe(1.666667);
     expect(write?.history?.pricePerUnit).toBe(1.666667);
+  });
+
+  test('review 24 Oct: a weight changed BEFORE the card opened (an employee\'s card) is said, and an untouched save re-prices it', () => {
+    const card = openCard({ ...PACK_BY_OTHER_WORD, weight: '3kg' });
+    expect(card.edited(), 'nothing was touched').toBe(false);
+    expect(card.view().packChangedNote).toBe('The package weight has changed: the price updates when you save');
+    expect(card.view().summary.main).toMatch(/1\.666667 \/ kg/);
+    const { write } = saved(card);
+    expect(write?.doc.caseItemSize, 'the case now says what the screen said').toBe(3);
+    expect(write?.doc.pricePerUnit).toBe(1.666667);
+    expect(write?.history?.pricePerUnit).toBe(1.666667);
+    // …and a pack case whose weight still matches sends nothing.
+    expect(saved(openCard(PACK_BY_OTHER_WORD)).patch).toBeNull();
   });
 
   test('a weight edited on a shape that does not price by it writes nothing of the price', () => {

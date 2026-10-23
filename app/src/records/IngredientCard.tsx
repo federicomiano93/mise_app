@@ -146,7 +146,11 @@ export function IngredientCard({
   // opens, for somebody who may write prices (an employee never gets it, C11). The new price block is then never drawn, the
   // format opens as for an employee and the two menus «Package» and «Order unit» replace «Single | Case».
   const [legacyCard] = useState(() => mayPrice && opened !== null && usesLegacyCard(opened));
-  const priceActive = mayPrice && !legacyCard;
+  // ⚠️ THE NEW PRICE BLOCK TOO IS DECIDED AT OPEN, and only ever turned OFF later (the right lost: no price drawn or sent). A right
+  // GAINED while the card is open (an employee made manager) must not switch the save to the price-reader's format machinery over a
+  // copy that was opened without it (review of 24 Oct 2026): the price comes with the next opening.
+  const [pricedAtOpen] = useState(() => mayPrice && !legacyCard);
+  const priceActive = pricedAtOpen && mayPrice;
   const [baseline] = useState<Working>(() => {
     const started = workingFrom(opened, { supplierIds, preset, mayPrice: priceActive, lang: language });
     const first = !opened && presetName ? { ...started, name: presetName.slice(0, NAME_MAX) } : started;
@@ -393,7 +397,7 @@ export function IngredientCard({
     // The card of before hands the store a price only when a price box or menu moved, or the weight did (legacySends), and only
     // for whoever may write prices NOW; it never reports a unit change (the order unit is a menu a person chose).
     const patch = legacyNow
-      ? (mayPrice && legacySends(legacyNow, legacyOpened, weightText(current), weightText(baseline))
+      ? (mayPrice && legacySends(legacyNow, legacyOpened, weightText(current), weightText(baseline), legacyCtx)
         ? legacyPatch(legacyNow, legacyOpened, legacyCtx, new Date().toISOString())
         : null)
       : (state && ctx ? pricePatchOf(readPrice(state, ctx), new Date().toISOString(), weightText(current)) : null);
@@ -504,7 +508,7 @@ export function IngredientCard({
   const carton = working.format === 'carton' && !legacyCard;
   const weightRefused = refused === 'weight' || refused === 'priceWeight' || refused === 'legacyPackWeight';
   const legacyDrawn = legacyCard && mayPrice;
-  const legacyViewNow = legacyDrawn ? buildLegacyView(legacy, legacyCtxOf(working, product), t) : null;
+  const legacyViewNow = legacyDrawn ? buildLegacyView(legacy, legacyCtxOf(working, product), t, legacyOpened) : null;
   const weightHint = priceActive ? weightHintOf(opened, weightText(working)) : null;
   const view = price ? priceView(price, ctxOf(working, price), t) : null;
 
