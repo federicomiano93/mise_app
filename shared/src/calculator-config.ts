@@ -472,13 +472,30 @@ export function calculatorEmptyReason(config: unknown, serverAnswered?: unknown)
   return getRecipes(config).length > 0 ? 'hidden-recipes' : 'no-recipes';
 }
 
+// Which row a tab names as its leavening, on the side its rows come from: the Catalogue row id
+// (`leaveningRid`) when linked, its own `leaveningKey` when not.
+//
+// ⚠️ A LINKED TAB'S OWN leaveningKey MEANS NOTHING ANY MORE. It points into the leftover list the tab carried
+// before it was linked, and a knob shown because of it scaled nothing: the screen moved the % and every gram
+// stayed put (found 18 Oct 2026 in the current app, PR #376).
+export function tabLeaveningId(recipe: unknown): string | null {
+  const r = recipe as { catalogueId?: unknown; leaveningRid?: unknown; leaveningKey?: unknown } | null | undefined;
+  if (!r) return null;
+  const linked = !!String(r.catalogueId || '').trim();
+  return String((linked ? r.leaveningRid : r.leaveningKey) || '').trim() || null;
+}
+
 // Whether a recipe's calculator tab shows a leavening knob: only logics that order or sum ('orders'/'both'),
 // and only when the recipe designates a leavening with the "show the knob" flag on. A 'total' or trays
 // recipe never shows it (pure pro-rata).
+//
+// ⚠️ A LINKED TAB ASKS FOR ITS CATALOGUE ROW (leaveningRid), never its leftover own leaveningKey. Whether that
+// row still EXISTS in the Catalogue is the screen's question (leaveningLost): only the screen has the
+// resolved recipe.
 export function showsLeaveningKnob(recipe: unknown): boolean {
-  const r = recipe as { logic?: unknown; leaveningKey?: unknown; showLeavening?: unknown } | null | undefined;
+  const r = recipe as { logic?: unknown; showLeavening?: unknown } | null | undefined;
   if (!r || !usesOrders(r.logic)) return false;
-  return !!(r.leaveningKey && r.showLeavening);
+  return !!(tabLeaveningId(r) && r.showLeavening);
 }
 
 // Build the scaleRecipe spec from a config recipe: the ordered {key: grams} amounts, which ingredient is the
@@ -1029,9 +1046,6 @@ function normalizeRecipe(raw: any, index: number): Recipe | null {
     ? String(raw.leaveningKey) : null;
   const leaveningDefaultPct = Math.max(0, Number(raw.leaveningDefaultPct) || 0);
   const showLeavening = raw.showLeavening !== false;
-  const baselinePct = Number.isFinite(Number(raw.baselinePct)) && Number(raw.baselinePct) > 0
-    ? Number(raw.baselinePct)
-    : (leaveningKey && leaveningDefaultPct > 0 ? leaveningDefaultPct : null);
 
   // ⚠️ THE LINK TO A CATALOGUE RECIPE MUST SURVIVE. Since 14 Aug 2026 a tab can take its ingredients from the
   // Catalogue (`catalogueId`, its leavening as `leaveningRid`), but this function rebuilt every recipe from a
@@ -1040,6 +1054,13 @@ function normalizeRecipe(raw: any, index: number): Recipe | null {
   const link = raw.catalogueId && String(raw.catalogueId).trim()
     ? { catalogueId: String(raw.catalogueId).trim(), leaveningRid: raw.leaveningRid ? String(raw.leaveningRid) : null }
     : {};
+
+  // The baseline falls back to the default % only when the tab HAS a leavening — on a linked tab its Catalogue
+  // row (leaveningRid), not the leftover own key.
+  const hasLeavening = 'catalogueId' in link ? !!link.leaveningRid : !!leaveningKey;
+  const baselinePct = Number.isFinite(Number(raw.baselinePct)) && Number(raw.baselinePct) > 0
+    ? Number(raw.baselinePct)
+    : (hasLeavening && leaveningDefaultPct > 0 ? leaveningDefaultPct : null);
 
   return {
     id, name, logic, ingredients,
