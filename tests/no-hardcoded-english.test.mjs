@@ -134,12 +134,49 @@ const ARG = /(?:field\(\s*)'([A-Z][a-z][^']*)'/g;
 const ARG_TEMPLATE = /(?:field\(\s*)`([^`]*)`/g;
 const MESSAGE = /message:\s*(?:'([A-Z][a-z][^']*)'|`([^`]*)`)/g;
 
+// ⚠️⚠️ THE NINTH AND TENTH SHAPES, 11 Oct 2026 — found on Panificio Miano, by opening the
+// Pastries editor in Italian, exactly the way the note above says the next shape would be:
+//
+//   countEl.textContent = n === 1 ? '1 pastry' : `${n} pastries`;
+//   'aria-label': `How many ${row.name || 'pastries'}`,
+//
+// WHY EACH EARLIER SHAPE MISSED IT.
+//   * The count: TEMPLATE needs a backtick right AFTER `textContent =`, and here a TERNARY
+//     stood there. Its literals were also lowercase («1 pastry», «pastries»), and every shape
+//     above asks for `[A-Z][a-z]`. The English PLURAL RULE (one / other) had been written at
+//     the call site, which is wrong in its own right: the dictionary's { one, other }
+//     entries exist so that no screen has to know a language's plural rule.
+//   * The label: no shape looks at `'aria-label':` at all. tests/nothing-stays-english.test.mjs
+//     does, but only single-quoted, and its sentence scan strips the `${…}` hole, leaving
+//     «How many» and «Remove» — both ARE dictionary phrases (`co.howMany`, `ui.remove`), so
+//     English glued to a pastry's name passed as translated.
+//
+// ATTR_TEMPLATE reads a template literal handed to a name a person hears or sees (an
+// aria-label, a title, a placeholder), and flags ANY two letters left once the holes are
+// removed, not only a capitalised word: a lowercase attribute is just as English.
+// HAND_PLURAL reads `x === 1 ? 'a' : 'b'` with a literal on both sides. One literal branch
+// (`i === 1 ? 'tomorrow' : wd`) is not a plural rule; it is left alone on purpose.
+const ATTR_TEMPLATE = /(?:'aria-label'\s*:\s*|\b(?:title|placeholder)\s*:\s*|setAttribute\(\s*'(?:aria-label|title|placeholder)'\s*,\s*)`([^`]*)`/g;
+const HAND_PLURAL = /[!=]==?\s*1\s*\?\s*(?:'[^']*'|`[^`]*`)\s*:\s*(?:'[^']*'|`[^`]*`)/g;
+
+// ⚠️ ONE FILE CANNOT USE THE DICTIONARY, and only the plural shape is told so.
+const HAND_PLURAL_EXEMPT = new Map([
+  ['js/join-code.js', 'copied byte-for-byte into functions/ — it cannot import the dictionary '
+    + '(tests/nothing-stays-english.test.mjs exempts it for the same reason)'],
+]);
+
+// A whole line of comment is history or explanation, not a screen: a note that QUOTES the old
+// code (`n === 1 ? 'ingredient is' : …`) must not be reported as that code — the same call
+// tests/helpers/strings-in.mjs makes.
+const isCommentLine = (line) => line.trim().startsWith('//');
+
 test('⚠️ no English is written straight into a screen — it all goes through the dictionary', () => {
   const found = [];
 
   for (const file of jsFiles(ROOT)) {
     const src = readFileSync(file, 'utf8');
     src.split(/\r?\n/).forEach((line, i) => {
+      if (isCommentLine(line)) return;
       const where = file.split(/[\\/]/).slice(-2).join('/');
       for (const m of line.matchAll(LITERAL)) {
         const phrase = m[1];
@@ -179,6 +216,18 @@ test('⚠️ no English is written straight into a screen — it all goes throug
         if (SAFE.has(phrase.toLowerCase())) continue;
         if (KNOWN_DEBT.has(where)) continue;
         found.push(`${where}:${i + 1}  message: '${phrase}'`);
+      }
+      for (const m of line.matchAll(ATTR_TEMPLATE)) {
+        const phrase = prose(m[1]);
+        if (!/[A-Za-z]{2}/.test(phrase)) continue;     // nothing but values and symbols
+        if (SAFE.has(phrase.toLowerCase())) continue;
+        if (KNOWN_DEBT.has(where)) continue;
+        found.push(`${where}:${i + 1}  attribute \`${phrase}\``);
+      }
+      for (const m of line.matchAll(HAND_PLURAL)) {
+        if (HAND_PLURAL_EXEMPT.has(where)) continue;
+        if (!/[A-Za-z]/.test(m[0].replace(/\$\{[^}]*\}/g, ''))) continue;   // nothing but values and symbols
+        found.push(`${where}:${i + 1}  plural by hand: ${m[0]}`);
       }
     });
   }
@@ -230,6 +279,46 @@ test('…and leaves a data word alone', () => {
   const sample = `el('span', { text: 'Monday' })`;
   const hits = [...sample.matchAll(LITERAL)].map(m => m[1]).filter(p => !SAFE.has(p.toLowerCase()));
   assert.deepEqual(hits, [], 'Monday is a document id, not a phrase');
+});
+
+// ⚠️ THE NINTH AND TENTH SHAPES GET THE SAME PROOF. Both were added because the eight above
+// passed while a whole editor sat in English on Panificio Miano.
+test('the scan finds an English sentence glued to a name inside an aria-label', () => {
+  const how = "'aria-label': `How many ${row.name || 'pastries'}`,";
+  assert.deepEqual([...how.matchAll(ATTR_TEMPLATE)].map(m => prose(m[1])), ['How many']);
+  const remove = "'aria-label': `Remove ${row.name || 'this row'}`,";
+  assert.deepEqual([...remove.matchAll(ATTR_TEMPLATE)].map(m => prose(m[1])), ['Remove']);
+  const set = "node.setAttribute('aria-label', `Step ${i + 1} speed`);";
+  assert.deepEqual([...set.matchAll(ATTR_TEMPLATE)].map(m => prose(m[1])), ['Step  speed']);
+});
+
+test('the scan finds a plural rule written by hand, in either of its shapes', () => {
+  const ternary = "countEl.textContent = n === 1 ? '1 pastry' : `${n} pastries`;";
+  assert.equal([...ternary.matchAll(HAND_PLURAL)].length, 1);
+  const suffix = "`${days} day${days === 1 ? '' : 's'}`";
+  assert.equal([...suffix.matchAll(HAND_PLURAL)].length, 1);
+});
+
+test('…and leaves a translated attribute, a plural through t() and a lone branch alone', () => {
+  const translated = "'aria-label': t('past.howManyOf', { name: label }),";
+  assert.deepEqual([...translated.matchAll(ATTR_TEMPLATE)], [], 'a t() call is not a literal');
+  const onlyValues = "'aria-label': `${row.name} — ${t('orders.field.order')}`,";
+  assert.deepEqual([...onlyValues.matchAll(ATTR_TEMPLATE)].map(m => /[A-Za-z]{2}/.test(prose(m[1]))), [false],
+    'nothing but a value and a dash is left once the holes are removed');
+  const counted = "countEl.textContent = t('past.count', { n });";
+  assert.deepEqual([...counted.matchAll(HAND_PLURAL)], []);
+  const oneBranch = "if (days.includes(wd)) return i === 1 ? 'tomorrow' : wd;";
+  assert.deepEqual([...oneBranch.matchAll(HAND_PLURAL)], [], 'one literal branch is not a plural rule');
+  const notOne = "disabled: i === steps.length - 1 ? 'disabled' : null,";
+  assert.deepEqual([...notOne.matchAll(HAND_PLURAL)], [], 'comparing with length - 1 is not comparing with 1');
+
+  // The comment that sits above the FIXED line in js/catalogue/catalogue-editor.js quotes the old
+  // code. The shape would match it, so the proof is that the loop's own skip catches it first.
+  const quoted = "    // `skipped === 1 ? 'ingredient is' : 'ingredients are'` — English grammar";
+  assert.equal([...quoted.matchAll(HAND_PLURAL)].length, 1, 'the shape alone would report this comment');
+  assert.ok(isCommentLine(quoted), 'a line of comment is skipped before any shape reads it');
+  assert.ok(!isCommentLine("countEl.textContent = n === 1 ? '1 pastry' : `${n} pastries`; // note"),
+    'a trailing comment does not hide the code in front of it');
 });
 
 // ⚠️ And it must be looking at real files, or "nothing found" means "nothing read".
