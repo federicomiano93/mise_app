@@ -50,6 +50,10 @@
 // ingredient-merge.ts are partial ports (`remainingIds`; `findUsage` and the two month keys); their specs compare names and shapes.
 // catalogue-photo-model.ts is not paired: it exports its table of sentences as well (`CATALOGUE_PHOTO_KEYS`, private in the
 // original) and leaves out the sizes the original re-exports from photo-model; its spec compares what it ports.
+// invoice-zip/reasons.ts, py-compat.ts, sha256.ts, classify.ts and pricing.ts ARE paired (step 3e-6, slice A1, the first
+// half of the invoice reader): full ports of js/orders/invoice-zip/. invoice-zip/keywords.ts is NOT: it holds the seven keyword
+// patterns that classify.js keeps private (classify.ts imports them from it and still exports exactly what the original does), so
+// it has no js/ counterpart; invoice-zip/keywords.spec.ts pins it against invoice-import/classify.py instead.
 //
 // ⚠️ IT IS WHAT CATCHES A FIX MADE TO js/ AND FORGOTTEN HERE. A constant changed in one file
 // (a new allergen, a new push kind, a new card) is invisible to every behavioural test that does
@@ -102,6 +106,11 @@ import * as ingredientEditModel from './ingredient-edit-model';
 import * as allergenTerms from './allergen-terms';
 import * as allergenMatch from './allergen-match';
 import * as records from './records';
+import * as invoiceReasons from './invoice-zip/reasons';
+import * as invoicePyCompat from './invoice-zip/py-compat';
+import * as invoiceSha256 from './invoice-zip/sha256';
+import * as invoiceClassify from './invoice-zip/classify';
+import * as invoicePricing from './invoice-zip/pricing';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -148,6 +157,11 @@ import * as legacyIngredientEditModel from '../../js/ingredient-edit-model.js';
 import * as legacyAllergenTerms from '../../js/allergen-terms.js';
 import * as legacyAllergenMatch from '../../js/allergen-match.js';
 import * as legacyRecords from '../../js/records.js';
+import * as legacyInvoiceReasons from '../../js/orders/invoice-zip/reasons.js';
+import * as legacyInvoicePyCompat from '../../js/orders/invoice-zip/py-compat.js';
+import * as legacyInvoiceSha256 from '../../js/orders/invoice-zip/sha256.js';
+import * as legacyInvoiceClassify from '../../js/orders/invoice-zip/classify.js';
+import * as legacyInvoicePricing from '../../js/orders/invoice-zip/pricing.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -196,6 +210,11 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['allergen-terms', allergenTerms, legacyAllergenTerms],
   ['allergen-match', allergenMatch, legacyAllergenMatch],
   ['records', records, legacyRecords],
+  ['invoice-zip/reasons', invoiceReasons, legacyInvoiceReasons],
+  ['invoice-zip/py-compat', invoicePyCompat, legacyInvoicePyCompat],
+  ['invoice-zip/sha256', invoiceSha256, legacyInvoiceSha256],
+  ['invoice-zip/classify', invoiceClassify, legacyInvoiceClassify],
+  ['invoice-zip/pricing', invoicePricing, legacyInvoicePricing],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -257,7 +276,7 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all forty-six models are compared', () => {
+test('all fifty-one models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
@@ -265,5 +284,6 @@ test('all forty-six models are compared', () => {
       'vat-guide', 'foodcost-weighing', 'calculator-dough-math', 'calculator-recipe-source', 'calculator-recipe-text', 'calculator-order-text',
       'confirm-flow', 'log-time', 'venue-features', 'market', 'recipe-label-model', 'label-template-model', 'photo-model',
       'supplier-label', 'vat-number', 'favourite-suppliers', 'record-choices', 'category-batches', 'ingredient-edit-model',
-      'allergen-terms', 'allergen-match', 'records']);
+      'allergen-terms', 'allergen-match', 'records', 'invoice-zip/reasons', 'invoice-zip/py-compat', 'invoice-zip/sha256',
+      'invoice-zip/classify', 'invoice-zip/pricing']);
 });
