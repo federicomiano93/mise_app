@@ -3,7 +3,7 @@ import type { HTMLAttributes } from 'react';
 import { Pencil } from 'lucide-react';
 import {
   doughExtraGrams, exportTraysFor, formatGrams, getTabProducts, isExtraDoughEnabled, settledTraysText,
-  normalizeTrays, showsLeaveningKnob, traysGrams, usesOrders, usesTrays, usesTypedTotal,
+  normalizeTrays, traysGrams, usesOrders, usesTrays, usesTypedTotal,
 } from '@mise/shared/calculator-config';
 import type { Recipe } from '@mise/shared/calculator-config';
 import { runConfirm } from '@mise/shared/confirm-flow';
@@ -22,7 +22,7 @@ import { useCalculator, useCalculatorStore } from './CalculatorContext';
 import { numberOf, knobRange } from './calculatorInput';
 import { problemSentence } from './calculatorMessages';
 import { buildDoughVersion } from './calculatorSave';
-import { calculateTab, sourceRecipe } from './calculatorResult';
+import { calculateTab, showsKnob, sourceRecipe } from './calculatorResult';
 import { useTabState, useTabVersion } from './TabStateContext';
 import { NumberField } from './NumberField';
 import { OrderCards } from './OrderCards';
@@ -82,11 +82,11 @@ export function RecipePanel({ recipe, panelProps }: Props) {
   const setDivisorN = (n: number) => { setPicked({ n, generation }); };
 
   const products = getTabProducts(config, rid);
-  const { source } = sourceRecipe(recipe, linked);
+  const { source, resolved } = sourceRecipe(recipe, linked);
   const hasOrders = usesOrders(recipe.logic);
   const hasTrays = usesTrays(recipe.logic);
   const hasTotal = usesTypedTotal(recipe.logic);
-  const hasKnob = showsLeaveningKnob(source);
+  const hasKnob = showsKnob(recipe, source, resolved);
 
   // What the tab keeps, as text (the current app restores a box from the same key).
   const qtyText = (qtyId: string) => state.read(qtyKey(qtyId)) ?? '0';
