@@ -131,6 +131,32 @@ export function reconcileTicks(
   return { contains: [...out.contains], may: [...out.may], appOwned: owned, added, removed };
 }
 
+// ⚠️⚠️ A TAP THAT LANDS AS THE APP TICKS THE SAME BOX MEANT «TICK IT», NOT «UNTICK IT». Somebody types «latte» and
+// reaches for Milk «has»; the pause ends just before the finger lands, the app ticks Milk, and the tap flips it OFF —
+// and a box a person moved is theirs for good, so Milk would stay missing. So a person's UNtick of a box the app ticked
+// less than RECENT_APP_TICK_MS ago leaves it TICKED (and the caller makes it the person's, so the app never takes it
+// back and a second tap unticks it). Only that one case; the safe direction only. The current app's port of Mise 2's
+// rule (PR #388); app/src/records/allergenCardModel.ts tickByHand asks this function.
+//
+// `tickedAt`: when the app added each tick, on a steady clock (performance.now(): setting the phone's clock back
+// cannot make an old tick look recent). A clock that went backwards proves nothing.
+export const RECENT_APP_TICK_MS = 800;
+
+export interface KeepsAppTickInput {
+  key?: string;
+  on?: boolean;
+  appOwned?: ReadonlySet<string> | null;
+  tickedAt?: ReadonlyMap<string, number> | null;
+  now?: number;
+}
+
+export function keepsAppTick({ key, on, appOwned, tickedAt, now }: KeepsAppTickInput = {}): boolean {
+  if (on) return false;
+  if (!appOwned || !appOwned.has(key as string)) return false;
+  const at = tickedAt && tickedAt.get(key as string);
+  return typeof at === 'number' && (now as number) - at >= 0 && (now as number) - at < RECENT_APP_TICK_MS;
+}
+
 // ── Normalising, WITHOUT losing where each character came from ───────────────
 //
 // The map is the whole point: a match found at normalised index n has to be
