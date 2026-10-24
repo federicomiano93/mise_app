@@ -86,6 +86,7 @@ import * as legacyVatRatesJs from '../../js/vat-rates.js';
 import * as legacyIngredientKindJs from '../../js/ingredient-kind.js';
 import * as legacyProductLimitsJs from '../../js/foodcost/product-limits.js';
 import * as legacyVatGuideJs from '../../js/foodcost/vat-guide.js';
+import { t as legacyT } from '../../js/i18n.js';
 import * as legacyCatalogueModelJs from '../../js/catalogue/catalogue-model.js';
 import * as legacyRecipeCostModelJs from '../../js/catalogue/recipe-cost-model.js';
 import * as legacyFoodcostWeighingJs from '../../js/foodcost/foodcost-weighing.js';
@@ -2169,6 +2170,57 @@ describe('catalogue-model: odd inputs', () => {
     [{ ingredients: SG_INGREDIENTS[11], recipes: [], query: 'zucchero' }], [{ ingredients: SG_INGREDIENTS[11], recipes: [], query: 'zucchero', limit: 3 }],
   ];
   agree('suggestLinks', m.suggestLinks as AnyFn, l.suggestLinks as AnyFn, suggestInputs());
+
+  // ── The recipe normalisers, list helpers and scaling (step 3d-1) ──
+  const CAT_ROWS: readonly unknown[] = [...ROWS.slice(0, 60), { label: 'Flour', grams: '500' }, { name: 'Water', grams: -5 }, { label: 'Salt', grams: 'abc', rid: ' r1 ' },
+    { label: 'Link', grams: 1, kind: 'recipe', refId: ' R1 ', rid: 7 }, { label: 'Link', grams: 1, kind: 'x', refId: 5 }, { label: null, name: 'N', grams: 2, unit: 'pcs' },
+    { label: 5, grams: [3] }, { rid: '', refId: '' }, [], [1]];
+  const CAT_RECIPES: readonly unknown[] = [...ODD, 'recipe', 5, RECIPE_BASE, { id: 42, name: '  Ciabatta  ', ingredients: CAT_ROWS },
+    { id: 'r', name: 'B', ingredients: [], lossPct: 12, rawGrams: 1000, cookedGrams: 800, netWeightG: 250, shelfLifeDays: 0 },
+    { id: 'r', name: 'B', ingredients: 'x', lossPct: 150, rawGrams: -1, cookedGrams: 'abc', netWeightG: '300', shelfLifeDays: '7' },
+    { steps: [{ id: 's' }], endNote: 'Done' }, { steps: [], endNote: '  ' }, { steps: 'x', endNote: 5 }, { ingredients: [null, undefined, 'x', 5, {}] },
+    { id: null, name: null }, { id: 0, name: 0 }, { shelfLifeDays: true }, { shelfLifeDays: 3651 }, { shelfLifeDays: 1.9 }, { shelfLifeDays: -0.5 },
+    Object.create({ id: 'P', name: 'Proto' }), { get name(): unknown { throw new Error('boom'); } }];
+  agree('normalizeCatalogueRecipe', m.normalizeCatalogueRecipe, l.normalizeCatalogueRecipe, product(CAT_RECIPES));
+  agree('normalizeCatalogueRecipes', m.normalizeCatalogueRecipes, l.normalizeCatalogueRecipes, product([...ODD, CAT_RECIPES, [null, 5, { name: 'X' }], 'abc']));
+  agree('labelFieldsOf', m.labelFieldsOf, l.labelFieldsOf, product(CAT_RECIPES));
+  agree('normalizeShelfLifeDays', m.normalizeShelfLifeDays, l.normalizeShelfLifeDays, product([...PRICE_VALUES, 3650, 3651, 7, '7', ' 7 ', '0', 0, -0, 1.9, '1.9', '', '  ']));
+  test('MAX_SHELF_LIFE_DAYS, MAX_SANE_BATCH_G, MAX_SANE_MULTIPLE and SCALED_TTL_MS are the original numbers', () => {
+    expect([m.MAX_SHELF_LIFE_DAYS, m.MAX_SANE_BATCH_G, m.MAX_SANE_MULTIPLE, m.SCALED_TTL_MS])
+      .toStrictEqual([l.MAX_SHELF_LIFE_DAYS, l.MAX_SANE_BATCH_G, l.MAX_SANE_MULTIPLE, l.SCALED_TTL_MS]);
+  });
+
+  const SORT_LISTS: readonly unknown[] = [[], [{ id: 'a', name: 'Brioche' }, { id: 'b', name: 'Focaccia' }, { id: 'c', name: 'Sourdough' }],
+    [{ id: 'x', name: 'Zebra' }, { id: 'y', name: 'Apple' }], [{ id: 'a', name: 'b' }, { id: 'b', name: 'B' }, { id: 'c', name: 'a' }, { id: 'd' }, { id: 'e', name: null }],
+    [{ id: 1, name: 'n1' }, { id: 2, name: 'n2' }], [{}, {}], [null], 'abc', null, undefined, 5, {}];
+  const USAGE: readonly unknown[] = [undefined, {}, { b: 5, c: 5, a: 1 }, { x: 1, a: 'junk', b: -3, c: NaN }, { 1: 3, 2: 1, undefined: 9 }, null, 'abc', [], 5];
+  agree('sortByUsage', m.sortByUsage as AnyFn, l.sortByUsage as AnyFn, product(SORT_LISTS, USAGE));
+  const FILTER_LISTS: readonly unknown[] = [[], [{ name: 'Focaccia' }, { name: 'Brioche' }, { name: 'Sourdough' }], [{ name: 'ÀB' }, { name: 'ab' }, {}, { name: null }, { name: 5 }],
+    [null], 'abc', null, undefined, 5];
+  agree('filterByName', m.filterByName as AnyFn, l.filterByName as AnyFn, product(FILTER_LISTS, [...ODD, 'bri', 'O', '   ', ' ab ', 'AB', 'ó', 5, { toString: () => 'foc' }]));
+
+  const SCALE_RECIPES: readonly unknown[] = [...ODD, 'recipe', 5, RECIPE_BASE, { ingredients: [] }, { ingredients: 'x' }, { ingredients: [null] },
+    { ingredients: [{ label: 'F', grams: 278 }, { label: 'F2', grams: 278 }, { label: 'M', grams: 3 }, { label: 'Y', grams: 3.6 }, { label: 'W', grams: 334 }] },
+    { ingredients: [{ label: 'Flour', grams: 1000, unit: 'g' }, { label: 'Eggs', grams: 2, unit: 'pcs' }, { label: 'Salt', grams: 0, unit: 'to taste' }] },
+    { ingredients: [{ label: 'F', grams: 1, unit: 'kg' }, { label: 'W', grams: 1, unit: 'l' }] },
+    { ingredients: [{ grams: 'x' }, { grams: 3, unit: 'kg' }, { grams: -2, unit: 'cl' }, { unit: 'mg', grams: 5000 }] },
+    { ingredients: [{ label: 'Salt', grams: 5, unit: 'to taste' }, { label: 'Pinch', grams: 1, unit: 'pinch' }] },
+    { ingredients: [{ grams: 0.4 }, { grams: 0.4 }, { grams: 0.4 }] }, { ingredients: [{ grams: 1 }, null] }, { ingredients: [{ grams: 1, unit: 'kg' }, undefined] }];
+  const TARGETS: readonly unknown[] = [...PRICE_VALUES.slice(0, 40), 10000, 17500, 17500000, 1, 0.4, 995.6, '2000', 4000];
+  agree('scaleCatalogue', m.scaleCatalogue, l.scaleCatalogue, product(SCALE_RECIPES, TARGETS));
+  agree('baseAmounts', m.baseAmounts, l.baseAmounts, product(SCALE_RECIPES));
+
+  agree('formatWeight', m.formatWeight, l.formatWeight, product([...PRICE_VALUES, 500, 999.999, 1000, 17500, 18000, 999999, 1000000, 17500000, 1.005, 0.004, '17500', 'junk']));
+  const EN = (key: string, params?: Record<string, string | number>): string => legacyT(key, params);
+  agree('batchWarning', (target: unknown, base: unknown) => m.batchWarning(target, base, EN as never), l.batchWarning as AnyFn,
+    product([...PRICE_VALUES, 100000, 100001, 5000, 5001, 17500, 17500000, 175000, 14153 * 51, 14153 * 50], [...PRICE_VALUES, 14153, 100, 50000, 0, 1]));
+
+  agree('isScaledEntryFresh', m.isScaledEntryFresh, l.isScaledEntryFresh, product([...ODD, 'e', { target: 10000, ts: 1000 }, { target: 10000, ts: 1e12 - 1000 }, { target: 10000, ts: 1e12 - 43200000 },
+    { target: 10000, ts: 1e12 - 43199999 }, { target: 0, ts: 1e12 }, { target: -5, ts: 1e12 }, { target: 5000 }, { ts: 1e12 }, { target: '5000', ts: 1e12 }, { target: Infinity, ts: 1e12 },
+    { target: 5, ts: NaN }, { target: 5, ts: '1000' }, { get target(): unknown { throw new Error('boom'); } }], [1e12, 0, NaN, '1e12', undefined, null, Infinity, -1, {}]));
+
+  const unitTextViaKey = (unit: unknown): unknown => { const key = m.unitTextKey(unit); return key ? legacyT(key) : unit; };
+  agree('unitTextKey (through the dictionary) against unitText', unitTextViaKey, (l as unknown as { unitText: AnyFn }).unitText, product(ROW_UNITS));
 });
 
 // ── recipe-cost-model ────────────────────────────────────────────────────────

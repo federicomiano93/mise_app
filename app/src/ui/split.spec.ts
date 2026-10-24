@@ -5,7 +5,7 @@ import { SPLIT_QUERY } from './split';
 // with it (the days' aria-orientation, push or replace when a product is picked), by SPLIT_QUERY. A
 // media query cannot read a constant, so this reads the stylesheets themselves and fails when they
 // stop saying the same number. Every section that is a split has its sheets listed here.
-const sheets = import.meta.glob<string>(['../pastries/*.module.css', '../stocktake/*.module.css', '../calculator/*.module.css'], {
+const sheets = import.meta.glob<string>(['../pastries/*.module.css', '../stocktake/*.module.css', '../calculator/*.module.css', '../recipes/*.module.css'], {
   query: '?raw',
   import: 'default',
   eager: true,
@@ -19,7 +19,10 @@ const PASTRIES_SPLIT = ['DaysNav', 'DayPanel', 'PastryRow', 'PastriesSection', '
 const STOCKTAKE_SPLIT = ['StocktakeSection'];
 // The Calculator's panel is the split: the entries on the left, the scaled recipe on the right.
 const CALCULATOR_SPLIT = ['RecipePanel'];
+// The Recipe catalogue's frame is the split: the list on the left, the recipe on the right.
+const RECIPES_SPLIT = ['RecipesSection'];
 const SPLIT_SHEETS: (readonly [string, string])[] = [
+  ...RECIPES_SPLIT.map(name => ['recipes', name] as const),
   ...PASTRIES_SPLIT.map(name => ['pastries', name] as const),
   ...STOCKTAKE_SPLIT.map(name => ['stocktake', name] as const),
   ...CALCULATOR_SPLIT.map(name => ['calculator', name] as const),

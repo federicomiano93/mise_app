@@ -5,32 +5,35 @@
 // the two must stay equal until the switch to Mise 2.
 //
 // catalogue-model.ts is a PARTIAL port, so parity.spec.ts does not pair it: the original also holds the
-// recipe normalisers, the kg scaling, the Calculator import and three functions that look a word up in
-// the interface dictionary. The last block of this file stands in for what pairing would have checked:
-// the same names, the same constants, the same frozen-ness, the same function shapes.
+// editor's link functions, the validation and the Calculator import. The last block of this file stands in for
+// what pairing would have checked: the same names (plus the one the port adds, `unitTextKey`), the same
+// constants, the same frozen-ness, the same function shapes (`batchWarning` excepted: it takes the translator).
 //
-// PORTED from tests/catalogue-model.test.mjs: 'unitOf / isWeighableUnit / weighableTotalGrams' and the
-// weighing tests ('two weighings become a percentage', '⚠️ the number SHOWN is the number STORED…',
-// '⚠️⚠️ nothing gains weight in an oven…', '⚠️⚠️ a cooked weight of almost nothing is capped at 99…',
-// '⚠️ an unanswered pair is null…', 'junk in, no throw and no NaN out'); from
-// tests/link-suggestions.test.mjs: every test of suggestLinks (nothing below two characters, «burro»,
-// starts-with / word / inside, accents, the NAME only, deactivated and the recipe being edited, at most
-// five, ingredients before recipes, what each suggestion carries) and the suggestLinks half of
-// '⚠️ packaging is never offered as a recipe ingredient'; from tests/recipe-cost-model.test.mjs:
-// 'a loss of 100% cannot divide the price by zero' (the normalizeLossPct half), 'a nonsense loss is
-// treated as none' and 'a junk link is treated as no link…'. Added: normalizeSearchText, ingredientGrams
-// (including the copied quirk) and the constants.
+// PORTED from tests/catalogue-model.test.mjs: 'unitOf / isWeighableUnit / weighableTotalGrams', the weighing
+// tests ('two weighings become a percentage', '⚠️ the number SHOWN is the number STORED…', '⚠️⚠️ nothing gains
+// weight in an oven…', '⚠️⚠️ a cooked weight of almost nothing is capped at 99…', '⚠️ an unanswered pair is
+// null…', 'junk in, no throw and no NaN out') and, since step 3d-1, every test of the normalisers, the kg
+// scaling, formatWeight, batchWarning (THE INCIDENT), isScaledEntryFresh, sortByUsage and filterByName;
+// from tests/recipe-weights.test.mjs: '⚠️⚠️ a recipe with no shelf life stays WITHOUT one — absent is not
+// zero' and 'labelFieldsOf'; from tests/guided-model.test.mjs the «row id survives the trip» property; from
+// tests/recipe-cost-model.test.mjs 'normalising a recipe keeps its ingredient links' (and the no-link shape);
+// from tests/link-suggestions.test.mjs: every test of suggestLinks and the suggestLinks half of '⚠️ packaging
+// is never offered as a recipe ingredient'; from tests/recipe-unit-text.test.mjs the language tests, adapted
+// to `unitTextKey` (the data-word and screen-source tests stay in the original's own suite). Added:
+// normalizeSearchText, ingredientGrams (including the copied quirk) and the constants.
 //
-// NOT PORTED — the other half of the original: every test of normalizeCatalogueRecipe(s), scaleCatalogue,
-// baseAmounts, formatWeight, batchWarning, isScaledEntryFresh, sortByUsage, filterByName,
-// findInvalidRecipe, toCalculatorRecipe, nonWeighableLabels, mergeImportedRecipe, findCalculatorImport
-// (tests/catalogue-model.test.mjs, 40 of its 48); '⚠️ the weights are absent, not zero…' (it reads
-// normalizeCatalogueRecipe); tests/link-suggestions.test.mjs' applyLink, linkedItemName, isSameLink and
-// linkOptions tests, and the ones that read the screens' source or the precache.
+// `batchWarning` is run with the interface dictionary's own `t` handed to the port as the translator, which
+// is exactly the words the original reads for itself.
+//
+// NOT PORTED — the rest of the original: findInvalidRecipe, toCalculatorRecipe, nonWeighableLabels,
+// mergeImportedRecipe, findCalculatorImport (tests/catalogue-model.test.mjs), tests/link-suggestions.test.mjs'
+// applyLink, linkedItemName, isSameLink and linkOptions tests, and the ones that read the screens' source or
+// the precache.
 
 import { describe, expect, test } from 'vitest';
 import * as ported from './catalogue-model';
 import * as legacyJs from '../../js/catalogue/catalogue-model.js';
+import { DATA_WORDS, DEFAULT_LANGUAGE, _dictionaries, setLanguage, t } from '../../js/i18n.js';
 
 const legacy = legacyJs as unknown as typeof ported;
 
@@ -304,6 +307,378 @@ describe.each([
     const out = m.suggestLinks({ ingredients: {}, recipes: { R1: { id: 'R1', name: 'Crema al burro' } }, query: 'crema' });
     expect(out.items.map(i => i.refId)).toStrictEqual(['R1']);
   });
+
+  // ── The recipe, normalised (step 3d-1) ─────────────────────────────────────
+
+  const FOCACCIA = {
+    id: 'foc',
+    name: 'Focaccia',
+    ingredients: [
+      { label: 'Flour uniqua blue', grams: 278 }, { label: 'Flour T65', grams: 278 }, { label: 'Malt', grams: 3 },
+      { label: 'Sugar', grams: 8 }, { label: 'Salt', grams: 11 }, { label: 'Yeast', grams: 3.6 }, { label: 'Oil', grams: 56 },
+      { label: '1° Water', grams: 334 }, { label: '2° Water', grams: 24 },
+    ],
+  };
+  const sum = (arr: readonly (number | null)[]): number => arr.reduce<number>((a, b) => a + (b ?? 0), 0);
+
+  test('normalizeCatalogueRecipe coerces junk safely (never NaN, never throws)', () => {
+    const r = m.normalizeCatalogueRecipe({
+      id: 42, name: '  Ciabatta  ',
+      ingredients: [
+        { label: 'Flour', grams: '500' },            // numeric string
+        { name: 'Water', grams: -5 },                 // legacy `name`, negative -> 0
+        { label: 'Salt', grams: 'abc' },              // non-numeric -> 0
+        { label: 'Milk', grams: 2, unit: 'l' },       // valid unit preserved
+        { label: 'Eggs', grams: 3, unit: 'pcs' },     // valid unit preserved
+        { label: 'Bad', grams: 1, unit: 'xyz' },      // unknown unit -> grams
+        null,                                          // dropped
+        'garbage',                                     // dropped
+      ],
+    });
+    expect(r?.id).toBe('42');
+    expect(r?.name).toBe('Ciabatta');
+    expect(r?.ingredients).toStrictEqual([
+      { label: 'Flour', grams: 500, unit: 'g' },
+      { label: 'Water', grams: 0, unit: 'g' },
+      { label: 'Salt', grams: 0, unit: 'g' },
+      { label: 'Milk', grams: 2, unit: 'l' },
+      { label: 'Eggs', grams: 3, unit: 'pcs' },
+      { label: 'Bad', grams: 1, unit: 'g' },
+    ]);
+  });
+
+  test('normalizeCatalogueRecipe returns null for non-object input', () => {
+    expect(m.normalizeCatalogueRecipe(null)).toBe(null);
+    expect(m.normalizeCatalogueRecipe('x')).toBe(null);
+  });
+
+  test('normalizeCatalogueRecipes drops junk entries', () => {
+    const list = m.normalizeCatalogueRecipes([FOCACCIA, null, 5, { name: 'X' }]);
+    expect(list.length).toBe(2);
+    expect(list[0]?.name).toBe('Focaccia');
+    expect(list[1]?.name).toBe('X');
+    expect(m.normalizeCatalogueRecipes('nope')).toStrictEqual([]);
+  });
+
+  test('normalising a recipe keeps its ingredient links', () => {
+    // normalizeIngredient rebuilds every row, so a field it does not mention is dropped on the way in from
+    // Firestore — and opening a recipe to fix a typo would wipe every link.
+    const stored = { id: 'R1', name: 'Bread', lossPct: 12, ingredients: [
+      { label: 'Flour', grams: 800, unit: 'g', kind: 'ingredient', refId: 'FLOUR' },
+      { label: 'Cream', grams: 200, unit: 'g', kind: 'recipe', refId: 'CREAM' },
+    ] };
+    const out = m.normalizeCatalogueRecipe(stored);
+    expect(out?.ingredients[0]).toStrictEqual({ label: 'Flour', grams: 800, unit: 'g', kind: 'ingredient', refId: 'FLOUR' });
+    expect(out?.ingredients[1]).toStrictEqual({ label: 'Cream', grams: 200, unit: 'g', kind: 'recipe', refId: 'CREAM' });
+    expect(out?.lossPct).toBe(12);
+  });
+
+  test('a row with no link stays exactly the shape it has always had', () => {
+    const out = m.normalizeCatalogueRecipe({ id: 'R1', name: 'Old', ingredients: [{ label: 'Flour', grams: 500, unit: 'g' }] });
+    expect(out?.ingredients[0]).toStrictEqual({ label: 'Flour', grams: 500, unit: 'g' });
+  });
+
+  test('⚠️ the row id survives the trip, trimmed, and is never minted', () => {
+    // `rid` is the stable id a guided mixing step points at: dropped here, every step would be unhooked.
+    const out = m.normalizeCatalogueRecipe({ id: 'r', name: 'B', ingredients: [
+      { rid: ' ra ', label: 'Flour', grams: 1000, unit: 'g' }, { label: 'Water', grams: 500 }, { rid: '  ', label: 'Salt', grams: 5 }, { rid: 7, label: 'Oil', grams: 1 },
+    ] });
+    expect(out?.ingredients.map(row => row.rid)).toStrictEqual(['ra', undefined, undefined, '7']);
+    expect('rid' in (out?.ingredients[1] ?? {}), 'no rid key at all on a row without one').toBe(false);
+    expect(out?.ingredients[0]).toStrictEqual({ label: 'Flour', grams: 1000, unit: 'g', rid: 'ra' });
+  });
+
+  test('the guided procedure is carried as stored, and absent when there is none', () => {
+    const steps = [{ id: 's1', text: 'Mix' }];
+    expect(m.normalizeCatalogueRecipe({ id: 'r', name: 'B', steps, endNote: 'Done' })).toMatchObject({ steps, endNote: 'Done' });
+    const bare = m.normalizeCatalogueRecipe({ id: 'r', name: 'B', steps: [], endNote: '   ' });
+    expect('steps' in (bare ?? {})).toBe(false);
+    expect('endNote' in (bare ?? {})).toBe(false);
+  });
+
+  test('⚠️ the weights are absent, not zero, on a recipe nobody has weighed', () => {
+    const plain = m.normalizeCatalogueRecipe({ id: 'r', name: 'Bread', ingredients: [], lossPct: 12 });
+    expect('rawGrams' in (plain ?? {}), 'no rawGrams key at all').toBe(false);
+    expect('cookedGrams' in (plain ?? {}), 'no cookedGrams key at all').toBe(false);
+    expect(plain?.lossPct, 'and its stored loss is untouched').toBe(12);
+
+    const weighed = m.normalizeCatalogueRecipe({ id: 'r', name: 'Bread', ingredients: [], lossPct: 20, rawGrams: 1000, cookedGrams: 800 });
+    expect(weighed?.rawGrams).toBe(1000);
+    expect(weighed?.cookedGrams).toBe(800);
+  });
+
+  test('⚠️⚠️ a recipe with no shelf life stays WITHOUT one — absent is not zero', () => {
+    const bare = m.normalizeCatalogueRecipe({ id: 'r', name: 'Bread', ingredients: [] });
+    expect('shelfLifeDays' in (bare ?? {}), 'a recipe nobody has told must not gain the key').toBe(false);
+    expect('netWeightG' in (bare ?? {}), 'nor a weight nobody weighed').toBe(false);
+
+    expect(m.normalizeShelfLifeDays(undefined)).toBe(null);
+    expect(m.normalizeShelfLifeDays(null)).toBe(null);
+    expect(m.normalizeShelfLifeDays('')).toBe(null);
+    expect(m.normalizeShelfLifeDays('   ')).toBe(null);
+    expect(m.normalizeShelfLifeDays(true), 'a boolean is not a number of days: Number(true) is 1').toBe(null);
+    expect(m.normalizeShelfLifeDays(-1)).toBe(null);
+    expect(m.normalizeShelfLifeDays(99999)).toBe(null);
+    expect(m.normalizeShelfLifeDays(0), 'a real zero, typed on purpose, is «today» and is kept').toBe(0);
+    expect(m.normalizeShelfLifeDays('7')).toBe(7);
+    expect(m.normalizeShelfLifeDays(m.MAX_SHELF_LIFE_DAYS)).toBe(3650);
+    expect(m.normalizeShelfLifeDays(m.MAX_SHELF_LIFE_DAYS + 1)).toBe(null);
+    expect(m.normalizeCatalogueRecipe({ id: 'r', name: 'B', ingredients: [], shelfLifeDays: 0 })?.shelfLifeDays).toBe(0);
+  });
+
+  test('labelFieldsOf: a number, or null for «nobody has said» — never 0 for a shelf life nobody typed', () => {
+    expect(m.labelFieldsOf({ netWeightG: 250, shelfLifeDays: 3 })).toStrictEqual({ netWeightG: 250, shelfLifeDays: 3 });
+    expect(m.labelFieldsOf({ netWeightG: '250', shelfLifeDays: '0' }), 'a shelf life of 0 is a real answer and must be kept')
+      .toStrictEqual({ netWeightG: 250, shelfLifeDays: 0 });
+    expect(m.labelFieldsOf({})).toStrictEqual({ netWeightG: null, shelfLifeDays: null });
+    expect(m.labelFieldsOf({ netWeightG: 0, shelfLifeDays: '' }), 'an emptied box is a removal').toStrictEqual({ netWeightG: null, shelfLifeDays: null });
+    expect(m.labelFieldsOf({ netWeightG: -5, shelfLifeDays: true }), 'junk is not a number of grams or days').toStrictEqual({ netWeightG: null, shelfLifeDays: null });
+    expect(m.labelFieldsOf(null)).toStrictEqual({ netWeightG: null, shelfLifeDays: null });
+  });
+
+  // ── scaleCatalogue: the core invariant (integers sum EXACTLY to the target) ──
+
+  test('scaleCatalogue keeps the base recipe when target equals its total', () => {
+    const total = FOCACCIA.ingredients.reduce((s, i) => s + i.grams, 0); // 995.6 (raw, fractional)
+    expect(sum(m.scaleCatalogue(FOCACCIA, total))).toBe(Math.round(total));
+  });
+
+  test('baseAmounts rounds to whole grams that sum to the rounded base total', () => {
+    const out = m.baseAmounts(FOCACCIA);
+    expect(out.every(Number.isInteger), 'every base amount is a whole number').toBe(true);
+    const rawTotal = FOCACCIA.ingredients.reduce((s, i) => s + i.grams, 0); // 995.6
+    expect(sum(out), 'rows add up to the shown total').toBe(Math.round(rawTotal)); // 996
+  });
+
+  test('baseAmounts on an empty recipe is []', () => {
+    expect(m.baseAmounts({ ingredients: [] })).toStrictEqual([]);
+  });
+
+  test('scaleCatalogue to 10 kg: proportional and sums to exactly 10000 g', () => {
+    const out = m.scaleCatalogue(FOCACCIA, 10000);
+    expect(sum(out)).toBe(10000);
+    expect(out[0]).toBe(out[1]);
+    expect((out[0] as number) > 2700 && (out[0] as number) < 2900).toBe(true);
+  });
+
+  test('scaleCatalogue sums to target across many weights (rounding residual absorbed)', () => {
+    for (const kg of [0.5, 1, 3, 7, 12.5, 33]) {
+      expect(sum(m.scaleCatalogue(FOCACCIA, kg * 1000)), `sum must equal target for ${kg} kg`).toBe(Math.round(kg * 1000));
+    }
+  });
+
+  test('scaleCatalogue is defensive: empty recipe / non-positive / bad target -> zeros', () => {
+    expect(m.scaleCatalogue({ ingredients: [] }, 10000)).toStrictEqual([]);
+    expect(m.scaleCatalogue(FOCACCIA, 0).every(x => x === 0)).toBe(true);
+    expect(m.scaleCatalogue(FOCACCIA, -5).every(x => x === 0)).toBe(true);
+    expect(m.scaleCatalogue(FOCACCIA, NaN).every(x => x === 0)).toBe(true);
+    expect(m.scaleCatalogue(null, 10000)).toStrictEqual([]);
+  });
+
+  test('scaleCatalogue mixed units: weighable + pieces scale by the same factor', () => {
+    const recipe = { ingredients: [
+      { label: 'Flour', grams: 1000, unit: 'g' }, { label: 'Eggs', grams: 2, unit: 'pcs' }, { label: 'Salt', grams: 0, unit: 'to taste' },
+    ] };
+    expect(m.scaleCatalogue(recipe, 2000)).toStrictEqual([2000, 4, null]); // factor 2; to-taste has no number
+    expect(m.scaleCatalogue(recipe, 0), 'to taste stays null even when nothing can be scaled').toStrictEqual([0, 0, null]);
+  });
+
+  test('scaleCatalogue mixed: kg + l convert into the weighable total, then scale', () => {
+    const recipe = { ingredients: [{ label: 'Flour', grams: 1, unit: 'kg' }, { label: 'Water', grams: 1, unit: 'l' }] };
+    expect(m.scaleCatalogue(recipe, 4000)).toStrictEqual([2, 2]); // factor 2 -> 2 kg, 2 l
+  });
+
+  test('baseAmounts with non-weight units: whole numbers in each unit, null for to-taste', () => {
+    expect(m.baseAmounts({ ingredients: [
+      { label: 'Flour', grams: 500.4, unit: 'g' }, { label: 'Eggs', grams: 2, unit: 'pcs' }, { label: 'Salt', grams: 0, unit: 'to taste' },
+    ] })).toStrictEqual([500, 2, null]);
+  });
+
+  test('isScaledEntryFresh: valid within 12h, expired after, junk-safe', () => {
+    const now = 1_000_000_000_000;
+    expect(m.isScaledEntryFresh({ target: 10000, ts: now - 1000 }, now)).toBe(true);
+    expect(m.isScaledEntryFresh({ target: 10000, ts: now - (m.SCALED_TTL_MS - 1) }, now), 'just under 12h').toBe(true);
+    expect(m.isScaledEntryFresh({ target: 10000, ts: now - m.SCALED_TTL_MS }, now), 'exactly 12h is stale').toBe(false);
+    expect(m.isScaledEntryFresh({ target: 10000, ts: now - (m.SCALED_TTL_MS + 1) }, now)).toBe(false);
+    expect(m.isScaledEntryFresh(null, now)).toBe(false);
+    expect(m.isScaledEntryFresh({ target: 0, ts: now }, now), 'non-positive target').toBe(false);
+    expect(m.isScaledEntryFresh({ target: 5000 }, now), 'missing ts').toBe(false);
+    expect(m.SCALED_TTL_MS).toBe(43200000);
+  });
+
+  // ── sortByUsage / filterByName ──────────────────────────────────────────────
+
+  test('sortByUsage: open-count desc, then name asc; does not mutate input', () => {
+    const recipes = [{ id: 'a', name: 'Brioche' }, { id: 'b', name: 'Focaccia' }, { id: 'c', name: 'Sourdough' }];
+    const snapshot = recipes.slice();
+    const sorted = m.sortByUsage(recipes, { b: 5, c: 5, a: 1 });
+    expect(sorted.map(r => r.id), 'b,c tie on 5 -> name asc').toStrictEqual(['b', 'c', 'a']);
+    expect(recipes, 'original untouched').toStrictEqual(snapshot);
+  });
+
+  test('sortByUsage: missing counts treated as 0', () => {
+    const sorted = m.sortByUsage([{ id: 'x', name: 'Zebra' }, { id: 'y', name: 'Apple' }], {});
+    expect(sorted.map(r => r.name)).toStrictEqual(['Apple', 'Zebra']);
+    expect(m.sortByUsage([{ id: 'x', name: 'Zebra' }, { id: 'y', name: 'Apple' }]).map(r => r.name)).toStrictEqual(['Apple', 'Zebra']);
+  });
+
+  test('filterByName: case-insensitive substring; empty query returns all', () => {
+    const recipes = [{ name: 'Focaccia' }, { name: 'Brioche' }, { name: 'Sourdough' }];
+    expect(m.filterByName(recipes, 'bri').map(r => r.name)).toStrictEqual(['Brioche']);
+    expect(m.filterByName(recipes, 'O').length).toBe(3);
+    expect(m.filterByName(recipes, '   ').length).toBe(3);
+    expect(m.filterByName(recipes, '')).toBe(recipes);
+  });
+
+  // ── Batch size: readable weight + the mistyped-total guard ──────────────────
+  // The real incident: the field took KILOGRAMS while every row read in grams, so typing 17500 (meaning 17500 g)
+  // silently produced a 17.5-tonne batch. Sums to 14153 g, NOT the 14000 g (4 x 3500) its name promises.
+
+  const CROISSANT = m.normalizeCatalogueRecipe({
+    id: 'croissant', name: 'Croissant (4 x 3500gr.)',
+    ingredients: [
+      { label: 'Flour T45', grams: 7360, unit: 'g' }, { label: 'Caster sugar', grams: 955, unit: 'g' }, { label: 'Salt', grams: 148, unit: 'g' },
+      { label: 'Fresh yeast', grams: 295, unit: 'g' }, { label: 'Fresh milk', grams: 1470, unit: 'g' }, { label: 'Water', grams: 1950, unit: 'g' },
+      { label: 'Butter', grams: 505, unit: 'g' }, { label: 'Croissant scraps', grams: 1470, unit: 'g' },
+    ],
+  });
+  // The interface dictionary in English: the original reads it itself, the port is handed it.
+  const tr: ported.BatchWarningTranslate = (key, params) => t(key, params as Record<string, string | number>);
+  const warn = (target: unknown, base: unknown): string | null => m.batchWarning(target, base, tr);
+
+  test('the croissant weighs what its ingredients say (14153 g), not what its name says', () => {
+    expect(m.weighableTotalGrams(CROISSANT)).toBe(14153);
+  });
+
+  test('formatWeight: names a weight the way a person would say it', () => {
+    expect(m.formatWeight(500)).toBe('500 g');
+    expect(m.formatWeight(17500)).toBe('17.5 kg');
+    expect(m.formatWeight(18000), 'no trailing .0').toBe('18 kg');
+    expect(m.formatWeight(17500000)).toBe('17.5 tonnes');
+    expect(m.formatWeight(0)).toBe('0 g');
+    expect(m.formatWeight('junk'), 'never NaN').toBe('0 g');
+  });
+
+  test('batchWarning: a normal batch passes without a warning', () => {
+    const base = m.weighableTotalGrams(CROISSANT);
+    expect(warn(17500, base)).toBe(null);
+    expect(warn(base, base)).toBe(null);
+    expect(warn(0, base), 'an empty field is not a warning').toBe(null);
+  });
+
+  test('batchWarning: THE INCIDENT — a tonne-scale total is flagged, not scaled in silence', () => {
+    const base = m.weighableTotalGrams(CROISSANT);
+    const w = warn(17500000, base); // what "17500 kg" used to mean
+    expect(w, 'a 17.5-tonne batch must warn').toBeTruthy();
+    expect(w).toMatch(/17\.5 tonnes/);
+    expect(w).toMatch(/1236\.49×/);   // 17500000 / 14153
+    expect(w).toMatch(/14\.15 kg/);   // compared against the recipe as written
+    expect(w).toBe('That is 17.5 tonnes of dough — 1236.49× the recipe as written (14.15 kg). Check the amount before calculating.');
+  });
+
+  test('batchWarning: one extra zero (175 kg instead of 17.5 kg) is caught too', () => {
+    const w = warn(175000, m.weighableTotalGrams(CROISSANT));
+    expect(w, 'a fat-finger extra zero must warn').toBeTruthy();
+    expect(w).toMatch(/175 kg/);
+  });
+
+  test('batchWarning: flags on absolute weight OR on the multiple of the recipe', () => {
+    expect(warn(m.MAX_SANE_BATCH_G + 1, 50000)).toBeTruthy();
+    expect(warn(m.MAX_SANE_BATCH_G, 50000), 'exactly at the line: fine').toBe(null);
+    expect(warn(m.MAX_SANE_MULTIPLE * 100 + 100, 100)).toBeTruthy();
+    expect(warn(m.MAX_SANE_MULTIPLE * 100, 100)).toBe(null);
+  });
+
+  test('batchWarning: with no recipe to compare to, the shorter sentence is used', () => {
+    expect(warn(175000, 0)).toBe('That is 175 kg of dough. Check the amount before calculating.');
+    expect(warn(175000, 'junk')).toBe('That is 175 kg of dough. Check the amount before calculating.');
+  });
+
+  test('scaleCatalogue: the scaling itself was never wrong — it reproduces the screenshot', () => {
+    const rows = m.scaleCatalogue(CROISSANT, 17500000);
+    expect(rows).toStrictEqual([9100543, 1180845, 183000, 364764, 1817636, 2411150, 624426, 1817636]);
+    expect(sum(rows), 'and they sum EXACTLY').toBe(17500000);
+    expect(sum(m.scaleCatalogue(CROISSANT, 17500))).toBe(17500);
+  });
+
+  test('the batch limits and the shelf-life ceiling are the original numbers', () => {
+    expect(m.MAX_SANE_BATCH_G).toBe(100000);
+    expect(m.MAX_SANE_MULTIPLE).toBe(50);
+    expect(m.MAX_SHELF_LIFE_DAYS).toBe(3650);
+  });
+});
+
+// ── What a person reads for a unit ───────────────────────────────────────────
+// ADAPTED from tests/recipe-unit-text.test.mjs: the original `unitText(unit)` against the port's `unitTextKey`
+// (key, then the dictionary — or the unit itself for a metric symbol), in each language.
+
+describe('unitText (the original) against unitTextKey (the port)', () => {
+  const portedText = (unit: unknown): unknown => {
+    const key = ported.unitTextKey(unit);
+    return key ? t(key) : unit;
+  };
+  const legacyText = (unit: unknown): unknown => (legacyJs as unknown as { unitText: (u: unknown) => unknown }).unitText(unit);
+
+  function inLanguage<R>(lang: string, fn: () => R): R {
+    setLanguage(lang);
+    try { return fn(); } finally { setLanguage(DEFAULT_LANGUAGE); }
+  }
+
+  describe.each([['shared/ (TypeScript)', portedText], ['js/ (current app)', legacyText]] as const)('%s', (_name, unitText) => {
+    test('an Italian venue reads its units in Italian', () => {
+      inLanguage('it', () => {
+        expect(unitText('to taste')).toBe('q.b.');
+        expect(unitText('pinch')).toBe('pizz.');
+        expect(unitText('pcs')).toBe('pz');
+      });
+    });
+
+    // ⚠️⚠️ THE EDITOR'S UNIT BOX LEAVES 41.2px FOR THE WORD. Measured widths of what ships, so a longer word is
+    // a decision: q.b. 24.07 · pz 15.86 · pizz. 30.79 · tbsp 30.30 · tsp 21.85
+    test('⚠️ every Italian unit label is one that was measured to fit the editor', () => {
+      const MEASURED = new Map<unknown, number>([['q.b.', 24.07], ['pz', 15.86], ['pizz.', 30.79], ['tbsp', 30.30], ['tsp', 21.85]]);
+      inLanguage('it', () => {
+        for (const unit of ported.CATALOGUE_UNITS.filter(u => /[a-z]{2}/.test(u) && !/^(mg|ml|cl|dl|kg)$/.test(u))) {
+          const label = unitText(unit);
+          expect(MEASURED.has(label), `«${String(label)}» (${unit}) was never measured against the 41.2px box`).toBe(true);
+          expect(MEASURED.get(label) as number).toBeLessThanOrEqual(41.2);
+        }
+        expect(unitText('tsp')).not.toBe(unitText('tbsp'));
+      });
+    });
+
+    test('an English venue reads exactly what it always read', () => {
+      inLanguage('en', () => {
+        for (const unit of ported.CATALOGUE_UNITS) expect(unitText(unit)).toBe(unit);
+      });
+    });
+
+    test('the metric symbols are the same in every language', () => {
+      inLanguage('it', () => {
+        for (const unit of ['g', 'kg', 'mg', 'ml', 'cl', 'dl', 'l']) expect(unitText(unit)).toBe(unit);
+      });
+    });
+
+    test('an unknown word comes back as it is', () => {
+      for (const odd of ['nope', '', 5, null, undefined]) expect(unitText(odd)).toBe(odd);
+    });
+  });
+
+  test('⚠️ the stored units stay identifiers, protected as data words', () => {
+    for (const unit of ['pcs', 'tsp', 'tbsp', 'pinch', 'to taste']) {
+      expect((DATA_WORDS as readonly string[]).includes(unit), `${unit} must be a DATA_WORD`).toBe(true);
+    }
+  });
+
+  test('every key unitTextKey answers exists in both dictionaries', () => {
+    const dicts = _dictionaries() as Record<string, Record<string, unknown>>;
+    for (const unit of ported.CATALOGUE_UNITS) {
+      const key = ported.unitTextKey(unit);
+      if (key) for (const lang of Object.keys(dicts)) expect(dicts[lang]?.[key], `${key} in ${lang}`).toBeTruthy();
+    }
+    expect(ported.unitTextKey('g')).toBe(null);
+    expect(ported.unitTextKey('toString'), 'a name on the prototype is not a unit').toBe(null);
+  });
 });
 
 // ── A quirk copied, not tidied ───────────────────────────────────────────────
@@ -318,20 +693,55 @@ describe('QUIRK COPIED: ingredientGrams of nothing', () => {
     });
 });
 
+// ── kg and litres keep their decimals (14 Oct 2026, the current app's PR #361) ──
+
+describe('kg and litre decimals', () => {
+  // Made up: 0.4 kg flour + 1.25 l milk + 2 eggs + salt to taste = 1650 g weighable.
+  const MIXED = { ingredients: [
+    { label: 'Farina di prova', grams: 0.4, unit: 'kg' },
+    { label: 'Latte di prova', grams: 1.25, unit: 'l' },
+    { label: 'Uova di prova', grams: 2, unit: 'pcs' },
+    { label: 'Sale di prova', grams: 0, unit: 'to taste' },
+  ] };
+
+  test('only kg, l, dl and cl have decimals, down to one gram or millilitre', () => {
+    expect(['kg', 'l', 'dl', 'cl', 'g', 'mg', 'ml', 'pcs', 'tsp', 'to taste'].map(ported.unitDecimals))
+      .toStrictEqual([3, 3, 2, 1, 0, 0, 0, 0, 0, 0]);
+    expect(ported.roundInUnit(1.8375, 'kg')).toBe(1.838);
+    expect(ported.roundInUnit(2.345, 'dl')).toBe(2.35);
+    expect(ported.roundInUnit(2.4, 'g')).toBe(2);
+    expect(ported.roundInUnit('junk', 'kg'), 'never NaN').toBe(0);
+  });
+
+  test('⚠️ the base recipe keeps 0.4 kg and 1.25 l (they read «0 kg» and «1 l»)', () => {
+    expect(ported.baseAmounts(MIXED)).toStrictEqual([0.4, 1.25, 2, null]);
+  });
+
+  test('⚠️ scaled, kg and l keep their decimals (3000 g: 0.727 kg, 2.273 l)', () => {
+    expect(ported.scaleCatalogue(MIXED, 3000)).toStrictEqual([0.727, 2.273, 4, null]);
+  });
+
+  test('the same numbers as the current app', () => {
+    for (const target of [0, 1000, 3000, 7777]) {
+      expect(ported.scaleCatalogue(MIXED, target), String(target)).toStrictEqual(legacy.scaleCatalogue(MIXED, target));
+    }
+    expect(ported.baseAmounts(MIXED)).toStrictEqual(legacy.baseAmounts(MIXED));
+  });
+});
+
 // ── What pairing would have checked ──────────────────────────────────────────
 
 describe('the port against the original', () => {
-  // The other half of the original: recipe normalisers, list helpers, the kg scaling, the Calculator import
-  // and the functions that look a word up in the interface dictionary. `unitDecimals` / `roundInUnit` belong
-  // to the kg scaling (live fix «kg and litre amounts keep their decimals»), `formatAmount` reads the interface
-  // locale: all three come with the scaling, in step 3d.
+  // The rest of the original: the editor's link functions, the validation and the Calculator import (steps 3d-6,
+  // 3d-7), `unitText`, which the port replaces by `unitTextKey`, and `formatAmount`, which needs the interface
+  // language and so lives in the app (app/src/recipes/recipeAmounts.ts `amountNumber`).
   const LEFT_OUT = [
-    'unitText', 'unitDecimals', 'roundInUnit', 'formatAmount', 'normalizeCatalogueRecipe', 'normalizeCatalogueRecipes', 'labelFieldsOf', 'normalizeShelfLifeDays',
-    'MAX_SHELF_LIFE_DAYS', 'sortByUsage', 'filterByName', 'linkOptions', 'linkedItemName', 'isSameLink', 'applyLink',
-    'moveRow', 'scaleCatalogue', 'baseAmounts', 'MAX_SANE_BATCH_G', 'MAX_SANE_MULTIPLE', 'formatWeight',
-    'batchWarning', 'SCALED_TTL_MS', 'isScaledEntryFresh', 'findInvalidRecipe', 'toCalculatorRecipe',
-    'nonWeighableLabels', 'mergeImportedRecipe', 'importFailureKey', 'findCalculatorImport',
+    'unitText', 'formatAmount', 'linkOptions', 'linkedItemName', 'isSameLink', 'applyLink', 'moveRow', 'findInvalidRecipe',
+    'toCalculatorRecipe', 'nonWeighableLabels', 'mergeImportedRecipe', 'importFailureKey', 'findCalculatorImport',
   ];
+  const ADDED = ['unitTextKey'];
+  // Same name, same results, but the translator is one more parameter.
+  const ARITY_DIFFERS = ['batchWarning'];
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;
   const shared = Object.keys(original).filter(name => !LEFT_OUT.includes(name)).sort();
@@ -342,7 +752,7 @@ describe('the port against the original', () => {
   });
 
   test('exports exactly the same names, except those', () => {
-    expect(Object.keys(port).sort()).toStrictEqual(shared);
+    expect(Object.keys(port).sort()).toStrictEqual([...shared, ...ADDED].sort());
   });
 
   test('every non-function export is strictly equal and frozen the same way', () => {
@@ -359,7 +769,8 @@ describe('the port against the original', () => {
       const theirs = original[name];
       if (typeof mine !== 'function' || typeof theirs !== 'function') continue;
       expect(mine.name, name).toBe(theirs.name);
-      expect(mine.length, `${name}: arity`).toBe(theirs.length);
+      const expected = ARITY_DIFFERS.includes(name) ? theirs.length + 1 : theirs.length;
+      expect(mine.length, `${name}: arity`).toBe(expected);
     }
   });
 });
