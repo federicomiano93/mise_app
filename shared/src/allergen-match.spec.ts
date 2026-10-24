@@ -544,3 +544,23 @@ describe.each([
     expect(appOwned.size).toBe(0);
   });
 });
+
+// ── A tap that lands as the app ticks the same box (the current app's PR #388; tests/allergen-tap-race.test.mjs) ──
+describe.each([
+  ['shared/ (TypeScript)', portedMatch],
+  ['js/ (current app)', legacyMatchJs as unknown as typeof portedMatch],
+] as const)('%s keepsAppTick', (_name, m) => {
+  test('only an UNtick of a box the app ticked under 800 ms ago is kept', () => {
+    const key = m.tickKey('milk', 'contains');
+    const owned = new Set([key]);
+    const at = new Map([[key, 1000]]);
+    expect(m.RECENT_APP_TICK_MS).toBe(800);
+    expect(m.keepsAppTick({ key, on: false, appOwned: owned, tickedAt: at, now: 1000 + 799 })).toBe(true);
+    expect(m.keepsAppTick({ key, on: false, appOwned: owned, tickedAt: at, now: 1000 + 800 }), 'an older app tick is the person’s to remove').toBe(false);
+    expect(m.keepsAppTick({ key, on: true, appOwned: owned, tickedAt: at, now: 1001 }), 'a tick on is what was asked').toBe(false);
+    expect(m.keepsAppTick({ key, on: false, appOwned: new Set(), tickedAt: at, now: 1001 }), 'a box the app does not own is the person’s').toBe(false);
+    expect(m.keepsAppTick({ key, on: false, appOwned: owned, tickedAt: new Map(), now: 1001 })).toBe(false);
+    expect(m.keepsAppTick({ key, on: false, appOwned: owned, tickedAt: at, now: 900 }), 'a clock that went backwards proves nothing').toBe(false);
+    expect(m.keepsAppTick(), 'nothing given keeps nothing').toBe(false);
+  });
+});

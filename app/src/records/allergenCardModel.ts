@@ -1,4 +1,4 @@
-import { readPackIngredients, reconcileTicks, tickKey } from '@mise/shared/allergen-match';
+import { RECENT_APP_TICK_MS, keepsAppTick, readPackIngredients, reconcileTicks, tickKey } from '@mise/shared/allergen-match';
 import {
   NUTRIENT_KEYS, allergenState, buildAllergenFields, checkedAt, isDeclared, missingNutrients, normalizeAllergens,
 } from '@mise/shared/allergen-model';
@@ -85,20 +85,21 @@ export function allergenWorkingFrom(item: ItemLike | null, money: Money): Allerg
 // A person ticked or unticked a box: it becomes theirs, and the app never touches it again (C108). Dropping it from `appOwned`
 // at the same time stops the app later «taking back» a box that is no longer its to take.
 //
-// ⚠️⚠️ DIFFERENCE FROM THE CURRENT APP, ON PURPOSE (the safe direction only): a person's change that would UNTICK a box the app
+// ⚠️⚠️ THE SAME RULE AS THE CURRENT APP (it took it from here, PR #388; shared allergen-match keepsAppTick): a person's change that would UNTICK a box the app
 // ticked LESS THAN `RECENT_APP_TICK_MS` ago leaves the box TICKED — and it becomes the person's, so the app never takes it back
 // and a later tap unticks it. Why: someone types «latte» and reaches for Milk «has»; the pause ends just before the finger lands,
 // the app ticks Milk, and the tap, which meant «tick it», flips it OFF — and an unticked box a person touched is theirs for good,
 // so Milk would be missing. Any other change (a tick on; an untick of a box the app ticked longer ago, or never ticked) is
 // exactly what the person asked for.
-export const RECENT_APP_TICK_MS = 800;
+export { RECENT_APP_TICK_MS };
 
 export function tickByHand(
   working: AllergenWorking, code: AllergenCode, column: Column, on: boolean, now: number,
 ): AllergenWorking {
   const key = tickKey(code, column);
-  const tickedAt = working.appTickedAt[key];
-  const justTickedByApp = !on && working.appOwned.includes(key) && tickedAt !== undefined && now - tickedAt < RECENT_APP_TICK_MS;
+  const justTickedByApp = keepsAppTick({
+    key, on, now, appOwned: new Set(working.appOwned), tickedAt: new Map(Object.entries(working.appTickedAt)),
+  });
   const list = new Set<AllergenCode>(working[column]);
   if (on || justTickedByApp) list.add(code);
   else list.delete(code);

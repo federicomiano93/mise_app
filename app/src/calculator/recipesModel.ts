@@ -134,7 +134,10 @@ export function chooseLeavening(
     next = { ...patchIngredient(recipe, index, { key }), leaveningKey: key };
   }
   const pct = next.leaveningDefaultPct || 1;
-  return { ...next, leaveningDefaultPct: pct, baselinePct: next.baselinePct == null ? pct : next.baselinePct };
+  // ⚠️ A LINKED PICK RESTARTS THE BASELINE AT THE STARTING % (the current app's fix, PR #376; the shared twin is
+  // calculator-recipe-source.ts chooseLeavening). A baseline left from the tab's old own recipe would silently change
+  // the Catalogue's yeast at the very % every phone starts from (0.65 kept, 0.8 start → ×1.23).
+  return { ...next, leaveningDefaultPct: pct, baselinePct: linkedRows || next.baselinePct == null ? pct : next.baselinePct };
 }
 
 // What the leavening select shows: the chosen row's option value, or '' for none.
