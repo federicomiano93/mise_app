@@ -584,9 +584,9 @@ What the code does, and where it differs from the current app (each difference w
 
 ## Step 3e-6 as built — part B3a: the door, the frame, choosing the file, the suppliers
 
-Part B3a is the FIRST HALF of «Import from invoices» (the second half, B3b, is step 3 and the summary). Files:
+Part B3a is the FIRST HALF of «Import from invoices» (the second half, B3b, is step 3 and the summary: see «part B3b» below). Files:
 `app/src/suppliers/invoiceImport/` — `InvoiceImportScreen.tsx` (the frame and the state), `FileStep.tsx`, `SuppliersStep.tsx`,
-`IngredientsStep.tsx` (**the B3b hand-over point**: a heading and nothing else), `importRun.ts` (read, choose, failure sentences),
+`IngredientsStep.tsx` (built in B3b; in B3a it was a heading and nothing else), `importRun.ts` (read, choose, failure sentences),
 `supplierStep.ts` (the select and the write), `importWords.ts` (code → phrase tables), `lazyImportSource.ts`,
 `LeaveBlocker.tsx`, `useMayImport.ts`, `testing/` (the fake source, `renderImport.tsx`).
 
@@ -639,6 +639,45 @@ Part B3a is the FIRST HALF of «Import from invoices» (the second half, B3b, is
   each header; left for B3b: every ingredients-step, rows, decisions-written and summary test of `invoice-import-flow` (all from «a file
   goes through every step» and «loading the same file again» on), the review tests of the rows (`invoice-import-review` 1–4, 7–11, A–C, R, S),
   and the `invoice-import-names` and `-price-changes` screen tests.
+
+## Step 3e-6 as built — part B3b: step 3, the run and the summary
+
+Part B3b is the SECOND HALF of «Import from invoices». Files (all in `app/src/suppliers/invoiceImport/`): `ingredientsRun.ts` (the check read,
+the answers' type, the remembered decisions, and THE RUN — no React, no Firestore), `ingredientAnswers.ts` (the answers as functions),
+`IngredientsStep.tsx` + `IngredientRow.tsx` (step 3, props only), `RunningStep.tsx` (the busy view), `SummaryStep.tsx` (the end),
+`importWords.ts` (REASON_KEYS, STATUS, FILTER_KEYS), and `testing/fakeImportSource.ts` which now APPLIES what is written.
+
+- **The check** (I88): «Checking what is already in Mise…» (heading, note, live line) while `planIngredientStep` reads the invoice points of
+  the ingredients a row could match, 8 at a time; a failed read → a red `role="alert"` line in the offline / permission / plain words and the
+  primary button «Try again». A supplier skipped at step 2 takes its products out of the rows (`activeIngredients`).
+- **The step** (I24, I89–I92): the note, the chips (`role="group"` «Show», real buttons with `aria-pressed`, «Word (n)», zero-count chips hidden
+  unless All or the active one), then in «All» the active rows and «Unchanged» / «To check» / «Errors» as closed `<details>` groups (open state in
+  the screen); in another chip the list or «Nothing here.». A row: name, «supplier · price · n invoices», a pill with a WORD (the `check` pill
+  by the original's rule, review 11), the reason lines, then the selects IN THIS ORDER (review 10): «Create / Do not import (remember)» (NEW rows;
+  Create is the default and never blocks), the question (Choose… / Same as … / Create a new ingredient — absent on an «unisci con» row / Skip),
+  «This price?» (Leave it for now / Use this price), «Name on the invoice» (Keep / Save the new name). A new answer to the question or the
+  new-row choice clears that row's «Use this price» and rename (S4). The price shown is the EFFECTIVE row's (S3); «from → to (+10%)» only in the
+  same unit. The primary button: «Import n ingredients» (disabled with «Choose what to do with n ingredients first» tied by `aria-describedby`
+  while a question is open), or «Done» + the hint «Nothing to import…» (+ the secondary «Record price changes» when rows already in Mise could
+  have price changes to record).
+- **Confirm and run** (I93–I96): offline → the alert first; then the confirmation (new ingredients, prices, invoice names, «Price changes are
+  recorded too.», «n choices will be remembered»); Cancel writes nothing and keeps the screen. Yes → `working` / `busyRef` / `busy`, Back OFF and the
+  router's blocker refusing without asking (as for the suppliers); the busy view (heading «Importing…» with the focus, a `<progress>` only when
+  there is something to count, the live line «Importing n of total…»); the remembered decisions first, then every row planned AGAIN on fresh
+  server data. Only a refusal and a lost connection stop the run; any other failure is that row's.
+- **Done with nothing to import** (I24): with remembered choices → offline alert, else the confirmation «Remember your choices?», then one write;
+  a failure → an alert and the screen stays; no choices → it leaves at once. **Record price changes**: offline alert, confirmation, then the same run.
+- **The summary** (I96): «Import finished» (no «Step n of 3»); the stop sentence in a red alert (+ «n not tried»); Created / Updated / Prices added /
+  (Invoice names saved) / Price changes recorded / Unchanged / Skipped / (names not saved) / (Choices remembered) / (pack codes full); red alerts for
+  price changes and choices that could not be recorded; the rows that could not be imported with their reasons; «Load the same file again…» only when
+  a second load can help. `announceAction('invoice-imported')` only when the run was not stopped. The import is finished: Back and «Done» leave
+  without a question, with the focus on the door (`IMPORT_OPENER`).
+
+**Differences from the current app, on purpose:** no `.json` path (F6), so no workbook advice (`summary.fixFile`) and no remember hints
+(`summary.remember`/`rememberHints` is not used); the busy view is an `<h3>` inside the same card (the original replaced the whole body with an `<h2>`)
+and says «Importing n of total…» through the live region as well as the bar; «Done» leaves through the router (`leave()`) instead of closing an
+overlay; the check's live line is also spoken while the heading shows it; the quiet pill (history only / unchanged / skipped) is a neutral grey, the
+original's «quiet» tone.
 
 ## Findings — things found while reading, not decided
 

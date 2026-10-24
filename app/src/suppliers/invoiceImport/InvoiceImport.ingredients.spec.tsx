@@ -18,7 +18,7 @@ import {
 // answered “do not import” does not say it will be created», «S3 · the screen takes the shown price from the effective row»,
 // «S4 · a new answer clears the “Use this price” of the row» (the answers' half is in ingredientAnswers.spec.ts).
 // PORTS (tests/invoice-import-flow.test.mjs): «a NEW row can be left out…» (the screen's half), the question that blocks the button.
-// LEFT FOR SLICE 2: the confirmation, the run, the summary and every write.
+// The confirmation, the run, the summary and every write are in InvoiceImport.run.spec.tsx.
 
 beforeAll(async () => {
   await import('../SuppliersSection');
@@ -41,7 +41,7 @@ async function open(venue: Venue = {}, options: Parameters<typeof renderImport>[
   const suppliers = venue.suppliers ?? [SUPPLIER];
   const source = fakeSuppliersSource({ suppliers, ingredients: venue.ingredients ?? [] });
   for (const [id, doc] of Object.entries(venue.prices ?? {})) source.prices.set(id, doc);
-  const importing = fakeImportSource({ suppliers });
+  const importing = fakeImportSource({ suppliers, ingredients: venue.ingredients ?? [], prices: venue.prices });
   const view = renderImport('/suppliers/import', { suppliers: source, importing, ...options });
   const region = await findImportScreen(options.lang === 'it' ? 'Importa da fatture' : 'Import from invoices');
   return { ...view, ...region, importing };

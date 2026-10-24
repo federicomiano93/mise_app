@@ -322,3 +322,15 @@
   align-items: center;
   gap: var(--s3);
 }
+
+/* The bar of the busy view, and the heading over the rows that could not be imported. */
+.progress {
+  width: 100%;
+  height: var(--s3);
+  accent-color: var(--accent);
+}
+
+.subheading {
+  font-size: var(--fs-md);
+  font-weight: 650;
+}

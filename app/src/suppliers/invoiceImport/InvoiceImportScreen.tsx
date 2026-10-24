@@ -2,6 +2,7 @@ import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } 
 import { useLocation, useNavigationType } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import { planSuppliers, supplierWrites } from '@mise/shared/invoice-import-model';
+import { outputLanguage } from '@mise/shared/market';
 import type { SupplierPlanEntry } from '@mise/shared/invoice-import-model';
 import { applyDecisions, importTotals, waitingCount } from '@mise/shared/invoice-import-plan';
 import { useDataServices } from '../../data/DataContext';
@@ -12,6 +13,7 @@ import { useSession } from '../../session/SessionContext';
 import { ScrollAreaContext } from '../../shell/scrollArea';
 import { Button } from '../../ui/Button';
 import { FormBar } from '../../ui/FormBar';
+import { announceAction } from '../../telemetry/usage';
 import { useAlert } from '../../ui/useAlert';
 import { useConfirm } from '../../ui/useConfirm';
 import { IMPORT_OPENER, useHandBack } from '../handBack';
@@ -26,8 +28,13 @@ import { IngredientsStep } from './IngredientsStep';
 import { LeaveBlocker } from './LeaveBlocker';
 import { NO_TICKS, chooseFrom, failureKey, readInvoiceFiles } from './importRun';
 import type { ImportRun, Ticks } from './importRun';
-import { NO_ANSWERS, activeIngredients, planIngredientStep, quietRows } from './ingredientsRun';
-import type { IngredientAnswers, IngredientPlan } from './ingredientsRun';
+import {
+  NO_ANSWERS, activeIngredients, decisionChangesOf, decisionCount, planIngredientStep, quietRows, runIngredientImport,
+} from './ingredientsRun';
+import type { IngredientAnswers, IngredientPlan, RunOutcome, RunProgress, RunWords } from './ingredientsRun';
+import { reasonKey } from './importWords';
+import { RunningStep } from './RunningStep';
+import { SummaryStep } from './SummaryStep';
 import { SuppliersStep } from './SuppliersStep';
 import { decisionsNow, newProgress, pendingOps, saveSupplierOps } from './supplierStep';
 import type { SupplierDecision } from './supplierStep';
@@ -50,9 +57,10 @@ import styles from './InvoiceImportScreen.module.css';
 // ⚠️ NOT LOCAL-FIRST, ON PURPOSE (decision T3): every read is from the server and a write is refused offline (importSource.ts).
 // ⚠️ EVERY WORD IS ASKED INSIDE THE DRAWING, and this screen names no food: ingredient names are the file's own.
 
-type Step = 'file' | 'suppliers' | 'ingredients';
+type Step = 'file' | 'suppliers' | 'ingredients' | 'summary';
 
-const STEP_NUMBER = { file: 1, suppliers: 2, ingredients: 3 } as const satisfies Record<Step, number>;
+// The summary has no number: it is the end, not a fourth step.
+const STEP_NUMBER = { file: 1, suppliers: 2, ingredients: 3 } as const satisfies Partial<Record<Step, number>>;
 const STEPS_IN_ALL = 3;
 
 // What step 2 hands to step 3: which supplier each file supplier stands for.
@@ -64,7 +72,7 @@ export default function InvoiceImportScreen() {
   const navigationType = useNavigationType();
   const handBack = useHandBack();
   const scroll = useContext(ScrollAreaContext);
-  const { locationId } = useSession();
+  const { locationId, location } = useSession();
   // The section is drawn only for a ready session (SectionRoute), so a venue is always open here.
   if (!locationId) throw new Error('Import from invoices needs an open venue.');
   const services = useDataServices();
@@ -102,12 +110,20 @@ export default function InvoiceImportScreen() {
   const [filter, setFilter] = useState('all');
   const [ingOpen, setIngOpen] = useState<Record<string, boolean>>({});
 
+  // The run and the end
+  const [running, setRunning] = useState<RunProgress | null>(null);
+  const [outcome, setOutcome] = useState<RunOutcome | null>(null);
+  const [finished, setFinished] = useState(false);
+  const isRunning = running !== null;
+
   // The same values, readable at once (the state is only read on the next render): the blocker and the async handlers use them.
   const runRef = useRef<ImportRun | null>(null);
   const busyRef = useRef(false);
   const working = useRef(false);
   const mounted = useRef(true);
   const leavingClean = useRef(false);
+  // The import is over (the summary is on screen, or «Done» had nothing to import): Back and the router leave without a question.
+  const finishedRef = useRef(false);
   const askingBack = useRef(false);
   const askingBlocked = useRef(false);
   useEffect(() => {
@@ -122,7 +138,8 @@ export default function InvoiceImportScreen() {
   const existing = () => ({ suppliers: latest.current.suppliers, ingredients: latest.current.ingredients });
 
   // ⚠️ A SELF-STARTED RELOAD WOULD THROW THE IMPORT AWAY: it waits while a file is loaded or something is being written.
-  const holding = run !== null || busy;
+  // Once the import is finished there is nothing left to lose.
+  const holding = (run !== null && !finished) || busy;
   useEffect(() => {
     if (!holding) return undefined;
     return markBusy();
@@ -150,7 +167,7 @@ export default function InvoiceImportScreen() {
     const area = scroll.element();
     if (area) area.scrollTop = 0;
     heading.current?.focus({ preventScroll: true });
-  }, [step, scroll]);
+  }, [step, scroll, isRunning]);
 
   // ⚠️ AFTER A READ the focus — which fell to the page when the picker was disabled — goes to the next thing to do: the line that
   // says how it went (the result, or the refusal), else the Next button (P18).
@@ -187,14 +204,14 @@ export default function InvoiceImportScreen() {
   // ⚠️ EVERY WAY OUT GOES THROUGH THE ROUTER'S BLOCKER once a file is loaded or something is being written: the browser's Back, the
   // rail and the tab bar all navigate. While the suppliers are being written it refuses without asking.
   const shouldBlock = useCallback<BlockerFunction>(
-    ({ currentLocation, nextLocation }) => !leavingClean.current && (runRef.current !== null || busyRef.current)
+    ({ currentLocation, nextLocation }) => !leavingClean.current && !finishedRef.current && (runRef.current !== null || busyRef.current)
       && currentLocation.pathname !== nextLocation.pathname,
     [],
   );
 
   async function back() {
     if (busyRef.current || askingBack.current || askingBlocked.current) return;
-    if (runRef.current !== null) {
+    if (runRef.current !== null && !finishedRef.current) {
       askingBack.current = true;
       try {
         if (!(await leaveQuestion()) || !mounted.current) return;
@@ -221,6 +238,10 @@ export default function InvoiceImportScreen() {
     setIngAnswers(NO_ANSWERS);
     setFilter('all');
     setIngOpen({});
+    setRunning(null);
+    setOutcome(null);
+    setFinished(false);
+    finishedRef.current = false;
     progress.current = newProgress();
   }
 
@@ -364,6 +385,175 @@ export default function InvoiceImportScreen() {
   const totals = importTotals(entries);
   const canRecordChanges = quietRows(entries).length > 0;
 
+  // ── Step 3 · confirm, write, and the end ─────────────────────────────────────────────────────────────────────────
+
+  const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
+  const saidOffline = () => alert({ message: t('sup.imp.stop.offline'), okLabel: t('common.ok') });
+
+  // The import is over: nothing left to lose, so the blocker lets go; the focus goes back to the door (IMPORT_OPENER).
+  function exitFinished() {
+    finishedRef.current = true;
+    leavingClean.current = true;
+    leave();
+  }
+
+  // The words a result row carries, chosen here so every one goes through t().
+  const runWords = (): RunWords => ({
+    reason: code => t(reasonKey(code)),
+    changed: () => t('sup.imp.reason.changed'),
+    writeFailed: code => t('sup.imp.reason.writeFailed', { code }),
+    stop: kind => t(kind === 'permission' ? 'sup.imp.stop.permission' : 'sup.imp.stop.offline'),
+  });
+
+  // The rows are written one by one (ingredientsRun.ts); Back is off and the blocker refuses without asking, as for the suppliers.
+  async function runRows() {
+    if (!run || !plan || !handOver) return;
+    busyRef.current = true;
+    setBusy(true);
+    focusHeading.current = true;
+    setRunning({ done: 0, shown: 0, total: 0 });
+    setLive('');
+    try {
+      const result = await runIngredientImport({
+        source,
+        entries,
+        ctx: plan.ctx,
+        file: run.file,
+        supplierIdByKey: handOver.supplierIdByKey,
+        answers: ingAnswers,
+        decisionChanges: decisionChangesOf(run, skips, ingAnswers.forgetKeys),
+        language: outputLanguage(location) ?? 'en',
+        ingredientsNow: () => latest.current.ingredients,
+        words: runWords(),
+        onProgress: progressNow => {
+          if (!mounted.current) return;
+          setRunning(progressNow);
+          setLive(progressNow.total > 0 ? t('sup.imp.progress', { done: progressNow.shown, total: progressNow.total }) : '');
+        },
+      });
+      if (!mounted.current) return;
+      finishedRef.current = true;
+      setFinished(true);
+      setOutcome(result);
+      setRunning(null);
+      setLive('');
+      // The usage count: a run the connection or the rules stopped is not «an import» (parity I96).
+      if (result.summary.stopped === null) announceAction('invoice-imported');
+      goTo('summary');
+    } catch (error) {
+      console.error('The import failed:', error);
+      if (mounted.current) {
+        setRunning(null);
+        setLive('');
+        refocusPrimary.current = true;
+        await alert({ message: t(failureKey(error, 'sup.imp.reason.unknown')), okLabel: t('common.ok') });
+      }
+    } finally {
+      busyRef.current = false;
+      if (mounted.current) setBusy(false);
+    }
+  }
+
+  async function confirmAndRun() {
+    if (!run || working.current) return;
+    working.current = true;
+    try {
+      if (isOffline()) {
+        await saidOffline();
+        return;
+      }
+      const remembered = decisionCount(decisionChangesOf(run, skips, ingAnswers.forgetKeys));
+      const ok = await confirm({
+        title: t('sup.imp.ing.confirmTitle'),
+        message: [
+          totals.newIngredients > 0 ? t('sup.imp.ing.confirmNew', { n: totals.newIngredients }) : '',
+          totals.pricesAdded > 0 ? t('sup.imp.ing.confirmPrices', { n: totals.pricesAdded }) : '',
+          totals.namesSaved > 0 ? t('sup.imp.ing.confirmNames', { n: totals.namesSaved }) : '',
+          t('sup.imp.ing.confirmChanges'),
+          remembered > 0 ? t('sup.imp.decisions.confirmLine', { n: remembered }) : '',
+        ].filter(Boolean),
+        okLabel: t('sup.imp.ing.confirmOk'),
+        cancelLabel: t('common.cancel'),
+      });
+      if (!ok || !mounted.current) return;
+      await runRows();
+    } finally {
+      working.current = false;
+    }
+  }
+
+  // Nothing is left to import: the person's «do not import» answers are still worth keeping, so they are confirmed and saved
+  // before the screen closes. ⚠️ NOTHING IS WRITTEN WITHOUT A CONFIRMATION (P20): «Done» on a file with nothing new closes the
+  // screen as it always did; recording the changes of the rows already in Mise is its own button.
+  async function finishWithoutRows() {
+    if (!run || working.current) return;
+    working.current = true;
+    try {
+      const changes = decisionChangesOf(run, skips, ingAnswers.forgetKeys);
+      const n = decisionCount(changes);
+      if (n > 0) {
+        if (isOffline()) {
+          await saidOffline();
+          return;
+        }
+        const ok = await confirm({
+          title: t('sup.imp.decisions.confirmTitle'),
+          message: t('sup.imp.decisions.confirmLine', { n }),
+          okLabel: t('ui.save'),
+          cancelLabel: t('common.cancel'),
+        });
+        if (!ok || !mounted.current) return;
+        busyRef.current = true;
+        setBusy(true);
+        try {
+          await source.writeDecisions(changes);
+        } catch (error) {
+          console.error('Remembering the decisions failed:', error);
+          busyRef.current = false;
+          if (mounted.current) {
+            setBusy(false);
+            refocusPrimary.current = true;
+            await alert({ message: t(failureKey(error, 'sup.imp.decisions.failed')), okLabel: t('common.ok') });
+          }
+          return;
+        }
+        busyRef.current = false;
+      }
+      exitFinished();
+    } finally {
+      busyRef.current = false;
+      working.current = false;
+      if (mounted.current) setBusy(false);
+    }
+  }
+
+  // The second button of a file with nothing new: asks, then runs the pass over the rows already in Mise and ends on the summary,
+  // which says how many price changes were recorded.
+  async function recordChangesOnly() {
+    if (!run || working.current) return;
+    working.current = true;
+    try {
+      if (isOffline()) {
+        await saidOffline();
+        return;
+      }
+      const remembered = decisionCount(decisionChangesOf(run, skips, ingAnswers.forgetKeys));
+      const ok = await confirm({
+        title: t('sup.imp.ing.recordChangesTitle'),
+        message: [
+          t('sup.imp.ing.recordChangesConfirm'),
+          remembered > 0 ? t('sup.imp.decisions.confirmLine', { n: remembered }) : '',
+        ].filter(Boolean),
+        okLabel: t('sup.imp.ing.recordChangesOk'),
+        cancelLabel: t('common.cancel'),
+      });
+      if (!ok || !mounted.current) return;
+      await runRows();
+    } finally {
+      working.current = false;
+    }
+  }
+
   const onDecision = (key: string, decision: IngredientDecision | null) => { setIngAnswers(current => answerQuestion(current, key, decision)); };
   const onNew = (key: string, forget: boolean) => { setIngAnswers(current => answerNew(current, key, forget)); };
   const onConfirm = (key: string, use: boolean) => { setIngAnswers(current => answerConfirm(current, key, use)); };
@@ -458,19 +648,20 @@ export default function InvoiceImportScreen() {
         {pending.length > 0 ? t('sup.imp.suppliers.save', { n: pending.length }) : t('sup.imp.next')}
       </Button>
     );
-  } else if (step === 'ingredients' && !checking && handOver) {
+  } else if (step === 'ingredients' && !checking && !isRunning && handOver) {
     if (checkError) {
       action = <Button ref={primary} variant="primary" onPress={() => { void startIngredients(handOver.supplierIdByKey); }}>{t('sup.imp.retry')}</Button>;
     } else if (plan) {
-      // Not wired yet: the confirmations and the run come with the next slice of part B3b.
       action = waiting > 0 ? (
         <Button ref={primary} variant="primary" isDisabled aria-describedby={hintId}>{t('sup.imp.ing.import', { n: totals.rows })}</Button>
       ) : (
-        <Button ref={primary} variant="primary" onPress={() => undefined}>
+        <Button ref={primary} variant="primary" isDisabled={busy} onPress={() => { void (totals.rows === 0 ? finishWithoutRows() : confirmAndRun()); }}>
           {totals.rows === 0 ? t('sup.imp.done') : t('sup.imp.ing.import', { n: totals.rows })}
         </Button>
       );
     }
+  } else if (step === 'summary') {
+    action = <Button ref={primary} variant="primary" onPress={exitFinished}>{t('sup.imp.done')}</Button>;
   }
 
   return (
@@ -482,7 +673,7 @@ export default function InvoiceImportScreen() {
         title={t('sup.imp.title')}
         titleId={titleId}
         titleRef={title}
-        sub={<p className={styles.sub}>{t('sup.imp.stepOf', { n: STEP_NUMBER[step], total: STEPS_IN_ALL })}</p>}
+        sub={step === 'summary' ? undefined : <p className={styles.sub}>{t('sup.imp.stepOf', { n: STEP_NUMBER[step], total: STEPS_IN_ALL })}</p>}
         action={action}
       />
       <div className={styles.body}>
@@ -517,7 +708,10 @@ export default function InvoiceImportScreen() {
             onForget={onForget}
           />
         ) : null}
-        {step === 'ingredients' && run && handOver ? (
+        {step === 'ingredients' && run && handOver && running ? (
+          <RunningStep headingRef={heading} done={running.done} total={running.total} />
+        ) : null}
+        {step === 'ingredients' && run && handOver && !running ? (
           <IngredientsStep
             headingRef={heading}
             file={run.file}
@@ -540,8 +734,11 @@ export default function InvoiceImportScreen() {
             onForget={onNew}
             onConfirm={onConfirm}
             onRename={onRename}
-            onRecordChanges={() => undefined}
+            onRecordChanges={() => { void recordChangesOnly(); }}
           />
+        ) : null}
+        {step === 'summary' && outcome ? (
+          <SummaryStep headingRef={heading} summary={outcome.summary} decisionsWritten={outcome.decisionsWritten} decisionsFailed={outcome.decisionsFailed} />
         ) : null}
         {/* Present, empty, before it speaks: a live region inserted already filled is announced unreliably. */}
         <div role="status" className="visually-hidden">{live}</div>

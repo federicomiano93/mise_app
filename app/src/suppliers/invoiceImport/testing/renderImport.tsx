@@ -28,7 +28,9 @@ type Options = NonNullable<Parameters<typeof renderApp>[1]> & {
 
 export function renderImport(path = '/suppliers/import', { suppliers, importing, session = ITALY, ...options }: Options = {}) {
   const source = suppliers ?? fakeSuppliersSource();
-  const serverSide = importing ?? fakeImportSource({ suppliers: [...source.suppliers.values()] });
+  const serverSide = importing ?? fakeImportSource({
+    suppliers: [...source.suppliers.values()], ingredients: [...source.ingredients.values()], prices: Object.fromEntries(source.prices),
+  });
   const view = renderApp(path, { ...options, session, data: { suppliers: () => source, invoiceImport: () => serverSide, ...options.data } });
   return { ...view, source, importing: serverSide };
 }

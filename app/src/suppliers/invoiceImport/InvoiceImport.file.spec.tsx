@@ -22,7 +22,7 @@ import {
 // «6 · after a read the focus goes to the result status line, else to the Next button».
 // NOT PORTED, BY DECISION: «a file that is not an import file says what is wrong, in words» and «a .json file still takes the old
 // path» (F6: the screen speaks only of the zip, and `.json` is not accepted).
-// LEFT FOR B3b: the rest of the zip-path tests, which write rows, decisions and price changes.
+// The zip-path tests that write rows, decisions and price changes are in InvoiceImport.run.spec.tsx (part B3b).
 
 beforeAll(async () => {
   await import('../SuppliersSection');

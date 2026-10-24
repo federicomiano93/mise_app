@@ -308,7 +308,7 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   reported with fixed words only (`Recipe export failed:`, the file kind, `library` or `build`), never the recipe.
 - `suppliers/` — Ingredients & suppliers (section id `suppliers`, step 3e, built in slices; its parity list is
   `docs/parity/suppliers.md`). Slice A looks (the three lists and a supplier's own screen), slice B writes suppliers and adds
-  Settings; 3e-2 onwards is the ingredient card, the pack photo, the invoice import. The data layer: `suppliersSource.ts` (the
+  Settings; 3e-2 onwards is the ingredient card, the pack photo, the invoice import. The invoice import is built end to end: the door, step 1 (the file), step 2 (the suppliers), step 3 (the ingredients: `IngredientsStep`, `ingredientsRun.ts`) and the summary (`SummaryStep`). The data layer: `suppliersSource.ts` (the
   Firestore half: suppliers, ingredients, prices, `config/orders`, and the one Cloud Function `setIngredientPanels`), `suppliersStore.ts`
   (plain TypeScript, local-first writes, `SuppliersMessage` kinds that `suppliersMessages.ts` words), `SuppliersContext.tsx`
   (started on mount, stopped on unmount, P14). Addresses, in `suppliersPath.ts`: `/suppliers` (Ingredients tab), `/suppliers/suppliers`,

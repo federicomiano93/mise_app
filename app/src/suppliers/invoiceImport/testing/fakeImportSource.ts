@@ -11,6 +11,8 @@
 //
 // Invented data only.
 
+import { planBatchWrites, pointsOfDocs } from '@mise/shared/invoice-import-plan';
+import type { DocWrite } from '@mise/shared/invoice-import-plan';
 import type { DecisionChanges } from '@mise/shared/invoice-zip/selection';
 import type { InvoiceImportSource, StoredPoints, StoredPriceChange } from '../importSource';
 import type { StoredDoc } from '../../suppliersSource';
@@ -21,7 +23,8 @@ export type ImportWrite =
   | { readonly kind: 'createSupplier'; readonly id: string; readonly data: Readonly<Record<string, unknown>> }
   | { readonly kind: 'linkSupplierVat'; readonly supplierId: string; readonly vatNumber: string }
   | { readonly kind: 'decisions'; readonly changes: DecisionChanges }
-  | { readonly kind: 'batches'; readonly batches: unknown };
+  // The DocWrites of one row's batches, as planBatchWrites made them (the ids already minted).
+  | { readonly kind: 'batches'; readonly batches: readonly (readonly DocWrite[])[] };
 
 export interface FakeImportSource extends InvoiceImportSource {
   // «The server»: what the next fresh read returns. A spec edits these to play another phone.
@@ -29,7 +32,11 @@ export interface FakeImportSource extends InvoiceImportSource {
   ingredients: StoredDoc[];
   decisions: StoredDoc[];
   // The invoice points already stored, by ingredient id (none = nothing recorded yet): what step 3 reads to tell a price that is in.
+  // The points the run writes are added to these on the next read.
   points: Map<string, StoredPoints>;
+  // The price documents (ingredient-prices) by ingredient id, and the price changes by their id: what the run writes lands here.
+  prices: Map<string, Record<string, unknown>>;
+  priceChanges: Map<string, Record<string, unknown>>;
   // Every call, in order: [method, ...arguments].
   readonly calls: Array<readonly [ImportMethod, ...unknown[]]>;
   // Every write, in order.
@@ -44,16 +51,23 @@ export interface FakeImportSource extends InvoiceImportSource {
   countOf(method: ImportMethod): number;
 }
 
-export function fakeImportSource(initial: { suppliers?: StoredDoc[]; ingredients?: StoredDoc[]; decisions?: StoredDoc[] } = {}): FakeImportSource {
+export function fakeImportSource(
+  initial: { suppliers?: StoredDoc[]; ingredients?: StoredDoc[]; decisions?: StoredDoc[]; prices?: Record<string, Record<string, unknown>> } = {},
+): FakeImportSource {
   const failures = new Map<ImportMethod, { code: string; after: number }>();
   const holds = new Map<ImportMethod, Promise<void>>();
   let minted = 0;
+  let mintedIngredients = 0;
+  // The history points the run wrote, by ingredient id then point id.
+  const pointDocs = new Map<string, Map<string, Record<string, unknown>>>();
 
   const self: FakeImportSource = {
     suppliers: [...(initial.suppliers ?? [])],
     ingredients: [...(initial.ingredients ?? [])],
     decisions: [...(initial.decisions ?? [])],
     points: new Map<string, StoredPoints>(),
+    prices: new Map(Object.entries(initial.prices ?? {})),
+    priceChanges: new Map<string, Record<string, unknown>>(),
     calls: [],
     writes: [],
     beforeFreshSuppliers: null,
@@ -87,12 +101,28 @@ export function fakeImportSource(initial: { suppliers?: StoredDoc[]; ingredients
     }),
     freshIngredientsForSupplier: supplierId => run('freshIngredientsForSupplier', [supplierId],
       () => self.ingredients.filter(ingredient => ingredient.supplierId === supplierId).map(ingredient => ({ ...ingredient }))),
-    invoicePoints: ingredientId => run('invoicePoints', [ingredientId], (): StoredPoints => self.points.get(ingredientId) ?? { ids: new Set<string>(), points: [] }),
-    storedPriceChanges: ingredientId => run('storedPriceChanges', [ingredientId], (): StoredPriceChange[] => []),
-    freshPrice: ingredientId => run('freshPrice', [ingredientId], () => null),
+    invoicePoints: ingredientId => run('invoicePoints', [ingredientId], (): StoredPoints => {
+      const seeded = self.points.get(ingredientId);
+      const written = [...(pointDocs.get(ingredientId) ?? new Map()).entries()].map(([id, data]) => ({ id, data }));
+      return {
+        ids: new Set([...(seeded?.ids ?? []), ...written.map(point => point.id)]),
+        points: [...(seeded?.points ?? []), ...pointsOfDocs(written)],
+      };
+    }),
+    storedPriceChanges: ingredientId => run('storedPriceChanges', [ingredientId], (): StoredPriceChange[] =>
+      [...self.priceChanges.entries()].filter(([, data]) => data.ingredientId === ingredientId).map(([id, data]) => ({
+        id, oldPrice: data.oldPrice, newPrice: data.newPrice, oldDate: data.oldDate, date: data.date, priceUnit: data.priceUnit,
+      }))),
+    freshPrice: ingredientId => run('freshPrice', [ingredientId], () => {
+      const price = self.prices.get(ingredientId);
+      return price ? { ...price } : null;
+    }),
     runImportBatches: batches => run('runImportBatches', [batches], () => {
-      self.writes.push({ kind: 'batches', batches });
-      return null;
+      // The way the database would: a NEW ingredient gets its id here, and every write lands where its path says.
+      const { batches: steps, ingredientId } = planBatchWrites(batches, { mintId: () => `ing-${++mintedIngredients}`, bakery: 'test' });
+      self.writes.push({ kind: 'batches', batches: steps });
+      for (const step of steps) step.forEach(write => { apply(write); });
+      return ingredientId;
     }),
     loadDecisions: () => run('loadDecisions', [], () => self.decisions.map(decision => ({ ...decision }))),
     writeDecisions: changes => run('writeDecisions', [changes], () => {
@@ -105,6 +135,34 @@ export function fakeImportSource(initial: { suppliers?: StoredDoc[]; ingredients
       return changes.set.length + changes.remove.length;
     }),
   };
+
+  // One planned write, applied to the fake's «server».
+  function apply(write: DocWrite): void {
+    const [folder, id, sub, pointId] = write.path;
+    if (folder === 'ingredients' && id && sub === 'prices' && pointId) {
+      const points = pointDocs.get(id) ?? new Map<string, Record<string, unknown>>();
+      if ('remove' in write) points.delete(pointId);
+      else points.set(pointId, { ...write.data });
+      pointDocs.set(id, points);
+    } else if (folder === 'ingredients' && id) {
+      const at = self.ingredients.findIndex(ingredient => ingredient.id === id);
+      if ('remove' in write) {
+        if (at >= 0) self.ingredients.splice(at, 1);
+      } else if (at >= 0) {
+        self.ingredients[at] = { ...self.ingredients[at], ...write.data, id } as StoredDoc;
+      } else {
+        self.ingredients.push({ ...write.data, id } as StoredDoc);
+      }
+    } else if (folder === 'ingredient-prices' && id) {
+      if ('remove' in write) self.prices.delete(id);
+      else self.prices.set(id, { ...self.prices.get(id), ...write.data });
+    } else if (folder === 'price-changes' && id) {
+      if ('remove' in write) self.priceChanges.delete(id);
+      else self.priceChanges.set(id, { ...write.data });
+    } else {
+      throw new Error(`The fake import source does not know the path ${write.path.join('/')}`);
+    }
+  }
 
   // One call: recorded when it starts, held if a spec asked, failed if a spec asked, done otherwise.
   async function run<T>(method: ImportMethod, args: unknown[], work: () => T): Promise<T> {

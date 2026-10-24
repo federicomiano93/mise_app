@@ -68,4 +68,55 @@ describe('the fake import source', () => {
     source.beforeFreshSuppliers = () => { source.suppliers.push({ id: 'other', name: 'Other' }); };
     expect(await source.freshSuppliers()).toEqual([{ id: 'other', name: 'Other' }]);
   });
+
+  it('applies a row\'s batches like the database: the ingredient gets a minted id, its price, its history point and its price change', async () => {
+    const source = fakeImportSource();
+    const id = await source.runImportBatches([
+      [
+        { type: 'create-ingredient', data: { name: 'Farina', supplierId: 'sup-1' } },
+        { type: 'set-current-price', data: { pricePerUnit: 0.5, priceUnit: 'kg' } },
+        { type: 'add-price-point', pointId: 'inv-18000000001-1', data: { invoiceId: '18000000001', pricePerUnit: 0.5, priceUnit: 'kg' } },
+      ],
+    ] as never);
+    expect(id).toBe('ing-1');
+    expect(source.ingredients).toEqual([{ name: 'Farina', supplierId: 'sup-1', bakery: 'test', id: 'ing-1' }]);
+    expect(await source.freshIngredientsForSupplier('sup-1')).toHaveLength(1);
+    expect(await source.freshIngredientsForSupplier('other')).toEqual([]);
+    expect(await source.freshPrice('ing-1')).toMatchObject({ pricePerUnit: 0.5, priceUnit: 'kg' });
+    expect(await source.freshPrice('nobody')).toBeNull();
+    const stored = await source.invoicePoints('ing-1');
+    expect([...stored.ids]).toEqual(['inv-18000000001-1']);
+    expect(stored.points).toHaveLength(1);
+
+    await source.runImportBatches([[
+      {
+        type: 'add-price-change', ingredientId: 'ing-1', changeId: 'c1',
+        data: { ingredientId: 'ing-1', oldPrice: 1, newPrice: 1.1, oldDate: '2026-09-01', date: '2026-09-10', priceUnit: 'kg' },
+      },
+    ]] as never);
+    expect(await source.storedPriceChanges('ing-1'))
+      .toEqual([{ id: 'c1', oldPrice: 1, newPrice: 1.1, oldDate: '2026-09-01', date: '2026-09-10', priceUnit: 'kg' }]);
+    await source.runImportBatches([[{ type: 'remove-price-change', ingredientId: 'ing-1', changeId: 'c1' }]] as never);
+    expect(await source.storedPriceChanges('ing-1')).toEqual([]);
+    expect(source.writes.map(write => write.kind)).toEqual(['batches', 'batches', 'batches']);
+  });
+
+  it('merges a patch into an ingredient that exists, and fails a batch on request like any other call', async () => {
+    const source = fakeImportSource({ ingredients: [{ id: 'ing-9', name: 'Old', supplierId: 's' }] });
+    await source.runImportBatches([[{ type: 'patch-ingredient', ingredientId: 'ing-9', data: { invoiceName: 'NEW' } }]] as never);
+    expect(source.ingredients).toEqual([{ id: 'ing-9', name: 'Old', supplierId: 's', invoiceName: 'NEW', bakery: 'test' }]);
+    source.failWith('runImportBatches', 'permission-denied', 1);
+    await expect(source.runImportBatches([[{ type: 'patch-ingredient', ingredientId: 'ing-9', data: { invoiceName: 'X' } }]] as never))
+      .rejects.toMatchObject({ code: 'permission-denied' });
+    expect(source.ingredients[0]?.invoiceName).toBe('NEW');
+  });
+
+  it('adds the points a spec seeded to the ones a run wrote', async () => {
+    const source = fakeImportSource();
+    source.points.set('ing-1', { ids: new Set(['inv-1-1']), points: [] });
+    await source.runImportBatches([[
+      { type: 'add-price-point', ingredientId: 'ing-1', pointId: 'inv-2-1', data: { invoiceId: '2', pricePerUnit: 1, priceUnit: 'kg' } },
+    ]] as never);
+    expect([...(await source.invoicePoints('ing-1')).ids].sort()).toEqual(['inv-1-1', 'inv-2-1']);
+  });
 });

@@ -19,7 +19,7 @@ import {
 // half), «a NEW row can be left out…» / «a supplier chosen "do not import anything" is dropped…» (the screen's half: the choice, the
 // button and the step on; the decision REMEMBERED is written with the rows, part B3b), «the screen is a modal dialog…» (the frame
 // spec), «Back closes at once before a file is loaded, and asks (danger) once there is one» (the frame spec).
-// LEFT FOR B3b: «a file goes through every step…», «a skipped supplier makes its ingredients errors that say why», and every test of
+// DONE IN B3b (InvoiceImport.run.spec.tsx, InvoiceImport.ingredients.spec.tsx): «a file goes through every step…», «a skipped supplier…», and every test of
 // the ingredients step, the rows' write, the remembered decisions and the summary.
 
 beforeAll(async () => {

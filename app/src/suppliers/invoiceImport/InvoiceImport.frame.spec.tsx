@@ -159,7 +159,7 @@ describe('the frame', () => {
     expect(screen.getByText('Step 3 of 3')).toBeInTheDocument();
   });
 
-  it('step 3 is the hand-over to part B3b: its heading and nothing else yet, and Back still asks', async () => {
+  it('step 3 offers no Next or Save (its own buttons come with its rows), and Back still asks', async () => {
     const { user } = await open();
     await toSuppliers(user);
     await user.click(screen.getByRole('button', { name: 'Save 1 supplier' }));
