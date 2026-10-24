@@ -4,26 +4,25 @@
 // port in shared/ and the js/ files the live app uses today. Ported from tests/invoice-import-names.test.mjs.
 // Every name, code, VAT number and price below is INVENTED.
 //
-// PORTED: 21 of the 36 tests of tests/invoice-import-names.test.mjs, all of them the ones that run the MODEL
-// (invoice-import-model, with invoiceNameOf of classify and the invented invoices of testing/invoice-builders.ts):
+// PORTED: 32 of the 36 tests of tests/invoice-import-names.test.mjs: the 21 that run the MODEL (invoice-import-model, with
+// invoiceNameOf of classify and the invented invoices of testing/invoice-builders.ts) and, since slice B1b, the 11 that also call
+// invoice-import-plan (applyDecisions, bucketOf, importTotals, rowToWrite, summarizeRun, withRename, writesRow):
 //   '1 · invoiceNameOf removes ONLY the {…} lot blocks…', '1 · the file ingredient carries the description of the NEWEST
 //   invoice…', '1 · the .json of the Python script has no description…', '2 · a new ingredient is created with its
 //   invoiceName', '2 · a file with no invoiceName creates an ingredient with no such key', the five '3 ·' tests,
-//   '4 · a code match fills in an EMPTY invoice name silently', '4 · a file OLDER than what the venue holds never proposes a
-//   rename…', '4 · a hit through an EXTRA code (another pack)…', '4b · a NEW pack added through «Same as»…', '4b · a row with
-//   NO code answered «Same as»…', the two '5 ·' tests, '6 · the same product on a later invoice with another LOT number…',
-//   '9 · the «older file» floor comes only from the MAIN pack…', '9 · M13…' and '9 · M14…'.
-//
-// LEFT FOR SLICE B1b (they call invoice-import-plan.js — applyDecisions, bucketOf, importTotals, rowToWrite, summarizeRun,
-// withRename, writesRow — which is not ported yet; ELEVEN tests):
-//   '4 · an otherwise UNCHANGED row still writes the invoice name, counts as a write…', '4 · the same invoice name writes
-//   nothing at all, and neither does another CASE or spacing of it', '4 · a DIFFERENT invoice name under the same main code
-//   NEVER holds the prices…', '4 · the rename is written only when the person chose it for THAT old → new pair', '4 · a
-//   renamed product whose prices are all in already is a write only once the rename is chosen', '4 · a price reason AND a
-//   rename are both on the row…', '4b · the same RUN: the new pack row first, then the main pack row…' (rowToWrite), '4c ·
-//   rowToWrite: a fresh plan with a price reason nobody confirmed is not written…', '6 · idempotency: the same invoices planned
-//   twice…' (its last lines apply the decisions), '9 · a held PRICE with a chosen rename still saves the name…', '9 · the
-//   summary counts the chosen renames that could not be written…'.
+//   '4 · a code match fills in an EMPTY invoice name silently', '4 · an otherwise UNCHANGED row still writes the invoice name…',
+//   '4 · the same invoice name writes nothing at all…', '4 · a DIFFERENT invoice name under the same main code NEVER holds the
+//   prices…', '4 · the rename is written only when the person chose it for THAT old → new pair', '4 · a renamed product whose
+//   prices are all in already…', '4 · a price reason AND a rename are both on the row…', '4 · a file OLDER than what the venue
+//   holds never proposes a rename…', '4 · a hit through an EXTRA code (another pack)…', '4b · a NEW pack added through «Same
+//   as»…', '4b · the same RUN: the new pack row first, then the main pack row…', '4b · a row with NO code answered «Same
+//   as»…', '4c · rowToWrite: a fresh plan with a price reason nobody confirmed is not written…', the two '5 ·' tests, '6 ·
+//   idempotency: the same invoices planned twice…', '6 · the same product on a later invoice with another LOT number…', '9 ·
+//   the «older file» floor comes only from the MAIN pack…', '9 · a held PRICE with a chosen rename still saves the name…',
+//   '9 · M13…', '9 · M14…' and '9 · the summary counts the chosen renames that could not be written…'.
+//   ONE test is ported without a few of its assertions: '9 · the summary counts the chosen renames…' also reads the entries
+//   'invoiceImport.summary.namesLost' and 'invoiceImport.ing.confirmNames' of the current app's dictionary (singular and plural
+//   forms, and the Italian sentences); the counts it asserts are here, the dictionary lines come with the screen (slice B3).
 //
 // NOT PORTED, because the test is about something else (FOUR tests): '7 · every new label and reason exists in English and
 // Italian' and 'the note on ingredients already in Mise says what the import adds to them' (the dictionary, which in Mise 2
@@ -35,11 +34,14 @@ import { implementations } from './invoice-zip/testing/implementations';
 import { makeCase } from './invoice-zip/testing/invoice-builders';
 import type { InvoiceCase } from './invoice-zip/testing/invoice-builders';
 import * as ported from './invoice-import-model';
+import * as portedPlan from './invoice-import-plan';
 import * as portedClassify from './invoice-zip/classify';
 import * as legacyJs from '../../js/orders/invoice-import-model.js';
+import * as legacyPlanJs from '../../js/orders/invoice-import-plan.js';
 import * as legacyClassifyJs from '../../js/orders/invoice-zip/classify.js';
 
 const legacy = legacyJs as unknown as typeof ported;
+const legacyPlan = legacyPlanJs as unknown as typeof portedPlan;
 const legacyClassify = legacyClassifyJs as unknown as typeof portedClassify;
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -49,10 +51,12 @@ const SUPPLIER_KEY = 'IT00000000001';
 const SUPPLIER_ID = 'sup-1';
 
 describe.each([
-  ['shared/ (TypeScript)', ported, portedClassify, implementations[0][1]],
-  ['js/ (current app)', legacy, legacyClassify, implementations[1][1]],
-] as const)('%s', (_name, m, classify, impl) => {
-  const { IMPORT_FORMAT, IMPORT_VERSION, parseImportFile, planIngredients } = m;
+  ['shared/ (TypeScript)', ported, portedPlan, portedClassify, implementations[0][1]],
+  ['js/ (current app)', legacy, legacyPlan, legacyClassify, implementations[1][1]],
+] as const)('%s', (_name, m, plan, classify, impl) => {
+  const { IMPORT_FORMAT, IMPORT_VERSION, CHECK_REASONS, parseImportFile, planIngredients } = m;
+  const { bucketOf, importTotals, rowToWrite, summarizeRun, withRename, writesRow } = plan;
+  const applyDecisions = plan.applyDecisions as (rows: Loose, decisions?: Loose, ctx?: Loose, forget?: Loose, confirm?: Loose, renames?: Loose) => Loose[];
   const { invoiceNameOf } = classify;
   const resolveRow = m.resolveRow as (row: Loose, decision?: Loose, ctx?: Loose) => Loose;
   const ingredientWrites = m.ingredientWrites as (row: Loose, file: Loose, nowIso?: Loose, options?: Loose) => Loose;
@@ -84,6 +88,9 @@ describe.each([
   });
   const planOne = (raw: Loose, ctx: Loose): Loose => planIngredients(fileOf([raw]).ingredients, ctx)[0];
   const writesOf = (row: Loose, raw: Loose): Loose[] => ingredientWrites(row, fileOf([raw]).ingredients[0], '2026-10-06T10:00:00Z', {}).flat();
+  const entryOf = (planned: Loose, confirm: Loose = new Set()): Loose => applyDecisions([planned], {}, ctxOf(), new Set(), confirm)[0];
+  // The point of the raw file ingredient is already recorded: nothing to write but names and codes.
+  const known = (raw: Loose): Loose => ({ 'ing-1': new Set(raw.prices.map((p: Loose) => `inv-${p.invoiceId}-${p.line}`)) });
 
   // ── 1 · the entry carries it ─────────────────────────────────────────────────────
 
@@ -187,7 +194,84 @@ describe.each([
     expect(writesOf(row, raw).some((op) => op.type === 'set-current-price'), 'the price goes in with it').toBeTruthy();
   });
 
+  test('4 · an otherwise UNCHANGED row still writes the invoice name, counts as a write, and writes only that', () => {
+    const raw = rawIngredient();
+    const row = planOne(raw, ctxOf({ ingredients: [stored({ invoiceName: '' })], invoicePointIds: known(raw) }));
+    expect(row.status).toBe('unchanged');
+    const ops = writesOf(row, raw);
+    expect(ops.length).toBe(1);
+    expect(ops[0]).toStrictEqual({ type: 'patch-ingredient', ingredientId: 'ing-1', data: { invoiceName: 'FARINA TIPO 00 SACCO KG 25' } });
+    expect(writesRow({ row }), 'the primary action counts it: «Done» never discards it').toBe(true);
+    expect(importTotals([{ row }]).rows).toBe(1);
+    expect(writesRow({ row: { ...row, patchInvoiceName: null } })).toBe(false);
+  });
+
+  test('4 · the same invoice name writes nothing at all, and neither does another CASE or spacing of it', () => {
+    const raw = rawIngredient();
+    const row = planOne(raw, ctxOf({ invoicePointIds: known(raw) }));
+    expect(row.status).toBe('unchanged');
+    expect(row.patchInvoiceName).toBe(null);
+    expect(writesOf(row, raw)).toStrictEqual([]);
+    const shouted = planOne(rawIngredient({ invoiceName: 'Farina  tipo 00 sacco KG 25' }), ctxOf({ invoicePointIds: known(raw) }));
+    expect(shouted.invoiceRename, 'a supplier switching case is not a rename').toBe(undefined);
+    expect(shouted.patchInvoiceName).toBe(null);
+    expect(bucketOf({ planned: shouted, row: shouted })).toBe('unchanged');
+  });
+
   const RENAMED = 'Farina 00 sacco da kg 25 (nuova ricetta)';
+
+  test('4 · a DIFFERENT invoice name under the same main code NEVER holds the prices: they are written, the rename is a choice', () => {
+    const raw = rawIngredient({ invoiceName: RENAMED });
+    const row = planOne(raw, ctxOf());
+    expect(row.status).toBe('update-price');
+    expect(row.checkReason, 'no price is held for a name').toBe(undefined);
+    expect(row.invoiceRename).toStrictEqual({ stored: 'FARINA TIPO 00 SACCO KG 25', file: RENAMED });
+    expect(row.patchInvoiceName).toBe(null);
+    const entry = entryOf(row);
+    expect(entry.row.status).toBe('update-price');
+    expect(bucketOf(entry), 'visible under «To check», not held').toBe('check');
+    const ops = writesOf(entry.row, raw);
+    expect(ops.some((op) => op.type === 'set-current-price') && ops.some((op) => op.type === 'add-price-point')).toBeTruthy();
+    expect(ops.some((op) => op.type === 'patch-ingredient'), 'the old name is kept by default').toBe(false);
+  });
+
+  test('4 · the rename is written only when the person chose it for THAT old → new pair', () => {
+    const raw = rawIngredient({ invoiceName: RENAMED });
+    const row = planOne(raw, ctxOf());
+    const pair = { stored: 'FARINA TIPO 00 SACCO KG 25', file: RENAMED };
+    const chosen = applyDecisions([row], {}, ctxOf(), new Set(), new Set(), new Map([[row.key, pair]]))[0];
+    expect(writesOf(chosen.row, raw).find((op) => op.type === 'patch-ingredient')!.data).toStrictEqual({ invoiceName: RENAMED });
+    const other = applyDecisions([row], {}, ctxOf(), new Set(), new Set(), new Map([[row.key, { ...pair, file: 'Another' }]]))[0];
+    expect(writesOf(other.row, raw).some((op) => op.type === 'patch-ingredient'), 'another pair is not what was chosen').toBe(false);
+    expect(withRename(row, null)).toBe(row);
+    expect(withRename({ ...row, invoiceRename: { ...pair, stored: 'moved' } }, pair).patchInvoiceName).toBe(null);
+  });
+
+  test('4 · a renamed product whose prices are all in already is a write only once the rename is chosen', () => {
+    const raw = rawIngredient({ invoiceName: RENAMED });
+    const row = planOne(raw, ctxOf({ invoicePointIds: known(raw) }));
+    expect(row.status).toBe('unchanged');
+    expect(bucketOf(entryOf(row))).toBe('check');
+    expect(writesRow(entryOf(row))).toBe(false);
+    const chosen = applyDecisions([row], {}, ctxOf(), new Set(), new Set(), new Map([[row.key, row.invoiceRename]]))[0];
+    expect(writesRow(chosen)).toBe(true);
+    const ops = writesOf(chosen.row, raw);
+    expect(ops.length).toBe(1);
+    expect(ops[0]!.data).toStrictEqual({ invoiceName: RENAMED });
+  });
+
+  test('4 · a price reason AND a rename are both on the row; confirming the price never saves the name', () => {
+    const raw = rawIngredient({ invoiceName: RENAMED, prices: [point({ pricePerUnit: 1.4, reliability: 'media' })] });
+    const row = planOne(raw, ctxOf({
+      pricesById: { 'ing-1': { priceUnit: 'kg', pricePerUnit: 1, priceUpdatedAt: '2026-01-01T12:00:00.000Z' } },
+    }));
+    expect(row.checkReason).toBe(CHECK_REASONS.PRICE_JUMP);
+    expect(row.invoiceRename, 'the name sentence is not hidden by the price reason').toBeTruthy();
+    expect(writesOf(entryOf(row).row, raw), 'the price is held').toStrictEqual([]);
+    const confirmed = writesOf(entryOf(row, new Set([row.key])).row, raw);
+    expect(confirmed.some((op) => op.type === 'set-current-price')).toBeTruthy();
+    expect(confirmed.some((op) => op.type === 'patch-ingredient'), 'a price confirmation never authorises a rename').toBe(false);
+  });
 
   test('4 · a file OLDER than what the venue holds never proposes a rename (an empty name is still filled in)', () => {
     const raw = rawIngredient({ invoiceName: RENAMED, prices: [point({ invoiceDate: '2026-03-01' })] });
@@ -257,12 +341,40 @@ describe.each([
     expect(writesOf(next, main).some((op) => op.type === 'set-current-price')).toBeTruthy();
   });
 
+  test('4b · the same RUN: the new pack row first, then the main pack row, each planned on what the first wrote', () => {
+    const pack5 = rawIngredient({ supplierCode: 'F00-5', key: `${SUPPLIER_KEY}|code:F00-5`, name: 'Farina tipo 00', invoiceName: 'FARINA TIPO 00 SACCHETTO KG 5', weight: '5 kg', prices: [point({ invoiceId: '18000000003', line: 2 })] });
+    const main = rawIngredient();
+    const file = fileOf([pack5, main]);
+    const catalogue: Loose = { ingredients: [stored({ invoiceName: '', name: 'Farina tipo 00' })], pricesById: {}, invoicePointIds: {}, created: null };
+    const ctx = (): Loose => ({ supplierIdByKey: { [SUPPLIER_KEY]: SUPPLIER_ID }, ...catalogue });
+    const first = resolveRow(planIngredients([file.ingredients[0]], ctx())[0], { sameAs: 'ing-1' }, ctx());
+    apply([first], file, catalogue);
+    const second = planIngredients([file.ingredients[1]], ctx())[0] as Loose;
+    expect(second.checkReason).toBe(undefined);
+    expect(second.invoiceRename).toBe(undefined);
+    expect(writesOf(rowToWrite(second, {}), main).some((op) => op.type === 'add-price-point'), 'its prices are written, not dropped').toBeTruthy();
+  });
+
   test('4b · a row with NO code answered «Same as» onto an ingredient that has a main code leaves its name alone', () => {
     const raw = rawIngredient({ supplierCode: '', key: `${SUPPLIER_KEY}|name:farina`, name: 'Farina tipo 00 speciale', invoiceName: 'FARINA SPECIALE KG 25' });
     const target = stored({ invoiceName: '', name: 'Farina tipo 00' });
     const asked = planOne(raw, ctxOf({ ingredients: [target] }));
     expect(asked.status).toBe('maybe-duplicate');
     expect(resolveRow(asked, { sameAs: 'ing-1' }, ctxOf({ ingredients: [target] })).patchInvoiceName).toBe(null);
+  });
+
+  // ── 4c · the write-time gate ─────────────────────────────────────────────────────
+
+  test('4c · rowToWrite: a fresh plan with a price reason nobody confirmed is not written; a rename not chosen is not written', () => {
+    const raw = rawIngredient({ invoiceName: RENAMED, prices: [point({ pricePerUnit: 1.4, reliability: 'media' })] });
+    const row = planOne(raw, ctxOf({ pricesById: { 'ing-1': { priceUnit: 'kg', pricePerUnit: 1, priceUpdatedAt: '2026-01-01T12:00:00.000Z' } } }));
+    expect(rowToWrite(row, { confirmed: false }), 'the price needs a look and nobody gave it').toBe(null);
+    expect(rowToWrite(row, { confirmed: true })!.patchInvoiceName, 'a confirmed price never carries a rename').toBe(null);
+    const pair = row.invoiceRename;
+    expect(rowToWrite(row, { confirmed: true, rename: pair })!.patchInvoiceName).toBe(RENAMED);
+    expect(rowToWrite(row, { confirmed: true, rename: { ...pair, stored: 'was something else' } })!.patchInvoiceName,
+      'the pair changed since the person looked: nothing is written').toBe(null);
+    expect(rowToWrite(null, {})).toBe(null);
   });
 
   // ── 5 · a person's answer ────────────────────────────────────────────────────────
@@ -292,6 +404,42 @@ describe.each([
   });
 
   // ── 6 · building and planning the same invoices twice ─────────────────────────────
+
+  test('6 · idempotency: the same invoices planned twice give no new row, no question and no hold the second time', () => {
+    const c = newCase();
+    c.add([
+      { desc: 'FARINA TIPO 00 {LOTTO 77} SACCO KG 25', code: 'F00-25', qty: 2, unit: 'PZ', total: 28.5 },
+      { desc: 'Lievito fresco {L 9} panetto KG 1', code: 'L-1', qty: 4, unit: 'KG', total: 12 },
+      { desc: 'ZUCCHERO SEMOLATO SACCHI DA KG 25', qty: 2, unit: 'PZ', total: 40 },
+    ], { date: '2026-09-01' });
+    c.add([
+      { desc: 'FARINA TIPO 00 {LOTTO 80} SACCO KG 25', code: 'F00-25', qty: 2, unit: 'PZ', total: 30 },
+      { desc: 'ZUCCHERO SEMOLATO SACCHI DA KG 25', qty: 2, unit: 'PZ', total: 41 },
+    ], { date: '2026-09-15' });
+    const built = c.build().importFile as Loose;
+    expect(built.ingredients.length).toBeGreaterThanOrEqual(3);
+    expect(built.ingredients.every((i: Loose) => i.invoiceName), 'every entry carries its invoice name').toBeTruthy();
+    const file = (parseImportFile(JSON.stringify(built)) as Loose).file;
+    const catalogue: Loose = { ingredients: [], pricesById: {}, invoicePointIds: {}, created: null };
+    const ctx = (): Loose => ({ supplierIdByKey: { [file.suppliers[0].key]: SUPPLIER_ID }, ...catalogue });
+
+    const first = planIngredients(file.ingredients, ctx());
+    expect(first.every((r) => r.status === 'new'), JSON.stringify(first.map((r) => r.status))).toBeTruthy();
+    apply(first, file, catalogue);
+    expect(catalogue.ingredients.length).toBe(first.length);
+
+    // The same file again, against what the first run wrote.
+    const second = planIngredients(file.ingredients, ctx());
+    expect(second.map((r) => r.status), 'every row is the ingredient it created').toStrictEqual(second.map(() => 'unchanged'));
+    expect(second.every((r) => !r.checkReason && !r.patchInvoiceName && !r.patchSupplierCode && !r.setSupplierCodes)).toBeTruthy();
+    second.forEach((row) => {
+      expect(ingredientWrites(row, file.ingredients.find((i: Loose) => i.key === row.key), '2026-10-06T10:00:00Z', {})).toStrictEqual([]);
+    });
+
+    // A third look, as the screen does it (decisions applied): nothing is held, nothing waits.
+    const entries = applyDecisions(second, {}, ctx(), new Set(), new Set());
+    expect(entries.every((e) => !e.waiting && e.row.status === 'unchanged' && !e.row.held)).toBeTruthy();
+  });
 
   test('6 · the same product on a later invoice with another LOT number is still the same ingredient', () => {
     const first = newCase();
@@ -330,6 +478,30 @@ describe.each([
     expect(mainNewer.invoiceRename).toBe(undefined);
   });
 
+  test('9 · a held PRICE with a chosen rename still saves the name, and nothing else leaks', () => {
+    const raw = rawIngredient({
+      invoiceName: RENAMED, supplierCode: 'F00-25', prices: [point({ pricePerUnit: 1.4, reliability: 'media' })],
+    });
+    const ctx = ctxOf({
+      ingredients: [stored({ supplierCode: 'F00-25' })],
+      pricesById: { 'ing-1': { priceUnit: 'kg', pricePerUnit: 1, priceUpdatedAt: '2026-01-01T12:00:00.000Z' } },
+    });
+    const row = planOne(raw, ctx);
+    expect(row.checkReason).toBe(CHECK_REASONS.PRICE_JUMP);
+    const renames = new Map([[row.key, row.invoiceRename]]);
+    const entry = applyDecisions([row], {}, ctx, new Set(), new Set(), renames)[0];
+    expect(writesRow(entry)).toBe(true);
+    expect(entry.row.held, 'the price is still held').toBe(true);
+    expect(entry.row.heldRow.status).toBe('update-price');
+    const ops = writesOf(entry.row, raw);
+    expect(ops.length, 'one write: the name').toBe(1);
+    expect(ops[0]).toStrictEqual({ type: 'patch-ingredient', ingredientId: 'ing-1', data: { invoiceName: RENAMED } });
+    const fresh = rowToWrite(row, { confirmed: false, rename: row.invoiceRename });
+    expect(writesOf(fresh, raw).map((op) => op.type)).toStrictEqual(['patch-ingredient']);
+    expect(importTotals([entry]).pricesAdded).toBe(0);
+    expect(importTotals([entry]).namesSaved).toBe(1);
+  });
+
   test('9 · M13: an ingredient taking its FIRST main code takes the invoice name too', () => {
     const raw = rawIngredient({ name: 'Farina tipo 00' });
     const row = planOne(raw, ctxOf({ ingredients: [stored({ supplierCode: '', invoiceName: '', name: 'Farina tipo 00' })] }));
@@ -351,5 +523,13 @@ describe.each([
     expect(codeless.ingredientId).toBe('ing-1');
     expect(codeless.invoiceRename).toBe(undefined);
     expect(codeless.patchInvoiceName).toBe(null);
+  });
+
+  // The original also asserts the singular / plural entries of two dictionary keys and their Italian sentences: that is the
+  // current app's dictionary, which comes with the screen (slice B3).
+  test('9 · the summary counts the chosen renames that could not be written', () => {
+    const sum = summarizeRun([{ key: 'a', name: 'A', outcome: 'unchanged', namesSaved: 1 }, { key: 'b', name: 'B', outcome: 'unchanged', namesLost: 1 }]);
+    expect(sum.namesSaved).toBe(1);
+    expect(sum.namesLost).toBe(1);
   });
 });

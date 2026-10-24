@@ -12,8 +12,9 @@
 // The js/ side of 'every reason a price is «da verificare»…' reads the reason codes of js/ itself
 // (js/orders/invoice-zip/reasons.js), the port's those of invoice-zip/reasons.ts.
 //
-// NOT HERE: invoice-import-plan.js (the screen's plan: applyDecisions, rowToWrite, bucketOf…) is slice B1b; its tests
-// are in invoice-import-names.spec.ts's header, by name.
+// NOT HERE: invoice-import-plan.js (the screen's plan: applyDecisions, rowToWrite, bucketOf…) has its own specs since slice
+// B1b: invoice-import-plan.spec.ts, and the tests that need both the model and the plan are in invoice-import-names.spec.ts
+// and invoice-import-review.spec.ts.
 
 import { describe, expect, test } from 'vitest';
 import * as ported from './invoice-import-model';
