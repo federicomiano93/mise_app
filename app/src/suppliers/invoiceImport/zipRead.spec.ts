@@ -155,6 +155,19 @@ describe('the port: an entry is judged by its own size in pass 2, not by its nam
     return new Uint8Array([...a.local, ...b.local, ...cd, ...eocd]);
   };
 
+  test('a STORED entry that declares a compressed size as long as the archive is judged by it, and never copied', () => {
+    const zip = new Uint8Array(zipSync({ 'a.xml': strToU8('<x/>'.repeat(300)) }, { level: 0 }));
+    const view = new DataView(zip.buffer);
+    let end = zip.length - 22;
+    while (view.getUint32(end, true) !== 0x06054b50) end -= 1;
+    // The central directory's «compressed size» of the one entry (offset 20 of its header), forged to 2 GB.
+    view.setUint32(view.getUint32(end + 16, true) + 20, 0x7fffffff, true);
+    const read = ported.zipRead.readInvoiceArchives([{ name: 'stored.zip', bytes: zip }], { limits: { maxXmlBytes: 5000 } });
+    const entries = (read.containers[0] as { entries: Record<string, Uint8Array> } | undefined)?.entries ?? {};
+    expect(entries['a.xml']).toBeUndefined();
+    expect(read.skipped.map(s => s.reason)).toContain('file-too-large');
+  });
+
   test('the huge twin is never inflated: only the entry within the limit is read', () => {
     const read = ported.zipRead.readInvoiceArchives([{ name: 'twins.zip', bytes: twoOfOneName(10, 5_000_000) }], {
       limits: { maxXmlBytes: 1000 },

@@ -102,7 +102,10 @@ function readZip(bytes: Uint8Array, limits: ReadLimits, skipped: SkippedFile[]):
     listing = [];
     unzipSync(bytes, {
       filter: (file) => {
-        listing.push({ name: file.name, size: file.originalSize });
+        // ⚠️ THE LARGER OF THE TWO DECLARED SIZES (re-check of 25 Oct 2026, NOT IN THE ORIGINAL): a STORED entry is copied by
+        // its compressed size, not its original one, so an entry declaring 10 bytes and a compressed size as long as the archive
+        // would be copied whole — thousands of times over by a directory pointing every entry at it.
+        listing.push({ name: file.name, size: Math.max(file.size, file.originalSize) });
         if (listing.length > limits.maxEntries) throw new TooManyEntries();
         return false;
       },
@@ -144,9 +147,10 @@ function readZip(bytes: Uint8Array, limits: ReadLimits, skipped: SkippedFile[]):
     let inflating = 0;
     files = unzipSync(bytes, {
       filter: (file) => {
-        if (!wanted.has(file.name) || file.originalSize > limits.maxXmlBytes) return false;
-        if (inflating + file.originalSize > limits.maxArchiveBytes) return false;
-        inflating += file.originalSize;
+        const size = Math.max(file.size, file.originalSize);
+        if (!wanted.has(file.name) || size > limits.maxXmlBytes) return false;
+        if (inflating + size > limits.maxArchiveBytes) return false;
+        inflating += size;
         return true;
       },
     });

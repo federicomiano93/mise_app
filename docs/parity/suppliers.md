@@ -682,7 +682,10 @@ original's «quiet» tone.
 **Fixed after the review of all of 3e-6 (25 Oct 2026) — the current app still has the first two:**
 - ⚠️ **Two zip entries with ONE name** (`zipRead.ts`, pass 2): a small entry made the name «wanted» and a huge twin of that name was inflated too, past
   every size limit (a 5 KB archive gave a 5 MB entry against a 1 KB limit; a real attack could freeze the lab tablet's 32-bit Chrome). Pass 2 now
-  judges each entry by its own declared size with a running total. `js/orders/invoice-zip/zip-read.js` has the same hole.
+  judges each entry by its own declared size with a running total. And (re-check) both passes judge the LARGER of the two declared sizes: a
+  STORED entry is copied by its compressed size, so one declaring 10 bytes and a compressed size as long as the archive, pointed at by
+  thousands of directory entries, asked for gigabytes. Real invoice zips have equal sizes, so nothing real changes. `js/orders/invoice-zip/
+  zip-read.js` has both holes.
 - ⚠️ **A write that timed out is still queued** (`importSource.ts`): Firestore keeps it in its persistent queue and sends it later, even after a
   reload, so «load the same file again» on a weak connection could read a server without the earlier supplier or ingredient and create it twice.
   The two reads that decide «new or already there» (`freshSuppliers`, `freshIngredientsForSupplier`) first wait for this phone's queue
