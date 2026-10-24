@@ -15,6 +15,7 @@ type FakeStore = SessionStore & {
   chooseLocation: Mock<SessionStore['chooseLocation']>;
   switchLocation: Mock<SessionStore['switchLocation']>;
   changesStillWaiting: Mock<SessionStore['changesStillWaiting']>;
+  refreshLocation: Mock<SessionStore['refreshLocation']>;
 };
 
 // By default: the owner of one venue, signed in and ready, in English.
@@ -49,6 +50,7 @@ export function fakeStore(partial: Partial<Session> = {}): FakeStore {
     chooseLocation: vi.fn<SessionStore['chooseLocation']>(() => Promise.resolve()),
     switchLocation: vi.fn<SessionStore['switchLocation']>(() => Promise.resolve()),
     changesStillWaiting: vi.fn<SessionStore['changesStillWaiting']>(() => Promise.resolve(false)),
+    refreshLocation: vi.fn<SessionStore['refreshLocation']>(() => Promise.resolve()),
     set(next) {
       snapshot = Object.freeze({ ...snapshot, ...next });
       listeners.forEach(listener => { listener(); });

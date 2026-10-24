@@ -95,6 +95,11 @@ export interface SessionStore {
   // Moves to another of YOUR venues: wipes this phone's copies and reloads.
   switchLocation(locationId: string): Promise<void>;
   changesStillWaiting(ms?: number): Promise<boolean>;
+  // Reads the open venue's document from the SERVER and puts it in the session (its sections, its switches), with no
+  // reload. For a change a Cloud Function has just made to it (the recipe photo switch, step 3d-9), which no listener
+  // would otherwise bring: the session reads the venue once, when it opens. Never rejects: offline, or with no venue
+  // open, it changes nothing (the check made when the app next opens catches up).
+  refreshLocation(): Promise<void>;
 }
 
 const userPath = (uid: string) => `users/${uid}`;
@@ -348,5 +353,19 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       env.reload();
     },
     changesStillWaiting: ms => backend.changesStillWaiting(ms),
+    async refreshLocation() {
+      const id = session.locationId;
+      if (session.status !== 'ready' || id === null) return;
+      let data: DocData | null;
+      try {
+        data = await backend.readFromServer(locationDocPath(id));
+      } catch {
+        return;
+      }
+      // ⚠️ ONLY IF THE SAME VENUE IS STILL OPEN: the answer may land after a sign-out or a switch, and another venue's
+      // switches must never be painted over this one. A venue whose document vanished keeps what it had.
+      if (data === null || session.status !== 'ready' || session.locationId !== id) return;
+      setSession({ location: data });
+    },
   };
 }

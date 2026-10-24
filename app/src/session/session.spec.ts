@@ -435,3 +435,39 @@ describe('leaving', () => {
     expect(s.backend.signIn).toHaveBeenCalledWith('alice@club.test', ' pass word ');
   });
 });
+
+describe('the venue read again from the server (refreshLocation, step 3d-9)', () => {
+  test('a switch thrown by a Cloud Function reaches the session with no reload', async () => {
+    const w = world({ 'users/alice': { locations: { bakery: 'owner' } }, 'locations/bakery': { name: 'The Bakery' } });
+    const s = setup(w);
+    s.auth(ALICE);
+    await settle();
+    w.server.set('locations/bakery', { name: 'The Bakery', recipePhoto: true });
+    await s.store.refreshLocation();
+    expect(s.store.getSnapshot().location).toMatchObject({ recipePhoto: true });
+    expect(s.calls).toContain('readFromServer locations/bakery');
+    expect(s.calls).not.toContain('reload');
+  });
+
+  test('offline it changes nothing and never rejects; a vanished document keeps what the session had', async () => {
+    const w = world({ 'users/alice': { locations: { bakery: 'owner' } }, 'locations/bakery': { name: 'The Bakery', recipePhoto: true } });
+    const s = setup(w);
+    s.auth(ALICE);
+    await settle();
+    s.backend.readFromServer = vi.fn(async () => { throw new Error('offline'); });
+    await expect(s.store.refreshLocation()).resolves.toBeUndefined();
+    expect(s.store.getSnapshot().location).toMatchObject({ recipePhoto: true });
+    s.backend.readFromServer = vi.fn(async () => null);
+    await s.store.refreshLocation();
+    expect(s.store.getSnapshot().location).toMatchObject({ recipePhoto: true });
+  });
+
+  test('with no venue open it reads nothing', async () => {
+    const s = setup(world({ 'users/alice': { locations: {} } }));
+    s.auth(ALICE);
+    await settle();
+    const before = s.calls.length;
+    await s.store.refreshLocation();
+    expect(s.calls.slice(before).some(call => call.startsWith('readFromServer'))).toBe(false);
+  });
+});
