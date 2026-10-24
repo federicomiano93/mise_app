@@ -3,9 +3,13 @@ import { LEFT_OUT, NOTE, SKIPPED } from '@mise/shared/invoice-zip/reasons';
 import { en } from '../../i18n/en';
 import type { Message } from '../../i18n/en';
 import { it as italian } from '../../i18n/it';
-import { CODE_KEYS, SUPPLIER_REASON_KEYS, SUPPLIER_STATUS, UNKNOWN_REASON_KEY, codeKeys, supplierReasonKey } from './importWords';
+import { FILTERS } from '@mise/shared/invoice-import-plan';
+import {
+  CODE_KEYS, FILTER_KEYS, REASON_KEYS, STATUS, SUPPLIER_REASON_KEYS, SUPPLIER_STATUS, UNKNOWN_REASON_KEY, codeKeys, filterKey, reasonKey,
+  supplierReasonKey,
+} from './importWords';
 
-// The words of «Import from invoices» (part B3a): every reason the reader can give has a phrase, every key is asked by somebody,
+// The words of «Import from invoices» (parts B3a and B3b, slice 1): every reason the reader can give has a phrase, every key is asked by somebody,
 // nothing is frozen at module load, and the wording the owner agreed is the wording on screen.
 //
 // PORTS (tests/invoice-import-screen.test.mjs): «every reason code of the invoice reader that can reach the screen has a phrase»,
@@ -57,6 +61,112 @@ describe('the reader\'s reasons', () => {
       expect(italian[key].length).toBeGreaterThan(2);
       expect(['ok', 'warn', 'error']).toContain(tone);
     }
+  });
+});
+
+describe('step 3\'s tables (part B3b)', () => {
+  // Every reason code the model and the plan can put on an ingredient row (invoice-import-model.ts / invoice-import-plan.ts).
+  const ROW_REASONS = [
+    'not-object', 'key-missing', 'duplicate-key', 'name-missing', 'vat-missing', 'vat-too-long', 'supplier-key-missing',
+    'supplier-missing', 'price-unit', 'unit-weight-missing', 'pack-count', 'no-prices', 'price-invalid', 'target-not-found',
+    'code-ambiguous', 'name-ambiguous', 'merge-target-not-found', 'merge-target-ambiguous', 'duplicate-vat', 'code-differs',
+    'unit-differs', 'piece-differs', 'codes-full',
+  ];
+
+  it.each(ROW_REASONS)('⚠️ the reason %s has a phrase, in English and in Italian', code => {
+    const key = reasonKey(code);
+    expect(key).not.toBe(UNKNOWN_REASON_KEY);
+    expect(en[key]).toBeTruthy();
+    expect(italian[key]).toBeTruthy();
+  });
+
+  it('an unknown reason, a missing one and a prototype name are «could not be imported», never a blank', () => {
+    expect(reasonKey('something-new')).toBe(UNKNOWN_REASON_KEY);
+    expect(reasonKey(undefined)).toBe(UNKNOWN_REASON_KEY);
+    expect(reasonKey('toString')).toBe(UNKNOWN_REASON_KEY);
+    expect(Object.keys(REASON_KEYS).sort()).toEqual([...ROW_REASONS].sort());
+  });
+
+  it('the six reasons a supplier shares with a product use the same phrases', () => {
+    for (const code of Object.keys(SUPPLIER_REASON_KEYS)) expect(reasonKey(code)).toBe(supplierReasonKey(code));
+  });
+
+  it('every row status is a WORD in a pill with a tone, and «quiet» is for what writes nothing', () => {
+    for (const { key, tone } of Object.values(STATUS)) {
+      expect(en[key]).toBeTruthy();
+      expect(italian[key]).toBeTruthy();
+      expect(['ok', 'warn', 'error', 'quiet']).toContain(tone);
+    }
+    expect(STATUS['history-only'].tone).toBe('quiet');
+    expect(STATUS.unchanged.tone).toBe('quiet');
+    expect(STATUS.skipped.tone).toBe('quiet');
+    expect(STATUS.check.tone).toBe('warn');
+  });
+
+  it('every chip of the plan has a word, and an unknown one never throws', () => {
+    for (const filter of FILTERS) {
+      expect(Object.hasOwn(FILTER_KEYS, filter), filter).toBe(true);
+      expect(en[filterKey(filter)]).toBeTruthy();
+      expect(italian[filterKey(filter)]).toBeTruthy();
+    }
+    expect(filterKey('nonsense')).toBe(UNKNOWN_REASON_KEY);
+  });
+});
+
+describe('the review sentences (tests/invoice-import-review.test.mjs)', () => {
+  it('3 · the sales-invoice summary line exists in English and Italian, with a singular and a plural', () => {
+    for (const message of [en['sup.imp.zip.sales'], italian['sup.imp.zip.sales']]) {
+      expect(typeof message).toBe('object');
+      const { one, other } = message as { one: string; other: string };
+      expect(one).toMatch(/\{n\}/);
+      expect(other).toMatch(/\{n\}/);
+    }
+    expect((en['sup.imp.zip.sales'] as { other: string }).other).toBe('{n} sales invoices skipped');
+    expect((italian['sup.imp.zip.sales'] as { other: string }).other).toBe('{n} fatture di vendita ignorate');
+  });
+
+  it('4 · the reason sentences exist in both languages, with their holes', () => {
+    expect(italian['sup.imp.check.olderInvoice']).toBe('Prezzo dalla fattura del {date}: la più recente è da verificare.');
+    for (const key of ['sup.imp.check.weightUnreadable', 'sup.imp.check.priceJump', 'sup.imp.check.olderInvoice'] as const) {
+      expect(typeof en[key], key).toBe('string');
+      expect(typeof italian[key], key).toBe('string');
+    }
+    for (const language of [en, italian]) {
+      expect(language['sup.imp.check.priceJump']).toMatch(/\{limit\}/);
+      expect(language['sup.imp.check.olderInvoice']).toMatch(/\{date\}/);
+      expect(language['sup.imp.check.olderInvoiceNew']).toMatch(/\{date\}/);
+      expect(language['sup.imp.check.weightRescaled']).toMatch(/\{stored\}.*\{file\}/);
+      expect(language['sup.imp.check.invoiceNameChanged']).toMatch(/\{old\}.*\{new\}/);
+      expect(typeof language['sup.imp.ing.confirm.use']).toBe('string');
+      expect(typeof language['sup.imp.ing.confirm.hold']).toBe('string');
+    }
+  });
+
+  it('4 · the unreadable-weight sentence says the price below uses the invoice weight', () => {
+    expect(en['sup.imp.check.weightUnreadable'])
+      .toBe('The pack weight saved in Mise cannot be read: the price per kilo or litre below uses the weight on the invoice. Check it.');
+    expect(italian['sup.imp.check.weightUnreadable'])
+      .toBe('Il peso della confezione salvato in Mise non si legge: il prezzo al chilo o al litro qui sotto usa il peso scritto in fattura. Controllalo.');
+  });
+
+  it('7 · a NEW row from an older invoice says it WILL BE CREATED, the matched one does not', () => {
+    expect(en['sup.imp.check.olderInvoiceNew'])
+      .toBe('It will be created with the price of the invoice of {date}: the most recent one needs checking.');
+    expect(italian['sup.imp.check.olderInvoiceNew'])
+      .toBe('Verrà creato con il prezzo della fattura del {date}: la più recente è da verificare.');
+    expect(en['sup.imp.check.olderInvoice']).not.toMatch(/created/);
+  });
+
+  it('10 · «This price?» has its own label', () => {
+    expect(en['sup.imp.ing.confirm.label']).toBe('This price?');
+    expect(italian['sup.imp.ing.confirm.label']).toBe('Questo prezzo?');
+  });
+
+  it('R6 · the rescaled sentence names both packs', () => {
+    expect(en['sup.imp.check.weightRescaled'])
+      .toBe('Price worked out with the pack saved in Mise ({stored}) instead of the one on the invoice ({file}). Check it.');
+    expect(italian['sup.imp.check.weightRescaled'])
+      .toBe('Prezzo calcolato con la confezione salvata in Mise ({stored}) invece di quella in fattura ({file}). Controllalo.');
   });
 });
 

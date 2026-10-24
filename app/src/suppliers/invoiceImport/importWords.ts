@@ -36,7 +36,7 @@ export const CODE_KEYS = {
 } as const satisfies Record<string, MessageKey>;
 
 // Why a supplier of the file cannot be imported (SupplierPlanEntry.reason): the codes of parseSupplier, and the model's
-// duplicate-VAT answer. The ingredient-row reasons arrive with step 3 (part B3b).
+// duplicate-VAT answer. The ingredient-row reasons are REASON_KEYS, below.
 export const SUPPLIER_REASON_KEYS = {
   'not-object': 'sup.imp.reason.notObject',
   'key-missing': 'sup.imp.reason.keyMissing',
@@ -51,7 +51,7 @@ export const UNKNOWN_REASON_KEY: MessageKey = 'sup.imp.reason.unknown';
 
 // A supplier row's status → the word on its pill and the tone that repeats it. The word is ALWAYS there: the colour only
 // repeats it (P18).
-export type Tone = 'ok' | 'warn' | 'error';
+export type Tone = 'ok' | 'warn' | 'error' | 'quiet';
 
 export const SUPPLIER_STATUS = {
   new: { key: 'sup.imp.status.new', tone: 'ok' },
@@ -74,3 +74,63 @@ export function codeKeys(text: unknown): MessageKey[] {
 export function supplierReasonKey(code: string): MessageKey {
   return Object.hasOwn(SUPPLIER_REASON_KEYS, code) ? SUPPLIER_REASON_KEYS[code as keyof typeof SUPPLIER_REASON_KEYS] : UNKNOWN_REASON_KEY;
 }
+
+// ── Step 3 · the ingredients ────────────────────────────────────────────────────────────────────────────────────────
+
+// Why an ingredient row cannot be imported, or what to know about it (IngredientRow.reason): the supplier reasons above plus
+// the ones only a product has. An unknown code is «could not be imported», never a blank.
+export const REASON_KEYS = {
+  ...SUPPLIER_REASON_KEYS,
+  'supplier-key-missing': 'sup.imp.reason.supplierKeyMissing',
+  'supplier-missing': 'sup.imp.reason.supplierMissing',
+  'price-unit': 'sup.imp.reason.priceUnit',
+  'unit-weight-missing': 'sup.imp.reason.unitWeightMissing',
+  'pack-count': 'sup.imp.reason.packCount',
+  'no-prices': 'sup.imp.reason.noPrices',
+  'price-invalid': 'sup.imp.reason.priceInvalid',
+  'target-not-found': 'sup.imp.reason.targetNotFound',
+  'code-ambiguous': 'sup.imp.reason.codeAmbiguous',
+  'name-ambiguous': 'sup.imp.reason.nameAmbiguous',
+  'merge-target-not-found': 'sup.imp.reason.mergeNotFound',
+  'merge-target-ambiguous': 'sup.imp.reason.mergeAmbiguous',
+  'code-differs': 'sup.imp.reason.codeDiffers',
+  'unit-differs': 'sup.imp.reason.unitDiffers',
+  'piece-differs': 'sup.imp.reason.pieceDiffers',
+  'codes-full': 'sup.imp.reason.codesFull',
+} as const satisfies Record<string, MessageKey>;
+
+export function reasonKey(code: unknown): MessageKey {
+  return typeof code === 'string' && Object.hasOwn(REASON_KEYS, code) ? REASON_KEYS[code as keyof typeof REASON_KEYS] : UNKNOWN_REASON_KEY;
+}
+
+// An ingredient row's status (or the `check` bucket) → the word on its pill and the tone that repeats it.
+export const STATUS = {
+  new: { key: 'sup.imp.status.new', tone: 'ok' },
+  'update-price': { key: 'sup.imp.status.updatePrice', tone: 'ok' },
+  'history-only': { key: 'sup.imp.status.historyOnly', tone: 'quiet' },
+  unchanged: { key: 'sup.imp.status.unchanged', tone: 'quiet' },
+  'maybe-duplicate': { key: 'sup.imp.status.decide', tone: 'warn' },
+  choose: { key: 'sup.imp.status.decide', tone: 'warn' },
+  skipped: { key: 'sup.imp.status.skipped', tone: 'quiet' },
+  check: { key: 'sup.imp.status.priceCheck', tone: 'warn' },
+  error: { key: 'sup.imp.status.error', tone: 'error' },
+} as const satisfies Record<string, { key: MessageKey; tone: Tone }>;
+
+export type IngredientStatus = keyof typeof STATUS;
+
+export const isIngredientStatus = (value: unknown): value is IngredientStatus => typeof value === 'string' && Object.hasOwn(STATUS, value);
+
+// The chips (the model's FILTERS) → their words.
+export const FILTER_KEYS = {
+  all: 'sup.imp.filter.all',
+  new: 'sup.imp.status.new',
+  'update-price': 'sup.imp.status.updatePrice',
+  'history-only': 'sup.imp.status.historyOnly',
+  unchanged: 'sup.imp.status.unchanged',
+  check: 'sup.imp.status.priceCheck',
+  decide: 'sup.imp.status.decide',
+  error: 'sup.imp.filter.errors',
+} as const satisfies Record<string, MessageKey>;
+
+export const filterKey = (filter: string): MessageKey =>
+  (Object.hasOwn(FILTER_KEYS, filter) ? FILTER_KEYS[filter as keyof typeof FILTER_KEYS] : UNKNOWN_REASON_KEY);

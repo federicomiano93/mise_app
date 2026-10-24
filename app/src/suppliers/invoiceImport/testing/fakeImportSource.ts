@@ -28,6 +28,8 @@ export interface FakeImportSource extends InvoiceImportSource {
   suppliers: StoredDoc[];
   ingredients: StoredDoc[];
   decisions: StoredDoc[];
+  // The invoice points already stored, by ingredient id (none = nothing recorded yet): what step 3 reads to tell a price that is in.
+  points: Map<string, StoredPoints>;
   // Every call, in order: [method, ...arguments].
   readonly calls: Array<readonly [ImportMethod, ...unknown[]]>;
   // Every write, in order.
@@ -51,6 +53,7 @@ export function fakeImportSource(initial: { suppliers?: StoredDoc[]; ingredients
     suppliers: [...(initial.suppliers ?? [])],
     ingredients: [...(initial.ingredients ?? [])],
     decisions: [...(initial.decisions ?? [])],
+    points: new Map<string, StoredPoints>(),
     calls: [],
     writes: [],
     beforeFreshSuppliers: null,
@@ -84,7 +87,7 @@ export function fakeImportSource(initial: { suppliers?: StoredDoc[]; ingredients
     }),
     freshIngredientsForSupplier: supplierId => run('freshIngredientsForSupplier', [supplierId],
       () => self.ingredients.filter(ingredient => ingredient.supplierId === supplierId).map(ingredient => ({ ...ingredient }))),
-    invoicePoints: ingredientId => run('invoicePoints', [ingredientId], (): StoredPoints => ({ ids: new Set<string>(), points: [] })),
+    invoicePoints: ingredientId => run('invoicePoints', [ingredientId], (): StoredPoints => self.points.get(ingredientId) ?? { ids: new Set<string>(), points: [] }),
     storedPriceChanges: ingredientId => run('storedPriceChanges', [ingredientId], (): StoredPriceChange[] => []),
     freshPrice: ingredientId => run('freshPrice', [ingredientId], () => null),
     runImportBatches: batches => run('runImportBatches', [batches], () => {

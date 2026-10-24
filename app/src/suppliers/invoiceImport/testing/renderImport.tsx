@@ -89,3 +89,33 @@ export async function toSuppliers(user: UserEvent, ...files: File[]): Promise<vo
   await user.click(await screen.findByRole('button', { name: 'Next' }, LOAD));
   await screen.findByRole('heading', { level: 3, name: 'Suppliers' }, LOAD);
 }
+
+// Chooses the zip, passes the suppliers step (saving the new supplier if there is one to save) and waits until step 3 has checked
+// what Mise already holds.
+export async function toIngredients(user: UserEvent, ...files: File[]): Promise<void> {
+  await toSuppliers(user, ...files);
+  const next = screen.queryByRole('button', { name: 'Next' });
+  if (next) {
+    await user.click(next);
+  } else {
+    await user.click(screen.getByRole('button', { name: /^Save \d+ suppliers?$/ }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Save these suppliers?' }, LOAD);
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+  }
+  await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);
+  await waitFor(() => { expect(screen.queryByText('Checking what is already in Mise…')).not.toBeInTheDocument(); }, LOAD);
+}
+
+// A zip with several invoices (each with its SdI metadata file): the dates and numbers are the specs' to choose.
+export function invoicesZip(invoices: readonly { lines: readonly LineSpec[]; spec?: InvoiceSpec }[], name = 'fatture.zip'): File {
+  const members: Record<string, string> = {};
+  invoices.forEach((invoice, index) => {
+    members[`inv${index}.xml`] = invoiceXml(invoice.lines, { number: String(index + 1), ...invoice.spec });
+    members[`inv${index}_MT_001.xml`] = metadataXml(String(9000000001 + index));
+  });
+  const bytes = zipSync(Object.fromEntries(Object.entries(members).map(([member, xml]) => [member, Uint8Array.from(strToU8(xml))])));
+  return withBytes(new File([bytes.slice().buffer], name, { type: 'application/zip' }), bytes);
+}
+
+// A flour sold by the sack of 25 kg, priced by the piece on the invoice (so the pack weight matters), and the same by the kilo.
+export const FLOUR_BY_SACK: LineSpec = { desc: 'FARINA TIPO 00 SACCO KG 25', code: 'F00', qty: 2, unit: 'PZ', total: 28.5 };

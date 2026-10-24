@@ -271,3 +271,54 @@
 .suppliers > .row:first-child {
   border-top: 0;
 }
+
+/* Step 3: a pill for a row that writes nothing of its own (history only, unchanged, skipped). */
+.pill[data-tone="quiet"] {
+  background: var(--sunken);
+  color: var(--ink-2);
+}
+
+/* The filter chips: real buttons, the chosen one marked by colour AND by aria-pressed. */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 var(--fs-sm)/1 var(--font);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+.chip:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The rows of step 3 are one card; the first row needs no line above it. */
+.list > .row:first-child {
+  border-top: 0;
+}
+
+/* «Nothing to import»: the hint and the second button, in the body (the bar keeps the one primary). */
+.nothing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+}
