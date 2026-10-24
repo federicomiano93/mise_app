@@ -141,6 +141,67 @@ describe.each([
   });
 });
 
+// ── decoding a photo the right way up (the current app's PR #374; tests/photo-decode-upright.test.mjs) ──
+describe.each([
+  ['shared/ (TypeScript)', ported],
+  ['js/ (current app)', legacy],
+] as const)('%s decodeUpright', (_name, m) => {
+  const FILE = { name: 'photo.jpg' };
+  const BITMAP = { width: 30, height: 40 };
+  // A stand-in for createImageBitmap that records every call and answers from a script.
+  function fakeCreate(...answers: unknown[]) {
+    const calls: unknown[][] = [];
+    const create = async (...args: unknown[]) => {
+      calls.push(args);
+      const answer = answers[calls.length - 1];
+      if (answer instanceof Error) throw answer;
+      return answer;
+    };
+    return { create, calls };
+  }
+  const decode = (create: unknown) => (m.decodeUpright as (file: unknown, create?: unknown) => Promise<unknown>)(FILE, create);
+
+  test('a modern browser decodes once, with the EXIF option', async () => {
+    const { create, calls } = fakeCreate(BITMAP);
+    expect(await decode(create)).toBe(BITMAP);
+    expect(calls).toStrictEqual([[FILE, { imageOrientation: 'from-image' }]]);
+  });
+
+  test('⚠️ Chrome 101: the option refused with a TypeError retries ONCE without options', async () => {
+    const { create, calls } = fakeCreate(new TypeError("The provided value 'from-image' is not a valid enum value"), BITMAP);
+    expect(await decode(create)).toBe(BITMAP);
+    expect(calls.length).toBe(2);
+    expect(calls[1], 'the retry passes no options at all').toStrictEqual([FILE]);
+  });
+
+  test('⚠️ a photo that cannot be decoded (not a TypeError) is NOT retried', async () => {
+    const broken = new Error('The source image could not be decoded.');
+    const { create, calls } = fakeCreate(broken, BITMAP);
+    await expect(decode(create)).rejects.toBe(broken);
+    expect(calls.length, 'a second try would only hide a HEIC photo behind a slower failure').toBe(1);
+  });
+
+  test('a retry that also fails rejects, and is not tried a third time', async () => {
+    const second = new Error('no');
+    const { create, calls } = fakeCreate(new TypeError('bad enum'), second);
+    await expect(decode(create)).rejects.toBe(second);
+    expect(calls.length).toBe(2);
+  });
+
+  test('⚠️ with no stand-in it calls the real global createImageBitmap', async () => {
+    const { create, calls } = fakeCreate(BITMAP);
+    const holder = globalThis as { createImageBitmap?: unknown };
+    const saved = holder.createImageBitmap;
+    holder.createImageBitmap = create;
+    try {
+      expect(await decode(undefined)).toBe(BITMAP);
+      expect(calls.length).toBe(1);
+    } finally {
+      if (saved === undefined) delete holder.createImageBitmap; else holder.createImageBitmap = saved;
+    }
+  });
+});
+
 describe('shared/ photo-model: the functions and constants it has', () => {
   test('exports the same names as the current app', () => {
     expect(Object.keys(ported).sort()).toStrictEqual(Object.keys(legacy).sort());
