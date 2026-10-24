@@ -1,0 +1,62 @@
+/* The sign-in form: two labelled fields, a message, the one primary button and a quiet link. */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s4);
+  width: 100%;
+  text-align: left;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  width: 100%;
+}
+
+.label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* 16px type on purpose: a smaller size makes iOS zoom the page in when the field is focused. */
+.input {
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+/* aria-invalid is what React Aria sets, and it is also what a screen reader hears. */
+.input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.error {
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+}
+
+/* The result of the last try, over the button it belongs to. Meaning is in the words; colour only
+   backs it up. */
+.notice {
+  width: 100%;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+}
+
+.notice[data-kind="error"] {
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
+
+.notice[data-kind="success"] {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
