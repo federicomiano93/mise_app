@@ -1,9 +1,13 @@
+import { reconcileConfigWrite } from '@mise/shared/calculator-config';
+import { withRowIds } from '@mise/shared/guided-model';
 import type { AnswerMeta, CalculatorSource, StoredDoc } from '../calculator/calculatorSource';
 
 // A Calculator source for the specs, in memory: the configuration, the catalogue recipes and the logs are
 // plain values; a log save lands at once (or is refused, with `refuse`, or held, with `holdSaves`), and every
 // live watcher is told, like Firestore would. By default every answer comes from the server (an online
-// database); `answer()` lets a spec send one from the browser's own database instead.
+// database); `answer()` lets a spec send one from the browser's own database instead. A configuration save
+// is reconciled and stamped like the real transaction (revision + 1, configModel 4) and told to every watcher;
+// `refuse.configSave` refuses it, `holdConfigSaves` keeps it in the air until `settleConfigSaves`.
 type ConfigListener = { onChange: (data: Record<string, unknown> | null, meta: AnswerMeta) => void; onError: (err: unknown) => void };
 type LogsListener = { sinceMs: number; onChange: (list: StoredDoc[], meta: AnswerMeta) => void; onError: (err: unknown) => void };
 type RecipeListener = { id: string; onChange: (recipe: StoredDoc | null, meta: AnswerMeta) => void };
@@ -15,9 +19,18 @@ export type FakeCalculatorSource = CalculatorSource & {
   recipes: Map<string, StoredDoc>;
   logs: Map<string, StoredDoc>;
   // The next calls of this kind fail.
-  refuse: { save: boolean; config: boolean; logs: boolean };
+  refuse: { save: boolean; config: boolean; logs: boolean; configSave: boolean; catalogue: boolean; stamp: boolean };
   // Every log that reached the source, in order.
   saved: StoredDoc[];
+  // Every configuration that reached the source, in order, as handed over.
+  savedConfigs: Record<string, unknown>[];
+  // Every row-id stamp that WROTE: the recipe and the rows written.
+  stamps: { id: string; ingredients: unknown[] }[];
+  // How many times the whole catalogue was read.
+  catalogueReads(): number;
+  // Configuration saves wait (offline, slow) until settleConfigSaves().
+  holdConfigSaves(): void;
+  settleConfigSaves(): void;
   // Which linked recipes are watched right now.
   watchedRecipes(): string[];
   // Tells every watcher again (as another phone's write would).
@@ -40,8 +53,13 @@ export function fakeCalculatorSource(seed: {
   const configWatchers = new Set<ConfigListener>();
   const logWatchers = new Set<LogsListener>();
   const recipeWatchers = new Set<RecipeListener>();
-  const refuse = { save: false, config: false, logs: false };
+  const refuse = { save: false, config: false, logs: false, configSave: false, catalogue: false, stamp: false };
   const saved: StoredDoc[] = [];
+  const savedConfigs: Record<string, unknown>[] = [];
+  const stamps: { id: string; ingredients: unknown[] }[] = [];
+  let catalogueReads = 0;
+  let configSavesHeld = false;
+  let heldConfigSaves: Array<() => void> = [];
   let held = false;
   let savesHeld = false;
   let heldSaves: Array<() => void> = [];
@@ -63,7 +81,8 @@ export function fakeCalculatorSource(seed: {
 
   const fake: FakeCalculatorSource = {
     config: seed.config === undefined ? null : seed.config,
-    recipes, logs, refuse, saved,
+    recipes, logs, refuse, saved, savedConfigs, stamps,
+    catalogueReads: () => catalogueReads,
 
     watchConfig(onChange, onError) {
       const listener = { onChange, onError };
@@ -99,6 +118,51 @@ export function fakeCalculatorSource(seed: {
       }
       land();
       return Promise.resolve();
+    },
+
+    saveConfig(config) {
+      const handed = JSON.parse(JSON.stringify(config)) as Record<string, unknown>;
+      savedConfigs.push(handed);
+      const land = (): Promise<number> => {
+        if (refuse.configSave) return Promise.reject(refused());
+        const { recipes: kept, configRev } = reconcileConfigWrite(handed, fake.config);
+        fake.config = { ...handed, recipes: kept, configRev, configModel: 4 };
+        for (const listener of configWatchers) tellConfig(listener, FROM_SERVER);
+        return Promise.resolve(configRev);
+      };
+      if (configSavesHeld) {
+        return new Promise<number>((resolve, reject) => { heldConfigSaves.push(() => { land().then(resolve, reject); }); });
+      }
+      return land();
+    },
+
+    listCatalogueRecipes() {
+      catalogueReads += 1;
+      if (refuse.catalogue) return Promise.reject(refused());
+      return Promise.resolve([...recipes.values()].map(doc => ({ ...doc })));
+    },
+
+    // Like the real transaction: stamps the recipe AS STORED NOW, and writes only when a row lacked an id.
+    stampRowIds(id) {
+      if (refuse.stamp) return Promise.reject(refused());
+      const doc = recipes.get(id);
+      if (!doc) return Promise.reject(Object.assign(new Error('not-found'), { code: 'not-found' }));
+      const rows: unknown[] = Array.isArray(doc.ingredients) ? doc.ingredients as unknown[] : [];
+      const stamped = withRowIds(rows);
+      if (stamped.some((row, i) => row !== rows[i])) {
+        stamps.push({ id, ingredients: [...stamped] });
+        recipes.set(id, { ...doc, ingredients: stamped });
+        for (const listener of recipeWatchers) if (listener.id === id) tellRecipe(listener, FROM_SERVER);
+      }
+      return Promise.resolve(stamped);
+    },
+
+    holdConfigSaves() { configSavesHeld = true; },
+    settleConfigSaves() {
+      configSavesHeld = false;
+      const waiting = heldConfigSaves;
+      heldConfigSaves = [];
+      for (const land of waiting) land();
     },
 
     watchedRecipes: () => [...new Set([...recipeWatchers].map(listener => listener.id))],

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { CALCULATOR_PATH, parseCalculatorPath, recipePath, resolveCalculatorPath } from './calculatorPath';
+import {
+  CALCULATOR_PATH, SETTINGS_PATH, clientPath, clientsPath, divisorPath, divisorRecipePath, extraPath, inRecipesEditor, logSettingsPath,
+  newClientPath, newRecipePath, parseCalculatorPath, recipePath, recipeSettingsPath, recipesPath, resolveCalculatorPath,
+} from './calculatorPath';
 
 describe('parseCalculatorPath', () => {
   it.each([
@@ -61,5 +64,98 @@ describe('resolveCalculatorPath', () => {
   it('leaves the address alone while there is no visible recipe to judge it by', () => {
     expect(resolveCalculatorPath('/gone', [])).toEqual({ active: null });
     expect(resolveCalculatorPath('', [])).toEqual({ active: null });
+  });
+});
+
+describe('the Settings addresses', () => {
+  it.each([
+    ['/settings', { kind: 'hub' }],
+    ['/settings/', { kind: 'hub' }],
+    ['/settings/extra', { kind: 'extra' }],
+    ['/settings/log', { kind: 'log' }],
+    ['/settings/divisor', { kind: 'divisor', recipeId: null }],
+    ['/settings/divisor/focaccia', { kind: 'divisor', recipeId: 'focaccia' }],
+    ['/settings/divisor/a%2Fb%20c', { kind: 'divisor', recipeId: 'a/b c' }],
+    ['/settings/clients', { kind: 'clients', target: { kind: 'list' } }],
+    ['/settings/clients/new', { kind: 'clients', target: { kind: 'new' } }],
+    ['/settings/clients/c-1', { kind: 'clients', target: { kind: 'one', id: 'c-1' } }],
+    ['/settings/recipes', { kind: 'recipes', target: { kind: 'list' } }],
+    ['/settings/recipes/new', { kind: 'recipes', target: { kind: 'new' } }],
+    ['/settings/recipes/r%2F1', { kind: 'recipes', target: { kind: 'one', id: 'r/1' } }],
+  ])('%s is a Settings screen', (rest, view) => {
+    expect(parseCalculatorPath(rest)).toEqual({ kind: 'settings', view });
+  });
+
+  it.each([
+    '/settings/nonsense', '/settings/extra/more', '/settings/log/x', '/settings/divisor/a/b', '/settings/divisor/%',
+    '/settings/clients/a/b', '/settings/recipes/%E0%A4%A',
+  ])('%s is an unknown Settings address', rest => {
+    expect(parseCalculatorPath(rest)).toEqual({ kind: 'settings', view: { kind: 'unknown' } });
+  });
+
+  it('reads a trailing slash as the same screen', () => {
+    expect(parseCalculatorPath('/settings/extra/')).toEqual({ kind: 'settings', view: { kind: 'extra' } });
+  });
+
+  it('reads «settings» as the first segment as Settings, never as a recipe called settings', () => {
+    expect(parseCalculatorPath('/settings')).toEqual({ kind: 'settings', view: { kind: 'hub' } });
+  });
+
+  it('writes every address percent-encoded, and parse reads it back', () => {
+    for (const id of ['brioche', 'a/b c', '100%', 'é']) {
+      expect(divisorRecipePath(id)).toMatch(new RegExp(`^${divisorPath}/[^/]+$`));
+      expect(parseCalculatorPath(divisorRecipePath(id).slice(CALCULATOR_PATH.length)))
+        .toEqual({ kind: 'settings', view: { kind: 'divisor', recipeId: id } });
+      expect(parseCalculatorPath(clientPath(id).slice(CALCULATOR_PATH.length)))
+        .toEqual({ kind: 'settings', view: { kind: 'clients', target: { kind: 'one', id } } });
+      expect(parseCalculatorPath(recipeSettingsPath(id).slice(CALCULATOR_PATH.length)))
+        .toEqual({ kind: 'settings', view: { kind: 'recipes', target: { kind: 'one', id } } });
+    }
+    expect(SETTINGS_PATH).toBe('/calculator/settings');
+    expect([extraPath, logSettingsPath, clientsPath, newClientPath, recipesPath, newRecipePath]).toEqual([
+      '/calculator/settings/extra', '/calculator/settings/log', '/calculator/settings/clients',
+      '/calculator/settings/clients/new', '/calculator/settings/recipes', '/calculator/settings/recipes/new',
+    ]);
+  });
+});
+
+describe('resolveCalculatorPath for Settings', () => {
+  const visible = ['focaccia', 'brioche'];
+
+  it.each([
+    ['/settings', { kind: 'hub' }],
+    ['/settings/extra', { kind: 'extra' }],
+    ['/settings/log', { kind: 'log' }],
+    ['/settings/divisor/brioche', { kind: 'divisor', recipeId: 'brioche' }],
+  ])('%s is drawn, whatever the tabs are', (rest, settings) => {
+    expect(resolveCalculatorPath(rest, visible)).toEqual({ settings });
+    expect(resolveCalculatorPath(rest, [])).toEqual({ settings });
+  });
+
+  it.each([
+    ['/settings/recipes', { kind: 'list' }],
+    ['/settings/recipes/new', { kind: 'new' }],
+    ['/settings/recipes/r-1', { kind: 'one', id: 'r-1' }],
+  ])('%s is drawn as the Recipes editor, whatever the tabs are', (rest, target) => {
+    expect(resolveCalculatorPath(rest, visible)).toEqual({ settings: { kind: 'recipes', target } });
+    expect(resolveCalculatorPath(rest, [])).toEqual({ settings: { kind: 'recipes', target } });
+  });
+
+  it('knows which addresses belong to the Recipes editor', () => {
+    expect(inRecipesEditor(recipesPath)).toBe(true);
+    expect(inRecipesEditor(recipeSettingsPath('r-1'))).toBe(true);
+    expect(inRecipesEditor(newRecipePath)).toBe(true);
+    expect(inRecipesEditor('/calculator/settings')).toBe(false);
+    expect(inRecipesEditor('/calculator/settings/recipesx')).toBe(false);
+    expect(inRecipesEditor('/calculator/settings/clients')).toBe(false);
+  });
+
+  it('sends the bare word «new» under Clients to the list: a client is made by Add client', () => {
+    expect(resolveCalculatorPath('/settings/clients/new', visible)).toEqual({ redirect: '/calculator/settings/clients' });
+  });
+
+  it('sends any other address under Settings to the hub', () => {
+    expect(resolveCalculatorPath('/settings/nonsense', visible)).toEqual({ redirect: '/calculator/settings' });
+    expect(resolveCalculatorPath('/settings/extra/more', [])).toEqual({ redirect: '/calculator/settings' });
   });
 });

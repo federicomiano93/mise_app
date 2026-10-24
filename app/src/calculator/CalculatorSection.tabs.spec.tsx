@@ -199,11 +199,11 @@ describe('a Calculator with nothing to draw says why, in three different sentenc
     expect(main().queryByRole('link')).not.toBeInTheDocument();
   });
 
-  it('«No recipes yet» when the venue has none — and no button (the doors arrive with Settings)', async () => {
+  it('«No recipes yet» when the venue has none — with the doors to Settings and to «Add a recipe»', async () => {
     await open('/calculator', configOf({ recipes: [] }));
     expect(await screen.findByText('No recipes yet', undefined, LOAD)).toBeInTheDocument();
     expect(screen.getByText(/Add your first recipe/)).toBeInTheDocument();
-    expect(main().queryByRole('button')).not.toBeInTheDocument();
+    expect(main().getAllByRole('button').map(button => button.textContent)).toEqual(['Settings', 'Add a recipe']);
   });
 
   it('a brand-new venue (the server says «no document») is «No recipes yet», not «Loading…» for ever', async () => {
@@ -216,7 +216,7 @@ describe('a Calculator with nothing to draw says why, in three different sentenc
     await open('/calculator', configOf({ recipes: [{ ...FOCACCIA, visible: false }] }));
     expect(await screen.findByText('No recipe is shown here', undefined, LOAD)).toBeInTheDocument();
     expect(screen.getByText(/none of them is set to appear as a tab/)).toBeInTheDocument();
-    expect(main().queryByRole('button')).not.toBeInTheDocument();
+    expect(main().getAllByRole('button').map(button => button.textContent)).toEqual(['Settings', 'Choose which to show']);
   });
 
   it('says the configuration could not be loaded when the stream failed and nothing is on this phone', async () => {
