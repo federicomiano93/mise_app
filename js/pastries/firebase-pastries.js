@@ -56,7 +56,16 @@ function withBakery(data) {
 }
 
 // Subscribe to all seven days in real time. onChange receives an array of
-// { id, ...data }; the id is the weekday name.
+// { id, ...data }; the id is the weekday name. Its second argument says whether
+// the answer came from Firestore's own offline copy rather than the server —
+// pastries-store.js needs it to tell «nothing here» from «nothing known yet».
+//
+// ⚠️ includeMetadataChanges, because the store may set an empty from-cache
+// answer aside and wait for the server: when the server then says the same
+// nothing, only the metadata changes, and without this option that answer is
+// never delivered — the pencil would wait on every opening (code review, 11 Oct
+// 2026). It costs no reads: a few extra in-place repaints (a save confirmed,
+// going offline or back online).
 //
 // onSnapshot does NOT auto-resubscribe after an error, so a dropped stream would
 // otherwise leave the screen looking like a location with nothing in it, for
@@ -66,7 +75,8 @@ export async function watchPastryDays(onChange, onError) {
   await authReady;
   return onSnapshot(
     collection(db, pathFor(PASTRIES)),
-    snap => onChange(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
+    { includeMetadataChanges: true },
+    snap => onChange(snap.docs.map(d => ({ id: d.id, ...d.data() })), snap.metadata.fromCache),
     err => { console.error('watchPastryDays failed:', err); if (onError) onError(err); },
   );
 }

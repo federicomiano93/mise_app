@@ -255,7 +255,9 @@ test('⚠️ the offline check stays, and stays BEFORE the call', () => {
 });
 
 test('⚠️ HEIC has no fallback decoder, deliberately', () => {
-  assert.match(CAPTURE, /createImageBitmap\(file, \{ imageOrientation: 'from-image' \}\)/,
+  // The EXIF option itself is passed by decodeUpright (tests/photo-decode-upright.test.mjs),
+  // which also retries without it when Chrome 101 refuses the word.
+  assert.match(CAPTURE, /bitmap = await decodeUpright\(file\)/,
     'EXIF rotation, and no blob: URL — the CSP allows img-src \'self\' data: and nothing else');
   assert.match(CAPTURE, /throw new Error\('undecodable'\)/,
     'a second decoder that works on one platform is a defect that exists only on the other');
