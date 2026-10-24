@@ -23,7 +23,7 @@ import {
   timerState, formatRemaining, formatDuration, overdueText, progressText,
   isResumable, RESUME_TTL_MS,
 } from './guided-model.js';
-import { unitOf, unitText } from './catalogue-model.js';
+import { unitOf, unitText, formatAmount } from './catalogue-model.js';
 import { unlockAlarm, startAlarm, stopAlarm, keepScreenAwake, releaseScreen, canKeepScreenAwake } from './guided-alarm.js';
 import { scheduleAlarm, cancelAlarm, pushSupport, enablePush, supportText } from '../push.js';
 
@@ -36,9 +36,8 @@ const CHECK_SVG =
 const PLAY_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l14 8-14 8z"/></svg>';
 
-// Whole numbers, no thousands separator — the same formatting as the recipe rows
+// Amounts are written by formatAmount (catalogue-model.js) — the same call as the recipe rows
 // this screen quotes, so a number never reads differently in the two places.
-const nf = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0, useGrouping: false });
 
 // ── The saved session ─────────────────────────────────────────────────────────
 // localStorage, not Firestore: it belongs to the phone doing the mixing, it must
@@ -178,7 +177,7 @@ export function renderRun({ recipe, targetGrams, app, resume = null }) {
         list.appendChild(el('div', { class: 'guided-ing' + (row.missing ? ' guided-ing--gone' : '') }, [
           el('span', { class: 'guided-ing-name', text: row.label }),
           el('span', { class: 'guided-ing-amt' }, [
-            el('span', { class: 'guided-ing-num', text: row.amount === null ? '' : nf.format(row.amount) }),
+            el('span', { class: 'guided-ing-num', text: row.amount === null ? '' : formatAmount(row.amount, row.unit) }),
             el('span', { class: 'guided-ing-unit', text: row.amount === null && !row.missing ? unitText('to taste') : (row.missing ? '' : unitText(row.unit)) }),
           ]),
         ]));
@@ -275,7 +274,7 @@ export function renderRun({ recipe, targetGrams, app, resume = null }) {
 
     if (missed.length) {
       const warn = el('div', { class: 'guided-missed' }, [
-        el('p', { class: 'guided-missed-title', text: t('cat.notInAnyStep') }),
+        el('p', { class: 'guided-missed-title', text: t('cat.notInAnyStepCheck') }),
       ]);
       for (const row of missed) {
         const i = snapshot.ingredients.indexOf(row);
@@ -283,7 +282,7 @@ export function renderRun({ recipe, targetGrams, app, resume = null }) {
         warn.appendChild(el('div', { class: 'guided-ing' }, [
           el('span', { class: 'guided-ing-name', text: row.label }),
           el('span', { class: 'guided-ing-amt' }, [
-            el('span', { class: 'guided-ing-num', text: amount === null || amount === undefined ? '' : nf.format(amount) }),
+            el('span', { class: 'guided-ing-num', text: amount === null || amount === undefined ? '' : formatAmount(amount, unitOf(row)) }),
             el('span', { class: 'guided-ing-unit', text: amount === null ? unitText('to taste') : unitText(unitOf(row)) }),
           ]),
         ]));

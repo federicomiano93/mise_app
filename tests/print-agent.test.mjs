@@ -187,3 +187,63 @@ test('⚠️⚠️ the agent can be pointed at the emulator, and says which it i
   assert.ok(!/cfg\.emulator|config\.emulator/.test(src),
     'the emulator switch must not be readable from the settings file');
 });
+
+// ── The bytes the printer reads ──────────────────────────────────────────────
+//
+// ⚠️⚠️ ^CI28 TELLS THE PRINTER «UTF-8», SO UTF-8 IS WHAT MUST ARRIVE. Until 14 Oct
+// 2026 the agent wrote latin1: «Può» reached the Zebra as 50 75 F2, which is not
+// UTF-8, and € was cut to a single wrong byte. Nothing failed — the label simply
+// printed wrong — so the bytes on the wire are pinned here, not the source text.
+
+const ACCENTED = '^XA^CI28^FO10,10^FH^FDPuò contenere: œufs, 2,50 €^FS^XZ';
+
+test('⚠️⚠️ a label sent to a network printer arrives as UTF-8', async () => {
+  const net = await import('node:net');
+  const { printToTcp } = await import('../print-agent/agent.mjs');
+
+  const received = [];
+  const server = net.createServer((sock) => {
+    sock.on('data', (d) => received.push(d));
+    sock.on('error', () => {}); // a failed send must fail the test, not crash the run
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  try {
+    const { port } = server.address();
+    await printToTcp('127.0.0.1', port, ACCENTED);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+
+  const bytes = Buffer.concat(received);
+  assert.deepEqual(bytes, Buffer.from(ACCENTED, 'utf8'));
+  assert.ok(bytes.includes(Buffer.from([0x50, 0x75, 0xC3, 0xB2])), '«Può» must be 50 75 C3 B2');
+  assert.ok(bytes.includes(Buffer.from([0xE2, 0x82, 0xAC])), '€ must be E2 82 AC');
+  // And it decodes back without a single replacement character.
+  assert.equal(new TextDecoder('utf-8', { fatal: true }).decode(bytes), ACCENTED);
+});
+
+test('⚠️⚠️ a label copied to a shared printer is written as UTF-8 too', async () => {
+  // The copy itself needs Windows and a real share, so it cannot run here. What can
+  // be pinned is that both paths go through the one encoder and that it is UTF-8.
+  const { labelBytes } = await import('../print-agent/agent.mjs');
+  assert.deepEqual(labelBytes(ACCENTED), Buffer.from(ACCENTED, 'utf8'));
+
+  const src = codeOf(read(AGENT));
+  const share = src.slice(src.indexOf('async function printToShare'), src.indexOf('function printToTcp'));
+  assert.ok(share.length > 100, 'the agent no longer has the shape this test reads');
+  assert.match(share, /await writeFile\(file, labelBytes\(text\)\);/,
+    'the file copied to the share must be the UTF-8 bytes');
+  const tcp = src.slice(src.indexOf('function printToTcp'), src.indexOf('async function printJob'));
+  assert.match(tcp, /socket\.end\(labelBytes\(text\)\)/);
+  assert.ok(!/'binary'|'latin1'/.test(src), 'latin1 has come back into the agent');
+});
+
+test('⚠️⚠️ no letter can turn into a printer command on the wire', async () => {
+  // isSingleLabel() reads the string; the printer reads the bytes. Under latin1 «ž»
+  // became 0x7E (~, a control command) and «Ş» 0x5E (^). In UTF-8 a non-ASCII letter
+  // never produces a byte below 0x80, so the filter and the printer agree.
+  const { labelBytes } = await import('../print-agent/agent.mjs');
+  const bytes = [...labelBytes('^XA^CI28^FH^FDžJR Ş^FS^XZ')];
+  assert.equal(bytes.filter(b => b === 0x7E).length, 0, 'a ~ appeared on the wire');
+  assert.equal(bytes.filter(b => b === 0x5E).length, 6, 'only the six ^ the label really has');
+});

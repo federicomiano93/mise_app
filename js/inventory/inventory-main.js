@@ -353,7 +353,24 @@ function showUnavailable() {
 
 function handleBack() {
   if (view === 'detail' || view === 'usage') { showList(); return; }
-  location.href = 'index.html';
+  leaveForHome();
+}
+
+// ⚠️ flushBeforeLeaving(), as for the month arrows: the last count typed is handed to
+// Firestore and given the moment it needs to reach the browser's own database before
+// the page goes — in a storeroom it is the only copy there is. Otherwise it waits on
+// this phone until this same month is opened here again (code review, 11 Oct 2026).
+function leaveForHome() {
+  flushBeforeLeaving().finally(() => { location.href = 'index.html'; });
+}
+
+// The Home link is a real link (it still works before this script has run), so it is
+// caught here: a plain tap leaves through leaveForHome(); a modified click (a new tab
+// on a computer) is left to the browser, since this page stays open.
+function handleHomeLink(e) {
+  if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  e.preventDefault();
+  leaveForHome();
 }
 
 function toast(msg) {
@@ -365,6 +382,7 @@ function toast(msg) {
 }
 
 backBtn.addEventListener('click', handleBack);
+homeBtn.addEventListener('click', handleHomeLink);
 costBtn.addEventListener('click', showUsage);
 prevBtn.addEventListener('click', () => goToMonth(previousMonth(openMonthId)));
 nextBtn.addEventListener('click', () => goToMonth(nextMonth(openMonthId)));
@@ -374,7 +392,13 @@ setSyncErrorHandler(msg => toast(msg));
 // ⚠️ WHAT IS TYPED IS SENT BEFORE THE PAGE GOES AWAY. The save is debounced, so
 // closing the app a moment after the last number would otherwise lose it — and it
 // is the one number somebody walked across a storeroom for.
+// ⚠️ AND WHEN IT IS HIDDEN, which on a phone comes first: switching app or locking
+// the screen hides the page while it is still alive, with time for the write to
+// reach the browser's own database; pagehide may come only as it is torn down.
 window.addEventListener('pagehide', () => { flush(); });
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flush();
+});
 
 initInventory(
   openMonthId,

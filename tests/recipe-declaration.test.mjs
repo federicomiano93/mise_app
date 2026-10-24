@@ -167,6 +167,26 @@ test('⚠️⚠️ a recipe that cannot be labelled offers no way to send one', 
     'the refusal must return before the send row exists');
 });
 
+test('⚠️⚠️ no country means no declaration to copy or send — the label screen\'s refusal', () => {
+  // Found while porting to Mise 2 (13 Oct 2026): this card built the text with
+  // outputLanguage() → null → English and offered Copy and Send, while the label screen
+  // and the allergen sheet both refused. An English declaration pasted onto Italian
+  // packaging is the defect the country rule exists to prevent.
+  const start = DETAIL.indexOf('function declarationPanel(');
+  const body = DETAIL.slice(start, DETAIL.indexOf('\nfunction allergenPanel(', start));
+  const guard = body.indexOf('if (!canPrintLabel(location)) {');
+  assert.notEqual(guard, -1, 'the country must be asked');
+  assert.match(DETAIL, /import \{[^}]*\bcanPrintLabel\b[^}]*\} from '\.\.\/market\.js';/,
+    'and imported — without it the call throws and the cards around it never draw');
+  const branch = body.slice(guard, body.indexOf('return panel;', guard));
+  assert.match(branch, /t\('label\.blocked\.noCountry'\)/, 'in the label screen\'s own words');
+  assert.ok(!/cat-decl-send|copyToClipboard|chooseHowToSend|declarationText/.test(branch),
+    'the refusal offers nothing to copy or send');
+  assert.ok(guard < body.indexOf('buildLabel('), 'asked before anything is built');
+  assert.ok(body.indexOf('return panel;', guard) < body.indexOf('cat-decl-send'),
+    'and it returns before the send row exists');
+});
+
 test('⚠️ allergens switched off means no declaration card at all', () => {
   const start = DETAIL.indexOf('function declarationPanel(');
   const body = DETAIL.slice(start, DETAIL.indexOf('\nfunction allergenPanel(', start));
