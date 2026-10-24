@@ -54,6 +54,11 @@
 // half of the invoice reader): full ports of js/orders/invoice-zip/. invoice-zip/keywords.ts is NOT: it holds the seven keyword
 // patterns that classify.js keeps private (classify.ts imports them from it and still exports exactly what the original does), so
 // it has no js/ counterpart; invoice-zip/keywords.spec.ts pins it against invoice-import/classify.py instead.
+// invoice-zip/fatturapa.ts, products.ts and selection.ts ARE paired too (slice A2, the second half of the reader): full ports.
+// invoice-zip/build-import.ts is NOT: it is a PARTIAL port (decision T5) — every export of js/orders/invoice-zip/build-import.js
+// except `buildImportFromInvoices`, which opens the zip archives with fflate and so stays app code
+// (app/src/suppliers/invoiceImport/buildImport.ts), plus `buildImportFromRead`, the original's body after the reading. Its
+// specs run every test against both files instead (selection.spec.ts and the app's buildImport.spec.ts).
 //
 // ⚠️ IT IS WHAT CATCHES A FIX MADE TO js/ AND FORGOTTEN HERE. A constant changed in one file
 // (a new allergen, a new push kind, a new card) is invisible to every behavioural test that does
@@ -111,6 +116,9 @@ import * as invoicePyCompat from './invoice-zip/py-compat';
 import * as invoiceSha256 from './invoice-zip/sha256';
 import * as invoiceClassify from './invoice-zip/classify';
 import * as invoicePricing from './invoice-zip/pricing';
+import * as invoiceFatturapa from './invoice-zip/fatturapa';
+import * as invoiceProducts from './invoice-zip/products';
+import * as invoiceSelection from './invoice-zip/selection';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -162,6 +170,9 @@ import * as legacyInvoicePyCompat from '../../js/orders/invoice-zip/py-compat.js
 import * as legacyInvoiceSha256 from '../../js/orders/invoice-zip/sha256.js';
 import * as legacyInvoiceClassify from '../../js/orders/invoice-zip/classify.js';
 import * as legacyInvoicePricing from '../../js/orders/invoice-zip/pricing.js';
+import * as legacyInvoiceFatturapa from '../../js/orders/invoice-zip/fatturapa.js';
+import * as legacyInvoiceProducts from '../../js/orders/invoice-zip/products.js';
+import * as legacyInvoiceSelection from '../../js/orders/invoice-zip/selection.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -215,6 +226,9 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['invoice-zip/sha256', invoiceSha256, legacyInvoiceSha256],
   ['invoice-zip/classify', invoiceClassify, legacyInvoiceClassify],
   ['invoice-zip/pricing', invoicePricing, legacyInvoicePricing],
+  ['invoice-zip/fatturapa', invoiceFatturapa, legacyInvoiceFatturapa],
+  ['invoice-zip/products', invoiceProducts, legacyInvoiceProducts],
+  ['invoice-zip/selection', invoiceSelection, legacyInvoiceSelection],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -276,7 +290,7 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all fifty-one models are compared', () => {
+test('all fifty-four models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
@@ -285,5 +299,5 @@ test('all fifty-one models are compared', () => {
       'confirm-flow', 'log-time', 'venue-features', 'market', 'recipe-label-model', 'label-template-model', 'photo-model',
       'supplier-label', 'vat-number', 'favourite-suppliers', 'record-choices', 'category-batches', 'ingredient-edit-model',
       'allergen-terms', 'allergen-match', 'records', 'invoice-zip/reasons', 'invoice-zip/py-compat', 'invoice-zip/sha256',
-      'invoice-zip/classify', 'invoice-zip/pricing']);
+      'invoice-zip/classify', 'invoice-zip/pricing', 'invoice-zip/fatturapa', 'invoice-zip/products', 'invoice-zip/selection']);
 });

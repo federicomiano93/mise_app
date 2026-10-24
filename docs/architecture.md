@@ -62,7 +62,7 @@ both, and the switch keeps the address) and it has consequences that every chang
 | jspdf | 4.2.1 | the recipe export's PDF; loaded only when someone taps Export |
 | write-excel-file | 4.1.1 | the recipe export's Excel file; loaded only when someone taps Export |
 | Vitest + Testing Library + jsdom | — | specs |
-| fflate | 0.8.3 (dev only) | unzips the .xlsx inside a spec to read what was written; never in the bundle |
+| fflate | 0.8.3 (runtime, `app/` only) | opens the zip archives of the invoice import (`app/src/suppliers/invoiceImport/zipRead.ts`; `shared/` has no runtime dependency, so the zip reader is app code); specs also use it to unzip the .xlsx the recipe export wrote |
 | Geist / Geist Mono | @fontsource-variable | bundled, so the app starts offline and no third party sees who opens it |
 
 Preact was evaluated in step 2c and NOT adopted: React is about a fifth of the bundle, and React
