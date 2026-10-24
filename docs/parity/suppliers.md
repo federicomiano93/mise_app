@@ -582,6 +582,64 @@ What the code does, and where it differs from the current app (each difference w
   - Same as the current app, left: a «bag of …» case whose weight became unreadable refuses every Save on the weight box until the weight reads again, even a rename (it forces the fix rather than leave a price that no longer reads).
 - **Driven**: `algprobe/mise-drive/drive-mise2-suppliers.mjs <url> <port> f` — IT owner at 1024/360/296 (open, rename = price byte-identical, VAT only, «+ New unit» refused then saved, Back asks, a case reopened and re-priced with one history entry, «abc» refused, «bag of 2.5 kg» re-sized by the weight, an empty weight refused, a weight changed before opening re-priced by a rename; axe clean, every control ≥44×44, nothing clipped) and the EN employee at 360 (the new card, no price).
 
+## Step 3e-6 as built — part B3a: the door, the frame, choosing the file, the suppliers
+
+Part B3a is the FIRST HALF of «Import from invoices» (the second half, B3b, is step 3 and the summary). Files:
+`app/src/suppliers/invoiceImport/` — `InvoiceImportScreen.tsx` (the frame and the state), `FileStep.tsx`, `SuppliersStep.tsx`,
+`IngredientsStep.tsx` (**the B3b hand-over point**: a heading and nothing else), `importRun.ts` (read, choose, failure sentences),
+`supplierStep.ts` (the select and the write), `importWords.ts` (code → phrase tables), `lazyImportSource.ts`,
+`LeaveBlocker.tsx`, `useMayImport.ts`, `testing/` (the fake source, `renderImport.tsx`).
+
+- **Door and address** (I1, I2, I4, F3 b): a button «Import from invoices» / «Importa da fatture» in the list column, above Settings.
+  Shown only to whoever `useMayWritePrices()` allows (owner or manager of a venue with Food cost on) AND whose venue's `country` is
+  `IT` (`countryOf(location)`, `@mise/shared/market`: a venue with no country, or any other, has no door). Typing `/suppliers/import`
+  without that right replaces it with `/suppliers` and draws nothing. It opens one level down, full width at every size (`data-view
+  ="wide"`, like Settings), with the focus on the screen's title; Back returns to the list with the focus on the door
+  (`IMPORT_OPENER`). The screen is loaded when opened (`React.lazy`): the reader, the plan and fflate are not in the section's first code.
+- **The source** reaches the screen through the data services (`DataServices.invoiceImport(locationId)`, built in `main.tsx` on the
+  session's backend); `renderApp` hands every spec a `fakeImportSource`. `DataContext` is in the first screen's code, so the real source
+  is behind `lazyImportSource.ts`, which fetches `importSource.ts` as soon as the screen makes it.
+- **The frame** (I7, I83, I84, I98): a `region` named by the title, the form bar (Back · «Import from invoices» · «Step n of 3» · the
+  one primary action), then the step. Back asks «Leave the import?» (danger, «Leave» / Cancel) once a file is loaded and the import is
+  not finished; so do the browser's Back and the rail (the router's blocker, `LeaveBlocker.tsx`). While the suppliers are being written
+  Back is OFF (`FormBar` got a `backDisabled` prop) and a blocked move is refused without a question. A polite live region, present and
+  empty before it speaks. After each step the page is at the top and the step's heading has the focus. The screen holds the app's busy
+  marker (`markBusy`) while a file is loaded or something is written.
+- **Step 1** (I33–I36, I85, I86): one hidden input (`.zip,.xml,.p7m`, `multiple`) opened by a label dressed as a button; «Chosen file:
+  {names}»; the picker is disabled and `aria-busy` while a zip is read and comes back on every way out; reading starts after the browser
+  has painted «Reading the invoices…» (`setTimeout 0`), with the platform XML parser, `now` and **the venue id as the salt** (the default
+  would be empty); a throw → the one plain message; the remembered decisions come from `loadDecisions()` and a failure is said in the
+  offline / permission / plain words; then the selection (`selectImport`), the result line (focused afterwards), the facts line, and the
+  closed `<details>` groups whose ticks re-run the selection at once, in memory. «Next» only with a file loaded and not reading, and
+  refused with «Your suppliers and ingredients are still loading» until the store has the suppliers, the ingredients and the prices
+  **from the server** (the three `…FromServer` flags — an empty venue is an answer); the refusal goes by itself once the server speaks.
+- **Step 2** (I12, I13, I26–I28, I87): one row per file supplier — name, «VAT number …» / «No VAT number», «is {existing}», a pill with a
+  word (New / Already in Mise / Maybe this one? / Error) and its tone; a `maybe` row has «What should happen?» (Choose… / Same as … / Create
+  a new supplier / Skip), a `new` row «Import» / «Do not import anything from this supplier (remember)»; an unanswered `maybe` blocks the
+  primary button («Decide first» sentence, tied with `aria-describedby`). The primary reads «Save n suppliers» when writes are pending,
+  else «Next». Save: offline → the alert first; then the confirmation (the creates and links); then **the suppliers are read from the
+  server first** and, if a confirmed answer changed, NOTHING is written, those answers are cleared and the step is drawn again with
+  «The supplier list changed: check again.»; otherwise creates (`createSupplier(op.data)` — the model's payload, untouched) and links
+  (`linkSupplierVat`) one by one, the progress remembered across retries.
+- **F6 (b) as built**: the explanation is the current app's minus «or a .json import file»; `.json` is not in `accept`; no key of the
+  screen mentions it (a spec scans the dictionary). The `.json` path (I29) is not ported: its messages (mixed, not-json, wrong-format…)
+  have no key; if the selection's own file ever failed the model's parser the screen says the plain «could not be read» (the original
+  showed nothing).
+- ⚠️ **DIFFERENCES FROM THE CURRENT APP, ON PURPOSE**: the door is gated on the country (F3) and sits in the list column, not a bottom
+  bar; the explanation has no .json (F6); an offline Save says «There is no connection…» in an alert BEFORE the question (the original
+  asked, then failed); a «still loading» refusal clears itself when the lists arrive; the primary action is in the form bar (the
+  original's footer); Back from the browser and the rail ask too (the original was an overlay, nothing else was reachable).
+- ⚠️ **The remembered decisions are NOT written at step 2.** The brief of this slice said «written BEFORE the supplier writes»; the
+  original (and I24) write them BEFORE THE ROWS, at the confirmation of step 3 — and a supplier skipped at step 2 is only an answer
+  held on screen until then (the original's test «nothing is written until Done is confirmed»). B3b writes them there.
+- **Words**: `sup.imp.*` (EN + IT), the current app's wording one for one (the group titles are plain strings with `{n}`: the original's
+  `one` and `other` were the same); the 25 reader codes and the supplier reasons have phrases; no `t()` at module level.
+- **Specs**: door and address (`InvoiceImport.door`), step 1 (`.file`), step 2 (`.suppliers`), the frame (`.frame`), the words
+  (`importWords`), the pure steps (`importRun`, `supplierStep`), the lazy source, the fake, the data services. Ported tests are listed in
+  each header; left for B3b: every ingredients-step, rows, decisions-written and summary test of `invoice-import-flow` (all from «a file
+  goes through every step» and «loading the same file again» on), the review tests of the rows (`invoice-import-review` 1–4, 7–11, A–C, R, S),
+  and the `invoice-import-names` and `-price-changes` screen tests.
+
 ## Findings — things found while reading, not decided
 
 ### Findings — The page, the lists, suppliers
@@ -694,6 +752,12 @@ F6 (b).**
 - **T5. fflate** becomes a runtime dependency of `app/` at ONE exact version: 0.8.3 if the end-of-directory and limit
   specs (I38, I39) pass on it, otherwise 0.8.2 for both uses. `zip-read` stays app code; everything else of the reader
   is a `shared/` port.
+  **T5 as built (3e-6 A, review of 24 Oct 2026): fflate is pinned at 0.8.2**, the vendored version — 0.8.3 passed every
+  end-of-directory spec but switches to the ZIP64 record on the ZIP64 LOCATOR alone and loops on its 64-bit count (a 190-byte
+  forged zip made it walk millions of entries). The port adds two guards the original lacks: a ZIP64 locator in front of the
+  end record is a ZIP64 marker (unreadable), and the first pass stops walking once it has listed more entries than the limit
+  (`zipRead.spec.ts` «the port only», `zipRead.walk.spec.ts`). The keyword check (T6) also compares the current app's
+  classify.js text, refuses a Python piece it cannot read, and requires the flags to be re.I alone.
 - **T6. The keyword lists shared with Python** (I58, I59, Finding I-A) get a spec that reads `invoice-import/classify.py`
   and compares its word lists with the TypeScript port's, so a change to one without the other fails CI. The Python
   stays in the repo untouched as the fallback; the workbook/export half is not ported.

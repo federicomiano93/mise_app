@@ -9,8 +9,9 @@ import { useOwnScrollArea } from '../shell/scrollArea';
 import { SPLIT_QUERY } from '../ui/split';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { useMediaQuery } from '../ui/useMediaQuery';
-import { HandBackProvider, NEW_OPENER, SETTINGS_OPENER, itemOpener, supplierOpener, useHandBackState } from './handBack';
+import { HandBackProvider, IMPORT_OPENER, NEW_OPENER, SETTINGS_OPENER, itemOpener, supplierOpener, useHandBackState } from './handBack';
 import { createIngredientDeletions, IngredientDeletionsProvider } from './ingredientDeletions';
+import { useMayImport } from './invoiceImport/useMayImport';
 import { createSupplierDeletions, SupplierDeletionsProvider } from './supplierDeletions';
 import { SuppliersProvider, useSuppliers, useSuppliersStore } from './SuppliersContext';
 import { SuppliersDetail } from './SuppliersDetail';
@@ -19,7 +20,7 @@ import { SuppliersList } from './SuppliersList';
 import { FROM_LIST, cameFromList, fromListTab, supplierScreenOf, tabOfState } from './suppliersNav';
 import { messageText } from './suppliersMessages';
 import {
-  NEW_INGREDIENT_PATH, NEW_PACKAGING_PATH, NEW_SUPPLIER_PATH, SUPPLIERS_PATH, SUPPLIERS_SETTINGS_PATH,
+  NEW_INGREDIENT_PATH, NEW_PACKAGING_PATH, NEW_SUPPLIER_PATH, SUPPLIERS_IMPORT_PATH, SUPPLIERS_PATH, SUPPLIERS_SETTINGS_PATH,
   ingredientPath, parseSuppliersPath, supplierPath, tabOf, tabPath,
 } from './suppliersPath';
 import type { SuppliersTab } from './suppliersPath';
@@ -61,6 +62,7 @@ function SuppliersScreen() {
   const { pathname, search, state } = useLocation();
   const navigationType = useNavigationType();
   const { canManage } = useSession();
+  const mayImport = useMayImport();
   // The address as it is written, not React Router's «*»: a supplier id is split before it is decoded (suppliersPath.ts).
   const view = parseSuppliersPath(pathname.slice(SUPPLIERS_PATH.length), search);
 
@@ -75,8 +77,16 @@ function SuppliersScreen() {
   if (view.kind === 'settings' && !canManage) {
     return <Navigate to={SUPPLIERS_PATH} replace state={KEEP_FOCUS} />;
   }
+  // ⚠️ THE IMPORT IS FOR A PRICE WRITER OF AN ITALIAN VENUE (decision F3 (b)): anybody else who types the address is sent to the
+  // list, and nothing of the screen is drawn. The rules are the real guard; this is courtesy.
+  if (view.kind === 'import' && !mayImport) {
+    return <Navigate to={SUPPLIERS_PATH} replace state={KEEP_FOCUS} />;
+  }
   return <SuppliersLayout view={view} />;
 }
+
+// The screens that take the whole row at every size (the list is not drawn beside them).
+const isWide = (kind: ShownView['kind']): boolean => kind === 'settings' || kind === 'import';
 
 function SuppliersLayout({ view }: { view: ShownView }) {
   const { t } = useT();
@@ -152,6 +162,18 @@ function SuppliersLayout({ view }: { view: ShownView }) {
     }
   };
 
+  // «Import from invoices» opens the way Settings does: full width at every size, one level down.
+  const openImport = () => {
+    if (view.kind === 'import') return;
+    handBack.expect(IMPORT_OPENER);
+    listTop.current = scrollArea()?.scrollTop ?? null;
+    if (split && view.kind !== 'list') {
+      void navigate(SUPPLIERS_IMPORT_PATH, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
+    } else {
+      void navigate(SUPPLIERS_IMPORT_PATH, { state: FROM_LIST });
+    }
+  };
+
   const openSettings = () => {
     if (view.kind === 'settings') return;
     handBack.expect(SETTINGS_OPENER);
@@ -174,8 +196,8 @@ function SuppliersLayout({ view }: { view: ShownView }) {
   // Where the scroll area goes at every move inside the section. Before the hand-back below, so the place is back when the
   // row takes the focus: focusing a row that is in view scrolls nothing.
   //  - A tab is a new list: the top, whatever the width.
-  //  - On the split the list otherwise keeps its place (the right-hand side starts at its own top, below). Settings are the
-  //    exception: they take the whole row, so to and from them the split behaves as a phone does.
+  //  - On the split the list otherwise keeps its place (the right-hand side starts at its own top, below). Settings and the
+  //    import are the exception: they take the whole row, so to and from them the split behaves as a phone does.
   //  - On a phone, Back to the list restores the place written down when a supplier opened; any other move is a new screen
   //    and starts at the top.
   //  - The first render does nothing: the shell reset the area when the section was entered.
@@ -189,7 +211,7 @@ function SuppliersLayout({ view }: { view: ShownView }) {
     if (before.kind === 'list' && view.kind === 'list') {
       listTop.current = null;
       area.scrollTop = 0;
-    } else if (split && before.kind !== 'settings' && view.kind !== 'settings') {
+    } else if (split && !isWide(before.kind) && !isWide(view.kind)) {
       listTop.current = null;
     } else if (view.kind === 'list' && listTop.current !== null) {
       area.scrollTop = listTop.current;
@@ -217,7 +239,7 @@ function SuppliersLayout({ view }: { view: ShownView }) {
       <SupplierDeletionsProvider value={deletions}>
       <IngredientDeletionsProvider value={ingredientDeletions}>
       <Page title={t('sup.title')}>
-        <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : view.kind === 'settings' ? 'wide' : 'detail'}>
+        <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : isWide(view.kind) ? 'wide' : 'detail'}>
           <div className={styles.list}>
             <PartBoundary>
               <SuppliersList
@@ -231,6 +253,8 @@ function SuppliersLayout({ view }: { view: ShownView }) {
                 onNew={openNew}
                 settingsOpen={view.kind === 'settings'}
                 onOpenSettings={openSettings}
+                importOpen={view.kind === 'import'}
+                onOpenImport={openImport}
               />
             </PartBoundary>
           </div>

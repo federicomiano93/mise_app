@@ -22,6 +22,14 @@ describe('FormBar', () => {
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
+  it('draws Back off, and does nothing when pressed, while the caller says so', async () => {
+    const onBack = vi.fn();
+    render(<FormBar backLabel="Back" onBack={onBack} backDisabled title="Import" />);
+    expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Back' }));
+    expect(onBack).not.toHaveBeenCalled();
+  });
+
   it('puts what the caller says under the title', () => {
     render(<FormBar backLabel="Back" onBack={() => undefined} title="Records" sub={<p>Last 15 days</p>} />);
     expect(screen.getByText('Last 15 days')).toBeInTheDocument();

@@ -1,0 +1,273 @@
+/* «Import from invoices»: a card holding the form bar and the step, in the look of Settings. Full width at every size (the
+   section draws no list beside it).
+
+   ⚠️ NOTHING ON THE OUTER CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's scrolling area, and a
+   clipping ancestor would turn it into an ordinary row. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}
+
+/* The step's name. It takes the focus from script when a step opens; a tap does not need a ring around it. */
+.heading {
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+.heading:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+/* ⚠️ THE NATIVE FILE BOX IS 23px TALL AND SPEAKS THE BROWSER'S LANGUAGE: it stays, hidden but focusable (the global
+   `visually-hidden` recipe, positioned against .file), and a label dressed as a button opens it. The focus ring is drawn on
+   the label. */
+.file {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.fileButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--hit);
+  padding: 0 var(--s5);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 var(--fs-md)/1 var(--font);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fileInput:focus-visible + .fileButton {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.fileInput:disabled + .fileButton {
+  background: var(--sunken);
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.fileName {
+  min-width: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+/* The line a result or a refusal is said on: it takes the focus after a read. */
+.status {
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.status:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.ok {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.error {
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
+
+.empty {
+  color: var(--ink-2);
+}
+
+.hint {
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* What the invoices held that is not in this import: groups that stay closed until opened. */
+.groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.group {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.groupTitle {
+  display: flex;
+  align-items: center;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s4);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.groupTitle:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+  border-radius: var(--r-md);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.rowTop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.rowMain {
+  display: flex;
+  flex: 1 1 160px;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.meta {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.reason {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+/* A status is a WORD in a pill; the colour only repeats it (P18). */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  padding: var(--s1) var(--s3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.pill[data-tone="ok"] {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.pill[data-tone="warn"] {
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.pill[data-tone="error"] {
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
+
+.choice {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.choiceLabel {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.select {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+.select:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.tick {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  cursor: pointer;
+}
+
+.tick input {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  accent-color: var(--accent);
+}
+
+/* The suppliers of step 2 are one card of rows: the first row needs no line above it. */
+.suppliers > .row:first-child {
+  border-top: 0;
+}
