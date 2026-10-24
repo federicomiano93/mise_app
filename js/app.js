@@ -9,7 +9,7 @@ import { openRecipes, closeRecipes, goHomeFromRecipes, saveRecipes } from './rec
 import { openSettings } from './calculator-settings.js';
 import './log-settings.js';
 import { shareMarketOrder, closeLoafModal, sendWithLoaves, closeListPicker, closeWhoPicker } from './whatsapp.js';
-import { syncLinkedRecipes } from './calculator-catalogue-link.js';
+import { syncLinkedRecipes, effectiveRecipe } from './calculator-catalogue-link.js';
 import { getConfig, initConfig, canSyncConfig } from './calculator-config-store.js';
 import { initLogs } from './log-store.js';
 import { renderTab, buildRecipePanel, buildEmptyPanel, buildTabBar, el } from './calculator-render.js';
@@ -371,7 +371,7 @@ function renderAll() {
   const host = document.getElementById('recipe-tabs');
   if (host) {
     host.textContent = '';
-    recipes.forEach(r => host.appendChild(buildRecipePanel(r)));
+    recipes.forEach(r => host.appendChild(buildRecipePanel(r, effectiveRecipe(r))));
     if (emptyReason) host.appendChild(buildEmptyPanel(emptyReason, openRecipes));
   }
 
