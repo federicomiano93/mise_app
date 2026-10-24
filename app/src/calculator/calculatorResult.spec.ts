@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { getRecipeById, normalizeConfig } from '@mise/shared/calculator-config';
 import type { Recipe } from '@mise/shared/calculator-config';
-import { calculateTab, sourceRecipe, stillLoading } from './calculatorResult';
+import { calculateTab, showsKnob, sourceRecipe, stillLoading } from './calculatorResult';
 import type { TabNumbers } from './calculatorResult';
 import { BRIOCHE, CLIENTS, FOCACCIA, SOURDOUGH } from '../testing/renderCalculator';
 
@@ -149,5 +149,18 @@ describe('a recipe taken from the catalogue', () => {
     expect(rest.rows.map(row => row.grams)).toEqual([600, 400]);
     expect(less.rows[1]?.grams).toBeLessThan(400);
     expect(sum(less.rows)).toBe(1000);
+  });
+
+  // ⚠️ The current app's fix (PR #376): a Catalogue row that is gone scales pro-rata, so the tab draws no knob —
+  // one would move the % and change no gram. While the recipe is still arriving it is not «gone».
+  it('draws no knob when the catalogue\'s leavening row is gone, and one while it is there', () => {
+    const both = linked({ logic: 'both', leaveningRid: 'r-yeast', leaveningDefaultPct: 40, baselinePct: 40, showLeavening: true });
+    const there = sourceRecipe(both, { 'cat-1': doc(GOOD) });
+    expect(showsKnob(both, there.source, there.resolved)).toBe(true);
+    const gone = sourceRecipe(both, { 'cat-1': doc([GOOD[0]]) });
+    expect(showsKnob(both, gone.source, gone.resolved)).toBe(false);
+    const stale = linked({ logic: 'both', leaveningKey: 'old', leaveningDefaultPct: 40, showLeavening: true });
+    const leftover = sourceRecipe(stale, { 'cat-1': doc(GOOD) });
+    expect(showsKnob(stale, leftover.source, leftover.resolved), 'the tab\'s leftover own key is not a leavening').toBe(false);
   });
 });
