@@ -1,0 +1,275 @@
+/* The mixing steps editor: a card holding the form bar and the form, in the look of the recipe screen. On the split it is the
+   right-hand pane; below 1000px it replaces the list.
+
+   ⚠️ NOTHING ON THE SCREEN MAY CLIP (no `overflow`): the form bar sticks to the top of the scrolling area, and a clipping
+   ancestor would turn it into an ordinary row.
+
+   It has to hold at 296px: the body is padded less on a phone than on a tablet, the timer's four parts wrap rather than
+   push out of the card, and every name wraps anywhere. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s3) var(--s2) var(--s4);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}
+
+/* The summary of the procedure and the check over the rows. */
+.top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.check {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.summary,
+.hint,
+.ok,
+.warn,
+.endHead {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.summary,
+.endHead {
+  font-weight: 650;
+}
+
+.hint {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* Said in words as well as colour: the sentence is the signal, the tint only helps. */
+.ok,
+.warn {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.ok {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.warn {
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  min-width: 0;
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.stepName {
+  flex: 1 1 0;
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* The three small icon buttons of a step: move up, move down, remove. 48px targets, the icon centred on its box. */
+.icon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.icon:disabled {
+  color: var(--ink-3);
+  cursor: default;
+  opacity: 0.45;
+}
+
+.icon:focus-visible,
+.box:focus-visible,
+.tick:focus-visible,
+.textarea:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .icon:not(:disabled):hover {
+    background: var(--sunken);
+    color: var(--ink);
+  }
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.label {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+/* 16px type on purpose: under 16px iOS zooms the page in when a field is focused. */
+.box,
+.textarea {
+  min-width: 0;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+.box {
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+}
+
+.textarea {
+  width: 100%;
+  padding: var(--s3);
+  resize: vertical;
+}
+
+/* The tick boxes: one row each, the whole row is the target (48px) and the name takes what the amount leaves. */
+.picks {
+  display: flex;
+  flex-direction: column;
+}
+
+.pick {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: 0 var(--s1);
+  border-radius: var(--r-md);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .pick:hover {
+    background: var(--sunken);
+  }
+}
+
+.tick {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.pickName {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pickAmount {
+  flex: none;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Minutes and seconds: two boxes with their unit words, wrapping on the narrowest phone. */
+.time {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* ⚠️ 64 px, not more: at 296 px the row is 220 px wide, and the two boxes with «min» and «sec» must stay on ONE line
+   (measured: at 72 px «sec» wrapped alone under the boxes). Three digits (720 minutes) still fit. */
+.time .num {
+  flex: none;
+  width: 64px;
+}
+
+.unit {
+  flex: none;
+  margin-right: var(--s2);
+  color: var(--ink-2);
+}
+
+.unit:last-child {
+  margin-right: 0;
+}
+
+.add {
+  align-self: flex-start;
+}
+
+.end {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
