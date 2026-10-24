@@ -36,6 +36,15 @@ let onError = null;
 let confirmed = new Set();
 let unsubConfirmed = null;
 
+// Whether tonight's confirmations have answered at least ONCE since the page
+// opened (a snapshot, or the question failing). Until then an empty `confirmed`
+// only means «nobody has said yet», so a recorded day would open without the
+// «Edit?» question. Deliberately never reset by the 4am refresh: that would
+// close the box somebody is typing into at the one minute of the day they are
+// most likely to be using it, and a refresh that has not answered yet locks
+// nothing — exactly the failure direction chosen below.
+let confirmationsAnswered = false;
+
 export function getLogs() {
   return logs;
 }
@@ -98,6 +107,11 @@ export function isConfirmedTonight(day) {
   return confirmed.has(day);
 }
 
+// Whether the confirmations have answered once (see confirmationsAnswered above).
+export function confirmationsReady() {
+  return confirmationsAnswered;
+}
+
 // Subscribe to tonight's confirmations. Called at boot AND again when the work
 // date rolls at 4am, so it always asks about the night actually under way — the
 // previous subscription is dropped first, or the screen would keep answering
@@ -131,8 +145,18 @@ export async function watchConfirmations(workDate, onChange) {
   try {
     const unsub = await watchPastryLogsForDate(
       workDate,
-      docs => { if (mine === confirmationsSeq) { confirmed = confirmedDaysFrom(docs); if (paint) paint(); } },
-      () => { if (mine === confirmationsSeq) { confirmed = new Set(); if (paint) paint(); } },
+      docs => {
+        if (mine !== confirmationsSeq) return;
+        confirmed = confirmedDaysFrom(docs);
+        confirmationsAnswered = true;
+        if (paint) paint();
+      },
+      () => {
+        if (mine !== confirmationsSeq) return;
+        confirmed = new Set();
+        confirmationsAnswered = true;
+        if (paint) paint();
+      },
     );
     if (mine !== confirmationsSeq) {
       try { unsub(); } catch (e) { /* already gone */ }
@@ -144,6 +168,7 @@ export async function watchConfirmations(workDate, onChange) {
     // An older call that failed must not empty a newer call's set.
     if (mine !== confirmationsSeq) return;
     confirmed = new Set();
+    confirmationsAnswered = true;
     if (paint) paint();
   }
 }
