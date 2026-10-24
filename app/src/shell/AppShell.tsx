@@ -13,8 +13,12 @@ import { MORE, moreIsCurrent, screenNameFor, sectionById, titleKeyFor } from './
 import type { Section } from './sections';
 import { useOnline } from './useOnline';
 import { useToday } from './useToday';
+import { ScrollAreaContext, useScrollAreaState } from './scrollArea';
 import { useVisibleSections } from './useVisibleSections';
 import styles from './AppShell.module.css';
+
+// The section an address belongs to: its first segment («stocktake» for /stocktake/2026-10).
+const sectionOf = (pathname: string): string => pathname.split('/')[1] ?? '';
 
 // The frame around every screen: a rail on a tablet, a tab bar on a phone, a top bar on a
 // tablet, and the section itself in the middle.
@@ -28,12 +32,22 @@ export function AppShell() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const contentRef = useRef<HTMLElement>(null);
+  const { area, isOwned } = useScrollAreaState(contentRef);
+  const lastPathname = useRef<string | null>(null);
 
   // One scroll area serves every section, so without this a long Orders list scrolled to the
   // bottom would open Recipes halfway down.
+  //
+  // ⚠️ EXCEPT INSIDE A SECTION THAT OWNS THE SCROLL (scrollArea.tsx): its list and its detail are
+  // separate addresses, and resetting at every one would lose the place in the list. The shell then
+  // resets only when the SECTION changes — leaving an owner for another section resets as ever —
+  // and the owner handles every move within itself.
   useEffect(() => {
+    const before = lastPathname.current;
+    lastPathname.current = pathname;
+    if (before !== null && isOwned() && sectionOf(before) === sectionOf(pathname)) return;
     if (contentRef.current) contentRef.current.scrollTop = 0;
-  }, [pathname]);
+  }, [pathname, isOwned]);
 
   // Tells the usage record and the error report which screen this is (telemetry/usage.ts). On
   // every move, but not for `/`: that redirects at once and the section it lands on announces
@@ -58,8 +72,10 @@ export function AppShell() {
             {/* Keyed on the section, so moving to another one clears a failure. A section that
                 fails never got to print its own title, so the shell names it from the address:
                 the fallback then has an h1 and the tab title of the screen it replaces. */}
-            <PartBoundary resetKey={pathname.split('/')[1] ?? ''} title={t(titleKeyFor(pathname))}>
-              <Outlet />
+            <PartBoundary resetKey={sectionOf(pathname)} title={t(titleKeyFor(pathname))}>
+              <ScrollAreaContext.Provider value={area}>
+                <Outlet />
+              </ScrollAreaContext.Provider>
             </PartBoundary>
           </main>
         </div>
