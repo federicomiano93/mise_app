@@ -138,8 +138,18 @@ function readZip(bytes: Uint8Array, limits: ReadLimits, skipped: SkippedFile[]):
 
   let files: Record<string, Uint8Array>;
   try {
-    // Pass 2: inflate only what was accepted.
-    files = unzipSync(bytes, { filter: (file) => wanted.has(file.name) });
+    // Pass 2: inflate only what was accepted. ⚠️ NOT IN THE ORIGINAL (review of 25 Oct 2026): the size is judged AGAIN, entry by
+    // entry, with a running total. Pass 1 accepts a NAME, and an archive may hold two entries of that name: a small one makes the
+    // name wanted, a huge one beside it would be inflated too (fflate allocates what the entry declares), past every limit.
+    let inflating = 0;
+    files = unzipSync(bytes, {
+      filter: (file) => {
+        if (!wanted.has(file.name) || file.originalSize > limits.maxXmlBytes) return false;
+        if (inflating + file.originalSize > limits.maxArchiveBytes) return false;
+        inflating += file.originalSize;
+        return true;
+      },
+    });
   } catch {
     return { refused: SKIPPED.ZIP_UNREADABLE };
   }

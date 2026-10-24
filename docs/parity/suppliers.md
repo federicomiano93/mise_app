@@ -679,6 +679,20 @@ and says «Importing n of total…» through the live region as well as the bar;
 overlay; the check's live line is also spoken while the heading shows it; the quiet pill (history only / unchanged / skipped) is a neutral grey, the
 original's «quiet» tone.
 
+**Fixed after the review of all of 3e-6 (25 Oct 2026) — the current app still has the first two:**
+- ⚠️ **Two zip entries with ONE name** (`zipRead.ts`, pass 2): a small entry made the name «wanted» and a huge twin of that name was inflated too, past
+  every size limit (a 5 KB archive gave a 5 MB entry against a 1 KB limit; a real attack could freeze the lab tablet's 32-bit Chrome). Pass 2 now
+  judges each entry by its own declared size with a running total. `js/orders/invoice-zip/zip-read.js` has the same hole.
+- ⚠️ **A write that timed out is still queued** (`importSource.ts`): Firestore keeps it in its persistent queue and sends it later, even after a
+  reload, so «load the same file again» on a weak connection could read a server without the earlier supplier or ingredient and create it twice.
+  The two reads that decide «new or already there» (`freshSuppliers`, `freshIngredientsForSupplier`) first wait for this phone's queue
+  (`waitForPendingWrites`), inside the same 30 s bound. The current app (memory cache, but the same give-up-and-retry) has the same race.
+- The path guard accepts a four-segment write only under `ingredients/<id>/prices/` (defence in depth; no plan op makes another).
+- The file picker is emptied after each choice, so the same file chosen again (after a read that failed offline) starts a read.
+- `aria-busy` sits on the step, not on the section that holds the live region, so «Importing n of N…» is not held back by a screen reader.
+- Left as it is: if the person's role or the Food cost switch changes WHILE rows are written, the section replaces the import screen with the list;
+  the run goes on without a summary (the rules stop the price writes). Rare; noted for step 4 (real-data trial).
+
 ## Findings — things found while reading, not decided
 
 ### Findings — The page, the lists, suppliers

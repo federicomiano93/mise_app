@@ -29,6 +29,7 @@ function fakeKit() {
       const data = docs[ref.path] ?? null;
       return { exists: () => data !== null, data: () => data };
     }),
+    waitForPendingWrites: vi.fn(async (_db: unknown) => {}),
     getDocs: vi.fn(),
     getDoc: vi.fn(),
     setDoc: vi.fn(async (_ref: Ref, _data: Record<string, unknown>, _options?: unknown) => {}),
@@ -90,6 +91,26 @@ describe('suppliers', () => {
     expect(await source.freshSuppliers()).toEqual([{ id: 's1', name: 'Molino' }]);
     expect(fs.getDocsFromServer).toHaveBeenCalledTimes(1);
     expect(fs.getDocs).not.toHaveBeenCalled();
+  });
+
+  test('⚠️ the fresh suppliers wait for this phone’s queued writes before they ask the server (a timed-out write is still queued)', async () => {
+    const { fs, source } = make();
+    const order: string[] = [];
+    fs.waitForPendingWrites.mockImplementationOnce(async () => { order.push('drained'); });
+    fs.getDocsFromServer.mockImplementationOnce(async () => { order.push('read'); return { docs: [] }; });
+    await source.freshSuppliers();
+    expect(order).toEqual(['drained', 'read']);
+  });
+
+  test('a queue that never drains is a stop after the timeout, never a read of a server that lacks the queued write', async () => {
+    vi.useFakeTimers();
+    const { fs, source } = make();
+    fs.waitForPendingWrites.mockImplementationOnce(() => new Promise<void>(() => {}));
+    const read = source.freshIngredientsForSupplier('s1');
+    const caught = read.catch((error: unknown) => error);
+    await vi.advanceTimersByTimeAsync(IMPORT_COMMIT_TIMEOUT_MS);
+    expect(await caught).toMatchObject({ code: 'timeout' });
+    expect(fs.getDocsFromServer).not.toHaveBeenCalled();
   });
 
   test('an id that could name another path never reaches Firestore', async () => {

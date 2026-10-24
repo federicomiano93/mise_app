@@ -158,7 +158,8 @@ export function createFirestoreImportSource(
     const [folder, ...rest] = path;
     if (!folder || !WRITABLE.has(folder)) throw new Error(`The import may not write to ${JSON.stringify(folder)}`);
     if (rest.length === 0) throw new Error('A planned write names no document');
-    if (rest.length === 3 && rest[1] !== PRICES) throw new Error(`The import may not write to ${JSON.stringify(path.join('/'))}`);
+    // A price point is the one write four segments deep, and only under an ingredient (review of 25 Oct 2026).
+    if (rest.length === 3 && (folder !== INGREDIENTS || rest[1] !== PRICES)) throw new Error(`The import may not write to ${JSON.stringify(path.join('/'))}`);
     if (rest.length !== 1 && rest.length !== 3) throw new Error(`Not a document path: ${JSON.stringify(path.join('/'))}`);
     return kit.fs.doc(kit.db, pathOf(folder), ...rest.map(checkId));
   }
@@ -174,14 +175,23 @@ export function createFirestoreImportSource(
       await fs.setDoc(fs.doc(db, pathOf(SUPPLIERS), checkId(supplierId)), supplierData({ vatNumber }), { merge: true });
     }),
 
-    freshSuppliers: () => guarded(async ({ fs, db }) =>
-      docsOf(await fs.getDocsFromServer(fs.collection(db, pathOf(SUPPLIERS)) as Query))),
+    // ⚠️ THE TWO READS THAT DECIDE «NEW OR ALREADY THERE» WAIT FOR THIS PHONE'S QUEUE FIRST (review of 25 Oct 2026; NOT IN THE
+    // ORIGINAL, which has the same hole). A write that timed out was only given up on here: the SDK keeps it in its persistent
+    // queue and sends it later, even after a reload. Without the wait, «load the same file again» on a weak connection reads a
+    // server that has not got the earlier supplier or ingredient yet, and creates it a second time. `waitForPendingWrites`
+    // answers at once when nothing is queued; inside the same 30 s bound, a queue that cannot drain is «no connection».
+    freshSuppliers: () => guarded(async ({ fs, db }) => {
+      await fs.waitForPendingWrites(db);
+      return docsOf(await fs.getDocsFromServer(fs.collection(db, pathOf(SUPPLIERS)) as Query));
+    }),
 
-    freshIngredientsForSupplier: supplierId => guarded(async ({ fs, db }) =>
-      docsOf(await fs.getDocsFromServer(fs.query(
+    freshIngredientsForSupplier: supplierId => guarded(async ({ fs, db }) => {
+      await fs.waitForPendingWrites(db);
+      return docsOf(await fs.getDocsFromServer(fs.query(
         fs.collection(db, pathOf(INGREDIENTS)),
         fs.where('supplierId', '==', String(supplierId)),
-      )))),
+      )));
+    }),
 
     invoicePoints: ingredientId => guarded(async ({ fs, db }) => {
       const snap = await fs.getDocsFromServer(fs.query(

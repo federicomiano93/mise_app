@@ -43,7 +43,7 @@ export function FileStep({
     <>
       <h3 ref={headingRef} tabIndex={-1} className={styles.heading}>{t('sup.imp.step.file')}</h3>
       <p className={styles.note}>{t('sup.imp.file.explain')}</p>
-      {/* ONE input for the life of the screen: it is never drawn again, so it never forgets the file it holds. The zip is the
+      {/* ONE input for the life of the screen: it is never drawn again (its value is emptied after each choice, so the same file can be chosen twice). The zip is the
           only file the screen speaks of (decision F6): a loose .xml or .p7m is read by the same reader, a .json is not offered. */}
       <div className={styles.file}>
         <input
@@ -56,7 +56,13 @@ export function FileStep({
           // one's state. It comes back on every way out of the read.
           disabled={reading}
           aria-busy={reading ? true : undefined}
-          onChange={event => { onFiles(Array.from(event.target.files ?? [])); }}
+          onChange={event => {
+            const files = Array.from(event.target.files ?? []);
+            // The same file chosen again (after a read that failed offline, say) must start a read too: a browser fires no
+            // change for an input that already holds it (review of 25 Oct 2026). The name stays on screen from the state.
+            event.target.value = '';
+            onFiles(files);
+          }}
         />
         <label htmlFor={inputId} className={styles.fileButton} aria-disabled={reading ? true : undefined}>{t('sup.imp.file.label')}</label>
         {fileName ? <p className={styles.fileName}>{t('sup.imp.file.chosen', { name: fileName })}</p> : null}

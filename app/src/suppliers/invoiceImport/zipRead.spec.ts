@@ -126,3 +126,41 @@ describe('the port only: a ZIP64 locator', () => {
     expect(read.skipped).toStrictEqual([{ name: 'forged.zip', reason: 'zip-unreadable', detail: '' }]);
   });
 });
+
+// ⚠️ NOT IN THE ORIGINAL (review of 25 Oct 2026): two entries with ONE name, a small one and a huge one. Pass 1 accepts the name
+// for the small one; pass 2 used to inflate every entry of that name, the huge one too, past every size limit. The current app's
+// js/orders/invoice-zip/zip-read.js still does, so this runs against the port only.
+describe('the port: an entry is judged by its own size in pass 2, not by its name', () => {
+  // One archive holding both entries under the same name, put together by hand (fflate's zipSync keys by name).
+  const twoOfOneName = (smallBytes: number, bigBytes: number): Uint8Array => {
+    const parts = (zip: Uint8Array) => {
+      const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+      let end = zip.length - 22;
+      while (view.getUint32(end, true) !== 0x06054b50) end -= 1;
+      const cdOffset = view.getUint32(end + 16, true);
+      const cdSize = view.getUint32(end + 12, true);
+      return { local: zip.subarray(0, cdOffset), cd: zip.slice(cdOffset, cdOffset + cdSize) };
+    };
+    const a = parts(zipSync({ 'a.xml': new Uint8Array(smallBytes) }));
+    const b = parts(zipSync({ 'a.xml': new Uint8Array(bigBytes) }, { level: 9 }));
+    new DataView(b.cd.buffer).setUint32(42, a.local.length, true);
+    const cd = new Uint8Array([...a.cd, ...b.cd]);
+    const eocd = new Uint8Array(22);
+    const view = new DataView(eocd.buffer);
+    view.setUint32(0, 0x06054b50, true);
+    view.setUint16(8, 2, true);
+    view.setUint16(10, 2, true);
+    view.setUint32(12, cd.length, true);
+    view.setUint32(16, a.local.length + b.local.length, true);
+    return new Uint8Array([...a.local, ...b.local, ...cd, ...eocd]);
+  };
+
+  test('the huge twin is never inflated: only the entry within the limit is read', () => {
+    const read = ported.zipRead.readInvoiceArchives([{ name: 'twins.zip', bytes: twoOfOneName(10, 5_000_000) }], {
+      limits: { maxXmlBytes: 1000 },
+    });
+    const entries = (read.containers[0] as { entries: Record<string, Uint8Array> }).entries;
+    expect(Object.keys(entries)).toStrictEqual(['a.xml']);
+    expect((entries['a.xml'] as Uint8Array).length).toBe(10);
+  });
+});

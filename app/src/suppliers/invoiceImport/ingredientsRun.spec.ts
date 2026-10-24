@@ -233,12 +233,15 @@ describe('rows already in Mise', () => {
     importing.failWith('invoicePoints', 'unavailable', 1);
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const { planned, entries } = await plan(importing, FILE(), NO_ANSWERS, [STORED()]);
-    // The plan was made with the points known; the run finds them in the context and reads nothing more.
+    // ⚠️ The context forgets the points (review of 25 Oct 2026: with them known the run read nothing, and the catch this test is
+    // named after was never reached), so the quiet pass must read them again — and that read fails.
+    const reads = importing.countOf('invoicePoints');
     const outcome = await runIngredientImport({
-      source: importing, entries, ctx: planned.ctx, file: FILE(), supplierIdByKey: IDS, answers: NO_ANSWERS,
+      source: importing, entries, ctx: { ...planned.ctx, invoicePointIds: {} }, file: FILE(), supplierIdByKey: IDS, answers: NO_ANSWERS,
       decisionChanges: { set: [], remove: [] }, language: 'en', ingredientsNow: () => [STORED()], words: WORDS, onProgress: () => undefined,
     });
-    expect(outcome.summary).toMatchObject({ unchanged: 1, stopped: null });
+    expect(importing.countOf('invoicePoints')).toBe(reads + 1);
+    expect(outcome.summary).toMatchObject({ unchanged: 1, stopped: null, changesFailed: 1 });
     expect(outcome.summary.failed).toEqual([]);
   });
 });

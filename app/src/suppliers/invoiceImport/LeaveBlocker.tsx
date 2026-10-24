@@ -39,8 +39,9 @@ export function LeaveBlocker({ shouldBlock, ask, asking }: {
         if (leave) current.proceed();
         else current.reset();
       } catch (error) {
+        // Inside a fire-and-forget task a rethrow would be an unhandled rejection: say it, and let the next move ask again.
         asking.current = false;
-        throw error;
+        console.error('The leave question failed:', error);
       }
     })();
   });

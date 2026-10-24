@@ -19,6 +19,13 @@
   padding: var(--s4);
 }
 
+/* The step itself, inside the body: it carries aria-busy, so the live region beside it is never inside a busy region. */
+.step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
 @media (min-width: 1000px) {
   .body {
     padding: var(--s6);

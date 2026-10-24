@@ -322,7 +322,11 @@ describe('⚠️ while the suppliers are being written', () => {
     expect(screen.getByRole('combobox', { name: 'What should happen?' })).toBeDisabled();
     expect(primary('Save 1 supplier')).toBeDisabled();
     expect(screen.getByText('Saving suppliers…', { selector: 'p' })).toBeInTheDocument();
-    expect(screen.getByRole('region', { name: 'Import from invoices' })).toHaveAttribute('aria-busy', 'true');
+    // The STEP is busy; the live region that says «Saving suppliers…» is outside it, so a screen reader still says it.
+    const region = screen.getByRole('region', { name: 'Import from invoices' });
+    expect(region).not.toHaveAttribute('aria-busy');
+    expect(screen.getByRole('heading', { level: 3, name: 'Suppliers' }).closest('[aria-busy="true"]')).not.toBeNull();
+    expect(within(region).getAllByRole('status').every(node => node.closest('[aria-busy="true"]') === null)).toBe(true);
 
     release();
     await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);

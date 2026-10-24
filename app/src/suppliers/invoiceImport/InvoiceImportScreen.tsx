@@ -665,7 +665,9 @@ export default function InvoiceImportScreen() {
   }
 
   return (
-    <section className={styles.screen} aria-labelledby={titleId} aria-busy={busy ? true : undefined}>
+    // ⚠️ aria-busy sits on the STEP, never on the section that holds the live region: some screen readers hold back what a busy
+    // region says, and «Importing n of N…» is said exactly while the screen is busy (review of 25 Oct 2026).
+    <section className={styles.screen} aria-labelledby={titleId}>
       <FormBar
         backLabel={t('ui.back')}
         onBack={() => { void back(); }}
@@ -677,6 +679,7 @@ export default function InvoiceImportScreen() {
         action={action}
       />
       <div className={styles.body}>
+        <div className={styles.step} aria-busy={busy ? true : undefined}>
         {step === 'file' ? (
           <FileStep
             headingRef={heading}
@@ -740,6 +743,7 @@ export default function InvoiceImportScreen() {
         {step === 'summary' && outcome ? (
           <SummaryStep headingRef={heading} summary={outcome.summary} decisionsWritten={outcome.decisionsWritten} decisionsFailed={outcome.decisionsFailed} />
         ) : null}
+        </div>
         {/* Present, empty, before it speaks: a live region inserted already filled is announced unreliably. */}
         <div role="status" className="visually-hidden">{live}</div>
       </div>
