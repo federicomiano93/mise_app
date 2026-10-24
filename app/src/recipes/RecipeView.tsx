@@ -67,11 +67,11 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
 // the way in for a keyboard and a screen reader (the list itself stays readable as a table, which a
 // list made into one big button would not be).
 function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: number | null }) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const headingId = useId();
   const opener = useRef<HTMLButtonElement>(null);
   const [fullScreen, setFullScreen] = useState(false);
-  const { rows, total } = recipeAmounts(recipe, target, t);
+  const { rows, total } = recipeAmounts(recipe, target, t, locale);
 
   // ⚠️ THE FOCUS GOES BACK ONLY ONCE THE DIALOG IS CLOSED. While a modal <dialog> is open everything
   // outside it is inert and focus() on the opener does nothing; the dialog closes itself first

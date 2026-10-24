@@ -160,6 +160,14 @@ describe('the leavening', () => {
     expect(leaveningValue(linked, false)).toBe('yeast');
     expect(leaveningValue({ ...FOCACCIA, leaveningKey: null }, false)).toBe('');
   });
+
+  it('a linked pick restarts the baseline at the starting %, an own pick keeps it', () => {
+    const rows = [{ key: 'rabc', label: 'Starter', grams: 100 }];
+    const linked = { ...FOCACCIA, catalogueId: 'cat-1', leaveningDefaultPct: 0.8, baselinePct: 0.65 };
+    expect(chooseLeavening(linked, 'rabc', rows)).toMatchObject({ leaveningDefaultPct: 0.8, baselinePct: 0.8 });
+    const own = { ...FOCACCIA, leaveningDefaultPct: 2.5, baselinePct: 3 };
+    expect(chooseLeavening(own, 'flour', null)).toMatchObject({ leaveningDefaultPct: 2.5, baselinePct: 3 });
+  });
 });
 
 describe('the link to the Catalogue', () => {

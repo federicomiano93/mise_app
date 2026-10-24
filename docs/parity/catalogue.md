@@ -213,9 +213,10 @@ millimetres and the ZPL characters (items 62–80 and «What proves byte-identit
     Calculator» with its one-line hint, and the low-key Delete (`canManage` only). Every block is a card with a
     static heading — **never a fold for an ANSWER** (an answer behind a tap is an answer nobody reads).
 34. **The ingredient list** shows each row's label and `number + unit` in two aligned columns (numbers
-    right-aligned), whole numbers (`Intl.NumberFormat('en-GB', {maximumFractionDigits:0, useGrouping:false})`
-    whatever the language — Findings F), «to taste» rows with no number, and a **Total** of the weighable rows in
-    grams. The batch card is **hidden when nothing is weighable** (all pieces / to-taste).
+    right-aligned), no thousands separator whatever the language (Findings F); whole numbers except kg and l (3
+    decimals), dl (2) and cl (1) — one gram or millilitre — written with the language's decimal mark («1,846 kg»;
+    `roundInUnit` + `amountNumber`, the current app's PR #361, 14 Oct 2026); «to taste» rows with no number, and a
+    **Total** of the weighable rows in whole grams. The batch card is **hidden when nothing is weighable** (all pieces / to-taste).
 35. **Full screen** (`cat-ing-list--zoom`): a tap or Enter/Space on the list toggles a CSS overlay (not the
     Fullscreen API — iOS refuses it); × and Escape close it; the page behind is locked (`cat-zoom-lock`); a −/+
     pair steps the text through six sizes (`ZOOM_SCALES = 0.8, 1, 1.2, 1.45, 1.75, 2.1`, default step 1) kept in
