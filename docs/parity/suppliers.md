@@ -694,6 +694,12 @@ F6 (b).**
 - **T5. fflate** becomes a runtime dependency of `app/` at ONE exact version: 0.8.3 if the end-of-directory and limit
   specs (I38, I39) pass on it, otherwise 0.8.2 for both uses. `zip-read` stays app code; everything else of the reader
   is a `shared/` port.
+  **T5 as built (3e-6 A, review of 24 Oct 2026): fflate is pinned at 0.8.2**, the vendored version — 0.8.3 passed every
+  end-of-directory spec but switches to the ZIP64 record on the ZIP64 LOCATOR alone and loops on its 64-bit count (a 190-byte
+  forged zip made it walk millions of entries). The port adds two guards the original lacks: a ZIP64 locator in front of the
+  end record is a ZIP64 marker (unreadable), and the first pass stops walking once it has listed more entries than the limit
+  (`zipRead.spec.ts` «the port only», `zipRead.walk.spec.ts`). The keyword check (T6) also compares the current app's
+  classify.js text, refuses a Python piece it cannot read, and requires the flags to be re.I alone.
 - **T6. The keyword lists shared with Python** (I58, I59, Finding I-A) get a spec that reads `invoice-import/classify.py`
   and compares its word lists with the TypeScript port's, so a change to one without the other fails CI. The Python
   stays in the repo untouched as the fallback; the workbook/export half is not ported.

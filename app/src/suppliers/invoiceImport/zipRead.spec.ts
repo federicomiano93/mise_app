@@ -11,7 +11,7 @@
 
 import { describe, expect, test } from 'vitest';
 import { strToU8, zipSync } from 'fflate';
-import { implementations } from './testing/implementations';
+import { implementations, ported } from './testing/implementations';
 
 describe.each(implementations)('%s', (_name, impl) => {
   const { declaredEntryCount, readInvoiceArchives } = impl.zipRead;
@@ -38,6 +38,12 @@ describe.each(implementations)('%s', (_name, impl) => {
     const skipped = read.skipped[0] as { reason: string; detail: string };
     return [skipped.reason, skipped.detail];
   };
+
+  test('the limits themselves (review of 24 Oct 2026: nothing else pins them)', () => {
+    expect(impl.zipRead.MAX_ARCHIVE_ENTRIES).toBe(5000);
+    expect(impl.zipRead.MAX_ARCHIVE_BYTES).toBe(300_000_000);
+    expect(impl.fatturapa.MAX_XML_BYTES).toBe(30_000_000);
+  });
 
   test('5 · the entry count is read from the End Of Central Directory record', () => {
     expect(declaredEntryCount(zipOfEntries(3))).toBe(3);
@@ -90,5 +96,33 @@ describe.each(implementations)('%s', (_name, impl) => {
     new DataView(withComment.buffer).setUint16(real.length - 2, comment, true);
     expect(declaredEntryCount(withComment)).toBe(1);
     expect(Object.keys((readInvoiceArchives([{ name: 'a.zip', bytes: withComment }]).containers[0] as { entries: object }).entries).length).toBe(1);
+  });
+});
+
+// ⚠️ ONE GUARD THE ORIGINAL DOES NOT HAVE (review of 24 Oct 2026, the header of zipRead.ts): a ZIP64 LOCATOR in front of the
+// end record. fflate 0.8.3 switches to the ZIP64 record on that locator alone and loops on its 64-bit count (a 190-byte forged
+// zip made it walk millions of entries); 0.8.2, pinned now, does not — but the guard must not depend on the version. The js
+// original (0.8.2, no such check) reads this archive as its one honest entry, so this test runs on the port only.
+describe('the port only: a ZIP64 locator', () => {
+  const { declaredEntryCount, readInvoiceArchives } = ported.zipRead;
+
+  // A real one-entry zip with a 20-byte ZIP64 end-of-directory locator inserted in front of its end record.
+  const withLocator = (): Uint8Array => {
+    const real = zipSync({ 'a.xml': strToU8('<x/>') });
+    const eocd = real.length - 22;
+    const out = new Uint8Array(real.length + 20);
+    out.set(real.subarray(0, eocd), 0);
+    const view = new DataView(out.buffer);
+    view.setUint32(eocd, 0x07064b50, true);
+    out.set(real.subarray(eocd), eocd + 20);
+    return out;
+  };
+
+  test('is a ZIP64 marker: «zip unreadable», nothing walked', () => {
+    const bytes = withLocator();
+    expect(declaredEntryCount(bytes)).toBe(Infinity);
+    const read = readInvoiceArchives([{ name: 'forged.zip', bytes }]);
+    expect(read.containers).toStrictEqual([]);
+    expect(read.skipped).toStrictEqual([{ name: 'forged.zip', reason: 'zip-unreadable', detail: '' }]);
   });
 });

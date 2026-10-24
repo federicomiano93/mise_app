@@ -19,6 +19,7 @@ import {
 import type { LineSpec } from '@mise/shared/invoice-zip/testing/invoice-builders';
 import { parseXmlTree } from '@mise/shared/invoice-zip/testing/xml-tree';
 import type { ImportResult } from '@mise/shared/invoice-zip/build-import';
+import * as sharedBuild from '@mise/shared/invoice-zip/build-import';
 import { implementations, legacyImportModel, makeZipCase } from './testing/implementations';
 
 const FLOUR: LineSpec = { desc: 'FARINA TIPO 00 SACCO KG 25', code: 'F00-25', qty: 25, unit: 'KG', total: 14.25 };
@@ -414,5 +415,21 @@ describe.each(implementations)('%s', (_name, impl) => {
     const read = c.read();
     expect(read.skipped.map((s) => [s.name, s.reason])).toStrictEqual([
       ['bad.zip', 'zip-unreadable'], ['empty.zip', 'zip-unreadable']]);
+  });
+});
+
+// build-import.ts is a PARTIAL port, so parity.spec.ts does not compare its exports: its constants are pinned here against the
+// current app's (review of 24 Oct 2026).
+describe('the build-import constants are the current app\'s', () => {
+  const legacy = Object.values(import.meta.glob('../../../../js/orders/invoice-zip/build-import.js', { eager: true }))[0] as Record<string, unknown>;
+
+  test.each(['IMPORT_FORMAT', 'IMPORT_VERSION', 'IMPORTED_TYPE', 'NOT_IMPORTED_REASON', 'NO_SDI_REASON'] as const)('%s', (name) => {
+    expect(legacy, 'the original was found').toBeTruthy();
+    expect(sharedBuild[name]).toStrictEqual(legacy[name]);
+  });
+
+  test('the import file format and version', () => {
+    expect(sharedBuild.IMPORT_FORMAT).toBe('mise-invoice-import');
+    expect(sharedBuild.IMPORT_VERSION).toBe(1);
   });
 });

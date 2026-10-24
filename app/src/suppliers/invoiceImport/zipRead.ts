@@ -7,9 +7,18 @@
 // Pure: no DOM, no Firebase, no globals.
 //
 // FULL port of js/orders/invoice-zip/zip-read.js, kept in app/ (not in shared/) because it needs fflate, and shared/
-// has no runtime dependency (decision T5). Same exported names, same behaviour input for input; typing only differs.
-// ⚠️ `declaredEntryCount` is a SECURITY GUARD, and it is the original's logic byte for byte: change it only together
-// with the original and with the tests that forge archives (zipRead.spec.ts).
+// has no runtime dependency (decision T5). Same exported names, same behaviour input for input on every real archive;
+// typing only differs — EXCEPT two guards the original does not have (review of 24 Oct 2026, below).
+// ⚠️ `declaredEntryCount` is a SECURITY GUARD: change it only with the tests that forge archives (zipRead.spec.ts,
+// zipRead.walk.spec.ts).
+//
+// ⚠️ fflate IS PINNED AT 0.8.2, THE VERSION THE CURRENT APP VENDORS (js/vendor/fflate.esm.js), NOT 0.8.3 (decision T5 said
+// «0.8.3 if the end-of-directory specs pass»; they passed, but could not see this): 0.8.3 switches to the ZIP64 record whenever
+// the four bytes 20 before the end record are the ZIP64 LOCATOR signature, and then loops on a 64-bit count from that record —
+// up to 4,294,967,295 — walking past the end of the buffer without throwing. A forged zip of 190 bytes declaring one entry made
+// it walk millions (reproduced in review): the tablet's tab freezes or runs out of memory. So, on top of the pin, two guards that
+// do not depend on the version: `declaredEntryCount` treats a ZIP64 locator as ZIP64 (unreadable — an invoice zip never needs
+// it), and the first pass STOPS the walk as soon as it has listed more entries than the limit, whatever the record declared.
 
 import { unzipSync } from 'fflate';
 import { MAX_XML_BYTES, redactFileName } from '@mise/shared/invoice-zip/fatturapa';
@@ -42,6 +51,9 @@ const byLowerName = (a: PickedFile, b: PickedFile): number => {
 };
 
 const EOCD_SIGNATURE = 0x06054b50;
+// The ZIP64 end-of-directory LOCATOR sits 20 bytes before the end record when an archive uses ZIP64.
+const ZIP64_LOCATOR_SIGNATURE = 0x07064b50;
+const ZIP64_LOCATOR_BYTES = 20;
 const EOCD_MIN_BYTES = 22;
 // fflate's own search window: it examines every position until the end is 65559 bytes away.
 const EOCD_SEARCH_WINDOW = 65559;
@@ -52,6 +64,7 @@ const EOCD_SEARCH_WINDOW = 65559;
 // 0xFFFFFFFF. So: the record is searched in the same window fflate uses (it tries every position down to 65559 bytes
 // from the end); the LARGER of the two counts is returned; and a ZIP64 marker returns Infinity — an invoice zip never
 // needs ZIP64, so readZip refuses it as unreadable. null when no record is found: fflate then refuses the archive as unreadable.
+// ⚠️ NOT IN THE ORIGINAL: a ZIP64 LOCATOR in front of the record is a ZIP64 marker too (the header says why).
 export function declaredEntryCount(bytes?: Uint8Array | null): number | null {
   if (!bytes || bytes.length < EOCD_MIN_BYTES) return null;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -61,12 +74,16 @@ export function declaredEntryCount(bytes?: Uint8Array | null): number | null {
     const onDisk = view.getUint16(at + 8, true);
     const total = view.getUint16(at + 10, true);
     if (onDisk === 0xffff || total === 0xffff || view.getUint32(at + 16, true) === 0xffffffff) return Infinity;
+    if (at >= ZIP64_LOCATOR_BYTES && view.getUint32(at - ZIP64_LOCATOR_BYTES, true) === ZIP64_LOCATOR_SIGNATURE) return Infinity;
     return Math.max(onDisk, total);
   }
   return null;
 }
 
 type ZipRead = { entries: Record<string, Uint8Array>; p7m: number } | { refused: string; detail?: string };
+
+// Thrown from inside fflate's walk to stop it (see readZip's first pass).
+class TooManyEntries extends Error {}
 
 // One zip -> { entries: { baseName: bytes }, p7m } or { refused: reason }.
 // Every `.xml` entry is read; `.p7m` entries are counted; PDFs and everything else are ignored.
@@ -80,14 +97,18 @@ function readZip(bytes: Uint8Array, limits: ReadLimits, skipped: SkippedFile[]):
   let listing: { name: string; size: number }[];
   try {
     // Pass 1: the central directory only. The filter answers false, so nothing is inflated.
+    // ⚠️ NOT IN THE ORIGINAL: the walk is STOPPED once it has listed more entries than the limit, so no record — whatever it
+    // declares, in whichever format the library reads it — can make it walk millions of entries (the header says why).
     listing = [];
     unzipSync(bytes, {
       filter: (file) => {
         listing.push({ name: file.name, size: file.originalSize });
+        if (listing.length > limits.maxEntries) throw new TooManyEntries();
         return false;
       },
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof TooManyEntries) return { refused: SKIPPED.TOO_MANY_ENTRIES, detail: String(limits.maxEntries) };
     return { refused: SKIPPED.ZIP_UNREADABLE };
   }
   if (listing.length > limits.maxEntries) {
