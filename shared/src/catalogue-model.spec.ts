@@ -32,8 +32,11 @@
 // linkOptions test; and `nameTaken` (tests/record-cards-shared.test.mjs and tests/ingredient-name.test.mjs,
 // plus the cases of its doc comment), run against the port and against js/catalogue/ingredient-suggest.js.
 //
-// NOT PORTED — the rest of the original: toCalculatorRecipe, nonWeighableLabels, mergeImportedRecipe
-// (tests/catalogue-model.test.mjs; step 3d-7), and the tests that read the screens' source, the precache or the
+// PORTED since step 3d-7: the import tests of tests/catalogue-model.test.mjs (toCalculatorRecipe,
+// nonWeighableLabels, mergeImportedRecipe) and of tests/calculator-trays.test.mjs (a re-import keeps how the tab
+// calculates; importFailureKey).
+//
+// NOT PORTED — the rest of the original: the tests that read the screens' source, the precache or the
 // dictionary words.
 
 import { describe, expect, test } from 'vitest';
@@ -806,6 +809,107 @@ describe.each([
     expect(m.findCalculatorImport({ recipes: 'x' }, 'foc')).toBe(null);
     expect(m.findCalculatorImport({ recipes: [null, 5, { id: 'cat-foc' }] }, 'foc')).toStrictEqual({ id: 'cat-foc' });
   });
+
+  // ── The import into the Calculator ─────────────────────────────────────────
+
+  test('toCalculatorRecipe converts weighable to grams and drops non-weighable', () => {
+    const cr = m.toCalculatorRecipe({ id: 'r1', name: 'Mix', ingredients: [
+      { label: 'Flour', grams: 1, unit: 'kg' },       // -> 1000 g
+      { label: 'Water', grams: 0.5, unit: 'l' },      // -> 500 g
+      { label: 'Eggs', grams: 3, unit: 'pcs' },       // dropped
+      { label: 'Salt', grams: 0, unit: 'to taste' },  // dropped
+    ] });
+    expect(cr.ingredients).toStrictEqual([
+      { label: 'Flour', grams: 1000 },
+      { label: 'Water', grams: 500 },
+    ]);
+  });
+
+  test('toCalculatorRecipe maps to a hidden pro-rata Calculator recipe, grams rounded', () => {
+    const cr = m.toCalculatorRecipe(FOCACCIA);
+    expect(cr.id).toBe('cat-foc');
+    expect(cr.name).toBe('Focaccia');
+    expect(cr.logic).toBe('total');
+    expect(cr.visible).toBe(false);
+    expect(cr.ingredients.length).toBe(FOCACCIA.ingredients.length);
+    expect(cr.ingredients[0]).toStrictEqual({ label: 'Flour uniqua blue', grams: 278 });
+    expect(cr.ingredients.find(i => i.label === 'Yeast')).toStrictEqual({ label: 'Yeast', grams: 4 });
+  });
+
+  test('toCalculatorRecipe copes with a recipe that has no ingredients', () => {
+    expect(m.toCalculatorRecipe({ id: 'e', name: 'Empty' }).ingredients).toStrictEqual([]);
+  });
+
+  test('nonWeighableLabels lists only what the grams-only Calculator cannot take', () => {
+    expect(m.nonWeighableLabels({ ingredients: [
+      { label: 'Flour', grams: 1, unit: 'kg' },
+      { label: 'Eggs', grams: 3, unit: 'pcs' },
+      { label: 'Vanilla', grams: 0, unit: 'to taste' },
+      { label: '', grams: 1, unit: 'pcs' }, // blank label ignored
+    ] })).toStrictEqual(['Eggs', 'Vanilla']);
+  });
+
+  test('nonWeighableLabels is junk-safe', () => {
+    for (const odd of [null, undefined, {}, { ingredients: 'x' }, 5]) expect(m.nonWeighableLabels(odd), String(odd)).toStrictEqual([]);
+  });
+
+  test('mergeImportedRecipe appends a new recipe (action: added)', () => {
+    const cfg = { recipes: [{ id: 'focaccia' }] };
+    const { config, action } = m.mergeImportedRecipe(cfg, m.toCalculatorRecipe(FOCACCIA));
+    expect(action).toBe('added');
+    expect(config.recipes.length).toBe(2);
+    expect(config.recipes[1]!.id).toBe('cat-foc');
+    expect(cfg.recipes.length, 'pure: the input is not changed').toBe(1);
+  });
+
+  test('mergeImportedRecipe on a config with no recipes starts the list', () => {
+    const { config, action } = m.mergeImportedRecipe({}, m.toCalculatorRecipe(FOCACCIA)) as { config: { recipes: { id: string }[] }; action: string };
+    expect(action).toBe('added');
+    expect(config.recipes.map(r => r.id)).toStrictEqual(['cat-foc']);
+  });
+
+  test('mergeImportedRecipe updates in place, no duplicate, preserving order/visible', () => {
+    const cfg = { recipes: [
+      { id: 'focaccia' },
+      { id: 'cat-foc', name: 'Old', order: 2, visible: true },
+    ] };
+    const updated = m.toCalculatorRecipe({ ...FOCACCIA, name: 'New name' });
+    const { config, action } = m.mergeImportedRecipe(cfg, updated);
+    const recipes = config.recipes as Record<string, unknown>[];
+    expect(action).toBe('updated');
+    expect(recipes.length).toBe(2); // no duplicate
+    expect(recipes[1]!.name).toBe('New name');
+    expect(recipes[1]!.order).toBe(2);    // preserved
+    expect(recipes[1]!.visible).toBe(true); // preserved
+  });
+
+  test('re-importing from the Catalogue keeps how the tab calculates, and refreshes the rest', () => {
+    const INGS = [
+      { key: 'flour', label: 'Flour', grams: 600 },
+      { key: 'water', label: 'Water', grams: 380 },
+      { key: 'salt', label: 'Salt', grams: 20 },
+    ];
+    const existing = { id: 'cat-x', name: 'Old', logic: 'traysTotal', trayWeight: 1200, order: 3, visible: false, ingredients: INGS };
+    const imported = { id: 'cat-x', name: 'New', logic: 'total', ingredients: [INGS[0]] };
+    const { config, action } = m.mergeImportedRecipe({ recipes: [existing] }, imported);
+    const r = (config.recipes as Record<string, unknown>[])[0]!;
+    expect(action).toBe('updated');
+    expect(r.name).toBe('New');
+    expect((r.ingredients as unknown[]).length).toBe(1);
+    expect(r.logic).toBe('traysTotal');
+    expect(r.trayWeight).toBe(1200);
+    expect(r.order).toBe(3);
+    expect(r.visible).toBe(false);
+    // A recipe without a stored weight does not get an invented one.
+    const bare = (m.mergeImportedRecipe({ recipes: [{ id: 'cat-x', order: 0, visible: true }] }, imported).config.recipes as Record<string, unknown>[])[0]!;
+    expect('trayWeight' in bare).toBe(false);
+    expect(bare.logic).toBe('total');
+  });
+
+  test('a refused Catalogue import says «out of date», any other failure says «connection»', () => {
+    expect(m.importFailureKey({ code: 'permission-denied' })).toBe('calc.notSavedOutOfDate');
+    for (const e of [{ code: 'unavailable' }, new Error('x'), null, undefined]) expect(m.importFailureKey(e)).toBe('cat.importFailedCheckYour');
+  });
 });
 
 // ── nameTaken: the port against js/catalogue/ingredient-suggest.js ───────────
@@ -974,13 +1078,12 @@ describe('kg and litre decimals', () => {
 // ── What pairing would have checked ──────────────────────────────────────────
 
 describe('the port against the original', () => {
-  // The rest of the original: the Calculator import (step 3d-7), `unitText`, which the port replaces by `unitTextKey`, and `formatAmount`, which needs the interface
+  // The rest of the original: `unitText`, which the port replaces by `unitTextKey`, and `formatAmount`, which needs the interface
   // language and so lives in the app (app/src/recipes/recipeAmounts.ts `amountNumber`), and `exportModelOf`, which
   // reads both of those (the unit word and the screen's number): the app builds the export model from its own
   // typed i18n, in the export slice.
   const LEFT_OUT = [
-    'unitText', 'formatAmount', 'toCalculatorRecipe', 'nonWeighableLabels', 'mergeImportedRecipe', 'importFailureKey',
-    'exportModelOf',
+    'unitText', 'formatAmount', 'exportModelOf',
   ];
   // `supplierLabel` is js/supplier-label.js's, copied into the model and exported (step 3d-6 A2) for the link line.
   // `nameTaken` is not an export of catalogue-model.js: its original is in ingredient-suggest.js (tested above).

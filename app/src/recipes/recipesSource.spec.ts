@@ -1,6 +1,8 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { FirestoreKit } from '../session/firebaseBackend';
 import { PRICE_FIELDS } from '@mise/shared/price-model';
+import { CONFIG_MODEL } from '@mise/shared/calculator-config';
+import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import { createFirestoreRecipesSource, newRecipeId } from './recipesSource';
 
 // The ONLY code in Mise 2 that reads the Recipe catalogue from the real database, against a recording
@@ -316,5 +318,126 @@ describe('the Recipe catalogue source', () => {
   test('⚠️ a venue id that could name another path is refused before anything is read', () => {
     const { kit } = fakeKit();
     expect(() => createFirestoreRecipesSource(() => Promise.resolve(kit), '../other')).toThrow();
+  });
+});
+
+// The import into the Calculator: ONE transaction on config/calculator, against a fake whose runTransaction hands the
+// update function a fake transaction over the documents the "server" holds at each attempt.
+describe('importing a recipe into the Calculator (a transaction)', () => {
+  const FOCACCIA = {
+    id: 'foc', name: 'Focaccia', lossPct: 0,
+    ingredients: [
+      { label: 'Flour', grams: 1, unit: 'kg' },
+      { label: 'Water', grams: 600, unit: 'g' },
+      { label: 'Eggs', grams: 3, unit: 'pcs' },
+    ],
+  } as CatalogueRecipe;
+  const TITLE = 'Market order';
+
+  // `attempts`: what the server holds on each try (Firestore calls the update again when it must retry).
+  function txKit(attempts: Array<Record<string, unknown> | null>) {
+    const { kit, fs } = fakeKit();
+    const sets: { target: Ref; data: Record<string, unknown> }[] = [];
+    const reads: Ref[] = [];
+    const runTransaction = vi.fn(async (_db: unknown, update: (tx: unknown) => Promise<unknown>) => {
+      let result: unknown;
+      for (const doc of attempts) {
+        sets.length = 0;
+        result = await update({
+          get: async (ref: Ref) => { reads.push(ref); return { exists: () => doc !== null, data: () => doc }; },
+          set: (target: Ref, data: Record<string, unknown>) => { sets.push({ target, data }); },
+        });
+      }
+      return result;
+    });
+    Object.assign(fs, { runTransaction });
+    return { kit, runTransaction, sets, reads };
+  }
+
+  const CLIENT = { id: 'c1', name: 'Cafe', products: [] };
+  const sourceOn = (kit: FirestoreKit, venue = 'panificio-miano') => createFirestoreRecipesSource(() => Promise.resolve(kit), venue);
+  const recipesOf = (data: Record<string, unknown>) => data.recipes as Record<string, unknown>[];
+
+  test('reads and writes config/calculator of the open venue, and stamps the shape number, the next revision and the venue', async () => {
+    const { kit, sets, reads } = txKit([{ clients: [CLIENT], recipes: [], configRev: 4, configModel: 2, bakery: 'forged' }]);
+    await expect(sourceOn(kit).importIntoCalculator(FOCACCIA, TITLE)).resolves.toBe('added');
+    expect(reads.map(r => r.path)).toStrictEqual(['locations/panificio-miano/config/calculator']);
+    expect(sets).toHaveLength(1);
+    expect(sets[0]!.target.path).toBe('locations/panificio-miano/config/calculator');
+    expect(sets[0]!.data.configModel, 'this build’s number, never the stored one').toBe(CONFIG_MODEL);
+    expect(sets[0]!.data.configRev).toBe(5);
+    expect(sets[0]!.data.bakery, 'the folder it lands in, never what the stored document claimed').toBe('panificio-miano');
+  });
+
+  test('the recipe arrives hidden, pro-rata, in grams, without the rows the Calculator cannot take', async () => {
+    const { kit, sets } = txKit([{ clients: [CLIENT], recipes: [] }]);
+    await sourceOn(kit).importIntoCalculator(FOCACCIA, TITLE);
+    const [added] = recipesOf(sets[0]!.data);
+    expect(added).toMatchObject({ id: 'cat-foc', name: 'Focaccia', logic: 'total', visible: false });
+    expect((added!.ingredients as { label: string; grams: number }[]).map(i => [i.label, i.grams])).toStrictEqual([['Flour', 1000], ['Water', 600]]);
+  });
+
+  test('no document yet: the default configuration plus the recipe, revision 1', async () => {
+    const { kit, sets } = txKit([null]);
+    await expect(sourceOn(kit, 'bakery').importIntoCalculator(FOCACCIA, TITLE)).resolves.toBe('added');
+    expect(sets[0]!.data.configRev).toBe(1);
+    expect(sets[0]!.data.bakery).toBe('bakery');
+    expect(recipesOf(sets[0]!.data).some(r => r.id === 'cat-foc')).toBe(true);
+    expect(Array.isArray(sets[0]!.data.clients)).toBe(true);
+  });
+
+  test('a document with no revision, or a junk one, counts as 0', async () => {
+    for (const rev of [undefined, 'x', null]) {
+      const { kit, sets } = txKit([{ clients: [CLIENT], recipes: [], ...(rev === undefined ? {} : { configRev: rev }) }]);
+      await sourceOn(kit).importIntoCalculator(FOCACCIA, TITLE);
+      expect(sets[0]!.data.configRev, String(rev)).toBe(1);
+    }
+  });
+
+  test('⚠️ a concurrent change is not lost: what the server holds NOW (another client, another imported recipe) is written back', async () => {
+    const { kit, sets } = txKit([{
+      clients: [CLIENT, { id: 'c2', name: 'Hotel only the server knows', products: [] }],
+      recipes: [{ id: 'cat-other', name: 'Other', logic: 'total', visible: true, order: 0, ingredients: [{ label: 'Flour', grams: 500 }] }],
+      configRev: 9,
+    }]);
+    await sourceOn(kit).importIntoCalculator(FOCACCIA, TITLE);
+    const data = sets[0]!.data;
+    expect((data.clients as { id: string }[]).map(c => c.id)).toStrictEqual(['c1', 'c2']);
+    expect(recipesOf(data).map(r => r.id)).toStrictEqual(['cat-other', 'cat-foc']);
+    expect(data.configRev).toBe(10);
+  });
+
+  test('⚠️ a transaction Firestore retries writes from the SECOND document, keeping nothing of the first attempt', async () => {
+    const first = { clients: [CLIENT], recipes: [{ id: 'cat-first', name: 'First', logic: 'total', ingredients: [{ label: 'F', grams: 1 }] }], configRev: 3 };
+    const second = { clients: [CLIENT], recipes: [{ id: 'cat-second', name: 'Second', logic: 'total', ingredients: [{ label: 'S', grams: 1 }] }], configRev: 8 };
+    const { kit, sets, runTransaction } = txKit([first, second]);
+    await sourceOn(kit).importIntoCalculator(FOCACCIA, TITLE);
+    expect(runTransaction).toHaveBeenCalledTimes(1);
+    expect(sets).toHaveLength(1);
+    expect(recipesOf(sets[0]!.data).map(r => r.id)).toStrictEqual(['cat-second', 'cat-foc']);
+    expect(sets[0]!.data.configRev).toBe(9);
+  });
+
+  test('a re-import updates in place, keeping the tab order, its visibility and how it calculates', async () => {
+    const { kit, sets } = txKit([{
+      clients: [CLIENT],
+      recipes: [
+        { id: 'a', name: 'A', logic: 'total', visible: true, order: 0, ingredients: [{ label: 'F', grams: 1 }] },
+        { id: 'cat-foc', name: 'Old name', logic: 'traysTotal', trayWeight: 1200, visible: true, order: 1, ingredients: [{ label: 'Old', grams: 5 }] },
+      ],
+      configRev: 2,
+    }]);
+    await expect(sourceOn(kit).importIntoCalculator(FOCACCIA, TITLE)).resolves.toBe('updated');
+    const list = recipesOf(sets[0]!.data);
+    expect(list.map(r => r.id)).toStrictEqual(['a', 'cat-foc']);
+    expect(list[1]).toMatchObject({ name: 'Focaccia', logic: 'traysTotal', trayWeight: 1200, visible: true, order: 1 });
+    expect((list[1]!.ingredients as { label: string }[]).map(i => i.label)).toStrictEqual(['Flour', 'Water']);
+  });
+
+  test('a refused or failed transaction rejects, so the screen can say so; nothing is written', async () => {
+    const { kit, runTransaction, sets } = txKit([null]);
+    runTransaction.mockRejectedValueOnce(Object.assign(new Error('x'), { code: 'permission-denied' }));
+    await expect(sourceOn(kit).importIntoCalculator(FOCACCIA, TITLE)).rejects.toMatchObject({ code: 'permission-denied' });
+    expect(sets).toHaveLength(0);
   });
 });

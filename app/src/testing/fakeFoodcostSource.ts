@@ -8,6 +8,7 @@ import type { FoodcostSource, ProductsMeta, RecipeLossPatch, StoredDoc } from '.
 // against its own fake in foodcostStore.spec.ts; a screen's spec only needs a database that behaves.
 type ProductsListener = { onChange: (list: StoredDoc[], meta: ProductsMeta) => void; onError: (err: unknown) => void };
 type ListListener = { onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void };
+type RecipesListener = { onChange: (list: StoredDoc[], meta?: ProductsMeta) => void; onError: (err: unknown) => void };
 // This fake is a database that is online: every answer comes from the server.
 const FROM_SERVER: ProductsMeta = { fromServer: true };
 
@@ -43,7 +44,7 @@ export function fakeFoodcostSource(seed: {
   const prices = new Map(Object.entries(seed.prices ?? {}));
   const history = new Map(Object.entries(seed.history ?? {}));
   const productWatchers = new Set<ProductsListener>();
-  const recipeWatchers = new Set<ListListener>();
+  const recipeWatchers = new Set<RecipesListener>();
   const ingredientWatchers = new Set<ListListener>();
   const settingsWatchers = new Set<(data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void>();
   const refuse = { save: false, loss: false, remove: false, rate: false, history: false, products: false };
@@ -60,7 +61,7 @@ export function fakeFoodcostSource(seed: {
 
     push() {
       if (!held) for (const w of productWatchers) w.onChange([...products.values()], FROM_SERVER);
-      for (const w of recipeWatchers) w.onChange([...recipes.values()]);
+      for (const w of recipeWatchers) w.onChange([...recipes.values()], FROM_SERVER);
       for (const w of ingredientWatchers) w.onChange(priced());
       for (const w of settingsWatchers) w(fake.settings, { fromServer: true });
     },
@@ -86,9 +87,9 @@ export function fakeFoodcostSource(seed: {
     }),
 
     watchRecipes: vi.fn<FoodcostSource['watchRecipes']>((onChange, onError) => {
-      const listener: ListListener = { onChange, onError };
+      const listener: RecipesListener = { onChange, onError };
       recipeWatchers.add(listener);
-      queueMicrotask(() => { if (recipeWatchers.has(listener)) onChange([...recipes.values()]); });
+      queueMicrotask(() => { if (recipeWatchers.has(listener)) onChange([...recipes.values()], FROM_SERVER); });
       return () => { recipeWatchers.delete(listener); };
     }),
 

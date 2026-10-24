@@ -2,7 +2,7 @@ import {
   PRODUCT_MODEL, normalizeProduct, vatSelection,
 } from '@mise/shared/foodcost-model';
 import type {
-  LineUnit, PackUnit, Product, ProductComponent, SellingMode,
+  LineUnit, PackUnit, Product, ProductComponent, ProductDraft, SellingMode,
 } from '@mise/shared/foodcost-model';
 
 // The product being edited, as the editor holds it: a WORKING COPY (P20) in which every number is
@@ -56,6 +56,18 @@ export function emptyWorking(): Working {
   return {
     name: '', components: [], packaging: [], sellingMode: '', piecesPerBatch: '', packSize: '', packUnit: '',
     labourMinutes: '', labourPeople: '', sellingPrice: '', vatSelect: '', vatOther: '', foodCostTarget: '',
+  };
+}
+
+// A new product started from a recipe (draftFromRecipe): its name and its lines, nothing else. ⚠️ The
+// recipe's amount is 0 in the draft, and a 0 shows as an EMPTY box (qtyText), never as a typed «0».
+export function workingFromDraft(draft: ProductDraft): Working {
+  return {
+    ...emptyWorking(),
+    name: draft.name,
+    components: draft.components.map<WorkingComponent>(line => ({
+      key: newLineKey(), kind: 'recipe', recipeId: line.recipeId, qty: qtyText(line.qtyKg),
+    })),
   };
 }
 

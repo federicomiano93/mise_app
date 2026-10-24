@@ -150,6 +150,19 @@ describe('the Food cost source, as firestore.rules expect it', () => {
     expect(seen).toEqual([[[{ id: 'p1', name: 'Loaf' }], false], [[{ id: 'p1', name: 'Loaf' }], true]]);
   });
 
+  test('⚠️ the recipes are watched WITH metadata changes too, and say whether the server answered', async () => {
+    const { kit, live } = fakeKit();
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
+    const seen: [StoredDoc[], boolean | undefined][] = [];
+    source.watchRecipes((list, meta) => seen.push([list, meta?.fromServer]), () => {});
+    await settle();
+    const [listener] = live('locations/bakery/recipes');
+    expect(listener!.options).toEqual({ includeMetadataChanges: true });
+    listener!.next(collectionSnap([{ id: 'r1', name: 'Loaf' }], true));
+    listener!.next(collectionSnap([{ id: 'r1', name: 'Loaf' }], false));
+    expect(seen).toEqual([[[{ id: 'r1', name: 'Loaf' }], false], [[{ id: 'r1', name: 'Loaf' }], true]]);
+  });
+
   test('⚠️ the ingredients are emitted only once they have arrived, with their prices laid on', async () => {
     const { kit, live } = fakeKit();
     const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
