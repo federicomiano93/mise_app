@@ -55,6 +55,8 @@
 // patterns that classify.js keeps private (classify.ts imports them from it and still exports exactly what the original does), so
 // it has no js/ counterpart; invoice-zip/keywords.spec.ts pins it against invoice-import/classify.py instead.
 // invoice-zip/fatturapa.ts, products.ts and selection.ts ARE paired too (slice A2, the second half of the reader): full ports.
+// work-week.ts, price-changes-model.ts and invoice-import-model.ts ARE paired too (step 3e-6, slice B1a, the import model): full
+// ports of js/orders/work-week.js, price-changes-model.js and invoice-import-model.js.
 // invoice-zip/build-import.ts is NOT: it is a PARTIAL port (decision T5) — every export of js/orders/invoice-zip/build-import.js
 // except `buildImportFromInvoices`, which opens the zip archives with fflate and so stays app code
 // (app/src/suppliers/invoiceImport/buildImport.ts), plus `buildImportFromRead`, the original's body after the reading. Its
@@ -119,6 +121,9 @@ import * as invoicePricing from './invoice-zip/pricing';
 import * as invoiceFatturapa from './invoice-zip/fatturapa';
 import * as invoiceProducts from './invoice-zip/products';
 import * as invoiceSelection from './invoice-zip/selection';
+import * as workWeek from './work-week';
+import * as priceChangesModel from './price-changes-model';
+import * as invoiceImportModel from './invoice-import-model';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -173,6 +178,9 @@ import * as legacyInvoicePricing from '../../js/orders/invoice-zip/pricing.js';
 import * as legacyInvoiceFatturapa from '../../js/orders/invoice-zip/fatturapa.js';
 import * as legacyInvoiceProducts from '../../js/orders/invoice-zip/products.js';
 import * as legacyInvoiceSelection from '../../js/orders/invoice-zip/selection.js';
+import * as legacyWorkWeek from '../../js/orders/work-week.js';
+import * as legacyPriceChangesModel from '../../js/orders/price-changes-model.js';
+import * as legacyInvoiceImportModel from '../../js/orders/invoice-import-model.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -229,6 +237,9 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['invoice-zip/fatturapa', invoiceFatturapa, legacyInvoiceFatturapa],
   ['invoice-zip/products', invoiceProducts, legacyInvoiceProducts],
   ['invoice-zip/selection', invoiceSelection, legacyInvoiceSelection],
+  ['work-week', workWeek, legacyWorkWeek],
+  ['price-changes-model', priceChangesModel, legacyPriceChangesModel],
+  ['invoice-import-model', invoiceImportModel, legacyInvoiceImportModel],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -290,7 +301,7 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all fifty-four models are compared', () => {
+test('all fifty-seven models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
@@ -299,5 +310,6 @@ test('all fifty-four models are compared', () => {
       'confirm-flow', 'log-time', 'venue-features', 'market', 'recipe-label-model', 'label-template-model', 'photo-model',
       'supplier-label', 'vat-number', 'favourite-suppliers', 'record-choices', 'category-batches', 'ingredient-edit-model',
       'allergen-terms', 'allergen-match', 'records', 'invoice-zip/reasons', 'invoice-zip/py-compat', 'invoice-zip/sha256',
-      'invoice-zip/classify', 'invoice-zip/pricing', 'invoice-zip/fatturapa', 'invoice-zip/products', 'invoice-zip/selection']);
+      'invoice-zip/classify', 'invoice-zip/pricing', 'invoice-zip/fatturapa', 'invoice-zip/products', 'invoice-zip/selection',
+      'work-week', 'price-changes-model', 'invoice-import-model']);
 });
