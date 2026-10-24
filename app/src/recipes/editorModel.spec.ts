@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizeCatalogueRecipe } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import {
-  addRow, cleanWorking, dropWorkingRow, linkRowTo, moveWorkingRow, netWeightText, notWeighedCount, removeRow, setRowFields, shelfLifeText, stepWorkingRow, totalText, workingFrom, workingFromDraft, restoreWorking,
+  NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, duplicateWorking, linkRowTo, moveWorkingRow, netWeightText, notWeighedCount, removeRow, setRowFields, shelfLifeText, stepWorkingRow, totalText, workingFrom, workingFromDraft, restoreWorking,
 } from './editorModel';
 
 // The editor's working copy and the rules that turn it into what is saved (the pure half of catalogue-editor.js).
@@ -329,5 +329,62 @@ describe('a working copy that travelled in the navigation state (step 3d-9)', ()
     const back = restoreWorking({ name: 'A', rows: [], rest: 5 });
     expect(back?.rows).toHaveLength(1);
     expect(back?.rest).toEqual({});
+  });
+});
+
+describe('a duplicate (the recipe page’s «Duplicate»)', () => {
+  const original = () => recipe({
+    id: 'orig', bakery: 'bakery', netWeightG: 250, shelfLifeDays: 3, endNote: 'Rest 20 min', rawGrams: 1000, cookedGrams: 880,
+    steps: [{ text: 'Mix', rows: ['row-a'], seconds: 60, speed: '1' }],
+  });
+  const copyOf = (name: string) => `${name} (copy)`;
+
+  it('⚠️ is named «<name> (copy)» and takes the pack weight, the shelf life and the procedure', () => {
+    const working = duplicateWorking(original(), copyOf);
+    expect(working.name).toBe('Focaccia (copy)');
+    expect(working.rest).toEqual({
+      netWeightG: 250, shelfLifeDays: 3, endNote: 'Rest 20 min',
+      steps: [{ text: 'Mix', rows: ['row-a'], seconds: 60, speed: '1' }],
+    });
+    expect(working.netWeight).toBeNull();
+    expect(working.shelfLife).toBeNull();
+  });
+
+  it('⚠️⚠️ NEVER carries the original’s id, its venue or its Food cost weighings — and none of them survives cleanWorking', () => {
+    const working = duplicateWorking(original(), copyOf);
+    for (const key of ['id', 'bakery', 'lossPct', 'rawGrams', 'cookedGrams']) expect(working.rest, key).not.toHaveProperty(key);
+    const saved = cleanWorking(working) as unknown as Record<string, unknown>;
+    for (const key of ['id', 'bakery', 'lossPct', 'rawGrams', 'cookedGrams']) expect(saved, key).not.toHaveProperty(key);
+    expect(saved.name).toBe('Focaccia (copy)');
+  });
+
+  it('⚠️ keeps every row as it is — its link, its row id, its amount and unit — so the steps still point at their rows', () => {
+    const working = duplicateWorking(original(), copyOf);
+    expect(working.rows.map(item => item.row)).toEqual([
+      { label: 'Flour', grams: 1000, unit: 'g', kind: 'ingredient', refId: 'ing-1', rid: 'row-a' },
+      { label: 'Salt', grams: 0, unit: 'to taste' },
+    ]);
+    const keys = working.rows.map(item => item.key);
+    expect(new Set(keys).size).toBe(keys.length);
+  });
+
+  it('is a COPY: changing the duplicate never reaches the original recipe’s procedure', () => {
+    const source = original();
+    const working = duplicateWorking(source, copyOf);
+    ((working.rest.steps as { text: string }[])[0]!).text = 'changed';
+    expect((source.steps as { text: string }[])[0]!.text).toBe('Mix');
+  });
+
+  it('takes nothing a recipe without them does not have (a recipe with no shelf life stays without one)', () => {
+    const bare = duplicateWorking(recipe({ lossPct: undefined, steps: undefined }), copyOf);
+    expect(bare.rest).toEqual({});
+  });
+
+  it('⚠️ fits the name box: when the whole is too long the ORIGINAL’s end is cut, never the «(copy)»', () => {
+    const long = recipe({ name: 'A'.repeat(NAME_MAX_LENGTH) });
+    const working = duplicateWorking(long, copyOf);
+    expect(working.name).toHaveLength(NAME_MAX_LENGTH);
+    expect(working.name.endsWith(' (copy)')).toBe(true);
+    expect(duplicateWorking(recipe({ name: 'A'.repeat(NAME_MAX_LENGTH - 7) }), copyOf).name).toHaveLength(NAME_MAX_LENGTH);
   });
 });

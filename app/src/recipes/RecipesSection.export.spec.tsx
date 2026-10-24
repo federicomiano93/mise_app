@@ -49,7 +49,7 @@ type Model = {
 };
 
 describe('the Export button on the recipe screen', () => {
-  it('⚠️ comes after every card; only Import into Calculator and the owner’s small delete icon follow it (his choices, 14-15 Oct 2026)', async () => {
+  it('⚠️ comes after every card; only Import into Calculator, Duplicate and the owner’s small delete icon follow it (his choices, 14-15 Oct 2026)', async () => {
     await open();
     const table = main().getByRole('table', { name: 'Ingredients' });
     const button = main().getByRole('button', { name: 'Export' });
@@ -61,8 +61,8 @@ describe('the Export button on the recipe screen', () => {
     const after = [...page!.querySelectorAll('button, a, input, h3, table')].filter(
       el => (button.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0,
     );
-    // The default session is the owner's: Import into Calculator, then the delete icon, and nothing else, follow Export.
-    expect(after.map(el => el.getAttribute('aria-label') ?? el.textContent)).toEqual(['Import into Calculator', 'Delete recipe']);
+    // The default session is the owner's: Import into Calculator, Duplicate (button and hint), then the delete icon, and nothing else, follow Export.
+    expect(after.map(el => el.getAttribute('aria-label') ?? el.textContent)).toEqual(['Import into Calculator', 'Duplicate', 'Delete recipe']);
   });
 
   it('⚠️ is followed only by Import into Calculator for an employee, who has no delete icon', async () => {

@@ -161,6 +161,24 @@ describe('the Calculator warning', () => {
     expect(dialog).toHaveTextContent('Delete “Focaccia”? This cannot be undone. It was imported into the Calculator — that copy will stay');
   });
 
+  it('⚠️ says the Calculator USES the recipe, and that the tab cannot calculate afterwards, when a tab is linked to it', async () => {
+    const source = sourceWith([FOCACCIA]);
+    source.calculatorConfig = { recipes: [{ id: 'cat-r1', catalogueId: 'r1' }] };
+    const { user } = await openPageFromList({ source });
+    await user.click(trash());
+    const dialog = await screen.findByRole('alertdialog', { name: 'Delete recipe?' });
+    expect(dialog).toHaveTextContent('Delete “Focaccia”? This cannot be undone. The Calculator uses it: afterwards that tab cannot calculate until you pick another recipe for it.');
+    expect(dialog).not.toHaveTextContent('that copy will stay');
+  });
+
+  it('a tab linked by hand under its own id gets the same warning', async () => {
+    const source = sourceWith([FOCACCIA]);
+    source.calculatorConfig = { recipes: [{ id: 'my-tab', catalogueId: 'r1' }] };
+    const { user } = await openPageFromList({ source });
+    await user.click(trash());
+    expect(await screen.findByRole('alertdialog', { name: 'Delete recipe?' })).toHaveTextContent('The Calculator uses it');
+  });
+
   it('does not warn about another recipe’s import', async () => {
     const source = sourceWith([FOCACCIA]);
     source.calculatorConfig = { recipes: [{ id: 'cat-other' }] };

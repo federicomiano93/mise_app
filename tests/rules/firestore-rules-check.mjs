@@ -1067,6 +1067,14 @@ async function neighbours() {
         { id: 's2', text: 'Mix', rows: [], seconds: 240, speed: '1' },
       ],
     }));
+  // Mise 2's «Duplicate» CREATES a recipe that already carries its procedure, in one write (a document that does not exist yet).
+  await expectAllowed('a NEW recipe may be created with its steps, closing message and label fields in the same write', () =>
+    wholeWrite('locations/main/recipes/duplicate-of-r1', {
+      bakery: 'main', name: 'Croissant (copy)', netWeightG: 250, shelfLifeDays: 3,
+      ingredients: [{ label: 'Flour', grams: 1000, unit: 'g', rid: 'rflour001' }],
+      steps: [{ text: 'Mix', rows: ['rflour001'], seconds: 240, speed: '1' }],
+      endNote: 'Let it rest',
+    }));
   await expectAllowed('…and a procedure that has been emptied again', () =>
     wholeWrite('locations/main/recipes/r1',
       { bakery: 'main', name: 'Croissant', ingredients: [], steps: [] }));

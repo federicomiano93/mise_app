@@ -128,6 +128,7 @@ function RecipesLayout({ view }: { view: ShownView }) {
     },
     pending: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'label',
     pendingEdit: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'edit',
+    pendingDuplicate: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'duplicate',
     pendingSteps: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'steps',
     pendingMix: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'mix',
     markDelivered() { if (place.current !== null) place.current.delivered = true; },
@@ -210,9 +211,9 @@ function RecipesLayout({ view }: { view: ShownView }) {
     // Back from a label (or an editor) to its recipe keeps the place written down when it opened. Any other move forgets it
     // (the opening move itself, recipe → label or recipe → editor, is the one that must not).
     const written = place.current;
-    const returning = (before.kind === 'label' || before.kind === 'edit' || before.kind === 'steps' || before.kind === 'mix') && view.kind === 'recipe' && written !== null && written.id === view.id;
+    const returning = (before.kind === 'label' || before.kind === 'new' || before.kind === 'edit' || before.kind === 'steps' || before.kind === 'mix') && view.kind === 'recipe' && written !== null && written.id === view.id;
     if (returning) backFromLabel.current = written;
-    else if (view.kind !== 'label' && view.kind !== 'edit' && view.kind !== 'steps' && view.kind !== 'mix') place.current = null;
+    else if (view.kind !== 'label' && view.kind !== 'new' && view.kind !== 'edit' && view.kind !== 'steps' && view.kind !== 'mix') place.current = null;
     if (area === null) return;
     if (split) {
       listTop.current = null;
