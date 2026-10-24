@@ -109,6 +109,27 @@ export function reconcileTicks({ proposal, current, appOwned, humanTouched } = {
   return { contains: [...out.contains], may: [...out.may], appOwned: owned, added, removed };
 }
 
+// ⚠️⚠️ A TAP THAT LANDS AS THE APP TICKS THE SAME BOX MEANT «TICK IT», NOT «UNTICK IT».
+// Somebody types «latte» and reaches for Milk «has»; the pause ends just before the finger
+// lands, the app ticks Milk, and the tap flips it OFF — and a box a person moved is theirs
+// for good, so Milk would stay missing. So a person's UNtick of a box the app ticked less
+// than RECENT_APP_TICK_MS ago leaves it TICKED (and the caller makes it the person's, so the
+// app never takes it back and a second tap unticks it). Only that one case: a tick on, or an
+// untick of a box the app ticked longer ago or never, is exactly what the person asked for.
+// The safe direction only — the worst it can do is keep an allergen a second tap removes.
+// Same rule as Mise 2 (app/src/records/allergenCardModel.ts tickByHand).
+//
+// `tickedAt`: Map of tickKey → when the app added that tick, on a steady clock
+// (performance.now(): setting the phone's clock back cannot make an old tick look recent).
+export const RECENT_APP_TICK_MS = 800;
+
+export function keepsAppTick({ key, on, appOwned, tickedAt, now } = {}) {
+  if (on) return false;
+  if (!appOwned || !appOwned.has(key)) return false;
+  const at = tickedAt && tickedAt.get(key);
+  return typeof at === 'number' && now - at >= 0 && now - at < RECENT_APP_TICK_MS;
+}
+
 // ── Normalising, WITHOUT losing where each character came from ───────────────
 //
 // The map is the whole point: a match found at normalised index n has to be
