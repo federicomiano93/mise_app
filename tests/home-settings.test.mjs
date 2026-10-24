@@ -23,14 +23,50 @@ function bodyOf(src, name) {
   return next === -1 ? src.slice(start) : src.slice(start, next);
 }
 
-test('⚠️ the bottom of the Home carries ONE button, «Settings»', () => {
+test('⚠️ the bottom of the Home carries «Settings» and ONE small «Log out», nothing else', () => {
   const strip = bodyOf(HOME, 'renderSessionActions');
   assert.match(strip, /t\('ui\.settings'\)/);
-  assert.equal((strip.match(/createElement\('button'\)/g) || []).length, 1,
-    'exactly one button is built for the bottom of the Home');
-  for (const key of ['auth.logOut', 'lang.title', 'people.title', 'home.switch', 'homeCards.title']) {
+  assert.match(strip, /t\('auth\.logOut'\)/);
+  assert.equal((strip.match(/createElement\('button'\)/g) || []).length, 2,
+    'exactly two buttons are built for the bottom of the Home');
+  for (const key of ['lang.title', 'people.title', 'home.switch', 'homeCards.title']) {
     assert.ok(!HOME.includes(`t('${key}')`), `«${key}» lives in Settings now, not under the cards`);
   }
+});
+
+test('⚠️ the Home «Log out» asks first, then asks again if something is unsent, then signs out', () => {
+  const strip = bodyOf(HOME, 'renderSessionActions');
+  assert.match(strip, /className = 'home-signout'/);
+  // The kiosk toggle finds the button by this selector: renaming the class must fail here, not
+  // silently leave the Home «Log out» on a kiosk tablet.
+  assert.match(read('js/home-session.js'), /querySelector\('#session-logout-host \.home-signout'\)/);
+  assert.match(strip, /title: t\('auth\.logOut\.title'\)[\s\S]*message: t\('auth\.logOut\.message'\)/);
+  assert.match(strip, /okLabel: t\('auth\.logOut'\),\s*cancelLabel: t\('ui\.cancel'\),\s*danger: true,\s*\}\);\s*if \(ok && await mayLeaveWithUnsent\(confirmDialog\)\) signOutNow\(\);/);
+  assert.match(HOME, /import \{ confirmDialog \} from '\.\/confirm-dialog\.js';/);
+  assert.match(HOME, /import \{ mayLeaveWithUnsent \} from '\.\/unsent-guard\.js';/);
+  assert.match(HOME, /import \{[^}]*signOutNow[^}]*\} from '\.\/firebase\.js';/);
+});
+
+test('⚠️ the Home «Log out» is not shown on a kiosk device, and follows kiosk mode being switched', () => {
+  // On a kiosk device the Home has a red «Exit» that closes the app; two «Exit»s are a trap.
+  const strip = bodyOf(HOME, 'renderSessionActions');
+  assert.match(strip, /signOut\.hidden = kioskIsOn\(\);/);
+  assert.match(HOME, /kioskBandVisible\(localStorage\.getItem\(KIOSK_STORAGE_KEY\)\)/);
+  assert.match(HOME, /addEventListener\('kiosk-settings-changed', syncSignOut\)/);
+  assert.match(HOME, /addEventListener\('storage'/);
+});
+
+test('⚠️ the Home «Log out» is small and quiet, but its tap area is still 44px tall', () => {
+  const css = read('orders.css');
+  const start = css.indexOf('#session-logout-host .home-signout {');
+  assert.ok(start >= 0, 'the Home sign-out has its own rule');
+  const rule = css.slice(start, css.indexOf('}', start));
+  assert.match(rule, /min-height:\s*44px/);
+  assert.match(rule, /font-size:\s*13px/);
+  assert.match(rule, /color:\s*var\(--text-2\)/);
+  assert.match(rule, /white-space:\s*nowrap/);
+  assert.match(css, /#session-logout-host \.home-signout:focus-visible\s*\{[^}]*outline/);
+  assert.doesNotMatch(rule, /#[0-9a-fA-F]{3,6}\b/, 'tokens only');
 });
 
 test('the Settings button is the app\'s bottom-bar button, icon and label in a row', () => {
@@ -59,7 +95,12 @@ test('⚠️⚠️ every row keeps exactly the gate it had under the cards', () 
     'a fifth row would be a row nobody decided the gate for');
 });
 
-test('⚠️ Log out is for everybody, last, low-key, and asks first', () => {
+test('⚠️ Settings keeps Log out ONLY on a kiosk device, last, low-key, and asks first', () => {
+  // Since 15 Oct 2026 it lives on the Home; here it is the kiosk device's way out.
+  assert.match(SETTINGS, /logout\.hidden = !kioskOn\(\);/);
+  assert.match(SETTINGS, /kioskBandVisible\(localStorage\.getItem\(KIOSK_STORAGE_KEY\)\)/);
+  assert.match(SETTINGS, /addEventListener\('kiosk-settings-changed', onKioskChanged\)/);
+  assert.match(SETTINGS, /removeEventListener\('kiosk-settings-changed', onKioskChanged\)/);
   assert.match(SETTINGS, /const logout = node\('button', 'set-danger', t\('auth\.logOut'\)\);/,
     'a quiet underlined line, never a row dressed like the others (P20)');
   assert.match(read('tokens.css'), /\.set-danger\s*\{[^}]*text-decoration:\s*underline/,
@@ -102,4 +143,10 @@ test('⚠️ the sentence under a Settings row is in the same typeface as its ti
 
 test('the Settings screen is precached', () => {
   assert.deepEqual(missingFromPrecache(['js/home-settings.js']), []);
+});
+
+test('Settings follows kiosk mode switched in another tab, and stops listening when it closes', () => {
+  const src = read('js/home-settings.js');
+  assert.match(src, /window\.addEventListener\('storage', onKioskChanged\);/);
+  assert.match(src, /window\.removeEventListener\('storage', onKioskChanged\);/);
 });
