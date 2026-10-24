@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation, useNavigationType } from 'react-router';
 import { useT } from '../i18n/useT';
@@ -15,6 +15,11 @@ type Props = {
   onBack?: () => void;
   // The one primary action of the bar, when the screen is a form.
   action?: ReactNode;
+  // Under the title (the Dough history's day badge).
+  sub?: ReactNode;
+  // The name the title registers under with the hand-back: a screen left by a move of its own (a log deleted, a
+  // version restored) hands the focus to the title of the screen it lands on.
+  titleOpener?: string;
   children: ReactNode;
 };
 
@@ -23,14 +28,18 @@ type Props = {
 //
 // When it appears it takes the focus onto its title if it was opened from the level above, and hands the focus
 // to the button that opened the screen the person has just come back from (handBack.ts).
-export function SettingsPage({ title, fallback, onBack, action, children }: Props) {
+export function SettingsPage({ title, fallback, onBack, action, sub, titleOpener, children }: Props) {
   const { t } = useT();
   const { state } = useLocation();
   const navigationType = useNavigationType();
   const handBack = useHandBack();
   const leave = useLeave(fallback);
   const titleId = `${useId()}-title`;
-  const heading = useRef<HTMLHeadingElement>(null);
+  const heading = useRef<HTMLHeadingElement | null>(null);
+  const titleRef = useCallback((node: HTMLHeadingElement | null) => {
+    heading.current = node;
+    if (titleOpener !== undefined) handBack.register(titleOpener, node);
+  }, [handBack, titleOpener]);
 
   useLayoutEffect(() => { handBack.deliver(); }, [handBack]);
   useEffect(() => {
@@ -48,7 +57,8 @@ export function SettingsPage({ title, fallback, onBack, action, children }: Prop
           onBack={onBack ?? leave}
           title={title}
           titleId={titleId}
-          titleRef={heading}
+          titleRef={titleRef}
+          sub={sub}
           action={action}
         />
       )}
