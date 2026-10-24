@@ -28,7 +28,8 @@
   cursor: pointer;
 }
 
-.row[data-all="true"] {
+.row[data-all="true"],
+.row[data-create="true"] {
   color: var(--accent-ink);
   font-weight: 600;
 }

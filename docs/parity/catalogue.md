@@ -618,7 +618,10 @@ millimetres and the ZPL characters (items 62–80 and «What proves byte-identit
 87. **A missing ingredient can be created from a recipe row** (`+ Create "…" as an ingredient`, only where
     `mayEditRecords`): the same card «Ingredients & suppliers» uses opens above the editor, nothing typed is lost,
     and the row is linked to the new ingredient once it is saved (a `packaging` result is refused). Depends on
-    Orders — Questions 9.
+    Orders — Questions 9. **Built in T15** (step 3e): the last row of the suggestions (after «See all», it may be the only
+    one) and the last button of the chooser, `cat.createIngredient`, shown only for a typed name no ingredient holds (the
+    set the chooser offers) and where `mayEditRecords`; the card is `records/IngredientCard` in a dialog (a full screen
+    below 700px) opened by `suppliers/CreateIngredientOverlay`; decisions O1–O5 in `docs/parity/suppliers.md`, T15.
 
 ## The editor
 
