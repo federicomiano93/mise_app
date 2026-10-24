@@ -638,6 +638,16 @@ body.calc-zoom-lock .scroll-area { overflow: hidden; }
   cursor: pointer;
 }
 .copy-btn:active { background: var(--accent-light); }
+/* The recipe export: a secondary button on its own line under the copy row. Icon + text is a flex
+   row (an SVG in a plain button sits on the text baseline). */
+.export-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.export-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 
 /* Footer recipes trigger */
 .recipe-footer {
