@@ -16,7 +16,16 @@ export type FakeRecipesSource = RecipesSource & {
   // The label profile (config/labels) as stored; null = the venue has none (the defaults).
   labelConfig: Record<string, unknown> | null;
   // The next watch fails (the rules refused it, or the stream died).
-  refuse: { recipes: boolean; ingredients: boolean; labelConfig: boolean };
+  refuse: { recipes: boolean; ingredients: boolean; labelConfig: boolean; printAgents: boolean; queue: boolean };
+  // The shop computers' heartbeats (print-agents) as the watch reports them.
+  printAgents: StoredDoc[];
+  // Replaces the agents and tells every watcher at once, as a new heartbeat would. Does NOT go through push():
+  // a heartbeat arrives on its own.
+  setPrintAgents(list: StoredDoc[]): void;
+  // Every job the screen put in the queue, in order, as it was handed over (refused ones are not here).
+  jobs: Record<string, unknown>[];
+  // The next queue writes wait until the returned function is called (a slow network); the job is recorded then.
+  holdQueue(): () => void;
   // Tells every watcher again (as another phone's write would).
   push(): void;
   // Kills every live RECIPES stream, as a lost permission would.
@@ -30,7 +39,9 @@ export type FakeRecipesSource = RecipesSource & {
 };
 
 export function fakeRecipesSource(
-  seed: { recipes?: StoredDoc[]; ingredients?: StoredDoc[]; labelConfig?: Record<string, unknown> | null } = {},
+  seed: {
+    recipes?: StoredDoc[]; ingredients?: StoredDoc[]; labelConfig?: Record<string, unknown> | null; printAgents?: StoredDoc[];
+  } = {},
 ): FakeRecipesSource {
   const recipes = new Map((seed.recipes ?? []).map(doc => [doc.id, doc] as const));
   const ingredients = new Map((seed.ingredients ?? []).map(doc => [doc.id, doc] as const));
@@ -41,7 +52,9 @@ export function fakeRecipesSource(
     onError: (err: unknown) => void;
   };
   const labelWatchers = new Set<LabelListener>();
-  const refuse = { recipes: false, ingredients: false, labelConfig: false };
+  const agentWatchers = new Set<{ onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void }>();
+  const refuse = { recipes: false, ingredients: false, labelConfig: false, printAgents: false, queue: false };
+  let queueHold: Promise<void> | null = null;
   let held = false;
   let labelHeld = false;
   const refused = () => Object.assign(new Error('permission-denied'), { code: 'permission-denied' });
@@ -67,6 +80,17 @@ export function fakeRecipesSource(
   const fake: FakeRecipesSource = {
     recipes, ingredients, refuse,
     labelConfig: seed.labelConfig ?? null,
+    printAgents: seed.printAgents ?? [],
+    jobs: [],
+    setPrintAgents(list) {
+      fake.printAgents = list;
+      for (const w of agentWatchers) w.onChange(list);
+    },
+    holdQueue() {
+      let release: () => void = () => undefined;
+      queueHold = new Promise<void>(resolve => { release = resolve; });
+      return () => { queueHold = null; release(); };
+    },
     push() {
       if (held) return;
       for (const w of watchers) w.onChange([...recipes.values()], FROM_SERVER);
@@ -106,6 +130,25 @@ export function fakeRecipesSource(
         }
       });
       return () => { labelWatchers.delete(listener); };
+    }),
+    watchPrintAgents: vi.fn<RecipesSource['watchPrintAgents']>((onChange, onError) => {
+      const listener = { onChange, onError };
+      agentWatchers.add(listener);
+      queueMicrotask(() => {
+        if (!agentWatchers.has(listener)) return;
+        if (refuse.printAgents) {
+          agentWatchers.delete(listener);
+          onError(refused());
+        } else {
+          onChange(fake.printAgents);
+        }
+      });
+      return () => { agentWatchers.delete(listener); };
+    }),
+    queuePrintJob: vi.fn<RecipesSource['queuePrintJob']>(async job => {
+      if (queueHold) await queueHold;
+      if (refuse.queue) throw refused();
+      fake.jobs.push({ ...job });
     }),
   };
   return fake;
