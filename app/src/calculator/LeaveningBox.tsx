@@ -1,5 +1,5 @@
 import { useId } from 'react';
-import { isLinked } from '@mise/shared/calculator-recipe-source';
+import { isLinked, leaveningLost } from '@mise/shared/calculator-recipe-source';
 import { useT } from '../i18n/useT';
 import { DecimalBox } from './DecimalBox';
 import { useRecipesEditor } from './recipesEditorContext';
@@ -25,7 +25,10 @@ export function LeaveningBox({ recipe }: { recipe: EditableRecipe }) {
   const id = (part: string) => `${ids}-${part}`;
   const linked = isLinked(recipe);
   const rows = leaveningRows(recipe, editor.linkedRows(recipe));
-  const chosen = leaveningValue(recipe, linked);
+  // ⚠️ A CATALOGUE ROW THAT IS GONE (deleted, or re-added with a new id) READS AS «NOTHING RISES» — which is what
+  // the Calculator then does: no knob, pro-rata (the current app's fix, PR #376). Its % box would move nothing.
+  const lost = leaveningLost(recipe, editor.resolved(recipe));
+  const chosen = lost ? '' : leaveningValue(recipe, linked);
   const knob = recipe.showLeavening !== false;
 
   return (
