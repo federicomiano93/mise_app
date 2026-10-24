@@ -183,6 +183,50 @@ export function canCalculate(resolved: ResolvedRecipe | null | undefined): boole
   return !!resolved && !resolved.problem && resolved.ingredients.length > 0;
 }
 
+// Settings → Recipes: the leavening dropdown's answer, written on the tab being edited (a working copy, changed
+// IN PLACE like the original's). `value` is the option's value — '' for «nothing rises», a row key, or
+// '#<index>' for an own row that has no key yet. `linkedRows` is the resolved Catalogue list when the tab is
+// linked, null when it carries its own. Returns true when the choice was understood.
+//
+// ⚠️ A LINKED CHOICE IS LOOKED UP IN THE CATALOGUE ROWS IT WAS OFFERED FROM (the current app once looked it up
+// in the tab's own leftover list, where a Catalogue row id is never found). Mise 2's editor keeps its own
+// copy-returning twin, app/src/calculator/recipesModel.ts chooseLeavening, which must say the same.
+type LeaveningTab = {
+  ingredients?: unknown; leaveningKey?: unknown; leaveningRid?: unknown;
+  leaveningDefaultPct?: unknown; baselinePct?: unknown;
+};
+type OwnRow = { key?: string; label?: string } | null | undefined;
+export function chooseLeavening(recipe: unknown, value: unknown, linkedRows: readonly { key?: unknown }[] | null | undefined): boolean {
+  const tab = recipe as LeaveningTab | null | undefined;
+  if (!tab) return false;
+  const picked = String(value || '');
+  if (!picked) {
+    if (linkedRows) tab.leaveningRid = null; else tab.leaveningKey = null;
+    return true;
+  }
+
+  if (linkedRows) {
+    if (!linkedRows.some(row => row && row.key === picked)) return false;
+    tab.leaveningRid = picked;
+  } else {
+    const own: OwnRow[] = Array.isArray(tab.ingredients) ? tab.ingredients as OwnRow[] : [];
+    const index = picked.startsWith('#') ? Number(picked.slice(1)) : -1;
+    const ing = index >= 0 ? own[index] : own.find(i => i && i.key === picked);
+    if (!ing) return false;
+    // An ingredient with no key cannot be pointed at yet; it gets one the moment it is chosen.
+    if (!ing.key) {
+      ing.key = (ing.label || 'ing').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + own.indexOf(ing);
+    }
+    tab.leaveningKey = ing.key;
+  }
+  if (!tab.leaveningDefaultPct) tab.leaveningDefaultPct = 1;
+  // ⚠️ A LINKED PICK RESTARTS THE BASELINE AT THE STARTING %. The baseline is the % at which the rows' grams are
+  // written; one left on the tab from before it was linked describes its OLD own recipe, and would silently
+  // change the Catalogue's yeast at the very % every phone starts from (0.65 kept, 0.8 start → ×1.23).
+  if (linkedRows || tab.baselinePct == null) tab.baselinePct = tab.leaveningDefaultPct;
+  return true;
+}
+
 // ⚠️ AND A LINKED RECIPE WHOSE LEAVENING IS GONE SAYS SO. The dough still calculates — every other
 // ingredient is there — but the knob must not silently scale nothing while the screen goes on showing it.
 export function leaveningLost(recipe: unknown, resolved: Partial<ResolvedRecipe> | null | undefined): boolean {

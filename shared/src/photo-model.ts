@@ -114,3 +114,27 @@ export function errorKey(err: unknown, keys: PhotoKeys): string {
 export function answerKey(reason: unknown, keys: PhotoKeys): string {
   return (keys[reason as string] || keys['nothing-readable']) as string;
 }
+
+// Decode a chosen photo the right way up (the current app's js/photo-model.js, PR #374).
+//
+// ⚠️ Chrome 101 (the lab tablet's, the newest the SM-T550 can get) does not know the word 'from-image': it REJECTS the
+// options with a TypeError before looking at the photo, so every camera photo on the tablet was reported as an
+// unreadable format (found on the real tablet in Mise 2, 18 Oct 2026). Its own default already honours the EXIF
+// rotation (measured there: a 40×30 JPEG flagged «rotate 90°» decodes 30×40) — the spec later renamed that behaviour
+// 'from-image'. So ONLY a TypeError (the options refused) retries without them; a photo that truly cannot be decoded
+// fails with a DOMException and stays «undecodable» for the caller.
+//
+// `create` is createImageBitmap, passed in so a test can stand in for the browser. shared/ knows no DOM, so the
+// bitmap and the file are whatever the browser's own function takes and gives.
+type CreateBitmap<F, B> = (file: F, options?: { imageOrientation: 'from-image' }) => Promise<B>;
+export async function decodeUpright<F, B>(
+  file: F,
+  create: CreateBitmap<F, B> = (globalThis as unknown as { createImageBitmap: CreateBitmap<F, B> }).createImageBitmap,
+): Promise<B> {
+  try {
+    return await create(file, { imageOrientation: 'from-image' });
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+    return create(file);
+  }
+}
