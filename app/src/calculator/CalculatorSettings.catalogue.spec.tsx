@@ -248,6 +248,16 @@ describe('choosing a Catalogue recipe', () => {
 });
 
 describe('a recipe that is already linked', () => {
+  // ⚠️ The current app's fix (PR #376): a Catalogue row that is gone reads as «nothing rises», with no % box —
+  // what the Calculator then does (no knob, pro-rata).
+  it('reads «nothing rises», with no % box, when its leavening row is gone from the Catalogue', async () => {
+    const GONE = { ...STAMPED, ingredients: STAMPED.ingredients.slice(0, 1) };
+    await open(`${LIST}/focaccia`, { config: configOf({ recipes: [LINKED] }), recipes: [GONE] });
+    expect(await main().findByText('Linked to Catalogue focaccia', undefined, LOAD)).toBeInTheDocument();
+    expect(leavening()).toHaveValue('');
+    expect(main().queryByRole('spinbutton', { name: 'Start at' })).not.toBeInTheDocument();
+  });
+
   it('shows the Catalogue\'s rows from the watched recipe, without ever reading the Catalogue', async () => {
     const { source } = await open(`${LIST}/focaccia`, { config: configOf({ recipes: [LINKED] }), recipes: [STAMPED] });
     expect(await main().findByText('Linked to Catalogue focaccia', undefined, LOAD)).toBeInTheDocument();
