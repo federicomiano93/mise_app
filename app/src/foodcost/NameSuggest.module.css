@@ -1,0 +1,59 @@
+/* The product's name box with the recipes it matches under it, in the page's flow (not floating). */
+
+.suggest {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+/* 18px type on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
+.input {
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--font);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.input[data-invalid="true"],
+.input[data-invalid="true"]:focus {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.row[data-all="true"] {
+  color: var(--accent-ink);
+}
+
+.row[data-active="true"] {
+  background: var(--accent-tint);
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--sunken);
+  }
+}

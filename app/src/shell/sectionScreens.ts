@@ -20,6 +20,7 @@ export function lazyScreen(load: () => Promise<{ default: ComponentType }>): Laz
 export const SECTION_SCREENS: Readonly<Partial<Record<SectionId, LazyExoticComponent<ComponentType>>>> = {
   pastries: lazyScreen(() => import('../pastries/PastriesSection')),
   stocktake: lazyScreen(() => import('../stocktake/StocktakeSection')),
+  foodcost: lazyScreen(() => import('../foodcost/FoodcostSection')),
 };
 
 export function hasScreen(sectionId: SectionId): boolean {

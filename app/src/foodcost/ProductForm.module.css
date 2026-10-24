@@ -1,0 +1,101 @@
+/* The product's form: cards for what it is made of, its packaging, the work, and how it is sold.
+   Nothing here clips (no `overflow`): the form bar above sticks to the top of the scroll area. */
+
+.field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.label {
+  font-weight: 600;
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.nameNote {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.cardTitle {
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+/* The lines take the whole card, not just their content. */
+.lines {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  gap: var(--s2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.add {
+  align-self: flex-start;
+}
+
+.pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s4);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.select {
+  min-height: var(--hit);
+  max-width: 100%;
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-md) var(--font);
+}
+
+.select:focus {
+  border-color: var(--accent);
+}
+
+/* The guide's button: the icon alone, square, with its name for a screen reader. */
+.guide {
+  width: var(--hit);
+  padding: 0;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.delete {
+  color: var(--danger-ink);
+}

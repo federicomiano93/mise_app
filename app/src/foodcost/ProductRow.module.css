@@ -1,0 +1,108 @@
+/* One product on the list: the name and ONE line on the left, the traffic light and the food cost on
+   the right. The whole row is the button (48px and more), so a tap anywhere on it opens the product. */
+
+.item {
+  border-bottom: 1px solid var(--line);
+}
+
+.item:last-child {
+  border-bottom: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  width: 100%;
+  min-height: 72px;
+  padding: var(--s2) var(--s3);
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.row:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+/* The product whose figures are open beside the list (the tablet's split). */
+.row[data-open="true"] {
+  background: var(--accent-tint);
+}
+
+@media (hover: hover) {
+  .row[data-open="false"]:hover {
+    background: var(--sunken);
+  }
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.name {
+  overflow-wrap: anywhere;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+.sub {
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* A product that cannot be costed yet: the to-do colour, with the words saying what is missing. */
+.sub[data-todo="true"] {
+  color: var(--warn-ink);
+}
+
+.figure {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--r-pill);
+  background: var(--line-2);
+}
+
+.dot[data-status="green"] {
+  background: var(--ok);
+}
+
+.dot[data-status="amber"] {
+  background: var(--warn);
+}
+
+.dot[data-status="red"] {
+  background: var(--danger);
+}
+
+.pct {
+  min-width: 3.5em;
+  font-size: var(--fs-lg);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.pct[data-costed="false"] {
+  color: var(--ink-2);
+  font-weight: 500;
+}

@@ -1,19 +1,23 @@
-// The twenty-one TypeScript models and the js/ files the live app runs today must stay the SAME
+// The twenty-six TypeScript models and the js/ files the live app runs today must stay the SAME
 // thing, until the switch to Mise 2 retires the js/ ones. The behaviour specs next to each model
 // run every test against both; this file checks what a behaviour test cannot see — that the two
 // export the same names, the same constants, the same frozen-ness and the same function shapes.
 //
-// membership.ts, location-id.ts, pastries-model.ts, market.ts, price-model.ts, currency.ts and
-// inventory-value.ts are NOT paired here: they are partial or adapted ports (the pure half of
+// membership.ts, location-id.ts, pastries-model.ts, market.ts, price-model.ts, currency.ts,
+// inventory-value.ts, catalogue-model.ts, recipe-cost-model.ts and foodcost-model.ts are NOT paired here:
+// they are partial or adapted ports (the pure half of
 // js/roles.js and js/location.js; everything in js/pastries/pastries-model.js except weekdayLabel and
 // weekdayShortLabel, which look a word up in the interface dictionary that in Mise 2 belongs to the
 // app; the country and money half of js/market.js, without the label vocabulary; the reading half of
 // js/price-model.js, without the writing half and the dictionary lookups; js/currency.js without
 // the module variable that holds the venue's money, which Mise 2 hands to the functions instead; and
 // everything in js/inventory/inventory-value.js except formatTotal, which writes the total with that
-// same module variable), so the js/ files export more or differently by design; their specs run
-// every test against both files instead (pastries-model.spec.ts, market.spec.ts, price-model.spec.ts,
-// currency.spec.ts and inventory-value.spec.ts also compare the names, constants, frozen-ness and
+// same module variable; the part of js/catalogue/catalogue-model.js that Food cost reads; everything in
+// js/catalogue/recipe-cost-model.js except the two functions that look a word up in the dictionary; and
+// everything in js/foodcost/foodcost-model.js except blockerText, likewise), so the js/ files export more
+// or differently by design; their specs run every test against both files instead (pastries-model.spec.ts,
+// market.spec.ts, price-model.spec.ts, currency.spec.ts, inventory-value.spec.ts, catalogue-model.spec.ts,
+// recipe-cost-model.spec.ts and foodcost-model.spec.ts also compare the names, constants, frozen-ness and
 // function shapes of everything they do port).
 //
 // ⚠️ IT IS WHAT CATCHES A FIX MADE TO js/ AND FORGOTTEN HERE. A constant changed in one file
@@ -42,6 +46,11 @@ import * as orderCost from './order-cost';
 import * as inventoryModel from './inventory-model';
 import * as inventoryOutbox from './inventory-outbox';
 import * as inventoryPurchases from './inventory-purchases';
+import * as vatRates from './vat-rates';
+import * as ingredientKind from './ingredient-kind';
+import * as productLimits from './product-limits';
+import * as vatGuide from './vat-guide';
+import * as foodcostWeighing from './foodcost-weighing';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -63,6 +72,11 @@ import * as legacyOrderCost from '../../js/order-cost.js';
 import * as legacyInventoryModel from '../../js/inventory/inventory-model.js';
 import * as legacyInventoryOutbox from '../../js/inventory/inventory-outbox.js';
 import * as legacyInventoryPurchases from '../../js/inventory/inventory-purchases.js';
+import * as legacyVatRates from '../../js/vat-rates.js';
+import * as legacyIngredientKind from '../../js/ingredient-kind.js';
+import * as legacyProductLimits from '../../js/foodcost/product-limits.js';
+import * as legacyVatGuide from '../../js/foodcost/vat-guide.js';
+import * as legacyFoodcostWeighing from '../../js/foodcost/foodcost-weighing.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -86,6 +100,11 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['inventory-model', inventoryModel, legacyInventoryModel],
   ['inventory-outbox', inventoryOutbox, legacyInventoryOutbox],
   ['inventory-purchases', inventoryPurchases, legacyInventoryPurchases],
+  ['vat-rates', vatRates, legacyVatRates],
+  ['ingredient-kind', ingredientKind, legacyIngredientKind],
+  ['product-limits', productLimits, legacyProductLimits],
+  ['vat-guide', vatGuide, legacyVatGuide],
+  ['foodcost-weighing', foodcostWeighing, legacyFoodcostWeighing],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -172,9 +191,10 @@ if (!legacyOutboxHasTheFix) {
   });
 }
 
-test('all twenty-one models are compared', () => {
+test('all twenty-six models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
-      'order-cost', 'inventory-model', 'inventory-outbox', 'inventory-purchases']);
+      'order-cost', 'inventory-model', 'inventory-outbox', 'inventory-purchases', 'vat-rates', 'ingredient-kind', 'product-limits',
+      'vat-guide', 'foodcost-weighing']);
 });

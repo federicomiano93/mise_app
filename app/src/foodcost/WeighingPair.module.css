@@ -1,0 +1,90 @@
+/* The raw and cooked dough of one recipe, side by side; they wrap under each other on the narrowest
+   phone. */
+
+.weigh {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.title {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+
+.cell {
+  display: flex;
+  flex: 1 1 140px;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.label {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.box {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* 18px type on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
+.input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.unit {
+  color: var(--ink-2);
+}
+
+.out {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.warn {
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.shared {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}

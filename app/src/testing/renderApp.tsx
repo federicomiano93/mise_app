@@ -13,6 +13,7 @@ import type { Language } from '../i18n/i18n';
 import { routes as appRoutes } from '../routes';
 import { SessionProvider } from '../session/SessionContext';
 import type { Session } from '../session/session';
+import { fakeFoodcostSource } from './fakeFoodcostSource';
 import { fakePastriesSource } from './fakePastriesSource';
 import { fakeStocktakeSource } from './fakeStocktakeSource';
 import { fakeStore } from './fakeSession';
@@ -38,7 +39,8 @@ export function renderApp(path: string, { lang = 'en', routes = appRoutes, sessi
   const user = userEvent.setup();
   const messages = lang === 'it' ? italian : en;
   const store = fakeStore(session);
-  const services: DataServices = { pastries: () => fakePastriesSource(), stocktake: () => fakeStocktakeSource(), ...data };
+  const services: DataServices = { pastries: () => fakePastriesSource(), stocktake: () => fakeStocktakeSource(),
+    foodcost: () => fakeFoodcostSource(), ...data };
 
   render(
     <I18nProvider initialLanguage={lang} initialMessages={messages}>

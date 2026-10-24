@@ -111,6 +111,28 @@ Aria does not support Preact. The numbers are below.
   split from 1000px), `MonthBar`, `CountList` with `ProductRow` and `CountBox`, `StocktakeProduct`,
   `StocktakeCost`, `MonthActions`. The money comes from the venue's country through
   `session/useMoney.ts`. Its parity list is `docs/parity/stocktake.md`.
+- `foodcost/` — Food cost, the third section, built the same way: a source (`foodcostSource.ts`, a
+  port of `js/foodcost/firebase-foodcost.js`: products written whole with their margin point in the
+  same batch, the recipes and the ingredients with their prices read to cost a product, the hourly
+  labour cost, a product's history read once), a store (`foodcostStore.ts`: local-first and never
+  stuck, a refused write rolled back and said as a `FoodcostMessage`, an empty answer from the
+  browser's own database not believed over a copy that had products, the labour rate watched only
+  for whoever runs the place), a context (`FoodcostContext.tsx`) and the screens: `FoodcostSection`
+  (the frame, the split from 1000px, the scroll it owns and the hand-back of the focus),
+  `FoodcostList` with `ProductRow` (worst food cost first, the light as a dot AND a word),
+  `ProductEditor` (the product's own screen: a wrapper that follows the id in the address and waits
+  for the product, around `ProductForm`, keyed on the id, which copies the product once and works on
+  that copy — with `ProductAnswer`, `LineRow`, `WeighingPair`, `NameSuggest`, `NumberBox`, the
+  chooser `PickDialog` and the `VatGuideDialog`; the working copy's rules are in
+  `productEditorModel.ts`), `MarginHistory`, `FoodcostSettings` (the hourly labour cost, only for
+  whoever runs the place; it waits for the rate before it copies it). Addresses, in
+  `foodcostPath.ts` (ids split before they are decoded): `/food-cost`, `/new`, `/product/<id>`,
+  `/product/<id>/history`, `/settings`; anything else goes back to the list. The usage record names
+  four screens: `foodcost`, `foodcost-product` (new or existing), `foodcost-history`,
+  `foodcost-settings`. `foodcostNav.ts` and `handBack.ts` are this section's copies of the
+  Stocktake's (a feature never imports from another feature's folder). The money comes from the
+  venue's country (`session/useMoney.ts`), the percentages and dates from the interface language.
+  Its parity list is `docs/parity/foodcost.md`.
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the
@@ -126,7 +148,7 @@ Pure logic only, no DOM types. Each module is a PORT of a `js/` file, and its sp
 against BOTH files (`describe.each` over the TypeScript port and the `js/` original), so the two
 apps cannot drift apart while both are live. `parity.spec.ts` compares the full ports export by
 export (names, constants, frozen-ness, function names and arity); a partial port (`membership`,
-`location-id`, `pastries-model`, `market`, `price-model`, `inventory-value`) is not paired and its spec says why, and
+`location-id`, `pastries-model`, `market`, `price-model`, `inventory-value`, `catalogue-model`, `recipe-cost-model`, `foodcost-model`) is not paired and its spec says why, and
 compares what it does port with the `js/` file itself. `currency` is an ADAPTED port, also not paired:
 the original keeps the venue's money in a module variable (`setCurrency`), and Mise 2 never keeps a
 venue fact in a module variable, so the port is stateless (`moneyOf(symbol, layout)` returns the
@@ -139,10 +161,17 @@ copied, not tidied, and marked where it sits: fixing it is a bug fix to BOTH fil
 allergen-model, sections, firebase-target, local-data, same-data, error-model, device-model,
 usage-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock, pack-size,
 order-unit, ingredient-name, order-cost, inventory-model, inventory-outbox, inventory-purchases,
+vat-rates, ingredient-kind, product-limits, vat-guide, foodcost-weighing,
 market (partial: the country and the money, not the label
 vocabulary), price-model (partial: the reading half, not the writing half or the dictionary lookups),
 inventory-value (partial: everything but `formatTotal`, which reads the money from a module variable;
-the app writes money with `formatMoney(value, money)` of `price-model`), currency (adapted, stateless).
+the app writes money with `formatMoney(value, money)` of `price-model`), currency (adapted, stateless),
+catalogue-model (partial: only what Food cost reads — the unit table, the row link, the oven loss and the link
+suggestions; it leaves out the recipe normalisers, the kg scaling, the Calculator import and `unitText` /
+`batchWarning`, which use the dictionary), recipe-cost-model (partial: `costRecipe` and its constants; it leaves
+out `costReasonLabel` and `partialCostText`, which use the dictionary — the app resolves `COST_REASON_TEXT`
+through its own typed i18n), foodcost-model (partial: everything but `blockerText`, which uses the dictionary —
+the app resolves `BLOCKER_TEXT` likewise). A partial port keeps, in its header, the list of what it leaves out.
 
 ## The session
 
