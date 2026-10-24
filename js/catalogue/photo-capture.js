@@ -17,7 +17,7 @@ import { t, onLanguageChange } from '../i18n.js';
 import { el } from './dom.js';
 import {
   MAX_EDGE, JPEG_QUALITY, FALLBACK_QUALITY, MAX_PHOTOS, MAX_IMAGE_BYTES,
-  fitWithin, base64Of, mediaTypeOf, approxBytes, payloadProblem,
+  fitWithin, base64Of, mediaTypeOf, approxBytes, payloadProblem, decodeUpright,
   photoErrorKey, noRecipeKey,
 } from './photo-model.js';
 import { readRecipePhotos } from './firebase-photo.js';
@@ -30,10 +30,11 @@ const BIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 //
 // ⚠️ createImageBitmap, NOT FileReader, AND `imageOrientation` IS THE LINE THAT
 // MUST NOT BE LOST. A phone held upright writes an EXIF rotation flag into the
-// file instead of rotating the pixels; the historical default here is to ignore
-// it. Ignored, the reader is handed a photograph lying on its side and answers
+// file instead of rotating the pixels; some browsers' default ignores it
+// (Chrome 101's honours it — see decodeUpright). Ignored, the reader is handed a photograph lying on its side and answers
 // with confident nonsense — and NOTHING reports an error, because nothing has
-// gone wrong as far as any code can tell.
+// gone wrong as far as any code can tell. The option is passed by decodeUpright
+// (js/photo-model.js), which also copes with Chrome 101 refusing it.
 //
 // It also takes the File directly, so no blob: URL is ever made — which matters,
 // because the app's Content-Security-Policy allows `img-src 'self' data:` and
@@ -42,7 +43,7 @@ const BIN_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" str
 async function shrink(file) {
   let bitmap;
   try {
-    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    bitmap = await decodeUpright(file);
   } catch {
     // ⚠️ ALMOST ALWAYS HEIC, off an iPhone, picked from the library rather than
     // taken with the camera. Android cannot decode it at all. There is no fallback

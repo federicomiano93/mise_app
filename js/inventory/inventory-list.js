@@ -279,8 +279,10 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
       parts.subEl.classList.toggle('todo', !line.counted);
       parts.node.classList.toggle('counted', line.counted);
 
+      // boxNum, never num: a count that lands here (a save, another phone) is the next thing
+      // somebody edits, and a grouped «1,234» edited to «1,235» is saved as 1.235.
       if (document.activeElement !== parts.box) {
-        const text = line.closing === null ? '' : num(line.closing, locale);
+        const text = line.closing === null ? '' : boxNum(line.closing, locale);
         if (parts.box.value !== text) parts.box.value = text;
       }
     }
