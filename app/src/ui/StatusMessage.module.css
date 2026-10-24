@@ -1,0 +1,40 @@
+/* The status message (the design's `.toast`): a dark pill over the bottom of the content. The
+   region is fixed to the screen and lets every tap through; the pill is only there while there is
+   something to say.
+
+   The phone's tab bar is a 52px tab inside 6px of padding and a 1px rule (AppShell.module.css),
+   so the message sits 65px up, plus the home-indicator inset, to clear it. From 700px the tab bar
+   is gone and the rail takes the left edge. */
+
+.region {
+  position: fixed;
+  right: 0;
+  bottom: calc(var(--s4) + 65px + env(safe-area-inset-bottom));
+  left: 0;
+  z-index: 50;
+  display: flex;
+  justify-content: center;
+  padding: 0 var(--s4);
+  pointer-events: none;
+}
+
+.message {
+  display: inline-flex;
+  align-items: center;
+  min-height: 52px;
+  max-width: 560px;
+  padding: var(--s2) var(--s5);
+  border-radius: var(--r-md);
+  background: var(--ink);
+  color: var(--rail-ink-strong);
+  box-shadow: var(--shadow-2);
+  font-size: var(--fs-md);
+  font-weight: 500;
+}
+
+@media (min-width: 700px) {
+  .region {
+    bottom: var(--s6);
+    left: calc(var(--rail-w) + env(safe-area-inset-left));
+  }
+}

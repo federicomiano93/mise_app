@@ -5,6 +5,7 @@ import './styles/base.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { RouterProvider } from 'react-router/dom';
+import { createDataServices, DataProvider } from './data/DataContext';
 import { AppBoundary } from './errors/AppBoundary';
 import { onRouteError } from './errors/routeErrors';
 import { I18nProvider } from './i18n/I18nProvider';
@@ -37,6 +38,9 @@ const sinks = createTelemetrySinks(backend, () => {
 // keeps it in memory and sends it once a venue is open.
 startTelemetry({ store, sinks });
 
+// Every section's data, on the same backend: Firestore is loaded by the first section that reads.
+const services = createDataServices(backend.firestore);
+
 // Nobody signed in: the sign-in form needs no Firestore (firebaseBackend.ts loads it lazily), so
 // it is fetched while the password is being typed. Signed in, the session's first read loads it.
 store.subscribe(() => {
@@ -58,9 +62,11 @@ void loadLanguage(wanted).then(({ lang, messages }) => {
       <AppBoundary>
         <I18nProvider initialLanguage={lang} initialMessages={messages}>
           <SessionProvider store={store}>
-            <SessionGate>
-              <RouterProvider router={router} onError={onRouteError} />
-            </SessionGate>
+            <DataProvider services={services}>
+              <SessionGate>
+                <RouterProvider router={router} onError={onRouteError} />
+              </SessionGate>
+            </DataProvider>
           </SessionProvider>
         </I18nProvider>
       </AppBoundary>

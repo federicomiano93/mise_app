@@ -4,6 +4,7 @@ import { Button } from 'react-aria-components';
 import { CloudOff, RotateCw } from 'lucide-react';
 import { useT } from '../i18n/useT';
 import { Page } from '../shell/Page';
+import { ScreenLoadError } from './ScreenLoadError';
 import styles from './PartBoundary.module.css';
 
 type Props = {
@@ -22,7 +23,12 @@ type Props = {
   onError?: (error: unknown, info: ErrorInfo) => void;
 };
 
-type State = { failed: boolean; resetKey: string | undefined };
+type State = {
+  failed: boolean;
+  // What failed was the download of a screen's code: only a new page load can fix that.
+  pageReload: boolean;
+  resetKey: string | undefined;
+};
 
 // ⚠️ ONE FAILING PART MUST NOT TAKE THE SCREEN DOWN. Without a boundary, an error thrown while
 // drawing one section unmounts the whole tree: a white page, no navigation, nothing to tap.
@@ -32,21 +38,21 @@ type State = { failed: boolean; resetKey: string | undefined };
 // `failed` is a flag, not the error itself: `throw undefined` is legal JavaScript, and an error
 // stored as a value would then look like «no error».
 export class PartBoundary extends Component<Props, State> {
-  override state: State = { failed: false, resetKey: this.props.resetKey };
+  override state: State = { failed: false, pageReload: false, resetKey: this.props.resetKey };
 
   private container = createRef<HTMLDivElement>();
   private fallback = createRef<HTMLDivElement>();
   private focusAfterReload = false;
 
-  static getDerivedStateFromError(): Partial<State> {
-    return { failed: true };
+  static getDerivedStateFromError(error: unknown): Partial<State> {
+    return { failed: true, pageReload: error instanceof ScreenLoadError };
   }
 
   // Synchronous, before the render: the new section is drawn straight away, instead of the
   // fallback flashing for one frame after the user already moved on.
   static getDerivedStateFromProps(props: Props, state: State): Partial<State> | null {
     if (props.resetKey === state.resetKey) return null;
-    return { failed: false, resetKey: props.resetKey };
+    return { failed: false, pageReload: false, resetKey: props.resetKey };
   }
 
   override componentDidCatch(error: unknown, info: ErrorInfo): void {
@@ -70,7 +76,15 @@ export class PartBoundary extends Component<Props, State> {
     else focusRestored(this.container.current);
   }
 
+  // ⚠️ A SCREEN THAT COULD NOT BE DOWNLOADED IS NOT FIXED BY DRAWING IT AGAIN: React.lazy and the
+  // browser both remember the failed import for the life of the page, so «Reload» would rethrow the
+  // same error at once, for ever. Only a new page load downloads it afresh (see ScreenLoadError).
+  // Anything else gets the soft reset: a bug in a screen can pass.
   private reload = (): void => {
+    if (this.state.pageReload) {
+      window.location.reload();
+      return;
+    }
     this.focusAfterReload = true;
     this.setState({ failed: false });
   };

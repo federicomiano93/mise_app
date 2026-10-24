@@ -49,6 +49,11 @@ export default defineConfig({
     // *.spec.*, never *.test.*: see shared/vitest.config.ts.
     include: ['src/**/*.spec.{ts,tsx}'],
     setupFiles: ['src/testing/setup.ts'],
+    // The files of the suite run side by side, and on a modest PC the first screen a file draws can
+    // take a few seconds instead of half of one (a spec that takes 0.5 s on its own timed out at the
+    // default 5 s in a full run). A test that passes finishes when it does; this only stops a slow
+    // machine from reading as a broken screen.
+    testTimeout: 20_000,
     // Vitest replaces every CSS file with an empty string unless told otherwise — `?raw`
     // included — so src/css-modules.spec.ts would be handed empty text: its var(--x) check would
     // pass with nothing to look at, and only its class check and its «tokens.css is not empty»
