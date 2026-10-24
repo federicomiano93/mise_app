@@ -322,9 +322,11 @@ describe('QUIRK COPIED: ingredientGrams of nothing', () => {
 
 describe('the port against the original', () => {
   // The other half of the original: recipe normalisers, list helpers, the kg scaling, the Calculator import
-  // and the functions that look a word up in the interface dictionary.
+  // and the functions that look a word up in the interface dictionary. `unitDecimals` / `roundInUnit` belong
+  // to the kg scaling (live fix «kg and litre amounts keep their decimals»), `formatAmount` reads the interface
+  // locale: all three come with the scaling, in step 3d.
   const LEFT_OUT = [
-    'unitText', 'normalizeCatalogueRecipe', 'normalizeCatalogueRecipes', 'labelFieldsOf', 'normalizeShelfLifeDays',
+    'unitText', 'unitDecimals', 'roundInUnit', 'formatAmount', 'normalizeCatalogueRecipe', 'normalizeCatalogueRecipes', 'labelFieldsOf', 'normalizeShelfLifeDays',
     'MAX_SHELF_LIFE_DAYS', 'sortByUsage', 'filterByName', 'linkOptions', 'linkedItemName', 'isSameLink', 'applyLink',
     'moveRow', 'scaleCatalogue', 'baseAmounts', 'MAX_SANE_BATCH_G', 'MAX_SANE_MULTIPLE', 'formatWeight',
     'batchWarning', 'SCALED_TTL_MS', 'isScaledEntryFresh', 'findInvalidRecipe', 'toCalculatorRecipe',
