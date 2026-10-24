@@ -69,6 +69,7 @@ import * as favouriteSuppliers from './favourite-suppliers';
 import * as recordChoices from './record-choices';
 import * as categoryBatches from './category-batches';
 import * as ingredientEditModel from './ingredient-edit-model';
+import * as allergenMatch from './allergen-match';
 import * as ingredientSearch from './ingredient-search';
 import * as packFormat from './pack-format';
 import * as orderRequestModel from './order-request-model';
@@ -118,6 +119,7 @@ import * as legacyFavouriteSuppliersJs from '../../js/orders/favourite-suppliers
 import * as legacyRecordChoicesJs from '../../js/record-choices.js';
 import * as legacyCategoryBatchesJs from '../../js/orders/category-batches.js';
 import * as legacyIngredientEditModelJs from '../../js/ingredient-edit-model.js';
+import * as legacyAllergenMatchJs from '../../js/allergen-match.js';
 import * as legacyIngredientSearchJs from '../../js/orders/ingredient-search.js';
 import * as legacyPackFormatJs from '../../js/pack-format.js';
 import * as legacyOrderRequestModelJs from '../../js/orders/order-request-model.js';
@@ -198,6 +200,7 @@ const legacyFavouriteSuppliers = legacyFavouriteSuppliersJs as unknown as typeof
 const legacyRecordChoices = legacyRecordChoicesJs as unknown as typeof recordChoices;
 const legacyCategoryBatches = legacyCategoryBatchesJs as unknown as typeof categoryBatches;
 const legacyIngredientEditModel = legacyIngredientEditModelJs as unknown as typeof ingredientEditModel;
+const legacyAllergenMatch = legacyAllergenMatchJs as unknown as typeof allergenMatch;
 const legacyIngredientSearch = legacyIngredientSearchJs as unknown as typeof ingredientSearch;
 const legacyPackFormat = legacyPackFormatJs as unknown as typeof packFormat;
 const legacyOrderRequestModel = legacyOrderRequestModelJs as unknown as typeof orderRequestModel;
@@ -3428,6 +3431,38 @@ describe('record-choices: odd inputs', () => {
   agree('looseUnitFor', m.looseUnitFor, l.looseUnitFor, product(['kg', 'l', 'pcs', 'weird', 'KG', 'constructor', 'toString', '__proto__', ...ODD], LANGUAGES));
   agree('packWordFor', m.packWordFor, l.packWordFor, product(['busta', ' Busta ', 'sacco', 'box', 'sleeve', 'constructor', 'toString', '__proto__', ...ODD],
     [1, '1', 2, 0, -1, 1.5, ...ODD], ['it', 'en', ...LANGUAGES.slice(0, 8)]));
+});
+
+describe('allergen-match: odd inputs', () => {
+  const m = allergenMatch;
+  const l = legacyAllergenMatch;
+
+  const TEXTS: readonly unknown[] = [...ODD, new String('latte'), 'latte', 'LATTE di MANDORLA', '   ', 'èàò ̀́', 'àèì',
+    'Farina di SEMOLA di GRANO duro, LATTE scremato in polvere, lecitina di SOIA. Può contenere tracce di FRUTTA A GUSCIO e SESAMO.',
+    'May contain traces of nuts. Può contenere nocciole. Tracce di latte', 'tracce di', 'may contain', ' may contain',
+    'burro di arachidi, noccioline americane, albumina, lecitine, e322, gluten', 'cream of tartar, cremor tartaro, gluten free oats',
+    '🥛 latte 🥛', 'a�b', 'latte uova', 'x'.repeat(3000), 'latte '.repeat(500), ' '.repeat(2000),
+    { toString: () => 'latte' }, { toString(): string { throw new Error('boom'); } }, Symbol.iterator, 12345n];
+  agree('readPackIngredients', m.readPackIngredients as AnyFn, l.readPackIngredients as AnyFn, product(TEXTS));
+  agree('splitTraces', m.splitTraces as AnyFn, l.splitTraces as AnyFn, product(TEXTS));
+  agree('normaliseWithMap', m.normaliseWithMap as AnyFn, l.normaliseWithMap as AnyFn, product(TEXTS));
+  agree('tickKey', m.tickKey as AnyFn, l.tickKey as AnyFn, product(ODD, ['contains', 'may', ...ODD]));
+
+  const LISTS: readonly unknown[] = [undefined, null, [], ['milk'], ['milk', 'eggs'], ['milk', 'milk'], ['nuts-almond', 'fish'], 'milk', '', 5, true, {},
+    new Set(['milk']), new Set(['contains:milk', 'may:eggs', 'contains:fish']), ['contains:milk'], ['may:milk', 'contains:eggs'], [1, null, undefined]];
+  const PROPOSALS: readonly unknown[] = [undefined, null, 5, 'text', {}, { allergens: ['milk'], mayContain: ['eggs'] }, { allergens: ['milk'], mayContain: ['milk'] },
+    { allergens: [], mayContain: ['fish'] }, { allergens: 'milk' }, { allergens: null, mayContain: undefined }, { allergens: 7 },
+    m.readPackIngredients('latte, uova. Può contenere nocciole')];
+  const CURRENTS: readonly unknown[] = [undefined, null, {}, 5, { contains: [], may: [] }, { contains: ['milk'], may: [] }, { contains: ['eggs', 'milk'], may: ['sesame', 'milk'] },
+    { contains: 'milk', may: 'eggs' }, { contains: null, may: 7 }, { contains: ['fish'] }, { may: ['fish'] }];
+  const OWNED: readonly unknown[] = [undefined, null, new Set<string>(), new Set(['contains:milk']), new Set(['may:eggs', 'contains:fish']),
+    ['contains:milk', 'contains:eggs'], 'contains:milk', 5, {}];
+  agree('reconcileTicks', m.reconcileTicks as AnyFn, l.reconcileTicks as AnyFn, [
+    [], [undefined], [null], [5], ['text'], [{}], [[]],
+    ...product(PROPOSALS, CURRENTS, OWNED, OWNED).map(([proposal, current, appOwned, humanTouched]) => [{ proposal, current, appOwned, humanTouched }]),
+    ...product(LISTS, LISTS).map(([contains, may]) => [{ proposal: { allergens: contains, mayContain: may }, current: { contains: may, may: contains },
+      appOwned: new Set(['contains:milk', 'may:milk']), humanTouched: new Set(['may:eggs']) }]),
+  ]);
 });
 
 describe('category-batches: odd inputs', () => {
