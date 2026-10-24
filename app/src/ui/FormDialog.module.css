@@ -1,0 +1,25 @@
+/* A form in a modal (FormDialog.tsx): a card on a scrim, scrolling inside the overlay so the form bar can stick to its top.
+   Above the skip link and everything else, as Dialog is. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  padding: var(--s4);
+  overflow-y: auto;
+  background: var(--scrim);
+}
+
+.modal {
+  width: 100%;
+  margin: auto;
+  max-width: 560px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+}
+
+.dialog:focus-visible {
+  outline: none;
+}

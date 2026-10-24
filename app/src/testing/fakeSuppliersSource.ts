@@ -1,4 +1,4 @@
-import type { PanelKey, StoredDoc, SuppliersMeta, SuppliersSource } from '../suppliers/suppliersSource';
+import type { IngredientUsage, PanelKey, StoredDoc, SuppliersMeta, SuppliersSource } from '../suppliers/suppliersSource';
 
 // An «Ingredients & suppliers» source for the specs of screens, in memory, that behaves like Firestore's own local
 // view: a write is in the maps and every watcher is told AT ONCE (Firestore shows its pending writes), and a refused
@@ -13,7 +13,11 @@ export type SupplierWrite =
   | { readonly op: 'active'; readonly id: string; readonly active: boolean }
   | { readonly op: 'delete'; readonly id: string }
   | { readonly op: 'favourite'; readonly id: string; readonly on: boolean }
-  | { readonly op: 'category'; readonly list: readonly string[]; readonly ids: readonly string[] };
+  | { readonly op: 'category'; readonly list: readonly string[]; readonly ids: readonly string[] }
+  | { readonly op: 'ingredient-save'; readonly id: string; readonly data: Record<string, unknown> }
+  | { readonly op: 'ingredient-delete'; readonly id: string; readonly withPrice: boolean }
+  | { readonly op: 'draft-clear'; readonly id: string }
+  | { readonly op: 'draft-unit'; readonly id: string; readonly unit: string };
 
 export type FakeSuppliersSource = SuppliersSource & {
   suppliers: Map<string, StoredDoc>;
@@ -29,7 +33,18 @@ export type FakeSuppliersSource = SuppliersSource & {
   // Every write the store sent, in order (refused ones included: they are taken back afterwards).
   writes: SupplierWrite[];
   // The next writes of these kinds are refused (the rules said no).
-  refuseWrites: { save: boolean; active: boolean; delete: boolean; favourite: boolean; category: boolean };
+  refuseWrites: {
+    save: boolean; active: boolean; delete: boolean; favourite: boolean; category: boolean;
+    ingredientSave: boolean; ingredientDelete: boolean;
+  };
+  // The order in progress (drafts/current): its lines by ingredient id, or null when there is no draft (a clear then
+  // rejects, as updateDoc does on a missing document).
+  draft: Record<string, Record<string, unknown>> | null;
+  // What readUsage answers, and every id it was asked about. `holdUsage` makes the next answers wait until the returned
+  // function is called.
+  usage: IngredientUsage;
+  usageCalls: string[];
+  holdUsage(): () => void;
   // The next writes are answered only when the returned function is called (offline, or a slow network); until then
   // they are on screen, as Firestore's pending writes are.
   holdWrites(): () => void;
@@ -71,6 +86,7 @@ export function fakeSuppliersSource(
   let held = false;
   let writeHold: Promise<void> | null = null;
   let panelHold: Promise<void> | null = null;
+  let usageHold: Promise<void> | null = null;
   const deferred: string[] = [];
   const refused = () => Object.assign(new Error('permission-denied'), { code: 'permission-denied' });
 
@@ -131,7 +147,12 @@ export function fakeSuppliersSource(
     ordersConfig: seed.ordersConfig ?? null,
     refuse: { suppliers: false, ingredients: false, config: false },
     writes: [],
-    refuseWrites: { save: false, active: false, delete: false, favourite: false, category: false },
+    refuseWrites: {
+      save: false, active: false, delete: false, favourite: false, category: false, ingredientSave: false, ingredientDelete: false,
+    },
+    draft: null,
+    usage: { recipes: 0, products: 0 },
+    usageCalls: [],
     panelCalls: [],
     refusePanel: null,
     fromCache: false,
@@ -217,6 +238,66 @@ export function fakeSuppliersSource(
         }
         return () => { fake.ordersConfig = before; undo(); };
       });
+    },
+
+    newIngredientId: () => `new-ingredient-${++idCounter}`,
+
+    saveIngredient(id, data) {
+      return write({ op: 'ingredient-save', id, data: { ...data } }, fake.refuseWrites.ingredientSave, () => {
+        const undo = snapshotOf(ingredients);
+        ingredients.set(id, { ...(ingredients.get(id) ?? {}), ...data, id });
+        return undo;
+      });
+    },
+
+    deleteIngredient(id, withPrice) {
+      return write({ op: 'ingredient-delete', id, withPrice }, fake.refuseWrites.ingredientDelete, () => {
+        const undoItems = snapshotOf(ingredients);
+        const undoPrices = snapshotOf(prices);
+        ingredients.delete(id);
+        if (withPrice) prices.delete(id);
+        return () => { undoItems(); undoPrices(); };
+      });
+    },
+
+    clearDraftEntry(id) {
+      return write({ op: 'draft-clear', id }, fake.draft === null, () => {
+        const before = fake.draft;
+        if (before) {
+          const next = { ...before };
+          delete next[id];
+          fake.draft = next;
+        }
+        return () => { fake.draft = before; };
+      });
+    },
+
+    async readDraftEntry(id) {
+      await Promise.resolve();
+      const entry = fake.draft?.[id];
+      return entry ? { ...entry } : null;
+    },
+
+    setDraftEntryUnit(id, unit) {
+      return write({ op: 'draft-unit', id, unit }, false, () => {
+        const before = fake.draft;
+        fake.draft = { ...(before ?? {}), [id]: { ...(before?.[id] ?? {}), unit } };
+        return () => { fake.draft = before; };
+      });
+    },
+
+    async readUsage(id) {
+      fake.usageCalls.push(id);
+      const hold = usageHold;
+      if (hold) await hold;
+      else await Promise.resolve();
+      return { ...fake.usage };
+    },
+
+    holdUsage() {
+      let release = () => undefined as void;
+      usageHold = new Promise<void>(resolve => { release = resolve; });
+      return () => { usageHold = null; release(); };
     },
 
     async setIngredientPanel(key, on) {
