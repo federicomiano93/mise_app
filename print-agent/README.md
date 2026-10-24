@@ -102,6 +102,7 @@ and the printer — check this window, which logs every job and every failure.
 | `did not answer` | (network printer) wrong address, or the printer is asleep |
 | Nothing prints, no errors | the venue is not set to **Zebra** in Settings, so nothing is being queued |
 | A page of `^XA` codes comes out as text | the bytes went through the driver — print to the **share**, not the printer name |
+| Accented letters print wrong («Può» as `Pu?` or a box) | this computer runs an agent older than **1.0.1** (the first line of this window says which), which sent latin1 to a printer told to read UTF-8 — update the whole checkout (`git pull` in the repository folder, not just `print-agent\`) and restart the program |
 
 ---
 

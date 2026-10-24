@@ -213,7 +213,8 @@ function totalCell(list, last, totalG) {
   let computed = 0;
   list.forEach((r, i) => {
     if (r.factor > 0 && r.value !== null) {
-      terms.push(r.factor === 1 ? `B${i + 3}` : `B${i + 3}*${r.factor}`);
+      const ref = `B${i + 3}`;
+      terms.push(r.factor === 1 ? ref : `${ref}*${r.factor}`);
       computed += r.value * r.factor;
     }
   });
