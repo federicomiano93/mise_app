@@ -2,12 +2,15 @@
 //
 // The recipe never leaves the device: both files are built here from the same model the
 // screen draws, and handed to the person as a download (js/export-sheet.js is the dialog).
-// It lives in js/ ROOT because two features use it — the Calculator's result card now, the
-// Recipe catalogue next — and a calculation shared by features is not copied (CLAUDE.md).
+// It lives in js/ ROOT because two features use it — the Calculator's result card and the
+// Recipe catalogue's recipe screen — and a calculation shared by features is not copied (CLAUDE.md).
 //
-// The model: { name, trays, totalG, rows: [{ name, grams }] }. `grams` are the UNROUNDED
-// numbers the Calculator holds: the PDF shows them as the card does (Math.round + « g»),
-// the spreadsheet keeps them exact so a formula over them is right.
+// The model: { name, trays, totalG, rows }. A row is EITHER the Calculator's { name, grams } (the
+// UNROUNDED grams it holds: the PDF shows them as the card does, Math.round + « g», the spreadsheet
+// keeps them exact so a formula over them is right) OR the Recipe catalogue's
+// { name, value, unit, factor }: `value` in the row's OWN unit (null = «to taste»), `unit` the text
+// the screen prints after the number, `factor` the grams in one unit (0 = not weighable: pieces,
+// spoons, a pinch). exportRow() turns both into the second shape, so every builder reads one.
 //
 // ⚠️ THE TWO LIBRARIES ARE LOADED ONLY INSIDE buildPdfBlob / buildXlsxBlob, WITH import().
 // jsPDF is ~400 KB and write-excel-file ~70 KB; nobody opening the Calculator should pay
@@ -17,13 +20,33 @@
 // ⚠️ NO t() AND NO DOM HERE. Words arrive from the caller (the title is the recipe's own
 // name; the Excel total label is passed in), so this file is plain functions a test can run.
 
+// ── Rows ──────────────────────────────────────────────────────────────────────────────────
+
+// One row in the general shape { name, value, unit, factor }. The Calculator's { name, grams } is
+// a row in grams: factor 1, unit «g».
+export function exportRow(r) {
+  if (r && (r.unit !== undefined || r.value !== undefined)) {
+    return {
+      name: r.name,
+      value: r.value === null || r.value === undefined ? null : (Number(r.value) || 0),
+      unit: String(r.unit ?? ''),
+      factor: Number(r.factor) > 0 ? Number(r.factor) : 0,
+      decimals: Math.max(0, Math.min(3, Math.trunc(Number(r.decimals)) || 0)),
+      text: typeof r.text === 'string' && r.text ? r.text : null,
+    };
+  }
+  return { name: r && r.name, value: Number(r && r.grams) || 0, unit: 'g', factor: 1, decimals: 0, text: null };
+}
+
 // ── Names ─────────────────────────────────────────────────────────────────────────────────
 
 // What the page and the spreadsheet are titled: «Pizza x 3» for trays, «Pizza — 24000 g» else.
 export function exportTitle(m) {
   const name = String(m.name ?? '');
   const trays = Number(m.trays) || 0;
-  return trays > 0 ? `${name} x ${trays}` : `${name} — ${m.totalG} g`;
+  if (trays > 0) return `${name} x ${trays}`;
+  // A recipe of only pieces or «to taste» has no weight to put in the title.
+  return Number(m.totalG) > 0 ? `${name} — ${m.totalG} g` : name;
 }
 
 // «Pizza_x3.pdf», «Focaccia_24000g.xlsx»: safe on Windows, Android and iOS file systems.
@@ -36,11 +59,20 @@ export function exportFileName(m, ext, fallback = 'recipe') {
     .replace(/^\.+/, '')
     .slice(0, 80) || fallback;
   const trays = Number(m.trays) || 0;
-  return `${base}${trays > 0 ? `_x${trays}` : `_${m.totalG}g`}.${ext}`;
+  const suffix = trays > 0 ? `_x${trays}` : (Number(m.totalG) > 0 ? `_${m.totalG}g` : '');
+  return `${base}${suffix}.${ext}`;
 }
 
 // The weight as the result card prints it (js/calc.js renderIngredients).
 export const rowText = grams => `${Math.round(grams)} g`;
+
+// A row as the PDF prints it: «14400 g», «500 ml», «3 pz», or just the unit word for «to taste».
+export function rowTextOf(row) {
+  const r = exportRow(row);
+  if (r.value === null) return r.unit;
+  // The screen's own number when the caller has it («1,846» in Italian): kg and l keep decimals.
+  return `${r.text ?? Math.round(r.value)} ${r.unit}`;
+}
 
 // ── The PDF page ──────────────────────────────────────────────────────────────────────────
 
@@ -148,6 +180,14 @@ export function pdfLayout({ title, rows }, measure) {
 
 const QUOTE = String.fromCharCode(34);
 const GRAMS_FORMAT = `0 ${QUOTE}g${QUOTE}`;
+// The number format that shows a value with its unit; a quote in the unit text would end the format.
+// ⚠️ A UNIT WITH DECIMALS (kg, l) IS «General», NEVER «0»: «0» would print 1.846 kg as «2 kg», the
+// very rounding the screen stopped doing, and «0.###» leaves a bare dot after a whole number.
+const unitFormat = (unit, decimals = 0) => {
+  const clean = String(unit).replace(/"/g, '').trim();
+  const num = decimals > 0 ? 'General' : '0';
+  return clean ? `${num} ${QUOTE}${clean}${QUOTE}` : num;
+};
 // ⚠️ A formula is written WITHOUT its leading «=»: the library puts the text into <f> as it is,
 // and the file format has no «=» there.
 
@@ -159,25 +199,56 @@ export function sheetNameOf(name, fallback = 'Recipe') {
   return !clean || clean.toLowerCase() === 'history' ? fallback : clean;
 }
 
-// xlsxSheet({ title, name, rows: [{ name, grams }], totalLabel }) -> { data, options } for write-excel-file.
-// The sheet's tab is called after the recipe (`name`, else the title). Weights are real numbers (exact), the total is a formula the spreadsheet computes itself.
-export function xlsxSheet({ title, name, rows, totalLabel, sheetFallback = 'Recipe' }) {
+// The total row's value cell, always shown as grams.
+// Only weighable rows count, each converted to grams (pieces, spoons, «to taste» are left out, as
+// the screen's Total leaves them out). Gram-only rows keep the plain SUM.
+// ⚠️ THE TOTAL MUST EQUAL THE SCREEN'S TOTAL. With mixed units each row is rounded in its OWN unit
+// on screen, so the formula's value can differ by a gram from the total printed there. When it
+// would not round to `totalG`, the cell is the screen's number as a plain value instead.
+// ⚠️ THE CHECK COVERS THE PLAIN SUM TOO: grams and ml rows both count 1:1, but a catalogue recipe
+// that mixes them rounds each row on its own (no exact-sum step), so even a SUM can miss by a gram.
+function totalCell(list, last, totalG) {
+  const cell = { fontWeight: 'bold', format: GRAMS_FORMAT };
+  const terms = [];
+  let computed = 0;
+  list.forEach((r, i) => {
+    if (r.factor > 0 && r.value !== null) {
+      const ref = `B${i + 3}`;
+      terms.push(r.factor === 1 ? ref : `${ref}*${r.factor}`);
+      computed += r.value * r.factor;
+    }
+  });
+  if (terms.length === 0) return { ...cell, value: 0, type: Number };
+  if (Number.isFinite(Number(totalG)) && Math.round(computed) !== Number(totalG)) {
+    return { ...cell, value: Number(totalG), type: Number };
+  }
+  const formula = list.every(r => r.factor === 1 && r.value !== null) ? `SUM(B3:B${last})` : terms.join('+');
+  return { ...cell, value: formula, type: 'Formula' };
+}
+
+// xlsxSheet({ title, name, rows, totalLabel, totalG }) -> { data, options } for write-excel-file.
+// The sheet's tab is called after the recipe (`name`, else the title). Weights are real numbers (exact),
+// each shown with its own unit; «to taste» is text. The total is a formula the spreadsheet computes itself.
+export function xlsxSheet({ title, name, rows, totalLabel, sheetFallback = 'Recipe', totalG }) {
   const data = [
     [{ value: title, fontWeight: 'bold', columnSpan: 2 }, null],
     [],
   ];
-  for (const r of rows) {
+  const list = rows.map(exportRow);
+  for (const r of list) {
     data.push([
       { value: String(r.name ?? ''), type: String },
-      { value: Number(r.grams) || 0, type: Number, format: GRAMS_FORMAT },
+      r.value === null
+        ? { value: r.unit, type: String }
+        : { value: r.value, type: Number, format: unitFormat(r.unit, r.decimals) },
     ]);
   }
-  const last = rows.length + 2;
+  const last = list.length + 2;
   data.push([
     { value: totalLabel, type: String, fontWeight: 'bold' },
-    { value: `SUM(B3:B${last})`, type: 'Formula', fontWeight: 'bold', format: GRAMS_FORMAT },
+    totalCell(list, last, totalG),
   ]);
-  const longest = rows.reduce((w, r) => Math.max(w, String(r.name ?? '').length), String(totalLabel ?? '').length);
+  const longest = list.reduce((w, r) => Math.max(w, String(r.name ?? '').length), String(totalLabel ?? '').length);
   const sheet = sheetNameOf(name ?? title, sheetFallback);
   return {
     data,
@@ -242,7 +313,7 @@ export async function buildPdfBlob(m) {
   const measure = pdfMeasurer(doc);
   const { items } = pdfLayout({
     title,
-    rows: m.rows.map(r => ({ name: pdfSafe(r.name), text: rowText(r.grams) })),
+    rows: m.rows.map(r => ({ name: pdfSafe(exportRow(r).name), text: pdfSafe(rowTextOf(r)) })),
   }, measure);
   for (const it of items) {
     doc.setFont('helvetica', it.bold ? 'bold' : 'normal');
@@ -262,6 +333,6 @@ export const XLSX_FONT = Object.freeze({ fontFamily: 'Calibri', fontSize: 11 });
 // -> Blob (.xlsx). `totalLabel` is the venue's own «Total dough» word, passed by the caller.
 export async function buildXlsxBlob(m, totalLabel, sheetFallback = 'Recipe') {
   const { default: writeXlsxFile } = await loadLibrary(() => import('./vendor/write-excel-file.esm.js'));
-  const { data, options } = xlsxSheet({ title: exportTitle(m), name: m.name, rows: m.rows, totalLabel, sheetFallback });
+  const { data, options } = xlsxSheet({ title: exportTitle(m), name: m.name, rows: m.rows, totalLabel, sheetFallback, totalG: m.totalG });
   return writeXlsxFile(data, options, XLSX_FONT).toBlob();
 }

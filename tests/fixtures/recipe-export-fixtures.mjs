@@ -34,3 +34,40 @@ export const AWKWARD_NAME = {
   totalG: 1000,
   rows: [{ name: 'Farina «tipo 00» — è ’buona’', grams: 1000 }],
 };
+
+// Rows in their own unit, as the Recipe catalogue draws them. 500 ml + 2 kg + 250 g = 2750 g.
+export const MIXED = {
+  name: 'Crema di prova',
+  trays: 0,
+  totalG: 2750,
+  rows: [
+    { name: 'Latte di prova', value: 500, unit: 'ml', factor: 1 },
+    { name: 'Farina di prova', value: 2, unit: 'kg', factor: 1000 },
+    { name: 'Uova di prova', value: 3, unit: 'pz', factor: 0 },
+    { name: 'Zucchero di prova', value: 250, unit: 'g', factor: 1 },
+    { name: 'Sale di prova', value: null, unit: 'q.b.', factor: 0 },
+  ],
+};
+
+// Each row rounds in its own unit on screen: 920 g of oil and of water each read «1 kg», while the
+// Total says 1841 g. The formula over the rows (1 kg + 1 kg + 1 g = 2001 g) would not round to it.
+export const MIXED_DRIFT = {
+  name: 'Salsa di prova',
+  trays: 0,
+  totalG: 1841,
+  rows: [
+    { name: 'Olio di prova', value: 1, unit: 'kg', factor: 1000 },
+    { name: 'Acqua di prova', value: 1, unit: 'kg', factor: 1000 },
+    { name: 'Pepe di prova', value: 1, unit: 'g', factor: 1 },
+  ],
+};
+
+export const ONLY_PIECES = {
+  name: 'Decori di prova',
+  trays: 0,
+  totalG: 0,
+  rows: [
+    { name: 'Fragole di prova', value: 12, unit: 'pz', factor: 0 },
+    { name: 'Sale di prova', value: null, unit: 'q.b.', factor: 0 },
+  ],
+};
