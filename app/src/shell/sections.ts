@@ -155,6 +155,8 @@ function calculatorScreenName(pathname: string, base: string): string {
   const [first, , third] = pathname.slice(base.length).split('/').filter(part => part !== '');
   if (first === 'settings') return 'settings';
   if (first === 'log') return third === 'history' ? 'log-history' : 'log';
+  // Orders received, still coming or history: the current app's overlay is one screen, `client-orders`.
+  if (first === 'orders') return 'client-orders';
   return 'calculator';
 }
 

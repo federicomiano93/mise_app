@@ -54,10 +54,10 @@ async function open(over: Record<string, unknown> = {}, { logs = [], lang = 'en'
 const oneList = { whatsappLists: [MORNING] };
 
 describe('the door', () => {
-  it('is a third button beside Dough history and Settings, with an icon and no address', async () => {
+  it('is a fourth button beside Dough history, Settings and Orders, with an icon and no address', async () => {
     const view = await open(oneList);
-    const names = main().getAllByRole('button').slice(0, 3).map(button => button.textContent);
-    expect(names).toEqual(['Dough history', 'Settings', 'Send order']);
+    const names = main().getAllByRole('button').slice(0, 4).map(button => button.textContent);
+    expect(names).toEqual(['Dough history', 'Settings', 'Client orders', 'Send order']);
     expect(view.door.querySelector('svg')).not.toBeNull();
     await view.user.click(view.door);
     expect(view.router.state.location.pathname).toBe('/calculator');
