@@ -29,6 +29,29 @@ let days = readCache();
 let notify = null;       // called with the new day map whenever it changes
 let onSyncError = null;  // called with a message when a background write is rejected
 
+// Whether the seven days have been ANSWERED for: the first snapshot that can be
+// believed (see believable() below), or the stream failing. Until then `days` is
+// only this phone's localStorage copy, which on a new phone or a cleared browser
+// is EMPTY. (On a phone that has opened Pastries before, Firestore's own offline
+// copy answers almost at once with that same list: working offline from it is
+// the app's local-first choice, unchanged here.)
+//
+// ⚠️ NOTHING MAY BE WRITTEN BEFORE THE ANSWER. The editor copies the day once,
+// when it opens, and the day is written whole (setDoc, no merge): opened a
+// second too early on a new phone it copied an EMPTY day, and typing one pastry
+// and saving would have replaced the real list (found 11 Oct 2026). The screen
+// asks daysReady() before it lets anything write.
+//
+// A failure counts as an answer: nothing may wait for ever on a question that
+// cannot be answered, and the screen already says the live sync broke. It is
+// safe because the rules give reading and writing pastries the same condition:
+// a phone refused the list is refused the save too, which is rolled back.
+let daysAnswered = false;
+
+// What this phone's own copy said when the page opened: whether there was one
+// at all, and if so whether it held no pastry on any day.
+const bootCopyEmpty = hasLocalCopy() && !Object.values(days).some(d => d.items.length);
+
 // ── Cache (localStorage mirror for instant/offline first paint) ───────────────
 
 function readCache() {
@@ -39,6 +62,14 @@ function readCache() {
     // Corrupt/unavailable cache — start empty; the listener will fill it in.
   }
   return normalizeDays([]);
+}
+
+function hasLocalCopy() {
+  try {
+    return localStorage.getItem(CACHE_KEY) !== null;
+  } catch (e) {
+    return false;   // private mode: no copy this phone can show
+  }
 }
 
 function writeCache(map) {
@@ -77,6 +108,12 @@ export function getCounts() {
   return out;
 }
 
+// Whether the seven days have answered (see daysAnswered above). Once true it
+// stays true for as long as the page is open.
+export function daysReady() {
+  return daysAnswered;
+}
+
 // Register a handler for background write failures (shown as a toast by the UI).
 export function setSyncErrorHandler(fn) {
   onSyncError = typeof fn === 'function' ? fn : null;
@@ -91,17 +128,48 @@ export function setSyncErrorHandler(fn) {
 export function initPastries(onUpdate, onError) {
   notify = guarded('Pastries: screen refresh', onUpdate);
   watchPastryDays(
-    remote => {
+    (remote, fromCache) => {
+      if (!believable(remote, fromCache)) return;
       days = normalizeDays(remote);
+      daysAnswered = true;
       writeCache(days);
       if (notify) notify(days);
     },
-    err => { if (onError) onError(err); },
+    err => {
+      answerWithoutData();
+      if (onError) onError(err);
+    },
   ).catch(err => {
     console.error('Pastries live sync failed to start:', err);
+    answerWithoutData();
     if (onError) onError(err);
   });
   return days;
+}
+
+// ⚠️ A FROM-CACHE ANSWER WITH NO DOCUMENTS AT ALL IS «NOTHING KNOWN», NOT
+// «NOTHING HERE». Firestore says it about a list it has never fetched on this
+// phone, once it decides it is offline (about ten seconds without a signal) —
+// so a new phone on bad Wi-Fi would open an empty editor, and the save, queued,
+// would replace the real list when the signal came back. The seven documents
+// are never deleted, so once any day has been saved a real answer always holds
+// documents: an empty one from the cache is believed only when this phone's own
+// copy agreed that this venue has never had a pastry. Otherwise it is ignored —
+// not even drawn, so it cannot wipe the copy on screen either — and the server's
+// answer is awaited (firebase-pastries.js asks for metadata changes, so that
+// answer arrives even when it is the same nothing).
+function believable(remote, fromCache) {
+  if (!fromCache) return true;
+  if (Array.isArray(remote) && remote.length) return true;
+  return bootCopyEmpty;
+}
+
+// The stream failed before (or after) it answered: stop the screen waiting, and
+// tell it, since nothing else will call it again.
+function answerWithoutData() {
+  if (daysAnswered) return;
+  daysAnswered = true;
+  if (notify) notify(days);
 }
 
 function applyLocal(day, value) {

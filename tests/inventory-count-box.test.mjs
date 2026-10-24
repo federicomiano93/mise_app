@@ -1,14 +1,20 @@
 // A stocktake box a person edits never shows a thousands separator (4 Oct 2026).
 //
 // ⚠️ WHY THIS EXISTS. The count boxes were filled with the DISPLAY formatter, which groups
-// thousands: 1234.5 read «1,234.5» on an English screen and «1.234,5» on an Italian one.
+// thousands: 1234.5 read «1,234.5» on an English screen, and 12345.5 «12.345,5» on an Italian one
+// (Italian groups only from five digits, so a four-digit count there never showed the defect).
 // readCount() takes ONE mark as the decimal, so the grouped text came back unreadable — the
 // product turned «not counted» — or, worse, «1,234.5» edited to «1,235» was read as 1.235, a
 // thousand times less, with nothing on screen to say so.
+//
+// ⚠️ AND THE SAME DEFECT ON A SECOND PATH (11 Oct 2026). The first fix covered the boxes as they
+// are BUILT. A count that lands by a refresh — a save, another phone counting — rewrote the box
+// nobody was typing into with num() again, through `parts.box.value = text`, which the property
+// check below cannot see. The last test follows every `.value =` back to where its text comes from.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { readCount } from '../js/inventory/inventory-model.js';
 
 const read = rel => readFileSync(new URL(`../${rel}`, import.meta.url), 'utf8');
@@ -42,5 +48,42 @@ test('every stocktake box a person edits is filled without grouping', () => {
   // and no input value anywhere in the stocktake is filled with the grouping formatter
   for (const src of [detail, list]) {
     assert.doesNotMatch(src, /(value|placeholder): [^\n]*\bnum\(/);
+  }
+});
+
+// Every `.value = …` in a source, with the text it is written from: the right-hand side itself
+// or, when that is a bare variable, every assignment to that variable. Returns the ones that use
+// a grouping formatter (num, toLocaleString), plus how many writes it looked at.
+function groupedBoxWrites(src) {
+  const offenders = [];
+  let writes = 0;
+  for (const [line, rhs] of src.matchAll(/\.value\s*=(?!=)\s*([^;\n]+)/g)) {
+    writes += 1;
+    const id = rhs.trim();
+    const sources = /^[A-Za-z_$][\w$]*$/.test(id)
+      ? [...src.matchAll(new RegExp(`(?<![\\w$.])${id}\\s*=(?!=)\\s*([^;\\n]+)`, 'g'))].map(m => m[1])
+      : [rhs];
+    if (sources.length === 0) offenders.push(`${line} — cannot tell where «${id}» comes from`);
+    for (const text of sources) {
+      if (/\bnum\(|toLocaleString\(/.test(text)) offenders.push(`${line} ← ${text}`);
+    }
+  }
+  return { offenders, writes };
+}
+
+test('⚠️ no box is rewritten later with the grouping formatter either', () => {
+  // The check itself catches the line that shipped — otherwise it proves nothing.
+  const shipped = "const text = line.closing === null ? '' : num(line.closing, locale);\n"
+    + '        if (parts.box.value !== text) parts.box.value = text;';
+  assert.equal(groupedBoxWrites(shipped).offenders.length, 1);
+
+  const list = read('js/inventory/inventory-list.js');
+  assert.match(list, /const text = line\.closing === null \? '' : boxNum\(line\.closing, locale\);/);
+  assert.ok(groupedBoxWrites(list).writes > 0, 'the list still rewrites its boxes — so the check looked');
+  // Every file of the stocktake, so a box added to a new screen is covered too.
+  const files = readdirSync(new URL('../js/inventory/', import.meta.url)).filter(f => f.endsWith('.js'));
+  assert.ok(files.includes('inventory-list.js') && files.includes('inventory-detail.js'));
+  for (const file of files) {
+    assert.deepEqual(groupedBoxWrites(read(`js/inventory/${file}`)).offenders, [], file);
   }
 });
