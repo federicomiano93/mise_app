@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
-  NEW_CHOICE, NO_SUPPLIER_ID, buildSave, firstRefusal, formState, isDirty, kindFor, readChoice, weightText, withFormat, withInner, workingFrom,
+  NEW_CHOICE, NO_SUPPLIER_ID, buildSave, firstRefusal, formState, isDirty, kindFor, orderNow, readChoice, weightText, withFormat, withInner, workingFrom,
 } from './ingredientCardModel';
 import type { ItemLike, Working } from './ingredientCardModel';
 
@@ -315,5 +315,116 @@ describe('the format keys and the order unit they replace (parity C53, C35)', ()
     expect(built.payload).not.toHaveProperty('packCount');
     expect(built.payload).not.toHaveProperty('unit');
     expect(built.unitChangedFrom).toBe('');
+  });
+});
+
+// ── The price's side of the card (step 3e-3: parity C48, C51, C54, C55, C65, C84, C85) ─────────────────────────
+
+describe('the format as a price writer opens it (parity C48, C51)', () => {
+  const STORED_CASE: ItemLike = {
+    id: 'x', name: 'x', unit: 'cartone', packUnit: 'busta', weight: '2.5kg', priceUnit: 'pcs', pricePerUnit: 5,
+    casePrice: 20, caseCount: 4, caseItemUnit: 'pcs', unitWeightKg: 2.5,
+  };
+  const priced = (item: ItemLike | null, preset: string | null = null) => workingFrom(item, { supplierIds: SUPPLIERS, preset, mayPrice: true, lang: 'it' });
+
+  test('the count of a carton with no packCount is read from the stored case for a price writer, and left empty for anybody else', () => {
+    expect(priced(STORED_CASE)).toMatchObject({ format: 'carton', count: '4' });
+    expect(workingFrom(STORED_CASE, { supplierIds: SUPPLIERS, preset: null, mayPrice: false, lang: 'it' })).toMatchObject({ format: 'carton', count: '' });
+    expect(open(STORED_CASE)).toMatchObject({ format: 'carton', count: '' });
+  });
+
+  test('a stored case of PIECES whose ingredient names no package opens showing the venue\'s piece word, in its language', () => {
+    const item = { ...STORED_CASE, packUnit: '' };
+    expect(priced(item).inner.choice).toBe('pezzo');
+    expect(workingFrom(item, { supplierIds: SUPPLIERS, preset: null, mayPrice: true, lang: 'en' }).inner.choice).toBe('piece');
+    // a case priced by weight shows no invented word
+    expect(priced({ ...item, caseItemUnit: 'pack', caseItemSize: 2.5, priceUnit: 'kg', pricePerUnit: 2 }).inner.choice).toBe('');
+  });
+
+  test('the shown piece word is not a change: an untouched Save writes no format key and no package word', () => {
+    const item = { ...STORED_CASE, packUnit: '', packCount: 4 };
+    const working = priced(item);
+    expect(firstRefusal(working, item, { mayPrice: true, lang: 'it' })).toBeNull();
+    const built = buildSave({ working, item, kind: 'ingredient', lang: 'it', startSupplierId: working.supplierId, mayPrice: true });
+    for (const key of ['unit', 'packUnit', 'packCount']) expect(built.payload).not.toHaveProperty(key);
+    expect(built.unitChangedFrom).toBe('');
+  });
+
+  test('an untouched carton with no count is not refused, but a price typed under it is (C85)', () => {
+    const item: ItemLike = { id: 'x', name: 'x', unit: 'cartone', packUnit: 'busta', weight: '2.5kg', priceUnit: 'kg', pricePerUnit: 2 };
+    const working = priced(item);
+    expect(working).toMatchObject({ format: 'carton', count: '' });
+    expect(firstRefusal(working, item, { mayPrice: true, lang: 'it' })).toBeNull();
+    expect(firstRefusal(working, item, { mayPrice: true, lang: 'it', priceDirty: true })).toBe('count');
+    const noWord = { ...working, count: '3', inner: { choice: '', typed: '' } };
+    expect(firstRefusal(noWord, item, { mayPrice: true, lang: 'it', priceDirty: true })).toBe('innerEmpty');
+    expect(firstRefusal(noWord, item, { mayPrice: true, lang: 'it' })).toBe('innerEmpty');
+  });
+
+  test('a Single is never refused for its count or its inner word, whatever the price did', () => {
+    const working = open(FLOUR);
+    expect(firstRefusal(working, FLOUR, { mayPrice: true, lang: 'en', priceDirty: true })).toBeNull();
+  });
+});
+
+describe('what a typed price writes beside the price (parity C54, C55)', () => {
+  const priceFor = (priceUnit: string, pricePerUnit: number | null) => ({ priceUnit, pricePerUnit });
+  const saveWith = (
+    working: Working, item: ItemLike | null,
+    extra: { priceDirty?: boolean; pricePatch?: { priceUnit: unknown; pricePerUnit: unknown } | null }, lang = 'it',
+  ) => buildSave({ working, item, kind: 'ingredient', lang, startSupplierId: SUPPLIERS[0] as string, mayPrice: true, ...extra });
+
+  test('a price typed under a Case writes packCount and the inner word even though the format was not moved — and NEVER the order unit', () => {
+    const item: ItemLike = { id: 'x', name: 'x', unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg' };
+    const working = workingFrom(item, { supplierIds: SUPPLIERS, preset: null, mayPrice: true, lang: 'it' });
+    const built = saveWith(working, item, { priceDirty: true });
+    expect(built.payload).toMatchObject({ packCount: 4, packUnit: 'busta' });
+    expect(built.payload).not.toHaveProperty('unit');
+    expect(built.unitChangedFrom).toBe('');
+    // with the price clean the same card writes nothing of it
+    expect(saveWith(working, item, {}).payload).not.toHaveProperty('packCount');
+    // and the dirty price of a Single adds nothing
+    const sack = { ...item, packCount: null, unit: 'sacco' };
+    const single = workingFrom(sack, { supplierIds: SUPPLIERS, preset: null, mayPrice: true, lang: 'it' });
+    expect(saveWith(single, sack, { priceDirty: true }).payload).not.toHaveProperty('packCount');
+  });
+
+  test('a NEW Single with no readable weight priced by the kilo / litre / piece gets the venue\'s word as its order unit', () => {
+    const working = { ...open(null), name: 'Zucchine' };
+    for (const [priceUnit, word] of [['kg', 'kg'], ['l', 'l'], ['pcs', 'pz']] as const) {
+      expect(saveWith(working, null, { pricePatch: priceFor(priceUnit, 3) }).payload.unit, priceUnit).toBe(word);
+    }
+    expect(saveWith(working, null, { pricePatch: priceFor('pcs', 3) }, 'en').payload.unit).toBe('pcs');
+  });
+
+  test('…but not with a weight that reads, a Case, no price, or an existing item', () => {
+    const named = { ...open(null), name: 'Farina' };
+    expect(saveWith({ ...named, weight: { amount: '25', unit: 'kg', legacy: '' } }, null, { pricePatch: priceFor('pcs', 20) }).payload.unit).toBe('');
+    expect(saveWith(withFormat(named, 'carton', 'it'), null, { pricePatch: priceFor('kg', 3) }).payload.unit).toBe('cartone');
+    expect(saveWith(named, null, { pricePatch: priceFor('kg', null) }).payload.unit).toBe('');
+    expect(saveWith(named, null, {}).payload.unit).toBe('');
+    expect(saveWith(open(FLOUR), FLOUR, { pricePatch: priceFor('kg', 3) }).payload).not.toHaveProperty('unit');
+  });
+});
+
+describe('the order the VAT line prices, and the leave question (parity C78, C65)', () => {
+  const item: ItemLike = { id: 'x', name: 'x', unit: 'cartone', packUnit: 'busta', packCount: 4, weight: '2.5kg' };
+  const working = workingFrom(item, { supplierIds: SUPPLIERS, preset: null, mayPrice: true, lang: 'it' });
+
+  test('orderNow is what the card would SAVE: the stored order untouched, the new one once the format moved', () => {
+    expect(orderNow(working, item, { mayPrice: true, lang: 'it' })).toEqual({ unit: 'cartone', weight: '2.5 kg', packUnit: 'busta', packCount: 4 });
+    expect(orderNow(withFormat(working, 'single', 'it'), item, { mayPrice: true, lang: 'it' }))
+      .toEqual({ unit: 'busta', weight: '2.5 kg', packUnit: 'busta', packCount: null });
+    expect(orderNow(typed(working, { count: '6' }), item, { mayPrice: true, lang: 'it' })).toMatchObject({ packCount: 6, unit: 'cartone' });
+  });
+
+  test('a new item starts with an empty order unit and no count', () => {
+    expect(orderNow(open(null), null)).toEqual({ unit: '', weight: '', packUnit: '', packCount: null });
+  });
+
+  test('the price counts as part of the card for the leave question: its own edit makes the card dirty', () => {
+    expect(isDirty(working, working)).toBe(false);
+    expect(isDirty(working, working, false)).toBe(false);
+    expect(isDirty(working, working, true)).toBe(true);
   });
 });
