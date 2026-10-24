@@ -41,7 +41,7 @@ import {
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..');
 
-const VERSION = '1.0.0';
+const VERSION = '1.0.1';     // 1.0.1: labels sent as UTF-8 (14 Oct 2026)
 const POLL_IDLE_MS = 15000;
 const POLL_BUSY_MS = 3000;
 const BUSY_FOR_MS = 60000;      // stay quick for a minute after seeing work
@@ -322,6 +322,20 @@ async function beat(app, cfg, session, agentId, printerName) {
 
 // ── Putting bytes on paper ───────────────────────────────────────────────────
 
+// ⚠️⚠️ UTF-8, BECAUSE THE LABEL SAYS SO. Every job opens with ^CI28, which tells the
+// printer to read the bytes that follow as UTF-8 (js/catalogue/label-zpl.js). Until
+// 14 Oct 2026 both paths below wrote the text as 'binary' (latin1): «Può» went out
+// as 50 75 F2 instead of 50 75 C3 B2, so every accented word printed wrong, and €
+// or œ — outside latin1 — lost their high byte entirely. The encoding here and the
+// ^CI28 there are one decision; change neither alone.
+//
+// ⚠️ IT ALSO KEEPS THE LABEL FILTER HONEST. latin1 kept only the low byte of each
+// character, so «ž» (U+017E) left as 0x7E — a ~ — and «Ş» as 0x5E — a ^: a job that
+// isSingleLabel() passed could reach the printer carrying a control command. In
+// UTF-8 every byte of a non-ASCII character is 0x80 or above, so what the filter
+// reads is what the printer reads.
+const labelBytes = (text) => Buffer.from(String(text), 'utf8');
+
 // A printer on this computer, shared so raw bytes can be written to it.
 //
 // ⚠️⚠️ RAW, WHICH IS THE WHOLE POINT — a Windows driver would RASTERISE the ZPL and
@@ -335,7 +349,7 @@ async function beat(app, cfg, session, agentId, printerName) {
 async function printToShare(target, text) {
   const dir = await mkdtemp(join(tmpdir(), 'mise-label-'));
   const file = join(dir, 'label.zpl');
-  await writeFile(file, text, 'binary');
+  await writeFile(file, labelBytes(text));
   try {
     await new Promise((resolve, reject) => {
       const p = spawn('cmd.exe', ['/c', 'copy', '/b', file, target], { windowsHide: true });
@@ -362,7 +376,7 @@ function printToTcp(host, port, text) {
     const fail = (e) => { socket.destroy(); reject(e); };
     socket.setTimeout(15000, () => fail(new Error(`${host}:${port || 9100} did not answer`)));
     socket.on('error', fail);
-    socket.on('connect', () => socket.end(text, 'binary'));
+    socket.on('connect', () => socket.end(labelBytes(text)));
     socket.on('close', () => resolve());
   });
 }
@@ -455,7 +469,7 @@ async function main() {
 }
 
 // Exported for the tests; nothing else imports this file.
-export { encode, decode, toDoc, fromDoc, readAppConfig, printerName };
+export { encode, decode, toDoc, fromDoc, readAppConfig, printerName, labelBytes, printToTcp };
 
 if (process.argv[1] && process.argv[1].endsWith('agent.mjs')) {
   main().catch((err) => die(err.stack || err.message));

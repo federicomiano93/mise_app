@@ -59,3 +59,20 @@ test('an unlinked tab is returned untouched', () => {
 test('an unresolved link cannot be calculated, so the save is refused', () => {
   assert.equal(canCalculate(resolveRecipe(tab, {})), false);
 });
+
+// ⚠️ The saved dough is frozen from these numbers, so a kg row read as grams was
+// stored wrong for good: Flour 1 kg / Water 700 g / Salt 20 g at 1720 g saved 2 g
+// of flour. The sheet and the snapshot must both carry the converted grams.
+test('⚠️ a kg Catalogue row is saved in grams, as the screen shows it', () => {
+  const kgCatalogue = { 'cat-kg': { name: 'Bread', ingredients: [
+    { rid: 'r-flour', label: 'Flour', grams: 1, unit: 'kg' },
+    { rid: 'r-water', label: 'Water', grams: 700, unit: 'g' },
+    { rid: 'r-salt', label: 'Salt', grams: 20, unit: 'g' },
+  ] } };
+  const bread = { id: 'bread', name: 'Bread', logic: 'total', catalogueId: 'cat-kg', ingredients: [] };
+  const resolved = resolveRecipe(bread, kgCatalogue);
+  const sheet = buildSheet({ recipe: sheetRecipe(bread, resolved), items: [], totalInput: 1720, leaveningPct: 1 });
+  assert.deepEqual(sheet.ingredients.map(i => i.grams), [1000, 700, 20]);
+  const snap = recipeSnapshot(sheetRecipe(bread, resolved));
+  assert.deepEqual(snap.ingredients.map(i => i.grams), [1000, 700, 20]);
+});
