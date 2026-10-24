@@ -1,0 +1,207 @@
+/*
+  label-print.css — the label as a piece of paper, on screen and on the printer.
+
+  Mise 2 copy of /label-print.css of the current app: the same rules, the same class names.
+
+  ⚠️⚠️ THIS IS A PLAIN GLOBAL STYLESHEET, NOT A CSS MODULE, AND MUST STAY ONE. A module
+  hashes every class name, and these names are not ours to hash: `lab-sheet`,
+  `lab-sheet-block`, `lab-sheet-{role}`, `lab-sheet-ing`, `lab-sheet-ing--allergen`,
+  `lab-print--{id}` and `#labelPrint` are built at run time by the sheet and the print
+  host (`lab-sheet-${role}`, `lab-print--${sizeId}`), found by id by the @media print
+  rule below, and named in @page rules that cannot be scoped. Import it for its side
+  effect, once, where the label is drawn.
+
+  What differs from the current app's file, and only this: the tokens. Mise 2 has no
+  --cat-* tokens, so the preview frame, its note and the «does not fit» box read
+  --line-2, --ink-2, --warn-tint, --warn-ink and --shadow-1. The typeface is NOT a
+  token: it is Manrope, declared below (see the note there). The sheet itself keeps no token for its colours (next paragraph).
+
+  ⚠️⚠️ THE SHEET IS BLACK ON WHITE, AND THAT IS NOT AN AESTHETIC CHOICE SO IT DOES
+  NOT ASK tokens.css. A thermal label printer is monochrome: it burns a dot or it
+  does not. There is no cream, no brand green and no grey on a label — asking the
+  design system for a colour here would produce a preview that cannot be printed and
+  a print that does not match it. Everything else on this page still consumes the
+  shared tokens; the sheet is paper.
+
+  ⚠️ NOTHING VARIABLE LIVES HERE. The label's width, height, margin and font size all
+  come from label-template-model.ts through the sheet's `style` (the CSSOM), because
+  the page CSP is `style-src 'self'` and an inline style="" attribute is refused.
+  This file holds only what never changes.
+*/
+
+/*
+  ⚠️⚠️ THE SHEET HAS ITS OWN TYPEFACE, THE CURRENT APP'S MANROPE, AND NOT THE SCREEN'S GEIST. The fit gate
+  measures this sheet in the browser and the printer prints the same node: if Mise 2 drew the paper in a different
+  face from the current app, the same recipe on the same paper would fit in one app and spill in the other, and
+  the label would change the day the app is switched. Same two files (copied byte for byte into
+  src/assets/fonts), same unicode ranges as the root tokens.css.
+
+  font-display is 'swap', as in the current app: a block period would hide the paper for a moment and
+  a failed font would hide it for ever. The price is that a first measurement can be taken in the fallback face, so
+  the screen measures AGAIN when document.fonts reports the face loaded (LabelScreen.tsx).
+*/
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url(../assets/fonts/manrope-latin.woff2) format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: 'Manrope';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url(../assets/fonts/manrope-latin-ext.woff2) format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+/* ── The sheet ───────────────────────────────────────────────────────────────
+   Sized in millimetres by the sheet (label-sheet.ts). box-sizing: border-box so the margin the
+   model reserved is INSIDE the paper, which is what a printer means by a margin.
+
+   ⚠️ overflow: hidden IS LOAD-BEARING AND IT IS NOT COSMETIC. The paper cannot
+   grow, so text that does not fit must be CLIPPED rather than allowed to stretch
+   the box — otherwise the browser silently resizes the sheet and nothing, on screen
+   or in code, can tell that the label overflowed. the screen reads scrollHeight
+   against clientHeight to detect exactly that, and then refuses to print. */
+.lab-sheet {
+  box-sizing: border-box;
+  overflow: hidden;
+  background: #fff;
+  color: #000;
+  font-family: 'Manrope', system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* ⚠️ A long ingredient name must break inside itself rather than push the block
+     off the paper. The fit estimate in label-template-model.ts assumes exactly this
+     behaviour, so the two have to agree. */
+  overflow-wrap: anywhere;
+  /* ⚠️ THE SAME LINE BREAKS AS THE CURRENT APP, or the same label fits there and spills here. Mise 2's base.css sets
+     `text-wrap: pretty` on <body>, which re-breaks lines to avoid a short last one; the current app's catalogue page
+     does not, and the fit gate measures THIS sheet. The other text properties base.css sets (-webkit-font-smoothing)
+     are the current catalogue page's too (catalogue.css), and its heading letter-spacing never reaches the sheet. */
+  text-wrap: wrap;
+}
+
+.lab-sheet-block { margin: 0; }
+
+.lab-sheet-name { font-weight: 700; }
+
+/* ⚠️ THE EMPHASIS IS THE REGULATION'S, NOT A HIGHLIGHT. The allergen has to stand
+   out inside the ingredient list. Bold AND underlined, because a thermal print at
+   1.7 mm loses a lot of the difference between weights, and an allergen that is
+   merely a little darker than its neighbours is an allergen nobody sees. */
+.lab-sheet-ing--allergen {
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 0.12em;
+}
+
+.lab-sheet-contains { font-weight: 700; }
+
+/* ── The preview, on screen ──────────────────────────────────────────────────
+   The same node, at the same millimetre size, so what is on the phone is what comes
+   out of the printer. The frame and the shadow belong to the SCREEN, never to the
+   sheet — they are how a reader can tell where the paper ends. */
+.lab-preview {
+  display: flex;
+  justify-content: center;
+  /* ⚠️⚠️ flex-start, AND IT IS LOAD-BEARING. A flex container's default is
+     `align-items: stretch`, which STRETCHES the sheet to the container's height and
+     overrides the exact millimetres the sheet set on it. The paper then is not
+     the paper: a 25 × 20 mm label drew 25 mm wide and 51 mm tall, and it looked
+     right at 76 × 51 only because that happened to be the height the container had
+     anyway. Found by setting a custom size and MEASURING, never by looking. */
+  align-items: flex-start;
+  margin-bottom: 14px;
+  /* A 102 mm sheet is wider than a phone. It scrolls sideways in its own box rather
+     than making the whole page scroll. */
+  overflow-x: auto;
+}
+
+.lab-preview .lab-sheet {
+  flex: none;
+  border: 1px solid var(--line-2);
+  border-radius: 2px;
+  box-shadow: var(--shadow-1);
+}
+
+.lab-preview-note {
+  margin: 0 0 12px;
+  font-size: .78rem;
+  color: var(--ink-2);
+  text-align: center;
+}
+
+/* The label does not fit and printing is refused. Warning colours, because this is
+   the one thing on the screen a person has to act on. */
+.lab-nofit {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  font-size: .86rem;
+  line-height: 1.45;
+}
+
+/* ── The printing ────────────────────────────────────────────────────────────
+
+   ⚠️ ONE PRESET, ONE NAMED PAGE. CSS named pages let the three sizes a venue is
+   likely to have live in this static file, so nothing has to build a stylesheet at
+   runtime — which the CSP would make awkward and which would put the paper size, of
+   all things, in the one output nobody sees before it is already printed.
+
+   ⚠️ A CUSTOM SIZE HAS A NAMED PAGE OF ITS OWN, `labcustom`, with `size: auto` so the printer driver's own stock
+   decides — which is what the driver has to be set to in any case; see the setup note in the plan. Better the
+   driver's real answer than a number this app guessed. It is named, and not an unnamed `@page { … }`, because
+   THIS FILE IS LOADED BY THE WHOLE SINGLE-PAGE APP (the current app links it on the catalogue page alone): an
+   unnamed rule would give margin 0 to every other print the app will ever make. A page name applies only to the
+   sheet that selects it, and so does everything else in this section.
+
+   The custom rule is `:where(.lab-print) .lab-sheet`, specificity (0,1,0), so each preset rule below (0,2,0) wins
+   whatever the order. */
+@page labcustom { size: auto; margin: 0; }
+@page p76x51  { size: 76mm 51mm;  margin: 0; }
+@page p57x32  { size: 57mm 32mm;  margin: 0; }
+@page p102x76 { size: 102mm 76mm; margin: 0; }
+
+.lab-print { display: none; }
+:where(.lab-print) .lab-sheet { page: labcustom; }
+.lab-print--p76x51 .lab-sheet  { page: p76x51; }
+.lab-print--p57x32 .lab-sheet  { page: p57x32; }
+.lab-print--p102x76 .lab-sheet { page: p102x76; }
+
+@media print {
+  /* ⚠️ ONE RULE, AND IT IS DERIVED RATHER THAN LISTED. #labelPrint is a direct child
+     of <body>, so everything else on the page — the header, the screen, the bottom
+     bar, the toast, and the sign-in cover that must never be printed — is hidden by
+     the same selector, and a header added next year is hidden by it too. A list of
+     class names here would go stale silently, on an output nobody previews. */
+  /* ⚠️ SCOPED TO A LABEL PRINT: this file is loaded by the whole app once the label has been opened, and an unscoped
+     rule would blank every other print it ever makes. The scope is the `lab-printing` class printHost.tsx puts on
+     <html> for exactly as long as a label host exists.
+     ⚠️⚠️ A CLASS, NOT `body:has(> #labelPrint)`. `:has` arrived in Chrome 105, and the lab tablet was found on Chrome
+     101 (13 Oct 2026, after a reset): there the rule was dropped whole, nothing was hidden, and the print dialog
+     offered the app's screen on A4 instead of the label. A selector the browser does not know is not an error — it
+     is a rule that silently does not exist. */
+  .lab-printing body > *:not(#labelPrint) { display: none !important; }
+
+  .lab-printing body { margin: 0; background: #fff; }
+
+  .lab-print { display: block; }
+
+  /* Nothing from the screen follows the sheet onto the paper. */
+  .lab-print .lab-sheet {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* ⚠️ The emphasis on an allergen is not decoration and must survive a printer set
+     to save ink. This is the one place in the app that asks for that. */
+  .lab-sheet-ing--allergen {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

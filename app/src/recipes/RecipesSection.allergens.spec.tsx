@@ -81,11 +81,12 @@ describe('the allergen card of a complete recipe', () => {
     expect(algCard().getByText('May contain: Hazelnut')).not.toBeVisible();
   });
 
-  it('offers no «Make a label» yet: the label screen arrives with step 3d-3', async () => {
+  it('offers «Make a label» inside the fold, with the rest of the job (the label screen has its own spec)', async () => {
     const { user } = await open([CAKE], [FLOUR, MILK, SALT], 'cake');
     await screen.findByText('Wheat, Milk');
+    expect(main().getByText('Make a label')).not.toBeVisible();
     await user.click(algButton());
-    expect(main().queryByRole('button', { name: /label/i })).not.toBeInTheDocument();
+    expect(main().getByRole('button', { name: 'Make a label' })).toBeVisible();
   });
 
   it('says «None of the 14» only for a recipe whose every ingredient has been checked and contains none', async () => {

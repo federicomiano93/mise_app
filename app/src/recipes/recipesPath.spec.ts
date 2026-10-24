@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALLERGENS_PATH, RECIPES_PATH, parseRecipesPath, recipePath, resolveRecipesPath } from './recipesPath';
+import { ALLERGENS_PATH, RECIPES_PATH, labelPath, parseRecipesPath, recipePath, resolveRecipesPath } from './recipesPath';
 
 describe('the addresses of the Recipe catalogue', () => {
   it('has the list at /recipes and a recipe at /recipes/<id>', () => {
@@ -33,6 +33,28 @@ describe('the addresses of the Recipe catalogue', () => {
     expect(parseRecipesPath('/allergens/')).toEqual({ kind: 'allergens' });
     expect(parseRecipesPath('/allergens/x')).toEqual({ kind: 'unknown' });
     expect(resolveRecipesPath('/allergens')).toEqual({ view: { kind: 'allergens' } });
+  });
+
+  // The label (step 3d-3) is one level below its recipe: «label» after an id, and nothing else.
+  it('has the label of a recipe at /recipes/<id>/label, the id written whole and read back whole', () => {
+    expect(labelPath('abc')).toBe('/recipes/abc/label');
+    expect(parseRecipesPath('/abc/label')).toEqual({ kind: 'label', id: 'abc' });
+    expect(parseRecipesPath('/abc/label/')).toEqual({ kind: 'label', id: 'abc' });
+    for (const id of ['a/b c', '100%', 'é', 'x?y#z']) {
+      expect(parseRecipesPath(labelPath(id).slice(RECIPES_PATH.length))).toEqual({ kind: 'label', id });
+    }
+    expect(resolveRecipesPath('/abc/label')).toEqual({ view: { kind: 'label', id: 'abc' } });
+  });
+
+  it('keeps the reserved words and bad ids out of the label address', () => {
+    for (const word of ['new', 'allergens', 'settings', 'photo']) {
+      expect(parseRecipesPath(`/${word}/label`), word).toEqual({ kind: 'unknown' });
+    }
+    expect(parseRecipesPath('/%/label')).toEqual({ kind: 'unknown' });
+    expect(parseRecipesPath('//label')).toEqual({ kind: 'recipe', id: 'label' });
+    expect(parseRecipesPath('/abc/label/x')).toEqual({ kind: 'unknown' });
+    expect(parseRecipesPath('/abc/labels')).toEqual({ kind: 'unknown' });
+    expect(parseRecipesPath('/abc/Label')).toEqual({ kind: 'unknown' });
   });
 
   it.each(['new', 'settings', 'photo'])('keeps «%s» for a later step, never reading it as a recipe', word => {
