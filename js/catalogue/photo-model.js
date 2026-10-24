@@ -17,7 +17,7 @@ import { errorKey, answerKey } from '../photo-model.js';
 export {
   MAX_EDGE, JPEG_QUALITY, FALLBACK_QUALITY,
   MAX_PHOTOS, MAX_IMAGE_BYTES, MAX_TOTAL_BYTES,
-  fitWithin, base64Of, mediaTypeOf, approxBytes, payloadProblem,
+  fitWithin, base64Of, mediaTypeOf, approxBytes, payloadProblem, decodeUpright,
 } from '../photo-model.js';
 
 // ⚠️ A KEY, NEVER A PHRASE, AND NEVER A t() CALL. A t() resolved here would run at
