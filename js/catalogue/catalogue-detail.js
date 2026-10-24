@@ -10,7 +10,7 @@ import { el } from './dom.js';
 import { currentSession } from '../firebase.js';
 import { isSectionAllowed } from '../sections.js';
 import {
-  scaleCatalogue, baseAmounts, weighableTotalGrams, unitOf, unitText, batchWarning, formatWeight,
+  scaleCatalogue, baseAmounts, weighableTotalGrams, unitOf, unitText, batchWarning, formatWeight, formatAmount,
 } from './catalogue-model.js';
 import {
   getScaledTarget, setScaledTarget, clearScaledTarget, getIngredients, getRecipesById,
@@ -28,7 +28,7 @@ import {
 // prints — one of the two saying «Hazelnut» and the other «Nocciole» is how somebody
 // stops trusting either. The words AROUND the list («may contain», «not declared»)
 // stay interface text: they address the reader, not the consumer.
-import { outputLanguage, allergenName } from '../market.js';
+import { outputLanguage, allergenName, canPrintLabel } from '../market.js';
 // Whether this venue tracks allergens at all. From js/ root: Orders sets the switch
 // and the Catalogue obeys it, so the judgement lives in one file for both.
 import { allergensOn } from '../venue-features.js';
@@ -54,16 +54,16 @@ const TRASH_SVG =
 const CLOSE_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
 
-// Whole grams only: values are already rounded in the model, and maximumFractionDigits:0
-// is a belt-and-suspenders guard so nothing ever shows a decimal. useGrouping:false
-// drops the thousands separator (e.g. 1000 g, not 1,000 g) — Federico's preference.
+// Whole GRAMS only — the Total row and the batch confirm. A row's amount is written by
+// formatAmount (catalogue-model.js), because kg and l keep their decimals («1,846 kg»).
+// useGrouping:false drops the thousands separator (e.g. 1000 g, not 1,000 g) — Federico's preference.
 const nf = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0, useGrouping: false });
 // Split each amount into number + unit so they line up in two straight columns
 // (numbers right-aligned, units left-aligned) no matter how long the name is. A
 // 'to taste' row (value null) has no number and shows the phrase in the unit slot.
 const amountParts = (value, unit) => value === null
   ? { num: '', unit: unitText('to taste') }
-  : { num: nf.format(value), unit: unitText(unit) };
+  : { num: formatAmount(value, unit), unit: unitText(unit) };
 const amountEl = ({ num, unit }) => el('span', { class: 'cat-ing-amt' }, [
   el('span', { class: 'cat-ing-num', text: num }),
   el('span', { class: 'cat-ing-unit', text: unit }),
@@ -154,12 +154,22 @@ function declarationPanel(recipe, app) {
   // refusal, in the same order, as label-view.js.
   if (!allergensOn(location)) { panel.hidden = true; return panel; }
 
-  const lang = outputLanguage(location);
-  const label = buildLabel(recipe, { ingredients: getIngredients(), recipes: getRecipesById() });
-
   panel.appendChild(el('div', { class: 'cat-sec-head' }, [
     el('span', { class: 'cat-sec-label', text: t('cat.decl.title') }),
   ]));
+
+  // ⚠️⚠️ NO COUNTRY, NO DECLARATION — the same refusal, in the same words, as the label
+  // screen (label-view.js) and the allergen sheet. The country decides the language a
+  // declaration must be written in; without one, outputLanguage() falls back to English,
+  // and this card used to hand that English text to Copy and Send — ready to be pasted
+  // onto Italian packaging. One line, no buttons.
+  if (!canPrintLabel(location)) {
+    panel.appendChild(el('p', { class: 'cat-decl-blocked', text: t('label.blocked.noCountry') }));
+    return panel;
+  }
+
+  const lang = outputLanguage(location);
+  const label = buildLabel(recipe, { ingredients: getIngredients(), recipes: getRecipesById() });
 
   if (!label.ok) {
     // ⚠️ ONE LINE, POINTING AT THE CARD THAT ALREADY EXPLAINS IT, and NO send buttons
@@ -172,7 +182,10 @@ function declarationPanel(recipe, app) {
   // ⚠️ THE ALLERGEN IS EMPHASISED INSIDE THE LIST, which is what the regulation asks
   // for — not only summarised underneath. Same bold-and-underline as .lab-ing--allergen
   // on the label screen: the same fact must not look like two different things.
-  const list = el('p', { class: 'cat-decl-list' });
+  // ⚠️ translate="no" on the declaration's own words (list, «Contains», traces), never on
+  // the heading or caveat, which address the reader: the reason is on the label card in
+  // label-view.js.
+  const list = el('p', { class: 'cat-decl-list', translate: 'no' });
   label.ingredients.forEach((item, i) => {
     if (i) list.appendChild(document.createTextNode(', '));
     list.appendChild(el('span', {
@@ -189,9 +202,9 @@ function declarationPanel(recipe, app) {
   panel.appendChild(list);
 
   const contains = containsLine(label, lang);
-  if (contains) panel.appendChild(el('p', { class: 'cat-decl-contains', text: contains }));
+  if (contains) panel.appendChild(el('p', { class: 'cat-decl-contains', translate: 'no', text: contains }));
   const traces = mayContainLine(label, lang);
-  if (traces) panel.appendChild(el('p', { class: 'cat-decl-traces', text: traces }));
+  if (traces) panel.appendChild(el('p', { class: 'cat-decl-traces', translate: 'no', text: traces }));
 
   // ⚠️ THE CAVEAT TRAVELS WITH THE TEXT, and it is interface language: it addresses the
   // person holding the phone, not the consumer reading a packet.

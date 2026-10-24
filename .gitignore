@@ -11,6 +11,24 @@ firebase-config.js
 # the account until somebody noticed.
 .secret.local
 functions/.secret.local
+# The variants of .env that tools write beside it (Vite, Firebase, dotenv): `.env` alone
+# matches only the bare name, so `.env.local` would have been committed. An example file
+# is the one allowed (P7).
+.env.*
+!.env.example
+# Server-level credentials (P1): private keys and certificates, and the service-account
+# JSON the Firebase console downloads (`<project>-firebase-adminsdk-<id>.json`). None of
+# them is ever needed in here — CI signs in to Google through Workload Identity.
+*.pem
+*.key
+*.p12
+*.pfx
+*-firebase-adminsdk-*.json
+service-account*.json
+serviceAccount*.json
+# The credentials file google-github-actions/auth writes into the checkout during a CI
+# job (tests/preview-hosting.test.mjs tells the story of the time one nearly went public).
+gha-creds-*.json
 node_modules/
 # CLAUDE.md (project context) and CLAUDE.global.md (transport copy of the global
 # rules) stay local and must never be committed or published.
