@@ -1,4 +1,4 @@
-// The thirty-one TypeScript models and the js/ files the live app runs today must stay the SAME
+// The thirty-two TypeScript models and the js/ files the live app runs today must stay the SAME
 // thing, until the switch to Mise 2 retires the js/ ones. The behaviour specs next to each model
 // run every test against both; this file checks what a behaviour test cannot see — that the two
 // export the same names, the same constants, the same frozen-ness and the same function shapes.
@@ -25,7 +25,9 @@
 // the pure `dayLabelParts` instead), guided-model.ts (everything but `ridOf`) and zoom-steps.ts (the storage and DOM halves); their
 // specs (calculator-config.spec.ts, log-model.spec.ts, guided-model via calculator-recipe-source.spec.ts,
 // zoom-steps.spec.ts) compare what they do port. calculator-tab-keys.ts is new in Mise 2 and has no original.
-// calculator-recipe-text.ts is paired although it differs from the original in ONE input (the line called
+// calculator-order-prefill.ts is not paired: `prefillNote` takes the translate function as a third argument (the
+// original reads the interface dictionary), so its arity differs by design; its spec compares names, constant and
+// shapes itself. calculator-recipe-text.ts is paired although it differs from the original in ONE input (the line called
 // `Flour uniqua blue`, one venue's data): the exports are the same, and its spec says where the text differs.
 //
 // ⚠️ IT IS WHAT CATCHES A FIX MADE TO js/ AND FORGOTTEN HERE. A constant changed in one file
@@ -62,6 +64,7 @@ import * as foodcostWeighing from './foodcost-weighing';
 import * as calculatorDoughMath from './calculator-dough-math';
 import * as calculatorRecipeSource from './calculator-recipe-source';
 import * as calculatorRecipeText from './calculator-recipe-text';
+import * as calculatorOrderText from './calculator-order-text';
 import * as confirmFlow from './confirm-flow';
 import * as logTime from './log-time';
 import * as legacyJoinCode from '../../js/join-code.js';
@@ -93,6 +96,7 @@ import * as legacyFoodcostWeighing from '../../js/foodcost/foodcost-weighing.js'
 import * as legacyCalculatorDoughMath from '../../js/calculator-dough-math.js';
 import * as legacyCalculatorRecipeSource from '../../js/calculator-recipe-source.js';
 import * as legacyCalculatorRecipeText from '../../js/calculator-recipe-text.js';
+import * as legacyCalculatorOrderText from '../../js/calculator-order-text.js';
 import * as legacyConfirmFlow from '../../js/confirm-flow.js';
 import * as legacyLogTime from '../../js/log-time.js';
 
@@ -126,6 +130,7 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['calculator-dough-math', calculatorDoughMath, legacyCalculatorDoughMath],
   ['calculator-recipe-source', calculatorRecipeSource, legacyCalculatorRecipeSource],
   ['calculator-recipe-text', calculatorRecipeText, legacyCalculatorRecipeText],
+  ['calculator-order-text', calculatorOrderText, legacyCalculatorOrderText],
   ['confirm-flow', confirmFlow, legacyConfirmFlow],
   ['log-time', logTime, legacyLogTime],
 ];
@@ -214,11 +219,11 @@ if (!legacyOutboxHasTheFix) {
   });
 }
 
-test('all thirty-one models are compared', () => {
+test('all thirty-two models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
       'order-cost', 'inventory-model', 'inventory-outbox', 'inventory-purchases', 'vat-rates', 'ingredient-kind', 'product-limits',
-      'vat-guide', 'foodcost-weighing', 'calculator-dough-math', 'calculator-recipe-source', 'calculator-recipe-text', 'confirm-flow',
-      'log-time']);
+      'vat-guide', 'foodcost-weighing', 'calculator-dough-math', 'calculator-recipe-source', 'calculator-recipe-text', 'calculator-order-text',
+      'confirm-flow', 'log-time']);
 });
