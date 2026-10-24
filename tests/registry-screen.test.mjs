@@ -344,8 +344,12 @@ test('the «read it and tick the boxes» button is gone, and typing runs it', ()
   assert.doesNotMatch(code, /orders\.pack\.suggest/,
     'the key is retired — see tests/i18n for the ban on its return');
   assert.match(code, /packBox\.addEventListener\('input'/);
-  assert.match(code, /packBox\.addEventListener\('change'/,
-    'a paste and leaving the box must not have to wait for the timer');
+  // ⚠️ INVERTED 23 Oct 2026. Proposing on `change` (leaving the box) raced a tap on a tick box:
+  // the blur ticked Milk and the same tap's click flipped it back OFF, for good. A paste raises
+  // `input` and waits the pause like typing; Save runs whatever is still waiting
+  // (tests/allergen-tap-race.test.mjs executes all of it).
+  assert.doesNotMatch(code, /packBox\.addEventListener\('change'/,
+    'leaving the pack box must never move a tick box under a finger');
 });
 
 // ── 3. The move actually happened, and left nothing behind ───────────────────
