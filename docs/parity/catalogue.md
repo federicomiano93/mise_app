@@ -1348,3 +1348,27 @@ allergen state with an `if` of its own. What differs from the current app, and w
   label declares `^CI28` (UTF-8), so accented letters reach the printer wrong. A separate fix to the current app.
 - **Found while testing, not a difference:** `userEvent.setup()` installs a clipboard on `navigator`, so a spec for a device with no
   clipboard has to remove it after rendering (the screen asks at draw time).
+
+## Step 3d-5 as built (15 Oct 2026) — differences from the current app, on purpose
+
+- **Built:** the label Settings at `/recipes/settings` (usage screen `recipes-settings`), a door «Settings» at the foot of the list
+  after the Allergen sheet's, drawn only for `canManage`; an employee who types the address is sent to the list. Two cards in the
+  current app's order, the setup note under them; every control saves on the tap through `saveLabelProfile`. The photo switch row
+  is NOT here: it comes in 3d-9.
+- **On purpose, NEW in Mise 2:** the writes are **not chained** behind each other. The current app chains them (a queue of
+  promises); here each one is issued at once, in the order of the taps, because Firestore commits one client's writes in the order
+  they were made and keeps unsent ones in its own persistent queue across an offline reload, whereas a chain would hold the later
+  ones in memory where such a reload loses them. A refused save puts back only ITS OWN keys (to the values just before it), except
+  a key a later save has set since.
+- **On purpose, NEW in Mise 2:** the size group is a true single choice, so «Custom size» is the chosen one while its two boxes are
+  open (the current app kept the preset pressed beside it); a preset tapped while a custom size waits its 350 ms cancels that write;
+  a size is written as ONE write only after focus has left BOTH boxes (moving from Width to Height arms nothing, and focus or typing
+  in either stops the 350 ms timer), and the boxes stay open while somebody is in them; an empty box, text that is no number or a
+  value outside 20–300 mm writes nothing, puts both boxes back to the saved size and says so (`label.settings.sizeRange`, new in
+  Mise 2) until the next valid size (the current app read an empty box as 0 and sent it to the rules); a size still waiting is
+  written at once when the page is hidden (`visibilitychange`, `pagehide`).
+- **On purpose, NEW in Mise 2:** a refusal puts a key back to the most recent earlier patch on it that was not itself refused,
+  else to the confirmed value before the first patch in the air, so two refused saves on one key never bring back a refused value.
+- **On purpose, NEW in Mise 2:** a box still holding typing, or a custom size still waiting, is written when the screen goes
+  (the store's write outlives the screen) and the app is held busy (`markBusy`) meanwhile. A refusal after the screen has gone is
+  said through the section's status message.
