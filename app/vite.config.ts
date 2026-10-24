@@ -44,6 +44,11 @@ export default defineConfig({
       },
     },
   },
+  // ⚠️ The dev server and the specs may read files from the whole repository, not only from app/. A screen spec builds its invented
+  // invoices with shared/src/invoice-zip/testing/invoice-builders.ts, which reads the fixtures in ../invoice-import/tests as `?raw`
+  // text: outside this folder, that is "Denied ID" in a jsdom spec (a node-environment spec is not checked). Nothing is served to a
+  // phone from here — `vite build` ignores it.
+  server: { fs: { allow: ['..'] } },
   test: {
     environment: 'jsdom',
     // *.spec.*, never *.test.*: see shared/vitest.config.ts.
