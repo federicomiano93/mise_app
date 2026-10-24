@@ -150,9 +150,11 @@ describe('screenNameFor', () => {
     ['/recipes/allergens/label', 'recipes'],
     ['/recipes/a%2Fb', 'recipes-detail'],
     // A reserved word or junk is sent back to the list: never a recipe screen in the statistics.
-    ['/recipes/new', 'recipes'],
+    ['/recipes/new', 'recipes-editor'],
     ['/recipes/%', 'recipes'],
-    ['/recipes/abc/edit', 'recipes'],
+    ['/recipes/abc/edit', 'recipes-editor'],
+    ['/recipes/new/edit', 'recipes'],
+    ['/recipes/photo', 'recipes'],
   ])('%s → %s', (pathname, expected) => {
     expect(screenNameFor(pathname)).toBe(expected);
   });

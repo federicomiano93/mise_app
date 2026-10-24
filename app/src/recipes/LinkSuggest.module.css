@@ -1,0 +1,72 @@
+/* The suggestion list under a recipe row's name, in the page's flow (not floating). */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  margin-top: var(--s1);
+  padding: var(--s1);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.list[hidden] {
+  display: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--s3);
+  row-gap: 0;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.row[data-all="true"] {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+
+.row[data-active="true"] {
+  background: var(--accent-tint);
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--sunken);
+  }
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.meta {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.linked {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  margin-left: auto;
+  color: var(--accent-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.linked svg {
+  width: 16px;
+  height: 16px;
+}

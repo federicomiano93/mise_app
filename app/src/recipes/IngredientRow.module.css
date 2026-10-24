@@ -1,0 +1,176 @@
+/* One ingredient: name, amount and unit in one frame, and a bin — on ONE line down to a 296px phone.
+   The name keeps the most width: the amount is a narrow box, and the unit a narrow menu.
+
+   ⚠️ 16px TYPE ON PURPOSE in every box: under 16px iOS zooms the page in when a field is focused. Targets are 48px tall. */
+
+.item {
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.line {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.name {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+/* The amount and the unit share one frame, divided down the middle, so the pair reads as one answer. The cell is the same
+   width on every row (and in the Total row), so the numbers end on one edge. */
+.amount {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 116px;
+  min-height: var(--hit);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.grams {
+  flex: none;
+  width: 52px;
+  min-height: calc(var(--hit) - 2px);
+  padding: 0 var(--s1);
+  border: 0;
+  border-right: 1px solid var(--line-2);
+  border-radius: var(--r-md) 0 0 var(--r-md);
+  background: none;
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  -moz-appearance: textfield;
+}
+
+.grams::-webkit-outer-spin-button,
+.grams::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.unitCell {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  min-width: 0;
+}
+
+.unit {
+  width: 100%;
+  min-height: calc(var(--hit) - 2px);
+  padding: 0 var(--s5) 0 var(--s2);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+  appearance: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.chevron {
+  position: absolute;
+  right: var(--s1);
+  width: 16px;
+  height: 16px;
+  color: var(--ink-3);
+  pointer-events: none;
+}
+
+.link {
+  display: block;
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s1) var(--s2);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-2);
+  font: var(--fs-sm)/1.3 var(--font);
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.link[data-linked="true"] {
+  color: var(--accent-ink);
+}
+
+.link:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .link:hover {
+    background: var(--sunken);
+  }
+}
+
+.name:focus-visible,
+.grams:focus-visible,
+.unit:focus-visible,
+.remove:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.name[aria-invalid="true"] {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+}
+
+.amount[data-invalid="true"] {
+  background: var(--danger-tint);
+  border-color: var(--danger);
+}
+
+.remove {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.remove svg {
+  width: 18px;
+  height: 18px;
+}
+
+@media (hover: hover) {
+  .remove:hover {
+    background: var(--danger-tint);
+    color: var(--danger-ink);
+  }
+}
+
+/* Under 340px the unit menu gives 8px to the name (RecipeEditor.module.css narrows the Total's cell to match). */
+@media (max-width: 339px) {
+  .amount {
+    width: 108px;
+  }
+}

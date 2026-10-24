@@ -12,5 +12,10 @@ export function messageText(
   switch (message.kind) {
     case 'recipes-stream-broken':
       return t('cat.liveSyncInterruptedRecipes');
+    case 'recipe-not-saved':
+      // A recipe saved with no name cannot get here (Save is blocked), but a refusal must still read as a sentence.
+      return t('cat.couldNotSaveRecipe', { name: message.name.trim() || t('cat.recipeWord') });
+    case 'recipe-not-deleted':
+      return t('cat.couldnTDeleteThe');
   }
 }

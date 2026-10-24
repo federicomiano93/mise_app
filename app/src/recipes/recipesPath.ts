@@ -6,6 +6,8 @@
 //   /recipes/allergens  the Allergen sheet (step 3d-2)
 //   /recipes/<id>/label the label of one recipe (step 3d-3), one level below the recipe
 //   /recipes/settings   the label Settings (step 3d-5), for whoever runs the place
+//   /recipes/new        a new recipe (step 3d-6), the editor on an empty copy
+//   /recipes/<id>/edit  one recipe's editor (step 3d-6), one level below the recipe
 //   anything else     unknown: the section goes back to /recipes
 //
 // ⚠️ THE WORDS A LATER STEP WILL TAKE AS ITS OWN ARE NEVER A RECIPE'S ID (`new`, `allergens`,
@@ -15,6 +17,7 @@
 export const RECIPES_PATH = '/recipes';
 export const ALLERGENS_PATH = '/recipes/allergens';
 export const SETTINGS_PATH = '/recipes/settings';
+export const NEW_PATH = '/recipes/new';
 
 const RESERVED = ['new', 'allergens', 'settings', 'photo'] as const;
 
@@ -24,10 +27,13 @@ export type RecipesView =
   | { readonly kind: 'allergens' }
   | { readonly kind: 'settings' }
   | { readonly kind: 'label'; readonly id: string }
+  | { readonly kind: 'new' }
+  | { readonly kind: 'edit'; readonly id: string }
   | { readonly kind: 'unknown' };
 
 export const recipePath = (id: string): string => `${RECIPES_PATH}/${encodeURIComponent(id)}`;
 export const labelPath = (id: string): string => `${recipePath(id)}/label`;
+export const editPath = (id: string): string => `${recipePath(id)}/edit`;
 
 // Whether an id (already decoded) can be a recipe's: not empty, and not a word a step has taken for its own.
 const isRecipeId = (id: string | null): id is string => id !== null && id !== '' && !(RESERVED as readonly string[]).includes(id);
@@ -55,15 +61,17 @@ export function parseRecipesPath(rest: string | undefined): RecipesView {
     if (id === 'allergens') return { kind: 'allergens' };
     // The label Settings (step 3d-5) likewise: whether the person may see it is the section's question, not the address's.
     if (id === 'settings') return { kind: 'settings' };
+    // A new recipe (step 3d-6): «new» is one of the reserved words, never a recipe's id.
+    if (id === 'new') return { kind: 'new' };
     // An empty id is not a recipe (and not a Firestore document id either).
     if (isRecipeId(id)) return { kind: 'recipe', id };
   }
   // `<id>/label`: the label of that recipe. The id is read by the same rule as a recipe's own, so a reserved word
-  // before «label» (`/allergens/label`) is no recipe's label.
+  // before «label» or «edit» (`/allergens/label`, `/new/edit`) is no recipe's label or editor.
   const second = parts[1];
-  if (parts.length === 2 && first !== undefined && second === 'label') {
+  if (parts.length === 2 && first !== undefined && (second === 'label' || second === 'edit')) {
     const id = decoded(first);
-    if (isRecipeId(id)) return { kind: 'label', id };
+    if (isRecipeId(id)) return second === 'label' ? { kind: 'label', id } : { kind: 'edit', id };
   }
   return { kind: 'unknown' };
 }

@@ -5,8 +5,8 @@
 // the two must stay equal until the switch to Mise 2.
 //
 // catalogue-model.ts is a PARTIAL port, so parity.spec.ts does not pair it: the original also holds the
-// editor's link functions, the validation and the Calculator import. The last block of this file stands in for
-// what pairing would have checked: the same names (plus the one the port adds, `unitTextKey`), the same
+// Calculator import. The last block of this file stands in for
+// what pairing would have checked: the same names (plus the two the port adds, `unitTextKey` and `nameTaken`), the same
 // constants, the same frozen-ness, the same function shapes (`batchWarning` excepted: it takes the translator).
 //
 // PORTED from tests/catalogue-model.test.mjs: 'unitOf / isWeighableUnit / weighableTotalGrams', the weighing
@@ -25,14 +25,21 @@
 // `batchWarning` is run with the interface dictionary's own `t` handed to the port as the translator, which
 // is exactly the words the original reads for itself.
 //
-// NOT PORTED — the rest of the original: findInvalidRecipe, toCalculatorRecipe, nonWeighableLabels,
-// mergeImportedRecipe, findCalculatorImport (tests/catalogue-model.test.mjs), tests/link-suggestions.test.mjs'
-// applyLink, linkedItemName, isSameLink and linkOptions tests, and the ones that read the screens' source or
-// the precache.
+// PORTED since step 3d-6: from tests/catalogue-model.test.mjs every test of findInvalidRecipe and
+// findCalculatorImport; from tests/link-suggestions.test.mjs every applyLink test, the linkOptions half of
+// '⚠️ packaging is never offered…', 'linkedItemName: the one name…' and '⚠️ choosing the link a row already
+// has…'; from tests/catalogue-reorder.test.mjs the three moveRow tests; from tests/ingredient-name.test.mjs the
+// linkOptions test; and `nameTaken` (tests/record-cards-shared.test.mjs and tests/ingredient-name.test.mjs,
+// plus the cases of its doc comment), run against the port and against js/catalogue/ingredient-suggest.js.
+//
+// NOT PORTED — the rest of the original: toCalculatorRecipe, nonWeighableLabels, mergeImportedRecipe
+// (tests/catalogue-model.test.mjs; step 3d-7), and the tests that read the screens' source, the precache or the
+// dictionary words.
 
 import { describe, expect, test } from 'vitest';
 import * as ported from './catalogue-model';
 import * as legacyJs from '../../js/catalogue/catalogue-model.js';
+import { nameTaken as legacyNameTaken } from '../../js/catalogue/ingredient-suggest.js';
 import { DATA_WORDS, DEFAULT_LANGUAGE, _dictionaries, setLanguage, t } from '../../js/i18n.js';
 
 const legacy = legacyJs as unknown as typeof ported;
@@ -606,6 +613,241 @@ describe.each([
     expect(m.MAX_SANE_MULTIPLE).toBe(50);
     expect(m.MAX_SHELF_LIFE_DAYS).toBe(3650);
   });
+
+  // ── The chooser (step 3d-6) ────────────────────────────────────────────────
+
+  test('⚠️ packaging is never offered as a recipe ingredient (the chooser half)', () => {
+    const ingredients = {
+      ...INGREDIENTS,
+      BOX: { id: 'BOX', name: 'Burro box', kind: 'packaging', supplierId: 'S1' },
+    };
+    const all = m.linkOptions({ ingredients, recipes: [], suppliers: SUPPLIERS, query: '' }).ingredients.map(i => i.id);
+    expect(all.includes('BOX'), 'the chooser leaves packaging out').toBe(false);
+    expect(all.includes('B1'), 'and still lists the real ingredients').toBe(true);
+  });
+
+  test('the chooser shows the display name, searches both names, and still HANDS BACK the invoice name', () => {
+    const ingredients = {
+      f: { id: 'f', name: 'Caputo Rosso 00', shortName: 'Farina', weight: '25kg', supplierId: 'S1', active: true, unit: 'sacco' },
+      b: { id: 'b', name: 'Butter', weight: '1kg', supplierId: 'S1', active: true, unit: '' },
+    };
+    const all = m.linkOptions({ ingredients, query: '' }).ingredients;
+    const flour = all.find(o => o.id === 'f');
+    expect(flour?.displayName).toBe('Farina');
+    expect(flour?.name, 'the invoice name').toBe('Caputo Rosso 00');
+    expect(m.linkOptions({ ingredients, query: 'farina' }).ingredients.map(o => o.id)).toStrictEqual(['f']);
+    expect(m.linkOptions({ ingredients, query: 'caputo' }).ingredients.map(o => o.id)).toStrictEqual(['f']);
+    const hits = m.suggestLinks({ ingredients, query: 'far' }).items;
+    expect(hits[0]?.refId).toBe('f');
+    expect(hits[0]?.displayName).toBe('Farina');
+    expect(hits[0]?.name).toBe('Caputo Rosso 00');
+    expect(m.suggestLinks({ ingredients, query: 'cap' }).items[0]?.refId).toBe('f');
+  });
+
+  test('the chooser: ingredients and recipes sorted, the recipe being edited left out, the supplier searched', () => {
+    const out = m.linkOptions({ ingredients: INGREDIENTS, recipes: RECIPES, suppliers: SUPPLIERS, query: '', excludeRecipeId: 'SELF' });
+    expect(out.ingredients.map(i => i.id), 'deactivated OLD is left out').toStrictEqual(['B2', 'B1', 'CR', 'F1', 'P1']);
+    expect(out.recipes.map(r => r.id)).toStrictEqual(['R1']);
+    expect(m.linkOptions({ ingredients: INGREDIENTS, suppliers: SUPPLIERS, query: 'brava' }).ingredients.map(i => i.id), 'the supplier is searched too')
+      .toStrictEqual(['B1', 'F1', 'P1']);
+    expect(m.linkOptions().ingredients).toStrictEqual([]);
+    expect(m.linkOptions({ ingredients: null, recipes: 'x' }).recipes).toStrictEqual([]);
+  });
+
+  // ── Writing a row's link ───────────────────────────────────────────────────
+
+  test('applyLink without a label: the typed name is left as it was (the old rule, for any other caller)', () => {
+    const row = { label: 'burro', grams: 250, unit: 'g' };
+    m.applyLink(row, { kind: 'ingredient', refId: 'B1', name: 'Burro Occelli' });
+    expect(row).toStrictEqual({ label: 'burro', grams: 250, unit: 'g', kind: 'ingredient', refId: 'B1' });
+  });
+
+  test('⚠️⚠️ a pick sets the name to the one the link line shows — what was typed is overwritten (9 Oct 2026)', () => {
+    const row = { label: 'burro', grams: 250, unit: 'g' };
+    m.applyLink(row, { kind: 'ingredient', refId: 'B1', name: 'Burro Président' }, { label: 'Burro P.' });
+    expect(row).toStrictEqual({ label: 'Burro P.', grams: 250, unit: 'g', kind: 'ingredient', refId: 'B1' });
+    const plain = { label: 'burro' };
+    m.applyLink(plain, { kind: 'ingredient', refId: 'B2', name: 'Burro Occelli' }, { label: 'Burro Occelli' });
+    expect(plain.label, 'no short name: the ingredient name').toBe('Burro Occelli');
+    const rec: Record<string, unknown> = { label: 'crema' };
+    m.applyLink(rec, { kind: 'recipe', refId: 'R1', name: 'Crema al burro' }, { label: 'Crema al burro' });
+    expect(rec.label).toBe('Crema al burro');
+    expect(rec.kind).toBe('recipe');
+  });
+
+  test('applyLink mutates the row it is given and hands back that very object', () => {
+    const row = { label: 'x' };
+    expect(m.applyLink(row, { kind: 'ingredient', refId: ' B1 ' })).toBe(row);
+    expect((row as Record<string, unknown>).refId, 'the id is trimmed').toBe('B1');
+  });
+
+  test('an empty label option, or a choice that is not one, never blanks or renames the row', () => {
+    const row = { label: 'burro', kind: 'ingredient', refId: 'B1' };
+    m.applyLink(row, { kind: 'ingredient', refId: 'B2', name: 'X' }, { label: '  ' });
+    expect(row.label).toBe('burro');
+    m.applyLink(row, { kind: 'supplier', refId: 'S1' }, { label: 'Nope' });
+    expect(row.label).toBe('burro');
+    expect(row.refId).toBe('B2');
+  });
+
+  test('a row with no name at all takes the chosen one', () => {
+    for (const label of ['', '   ', undefined]) {
+      const row: Record<string, unknown> = { label, grams: '', unit: 'g' };
+      m.applyLink(row, { kind: 'recipe', refId: 'R1', name: 'Crema al burro' });
+      expect(row.label).toBe('Crema al burro');
+      expect(row.kind).toBe('recipe');
+    }
+  });
+
+  test('applyLink(null) removes the link and keeps the name', () => {
+    const row = { label: 'burro', kind: 'ingredient', refId: 'B1' };
+    m.applyLink(row, null, { label: 'Burro P.' });
+    expect(row).toStrictEqual({ label: 'burro' });
+  });
+
+  test('a choice that is not one changes nothing', () => {
+    for (const junk of [undefined, {}, { kind: 'supplier', refId: 'S1' }, { kind: 'ingredient', refId: '  ' }]) {
+      const row = { label: 'burro', kind: 'ingredient', refId: 'B1' };
+      m.applyLink(row, junk);
+      expect(row, JSON.stringify(junk)).toStrictEqual({ label: 'burro', kind: 'ingredient', refId: 'B1' });
+    }
+    expect(m.applyLink(null, { kind: 'ingredient', refId: 'B1' })).toBe(null);
+  });
+
+  test('linkedItemName: the one name a link line shows and a pick sets', () => {
+    const ingredients = { B1: { id: 'B1', name: 'Burro Président', shortName: 'Burro P.' }, B2: { id: 'B2', name: 'Burro Occelli' } };
+    const recipes = [{ id: 'R1', name: 'Crema al burro' }];
+    expect(m.linkedItemName({ kind: 'ingredient', refId: 'B1', name: 'Burro Président' }, ingredients, recipes)).toBe('Burro P.');
+    expect(m.linkedItemName({ kind: 'ingredient', refId: 'B2', name: 'x' }, ingredients, recipes)).toBe('Burro Occelli');
+    expect(m.linkedItemName({ kind: 'recipe', refId: 'R1' }, ingredients, recipes)).toBe('Crema al burro');
+    expect(m.linkedItemName({ kind: 'ingredient', refId: 'NEW', name: 'Lievito' }, ingredients, recipes), 'not loaded yet: the chosen name').toBe('Lievito');
+    expect(m.linkedItemName({ kind: 'ingredient', refId: 'GONE' }, ingredients, recipes), 'nothing to show').toBe('');
+    expect(m.linkedItemName({ kind: 'recipe', refId: 'GONE' }, ingredients, recipes)).toBe('');
+    expect(m.linkedItemName({ kind: 'recipe', refId: 'GONE', name: ' Old copy ' }, ingredients, recipes), 'a recipe that is gone falls back to the chosen name').toBe('Old copy');
+    expect(m.linkedItemName({ kind: 'supplier', refId: 'B1', name: 'x' }, ingredients, recipes), 'not a kind a row can link to').toBe('');
+    expect(m.linkedItemName(null, ingredients, recipes)).toBe('');
+    expect(m.linkedItemName('B1', ingredients, recipes)).toBe('');
+    expect(m.linkedItemName({ kind: 'ingredient', refId: 'B1' }, null, null), 'no stores loaded yet').toBe('');
+  });
+
+  test('⚠️ choosing the link a row already has is not a new pick: it must not rename the row', () => {
+    const ing = { kind: 'ingredient', refId: 'B1' };
+    expect(m.isSameLink(ing, { kind: 'ingredient', refId: 'B1', name: 'Burro' })).toBe(true);
+    expect(m.isSameLink(ing, { kind: 'ingredient', refId: 'B2' })).toBe(false);
+    expect(m.isSameLink(ing, { kind: 'recipe', refId: 'B1' }), 'same id, other kind').toBe(false);
+    expect(m.isSameLink(null, ing), 'a row with no link: every pick is new').toBe(false);
+    expect(m.isSameLink(ing, null)).toBe(false);
+    expect(m.isSameLink({ kind: 'ingredient', refId: 7 }, { kind: 'ingredient', refId: '7' }), 'a number id is read as text').toBe(true);
+  });
+
+  // ── moveRow ────────────────────────────────────────────────────────────────
+
+  test('a row moves to its new place, and the others close up around it', () => {
+    const [a, b, c, d] = ['flour', 'water', 'salt', 'yeast'].map(label => ({ label }));
+    expect(m.moveRow([a, b, c, d], 0, 2).map(r => r?.label)).toStrictEqual(['water', 'salt', 'flour', 'yeast']);
+    expect(m.moveRow([a, b, c, d], 3, 0).map(r => r?.label)).toStrictEqual(['yeast', 'flour', 'water', 'salt']);
+  });
+
+  test('⚠️⚠️ the SAME row objects move, so a row keeps its link and its rid — the step that points at it', () => {
+    const flour = { label: 'flour', rid: 'r1', kind: 'ingredient', refId: 'FLOUR' };
+    const water = { label: 'water', rid: 'r2' };
+    const out = m.moveRow<Record<string, unknown>>([flour, water], 0, 1);
+    expect(out[1], 'not a copy: the very row').toBe(flour);
+    expect(out[1]?.rid).toBe('r1');
+    expect(out[1]?.refId).toBe('FLOUR');
+  });
+
+  test('a move that goes nowhere, or off the end, changes nothing and never throws', () => {
+    const rows = [{ label: 'a' }, { label: 'b' }];
+    for (const [from, to] of [[0, 0], [-1, 0], [0, 2], [5, 1], ['x', 1], [null, undefined]]) {
+      expect(m.moveRow(rows, from, to), `${from} → ${to}`).toStrictEqual(rows);
+    }
+    expect(m.moveRow(rows, 0, 1), 'a new list, never the one it was given').not.toBe(rows);
+    expect(m.moveRow(rows, 0, 0), 'also when nothing moves').not.toBe(rows);
+    expect(m.moveRow(null, 0, 1)).toStrictEqual([]);
+  });
+
+  // ── The editor's validation ────────────────────────────────────────────────
+
+  test('findInvalidRecipe flags blank name and no-named-ingredient, passes valid', () => {
+    expect(m.findInvalidRecipe({ name: '', ingredients: [{ label: 'Flour', grams: 1 }] })).toBe('name');
+    expect(m.findInvalidRecipe({ name: 'X', ingredients: [] })).toBe('ingredients');
+    expect(m.findInvalidRecipe({ name: 'X', ingredients: [{ label: '  ', grams: 1 }] })).toBe('ingredients');
+    expect(m.findInvalidRecipe(FOCACCIA)).toBe(null);
+  });
+
+  test('findInvalidRecipe flags an all-zero-weight recipe (cannot be scaled)', () => {
+    expect(m.findInvalidRecipe({ name: 'X', ingredients: [{ label: 'Flour', grams: 0 }] })).toBe('weight');
+    expect(m.findInvalidRecipe({ name: 'X', ingredients: [{ label: 'Flour', grams: 0 }, { label: 'Salt', grams: 0 }] })).toBe('weight');
+    expect(m.findInvalidRecipe({ name: 'X', ingredients: [{ label: 'Flour', grams: 5 }] })).toBe(null);
+  });
+
+  test('findInvalidRecipe is junk-safe, and the name is checked first', () => {
+    for (const odd of [null, undefined, '', 0, {}, { name: '  ' }]) expect(m.findInvalidRecipe(odd), String(odd)).toBe('name');
+    expect(m.findInvalidRecipe({ name: 'X' })).toBe('ingredients');
+    expect(m.findInvalidRecipe({ name: 'X', ingredients: [null, 5 as never, { label: 'A', grams: 'x' }] }), 'a non-number amount is 0').toBe('weight');
+    expect(m.findInvalidRecipe({ name: 'X', ingredients: [{ label: 'Salt', grams: 1, unit: 'to taste' }] }), 'any unit counts').toBe(null);
+  });
+
+  // ── The delete warning (drives the «was this imported?» question) ──────────
+
+  test('findCalculatorImport finds the imported copy by its cat-<id> provenance id', () => {
+    const cfg = { recipes: [{ id: 'brioche' }, { id: 'cat-foc', name: 'Focaccia' }] };
+    expect(m.findCalculatorImport(cfg, 'foc')).toBe(cfg.recipes[1]);
+  });
+
+  test('findCalculatorImport returns null when the recipe was never imported', () => {
+    expect(m.findCalculatorImport({ recipes: [{ id: 'brioche' }, { id: 'cat-other' }] }, 'foc')).toBe(null);
+  });
+
+  test('findCalculatorImport is junk-safe (null config / missing recipes -> null)', () => {
+    expect(m.findCalculatorImport(null, 'foc')).toBe(null);
+    expect(m.findCalculatorImport({}, 'foc')).toBe(null);
+    expect(m.findCalculatorImport({ recipes: 'x' }, 'foc')).toBe(null);
+    expect(m.findCalculatorImport({ recipes: [null, 5, { id: 'cat-foc' }] }, 'foc')).toStrictEqual({ id: 'cat-foc' });
+  });
+});
+
+// ── nameTaken: the port against js/catalogue/ingredient-suggest.js ───────────
+
+describe.each([
+  ['shared/ (TypeScript)', ported.nameTaken],
+  ['js/ (current app: ingredient-suggest.js)', legacyNameTaken as typeof ported.nameTaken],
+] as const)('nameTaken — %s', (_name, nameTaken) => {
+  test('an ingredient of exactly that name already on file is not offered again', () => {
+    const map = { a: { name: 'Burro' }, b: { name: 'Strong flour' } };
+    expect(nameTaken(map, ' burro '), 'case and the spaces at the ends do not make a new ingredient').toBe(true);
+    expect(nameTaken(Object.values(map), 'STRONG FLOUR'), 'a list works as well as the map').toBe(true);
+    expect(nameTaken(map, 'Burro salato')).toBe(false);
+    expect(nameTaken(null, 'Burro')).toBe(false);
+    expect(nameTaken({ x: null, y: {} }, 'Burro')).toBe(false);
+  });
+
+  test('⚠️ ONLY WHAT A ROW CAN BE LINKED TO: a switched-off ingredient or a box does not count', () => {
+    expect(nameTaken({ a: { name: 'Burro', active: false } }, 'Burro')).toBe(false);
+    expect(nameTaken({ a: { name: 'Burro', kind: 'packaging' } }, 'Burro')).toBe(false);
+    expect(nameTaken({ a: { name: 'Burro', kind: 'ingredient', active: true } }, 'Burro')).toBe(true);
+    expect(nameTaken({ a: { name: 'Burro', active: 0 } }, 'Burro'), 'only an explicit false switches it off').toBe(true);
+  });
+
+  test('a short name counts too, and so does the invoice name', () => {
+    const flour = { f: { id: 'f', name: 'Caputo Rosso 00', shortName: 'Farina', active: true } };
+    expect(nameTaken(flour, 'farina')).toBe(true);
+    expect(nameTaken(flour, 'Caputo Rosso 00')).toBe(true);
+    expect(nameTaken(flour, 'Burro')).toBe(false);
+    expect(nameTaken({ a: { name: 'Burro', shortName: ' Bur ' } }, 'bur'), 'the short name is trimmed').toBe(true);
+  });
+
+  test('exactly that name — not a part of it — and any junk is simply «not taken»', () => {
+    expect(nameTaken({ a: { name: 'Burro salato' } }, 'burro')).toBe(false);
+    expect(nameTaken({ a: { name: 'Burro' } }, undefined), 'QUIRK COPIED: a blank name matches the missing short name, so the callers guard against a blank').toBe(true);
+    expect(nameTaken({ a: { name: 'Burro', shortName: 'Bur' } }, undefined), 'with both names filled, a blank matches nothing').toBe(false);
+    expect(nameTaken({ a: { id: 'a' } }, '  '), 'a nameless ingredient equals a blank name (copied quirk)').toBe(true);
+    expect(nameTaken(undefined, 'x')).toBe(false);
+    expect(nameTaken('abc', 'a')).toBe(false);
+    expect(nameTaken(5, 'x')).toBe(false);
+    expect(nameTaken({ a: { name: 5 } }, '5'), 'a number name is read as text').toBe(true);
+  });
 });
 
 // ── What a person reads for a unit ───────────────────────────────────────────
@@ -732,17 +974,17 @@ describe('kg and litre decimals', () => {
 // ── What pairing would have checked ──────────────────────────────────────────
 
 describe('the port against the original', () => {
-  // The rest of the original: the editor's link functions, the validation and the Calculator import (steps 3d-6,
-  // 3d-7), `unitText`, which the port replaces by `unitTextKey`, and `formatAmount`, which needs the interface
+  // The rest of the original: the Calculator import (step 3d-7), `unitText`, which the port replaces by `unitTextKey`, and `formatAmount`, which needs the interface
   // language and so lives in the app (app/src/recipes/recipeAmounts.ts `amountNumber`), and `exportModelOf`, which
   // reads both of those (the unit word and the screen's number): the app builds the export model from its own
   // typed i18n, in the export slice.
   const LEFT_OUT = [
-    'unitText', 'formatAmount', 'linkOptions', 'linkedItemName', 'isSameLink', 'applyLink', 'moveRow', 'findInvalidRecipe',
-    'toCalculatorRecipe', 'nonWeighableLabels', 'mergeImportedRecipe', 'importFailureKey', 'findCalculatorImport',
+    'unitText', 'formatAmount', 'toCalculatorRecipe', 'nonWeighableLabels', 'mergeImportedRecipe', 'importFailureKey',
     'exportModelOf',
   ];
-  const ADDED = ['unitTextKey'];
+  // `supplierLabel` is js/supplier-label.js's, copied into the model and exported (step 3d-6 A2) for the link line.
+  // `nameTaken` is not an export of catalogue-model.js: its original is in ingredient-suggest.js (tested above).
+  const ADDED = ['unitTextKey', 'nameTaken', 'supplierLabel'];
   // Same name, same results, but the translator is one more parameter.
   const ARITY_DIFFERS = ['batchWarning'];
   const original = legacyJs as unknown as Record<string, unknown>;
