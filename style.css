@@ -1194,7 +1194,10 @@ input.cp-prod-weight {
 }
 
 /* A required field left empty when the user tried to Save. */
-.cp-invalid { border-color: var(--danger) !important; background: color-mix(in srgb, var(--danger) 6%, transparent) !important; }
+.cp-invalid { border-color: var(--danger) !important; background: var(--error-bg) !important; }
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  .cp-invalid { background: color-mix(in srgb, var(--danger) 6%, transparent) !important; }
+}
 
 /* Prominent Save at the bottom of a detail screen. */
 .cp-save-bottom {
@@ -1729,7 +1732,11 @@ input.cp-prod-weight {
   cursor: pointer;
 }
 .log-edit-btn { background: var(--surface); border: 1px solid var(--border); color: var(--text2); }
-.log-delete-btn { background: var(--surface); border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--border)); color: var(--danger); display: inline-flex; align-items: center; justify-content: center; }
+.log-delete-btn { background: var(--surface); border: 1px solid var(--error-border); color: var(--danger); display: inline-flex; align-items: center; justify-content: center; }
+/* The 40% red border where color-mix() exists; Chrome before 111 (the lab tablet) keeps the plain one above. */
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  .log-delete-btn { border-color: color-mix(in srgb, var(--danger) 40%, var(--border)); }
+}
 
 .log-empty {
   text-align: center;
