@@ -497,6 +497,46 @@ test('a precached path with a query string is not answered from the cache', asyn
   assert.equal(w.record.attempts.length, before + 1);
 });
 
+// ⚠️⚠️ The stocktake's month arrows open inventory.html?month=…, and with no signal every
+// month never opened online answered with the browser's own error page — the arrows dead in
+// a storeroom (found 11 Oct 2026 on the emulator, offline through this worker).
+const MONTH_PAGE = `${abs('./inventory.html')}?month=2026-09`;
+
+test("⚠⚠ offline, a precached page asked for WITH a query is this worker's copy of it", async () => {
+  const w = loadWorker({ fails: url => url.includes('/inventory.html?') });
+  await install(w);
+  w.record.puts.length = 0;
+  const res = await serve(w, MONTH_PAGE);
+  assert.ok(res, 'the worker must answer, not leave the browser to show its error page');
+  assert.equal(await res.text(), `asset:${abs('./inventory.html')}`, 'the precached page, query dropped');
+  assert.deepEqual(w.record.puts, [], 'nothing is written on the way');
+});
+
+test('online, the same address still goes to the network first', async () => {
+  const w = loadWorker();
+  await install(w);
+  const before = w.record.attempts.length;
+  await serve(w, MONTH_PAGE);
+  assert.equal(w.record.attempts.length, before + 1);
+  assert.ok(w.record.attempts.includes(MONTH_PAGE));
+});
+
+test('offline, a page that is NOT precached gets no stand-in from the precache', async () => {
+  const w = loadWorker({ fails: url => url.includes('/order.html?') });
+  await install(w);
+  const opened = w.record.opened.length;
+  const res = await serve(w, `${abs('./order.html')}?venue=x`);
+  assert.equal(res, undefined, 'the client page answers from its own stored copy or not at all');
+  assert.equal(w.record.opened.length, opened, 'the release cache is not even opened for it');
+});
+
+test("the offline stand-in is matched in THIS worker's cache, never through caches.match()", () => {
+  const branch = SW.slice(SW.indexOf('function offlineCopy'));
+  const body = branch.slice(0, branch.indexOf('\n}'));
+  assert.match(body, /caches\.open\(CACHE_NAME\)/,
+    "a waiting release's cache must never answer the current page");
+});
+
 test('writes are never touched by the worker', async () => {
   const w = loadWorker();
   assert.equal(await serve(w, abs('./index.html'), 'POST'), null);

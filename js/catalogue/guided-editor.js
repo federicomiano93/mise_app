@@ -13,7 +13,7 @@
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
-import { unitOf, unitText } from './catalogue-model.js';
+import { unitOf, unitText, formatAmount } from './catalogue-model.js';
 import {
   withRowIds, ridOf, normalizeSteps, normalizeSeconds, normalizeEndNote, unassignedRows,
   MAX_STEPS, MAX_STEP_TEXT, MAX_SPEED_TEXT, MAX_END_NOTE, formatDuration,
@@ -25,8 +25,6 @@ const UP_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
 const DOWN_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M19 12l-7 7-7-7"/></svg>';
-
-const nf = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0, useGrouping: false });
 
 const clampInt = (value, max) => {
   const n = Math.floor(Number(value));
@@ -79,7 +77,7 @@ export function renderGuidedEditor({ recipe, app }) {
     const textInput = el('input', {
       class: 'guided-edit-text', type: 'text', maxlength: String(MAX_STEP_TEXT),
       value: step.text, placeholder: t('cat.whatToDoE'),
-      'aria-label': `Step ${i + 1} instruction`,
+      'aria-label': t('cat.stepInstruction', { n: i + 1 }),
       oninput: (e) => { step.text = e.target.value; markDirty(); },
     });
 
@@ -104,7 +102,7 @@ export function renderGuidedEditor({ recipe, app }) {
       picks.appendChild(el('label', { class: 'guided-edit-pick' }, [
         box,
         el('span', { class: 'guided-edit-pick-name', text: label }),
-        el('span', { class: 'guided-edit-pick-amt', text: `${nf.format(Number(row.grams) || 0)} ${unitText(unitOf(row))}` }),
+        el('span', { class: 'guided-edit-pick-amt', text: `${formatAmount(row.grams, unitOf(row))} ${unitText(unitOf(row))}` }),
       ]));
     }
 
@@ -114,20 +112,20 @@ export function renderGuidedEditor({ recipe, app }) {
     const mins = el('input', {
       class: 'guided-edit-num', type: 'number', min: '0', max: '720', step: '1', inputmode: 'numeric',
       value: step.seconds ? String(Math.floor(step.seconds / 60)) : '', placeholder: '0',
-      'aria-label': `Step ${i + 1} minutes`,
+      'aria-label': t('cat.stepMinutes', { n: i + 1 }),
       oninput: (e) => { setTime(step, e.target.value, secs.value); markDirty(); },
     });
     const secs = el('input', {
       class: 'guided-edit-num', type: 'number', min: '0', max: '59', step: '1', inputmode: 'numeric',
       value: step.seconds % 60 ? String(step.seconds % 60) : '', placeholder: '0',
-      'aria-label': `Step ${i + 1} seconds`,
+      'aria-label': t('cat.stepSeconds', { n: i + 1 }),
       oninput: (e) => { setTime(step, mins.value, e.target.value); markDirty(); },
     });
 
     const speed = el('input', {
       class: 'guided-edit-speed', type: 'text', maxlength: String(MAX_SPEED_TEXT),
-      value: step.speed, placeholder: 'e.g. 1',
-      'aria-label': `Step ${i + 1} speed`,
+      value: step.speed, placeholder: t('cat.speedPlaceholder'),
+      'aria-label': t('cat.stepSpeed', { n: i + 1 }),
       oninput: (e) => { step.speed = e.target.value; markDirty(); },
     });
 
@@ -146,7 +144,7 @@ export function renderGuidedEditor({ recipe, app }) {
         }),
         el('button', {
           class: 'cat-del-icon', type: 'button', icon: TRASH_SVG,
-          'aria-label': `Remove step ${i + 1}`, onclick: () => remove(i),
+          'aria-label': t('cat.removeStep', { n: i + 1 }), onclick: () => remove(i),
         }),
       ]),
       textInput,
