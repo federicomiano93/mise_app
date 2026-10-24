@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v664';
+const CACHE_NAME = 'theitalianclub-v684';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -149,20 +149,20 @@ const ASSET_HASHES = {
   "./suppliers.html": '0f24580d8d5a1e05',
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
-  "./dist/i18n.js": 'ea6405e58166871b',
-  "./dist/index.js": '0a16e023a70d7899',
-  "./dist/calculator.js": '5206be30cd6047c0',
-  "./dist/orders.js": '9361e46096a15f84',
-  "./dist/suppliers.js": '95932780d01b980f',
+  "./dist/i18n.js": 'ec9076fc5297afe6',
+  "./dist/index.js": '260b3eb5d851b110',
+  "./dist/calculator.js": 'dbac674aad83bbb2',
+  "./dist/orders.js": '515deaac1b4e6ffe',
+  "./dist/suppliers.js": '245436b96e0fc146',
   "./dist/install-guide.js": '86df880954faeae9',
   "./js/allergen-model.js": 'a9ad7592da832a56',
-  "./js/calculator-config.js": '65e76f83f8458dbb',
+  "./js/calculator-config.js": '2a04f05879932378',
   "./js/credentials.js": 'b805f88d003ea918',
   "./js/currency.js": '241b1dbdf4cc465f',
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/firebase.js": '4aeddee49dce8a21',
   "./js/i18n-dom.js": '24249af4367511e5',
-  "./js/i18n.js": 'd100e54533c7389b',
+  "./js/i18n.js": 'e7355bc1c52e0623',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/local-data.js": '91aa7f1699c897a1',
   "./js/location.js": '6aaf53615a8739d1',
@@ -175,15 +175,15 @@ const ASSET_HASHES = {
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/sw-update.js": '2ffc253aa03eff0f',
   "./js/update-gate.js": '1801738b3e6def2d',
-  "./dist/catalogue.js": '53e52b22b7fa3d1a',
-  "./dist/pastries.js": '11b100243abc9b35',
-  "./dist/foodcost.js": '582d5d94ea930e3f',
-  "./dist/inventory.js": '66563be3b74bf5b9',
+  "./dist/catalogue.js": '415f2b3ed9aad8d2',
+  "./dist/pastries.js": '542ddb995c74b911',
+  "./dist/foodcost.js": '7c528cc0d5521d53',
+  "./dist/inventory.js": 'caee82bcb52584c8',
   "./qr.png": '761a95e5bc25e2ba',
-  "./dist/tokens.css": 'a4f37273bf55b63f',
+  "./dist/tokens.css": '86359636bea1c94f',
   "./dist/auth.css": '58cd14bdbf808ecc',
-  "./dist/style.css": '1580de8c8c205539',
-  "./dist/orders.css": 'a51af9d47d76ff97',
+  "./dist/style.css": '97ba2c33e071292d',
+  "./dist/orders.css": 'dc27c1f5c1840cea',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -196,11 +196,11 @@ const ASSET_HASHES = {
   "./fonts/atkinson-next-digits.woff2": '99ffa5b0e9a45a2b',
   "./js/splash-init.js": 'c68474ad53893e48',
   "./catalogue.html": 'd7e133a7e7180865',
-  "./dist/catalogue.css": 'ac6b5f2843dc7902',
+  "./dist/catalogue.css": '6a1f7d98c3506d8b',
   "./dist/label-print.css": 'c96c56dfef069675',
-  "./dist/records.css": 'e15955849eb3fde0',
+  "./dist/records.css": '0285e69618b83eed',
   "./pastries.html": '7f35bf54c3ee54db',
-  "./dist/pastries.css": 'bd6b926af0a75ce7',
+  "./dist/pastries.css": '636ec96ab272ae23',
   "./foodcost.html": '59bab773b490ded3',
   "./dist/foodcost.css": '92d3e004797ffba6',
   "./inventory.html": '4caee7fc2b8256a8',
@@ -568,9 +568,26 @@ self.addEventListener('fetch', e => {
           .catch(() => {});
       }
       return res;
-    }).catch(() => caches.match(e.request))
+    }).catch(() => offlineCopy(url, e.request))
   );
 });
+
+// What answers a request of ours that the network could not.
+//
+// ⚠️⚠️ A PRECACHED PAGE ASKED FOR WITH A QUERY IS STILL THAT PAGE. The stocktake's month
+// arrows open inventory.html?month=…, and with no signal every month not opened online
+// before answered with the browser's own error page — the arrows dead in a storeroom
+// (found 11 Oct 2026, offline through this worker on the emulator). The query is read by
+// the page's own script, never by the server, so THIS worker's copy of the file is the
+// right answer: the one that matches this release's bundles. Online nothing changes.
+function offlineCopy(url, request) {
+  if (url.search && PRECACHED.has(url.origin + url.pathname)) {
+    return caches.open(CACHE_NAME)
+      .then(cache => cache.match(url.origin + url.pathname))
+      .then(hit => hit || caches.match(request));
+  }
+  return caches.match(request);
+}
 
 self.addEventListener('message', e => {
   if (!e.source) return;

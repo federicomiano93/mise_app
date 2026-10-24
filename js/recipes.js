@@ -23,12 +23,12 @@ const saveGuard = createSaveGuard(() => document.getElementById('recipe-save-btn
 import { recipeTotal } from './calculator-dough-math.js';
 import { getConfig, saveConfigOrSay } from './calculator-config-store.js';
 import {
-  cloneConfig, getRecipes, getIngredients, getProducts, LOGICS, MAX_VISIBLE_RECIPES,
+  cloneConfig, getRecipes, getIngredients, getProducts, LOGICS, MAX_VISIBLE_RECIPES, tabLeaveningId,
   usesOrders, usesTrays, isValidTrayWeight, DEFAULT_TRAY_WEIGHT, MAX_TRAY_WEIGHT, MIN_TRAY_WEIGHT,
 } from './calculator-config.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
-import { isLinked } from './calculator-recipe-source.js';
+import { isLinked, chooseLeavening, leaveningLost } from './calculator-recipe-source.js';
 import { effectiveRecipe } from './calculator-catalogue-link.js';
 import { withRowIds } from './catalogue/guided-model.js';
 import { getCatalogueRecipesOnce, stampRecipeRowIds } from './firebase.js';
@@ -539,26 +539,13 @@ function leaveningBox(recipe) {
     const option = el('option', { value }, ing.label || t('calc.unnamedIngredient'));
     select.appendChild(option);
   });
-  select.value = (linkedRows ? recipe.leaveningRid : recipe.leaveningKey) || '';
+  // A Catalogue row that is gone (deleted, or re-added with a new id) reads as
+  // «nothing rises» — which is what the Calculator then does: no knob, pro-rata.
+  const lost = leaveningLost(recipe, src);
+  select.value = lost ? '' : (tabLeaveningId(recipe) || '');
 
   select.addEventListener('change', () => {
-    const picked = select.value;
-    if (!picked) {
-      if (linkedRows) recipe.leaveningRid = null; else recipe.leaveningKey = null;
-    } else {
-      const index = picked.startsWith('#') ? Number(picked.slice(1)) : -1;
-      const ing = index >= 0 ? recipe.ingredients[index]
-        : recipe.ingredients.find(i => i.key === picked);
-      if (ing) {
-        if (!ing.key) {
-          ing.key = (ing.label || 'ing').toLowerCase().replace(/[^a-z0-9]+/g, '-')
-            + '-' + recipe.ingredients.indexOf(ing);
-        }
-        if (linkedRows) recipe.leaveningRid = ing.key; else recipe.leaveningKey = ing.key;
-        if (!recipe.leaveningDefaultPct) recipe.leaveningDefaultPct = 1;
-        if (recipe.baselinePct == null) recipe.baselinePct = recipe.leaveningDefaultPct;
-      }
-    }
+    chooseLeavening(recipe, select.value, linkedRows);
     markDirty();
     renderEditor();
   });
@@ -569,8 +556,9 @@ function leaveningBox(recipe) {
   // word inside it. .cp-hint is the app's existing explanation line.
   rows.push(el('div', { class: 'cp-hint' }, t('calc.leaveningHint')));
 
-  // The rest of the box only means anything once something IS the leavening.
-  if (recipe.leaveningKey) {
+  // The rest of the box only means anything once something IS the leavening —
+  // on a linked tab, a Catalogue row (leaveningRid), never its leftover own key.
+  if (tabLeaveningId(recipe) && !lost) {
     const pct = el('input', {
       class: 'cp-prod-weight', type: 'number', min: '0', max: '100', step: '0.05',
       value: String(recipe.leaveningDefaultPct || 0), inputmode: 'decimal',
