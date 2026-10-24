@@ -7,7 +7,7 @@
 import { computeRecipeTarget, isProRata, recipeSpec, showsLeaveningKnob } from '@mise/shared/calculator-config';
 import type { CalculatorConfig, Recipe } from '@mise/shared/calculator-config';
 import { scaleRecipe } from '@mise/shared/calculator-dough-math';
-import { canCalculate, isLinked, resolveRecipe, sheetRecipe } from '@mise/shared/calculator-recipe-source';
+import { canCalculate, isLinked, leaveningLost, resolveRecipe, sheetRecipe } from '@mise/shared/calculator-recipe-source';
 import type { ResolvedRecipe } from '@mise/shared/calculator-recipe-source';
 import type { StoredDoc } from './calculatorSource';
 import { leaveningPct } from './calculatorInput';
@@ -54,6 +54,14 @@ export function sourceRecipe(recipe: Recipe, linked: Readonly<Record<string, Sto
   return { source: sheetRecipe(recipe, resolved), resolved };
 }
 
+// Whether the tab draws its leavening knob.
+//
+// ⚠️ NO KNOB FOR A CATALOGUE ROW THAT IS GONE (deleted, or re-added with a new id): the dough then scales
+// pro-rata, and a knob would move the % and change no gram (the current app's fix, PR #376).
+export function showsKnob(recipe: Recipe, source: Recipe, resolved: ResolvedRecipe): boolean {
+  return showsLeaveningKnob(source) && !leaveningLost(recipe, resolved);
+}
+
 // Whether the linked recipe has not been heard of yet. A key present with null is «looked, it is gone».
 export function stillLoading(recipe: Recipe, linked: Readonly<Record<string, StoredDoc | null>>): boolean {
   return isLinked(recipe) &&!(String(recipe.catalogueId).trim() in linked);
@@ -86,7 +94,7 @@ export function calculateTab(
     };
   }
 
-  const pct = leaveningPct(showsLeaveningKnob(source) ? numbers.knob : null, recipe.leaveningDefaultPct);
+  const pct = leaveningPct(showsKnob(recipe, source, resolved) ? numbers.knob : null, recipe.leaveningDefaultPct);
   const spec = recipeSpec(source);
   // 'total' and the trays logics scale purely pro-rata.
   if (isProRata(recipe.logic)) spec.leaveningKey = null;

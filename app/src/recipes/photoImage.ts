@@ -1,4 +1,6 @@
-import { FALLBACK_QUALITY, JPEG_QUALITY, MAX_EDGE, MAX_IMAGE_BYTES, approxBytes, base64Of, fitWithin } from '@mise/shared/photo-model';
+import {
+  FALLBACK_QUALITY, JPEG_QUALITY, MAX_EDGE, MAX_IMAGE_BYTES, approxBytes, base64Of, decodeUpright, fitWithin,
+} from '@mise/shared/photo-model';
 
 // The DOM half of a photograph: one chosen file becomes the ONE string that is both the thumbnail and the payload (a port of
 // `shrink` in js/catalogue/photo-capture.js; the arithmetic is the shared photo model's).
@@ -25,19 +27,12 @@ export class PhotoImageError extends Error {
 // It also takes the File directly, so no blob: URL is ever made — the app's Content-Security-Policy allows
 // `img-src 'self' data:` and nothing else — and it holds one downscaled copy rather than the original as well.
 //
-// ⚠️ Chrome 101 (the lab tablet's) does not know the word 'from-image': it REJECTS the options with a TypeError before
-// looking at the photo, and every camera photo on the tablet was reported as an unreadable format (found on the real
-// tablet, 18 Oct 2026). Its own default already honours the EXIF flag (measured there: a 40×30 JPEG flagged «rotate 90°»
-// decodes 30×40) — the spec later renamed that behaviour 'from-image'. So ONLY a TypeError (the options refused) retries
-// without them; a photo that truly cannot be decoded fails with a DOMException and stays «undecodable».
-async function decodeUpright(file: Blob): Promise<ImageBitmap> {
-  try {
-    return await createImageBitmap(file, { imageOrientation: 'from-image' });
-  } catch (error) {
-    if (!(error instanceof TypeError)) throw error;
-    return createImageBitmap(file);
-  }
-}
+// ⚠️ Chrome 101 (the lab tablet's) refuses the option with a TypeError: decodeUpright (shared photo-model, the same as
+// the current app's) passes it and retries without it only then.
+// The retry passes NO options at all, not an undefined one, exactly as the current app does.
+const decodeFile = (file: Blob): Promise<ImageBitmap> => decodeUpright<Blob, ImageBitmap>(
+  file, (f, options) => (options === undefined ? createImageBitmap(f) : createImageBitmap(f, options)),
+);
 
 export async function shrinkPhoto(file: Blob): Promise<string> {
   // A browser without it (Chrome 101, the lab tablet's, has it) cannot prepare a photo: said as «could not be prepared»,
@@ -46,7 +41,7 @@ export async function shrinkPhoto(file: Blob): Promise<string> {
 
   let bitmap: ImageBitmap;
   try {
-    bitmap = await decodeUpright(file);
+    bitmap = await decodeFile(file);
   } catch {
     // ⚠️ ALMOST ALWAYS HEIC, off an iPhone, picked from the library rather than taken with the camera. Android cannot
     // decode it at all. There is no fallback path on purpose: a second decoder that works on one platform is a defect that
