@@ -1,0 +1,52 @@
+/* The dialog (the design's `.dialog`): a card on a scrim, centred. Above the skip link and
+   everything else in the app. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  padding: var(--s4);
+  overflow-y: auto;
+  background: var(--scrim);
+}
+
+/* The auto margin centres the card and, unlike centring with align-items, never pushes the top
+   of a tall card (a phone on its side) out of reach above the scrollable area. */
+.modal {
+  width: 100%;
+  margin: auto;
+  max-width: 440px;
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+}
+
+.dialog {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s6);
+}
+
+/* The dialog itself takes the focus when it opens; it is a container, not a control, so no
+   ring around the whole card. */
+.dialog:focus-visible {
+  outline: none;
+}
+
+.title {
+  font-size: var(--fs-xl);
+  font-weight: 650;
+}
+
+.message {
+  color: var(--ink-2);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s3);
+}
