@@ -64,7 +64,7 @@ export function renderEditor({ day, items, note, allDays, app }) {
 
   function updateCount() {
     const n = cleanItems(working).length;
-    countEl.textContent = n === 1 ? '1 pastry' : `${n} pastries`;
+    countEl.textContent = t('past.count', { n });
   }
 
   function renderRows() {
@@ -79,7 +79,7 @@ export function renderEditor({ day, items, note, allDays, app }) {
         list: 'pas-name-options',
         autocomplete: 'off',
         'aria-label': t('past.pastryName'),
-        oninput: (e) => { row.name = e.target.value; markDirty(); updateCount(); if (showErrors) validate(); },
+        oninput: (e) => { row.name = e.target.value; markDirty(); updateCount(); nameRow(); if (showErrors) validate(); },
       });
 
       const qtyInput = el('input', {
@@ -91,17 +91,25 @@ export function renderEditor({ day, items, note, allDays, app }) {
         max: String(MAX_QTY),
         step: '1',
         inputmode: 'numeric',
-        'aria-label': `How many ${row.name || 'pastries'}`,
         oninput: (e) => { row.qty = e.target.value; markDirty(); if (showErrors) validate(); },
       });
 
       const del = el('button', {
         class: 'pas-del-icon',
         type: 'button',
-        'aria-label': `Remove ${row.name || 'this row'}`,
         icon: TRASH_SVG,
         onclick: () => removeRow(idx),
       });
+
+      // The quantity box and the bin are named after the pastry, and follow the name as it is
+      // typed: a screen reader moving from «Cornetti» to the next box hears «Quantità di Cornetti»,
+      // not the blank row's «Quante paste». Trimmed, like the confirm in removeRow() below.
+      function nameRow() {
+        const label = (row.name || '').trim();
+        qtyInput.setAttribute('aria-label', label ? t('past.howManyOf', { name: label }) : t('past.howManyPastries'));
+        del.setAttribute('aria-label', t('past.removeRow', { name: label || t('past.thisRow') }));
+      }
+      nameRow();
 
       rowsContainer.appendChild(el('div', { class: 'pas-editrow' }, [nameInput, qtyInput, del]));
     });

@@ -30,15 +30,28 @@ const PENCIL_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" 
 // reason the Orders draft keeps a `pending` map).
 const typedKey = (day, name) => `${day} ${String(name).trim().toLowerCase()}`;
 
-export function renderDay({ day, items, note, locked = false, app }) {
+// ⚠️ `ready` IS FALSE UNTIL THE DAYS AND TONIGHT'S CONFIRMATIONS HAVE ANSWERED
+// (pastries-main.js, «Waiting for the first answers»). Until then the list is
+// only this phone's own copy (empty on a new phone): it is drawn, so the first
+// paint is instant, but a row ignores a tap (aria-disabled, still in the
+// keyboard's path) and Confirm is disabled — a tick would write a whole day built
+// from that copy, and Confirm would record it as tonight's.
+export function renderDay({ day, items, note, locked = false, ready = true, app }) {
   const typed = new Map();
   let openName = null;      // at most one row is open at a time
   let isLocked = !!locked;  // confirmed tonight, and no edit granted since
+  let isReady = !!ready;    // the first answers are in: rows and Confirm may write
 
   const list = el('div', { class: 'pas-list' });
   const empty = el('div', { class: 'empty-state' }, [
     el('p', { class: 'empty-title', text: t('past.nothingToProveFor', { day: weekdayLabel(day) }) }),
     el('p', { class: 'empty-sub', text: t('past.tapThePencilTo') }),
+  ]);
+  // An empty copy before the answer is «nothing known», not «nothing to prove»:
+  // read as the latter at 4am on a new tablet with no signal, it would send
+  // somebody home without proving anything.
+  const notArrived = el('div', { class: 'empty-state' }, [
+    el('p', { class: 'empty-title', text: t('past.listNotArrivedYet') }),
   ]);
   const body = el('div', { class: 'pas-body' });
 
@@ -60,7 +73,9 @@ export function renderDay({ day, items, note, locked = false, app }) {
       class: 'pas-row-main',
       type: 'button',
       'aria-expanded': (!isLocked && openName === key) ? 'true' : 'false',
+      'aria-disabled': isReady ? null : 'true',
       onclick: async () => {
+        if (!isReady) return;
         if (!isLocked) { toggle(key); return; }
         // Said yes: open the row that was tapped, rather than making them find
         // it again. One tap, one question, then the box they were reaching for.
@@ -176,7 +191,7 @@ export function renderDay({ day, items, note, locked = false, app }) {
       list.replaceChildren(...built.map(b => b.row));
       body.replaceChildren(list);
     } else {
-      body.replaceChildren(empty);
+      body.replaceChildren(isReady ? empty : notArrived);
     }
   }
 
@@ -201,7 +216,7 @@ export function renderDay({ day, items, note, locked = false, app }) {
     type: 'button',
     text: t('past.confirm'),
     onclick: async () => {
-      if (confirming) return;     // the dialog takes time to read; taps keep arriving
+      if (confirming || !isReady) return;   // the dialog takes time to read; taps keep arriving
       confirming = true;
       try {
         await app.confirmDay(day, currentItems, currentNote);
@@ -228,6 +243,7 @@ export function renderDay({ day, items, note, locked = false, app }) {
 
   function paintLock() {
     confirmBtn.hidden = isLocked;
+    confirmBtn.disabled = !isReady;
     doneRow.hidden = !isLocked;
   }
 
@@ -255,7 +271,7 @@ export function renderDay({ day, items, note, locked = false, app }) {
     // selection") and selectionStart reads back null. Focus is restored, which
     // puts the caret at the end — the right place after typing anyway. Anything
     // here that pretended to save a caret position would be dead code.
-    update(nextItems, nextNote, nextLocked) {
+    update(nextItems, nextNote, nextLocked, nextReady = true) {
       const active = document.activeElement;
       const wasTyping = active && active.classList && active.classList.contains('pas-quick');
       const openBefore = openName;
@@ -265,6 +281,9 @@ export function renderDay({ day, items, note, locked = false, app }) {
       // would be a box that accepts a number and then refuses to keep it.
       isLocked = !!nextLocked;
       if (isLocked) openName = null;
+      // Once in, the answers stay in (both stores say so), so this only ever
+      // turns the rows and Confirm ON — it can never close a box being typed into.
+      isReady = !!nextReady;
 
       paint(nextItems);
       paintNote(nextNote);
