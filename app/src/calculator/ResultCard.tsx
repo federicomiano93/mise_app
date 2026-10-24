@@ -11,7 +11,7 @@ import { useT } from '../i18n/useT';
 import { useSendSheet } from '../ui/SendSheet';
 import { problemSentence } from './calculatorMessages';
 import type { TabResult } from './calculatorResult';
-import { copyToClipboard } from './clipboard';
+import { copyToClipboard } from '../ui/clipboard';
 import { RecipeFullScreen } from '../ui/RecipeFullScreen';
 import { CALCULATOR_ZOOM_KEY } from '../ui/zoomStorage';
 import boxes from './Boxes.module.css';

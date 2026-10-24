@@ -143,6 +143,7 @@ describe('screenNameFor', () => {
   it.each([
     ['/recipes', 'recipes'],
     ['/recipes/', 'recipes'],
+    ['/recipes/allergens', 'recipes-allergens'],
     ['/recipes/abc123', 'recipes-detail'],
     ['/recipes/a%2Fb', 'recipes-detail'],
     // A reserved word or junk is sent back to the list: never a recipe screen in the statistics.
