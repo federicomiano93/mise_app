@@ -5,7 +5,7 @@ import { resolveLabel } from '@mise/shared/label-template-model';
 import { buildLabel } from '@mise/shared/recipe-label-model';
 import pageCss from './label-page.css?raw';
 import type { SheetSource } from './LabelSheet';
-import { closePrintHost, LABEL_PAGE_ID, LABEL_PAGE_OFF, LABEL_PAGE_ON, openPrintHost, PRINTING_CLASS } from './printHost';
+import { closePrintHost, LABEL_PAGE_ID, LABEL_PAGE_OFF, LABEL_PAGE_ON, openImagePrintHost, openPrintHost, PRINTING_CLASS } from './printHost';
 
 // ⚠️⚠️ THE ZERO-MARGIN PAGE IS ON EXACTLY AS LONG AS THE PRINT HOST (driven on the lab tablet, Chrome 101, 14 Oct 2026).
 // Without it the label went onto the browser's default page — off its corner and onto a second, blank page. Left on
@@ -42,6 +42,35 @@ describe('the print host and the label page', () => {
     act(() => { closePrintHost(); });
     expect(document.documentElement.classList.contains(PRINTING_CLASS)).toBe(false);
     expect(pageLink().media).toBe(LABEL_PAGE_OFF);
+  });
+
+  it('builds the image label host: the 80 × 60 mm page class and the picture, removed like any other host', () => {
+    const png = 'data:image/png;base64,AAAA';
+    act(() => { openImagePrintHost(png); });
+    const host = document.getElementById('labelPrint');
+    expect(host?.parentElement).toBe(document.body);
+    expect(host?.className).toBe('lab-print lab-print--p80x60');
+    const image = host?.querySelector('img.lab-print-image');
+    expect(image?.getAttribute('src')).toBe(png);
+    expect(image?.getAttribute('alt')).toBe('');
+    expect(document.documentElement.classList.contains(PRINTING_CLASS)).toBe(true);
+    expect(pageLink().media).toBe(LABEL_PAGE_ON);
+
+    // A second Print replaces the host; closing takes it, the class and the zero-margin page away.
+    act(() => { openImagePrintHost(png); });
+    expect(document.querySelectorAll('#labelPrint')).toHaveLength(1);
+    act(() => { closePrintHost(); });
+    expect(document.getElementById('labelPrint')).toBeNull();
+    expect(document.documentElement.classList.contains(PRINTING_CLASS)).toBe(false);
+    expect(pageLink().media).toBe(LABEL_PAGE_OFF);
+  });
+
+  it('waits for the person to be back in the page after afterprint, for the image host too', () => {
+    act(() => { openImagePrintHost('data:image/png;base64,AAAA'); });
+    act(() => { window.dispatchEvent(new Event('afterprint')); });
+    expect(document.getElementById('labelPrint')).not.toBeNull();
+    act(() => { window.dispatchEvent(new Event('pointerdown')); });
+    expect(document.getElementById('labelPrint')).toBeNull();
   });
 
   it('links it once, however many times Print is pressed', () => {

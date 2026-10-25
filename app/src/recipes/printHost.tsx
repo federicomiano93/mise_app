@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
@@ -78,11 +79,14 @@ export function closePrintHost(): void {
   labelPageLink().media = LABEL_PAGE_OFF;
 }
 
-export function openPrintHost(resolved: SheetSource, fontMm: number, sizeId: string | null): void {
+// ⚠️ ONE LIFETIME FOR EVERY KIND OF LABEL. The paper sheet and the image label (a PNG of the very dots that go to the
+// printer) differ only in the node's class and in what is drawn inside it; everything above — the host outliving the
+// screen, `afterprint` only arming the removal, the class on <html>, the zero-margin page — is this one function's.
+function openHost(className: string, content: ReactNode): void {
   closePrintHost();
   const node = document.createElement('div');
   node.id = 'labelPrint';
-  node.className = sizeId === null ? 'lab-print' : `lab-print lab-print--${sizeId}`;
+  node.className = className;
   document.body.appendChild(node);
   document.documentElement.classList.add(PRINTING_CLASS);
   labelPageLink().media = LABEL_PAGE_ON;
@@ -95,5 +99,18 @@ export function openPrintHost(resolved: SheetSource, fontMm: number, sizeId: str
   };
   current = { root, node, armed, back };
   window.addEventListener('afterprint', armed);
-  flushSync(() => { root.render(<LabelSheet resolved={resolved} fontMm={fontMm} />); });
+  flushSync(() => { root.render(content); });
+}
+
+export function openPrintHost(resolved: SheetSource, fontMm: number, sizeId: string | null): void {
+  openHost(
+    sizeId === null ? 'lab-print' : `lab-print lab-print--${sizeId}`,
+    <LabelSheet resolved={resolved} fontMm={fontMm} />,
+  );
+}
+
+// The image label («with logo»): its dots as a PNG on an 80 × 60 mm page of its own (label-print.css, `p80x60`). The
+// image has no alt text on purpose: it is a picture of a label, and nobody reads the print host.
+export function openImagePrintHost(png: string): void {
+  openHost('lab-print lab-print--p80x60', <img className="lab-print-image" src={png} alt="" />);
 }

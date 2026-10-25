@@ -165,12 +165,22 @@
 @page p76x51  { size: 76mm 51mm;  margin: 0; }
 @page p57x32  { size: 57mm 32mm;  margin: 0; }
 @page p102x76 { size: 102mm 76mm; margin: 0; }
+/* The image label («with logo») is always 80 × 60 mm: its dots are drawn for that paper alone. */
+@page p80x60  { size: 80mm 60mm;  margin: 0; }
 
 .lab-print { display: none; }
 :where(.lab-print) .lab-sheet { page: labcustom; }
 .lab-print--p76x51 .lab-sheet  { page: p76x51; }
 .lab-print--p57x32 .lab-sheet  { page: p57x32; }
 .lab-print--p102x76 .lab-sheet { page: p102x76; }
+/* The picture IS the page: exactly 80 × 60 mm, its dots kept square (a 640 × 480 image is 8 dots to the millimetre). */
+.lab-print--p80x60 .lab-print-image {
+  page: p80x60;
+  display: block;
+  width: 80mm;
+  height: 60mm;
+  image-rendering: pixelated;
+}
 
 @media print {
   /* ⚠️ ONE RULE, AND IT IS DERIVED RATHER THAN LISTED. #labelPrint is a direct child

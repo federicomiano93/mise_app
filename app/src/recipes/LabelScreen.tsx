@@ -22,6 +22,8 @@ import { FormBar } from '../ui/FormBar';
 import { copyToClipboard } from '../ui/clipboard';
 import { useSendSheet } from '../ui/SendSheet';
 import { useAllergenTables } from './allergenTables';
+import { ImageLabelBody } from './ImageLabelBody';
+import { imageLabelChoice } from './imageLabelData';
 import { LabelCard } from './LabelCard';
 import { LabelSheet } from './LabelSheet';
 import type { SheetSource } from './LabelSheet';
@@ -61,6 +63,11 @@ type Props = {
 export function LabelScreen({ recipe, titleRef, onBack }: Props) {
   const { t } = useT();
   const titleId = useId();
+  // ⚠️ THE MODEL IS THE VENUE'S CHOICE (config/labels `template`), and it is believed only once the label settings have
+  // arrived: until then the standard screen is drawn, exactly as before this model existed. The image label has its own
+  // screen and no allergens / nutrition switch (its text is typed, not worked out).
+  const { labelConfig, labelConfigKnown } = useRecipes();
+  const image = labelConfigKnown && imageLabelChoice(labelConfig).template === 'logo';
   return (
     <section className={styles.screen} aria-labelledby={titleId}>
       <FormBar
@@ -71,7 +78,7 @@ export function LabelScreen({ recipe, titleRef, onBack }: Props) {
         titleRef={titleRef}
         sub={<span className={styles.sub}>{t('cat.label')}</span>}
       />
-      <LabelBody recipe={recipe} />
+      {image ? <ImageLabelBody recipe={recipe} /> : <LabelBody recipe={recipe} />}
     </section>
   );
 }

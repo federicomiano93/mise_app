@@ -11,7 +11,7 @@ import { describe, expect, test } from 'vitest';
 //  - the print host is never the class that holds back a compulsory update (`preview-overlay`);
 //  - the paper's stylesheet is imported where the sheet is drawn, as a plain file.
 const sources = import.meta.glob<string>(
-  ['./LabelSheet.tsx', './LabelScreen.tsx', './LabelCard.tsx', './useSheetFit.ts', './printHost.tsx', './labelFontPreload.ts'],
+  ['./LabelSheet.tsx', './LabelScreen.tsx', './LabelCard.tsx', './useSheetFit.ts', './printHost.tsx', './labelFontPreload.ts', './ImageLabelBody.tsx'],
   { query: '?raw', import: 'default', eager: true },
 );
 
@@ -20,7 +20,7 @@ const codeOf = (source: string): string => source
   .replace(/^\s*\/\/.*$/gm, '')
   .replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
 
-const FILES = ['./LabelSheet.tsx', './LabelScreen.tsx', './LabelCard.tsx', './useSheetFit.ts', './printHost.tsx', './labelFontPreload.ts'];
+const FILES = ['./LabelSheet.tsx', './LabelScreen.tsx', './LabelCard.tsx', './useSheetFit.ts', './printHost.tsx', './labelFontPreload.ts', './ImageLabelBody.tsx'];
 
 describe('the label\'s files and the page CSP', () => {
   test('the scan finds every one of the label files, and reads real text', () => {
