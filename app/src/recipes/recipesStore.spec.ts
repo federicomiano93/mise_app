@@ -736,6 +736,61 @@ describe('the Recipe catalogue store', () => {
       expect(store.getSnapshot().recipes.map(r => r.id)).toEqual([id]);
     });
 
+    test('⚠️ a NEW recipe that carries a procedure (a duplicate) is created WITH it, shaped as saveProcedure shapes it', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([]);
+      const id = store.saveRecipe({
+        name: 'Focaccia (copy)',
+        ingredients: [{ label: 'Flour', grams: 1000, unit: 'g', rid: 'rflour001' }, { label: 'Salt', grams: 20, unit: 'g' }],
+        steps: [
+          { text: ' Mix ', rows: ['rflour001', 'rflour001', 'rgone0001'], seconds: '240', speed: '1' },
+          { text: '', rows: ['rgone0001'] },
+        ],
+        endNote: ' Rest ',
+      });
+      expect(saveRecipeDoc).toHaveBeenCalledTimes(1);
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect(Object.keys(doc).sort()).toEqual(['endNote', 'ingredients', 'name', 'netWeightG', 'shelfLifeDays', 'steps']);
+      // Trimmed, the row named twice named once, the row the copy no longer has taken out, the step left empty dropped.
+      expect(doc.steps).toEqual([{ text: 'Mix', rows: ['rflour001'], seconds: 240, speed: '1' }]);
+      expect(doc.endNote).toBe('Rest');
+      const held = store.getSnapshot().recipes.find(r => r.id === id) as unknown as Record<string, unknown>;
+      expect(held.steps).toEqual(doc.steps);
+    });
+
+    test('a step may point at a row that only got its id at this very save (the ids are minted first)', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([]);
+      store.saveRecipe({ name: 'Pane', ingredients: [{ label: 'Flour', grams: 500, unit: 'g' }], steps: [{ text: 'Mix', rows: ['rnothere1'] }], endNote: '' });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect(doc.steps).toEqual([{ text: 'Mix', rows: [], seconds: 0, speed: '' }]);
+    });
+
+    test('⚠️ an EXISTING recipe never has its procedure rewritten by a save, whatever the working copy carries', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([FOCACCIA]);
+      store.saveRecipe({
+        id: 'R1', name: 'Focaccia alta', ingredients: FOCACCIA.ingredients as Array<Record<string, unknown>>,
+        steps: [{ text: 'Something else' }], endNote: 'Other',
+      });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect(doc).not.toHaveProperty('steps');
+      expect(doc).not.toHaveProperty('endNote');
+      const held = store.getSnapshot().recipes.find(r => r.id === 'R1') as unknown as Record<string, unknown>;
+      expect(held.steps).toEqual(FOCACCIA.steps);
+    });
+
+    test('a new recipe that carries no procedure sends none (nothing empty is written)', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([]);
+      store.saveRecipe({ name: 'Pane', ingredients: [{ label: 'Flour', grams: 500, unit: 'g' }] });
+      expect(Object.keys(saveRecipeDoc.mock.calls[0]![1]).sort()).toEqual(['ingredients', 'name', 'netWeightG', 'shelfLifeDays']);
+    });
+
     test('⚠️ a REFUSED save puts the version before it back, and says so with the typed name', async () => {
       const { store, server, saveRecipeDoc } = makeStore();
       const said = vi.fn();
@@ -920,18 +975,22 @@ describe('the Recipe catalogue store', () => {
       expect(said).toHaveBeenCalledWith({ kind: 'recipe-not-saved', name: 'Focaccia' });
     });
 
-    test('the Calculator check: imported as cat-<id> → true; no copy, no document or a refused read → false', async () => {
+    test('the Calculator check: a linked tab → linked; an old cat-<id> copy → copy; nothing, no document or a refused read → null', async () => {
       const { store, getCalculatorConfig } = makeStore();
       getCalculatorConfig.mockResolvedValueOnce({ recipes: [{ id: 'cat-R1', name: 'Focaccia' }] });
-      await expect(store.calculatorImportOf('R1')).resolves.toBe(true);
-      getCalculatorConfig.mockResolvedValueOnce({ recipes: [{ id: 'cat-R2' }] });
-      await expect(store.calculatorImportOf('R1')).resolves.toBe(false);
+      await expect(store.calculatorImportOf('R1')).resolves.toBe('copy');
+      getCalculatorConfig.mockResolvedValueOnce({ recipes: [{ id: 'cat-R1', catalogueId: 'R1' }] });
+      await expect(store.calculatorImportOf('R1')).resolves.toBe('linked');
+      getCalculatorConfig.mockResolvedValueOnce({ recipes: [{ id: 'my-tab', catalogueId: 'R1' }] });
+      await expect(store.calculatorImportOf('R1')).resolves.toBe('linked');
+      getCalculatorConfig.mockResolvedValueOnce({ recipes: [{ id: 'cat-R2' }, { id: 'other', catalogueId: 'R2' }] });
+      await expect(store.calculatorImportOf('R1')).resolves.toBeNull();
       getCalculatorConfig.mockResolvedValueOnce(null);
-      await expect(store.calculatorImportOf('R1')).resolves.toBe(false);
+      await expect(store.calculatorImportOf('R1')).resolves.toBeNull();
       getCalculatorConfig.mockRejectedValueOnce(new Error('permission-denied'));
-      await expect(store.calculatorImportOf('R1')).resolves.toBe(false);
+      await expect(store.calculatorImportOf('R1')).resolves.toBeNull();
       getCalculatorConfig.mockImplementationOnce(() => { throw new Error('sync'); });
-      await expect(store.calculatorImportOf('R1')).resolves.toBe(false);
+      await expect(store.calculatorImportOf('R1')).resolves.toBeNull();
     });
 
     test('importing into the Calculator asks the source, hands back its answer, and counts the recipe as used', async () => {
@@ -964,7 +1023,7 @@ describe('the Recipe catalogue store', () => {
         await vi.advanceTimersByTimeAsync(0);
         expect(settled).toBe(false);
         await vi.advanceTimersByTimeAsync(1);
-        await expect(answer).resolves.toBe(false);
+        await expect(answer).resolves.toBeNull();
       } finally {
         vi.useRealTimers();
       }
