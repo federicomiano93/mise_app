@@ -31,12 +31,13 @@ test('"Flour uniqua blue" becomes two lines; a normal ingredient stays one line'
   assert.equal(lines[2], 'Flour uniqua');
   assert.match(lines[3], /^blue:\s+500 g$/);
 
-  const single = buildRecipeText('Brioche', [{ name: 'Water', grams: 1575 }], 1575);
+  const single = buildRecipeText('Brioche', [{ name: 'Water', grams: 1500 }], 1500);
   assert.equal(single.split('\n').length, 3); // title + separator + one line
 });
 
 test('grams are rounded the same way the screen rounds them', () => {
-  assert.match(buildRecipeText('Brioche', [{ name: 'Yeast', grams: 127.4 }], 3000), /Yeast:\s+127 g/);
+  // 118.6 is an invented fractional amount: it must round to a whole gram on screen.
+  assert.match(buildRecipeText('Brioche', [{ name: 'Yeast', grams: 118.6 }], 3000), /Yeast:\s+119 g/);
   assert.match(buildRecipeText('Brioche', [{ name: 'Yeast', grams: 4.5 }], 3000), /Yeast:\s+5 g/);
 });
 
