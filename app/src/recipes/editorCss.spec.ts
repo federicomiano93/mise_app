@@ -5,6 +5,7 @@ import rowCss from './IngredientRow.module.css?raw';
 import viewCss from './RecipeView.module.css?raw';
 import linkCss from './LinkSuggest.module.css?raw';
 import dialogCss from './LinkDialog.module.css?raw';
+import reorderCss from './ReorderRows.module.css?raw';
 
 // What a stylesheet decides and jsdom cannot see (see recipesCss.spec.ts): the editor's row on a 296px phone, the targets,
 // and where the «New recipe» button stands.
@@ -117,5 +118,55 @@ describe('linking a row', () => {
       const bare = withoutComments(css).replace(/@media \(hover: hover\)\s*\{[\s\S]*?\}/g, '');
       expect(bare).not.toContain(':hover');
     }
+  });
+});
+
+describe('reordering the rows', () => {
+  it('makes the grip a 48px target that takes the touch for itself, and every row at least 48px tall', () => {
+    const grip = rule(reorderCss, '.grip');
+    expect(declaration(grip, 'width')).toBe('var(--hit)');
+    expect(declaration(grip, 'height')).toBe('var(--hit)');
+    expect(declaration(grip, 'touch-action')).toBe('none');
+    expect(declaration(grip, 'display')).toBe('flex');
+    expect(declaration(grip, 'align-items')).toBe('center');
+    expect(declaration(rule(reorderCss, '.row'), 'min-height')).toBe('var(--hit)');
+  });
+
+  it('lets the name take the width and wrap, and keeps the amount at its own width', () => {
+    expect(declaration(rule(reorderCss, '.name'), 'flex')).toBe('1 1 0');
+    expect(declaration(rule(reorderCss, '.name'), 'min-width')).toBe('0');
+    expect(declaration(rule(reorderCss, '.name'), 'overflow-wrap')).toBe('anywhere');
+    expect(declaration(rule(reorderCss, '.amount'), 'flex')).toBe('none');
+    expect(declaration(rule(reorderCss, '.number'), 'text-align')).toBe('right');
+  });
+
+  it('⚠️ builds its right side from the Total row’s geometry, so every number ends on the Total’s right edge', () => {
+    expect(declaration(rule(reorderCss, '.amount'), 'width')).toBe(declaration(rule(editorCss, '.totalCell'), 'width'));
+    expect(declaration(rule(reorderCss, '.amount'), 'padding-left')).toBe(declaration(rule(editorCss, '.totalCell'), 'padding-left'));
+    expect(declaration(rule(reorderCss, '.number'), 'width')).toBe(declaration(rule(editorCss, '.totalNum'), 'width'));
+    expect(declaration(rule(reorderCss, '.number'), 'padding')).toBe(declaration(rule(editorCss, '.totalNum'), 'padding'));
+    expect(declaration(rule(reorderCss, '.number'), 'text-align')).toBe('right');
+    expect(declaration(rule(reorderCss, '.unit'), 'padding-left')).toBe(declaration(rule(editorCss, '.totalUnit'), 'padding-left'));
+    // The grip stands where the bin and the Total's spacer stand (the end), so the name keeps its editing width.
+    expect(declaration(rule(reorderCss, '.grip'), 'width')).toBe(declaration(rule(editorCss, '.totalSpacer'), 'width'));
+    expect(reorderCss).not.toContain('.spacer');
+    expect(declaration(rule(reorderCss, '.row'), 'gap')).toBe(declaration(rule(editorCss, '.total'), 'gap'));
+    // The unit word has a fixed slot and is cut short, never pushing the number.
+    expect(declaration(rule(reorderCss, '.unit'), 'min-width')).toBe('0');
+    expect(declaration(rule(reorderCss, '.unit'), 'overflow')).toBe('hidden');
+    const narrow = (css: string) => withoutComments(css).slice(withoutComments(css).indexOf('@media (max-width: 339px)'));
+    expect(declaration(rule(narrow(reorderCss), '.amount'), 'width')).toBe(declaration(rule(narrow(editorCss), '.totalCell'), 'width'));
+  });
+
+  it('dims the dragged row and draws the drop place as a 3px accent line', () => {
+    expect(declaration(rule(reorderCss, '.row[data-dragging]'), 'opacity')).toBe('0.6');
+    expect(declaration(rule(reorderCss, '.indicator[data-drop-target]'), 'border-top')).toBe('3px solid var(--accent)');
+  });
+
+  it('puts the hover inside (hover: hover) and invents no colour or custom property', () => {
+    const css = withoutComments(reorderCss);
+    expect(css.replace(/@media \(hover: hover\)\s*\{[\s\S]*?\}\s*\}/g, '')).not.toContain(':hover');
+    expect(css).not.toMatch(/#[0-9a-f]{3,8}\b|rgb\(|hsl\(|oklch\(/i);
+    expect(css).not.toMatch(/--[a-z0-9-]+\s*:/i);
   });
 });
