@@ -14,6 +14,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
+import { readFileSync } from 'node:fs';
 import { calculatorEmptyReason } from '../js/calculator-config.js';
 
 const STORE = new URL('../js/calculator-config-store.js', import.meta.url).href;
@@ -106,6 +107,19 @@ test('a cached document that exists is believed: working offline is untouched', 
   assert.equal(fake.saved.length, 1);
 });
 
+test('the same document again (the server confirming the cache, going offline, coming back) draws nothing', async () => {
+  // A repaint is a full rebuild of the Calculator — it closes the full-screen recipe and jumps
+  // to the top — so the copies metadata changes resend must not cause one (code review).
+  const { store, fake, painted } = await freshStore('same-doc-again');
+  fake.answer(REAL, true);
+  fake.answer({ ...REAL }, false);
+  fake.answer({ ...REAL }, true);
+  assert.equal(painted(), 1, 'one paint for one document');
+  fake.answer({ clients: [{ id: 'c-other', name: 'Another phone added me', products: [] }] }, false);
+  assert.equal(painted(), 2, 'a real change is still drawn');
+  assert.equal(store.getConfig().clients[0].id, 'c-other');
+});
+
 test('going offline after the server answered neither locks saving nor wipes the copy on screen', async () => {
   const { store, fake, painted } = await freshStore('server-doc-then-cache-null');
   fake.answer(REAL, false);
@@ -114,3 +128,22 @@ test('going offline after the server answered neither locks saving nor wipes the
   assert.equal(store.getConfig().clients[0].id, 'c-real', 'the real clients stay');
   assert.equal(painted(), 1, 'a cached nothing draws nothing');
 });
+
+// ── The two halves that live in the data layer ───────────────────────────────
+//
+// The tests above replace ./firebase.js, so they cannot see it. Without its second argument the
+// guard above never fires and the hole reopens; without includeMetadataChanges the server's own
+// "no document" never arrives after a cached one, and a new venue sits on «Loading…» for ever.
+// firebase.js loads the SDK from a CDN and cannot run under node, so its shape is pinned as text.
+
+
+for (const file of ['js/firebase.js', 'js/firebase.example.js']) {
+  test(`${file}: the config watch passes fromCache and asks for metadata changes`, () => {
+    const src = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+    const start = src.indexOf('export function watchCalculatorConfig(onChange) {');
+    assert.ok(start >= 0, `${file}: watchCalculatorConfig is gone`);
+    const body = src.slice(start, src.indexOf('\n}\n', start));
+    assert.match(body, /doc\(db, pathFor\('config'\), 'calculator'\),\s*\{ includeMetadataChanges: true \},/);
+    assert.match(body, /snap => onChange\(snap\.exists\(\) \? snap\.data\(\) : null, snap\.metadata\.fromCache\)/);
+  });
+}

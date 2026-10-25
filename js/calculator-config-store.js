@@ -18,6 +18,7 @@ const CACHE_KEY = 'calculator-config';
 
 let current = readCache();
 let notify = null; // called with the new config whenever it changes (set by initConfig)
+let lastRemoteText = null; // the last server document applied, as JSON (see initConfig)
 
 // Has Firestore ANSWERED yet — including answering "there is no document"?
 //
@@ -90,6 +91,14 @@ export function initConfig(onUpdate) {
       if (firstAnswer && notify) notify(current);
       return; // no document yet — keep cache/default
     }
+    // ⚠️ THE SAME DOCUMENT AGAIN IS NOT NEWS. Metadata changes (see firebase.js) send
+    // it again when the server confirms the cached copy and whenever the phone goes
+    // offline or comes back — and a repaint here is a full rebuild of the Calculator:
+    // it closes the full-screen recipe, drops the focus and jumps to the top (code
+    // review, 25 Oct 2026). Only data that differs from the last applied is drawn.
+    const text = JSON.stringify(remote);
+    if (text === lastRemoteText) return;
+    lastRemoteText = text;
     current = normalizeConfig(remote);
     writeCache(current);
     if (notify) notify(current);
