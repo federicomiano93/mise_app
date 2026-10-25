@@ -33,11 +33,11 @@ describe.each([
   const normalizeConfig = (raw: unknown): Loose => w.config.normalizeConfig(raw);
   const { scaleRecipe, scaleFocaccia, scaleBrioche, scaleSourdough } = w.math as unknown as Record<string, Loose>;
 
-  // The recipe amount objects the legacy scale functions expect (mirror RECIPE_DEFAULTS
-  // in js/recipes.js — recipes.js can't load under Node, it reads localStorage).
-  const FOCACCIA = { flourBlu: 278, flourT65: 278, malt: 3, sugar: 8, salt: 11, yeast: 3.6, oil: 56, water1: 334, water2: 24 };
-  const BRIOCHE = { flour: 3185, yeast: 127.4, water: 1575 };
-  const SOURDOUGH = { flourBlu: 2560, flourT65: 2560, flourWhole: 570, water1: 3800, starter: 1024, malt: 30, salt: 124, water2: 300 };
+  // The recipe amount objects the legacy scale functions expect (the invented fixture
+  // bakery's, tests/fixtures/bakery-config.mjs).
+  const FOCACCIA = { flourBlu: 260, flourT65: 290, malt: 4, sugar: 10, salt: 12, yeast: 3.4, oil: 50, water1: 340, water2: 30 };
+  const BRIOCHE = { flour: 3000, yeast: 120, water: 1500 };
+  const SOURDOUGH = { flourBlu: 2400, flourT65: 2400, flourWhole: 600, water1: 3700, starter: 980, malt: 25, salt: 115, water2: 250 };
 
   const scaleViaConfig = (config: Loose, id: string, target: number, pct: number): Loose => scaleRecipe(recipeSpec(getRecipeById(config, id)), target, pct);
 
@@ -67,7 +67,8 @@ describe.each([
   });
 
   test('brioche: config-driven scaling equals scaleBrioche EXACTLY across the knob range', () => {
-    for (const target of [2000, 4887.4, 9000, 18000]) {
+    // Fractional targets (4620.6, 9240.4) keep a case where Math.round(target) differs from the target.
+    for (const target of [2000, 4620, 4620.6, 9000, 9240.4, 18000]) {
       for (const pct of [2, 4, 6, 8]) {
         expect(scaleViaConfig(BAKERY_CONFIG, 'brioche', target, pct), `brioche ${target}g @ ${pct}%`).toStrictEqual(scaleBrioche(BRIOCHE, target, pct));
       }
@@ -96,9 +97,9 @@ describe.each([
   test('recipeSpec builds ordered amounts, the leavening key and the stored baseline', () => {
     const spec = recipeSpec(getRecipeById(BAKERY_CONFIG, 'focaccia'));
     expect(Object.keys(spec.amounts)).toStrictEqual(['flourBlu', 'flourT65', 'malt', 'sugar', 'salt', 'yeast', 'oil', 'water1', 'water2']);
-    expect(spec.amounts.yeast).toBe(3.6);
+    expect(spec.amounts.yeast).toBe(3.4);
     expect(spec.leaveningKey).toBe('yeast');
-    expect(Math.abs(spec.baselinePct - 0.6474820143884892) < 1e-9).toBeTruthy();
+    expect(Math.abs(spec.baselinePct - 0.6181818181818182) < 1e-9).toBeTruthy();
   });
 
   test('recipeSpec on a leavening-less recipe scales pro-rata (no leavening key)', () => {
@@ -224,9 +225,9 @@ describe.each([
 
   test('computeRecipeTarget: orders = Σ(qty×weight) + extra; ignores any typed total', () => {
     const recipe = getRecipeById(BAKERY_CONFIG, 'focaccia'); // logic 'orders'
-    const getQty = (id: string): number => ({ [pairId('c-bakery', 'f-pizze')]: 10 } as Record<string, number>)[id] || 0; // 10×201
+    const getQty = (id: string): number => ({ [pairId('c-bakery', 'f-pizze')]: 10 } as Record<string, number>)[id] || 0; // 10×210
     const t = computeRecipeTarget(BAKERY_CONFIG, recipe, { getQty, extraGrams: 500, totalInput: 9999 });
-    expect(t).toBe(10 * 201 + 500); // typed total ignored for 'orders'
+    expect(t).toBe(10 * 210 + 500); // typed total ignored for 'orders'
   });
 
   test('computeRecipeTarget: total = the typed total only (no orders, no extra)', () => {
@@ -239,7 +240,7 @@ describe.each([
     const recipe = { ...getRecipeById(BAKERY_CONFIG, 'focaccia'), logic: 'both' };
     const getQty = (id: string): number => ({ [pairId('c-bakery', 'f-pizze')]: 10 } as Record<string, number>)[id] || 0;
     const t = computeRecipeTarget(BAKERY_CONFIG, recipe, { getQty, extraGrams: 500, totalInput: 2000 });
-    expect(t).toBe(10 * 201 + 2000 + 500);
+    expect(t).toBe(10 * 210 + 2000 + 500);
   });
 
   test('computeRecipeTarget never produces NaN/negative from junk inputs', () => {
