@@ -1,0 +1,5 @@
+# Search tools only (ripgrep and Claude's searches read this file; Git and GitHub Pages do not).
+# The committed bundles in dist/ are minified: one line can be 170 000 characters, so a search that
+# lands there floods the output. Search js/ instead — dist/ is built from it.
+/dist/
+*.map
