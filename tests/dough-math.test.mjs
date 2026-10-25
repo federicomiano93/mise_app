@@ -5,9 +5,8 @@
 // the target raw weight. If a future change drifts the math by even a gram, these
 // fail.
 //
-// The recipes below are the shipped defaults (RECIPE_DEFAULTS in recipes.js),
-// copied here so the test stays self-contained and pure (recipes.js itself reads
-// localStorage on import and cannot be loaded under Node).
+// The recipes below are the invented fixture bakery's (tests/fixtures/bakery-config.mjs),
+// copied here so the test stays self-contained and pure.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -84,7 +83,8 @@ test('scaleBrioche matches the locked golden breakdown (9240 g, 4%)', () => {
 });
 
 test('scaleBrioche ingredients always sum to the target', () => {
-  for (const target of [2000, 4620, 9240]) {
+  // Fractional targets (4620.6, 9240.4) keep a case where Math.round(target) differs from the target.
+  for (const target of [2000, 4620, 4620.6, 9240, 9240.4]) {
     assert.equal(sum(scaleBrioche(BRIOCHE, target, 4)), Math.round(target));
   }
 });

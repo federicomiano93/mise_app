@@ -8,7 +8,7 @@
 // across the full knob range; Focaccia, intentionally moved onto the clean method, must stay within a tiny
 // tolerance of the legacy focaccia math (exact at the 0.65% default).
 //
-// The recipes are the shipped defaults, copied here so the test stays pure.
+// The recipes are the invented fixture bakery's (tests/fixtures/bakery-config.mjs), copied here so the test stays pure.
 
 import { describe, expect, test } from 'vitest';
 import * as ported from './calculator-dough-math';
@@ -75,7 +75,8 @@ describe.each([
   test('scaleBrioche equals the legacy math across the full knob range and edited recipes', () => {
     // Brioche yeast knob: min 0.1, max 6.
     for (const R of variants(BRIOCHE)) {
-      for (const target of [2000, 4620, 9000, 9240, 18000]) {
+      // Fractional targets (4620.6, 9240.4) keep a case where Math.round(target) differs from the target.
+      for (const target of [2000, 4620, 4620.6, 9000, 9240, 9240.4, 18000]) {
         for (const pct of [0.1, 2, 4, 6]) {
           expect(scaleBrioche(R, target, pct), `brioche at target=${target}, pct=${pct}`).toStrictEqual(legacyBrioche(R, target, pct));
         }

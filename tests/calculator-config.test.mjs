@@ -552,7 +552,7 @@ test('migration: the oldest per-tab + market shape becomes client-owned products
       { id: 'f-c1', name: 'Client 1', products: [{ id: 'f-cia', name: 'Ciabatta', weight: 160, kind: 'ciabatta' }] },
     ] },
     brioche: { clients: [
-      { id: 'b-c1', name: 'Client 1', products: [{ id: 'b-bb', name: 'Burger buns', weight: 81, kind: 'number' }] },
+      { id: 'b-c1', name: 'Client 1', products: [{ id: 'b-bb', name: 'Burger buns', weight: 85, kind: 'number' }] },
     ] },
     market: { lists: [
       { id: 'l1', title: 'Market order', clients: [{ id: 'm-1', name: 'Client 1', products: [{ id: 'om-x', name: 'X' }] }] },

@@ -11,7 +11,7 @@
 // calculator-dough-math.ts is a FULL port, so parity.spec.ts pairs it (same names, same function shapes).
 //
 // PORTED from tests/dough-math.test.mjs: all 14 tests. From tests/unified-scaler.test.mjs: all 8 tests.
-// The recipes are the shipped defaults, copied here so the specs stay self-contained and pure.
+// The recipes are the invented fixture bakery's (tests/fixtures/bakery-config.mjs), copied here so the specs stay pure.
 
 import { describe, expect, test } from 'vitest';
 import * as ported from './calculator-dough-math';
@@ -134,7 +134,8 @@ describe.each([
   });
 
   test('scaleBrioche ingredients always sum to the target', () => {
-    for (const target of [2000, 4620, 9240]) {
+    // Fractional targets (4620.6, 9240.4) keep a case where Math.round(target) differs from the target.
+    for (const target of [2000, 4620, 4620.6, 9240, 9240.4]) {
       expect(sum(m.scaleBrioche(BRIOCHE, target, 4))).toBe(Math.round(target));
     }
   });
@@ -169,7 +170,8 @@ describe.each([
   test('scaleBrioche equals the pre-unification math across the full knob range and edited recipes', () => {
     // Brioche yeast knob: min 0.1, max 6.
     for (const R of variants(BRIOCHE)) {
-      for (const target of [2000, 4620, 9000, 9240, 18000]) {
+      // Fractional targets (4620.6, 9240.4) keep a case where Math.round(target) differs from the target.
+      for (const target of [2000, 4620, 4620.6, 9000, 9240, 9240.4, 18000]) {
         for (const pct of [0.1, 2, 4, 6]) {
           expect(m.scaleBrioche(R, target, pct), `brioche mismatch at target=${target}, pct=${pct}`)
             .toStrictEqual(legacyBrioche(R, target, pct));

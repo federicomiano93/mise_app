@@ -33,8 +33,8 @@ describe.each([
   const normalizeConfig = (raw: unknown): Loose => w.config.normalizeConfig(raw);
   const { scaleRecipe, scaleFocaccia, scaleBrioche, scaleSourdough } = w.math as unknown as Record<string, Loose>;
 
-  // The recipe amount objects the legacy scale functions expect (mirror RECIPE_DEFAULTS
-  // in js/recipes.js — recipes.js can't load under Node, it reads localStorage).
+  // The recipe amount objects the legacy scale functions expect (the invented fixture
+  // bakery's, tests/fixtures/bakery-config.mjs).
   const FOCACCIA = { flourBlu: 260, flourT65: 290, malt: 4, sugar: 10, salt: 12, yeast: 3.4, oil: 50, water1: 340, water2: 30 };
   const BRIOCHE = { flour: 3000, yeast: 120, water: 1500 };
   const SOURDOUGH = { flourBlu: 2400, flourT65: 2400, flourWhole: 600, water1: 3700, starter: 980, malt: 25, salt: 115, water2: 250 };
@@ -67,7 +67,8 @@ describe.each([
   });
 
   test('brioche: config-driven scaling equals scaleBrioche EXACTLY across the knob range', () => {
-    for (const target of [2000, 4620, 9000, 18000]) {
+    // Fractional targets (4620.6, 9240.4) keep a case where Math.round(target) differs from the target.
+    for (const target of [2000, 4620, 4620.6, 9000, 9240.4, 18000]) {
       for (const pct of [2, 4, 6, 8]) {
         expect(scaleViaConfig(BAKERY_CONFIG, 'brioche', target, pct), `brioche ${target}g @ ${pct}%`).toStrictEqual(scaleBrioche(BRIOCHE, target, pct));
       }
