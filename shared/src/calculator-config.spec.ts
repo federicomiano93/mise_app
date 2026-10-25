@@ -77,7 +77,7 @@ describe.each([
     const ciabatta = getTabProducts(BAKERY_CONFIG, 'focaccia').find((p: Loose) => p.id === 'f-ciabatta');
     expect(ciabatta.clientName).toBe('Client 1');
     expect(ciabatta.clientId).toBe('c-client-1');
-    expect(ciabatta.weight).toBe(151);
+    expect(ciabatta.weight).toBe(160);
     expect(ciabatta.kind).toBe('dropdown');
     expect(ciabatta.crate.show).toBe(true);
     expect(ciabatta.qtyId).toBe(pairId('c-client-1', 'f-ciabatta'));
@@ -91,7 +91,7 @@ describe.each([
       [pairId('c-client-2', 'f-trayfocaccia')]: 3,
       [pairId('c-client-3', 'f-panini')]: 24,
     };
-    const legacy = 10 * 201 + 5 * 181 + 40 * 151 + 3 * 1800 + 24 * 131;
+    const legacy = 10 * 210 + 5 * 175 + 40 * 160 + 3 * 1750 + 24 * 115;
     expect(computeTarget(BAKERY_CONFIG, 'focaccia', qtyFrom(q))).toBe(legacy);
   });
 
@@ -102,13 +102,13 @@ describe.each([
       [pairId('c-client-2', 'b-bun')]: 20,
       [pairId('c-client-2', 'b-rolls')]: 15,
     };
-    const legacy = 50 * 81 + 30 * 121 + 20 * 71 + 15 * 71;
+    const legacy = 50 * 85 + 30 * 125 + 20 * 75 + 15 * 65;
     expect(computeTarget(BAKERY_CONFIG, 'brioche', qtyFrom(q))).toBe(legacy);
   });
 
-  test('sourdough target matches loaves × default loaf weight (905 g)', () => {
+  test('sourdough target matches loaves × default loaf weight (900 g)', () => {
     const q = { [pairId('c-client-2', 's-loaf')]: 12 };
-    expect(computeTarget(BAKERY_CONFIG, 'sourdough', qtyFrom(q))).toBe(12 * 905);
+    expect(computeTarget(BAKERY_CONFIG, 'sourdough', qtyFrom(q))).toBe(12 * 900);
   });
 
   test('empty quantities give zero dough', () => {
@@ -275,8 +275,8 @@ describe.each([
     const config = {
       recipes: BAKERY_CONFIG.recipes,
       clients: [
-        { id: 'cA', name: 'A', products: [{ id: 'p1', name: 'Loaves of bread', recipeId: 'sourdough', weight: 905 }] },
-        { id: 'cB', name: 'B', products: [{ id: 'p1', name: 'Sourdough loaf', recipeId: 'sourdough', weight: 905 }] },
+        { id: 'cA', name: 'A', products: [{ id: 'p1', name: 'Loaves of bread', recipeId: 'sourdough', weight: 900 }] },
+        { id: 'cB', name: 'B', products: [{ id: 'p1', name: 'Sourdough loaf', recipeId: 'sourdough', weight: 900 }] },
       ],
       whatsappLists: [{ id: 'wl1', title: 'Order', clients: [{ clientId: 'cB', products: ['p1'] }] }],
     };
@@ -425,9 +425,9 @@ describe.each([
     const raw = {
       recipes: BAKERY_CONFIG.recipes,
       products: [
-        { id: 'p1', name: 'Ciabatta', recipeId: 'focaccia',  weight: 151 },
-        { id: 'p2', name: 'Panini',   recipeId: 'focaccia',  weight: 131 },
-        { id: 'p3', name: 'Loaf',     recipeId: 'sourdough', weight: 905 },
+        { id: 'p1', name: 'Ciabatta', recipeId: 'focaccia',  weight: 160 },
+        { id: 'p2', name: 'Panini',   recipeId: 'focaccia',  weight: 115 },
+        { id: 'p3', name: 'Loaf',     recipeId: 'sourdough', weight: 900 },
       ],
       clients: [
         { id: 'c1', name: 'A', items: [
@@ -444,7 +444,7 @@ describe.each([
     // Name, recipe and weight came from the catalogue; kind and crate from the item.
     const ciabatta = getClientById(norm, 'c1').products[0];
     expect(ciabatta.name).toBe('Ciabatta');
-    expect(ciabatta.weight).toBe(151);
+    expect(ciabatta.weight).toBe(160);
     expect(ciabatta.recipeId).toBe('focaccia');
     expect(ciabatta.kind).toBe('dropdown');       // legacy 'ciabatta' migrated
     expect(ciabatta.crate.show).toBe(true);
@@ -457,7 +457,7 @@ describe.each([
     // client would quietly cut all four.
     const raw = {
       recipes: BAKERY_CONFIG.recipes,
-      products: [{ id: 'shared', name: 'Loaves of bread', recipeId: 'sourdough', weight: 905 }],
+      products: [{ id: 'shared', name: 'Loaves of bread', recipeId: 'sourdough', weight: 900 }],
       clients: [
         { id: 'cA', name: 'CLIENT A', items: [{ productId: 'shared', kind: 'number' }] },
         { id: 'cB', name: 'CLIENT B', items: [{ productId: 'shared', kind: 'number' }] },
@@ -502,7 +502,7 @@ describe.each([
   test('migration: re-normalising the migrated config changes nothing', () => {
     const raw = {
       recipes: BAKERY_CONFIG.recipes,
-      products: [{ id: 'p1', name: 'Pizzas', recipeId: 'focaccia', weight: 201 }],
+      products: [{ id: 'p1', name: 'Pizzas', recipeId: 'focaccia', weight: 210 }],
       clients: [{ id: 'c1', name: 'A', items: [{ productId: 'p1', kind: 'number' }] }],
     };
     const once = normalizeConfig(raw);
@@ -515,21 +515,21 @@ describe.each([
     // exactly the pre-catalogue shape, so a phone still on an older version reads it
     // correctly instead of finding an empty address book.
     const saved = normalizeConfig({
-      products: [{ id: 'p1', name: 'Pizzas', recipeId: 'focaccia', weight: 201 }],
+      products: [{ id: 'p1', name: 'Pizzas', recipeId: 'focaccia', weight: 210 }],
       clients: [{ id: 'c1', name: 'A', items: [{ productId: 'p1', kind: 'number' }] }],
     });
     expect('products' in saved).toBe(false);
     expect(saved.clients[0].products[0].name).toBe('Pizzas');
-    expect(saved.clients[0].products[0].weight).toBe(201);
+    expect(saved.clients[0].products[0].weight).toBe(210);
   });
 
   test('migration math equals the legacy formula after migrating', () => {
     const norm = normalizeConfig({
       recipes: BAKERY_CONFIG.recipes,
-      products: [{ id: 'f-pizze', name: 'Pizzas', recipeId: 'focaccia', weight: 201 }],
+      products: [{ id: 'f-pizze', name: 'Pizzas', recipeId: 'focaccia', weight: 210 }],
       clients: [{ id: 'c1', name: 'A', items: [{ productId: 'f-pizze', kind: 'number' }] }],
     });
-    expect(computeTarget(norm, 'focaccia', qtyFrom({ [pairId('c1', 'f-pizze')]: 7 }))).toBe(7 * 201);
+    expect(computeTarget(norm, 'focaccia', qtyFrom({ [pairId('c1', 'f-pizze')]: 7 }))).toBe(7 * 210);
   });
 
   // ── Migration: oldest per-tab + market shape ───────────────────────────
@@ -538,10 +538,10 @@ describe.each([
     const legacy = {
       recipes: BAKERY_CONFIG.recipes,
       focaccia: { clients: [
-        { id: 'f-c1', name: 'Client 1', products: [{ id: 'f-cia', name: 'Ciabatta', weight: 151, kind: 'ciabatta' }] },
+        { id: 'f-c1', name: 'Client 1', products: [{ id: 'f-cia', name: 'Ciabatta', weight: 160, kind: 'ciabatta' }] },
       ] },
       brioche: { clients: [
-        { id: 'b-c1', name: 'Client 1', products: [{ id: 'b-bb', name: 'Burger buns', weight: 81, kind: 'number' }] },
+        { id: 'b-c1', name: 'Client 1', products: [{ id: 'b-bb', name: 'Burger buns', weight: 85, kind: 'number' }] },
       ] },
       market: { lists: [
         { id: 'l1', title: 'Market order', clients: [{ id: 'm-1', name: 'Client 1', products: [{ id: 'om-x', name: 'X' }] }] },
@@ -708,8 +708,8 @@ describe.each([
   const paused = (over = {}) => ({
     recipes: BAKERY_CONFIG.recipes,
       clients: [{ id: 'c1', name: 'A', products: [
-      { id: 'p1', name: 'Pizzas',    recipeId: 'focaccia', weight: 201, kind: 'number', ...over },
-      { id: 'p2', name: 'Focaccias', recipeId: 'focaccia', weight: 181, kind: 'number' },
+      { id: 'p1', name: 'Pizzas',    recipeId: 'focaccia', weight: 210, kind: 'number', ...over },
+      { id: 'p2', name: 'Focaccias', recipeId: 'focaccia', weight: 175, kind: 'number' },
     ] }],
   });
 
@@ -717,7 +717,7 @@ describe.each([
     const config = normalizeConfig(paused({ active: false }));
     expect(getTabProducts(config, 'focaccia').map((p: Loose) => p.id)).toStrictEqual(['p2']);
     const q = { [pairId('c1', 'p1')]: 100, [pairId('c1', 'p2')]: 2 };
-    expect(computeTarget(config, 'focaccia', qtyFrom(q)), 'the paused 100 is ignored').toBe(2 * 181);
+    expect(computeTarget(config, 'focaccia', qtyFrom(q)), 'the paused 100 is ignored').toBe(2 * 175);
   });
 
   test('a product with NO active field is active — every document in production lacks it', () => {
@@ -737,7 +737,7 @@ describe.each([
     const config = normalizeConfig(paused({ active: false, kind: 'dropdown', crate: { show: true, perBox: 24 } }));
     const p = getProductById(config, 'p1');
     expect(p.name).toBe('Pizzas');
-    expect(p.weight).toBe(201);
+    expect(p.weight).toBe(210);
     expect(p.kind).toBe('dropdown');
     expect(p.crate).toStrictEqual({ show: true, perBox: 24 });
   });
@@ -749,7 +749,7 @@ describe.each([
     expect(getDivisorIncluded(config, 'focaccia'), 'the tick survives').toStrictEqual(['p1', 'p2']);
     expect(getDivisorProducts(config, 'focaccia').map((p: Loose) => p.id), 'but it does not split').toStrictEqual(['p2']);
     const q = { [pairId('c1', 'p1')]: 10, [pairId('c1', 'p2')]: 3 };
-    expect(divisorTotal(config, 'focaccia', qtyFrom(q))).toBe(3 * 181);
+    expect(divisorTotal(config, 'focaccia', qtyFrom(q))).toBe(3 * 175);
   });
 
   test('a paused product still blocks deleting the recipe it belongs to', () => {
@@ -911,7 +911,7 @@ describe.each([
 
   test('normalizeConfig on the oldest shape names the market list in the interface language (the default is English)', () => {
     const oldest = {
-      focaccia: { clients: [{ id: 'f-c1', name: 'Client 1', products: [{ id: 'f-cia', name: 'Ciabatta', weight: 151 }] }] },
+      focaccia: { clients: [{ id: 'f-c1', name: 'Client 1', products: [{ id: 'f-cia', name: 'Ciabatta', weight: 160 }] }] },
       market: { clients: [{ id: 'm-1', name: 'Client 1', products: [] }] },
     };
     expect(normalizeConfig(oldest).whatsappLists[0].title).toBe('Market order');
@@ -927,7 +927,7 @@ describe('the port with the words it is handed', () => {
 
   test('normalizeConfig names the list built out of the oldest «market» section with the title it is handed', () => {
     const oldest = {
-      focaccia: { clients: [{ id: 'f-c1', name: 'Client 1', products: [{ id: 'f-cia', name: 'Ciabatta', weight: 151 }] }] },
+      focaccia: { clients: [{ id: 'f-c1', name: 'Client 1', products: [{ id: 'f-cia', name: 'Ciabatta', weight: 160 }] }] },
       market: { clients: [{ id: 'm-1', name: 'Client 1', products: [] }] },
     };
     expect(ported.normalizeConfig(oldest, 'Ordine del mercato').whatsappLists[0]?.title).toBe('Ordine del mercato');
