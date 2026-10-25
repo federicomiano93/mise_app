@@ -153,6 +153,39 @@ test('A GUIDED MIX IN PROGRESS COUNTS AS BUSY', () => {
   assert.equal(isBusy(screenWith('.guided-edit')), true);
 });
 
+// ── Found by the audit of 25 Oct 2026 ────────────────────────────────────────
+//
+// Two screens that hold a working copy were missing, so a release could reload the page
+// under them: the Pastries day editor (the day is saved whole from its copy) and the
+// invoice import (every choice lives on screen until the import runs). Each check below
+// proves the screen really carries its marker, by building it: invoice-import-flow.test.mjs
+// does the same for the import, through the whole run.
+
+test('a Pastries day being edited counts as busy, and the editor carries the marker', async () => {
+  assert.equal(isBusy(screenWith('.pas-editor')), true);
+  const { installDom } = await import('./helpers/form-dom.mjs');
+  installDom();
+  const { renderEditor } = await import('../js/pastries/pastries-editor.js');
+  const app = { confirm: async () => true, toast() {}, saveDay() {}, showDay() {}, setLeaveGuard() {}, setHeaderSave() {} };
+  const editor = renderEditor({ day: 'Sunday', items: [{ name: 'Cornetti', qty: 4 }], note: '', allDays: {}, app });
+  assert.ok(editor.classList.contains('pas-editor'), 'the editor root must carry .pas-editor');
+});
+
+test('⚠️ the read-only Pastries day does NOT carry the marker, or no update would ever reach the Pastries home', async () => {
+  const { installDom } = await import('./helpers/form-dom.mjs');
+  installDom();
+  const { renderDay } = await import('../js/pastries/pastries-day.js');
+  // Every app call is a no-op: the day view only needs to be built.
+  const app = new Proxy({}, { get: () => () => undefined });
+  const day = renderDay({ day: 'Sunday', items: [{ name: 'Cornetti', qty: 4 }], note: '', app });
+  assert.ok(day.node.classList.contains('pas-view'), 'this is the day view');
+  assert.equal(day.node.classList.contains('pas-editor'), false);
+});
+
+test('an invoice import holding choices counts as busy', () => {
+  assert.equal(isBusy(screenWith('.invimp-unsaved')), true);
+});
+
 test('EVERY selector for a statically declared element demands .visible', () => {
   // The trap this guards: the Calculator declares its sixteen overlays in the HTML
   // and merely hides them, so they are in the document from page load. A selector

@@ -394,6 +394,28 @@ test('Back closes at once before a file is loaded, and asks (danger) once there 
   assert.equal(db.calls.length, 0);
 });
 
+// ⚠️ A release's forced update reloads the page unless something marks it busy (js/update-gate.js,
+// audit 25 Oct 2026): the marker is on while Back would ask, while rows are being written, and on the summary until
+// Done — the summary is the only record of which rows failed (code review).
+test('⚠️ the screen tells the update gate it holds work exactly while there is work to lose', async () => {
+  const db = makeDb();
+  const unsaved = () => overlay().classList.contains('invimp-unsaved');
+  let root = await open(db);
+  assert.equal(unsaved(), false, 'no file yet: nothing to lose, the update may reload');
+  await load(root, fileText());
+  assert.equal(unsaved(), true, 'a file read: the choices live only on this screen');
+  await toIngredients(root);
+  assert.equal(unsaved(), true, 'still deciding');
+  const seen = [];
+  db.beforeBatch = () => { seen.push(unsaved()); };
+  await press(root, 'Import 2 ingredients');
+  assert.deepEqual(seen.slice(0, 1), [true], 'rows being written');
+  assert.match(textOf(root), /Import finished/);
+  assert.equal(unsaved(), true, '⚠️ the summary is still unread: a reload now would wipe which rows failed');
+  await press(root, 'Done');
+  assert.equal(overlay(), null, 'Done closes the screen, so the gate is free again');
+});
+
 test('while rows are being written Back is off and does nothing', async () => {
   const db = makeDb();
   const root = await open(db, fileText());
