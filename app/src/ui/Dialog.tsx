@@ -17,6 +17,8 @@ type Props = {
   // `alertdialog` for a question that needs an answer (leave? discard?); `dialog` for a list
   // to pick from.
   role?: 'dialog' | 'alertdialog';
+  // A press on the backdrop closes it too: a choice to back out of, never a question that needs an answer.
+  dismissable?: boolean;
   children?: ReactNode;
   actions: ReactNode;
 };
@@ -27,7 +29,7 @@ type Props = {
 //
 // ⚠️ NEVER THE BROWSER'S confirm() / alert() — they cannot be styled, translated or tested, and
 // a phone can suppress them.
-export function Dialog({ isOpen, onClose, title, message, role = 'dialog', children, actions }: Props) {
+export function Dialog({ isOpen, onClose, title, message, role = 'dialog', dismissable = false, children, actions }: Props) {
   const messageId = useId();
   const paragraphs = message === undefined ? [] : typeof message === 'string' ? [message] : message;
 
@@ -35,6 +37,7 @@ export function Dialog({ isOpen, onClose, title, message, role = 'dialog', child
     <ModalOverlay
       isOpen={isOpen}
       onOpenChange={open => { if (!open) onClose(); }}
+      isDismissable={dismissable}
       className={styles.overlay}
     >
       <Modal className={styles.modal}>
