@@ -392,6 +392,75 @@ test('an archive that lies about a size is truncated, never inflated past the de
   assert.equal(read.containers[0].entries['a.xml'].length, 50, 'exactly the declared size comes out, not the real 200');
 });
 
+test('a STORED entry that declares a compressed size as long as the archive is judged by it, and never copied', () => {
+  // A stored entry is copied by its compressed size: declaring 2 GB there while the original size says 1200 bytes used to pass.
+  const zip = zipSync({ 'a.xml': strToU8('<x/>'.repeat(300)) }, { level: 0 });
+  const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+  let end = zip.length - 22;
+  while (view.getUint32(end, true) !== 0x06054b50) end -= 1;
+  // The central directory's «compressed size» of the one entry (offset 20 of its header).
+  view.setUint32(view.getUint32(end + 16, true) + 20, 0x7fffffff, true);
+  const c = newCase();
+  c.files.push({ name: 'stored.zip', bytes: zip });
+  const read = c.read({ limits: { maxXmlBytes: 5000 } });
+  assert.equal(read.containers[0]?.entries['a.xml'], undefined);
+  assert.ok(read.skipped.some((s) => s.reason === 'file-too-large'));
+});
+
+// One archive holding two entries under ONE name, a small one and a huge one, put together by hand (zipSync keys by name).
+// forgeStoredTwin: the twin is STORED, holds bigBytes, and its central-directory compressed size is forged to 2 GB.
+const twoOfOneName = (smallBytes, bigBytes, { forgeStoredTwin = false } = {}) => {
+  const parts = (zip) => {
+    const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+    let end = zip.length - 22;
+    while (view.getUint32(end, true) !== 0x06054b50) end -= 1;
+    const cdOffset = view.getUint32(end + 16, true);
+    const cdSize = view.getUint32(end + 12, true);
+    return { local: zip.subarray(0, cdOffset), cd: zip.slice(cdOffset, cdOffset + cdSize) };
+  };
+  const a = parts(zipSync({ 'a.xml': new Uint8Array(smallBytes) }));
+  const b = parts(zipSync({ 'a.xml': new Uint8Array(bigBytes) }, { level: forgeStoredTwin ? 0 : 9 }));
+  new DataView(b.cd.buffer).setUint32(42, a.local.length, true); // the twin's local header sits after the first entry
+  if (forgeStoredTwin) new DataView(b.cd.buffer).setUint32(20, 0x7fffffff, true);
+  const cd = new Uint8Array([...a.cd, ...b.cd]);
+  const eocd = new Uint8Array(22);
+  const view = new DataView(eocd.buffer);
+  view.setUint32(0, 0x06054b50, true);
+  view.setUint16(8, 2, true);
+  view.setUint16(10, 2, true);
+  view.setUint32(12, cd.length, true);
+  view.setUint32(16, a.local.length + b.local.length, true);
+  return new Uint8Array([...a.local, ...b.local, ...cd, ...eocd]);
+};
+
+test('two entries of one name: the huge twin is never inflated, only the entry within the limit is read', () => {
+  // Pass 1 accepts the NAME for the small one; pass 2 used to inflate every entry of that name, the huge one too.
+  const c = newCase();
+  c.files.push({ name: 'twins.zip', bytes: twoOfOneName(10, 5_000_000) });
+  const read = c.read({ limits: { maxXmlBytes: 1000 } });
+  assert.deepEqual(Object.keys(read.containers[0].entries), ['a.xml']);
+  assert.equal(read.containers[0].entries['a.xml'].length, 10);
+});
+
+test('pass 2 judges a STORED twin by its forged compressed size too, so it is never copied', () => {
+  // The twin declares 20 bytes but a 2 GB compressed size: pass 1 already refuses it, and pass 2 must not let the
+  // small entry's NAME carry it through (fflate copies a stored entry up to the end of the archive).
+  const c = newCase();
+  c.files.push({ name: 'twins.zip', bytes: twoOfOneName(10, 20, { forgeStoredTwin: true }) });
+  const read = c.read({ limits: { maxXmlBytes: 1000 } });
+  assert.deepEqual(Object.keys(read.containers[0].entries), ['a.xml']);
+  assert.equal(read.containers[0].entries['a.xml'].length, 10);
+});
+
+test('two entries of one name both count towards the archive total', () => {
+  // Pass 1 sums per entry, not per name (it always did), so twins that each fit cannot slip a double size past the limit.
+  const c = newCase();
+  c.files.push({ name: 'twins.zip', bytes: twoOfOneName(60, 60) });
+  const read = c.read({ limits: { maxXmlBytes: 100, maxArchiveBytes: 100 } });
+  assert.deepEqual(read.containers, []);
+  assert.deepEqual(read.skipped, [{ name: 'twins.zip', reason: 'archive-too-large', detail: '' }]);
+});
+
 test('a corrupt archive is reported, not thrown', () => {
   const c = newCase();
   c.files.push({ name: 'bad.zip', bytes: bytesOf('PK\x03\x04 definitely not a zip') });

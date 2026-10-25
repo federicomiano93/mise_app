@@ -1,8 +1,8 @@
 // zip-read.js — the owner's files (zip archives, loose .xml, loose .p7m) -> «containers» of XML bytes.
 // A port of the zip half of invoice-import/fatturapa.py, with limits the Python script did not need (it ran
 // on the owner's own computer, from a folder of his own choosing; here the zip comes through a file picker).
-// Archives are read in memory and never extracted. The limits are checked on the DECLARED sizes before
-// anything is inflated, and fflate allocates exactly the declared size for an entry, so an archive that
+// Archives are read in memory and never extracted. The limits are checked on the DECLARED sizes (the larger of
+// the compressed and the original one) before anything is inflated, and fflate allocates exactly the declared size for an entry, so an archive that
 // lies about its size is truncated, not inflated.
 // Pure: no DOM, no Firebase, no globals.
 
@@ -69,7 +69,10 @@ function readZip(bytes, limits, skipped) {
     listing = [];
     unzipSync(bytes, {
       filter: (file) => {
-        listing.push({ name: file.name, size: file.originalSize });
+        // ⚠️ THE LARGER OF THE TWO DECLARED SIZES (review of 25 Oct 2026): a STORED entry is copied by its compressed
+        // size, not its original one, so an entry declaring 10 bytes and a compressed size as long as the archive would
+        // be copied whole — once per directory entry pointing at it.
+        listing.push({ name: file.name, size: Math.max(file.size, file.originalSize) });
         return false;
       },
     });
@@ -103,8 +106,19 @@ function readZip(bytes, limits, skipped) {
 
   let files;
   try {
-    // Pass 2: inflate only what was accepted.
-    files = unzipSync(bytes, { filter: (file) => wanted.has(file.name) });
+    // Pass 2: inflate only what was accepted. ⚠️ The size is judged AGAIN, entry by entry, with a running total (review
+    // of 25 Oct 2026): pass 1 accepts a NAME, and an archive may hold two entries of that name — a small one makes the
+    // name wanted, and a huge twin beside it would be inflated too (fflate allocates what the entry declares).
+    let inflating = 0;
+    files = unzipSync(bytes, {
+      filter: (file) => {
+        const size = Math.max(file.size, file.originalSize);
+        if (!wanted.has(file.name) || size > limits.maxXmlBytes) return false;
+        if (inflating + size > limits.maxArchiveBytes) return false;
+        inflating += size;
+        return true;
+      },
+    });
   } catch {
     return { refused: SKIPPED.ZIP_UNREADABLE };
   }

@@ -10,6 +10,13 @@
 // «fresh» check would be a lie), and every write is refused before it starts when the phone says it is offline.
 // ⚠️ AND A COMMIT THAT NEVER ANSWERS IS A STOP, NOT A HANG: a connection that says it is up and carries
 // nothing leaves commit() pending for ever; after IMPORT_COMMIT_TIMEOUT_MS it throws code 'timeout'.
+// ⚠️ A WRITE THAT TIMED OUT IS STILL QUEUED, AND THE FRESH READS SEE IT (checked 25 Oct 2026). The timeout only gives
+// up on the promise: the SDK keeps the write in its on-disk queue and sends it later, even after a reload. That
+// cannot make a retry create the supplier or ingredient twice, because getDocsFromServer is an ordinary listener
+// that refuses a cache-only answer but still lays this phone's queued writes over the server's documents. Driven
+// on the emulator with the write channel blocked: the same page, and a reload with the same file, both showed the
+// queued supplier as «already in Mise» and the queued ingredient as unchanged; the server ended with one of each.
+// So the fresh reads must stay full-SDK listener reads (not Firestore Lite, not REST): those cannot see the queue.
 
 import { sessionReady } from '../firebase.js';
 import { currentLocationId, pathFor } from '../location.js';
