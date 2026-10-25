@@ -1,0 +1,216 @@
+import { describe, expect, test, vi } from 'vitest';
+import { SCALED_TTL_MS } from '@mise/shared/catalogue-model';
+import type { KeyValueStorage } from '../session/backend';
+import type { RecipesMeta, RecipesSource, StoredDoc } from './recipesSource';
+import { RECIPES_KEY, SCALED_KEY, USAGE_KEY, createRecipesStore } from './recipesStore';
+
+// The Recipe catalogue's store against a hand-driven source and an in-memory localStorage. The keys
+// are the CURRENT app's (one origin): what this store writes, js/catalogue/catalogue-store.js reads.
+
+function memoryStorage(seed: Record<string, string> = {}) {
+  const data = new Map(Object.entries(seed));
+  const storage = {
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => { data.set(key, value); },
+    removeItem: (key: string) => { data.delete(key); },
+  };
+  return { data, storage: storage as unknown as KeyValueStorage };
+}
+
+function handSource() {
+  let onChange: ((list: StoredDoc[], meta: RecipesMeta) => void) | null = null;
+  let onError: ((err: unknown) => void) | null = null;
+  const stop = vi.fn();
+  const watchRecipes = vi.fn<RecipesSource['watchRecipes']>((change, error) => {
+    onChange = change;
+    onError = error;
+    return stop;
+  });
+  const source: RecipesSource = { watchRecipes };
+  return {
+    source,
+    watchRecipes,
+    stop,
+    server: (list: StoredDoc[]) => onChange!(list, { fromServer: true }),
+    cache: (list: StoredDoc[]) => onChange!(list, { fromServer: false }),
+    fail: () => onError!(new Error('permission-denied')),
+  };
+}
+
+const NOW = Date.UTC(2026, 9, 13, 9, 0);
+
+function makeStore(seed: Record<string, string> = {}, now = () => NOW) {
+  const { data, storage } = memoryStorage(seed);
+  const hand = handSource();
+  const warn = vi.fn();
+  const store = createRecipesStore(hand.source, { storage, now, warn });
+  return { store, data, warn, ...hand };
+}
+
+const FOCACCIA: StoredDoc = { id: 'r1', name: ' Focaccia ', ingredients: [{ label: 'Flour', grams: 1000, unit: 'g', kind: 'ingredient', refId: 'i1', rid: 'a1' }] };
+const BREAD: StoredDoc = { id: 'r2', name: 'Bread', ingredients: [] };
+
+describe('the Recipe catalogue store', () => {
+  test('paints the local copy at once, and waits («not loaded») when there is none', () => {
+    const cold = makeStore();
+    expect(cold.store.getSnapshot().recipesLoaded).toBe(false);
+    expect(cold.store.getSnapshot().recipes).toEqual([]);
+    const warm = makeStore({ [RECIPES_KEY]: JSON.stringify([BREAD]) });
+    expect(warm.store.getSnapshot().recipesLoaded).toBe(true);
+    expect(warm.store.getSnapshot().recipes.map(r => r.name)).toEqual(['Bread']);
+  });
+
+  test('⚠️ the copy is stored NORMALISED, links and row ids kept — the current app reads it', () => {
+    const { store, data, server } = makeStore();
+    store.start();
+    server([FOCACCIA]);
+    const stored = JSON.parse(data.get(RECIPES_KEY)!);
+    expect(stored[0].name).toBe('Focaccia');
+    expect(stored[0].lossPct).toBe(0);
+    expect(stored[0].ingredients[0]).toEqual({ label: 'Flour', grams: 1000, unit: 'g', kind: 'ingredient', refId: 'i1', rid: 'a1' });
+    expect(store.getSnapshot().recipesFromServer).toBe(true);
+  });
+
+  test('⚠️ an EMPTY answer from the browser’s own database does not wipe a copy that had recipes', () => {
+    const { store, cache, server } = makeStore({ [RECIPES_KEY]: JSON.stringify([BREAD]) });
+    store.start();
+    cache([]);
+    expect(store.getSnapshot().recipes).toHaveLength(1);
+    expect(store.getSnapshot().recipesFromServer).toBe(false);
+    server([]);
+    expect(store.getSnapshot().recipes).toHaveLength(0);
+  });
+
+  test('⚠️ before the server speaks, a cached answer that LACKS a held recipe is not believed (nor saved)', () => {
+    const { store, data, cache, server } = makeStore({ [RECIPES_KEY]: JSON.stringify([FOCACCIA, BREAD]) });
+    store.start();
+    cache([BREAD]);
+    expect(store.getSnapshot().recipes.map(r => r.id)).toEqual(['r1', 'r2']);
+    expect(JSON.parse(data.get(RECIPES_KEY)!)).toHaveLength(2);
+    // A cached answer that holds every recipe (and more) is believed.
+    cache([FOCACCIA, BREAD, { id: 'r3', name: 'Pizza' }]);
+    expect(store.getSnapshot().recipes).toHaveLength(3);
+    // The server's word is believed whatever it lacks; after it, the browser's own copy follows it.
+    server([BREAD]);
+    expect(store.getSnapshot().recipes.map(r => r.id)).toEqual(['r2']);
+    cache([BREAD]);
+    expect(store.getSnapshot().recipes.map(r => r.id)).toEqual(['r2']);
+  });
+
+  test('an empty cached answer stands when the copy itself said «no recipes»; a cold one keeps waiting', () => {
+    const none = makeStore({ [RECIPES_KEY]: '[]' });
+    none.store.start();
+    none.cache([]);
+    expect(none.store.getSnapshot().recipesLoaded).toBe(true);
+    const cold = makeStore();
+    cold.store.start();
+    cold.cache([]);
+    expect(cold.store.getSnapshot().recipesLoaded).toBe(false);
+    cold.cache([BREAD]);
+    expect(cold.store.getSnapshot().recipesLoaded).toBe(true);
+  });
+
+  test('a corrupt copy reads as none, and blocked storage never throws', () => {
+    const corrupt = makeStore({ [RECIPES_KEY]: '{not json', [USAGE_KEY]: '[1,2]', [SCALED_KEY]: 'nope' });
+    expect(corrupt.store.getSnapshot().recipesLoaded).toBe(false);
+    expect(corrupt.store.getSnapshot().usage).toEqual({});
+    expect(corrupt.store.getSnapshot().scaled).toEqual({});
+    const throwing = {
+      getItem: () => { throw new Error('blocked'); },
+      setItem: () => { throw new Error('full'); },
+      removeItem: () => undefined,
+    } as unknown as KeyValueStorage;
+    const hand = handSource();
+    const store = createRecipesStore(hand.source, { storage: throwing, now: () => NOW, warn: vi.fn() });
+    store.start();
+    expect(() => hand.server([BREAD])).not.toThrow();
+    expect(() => store.bumpUsage('r2')).not.toThrow();
+    expect(store.getSnapshot().usage).toEqual({ r2: 1 });
+  });
+
+  test('a dead stream ends the wait and is said once; the copy stays on screen', () => {
+    const { store, fail, warn } = makeStore({ [RECIPES_KEY]: JSON.stringify([BREAD]) });
+    const said = vi.fn();
+    store.onMessage(said);
+    store.start();
+    fail();
+    expect(store.getSnapshot()).toMatchObject({ recipesLoaded: true, streamBroken: true });
+    expect(store.getSnapshot().recipes).toHaveLength(1);
+    expect(said).toHaveBeenCalledTimes(1);
+    expect(said).toHaveBeenCalledWith({ kind: 'recipes-stream-broken' });
+    expect(warn).toHaveBeenCalled();
+  });
+
+  test('opening counts one more, written to the shared key', () => {
+    const { store, data } = makeStore({ [USAGE_KEY]: JSON.stringify({ r1: 2 }) });
+    store.bumpUsage('r1');
+    store.bumpUsage('r2');
+    store.bumpUsage('');
+    expect(store.getSnapshot().usage).toEqual({ r1: 3, r2: 1 });
+    expect(JSON.parse(data.get(USAGE_KEY)!)).toEqual({ r1: 3, r2: 1 });
+  });
+
+  test('a batch is remembered for 12 hours, then reads as none; Clear forgets it', () => {
+    let now = NOW;
+    const { store, data } = makeStore({}, () => now);
+    store.setScaledTarget('r1', 2500);
+    expect(store.scaledTarget('r1')).toBe(2500);
+    expect(JSON.parse(data.get(SCALED_KEY)!)).toEqual({ r1: { target: 2500, ts: NOW } });
+    now = NOW + SCALED_TTL_MS + 1;
+    expect(store.scaledTarget('r1')).toBeNull();
+    now = NOW;
+    store.clearScaledTarget('r1');
+    expect(store.scaledTarget('r1')).toBeNull();
+    expect(JSON.parse(data.get(SCALED_KEY)!)).toEqual({});
+  });
+
+  test('a batch of nothing, of a negative or of junk is not remembered', () => {
+    const { store } = makeStore();
+    store.setScaledTarget('r1', 0);
+    store.setScaledTarget('r1', -5);
+    store.setScaledTarget('r1', Number.NaN);
+    store.setScaledTarget('r1', Number.POSITIVE_INFINITY);
+    store.setScaledTarget('', 100);
+    expect(store.getSnapshot().scaled).toEqual({});
+  });
+
+  test('⚠️ counts and batches of deleted recipes are pruned on the SERVER’s word only', () => {
+    const { store, data, cache, server } = makeStore({
+      [RECIPES_KEY]: JSON.stringify([FOCACCIA, BREAD]),
+      [USAGE_KEY]: JSON.stringify({ r1: 4, r2: 1, gone: 9 }),
+      [SCALED_KEY]: JSON.stringify({
+        r1: { target: 900, ts: NOW },
+        r2: { target: 50, ts: NOW - SCALED_TTL_MS - 1 },
+        gone: { target: 1, ts: NOW },
+      }),
+    });
+    store.start();
+    // The browser's own database holds only the recipe the Calculator once read.
+    cache([BREAD]);
+    expect(store.getSnapshot().usage).toEqual({ r1: 4, r2: 1, gone: 9 });
+    expect(store.getSnapshot().recipes).toHaveLength(2);
+    server([FOCACCIA, BREAD]);
+    expect(store.getSnapshot().usage).toEqual({ r1: 4, r2: 1 });
+    expect(store.getSnapshot().scaled).toEqual({ r1: { target: 900, ts: NOW } });
+    expect(JSON.parse(data.get(USAGE_KEY)!)).toEqual({ r1: 4, r2: 1 });
+  });
+
+  test('start → stop → start listens once at a time; stop ends the listener', () => {
+    const { store, watchRecipes, stop } = makeStore();
+    store.start();
+    store.start();
+    expect(watchRecipes).toHaveBeenCalledTimes(1);
+    store.stop();
+    expect(stop).toHaveBeenCalledTimes(1);
+    store.start();
+    expect(watchRecipes).toHaveBeenCalledTimes(2);
+  });
+
+  test('the snapshot is the SAME object until something changes', () => {
+    const { store } = makeStore();
+    const first = store.getSnapshot();
+    expect(store.getSnapshot()).toBe(first);
+    store.bumpUsage('r1');
+    expect(store.getSnapshot()).not.toBe(first);
+  });
+});
