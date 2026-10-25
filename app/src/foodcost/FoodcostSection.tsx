@@ -11,11 +11,11 @@ import { FoodcostProvider, useFoodcostStore } from './FoodcostContext';
 import { FoodcostDetail } from './FoodcostDetail';
 import { FoodcostList } from './FoodcostList';
 import { messageText } from './foodcostMessages';
-import { FROM_LIST, cameFromList } from './foodcostNav';
+import { FROM_LIST, cameFromList, keepDepth, pushDepth, useBackToRecipe, withoutKeepFocus } from './foodcostNav';
 import {
-  FOODCOST_PATH, newPath, productPath, resolveFoodcostPath, settingsPath,
+  FOODCOST_PATH, historyPath, newPath, productPath, resolveFoodcostPath, settingsPath,
 } from './foodcostPath';
-import type { ShownView } from './foodcostPath';
+import type { Origin, ShownView } from './foodcostPath';
 import { HandBackProvider, NEW_OPENER, SETTINGS_OPENER, productOpener, useHandBackState } from './handBack';
 import styles from './FoodcostSection.module.css';
 
@@ -47,11 +47,11 @@ function StoreMessages() {
 }
 
 function FoodcostScreen() {
-  const { pathname, state } = useLocation();
+  const { pathname, search, state } = useLocation();
   const navigationType = useNavigationType();
   // The address as it is written, not React Router's «*»: a product id is split before it is
-  // decoded (foodcostPath.ts).
-  const resolved = resolveFoodcostPath(pathname.slice(FOODCOST_PATH.length));
+  // decoded (foodcostPath.ts). The query says whether a recipe sent us here.
+  const resolved = resolveFoodcostPath(pathname.slice(FOODCOST_PATH.length), search);
 
   // ⚠️ THE REDIRECT MUST KEEP THE MEANING OF THE MOVE THAT CAUSED IT (see StocktakeSection): on a
   // POP the app is arranging itself, so KEEP_FOCUS; on any other move the state of the address being
@@ -59,15 +59,23 @@ function FoodcostScreen() {
   if ('redirect' in resolved) {
     return <Navigate to={resolved.redirect} replace state={navigationType === 'POP' ? KEEP_FOCUS : state} />;
   }
-  return <FoodcostLayout view={resolved.view} />;
+  return <FoodcostLayout view={resolved.view} origin={resolved.origin} />;
 }
 
-function FoodcostLayout({ view }: { view: ShownView }) {
+function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
   const { t } = useT();
   const navigate = useNavigate();
-  const { pathname, state } = useLocation();
+  const { pathname, search, state } = useLocation();
+  // One move of the section is a new pathname OR a new query (the narrowed list and the plain one share a
+  // pathname).
+  const place = pathname + search;
   const split = useMediaQuery(SPLIT_QUERY);
   const handBack = useHandBackState();
+
+  // The narrowed list stays narrowed while a product opened from it is beside it (or its history); a
+  // product the RECIPE opened sits beside the whole list, and so does everything else.
+  const listUsing = view.kind === 'list' || view.kind === 'product' || view.kind === 'history' ? origin.using : null;
+  const backToRecipe = useBackToRecipe(listUsing);
 
   // ⚠️ FOOD COST OWNS THE SCROLL for the moves inside itself (shell/scrollArea.tsx), because its
   // list and its screens are separate addresses: the shell's reset to the top at every address
@@ -82,17 +90,18 @@ function FoodcostLayout({ view }: { view: ShownView }) {
   // — and keeps whatever the entry it replaces knew about where Back goes.
   const openScreen = (to: string) => {
     if (split && view.kind !== 'list') {
-      void navigate(to, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
+      void navigate(to, { replace: true, state: { ...(cameFromList(state) ? FROM_LIST : KEEP_FOCUS), ...keepDepth(state) } });
     } else {
       // On a phone the list is hidden behind what opens, and the page shrinks to it: the place in
       // the list is written down now, while the list is what is on screen.
       if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
-      void navigate(to, { state: FROM_LIST });
+      void navigate(to, { state: { ...FROM_LIST, ...pushDepth(state) } });
     }
   };
   const openProduct = (id: string) => {
     handBack.expect(productOpener(id));
-    openScreen(productPath(id));
+    // A product picked from a narrowed list keeps the list narrowed; anything else drops the recipe.
+    openScreen(productPath(id, { recipe: null, using: listUsing }));
   };
   const openNew = () => {
     handBack.expect(NEW_OPENER);
@@ -103,6 +112,16 @@ function FoodcostLayout({ view }: { view: ShownView }) {
     openScreen(settingsPath);
   };
 
+  // «Show all»: the page stops being the recipe's. A product open beside stays open.
+  // ⚠️ THE BUTTON PRESSED GOES WITH THE NARROWED BAR, so the focus would drop to <body>: the state carries no KEEP_FOCUS and
+  // the page puts the focus on its heading (Page.tsx), alone or with a product beside.
+  const showAll = () => {
+    const to = view.kind === 'product' ? productPath(view.id)
+      : view.kind === 'history' ? historyPath(view.id)
+        : FOODCOST_PATH;
+    void navigate(to, { replace: true, state: withoutKeepFocus(view.kind === 'list' ? null : state) });
+  };
+
   // Where the scroll area goes at every move inside the section. Before the hand-back below, so
   // the place is back when the row's button takes the focus: focusing a row that is in view
   // scrolls nothing.
@@ -110,13 +129,13 @@ function FoodcostLayout({ view }: { view: ShownView }) {
   //  - On a phone, Back to the list restores the place written down when a screen opened; any
   //    other move is a new screen and starts at the top.
   //  - The first render does nothing: the shell reset the area when the section was entered.
-  const shown = useRef<{ pathname: string; kind: ShownView['kind'] } | null>(null);
+  const shown = useRef<{ place: string; kind: ShownView['kind'] } | null>(null);
   useLayoutEffect(() => {
     const before = shown.current;
-    shown.current = { pathname, kind: view.kind };
+    shown.current = { place, kind: view.kind };
     const area = scrollArea();
     // The same address twice is StrictMode running the effect again, not a move.
-    if (before === null || before.pathname === pathname || area === null) return;
+    if (before === null || before.place === place || area === null) return;
     if (split) {
       listTop.current = null;
     } else if (view.kind === 'list' && before.kind !== 'list' && listTop.current !== null) {
@@ -125,7 +144,7 @@ function FoodcostLayout({ view }: { view: ShownView }) {
     } else {
       area.scrollTop = 0;
     }
-  }, [pathname]);
+  }, [place]);
 
   // Back out of a screen (its own Back, or the phone's back gesture): the button that opened it
   // takes the focus, once the list is on screen again (on a phone it was hidden behind the screen,
@@ -140,7 +159,7 @@ function FoodcostLayout({ view }: { view: ShownView }) {
   const detail = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
     if (detail.current) detail.current.scrollTop = 0;
-  }, [pathname]);
+  }, [place]);
 
   return (
     <HandBackProvider value={handBack}>
@@ -153,12 +172,15 @@ function FoodcostLayout({ view }: { view: ShownView }) {
                 onOpenProduct={openProduct}
                 onOpenNew={openNew}
                 onOpenSettings={openSettings}
+                using={listUsing}
+                onShowAll={showAll}
+                onBackToRecipe={backToRecipe}
               />
             </PartBoundary>
           </div>
           <div ref={detail} className={styles.detail}>
-            <PartBoundary resetKey={pathname}>
-              <FoodcostDetail view={view} />
+            <PartBoundary resetKey={place}>
+              <FoodcostDetail view={view} origin={origin} />
             </PartBoundary>
           </div>
         </div>

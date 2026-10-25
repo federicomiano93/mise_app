@@ -16,7 +16,9 @@
 // persisted-batch freshness (`SCALED_TTL_MS`, `isScaledEntryFresh`) and, since step 3d-6, what the recipe
 // editor needs: the chooser (`linkOptions`, with the types `LinkOption` and `LinkOptionsInput`), writing a row's
 // link (`linkedItemName`, `isSameLink`, `applyLink`), `moveRow`, the Save validation (`findInvalidRecipe`, with
-// the type `InvalidRecipeProblem`) and `findCalculatorImport` (the delete warning).
+// the type `InvalidRecipeProblem`) and `findCalculatorImport` (the delete warning) and, since step 3d-7, the rest
+// of the Calculator import (`toCalculatorRecipe`, `nonWeighableLabels`, `mergeImportedRecipe`,
+// `importFailureKey`).
 //
 // ADDED, from another file: `nameTaken` is the one export that is NOT in catalogue-model.js — its original is
 // at the bottom of js/catalogue/ingredient-suggest.js (the rest of that file draws a screen). It answers over
@@ -36,8 +38,8 @@
 // js/supplier-label.js (pure, three lines; there is no shared port of that file yet).
 // `ingredientDisplayName` is imported from ingredient-name.ts, never copied.
 //
-// LEFT OUT: the rest of the Calculator import (`toCalculatorRecipe`, `nonWeighableLabels`,
-// `mergeImportedRecipe`, `importFailureKey`; step 3d-7).
+// LEFT OUT: `unitText`, `formatAmount` and `exportModelOf` (they read the interface dictionary or the screen's
+// number, which belong to the app).
 //
 // Weight and volume are "weighable": they convert to grams (volume at 1 ml = 1 g, the standard bakery
 // approximation). Pieces / spoons / pinch / to-taste are NOT weighable, so they stay out of the weight
@@ -447,6 +449,83 @@ export function findCalculatorImport(config: unknown, catalogueId: unknown): Rec
   const recipes = (c && Array.isArray(c.recipes)) ? c.recipes as (Record<string, unknown> | null)[] : [];
   const importId = 'cat-' + (catalogueId as string);
   return recipes.find(r => r && r.id === importId) || null;
+}
+
+// ── Import into the Calculator (the single coupling; still pure here) ────────
+
+// The raw Calculator-recipe shape the Calculator's normaliser accepts, as an import writes it.
+export interface CalculatorImportRecipe {
+  id: string;
+  name: unknown;
+  logic: 'total';
+  ingredients: { label: unknown; grams: number }[];
+  visible: false;
+}
+
+export type ImportAction = 'added' | 'updated';
+
+type ImportableRecipe = { id: unknown; name: unknown; ingredients?: unknown };
+
+// Map a catalogue recipe to the raw Calculator-recipe shape the Calculator's normalizeRecipe accepts.
+// 'cat-' + the opaque Firestore id is a stable, unique provenance id; logic 'total' = plain pro-rata;
+// visible:false keeps it out of the max-4 tab bar until the owner opts it in from Calculator Settings.
+// The Calculator is grams-only: weighable rows become grams, non-weighable ones (pieces / spoons / pinch /
+// to-taste) are left out; the UI warns first when anything is left out — see nonWeighableLabels.
+export function toCalculatorRecipe(recipe: ImportableRecipe): CalculatorImportRecipe {
+  const rows = (recipe.ingredients || []) as ({ label?: unknown } | null)[];
+  return {
+    id: 'cat-' + (recipe.id as string),
+    name: recipe.name,
+    logic: 'total',
+    ingredients: rows
+      .filter(i => isWeighableUnit(unitOf(i)))
+      .map(i => ({ label: (i as { label?: unknown }).label, grams: Math.round(ingGrams(i)) })),
+    visible: false,
+  };
+}
+
+// The labels of ingredients that CAN'T be imported into the grams-only Calculator. Empty when the whole recipe
+// is weighable; drives the pre-import warning.
+export function nonWeighableLabels(recipe: unknown): unknown[] {
+  const r = recipe as { ingredients?: unknown } | null | undefined;
+  const ings = (r && Array.isArray(r.ingredients)) ? r.ingredients as ({ label?: unknown } & Record<string, unknown>)[] : [];
+  return ings
+    .filter(i => String(i.label || '').trim() && !isWeighableUnit(unitOf(i)))
+    .map(i => i.label);
+}
+
+// Add or update an imported recipe inside a config's recipes[]. A recipe with the same id is replaced in place,
+// keeping its tab order and visibility and how it calculates (logic, trayWeight): a re-import never duplicates and
+// never hijacks the tab bar; otherwise it is appended. Pure: returns a new config plus the action taken.
+export function mergeImportedRecipe<C extends object>(config: C, recipe: object & { id: unknown }): { config: C; action: ImportAction } {
+  const current = (config as { recipes?: unknown }).recipes;
+  const recipes = Array.isArray(current) ? current.slice() as (Record<string, unknown> | null)[] : [];
+  const idx = recipes.findIndex(r => r && r.id === recipe.id);
+  let action: ImportAction;
+  if (idx >= 0) {
+    const prev = recipes[idx] as Record<string, unknown>;
+    // The owner chose how this tab calculates (logic, tray weight); an import refreshes the ingredients, never
+    // that (a fresh import always says logic: 'total').
+    recipes[idx] = {
+      ...recipe, order: prev.order, visible: prev.visible,
+      ...(prev.logic !== undefined ? { logic: prev.logic } : {}),
+      ...(prev.trayWeight !== undefined ? { trayWeight: prev.trayWeight } : {}),
+    };
+    action = 'updated';
+  } else {
+    recipes.push(recipe);
+    action = 'added';
+  }
+  return { config: { ...config, recipes }, action };
+}
+
+export type ImportFailureKey = 'calc.notSavedOutOfDate' | 'cat.importFailedCheckYour';
+
+// Which sentence explains a refused import. permission-denied = the server REFUSED: this app is older than the
+// data (configModel), which a connection check would never fix, so it says «out of date» (the Calculator's own key,
+// same rule as saveFailureKey in calculator-config). Anything else: the connection.
+export function importFailureKey(err: unknown): ImportFailureKey {
+  return err && (err as { code?: unknown }).code === 'permission-denied' ? 'calc.notSavedOutOfDate' : 'cat.importFailedCheckYour';
 }
 
 // ── The recipe, normalised ───────────────────────────────────────────────────

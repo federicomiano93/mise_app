@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
-import { SCALED_TTL_MS } from '@mise/shared/catalogue-model';
+import { SCALED_TTL_MS, normalizeCatalogueRecipe } from '@mise/shared/catalogue-model';
 import { PRICE_FIELDS } from '@mise/shared/price-model';
 import type { KeyValueStorage } from '../session/backend';
 import type { RecipesMeta, RecipesSource, StoredDoc } from './recipesSource';
@@ -66,9 +66,10 @@ function handSource() {
   const saveRecipeDoc = vi.fn<RecipesSource['saveRecipeDoc']>(() => Promise.resolve());
   const removeRecipeDoc = vi.fn<RecipesSource['removeRecipeDoc']>(() => Promise.resolve());
   const getCalculatorConfig = vi.fn<RecipesSource['getCalculatorConfig']>(() => Promise.resolve(null));
+  const importIntoCalculator = vi.fn<RecipesSource['importIntoCalculator']>(() => Promise.resolve('added'));
   const source: RecipesSource = {
     watchRecipes, watchIngredients, watchLabelConfig, watchPrintAgents, queuePrintJob, saveLabelConfig, watchSuppliers,
-    saveRecipeDoc, removeRecipeDoc, getCalculatorConfig,
+    saveRecipeDoc, removeRecipeDoc, getCalculatorConfig, importIntoCalculator,
   };
   return {
     source,
@@ -77,6 +78,7 @@ function handSource() {
     saveRecipeDoc,
     removeRecipeDoc,
     getCalculatorConfig,
+    importIntoCalculator,
     supServer: (list: StoredDoc[]) => onSuppliers!(list, { fromServer: true }),
     supCache: (list: StoredDoc[]) => onSuppliers!(list, { fromServer: false }),
     supFail: () => onSuppliersError!(new Error('permission-denied')),
@@ -802,6 +804,24 @@ describe('the Recipe catalogue store', () => {
       await expect(store.calculatorImportOf('R1')).resolves.toBe(false);
       getCalculatorConfig.mockImplementationOnce(() => { throw new Error('sync'); });
       await expect(store.calculatorImportOf('R1')).resolves.toBe(false);
+    });
+
+    test('importing into the Calculator asks the source, hands back its answer, and counts the recipe as used', async () => {
+      const { store, importIntoCalculator } = makeStore();
+      const recipe = normalizeCatalogueRecipe({ id: 'r1', name: 'Focaccia', ingredients: [{ label: 'Flour', grams: 100 }] })!;
+      importIntoCalculator.mockResolvedValueOnce('updated');
+      await expect(store.importIntoCalculator(recipe, 'Market order')).resolves.toBe('updated');
+      expect(importIntoCalculator).toHaveBeenCalledWith(recipe, 'Market order');
+      expect(store.getSnapshot().usage).toEqual({ r1: 1 });
+    });
+
+    test('⚠️ a refused import rejects with the very error and counts nothing', async () => {
+      const { store, importIntoCalculator } = makeStore();
+      const refusal = Object.assign(new Error('no'), { code: 'permission-denied' });
+      importIntoCalculator.mockRejectedValueOnce(refusal);
+      const recipe = normalizeCatalogueRecipe({ id: 'r1', name: 'Focaccia', ingredients: [] })!;
+      await expect(store.importIntoCalculator(recipe, 'Market order')).rejects.toBe(refusal);
+      expect(store.getSnapshot().usage).toEqual({});
     });
 
     test('⚠️ a read slower than 2.5 s never blocks the delete: it answers «not imported»', async () => {
