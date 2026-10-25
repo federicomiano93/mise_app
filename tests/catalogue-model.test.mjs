@@ -35,15 +35,15 @@ const FOCACCIA = {
   id: 'foc',
   name: 'Focaccia',
   ingredients: [
-    { label: 'Flour uniqua blue', grams: 278 },
-    { label: 'Flour T65', grams: 278 },
-    { label: 'Malt', grams: 3 },
-    { label: 'Sugar', grams: 8 },
-    { label: 'Salt', grams: 11 },
-    { label: 'Yeast', grams: 3.6 },
-    { label: 'Oil', grams: 56 },
-    { label: '1° Water', grams: 334 },
-    { label: '2° Water', grams: 24 },
+    { label: 'Flour uniqua blue', grams: 260 },
+    { label: 'Flour T65', grams: 290 },
+    { label: 'Malt', grams: 4 },
+    { label: 'Sugar', grams: 10 },
+    { label: 'Salt', grams: 12 },
+    { label: 'Yeast', grams: 3.4 },
+    { label: 'Oil', grams: 50 },
+    { label: '1° Water', grams: 340 },
+    { label: '2° Water', grams: 30 },
   ],
 };
 
@@ -92,7 +92,7 @@ test('normalizeCatalogueRecipes drops junk entries', () => {
 // ── scaleCatalogue: the core invariant (integers sum EXACTLY to the target) ─────
 
 test('scaleCatalogue keeps the base recipe when target equals its total', () => {
-  const total = FOCACCIA.ingredients.reduce((s, i) => s + i.grams, 0); // 995.6 (raw, fractional)
+  const total = FOCACCIA.ingredients.reduce((s, i) => s + i.grams, 0); // 999.4 (raw, fractional)
   const out = scaleCatalogue(FOCACCIA, total);
   assert.equal(sum(out), Math.round(total));
 });
@@ -100,8 +100,8 @@ test('scaleCatalogue keeps the base recipe when target equals its total', () => 
 test('baseAmounts rounds to whole grams that sum to the rounded base total', () => {
   const out = baseAmounts(FOCACCIA);
   assert.ok(out.every(Number.isInteger), 'every base amount is a whole number');
-  const rawTotal = FOCACCIA.ingredients.reduce((s, i) => s + i.grams, 0); // 995.6
-  assert.equal(sum(out), Math.round(rawTotal)); // 996 — rows add up to the shown total
+  const rawTotal = FOCACCIA.ingredients.reduce((s, i) => s + i.grams, 0); // 999.4
+  assert.equal(sum(out), Math.round(rawTotal)); // 999 — rows add up to the shown total
 });
 
 test('baseAmounts on an empty recipe is []', () => {
@@ -111,9 +111,9 @@ test('baseAmounts on an empty recipe is []', () => {
 test('scaleCatalogue to 10 kg: proportional and sums to exactly 10000 g', () => {
   const out = scaleCatalogue(FOCACCIA, 10000);
   assert.equal(sum(out), 10000);
-  // proportionality: the two equal flours stay equal, and each is ~10x the base
-  assert.equal(out[0], out[1]);
-  assert.ok(out[0] > 2700 && out[0] < 2900);
+  // proportionality: the larger flour stays larger, and each is ~10x its base (260 g, 290 g)
+  assert.ok(out[1] > out[0]);
+  assert.ok(out[0] > 2500 && out[0] < 2700 && out[1] > 2800 && out[1] < 3000);
 });
 
 test('scaleCatalogue sums to target across many weights (rounding residual absorbed)', () => {
@@ -257,7 +257,7 @@ test('toCalculatorRecipe maps to a hidden pro-rata Calculator recipe', () => {
   assert.equal(cr.logic, 'total');
   assert.equal(cr.visible, false);
   assert.equal(cr.ingredients.length, FOCACCIA.ingredients.length);
-  assert.deepEqual(cr.ingredients[0], { label: 'Flour uniqua blue', grams: 278 });
+  assert.deepEqual(cr.ingredients[0], { label: 'Flour uniqua blue', grams: 260 });
 });
 
 test('mergeImportedRecipe appends a new recipe (action: added)', () => {
