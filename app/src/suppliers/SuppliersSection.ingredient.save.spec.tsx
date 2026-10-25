@@ -171,12 +171,30 @@ describe('the question and the payload', () => {
       op: 'ingredient-save',
       id: 'i-flour',
       data: {
-        name: 'Flour 000', shortName: 'Flour', supplierId: 's-alp', brand: 'Caputo', weight: '25 kg', category: 'Bakery', active: true, kind: 'ingredient',
+        name: 'Flour 000', shortName: 'Flour', supplierId: 's-alp', brand: 'Caputo', weight: '25 kg', category: 'Bakery', kind: 'ingredient',
         ...drained,
       },
       // The card of a person who may not write prices carries no money (step 3e-3: the fake records the money of the batch).
       price: null,
     });
+  });
+
+  it('«Not in use at the moment»: a NEW ingredient has no switch', async () => {
+    const fresh = await open('/suppliers/ingredient/new');
+    expect(fresh.region.queryByRole('switch', { name: 'Not in use at the moment' })).not.toBeInTheDocument();
+  });
+
+  it('⚠️ «Not in use at the moment»: moving the switch writes `active` on Save, and nothing before', async () => {
+    const view = await open('/suppliers/ingredient/i-flour');
+    const toggle = view.region.getByRole('switch', { name: 'Not in use at the moment' });
+    expect(toggle).not.toBeChecked();
+    expect(toggle).toHaveAccessibleDescription(/under “Not in use”/);
+    await view.user.click(toggle);
+    expect(toggle).toBeChecked();
+    expect(view.source.writes).toEqual([]);
+    await saveAndConfirm(view);
+    await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
+    expect(view.source.writes[0]).toMatchObject({ op: 'ingredient-save', id: 'i-flour', data: { active: false } });
   });
 
   it('a blank short name is sent as an empty string, a blank category as «Other», the weight joined from its two boxes', async () => {

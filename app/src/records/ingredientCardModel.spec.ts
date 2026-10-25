@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
-  NEW_CHOICE, NO_SUPPLIER_ID, buildSave, firstRefusal, formState, isDirty, kindFor, orderNow, readChoice, weightText, withFormat, withInner, workingFrom,
+  NEW_CHOICE, NO_SUPPLIER_ID, activePatch, buildSave, firstRefusal, formState, isDirty, kindFor, orderNow, readChoice, weightText, withFormat, withInner, workingFrom,
 } from './ingredientCardModel';
 import type { ItemLike, Working } from './ingredientCardModel';
 
@@ -19,14 +19,14 @@ describe('opening: the copy a card is made from', () => {
     expect(open(FLOUR)).toEqual({
       name: 'Flour 00', shortName: 'Flour', supplierId: 's-alp', brand: 'Caputo',
       category: { choice: 'Bakery', typed: '' }, weight: { amount: '25', unit: 'kg', legacy: '' },
-      format: 'single', count: '', inner: { choice: '', typed: '' }, innerAutoSet: false,
+      format: 'single', count: '', inner: { choice: '', typed: '' }, innerAutoSet: false, notInUse: false,
     });
   });
 
   test('a new item starts empty, on «No supplier», in kilos', () => {
     expect(open(null)).toEqual({
       name: '', shortName: '', supplierId: NO_SUPPLIER_ID, brand: '', category: { choice: '', typed: '' },
-      weight: { amount: '', unit: 'kg', legacy: '' }, format: 'single', count: '', inner: { choice: '', typed: '' }, innerAutoSet: false,
+      weight: { amount: '', unit: 'kg', legacy: '' }, format: 'single', count: '', inner: { choice: '', typed: '' }, innerAutoSet: false, notInUse: false,
     });
   });
 
@@ -180,7 +180,7 @@ describe('the payload, key for key (parity C87)', () => {
   test('a rename writes the product data and NO format key, no price key, no allergen or nutrition key', () => {
     const built = save(typed(open(FLOUR), { name: ' Flour 000 ', brand: ' Caputo  ' }), FLOUR);
     expect(built.payload).toEqual({
-      name: 'Flour 000', shortName: 'Flour', supplierId: 's-alp', brand: 'Caputo', weight: '25 kg', category: 'Bakery', active: true, kind: 'ingredient',
+      name: 'Flour 000', shortName: 'Flour', supplierId: 's-alp', brand: 'Caputo', weight: '25 kg', category: 'Bakery', kind: 'ingredient',
     });
     expect(built.unitChangedFrom).toBe('');
     for (const key of ['unit', 'packCount', 'packUnit', 'pricePerUnit', 'priceUnit', 'vatRate', 'allergens', 'mayContain', 'allergensCheckedAt',
@@ -209,10 +209,23 @@ describe('the payload, key for key (parity C87)', () => {
     expect(weightText(typed(open(odd), { weight: { amount: '2,5', unit: 'l', legacy: '' } }))).toBe('2.5 l');
   });
 
-  test('a switched-off item stays switched off; an item with no flag is on', () => {
+  test('«Not in use at the moment»: `active` is sent only when the switch moved; a new item is active', () => {
     const off: ItemLike = { id: 'x', name: 'x', active: false };
-    expect(save(open(off), off).payload.active).toBe(false);
-    expect(save(open({ id: 'x', name: 'x' }), { id: 'x', name: 'x' }).payload.active).toBe(true);
+    const on: ItemLike = { id: 'x', name: 'x' };
+    expect(open(off).notInUse).toBe(true);
+    expect(open(on).notInUse).toBe(false);
+    expect('active' in save(open(off), off).payload, 'not moved: absent, never an old copy of the flag').toBe(false);
+    expect('active' in save(open(on), on).payload).toBe(false);
+    expect(save(typed(open(on), { notInUse: true }), on).payload.active, 'switched off').toBe(false);
+    expect(save(typed(open(off), { notInUse: false }), off).payload.active, 'switched back on').toBe(true);
+    expect(save(typed(open(null), { name: 'Salt' }), null).payload.active).toBe(true);
+    expect(activePatch(typed(open(null), { notInUse: true }), null)).toEqual({ active: false });
+  });
+
+  test('the switch is part of what counts as a change', () => {
+    const base = open(FLOUR);
+    expect(isDirty(typed(base, { notInUse: true }), base)).toBe(true);
+    expect(isDirty(typed(base, { notInUse: false }), base)).toBe(false);
   });
 
   test('the kind is sent, and fixed: an existing packaging item stays packaging whatever the address said', () => {
