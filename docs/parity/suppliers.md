@@ -696,6 +696,42 @@ original's «quiet» tone.
 - Left as it is: if the person's role or the Food cost switch changes WHILE rows are written, the section replaces the import screen with the list;
   the run goes on without a summary (the rules stop the price writes). Rare; noted for step 4 (real-data trial).
 
+## Step 3e-5b as built — «Not in use at the moment»
+
+His tablet note of 23 Oct 2026 («quelli che non uso li separi e li metti sotto»), decided 24 Oct 2026 (memory `piano-mise-2`).
+It closes Finding S-D and replaces T17 for Mise 2.
+
+- **The field is the existing `active`** (whitelisted, `is bool` in `firestore.rules`; absent = in use, read `!== false` in both
+  apps). No rules change, no new field. ⚠️ **ONE DATABASE, TWO READINGS until the switch:** the CURRENT app hides an `active: false`
+  ingredient everywhere — Orders (`orders-main.js` `groupLensBySupplier`), the recipe link (`catalogue-model.js` `linkOptions`),
+  Food cost's pickers, the Stocktake (`inventory-model.js`) — and shows it dimmed only in Fornitori. Mise 2 never hides it. Harmless
+  while Mise 2 runs only on the preview (fake data); at the switch the current app goes, so only the old installs that have not
+  updated yet would hide, for hours, an item switched off in Mise 2.
+- **The switch** is on the ingredient card (and the packaging card, and the card of before — one component), at the end, before the
+  Delete bin, for an EXISTING item only (a new item, the T15 create included, is in use by definition), for everybody (reversible,
+  like a supplier's Switch off). It edits the working copy; Save writes it. ⚠️ **Difference from C81/C87:** an existing item's Save
+  sends `active` ONLY when the switch moved (`ingredientCardModel.activePatch`, also used by `buildLegacySave`); the current app
+  sends `item.active !== false` on every save. The write is a merge, so a switch moved on another phone is not undone by an old
+  copy (the suppliers' S82 reasoning). A new item still sends `active: true`.
+- **Lists** (Ingredients and Packaging tabs, a supplier's own screen): the switched-off items sit under the others in ONE folded
+  `<details>` group «Non in uso (N)» (`suppliers/NotInUseGroup.tsx`), dimmed, without the per-row «Disattivato» tag (the heading
+  says it). The group opens by itself when the item open beside the list is in it or a search finds one of its items, and stays
+  open until closed; each tab starts folded (the list is keyed by the tab). The «no match» sentence shows only when neither part
+  matches. ⚠️ A row inside a closed `<details>` cannot take the focus: `handBack.ts` opens the group before it focuses one of its
+  rows, and carries the focus to a row redrawn in the same commit (measured at 1024: the store's answer moved the just-saved row
+  into the group after Back had focused it, and the focus fell to the top of the page).
+- **Pickers show them LAST, never hidden** (hiding could stop a needed order): the recipe link's full chooser (a third section
+  «Non in uso» after Recipes) and its suggestions (after the recipes, with the word «Non in uso»; `inactiveLast` of
+  `shared/catalogue-model`, default off so the port still matches the original), and Food cost's chooser (a «Non in uso» section
+  last, food or packaging by mode). `nameTaken` counts a switched-off match with the option, so «+ Add "…" as an ingredient» is not
+  offered over an item that is already there, switched off.
+- **Not changed, open:** the Stocktake still leaves switched-off items out (the current app's rule) — a question for him: an item
+  not in use may still be on the shelf. Orders is not built in Mise 2 yet: when it is, it must show them last as here (the current
+  app hides them). The merge chooser (3e-7) words them «Off the order list» in the current app — use «Non in uso» there.
+- Driven: `algprobe/mise-drive/drive-mise2-suppliers.mjs <url> <port> h` — IT owner at 1024/360/296 (switch, write read back,
+  group open after Save with the focus on the row, folded on a fresh tab, search, supplier screen, the recipe suggestions offering it
+  last), EN employee at 360; axe clean, no sideways scroll, no console errors.
+
 ## Findings — things found while reading, not decided
 
 ### Findings — The page, the lists, suppliers
@@ -847,7 +883,7 @@ F6 (b).**
     price section is drawn only for whoever may write prices, and a new ingredient has no history to read.
 - **T16. `suppliers.html#packaging`** has no linker (Finding S-G): not ported; `/suppliers/packaging` exists anyway.
 - **T17. No way to switch an ingredient off the order list** exists today (Finding S-D): parity, nothing added; said to
-  him as a finding.
+  him as a finding. **Superseded** by his note of 23 Oct 2026: step 3e-5b adds «Not in use at the moment» (see «Step 3e-5b as built»).
 
 ## Shared ports needed
 

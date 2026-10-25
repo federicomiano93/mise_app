@@ -359,6 +359,11 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   does — and a new ingredient writes all five. The pack text proposes after a 450 ms pause or at once on leaving the box, never on the
   first draw. The folds open closed on every open. Mise 2 has no «?» sheet yet, so ONE safety sentence («This only ticks boxes…») is
   drawn inline under the pack box; the other help text waits for the shared «?».
+  Step 3e-5b adds «Not in use at the moment»: a switch at the end of the card (existing items only) on the working copy's
+  `notInUse`, written as `active` by `activePatch` only when it moved. The lists of `suppliers/` put switched-off items last in the
+  folded `NotInUseGroup` (`<details>`); `suppliers/handBack.ts` opens a closed group before it focuses one of its rows and carries the
+  focus to a row redrawn in the same commit. The recipe link and Food cost's chooser offer them last (`inactiveLast`), never hidden.
+  Details and the difference from the current app (which hides them): `docs/parity/suppliers.md`, «Step 3e-5b as built».
   ⚠️ **The one exception to «a feature never imports another feature's folder»** (T15, «+ Add "…" as an ingredient»): `recipes/` may
   import `../suppliers/CreateIngredientOverlay` and NOTHING else from `suppliers/` (`RecipesSection.createIngredient.spec.tsx`
   fails on any other). The overlay draws `records/IngredientCard` hosted (`host`: no router blocker of its own, its Back handed
