@@ -7,7 +7,7 @@ import { findInvalidRecipe, linkOf } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe, InvalidRecipeProblem } from '@mise/shared/catalogue-model';
 import { normalizeLabelProfile } from '@mise/shared/label-template-model';
 import { mayEditRecords } from '@mise/shared/records';
-import { sortedCategories } from '@mise/shared/recipe-shelf';
+import { categoryOf, sortedCategories } from '@mise/shared/recipe-shelf';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
 import { useSession } from '../session/SessionContext';
@@ -98,6 +98,21 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   const [working, setWorking] = useState<Working>(() => carried?.working ?? workingFrom(recipe, categories));
   // The name the recipe had when this screen opened: what the delete question calls it.
   const [storedName] = useState(recipe?.name ?? '');
+
+  // ⚠️ THE MENU'S STARTING WORD FOLLOWS THE LIST UNTIL THE MENU IS TOUCHED: the form can open (after the patience of
+  // RecipeEditorScreen) before the label profile, which holds the list, has arrived. Then the copy was made with an empty list and
+  // would show «No category» for a recipe filed under a listed word. When the list arrives, the starting word (both halves,
+  // so nothing counts as moved) is worked out again — but only while the person has not chosen: their choice stays. The rest of
+  // the form is never rebuilt, so typing elsewhere survives.
+  const [openedWith] = useState(recipe);
+  const categoryTouched = useRef(false);
+  const listedStart = id === null ? null : categoryOf(openedWith, categories);
+  useEffect(() => {
+    if (listedStart === null || categoryTouched.current) return;
+    setWorking(current => (current.category === listedStart && current.categoryStart === listedStart
+      ? current
+      : { ...current, category: listedStart, categoryStart: listedStart }));
+  }, [listedStart]);
 
   // ⚠️ DIRTY IS «SOMETHING WAS TYPED», also kept in a ref: the router's blocker reads it at the moment of a navigation, and a
   // state value read there could be one render behind.
@@ -499,7 +514,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
                 id={categoryId}
                 className={styles.select}
                 value={working.category}
-                onChange={event => { edit(current => setCategory(current, event.target.value)); }}
+                onChange={event => { categoryTouched.current = true; edit(current => setCategory(current, event.target.value)); }}
               >
                 <option value="">{t('cat.shelf.categoryNone')}</option>
                 {sortedCategories(categories, locale).map(word => <option key={word} value={word}>{word}</option>)}

@@ -37,7 +37,8 @@ export function RecipeEditorScreen({ id }: { id: string | null }) {
 
   // ⚠️ AND ON THE LABEL PROFILE, which holds the venue's category list: the menu's starting choice is worked out when the form
   // is made, against that list. (A new recipe starts from «no category» whatever the list, so it needs no wait.)
-  const settled = (recipesFromServer || streamBroken) && labelConfigKnown;
+  const answered = recipesFromServer || streamBroken;
+  const settled = answered && labelConfigKnown;
   const [patienceOver, setPatienceOver] = useState(false);
   useEffect(() => {
     if (id === null || settled || patienceOver) return undefined;
@@ -69,7 +70,8 @@ export function RecipeEditorScreen({ id }: { id: string | null }) {
     setBase({ ...base, early: false, json });
   }, [recipesFromServer]);
   const hasForm = id === null || canOpen || shownFor === id;
-  const gone = !hasForm && recipe === null && settled;
+  // ⚠️ «NO LONGER EXISTS» DOES NOT WAIT FOR THE LABEL PROFILE: there is no form to start, so the category list matters not.
+  const gone = !hasForm && recipe === null && answered;
   const waiting = !hasForm && !gone;
 
   // Opened from a tap (the list's button, the recipe's «Edit»), the page does not move the focus: it goes to this title.

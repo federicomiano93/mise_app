@@ -94,9 +94,14 @@
   border: 0;
   border-radius: var(--r-md);
   background: none;
-  color: var(--danger-ink);
+  color: var(--ink-3);
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+.bin[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .bin:focus-visible {
@@ -110,8 +115,9 @@
 }
 
 @media (hover: hover) {
-  .bin:hover {
+  .bin:hover:not([aria-disabled='true']) {
     background: var(--danger-tint);
+    color: var(--danger-ink);
   }
 }
 

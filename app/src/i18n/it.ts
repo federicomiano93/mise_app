@@ -934,6 +934,8 @@ export const it: Messages = {
   'cat.shelf.archivedDone': 'Ricetta archiviata.',
   'cat.shelf.bannerTitle': 'Archiviata',
   'cat.shelf.bannerText': 'Non è nella lista né tra le scelte per nuovi collegamenti. Calcolatore, etichette e Food cost continuano a funzionare.',
+  'cat.shelf.allArchived': 'Tutte le ricette sono archiviate — ripristinane una nel Ricettario per sceglierla.',
+  'cat.shelf.waitingForServer': 'In attesa del server prima di poter cambiare la lista…',
   'cat.shelf.restore': 'Ripristina',
   'cat.shelf.restoredDone': 'Ricetta ripristinata.',
   'cat.shelf.couldNotArchive': 'Non è stato possibile archiviare “{name}” — controlla la connessione.',

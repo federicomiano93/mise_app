@@ -94,7 +94,8 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
       .map(packagingOption)
       .sort(byName);
 
-    return { recipeOptions, ingredientOptions, packagingOptions, inactiveIngredientOptions, inactivePackagingOptions };
+    const everyRecipeArchived = Object.keys(recipes).length > 0 && withoutArchived(Object.values(recipes)).length === 0;
+    return { everyRecipeArchived, recipeOptions, ingredientOptions, packagingOptions, inactiveIngredientOptions, inactivePackagingOptions };
   }, [recipes, ingredients, t, money]);
 
   const wanted = normalizeSearchText(query);
@@ -129,7 +130,10 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
   }
   const shown = sections.reduce((count, section) => count + section.items.length, 0);
   const emptyText = query.trim() !== '' ? t('fc.nothingMatches')
-    : mode === 'packaging' ? t('fc.noPackagingYet') : t('fc.noRecipesYet');
+    : mode === 'packaging' ? t('fc.noPackagingYet')
+      // Recipes exist but all are archived: say that, rather than «no recipes yet».
+      : (mode === 'recipe' || both) && options.everyRecipeArchived ? t('cat.shelf.allArchived')
+        : t('fc.noRecipesYet');
 
   return (
     <Dialog

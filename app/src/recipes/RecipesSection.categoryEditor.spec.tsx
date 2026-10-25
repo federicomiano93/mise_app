@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { isBusy } from '../session/busy';
 import { fakeRecipesSource } from '../testing/fakeRecipesSource';
 import { LOAD, recipe, renderRecipes } from '../testing/renderRecipes';
@@ -70,6 +70,53 @@ describe('the menu', () => {
     const select = within(region).getByRole('combobox', { name: 'Categoria' }) as HTMLSelectElement;
     expect(select.value).toBe('');
     expect(select.options[0]?.textContent).toBe('Nessuna categoria');
+  });
+});
+
+describe('the list arriving late', () => {
+  // The form opens after the patience (COPY_WAIT_MS, in real time) while the label profile, which holds the list, is still on its way.
+  const LATE = { timeout: 5000 };
+
+  it('⚠️ shows the recipe’s own word once the list arrives, keeps what was typed elsewhere, and sends no category on an unrelated save', async () => {
+    const source = fakeRecipesSource({ recipes: [recipe('r1', { name: 'Focaccia', category: 'Easter' })], labelConfig: LABELS });
+    source.holdLabelConfig();
+    const { user } = renderRecipes('/recipes/r1/edit', { source });
+    const region = await screen.findByRole('region', { name: 'Edit recipe' }, { timeout: 10_000 });
+    expect(menu(region)).toBeNull();
+    await user.type(within(region).getByRole('textbox', { name: 'Recipe name' }), ' bis');
+    act(() => { source.releaseLabelConfig(); });
+    await waitFor(() => { expect(menu(region)).not.toBeNull(); }, LATE);
+    expect(menu(region)?.value).toBe('Easter');
+    expect(within(region).getByRole('textbox', { name: 'Recipe name' })).toHaveValue('Focaccia bis');
+    await save(user, region);
+    await waitFor(() => { expect(source.recipeWrites).toHaveLength(1); });
+    expect(source.recipeWrites[0]?.data).not.toHaveProperty('category');
+    expect(source.recipes.get('r1')?.category).toBe('Easter');
+  });
+
+  it('⚠️ leaves the person’s own choice alone when a longer list arrives after they moved the menu', async () => {
+    const source = fakeRecipesSource({ recipes: [recipe('r1', { name: 'Focaccia', category: 'Easter' })], labelConfig: { recipeCategories: ['Christmas'] } });
+    source.holdLabelConfig();
+    const { user } = renderRecipes('/recipes/r1/edit', { source });
+    await waitFor(() => { expect(source.watchLabelConfig).toHaveBeenCalled(); });
+    act(() => { source.releaseLabelConfig(false); });
+    const region = await screen.findByRole('region', { name: 'Edit recipe' }, LOAD);
+    await waitFor(() => { expect(menu(region)).not.toBeNull(); });
+    expect(menu(region)?.value).toBe('');
+    await user.selectOptions(menu(region) as HTMLElement, 'Christmas');
+    source.labelConfig = LABELS;
+    act(() => { source.releaseLabelConfig(); });
+    await waitFor(() => { expect(Array.from((menu(region) as HTMLSelectElement).options).map(option => option.value)).toEqual(['', 'Christmas', 'Easter']); });
+    expect(menu(region)?.value).toBe('Christmas');
+  });
+});
+
+describe('«This recipe no longer exists.»', () => {
+  it('⚠️ does not wait for the label profile', async () => {
+    const source = fakeRecipesSource({ recipes: [recipe('r1', { name: 'Focaccia' })], labelConfig: LABELS });
+    source.holdLabelConfig();
+    renderRecipes('/recipes/gone/edit', { source });
+    expect(await screen.findByRole('heading', { name: 'This recipe no longer exists.' }, LOAD)).toBeInTheDocument();
   });
 });
 

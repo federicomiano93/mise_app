@@ -417,7 +417,11 @@ function PhotoCard() {
 // and a write over a list not yet seen would replace the venue's own words.
 function RecipeCategoriesCard({ onSave }: { onSave: (list: readonly string[]) => void }) {
   const { t, locale } = useT();
-  const { categories, recipes } = useRecipes();
+  const { categories, recipes, labelConfigFromServer } = useRecipes();
+  // ⚠️ THE LIST IS WRITTEN WHOLE, so it is changed only on the SERVER's word: a copy kept on this phone could be a version behind,
+  // and writing it would take away a word another manager added. Until then add and delete stay drawn (aria-disabled, never
+  // `disabled`: Chrome blurs a disabled control under the finger) and do nothing.
+  const writable = labelConfigFromServer;
   const [confirm, confirmDialog] = useConfirm();
   const headId = useId();
   const boxId = useId();
@@ -441,6 +445,7 @@ function RecipeCategoriesCard({ onSave }: { onSave: (list: readonly string[]) =>
   });
 
   function add(): void {
+    if (!writable) return;
     const result = addCategory(categories, typed);
     if ('refusal' in result) {
       setRefusal({ kind: result.refusal, name: typed.trim().replace(/\s+/g, ' ') });
@@ -454,7 +459,7 @@ function RecipeCategoriesCard({ onSave }: { onSave: (list: readonly string[]) =>
   }
 
   async function remove(name: string): Promise<void> {
-    if (asking.current) return;
+    if (asking.current || !writable) return;
     asking.current = true;
     try {
       const count = countInCategory(recipes, name, categories);
@@ -488,6 +493,7 @@ function RecipeCategoriesCard({ onSave }: { onSave: (list: readonly string[]) =>
       <div className={styles.head}>
         <h3 id={headId} ref={heading} tabIndex={-1} className={styles.headTitle}>{t('cat.shelf.settingsTitle')}</h3>
         <p className={styles.note}>{t('cat.shelf.settingsNote')}</p>
+        {writable ? null : <p className={styles.note}>{t('cat.shelf.waitingForServer')}</p>}
       </div>
       {list.length === 0 ? (
         <div className={styles.row}>
@@ -507,6 +513,7 @@ function RecipeCategoriesCard({ onSave }: { onSave: (list: readonly string[]) =>
                 className={styles.bin}
                 aria-label={t('cat.shelf.deleteCategory', { name })}
                 title={t('cat.shelf.deleteCategory', { name })}
+                aria-disabled={writable ? undefined : 'true'}
                 onClick={() => { void remove(name); }}
               >
                 <Trash2 aria-hidden="true" />
@@ -536,7 +543,7 @@ function RecipeCategoriesCard({ onSave }: { onSave: (list: readonly string[]) =>
               add();
             }}
           />
-          <Button variant="secondary" onPress={add}>{t('cat.shelf.add')}</Button>
+          <Button variant="secondary" isPending={!writable} onPress={add}>{t('cat.shelf.add')}</Button>
         </div>
         {/* Empty until a word is refused; it is there before it speaks, so a screen reader hears the sentence. */}
         <p id={refusalId} role="status" className={refusal === null ? styles.quietInBlock : styles.rangeError}>{refusalText}</p>

@@ -79,6 +79,54 @@ describe('the card', () => {
     expect(source.labelSaves).toEqual([]);
   });
 
+  describe('⚠️ before the server has answered about the label profile', () => {
+    async function openFromCopy() {
+      const source = fakeRecipesSource({ recipes: RECIPES, labelConfig: { recipeCategories: ['Easter', 'Christmas', 'Spring'] } });
+      source.holdLabelConfig();
+      const view = renderRecipes('/recipes/settings', { source, session: { location: GB } });
+      await screen.findByRole('region', { name: 'Settings' }, LOAD);
+      act(() => { source.releaseLabelConfig(false); });
+      await screen.findByRole('region', { name: 'Recipe categories' });
+      return { ...view, source };
+    }
+
+    it('keeps the words, the bins and the box drawn but unable to write, and says why', async () => {
+      const { user, source } = await openFromCopy();
+      expect(words()).toEqual(['Christmas', 'Easter', 'Spring']);
+      expect(card().getByText('Waiting for the server before the list can be changed…')).toBeInTheDocument();
+      expect(bin('Spring')).toHaveAttribute('aria-disabled', 'true');
+      expect(bin('Spring')).not.toBeDisabled();
+      expect(add()).toHaveAttribute('aria-disabled', 'true');
+      await user.click(bin('Spring'));
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      await user.type(box(), 'Summer');
+      await user.click(add());
+      await user.type(box(), '{Enter}');
+      expect(source.labelSaves).toEqual([]);
+      expect(box()).toHaveValue('Summer');
+    });
+
+    it('opens up when the server answers, and the sentence goes', async () => {
+      const { user, source } = await openFromCopy();
+      act(() => { source.releaseLabelConfig(); });
+      await waitFor(() => { expect(card().queryByText('Waiting for the server before the list can be changed…')).not.toBeInTheDocument(); });
+      expect(bin('Spring')).not.toHaveAttribute('aria-disabled');
+      await user.type(box(), 'Summer');
+      await user.click(add());
+      await waitFor(() => { expect(saved(source)).toEqual([['Easter', 'Christmas', 'Spring', 'Summer']]); });
+    });
+
+    it('says it in Italian', async () => {
+      const source = fakeRecipesSource({ recipes: RECIPES, labelConfig: { recipeCategories: ['Natale'] } });
+      source.holdLabelConfig();
+      renderRecipes('/recipes/settings', { source, lang: 'it', session: { location: GB, language: 'it' } });
+      await screen.findByRole('region', { name: 'Impostazioni' }, LOAD);
+      act(() => { source.releaseLabelConfig(false); });
+      const italian = within(await screen.findByRole('region', { name: 'Categorie delle ricette' }));
+      expect(italian.getByText('In attesa del server prima di poter cambiare la lista…')).toBeInTheDocument();
+    });
+  });
+
   it('⚠️ is not reachable for an employee: no door and no card', async () => {
     const source = fakeRecipesSource({ recipes: RECIPES, labelConfig: { recipeCategories: ['Easter'] } });
     renderRecipes('/recipes', { source, session: { location: GB, ...EMPLOYEE } });

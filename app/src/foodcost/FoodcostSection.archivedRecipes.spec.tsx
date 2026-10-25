@@ -34,6 +34,14 @@ describe('the recipes Food cost offers', () => {
     expect(optionNames(await screen.findByRole('dialog', undefined, LOAD))).toEqual(['Dough']);
   });
 
+  it('⚠️ when every recipe is archived the chooser says so, not «no recipes yet»', async () => {
+    const { user } = await open('/food-cost/new', editorSource([], { recipes: [recipe('Donut', { archived: true })] }));
+    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe' }));
+    const dialog = within(await screen.findByRole('dialog', undefined, LOAD));
+    expect(dialog.getByText('Every recipe is archived — restore one in the Recipe catalogue to choose it.')).toBeInTheDocument();
+    expect(dialog.queryByText(/No recipes yet/)).not.toBeInTheDocument();
+  });
+
   it('⚠️ leave an archived recipe out of the name’s suggestions', async () => {
     const { user } = await open('/food-cost/new', editorSource([], { recipes: RECIPES }));
     await user.type(nameBox(), 'do');

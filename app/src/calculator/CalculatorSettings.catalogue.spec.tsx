@@ -111,10 +111,18 @@ describe('the picker', () => {
     await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
   });
 
-  it('every recipe archived: the picker shows the empty sentence', async () => {
+  it('⚠️ every recipe archived: the picker says so (and not «no recipes yet»), in both languages', async () => {
     const { user } = await open(`${LIST}/focaccia`, { recipes: [{ ...CAT_1, archived: true }, { ...CAT_2, archived: true }] });
     const dialog = await openPicker(user);
-    expect(await dialog.findByText('The Recipe catalogue has no recipes yet.', undefined, LOAD)).toBeInTheDocument();
+    expect(await dialog.findByText('Every recipe is archived — restore one in the Recipe catalogue to choose it.', undefined, LOAD)).toBeInTheDocument();
+    expect(dialog.queryByText('The Recipe catalogue has no recipes yet.')).not.toBeInTheDocument();
+  });
+
+  it('every recipe archived, in Italian', async () => {
+    const { user } = await open(`${LIST}/focaccia`, { recipes: [{ ...CAT_1, archived: true }], lang: 'it' });
+    await user.selectOptions(main().getByRole('combobox', { name: /ingredienti/i }), 'catalogue');
+    const dialog = within(await screen.findByRole('dialog', undefined, LOAD));
+    expect(await dialog.findByText('Tutte le ricette sono archiviate — ripristinane una nel Ricettario per sceglierla.', undefined, LOAD)).toBeInTheDocument();
   });
 
   it('a read that fails says so in the picker and links nothing; the next opening tries again', async () => {

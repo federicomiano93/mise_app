@@ -49,7 +49,7 @@ describe('archiving from the recipe page', () => {
     await waitFor(() => { expect(source.recipeWrites).toEqual([{ id: 'r1', data: { archived: true } }]); });
     expect(router.state.location.pathname).toBe('/recipes/r1');
     const banner = await screen.findByRole('region', { name: 'Archived' });
-    expect(banner).toHaveTextContent('Not in the list nor in the choices for new links.');
+    expect(banner).toHaveTextContent('Not in the list or in the choices for new links.');
     expect(archiveButton()).not.toBeInTheDocument();
     await waitFor(() => { expect(restoreButton()).toHaveFocus(); });
     // The page is still the whole recipe.
