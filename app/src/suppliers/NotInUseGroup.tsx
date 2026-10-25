@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { useT } from '../i18n/useT';
@@ -29,14 +29,14 @@ export function NotInUseGroup({ count, open, onToggle, children }: {
 }
 
 // The open state of the group. `wanted` is «a row of the group is needed now»: the moment it turns true the group opens (and
-// stays open until the person closes it, even while `wanted` stays true). `show` opens it on demand.
-export function useNotInUseOpen(wanted: boolean): { open: boolean; onToggle: (open: boolean) => void; show: () => void } {
+// stays open until the person closes it, even while `wanted` stays true). A row the focus is handed back to opens it through
+// handBack.ts, whose toggle event lands in `onToggle`.
+export function useNotInUseOpen(wanted: boolean): { open: boolean; onToggle: (open: boolean) => void } {
   const [open, setOpen] = useState(false);
   const [wasWanted, setWasWanted] = useState(false);
   if (wanted !== wasWanted) {
     setWasWanted(wanted);
     if (wanted) setOpen(true);
   }
-  const show = useCallback(() => { setOpen(true); }, []);
-  return { open, onToggle: setOpen, show };
+  return { open, onToggle: setOpen };
 }

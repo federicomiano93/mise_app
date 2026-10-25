@@ -227,7 +227,9 @@ export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, open
             onOpenSupplier={onOpenSupplier}
           />
         ) : (
+          // Keyed by the tab: each list starts with its «Not in use» group folded (the two tabs are the same component).
           <ItemList
+            key={tab}
             tab={tab}
             items={snapshot.ingredients}
             suppliers={snapshot.suppliers}
