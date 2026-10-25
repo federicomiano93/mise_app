@@ -25,8 +25,11 @@ import { FileStep } from './FileStep';
 import { answerConfirm, answerNew, answerQuestion, answerRename } from './ingredientAnswers';
 import type { IngredientDecision } from './ingredientAnswers';
 import { IngredientsStep } from './IngredientsStep';
+import { fileVerdict, importedIds, logEntryOf, recordsOf, unfinishedWithoutRun } from './importLog';
+import type { FileVerdict } from './importLog';
 import { LeaveBlocker } from './LeaveBlocker';
-import { NO_TICKS, chooseFrom, failureKey, readInvoiceFiles } from './importRun';
+import type { LogState } from './LogBlock';
+import { NO_TICKS, browserParseXml, chooseFrom, failureKey, readInvoiceFiles } from './importRun';
 import type { ImportRun, Ticks } from './importRun';
 import {
   NO_ANSWERS, activeIngredients, decisionChangesOf, decisionCount, planIngredientStep, quietRows, runIngredientImport,
@@ -35,6 +38,7 @@ import type { IngredientAnswers, IngredientPlan, RunOutcome, RunProgress, RunWor
 import { reasonKey } from './importWords';
 import { RunningStep } from './RunningStep';
 import { SummaryStep } from './SummaryStep';
+import type { SummaryLog } from './SummaryStep';
 import { SuppliersStep } from './SuppliersStep';
 import { decisionsNow, newProgress, pendingOps, saveSupplierOps } from './supplierStep';
 import type { SupplierDecision } from './supplierStep';
@@ -93,6 +97,13 @@ export default function InvoiceImportScreen() {
   const [fileError, setFileError] = useState<MessageKey | null>(null);
   const [run, setRun] = useState<ImportRun | null>(null);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  // The import log (read when the screen opens, and again when a file is chosen) and what the file just read holds against it.
+  const [log, setLog] = useState<LogState>({ status: 'loading' });
+  const [verdict, setVerdict] = useState<FileVerdict | null>(null);
+  const [logNote, setLogNote] = useState<SummaryLog>({ saved: false, failed: false, recorded: 0, newCount: 0 });
+  const fileNames = useRef<string[]>([]);
+  // A read made after a file was chosen is fresher than the one made on opening: the late one must not overwrite it.
+  const logTouched = useRef(false);
 
   // Step 2
   const [supplierPlan, setSupplierPlan] = useState<SupplierPlanEntry[]>([]);
@@ -131,6 +142,17 @@ export default function InvoiceImportScreen() {
     return () => { mounted.current = false; };
   }, []);
   useEffect(() => { runRef.current = run; }, [run]);
+
+  // The list of past imports, read once on opening (from the server: offline it says so, and the file read refuses anyway).
+  useEffect(() => {
+    source.loadImportLog().then(
+      docs => { if (mounted.current && !logTouched.current) setLog({ status: 'loaded', records: recordsOf(docs) }); },
+      (error: unknown) => {
+        console.error('The import log could not be read:', error);
+        if (mounted.current && !logTouched.current) setLog({ status: 'failed' });
+      },
+    );
+  }, [source]);
 
   // What the section knows of the venue now, read when a selection or a plan is drawn.
   const latest = useRef(snapshot);
@@ -174,7 +196,11 @@ export default function InvoiceImportScreen() {
   useEffect(() => {
     if (reading || !focusAfterRead.current) return;
     focusAfterRead.current = false;
-    (errorLine.current ?? resultLine.current ?? primary.current)?.focus({ preventScroll: true });
+    const line = errorLine.current ?? resultLine.current;
+    (line ?? primary.current)?.focus({ preventScroll: true });
+    // The log above pushes the line down: on a phone it would sit under the bottom bar, focused but unseen. jsdom has no
+    // scrollIntoView.
+    if (typeof line?.scrollIntoView === 'function') line.scrollIntoView({ block: 'center' });
   }, [reading, run, fileError]);
 
   // The save button was off while the write ran: the focus comes back to it.
@@ -241,6 +267,8 @@ export default function InvoiceImportScreen() {
     setRunning(null);
     setOutcome(null);
     setFinished(false);
+    setVerdict(null);
+    setLogNote({ saved: false, failed: false, recorded: 0, newCount: 0 });
     finishedRef.current = false;
     progress.current = newProgress();
   }
@@ -250,6 +278,7 @@ export default function InvoiceImportScreen() {
   async function onFiles(files: File[]) {
     setFileError(null);
     resetImport();
+    fileNames.current = files.map(file => file.name);
     setFileName(files.map(file => file.name).join(', '));
     if (files.length === 0) return;
     setReading(true);
@@ -257,7 +286,23 @@ export default function InvoiceImportScreen() {
     try {
       // Let the browser paint «reading» before the heavy, synchronous part starts.
       await new Promise<void>(resolve => { setTimeout(resolve, 0); });
-      const built = await readInvoiceFiles(files, locationId as string);
+      // ⚠️ THE LOG IS READ FRESH BEFORE THE FILE: another phone may have imported these invoices a minute ago. If it cannot be
+      // read the new invoices cannot be told from the old, so nothing is read (and nothing can be written twice).
+      let records: ReturnType<typeof recordsOf>;
+      try {
+        records = recordsOf(await source.loadImportLog());
+      } catch (error) {
+        console.error('The import log could not be read:', error);
+        if (mounted.current) setFileError(failureKey(error, 'sup.imp.file.logFailed'));
+        return;
+      }
+      logTouched.current = true;
+      if (mounted.current) setLog({ status: 'loaded', records });
+      const built = await readInvoiceFiles(files, locationId as string, browserParseXml, importedIds(records));
+      const verdictNow = fileVerdict(built, records);
+      if (mounted.current) setVerdict(verdictNow);
+      // Every invoice of the file was imported before: nothing to do with it, so no run, no Next, nothing to lose.
+      if (verdictNow.newCount === 0 && verdictNow.oldCount > 0) return;
       let stored: StoredDoc[];
       try {
         stored = await source.loadDecisions();
@@ -431,7 +476,26 @@ export default function InvoiceImportScreen() {
           setLive(progressNow.total > 0 ? t('sup.imp.progress', { done: progressNow.shown, total: progressNow.total }) : '');
         },
       });
+      // ⚠️ THE RECORD IS WRITTEN WHILE THE SCREEN IS STILL BUSY, and a failure never undoes the import: the prices are in, the
+      // create-only price points keep a second load from saving any twice. The summary says it.
+      const entry = logEntryOf({
+        built: run.built, file: run.file, unfinishedKeys: result.unfinishedKeys, fileNames: fileNames.current, now: new Date(),
+      });
+      let note: SummaryLog = { saved: false, failed: false, recorded: 0, newCount: verdict?.newCount ?? 0 };
+      if (entry) {
+        try {
+          const id = await source.saveImportLog(entry);
+          note = { ...note, saved: true, recorded: entry.invoiceIds.length };
+          if (mounted.current) {
+            setLog(current => (current.status === 'loaded' ? { status: 'loaded', records: [...current.records, ...recordsOf([{ ...entry, id }])] } : current));
+          }
+        } catch (error) {
+          console.error('The import could not be added to the log:', error);
+          note = { ...note, failed: true };
+        }
+      }
       if (!mounted.current) return;
+      setLogNote(note);
       finishedRef.current = true;
       setFinished(true);
       setOutcome(result);
@@ -491,11 +555,15 @@ export default function InvoiceImportScreen() {
     try {
       const changes = decisionChangesOf(run, skips, ingAnswers.forgetKeys);
       const n = decisionCount(changes);
+      // «Done» adds the file to the log: the rows wrote nothing, but the invoices were seen through.
+      const entry = logEntryOf({
+        built: run.built, file: run.file, unfinishedKeys: unfinishedWithoutRun(entries), fileNames: fileNames.current, now: new Date(),
+      });
+      if ((n > 0 || entry) && isOffline()) {
+        await saidOffline();
+        return;
+      }
       if (n > 0) {
-        if (isOffline()) {
-          await saidOffline();
-          return;
-        }
         const ok = await confirm({
           title: t('sup.imp.decisions.confirmTitle'),
           message: t('sup.imp.decisions.confirmLine', { n }),
@@ -516,6 +584,18 @@ export default function InvoiceImportScreen() {
             await alert({ message: t(failureKey(error, 'sup.imp.decisions.failed')), okLabel: t('common.ok') });
           }
           return;
+        }
+        busyRef.current = false;
+      }
+      if (entry) {
+        busyRef.current = true;
+        setBusy(true);
+        try {
+          await source.saveImportLog(entry);
+        } catch (error) {
+          // The import itself is finished: the screen still closes, after saying what the next load will look like.
+          console.error('The import could not be added to the log:', error);
+          if (mounted.current) await alert({ message: t('sup.imp.log.notSaved'), okLabel: t('common.ok') });
         }
         busyRef.current = false;
       }
@@ -691,6 +771,8 @@ export default function InvoiceImportScreen() {
             run={run}
             open={openGroups}
             onToggle={(group, open) => { setOpenGroups(current => (current[group] === open ? current : { ...current, [group]: open })); }}
+            log={log}
+            verdict={verdict}
             onFiles={files => { void onFiles(files); }}
             onTick={onTick}
             onSupplierTick={onSupplierTick}
@@ -741,7 +823,7 @@ export default function InvoiceImportScreen() {
           />
         ) : null}
         {step === 'summary' && outcome ? (
-          <SummaryStep headingRef={heading} summary={outcome.summary} decisionsWritten={outcome.decisionsWritten} decisionsFailed={outcome.decisionsFailed} />
+          <SummaryStep headingRef={heading} summary={outcome.summary} decisionsWritten={outcome.decisionsWritten} decisionsFailed={outcome.decisionsFailed} log={logNote} />
         ) : null}
         </div>
         {/* Present, empty, before it speaks: a live region inserted already filled is announced unreliably. */}

@@ -246,6 +246,13 @@
   color: var(--ink-2);
 }
 
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
 .tag {
   display: inline-flex;
   align-items: center;

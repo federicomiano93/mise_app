@@ -19,6 +19,7 @@ vi.mock('./importSource', () => ({
       freshIngredientsForSupplier: answer('freshIngredientsForSupplier'), invoicePoints: answer('invoicePoints'),
       storedPriceChanges: answer('storedPriceChanges'), freshPrice: answer('freshPrice'), runImportBatches: answer('runImportBatches'),
       loadDecisions: answer('loadDecisions'), writeDecisions: answer('writeDecisions'),
+      loadImportLog: answer('loadImportLog'), saveImportLog: answer('saveImportLog'),
     };
     return created.source;
   }),
@@ -46,6 +47,7 @@ describe('the lazy import source', () => {
       ['createSupplier', [{ name: 'A' }]], ['linkSupplierVat', ['s1', 'IT1']], ['freshSuppliers', []],
       ['freshIngredientsForSupplier', ['s1']], ['invoicePoints', ['i1']], ['storedPriceChanges', ['i1']], ['freshPrice', ['i1']],
       ['runImportBatches', [[]]], ['loadDecisions', []], ['writeDecisions', [{ set: [], remove: [] }]],
+      ['loadImportLog', []], ['saveImportLog', [{ fileName: 'f.zip' }]],
     ];
     expect(expected.map(([name]) => name).sort()).toEqual(Object.keys(source).sort());
     for (const [name, args] of expected) {

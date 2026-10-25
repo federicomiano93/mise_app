@@ -364,6 +364,12 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   folded `NotInUseGroup` (`<details>`); `suppliers/handBack.ts` opens a closed group before it focuses one of its rows and carries the
   focus to a row redrawn in the same commit. The recipe link and Food cost's chooser offer them last (`inactiveLast`), never hidden.
   Details and the difference from the current app (which hides them): `docs/parity/suppliers.md`, «Step 3e-5b as built».
+  The import log (Mise 2 only): `invoiceImport/importLog.ts` is its pure half (records, the summary and the missing months, the
+  verdict «A new, B already imported», and the record a run may write — an invoice only when every row holding a price of it was seen
+  through); `importSource.ts` reads `invoice-imports` from the server and writes one record per run, create-only. The reader sets the
+  already-imported invoices aside before anything is built (`readInvoiceFiles(…, alreadyImported)` → the Mise-2-only option of
+  `shared/invoice-zip/build-import`). The «From invoice» tag of the lists is `suppliers/invoiceTag.ts`, derived from the keys only the
+  import writes (no field, no read). Details: `docs/parity/suppliers.md`, «Import log … as built».
   ⚠️ **The one exception to «a feature never imports another feature's folder»** (T15, «+ Add "…" as an ingredient»): `recipes/` may
   import `../suppliers/CreateIngredientOverlay` and NOTHING else from `suppliers/` (`RecipesSection.createIngredient.spec.tsx`
   fails on any other). The overlay draws `records/IngredientCard` hosted (`host`: no router blocker of its own, its Back handed

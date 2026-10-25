@@ -732,6 +732,47 @@ It closes Finding S-D and replaces T17 for Mise 2.
   group open after Save with the focus on the row, folded on a fresh tab, search, supplier screen, the recipe suggestions offering it
   last), EN employee at 360; axe clean, no sideways scroll, no console errors.
 
+## Import log, «Fatture caricate / Mancano» and the «Da fattura» tag as built
+
+His decision of 21 Oct 2026 («ok a tutto», memory `piano-mise-2`, «3e Invoice import»). Mise 2 only: every item here is a
+DIFFERENCE from the current app, which keeps no record of the files it imported and never says a file was loaded before (a
+re-import writes nothing thanks to the create-only `inv-<SDI>-<line>` points, I19, but says nothing either).
+
+- **The log** is a new collection, `locations/{lid}/invoice-imports/{id}`: one record per import run, written ONCE (create only,
+  never edited; `firestore.rules`), owner/manager with Food cost like `invoice-decisions`: `fileName` (the picked files' names, a
+  personal tax code blanked, ≤500), `importedAt`, `firstDate`/`lastDate` (the invoices' own `Data`, never the upload day),
+  `months[]`, `invoiceIds[]`. **No «who imported»** (P13). Rules tests in `tests/rules/firestore-rules-check.mjs`. ⚠️ The rules
+  must be DEPLOYED before Mise 2 goes live, or every record is refused (the import itself still works; the summary says the file
+  could not be added to the list).
+- **An invoice is known by its own id, never by the file name** (`docId` = the SDI id; a renamed or merged zip is the same
+  invoices). The reader sets aside every invoice already in the log right after reading it, BEFORE any product, price or supplier
+  is made of it — a Mise-2-only option `alreadyImported` of `shared/src/invoice-zip/build-import.ts` (without it the result is the
+  original's, key for key) — so a re-loaded file offers only its new invoices and the run never sees the old ones. The create-only
+  price points stay the second guard.
+- **What a run records** (`app/src/suppliers/invoiceImport/importLog.ts` `logEntryOf`): the file's NEW invoices less every invoice
+  an ingredient row holds a price of when that row was not seen through — failed, never reached because the run stopped, price
+  changes not recorded, a chosen name not saved (`ingredientsRun.ts` `unfinishedKeys`). A record says «done», never «tried»: loading
+  the same file again offers the unfinished invoices again. «Fine» with nothing to write records the file too (a row the plan could
+  not handle stays out). Rows the person skipped count as handled: the import «skips already-imported invoices entirely», his words.
+- **The screen** (step 1): at the top the log — «Fatture caricate: dal X al Y», «Mancano: da <mese> a <mese>» for the months
+  strictly between the first and last imported invoice that no imported invoice falls in (a month before the first or after the
+  last is not missing: the log cannot know where the books start), and every past import newest first, «file, data — N fatture dal X
+  al Y». ⚠️ The list starts empty at the switch: imports made by the current app are not in it (said on screen). After a file is
+  read, before anything is written: «Questo file: N fatture dal X al Y — A nuove, B già importate»; all old → «Queste fatture sono
+  già state importate il <data>: niente di nuovo.» and no Next. The log is read from the server when the screen opens and AGAIN when
+  a file is chosen; a failed read refuses the file (the new invoices could not be told from the old).
+- **The «Da fattura» tag** (Ingredients, Packaging, a supplier's screen, and supplier rows): derived, `suppliers/invoiceTag.ts` —
+  an item with a `supplierCode`, a `supplierCodes` entry or an `invoiceName` (only the import writes them; neither app's card can),
+  a supplier with at least one such item. No new field, no back-fill, and **no extra read** (the lists already hold those keys; the
+  estimate told to him was one read per opening). A hand-made item later matched by an import learns a code or the invoice name and
+  gets the tag. An item imported long ago that never got a code or an invoice name carries no tag until an import touches it.
+- Driven: `algprobe/mise-drive/drive-mise2-suppliers.mjs <url> <port> i` — IT owner at 1024/360/296 with FAKE zips only (empty
+  log said; the verdict before any write, reading writes nothing; one record read back — file, SDI ids, dates, month, stamp, no
+  person; the same file again «già importate … niente di nuovo», no Next, nothing written; a renamed mix «1 nuova, 1 già importata»,
+  only the new invoice recorded, three price points not four; «Mancano: da luglio 2026 a agosto 2026», newest import first; the tag
+  on the imported item and its supplier only; axe clean, every control ≥44px, no sideways scroll, no console errors) and in English
+  (the venue's language switched for the run: range, «Missing: April 2026», the past import, all old, the verdict).
+
 ## Findings — things found while reading, not decided
 
 ### Findings — The page, the lists, suppliers
