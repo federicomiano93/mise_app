@@ -23,6 +23,7 @@ export const SECTION_SCREENS: Readonly<Partial<Record<SectionId, LazyExoticCompo
   foodcost: lazyScreen(() => import('../foodcost/FoodcostSection')),
   calculator: lazyScreen(() => import('../calculator/CalculatorSection')),
   recipes: lazyScreen(() => import('../recipes/RecipesSection')),
+  suppliers: lazyScreen(() => import('../suppliers/SuppliersSection')),
 };
 
 export function hasScreen(sectionId: SectionId): boolean {

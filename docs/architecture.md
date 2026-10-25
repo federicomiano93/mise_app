@@ -54,7 +54,7 @@ both, and the switch keeps the address) and it has consequences that every chang
 |---|---|---|
 | React | 19.3.0 | components end the stale-screen bugs of the current app |
 | TypeScript | 7.0.2 (`tsc` native) | a missing translation or a wrong field is a build error |
-| Vite | 8.3.1 | build target `chrome101, edge101, firefox104, safari16`: the lab tablet (SM-T550, Chrome 101 — its ceiling on Google Play) and iPhone Safari 16.4 |
+| Vite | 8.3.4 | build target `chrome101, edge101, firefox104, safari16`: the lab tablet (SM-T550, Chrome 101 — its ceiling on Google Play) and iPhone Safari 16.4 |
 | React Aria Components | 1.21.1 | accessible controls (focus, keyboard, screen readers) without writing them |
 | react-router | 8.4.0 | hash routing (`#/orders`), because GitHub Pages cannot rewrite deep links |
 | lucide-react | 1.48.0 | the icon set of the design |
@@ -306,6 +306,29 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   the jsPDF and write-excel-file chunks BY NAME, never by a glob that would make every phone download those three. ⚠️ Excel is always a download: Chrome's Web Share has no Office types, so
   Share is offered for the PDF only, and only when `navigator.canShare` accepts the real file. A failure is
   reported with fixed words only (`Recipe export failed:`, the file kind, `library` or `build`), never the recipe.
+- `suppliers/` — Ingredients & suppliers (section id `suppliers`, step 3e, built in slices; its parity list is
+  `docs/parity/suppliers.md`). Slice A looks (the three lists and a supplier's own screen), slice B writes suppliers and adds
+  Settings; 3e-2 onwards is the ingredient card, the pack photo, the invoice import. The data layer: `suppliersSource.ts` (the
+  Firestore half: suppliers, ingredients, prices, `config/orders`, and the one Cloud Function `setIngredientPanels`), `suppliersStore.ts`
+  (plain TypeScript, local-first writes, `SuppliersMessage` kinds that `suppliersMessages.ts` words), `SuppliersContext.tsx`
+  (started on mount, stopped on unmount, P14). Addresses, in `suppliersPath.ts`: `/suppliers` (Ingredients tab), `/suppliers/suppliers`,
+  `/suppliers/packaging`, `/suppliers/supplier/<id>`, `/suppliers/supplier/<id>/edit`, `/suppliers/supplier/new` (`new` is never an id) and
+  `/suppliers/settings`; the usage record names `suppliers`, `suppliers-supplier`, `suppliers-supplier-edit` and `suppliers-settings`.
+  The frame (`SuppliersSection.tsx`) is the recipes' shape: the list on the left, one level down on the right from 1000px, the
+  section owns the scroll, `handBack.ts` gives the focus back to the button or row that opened a screen (`NEW_OPENER`,
+  `SETTINGS_OPENER`, a supplier's row, and `wantEdit`/`takeEdit` for «Edit» after the card). ⚠️ SETTINGS ARE FULL WIDTH AT EVERY
+  WIDTH: the layout is marked `data-view="wide"` and the stylesheet hides the list; an employee who types the address is replaced by the
+  list. `SupplierCardScreen` waits for the server (or `COPY_WAIT_MS`, `copyWait.ts`) and keys `SupplierCard` on the id, which copies the
+  supplier ONCE (`supplierModel.ts`: the working copy and the exact payload of parity S82 — `shortName` as `''` when blank, weekdays as
+  English keys in week order, `active` kept, `vatNumber` through `normalizeVat`), checks the one rule (a name), asks before Save, saves
+  local-first through `store.saveSupplier` and leaves one level up without asking: a new supplier to the list, an existing one to the
+  supplier's screen. One `useBlocker`, `markBusy` while dirty. `SupplierScreen` has «Edit», «Switch off» / «Switch on» (everybody; off
+  asks) and, for `canManage`, the Delete icon through `useDeleteSupplier`, which asks (with the products sentence of decision F2),
+  marks the id in `supplierDeletions.ts` so the screen's own «no longer exists» stays quiet, and says «Supplier deleted.» once.
+  `SuppliersSettings` has the two panel switches (allergens asks before OFF; the Cloud Function is called through the store, then
+  `sessionStore.refreshLocation()`, and the new value is held until the session shows it) and the categories card (every bin disabled
+  until `configLoaded`). `copyWait.ts`, `handBack.ts`, `suppliersNav.ts` and `supplierDeletions.ts` are copies of the recipes'/Food cost's
+  files: a feature never imports from another feature's folder.
 - `settings/` — the Settings page (today: the Account card).
 - `styles/` — `tokens.css` (every colour, size, radius, shadow) and `base.css`.
 - `testing/` — `renderApp`, the fake session store and other spec helpers.
@@ -346,7 +369,7 @@ the app writes money with `formatMoney(value, money)` of `price-model`), currenc
 catalogue-model (partial: everything but `unitText`, `formatAmount` and `exportModelOf`, which use the dictionary or the screen's number; `batchWarning` takes the translator, and the Calculator import — `toCalculatorRecipe`, `nonWeighableLabels`, `mergeImportedRecipe`, `importFailureKey` — came with 3d-7), recipe-link (partial: `mayOpenFoodCost`, `mayOpenOrders` and `recipeIdFromHash`; it leaves out the current app's page addresses — `recipeHash`, `foodCostHref`, `recipeHref`, `ordersHref`, `catalogueOriginFromHash` — and adds, new in Mise 2 with no original, the route builders `foodCostForRecipePath` and `recipeAddress`, the reader `recipeIdParam` and the navigation marker `FROM_RECIPE_LINK`), recipe-cost-model (partial: `costRecipe` and its constants; it leaves
 out `costReasonLabel` and `partialCostText`, which use the dictionary — the app resolves `COST_REASON_TEXT`
 through its own typed i18n), foodcost-model (partial: everything but `blockerText`, which uses the dictionary —
-the app resolves `BLOCKER_TEXT` likewise). A partial port keeps, in its header, the list of what it leaves out.
+the app resolves `BLOCKER_TEXT` likewise), and, for the Suppliers page (step 3e-1), supplier-label, vat-number, favourite-suppliers (its two heading keys, `orders.favourites.title` / `.others`, are data the app maps to its own words), record-choices and category-batches (all full, paired), and ingredient-search (partial: only `normalizeText` and `filterSuppliers`; it leaves out `letterOf`, `matchesQuery`, `flatRows` and `orderSummary`, the Orders list's row builders, which use order-text; not paired, its spec compares names and arity with the `js/` file). A partial port keeps, in its header, the list of what it leaves out.
 
 `fixtures/label-corpus.ts` is the fixture corpus of the whole label chain (33 recipes, four venues, four values of the label's switch), run through the `js/` originals and the ports by `label-corpus.spec.ts` and compared with the committed `fixtures/label-golden.json`, written once from `js/` by `fixtures/make-label-golden.mjs` (plain node) so the ports stay pinned after `js/` is deleted; a later step (labels, ZPL) adds a field to the chain and regenerates the file. `label-separation.spec.ts` reads the source of `market`, `recipe-label-model` and `recipe-allergen-model` and fails if one imports the dictionary or `app/`, or names the interface language.
 
