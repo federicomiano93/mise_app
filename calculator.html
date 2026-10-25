@@ -7,29 +7,8 @@
   stored in Firestore (config/calculator) — they are NOT hard-coded here. See
   js/calculator-config.js for the default structure and weights.
 
-  ── FOCACCIA ──────────────────────────────────────────────
-  Default unit weights: Pizzas 201g · Focaccias 181g · Ciabatta 151g ·
-    Tray focaccia 1800g · Panini 131g · Kg 1000g (extra dough direct in kg)
-  Scala base: 995.6g raw · Yeast default: 0.65%
-
-  ── BRIOCHE ───────────────────────────────────────────────
-  Default unit weights: Burger buns 81g · Sub rolls 121g · Buns 71g ·
-    Rolls 71g · Kg 1000g (extra dough direct in kg)
-  Scala base: 4887.4g raw · Yeast default: 4%
-
-  ── SOURDOUGH ─────────────────────────────────────────────
-  Input: numero pagnotte + peso per pagnotta (default 905g)
-  Scala base: 10968g raw
-  Starter default: 18%
-  Ingredienti base (colonna gialla Excel):
-    Flour uniqua blu  2560g
-    Flour T65         2560g
-    Flour wholemeal    570g
-    1° Water          3900g
-    Sourdough starter 1024g
-    Malt                30g
-    Salt               124g
-    2° Water           200g
+  Recipes and their formulas live in each venue's own config, never in this file:
+  this comment is served to anyone who opens the page (audit, 25 Oct 2026).
 
   ── NOTES ─────────────────────────────────────────────────
   Service worker: cache-first + background revalidate; updates surface as a

@@ -86,7 +86,7 @@ test('each tab row carries its client, weight, kind, crate and a per-pair qtyId'
   const ciabatta = getTabProducts(BAKERY_CONFIG, 'focaccia').find(p => p.id === 'f-ciabatta');
   assert.equal(ciabatta.clientName, 'Client 1');
   assert.equal(ciabatta.clientId, 'c-client-1');
-  assert.equal(ciabatta.weight, 151);
+  assert.equal(ciabatta.weight, 160);
   assert.equal(ciabatta.kind, 'dropdown');
   assert.equal(ciabatta.crate.show, true);
   assert.equal(ciabatta.qtyId, pairId('c-client-1', 'f-ciabatta'));
@@ -100,7 +100,7 @@ test('focaccia target matches the legacy hardcoded formula (products only)', () 
     [pairId('c-client-2', 'f-trayfocaccia')]: 3,
     [pairId('c-client-3', 'f-panini')]: 24,
   };
-  const legacy = 10 * 201 + 5 * 181 + 40 * 151 + 3 * 1800 + 24 * 131;
+  const legacy = 10 * 210 + 5 * 175 + 40 * 160 + 3 * 1750 + 24 * 115;
   assert.equal(computeTarget(BAKERY_CONFIG, 'focaccia', qtyFrom(q)), legacy);
 });
 
@@ -111,13 +111,13 @@ test('brioche target matches the legacy hardcoded formula (products only)', () =
     [pairId('c-client-2', 'b-bun')]: 20,
     [pairId('c-client-2', 'b-rolls')]: 15,
   };
-  const legacy = 50 * 81 + 30 * 121 + 20 * 71 + 15 * 71;
+  const legacy = 50 * 85 + 30 * 125 + 20 * 75 + 15 * 65;
   assert.equal(computeTarget(BAKERY_CONFIG, 'brioche', qtyFrom(q)), legacy);
 });
 
-test('sourdough target matches loaves × default loaf weight (905 g)', () => {
+test('sourdough target matches loaves × default loaf weight (900 g)', () => {
   const q = { [pairId('c-client-2', 's-loaf')]: 12 };
-  assert.equal(computeTarget(BAKERY_CONFIG, 'sourdough', qtyFrom(q)), 12 * 905);
+  assert.equal(computeTarget(BAKERY_CONFIG, 'sourdough', qtyFrom(q)), 12 * 900);
 });
 
 test('empty quantities give zero dough', () => {
@@ -284,8 +284,8 @@ test('a shared id resolves inside the entry OWN client, not the other copy', () 
   const config = {
     recipes: BAKERY_CONFIG.recipes,
     clients: [
-      { id: 'cA', name: 'A', products: [{ id: 'p1', name: 'Loaves of bread', recipeId: 'sourdough', weight: 905 }] },
-      { id: 'cB', name: 'B', products: [{ id: 'p1', name: 'Sourdough loaf', recipeId: 'sourdough', weight: 905 }] },
+      { id: 'cA', name: 'A', products: [{ id: 'p1', name: 'Loaves of bread', recipeId: 'sourdough', weight: 900 }] },
+      { id: 'cB', name: 'B', products: [{ id: 'p1', name: 'Sourdough loaf', recipeId: 'sourdough', weight: 900 }] },
     ],
     whatsappLists: [{ id: 'wl1', title: 'Order', clients: [{ clientId: 'cB', products: ['p1'] }] }],
   };
@@ -435,9 +435,9 @@ test('migration: a catalogue document becomes products owned by their client', (
   const raw = {
     recipes: BAKERY_CONFIG.recipes,
     products: [
-      { id: 'p1', name: 'Ciabatta', recipeId: 'focaccia',  weight: 151 },
-      { id: 'p2', name: 'Panini',   recipeId: 'focaccia',  weight: 131 },
-      { id: 'p3', name: 'Loaf',     recipeId: 'sourdough', weight: 905 },
+      { id: 'p1', name: 'Ciabatta', recipeId: 'focaccia',  weight: 160 },
+      { id: 'p2', name: 'Panini',   recipeId: 'focaccia',  weight: 115 },
+      { id: 'p3', name: 'Loaf',     recipeId: 'sourdough', weight: 900 },
     ],
     clients: [
       { id: 'c1', name: 'A', items: [
@@ -454,7 +454,7 @@ test('migration: a catalogue document becomes products owned by their client', (
   // Name, recipe and weight came from the catalogue; kind and crate from the item.
   const ciabatta = getClientById(norm, 'c1').products[0];
   assert.equal(ciabatta.name, 'Ciabatta');
-  assert.equal(ciabatta.weight, 151);
+  assert.equal(ciabatta.weight, 160);
   assert.equal(ciabatta.recipeId, 'focaccia');
   assert.equal(ciabatta.kind, 'dropdown');       // legacy 'ciabatta' migrated
   assert.equal(ciabatta.crate.show, true);
@@ -467,7 +467,7 @@ test('migration: a product ordered by TWO clients keeps ONE id in both copies', 
   // client would quietly cut all four.
   const raw = {
     recipes: BAKERY_CONFIG.recipes,
-    products: [{ id: 'shared', name: 'Loaves of bread', recipeId: 'sourdough', weight: 905 }],
+    products: [{ id: 'shared', name: 'Loaves of bread', recipeId: 'sourdough', weight: 900 }],
     clients: [
       { id: 'cA', name: 'CLIENT A', items: [{ productId: 'shared', kind: 'number' }] },
       { id: 'cB', name: 'CLIENT B', items: [{ productId: 'shared', kind: 'number' }] },
@@ -513,7 +513,7 @@ test('migration: an item pointing at a product that no longer exists is dropped'
 test('migration: re-normalising the migrated config changes nothing', () => {
   const raw = {
     recipes: BAKERY_CONFIG.recipes,
-    products: [{ id: 'p1', name: 'Pizzas', recipeId: 'focaccia', weight: 201 }],
+    products: [{ id: 'p1', name: 'Pizzas', recipeId: 'focaccia', weight: 210 }],
     clients: [{ id: 'c1', name: 'A', items: [{ productId: 'p1', kind: 'number' }] }],
   };
   const once = normalizeConfig(raw);
@@ -526,21 +526,21 @@ test('rollback safety: the saved shape is the one older code migrates FROM', () 
   // exactly the pre-catalogue shape, so a phone still on an older version reads it
   // correctly instead of finding an empty address book.
   const saved = normalizeConfig({
-    products: [{ id: 'p1', name: 'Pizzas', recipeId: 'focaccia', weight: 201 }],
+    products: [{ id: 'p1', name: 'Pizzas', recipeId: 'focaccia', weight: 210 }],
     clients: [{ id: 'c1', name: 'A', items: [{ productId: 'p1', kind: 'number' }] }],
   });
   assert.equal('products' in saved, false);
   assert.equal(saved.clients[0].products[0].name, 'Pizzas');
-  assert.equal(saved.clients[0].products[0].weight, 201);
+  assert.equal(saved.clients[0].products[0].weight, 210);
 });
 
 test('migration math equals the legacy formula after migrating', () => {
   const norm = normalizeConfig({
     recipes: BAKERY_CONFIG.recipes,
-    products: [{ id: 'f-pizze', name: 'Pizzas', recipeId: 'focaccia', weight: 201 }],
+    products: [{ id: 'f-pizze', name: 'Pizzas', recipeId: 'focaccia', weight: 210 }],
     clients: [{ id: 'c1', name: 'A', items: [{ productId: 'f-pizze', kind: 'number' }] }],
   });
-  assert.equal(computeTarget(norm, 'focaccia', qtyFrom({ [pairId('c1', 'f-pizze')]: 7 })), 7 * 201);
+  assert.equal(computeTarget(norm, 'focaccia', qtyFrom({ [pairId('c1', 'f-pizze')]: 7 })), 7 * 210);
 });
 
 // ── Migration: oldest per-tab + market shape ───────────────────────────
@@ -549,7 +549,7 @@ test('migration: the oldest per-tab + market shape becomes client-owned products
   const legacy = {
     recipes: BAKERY_CONFIG.recipes,
     focaccia: { clients: [
-      { id: 'f-c1', name: 'Client 1', products: [{ id: 'f-cia', name: 'Ciabatta', weight: 151, kind: 'ciabatta' }] },
+      { id: 'f-c1', name: 'Client 1', products: [{ id: 'f-cia', name: 'Ciabatta', weight: 160, kind: 'ciabatta' }] },
     ] },
     brioche: { clients: [
       { id: 'b-c1', name: 'Client 1', products: [{ id: 'b-bb', name: 'Burger buns', weight: 81, kind: 'number' }] },
@@ -719,8 +719,8 @@ test('a missing name still falls back, and nothing throws on junk', () => {
 const paused = (over = {}) => ({
   recipes: BAKERY_CONFIG.recipes,
     clients: [{ id: 'c1', name: 'A', products: [
-    { id: 'p1', name: 'Pizzas',    recipeId: 'focaccia', weight: 201, kind: 'number', ...over },
-    { id: 'p2', name: 'Focaccias', recipeId: 'focaccia', weight: 181, kind: 'number' },
+    { id: 'p1', name: 'Pizzas',    recipeId: 'focaccia', weight: 210, kind: 'number', ...over },
+    { id: 'p2', name: 'Focaccias', recipeId: 'focaccia', weight: 175, kind: 'number' },
   ] }],
 });
 
@@ -728,7 +728,7 @@ test('a paused product has no row and adds no dough', () => {
   const config = normalizeConfig(paused({ active: false }));
   assert.deepEqual(getTabProducts(config, 'focaccia').map(p => p.id), ['p2']);
   const q = { [pairId('c1', 'p1')]: 100, [pairId('c1', 'p2')]: 2 };
-  assert.equal(computeTarget(config, 'focaccia', qtyFrom(q)), 2 * 181, 'the paused 100 is ignored');
+  assert.equal(computeTarget(config, 'focaccia', qtyFrom(q)), 2 * 175, 'the paused 100 is ignored');
 });
 
 test('a product with NO active field is active — every document in production lacks it', () => {
@@ -748,7 +748,7 @@ test('a paused product keeps its settings, ready to come back untouched', () => 
   const config = normalizeConfig(paused({ active: false, kind: 'dropdown', crate: { show: true, perBox: 24 } }));
   const p = getProductById(config, 'p1');
   assert.equal(p.name, 'Pizzas');
-  assert.equal(p.weight, 201);
+  assert.equal(p.weight, 210);
   assert.equal(p.kind, 'dropdown');
   assert.deepEqual(p.crate, { show: true, perBox: 24 });
 });
@@ -760,7 +760,7 @@ test('the divisor ignores a paused product but KEEPS its tick for when it return
   assert.deepEqual(getDivisorIncluded(config, 'focaccia'), ['p1', 'p2'], 'the tick survives');
   assert.deepEqual(getDivisorProducts(config, 'focaccia').map(p => p.id), ['p2'], 'but it does not split');
   const q = { [pairId('c1', 'p1')]: 10, [pairId('c1', 'p2')]: 3 };
-  assert.equal(divisorTotal(config, 'focaccia', qtyFrom(q)), 3 * 181);
+  assert.equal(divisorTotal(config, 'focaccia', qtyFrom(q)), 3 * 175);
 });
 
 test('a paused product still blocks deleting the recipe it belongs to', () => {
