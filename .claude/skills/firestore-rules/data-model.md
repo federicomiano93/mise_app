@@ -83,6 +83,14 @@ both halves.
 named (`gluten-wheat`, not `gluten`). `mayContain` is never merged into `allergens`. In nutrition,
 0 is a real value and `null` is not.
 
+**Image labels (Mise 2, 25 Oct 2026, rules not yet deployed).** Recipes may carry `labelName` (string ≤200; empty =
+the recipe name in capitals) and `labelIngredientsText` (string ≤2000, the ingredients typed as printed, allergens in
+capitals); employees may edit both, like the rest of a recipe. `config/labels` gains `template` (`'standard'` |
+`'logo'`) and `rotate180` (bool). The logo is `label-assets/logo` — its OWN collection, because `/config/{doc}` would
+match any new name there — `{ bakery, png (a `data:image/png;base64,…` address, ≤400 000 chars), width (== 1320),
+height (int 1–1920), updatedAt? }`: written and deleted by `canManage` catalogue, read by members with the catalogue
+on; no other id. The current app saves recipes and `config/labels` with merge, so it keeps these keys.
+
 ⚠️ **The language rule, for every screen:** a word that names a FOOD follows the venue's COUNTRY
 (`allergenName` / `allergenGroupName` / `nutrientName`, passed the output language); a word that
 tells somebody what to tap follows `t()`. A file that does the first is a label file and may never

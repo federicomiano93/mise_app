@@ -1483,6 +1483,9 @@ service cloud.firestore {
           // kilobytes; a whole photograph pasted in by mistake must be refused here,
           // not discovered as a label screen that takes a minute to open.
           && request.resource.data.png.size() <= 400000
+          // The picture itself, as a PNG data address: never a link to somewhere else
+          // that every staff phone would then fetch.
+          && request.resource.data.png.matches('data:image/png;base64,[A-Za-z0-9+/]+=*')
           // The size the label draws it at: 1320 pixels wide on the 4× canvas (330 dots,
           // 41 mm), and never taller than the label itself.
           && request.resource.data.width == 1320

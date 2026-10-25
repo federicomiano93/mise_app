@@ -1627,8 +1627,20 @@ async function configAndLogs() {
     readAs(SAM, `${A}/label-assets/logo`));
   await expectDenied('logo: any other document in that collection',
     () => wholeWrite(`${A}/label-assets/banner`, logo()));
+  await expectDenied('logo: another venue\'s member reads nothing here',
+    readAs(BOB, `${A}/label-assets/logo`));
+  await seedDoc('locations/trattoria-x/label-assets/logo', logo({ bakery: 'trattoria-x' }));
+  await expectDenied('logo: a venue with the catalogue off shows it to nobody',
+    readAs(BOB, 'locations/trattoria-x/label-assets/logo'));
+  const big = 'data:image/png;base64,' + 'A'.repeat(400000 - 'data:image/png;base64,'.length);
+  await expectAllowed('logo: a picture exactly at the ceiling',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ png: big })));
   await expectDenied('logo: a picture bigger than the ceiling',
-    () => wholeWrite(`${A}/label-assets/logo`, logo({ png: 'x'.repeat(400001) })));
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ png: big + 'A' })));
+  await expectDenied('logo: an address elsewhere instead of the picture itself',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ png: 'https://example.test/logo.png' })));
+  await expectDenied('logo: a picture that is not a PNG',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ png: 'data:image/svg+xml;base64,PHN2Zz4=' })));
   await expectDenied('logo: drawn at a width the label does not use',
     () => wholeWrite(`${A}/label-assets/logo`, logo({ width: 2400 })));
   await expectDenied('logo: taller than the label',
