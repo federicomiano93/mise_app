@@ -927,7 +927,9 @@ The deadline editor, the hub's Client ordering row and the ordering link on a cl
   and gets the «cannot order» sentence. A grant with no secret cannot be shown: no Copy or Send, only Replace.
 - **Who sees what** (changed in BOTH apps by the audit of 25 Oct 2026 — the link's secret is the ordering account's password):
   the whole group, Copy link and Send included, only where `canManage`; the links are not even read for anybody else, who gets
-  one sentence (`calc.orderingLinkManagersOnly`), and the rules refuse them the read. Send opens the shared «which road» sheet (WhatsApp or the mail app, no recipient) with the client's name as
+  one sentence (`calc.orderingLinkManagersOnly`), and the rules refuse them the read. Deliberate difference: with unsaved
+  edits the current app tells an employee «Save your changes first» (its dirty check runs first), Mise 2 the managers-only
+  sentence (its role check runs first) — neither shows a link. Send opens the shared «which road» sheet (WhatsApp or the mail app, no recipient) with the client's name as
   the subject and the VENUE's name in the text («us» when the venue has none).
 - **The link points at the site root's `order.html`** even when the app is served from `/mise2/` (`orderingLinkFor` steps out of
   the folder), because the client's page stays where it is until its own port (step 3h).

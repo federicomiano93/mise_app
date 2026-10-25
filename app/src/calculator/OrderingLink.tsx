@@ -120,7 +120,6 @@ export function OrderingLink({ client, dirty }: { client: Client; dirty: boolean
     if (dirty) return <p className={styles.hint}>{t('calc.saveYourChangesFirst')}</p>;
     if (accountsState === 'failed') return <p className={styles.hint}>{t('calc.orderingLink.failed')}</p>;
     if (accountsState !== 'ready') return <p className={styles.hint}>{t('calc.loading')}</p>;
-    const mayMake = canOrder;
     return (
       <>
         <p className={styles.hint}>
@@ -146,7 +145,7 @@ export function OrderingLink({ client, dirty }: { client: Client; dirty: boolean
               </Button>
             </>
           ) : null}
-          {mayMake ? (
+          {canOrder ? (
             <Button isDisabled={working} onPress={() => { void create(); }}>
               {account ? t('calc.replaceWithANew') : t('calc.createOrderingLink')}
             </Button>
