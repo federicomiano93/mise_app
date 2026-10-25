@@ -1021,6 +1021,8 @@ export const en = {
   'cat.recipeWord': 'recipe',
   'cat.couldNotSaveRecipe': 'Couldn’t save “{name}” — check your connection.',
   'cat.couldnTDeleteThe': 'Couldn’t delete the recipe — check your connection.',
+  'cat.shelf.couldNotArchive': 'Couldn’t archive “{name}” — check your connection.',
+  'cat.shelf.couldNotRestore': 'Couldn’t restore “{name}” — check your connection.',
   'cat.liveSyncInterruptedRecipes': 'Live sync interrupted — recipes may be out of date.',
   // Writing recipes, step 3d-6 (the current app's cat.* wording, key for key).
   'cat.newRecipe': 'New recipe',

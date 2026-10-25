@@ -32,6 +32,7 @@ import {
 } from '@mise/shared/catalogue-model';
 import type { CalculatorImportKind, CatalogueRecipe, ImportAction } from '@mise/shared/catalogue-model';
 import { normalizeEndNote, normalizeSteps, ridOf, withRowIds } from '@mise/shared/guided-model';
+import { isArchivedRecipe, normalizeRecipeCategories } from '@mise/shared/recipe-shelf';
 import type { KeyValueStorage } from '../session/backend';
 import { LABEL_TEXT_FIELDS, labelTextPatchOf, normalizeStoredRecipe, normalizeStoredRecipes } from './labelTexts';
 import { newRecipeId, withoutPrice } from './recipesSource';
@@ -85,6 +86,22 @@ export interface RecipeToSave {
   // they were when opened, exactly like the name and the ingredients.
   readonly labelName?: unknown;
   readonly labelIngredientsText?: unknown;
+  // The category word chosen (the shelf, @mise/shared/recipe-shelf): a word, '' for «no category» (a removal), or undefined
+  // when the save does not touch it — then it is not sent and stays as stored. ⚠️ THE EDITOR SENDS IT ONLY WHEN THE PERSON
+  // MOVED THE CHOICE (or for a new recipe): a recipe filed under a word taken off the list shows «no category» in the editor,
+  // and an untouched save must not remove the word — it comes back if the word is put back on the list. The archived flag
+  // is never part of a save: archiving is its own action (setArchived), for whoever runs the place.
+  readonly category?: unknown;
+}
+
+// The rules' bound on a recipe's category word (firestore.rules, `recipes`).
+const CATEGORY_FIELD_MAX = 100;
+
+// What a save sends for the category, from what the editor handed over (see RecipeToSave.category).
+function categoryPatchOf(recipe: RecipeToSave): { category?: string | null } {
+  if (typeof recipe.category !== 'string') return {};
+  const word = recipe.category.trim().slice(0, CATEGORY_FIELD_MAX);
+  return { category: word === '' ? null : word };
 }
 
 // What the steps editor saves (step 3d-8): the procedure and its closing message, as typed (the store normalises
@@ -112,7 +129,9 @@ export type RecipesMessage =
   // A save the database refused: the change has been taken back. `name` is what was typed (may be empty).
   | { readonly kind: 'recipe-not-saved'; readonly name: string }
   // A delete the database refused: the recipe is back.
-  | { readonly kind: 'recipe-not-deleted' };
+  | { readonly kind: 'recipe-not-deleted' }
+  // An archive (`archived` true) or a restore (false) the database refused: the recipe is back where it was.
+  | { readonly kind: 'recipe-not-archived'; readonly name: string; readonly archived: boolean };
 
 export interface ScaledEntry {
   readonly target: number;
@@ -147,6 +166,9 @@ export interface RecipesSnapshot {
   // believable answer came, or the stream failed (then the defaults, as the current app). Until then
   // a label cannot be laid out honestly — the defaults could be the wrong paper.
   readonly labelConfigKnown: boolean;
+  // The venue's recipe categories (config/labels.recipeCategories, normalised by @mise/shared/recipe-shelf), in the order
+  // stored — the screens sort them for reading. [] when there are none, and until the label profile is known.
+  readonly categories: readonly string[];
   // The shop computers that report in (print-agents), as the last answer left them; [] until one comes, and
   // after a failure. ⚠️ NEVER WRITTEN TO STORAGE BY THE APP, NOR READ FROM IT: a heartbeat is a statement about
   // RIGHT NOW. Firestore's own offline cache can still replay the last print-agents document to a phone that
@@ -201,6 +223,14 @@ export interface RecipesStore {
   // Deletes a recipe, LOCAL-FIRST, with its open count and its remembered batch. A refused delete puts it back and
   // says so.
   deleteRecipe(id: string): void;
+  // Archives (true) or restores (false) a recipe, LOCAL-FIRST like a save, as a merge of the flag ALONE (a restore removes
+  // it). A refusal puts the recipe back as it was and says `recipe-not-archived`. Returns false, and writes nothing, when the
+  // recipe is not held or is already where it was asked to go. The rules let only an owner or a manager move the flag.
+  setArchived(id: string, archived: boolean): boolean;
+  // Replaces the venue's list of recipe categories (config/labels.recipeCategories), through saveLabelProfile: LOCAL-FIRST,
+  // the same rollback, rejects when refused. The list is normalised before it is written. The recipes filed under a word
+  // taken off the list are NOT rewritten (they read as «no category» until the word comes back).
+  saveRecipeCategories(list: readonly string[]): Promise<void>;
   // Saves a recipe's mixing procedure (steps + closing message), LOCAL-FIRST like saveRecipe, as a MERGE of those two
   // fields only — plus the ingredient rows when some row had no id yet (see the method). An empty procedure is saved
   // as empty, which deletes it. A refusal puts the version before it back and says `recipe-not-saved`. Returns false,
@@ -336,11 +366,20 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   let stops: Array<() => void> = [];
   let started = false;
 
+  // The categories are worked out again only when the label profile object changes, so a snapshot about something else keeps
+  // the same list (a screen that depends on it is not redrawn for nothing).
+  let categoriesOf: Record<string, unknown> | null | undefined;
+  let categories: readonly string[] = [];
+
   let snapshot: RecipesSnapshot = build();
 
   function build(): RecipesSnapshot {
+    if (categoriesOf !== labelConfig) {
+      categoriesOf = labelConfig;
+      categories = normalizeRecipeCategories(labelConfig?.recipeCategories);
+    }
     return { recipes, recipesLoaded, recipesFromServer, streamBroken, ingredients, ingredientsLoaded, ingredientsUnreadable, usage,
-      scaled, labelConfig, labelConfigKnown, printAgents, suppliers };
+      scaled, labelConfig, labelConfigKnown, categories, printAgents, suppliers };
   }
 
   function changed(): void {
@@ -435,7 +474,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     changed();
   }
 
-  return {
+  const store: RecipesStore = {
     getSnapshot: () => snapshot,
 
     subscribe(listener) {
@@ -665,6 +704,8 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
         ...labelFieldsOf(recipe),
         // The image label's texts only when the editor handed them over (null = emptied, a removal too).
         ...labelTextPatchOf(recipe),
+        // The category only when the person moved the choice (null = «no category», a removal).
+        ...categoryPatchOf(recipe),
       };
       const id = recipe.id || newRecipeId();
       const prev = recipes.find(candidate => candidate.id === id) ?? null;
@@ -680,8 +721,11 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       if (prev) {
         const held = prev as unknown as Record<string, unknown>;
         for (const key of KEPT_FIELDS) if (held[key] !== undefined) kept[key] = held[key];
-        // The image label's texts this save does not send stay as the phone held them, until the next snapshot.
-        for (const key of LABEL_TEXT_FIELDS) if (!(key in data) && held[key] !== undefined) kept[key] = held[key];
+        // The image label's texts this save does not send stay as the phone held them, until the next snapshot — and so do the
+        // category (when not sent) and the archived flag (never sent by a save: an archived recipe edited stays archived).
+        for (const key of [...LABEL_TEXT_FIELDS, 'category', 'archived'] as const) {
+          if (!(key in data) && held[key] !== undefined) kept[key] = held[key];
+        }
       }
       upsertLocal({ ...kept, id, ...data });
       let written: Promise<void>;
@@ -786,6 +830,41 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       });
     },
 
+    // ⚠️ THE FLAG TRAVELS ALONE (a merge): an archive is not a save of the recipe, and sending its name or rows from this
+    // phone's copy could put back an older version over a colleague's edit. A restore REMOVES the flag («not archived» is no
+    // field). On a refusal the recipe goes back as this phone held it just before, flag included.
+    setArchived(id, archived) {
+      const prev = recipes.find(candidate => candidate.id === id) ?? null;
+      if (!prev || isArchivedRecipe(prev) === archived) return false;
+      const held = prev as unknown as Record<string, unknown>;
+      const next: Record<string, unknown> = { ...held };
+      if (archived) next.archived = true; else delete next.archived;
+      upsertLocal(next);
+      let written: Promise<void>;
+      try {
+        written = source.saveRecipeDoc(id, { archived: archived ? true : null });
+      } catch (err) {
+        written = Promise.reject(err);
+      }
+      written.catch((err: unknown) => {
+        deps.warn('Recipe archive did not sync to Firestore:', err);
+        // Only when the flag is still where this call put it: a later archive or restore made since owns it.
+        const now = recipes.find(candidate => candidate.id === id);
+        if (now && isArchivedRecipe(now) === archived) {
+          const back: Record<string, unknown> = { ...(now as unknown as Record<string, unknown>) };
+          if (archived) delete back.archived; else back.archived = true;
+          upsertLocal(back);
+        }
+        say({ kind: 'recipe-not-archived', name: prev.name, archived });
+      });
+      return true;
+    },
+
+    saveRecipeCategories(list) {
+      // Through the label profile's own local-first write: the same per-key rollback, the same «put back» on a refusal.
+      return store.saveLabelProfile({ recipeCategories: normalizeRecipeCategories(list) });
+    },
+
     calculatorImportOf(id) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       const late = new Promise<CalculatorImportKind | null>(resolve => { timer = setTimeout(() => resolve(null), IMPORT_CHECK_MS); });
@@ -804,6 +883,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       return action;
     },
   };
+  return store;
 }
 
 export function browserRecipesDeps(): RecipesDeps {

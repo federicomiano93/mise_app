@@ -1107,6 +1107,146 @@ describe('the Recipe catalogue store', () => {
     });
   });
 
+  describe('the recipe shelf: a category and the archive (Mise 2 only, 25 Oct 2026)', () => {
+    const PANETTONE: StoredDoc = {
+      id: 'R1', name: 'Panettone', ingredients: [{ label: 'Farina', grams: 500, unit: 'g', rid: 'rfarina01' }],
+      category: ' Natale ', archived: true,
+    };
+
+    test('⚠️ the store keeps both fields (the shared normaliser drops them), in the list and in the phone’s copy', () => {
+      const { store, server, data } = makeStore();
+      store.start();
+      server([PANETTONE, { id: 'R2', name: 'Pane', ingredients: [], category: '  ', archived: 'yes' }]);
+      const held = store.getSnapshot().recipes as unknown as Array<Record<string, unknown>>;
+      expect(held[0]!.category).toBe('Natale');
+      expect(held[0]!.archived).toBe(true);
+      // Blank, or not a literal true: no field.
+      expect('category' in held[1]!).toBe(false);
+      expect('archived' in held[1]!).toBe(false);
+      const copy = JSON.parse(data.get(RECIPES_KEY)!);
+      expect(copy[0].category).toBe('Natale');
+      expect(copy[0].archived).toBe(true);
+    });
+
+    test('a save sends the category only when handed over: a word trimmed, «none» as null (the source removes it)', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([PANETTONE]);
+      const rows = PANETTONE.ingredients as Array<Record<string, unknown>>;
+      store.saveRecipe({ id: 'R1', name: 'Panettone', ingredients: rows, category: '  Dolci ' });
+      expect(saveRecipeDoc.mock.calls[0]![1].category).toBe('Dolci');
+      store.saveRecipe({ id: 'R1', name: 'Panettone', ingredients: rows, category: '' });
+      expect(saveRecipeDoc.mock.calls[1]![1].category).toBeNull();
+      const held = store.getSnapshot().recipes.find(r => r.id === 'R1') as unknown as Record<string, unknown>;
+      expect('category' in held).toBe(false);
+      // A word longer than the rules' bound is cut, so the save is never refused for it.
+      store.saveRecipe({ id: 'R1', name: 'Panettone', ingredients: rows, category: 'x'.repeat(150) });
+      expect((saveRecipeDoc.mock.calls[2]![1].category as string).length).toBe(100);
+    });
+
+    test('⚠️ a save that does not hand the category over sends neither field, and the copy keeps both (archived stays archived)', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([PANETTONE]);
+      store.saveRecipe({ id: 'R1', name: 'Panettone alto', ingredients: PANETTONE.ingredients as Array<Record<string, unknown>> });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect('category' in doc).toBe(false);
+      expect('archived' in doc).toBe(false);
+      const held = store.getSnapshot().recipes.find(r => r.id === 'R1') as unknown as Record<string, unknown>;
+      expect(held.name).toBe('Panettone alto');
+      expect(held.category).toBe('Natale');
+      expect(held.archived).toBe(true);
+    });
+
+    test('⚠️ a save never sends the archived flag, whatever the caller hands over', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([]);
+      store.saveRecipe({ name: 'Pane', ingredients: [], archived: true } as unknown as Parameters<typeof store.saveRecipe>[0]);
+      expect('archived' in saveRecipeDoc.mock.calls[0]![1]).toBe(false);
+    });
+
+    test('archiving sends the flag ALONE, local-first; restoring sends a removal', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([{ ...PANETTONE, archived: undefined }]);
+      expect(store.setArchived('R1', true)).toBe(true);
+      expect(saveRecipeDoc).toHaveBeenLastCalledWith('R1', { archived: true });
+      expect((store.getSnapshot().recipes[0] as unknown as Record<string, unknown>).archived).toBe(true);
+      expect(store.setArchived('R1', false)).toBe(true);
+      expect(saveRecipeDoc).toHaveBeenLastCalledWith('R1', { archived: null });
+      expect('archived' in (store.getSnapshot().recipes[0] as unknown as Record<string, unknown>)).toBe(false);
+    });
+
+    test('nothing is written for a recipe not held, nor one already where it was asked to go', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([PANETTONE]);
+      expect(store.setArchived('nope', true)).toBe(false);
+      expect(store.setArchived('R1', true)).toBe(false);
+      expect(saveRecipeDoc).not.toHaveBeenCalled();
+    });
+
+    test('a refused archive puts the recipe back and says so, naming it', async () => {
+      const { store, server, saveRecipeDoc, warn } = makeStore();
+      saveRecipeDoc.mockImplementationOnce(() => Promise.reject(new Error('permission-denied')));
+      const said = vi.fn();
+      store.onMessage(said);
+      store.start();
+      server([{ ...PANETTONE, archived: undefined }]);
+      store.setArchived('R1', true);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect('archived' in (store.getSnapshot().recipes[0] as unknown as Record<string, unknown>)).toBe(false);
+      expect(said).toHaveBeenCalledWith({ kind: 'recipe-not-archived', name: 'Panettone', archived: true });
+      expect(warn).toHaveBeenCalled();
+    });
+
+    test('⚠️ a refused archive does not undo a restore made after it', async () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      let refuse: (err: unknown) => void = () => undefined;
+      saveRecipeDoc.mockImplementationOnce(() => new Promise((_, reject) => { refuse = reject; }));
+      store.start();
+      server([{ ...PANETTONE, archived: undefined }]);
+      store.setArchived('R1', true);
+      store.setArchived('R1', false);
+      refuse(new Error('offline too long'));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect('archived' in (store.getSnapshot().recipes[0] as unknown as Record<string, unknown>)).toBe(false);
+    });
+
+    test('the venue’s categories come from the label profile, normalised, the same list until the profile changes', () => {
+      const { store, labelServer } = makeStore();
+      store.start();
+      expect(store.getSnapshot().categories).toEqual([]);
+      labelServer({ widthMm: 57, recipeCategories: [' Natale', 'natale', 'Estate', 3] });
+      const first = store.getSnapshot().categories;
+      expect(first).toEqual(['Natale', 'Estate']);
+      store.bumpUsage('R1');
+      expect(store.getSnapshot().categories).toBe(first);
+    });
+
+    test('saving the list goes through the label profile’s write, normalised, local-first', async () => {
+      const { store, labelServer, saveLabelConfig } = makeStore();
+      store.start();
+      labelServer({ widthMm: 57 });
+      const saved = store.saveRecipeCategories(['Natale', ' natale ', 'Estate']);
+      expect(store.getSnapshot().categories).toEqual(['Natale', 'Estate']);
+      expect(saveLabelConfig).toHaveBeenCalledWith({ recipeCategories: ['Natale', 'Estate'] });
+      await saved;
+    });
+
+    test('a refused list is put back', async () => {
+      const { store, labelServer, saveLabelConfig } = makeStore();
+      saveLabelConfig.mockImplementationOnce(() => Promise.reject(new Error('permission-denied')));
+      store.start();
+      labelServer({ widthMm: 57, recipeCategories: ['Natale'] });
+      await expect(store.saveRecipeCategories(['Natale', 'Estate'])).rejects.toThrow();
+      expect(store.getSnapshot().categories).toEqual(['Natale']);
+    });
+  });
+
   describe('the suppliers (names for the link chooser)', () => {
     test('are watched, kept by id, and written to the current app\'s key as an array', () => {
       const { store, supServer, data, watchSuppliers } = makeStore();

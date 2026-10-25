@@ -926,6 +926,8 @@ export const it: Messages = {
   'cat.recipeWord': 'ricetta',
   'cat.couldNotSaveRecipe': 'Non è stato possibile salvare “{name}” — controlla la connessione.',
   'cat.couldnTDeleteThe': 'Non è stato possibile eliminare la ricetta — controlla la connessione.',
+  'cat.shelf.couldNotArchive': 'Non è stato possibile archiviare “{name}” — controlla la connessione.',
+  'cat.shelf.couldNotRestore': 'Non è stato possibile ripristinare “{name}” — controlla la connessione.',
   'cat.liveSyncInterruptedRecipes': 'Sincronizzazione interrotta — le ricette potrebbero non essere aggiornate.',
   // Writing recipes, step 3d-6 (the current app's cat.* wording, key for key).
   'cat.newRecipe': 'Nuova ricetta',

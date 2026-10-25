@@ -1604,6 +1604,62 @@ async function configAndLogs() {
       bakery: 'main', name: 'Pane', ingredients: [], labelIngredientsText: ['farina'],
     }));
 
+  // ── Mise 2's recipe shelf: a category and the archive (25 Oct 2026) ───────
+  //
+  // Filing a recipe under a category is everybody's work, like the rest of the
+  // recipe; archiving and restoring it are for whoever runs the place — but an
+  // employee must still be able to save an archived recipe that stays archived.
+  await expectAllowed('recipes: a recipe filed under a category', () =>
+    wholeWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', name: 'Panettone', ingredients: [], category: 'Natale' }));
+  await expectAllowed('recipes: an employee files a recipe under a category', () =>
+    mergeWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', name: 'Panettone', ingredients: [], category: 'Dolci' },
+      asAccount(SAM)));
+  await expectAllowed('recipes: an employee takes the category away (the field removed)', () =>
+    clearWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', name: 'Panettone', ingredients: [] }, ['category'],
+      asAccount(SAM)));
+  await expectDenied('recipes: an empty category (no category is no field)',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], category: '' }));
+  await expectDenied('recipes: a category longer than any word on a list',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], category: 'x'.repeat(101) }));
+  await expectDenied('recipes: a category sent as a list',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], category: ['Natale'] }));
+  await expectDenied('recipes: an archived flag sent as a word',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], archived: 'yes' }));
+  await expectDenied('recipes: an employee cannot archive a recipe',
+    () => mergeWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', archived: true }, asAccount(SAM)));
+  await expectDenied('recipes: an employee cannot create a recipe already archived',
+    () => wholeWrite(`${A}/recipes/R_STAFF_NEW`, { bakery: 'main', name: 'Pane', ingredients: [], archived: true },
+      asAccount(SAM)));
+  await expectAllowed('recipes: …but may send «not archived» on a new one', () =>
+    wholeWrite(`${A}/recipes/R_STAFF_NEW`, { bakery: 'main', name: 'Pane', ingredients: [], archived: false },
+      asAccount(SAM)));
+  await expectAllowed('recipes: the manager archives it', () =>
+    mergeWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', archived: true }, asAccount(MAYA)));
+  await expectAllowed('recipes: an employee still edits the archived recipe (the flag untouched)', () =>
+    mergeWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', name: 'Panettone classico', ingredients: [] }, asAccount(SAM)));
+  await expectAllowed('recipes: …even when the save carries the flag as it is', () =>
+    mergeWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', name: 'Panettone classico', archived: true }, asAccount(SAM)));
+  await expectDenied('recipes: an employee cannot restore it (the flag removed)',
+    () => clearWrite(`${A}/recipes/R_SHELF`, { bakery: 'main' }, ['archived'], asAccount(SAM)));
+  await expectDenied('recipes: …nor by sending false',
+    () => mergeWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', archived: false }, asAccount(SAM)));
+  await expectAllowed('recipes: the owner restores it', () =>
+    clearWrite(`${A}/recipes/R_SHELF`, { bakery: 'main' }, ['archived']));
+  const shelf = await fetch(`${FS}/${A}/recipes/R_SHELF`, { headers: asUser() }).then(r => r.json());
+  check('recipes: the restored recipe holds no archived flag and keeps its name',
+    !('archived' in (shelf.fields ?? {})) && shelf.fields?.name?.stringValue === 'Panettone classico');
+
+  await expectAllowed('labels: the venue\'s list of recipe categories', () =>
+    mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: ['Natale', 'Estate', 'Pane'] }));
+  await expectAllowed('labels: …and an empty one', () =>
+    mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: [] }, asAccount(MAYA)));
+  await expectDenied('labels: a list of categories used as free storage',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: Array.from({ length: 101 }, (_, i) => `c${i}`) }));
+  await expectDenied('labels: the categories sent as one word',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: 'Natale' }));
+  await expectDenied('labels: an employee cannot change the categories',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: ['Natale'] }, asAccount(SAM)));
+
   await expectAllowed('labels: the model and the rotation of the image label', () =>
     mergeWrite(`${A}/config/labels`, { bakery: 'main', template: 'logo', rotate180: true }));
   await expectDenied('labels: a model the app has never heard of',
