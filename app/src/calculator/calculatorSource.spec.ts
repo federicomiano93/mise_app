@@ -25,6 +25,9 @@ function fakeKit() {
       return () => { entry.stopped = true; };
     }),
     setDoc: vi.fn(async (_ref: Ref, _data: Record<string, unknown>, _options?: unknown) => {}),
+    deleteDoc: vi.fn(async (_ref: Ref) => {}),
+    updateDoc: vi.fn(async (_ref: Ref, _data: Record<string, unknown>) => {}),
+    arrayUnion: (...items: unknown[]) => ({ arrayUnion: items }),
   };
   const kit = { fs, db: {} } as unknown as FirestoreKit;
   const live = (path: string) => listeners.filter(l => l.target.path === path && !l.stopped);
@@ -260,5 +263,53 @@ describe('saving the configuration and linking a recipe, as firestore.rules expe
     const bad = writeKit({ ingredients: [] });
     await expect(createFirestoreCalculatorSource(() => Promise.resolve(bad.kit), 'bakery').stampRowIds('a/b')).rejects.toThrow();
     expect(bad.fs.runTransaction).not.toHaveBeenCalled();
+  });
+});
+
+describe('deleting a log (step 3c-3)', () => {
+  test('deletes exactly that document under the open venue', async () => {
+    const { kit, fs } = fakeKit();
+    const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'panificio-miano');
+    await source.deleteLog('log-1');
+    expect(fs.deleteDoc).toHaveBeenCalledTimes(1);
+    expect(fs.deleteDoc.mock.calls[0]![0].path).toBe('locations/panificio-miano/logs/log-1');
+  });
+
+  test('⚠️ an id that could name another path is refused before Firestore is even asked', async () => {
+    const { kit, fs } = fakeKit();
+    let loaded = 0;
+    const source = createFirestoreCalculatorSource(() => { loaded += 1; return Promise.resolve(kit); }, 'bakery');
+    await expect(source.deleteLog('a/b')).rejects.toThrow();
+    await expect(source.deleteLog('..')).rejects.toThrow();
+    await expect(source.deleteLog('')).rejects.toThrow();
+    expect(fs.deleteDoc).not.toHaveBeenCalled();
+    expect(loaded).toBe(0);
+  });
+});
+
+describe('adding a version to a log (review of 3c-3)', () => {
+  test('⚠️ updateDoc with arrayUnion of the ONE version — never a whole-document write — stamped for the venue', async () => {
+    const { kit, fs } = fakeKit();
+    const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'panificio-miano');
+    await source.appendLogVersion('log-1', { kind: 'edit', text: 'x' }, 'tomorrow');
+    expect(fs.setDoc).not.toHaveBeenCalled();
+    expect(fs.updateDoc).toHaveBeenCalledTimes(1);
+    const [ref, data] = fs.updateDoc.mock.calls[0]!;
+    expect(ref.path).toBe('locations/panificio-miano/logs/log-1');
+    expect(data).toEqual({ versions: { arrayUnion: [{ kind: 'edit', text: 'x' }] }, forDay: 'tomorrow', bakery: 'panificio-miano' });
+  });
+
+  test('no day given → the day is left alone', async () => {
+    const { kit, fs } = fakeKit();
+    const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'bakery');
+    await source.appendLogVersion('log-1', { kind: 'restore' }, null);
+    expect(Object.keys(fs.updateDoc.mock.calls[0]![1])).toEqual(['versions', 'bakery']);
+  });
+
+  test('⚠️ an id that could name another path never reaches Firestore', async () => {
+    const { kit, fs } = fakeKit();
+    const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'bakery');
+    await expect(source.appendLogVersion('a/b', {}, null)).rejects.toThrow();
+    expect(fs.updateDoc).not.toHaveBeenCalled();
   });
 });

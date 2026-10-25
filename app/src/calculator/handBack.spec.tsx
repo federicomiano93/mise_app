@@ -71,4 +71,20 @@ describe('the hand-back of the focus', () => {
     act(() => { result.current.deliver(); });
     expect(nodes.x).not.toHaveFocus();
   });
+
+  it('replaceTop swaps the opener on top for another, leaving the ones under it', () => {
+    const { result } = renderHook(() => useHandBackState());
+    const nodes = buttons('door', 'row', 'title');
+    for (const name of ['door', 'row', 'title']) result.current.register(name, nodes[name] ?? null);
+    result.current.expect('door');
+    result.current.expect('row');
+    // The screen opened by «row» is left by a move of its own, landing where «title» is owed the focus.
+    result.current.replaceTop('title');
+    act(() => { result.current.deliver(); });
+    expect(nodes.title).toHaveFocus();
+    nodes.title?.blur();
+    act(() => { result.current.deliver(true); });
+    expect(nodes.door).toHaveFocus();
+    expect(nodes.row).not.toHaveFocus();
+  });
 });
