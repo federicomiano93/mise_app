@@ -116,12 +116,14 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
   if (mode === 'packaging') {
     sections.push({ key: 'packaging', heading: '', kind: 'packaging', items: options.packagingOptions.filter(matches) });
   }
-  // The switched-off ones come after everything else, under their own heading, and are chosen like any other.
+  // The switched-off ones come after everything else, under their own heading, and are chosen like any other. Each row says it
+  // too: a keyboard or screen-reader user tabs past the heading.
+  const markedOff = (option: Option): Option => ({ ...option, meta: [option.meta, t('ui.notInUse')].filter(Boolean).join(' · ') });
   if (mode === 'ingredient' || both) {
-    sections.push({ key: 'ingredient-off', heading: t('ui.notInUse'), kind: 'ingredient', items: options.inactiveIngredientOptions.filter(matches) });
+    sections.push({ key: 'ingredient-off', heading: t('ui.notInUse'), kind: 'ingredient', items: options.inactiveIngredientOptions.filter(matches).map(markedOff) });
   }
   if (mode === 'packaging') {
-    sections.push({ key: 'packaging-off', heading: t('ui.notInUse'), kind: 'packaging', items: options.inactivePackagingOptions.filter(matches) });
+    sections.push({ key: 'packaging-off', heading: t('ui.notInUse'), kind: 'packaging', items: options.inactivePackagingOptions.filter(matches).map(markedOff) });
   }
   const shown = sections.reduce((count, section) => count + section.items.length, 0);
   const emptyText = query.trim() !== '' ? t('fc.nothingMatches')

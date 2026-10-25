@@ -137,6 +137,18 @@ describe('the doors', () => {
       expect(group().open).toBe(true);
     });
 
+    it('⚠️ switched off and saved from the list: the row moves into the group, which opens, and keeps the focus', async () => {
+      const { user } = await loaded('/suppliers', withOff());
+      await user.click(main().getByRole('button', { name: /^Flour/ }));
+      const region = within(await card('Edit ingredient'));
+      await user.click(region.getByRole('switch', { name: 'Not in use at the moment' }));
+      await user.click(region.getByRole('button', { name: 'Save' }));
+      await user.click(within(await screen.findByRole('alertdialog', { name: 'Save ingredient?' }, LOAD)).getByRole('button', { name: 'Save' }));
+      const group = () => main().getByText('Not in use (2)').closest('details') as HTMLDetailsElement;
+      await waitFor(() => { expect(group().open).toBe(true); });
+      await waitFor(() => { expect(within(group()).getByRole('button', { name: /^Flour/ })).toHaveFocus(); });
+    });
+
     it('opened by its address (the group closed before): it opens by itself and the row can take the focus', async () => {
       const { user } = await loaded('/suppliers/ingredient/i-off', withOff());
       await card('Edit ingredient');

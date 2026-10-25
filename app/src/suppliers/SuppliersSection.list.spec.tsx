@@ -256,8 +256,11 @@ describe('the ingredients and packaging lists', () => {
     });
 
     it('the group stays where the person leaves it: opened, it is not closed by a snapshot', async () => {
-      const { user } = await loaded('/suppliers', seeded({ ingredients: OFF }));
+      const source = seeded({ ingredients: OFF });
+      const { user } = await loaded('/suppliers', source);
       await user.click(main().getByText('Not in use (2)'));
+      expect(groupOf().open).toBe(true);
+      act(() => { source.push(); });
       expect(groupOf().open).toBe(true);
     });
 

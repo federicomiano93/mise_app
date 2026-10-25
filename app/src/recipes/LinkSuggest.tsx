@@ -133,7 +133,7 @@ export function useLinkSuggest({
               {' '}
               {entry.meta === '' ? null : <span className={styles.meta}>{entry.meta}</span>}
               {/* 3e-5b: a switched-off ingredient is offered last and says so in a word (never by colour alone). */}
-              {entry.inactive ? <span className={styles.meta}>{t('ui.notInUse')}</span> : null}
+              {entry.inactive ? <>{entry.meta === '' ? null : ' '}<span className={styles.meta}>{t('ui.notInUse')}</span></> : null}
               {entry.linked ? (
                 <span className={styles.linked}>
                   <Check aria-hidden="true" />

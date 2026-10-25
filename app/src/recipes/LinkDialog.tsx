@@ -123,7 +123,8 @@ export function LinkDialog({ ingredients, recipes, suppliers, excludeRecipeId, h
                   >
                     <span className={styles.name}>{option.displayName ?? option.name}</span>
                     {' '}
-                    <span className={styles.meta}>{[option.weight, option.supplierName].filter(Boolean).join(LINK_SEPARATOR)}</span>
+                    {/* The row says it too, not only the heading: a keyboard or screen-reader user tabs past the heading. */}
+                    <span className={styles.meta}>{[option.weight, option.supplierName, t('ui.notInUse')].filter(Boolean).join(LINK_SEPARATOR)}</span>
                   </button>
                 </li>
               ))}

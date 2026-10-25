@@ -72,7 +72,7 @@ export function SupplierScreen({ id }: { id: string }) {
   const owed = useRef<string | null | undefined>(undefined);
   const addButton = useCallback((node: HTMLButtonElement | null) => { handBack.register(ADD_INGREDIENT_OPENER, node); }, [handBack]);
   // The folded «Not in use» group. When Back owes the focus to one of its rows, handBack opens it first.
-  const group = useNotInUseOpen(false);
+  const group = useNotInUseOpen(false, id);
   useEffect(() => {
     if (!shown) return;
     owed.current ??= handBack.takeEdit(id) ? 'edit' : handBack.takeOn(id);

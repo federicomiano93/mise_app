@@ -176,8 +176,8 @@ describe('the full chooser', () => {
     const dialog = within(await screen.findByRole('dialog', { name: 'Link to' }));
     expect(dialog.getAllByRole('heading', { level: 3 }).map(node => node.textContent)).toEqual(['Ingredients', 'Recipes', 'Not in use']);
     const section = dialog.getByRole('heading', { name: 'Not in use' }).closest('section') as HTMLElement;
-    expect(within(section).getAllByRole('button').map(node => node.textContent)).toEqual(['Farina vecchia 10 kg']);
-    await user.click(within(section).getByRole('button', { name: 'Farina vecchia 10 kg' }));
+    expect(within(section).getAllByRole('button').map(node => node.textContent)).toEqual(['Farina vecchia 10 kg  ·  Not in use']);
+    await user.click(within(section).getByRole('button', { name: 'Farina vecchia 10 kg · Not in use' }));
     await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
     expect(ingredientBoxes(region)[0]).toHaveValue('Farina vecchia');
   });

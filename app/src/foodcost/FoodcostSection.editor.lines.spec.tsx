@@ -125,7 +125,7 @@ describe('the chooser', () => {
     const dialog = await chooser();
     expect(within(dialog).getAllByRole('heading', { level: 3 }).map(node => node.textContent)).toEqual(['Recipes', 'Ingredients', 'Not in use']);
     const section = within(dialog).getByRole('heading', { level: 3, name: 'Not in use' }).closest('section') as HTMLElement;
-    expect(within(section).getAllByRole('listitem').map(item => item.textContent)).toEqual(['Sugar5 kg']);
+    expect(within(section).getAllByRole('listitem').map(item => item.textContent)).toEqual(['Sugar5 kg · Not in use']);
     await user.click(within(section).getByRole('button', { name: /^Sugar/ }));
     expect(within(madeOf()).getByRole('button', { name: 'Change: Sugar' })).toBeInTheDocument();
   });
@@ -147,11 +147,11 @@ describe('packaging', () => {
     await user.click(within(packaging()).getByRole('button', { name: '+ Add packaging' }));
     const dialog = await chooser();
     expect(within(dialog).getByRole('heading', { level: 2, name: 'Choose packaging' })).toBeInTheDocument();
-    expect(optionNames(dialog)).toEqual(['Box£0.25 each', 'Ribbonpriced by weight', 'Tissuenot priced', 'Old tinnot priced']);
+    expect(optionNames(dialog)).toEqual(['Box£0.25 each', 'Ribbonpriced by weight', 'Tissuenot priced', 'Old tinnot priced · Not in use']);
     const headings = within(dialog).getAllByRole('heading', { level: 3 });
     expect(headings.map(node => node.textContent)).toEqual(['Not in use']);
     const section = headings[0]!.closest('section') as HTMLElement;
-    expect(within(section).getAllByRole('listitem').map(item => item.textContent)).toEqual(['Old tinnot priced']);
+    expect(within(section).getAllByRole('listitem').map(item => item.textContent)).toEqual(['Old tinnot priced · Not in use']);
     await user.click(within(section).getByRole('button', { name: /^Old tin/ }));
     expect(within(packaging()).getByRole('button', { name: /Old tin/ })).toBeInTheDocument();
   });
