@@ -102,6 +102,21 @@ describe('the picker', () => {
     expect(await dialog.findByText('The Recipe catalogue has no recipes yet.', undefined, LOAD)).toBeInTheDocument();
   });
 
+  it('⚠️ leaves an archived recipe out of the list (a NEW link), and says the Catalogue is empty when every recipe is archived', async () => {
+    const { user } = await open(`${LIST}/focaccia`, { recipes: [CAT_1, { ...CAT_2, archived: true }] });
+    const dialog = await openPicker(user);
+    await dialog.findByRole('button', { name: 'Catalogue focaccia' }, LOAD);
+    expect(dialog.queryByRole('button', { name: 'Another loaf' })).not.toBeInTheDocument();
+    await user.click(dialog.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
+  });
+
+  it('every recipe archived: the picker shows the empty sentence', async () => {
+    const { user } = await open(`${LIST}/focaccia`, { recipes: [{ ...CAT_1, archived: true }, { ...CAT_2, archived: true }] });
+    const dialog = await openPicker(user);
+    expect(await dialog.findByText('The Recipe catalogue has no recipes yet.', undefined, LOAD)).toBeInTheDocument();
+  });
+
   it('a read that fails says so in the picker and links nothing; the next opening tries again', async () => {
     const { user, source } = await open(`${LIST}/focaccia`);
     source.refuse.catalogue = true;

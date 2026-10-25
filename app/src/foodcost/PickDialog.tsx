@@ -3,6 +3,7 @@ import { normalizeSearchText } from '@mise/shared/catalogue-model';
 import { isPackaging } from '@mise/shared/ingredient-kind';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { formatRate, pricePerKg } from '@mise/shared/price-model';
+import { withoutArchived } from '@mise/shared/recipe-shelf';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
@@ -65,7 +66,8 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
           : t('fc.notPriced');
       return { id: item.id, name: ingredientDisplayName(item).trim(), invoiceName: String(item.name).trim(), meta };
     };
-    const recipeOptions: Option[] = Object.values(recipes)
+    // ⚠️ AN ARCHIVED RECIPE IS NOT OFFERED (a NEW line); a line already made of one keeps costing and naming it elsewhere.
+    const recipeOptions: Option[] = withoutArchived(Object.values(recipes))
       .filter(recipe => String(recipe.name ?? '').trim() !== '')
       .map(recipe => ({ id: recipe.id, name: String(recipe.name).trim(), invoiceName: '', meta: '' }))
       .sort(byName);

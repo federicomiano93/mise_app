@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { normalizeSearchText } from '@mise/shared/catalogue-model';
+import { withoutArchived } from '@mise/shared/recipe-shelf';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
@@ -40,7 +41,7 @@ export function CataloguePicker({ onChoose, onClose }: Props) {
   useEffect(() => {
     let live = true;
     loadCatalogue().then(
-      recipes => { if (live) setReading({ status: 'ready', recipes }); },
+      recipes => { if (live) setReading({ status: 'ready', recipes: withoutArchived(recipes) }); },
       () => { if (live) setReading({ status: 'failed' }); },
     );
     return () => { live = false; };

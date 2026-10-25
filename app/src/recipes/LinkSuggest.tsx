@@ -3,6 +3,7 @@ import type { InputHTMLAttributes, KeyboardEvent, ReactNode } from 'react';
 import { Check } from 'lucide-react';
 import { nameTaken, suggestLinks } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
+import { withoutArchived } from '@mise/shared/recipe-shelf';
 import { useT } from '../i18n/useT';
 import type { Chosen } from './editorModel';
 import { LINK_SEPARATOR } from './linkModel';
@@ -44,6 +45,7 @@ type Entry =
 // visible area as it opens.
 // ⚠️ A TAP ON IT MUST NOT CLOSE IT FIRST: touching the list would move the focus off the box before the click lands, the blur
 // would close the list, and the tap would land on nothing — so the list swallows the pointer going down.
+// ⚠️ AN ARCHIVED RECIPE IS NOT OFFERED (it is a NEW link); `recipes` stays the full list, which the row's link line reads.
 // ⚠️ READ ON EVERY RENDER, not remembered: ingredients still arriving are offered as they land.
 export function useLinkSuggest({
   value, ingredients, recipes, suppliers, excludeRecipeId, linked, onPick, onSeeAll, mayCreate, onCreate,
@@ -60,7 +62,7 @@ export function useLinkSuggest({
   const [active, setActive] = useState(-1);
 
   const found = open
-    ? suggestLinks({ ingredients, recipes, suppliers, query: value, excludeRecipeId, linked, inactiveLast: true })
+    ? suggestLinks({ ingredients, recipes: withoutArchived(recipes), suppliers, query: value, excludeRecipeId, linked, inactiveLast: true })
     : { items: [], total: 0 };
   const entries: Entry[] = found.items.map(item => ({
     kind: 'item',

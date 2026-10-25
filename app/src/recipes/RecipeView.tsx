@@ -1,10 +1,11 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { ChartPie, Copy, Download, Import, Maximize2, Pencil, Trash2 } from 'lucide-react';
+import { Archive, ArchiveRestore, ChartPie, Copy, Download, Import, Maximize2, Pencil, Trash2 } from 'lucide-react';
 import { calculatorRefusal, importFailureKey, weighableTotalGrams } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import { FROM_RECIPE_LINK, foodCostForRecipePath, mayOpenFoodCost } from '@mise/shared/recipe-link';
+import { isArchivedRecipe } from '@mise/shared/recipe-shelf';
 import { isSectionAllowed } from '@mise/shared/sections';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
@@ -64,6 +65,55 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
   const recipeReturn = useRecipeReturn();
   const [runDelete, deleteDialog] = useDeleteRecipe();
   const editButton = useRef<HTMLButtonElement>(null);
+  const say = useStatusMessage();
+  const [confirm, archiveDialog] = useConfirm();
+  const archived = isArchivedRecipe(recipe);
+  const asking = useRef(false);
+  const restoreButton = useRef<HTMLButtonElement>(null);
+  // Where the focus goes once the page has redrawn with the flag moved: «Restore» after an archive (it replaces the button
+  // that was just tapped), the recipe's title after a restore (nobody is thrown to the foot of the page).
+  const focusAfter = useRef<'restore' | 'title' | null>(null);
+
+  useLayoutEffect(() => {
+    const wanted = focusAfter.current;
+    if (wanted === null) return;
+    focusAfter.current = null;
+    const target = wanted === 'restore' && restoreButton.current !== null ? restoreButton.current : document.getElementById(titleId);
+    if (target === null) return;
+    target.focus({ preventScroll: true });
+    // The closing dialog hands the focus back to the button that opened it, which is gone: once more after it has done so.
+    requestAnimationFrame(() => {
+      if (target.isConnected && document.activeElement !== target) target.focus({ preventScroll: true });
+    });
+  }, [archived]);
+
+  // ⚠️ THE PAGE STAYS OPEN. Archiving asks first; the store writes the flag alone, local-first, and says by itself when the
+  // server refuses (and puts the recipe back). `false` = nothing moved: nothing more is done.
+  async function archive() {
+    if (asking.current) return;
+    asking.current = true;
+    try {
+      const ok = await confirm({
+        title: t('cat.shelf.archiveTitle', { name: recipe.name }),
+        message: t('cat.shelf.archiveMessage'),
+        okLabel: t('cat.shelf.archiveOk'),
+        cancelLabel: t('common.cancel'),
+      });
+      if (!ok) return;
+      focusAfter.current = 'restore';
+      if (!store.setArchived(recipe.id, true)) { focusAfter.current = null; return; }
+      say(t('cat.shelf.archivedDone'));
+    } finally {
+      asking.current = false;
+    }
+  }
+
+  // A restore asks nothing: nothing is lost.
+  function restore() {
+    focusAfter.current = 'title';
+    if (!store.setArchived(recipe.id, false)) { focusAfter.current = null; return; }
+    say(t('cat.shelf.restoredDone'));
+  }
 
   // ⚠️ BACK FROM THIS RECIPE'S EDITOR the focus is on «Edit», where the person left (recipeReturn.ts); the recipe screen
   // then has nothing left to focus.
@@ -96,6 +146,7 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         }
       />
       <div className={styles.body}>
+        {archived ? <ArchivedBanner canManage={canManage} restoreRef={restoreButton} onRestore={restore} /> : null}
         <IngredientsCard recipe={recipe} target={target} />
         {/* A recipe of pieces and «to taste» has nothing to scale by weight: the whole card goes. */}
         {hasWeight ? <BatchCard recipe={recipe} target={target} /> : null}
@@ -108,10 +159,13 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         <ProcedureCard recipe={recipe} target={target} />
         <ExportAction recipe={recipe} target={target} />
         {/* A WRITE, NOT A DOOR: judged by the venue's section only (the Calculator card being hidden from staff does not matter). */}
-        {isSectionAllowed(location, 'calculator') ? <ImportAction recipe={recipe} /> : null}
+        {/* ⚠️ NOT ON AN ARCHIVED RECIPE: importing makes a NEW link, and an archived recipe is left out of those. */}
+        {isSectionAllowed(location, 'calculator') && !archived ? <ImportAction recipe={recipe} /> : null}
         {/* «Duplicate» opens the new-recipe editor filled in from this one. Absent — not disabled — for whoever may not start a
             recipe (the gate of «New recipe» in the list: canManage). */}
         {canManage ? <DuplicateAction recipe={recipe} /> : null}
+        {/* «Archive»: after Duplicate, before the Delete icon; whoever runs the place only, and only while it is not archived. */}
+        {canManage && !archived ? <ArchiveAction onArchive={() => { void archive(); }} /> : null}
         {/* ⚠️ THE VERY END OF THE PAGE, after Export, Import and Duplicate: small, low-key, icon only. Absent — not disabled —
             for an employee. */}
         {canManage ? (
@@ -127,7 +181,45 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         ) : null}
       </div>
       {deleteDialog}
+      {archiveDialog}
     </section>
+  );
+}
+
+// The calm notice at the top of an archived recipe: neutral colours (red, amber and green mean danger, check and done), what it
+// means in one sentence, and — for whoever may — the one tap that puts the recipe back. Employees read it without the button.
+function ArchivedBanner({ canManage, restoreRef, onRestore }: { canManage: boolean; restoreRef: Ref<HTMLButtonElement>; onRestore: () => void }) {
+  const { t } = useT();
+  const headingId = useId();
+  return (
+    <section className={styles.banner} aria-labelledby={headingId}>
+      <h3 id={headingId} className={styles.bannerTitle}>
+        <Archive aria-hidden="true" />
+        {t('cat.shelf.bannerTitle')}
+      </h3>
+      <p className={styles.bannerText}>{t('cat.shelf.bannerText')}</p>
+      {canManage ? (
+        <button ref={restoreRef} type="button" className={styles.importAction} onClick={onRestore}>
+          <ArchiveRestore aria-hidden="true" />
+          {t('cat.shelf.restore')}
+        </button>
+      ) : null}
+    </section>
+  );
+}
+
+// «Archive» with its one-line hint, laid out like «Duplicate».
+function ArchiveAction({ onArchive }: { onArchive: () => void }) {
+  const { t } = useT();
+  const hintId = useId();
+  return (
+    <div className={styles.importBlock}>
+      <button type="button" className={styles.importAction} aria-describedby={hintId} onClick={onArchive}>
+        <Archive aria-hidden="true" />
+        {t('cat.shelf.archive')}
+      </button>
+      <p id={hintId} className={styles.note}>{t('cat.shelf.archiveHint')}</p>
+    </div>
   );
 }
 
