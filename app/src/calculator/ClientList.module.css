@@ -1,0 +1,92 @@
+/* The address book: a card of rows, each as tall as a thumb's target, the handle at the start (when there are two
+   or more clients), the name, and the chevron at the end. The drag state comes from React Aria's data attributes. */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s1) var(--s4);
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.row:first-child {
+  border-top: 0;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+}
+
+.row:last-child {
+  border-radius: 0 0 var(--r-md) var(--r-md);
+}
+
+.row:first-child:last-child {
+  border-radius: var(--r-md);
+}
+
+/* The handle is a target of its own, so the row starts closer to the edge. */
+.withHandle {
+  padding-left: var(--s1);
+}
+
+.row[data-hovered] {
+  background: var(--bg);
+}
+
+.row[data-pressed] {
+  background: var(--sunken);
+}
+
+.row[data-dragging] {
+  opacity: 0.6;
+}
+
+.handle {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink-3);
+  cursor: grab;
+  touch-action: none;
+}
+
+.name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.chevron {
+  flex: none;
+  color: var(--ink-3);
+}
+
+/* Where the dragged client would land. */
+.indicator {
+  height: 0;
+}
+
+.indicator[data-drop-target] {
+  border-top: 3px solid var(--accent);
+}
+
+.add {
+  align-self: flex-start;
+}

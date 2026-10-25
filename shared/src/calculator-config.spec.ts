@@ -12,8 +12,9 @@
 //   • divisor / crate / WhatsApp resolution.
 //
 // calculator-config.ts is a PARTIAL port, so parity.spec.ts does not pair it: the original also exports
-// `reconcileConfigWrite` and `saveFailureKey` (the save path, step 3c-2) and `orderPrefillLabel` (it looks a
-// word up in the interface dictionary). The last block of this file stands in for what pairing would have
+// `orderPrefillLabel` (it looks a word up in the interface dictionary). The save path (`reconcileConfigWrite`,
+// `saveFailureKey`, step 3c-2) is ported: tests/config-reconcile.test.mjs and the saveFailureKey half of
+// tests/calculator-save-failure.test.mjs run below against both files. The last block of this file stands in for what pairing would have
 // checked: the same names, the same constants, the same frozen-ness, the same function shapes.
 //
 // PORTED from tests/calculator-config.test.mjs: all 73 of its tests. Added: the two words that come in as
@@ -936,11 +937,81 @@ describe('the port with the words it is handed', () => {
   });
 });
 
+// ── The save path (step 3c-2) — tests/config-reconcile.test.mjs and calculator-save-failure.test.mjs ──
+
+describe.each([
+  ['shared/ (TypeScript)', ported],
+  ['js/ (current app)', legacy],
+] as const)('%s — the save path', (_name, m) => {
+  const { reconcileConfigWrite, saveFailureKey } = m as unknown as Record<string, Loose>;
+  const ids = (out: Loose) => out.recipes.map((r: Loose) => r.id);
+
+  test('no concurrent writer (revs match): recipes pass through, rev climbs', () => {
+    const out = reconcileConfigWrite({ configRev: 3, recipes: [{ id: 'focaccia' }, { id: 'brioche' }] },
+      { configRev: 3, recipes: [{ id: 'focaccia' }, { id: 'brioche' }] });
+    expect(ids(out)).toStrictEqual(['focaccia', 'brioche']);
+    expect(out.configRev).toBe(4);
+  });
+
+  test('concurrent import preserved: a cat-* recipe added on the server survives the save', () => {
+    const out = reconcileConfigWrite({ configRev: 3, recipes: [{ id: 'focaccia' }] },
+      { configRev: 4, recipes: [{ id: 'focaccia' }, { id: 'cat-x', name: 'X' }] });
+    expect(ids(out)).toStrictEqual(['focaccia', 'cat-x']);
+    expect(out.configRev).toBe(5);
+  });
+
+  test('normal delete is NOT resurrected (no conflict): removed recipe stays removed', () => {
+    const out = reconcileConfigWrite({ configRev: 4, recipes: [{ id: 'focaccia' }] },
+      { configRev: 4, recipes: [{ id: 'focaccia' }, { id: 'brioche' }] });
+    expect(ids(out)).toStrictEqual(['focaccia']);
+    expect(out.configRev).toBe(5);
+  });
+
+  test('deleting an imported (cat-*) recipe works when there is no concurrent writer', () => {
+    const out = reconcileConfigWrite({ configRev: 5, recipes: [{ id: 'focaccia' }] },
+      { configRev: 5, recipes: [{ id: 'focaccia' }, { id: 'cat-x' }] });
+    expect(ids(out)).toStrictEqual(['focaccia']);
+  });
+
+  test('first write (no server document yet): rev starts at 1, recipes unchanged', () => {
+    const out = reconcileConfigWrite({ configRev: 0, recipes: [{ id: 'focaccia' }] }, null);
+    expect(ids(out)).toStrictEqual(['focaccia']);
+    expect(out.configRev).toBe(1);
+  });
+
+  test('only imported (cat-*) recipes are preserved on conflict, not arbitrary ones', () => {
+    const out = reconcileConfigWrite({ configRev: 3, recipes: [{ id: 'focaccia' }] },
+      { configRev: 4, recipes: [{ id: 'focaccia' }, { id: 'my-recipe' }] });
+    expect(ids(out)).toStrictEqual(['focaccia']);
+    expect(out.configRev).toBe(5);
+  });
+
+  test('a cat-* already present in the save is not duplicated', () => {
+    const out = reconcileConfigWrite({ configRev: 3, recipes: [{ id: 'focaccia' }, { id: 'cat-x' }] },
+      { configRev: 4, recipes: [{ id: 'focaccia' }, { id: 'cat-x' }] });
+    expect(ids(out)).toStrictEqual(['focaccia', 'cat-x']);
+  });
+
+  test('saveFailureKey: a refusal says the app is out of date, any other failure says check the connection', () => {
+    expect(saveFailureKey({ synced: false, reason: 'write-failed', code: 'permission-denied' })).toBe('calc.notSavedOutOfDate');
+    for (const code of ['unavailable', 'deadline-exceeded', 'failed-precondition', undefined, null, 42]) {
+      expect(saveFailureKey({ synced: false, reason: 'write-failed', code }), String(code)).toBe('calc.notSavedCheckConnection');
+    }
+  });
+
+  test('saveFailureKey: a stored change, no answer yet (already explained) and junk say nothing', () => {
+    expect(saveFailureKey({ synced: true })).toBeNull();
+    expect(saveFailureKey({ synced: false, reason: 'no-server-answer' })).toBeNull();
+    expect(saveFailureKey(undefined)).toBeNull();
+    expect(saveFailureKey(null)).toBeNull();
+  });
+});
+
 // ── What pairing would have checked ──────────────────────────────────────────
 
 describe('the port against the original', () => {
-  // The save path (3c-2) and the one function that looks a word up in the interface dictionary.
-  const LEFT_OUT = ['reconcileConfigWrite', 'saveFailureKey', 'orderPrefillLabel'];
+  // The one function that looks a word up in the interface dictionary.
+  const LEFT_OUT = ['orderPrefillLabel'];
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;
   const shared = Object.keys(original).filter(name => !LEFT_OUT.includes(name)).sort();

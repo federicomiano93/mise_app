@@ -1,10 +1,16 @@
-/* The frame of the Calculator: the tabs over the chosen recipe's panel, or, with no recipe to show, one quiet
-   sentence in the dashed card the other sections use for an empty list. */
+/* The frame of the Calculator: the door to Settings, the tabs over the chosen recipe's panel, or, with no recipe to
+   show, one quiet sentence in the dashed card the other sections use for an empty list. */
 
 .view {
   display: flex;
   flex-direction: column;
   gap: var(--s4);
+}
+
+/* The door to Settings, at the end of the first line. */
+.top {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .empty {

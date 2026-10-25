@@ -1,0 +1,63 @@
+/* A row that is a button: a title, an optional line under it, and a chevron at the end. As tall as a thumb's
+   target. Inside a list the first row has no line above it. */
+
+.door {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s3) var(--s4);
+  border: 0;
+  border-top: 1px solid var(--line);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.door:first-child {
+  border-top: 0;
+  border-radius: var(--r-md) var(--r-md) 0 0;
+}
+
+.door:last-child {
+  border-radius: 0 0 var(--r-md) var(--r-md);
+}
+
+.door:first-child:last-child {
+  border-radius: var(--r-md);
+}
+
+.door[data-hovered] {
+  background: var(--bg);
+}
+
+.door[data-pressed] {
+  background: var(--sunken);
+}
+
+.text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.title {
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+.door > svg {
+  color: var(--ink-3);
+}
