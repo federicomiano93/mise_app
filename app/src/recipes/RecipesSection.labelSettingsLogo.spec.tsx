@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { isBusy } from '../session/busy';
 import { fakeRecipesSource } from '../testing/fakeRecipesSource';
 import { LOAD, recipe, renderRecipes } from '../testing/renderRecipes';
@@ -176,6 +176,48 @@ describe('the logo', () => {
     release();
     await waitFor(() => { expect(isBusy()).toBe(false); });
     expect(settings().getByRole('region', { name: 'Logo' })).not.toHaveAttribute('aria-busy');
+  });
+
+  describe('when the server does not answer (offline)', () => {
+    afterEach(() => { vi.useRealTimers(); });
+
+    const startOffline = async () => {
+      vi.mocked(prepareLogo).mockResolvedValue(NEW_LOGO);
+      const { source } = await openSettings();
+      const release = source.holdLogoWrites();
+      await logoCard().findByRole('button', { name: 'Choose logo' });
+      vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+      pickFile();
+      await act(async () => { await vi.advanceTimersByTimeAsync(7_000); });
+      return { source, release };
+    };
+
+    it('⚠️ stays busy for 8 seconds, then frees the card and says the logo is kept on this device', async () => {
+      const { release } = await startOffline();
+      expect(isBusy()).toBe(true);
+      expect(logoCard().queryByText(/Saved on this device/)).toBeNull();
+      await act(async () => { await vi.advanceTimersByTimeAsync(1_500); });
+      expect(logoCard().getByText(/Saved on this device/)).toBeInTheDocument();
+      expect(isBusy()).toBe(false);
+      expect(logoCard().getByRole('button', { name: 'Choose logo' })).toBeEnabled();
+      await act(async () => { release(); await vi.advanceTimersByTimeAsync(10); });
+    });
+
+    it('says «Logo saved.» when the write finally lands', async () => {
+      const { release } = await startOffline();
+      await act(async () => { await vi.advanceTimersByTimeAsync(1_500); });
+      await act(async () => { release(); await vi.advanceTimersByTimeAsync(10); });
+      expect(logoCard().getByText('Logo saved.')).toBeInTheDocument();
+      expect(logoCard().queryByText(/Saved on this device/)).toBeNull();
+    });
+
+    it('says the save failed when the write is refused after the wait', async () => {
+      const { source, release } = await startOffline();
+      source.refuseLogoWrites = true;
+      await act(async () => { await vi.advanceTimersByTimeAsync(1_500); });
+      await act(async () => { release(); await vi.advanceTimersByTimeAsync(10); });
+      expect(logoCard().getByText(/Could not save the logo/)).toBeInTheDocument();
+    });
   });
 
   it('takes one pick at a time', async () => {

@@ -107,3 +107,26 @@
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
+
+/* The copies belong to the printer code, so they sit with its button: the box, its note, then the button. */
+.zplGroup {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  flex: 1 1 100%;
+}
+
+.copiesNote {
+  margin: 0;
+  flex: 1 1 100%;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+/* The screen's polite live region is always in the page, even with nothing in it. Empty, it must not add a gap of its
+   own to the body's column: the negative margin takes the body's gap (--s4) back. */
+.live:empty {
+  margin-bottom: calc(var(--s4) * -1);
+}

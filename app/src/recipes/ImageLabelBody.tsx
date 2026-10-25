@@ -148,8 +148,12 @@ function ImageLabelReady({ recipe, typed }: { recipe: CatalogueRecipe; typed: st
   const metrics = useLabelMetrics();
   const checkId = useId();
   const copiesId = useId();
+  const copiesNoteId = useId();
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [drawn, setDrawn] = useState<{ readonly bitmap: Bitmap; readonly png: string } | null>(null);
+  // `layout` and `logoPng` say WHAT the drawing was made from, so a drawing made from something else can be told apart.
+  const [drawn, setDrawn] = useState<{
+    readonly bitmap: Bitmap; readonly png: string; readonly layout: LogoLabelLayout; readonly logoPng: string;
+  } | null>(null);
   const [drawFailed, setDrawFailed] = useState(false);
   const [shownWidth, setShownWidth] = useState<number | null>(null);
   const [copiesText, setCopiesText] = useState('1');
@@ -161,16 +165,28 @@ function ImageLabelReady({ recipe, typed }: { recipe: CatalogueRecipe; typed: st
   const logoData = logo.status === 'ready' ? logo.logo : null;
   const usable = metrics !== null && metrics !== 'failed' ? metrics : null;
 
+  // ⚠️⚠️ THE DRAWING DEPENDS ON PLAIN VALUES, NEVER ON THE OBJECTS THEY CAME IN. Every Firestore snapshot (the watches ask
+  // for metadata changes too, so one arrives when the server confirms a write nobody changed) hands down NEW objects for
+  // the recipe, the label settings and the logo. Keyed on those objects, the layout would be made again, the drawing
+  // thrown away and drawn again, and the picture, Print, Copy and the Copies box would vanish and come back — the Copies
+  // box losing what was being typed, Print going from under the finger. Strings and numbers are equal when nothing changed.
+  const title = labelTitleOf(recipe);
+  const businessName = profile.businessName;
+  const businessAddress = profile.businessAddress;
+  const logoPng = logoData === null ? null : logoData.png;
+  const logoWidth = logoData === null ? 0 : logoData.width;
+  const logoHeight = logoData === null ? 0 : logoData.height;
+
   const input: LogoLabelInput | null = useMemo(() => {
-    if (logoData === null) return null;
+    if (logoPng === null) return null;
     return {
-      title: labelTitleOf(recipe),
+      title,
       ingredients: typed,
-      header: [profile.businessName, profile.businessAddress],
-      logo: { width: logoData.width, height: logoData.height },
+      header: [businessName, businessAddress],
+      logo: { width: logoWidth, height: logoHeight },
       producedOn: producedOnWord(lang),
     };
-  }, [recipe, typed, profile, logoData, lang]);
+  }, [title, typed, businessName, businessAddress, logoPng, logoWidth, logoHeight, lang]);
 
   const layout: LogoLabelLayout | null = useMemo(() => {
     if (input === null || usable === null) return null;
@@ -179,26 +195,37 @@ function ImageLabelReady({ recipe, typed }: { recipe: CatalogueRecipe; typed: st
 
   // The dots, drawn once the logo, the typeface, the widths and a layout that may be printed are all there. A result that
   // arrives after any of them changed is dropped.
+  // ⚠️ THE PREVIOUS DRAWING STAYS ON SCREEN WHILE THE NEW ONE IS MADE (Print and Copy off meanwhile, see `drawing`) and is
+  // replaced when the new one lands: clearing it first made the whole screen blink on every change. It is cleared only
+  // when the inputs no longer make a label that may be printed.
   useEffect(() => {
-    setDrawn(null);
     setDrawFailed(false);
-    if (layout === null || layout.refused || usable === null || logoData === null || fonts !== 'ready') return undefined;
+    if (layout === null || layout.refused || usable === null || logoPng === null || fonts !== 'ready') {
+      setDrawn(null);
+      return undefined;
+    }
     let alive = true;
     void (async () => {
       try {
-        const image = await loadLogoImage(logoData.png);
+        const image = await loadLogoImage(logoPng);
         const bitmap = renderLogoLabelBitmap(layout, usable, image);
         const png = bitmapPng(bitmap);
         // ⚠️ DECODED BEFORE PRINT IS PRESSED: window.print() does not wait for a picture that is still being decoded, and
         // a label printed blank is a wasted label. The result is not used; it only warms the browser's own copy.
         await loadLogoImage(png).catch(() => undefined);
-        if (alive) setDrawn({ bitmap, png });
+        if (alive) setDrawn({ bitmap, png, layout, logoPng });
       } catch {
         if (alive) setDrawFailed(true);
       }
     })();
     return () => { alive = false; };
-  }, [layout, usable, logoData, fonts]);
+  }, [layout, usable, logoPng, fonts]);
+
+  // A label that may be printed, drawn from exactly what is in the screen now. Anything else is either not there
+  // (refused, or still to load) or a drawing from before the last change, which stays visible but cannot be used.
+  const mayDraw = layout !== null && !layout.refused && logoPng !== null && fonts === 'ready';
+  const drawing = mayDraw && drawn !== null && (drawn.layout !== layout || drawn.logoPng !== logoPng);
+  const current = drawn !== null && !drawing && mayDraw ? drawn : null;
 
   useEffect(() => {
     if (drawn === null || canvasRef.current === null) return;
@@ -210,7 +237,7 @@ function ImageLabelReady({ recipe, typed }: { recipe: CatalogueRecipe; typed: st
   }, [drawn]);
 
   // Is the preview shown at its real 80 mm, or smaller to fit a narrow screen? Measured, never assumed.
-  const showing = drawn !== null && !drawFailed;
+  const showing = drawn !== null && mayDraw && !drawFailed;
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!showing || canvas === null) {
@@ -253,11 +280,11 @@ function ImageLabelReady({ recipe, typed }: { recipe: CatalogueRecipe; typed: st
   };
 
   const copyZpl = async () => {
-    if (drawn === null || hasErrors) return;
+    if (current === null || hasErrors) return;
     setNote(null);
     let zpl: string;
     try {
-      zpl = await imageLabelZpl(drawn.bitmap, { copies: clampCopies(copiesText), rotate180: choice.rotate180 }, browserDeflate);
+      zpl = await imageLabelZpl(current.bitmap, { copies: clampCopies(copiesText), rotate180: choice.rotate180 }, browserDeflate);
     } catch (error) {
       setNote({ key: error instanceof Error && error.message === 'no-compression' ? 'label.image.noCompression' : 'label.copyFailed' });
       return;
@@ -275,8 +302,8 @@ function ImageLabelReady({ recipe, typed }: { recipe: CatalogueRecipe; typed: st
 
   // ⚠️ THE HOST IS THE PRINT'S, NOT THIS SCREEN'S (printHost.tsx explains why it outlives the screen).
   const print = () => {
-    if (drawn === null || hasErrors) return;
-    openImagePrintHost(drawn.png);
+    if (current === null || hasErrors) return;
+    openImagePrintHost(current.png);
     try {
       window.print();
       announceAction('label-printed');
@@ -299,7 +326,7 @@ function ImageLabelReady({ recipe, typed }: { recipe: CatalogueRecipe; typed: st
   } else if (fonts === 'failed') {
     content = blocked(t('label.blocked'), [t('label.preview.fontMissing')]);
   } else if (metrics === 'failed') {
-    content = blocked(t('label.blocked'), [t('label.image.drawFailed')]);
+    content = blocked(t('label.blocked'), [t('label.image.metricsFailed')]);
   } else if (fonts === 'loading' || usable === null || layout === null) {
     content = neutral('label.image.preparing');
   } else if (layout.refused) {
@@ -359,12 +386,15 @@ function ImageLabelReady({ recipe, typed }: { recipe: CatalogueRecipe; typed: st
     </section>
   ) : null;
 
-  const off = !showing || hasErrors;
+  // Off while the drawing on screen is from before the last change (it is being replaced), and while the text has errors.
+  const off = !showing || drawing || hasErrors;
   const why = hasErrors ? checkId : undefined;
 
   return (
     <>
-      {content}
+      {/* ⚠️ THE STATUS REGION IS ALWAYS THERE, EMPTY OR NOT: only a region that already exists announces what is put into
+          it, so the screen reader is told when the label becomes ready or is refused, as the label screen's why-sentence is. */}
+      <div role="status" className={own.live}>{content}</div>
       {picture}
       {checkCard}
       {showing ? (
@@ -375,21 +405,6 @@ function ImageLabelReady({ recipe, typed }: { recipe: CatalogueRecipe; typed: st
       ) : null}
       {showing ? (
         <div className={styles.actions}>
-          <div className={own.copies}>
-            <label htmlFor={copiesId}>{t('label.image.copies')}</label>
-            <input
-              id={copiesId}
-              type="number"
-              min="1"
-              max={MAX_IMAGE_COPIES}
-              step="1"
-              inputMode="numeric"
-              className={own.copiesInput}
-              value={copiesText}
-              onChange={event => { setCopiesText(event.target.value); }}
-              onBlur={() => { setCopiesText(String(clampCopies(copiesText))); }}
-            />
-          </div>
           <button
             type="button"
             className={`${styles.button} ${styles.printButton}`}
@@ -400,15 +415,34 @@ function ImageLabelReady({ recipe, typed }: { recipe: CatalogueRecipe; typed: st
             <Printer aria-hidden="true" />
             <span>{t('label.print')}</span>
           </button>
-          <button
-            type="button"
-            className={styles.button}
-            disabled={off}
-            aria-describedby={why}
-            onClick={() => { void copyZpl(); }}
-          >
-            <span>{t('label.image.copyZpl')}</span>
-          </button>
+          <div className={own.zplGroup}>
+            <div className={own.copies}>
+              <label htmlFor={copiesId}>{t('label.image.copies')}</label>
+              <input
+                id={copiesId}
+                aria-describedby={copiesNoteId}
+                type="number"
+                min="1"
+                max={MAX_IMAGE_COPIES}
+                step="1"
+                inputMode="numeric"
+                className={own.copiesInput}
+                value={copiesText}
+                onChange={event => { setCopiesText(event.target.value); }}
+                onBlur={() => { setCopiesText(String(clampCopies(copiesText))); }}
+              />
+            </div>
+            <p id={copiesNoteId} className={own.copiesNote}>{t('label.image.copiesNote')}</p>
+            <button
+              type="button"
+              className={styles.button}
+              disabled={off}
+              aria-describedby={why}
+              onClick={() => { void copyZpl(); }}
+            >
+              <span>{t('label.image.copyZpl')}</span>
+            </button>
+          </div>
           <span role="status" className={styles.status}>{note === null ? '' : t(note.key, note.params)}</span>
         </div>
       ) : null}

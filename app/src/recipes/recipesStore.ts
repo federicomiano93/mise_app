@@ -79,8 +79,10 @@ export interface RecipeToSave {
   // and stay as stored (KEPT_FIELDS), whatever the working copy holds: their editor is the steps editor.
   readonly steps?: unknown;
   readonly endNote?: unknown;
-  // The image label's two texts (labelTexts.ts): a string as typed (empty = take the field away), or undefined when this
-  // save does not touch them — then they are not sent and stay as stored.
+  // The image label's two texts (labelTexts.ts): a string as typed (empty = take the field away), or undefined when a
+  // caller leaves them out — then they are not sent and stay as stored. ⚠️ THE EDITOR NEVER LEAVES THEM OUT: its
+  // cleanWorking hands back the texts it opened with (stored values pass through), so an untouched editor re-sends them as
+  // they were when opened, exactly like the name and the ingredients.
   readonly labelName?: unknown;
   readonly labelIngredientsText?: unknown;
 }

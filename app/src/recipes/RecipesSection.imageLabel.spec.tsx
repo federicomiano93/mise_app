@@ -421,6 +421,59 @@ describe('Copy the printer code', () => {
     expect(copies).toHaveValue(1);
   });
 
+  it('says the copies are for the printer code, and links the note to the box', async () => {
+    open();
+    await preview();
+    const copies = main().getByRole('spinbutton', { name: 'Copies' });
+    const note = main().getByText('For the printer code. When printing from this screen, choose the copies in the print window.');
+    expect(copies).toHaveAccessibleDescription(note.textContent ?? '');
+    expect(copies.closest('div')?.parentElement).toContainElement(zplButton());
+    expect(copies.closest('div')?.parentElement).not.toContainElement(printButton());
+  });
+
+  it('⚠️ an identical snapshot does not draw the label again, nor take the Copies box from under the finger', async () => {
+    const { user, source } = open();
+    const canvasNode = await preview();
+    const copies = main().getByRole('spinbutton', { name: 'Copies' });
+    await user.clear(copies);
+    await user.type(copies, '12');
+    expect(copies).toHaveFocus();
+    const drawnBefore = canvas.render.mock.calls.length;
+    act(() => { source.push(); });
+    act(() => { source.push(); });
+    await new Promise(resolve => { setTimeout(resolve, 20); });
+    expect(canvas.render).toHaveBeenCalledTimes(drawnBefore);
+    expect(await preview()).toBe(canvasNode);
+    expect(main().getByRole('spinbutton', { name: 'Copies' })).toBe(copies);
+    expect(copies).toHaveValue(12);
+    expect(copies).toHaveFocus();
+    expect(printButton()).toBeEnabled();
+    expect(zplButton()).toBeEnabled();
+  });
+
+  it('keeps the old drawing, with Print and Copy off, while a changed label is drawn, then replaces it', async () => {
+    let finish: () => void = () => undefined;
+    const { source } = open();
+    const canvasNode = await preview();
+    canvas.load.mockImplementation(() => new Promise(resolve => { finish = () => { resolve({}); }; }));
+    source.labelConfig = { template: 'logo', businessName: 'Bakery' };
+    act(() => { source.push(); });
+    await waitFor(() => { expect(printButton()).toBeDisabled(); });
+    expect(zplButton()).toBeDisabled();
+    expect(await preview()).toBe(canvasNode);
+    canvas.load.mockImplementation(() => Promise.resolve({}));
+    finish();
+    await waitFor(() => { expect(printButton()).toBeEnabled(); });
+    expect(zplButton()).toBeEnabled();
+  });
+
+  it('has its status region before it speaks, and fills it', async () => {
+    fonts.state = 'loading';
+    open();
+    await main().findByText('Preparing the label…', undefined, LOAD);
+    expect(main().getByText('Preparing the label…').closest('[role="status"]')).not.toBeNull();
+  });
+
   it('⚠️ copies nothing when the job is longer than the queue takes, and says how long it is', async () => {
     canvas.bitmap = noisyBitmap();
     const { user } = open();

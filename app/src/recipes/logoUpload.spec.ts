@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { LOGO_W } from '@mise/shared/label-image-layout';
 import type { GreyImage } from '@mise/shared/label-image-raster';
-import { LogoError, logoFromGrey, prepareLogo, pythonRound } from './logoUpload';
+import { LogoError, logoFromGrey, logoHeightFor, prepareLogo, pythonRound } from './logoUpload';
 
 const grey = (width: number, height: number, fill: (x: number, y: number) => number): GreyImage => {
   const data = new Uint8Array(width * height);
@@ -38,6 +38,16 @@ describe('logoFromGrey', () => {
     const result = logoFromGrey(grey(2640, 5, () => 0));
     if (typeof result === 'string') throw new Error(result);
     expect(result.height).toBe(2);
+  });
+
+  it('computes the height the script would, 0 for a hair-thin picture', () => {
+    expect(logoHeightFor(40, 10)).toBe(330);
+    expect(logoHeightFor(3000, 1)).toBe(0);
+    expect(logoHeightFor(2640, 5)).toBe(2);
+  });
+
+  it('calls a picture that rounds to no height blank, not too big', () => {
+    expect(logoFromGrey(grey(3000, 1, () => 0))).toBe('blank');
   });
 
   it('refuses a logo taller than the label', () => {

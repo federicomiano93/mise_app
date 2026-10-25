@@ -391,6 +391,9 @@ function PhotoCard() {
   );
 }
 
+// How long the logo card waits for the server before it says the logo is kept on this device.
+const LOGO_SAVE_WAIT_MS = 8000;
+
 const LOGO_ERROR_TEXT: Readonly<Record<LogoError['code'], MessageKey>> = {
   blank: 'label.settings.logoBlank',
   'too-tall': 'label.settings.logoTooTall',
@@ -440,11 +443,25 @@ function LogoCard() {
         outcome = error instanceof LogoError ? LOGO_ERROR_TEXT[error.code] : 'label.settings.logoUndecodable';
       }
       if (prepared !== undefined) {
-        try {
-          await store.saveLabelLogo(prepared);
-        } catch {
+        // ⚠️ OFFLINE THE WRITE NEVER ANSWERS: saveLabelLogo resolves when the SERVER has it, so without a limit the card
+        // would stay busy for as long as the connection is away, with no sentence at all. After LOGO_SAVE_WAIT_MS the card
+        // is released and says it is kept on this device; the write is still awaited in the background and its real end
+        // (saved, or refused) replaces that sentence if the card is still there and no newer pick has started.
+        const settled = store.saveLabelLogo(prepared).then(() => 'saved' as const, () => 'failed' as const);
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const slow = new Promise<'slow'>(resolve => { timer = setTimeout(() => { resolve('slow'); }, LOGO_SAVE_WAIT_MS); });
+        const first = await Promise.race([settled, slow]);
+        clearTimeout(timer);
+        if (first === 'failed') {
           bad = true;
           outcome = 'label.settings.logoSaveFailed';
+        } else if (first === 'slow') {
+          outcome = 'label.settings.logoQueued';
+          void settled.then(last => {
+            if (!mounted.current || working.current) return;
+            setSaid(last === 'saved' ? 'label.settings.logoSaved' : 'label.settings.logoSaveFailed');
+            setFailedCard(last === 'failed');
+          });
         }
       }
     } finally {

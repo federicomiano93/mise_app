@@ -177,6 +177,7 @@ export function fakeRecipesSource(
       for (const w of ingredientWatchers) w.onChange([...ingredients.values()], FROM_SERVER);
       for (const w of supplierWatchers) w.onChange([...suppliers.values()], FROM_SERVER);
       if (!labelHeld) for (const w of labelWatchers) w.onChange(fake.labelConfig, FROM_SERVER);
+      tellLogo();
     },
     breakStream() {
       for (const w of [...watchers]) {

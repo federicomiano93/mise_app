@@ -32,11 +32,20 @@ export function pythonRound(x: number): number {
   return floor % 2 === 0 ? floor : floor + 1;
 }
 
+// The logo's height once a picture of this size is reduced to LOGO_W wide, rounded the script's way.
+// ⚠️ A VERY WIDE, THIN PICTURE ROUNDS TO 0 (a 1-pixel line 3000 wide gives 0.44): there is no picture left, and the rules
+// need a height of at least 1. It is called blank (nothing to print), never «too big», which would send somebody looking
+// for a smaller file when the trouble is that there is too little of it.
+export function logoHeightFor(width: number, height: number): number {
+  return pythonRound((height * LOGO_W) / width);
+}
+
 // The pure half: a grey picture → the logo's grey picture, or what is wrong with it.
 export function logoFromGrey(grey: GreyImage): GreyImage | LogoProblem {
   const cropped = cropToInk(autocontrast(grey));
   if (cropped === null) return 'blank';
-  const height = pythonRound((cropped.height * LOGO_W) / cropped.width);
+  const height = logoHeightFor(cropped.width, cropped.height);
+  if (height < 1) return 'blank';
   if (height > CANVAS_H) return 'too-tall';
   return resizeLanczos(cropped, LOGO_W, height);
 }
