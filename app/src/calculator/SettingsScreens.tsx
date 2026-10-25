@@ -3,6 +3,7 @@ import { useT } from '../i18n/useT';
 import { useCalculator } from './CalculatorContext';
 import { CalculatorSettings } from './CalculatorSettings';
 import { ClientsEditor } from './ClientsEditor';
+import { CutoffEditor } from './CutoffEditor';
 import { SETTINGS_PATH } from './calculatorPath';
 import type { DrawnSettingsView } from './calculatorPath';
 import { DivisorChooser, DivisorProducts } from './DivisorSettings';
@@ -24,6 +25,8 @@ export function SettingsScreens({ view }: { view: DrawnSettingsView }) {
       return <SettingsGate><RecipesEditor target={view.target} /></SettingsGate>;
     case 'whatsapp':
       return <SettingsGate><WhatsappEditor target={view.target} /></SettingsGate>;
+    case 'ordering':
+      return <CutoffEditor />;
     case 'extra':
       return <SettingsGate><ExtraSettings /></SettingsGate>;
     case 'log':

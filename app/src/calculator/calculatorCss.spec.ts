@@ -177,6 +177,9 @@ describe('the doors at the top of the work view on a phone', () => {
   it('share one row of equal columns below the tablet rail (700px), not three stacked rows', () => {
     expect(text).toMatch(/@media \(max-width: 699\.98px\)\s*\{\s*\.top\s*\{[^}]*grid-auto-flow: column;[^}]*grid-auto-columns: minmax\(0, 1fr\);/);
   });
+  it('are two columns of two when the venue shows FOUR doors, until the single row of 700px', () => {
+    expect(text).toMatch(/@media \(max-width: 699\.98px\)[\s\S]*\.top\[data-doors="4"\]\s*\{[^}]*grid-auto-flow: row;[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  });
   it('fall back to two columns on the narrowest phones, where a third is too narrow for «Impostazioni»', () => {
     expect(text).toMatch(/@media \(max-width: 339\.98px\)\s*\{\s*\.top\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
   });

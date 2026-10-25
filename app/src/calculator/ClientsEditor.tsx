@@ -31,10 +31,9 @@ import { useSaveConfig } from './useSaveConfig';
 // Opened by SettingsGate, which waits for the venue's real configuration: the copy below is made ONCE, when the
 // editor opens, so it must not be made from the empty default.
 //
-// ⚠️ NOT HERE YET, on purpose: the client's ordering link (parity 75). It arrives with step 3c-4b, together with
-// the client-ordering accounts; nothing here writes `client-accounts` or `client-menus`. Republishing the clients'
-// ordering menus when the address book is saved (`publishMenus` in js/calculator-config-store.js, collection
-// `client-menus`) also comes with 3c-4b, and MUST be there before the switch to Mise 2.
+// The client's ordering link (parity 75) is drawn by ClientScreen (`OrderingLink`) and acts on the database at once, so it
+// shows only a sentence while this editor holds unsaved changes. Republishing the clients' ordering menus when the address
+// book is saved is the store's `onConfigSaved` (CalculatorContext), not this editor's business.
 //
 // ⚠️ THE DISCARD QUESTION FIRES ONLY WHEN THE EDITOR IS LEFT ALTOGETHER: every way out goes through the router's
 // blocker, which lets a move between the editor's own addresses through. A SAVE IN FLIGHT IS PENDING, NOT GONE:

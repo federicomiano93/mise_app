@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect } from 'react';
-import { ClipboardList, Settings } from 'lucide-react';
+import { ClipboardList, Inbox, Settings } from 'lucide-react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { calculatorEmptyReason, getVisibleRecipes } from '@mise/shared/calculator-config';
 import type { EmptyReason } from '@mise/shared/calculator-config';
@@ -8,17 +8,21 @@ import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS, Page } from '../shell/Page';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
-import { CalculatorProvider, useCalculator, useCalculatorStore } from './CalculatorContext';
+import { useAlert } from '../ui/useAlert';
+import { CalculatorProvider, useCalculator, useCalculatorStore, useClientOrdersStore } from './CalculatorContext';
 import {
-  CALCULATOR_PATH, LOG_PATH, SETTINGS_PATH, newRecipePath, recipePath, recipesPath, resolveCalculatorPath,
+  CALCULATOR_PATH, LOG_PATH, ORDERS_PATH, SETTINGS_PATH, newRecipePath, recipePath, recipesPath, resolveCalculatorPath,
 } from './calculatorPath';
 import { messageText } from './calculatorMessages';
+import { clientOrdersMessageDelivery, clientOrdersMessageText } from './clientOrdersMessages';
 import {
-  ADD_RECIPE_OPENER, CHOOSE_RECIPES_OPENER, DOUGH_HISTORY_OPENER, HandBackProvider, SETTINGS_OPENER, useHandBack,
+  ADD_RECIPE_OPENER, CHOOSE_RECIPES_OPENER, CLIENT_ORDERS_OPENER, DOUGH_HISTORY_OPENER, HandBackProvider, SETTINGS_OPENER, useHandBack,
   useHandBackState,
 } from './handBack';
 import { DoughHistory } from './DoughHistory';
 import { OpenButton } from './OpenButton';
+import { OrdersBanner } from './OrdersBanner';
+import { OrdersReceived } from './OrdersReceived';
 import { RecipePanel } from './RecipePanel';
 import { RecipeTabs } from './RecipeTabs';
 import { SendOrderDoor } from './SendOrder';
@@ -45,16 +49,25 @@ export default function CalculatorSection() {
   );
 }
 
-// What the store reports (a dough the database refused, a log that is full) goes to the status message.
+// What the stores report (a dough the database refused, a log that is full, an order that could not be recorded as used,
+// a deadline that was not saved) goes to the status message, on whatever Calculator screen is open.
 function StoreMessages() {
   const { t } = useT();
   const store = useCalculatorStore();
+  const clientOrders = useClientOrdersStore();
   const say = useStatusMessage();
   useEffect(() => store.onMessage(message => {
     const text = messageText(t, message);
     if (text !== null) say(text);
   }), [store, say, t]);
-  return null;
+  // ⚠️ A message that is a warning (an order used but not recorded) stays on screen until it is dismissed.
+  const [alert, alertDialog] = useAlert();
+  useEffect(() => clientOrders.onMessage(message => {
+    const text = clientOrdersMessageText(t, message);
+    if (clientOrdersMessageDelivery(message) === 'alert') void alert({ message: text, okLabel: t('common.ok') });
+    else say(text);
+  }), [clientOrders, say, alert, t]);
+  return alertDialog;
 }
 
 function CalculatorScreen() {
@@ -83,6 +96,10 @@ function CalculatorScreen() {
         ) : 'log' in resolved ? (
           <PartBoundary resetKey={pathname}>
             <DoughHistory view={resolved.log} />
+          </PartBoundary>
+        ) : 'orders' in resolved ? (
+          <PartBoundary resetKey="orders">
+            <OrdersReceived view={resolved.orders} />
           </PartBoundary>
         ) : (
           <PartBoundary resetKey={resolved.active ?? ''}>
@@ -130,7 +147,7 @@ function WorkView({ active }: { active: string | null }) {
     const copy = configFailed && reason === 'loading' ? FAILED_TEXT : EMPTY_TEXT[reason];
     return (
       <div className={styles.view}>
-        {reason === 'loading' ? null : <Doors />}
+        {reason === 'loading' ? null : <Doors showOrders={config.showClientOrdersButton} />}
         <div className={styles.empty}>
           <p className={styles.emptyTitle}>{t(copy.title)}</p>
           {copy.sub ? <p className={styles.emptySub}>{t(copy.sub)}</p> : null}
@@ -153,7 +170,8 @@ function WorkView({ active }: { active: string | null }) {
 
   return (
     <div className={styles.view}>
-      <Doors />
+      <Doors showOrders={config.showClientOrdersButton} />
+      <OrdersBanner />
       <RecipeTabs
         recipes={recipes}
         active={current.id}
@@ -173,13 +191,13 @@ function WorkView({ active }: { active: string | null }) {
   );
 }
 
-// The doors to the Dough history, to Settings and to the market order («Send order», a dialog rather than an address),
-// at the top of the work view and of every empty state but
-// «loading».
-function Doors() {
+// The doors to the Dough history, to Settings, to the clients' orders and to the market order («Send order», a dialog
+// rather than an address), at the top of the work view and of every empty state but «loading». The clients' orders door
+// is there unless the venue switched it off (`showClientOrdersButton`); the banner above the tabs does not follow that.
+function Doors({ showOrders }: { showOrders: boolean }) {
   const { t } = useT();
   return (
-    <div className={styles.top}>
+    <div className={styles.top} data-doors={showOrders ? 4 : 3}>
       <OpenButton opener={DOUGH_HISTORY_OPENER} to={LOG_PATH}>
         <ClipboardList aria-hidden="true" />
         {t('ui.log')}
@@ -188,6 +206,12 @@ function Doors() {
         <Settings aria-hidden="true" />
         {t('ui.settings')}
       </OpenButton>
+      {showOrders ? (
+        <OpenButton opener={CLIENT_ORDERS_OPENER} to={ORDERS_PATH}>
+          <Inbox aria-hidden="true" />
+          {t('calc.clientOrders.door')}
+        </OpenButton>
+      ) : null}
       <SendOrderDoor />
     </div>
   );
