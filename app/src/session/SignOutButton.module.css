@@ -1,0 +1,36 @@
+/* The small «Log out» on the title line of Settings: an icon and a word in muted ink, no fill and
+   no border, so it never competes with the page. The 48px touch height stays. Icon and text sit
+   on one flex row, centred on each other. State comes from React Aria's data attributes, so a
+   touch screen never keeps a stuck hover. The focus ring is base.css's :focus-visible. */
+
+.small {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: var(--hit);
+  padding: 0 var(--s2);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-2);
+  font: 500 var(--fs-sm)/1 var(--font);
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ⚠️ Sized here, not by the icon's size prop: base.css's `svg.lucide` (20px) is a CSS rule and beats the
+   width/height attributes the prop writes, which drew the icon at 20px beside 14px text. */
+.small svg {
+  width: 16px;
+  height: 16px;
+}
+
+.small[data-hovered] {
+  background: var(--sunken);
+  color: var(--ink);
+}
+
+.small[data-pressed] {
+  background: var(--sunken);
+}
