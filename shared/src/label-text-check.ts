@@ -6,7 +6,7 @@
 // ⚠️ IT DOES NOT REPLACE THE HACCP CONSULTANT, and the owner's own words say so: it stops the obvious mistakes before a
 // label is printed. ERRORE stops the printing, DA VERIFICARE asks for the product sheet.
 //
-// THE ONLY DIFFERENCES FROM THE SCRIPT — three defects found in it on 25 Oct 2026, fixed here on purpose:
+// THE ONLY DIFFERENCES FROM THE SCRIPT — four defects found in it on 25 Oct 2026, fixed here on purpose:
 //   (a) BOLD = CHECKED. The script checks SPELTA, ALBUME, TUORLO, SIERO, CASEINA, YOGURT, MANDORLA, NOCCIOLA and
 //       PISTACCHIO for capitals but does not print them bold; the law asks for both. One list now does both jobs.
 //   (b) «malto» IS A WHOLE WORD. The script looks for words STARTING with «malto», so «maltodestrina» (a sugar, no
@@ -14,6 +14,9 @@
 //   (c) ORZO NEXT TO THE BEER. The script accepted «birra» or «malto» whenever ORZO appeared ANYWHERE in the text — the
 //       barley of another ingredient made the beer look declared. Now ORZO must be in the SAME ingredient: the piece
 //       between commas, at the word's own depth, with its parentheses («birra (contiene ORZO, alcol 5°)»).
+//   (d) EVERY LECITHIN NAMES ITS ORIGIN. The script accepted a bare «lecitina» whenever a «lecitina di …» stood anywhere
+//       in the text; the bare one may be soy. Now each one must be followed by its own «di …».
+// Text pasted with separate accent marks (NFD) is composed first, so it reads as typed.
 // One addition the script has no equivalent for, because it knows nothing of the recipe: when Mise holds the recipe's
 // allergens fully declared, each one must appear in CAPITALS in the text (`declared`), else ERRORE.
 //
@@ -172,8 +175,9 @@ const HIDDEN: readonly { readonly word: 'birra' | 'malto'; readonly re: RegExp }
   // (b) a whole word: «maltodestrina» and «maltitolo» are not malt.
   { word: 'malto', re: new RegExp(word('malto'), 'gu') },
 ];
-const LECITHIN = new RegExp(prefix('lecitina'), 'u');
-const LECITHIN_WITH_ORIGIN = new RegExp(`lecitina\\s+di\\s+${W}+`, 'u');
+const LECITHIN = new RegExp(prefix('lecitina'), 'gu');
+// Read AT each lecithin (sticky): its own origin must follow it.
+const LECITHIN_WITH_ORIGIN = new RegExp(`lecitina\\s+di\\s+${W}+`, 'yu');
 // «lievito di birra» is a yeast and holds no barley (the script's ECCEZIONI_NASCOSTI).
 const HIDDEN_EXCEPTION = 'lievito di birra';
 
@@ -185,8 +189,10 @@ const TO_VERIFY: readonly { readonly kind: 'sulphites' | 'chocolate' | 'margarin
 
 // The check, in the script's order: small-letter allergens (list order, then where they stand), the hidden ones, then
 // the three to verify, then the cross-check with the recipe.
-export function checkLabelText(text: string, options: CheckOptions): CheckResult {
+export function checkLabelText(typed: string, options: CheckOptions): CheckResult {
   if (options.lang !== 'it') return { available: false, errors: [], warnings: [] };
+  // Accents pasted as separate marks (NFD) are composed first, as the layout does, so «più» is one word either way.
+  const text = typed.normalize('NFC');
   const errors: CheckIssue[] = [];
   const warnings: CheckIssue[] = [];
   const lower = lowerSameLength(text);
@@ -211,14 +217,22 @@ export function checkLabelText(text: string, options: CheckOptions): CheckResult
     const bad = [...lower.matchAll(h.re)].some(m => !inException(m.index) && !ingredientAt(text, m.index).includes('ORZO'));
     if (bad) errors.push({ kind: 'hidden', word: h.word });
   }
-  if (LECITHIN.test(lower) && !LECITHIN_WITH_ORIGIN.test(lower)) errors.push({ kind: 'lecithin' });
+  // (d) every lecithin names its own origin: the script let one «lecitina di girasole» anywhere excuse a bare one,
+  // which may be soy.
+  const bareLecithin = [...lower.matchAll(LECITHIN)].some(m => {
+    LECITHIN_WITH_ORIGIN.lastIndex = m.index;
+    return !LECITHIN_WITH_ORIGIN.test(lower);
+  });
+  if (bareLecithin) errors.push({ kind: 'lecithin' });
 
   for (const v of TO_VERIFY) {
     if (v.re.test(lower) && (v.unless === null || !text.includes(v.unless))) warnings.push({ kind: v.kind });
   }
 
   for (const code of options.declared ?? []) {
-    const words = DECLARED_WORDS[code];
+    // A code this list does not know (older stored data) is not a word the check can look for: skipped.
+    const words = (DECLARED_WORDS as Readonly<Record<string, readonly string[] | undefined>>)[code];
+    if (words === undefined) continue;
     if (!words.some(w => new RegExp(word(w), 'u').test(text))) errors.push({ kind: 'declared-missing', code });
   }
 

@@ -86,6 +86,41 @@ describe('the «with logo» layout, against the owner’s script', () => {
     expect(one.titleY).toBe(both.titleY);
   });
 
+  test('nothing runs off the side: what the script drew cut is refused here', () => {
+    const m = labelMetrics();
+    const measure = (t: string, f: LabelFont, px: number) => measureLikePillow(m, t, f, px);
+    // The two golden titles still too wide at the smallest size (the script drew them from x −126 and x −661).
+    for (const id of ['long-title', 'very-long-title']) {
+      const p = golden.products.find(g => g.id === id) as GoldenProduct;
+      expect(p.layout.texts.some(t => t.font === 'title' && t.x < 0), `${id} was cut by the script`).toBe(true);
+      const laid = layoutLogoLabel(input(p), measure);
+      expect([laid.tooWide, laid.refused]).toEqual([['title'], true]);
+    }
+    // Every other golden product fits sideways.
+    for (const p of golden.products.filter(g => !['long-title', 'very-long-title'].includes(g.id))) {
+      const laid = layoutLogoLabel(input(p), measure);
+      expect([p.id, laid.tooWide, laid.unmeasurable, laid.refused]).toEqual([p.id, [], false, p.layout.tooLong]);
+    }
+    const base = input(golden.products[0] as GoldenProduct);
+    // One «word» wider than a line (commas without spaces): refused, and no empty line before it.
+    const glued = layoutLogoLabel({ ...base, ingredients: 'INGREDIENTI:farina,zucchero,BURRO,UOVA,LATTE,sale,lievito,acqua,olio' }, measure);
+    expect([glued.tooWide, glued.refused, glued.lines.length, glued.lines[0]?.length]).toEqual([['word'], true, 1, 1]);
+    // A header line wider than the label.
+    const header = layoutLogoLabel({ ...base, header: ['X'.repeat(80), ''] }, measure);
+    expect([header.tooWide, header.refused]).toEqual([['header'], true]);
+  });
+
+  test('a character the fonts cannot measure refuses the label; decomposed accents are composed first', () => {
+    const m = labelMetrics();
+    const measure = (t: string, f: LabelFont, px: number) => measureLikePillow(m, t, f, px);
+    const base = input(golden.products[0] as GoldenProduct);
+    const snow = layoutLogoLabel({ ...base, ingredients: 'farina ☃, sale' }, measure);
+    expect([snow.unmeasurable, snow.refused]).toEqual([true, true]);
+    const nfd = layoutLogoLabel({ ...base, title: 'PIÙ BUONO', ingredients: 'farina, così sale' }, measure);
+    expect([nfd.unmeasurable, nfd.refused]).toEqual([false, false]);
+    expect(nfd.titleLines).toEqual(['PIÙ BUONO']);
+  });
+
   test('«PRODOTTO IL:» follows the country’s language, English for anything unknown', () => {
     expect(producedOnWord('it')).toBe('PRODOTTO IL:');
     expect(producedOnWord('en')).toBe('PRODUCED ON:');

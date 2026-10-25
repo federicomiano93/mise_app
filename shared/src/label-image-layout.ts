@@ -78,6 +78,13 @@ export interface LogoLabelLayout {
   readonly endY: number;
   // The ingredients go past y 398: refuse.
   readonly tooLong: boolean;
+  // Text that would run off the label sideways, which the script drew cut: a header line wider than the label, a title
+  // still wider than 596 dots at the smallest size, a single word of the ingredients wider than its 590. Refuse.
+  readonly tooWide: readonly ('header' | 'title' | 'word')[];
+  // A width that could not be measured (a character the fonts do not hold): refuse, never guess.
+  readonly unmeasurable: boolean;
+  // Any of the three: the label must not be printed.
+  readonly refused: boolean;
 }
 
 // The words of the ingredients, as the script reads them: split on any white space.
@@ -85,14 +92,24 @@ export function ingredientWords(text: string): string[] {
   return text.split(/\s+/u).filter(w => w !== '');
 }
 
-export function layoutLogoLabel(input: LogoLabelInput, measure: Measure): LogoLabelLayout {
+export function layoutLogoLabel(input: LogoLabelInput, rawMeasure: Measure): LogoLabelLayout {
   const elements: LayoutElement[] = [];
+  let unmeasurable = false;
+  const measure: Measure = (t, font, px) => {
+    const w = rawMeasure(t, font, px);
+    if (!Number.isFinite(w)) unmeasurable = true;
+    return w;
+  };
+  const tooWide = new Set<'header' | 'title' | 'word'>();
+  // Text pasted with its accents as separate marks (NFD) is brought to the composed form the fonts hold.
+  const nfc = (t: string) => t.normalize('NFC');
   const text = (x: number, yDots: number, t: string, font: LabelFont, px: number) => {
     if (t !== '') elements.push({ kind: 'text', x, y: yDots * S, text: t, font, px });
   };
   const centred = (yDots: number, t: string, font: LabelFont, px: number) => {
     const w = measure(t, font, px);
     text((CANVAS_W - w) / 2, yDots, t, font, px);
+    return w;
   };
 
   // The logo: 330 dots wide, centred, 10 dots from the top.
@@ -102,17 +119,20 @@ export function layoutLogoLabel(input: LogoLabelInput, measure: Measure): LogoLa
   const logoBottom = 10 + Math.floor(lh / S);
 
   // The header.
-  centred(logoBottom + 6, input.header[0].trim(), 'regular', BODY_PX);
-  centred(logoBottom + 28, input.header[1].trim(), 'regular', BODY_PX);
+  for (const [i, dy] of [[0, 6], [1, 28]] as const) {
+    if (centred(logoBottom + dy, nfc(input.header[i]).trim(), 'regular', BODY_PX) > CANVAS_W) tooWide.add('header');
+  }
 
   // The rule, 4 dots (0.5 mm), from x 22 to x 618.
   const lineY = logoBottom + 57;
   elements.push({ kind: 'rect', x0: 22 * S, y0: lineY * S, x1: 618 * S, y1: (lineY + 4) * S });
 
   // The title: 32 px, one size smaller at a time while its widest line is wider than 596 dots, never under 20.
-  const titleLines = input.title.split('|').map(r => r.trim());
+  const titleLines = nfc(input.title).split('|').map(r => r.trim());
+  const widest = (px: number) => Math.max(...titleLines.map(r => measure(r, 'title', px)));
   let size = TITLE_MAX;
-  while (size > TITLE_MIN && Math.max(...titleLines.map(r => measure(r, 'title', size * S))) > 596 * S) size -= 1;
+  while (size > TITLE_MIN && widest(size * S) > 596 * S) size -= 1;
+  if (widest(size * S) > 596 * S) tooWide.add('title');
   const extraTitle = (titleLines.length - 1) * TITLE_LINE;
 
   // The ingredients, word by word, onto lines at most 590 dots wide.
@@ -123,10 +143,12 @@ export function layoutLogoLabel(input: LogoLabelInput, measure: Measure): LogoLa
   const lines: string[][] = [];
   let cur: string[] = [];
   let curW = 0;
-  for (const w of ingredientWords(input.ingredients)) {
+  for (const w of ingredientWords(nfc(input.ingredients))) {
     const ww = widthOf(w);
+    if (ww > maxW) tooWide.add('word');
     const add = cur.length === 0 ? ww : space + ww;
-    if (curW + add <= maxW) {
+    // A word wider than a whole line starts its own line, never after an empty one (the script pushed an empty one).
+    if (curW + add <= maxW || cur.length === 0) {
       cur.push(w);
       curW += add;
     } else {
@@ -166,7 +188,11 @@ export function layoutLogoLabel(input: LogoLabelInput, measure: Measure): LogoLa
   text(27 * S, 430, input.producedOn, 'bold', SMALL_BOLD_PX);
   elements.push({ kind: 'rect', x0: 160 * S, y0: 444 * S, x1: 350 * S, y1: 446 * S });
 
-  return { elements, titleLines, titleSize: size, logoBottom, lineY, titleY, ingredientsY, lines, endY: y, tooLong };
+  const wide = [...tooWide].sort();
+  return {
+    elements, titleLines, titleSize: size, logoBottom, lineY, titleY, ingredientsY, lines, endY: y, tooLong,
+    tooWide: wide, unmeasurable, refused: tooLong || wide.length > 0 || unmeasurable,
+  };
 }
 
 // ── The one word this label adds ─────────────────────────────────────────────

@@ -3,7 +3,8 @@
 
 import { describe, expect, test } from 'vitest';
 import { toBitmap } from './label-image-raster';
-import { base64Decode, base64Encode, crc16Xmodem, graphicField, imageLabelZpl, readZ64, z64Field } from './zpl-z64';
+import { MAX_JOB_CHARS, base64Decode, base64Encode, crc16Xmodem, graphicField, imageLabelZpl, readZ64, z64Field } from './zpl-z64';
+import rulesSource from '../../firestore.rules?raw';
 import type { Deflate, Inflate } from './zpl-z64';
 
 // shared/ has no DOM or Node types; Node 18+ has the Compression Streams as globals.
@@ -84,8 +85,9 @@ describe('the job', () => {
     expect(await imageLabelZpl(b, { copies: Number.NaN, rotate180: true }, deflate)).toContain('^PQ1\n');
   });
 
-  test('a busy label is far under the 77 000 characters of plain hex', async () => {
+  test('a busy label fits the queue’s limit (and the limit is the rules’ own number)', async () => {
     const zpl = await imageLabelZpl(picture(), { copies: 1, rotate180: true }, deflate);
-    expect(zpl.length).toBeLessThan(77000 / 2);
+    expect(zpl.length).toBeLessThan(MAX_JOB_CHARS);
+    expect(rulesSource).toMatch(new RegExp(`payload\\.size\\(\\) <= ${MAX_JOB_CHARS}\\b`));
   });
 });

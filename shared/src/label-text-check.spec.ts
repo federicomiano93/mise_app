@@ -44,6 +44,13 @@ describe('the allergen check, against the owner’s script', () => {
     expect(checkLabelText('INGREDIENTI: birra (ORZO), birra scura, sale.', it).errors).toEqual([{ kind: 'hidden', word: 'birra' }]);
   });
 
+  test('(d) every lecithin names its own origin: one «lecitina di girasole» no longer excuses a bare one', () => {
+    const t = 'INGREDIENTI: farina, emulsionanti: lecitina, lecitina di girasole.';
+    expect(checkLabelText(t, it).errors).toEqual([{ kind: 'lecithin' }]);
+    expect(checkLabelText('INGREDIENTI: lecitina di SOIA, lecitina di girasole.', it).errors).toEqual([]);
+    expect(checkLabelText('INGREDIENTI: farina, lecitina.', it).errors).toEqual([{ kind: 'lecithin' }]);
+  });
+
   test('«lievito di birra» is a yeast, wherever it stands', () => {
     expect(checkLabelText('INGREDIENTI: farina di GRANO, lievito di birra, sale.', it).errors).toEqual([]);
     expect(checkLabelText('INGREDIENTI: lievito di birra, birra chiara.', it).errors).toEqual([{ kind: 'hidden', word: 'birra' }]);
@@ -78,6 +85,13 @@ describe('the cross-check with the recipe', () => {
   test('in small letters it is not said (and the small letters are their own error)', () => {
     const r = checkLabelText('INGREDIENTI: latte.', { lang: 'it', declared: ['milk'] });
     expect(r.errors).toEqual([{ kind: 'lowercase', word: 'latte' }, { kind: 'declared-missing', code: 'milk' }]);
+  });
+  test('a code the list does not know is skipped, never a crash', () => {
+    const r = checkLabelText('INGREDIENTI: BURRO.', { lang: 'it', declared: ['milk', 'gluten' as never] });
+    expect(r.errors).toEqual([]);
+  });
+  test('decomposed accents (NFD) read as typed', () => {
+    expect(checkLabelText('caffèlatte', it).errors).toEqual([]);
   });
   test('no declaration (not fully declared): no cross-check', () => {
     expect(checkLabelText('INGREDIENTI: zucchero.', { lang: 'it', declared: null }).errors).toEqual([]);

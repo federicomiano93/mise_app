@@ -88,6 +88,12 @@ export async function graphicField(bitmap: Bitmap, deflate: Deflate): Promise<st
 // The most copies one job may ask for: the print queue's own limit (print-queue-model MAX_COPIES, 99).
 export const MAX_IMAGE_COPIES = 99;
 
+// The longest job the print queue takes (firestore.rules, print-jobs `payload.size() <= 20000`; the agent refuses
+// longer too). A job longer than this must be stopped on screen before it is queued, never left to a «permission
+// denied». Measured on 25 Oct 2026: 2 700–7 200 characters for printable labels with a fake logo, about 850 more with
+// a detailed real one.
+export const MAX_JOB_CHARS = 20000;
+
 export interface ImageJobOptions {
   // How many labels: whole, 1 to 99 (anything else is brought into that range).
   readonly copies: number;
