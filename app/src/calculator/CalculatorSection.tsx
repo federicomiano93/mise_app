@@ -21,6 +21,7 @@ import { DoughHistory } from './DoughHistory';
 import { OpenButton } from './OpenButton';
 import { RecipePanel } from './RecipePanel';
 import { RecipeTabs } from './RecipeTabs';
+import { SendOrderDoor } from './SendOrder';
 import { SettingsScreens } from './SettingsScreens';
 import { TabStateProvider } from './TabStateContext';
 import styles from './CalculatorSection.module.css';
@@ -172,7 +173,8 @@ function WorkView({ active }: { active: string | null }) {
   );
 }
 
-// The doors to the Dough history and to Settings, at the top of the work view and of every empty state but
+// The doors to the Dough history, to Settings and to the market order («Send order», a dialog rather than an address),
+// at the top of the work view and of every empty state but
 // «loading».
 function Doors() {
   const { t } = useT();
@@ -186,6 +188,7 @@ function Doors() {
         <Settings aria-hidden="true" />
         {t('ui.settings')}
       </OpenButton>
+      <SendOrderDoor />
     </div>
   );
 }

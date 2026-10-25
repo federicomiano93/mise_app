@@ -13,6 +13,14 @@
 //   /calculator/settings/recipes             Recipes: the list, an accordion
 //   /calculator/settings/recipes/<id>        one recipe (an id the working copy lacks goes back to the list)
 //   /calculator/settings/recipes/new         makes a fresh empty recipe and replaces itself with the recipe's address
+//   /calculator/settings/whatsapp            WhatsApp: the lists and the direct clients (Level 0)
+//   …/whatsapp/list/<id>                     one list (Level 1; an id the working copy lacks goes back to Level 0)
+//   …/whatsapp/list/<id>/add                 choose an address-book client to add to the list (Level 1b)
+//   …/whatsapp/list/<id>/client/<clientId>   that client's products and free lines in the list (Level 2)
+//   …/whatsapp/list/<id>/client/<clientId>/add   «Add to the message» (Level 3)
+//   …/whatsapp/direct/<id>                   one direct client (its name, products and free lines)
+//   …/whatsapp/direct/<id>/add               «Add to the message» for the direct client
+//   …/whatsapp/list/new, …/direct/new        make a fresh empty item and replace themselves with its address
 //   any other /calculator/settings/…         unknown: back to /calculator/settings
 //   /calculator/log                          the Dough history: the list of logs
 //   /calculator/log/new                      Add log (a log made by hand)
@@ -42,10 +50,20 @@ export const clientsPath = `${SETTINGS_PATH}/clients`;
 export const newClientPath = `${clientsPath}/new`;
 export const recipesPath = `${SETTINGS_PATH}/recipes`;
 export const newRecipePath = `${recipesPath}/new`;
+export const whatsappPath = `${SETTINGS_PATH}/whatsapp`;
+export const newWhatsappListPath = `${whatsappPath}/list/new`;
+export const newWhatsappDirectPath = `${whatsappPath}/direct/new`;
 export const LOG_PATH = `${CALCULATOR_PATH}/log`;
 export const newLogPath = `${LOG_PATH}/new`;
 
 const encoded = (id: string): string => encodeURIComponent(id);
+
+export const whatsappListPath = (id: string): string => `${whatsappPath}/list/${encoded(id)}`;
+export const whatsappListAddPath = (id: string): string => `${whatsappListPath(id)}/add`;
+export const whatsappEntryPath = (id: string, clientId: string): string => `${whatsappListPath(id)}/client/${encoded(clientId)}`;
+export const whatsappEntryAddPath = (id: string, clientId: string): string => `${whatsappEntryPath(id, clientId)}/add`;
+export const whatsappDirectPath = (id: string): string => `${whatsappPath}/direct/${encoded(id)}`;
+export const whatsappDirectAddPath = (id: string): string => `${whatsappDirectPath(id)}/add`;
 
 export const recipePath = (id: string): string => `${CALCULATOR_PATH}/${encoded(id)}`;
 export const divisorRecipePath = (id: string): string => `${divisorPath}/${encoded(id)}`;
@@ -65,6 +83,27 @@ export const inClientsEditor = (pathname: string): boolean => pathname === clien
 // copy, so it is never leaving.
 export const inRecipesEditor = (pathname: string): boolean => pathname === recipesPath || pathname.startsWith(`${recipesPath}/`);
 
+// Whether an address belongs to ONE WhatsApp item (a list with its client entries and pickers, or a direct client
+// with its picker): moving between those keeps the item's working copy, so it is never leaving. The top (Level 0),
+// another item and the rest of the app are outside.
+export const inWhatsappItem = (pathname: string, group: WhatsappGroup, id: string): boolean => {
+  const base = group === 'list' ? whatsappListPath(id) : whatsappDirectPath(id);
+  return pathname === base || pathname.startsWith(`${base}/`);
+};
+
+export type WhatsappGroup = 'list' | 'direct';
+
+// What the WhatsApp editor is pointed at. `new` makes a fresh item and replaces itself with its address.
+export type WhatsappTarget =
+  | { readonly kind: 'top' }
+  | { readonly kind: 'new'; readonly group: WhatsappGroup }
+  | { readonly kind: 'list'; readonly id: string }
+  | { readonly kind: 'listAdd'; readonly id: string }
+  | { readonly kind: 'entry'; readonly id: string; readonly clientId: string }
+  | { readonly kind: 'entryAdd'; readonly id: string; readonly clientId: string }
+  | { readonly kind: 'direct'; readonly id: string }
+  | { readonly kind: 'directAdd'; readonly id: string };
+
 // What a list screen of Settings (Clients, Recipes) is pointed at.
 export type SettingsTarget =
   | { readonly kind: 'list' }
@@ -78,6 +117,7 @@ export type SettingsView =
   | { readonly kind: 'divisor'; readonly recipeId: string | null }
   | { readonly kind: 'clients'; readonly target: SettingsTarget }
   | { readonly kind: 'recipes'; readonly target: SettingsTarget }
+  | { readonly kind: 'whatsapp'; readonly target: WhatsappTarget }
   | { readonly kind: 'unknown' };
 
 // The screens of Settings that are drawn.
@@ -127,6 +167,30 @@ function targetOf(tail: readonly string[]): SettingsTarget | null {
   return id === null ? null : { kind: 'one', id };
 }
 
+// What follows /calculator/settings/whatsapp, segment by segment. `new` is an id only where nothing follows it (a list
+// or a direct client cannot be called «new»: its address would make a fresh one).
+function parseWhatsapp(tail: readonly string[]): WhatsappTarget | null {
+  const [group, first, second, third, fourth, ...more] = tail;
+  if (group === undefined) return { kind: 'top' };
+  if (group !== 'list' && group !== 'direct') return null;
+  if (first === undefined) return null;
+  if (first === 'new') return second === undefined ? { kind: 'new', group } : null;
+  const id = idOf(first);
+  if (id === null) return null;
+  if (second === undefined) return group === 'list' ? { kind: 'list', id } : { kind: 'direct', id };
+  if (second === 'add') {
+    if (third !== undefined) return null;
+    return group === 'list' ? { kind: 'listAdd', id } : { kind: 'directAdd', id };
+  }
+  if (group === 'list' && second === 'client') {
+    const clientId = idOf(third);
+    if (clientId === null || more.length > 0) return null;
+    if (fourth === undefined) return { kind: 'entry', id, clientId };
+    return fourth === 'add' && more.length === 0 ? { kind: 'entryAdd', id, clientId } : null;
+  }
+  return null;
+}
+
 // What follows /calculator/settings, segment by segment.
 function parseSettings(tail: readonly string[]): SettingsView {
   const [screen, ...more] = tail;
@@ -141,6 +205,10 @@ function parseSettings(tail: readonly string[]): SettingsView {
   if (screen === 'clients' || screen === 'recipes') {
     const target = targetOf(more);
     return target === null ? { kind: 'unknown' } : { kind: screen, target };
+  }
+  if (screen === 'whatsapp') {
+    const target = parseWhatsapp(more);
+    return target === null ? { kind: 'unknown' } : { kind: 'whatsapp', target };
   }
   return { kind: 'unknown' };
 }
