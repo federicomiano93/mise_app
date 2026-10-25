@@ -1093,12 +1093,22 @@ export function readOldLogsOnce() {
 // products and per-client weights for the three dough tabs (+ the market order).
 
 // Subscribe to the config document in real time. onChange receives the raw data
-// object, or null when the document does not exist yet (fresh project).
+// object, or null when the document does not exist yet (fresh project), and as its
+// second argument whether the answer came from Firestore's offline copy rather than
+// the server — calculator-config-store.js must not take a cached "no document" for
+// the server's word.
+//
+// ⚠️ includeMetadataChanges, because the store sets that cached "no document" aside
+// and waits: when the server then says the same nothing, only the metadata changes,
+// and without this option that answer is never delivered — a brand-new location
+// would sit on «Loading…» for ever. It costs no reads: a repaint when the phone goes
+// offline or comes back.
 export function watchCalculatorConfig(onChange) {
   authReady.then(() => {
     onSnapshot(
       doc(db, pathFor('config'), 'calculator'),
-      snap => onChange(snap.exists() ? snap.data() : null),
+      { includeMetadataChanges: true },
+      snap => onChange(snap.exists() ? snap.data() : null, snap.metadata.fromCache),
       err => { console.error('Config listener failed:', err); },
     );
   }).catch(err => {

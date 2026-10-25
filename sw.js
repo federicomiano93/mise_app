@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v684';
+const CACHE_NAME = 'theitalianclub-v685';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -150,17 +150,17 @@ const ASSET_HASHES = {
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
   "./dist/i18n.js": 'ec9076fc5297afe6',
-  "./dist/index.js": '260b3eb5d851b110',
-  "./dist/calculator.js": 'dbac674aad83bbb2',
-  "./dist/orders.js": '515deaac1b4e6ffe',
-  "./dist/suppliers.js": '245436b96e0fc146',
+  "./dist/index.js": 'e62406af2357f76b',
+  "./dist/calculator.js": '1d1b81c850f84d02',
+  "./dist/orders.js": '74220ff30bcf476b',
+  "./dist/suppliers.js": 'e0697cb0aecb7203',
   "./dist/install-guide.js": '86df880954faeae9',
   "./js/allergen-model.js": 'a9ad7592da832a56',
   "./js/calculator-config.js": '2a04f05879932378',
   "./js/credentials.js": 'b805f88d003ea918',
   "./js/currency.js": '241b1dbdf4cc465f',
   "./js/firebase-target.js": 'b3759997e54ddbc3',
-  "./js/firebase.js": '4aeddee49dce8a21',
+  "./js/firebase.js": '69ed2d1174c3b4a7',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/i18n.js": 'e7355bc1c52e0623',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
@@ -175,10 +175,10 @@ const ASSET_HASHES = {
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/sw-update.js": '2ffc253aa03eff0f',
   "./js/update-gate.js": '1801738b3e6def2d',
-  "./dist/catalogue.js": '415f2b3ed9aad8d2',
-  "./dist/pastries.js": '542ddb995c74b911',
-  "./dist/foodcost.js": '7c528cc0d5521d53',
-  "./dist/inventory.js": 'caee82bcb52584c8',
+  "./dist/catalogue.js": 'f3685b5c0e0181ed',
+  "./dist/pastries.js": 'f6c7ce7565af6abb',
+  "./dist/foodcost.js": '37820771f875da54',
+  "./dist/inventory.js": 'ed14e597fd37fe5f',
   "./qr.png": '761a95e5bc25e2ba',
   "./dist/tokens.css": '86359636bea1c94f',
   "./dist/auth.css": '58cd14bdbf808ecc',
