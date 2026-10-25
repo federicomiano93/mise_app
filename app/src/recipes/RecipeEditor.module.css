@@ -204,6 +204,36 @@
   color: var(--ink-2);
 }
 
+/* The «with logo» label's two texts: a heading like the ingredients', each box under its name, full width. */
+.logoLabel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.logoLabel .cell {
+  flex: none;
+}
+
+/* 16px type on purpose (iOS zoom), full width, taller by dragging down only. */
+.textArea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: calc(var(--hit) * 2);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--fs-md)/1.4 var(--font);
+  resize: vertical;
+}
+
+.textArea:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .actions {
   display: flex;
   justify-content: flex-start;

@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ReactNode, Ref } from 'react';
+import { Trash2 } from 'lucide-react';
 import {
   DATE_KINDS, DPI_CHOICES, LABEL_SIZES, PRINTER_LANGUAGES, normalizeLabelProfile,
 } from '@mise/shared/label-template-model';
@@ -16,6 +17,9 @@ import { useConfirm } from '../ui/useConfirm';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import { recipePhotoOn } from './photoGate';
 import { SegmentedChoice } from './SegmentedChoice';
+import { imageLabelChoice } from './imageLabelData';
+import { LogoError, prepareLogo } from './logoUpload';
+import { useLabelLogo } from './useLabelLogo';
 import styles from './LabelSettings.module.css';
 
 // How long the two boxes of a custom size wait, after one is left, before the size is written: the next box left
@@ -65,6 +69,8 @@ function Controls() {
   const { labelConfig } = useRecipes();
   // ⚠️ DRAWN FROM THE NORMALISED PROFILE, the one place that decides what a missing or corrupt field means.
   const profile = normalizeLabelProfile(labelConfig);
+  const image = imageLabelChoice(labelConfig);
+  const isLogo = image.template === 'logo';
   const [failed, setFailed] = useState(false);
   const [customOpen, setCustomOpen] = useState(false);
   const mounted = useRef(true);
@@ -119,6 +125,48 @@ function Controls() {
     <div className={styles.body}>
       <PhotoCard />
 
+      {/* ⚠️ THE MODEL DECIDES WHICH CARDS APPLY: the image label is always 80 × 60 mm at 203 dpi and has its own header, so
+          the paper, the printer and «what else» belong to the standard model only (their code is untouched). */}
+      <Card title={t('label.settings.model')} intro={t('label.settings.modelNote')}>
+        <SegmentedChoice
+          label={t('label.settings.model')}
+          choices={[
+            { value: 'standard' as const, text: t('label.settings.model.standard') },
+            { value: 'logo' as const, text: t('label.settings.model.logo') },
+          ]}
+          selected={image.template}
+          onSelect={template => { if (template !== image.template) save({ template }); }}
+        />
+        {isLogo ? (
+          <SwitchRow
+            title={t('label.settings.rotate')}
+            sub={t('label.settings.rotateNote')}
+            selected={image.rotate180}
+            onChange={on => { save({ rotate180: on }); }}
+          />
+        ) : null}
+      </Card>
+
+      {isLogo ? (
+        <>
+          <Card title={t('label.settings.header')} intro={t('label.settings.headerNote')}>
+            <TextSetting
+              label={t('label.settings.businessName')}
+              saved={profile.businessName}
+              onSave={text => { save({ businessName: text }); }}
+            />
+            <TextSetting
+              label={t('label.settings.businessAddress')}
+              saved={profile.businessAddress}
+              onSave={text => { save({ businessAddress: text }); }}
+            />
+          </Card>
+          <LogoCard />
+        </>
+      ) : null}
+
+      {isLogo ? null : (
+      <>
       <Card title={t('label.settings.title')}>
         <SegmentedChoice
           label={t('label.settings.size')}
@@ -230,6 +278,8 @@ function Controls() {
           </div>
         ) : null}
       </Card>
+      </>
+      )}
 
       {/* The live region sits in the same block as the note, outside the column's gap: empty, it takes no room. */}
       <div>
@@ -336,6 +386,154 @@ function PhotoCard() {
         onChange={next => { void change(next); }}
         busy={busy}
       />
+      {confirmDialog}
+    </section>
+  );
+}
+
+const LOGO_ERROR_TEXT: Readonly<Record<LogoError['code'], MessageKey>> = {
+  blank: 'label.settings.logoBlank',
+  'too-tall': 'label.settings.logoTooTall',
+  undecodable: 'label.settings.logoUndecodable',
+  'too-big': 'label.settings.logoTooBig',
+};
+
+// The logo of the «with logo» label: chosen from the phone's own files, turned into the printer's black and white by
+// prepareLogo and stored for the whole venue. Shown only for that model.
+//
+// ⚠️ ONE PICK AT A TIME (`working`), HELD BY THE CALL: the app does not reload by itself while the logo is being prepared
+// and written (markBusy), and the file box is emptied after every pick so the same file can be chosen again.
+// ⚠️ THE SENTENCE LIVES IN THE CARD'S OWN `role="status"`, there before it speaks, so a screen reader hears the outcome.
+function LogoCard() {
+  const { t } = useT();
+  const store = useRecipesStore();
+  const logo = useLabelLogo();
+  const [confirm, confirmDialog] = useConfirm();
+  const headId = useId();
+  const noteId = useId();
+  const fileBox = useRef<HTMLInputElement>(null);
+  const working = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+  const [busy, setBusy] = useState(false);
+  const [said, setSaid] = useState<MessageKey | null>(null);
+  const [failedCard, setFailedCard] = useState(false);
+
+  async function pick(file: Blob): Promise<void> {
+    if (working.current) return;
+    working.current = true;
+    setBusy(true);
+    setSaid(null);
+    setFailedCard(false);
+    const release = markBusy();
+    let outcome: MessageKey = 'label.settings.logoSaved';
+    let bad = false;
+    try {
+      let prepared;
+      try {
+        prepared = await prepareLogo(file);
+      } catch (error) {
+        bad = true;
+        outcome = error instanceof LogoError ? LOGO_ERROR_TEXT[error.code] : 'label.settings.logoUndecodable';
+      }
+      if (prepared !== undefined) {
+        try {
+          await store.saveLabelLogo(prepared);
+        } catch {
+          bad = true;
+          outcome = 'label.settings.logoSaveFailed';
+        }
+      }
+    } finally {
+      release();
+      working.current = false;
+      if (mounted.current) {
+        setBusy(false);
+        setSaid(outcome);
+        setFailedCard(bad);
+      }
+    }
+  }
+
+  async function remove(): Promise<void> {
+    if (working.current) return;
+    working.current = true;
+    try {
+      const ok = await confirm({
+        title: t('label.settings.logoRemoveTitle'),
+        message: t('label.settings.logoRemoveBody'),
+        okLabel: t('label.settings.logoRemove'),
+        cancelLabel: t('common.cancel'),
+        danger: true,
+      });
+      if (!ok || !mounted.current) return;
+      setBusy(true);
+      setSaid(null);
+      setFailedCard(false);
+      const release = markBusy();
+      let bad = false;
+      try {
+        await store.removeLabelLogo();
+      } catch {
+        bad = true;
+      } finally {
+        release();
+        if (mounted.current) {
+          setBusy(false);
+          setFailedCard(bad);
+          setSaid(bad ? 'label.settings.logoRemoveFailed' : null);
+        }
+      }
+    } finally {
+      working.current = false;
+    }
+  }
+
+  const has = logo.status === 'ready';
+  return (
+    <section className={styles.card} aria-labelledby={headId} aria-busy={busy ? true : undefined}>
+      <div className={styles.head}>
+        <h3 id={headId} className={styles.headTitle}>{t('label.settings.logo')}</h3>
+        <p id={noteId} className={styles.note}>{t('label.settings.logoNote')}</p>
+      </div>
+      <div className={styles.logoBody}>
+        {logo.status === 'loading' ? <p className={styles.note}>{t('label.settings.logoLoading')}</p> : null}
+        {logo.status === 'failed' ? <p className={styles.failed}>{t('label.settings.logoFailed')}</p> : null}
+        {logo.status === 'none' || logo.status === 'unreadable' ? <p className={styles.note}>{t('label.settings.logoNone')}</p> : null}
+        {logo.status === 'ready' ? (
+          <img className={styles.logoPreview} src={logo.logo.png} alt={t('label.settings.logoAlt')} />
+        ) : null}
+        {logo.status === 'loading' || logo.status === 'failed' ? null : (
+          <div className={styles.logoActions}>
+            <button type="button" className={styles.logoButton} disabled={busy} aria-describedby={noteId} onClick={() => { fileBox.current?.click(); }}>
+              {t(has ? 'label.settings.logoChange' : 'label.settings.logoChoose')}
+            </button>
+            {has ? (
+              <button type="button" className={styles.logoRemove} disabled={busy} aria-label={t('label.settings.logoRemove')} onClick={() => { void remove(); }}>
+                <Trash2 aria-hidden="true" />
+              </button>
+            ) : null}
+          </div>
+        )}
+        <input
+          ref={fileBox}
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          className={styles.fileBox}
+          tabIndex={-1}
+          aria-hidden="true"
+          data-testid="logo-file"
+          onChange={event => {
+            const file = event.target.files?.[0];
+            event.target.value = '';
+            if (file) void pick(file);
+          }}
+        />
+        <p role="status" className={failedCard ? styles.failed : said === null ? styles.quietInBlock : styles.logoSaid}>{said === null ? '' : t(said)}</p>
+      </div>
       {confirmDialog}
     </section>
   );
