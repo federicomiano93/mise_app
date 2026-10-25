@@ -1,9 +1,12 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { Ref } from 'react';
-import { Download, Maximize2 } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router';
+import { Download, Maximize2, Pencil, Trash2 } from 'lucide-react';
 import { weighableTotalGrams } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
+import { Button } from '../ui/Button';
 import { useExportSheet } from '../ui/ExportSheet';
 import { FormBar } from '../ui/FormBar';
 import { RecipeFullScreen } from '../ui/RecipeFullScreen';
@@ -14,6 +17,10 @@ import { DeclarationCard } from './DeclarationCard';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import { amountText, recipeAmounts } from './recipeAmounts';
 import { recipeExportModel } from './recipeExportModel';
+import { useRecipeReturn } from './recipeReturn';
+import { FROM_RECIPE, cameFromList, cameFromSheet } from './recipesNav';
+import { editPath } from './recipesPath';
+import { useDeleteRecipe } from './useDeleteRecipe';
 import styles from './RecipeView.module.css';
 
 type Props = {
@@ -25,7 +32,9 @@ type Props = {
 // One recipe: the bar with Back and its name, then the cards in the current app's order: the ingredient
 // list, the batch, the allergens and the declaration.
 //
-// (The Food cost link, the procedure, the pencil and Delete arrive with their own steps.)
+// «Edit» is the bar's one action, for everybody who sees the section (employees write recipes too). Delete is a small
+// icon at the very end of the page, for whoever runs the place only. (The Food cost link and the procedure arrive with
+// their own steps.)
 //
 // ⚠️ THE TWO ALLERGEN CARDS FOLLOW THE LIVE DATA ON THEIR OWN (they read the store), so an ingredient
 // declared on another phone reaches this screen without it being closed and reopened.
@@ -40,6 +49,20 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
   const titleId = useId();
   const target = store.scaledTarget(recipe.id);
   const hasWeight = weighableTotalGrams(recipe) > 0;
+  const { canManage } = useSession();
+  const navigate = useNavigate();
+  const { state } = useLocation();
+  const recipeReturn = useRecipeReturn();
+  const [runDelete, deleteDialog] = useDeleteRecipe();
+  const editButton = useRef<HTMLButtonElement>(null);
+
+  // ⚠️ BACK FROM THIS RECIPE'S EDITOR the focus is on «Edit», where the person left (recipeReturn.ts); the recipe screen
+  // then has nothing left to focus.
+  useLayoutEffect(() => {
+    if (!recipeReturn.pendingEdit(recipe.id) || editButton.current === null) return;
+    editButton.current.focus({ preventScroll: true });
+    recipeReturn.markDelivered();
+  }, []);
 
   return (
     <section className={styles.screen} aria-labelledby={titleId}>
@@ -49,6 +72,19 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         title={recipe.name === '' ? t('cat.noName') : recipe.name}
         titleId={titleId}
         titleRef={titleRef}
+        action={
+          <Button
+            ref={editButton}
+            variant="secondary"
+            onPress={() => {
+              recipeReturn.remember(recipe.id, 'edit');
+              void navigate(editPath(recipe.id), { state: { ...FROM_RECIPE, recipeFromList: cameFromList(state) && !cameFromSheet(state) } });
+            }}
+          >
+            <Pencil aria-hidden="true" />
+            {t('ui.edit')}
+          </Button>
+        }
       />
       <div className={styles.body}>
         <IngredientsCard recipe={recipe} target={target} />
@@ -57,7 +93,20 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         <AllergenCard recipe={recipe} />
         <DeclarationCard recipe={recipe} />
         <ExportAction recipe={recipe} target={target} />
+        {/* ⚠️ THE VERY END OF THE PAGE, after Export: small, low-key, icon only. Absent — not disabled — for an employee. */}
+        {canManage ? (
+          <button
+            type="button"
+            className={styles.deleteIcon}
+            aria-label={t('cat.deleteRecipe')}
+            title={t('cat.deleteRecipe')}
+            onClick={() => { void runDelete({ id: recipe.id, name: recipe.name }, onBack); }}
+          >
+            <Trash2 aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
+      {deleteDialog}
     </section>
   );
 }

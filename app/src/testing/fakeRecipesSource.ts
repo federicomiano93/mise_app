@@ -41,17 +41,34 @@ export type FakeRecipesSource = RecipesSource & {
   labelSaves: Record<string, unknown>[];
   // The next label saves wait until the returned function is called (a slow network); the patch is merged then.
   holdLabelSaves(): () => void;
+  // The suppliers the link chooser names.
+  suppliers: Map<string, StoredDoc>;
+  // Every recipe write, in order, as it was handed over: { id, data } for a save, { id, deleted: true } for a delete
+  // (refused ones are not here). A save is merged into `recipes` (a null field removed), and the watchers are told.
+  recipeWrites: Array<{ id: string; data?: Record<string, unknown>; deleted?: true }>;
+  // The next recipe saves / deletes are refused (the rules said no).
+  refuseRecipeWrites: { save: boolean; remove: boolean };
+  // The next recipe writes wait until the returned function is called (offline, or a slow network).
+  holdRecipeWrites(): () => void;
+  // config/calculator as stored (null = none), what the delete warning reads; `calculatorHold` makes the read hang.
+  calculatorConfig: Record<string, unknown> | null;
+  holdCalculatorRead(): () => void;
 };
 
 export function fakeRecipesSource(
   seed: {
     recipes?: StoredDoc[]; ingredients?: StoredDoc[]; labelConfig?: Record<string, unknown> | null; printAgents?: StoredDoc[];
+    suppliers?: StoredDoc[]; calculatorConfig?: Record<string, unknown> | null;
   } = {},
 ): FakeRecipesSource {
   const recipes = new Map((seed.recipes ?? []).map(doc => [doc.id, doc] as const));
   const ingredients = new Map((seed.ingredients ?? []).map(doc => [doc.id, doc] as const));
+  const suppliers = new Map((seed.suppliers ?? []).map(doc => [doc.id, doc] as const));
   const watchers = new Set<Listener>();
   const ingredientWatchers = new Set<Listener>();
+  const supplierWatchers = new Set<Listener>();
+  let recipeWriteHold: Promise<void> | null = null;
+  let calculatorHold: Promise<void> | null = null;
   type LabelListener = {
     onChange: (data: Record<string, unknown> | null, meta: RecipesMeta) => void;
     onError: (err: unknown) => void;
@@ -84,11 +101,24 @@ export function fakeRecipesSource(
   }
 
   const fake: FakeRecipesSource = {
-    recipes, ingredients, refuse,
+    recipes, ingredients, refuse, suppliers,
     labelConfig: seed.labelConfig ?? null,
     printAgents: seed.printAgents ?? [],
     jobs: [],
     labelSaves: [],
+    recipeWrites: [],
+    refuseRecipeWrites: { save: false, remove: false },
+    calculatorConfig: seed.calculatorConfig ?? null,
+    holdRecipeWrites() {
+      let release: () => void = () => undefined;
+      recipeWriteHold = new Promise<void>(resolve => { release = resolve; });
+      return () => { recipeWriteHold = null; release(); };
+    },
+    holdCalculatorRead() {
+      let release: () => void = () => undefined;
+      calculatorHold = new Promise<void>(resolve => { release = resolve; });
+      return () => { calculatorHold = null; release(); };
+    },
     holdLabelSaves() {
       let release: () => void = () => undefined;
       labelSaveHold = new Promise<void>(resolve => { release = resolve; });
@@ -107,6 +137,7 @@ export function fakeRecipesSource(
       if (held) return;
       for (const w of watchers) w.onChange([...recipes.values()], FROM_SERVER);
       for (const w of ingredientWatchers) w.onChange([...ingredients.values()], FROM_SERVER);
+      for (const w of supplierWatchers) w.onChange([...suppliers.values()], FROM_SERVER);
       if (!labelHeld) for (const w of labelWatchers) w.onChange(fake.labelConfig, FROM_SERVER);
     },
     breakStream() {
@@ -168,6 +199,31 @@ export function fakeRecipesSource(
       fake.labelSaves.push({ ...patch });
       fake.labelConfig = { ...(fake.labelConfig ?? {}), ...patch };
       fake.push();
+    }),
+    watchSuppliers: vi.fn<RecipesSource['watchSuppliers']>(
+      watch(supplierWatchers, () => false, () => [...suppliers.values()]),
+    ),
+    // A merge, like setDoc(…, { merge: true }): the fields handed over replace the stored ones, a null one is removed,
+    // and every other stored field stays.
+    saveRecipeDoc: vi.fn<RecipesSource['saveRecipeDoc']>(async (id, data) => {
+      if (recipeWriteHold) await recipeWriteHold;
+      if (fake.refuseRecipeWrites.save) throw refused();
+      fake.recipeWrites.push({ id, data: { ...data } });
+      const merged: Record<string, unknown> = { ...(recipes.get(id) ?? {}), ...data, id };
+      for (const [key, value] of Object.entries(data)) if (value === null) delete merged[key];
+      recipes.set(id, merged as StoredDoc);
+      fake.push();
+    }),
+    removeRecipeDoc: vi.fn<RecipesSource['removeRecipeDoc']>(async id => {
+      if (recipeWriteHold) await recipeWriteHold;
+      if (fake.refuseRecipeWrites.remove) throw refused();
+      fake.recipeWrites.push({ id, deleted: true });
+      recipes.delete(id);
+      fake.push();
+    }),
+    getCalculatorConfig: vi.fn<RecipesSource['getCalculatorConfig']>(async () => {
+      if (calculatorHold) await calculatorHold;
+      return fake.calculatorConfig;
     }),
   };
   return fake;

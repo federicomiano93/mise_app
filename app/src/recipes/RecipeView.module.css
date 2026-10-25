@@ -198,3 +198,37 @@
 .clear {
   margin-top: var(--s3);
 }
+
+/* Delete, the very end of the page: a small icon on the right, as low-key as it can be and still a 48px target. */
+.deleteIcon {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  align-self: flex-end;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.deleteIcon:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.deleteIcon svg {
+  width: 18px;
+  height: 18px;
+}
+
+@media (hover: hover) {
+  .deleteIcon:hover {
+    background: var(--danger-tint);
+    color: var(--danger-ink);
+  }
+}

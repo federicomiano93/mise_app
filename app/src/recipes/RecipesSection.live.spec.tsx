@@ -187,7 +187,7 @@ describe('an address whose recipe is not among the recipes', () => {
     expect(await screen.findByRole('heading', { level: 2, name: 'Odd' }, LOAD)).toBeInTheDocument();
   });
 
-  it.each(['/recipes/f/edit', '/recipes/new', '/recipes/a/b/c'])('sends %s back to the list', async path => {
+  it.each(['/recipes/f/editing', '/recipes/new/edit', '/recipes/a/b/c'])('sends %s back to the list', async path => {
     const { router } = renderRecipes(path, { source: sourceWith(RECIPES) });
     await screen.findByRole('button', { name: 'Focaccia' }, LOAD);
     expect(router.state.location.pathname).toBe('/recipes');
