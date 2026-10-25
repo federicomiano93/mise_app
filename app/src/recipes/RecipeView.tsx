@@ -290,6 +290,7 @@ function DuplicateAction({ recipe }: { recipe: CatalogueRecipe }) {
   const { t } = useT();
   const navigate = useNavigate();
   const { user, locationId } = useSession();
+  const { categories } = useRecipes();
   const recipeReturn = useRecipeReturn();
   const hintId = useId();
   const button = useRef<HTMLButtonElement>(null);
@@ -314,7 +315,7 @@ function DuplicateAction({ recipe }: { recipe: CatalogueRecipe }) {
           if (opening.current) return;
           opening.current = true;
           recipeReturn.remember(recipe.id, 'duplicate');
-          handOver(duplicateWorking(recipe, name => t('cat.copyOf', { name })), carryOwner(user?.uid, locationId), undefined, 'duplicate');
+          handOver(duplicateWorking(recipe, name => t('cat.copyOf', { name }), categories), carryOwner(user?.uid, locationId), undefined, 'duplicate');
           void navigate(NEW_PATH, { state: FROM_DUPLICATE });
         }}
       >

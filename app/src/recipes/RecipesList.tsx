@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronRight, Plus, Search, Settings, Wheat } from 'lucide-react';
 import { filterByName, sortByUsage } from '@mise/shared/catalogue-model';
+import { isArchivedRecipe, shelveRecipes, sortedCategories } from '@mise/shared/recipe-shelf';
 import { allergensOn } from '@mise/shared/venue-features';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
+import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import { ALLERGENS_OPENER, NEW_OPENER, SEARCH_OPENER, SETTINGS_OPENER, recipeOpener, useHandBack } from './handBack';
 import styles from './RecipesList.module.css';
@@ -43,7 +45,7 @@ type Props = {
 // the split began) stay in charge of the order until the list is shown alone again or the split is
 // left; the fresh ones apply then.
 export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOpenSheet, settingsOpen, onOpenSettings, newOpen, onNew }: Props) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const { location, canManage } = useSession();
   const store = useRecipesStore();
   const handBack = useHandBack();
@@ -51,7 +53,7 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOp
   const settingsDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
   const newDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(NEW_OPENER, node); }, [handBack]);
   const searchOpener = useCallback((node: HTMLInputElement | null) => { handBack.register(SEARCH_OPENER, node); }, [handBack]);
-  const { recipes, recipesLoaded, usage } = useRecipes();
+  const { recipes, recipesLoaded, usage, categories } = useRecipes();
 
   const [text, setText] = useState('');
   const [query, setQuery] = useState('');
@@ -78,6 +80,13 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOp
     () => sortByUsage(filterByName(recipes, query), orderUsage),
     [recipes, query, orderUsage],
   );
+  // The rows laid out on the shelf: under the venue's category words (alphabetical in the interface language), the recipes in
+  // none last, and the archived ones apart for the folded group at the foot. Inside a group the order stays «most used first».
+  const shelf = useMemo(() => shelveRecipes(visible, sortedCategories(categories, locale)), [visible, categories, locale]);
+  // ⚠️ The folded «Archived» group opens by itself when a search finds an archived recipe or the recipe open beside the list is
+  // archived (its row must be able to take the focus), and stays as the person left it otherwise.
+  const openIsArchived = openRecipeId !== null && recipes.some(recipe => recipe.id === openRecipeId && isArchivedRecipe(recipe));
+  const fold = useFoldedOpen(openIsArchived || (query.trim() !== '' && shelf.archived.length > 0));
 
   const press = (id: string) => {
     // The recipe that is already open stays as it is: nothing to open, nothing to count.
@@ -88,6 +97,17 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOp
     store.bumpUsage(id);
     onOpenRecipe(id);
   };
+
+  const rowOf = (recipe: (typeof visible)[number]) => (
+    <RecipeRow
+      key={recipe.id}
+      id={recipe.id}
+      name={recipe.name === '' ? t('cat.noName') : recipe.name}
+      isOpen={recipe.id === openRecipeId}
+      onPress={press}
+      register={handBack.register}
+    />
+  );
 
   return (
     <div className={styles.column}>
@@ -132,18 +152,25 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOp
         // A search that matches nothing stays a small line under the box.
         <p className={styles.nothing}>{t('cat.noRecipeMatchesYour')}</p>
       ) : (
-        <ul className={styles.rows}>
-          {visible.map(recipe => (
-            <RecipeRow
-              key={recipe.id}
-              id={recipe.id}
-              name={recipe.name === '' ? t('cat.noName') : recipe.name}
-              isOpen={recipe.id === openRecipeId}
-              onPress={press}
-              register={handBack.register}
-            />
-          ))}
-        </ul>
+        <>
+          {/* No category in use: the list is drawn as it always was, with no heading. */}
+          {shelf.groups.length === 1 && shelf.groups[0]?.category === '' ? (
+            <ul className={styles.rows}>{shelf.groups[0].recipes.map(rowOf)}</ul>
+          ) : (
+            shelf.groups.map(group => (
+              <div key={group.category} className={styles.group}>
+                <h2 className={styles.groupTitle}>{group.category === '' ? t('cat.shelf.noCategory') : group.category}</h2>
+                <ul className={styles.rows}>{group.recipes.map(rowOf)}</ul>
+              </div>
+            ))
+          )}
+          {/* Everybody sees the fold: an employee may open an archived recipe to print its label. */}
+          {shelf.archived.length > 0 ? (
+            <FoldedGroup title={t('cat.shelf.archivedGroup', { n: shelf.archived.length })} open={fold.open} onToggle={fold.onToggle}>
+              <ul className={styles.rows}>{shelf.archived.map(rowOf)}</ul>
+            </FoldedGroup>
+          ) : null}
+        </>
       )}
 
       {/* ⚠️ THE DOOR TO THE ALLERGEN SHEET EXISTS ONLY FOR A VENUE THAT TRACKS ALLERGENS (read here on every render; the venue

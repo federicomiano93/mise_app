@@ -5,11 +5,16 @@ import {
   DATE_KINDS, DPI_CHOICES, LABEL_SIZES, PRINTER_LANGUAGES, normalizeLabelProfile,
 } from '@mise/shared/label-template-model';
 import type { DateKind, PrinterLanguage } from '@mise/shared/label-template-model';
+import {
+  RECIPE_CATEGORIES_MAX, RECIPE_CATEGORY_MAX, addCategory, countInCategory, removeCategory, sortedCategories,
+} from '@mise/shared/recipe-shelf';
+import type { CategoryRefusal } from '@mise/shared/recipe-shelf';
 import type { MessageKey } from '../i18n/en';
 import { useDataServices } from '../data/DataContext';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
 import { useSession, useSessionStore } from '../session/SessionContext';
+import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { SettingSwitch } from '../ui/SettingSwitch';
 import { useStatusMessage } from '../ui/StatusMessage';
@@ -71,7 +76,8 @@ function Controls() {
   const profile = normalizeLabelProfile(labelConfig);
   const image = imageLabelChoice(labelConfig);
   const isLogo = image.template === 'logo';
-  const [failed, setFailed] = useState(false);
+  // The sentence under the page when a refused save was put back: which one (the labels' or the categories').
+  const [failed, setFailed] = useState<MessageKey | null>(null);
   const [customOpen, setCustomOpen] = useState(false);
   const mounted = useRef(true);
   useEffect(() => {
@@ -83,10 +89,20 @@ function Controls() {
   // speaks. A save made as the screen closes (a box still holding typing) is refused after the screen is gone, so
   // that one is said through the section's message instead.
   function save(patch: Patch): void {
-    setFailed(false);
+    setFailed(null);
     store.saveLabelProfile(patch).catch(() => {
-      if (mounted.current) setFailed(true);
+      if (mounted.current) setFailed('label.settings.saveFailed');
       else say(t('label.settings.saveFailed'));
+    });
+  }
+
+  // The recipe categories go through the same local-first write (saveRecipeCategories); a refusal puts the list back and says so
+  // in the same line.
+  function saveCategories(list: readonly string[]): void {
+    setFailed(null);
+    store.saveRecipeCategories(list).catch(() => {
+      if (mounted.current) setFailed('cat.shelf.categoriesNotSaved');
+      else say(t('cat.shelf.categoriesNotSaved'));
     });
   }
 
@@ -124,6 +140,8 @@ function Controls() {
   return (
     <div className={styles.body}>
       <PhotoCard />
+
+      <RecipeCategoriesCard onSave={saveCategories} />
 
       {/* ⚠️ THE MODEL DECIDES WHICH CARDS APPLY: the image label is always 80 × 60 mm at 203 dpi and has its own header, so
           the paper, the printer and «what else» belong to the standard model only (their code is untouched). */}
@@ -284,7 +302,7 @@ function Controls() {
       {/* The live region sits in the same block as the note, outside the column's gap: empty, it takes no room. */}
       <div>
         <p className={styles.setup}>{t('label.settings.setup')}</p>
-        <p role="status" className={failed ? styles.failed : styles.quiet}>{failed ? t('label.settings.saveFailed') : ''}</p>
+        <p role="status" className={failed ? styles.failed : styles.quiet}>{failed ? t(failed) : ''}</p>
       </div>
     </div>
   );
@@ -386,6 +404,143 @@ function PhotoCard() {
         onChange={next => { void change(next); }}
         busy={busy}
       />
+      {confirmDialog}
+    </section>
+  );
+}
+
+// The words a recipe can be filed under (NEW IN MISE 2, docs/parity/catalogue.md «Recipe categories and the archive»): alphabetical, a
+// low-key bin on each, and a box to add one. Deleting a word writes no recipe: the recipes under it read as «no category» until
+// the word is added again, and the question says how many.
+//
+// ⚠️ DRAWN ONLY ONCE THE LABEL PROFILE HAS ARRIVED (LabelSettings shows nothing else before): the list lives in that document,
+// and a write over a list not yet seen would replace the venue's own words.
+function RecipeCategoriesCard({ onSave }: { onSave: (list: readonly string[]) => void }) {
+  const { t, locale } = useT();
+  const { categories, recipes } = useRecipes();
+  const [confirm, confirmDialog] = useConfirm();
+  const headId = useId();
+  const boxId = useId();
+  const refusalId = useId();
+  const heading = useRef<HTMLHeadingElement>(null);
+  const box = useRef<HTMLInputElement>(null);
+  const bins = useRef(new Map<string, HTMLButtonElement>());
+  const asking = useRef(false);
+  const [typed, setTyped] = useState('');
+  const [refusal, setRefusal] = useState<{ kind: CategoryRefusal; name: string } | null>(null);
+  const list = sortedCategories(categories, locale);
+
+  // Where the focus goes once a deleted row has left the page: the bin that takes its place (the next row's, or the last when it
+  // was the last), or the card's heading when none is left — never the page.
+  const [after, setAfter] = useState<{ deleted: string; next: string | null } | null>(null);
+  useEffect(() => {
+    if (after === null || list.includes(after.deleted)) return;
+    setAfter(null);
+    const target = after.next === null ? undefined : bins.current.get(after.next);
+    (target ?? heading.current)?.focus();
+  });
+
+  function add(): void {
+    const result = addCategory(categories, typed);
+    if ('refusal' in result) {
+      setRefusal({ kind: result.refusal, name: typed.trim().replace(/\s+/g, ' ') });
+      box.current?.focus();
+      return;
+    }
+    setRefusal(null);
+    setTyped('');
+    onSave(result.list);
+    box.current?.focus();
+  }
+
+  async function remove(name: string): Promise<void> {
+    if (asking.current) return;
+    asking.current = true;
+    try {
+      const count = countInCategory(recipes, name, categories);
+      const ok = await confirm({
+        title: t('cat.shelf.deleteCategoryTitle', { name }),
+        message: count === 0 ? t('cat.shelf.deleteCategoryNone') : t('cat.shelf.deleteCategoryUsed', { n: count }),
+        okLabel: t('ui.delete'),
+        cancelLabel: t('common.cancel'),
+        danger: true,
+      });
+      if (!ok) return;
+      const index = list.indexOf(name);
+      const rest = list.filter(word => word !== name);
+      setAfter({ deleted: name, next: rest[Math.min(index, rest.length - 1)] ?? null });
+      onSave(removeCategory(categories, name));
+    } finally {
+      asking.current = false;
+    }
+  }
+
+  const refusalText = refusal === null ? '' : refusal.kind === 'tooLong'
+    ? t('cat.shelf.refusal.tooLong', { n: RECIPE_CATEGORY_MAX })
+    : refusal.kind === 'taken'
+      ? t('cat.shelf.refusal.taken', { name: refusal.name })
+      : refusal.kind === 'full'
+        ? t('cat.shelf.refusal.full', { n: RECIPE_CATEGORIES_MAX })
+        : t('cat.shelf.refusal.empty');
+
+  return (
+    <section className={styles.card} aria-labelledby={headId}>
+      <div className={styles.head}>
+        <h3 id={headId} ref={heading} tabIndex={-1} className={styles.headTitle}>{t('cat.shelf.settingsTitle')}</h3>
+        <p className={styles.note}>{t('cat.shelf.settingsNote')}</p>
+      </div>
+      {list.length === 0 ? (
+        <div className={styles.row}>
+          <span className={styles.text}><span className={styles.sub}>{t('cat.shelf.settingsEmpty')}</span></span>
+        </div>
+      ) : (
+        <ul className={styles.rows}>
+          {list.map(name => (
+            <li key={name} className={styles.row}>
+              <span className={styles.text}><span className={styles.title}>{name}</span></span>
+              <button
+                ref={node => {
+                  if (node) bins.current.set(name, node);
+                  else bins.current.delete(name);
+                }}
+                type="button"
+                className={styles.bin}
+                aria-label={t('cat.shelf.deleteCategory', { name })}
+                title={t('cat.shelf.deleteCategory', { name })}
+                onClick={() => { void remove(name); }}
+              >
+                <Trash2 aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div className={styles.field}>
+        <label htmlFor={boxId} className={styles.fieldName}>{t('cat.shelf.newCategory')}</label>
+        <div className={styles.addRow}>
+          <input
+            ref={box}
+            id={boxId}
+            type="text"
+            autoComplete="off"
+            className={styles.input}
+            maxLength={RECIPE_CATEGORY_MAX}
+            placeholder={t('cat.shelf.newCategoryPlaceholder')}
+            aria-invalid={refusal === null ? undefined : true}
+            aria-describedby={refusal === null ? undefined : refusalId}
+            value={typed}
+            onChange={event => { setTyped(event.target.value); setRefusal(null); }}
+            onKeyDown={event => {
+              if (event.key !== 'Enter') return;
+              event.preventDefault();
+              add();
+            }}
+          />
+          <Button variant="secondary" onPress={add}>{t('cat.shelf.add')}</Button>
+        </div>
+        {/* Empty until a word is refused; it is there before it speaks, so a screen reader hears the sentence. */}
+        <p id={refusalId} role="status" className={refusal === null ? styles.quietInBlock : styles.rangeError}>{refusalText}</p>
+      </div>
       {confirmDialog}
     </section>
   );
