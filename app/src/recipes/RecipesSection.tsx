@@ -16,6 +16,7 @@ import { ResumeOffer } from './ResumeOffer';
 import { ALLERGENS_OPENER, HandBackProvider, NEW_OPENER, SETTINGS_OPENER, recipeOpener, useHandBackState } from './handBack';
 import { LabelShowsProvider } from './labelShows';
 import { createRecipeDeletions, RecipeDeletionsProvider } from './recipeDeletions';
+import { recipePhotoOn } from './photoGate';
 import { messageText } from './recipesMessages';
 import { RecipeReturnProvider, carriedPlace, carryPlace, forgetCarriedPlace } from './recipeReturn';
 import type { Place, RecipeReturn } from './recipeReturn';
@@ -79,6 +80,12 @@ function RecipesScreen() {
   // ⚠️ SETTINGS ARE FOR WHOEVER RUNS THE PLACE: an employee who types the address is sent to the list, and nothing of the
   // screen is drawn. The rules are the real guard (config/labels is written by canManage only); this is courtesy.
   if (resolved.view.kind === 'settings' && !canManage) {
+    return <Navigate to={RECIPES_PATH} replace state={KEEP_FOCUS} />;
+  }
+  // ⚠️ THE PHOTO SCREEN RE-CHECKS ITS OWN GATE: it costs money per read, so a venue that has not switched the reader on has no
+  // photo screen, whatever address is in the bar (a bookmark, Back after the switch was turned off on another phone). Only a
+  // literal true counts (photoGate.ts).
+  if (resolved.view.kind === 'photo' && !recipePhotoOn(location)) {
     return <Navigate to={RECIPES_PATH} replace state={KEEP_FOCUS} />;
   }
   return <RecipesLayout view={resolved.view} />;

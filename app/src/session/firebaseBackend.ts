@@ -60,6 +60,9 @@ export interface FirebaseBackend extends SessionBackend {
   // Creates the account behind a client's ordering link and resolves with its uid, WITHOUT touching the
   // signed-in person's own session (see the function). Rejects when Auth refuses or cannot be reached.
   createLinkAccount(email: string, password: string): Promise<string>;
+  // Calls a Cloud Function (an «https callable», region us-central1) and resolves with what it returned; rejects with the
+  // SDK's error (its `code` and `message`) when it fails or `timeoutMs` passes. The Functions SDK is loaded on first use.
+  callFunction(name: string, data: unknown, timeoutMs: number): Promise<unknown>;
 }
 
 function startFirestore(fs: FirestoreSdk, app: FirebaseApp): Firestore {
@@ -146,10 +149,34 @@ export function createFirebaseBackend(hostname: string): FirebaseBackend {
     }
   }
 
+  // ⚠️ ON A LOCAL ADDRESS EVERY CALL GOES TO THE FUNCTIONS EMULATOR (port 5001), set before the first call: a page served
+  // from this PC must never run the real functions — `readRecipeFromPhotos` is PAID per call (js/catalogue/firebase-photo.js
+  // does the same). With no emulator running, the call simply fails.
+  // ⚠️ REGION us-central1, the one the functions are deployed in (functions/recipe-photo.js); another region is a 404.
+  let functionsLoading: Promise<{ sdk: typeof import('firebase/functions'); functions: import('firebase/functions').Functions }> | null = null;
+  function functionsKit() {
+    if (!functionsLoading) {
+      functionsLoading = import('firebase/functions').then(sdk => {
+        const functions = sdk.getFunctions(app, 'us-central1');
+        if (isEmulator) sdk.connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+        return { sdk, functions };
+      });
+      // As Firestore's: a failed download is retried by a reload, not by calling again.
+      functionsLoading.catch(() => { functionsLoading = null; });
+    }
+    return functionsLoading;
+  }
+  async function callFunction(name: string, data: unknown, timeoutMs: number): Promise<unknown> {
+    const { sdk, functions } = await functionsKit();
+    const result = await sdk.httpsCallable(functions, name, { timeout: timeoutMs })(data);
+    return result.data;
+  }
+
   return {
     firestore,
     firestoreIfReady: () => ready,
     createLinkAccount,
+    callFunction,
     preloadFirestore,
     auth,
     isEmulator,

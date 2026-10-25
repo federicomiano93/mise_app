@@ -156,9 +156,10 @@ describe('screenNameFor', () => {
     ['/recipes/new/edit', 'recipes'],
     ['/recipes/abc/steps', 'recipes-steps'],
     ['/recipes/abc/mix', 'recipes-run'],
+    ['/recipes/photo', 'recipes-photo'],
+    ['/recipes/photo/x', 'recipes'],
     ['/recipes/new/mix', 'recipes'],
     ['/recipes/settings/steps', 'recipes'],
-    ['/recipes/photo', 'recipes'],
   ])('%s → %s', (pathname, expected) => {
     expect(screenNameFor(pathname)).toBe(expected);
   });

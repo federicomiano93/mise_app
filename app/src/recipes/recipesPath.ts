@@ -7,6 +7,7 @@
 //   /recipes/<id>/label the label of one recipe (step 3d-3), one level below the recipe
 //   /recipes/settings   the label Settings (step 3d-5), for whoever runs the place
 //   /recipes/new        a new recipe (step 3d-6), the editor on an empty copy
+//   /recipes/photo      reading a recipe from photographs (step 3d-9), for a venue that has the reader on
 //   /recipes/<id>/edit  one recipe's editor (step 3d-6), one level below the recipe
 //   /recipes/<id>/steps one recipe's mixing steps editor (step 3d-8), one level below the recipe
 //   /recipes/<id>/mix   one recipe's guided mix, the run (step 3d-8, slice B), one level below the recipe, full width
@@ -20,6 +21,7 @@ export const RECIPES_PATH = '/recipes';
 export const ALLERGENS_PATH = '/recipes/allergens';
 export const SETTINGS_PATH = '/recipes/settings';
 export const NEW_PATH = '/recipes/new';
+export const PHOTO_PATH = '/recipes/photo';
 
 const RESERVED = ['new', 'allergens', 'settings', 'photo'] as const;
 
@@ -30,6 +32,7 @@ export type RecipesView =
   | { readonly kind: 'settings' }
   | { readonly kind: 'label'; readonly id: string }
   | { readonly kind: 'new' }
+  | { readonly kind: 'photo' }
   | { readonly kind: 'edit'; readonly id: string }
   | { readonly kind: 'steps'; readonly id: string }
   | { readonly kind: 'mix'; readonly id: string }
@@ -69,6 +72,8 @@ export function parseRecipesPath(rest: string | undefined): RecipesView {
     if (id === 'settings') return { kind: 'settings' };
     // A new recipe (step 3d-6): «new» is one of the reserved words, never a recipe's id.
     if (id === 'new') return { kind: 'new' };
+    // The photo screen (step 3d-9) likewise: whether the venue has the reader on is the section's question.
+    if (id === 'photo') return { kind: 'photo' };
     // An empty id is not a recipe (and not a Firestore document id either).
     if (isRecipeId(id)) return { kind: 'recipe', id };
   }

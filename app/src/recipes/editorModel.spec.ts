@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizeCatalogueRecipe } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import {
-  addRow, cleanWorking, dropWorkingRow, linkRowTo, moveWorkingRow, netWeightText, notWeighedCount, removeRow, setRowFields, shelfLifeText, stepWorkingRow, totalText, workingFrom,
+  addRow, cleanWorking, dropWorkingRow, linkRowTo, moveWorkingRow, netWeightText, notWeighedCount, removeRow, setRowFields, shelfLifeText, stepWorkingRow, totalText, workingFrom, workingFromDraft, restoreWorking,
 } from './editorModel';
 
 // The editor's working copy and the rules that turn it into what is saved (the pure half of catalogue-editor.js).
@@ -252,5 +252,82 @@ describe('reordering the rows', () => {
     expect(cleanWorking(moved).ingredients.map(row => [row.label, row.rid, row.refId])).toEqual([
       ['D', 'row-d', undefined], ['A', 'row-a', 'ing-1'], ['B', 'row-b', undefined], ['C', undefined, undefined],
     ]);
+  });
+});
+
+describe('the working copy of a recipe read from a photograph (step 3d-9)', () => {
+  const draft = { name: 'Pane toscano', ingredients: [{ label: 'Flour', grams: 1000, unit: 'g' }, { label: 'Salt', grams: 20 }], netWeightG: 500, shelfLifeDays: 3 };
+
+  it('is a NEW recipe: the name, the rows (the unit read as the recipe screen reads it) and the two label fields', () => {
+    const working = workingFromDraft(draft);
+    expect(working.name).toBe('Pane toscano');
+    expect(working.rows.map(item => item.row)).toEqual([
+      { label: 'Flour', grams: 1000, unit: 'g' },
+      { label: 'Salt', grams: 20, unit: 'g' },
+    ]);
+    expect(working.rest).toEqual({ netWeightG: 500, shelfLifeDays: 3 });
+    expect(working).toMatchObject({ netWeight: null, shelfLife: null });
+  });
+
+  it('⚠️ net weight and shelf life only when the read has them — 0 days would print today as a use-by', () => {
+    expect(workingFromDraft({ name: 'A', ingredients: [{ label: 'x', grams: 1 }] }).rest).toEqual({});
+    expect(workingFromDraft({ name: 'A', ingredients: [], netWeightG: 0 }).rest).toEqual({});
+    expect(workingFromDraft({ name: 'A', ingredients: [], netWeightG: 'heavy', shelfLifeDays: -2 }).rest).toEqual({});
+    expect(workingFromDraft({ name: 'A', ingredients: [], shelfLifeDays: 2 }).rest).toEqual({ shelfLifeDays: 2 });
+  });
+
+  it('⚠️ carries no oven loss, whatever the read held, and nothing else it was not meant to', () => {
+    const working = workingFromDraft({ ...draft, lossPct: 12, steps: [{ text: 'Mix' }], id: 'x', userId: 'u' });
+    expect(working.rest).toEqual({ netWeightG: 500, shelfLifeDays: 3 });
+    expect(cleanWorking(working)).not.toHaveProperty('lossPct');
+    expect(cleanWorking(working)).not.toHaveProperty('id');
+  });
+
+  it('a draft with no rows, or nothing at all, still has one empty row to type into', () => {
+    for (const odd of [{ name: 'A' }, { name: 'A', ingredients: [] }, { name: 'A', ingredients: 'x' }, null, undefined, 'text', 5, []]) {
+      const working = workingFromDraft(odd);
+      expect(working.rows).toHaveLength(1);
+      expect(working.rows[0]?.row).toEqual({ label: '', grams: '', unit: 'g' });
+    }
+    expect(workingFromDraft({ name: 5 }).name).toBe('');
+  });
+
+  it('a row that is not an object is an empty row, and every row gets its own key', () => {
+    const working = workingFromDraft({ name: 'A', ingredients: [null, 'x', { label: 'Flour', grams: 5 }] });
+    expect(working.rows).toHaveLength(3);
+    expect(new Set(working.rows.map(item => item.key)).size).toBe(3);
+    expect(working.rows[2]?.row).toMatchObject({ label: 'Flour' });
+  });
+
+  it('saves like a recipe typed by hand: names trimmed, the rows with no name dropped', () => {
+    const clean = cleanWorking(workingFromDraft({ name: ' Pane ', ingredients: [{ label: ' Flour ', grams: 100 }, { label: '', grams: 5 }], netWeightG: 250 }));
+    expect(clean.name).toBe('Pane');
+    expect(clean.ingredients.map(row => row.label)).toEqual(['Flour']);
+    expect(clean).toMatchObject({ netWeightG: 250 });
+  });
+});
+
+describe('a working copy that travelled in the navigation state (step 3d-9)', () => {
+  const typed = workingFrom(null);
+
+  it('comes back whole, with FRESH keys (a reload restarts the counter)', () => {
+    const copy = { ...typed, name: 'Pane', rows: [{ key: 1, row: { label: 'Flour', grams: 5, unit: 'g' } }, { key: 1, row: { label: 'Salt', grams: 1, unit: 'g' } }], netWeight: '500', shelfLife: null };
+    const back = restoreWorking(JSON.parse(JSON.stringify(copy)));
+    expect(back?.name).toBe('Pane');
+    expect(back?.rows.map(item => item.row.label)).toEqual(['Flour', 'Salt']);
+    expect(new Set(back?.rows.map(item => item.key)).size).toBe(2);
+    expect(back).toMatchObject({ netWeight: '500', shelfLife: null });
+  });
+
+  it('is nothing at all when it is not a working copy', () => {
+    for (const junk of [null, undefined, 5, 'x', [], {}, { name: 5, rows: [] }, { name: 'A', rows: 'x' }, { name: 'A', rows: [null] }, { name: 'A', rows: [{ row: 5 }] }]) {
+      expect(restoreWorking(junk), JSON.stringify(junk)).toBeNull();
+    }
+  });
+
+  it('keeps a row to type into when the copy had none, and ignores a rest that is not an object', () => {
+    const back = restoreWorking({ name: 'A', rows: [], rest: 5 });
+    expect(back?.rows).toHaveLength(1);
+    expect(back?.rest).toEqual({});
   });
 });

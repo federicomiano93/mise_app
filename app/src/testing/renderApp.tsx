@@ -49,7 +49,8 @@ export function renderApp(path: string, { lang = 'en', routes = appRoutes, sessi
   const store = fakeStore(session);
   const services: DataServices = { pastries: () => fakePastriesSource(), stocktake: () => fakeStocktakeSource(),
     foodcost: () => fakeFoodcostSource(), calculator: () => fakeCalculatorSource(),
-    clientOrders: () => fakeClientOrdersSource(), recipes: () => fakeRecipesSource(), ...data };
+    clientOrders: () => fakeClientOrdersSource(), recipes: () => fakeRecipesSource(),
+    photo: () => ({ readRecipe: () => Promise.reject(new Error('no photo reader in this spec')), setRecipePhoto: () => Promise.reject(new Error('no photo switch in this spec')) }), ...data };
 
   render(
     <I18nProvider initialLanguage={lang} initialMessages={messages}>

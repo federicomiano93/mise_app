@@ -38,9 +38,11 @@
 // originals read the interface dictionary), so those arities differ by design; their specs compare names, constants and
 // shapes themselves. recipe-allergen-model.ts is not paired: it leaves out `incompleteText` and `blockingIngredients` takes
 // the word for an unknown ingredient as a third argument (the original reads the interface dictionary); its spec compares
-// names, constants and shapes itself. market.ts (with the label vocabulary), venue-features.ts, recipe-label-model.ts and label-template-model.ts ARE
+// names, constants and shapes itself. market.ts (with the label vocabulary), venue-features.ts, recipe-label-model.ts, label-template-model.ts and photo-model.ts ARE
 // paired: they are full ports. calculator-recipe-text.ts is paired although it differs from the original in ONE input (the line called
 // `Flour uniqua blue`, one venue's data): the exports are the same, and its spec says where the text differs.
+// catalogue-photo-model.ts is not paired: it exports its table of sentences as well (`CATALOGUE_PHOTO_KEYS`, private in the
+// original) and leaves out the sizes the original re-exports from photo-model; its spec compares what it ports.
 //
 // ⚠️ IT IS WHAT CATCHES A FIX MADE TO js/ AND FORGOTTEN HERE. A constant changed in one file
 // (a new allergen, a new push kind, a new card) is invisible to every behavioural test that does
@@ -83,6 +85,7 @@ import * as venueFeatures from './venue-features';
 import * as market from './market';
 import * as recipeLabelModel from './recipe-label-model';
 import * as labelTemplateModel from './label-template-model';
+import * as photoModel from './photo-model';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -119,6 +122,7 @@ import * as legacyVenueFeatures from '../../js/venue-features.js';
 import * as legacyMarket from '../../js/market.js';
 import * as legacyRecipeLabelModel from '../../js/catalogue/recipe-label-model.js';
 import * as legacyLabelTemplateModel from '../../js/catalogue/label-template-model.js';
+import * as legacyPhotoModel from '../../js/photo-model.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -157,6 +161,7 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['market', market, legacyMarket],
   ['recipe-label-model', recipeLabelModel, legacyRecipeLabelModel],
   ['label-template-model', labelTemplateModel, legacyLabelTemplateModel],
+  ['photo-model', photoModel, legacyPhotoModel],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -218,11 +223,11 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all thirty-six models are compared', () => {
+test('all thirty-seven models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
       'order-cost', 'inventory-model', 'inventory-outbox', 'inventory-purchases', 'vat-rates', 'ingredient-kind', 'product-limits',
       'vat-guide', 'foodcost-weighing', 'calculator-dough-math', 'calculator-recipe-source', 'calculator-recipe-text', 'calculator-order-text',
-      'confirm-flow', 'log-time', 'venue-features', 'market', 'recipe-label-model', 'label-template-model']);
+      'confirm-flow', 'log-time', 'venue-features', 'market', 'recipe-label-model', 'label-template-model', 'photo-model']);
 });
