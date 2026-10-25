@@ -261,6 +261,11 @@ describe('the four refusals, each with a title and one sentence', () => {
     expect(main().getByText('1 ingrediente non è dichiarato. La schermata della ricetta li elenca.')).toBeInTheDocument();
   });
 
+  it('a recipe with no rows at all says so, never «0 ingredients are not declared»', async () => {
+    await openLabel([{ id: 'empty', name: 'Empty' }], 'empty');
+    refusal('This recipe has no ingredients with a weight.');
+  });
+
   it('no weights: nothing in the recipe has a weight', async () => {
     await openLabel([NO_WEIGHT], 'nowt');
     refusal('This recipe has no ingredients with a weight.');

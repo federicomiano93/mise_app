@@ -168,6 +168,26 @@ describe('what is missing, in one sentence', () => {
     noButtons();
   });
 
+  it('a recipe with no ingredient rows says so, never «0 ingredients are not declared»', async () => {
+    open({ recipe: cake({ labelIngredientsText: CLEAN_TEXT, ingredients: [] }) });
+    expect(await main().findByText('This recipe has no ingredients with a weight.', undefined, LOAD)).toBeInTheDocument();
+    expect(main().queryByText(/0 ingredients/)).not.toBeInTheDocument();
+    noButtons();
+  });
+
+  it('⚠️ a recipe that stops being fully declared while the preview is on screen loses Print and Copy at once', async () => {
+    const { source } = open();
+    await preview();
+    expect(printButton()).toBeEnabled();
+    act(() => {
+      source.recipes.set('cake', cake({ labelIngredientsText: CLEAN_TEXT, ingredients: [row('Flour', 'flour'), row('Mystery')] }));
+      source.push();
+    });
+    expect(await main().findByText('1 ingredient is not declared. The recipe screen lists them.', undefined, LOAD)).toBeInTheDocument();
+    expect(main().queryByRole('img', { name: 'Label preview, 80 × 60 mm' })).not.toBeInTheDocument();
+    noButtons();
+  });
+
   it('says a recipe has no label text yet', async () => {
     open({ recipe: cake() });
     expect(await main().findByText('This recipe has no label ingredients text yet. Type it in the recipe’s editor, under Label with logo.', undefined, LOAD)).toBeInTheDocument();

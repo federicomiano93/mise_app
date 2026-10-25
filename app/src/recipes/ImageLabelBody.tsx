@@ -139,7 +139,10 @@ export function ImageLabelBody({ recipe }: { recipe: CatalogueRecipe }) {
       </div>
     );
   } else if (!canLabel(declared)) {
-    content = blocked(t('label.blocked'), [t('label.blocked.notDeclared', { n: declared.gaps.length })]);
+    // Not declared with no row to name means no rows at all: «0 ingredients are not declared» would say nothing.
+    content = blocked(t('label.blocked'), [declared.gaps.length === 0
+      ? t('label.blocked.noWeights')
+      : t('label.blocked.notDeclared', { n: declared.gaps.length })]);
   } else if (typed.trim() === '') {
     content = blocked(t('label.blocked'), [t('label.image.noText')]);
   } else {

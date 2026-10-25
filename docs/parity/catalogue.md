@@ -449,7 +449,8 @@ millimetres and the ZPL characters (items 62–80 and «What proves byte-identit
     worked out, «Values are on the finished weight (−{n}%)» when the loss > 0) · the language note · the caveat
     («Check this before it goes on food») · the action row: **Print · Copy · Send · status**. The screen
     refuses, with a title and one sentence each, when: allergens are off, the country is unknown/unsupported, the
-    recipe is not fully declared (`{n} ingredient(s) is/are not declared …`), or nothing has a weight. If the
+    recipe is not fully declared (`{n} ingredient(s) is/are not declared …`), or nothing has a weight (a recipe with no rows at all says that too — the current app says «0 ingredients are
+    not declared»; Mise 2 fix, 25 Oct 2026). If the
     paper cannot be laid out (`resolved.ok` false) it falls back to card + caveat + Copy + Send (**no paper is
     not no screen**).
 69. **The preview and the print are the SAME NODE** built by the same function at the same millimetre size

@@ -295,7 +295,8 @@ function LabelBody({ recipe }: { recipe: CatalogueRecipe }) {
     );
   } else if (!label.ok) {
     content = blocked(
-      label.reason === 'no-ingredients'
+      // Not declared with no row to name is a recipe with no rows at all: say that, not «0 ingredients…».
+      label.reason === 'no-ingredients' || label.gaps.length === 0
         ? t('label.blocked.noWeights')
         : t('label.blocked.notDeclared', { n: label.gaps.length }),
     );
