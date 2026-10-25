@@ -171,6 +171,17 @@ test('a Pastries day being edited counts as busy, and the editor carries the mar
   assert.ok(editor.classList.contains('pas-editor'), 'the editor root must carry .pas-editor');
 });
 
+test('⚠️ the read-only Pastries day does NOT carry the marker, or no update would ever reach the Pastries home', async () => {
+  const { installDom } = await import('./helpers/form-dom.mjs');
+  installDom();
+  const { renderDay } = await import('../js/pastries/pastries-day.js');
+  // Every app call is a no-op: the day view only needs to be built.
+  const app = new Proxy({}, { get: () => () => undefined });
+  const day = renderDay({ day: 'Sunday', items: [{ name: 'Cornetti', qty: 4 }], note: '', app });
+  assert.ok(day.node.classList.contains('pas-view'), 'this is the day view');
+  assert.equal(day.node.classList.contains('pas-editor'), false);
+});
+
 test('an invoice import holding choices counts as busy', () => {
   assert.equal(isBusy(screenWith('.invimp-unsaved')), true);
 });
