@@ -5,9 +5,8 @@
 // the target raw weight. If a future change drifts the math by even a gram, these
 // fail.
 //
-// The recipes below are the shipped defaults (RECIPE_DEFAULTS in recipes.js),
-// copied here so the test stays self-contained and pure (recipes.js itself reads
-// localStorage on import and cannot be loaded under Node).
+// The recipes below are the invented fixture bakery's (tests/fixtures/bakery-config.mjs),
+// copied here so the test stays self-contained and pure.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -19,9 +18,9 @@ import {
   scaleSourdough,
 } from '../js/calculator-dough-math.js';
 
-const FOCACCIA = { flourBlu: 278, flourT65: 278, malt: 3, sugar: 8, salt: 11, yeast: 3.6, oil: 56, water1: 334, water2: 24 };
-const BRIOCHE = { flour: 3185, yeast: 127.4, water: 1575 };
-const SOURDOUGH = { flourBlu: 2560, flourT65: 2560, flourWhole: 570, water1: 3800, starter: 1024, malt: 30, salt: 124, water2: 300 };
+const FOCACCIA = { flourBlu: 260, flourT65: 290, malt: 4, sugar: 10, salt: 12, yeast: 3.4, oil: 50, water1: 340, water2: 30 };
+const BRIOCHE = { flour: 3000, yeast: 120, water: 1500 };
+const SOURDOUGH = { flourBlu: 2400, flourT65: 2400, flourWhole: 600, water1: 3700, starter: 980, malt: 25, salt: 115, water2: 250 };
 
 const sum = (arr) => arr.reduce((a, b) => a + b, 0);
 
@@ -29,7 +28,7 @@ const sum = (arr) => arr.reduce((a, b) => a + b, 0);
 
 test('recipeTotal sums every ingredient amount', () => {
   assert.equal(recipeTotal({ a: 1, b: 2, c: 3 }), 6);
-  assert.equal(recipeTotal(BRIOCHE), 3185 + 127.4 + 1575);
+  assert.equal(recipeTotal(BRIOCHE), 3000 + 120 + 1500);
 });
 
 // ── fixRounding (the rounding fairness rule) ────────────────────────────────────
@@ -63,7 +62,7 @@ test('fixRounding output always sums exactly to Math.round(total)', () => {
 
 test('scaleFocaccia matches the locked golden breakdown (5000 g, 0.65%)', () => {
   // [flourBlu, flourT65, malt, sugar, salt, yeast, oil, water1, water2]
-  assert.deepEqual(scaleFocaccia(FOCACCIA, 5000, 0.65), [1396, 1396, 15, 40, 55, 18, 281, 1678, 121]);
+  assert.deepEqual(scaleFocaccia(FOCACCIA, 5000, 0.65), [1301, 1451, 20, 50, 60, 18, 250, 1700, 150]);
 });
 
 test('scaleFocaccia ingredients always sum to the target', () => {
@@ -75,16 +74,17 @@ test('scaleFocaccia ingredients always sum to the target', () => {
 // ── Brioche ──────────────────────────────────────────────────────────────────────
 
 test('scaleBrioche at the recipe baseline returns the rounded recipe itself', () => {
-  // target = provisional total (4887.4) and yeast 4% → factor 1 → the recipe values.
-  assert.deepEqual(scaleBrioche(BRIOCHE, 4887.4, 4), [3185, 127, 1575]);
+  // target = provisional total (4620) and yeast 4% → factor 1 → the recipe values.
+  assert.deepEqual(scaleBrioche(BRIOCHE, 4620, 4), [3000, 120, 1500]);
 });
 
-test('scaleBrioche matches the locked golden breakdown (9774.8 g, 4%)', () => {
-  assert.deepEqual(scaleBrioche(BRIOCHE, 9774.8, 4), [6370, 255, 3150]);
+test('scaleBrioche matches the locked golden breakdown (9240 g, 4%)', () => {
+  assert.deepEqual(scaleBrioche(BRIOCHE, 9240, 4), [6000, 240, 3000]);
 });
 
 test('scaleBrioche ingredients always sum to the target', () => {
-  for (const target of [2000, 4887, 9775]) {
+  // Fractional targets (4620.6, 9240.4) keep a case where Math.round(target) differs from the target.
+  for (const target of [2000, 4620, 4620.6, 9240, 9240.4]) {
     assert.equal(sum(scaleBrioche(BRIOCHE, target, 4)), Math.round(target));
   }
 });
@@ -99,7 +99,7 @@ test('a higher yeast percentage raises the yeast share', () => {
 
 test('scaleSourdough matches the locked golden breakdown (9000 g, 18%)', () => {
   // [flourBlu, flourT65, flourWhole, water1, starter, malt, salt, water2]
-  assert.deepEqual(scaleSourdough(SOURDOUGH, 9000, 18), [2101, 2101, 468, 3117, 840, 25, 102, 246]);
+  assert.deepEqual(scaleSourdough(SOURDOUGH, 9000, 18), [2063, 2063, 516, 3181, 842, 21, 99, 215]);
 });
 
 test('scaleSourdough ingredients always sum to the target', () => {
