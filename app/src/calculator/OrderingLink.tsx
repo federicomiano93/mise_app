@@ -25,9 +25,11 @@ import styles from './ClientOrdering.module.css';
 // ⚠️ «COULD NOT READ» IS NOT «NO LINK»: when the links could not be read there is no Create button (it would mint a
 // second account for a client whose link works, and cut it off).
 //
-// ⚠️ MINTING, REPLACING AND TURNING OFF ARE FOR THOSE WHO CAN MANAGE (firestore.rules gates the account on canManage, so a
-// manager can too); COPYING AND SENDING ARE FOR EVERYONE — passing an existing link to the client who already has it is an
-// errand at the counter.
+// ⚠️ THE WHOLE GROUP IS FOR THOSE WHO CAN MANAGE (firestore.rules gates the account on canManage, so a manager can too) —
+// minting, replacing and turning off, and since the audit of 25 Oct 2026 copying and sending as well, and even READING the
+// links: the link's secret is the ordering account's password, so the rules let only the people who mint and revoke links
+// read them, and an employee who copied one kept a way to order as that client after leaving. Anybody else is never made
+// to ask (no refused read) and gets one sentence that names who looks after the link, promising neither answer.
 export function OrderingLink({ client, dirty }: { client: Client; dirty: boolean }) {
   const { t } = useT();
   const session = useSession();
@@ -41,16 +43,16 @@ export function OrderingLink({ client, dirty }: { client: Client; dirty: boolean
 
   // The links are read when the client's screen opens, and again when the editor's save completes, so a client that was
   // just saved is known to the store's list.
+  const canManage = session.canManage;
   const wasDirty = useRef(dirty);
-  useEffect(() => { void store.loadAccounts(); }, [store]);
+  useEffect(() => { if (canManage) void store.loadAccounts(); }, [store, canManage]);
   useEffect(() => {
-    if (wasDirty.current && !dirty) void store.loadAccounts();
+    if (canManage && wasDirty.current && !dirty) void store.loadAccounts();
     wasDirty.current = dirty;
-  }, [dirty, store]);
+  }, [dirty, store, canManage]);
 
   const name = client.name.trim() === '' ? t('calc.unnamedClient') : client.name;
   const account = accounts[client.id];
-  const canManage = session.canManage;
   const canOrder = isValidOrderClientId(client.id);
   const link = account?.linkToken && session.locationId
     ? orderingLinkFor(account.linkToken, session.locationId, window.location.href)
@@ -113,18 +115,17 @@ export function OrderingLink({ client, dirty }: { client: Client; dirty: boolean
   }
 
   function body() {
+    if (!canManage) return <p className={styles.hint}>{t('calc.orderingLinkManagersOnly')}</p>;
     // A link publishes the products AS SAVED.
     if (dirty) return <p className={styles.hint}>{t('calc.saveYourChangesFirst')}</p>;
     if (accountsState === 'failed') return <p className={styles.hint}>{t('calc.orderingLink.failed')}</p>;
     if (accountsState !== 'ready') return <p className={styles.hint}>{t('calc.loading')}</p>;
-    const mayMake = canManage && canOrder;
     return (
       <>
         <p className={styles.hint}>
           {account
             ? t('calc.clientCanSendOrders', { client: name })
-            : !canOrder ? t('calc.thisClientCannotHave')
-              : mayMake ? t('calc.createALinkAnd') : t('calc.thisClientCannotOrder')}
+            : !canOrder ? t('calc.thisClientCannotHave') : t('calc.createALinkAnd')}
         </p>
         <div className={styles.actions}>
           {link ? (
@@ -144,13 +145,13 @@ export function OrderingLink({ client, dirty }: { client: Client; dirty: boolean
               </Button>
             </>
           ) : null}
-          {mayMake ? (
+          {canOrder ? (
             <Button isDisabled={working} onPress={() => { void create(); }}>
               {account ? t('calc.replaceWithANew') : t('calc.createOrderingLink')}
             </Button>
           ) : null}
         </div>
-        {account && canManage ? (
+        {account ? (
           <Button variant="quiet" className={styles.turnOff} isDisabled={working} onPress={() => { void turnOff(); }}>
             {t('calc.turnOffOrdering')}
           </Button>
