@@ -28,11 +28,12 @@
 // in the console — and the wait ends, so a screen never waits for them for ever.
 
 import {
-  calculatorImportKind, isScaledEntryFresh, labelFieldsOf, normalizeCatalogueRecipe, normalizeCatalogueRecipes,
+  calculatorImportKind, isScaledEntryFresh, labelFieldsOf,
 } from '@mise/shared/catalogue-model';
 import type { CalculatorImportKind, CatalogueRecipe, ImportAction } from '@mise/shared/catalogue-model';
 import { normalizeEndNote, normalizeSteps, ridOf, withRowIds } from '@mise/shared/guided-model';
 import type { KeyValueStorage } from '../session/backend';
+import { LABEL_TEXT_FIELDS, labelTextPatchOf, normalizeStoredRecipe, normalizeStoredRecipes } from './labelTexts';
 import { newRecipeId, withoutPrice } from './recipesSource';
 import type { RecipesMeta, RecipesSource, StoredDoc } from './recipesSource';
 
@@ -78,6 +79,10 @@ export interface RecipeToSave {
   // and stay as stored (KEPT_FIELDS), whatever the working copy holds: their editor is the steps editor.
   readonly steps?: unknown;
   readonly endNote?: unknown;
+  // The image label's two texts (labelTexts.ts): a string as typed (empty = take the field away), or undefined when this
+  // save does not touch them — then they are not sent and stay as stored.
+  readonly labelName?: unknown;
+  readonly labelIngredientsText?: unknown;
 }
 
 // What the steps editor saves (step 3d-8): the procedure and its closing message, as typed (the store normalises
@@ -181,6 +186,12 @@ export interface RecipesStore {
   // the change. On a refusal the keys of THIS patch are put back to what they were just before it (except a key a
   // later patch has set since) and the promise rejects, so the screen can say so.
   saveLabelProfile(patch: Readonly<Record<string, unknown>>): Promise<void>;
+  // The image label's logo (label-assets/logo), straight through to the source: watched by the screens that show it, for
+  // as long as they are on screen (useLabelLogo.ts), never by the store — and never copied into storage (tens of
+  // kilobytes; Firestore's own offline cache already holds the last one read).
+  watchLabelLogo: RecipesSource['watchLabelLogo'];
+  saveLabelLogo: RecipesSource['saveLabelLogo'];
+  removeLabelLogo: RecipesSource['removeLabelLogo'];
   // Saves a recipe, LOCAL-FIRST: the list changes at once (and the phone's copy), then the database is asked. Returns
   // the recipe's id at once (a new one is made on the phone). Never waits for the network. A REFUSED write takes the
   // change back (the version before it, or no recipe at all for a new one) and says so with a RecipesMessage.
@@ -287,7 +298,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   // ⚠️ ONLY A COPY THAT SAYS «NO RECIPES» MAY LET AN EMPTY CACHED ANSWER STAND (see believable()).
   const bootSaidNone = Array.isArray(bootRecipes) && bootRecipes.length === 0;
 
-  let recipes: readonly CatalogueRecipe[] = normalizeCatalogueRecipes(bootRecipes);
+  let recipes: readonly CatalogueRecipe[] = normalizeStoredRecipes(bootRecipes);
   let recipesLoaded = Array.isArray(bootRecipes);
   let recipesFromServer = false;
   let streamBroken = false;
@@ -378,7 +389,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   // Puts a recipe into the list (replacing the one with its id), normalised as the current app stores it, and into the
   // phone's copy. Announced.
   function upsertLocal(raw: Record<string, unknown>): void {
-    const norm = normalizeCatalogueRecipe(raw);
+    const norm = normalizeStoredRecipe(raw);
     if (!norm) return;
     const at = recipes.findIndex(recipe => recipe.id === norm.id);
     const next = recipes.slice();
@@ -442,7 +453,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
         (remote, meta) => {
           if (meta.fromServer) recipesFromServer = true;
           if (!believable(remote, meta)) return;
-          recipes = normalizeCatalogueRecipes(remote);
+          recipes = normalizeStoredRecipes(remote);
           recipesLoaded = true;
           writeJson(RECIPES_KEY, recipes);
           if (meta.fromServer) prune();
@@ -560,6 +571,9 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     },
 
     queuePrintJob: job => source.queuePrintJob(job),
+    watchLabelLogo: (onChange, onError) => source.watchLabelLogo(onChange, onError),
+    saveLabelLogo: logo => source.saveLabelLogo(logo),
+    removeLabelLogo: () => source.removeLabelLogo(),
 
     // ⚠️ THE WRITES ARE NOT CHAINED, AND THAT IS ON PURPOSE (the current app chains them behind each other). Each call
     // asks the source at once, in the order the taps were made: Firestore commits ONE client's writes in the order
@@ -647,6 +661,8 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
         ingredients: rows,
         // A number, or null for an emptied box, which the source sends as a removal.
         ...labelFieldsOf(recipe),
+        // The image label's texts only when the editor handed them over (null = emptied, a removal too).
+        ...labelTextPatchOf(recipe),
       };
       const id = recipe.id || newRecipeId();
       const prev = recipes.find(candidate => candidate.id === id) ?? null;
@@ -662,6 +678,8 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       if (prev) {
         const held = prev as unknown as Record<string, unknown>;
         for (const key of KEPT_FIELDS) if (held[key] !== undefined) kept[key] = held[key];
+        // The image label's texts this save does not send stay as the phone held them, until the next snapshot.
+        for (const key of LABEL_TEXT_FIELDS) if (!(key in data) && held[key] !== undefined) kept[key] = held[key];
       }
       upsertLocal({ ...kept, id, ...data });
       let written: Promise<void>;
