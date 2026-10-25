@@ -322,6 +322,10 @@ export function openInvoiceImport(data) {
     titleHeading.textContent = t('invoiceImport.title');
     backBtn.setAttribute('aria-label', t('ui.back'));
     backBtn.disabled = s.busy;
+    // ⚠️ TELLS THE UPDATE GATE (js/update-gate.js) THERE IS WORK TO LOSE — on exactly the condition Back asks
+    // about (requestClose), or while rows are being written. Set BEFORE drawing: the gate re-checks when the
+    // draw below changes the DOM, so it must find the class already in its new state.
+    node.classList.toggle('invimp-unsaved', s.busy || (!!s.file && !s.finished));
 
     if (s.busy) drawBusy();
     else if (s.step === 'file') drawFile();
