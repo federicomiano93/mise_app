@@ -1,0 +1,19 @@
+/* The mark and the name, centred on the page ground. */
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+  /* Two declarations: Chrome 107 (the lab tablet's floor) has no dvh and keeps the first. */
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+}
+
+.name {
+  color: var(--ink-2);
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
