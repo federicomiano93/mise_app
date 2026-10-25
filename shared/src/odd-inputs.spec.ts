@@ -68,7 +68,11 @@ import * as vatNumber from './vat-number';
 import * as favouriteSuppliers from './favourite-suppliers';
 import * as recordChoices from './record-choices';
 import * as categoryBatches from './category-batches';
+import * as ingredientEditModel from './ingredient-edit-model';
 import * as ingredientSearch from './ingredient-search';
+import * as packFormat from './pack-format';
+import * as orderRequestModel from './order-request-model';
+import * as ingredientMerge from './ingredient-merge';
 import { BAKERY_CONFIG } from '../../tests/fixtures/bakery-config.mjs';
 import * as legacyJoinCodeJs from '../../js/join-code.js';
 import * as legacyPushModelJs from '../../js/push-model.js';
@@ -113,7 +117,12 @@ import * as legacyVatNumberJs from '../../js/vat-number.js';
 import * as legacyFavouriteSuppliersJs from '../../js/orders/favourite-suppliers.js';
 import * as legacyRecordChoicesJs from '../../js/record-choices.js';
 import * as legacyCategoryBatchesJs from '../../js/orders/category-batches.js';
+import * as legacyIngredientEditModelJs from '../../js/ingredient-edit-model.js';
 import * as legacyIngredientSearchJs from '../../js/orders/ingredient-search.js';
+import * as legacyPackFormatJs from '../../js/pack-format.js';
+import * as legacyOrderRequestModelJs from '../../js/orders/order-request-model.js';
+import * as legacyIngredientMergeJs from '../../js/orders/ingredient-merge.js';
+import { localeTag, setLanguage, t } from '../../js/i18n.js';
 import * as legacyCalculatorConfigJs from '../../js/calculator-config.js';
 import * as legacyCalculatorDoughMathJs from '../../js/calculator-dough-math.js';
 import * as legacyCalculatorRecipeSourceJs from '../../js/calculator-recipe-source.js';
@@ -188,7 +197,11 @@ const legacyVatNumber = legacyVatNumberJs as unknown as typeof vatNumber;
 const legacyFavouriteSuppliers = legacyFavouriteSuppliersJs as unknown as typeof favouriteSuppliers;
 const legacyRecordChoices = legacyRecordChoicesJs as unknown as typeof recordChoices;
 const legacyCategoryBatches = legacyCategoryBatchesJs as unknown as typeof categoryBatches;
+const legacyIngredientEditModel = legacyIngredientEditModelJs as unknown as typeof ingredientEditModel;
 const legacyIngredientSearch = legacyIngredientSearchJs as unknown as typeof ingredientSearch;
+const legacyPackFormat = legacyPackFormatJs as unknown as typeof packFormat;
+const legacyOrderRequestModel = legacyOrderRequestModelJs as unknown as typeof orderRequestModel;
+const legacyIngredientMerge = legacyIngredientMergeJs as unknown as typeof ingredientMerge;
 
 // ── The machinery ────────────────────────────────────────────────────────────
 
@@ -3362,4 +3375,189 @@ describe('ingredient-search (partial): odd inputs', () => {
     [{ name: 5, shortName: 6, category: 7 }], [{ get name(): string { throw new Error('boom'); } }]];
   const QUERIES: readonly unknown[] = [...SEARCHES, 'org', 'deli', 'no supp', 'pero', 'però', 'zzz', '   ', 'legacy', 'dry'];
   agree('filterSuppliers', m.filterSuppliers as AnyFn, l.filterSuppliers as AnyFn, product(LISTS, QUERIES));
+});
+
+describe('pack-format: odd inputs', () => {
+  const m = packFormat;
+  const l = legacyPackFormat;
+
+  const ITEMS: readonly unknown[] = [...ODD, 'cartone', 7,
+    { unit: 'cartone', packUnit: 'busta' }, { unit: 'cartone' }, { unit: 'Cassa.', packUnit: 'busta', packCount: 4 }, { packCount: 4 },
+    { packCount: '4' }, { packCount: 0 }, { packCount: 10001 }, { packCount: 2.5 }, { packCount: 10000, unit: 5, packUnit: {} },
+    { unit: 'busta', packUnit: ' Busta ' }, { unit: ' BUSTA ', packUnit: 'busta', weight: '2.5kg' },
+    { unit: 'kg', weight: '', priceUnit: 'kg', pricePerUnit: 7.2 }, { unit: 'sacco', weight: '25kg', priceUnit: 'kg', pricePerUnit: 0.8 },
+    { unit: 'cartone', packUnit: 'busta', weight: '2.5kg', priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' },
+    { unit: 'busta', packUnit: 'busta', weight: '2.5kg', priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' },
+    { unit: 'kg', weight: '2.5kg', priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' },
+    { unit: 'cartone', weight: '2.5kg', priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'kg' },
+    { unit: 'kg', weight: '500g', priceUnit: 'kg', pricePerUnit: 10, casePrice: 20, caseCount: 4, caseItemSize: 500, caseItemUnit: 'g' },
+    { unit: 'cartone', packUnit: 'pezzo', weight: '', priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 20, caseCount: 50, caseItemUnit: 'pcs', unitWeightKg: 0.06 },
+    { unit: 'pezzo', packUnit: 'pezzo', weight: '60g', priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 20, caseCount: 50, caseItemUnit: 'pcs', unitWeightKg: 0.06 },
+    { unit: 'pezzo', packUnit: 'pezzo', weight: '360g', priceUnit: 'pcs', pricePerUnit: 0.4, casePrice: 20, caseCount: 50, caseItemUnit: 'pcs', unitWeightKg: 0.06 },
+    { unit: 'cartone', packUnit: 'busta', weight: '2.5kg', priceUnit: 'kg', pricePerUnit: 3, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack' },
+    { weight: '6x1kg', priceUnit: 'kg', pricePerUnit: 2 }, { weight: 'sacco', priceUnit: 'pcs', pricePerUnit: 2 }, { weight: 5, pricePerUnit: '2' },
+    { get unit(): string { throw new Error('boom'); } }];
+
+  agree('usesLegacyCard', m.usesLegacyCard, l.usesLegacyCard, product(ITEMS));
+  agree('formatOf', m.formatOf as AnyFn, l.formatOf as AnyFn, [...product(ITEMS), ...product(ITEMS, ITEMS)]);
+  agree('isCartonWord', m.isCartonWord, l.isCartonWord, product([...ODD, 'cartone', 'Cartoni', ' cassa ', 'case.', 'crate', 'CARTONS', 'scatola', 'box', 'case..', 'collo']));
+  agree('parseCount', m.parseCount, l.parseCount, product([...ODD, ' 12 ', '10000', '10001', '2.5', '-1', '1e3', '007', 7, 10000, 10001, 1.5, '１２']));
+
+  const FORMATS: readonly unknown[] = [...ODD, { kind: 'single', count: null, inner: '' }, { kind: 'carton', count: 4, inner: 'busta' },
+    { kind: 'carton', count: null, inner: 'busta' }, { kind: 'carton', count: 4, inner: ' busta ' }, { kind: 'carton', count: '4', inner: 'busta' },
+    { kind: 'carton', count: NaN, inner: 'busta' }, { kind: 'carton', count: undefined, inner: undefined }, { kind: 'carton', count: 6, inner: 'sacco', cartonWord: 'case' },
+    { kind: 'single', count: 3, inner: 'bag', cartonWord: 'cartone' }, { kind: 'carton', count: 12, inner: '', cartonWord: 'cartone' },
+    { kind: 'carton', count: 10001, inner: 'x' }, { kind: 'carton', count: 4.5, inner: 'bag' }, { kind: 'carton', count: 4, inner: 'sleeve' }];
+  const BEFORES: readonly unknown[] = [...ODD, { kind: 'single', count: null, inner: '', unit: '', packUnit: '' },
+    { kind: 'single', count: null, inner: '', unit: 'cassa', packUnit: '' }, { kind: 'single', count: null, inner: '', unit: 'sacco', packUnit: '' },
+    { kind: 'single', count: null, inner: 'busta', unit: '', packUnit: 'busta' }, { kind: 'carton', count: 4, inner: 'busta', unit: 'cartone', packUnit: 'busta' },
+    { kind: 'carton', count: 4, inner: 'busta', unit: '', packUnit: 'busta' }, { kind: 'carton', count: null, inner: 'busta', unit: 'Cartone.', packUnit: 'busta' },
+    { kind: 'carton', count: 4, inner: '', unit: 'kg', packUnit: '' }, { kind: 'single', count: null, inner: '', unit: 'sacco', packUnit: 'busta' },
+    { kind: 'carton', count: 4, inner: 'busta' }, { kind: 'single', unit: 5, packUnit: {} }];
+  agree('formatTouched', m.formatTouched as AnyFn, l.formatTouched as AnyFn, product(BEFORES, FORMATS));
+  agree('formatPatch', m.formatPatch as AnyFn, l.formatPatch as AnyFn, [
+    ...product(BEFORES, FORMATS),
+    ...product(BEFORES, FORMATS, [{ force: true }, { force: false }, {}, undefined, null, { force: 1 }]),
+  ]);
+
+  const LOOSE: readonly unknown[] = [...ODD, { kind: 'single', weightReadable: false, priceUnit: 'kg', lang: 'it' }, { kind: 'single', priceUnit: 'pcs', lang: 'en' },
+    { kind: 'single', weightReadable: false, priceUnit: 'l', lang: 'it' }, { kind: 'single', weightReadable: true, priceUnit: 'kg', lang: 'it' },
+    { kind: 'carton', priceUnit: 'kg', lang: 'it' }, { kind: 'single', priceUnit: 'constructor', lang: 'it' }, { kind: 'single', priceUnit: 'pcs' },
+    { kind: 'single', weightReadable: 0, priceUnit: 'kg', lang: 'IT' }];
+  agree('looseUnit', m.looseUnit as AnyFn, l.looseUnit as AnyFn, product(LOOSE));
+
+  // The two adapted functions: the original reads the dictionary and the language of the page, the port is handed
+  // them. The original's own `t` and `localeTag()` stand in, so the same text is demanded of both, in both languages.
+  const WEIGHTS: readonly unknown[] = [...ODD, '2.5kg', '2,5 kg', '750 ml', '500g', '250g', '1l', '6x1kg', 'sacco', '60g', '0.06 kg', '3kg', '2.5 l', '1000g', 1500, '1.2345 kg'];
+  const LANGS: readonly unknown[] = [...ODD.slice(0, 6), 'it', 'en', 'IT'];
+  const CASES: readonly unknown[] = [...ITEMS.slice(0, 8), ...ITEMS.slice(15, 30),
+    { priceUnit: 'l', pricePerUnit: 4, casePrice: 12, caseCount: 6, caseItemSize: 0.5, caseItemUnit: 'pack' },
+    { priceUnit: 'l', pricePerUnit: 4, casePrice: 12, caseCount: 6, caseItemSize: 500, caseItemUnit: 'ml' }];
+  for (const language of ['en', 'it'] as const) {
+    test(`formatSummary and formatChanged: the same text as the original in ${language}`, () => {
+      setLanguage(language);
+      try {
+        const disagreements: string[] = [];
+        const compare = (name: string, args: unknown[], mine: () => unknown, theirs: () => unknown): void => {
+          const a = outcome(mine);
+          const b = outcome(theirs);
+          try { expect(a).toStrictEqual(b); } catch { disagreements.push(`${name}(${args.map(show).join(', ')}): ported ${show(a)} / current ${show(b)}`); }
+        };
+        for (const args of product(FORMATS, WEIGHTS, LANGS)) {
+          compare('formatSummary', args, () => (m.formatSummary as AnyFn)(args[0], args[1], args[2], t, localeTag()), () => (l.formatSummary as AnyFn)(...args));
+        }
+        for (const args of product(CASES, FORMATS, WEIGHTS)) {
+          compare('formatChanged', args, () => (m.formatChanged as AnyFn)(args[0], args[1], args[2], localeTag()), () => (l.formatChanged as AnyFn)(...args));
+        }
+        expect(disagreements.slice(0, 10)).toStrictEqual([]);
+      } finally { setLanguage('en'); }
+    }, 60_000);
+  }
+});
+
+describe('ingredient-edit-model: odd inputs', () => {
+  const m = ingredientEditModel;
+  const l = legacyIngredientEditModel;
+
+  const INGREDIENTS: readonly unknown[] = [...ODD, 'flour', { id: 'flour', name: 'Flour', pricePerUnit: 9, vatRate: 4, priceUnit: 'l' }, { id: 7 }, { name: 'no id' },
+    { id: 'a', casePrice: 5, caseCount: 2, caseItemUnit: 'pack', priceBasis: 'case' }, { get id(): string { throw new Error('boom'); } }];
+  const PRICE_DOCS: readonly unknown[] = [...ODD, { priceUnit: 'kg', pricePerUnit: 0.72, vatRate: 4 }, { pricePerUnit: null }, { bakery: 'main', priceUnit: 'l' }];
+  agree('itemWithPrice', m.itemWithPrice as AnyFn, l.itemWithPrice as AnyFn, [...product(INGREDIENTS, PRICE_DOCS), ...product(INGREDIENTS)]);
+  agree('needsPriceRead', m.needsPriceRead as AnyFn, l.needsPriceRead as AnyFn, [
+    ...product([true, false, 1, 'true', ...ODD], [true, false, 0, 'yes', ...ODD]).map(([mayPrice, pricesLoaded]) => [{ mayPrice, pricesLoaded }]),
+    [{}], [undefined], [null], [5],
+  ]);
+  agree('deletePlan', m.deletePlan as AnyFn, l.deletePlan as AnyFn, [
+    ...product(['flour', '', ...ODD], [true, false, 1, 'true', ...ODD]).map(([id, mayPrice]) => [{ id, mayPrice }]),
+    [{}], [undefined], [null], [5],
+  ]);
+  agree('draftEntryPath', m.draftEntryPath, l.draftEntryPath, product([...ODD, 'flour', 'a.b', 7, Symbol.iterator]));
+
+  // confirmAndDelete is async, so it is run by hand: the same result, the same calls in the same order.
+  test('confirmAndDelete: the same result and the same calls for every odd input', async () => {
+    type Script = { item: unknown; answer: unknown; fails: unknown; hooks: boolean };
+    const run = async (fn: AnyFn, { item, answer, fails, hooks }: Script): Promise<unknown> => {
+      const log: string[] = [];
+      const result = await (fn({
+        item,
+        ask: async () => { log.push('ask'); return answer; },
+        remove: async (id: unknown) => { log.push(`remove:${String(id)}`); if (fails) throw new Error('refused'); },
+        ...(hooks ? { onStart: () => log.push('start'), onDone: () => log.push('done'), onFail: (e: unknown) => log.push(`fail:${(e as Error).message}`) } : {}),
+      }) as Promise<unknown>).then((value: unknown) => ({ returned: value }), (e: unknown) => ({ threw: e instanceof Error ? e.name : typeof e }));
+      return { result, log };
+    };
+    const items: readonly unknown[] = [...ODD, { id: 'flour' }, { id: '' }, { id: 7 }, { id: 'x', name: 'X' }];
+    const disagreements: string[] = [];
+    for (const item of items) {
+      for (const answer of [true, false, 1, 0, 'yes', '', null, undefined]) {
+        for (const fails of [true, false]) {
+          for (const hooks of [true, false]) {
+            const script = { item, answer, fails, hooks };
+            const a = await run(m.confirmAndDelete as AnyFn, script);
+            const b = await run(l.confirmAndDelete as AnyFn, script);
+            try { expect(a).toStrictEqual(b); } catch { disagreements.push(`${show(script)}: ported ${show(a)} / current ${show(b)}`); }
+          }
+        }
+      }
+    }
+    expect(disagreements.slice(0, 10)).toStrictEqual([]);
+  });
+  test('confirmAndDelete: a call with nothing to destructure throws the same kind of error in both', async () => {
+    for (const arg of [undefined, null]) {
+      const a = await ((m.confirmAndDelete as AnyFn)(arg) as Promise<unknown>).then(() => 'returned', (e: unknown) => (e as Error).name);
+      const b = await ((l.confirmAndDelete as AnyFn)(arg) as Promise<unknown>).then(() => 'returned', (e: unknown) => (e as Error).name);
+      expect(a, show(arg)).toBe(b);
+    }
+  });
+});
+
+describe('order-request-model: odd inputs', () => {
+  const m = orderRequestModel;
+  const l = legacyOrderRequestModel;
+
+  const REQUESTS: readonly unknown[] = [...ODD, 'abc', 7, { quantities: { a: 1, b: 2, c: 3 }, done: { b: true } }, { quantities: { a: 1 }, done: { a: true } },
+    { quantities: { a: 1 } }, { quantities: { a: 1, b: 1, c: 1 }, done: { a: 1, b: 'true', c: true } }, { quantities: null, done: { a: true } },
+    { quantities: 'xy', done: {} }, { quantities: ['p', 'q'], done: { 0: true } }, { quantities: { a: 1 }, done: 'a' }, { quantities: { a: 1 }, done: [true] },
+    { quantities: {}, done: {} }, { quantities: { a: 1 }, done: null }, { get quantities(): object { throw new Error('boom'); } }];
+  agree('remainingIds', m.remainingIds, l.remainingIds, product(REQUESTS));
+});
+
+describe('ingredient-merge: odd inputs', () => {
+  const m = ingredientMerge;
+  const l = legacyIngredientMerge;
+
+  const IDS: readonly unknown[] = [...ODD, 'b', 'a.b', 'constructor', '__proto__', 7];
+  const inv = (month: unknown, data: unknown) => ({ month, data });
+  const OPEN = { closedAt: '', opening: { b: 3 } };
+  const SOURCES: readonly unknown[] = [...ODD, 'text', 7,
+    { products: [], recipes: [], inventory: null, month: '2026-10', draft: null },
+    { products: [{ name: 'Pane', components: [{ ingredientId: 'b' }], packaging: [] }, { name: ' Torta ', components: [{ recipeId: 'r' }], packaging: [{ ingredientId: 'b' }] }, null, { name: 5 }] },
+    { products: [{ components: 'b', packaging: { ingredientId: 'b' } }, { name: 'X', components: [null, 7, { ingredientId: 'b' }] }] },
+    { products: 'b', recipes: 'b' },
+    { recipes: [{ name: 'Impasto', ingredients: [{ refId: 'b', kind: 'ingredient' }] }, { name: 'Base', ingredients: [{ refId: 'b', kind: 'recipe' }] },
+      { name: 'Libera', ingredients: [{ label: 'Sale' }] }, null, { ingredients: 'b' }, { name: 'NoKind', ingredients: [{ refId: 'b' }] }] },
+    { month: '2026-10', inventory: OPEN }, { month: '2026-10', inventory: { closedAt: '2026-10-31', opening: { b: 3 } } },
+    { month: '2026-10', inventory: { closedAt: '', purchased: { b: 0 } } }, { month: '2026-10', inventory: { closedAt: '   ', closing: { b: 2 } } },
+    { month: '2026-10', inventory: { closedAt: '', opening: { b: null } } }, { month: '2026-10', inventory: { closedAt: '', opening: { b: undefined } } },
+    { month: '2026-10', inventory: { closedAt: '', opening: [3], purchased: 'b', closing: { x: 1 } } }, { month: '2026-10', inventory: { closedAt: 5, opening: { b: 1 } } },
+    { month: 7, inventory: OPEN }, { inventory: OPEN }, { inventory: [OPEN] },
+    { inventories: [inv('2026-10', null), inv('2026-09', OPEN)] }, { inventories: [inv('2026-10', OPEN), inv('2026-09', OPEN)] },
+    { inventories: [inv('2026-09', { opening: { b: 3 } })] }, { inventories: [inv(undefined, OPEN), null, 5, { data: OPEN }, { month: 'm' }] },
+    { inventories: [inv('2026-09', { closedAt: '2026-09-30', opening: { b: 3 } })] }, { inventories: 'x', inventory: OPEN, month: 'm' }, { inventories: [] },
+    { requests: [{ quantities: { b: 2, c: 1 }, done: {} }] }, { requests: [{ quantities: { b: 2, c: 1 }, done: { b: true } }] },
+    { requests: [{ quantities: { b: 2 }, done: { b: true } }] }, { requests: [{ quantities: { c: 1 }, done: {} }] },
+    { requests: [null, {}, { quantities: null }, [], { quantities: [] }, { quantities: ['b'] }, { quantities: 'b' }] }, { requests: 'b' },
+    { draft: { entries: { b: { qty: 2, stock: 0 } } } }, { draft: { entries: { b: { qty: 0, stock: 5 } } } }, { draft: { entries: { b: { qty: '3' } } } },
+    { draft: { entries: { b: { qty: -1 } } } }, { draft: { entries: { b: 5 } } }, { draft: { entries: { b: null } } }, { draft: { entries: [] } },
+    { draft: { entries: { b: { qty: NaN } } } }, { draft: { entries: {} } }, { draft: 'b' }, { draft: null },
+    { products: [{ name: 'P', components: [{ ingredientId: 'b' }] }], recipes: [{ name: 'R', ingredients: [{ refId: 'b', kind: 'ingredient' }] }],
+      inventory: OPEN, month: '2026-10', draft: { entries: { b: { qty: 1 } } }, requests: [{ quantities: { b: 1 }, done: {} }] },
+    { get products(): object { throw new Error('boom'); } }];
+  agree('findUsage', m.findUsage as AnyFn, l.findUsage as AnyFn, [...product(IDS, SOURCES), ...product(IDS)]);
+
+  const MOMENTS: readonly unknown[] = [undefined, NaN, 0, -1, 1e15, 8.64e15, 8.65e15, 'x', '2026-10-05', null, true, {}, [],
+    new Date(2026, 9, 5, 12).getTime(), new Date(2026, 0, 31, 12).getTime(), new Date(2026, 0, 1, 0, 0, 0).getTime(), new Date(2026, 11, 31, 23, 59, 59).getTime(),
+    new Date(2026, 2, 31, 12).getTime(), new Date(2026, 9, 25, 3).getTime(), new Date(2026, 9, 31, 23).getTime(), new Date(2024, 1, 29, 12).getTime()];
+  agree('monthKeyOf', m.monthKeyOf as AnyFn, l.monthKeyOf as AnyFn, product(MOMENTS));
+  agree('previousMonthKeyOf', m.previousMonthKeyOf as AnyFn, l.previousMonthKeyOf as AnyFn, product(MOMENTS));
 });

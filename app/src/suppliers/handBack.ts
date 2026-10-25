@@ -20,6 +20,11 @@ export const SEARCH_OPENER = 'search';
 export const NEW_OPENER = 'new-door';
 // The door to Settings, at the foot of the list: Back from Settings returns the focus to it.
 export const SETTINGS_OPENER = 'settings-door';
+// An ingredient or packaging row of a list: Back from its card returns the focus to it.
+export const itemOpener = (id: string): string => `item:${id}`;
+// The same item on a supplier's own screen, and that screen's «Add ingredient» button.
+export const supplierItemOpener = (id: string): string => `supplier-item:${id}`;
+export const ADD_INGREDIENT_OPENER = 'add-ingredient';
 
 export interface HandBack {
   // A row that opens a supplier. null when it goes away.
@@ -34,6 +39,12 @@ export interface HandBack {
   // supplier only.
   wantEdit(id: string): void;
   takeEdit(id: string): boolean;
+  // An ingredient's card opened from a supplier's screen is closing: that screen is owed the focus on `opener` (the row, or
+  // «Add ingredient») when it is drawn again. Taken once, for that supplier only; null when nothing is owed.
+  wantOn(supplierId: string, opener: string): void;
+  takeOn(supplierId: string): string | null;
+  // Gives the focus to a registered opener now; false when it is not there.
+  focus(name: string): boolean;
 }
 
 const NOTHING: HandBack = {
@@ -43,6 +54,9 @@ const NOTHING: HandBack = {
   deliver() { /* ditto */ },
   wantEdit() { /* ditto */ },
   takeEdit: () => false,
+  wantOn() { /* ditto */ },
+  takeOn: () => null,
+  focus: () => false,
 };
 
 const HandBackContext = createContext<HandBack>(NOTHING);
@@ -61,6 +75,7 @@ export function useHandBackState(deletions: SupplierDeletions): HandBack {
   const openers = useRef(new Map<string, HTMLElement>());
   const wanted = useRef<string | null>(null);
   const editOf = useRef<string | null>(null);
+  const onSupplier = useRef<{ supplierId: string; opener: string } | null>(null);
   return useMemo<HandBack>(() => ({
     register(name, node) {
       if (node) openers.current.set(name, node);
@@ -79,6 +94,20 @@ export function useHandBackState(deletions: SupplierDeletions): HandBack {
       if (editOf.current !== id) return false;
       editOf.current = null;
       return true;
+    },
+    wantOn(supplierId, opener) {
+      onSupplier.current = { supplierId, opener };
+    },
+    takeOn(supplierId) {
+      const owed = onSupplier.current;
+      if (owed === null || owed.supplierId !== supplierId) return null;
+      onSupplier.current = null;
+      return owed.opener;
+    },
+    focus(name) {
+      const node = openers.current.get(name);
+      node?.focus();
+      return node !== undefined;
     },
     deliver() {
       const name = wanted.current;

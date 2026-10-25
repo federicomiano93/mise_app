@@ -112,7 +112,7 @@ describe('a supplier\'s details', () => {
     expect(within(region).queryByText('No supplier')).not.toBeInTheDocument();
     for (const row of rows) {
       expect(within(row as HTMLElement).queryByText(/Alpine/)).not.toBeInTheDocument();
-      expect(row.querySelector('button, a, [tabindex]')).toBeNull();
+      expect(row.querySelector('a, [tabindex]')).toBeNull();
     }
   });
 

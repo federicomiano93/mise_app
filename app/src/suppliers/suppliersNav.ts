@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { KEEP_FOCUS } from '../shell/Page';
+import type { SuppliersTab } from './suppliersPath';
 
 // What the list puts in the navigation `state` when it opens a supplier one level down: «you came from
 // the list, so Back is the browser's Back». KEEP_FOCUS comes with it: the page then leaves the focus
@@ -42,3 +43,27 @@ export function useLeave(fallback: string, onLeaving: () => void, cameFrom: (sta
     else void navigate(fallback, { replace: true, state: KEEP_FOCUS });
   }, [navigate, fromList, fallback, onLeaving]);
 }
+
+// An ingredient's or packaging item's card, opened from the list: Back is the browser's Back, and the state also carries
+// the tab the list was on, so the same tab stays beside the card (a packaging item opened from the Ingredients tab by its
+// address would otherwise show the Packaging tab).
+export const fromListTab = (tab: SuppliersTab) => ({ ...FROM_LIST, tab }) as const;
+
+export function tabOfState(state: unknown): SuppliersTab | null {
+  if (typeof state !== 'object' || state === null || !('tab' in state)) return null;
+  const tab = (state as { tab: unknown }).tab;
+  return tab === 'ingredients' || tab === 'suppliers' || tab === 'packaging' ? tab : null;
+}
+
+// The same card, opened from a supplier's own screen («What they sell», «Add ingredient»): Back is the browser's Back, which
+// lands on that supplier's screen, and the list beside the card stays on the Suppliers tab.
+export const fromSupplierScreen = (supplierId: string) => ({ ...KEEP_FOCUS, fromSupplierScreen: supplierId }) as const;
+
+export function supplierScreenOf(state: unknown): string | null {
+  if (typeof state !== 'object' || state === null || !('fromSupplierScreen' in state)) return null;
+  const id = (state as { fromSupplierScreen: unknown }).fromSupplierScreen;
+  return typeof id === 'string' ? id : null;
+}
+
+// Did the card's own Back have a screen to step back to (the list, or a supplier's screen)?
+export const cameFromListOrSupplierScreen = (state: unknown): boolean => cameFromList(state) || supplierScreenOf(state) !== null;

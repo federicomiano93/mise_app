@@ -11,7 +11,7 @@ import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { ItemRow, ItemRows } from './ItemRow';
-import { NEW_OPENER, SEARCH_OPENER, SETTINGS_OPENER, supplierOpener, useHandBack } from './handBack';
+import { NEW_OPENER, SEARCH_OPENER, SETTINGS_OPENER, itemOpener, supplierOpener, useHandBack } from './handBack';
 import type { SuppliersTab } from './suppliersPath';
 import { useSuppliers } from './SuppliersContext';
 import type { StoredDoc } from './suppliersSource';
@@ -54,6 +54,12 @@ const NO_MATCH_KEY = {
   packaging: 'sup.noMatch.packaging',
 } as const satisfies Record<SuppliersTab, MessageKey>;
 
+const NEW_KEY = {
+  ingredients: 'sup.newIngredient',
+  suppliers: 'sup.newSupplier',
+  packaging: 'sup.newPackaging',
+} as const satisfies Record<SuppliersTab, MessageKey>;
+
 const tabId = (tab: SuppliersTab): string => `sup-tab-${tab}`;
 const PANEL_ID = 'sup-panel';
 
@@ -64,7 +70,10 @@ type Props = {
   openSupplierId: string | null;
   onTab: (tab: SuppliersTab) => void;
   onOpenSupplier: (id: string) => void;
-  // «New supplier» is the screen shown, and the button that opens it.
+  // The ingredient or packaging item open beside the list, and the row that opens one.
+  openItemId: string | null;
+  onOpenItem: (id: string) => void;
+  // «New supplier» / «New ingredient» / «New packaging» (by the tab) is the screen shown, and the button that opens it.
   newOpen: boolean;
   onNew: () => void;
   // Settings are the screen shown, and the door to them at the foot of the list.
@@ -97,7 +106,7 @@ function targetOf(key: string, index: number, last: number): number | null {
 // the person left them. The three tabs share it, so it is not even remounted by a tab (parity S48).
 //
 // ⚠️ A TAB CLEARS THE SEARCH (parity S49), however the tab came to change — one list's query must never filter the other.
-export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, newOpen, onNew, settingsOpen, onOpenSettings }: Props) {
+export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, openItemId, onOpenItem, newOpen, onNew, settingsOpen, onOpenSettings }: Props) {
   const { t } = useT();
   const { canManage } = useSession();
   const handBack = useHandBack();
@@ -162,9 +171,9 @@ export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, newO
             );
           })}
         </div>
-        {/* The search box and, on the Suppliers tab ONLY, the button that makes a supplier: side by side on the tablet's split,
-            one under the other on a phone (SuppliersList.module.css). ⚠️ NEVER HIDDEN ON A ROLE (parity S5): employees add
-            suppliers too, and it stands also over «No suppliers yet», the way to the first one. */}
+        {/* The search box and, under it at every width, the button that makes a new one of what the tab lists (a supplier, an
+            ingredient, a packaging item). ⚠️ NEVER HIDDEN ON A ROLE (parity S5): employees add them too, and it stands also over
+            «No … yet», the way to the first one. */}
         <div className={styles.top}>
           <div className={styles.search}>
             <Search aria-hidden="true" />
@@ -179,18 +188,16 @@ export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, newO
               onChange={event => { setText(event.target.value); }}
             />
           </div>
-          {suppliersTab ? (
-            <Button
-              ref={newDoor}
-              variant="primary"
-              className={styles.newSupplier}
-              aria-current={newOpen ? 'true' : undefined}
-              onPress={onNew}
-            >
-              <Plus aria-hidden="true" />
-              <span>{t('sup.newSupplier')}</span>
-            </Button>
-          ) : null}
+          <Button
+            ref={newDoor}
+            variant="primary"
+            className={styles.newSupplier}
+            aria-current={newOpen ? 'true' : undefined}
+            onPress={onNew}
+          >
+            <Plus aria-hidden="true" />
+            <span>{t(NEW_KEY[tab])}</span>
+          </Button>
         </div>
       </div>
 
@@ -213,7 +220,15 @@ export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, newO
             onOpenSupplier={onOpenSupplier}
           />
         ) : (
-          <ItemList tab={tab} items={snapshot.ingredients} suppliers={snapshot.suppliers} query={query} broken={broken} />
+          <ItemList
+            tab={tab}
+            items={snapshot.ingredients}
+            suppliers={snapshot.suppliers}
+            query={query}
+            broken={broken}
+            openItemId={openItemId}
+            onOpenItem={onOpenItem}
+          />
         )}
       </div>
 
@@ -238,8 +253,7 @@ export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, newO
 
 function EmptyState({ tab }: { tab: SuppliersTab }) {
   const { t } = useT();
-  // Nothing exists yet. (The button that makes the first supplier is «New supplier» above; the ingredient card's comes with
-  // step 3e-2.)
+  // Nothing exists yet. (The button that makes the first one is «New …» above.)
   return (
     <div className={styles.empty}>
       <p className={styles.emptyTitle}>{t(EMPTY_TITLE_KEY[tab])}</p>
@@ -331,11 +345,14 @@ type ItemListProps = {
   suppliers: readonly StoredDoc[];
   query: string;
   broken: boolean;
+  openItemId: string | null;
+  onOpenItem: (id: string) => void;
 };
 
 // The Ingredients and Packaging tabs: every item of that kind, A–Z, whoever sells it (parity S57–S60).
-function ItemList({ tab, items, suppliers, query, broken }: ItemListProps) {
+function ItemList({ tab, items, suppliers, query, broken, openItemId, onOpenItem }: ItemListProps) {
   const { t } = useT();
+  const handBack = useHandBack();
   const packaging = tab === 'packaging';
 
   const all = useMemo(
@@ -356,7 +373,15 @@ function ItemList({ tab, items, suppliers, query, broken }: ItemListProps) {
     <ItemRows>
       {visible.map(item => (
         // ⚠️ '' and never undefined for an item whose supplier is gone: undefined means «on the supplier's own screen».
-        <ItemRow key={item.id} item={item} supplier={typeof item.supplierId === 'string' ? (labels.get(item.supplierId) ?? '') : ''} />
+        <ItemRow
+          key={item.id}
+          item={item}
+          supplier={typeof item.supplierId === 'string' ? (labels.get(item.supplierId) ?? '') : ''}
+          isOpen={item.id === openItemId}
+          onOpen={onOpenItem}
+          opener={itemOpener(item.id)}
+          register={handBack.register}
+        />
       ))}
     </ItemRows>
   );
