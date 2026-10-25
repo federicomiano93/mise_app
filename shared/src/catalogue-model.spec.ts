@@ -1077,6 +1077,64 @@ describe.each([
   });
 });
 
+// ── `inactiveLast` (Mise 2 only, 3e-5b): switched-off ingredients are offered LAST, not left out ──────────
+// No original to compare with: the default behaviour is pinned by the both-files tests above.
+
+describe('inactiveLast (Mise 2 only)', () => {
+  const ingredients = {
+    A1: { id: 'A1', name: 'Burro attivo', supplierId: 'S1' },
+    Z9: { id: 'Z9', name: 'Burro zeta', active: false },
+    O1: { id: 'O1', name: 'Burro antico', shortName: 'Antico', active: false, supplierId: 'S2' },
+    FL: { id: 'FL', name: 'Farina spenta', active: false },
+    BOX: { id: 'BOX', name: 'Burro scatola', kind: 'packaging', active: false },
+  };
+  const recipes = [{ id: 'R1', name: 'Crema al burro' }];
+  const ids = (list: readonly { id: unknown }[] | undefined): unknown[] => (list ?? []).map(o => o.id);
+
+  test('by default the switched-off ones are left out and there is no `inactive` key', () => {
+    const out = ported.linkOptions({ ingredients, recipes, suppliers: SUPPLIERS, query: '' });
+    expect(ids(out.ingredients)).toStrictEqual(['A1']);
+    expect('inactive' in out).toBe(false);
+    expect('inactive' in ported.linkOptions({ ingredients, inactiveLast: false })).toBe(false);
+  });
+
+  test('with the option they come in `inactive`: food only, sorted like the others, filtered by the query', () => {
+    const all = ported.linkOptions({ ingredients, recipes, suppliers: SUPPLIERS, query: '', inactiveLast: true });
+    expect(ids(all.ingredients)).toStrictEqual(['A1']);
+    expect(ids(all.inactive), 'sorted by display name: Antico, Burro zeta, Farina spenta; the box never').toStrictEqual(['O1', 'Z9', 'FL']);
+    expect(all.inactive?.[0]).toMatchObject({ name: 'Burro antico', displayName: 'Antico', supplierName: 'Latteria' });
+    expect(ids(ported.linkOptions({ ingredients, query: 'farina', inactiveLast: true }).inactive)).toStrictEqual(['FL']);
+    expect(ids(ported.linkOptions({ ingredients, suppliers: SUPPLIERS, query: 'latteria', inactiveLast: true }).inactive)).toStrictEqual(['O1']);
+  });
+
+  test('suggestLinks: active · recipes · inactive, `inactive: true` only on the last ones, limit and total count all', () => {
+    const out = ported.suggestLinks({ ingredients, recipes, query: 'burro', inactiveLast: true });
+    expect(out.items.map(i => i.refId)).toStrictEqual(['A1', 'R1', 'O1', 'Z9']);
+    expect(out.items.map(i => i.inactive)).toStrictEqual([undefined, undefined, true, true]);
+    expect(out.items.map(i => 'inactive' in i)).toStrictEqual([false, false, true, true]);
+    expect(out.total).toBe(4);
+    const limited = ported.suggestLinks({ ingredients, recipes, query: 'burro', inactiveLast: true, limit: 3 });
+    expect(limited.items.map(i => i.refId)).toStrictEqual(['A1', 'R1', 'O1']);
+    expect(limited.total).toBe(4);
+  });
+
+  test('suggestLinks without the option is unchanged: no inactive, no key', () => {
+    const out = ported.suggestLinks({ ingredients, recipes, query: 'burro' });
+    expect(out.items.map(i => i.refId)).toStrictEqual(['A1', 'R1']);
+    expect(out.items.some(i => 'inactive' in i)).toBe(false);
+    expect(out.total).toBe(2);
+  });
+
+  test('nameTaken counts a switched-off food ingredient only with the option, and never a box', () => {
+    expect(ported.nameTaken(ingredients, 'Burro zeta')).toBe(false);
+    expect(ported.nameTaken(ingredients, 'Burro zeta', { inactiveLast: false })).toBe(false);
+    expect(ported.nameTaken(ingredients, 'Burro zeta', { inactiveLast: true })).toBe(true);
+    expect(ported.nameTaken(ingredients, 'antico', { inactiveLast: true }), 'the short name too').toBe(true);
+    expect(ported.nameTaken(ingredients, 'Burro scatola', { inactiveLast: true })).toBe(false);
+    expect(ported.nameTaken(ingredients, 'Burro attivo', { inactiveLast: true })).toBe(true);
+  });
+});
+
 // ── What a person reads for a unit ───────────────────────────────────────────
 // ADAPTED from tests/recipe-unit-text.test.mjs: the original `unitText(unit)` against the port's `unitTextKey`
 // (key, then the dictionary — or the unit itself for a metric symbol), in each language.
