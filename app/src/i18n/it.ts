@@ -1161,6 +1161,7 @@ export const it: Messages = {
   'label.settings.setup': 'Prima della prima stampa, imposta la misura dell’etichetta nel driver della stampante, e nella finestra di stampa metti i margini a nessuno e la scala al 100% — non «adatta alla pagina». Si fa una volta sola, e finché non è fatto la prima etichetta esce di misura sbagliata.',
   'label.settings.saveFailed': 'Salvataggio non riuscito — la modifica è stata rimessa com’era',
   'label.settings.model': 'Modello di etichetta',
+  'label.settings.modelCard': 'Quale etichetta stampare',
   'label.settings.model.standard': 'Standard',
   'label.settings.model.logo': 'Con logo (Zebra 80 × 60)',
   'label.settings.modelNote': 'Il modello con logo stampa l’etichetta del negozio, fatta come immagine per la Zebra 80 × 60 mm. Quello standard è l’etichetta che Mise compone da sé.',

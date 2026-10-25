@@ -127,7 +127,7 @@ function Controls() {
 
       {/* ⚠️ THE MODEL DECIDES WHICH CARDS APPLY: the image label is always 80 × 60 mm at 203 dpi and has its own header, so
           the paper, the printer and «what else» belong to the standard model only (their code is untouched). */}
-      <Card title={t('label.settings.model')} intro={t('label.settings.modelNote')}>
+      <Card title={t('label.settings.modelCard')} intro={t('label.settings.modelNote')}>
         <SegmentedChoice
           label={t('label.settings.model')}
           choices={[

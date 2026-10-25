@@ -1270,6 +1270,7 @@ export const en = {
   'label.settings.setup': 'Before the first print, set the label size in the printer’s own driver, and in the print window set margins to none and scale to 100% — not “fit to page”. It only has to be done once, and until it is done the first label will come out the wrong size.',
   'label.settings.saveFailed': 'Could not save — the change has been put back',
   'label.settings.model': 'Label model',
+  'label.settings.modelCard': 'Which label to print',
   'label.settings.model.standard': 'Standard',
   'label.settings.model.logo': 'With logo (Zebra 80 × 60)',
   'label.settings.modelNote': 'The logo model prints the shop’s own label, made as an image for the Zebra 80 × 60 mm. The standard one is the label Mise lays out itself.',
