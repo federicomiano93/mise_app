@@ -14,6 +14,7 @@ import type { CheckIssue } from '@mise/shared/label-text-check';
 import { normalizeLabelProfile } from '@mise/shared/label-template-model';
 import { allergenName, canPrintLabel, outputLanguage } from '@mise/shared/market';
 import { canLabel, recipeAllergens } from '@mise/shared/recipe-allergen-model';
+import type { RecipeAllergens } from '@mise/shared/recipe-allergen-model';
 import { MAX_IMAGE_COPIES, MAX_JOB_CHARS, imageLabelZpl } from '@mise/shared/zpl-z64';
 import { allergensOn } from '@mise/shared/venue-features';
 import type { MessageKey } from '../i18n/en';
@@ -52,9 +53,13 @@ import own from './ImageLabelBody.module.css';
 // English. It does not replace the HACCP consultant, and the caveat below says so on every label.
 //
 // ⚠️ ERRORS STOP THE PRINTING, WARNINGS DO NOT. An allergen in small letters, a beer without ORZO, a lecithin of unsaid
-// origin, an allergen Mise knows the recipe holds that the text never names: Copy and Print are off, beside the sentence
-// that says why. Wine, chocolate and margarine only ask to be verified. When Mise does not hold the recipe's allergens
-// fully declared there is nothing to compare with, and the screen says so as a warning — it is not a block.
+// origin, an allergen or a trace Mise knows the recipe holds that the text never names: Copy and Print are off, beside
+// the sentence that says why. Wine, chocolate and margarine only ask to be verified.
+//
+// ⚠️⚠️ A RECIPE WHOSE ALLERGENS ARE NOT FULLY DECLARED GETS NO LABEL, exactly as on the standard label: the reason, and
+// nothing to print or copy. The typed text is somebody's own words, and with an ingredient Mise knows nothing about there
+// is nothing to hold them against — an allergen the text forgot would go on the food unnoticed. (Until 25 Oct 2026 this
+// was only a warning; the owner chose the block.)
 
 // 80 mm in CSS pixels (96 to the inch): the width the preview has when the screen is wide enough to show it real size.
 const ACTUAL_PX = (80 * 96) / 25.4;
@@ -110,8 +115,11 @@ const blocked = (title: string, sentences: readonly string[]): ReactNode => (
 export function ImageLabelBody({ recipe }: { recipe: CatalogueRecipe }) {
   const { t } = useT();
   const { location } = useSession();
-  const { ingredientsLoaded } = useRecipes();
+  const { recipes, ingredients, ingredientsLoaded } = useRecipes();
+  const tables = useAllergenTables(recipes, ingredients);
   const stillWaiting = useStillWaiting(!ingredientsLoaded);
+  // What the recipe is known to contain and may contain as a trace: the same answer the standard label is gated on.
+  const declared = useMemo(() => recipeAllergens(recipe, tables), [recipe, tables]);
 
   const lang = outputLanguage(location);
   const allergens = allergensOn(location);
@@ -130,19 +138,21 @@ export function ImageLabelBody({ recipe }: { recipe: CatalogueRecipe }) {
         {stillWaiting ? <p className={styles.checking}>{t('recipes.allergensStillWaiting')}</p> : null}
       </div>
     );
+  } else if (!canLabel(declared)) {
+    content = blocked(t('label.blocked'), [t('label.blocked.notDeclared', { n: declared.gaps.length })]);
   } else if (typed.trim() === '') {
     content = blocked(t('label.blocked'), [t('label.image.noText')]);
   } else {
-    content = <ImageLabelReady recipe={recipe} typed={typed} />;
+    content = <ImageLabelReady recipe={recipe} typed={typed} declared={declared} />;
   }
   return <div className={styles.body}>{content}</div>;
 }
 
-function ImageLabelReady({ recipe, typed }: { recipe: CatalogueRecipe; typed: string }) {
+// `declared` is FULLY declared (canLabel): ImageLabelBody never draws this part otherwise.
+function ImageLabelReady({ recipe, typed, declared }: { recipe: CatalogueRecipe; typed: string; declared: RecipeAllergens }) {
   const { t } = useT();
   const { location } = useSession();
-  const { recipes, ingredients, labelConfig } = useRecipes();
-  const tables = useAllergenTables(recipes, ingredients);
+  const { labelConfig } = useRecipes();
   const logo = useLabelLogo();
   const fonts = useLabelFonts();
   const metrics = useLabelMetrics();
@@ -258,12 +268,11 @@ function ImageLabelReady({ recipe, typed }: { recipe: CatalogueRecipe; typed: st
     };
   }, [showing]);
 
-  // What the recipe is known to contain, when Mise holds it FULLY declared; else nothing to compare with.
-  const declaredCodes = useMemo(() => {
-    const result = recipeAllergens(recipe, tables);
-    return canLabel(result) ? result.allergens : null;
-  }, [recipe, tables]);
-  const check = useMemo(() => checkLabelText(typed, { lang, declared: declaredCodes }), [typed, lang, declaredCodes]);
+  // The text is held against what the recipe contains AND what it may contain as a trace.
+  const check = useMemo(
+    () => checkLabelText(typed, { lang, declared: declared.allergens, mayContain: declared.mayContain }),
+    [typed, lang, declared],
+  );
   const hasErrors = check.errors.length > 0;
 
   const issueText = (issue: CheckIssue): string => {
@@ -273,6 +282,7 @@ function ImageLabelReady({ recipe, typed }: { recipe: CatalogueRecipe; typed: st
       case 'lecithin': return t('label.image.issue.lecithin');
       // The allergen's name is a FOOD word: the label's language, so `lang` is its last argument.
       case 'declared-missing': return t('label.image.issue.declaredMissing', { allergen: allergenName(issue.code, lang) });
+      case 'trace-missing': return t('label.image.issue.traceMissing', { allergen: allergenName(issue.code, lang) });
       case 'sulphites': return t('label.image.issue.sulphites');
       case 'chocolate': return t('label.image.issue.chocolate');
       case 'margarine': return t('label.image.issue.margarine');
@@ -371,16 +381,15 @@ function ImageLabelReady({ recipe, typed }: { recipe: CatalogueRecipe; typed: st
           <p className={own.fixFirst}>{t('label.image.fixErrors')}</p>
         </div>
       ) : null}
-      {check.available && (check.warnings.length > 0 || declaredCodes === null) ? (
+      {check.available && check.warnings.length > 0 ? (
         <div className={`${own.issues} ${own.warnings}`}>
           <p className={own.issuesTitle}>{t('label.image.warningsTitle')}</p>
           <ul className={own.issueList}>
             {check.warnings.map((issue, index) => <li key={index}>{issueText(issue)}</li>)}
-            {declaredCodes === null ? <li>{t('label.image.notDeclared')}</li> : null}
           </ul>
         </div>
       ) : null}
-      {check.available && !hasErrors && check.warnings.length === 0 && declaredCodes !== null ? (
+      {check.available && !hasErrors && check.warnings.length === 0 ? (
         <p className={own.checkNote}>{t('label.image.checkClean')}</p>
       ) : null}
     </section>

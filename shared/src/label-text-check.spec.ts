@@ -96,6 +96,26 @@ describe('the cross-check with the recipe', () => {
   test('no declaration (not fully declared): no cross-check', () => {
     expect(checkLabelText('INGREDIENTI: zucchero.', { lang: 'it', declared: null }).errors).toEqual([]);
   });
+  test('⚠️ a trace the text never says in capitals is an ERRORE too, after the missing allergens', () => {
+    const r = checkLabelText('INGREDIENTI: farina di GRANO. Può contenere tracce di SOIA.', {
+      lang: 'it', declared: ['gluten-wheat', 'milk'], mayContain: ['soybeans', 'nuts-almond', 'sesame'],
+    });
+    expect(r.errors).toEqual([
+      { kind: 'declared-missing', code: 'milk' },
+      { kind: 'trace-missing', code: 'nuts-almond' },
+      { kind: 'trace-missing', code: 'sesame' },
+    ]);
+  });
+  test('a trace is held to the same words as an allergen: a generic FRUTTA A GUSCIO does not name the almond', () => {
+    const generic = checkLabelText('farina di GRANO. Può contenere tracce di FRUTTA A GUSCIO.', { lang: 'it', mayContain: ['nuts-almond'] });
+    expect(generic.errors).toEqual([{ kind: 'trace-missing', code: 'nuts-almond' }]);
+    const named = checkLabelText('farina di GRANO. Può contenere tracce di MANDORLE.', { lang: 'it', mayContain: ['nuts-almond'] });
+    expect(named.errors).toEqual([]);
+  });
+  test('a trace code the list does not know is skipped; no traces given, no trace check', () => {
+    expect(checkLabelText('farina di GRANO.', { lang: 'it', mayContain: ['gluten' as never] }).errors).toEqual([]);
+    expect(checkLabelText('farina di GRANO.', { lang: 'it', mayContain: null }).errors).toEqual([]);
+  });
 });
 
 describe('the rest', () => {

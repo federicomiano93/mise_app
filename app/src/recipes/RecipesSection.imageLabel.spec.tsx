@@ -159,6 +159,15 @@ describe('what is missing, in one sentence', () => {
     noButtons();
   });
 
+  it('⚠️ refuses a recipe whose allergens are not fully declared, as the standard label does: nothing to print or copy', async () => {
+    const notDeclared = cake({ labelIngredientsText: CLEAN_TEXT, ingredients: [row('Flour', 'flour'), row('Mystery')] });
+    open({ recipe: notDeclared });
+    expect(await main().findByText('1 ingredient is not declared. The recipe screen lists them.', undefined, LOAD)).toBeInTheDocument();
+    expect(main().getByText('No label can be made')).toBeInTheDocument();
+    expect(main().queryByRole('img', { name: 'Label preview, 80 × 60 mm' })).not.toBeInTheDocument();
+    noButtons();
+  });
+
   it('says a recipe has no label text yet', async () => {
     open({ recipe: cake() });
     expect(await main().findByText('This recipe has no label ingredients text yet. Type it in the recipe’s editor, under Label with logo.', undefined, LOAD)).toBeInTheDocument();
@@ -317,14 +326,25 @@ describe('the check of the text', () => {
     expect(printButton()).toBeEnabled();
   });
 
-  it('⚠️ a recipe whose allergens are not fully declared is a warning, not a block', async () => {
-    const notDeclared = cake({ labelIngredientsText: CLEAN_TEXT, ingredients: [row('Flour', 'flour'), row('Mystery')] });
-    open({ recipe: notDeclared });
+  it('⚠️ a trace the recipe may contain but the text never names is an ERROR', async () => {
+    const withTrace = { ...declared('flour', ['gluten-wheat']), mayContain: ['soybeans'] };
+    const recipe = cake({ labelIngredientsText: CLEAN_TEXT });
+    open({ source: fakeRecipesSource({ recipes: [recipe], ingredients: [withTrace, declared('milk', ['milk'])], labelConfig: LOGO_CONFIG, logo: LOGO }) });
     await preview();
-    expect(main().getByText('TO VERIFY')).toBeInTheDocument();
-    expect(main().getByText('Mise does not hold this recipe’s allergens fully declared, so the text was not compared with them.')).toBeInTheDocument();
-    expect(main().queryByText('Nothing found in the text.')).not.toBeInTheDocument();
+    expect(main().getByText('ERROR')).toBeInTheDocument();
+    expect(main().getByText(/Mise holds this recipe as possibly containing traces of .+, but the text never says it in CAPITALS/)).toBeInTheDocument();
+    expect(printButton()).toBeDisabled();
+    expect(zplButton()).toBeDisabled();
+  });
+
+  it('the same trace named in capitals is clean, and the buttons are on', async () => {
+    const withTrace = { ...declared('flour', ['gluten-wheat']), mayContain: ['soybeans'] };
+    const recipe = cake({ labelIngredientsText: `${CLEAN_TEXT}. Può contenere tracce di SOIA.` });
+    open({ source: fakeRecipesSource({ recipes: [recipe], ingredients: [withTrace, declared('milk', ['milk'])], labelConfig: LOGO_CONFIG, logo: LOGO }) });
+    await preview();
+    expect(main().queryByText('ERROR')).not.toBeInTheDocument();
     expect(printButton()).toBeEnabled();
+    expect(zplButton()).toBeEnabled();
   });
 
   it('does not read a label that is not in Italian: a plain note, whatever the text says', async () => {
