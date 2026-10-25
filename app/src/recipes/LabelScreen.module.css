@@ -234,6 +234,12 @@
   cursor: pointer;
 }
 
+/* Print has a row of its own: its words name the road («Copia il codice per la stampante» on a Zebra with the shop
+   computer silent), and squeezed beside Copy and Send that sentence stood four lines tall at 360px (driven 14 Oct 2026). */
+.printButton {
+  flex-basis: 100%;
+}
+
 @media (hover: hover) {
   .button:hover:not(:disabled) {
     background: var(--sunken);
