@@ -1386,7 +1386,13 @@ service cloud.firestore {
                // empty until somebody fills it in, so a venue that sells over its
                // own counter is untouched by their existence.
                'showWeight', 'showStorage', 'showBusiness',
-               'dateKind', 'storageText', 'businessName', 'businessAddress'
+               'dateKind', 'storageText', 'businessName', 'businessAddress',
+               // Mise 2's image label (25 Oct 2026): which model a label is drawn
+               // with — the text one, or the owner's «with logo» picture for the
+               // Zebra — and whether that picture is printed turned round (^POI,
+               // what his printer driver does). The current app never sends them
+               // and its merge writes keep them.
+               'template', 'rotate180'
              ])
           // ⚠️ THE BOUNDS ARE THE APP'S OWN, REPEATED HERE ON PURPOSE. A 0 mm label
           // is drawn as an empty rectangle with no error anywhere, and the app that
@@ -1437,10 +1443,58 @@ service cloud.firestore {
                   && request.resource.data.businessName.size() <= 200))
           && (!('businessAddress' in request.resource.data)
               || (request.resource.data.businessAddress is string
-                  && request.resource.data.businessAddress.size() <= 200));
+                  && request.resource.data.businessAddress.size() <= 200))
+          // A CLOSED SET: a model the app has never heard of would draw nothing.
+          && (!('template' in request.resource.data)
+              || request.resource.data.template in ['standard', 'logo'])
+          && (!('rotate180' in request.resource.data)
+              || request.resource.data.rotate180 is bool);
 
         // Nothing deletes a settings document. Turning a setting off is a write.
         allow delete: if false;
+      }
+
+      // ── The logo printed on the «with logo» image label (Mise 2) ───────────
+      // ONE document, `logo`: the picture as a PNG (a data: address), already reduced
+      // once to the size the label draws it at, with that size.
+      //
+      // ⚠️ ITS OWN COLLECTION, NOT config/label-logo. `match /config/{doc}` below
+      // matches every name under config/, and rules are ADDITIVE: an employee with
+      // the Calculator could have written it through that block (the trap the audit
+      // of 23 Sep 2026 found for config/labels). Out here nothing else matches.
+      //
+      // ⚠️ AND NOT IN config/labels: that document is read by every label screen and
+      // cached on every phone; a picture of tens of kilobytes has no business riding
+      // along with the paper size. Only the image label reads this one.
+      //
+      // ⚠️ WRITING IS canManage, READING IS EVERY MEMBER WITH THE SECTION — the same
+      // split as the label profile: whoever prints a label needs the logo, choosing it
+      // is a decision about how the place presents itself.
+      match /label-assets/{assetId} {
+        allow read: if assetId == 'logo' && member(lid) && sectionOn(lid, 'catalogue');
+
+        allow create, update: if assetId == 'logo'
+          && canManage(lid, 'catalogue')
+          && stampedFor(lid)
+          && request.resource.data.keys().hasOnly(['bakery', 'png', 'width', 'height', 'updatedAt'])
+          && request.resource.data.png is string
+          && request.resource.data.png.size() > 0
+          // ⚠️ A CEILING FAR UNDER THE 1 MiB DOCUMENT LIMIT: a reduced logo is tens of
+          // kilobytes; a whole photograph pasted in by mistake must be refused here,
+          // not discovered as a label screen that takes a minute to open.
+          && request.resource.data.png.size() <= 400000
+          // The size the label draws it at: 1320 pixels wide on the 4× canvas (330 dots,
+          // 41 mm), and never taller than the label itself.
+          && request.resource.data.width == 1320
+          && request.resource.data.height is int
+          && request.resource.data.height >= 1
+          && request.resource.data.height <= 1920
+          && (!('updatedAt' in request.resource.data)
+              || (request.resource.data.updatedAt is string
+                  && request.resource.data.updatedAt.size() <= 40));
+
+        // Taking the logo away is a decision too, so it is the same people's.
+        allow delete: if assetId == 'logo' && canManage(lid, 'catalogue');
       }
 
       // ── The print queue ───────────────────────────────────────────────────
@@ -2054,7 +2108,13 @@ service cloud.firestore {
                                                    // long it keeps. Optional in both directions like every
                                                    // field here — rules reach every phone the instant they
                                                    // deploy while code arrives one device at a time.
-                                                   'netWeightG', 'shelfLifeDays'])
+                                                   'netWeightG', 'shelfLifeDays',
+                                                   // Mise 2's «with logo» image label (25 Oct 2026): the
+                                                   // title as printed (`|` breaks the line) and the
+                                                   // ingredients typed as the owner writes them, allergens
+                                                   // in capitals. Optional both ways; the current app saves
+                                                   // recipes with merge, so it keeps them.
+                                                   'labelName', 'labelIngredientsText'])
           && stampedFor(lid)
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
@@ -2118,7 +2178,15 @@ service cloud.firestore {
           && (!('shelfLifeDays' in request.resource.data)
               || (request.resource.data.shelfLifeDays is number
                   && request.resource.data.shelfLifeDays >= 0
-                  && request.resource.data.shelfLifeDays <= 3650));
+                  && request.resource.data.shelfLifeDays <= 3650))
+          // Bounded, not judged: the app checks the allergens in the text. 2000
+          // characters is three labels' worth — the 80 × 60 label holds about 7 lines.
+          && (!('labelName' in request.resource.data)
+              || (request.resource.data.labelName is string
+                  && request.resource.data.labelName.size() <= 200))
+          && (!('labelIngredientsText' in request.resource.data)
+              || (request.resource.data.labelIngredientsText is string
+                  && request.resource.data.labelIngredientsText.size() <= 2000));
         // OWNER ONLY. A recipe is the business. It also carries the guided
         // procedure, the allergen links and whatever Food Cost products point
         // at it, none of which say so from the delete button.
