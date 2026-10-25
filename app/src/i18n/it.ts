@@ -878,7 +878,7 @@ export const it: Messages = {
   'calc.clientCanSendOrders': '{client} può mandare gli ordini direttamente nell’app. Chiunque abbia il link può ordinare come questo cliente, quindi mandalo solo a lui.',
   'calc.createALinkAnd': 'Crea un link e mandalo a questo cliente. Vedrà solo i suoi prodotti, e potrà ordinare senza password.',
   'calc.thisClientCannotHave': 'Questo cliente non può avere un link per ordinare finché non è stato salvato.',
-  'calc.thisClientCannotOrder': 'Questo cliente non può ancora ordinare dall’app. Il titolare o un responsabile può abilitarlo.',
+  'calc.orderingLinkManagersOnly': 'Il link per gli ordini di questo cliente lo gestisce il titolare o un responsabile, che glielo manda.',
   'calc.orderingLink.failed': 'Non è stato possibile leggere i link per ordinare. Controlla la connessione e riapri questo cliente.',
   'calc.copyLink': 'Copia il link',
   'ui.send': 'Manda',

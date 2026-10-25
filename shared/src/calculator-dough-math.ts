@@ -93,9 +93,9 @@ export function scaleSourdough(recipe: Fields, target: number, starterPct: numbe
 // sum EXACTLY to Math.round(target) — see fixRounding.
 //
 // Why baselinePct is STORED, not derived from leavening/flour: brioche's yeast is exactly 4% of its flour,
-// but sourdough's starter is 18% by design while starter/flour = 1024/5690 = 17.996%. Deriving it would
-// drift sourdough off its locked values; storing the intended baseline keeps both byte-identical to their
-// original functions.
+// but a sourdough's starter can be 18% by design while its starter/flour ratio sits a little off 18%.
+// Deriving it would drift sourdough off its locked values; storing the intended baseline (brioche 4,
+// sourdough 18, focaccia its own yeast/flour) keeps both byte-identical to their original functions.
 export function scaleRecipe(spec: ScaleSpec, target: number, leaveningPct: number): number[] {
   const { amounts, leaveningKey, baselinePct } = spec;
   const keys = Object.keys(amounts);
