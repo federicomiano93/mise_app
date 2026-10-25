@@ -11,8 +11,8 @@
 //     tolerance of the legacy focaccia math (and is exactly equal at the 0.65%
 //     default) — the small drift is a correction at high yeast %, see the project plan.
 //
-// The recipes are the shipped defaults (RECIPE_DEFAULTS in recipes.js), copied here
-// so the test stays pure (recipes.js reads localStorage on import).
+// The recipes are the invented fixture bakery's (tests/fixtures/bakery-config.mjs),
+// copied here so the test stays pure.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -77,7 +77,8 @@ const FOCACCIA_TOLERANCE_FULL_G = 6;
 test('scaleBrioche equals the legacy math across the full knob range and edited recipes', () => {
   // Brioche yeast knob: min 0.1, max 6 (calculator.html #b-yeast-pct).
   for (const R of variants(BRIOCHE)) {
-    for (const target of [2000, 4620, 9000, 9240, 18000]) {
+    // Fractional targets (4620.6, 9240.4) keep a case where Math.round(target) differs from the target.
+    for (const target of [2000, 4620, 4620.6, 9000, 9240, 9240.4, 18000]) {
       for (const pct of [0.1, 2, 4, 6]) {
         assert.deepEqual(
           scaleBrioche(R, target, pct),
