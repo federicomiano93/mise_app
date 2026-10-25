@@ -8,8 +8,8 @@
 // deleted; this file is what keeps the ports pinned after that: label-corpus.spec.ts also compares the ports'
 // output with the committed JSON, byte for byte.
 //
-// WHEN TO RUN IT: (1) when a step adds a field to `runLabelChain` in label-corpus.ts (the labels, the ZPL, the
-// print queue add theirs); the new field is generated here from js/, the old fields do not move. (2) NEVER to
+// WHEN TO RUN IT: (1) when a step adds a field to `runLabelChain` in label-corpus.ts (the label template was
+// added in step 3d-3; the ZPL and the print queue add theirs); the new field is generated here from js/, the old fields do not move. (2) NEVER to
 // make a red spec green: if a port and the golden file disagree, one of them is wrong — fix the port, or, if
 // the CURRENT app was deliberately fixed (Findings C was: PR #354, regenerated 13 Oct 2026), fix js/ and the port together and then
 // regenerate, saying so in the commit.
@@ -23,6 +23,7 @@ import { LABEL_CORPUS, UNKNOWN_INGREDIENT, runCorpus, stableStringify } from './
 import * as market from '../../../js/market.js';
 import * as allergen from '../../../js/catalogue/recipe-allergen-model.js';
 import * as label from '../../../js/catalogue/recipe-label-model.js';
+import * as template from '../../../js/catalogue/label-template-model.js';
 
 const api = {
   outputLanguage: market.outputLanguage,
@@ -41,6 +42,10 @@ const api = {
   // The original reads the word for an unknown ingredient from the dictionary (English here, as in the specs).
   blockingIngredients: (recipes, tables) => allergen.blockingIngredients(recipes, tables),
   unlinkedRowNames: allergen.unlinkedRowNames,
+  resolveLabel: template.resolveLabel,
+  blockText: template.blockText,
+  useByDate: template.useByDate,
+  dateText: template.dateText,
 };
 
 const golden = {

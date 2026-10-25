@@ -1,13 +1,17 @@
 // recipesSource.ts — the Recipe catalogue's data in Firestore, and nothing else.
 //
 // A port of js/catalogue/firebase-catalogue.js, one function at a time as the steps of 3d need them
-// (docs/parity/catalogue.md, «Proposed slices»). Steps 3d-1 and 3d-2 only READ: the recipes and the
-// ingredients, live, while the section is on screen. Behind an interface, so the store (recipesStore.ts) is a spec with a fake
+// (docs/parity/catalogue.md, «Proposed slices»). Steps 3d-1 to 3d-3 only READ: the recipes, the
+// ingredients and the label profile (config/labels), live, while the section is on screen. Behind an interface, so the store (recipesStore.ts) is a spec with a fake
 // source and never needs a database to be tested.
 //
 // Under the open venue:
 //   • recipes — one document per recipe. Read as a whole-collection live listener, attached only
 //     while the section is open, never at boot (P14).
+//   • config/labels — the paper, the printer and the optional blocks of a printed label (3d-3). One
+//     small document; a MISSING one is not an error (no venue has it until somebody opens the label
+//     Settings), so it is reported as null and the shared normalizer answers with the safe defaults.
+//     ⚠️ It is config/labels and not a field on locations/{lid} (that document is written by no client).
 //
 // ⚠️ NO ROLE IS READ HERE, ON PURPOSE: the section gate and firestore.rules decide (P2).
 //
@@ -41,10 +45,17 @@ export interface RecipesSource {
     onChange: (list: StoredDoc[], meta: RecipesMeta) => void,
     onError: (err: unknown) => void,
   ): () => void;
+  // The label profile document as stored (null when there is none), live. Same contract.
+  watchLabelConfig(
+    onChange: (data: Record<string, unknown> | null, meta: RecipesMeta) => void,
+    onError: (err: unknown) => void,
+  ): () => void;
 }
 
 const RECIPES = 'recipes';
 const INGREDIENTS = 'ingredients';
+const CONFIG = 'config';
+const LABELS_DOC = 'labels';
 
 // A copy of the document without any of the price keys (header).
 export function withoutPrice(doc: StoredDoc): StoredDoc {
@@ -60,6 +71,7 @@ export function createFirestoreRecipesSource(
   // Throws on a venue id that could point a read anywhere else (@mise/shared/location-id).
   const recipesPath = buildPath(locationId, RECIPES);
   const ingredientsPath = buildPath(locationId, INGREDIENTS);
+  const configPath = buildPath(locationId, CONFIG);
 
   // A live listener whose Firestore may not be loaded yet. The returned stop works at any moment.
   function listen(subscribe: (kit: FirestoreKit) => () => void, onError: (err: unknown) => void): () => void {
@@ -105,6 +117,21 @@ export function createFirestoreRecipesSource(
       ),
       err => {
         console.warn('watchIngredients failed:', err);
+        onError(err);
+      },
+    ), onError),
+
+    // ⚠️ QUIET TOO (warn): a refused or failed read leaves the profile the phone already holds, or the
+    // safe defaults — the label screen says nothing about it, as the current app.
+    watchLabelConfig: (onChange, onError) => listen(kit => kit.fs.onSnapshot(
+      kit.fs.doc(kit.db, configPath, LABELS_DOC),
+      { includeMetadataChanges: true },
+      snap => onChange(
+        snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null,
+        { fromServer: !snap.metadata.fromCache },
+      ),
+      err => {
+        console.warn('watchLabelConfig failed:', err);
         onError(err);
       },
     ), onError),
