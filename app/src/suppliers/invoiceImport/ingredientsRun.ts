@@ -165,6 +165,9 @@ export interface RunOutcome {
   // How many remembered decisions were written or deleted, and whether that write failed (the summary says either).
   readonly decisionsWritten: number;
   readonly decisionsFailed: boolean;
+  // The rows NOT seen through (importLog.ts): failed, never reached because the run stopped, or with price changes or a chosen
+  // name that did not land. The invoices they hold a price of stay out of the import log, so the same file offers them again.
+  readonly unfinishedKeys: ReadonlySet<string>;
 }
 
 type Read = ReplanInput['read'];
@@ -384,5 +387,24 @@ export async function runIngredientImport(input: RunInput): Promise<RunOutcome> 
     results.push({ key: planned.key, name: planned.name, outcome: 'unchanged', changesAdded: recorded.added, changesFailed: recorded.failed, codesFull });
   }
 
-  return { summary: summarizeRun(results, { stopped, notRun }), decisionsWritten, decisionsFailed };
+  return {
+    summary: summarizeRun(results, { stopped, notRun }), decisionsWritten, decisionsFailed,
+    unfinishedKeys: unfinishedOf(entries, results, stopped ? quiet : []),
+  };
+}
+
+// Every row of the run that was not seen through: no result at all (the run stopped before it), a failed one, price changes or a
+// chosen name that did not land, or a row already in Mise that the stop passed over (`passedOver`: its result says «unchanged»,
+// but its price changes were never looked at).
+export function unfinishedOf(entries: readonly PlanEntry[], results: readonly RunResult[], passedOver: readonly PlanEntry[]): Set<string> {
+  const done = new Set<string>();
+  results.forEach(result => {
+    if (result.outcome !== 'failed' && !(Number(result.changesFailed) > 0) && !result.namesLost) done.add(result.key);
+  });
+  passedOver.forEach(entry => { done.delete(entry.planned.key); });
+  // A row with two results (never today) is done only if every one of them is.
+  results.forEach(result => {
+    if (result.outcome === 'failed' || Number(result.changesFailed) > 0 || result.namesLost) done.delete(result.key);
+  });
+  return new Set(entries.map(entry => entry.planned.key).filter(key => !done.has(key)));
 }

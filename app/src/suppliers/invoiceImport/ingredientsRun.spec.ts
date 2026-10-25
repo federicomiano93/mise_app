@@ -5,7 +5,7 @@ import type { PlanEntry } from '@mise/shared/invoice-import-plan';
 import type { StoredDoc } from '../suppliersSource';
 import type { ImportFile } from './importRun';
 import {
-  NO_ANSWERS, decisionCount, planIngredientStep, quietRows, runIngredientImport,
+  NO_ANSWERS, decisionCount, planIngredientStep, quietRows, runIngredientImport, unfinishedOf,
 } from './ingredientsRun';
 import type { IngredientAnswers, RunProgress, RunWords } from './ingredientsRun';
 import { fakeImportSource } from './testing/fakeImportSource';
@@ -243,5 +243,38 @@ describe('rows already in Mise', () => {
     expect(importing.countOf('invoicePoints')).toBe(reads + 1);
     expect(outcome.summary).toMatchObject({ unchanged: 1, stopped: null, changesFailed: 1 });
     expect(outcome.summary.failed).toEqual([]);
+  });
+});
+
+// The import log records an invoice only when every row holding a price of it was seen through (importLog.ts).
+describe('the rows not seen through (unfinishedOf)', () => {
+  const entry = (key: string) => ({ planned: { key }, row: { status: 'new' } }) as unknown as PlanEntry;
+  const entries = ['a', 'b', 'c', 'd', 'e', 'f', 'g'].map(entry);
+
+  it('a failure, lost price changes or a lost name, and a row the run never reached are unfinished; the rest is done', () => {
+    const unfinished = unfinishedOf(entries, [
+      { key: 'a', name: 'A', outcome: 'created' },
+      { key: 'b', name: 'B', outcome: 'failed', reason: 'x' },
+      { key: 'c', name: 'C', outcome: 'updated', changesFailed: 1 },
+      { key: 'd', name: 'D', outcome: 'unchanged', namesLost: 1 },
+      { key: 'e', name: 'E', outcome: 'skipped' },
+      { key: 'f', name: 'F', outcome: 'unchanged' },
+    ], []);
+    expect([...unfinished].sort()).toEqual(['b', 'c', 'd', 'g']);
+  });
+
+  it('a row already in Mise that a stop passed over is unfinished although its result says «unchanged»', () => {
+    const unfinished = unfinishedOf([entry('q')], [{ key: 'q', name: 'Q', outcome: 'unchanged' }], [entry('q')]);
+    expect([...unfinished]).toEqual(['q']);
+  });
+
+  it('a run that stops says which rows it did not see through', async () => {
+    const source = fakeImportSource();
+    source.failWith('runImportBatches', 'permission-denied', 1);
+    const file = fileOf(product({ key: 'k1', name: 'Uno' }), product({ key: 'k2', name: 'Due', prices: [point({ invoiceId: '18000000002' })] }));
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { outcome } = await run(source, file);
+    expect(outcome.summary.stopped).toBe('permission');
+    expect([...outcome.unfinishedKeys]).toEqual(['k2']);
   });
 });

@@ -13,7 +13,7 @@ describe('createDataServices', () => {
     const source = services.invoiceImport('bakery');
     expect(Object.keys(source).sort()).toEqual([
       'createSupplier', 'freshIngredientsForSupplier', 'freshPrice', 'freshSuppliers', 'invoicePoints', 'linkSupplierVat',
-      'loadDecisions', 'runImportBatches', 'storedPriceChanges', 'writeDecisions',
+      'loadDecisions', 'loadImportLog', 'runImportBatches', 'saveImportLog', 'storedPriceChanges', 'writeDecisions',
     ]);
     expect(firestore).not.toHaveBeenCalled();
   });
