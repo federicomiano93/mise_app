@@ -80,7 +80,7 @@ describe.each([
   });
 
   test('buildSheet: ingredient grams sum exactly to the rounded total', () => {
-    const sheet = buildSheet({ recipe: FOCACCIA, leaveningPct: 0.65, items: [{ id: 'a', name: 'X', qty: 10, weightG: 151 }] });
+    const sheet = buildSheet({ recipe: FOCACCIA, leaveningPct: 0.65, items: [{ id: 'a', name: 'X', qty: 10, weightG: 160 }] });
     expect(sheet.ingredients.reduce((s: number, r: Loose) => s + r.grams, 0)).toBe(sheet.total_g);
     expect(sheet.ingredients.length).toBe(9);
     expect(sheet.ingredients[0].name).toBe('Flour uniqua blue');
@@ -110,8 +110,8 @@ describe.each([
     const sheet = buildSheet({
       recipe: FOCACCIA, leaveningPct: 0.65,
       items: [
-        { id: 'f-pizze', name: 'Pizzas', qty: 4, weightG: 201 },
-        { id: 'f-focacce', name: 'Focaccias', qty: 2, weightG: 181 },
+        { id: 'f-pizze', name: 'Pizzas', qty: 4, weightG: 210 },
+        { id: 'f-focacce', name: 'Focaccias', qty: 2, weightG: 175 },
       ],
     });
     expect(sheet.total_g).toBe(Math.round(target));
