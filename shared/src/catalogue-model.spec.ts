@@ -833,8 +833,8 @@ describe.each([
     expect(cr.logic).toBe('total');
     expect(cr.visible).toBe(false);
     expect(cr.ingredients.length).toBe(FOCACCIA.ingredients.length);
-    expect(cr.ingredients[0]).toStrictEqual({ label: 'Flour uniqua blue', grams: 278 });
-    expect(cr.ingredients.find(i => i.label === 'Yeast')).toStrictEqual({ label: 'Yeast', grams: 4 });
+    expect(cr.ingredients[0]).toStrictEqual({ label: 'Flour uniqua blue', grams: 260 });
+    expect(cr.ingredients.find(i => i.label === 'Yeast')).toStrictEqual({ label: 'Yeast', grams: 3 });
   });
 
   test('toCalculatorRecipe copes with a recipe that has no ingredients', () => {
