@@ -324,9 +324,9 @@ describe.each([
     id: 'foc',
     name: 'Focaccia',
     ingredients: [
-      { label: 'Flour uniqua blue', grams: 278 }, { label: 'Flour T65', grams: 278 }, { label: 'Malt', grams: 3 },
-      { label: 'Sugar', grams: 8 }, { label: 'Salt', grams: 11 }, { label: 'Yeast', grams: 3.6 }, { label: 'Oil', grams: 56 },
-      { label: '1° Water', grams: 334 }, { label: '2° Water', grams: 24 },
+      { label: 'Flour uniqua blue', grams: 260 }, { label: 'Flour T65', grams: 290 }, { label: 'Malt', grams: 4 },
+      { label: 'Sugar', grams: 10 }, { label: 'Salt', grams: 12 }, { label: 'Yeast', grams: 3.4 }, { label: 'Oil', grams: 50 },
+      { label: '1° Water', grams: 340 }, { label: '2° Water', grams: 30 },
     ],
   };
   const sum = (arr: readonly (number | null)[]): number => arr.reduce<number>((a, b) => a + (b ?? 0), 0);
@@ -449,15 +449,15 @@ describe.each([
   // ── scaleCatalogue: the core invariant (integers sum EXACTLY to the target) ──
 
   test('scaleCatalogue keeps the base recipe when target equals its total', () => {
-    const total = FOCACCIA.ingredients.reduce((s, i) => s + i.grams, 0); // 995.6 (raw, fractional)
+    const total = FOCACCIA.ingredients.reduce((s, i) => s + i.grams, 0); // 999.4 (raw, fractional)
     expect(sum(m.scaleCatalogue(FOCACCIA, total))).toBe(Math.round(total));
   });
 
   test('baseAmounts rounds to whole grams that sum to the rounded base total', () => {
     const out = m.baseAmounts(FOCACCIA);
     expect(out.every(Number.isInteger), 'every base amount is a whole number').toBe(true);
-    const rawTotal = FOCACCIA.ingredients.reduce((s, i) => s + i.grams, 0); // 995.6
-    expect(sum(out), 'rows add up to the shown total').toBe(Math.round(rawTotal)); // 996
+    const rawTotal = FOCACCIA.ingredients.reduce((s, i) => s + i.grams, 0); // 999.4
+    expect(sum(out), 'rows add up to the shown total').toBe(Math.round(rawTotal)); // 999
   });
 
   test('baseAmounts on an empty recipe is []', () => {
@@ -467,8 +467,9 @@ describe.each([
   test('scaleCatalogue to 10 kg: proportional and sums to exactly 10000 g', () => {
     const out = m.scaleCatalogue(FOCACCIA, 10000);
     expect(sum(out)).toBe(10000);
-    expect(out[0]).toBe(out[1]);
-    expect((out[0] as number) > 2700 && (out[0] as number) < 2900).toBe(true);
+    // proportionality: the larger flour stays larger, and each is ~10x its base (260 g, 290 g)
+    expect((out[1] as number) > (out[0] as number)).toBe(true);
+    expect((out[0] as number) > 2500 && (out[0] as number) < 2700 && (out[1] as number) > 2800 && (out[1] as number) < 3000).toBe(true);
   });
 
   test('scaleCatalogue sums to target across many weights (rounding residual absorbed)', () => {
