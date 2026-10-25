@@ -166,6 +166,10 @@ export interface RecipesSnapshot {
   // believable answer came, or the stream failed (then the defaults, as the current app). Until then
   // a label cannot be laid out honestly — the defaults could be the wrong paper.
   readonly labelConfigKnown: boolean;
+  // Whether the SERVER has answered about the label profile once. ⚠️ THE CATEGORY LIST IS WRITTEN WHOLE: a list edited from a
+  // cached copy (another manager added a word since, or this phone is offline) would write that word away, so the Settings
+  // card writes only after this is true.
+  readonly labelConfigFromServer: boolean;
   // The venue's recipe categories (config/labels.recipeCategories, normalised by @mise/shared/recipe-shelf), in the order
   // stored — the screens sort them for reading. [] when there are none, and until the label profile is known.
   readonly categories: readonly string[];
@@ -379,7 +383,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       categories = normalizeRecipeCategories(labelConfig?.recipeCategories);
     }
     return { recipes, recipesLoaded, recipesFromServer, streamBroken, ingredients, ingredientsLoaded, ingredientsUnreadable, usage,
-      scaled, labelConfig, labelConfigKnown, categories, printAgents, suppliers };
+      scaled, labelConfig, labelConfigKnown, labelConfigFromServer, categories, printAgents, suppliers };
   }
 
   function changed(): void {

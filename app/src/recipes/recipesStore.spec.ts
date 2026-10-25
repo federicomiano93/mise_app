@@ -1227,6 +1227,16 @@ describe('the Recipe catalogue store', () => {
       expect(store.getSnapshot().categories).toBe(first);
     });
 
+    test('⚠️ the snapshot says when the server has answered about the profile (a cached list is not enough to write over)', () => {
+      const { store, labelCache, labelServer } = makeStore();
+      store.start();
+      labelCache({ widthMm: 57, recipeCategories: ['Natale'] });
+      expect(store.getSnapshot().labelConfigKnown).toBe(true);
+      expect(store.getSnapshot().labelConfigFromServer).toBe(false);
+      labelServer({ widthMm: 57, recipeCategories: ['Natale', 'Estate'] });
+      expect(store.getSnapshot().labelConfigFromServer).toBe(true);
+    });
+
     test('saving the list goes through the label profile’s write, normalised, local-first', async () => {
       const { store, labelServer, saveLabelConfig } = makeStore();
       store.start();
