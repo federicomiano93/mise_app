@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { Camera, Check, Trash2 } from 'lucide-react';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
@@ -6,6 +6,7 @@ import type { BlockerFunction } from 'react-router';
 import { findInvalidRecipe, linkOf } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe, InvalidRecipeProblem } from '@mise/shared/catalogue-model';
 import { normalizeLabelProfile } from '@mise/shared/label-template-model';
+import { mayEditRecords } from '@mise/shared/records';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
 import { useSession } from '../session/SessionContext';
@@ -14,6 +15,8 @@ import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
+// ⚠️ THE ONE IMPORT FROM suppliers/ (docs/architecture.md, «The one exception»; pinned by RecipesSection.createIngredient.spec).
+import { CreateIngredientOverlay } from '../suppliers/CreateIngredientOverlay';
 import { KEEP_FOCUS } from '../shell/Page';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import {
@@ -23,6 +26,7 @@ import {
 import type { Chosen, DropPosition, Row, Working } from './editorModel';
 import { IngredientRow } from './IngredientRow';
 import { LinkDialog } from './LinkDialog';
+import { CardBoundary } from './CardBoundary';
 import { ReorderRows } from './ReorderRows';
 import { NEW_OPENER, recipeOpener, useHandBack } from './handBack';
 import { FROM_EDITOR, cameFromDuplicate, carryOwner, forgetHandover, hasTypedCopy, peekHandedOver, typedCopyOf, withTypedCopy, withoutTypedCopy } from './photoCarry';
@@ -146,8 +150,10 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
 
   // ⚠️ EVERY WAY OUT GOES THROUGH THE ROUTER'S BLOCKER, not through the Back button: the browser's Back, a recipe picked in
   // the split's list, the rail and the tab bar all navigate. Staying on the same address is never blocked.
+  // ⚠️ WITH THE «ADD AS AN INGREDIENT» CARD OPEN, ANY MOVE IS BLOCKED, and turned into that card's own Back (below): the browser's
+  // Back closes the card only, and the recipe under it stays as it is.
   const shouldBlock = useCallback<BlockerFunction>(
-    ({ currentLocation, nextLocation }) => !leavingClean.current && dirtyRef.current && currentLocation.pathname !== nextLocation.pathname,
+    ({ currentLocation, nextLocation }) => !leavingClean.current && (creatingRef.current || dirtyRef.current) && currentLocation.pathname !== nextLocation.pathname,
     [],
   );
   const blocker = useBlocker(shouldBlock);
@@ -156,6 +162,17 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     latestBlocker.current = blocker;
     if (blocker.state !== 'blocked') {
       askingLeave.current = false;
+      return;
+    }
+    // ⚠️ reset() lands a render later, and closing the card renders at once: without this that render would find the card gone
+    // and the move still blocked, and ask the EDITOR's question for a move that was already turned back. It is remembered WHICH
+    // blocked move was turned back (each one has its own reset function), not that one was: a flag cleared by a later render
+    // could swallow the next Back for good if two came faster than React renders.
+    if (turnedBack.current === blocker.reset) return;
+    if (creatingRef.current) {
+      turnedBack.current = blocker.reset;
+      blocker.reset();
+      cardBack.current?.();
       return;
     }
     if (askingLeave.current) return;
@@ -202,10 +219,10 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   // ── What is wrong, and where ─────────────────────────────────────────────────────────────────────────────────
   const [showErrors, setShowErrors] = useState(false);
   const nameBox = useRef<HTMLInputElement>(null);
-  const boxes = useRef(new Map<number, { name: HTMLInputElement | null; amount: HTMLInputElement | null }>());
-  const register = useCallback((key: number, box: 'name' | 'amount', node: HTMLInputElement | null) => {
-    const held = boxes.current.get(key) ?? { name: null, amount: null };
-    held[box] = node;
+  const boxes = useRef(new Map<number, { name: HTMLInputElement | null; amount: HTMLInputElement | null; link: HTMLButtonElement | null }>());
+  const register = useCallback((key: number, box: 'name' | 'amount' | 'link', node: HTMLInputElement | HTMLButtonElement | null) => {
+    const held = boxes.current.get(key) ?? { name: null, amount: null, link: null };
+    (held as Record<string, HTMLElement | null>)[box] = node;
     boxes.current.set(key, held);
   }, []);
 
@@ -221,6 +238,35 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     const frame = requestAnimationFrame(() => { boxes.current.get(amountFor.key)?.amount?.focus(); });
     return () => { cancelAnimationFrame(frame); };
   }, [amountFor]);
+
+  // ── Adding the ingredient a row names (T15) ──────────────────────────────────────────────────────────────────
+  // The ingredient card open ABOVE this editor, for the row `key`: this editor, its working copy and its rows stay mounted
+  // underneath, so closing the card — saved or not — leaves everything typed exactly where it was. Nothing is written to the
+  // recipe until Save recipe.
+  const [creating, setCreating] = useState<{ token: number; key: number; name: string; from: 'suggest' | 'chooser' } | null>(null);
+  const creatingRef = useRef(false);
+  const turnedBack = useRef<(() => void) | null>(null);
+  const cardBack = useRef<(() => void) | null>(null);
+  const tokens = useRef(0);
+  const workingRef = useRef(working);
+  workingRef.current = working;
+  const mayCreate = mayEditRecords(venue, canManage);
+  const knownIngredients = useMemo(() => Object.values(ingredients), [ingredients]);
+  const knownSuppliers = useMemo(() => Object.values(suppliers), [suppliers]);
+  // Where the focus is owed after the card closes without an ingredient: the name box (it was opened from the suggestions) or the
+  // row's link line (from the chooser). Looked up after the render, after the dialog has given the focus back to its opener.
+  const [refocus, setRefocus] = useState<{ key: number; box: 'name' | 'link' } | null>(null);
+  useEffect(() => {
+    if (refocus === null) return undefined;
+    const frame = requestAnimationFrame(() => { boxes.current.get(refocus.key)?.[refocus.box]?.focus(); });
+    return () => { cancelAnimationFrame(frame); };
+  }, [refocus]);
+  const openCreate = (key: number, name: string, from: 'suggest' | 'chooser') => {
+    onTyped?.();
+    creatingRef.current = true;
+    tokens.current += 1;
+    setCreating({ token: tokens.current, key, name, from });
+  };
 
   // ── Reordering ───────────────────────────────────────────────────────────────────────────────────────────────
   // A MODE (the current app's, item 92): the rows are grips, names and amounts with nothing to type in. Turning it on or off
@@ -476,6 +522,8 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
                       onPick: linkTo,
                       onSeeAll: (key, typed) => { setChooser({ key, query: typed }); },
                       onOpen: key => { setChooser({ key, query: '' }); },
+                      mayCreate,
+                      onCreate: (key, name) => { openCreate(key, name, 'suggest'); },
                     }}
                   />
                 ))}
@@ -583,7 +631,39 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
             linkTo(chooser.key, chosen);
           }}
           onClose={() => { setChooser(null); }}
+          mayCreate={mayCreate}
+          onCreate={name => {
+            // The chooser closes FIRST; the card opens one frame later, so the two dialogs never stand at once.
+            const key = chooser.key;
+            setChooser(null);
+            requestAnimationFrame(() => { if (mounted.current) openCreate(key, name, 'chooser'); });
+          }}
         />
+      )}
+      {creating === null ? null : (
+        <CardBoundary onFail={() => {
+          creatingRef.current = false;
+          cardBack.current = null;
+          setCreating(null);
+          say(t('sup.price.openFailed'));
+        }}>
+        <CreateIngredientOverlay
+          key={creating.token}
+          open
+          name={creating.name}
+          ingredients={knownIngredients}
+          suppliers={knownSuppliers}
+          backRef={cardBack}
+          onDone={made => {
+            creatingRef.current = false;
+            const { key, from } = creating;
+            setCreating(null);
+            if (!workingRef.current.rows.some(item => item.key === key)) return;
+            if (made === null) setRefocus({ key, box: from === 'suggest' ? 'name' : 'link' });
+            else linkTo(key, { kind: 'ingredient', refId: made.id, name: made.name });
+          }}
+        />
+        </CardBoundary>
       )}
       {confirmDialog}
       {deleteDialog}

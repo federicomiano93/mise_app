@@ -9,6 +9,7 @@ import { useOwnScrollArea } from '../shell/scrollArea';
 import { SPLIT_QUERY } from '../ui/split';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { useMediaQuery } from '../ui/useMediaQuery';
+import { CreateIngredientProvider } from '../suppliers/CreateIngredientOverlay';
 import { RecipesProvider, useRecipesStore } from './RecipesContext';
 import { RecipesDetail } from './RecipesDetail';
 import { RecipesList } from './RecipesList';
@@ -40,9 +41,13 @@ export default function RecipesSection() {
     <RecipesProvider>
       <StatusMessageProvider>
         <StoreMessages />
-        <LabelShowsProvider>
-          <RecipesScreen />
-        </LabelShowsProvider>
+        {/* The write-only Suppliers store for «+ Add "…" as an ingredient» (T15): it reads nothing, above all no price. INSIDE the
+            status message, which says what the database refuses after the card has closed. */}
+        <CreateIngredientProvider>
+          <LabelShowsProvider>
+            <RecipesScreen />
+          </LabelShowsProvider>
+        </CreateIngredientProvider>
       </StatusMessageProvider>
     </RecipesProvider>
   );
