@@ -22,6 +22,8 @@ import { normalizeFavourites } from '@mise/shared/favourite-suppliers';
 import { INGREDIENT_DRAINED_FIELDS, PRICE_FIELDS, withPrices } from '@mise/shared/price-model';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { markBusy as markBusyOfSession } from '../session/busy';
+import { priceWriteOf } from './priceSave';
+import type { PricePatch } from '@mise/shared/price-model';
 import type { IngredientUsage, PanelKey, StoredDoc, SuppliersMeta, SuppliersSource } from './suppliersSource';
 
 export type SuppliersMessage =
@@ -60,6 +62,9 @@ export interface SuppliersSnapshot {
   readonly ingredientsBroken: boolean;
   // Whether the prices REALLY answered (parity S24). False for a person the rules refuse.
   readonly pricesReadable: boolean;
+  // Whether the SERVER has answered the prices once (parity C28): only then is a price missing from the list really «no
+  // price». Until then a price writer's card reads its own price document before it opens (readPrice).
+  readonly pricesFromServer: boolean;
   // The venue's saved category list (config/orders.ingredientCategories), or null when it never saved one — or it has
   // not arrived. ⚠️ AN EMPTY LIST IS AN ANSWER: the venue deleted every category (parity S27).
   readonly storedCategories: readonly string[] | null;
@@ -78,13 +83,27 @@ export interface SuppliersDeps {
 // What the supplier card saves (parity S82), as the card builds it.
 export type SupplierPayload = Readonly<Record<string, unknown>> & { readonly name: string };
 
-// What the ingredient card saves (parity C87), as the card builds it — product data only in step 3e-2.
+// What the ingredient card saves (parity C87), as the card builds it: product data. The money travels apart, in
+// IngredientSaveOptions.price, and only for a person who may write prices.
 export type IngredientPayload = Readonly<Record<string, unknown>> & { readonly name: string };
 
 export interface IngredientSaveOptions {
   // The order unit the card has just replaced (Cartone / Singola rewrote `unit`): the open line of the order in progress
   // is frozen in it, so a quantity keeps its meaning (parity C35). '' or absent = nothing to freeze.
   readonly unitChangedFrom?: string;
+  // The money (step 3e-3), ONLY for a person who may write prices (canManage AND the venue's Food cost section — parity
+  // C4, C5, C22: a price write the rules refuse fails the whole batch, and an ordinary rename with it). `before` is the
+  // ingredient as the card OPENED it, its price laid on (null for a new one); `patch` is the card's pricePatch.
+  // priceSave.ts decides what is written: the price's date kept when the money did not move (F4), a history entry only
+  // when it did, and no price write at all when nothing in it would change.
+  readonly price?: { readonly before: Readonly<Record<string, unknown>> | null; readonly patch: PricePatch };
+}
+
+// What a save started: the ingredient's id (a new one is made on the phone), and whether a price-history entry went with
+// it (the screen then reports the `price-saved` action, parity C31).
+export interface IngredientSaved {
+  readonly id: string;
+  readonly priceRecorded: boolean;
 }
 
 // The ingredient DOCUMENT of a card's payload (js/price-model.js splitPriceFields, its ingredient half): every price key
@@ -127,10 +146,16 @@ export interface SuppliersStore {
   // Deletes a category: the shortened list, and «no category» on every ingredient that used it. Local-first; returns
   // false and writes nothing when config/orders has not really arrived (parity S107). A refusal says so.
   deleteCategory(category: string, language: string): boolean;
-  // Saves an ingredient, LOCAL-FIRST (decision T3): returns its id at once (a new one is made on the phone) and never
-  // waits for the network. Product data only (step 3e-2): no price document is written, so a rename can never touch the
-  // money. A refusal says `ingredient-not-saved`. `id` null = a new ingredient.
-  saveIngredient(id: string | null, payload: IngredientPayload, options?: IngredientSaveOptions): string;
+  // Saves an ingredient, LOCAL-FIRST (decision T3): returns at once and never waits for the network. With
+  // `options.price`, the price document and its history entry go in the same batch (parity C21) — or nothing of the money
+  // at all when the save would change none of it. A refusal says `ingredient-not-saved`: Firestore takes back the WHOLE
+  // batch. `id` null = a new ingredient.
+  saveIngredient(id: string | null, payload: IngredientPayload, options?: IngredientSaveOptions): IngredientSaved;
+  // One ingredient's price document, for a price writer's card that opens before the prices came from the server
+  // (parity C28). REJECTS when it cannot be read: the card then does not open.
+  readPrice(id: string): Promise<Record<string, unknown> | null>;
+  // The last 20 price-history entries of an ingredient, newest first, from the server (parity C25). REJECTS on failure.
+  readPriceHistory(id: string): Promise<readonly StoredDoc[]>;
   // Deletes an ingredient, local-first — with its price document when `withPrice` (a person who may write prices) — and
   // takes its line out of the order in progress (parity C32, C33). A refusal says `ingredient-not-deleted`.
   deleteIngredient(id: string, withPrice: boolean): void;
@@ -140,6 +165,9 @@ export interface SuppliersStore {
   // server has written it, REJECTS when refused or unreachable. The busy marker is held meanwhile.
   setIngredientPanel(key: PanelKey, on: boolean): Promise<void>;
 }
+
+// How many price-history entries the card shows (js/orders/firebase-orders.js getPriceHistory, parity C25).
+export const PRICE_HISTORY_MAX = 20;
 
 export function browserSuppliersDeps(): SuppliersDeps {
   return { markBusy: markBusyOfSession };
@@ -157,6 +185,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
   let ingredientsBroken = false;
   let prices: Record<string, Record<string, unknown>> = {};
   let pricesReadable = false;
+  let pricesFromServer = false;
   let storedCategories: readonly string[] | null = null;
   let favourites: readonly string[] = [];
   let configLoaded = false;
@@ -170,7 +199,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
 
   function build(): SuppliersSnapshot {
     return {
-      suppliers, suppliersLoaded, suppliersFromServer, suppliersBroken, ingredients, ingredientsLoaded, ingredientsFromServer, ingredientsBroken, pricesReadable,
+      suppliers, suppliersLoaded, suppliersFromServer, suppliersBroken, ingredients, ingredientsLoaded, ingredientsFromServer, ingredientsBroken, pricesReadable, pricesFromServer,
       storedCategories, favourites, configLoaded,
     };
   }
@@ -274,9 +303,14 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
           ingredientsLoaded = true;
           changed();
         }),
-        source.watchPrices((map, readable) => {
+        source.watchPrices((map, readable, meta) => {
           prices = map;
           pricesReadable = readable;
+          // ⚠️ A STREAM THAT DIED IS NO LONGER «THE SERVER ANSWERED» (review of 22 Oct 2026): the list has lost every price, so
+          // a price writer's card must read its own price again before it opens (parity C28), as the current app's
+          // needsPriceRead does on the live readability — or a VAT-only save would merge «no price» over the real one.
+          if (!readable) pricesFromServer = false;
+          else if (meta?.fromServer) pricesFromServer = true;
           relayIngredients();
           changed();
         }),
@@ -348,12 +382,20 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
     saveIngredient(id, payload, options = {}) {
       const ingredientId = id ?? source.newIngredientId();
       const doc = ingredientDocOf(payload);
-      track(attempt(() => source.saveIngredient(ingredientId, doc)), {
+      const supplierId = typeof payload.supplierId === 'string' ? payload.supplierId : '';
+      const money = options.price
+        ? priceWriteOf(options.price.before, options.price.patch, supplierId, new Date().toISOString())
+        : null;
+      track(attempt(() => source.saveIngredient(ingredientId, doc, money)), {
         kind: 'ingredient-not-saved', name: ingredientDisplayName(payload),
       });
       if (options.unitChangedFrom) freezeDraftLine(ingredientId, options.unitChangedFrom, payload);
-      return ingredientId;
+      return { id: ingredientId, priceRecorded: Boolean(money?.history) };
     },
+
+    readPrice: id => attempt(() => source.readPrice(id)),
+
+    readPriceHistory: id => attempt(() => source.readPriceHistory(id, PRICE_HISTORY_MAX)),
 
     // ⚠️ THE NAME IS READ BEFORE THE WRITE (as for a supplier). ⚠️ The draft line goes too, only logged on failure (parity
     // C33): a quantity left for a product that no longer exists would sit in the draft, never ordered. ⚠️ BUT ONLY ONCE THE

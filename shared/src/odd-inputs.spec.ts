@@ -1515,9 +1515,8 @@ const PRICE_VALUES: readonly unknown[] = [...ODD, 7.2, '7.20', '7,20', ' 7.2 ', 
 const PRICE_UNIT_WORDS: readonly unknown[] = [...ODD, 'kg', 'l', 'pcs', 'g', 'KG', ' kg', 'crate', 'case', 'pack', new String('kg'), ['kg']];
 
 describe('price-model: odd inputs', () => {
-  // A partial port: only what it exports is compared. formatMoney and formatRate take the venue's money
-  // as one more argument, so they are compared the way currency.ts is: js/ after setCurrency, the port
-  // with moneyOf.
+  // An adapted port: formatMoney and formatRate take the venue's money as one more argument, so they are
+  // compared the way currency.ts is: js/ after setCurrency, the port with moneyOf.
   const m = priceModel;
   const l = legacyPriceModel;
 
@@ -1579,6 +1578,87 @@ describe('price-model: odd inputs', () => {
     { a: FLOUR_CASE, b: PCS_CASE }, Object.create({ a: { pricePerUnit: 1 } }), { constructor: { pricePerUnit: 1 } },
     { '5': { pricePerUnit: 6 } }, { undefined: { pricePerUnit: 7 }, null: { pricePerUnit: 8 } }];
   agree('withPrices', m.withPrices as (...args: unknown[]) => unknown, l.withPrices as (...args: unknown[]) => unknown, product(ING_ROWS, PRICE_MAPS));
+
+  // ── The writing half (the ingredient card's, step 3e-3) ──
+  // The same odd values for both. priceUnitLabel, costReasonText and formatPricePerUnit take the translator
+  // and are run in price-write.spec.ts; keepPriceDate has no original yet (see price-model.spec.ts).
+  const AT = '2026-10-01T10:00:00.000Z';
+  const FORMATS: readonly unknown[] = [undefined, null, 5, 'str', [], {}, { kind: 'carton', count: 4, inner: 'busta' },
+    { kind: 'carton', count: null, inner: 'busta' }, { kind: 'carton', count: 50, inner: 'pezzo' }, { kind: 'single', count: null, inner: '' },
+    { kind: 'carton' }, { kind: 'CARTON', count: 4 }, { count: 6 },
+    ...varying({ kind: 'carton', count: 4, inner: 'busta' }, { kind: ODD, count: PACK_COUNTS })];
+  const FORMS: readonly unknown[] = [...ODD, 'single-pack', 'carton-pack', 'carton-pieces', 'typed', 'case', 'toString', '__proto__',
+    new String('typed'), ['typed']];
+  const BASES_OF_PRICE: readonly unknown[] = [...ODD, 'pack', 'case', 'rate', 'PACK', ' pack', 'bogus', 'toString', '__proto__',
+    new String('pack'), ['pack']];
+  const WEIGHTS: readonly unknown[] = [undefined, null, '', 'sacco', '2.5kg', '500 g', '750 ml', '10 kg', '6x1kg', '1 l', '0 kg', 5, {}, ['2.5kg'],
+    '9'.repeat(400) + 'kg', new String('2.5kg'), { toString: () => '500g' }];
+  const FEW_PRICES: readonly unknown[] = [...PRICE_VALUES.slice(0, 40), '', 9.6, 0.96, 0.012, 0.0085, 3.37, 12, '1.5', 0.0000001];
+  const FEW_FORMATS: readonly unknown[] = FORMATS.slice(0, 13);
+
+  agree('ownPieceWeight', m.ownPieceWeight, l.ownPieceWeight, [
+    ...product(PRICE_DOCS.slice(0, 40), WEIGHTS), ...product(PRICE_DOCS.slice(20), ['60g', '360g', '', 'sacco'], [undefined, '60g', '70g', '360g']),
+    ...product([{ priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06 }, { priceUnit: 'pcs', unitWeightKg: 0.06 + 5e-10 },
+      { priceUnit: 'pcs', unitWeightKg: 0.06 + 2e-9 }, { priceUnit: 'pcs', unitWeightKg: '0.06' }], ['60g', '0.06 kg', '70g'], [undefined, '60g', '', 'x'])]);
+  agree('priceFormOf', m.priceFormOf, l.priceFormOf, [...product(FORMATS, WEIGHTS, [undefined, false, true, 0, 1, '', 'x', null]),
+    ...product([undefined], ODD, [undefined])]);
+  agree('basisOptions', m.basisOptions, l.basisOptions, product(FORMS));
+  agree('defaultBasis', m.defaultBasis, l.defaultBasis, product(FORMS));
+  agree('basisOf', m.basisOf, l.basisOf, product(FORMS, BASES_OF_PRICE));
+  agree('basisToStore', m.basisToStore, l.basisToStore, product(FORMS, BASES_OF_PRICE));
+  agree('rateBaseOf', m.rateBaseOf, l.rateBaseOf, product(WEIGHT_TEXTS));
+  const NAMED_FORMS = ['single-pack', 'carton-pack', 'carton-pieces', 'typed', undefined, 'bogus'];
+  agree('basisToStoredPrice', m.basisToStoredPrice, l.basisToStoredPrice,
+    product(NAMED_FORMS, ['pack', 'case', 'rate', null, undefined, 'bogus'], FEW_PRICES, FEW_FORMATS, ['', '500 g', '1 kg', '750 ml', 'sacco', undefined]));
+  agree('storedPriceToBasis', m.storedPriceToBasis, l.storedPriceToBasis,
+    product(NAMED_FORMS, ['pack', 'case', 'rate', null, undefined, 'bogus'], FEW_PRICES, FEW_FORMATS, ['', '500 g', '1 kg', '750 ml', 'sacco', undefined]));
+  agree('convertBasisPrice', m.convertBasisPrice, l.convertBasisPrice,
+    product(NAMED_FORMS, ['pack', 'case', 'rate', null, 'bogus'], ['pack', 'case', 'rate', undefined], [30, '', 0, null, 9.6, 'x', 0.012], FEW_FORMATS.slice(0, 10),
+      ['500 g', '10 kg', '', 'sacco'], [undefined, 6, 12, 0, NaN, null, '2']));
+  agree('shownPrice', m.shownPrice, l.shownPrice, product(FEW_PRICES, [undefined]));
+
+  const PRICE_BOXES: readonly unknown[] = [undefined, null, 5, {}, { price: '20', vat: '' }, { price: 20, vat: 4 }, { price: '0.25', vat: '' },
+    { price: '3.333333', vat: '' }, { rate: '7.2', unit: 'kg', pieceKg: '', vat: '' }, { rate: '', unit: null, vat: '' }, { price: '20', pieceKg: '0.06', vat: '22' },
+    { price: '1', pieceKg: '0.06', ownPiece: true, vat: '' }, { rate: '0.26', unit: 'pcs', pieceKg: '0.06', ownPiece: true, vat: '' },
+    { price: 30, basis: 'pack', vat: 4 }, { price: 10, basis: 'rate', vat: 4 }, { price: 5, basis: 'case' }, { price: 5, basis: 'bogus' },
+    ...varying({ price: '20', rate: '7.2', unit: 'kg', pieceKg: '0.06', vat: '4', ownPiece: false, basis: null },
+      { price: FEW_PRICES, rate: FEW_PRICES.slice(0, 20), unit: PRICE_UNIT_WORDS, pieceKg: FEW_PRICES.slice(0, 20), vat: FEW_PRICES.slice(0, 20), ownPiece: ODD, basis: BASES_OF_PRICE })];
+  const SOME_BOXES: readonly unknown[] = [...PRICE_BOXES.slice(0, 17), ...PRICE_BOXES.slice(17).filter((_, i) => i % 3 === 0)];
+  agree('formatPriceInput', m.formatPriceInput, l.formatPriceInput, [...product(FEW_FORMATS, WEIGHTS, SOME_BOXES), ...product(FORMATS.slice(13), ['2.5kg', ''], [{ price: '20', vat: '' }])]);
+
+  const STORED_ITEMS: readonly unknown[] = [...PRICE_DOCS.slice(0, 45), ...PRICE_DOCS.slice(45).filter((_, i) => i % 3 === 0)];
+  agree('storedPriceInput', m.storedPriceInput, l.storedPriceInput, product(STORED_ITEMS, [undefined, '', '4', 10, null, 'x']));
+  agree('singleFromCaseInput', m.singleFromCaseInput, l.singleFromCaseInput, product(STORED_ITEMS, [undefined, '', '4', 10, null, 'x']));
+  agree('priceBoxStart', m.priceBoxStart, l.priceBoxStart,
+    product(STORED_ITEMS, FEW_FORMATS, ['', '2.5kg', '500g', '3kg', 'sacco', undefined], [undefined, false, true, 1, '']));
+
+  const NEEDED_BASE = { item: FLOUR_CASE, fmt: { kind: 'carton', count: 4, inner: 'busta' }, weightText: 'sacco', dirty: true, priceBox: '22' };
+  agree('weightNeededForPrice', m.weightNeededForPrice, l.weightNeededForPrice, [...product(ODD), [undefined],
+    ...product([NEEDED_BASE, { ...NEEDED_BASE, item: PACK_CASE }, { ...NEEDED_BASE, item: PCS_CASE }, { ...NEEDED_BASE, item: { priceUnit: 'kg', pricePerUnit: 2 } }]),
+    ...varying(NEEDED_BASE, { item: [...ODD, ...PRICE_DOCS.slice(0, 30)], fmt: FORMATS, weightText: WEIGHTS, dirty: ODD, priceBox: [...ODD, '22', 22, 0, '0'] }).map(x => [x])]);
+
+  const TIMES = [undefined, AT, '', null, 5];
+  agree('pricePatch', m.pricePatch, l.pricePatch, [
+    ...product(RATE_INPUTS, [AT], [undefined, '', '2.5 kg']),
+    ...product([...ODD, 'x', 5], [AT], [undefined]),
+    ...product(CASE_INPUTS.map(c => (c && typeof c === 'object' ? { priceUnit: 'case', ...(c as object) } : c)), [AT], [undefined, '', '2.5 kg', '500 g', '750 ml', 'sacco', '6x1kg', 5]),
+    ...product(SOME_BOXES.map(box => { try { return m.formatPriceInput(FORMATS[6] as never, '2.5kg', box as never); } catch { return null; } }),
+      TIMES, [undefined, '2.5kg']),
+    ...product(varying({ priceUnit: 'case', casePrice: 20, caseCount: 4, caseItemUnit: 'pack', packBasis: 'kg', caseItemSize: 2.5 },
+      { packBasis: [...BASES, 'KG'], caseItemSize: PRICE_VALUES, priceBasis: BASES_OF_PRICE, vatRate: [...PRICE_VALUES.slice(0, 30), 0, 4, 5, 10, 20, 22, '4', ''], keepRate: ODD }), [AT], ['2.5kg', '']),
+    ...product([{ priceUnit: 'kg', pricePerUnit: 7.2, priceBasis: null }, { priceUnit: 'kg', pricePerUnit: '', priceBasis: 'rate' },
+      { priceUnit: 'pcs', pricePerUnit: 3.333333, keepRate: true }, { priceUnit: 'pcs', pricePerUnit: 3.333333 },
+      { priceUnit: 'pcs', unitWeightKg: 0.0035 }, { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: 0.0035 }], [AT], [undefined])]);
+
+  agree('priceChangedByRepresentation', m.priceChangedByRepresentation, l.priceChangedByRepresentation, product(PRICE_DOCS.slice(0, 40), PRICE_DOCS.slice(0, 40)));
+  agree('priceChanged', m.priceChanged, l.priceChanged, [...product(PRICE_DOCS.slice(0, 45), PRICE_DOCS.slice(0, 45)),
+    ...product(PRICE_DOCS.slice(45).filter((_, i) => i % 4 === 0), PRICE_DOCS.slice(20, 40))]);
+  agree('priceRecord', m.priceRecord, l.priceRecord, product([...ODD, { supplierId: 'S1' }, { supplierId: 5 }, { supplierId: null }, { name: 'Flour' }],
+    [...ODD, 'x', { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, vatRate: 4, packPrice: null }, FLOUR_CASE, { priceUnit: undefined }], TIMES, [undefined, 'manual', 'invoice', '', 5, null]));
+  agree('splitPriceFields', m.splitPriceFields, l.splitPriceFields, [...product(ODD, [undefined]), ['x'], [5],
+    ...product([{ name: 'Flour', priceUnit: 'kg', pricePerUnit: 7.2, vatRate: 4 }, { name: 'Flour' }, { priceBasis: 'rate', priceUpdatedAt: AT }, { __proto__: { priceUnit: 'kg' }, name: 'x' }],
+      [undefined]),
+    ...product(PRICE_DOCS.slice(0, 60))]);
 
   // The rate and the amount, in a few venues.
   const FEW_VENUES: readonly (readonly [unknown, unknown])[] = [[undefined, undefined], ['£', GB_LAYOUT], ['€', IT_LAYOUT],

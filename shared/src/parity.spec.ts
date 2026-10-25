@@ -8,8 +8,7 @@
 // they are partial or adapted ports (the pure half of
 // js/roles.js and js/location.js; everything in js/pastries/pastries-model.js except weekdayLabel and
 // weekdayShortLabel, which look a word up in the interface dictionary that in Mise 2 belongs to the
-// app; the reading half of
-// js/price-model.js, without the writing half and the dictionary lookups; js/currency.js without
+// app; js/price-model.js whole, adapted the same way pack-format is (the dictionary functions take the translator, formatMoney and formatRate take the money); js/currency.js without
 // the module variable that holds the venue's money, which Mise 2 hands to the functions instead; and
 // everything in js/inventory/inventory-value.js except formatTotal, which writes the total with that
 // same module variable; the part of js/catalogue/catalogue-model.js that Food cost reads; everything in

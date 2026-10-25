@@ -5,7 +5,7 @@ import { createSuppliersStore, ingredientDocOf } from './suppliersStore';
 import type { SuppliersMessage } from './suppliersStore';
 
 // The ingredient card's half of the store (step 3e-2): product data saved local-first, never a price; the order line
-// frozen when the card replaced the order unit; a delete that takes the draft line with it; the F5 count.
+// frozen when the card replaced the order unit (the money: suppliersStore.price.spec.ts); a delete that takes the draft line with it; the F5 count.
 
 const tick = () => new Promise<void>(resolve => { setTimeout(resolve, 0); });
 
@@ -44,11 +44,12 @@ describe('the suppliers store: saving an ingredient', () => {
     const { store, source, held } = started();
     await tick();
     const release = source.holdWrites();
-    const id = store.saveIngredient(null, { name: 'Flour', shortName: '', pricePerUnit: 3 });
+    const { id, priceRecorded } = store.saveIngredient(null, { name: 'Flour', shortName: '', pricePerUnit: 3 });
+    expect(priceRecorded).toBe(false);
     expect(id).toMatch(/^new-ingredient-/);
     expect(held()).toBe(1);
     await tick();
-    expect(source.writes).toEqual([{ op: 'ingredient-save', id, data: { name: 'Flour', shortName: '', ...drained } }]);
+    expect(source.writes).toEqual([{ op: 'ingredient-save', id, data: { name: 'Flour', shortName: '', ...drained }, price: null }]);
     expect(store.getSnapshot().ingredients.map(i => i.id)).toEqual([id]);
     release();
     await tick();
@@ -58,7 +59,7 @@ describe('the suppliers store: saving an ingredient', () => {
   test('an existing ingredient is saved at its own id', async () => {
     const { store, source } = started(fakeSuppliersSource({ ingredients: [{ id: 'i1', name: 'Flour' }] }));
     await tick();
-    expect(store.saveIngredient('i1', { name: 'Flour 00' })).toBe('i1');
+    expect(store.saveIngredient('i1', { name: 'Flour 00' }).id).toBe('i1');
     await tick();
     expect(source.ingredients.get('i1')?.name).toBe('Flour 00');
   });

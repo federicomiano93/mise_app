@@ -538,6 +538,16 @@ What the code does, and where it differs from the current app (each difference w
   - A packaging item says «Save packaging?» / «Packaging saved.» and «Delete packaging» (IT: «Salvare l’imballaggio?», «Imballaggio salvato.», «Elimina imballaggio»). Case → Single clears a pending count / package-word sentence.
 - **Not in this step**: the price (C58–C79), the legacy price card (C82–C83), allergens and nutrition (C98–C116), the pack photo, merge.
 
+## Step 3e-3 as built — the price on the ingredient card
+
+- **Who** (C4): the price block is drawn only for `canManage` with the Food cost section on (`useMayWritePrices`); everybody else gets no block at all, never a disabled one. The right is read again at save time: Food cost switched off elsewhere while a card is open sends no price.
+- **The block** (C58–C79): the current app's `priceBlock` ported as a pure model (`records/priceCardModel.ts`) and drawn by `PriceSection.tsx` in the C79 order, under «Product data». A stored case of pieces now opens with the venue's piece word (C51); the C46 weight hint shows the stored size as a placeholder. The history (`PriceHistory.tsx`) is read only on «Show them», the last 20, focus moving to the answer.
+- **Opening** (C28): an existing item's card opens for a price writer only once the prices came from the server, or after its own price document was read; a failed read opens nothing (the «could not be opened» panel). A price stream that dies afterwards is no longer «from the server», so the next card reads again.
+- **Old price shapes** (T4): shown read-only with a NEW sentence («This price was saved in an older format…»); saving such a card sends no price at all. Editing them is 3e-5.
+- **Saving**: ingredient, price and history entry in ONE batch. The date and the history move only with the money (F4, `keepPriceDate`).
+- ⚠️ **DIFFERENCE FROM THE CURRENT APP, ON PURPOSE**: the current app writes the whole price document on every manager save. Mise 2 writes it only when one of its keys changes, and a save that did not move the money writes ONLY the keys it changed (VAT, basis, the case shape); a number equal to the stored one within rounding is not a change, and the date is never written on its own — an undated price stays undated until its money moves. Otherwise a VAT-only save on a tablet would merge the money it opened on over a newer price written meanwhile (an invoice import on the PC), under the old date and with no history entry (review of 22 Oct 2026, `priceSave.ts`).
+- **Same as the current app, left**: a new item saved by a price writer gets an `ingredient-prices` document with no money in it.
+
 ## Findings — things found while reading, not decided
 
 ### Findings — The page, the lists, suppliers
