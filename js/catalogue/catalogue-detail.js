@@ -11,6 +11,7 @@ import { currentSession } from '../firebase.js';
 import { isSectionAllowed } from '../sections.js';
 import {
   scaleCatalogue, baseAmounts, weighableTotalGrams, unitOf, unitText, batchWarning, formatWeight, formatAmount,
+  exportModelOf,
 } from './catalogue-model.js';
 import {
   getScaledTarget, setScaledTarget, clearScaledTarget, getIngredients, getRecipesById,
@@ -39,6 +40,8 @@ import { allergensOn } from '../venue-features.js';
 import { copyToClipboard } from '../share.js';
 import { chooseHowToSend } from '../send-sheet.js';
 import { SEND_PATHS, svgElement } from '../send-icon.js';
+import { DOWNLOAD_PATHS } from '../export-icon.js';
+import { openExportSheet } from '../export-sheet.js';
 import { hasProcedure, normalizeSteps, unassignedRows, progressText, formatDuration } from './guided-model.js';
 import { buildZoomControls } from './zoom-steps.js';
 
@@ -523,6 +526,9 @@ export function renderDetail({ recipe, app }) {
     class: 'cat-calc-btn', type: 'button', text: t('cat.calculate'), onclick: onCalculate,
   });
 
+  // What renderRows drew last, as the export model: the file is made from this, never recomputed.
+  let lastExport = null;
+
   function renderRows() {
     ingRows.replaceChildren();
     const scaled = displayTarget > 0;
@@ -541,6 +547,7 @@ export function renderDetail({ recipe, app }) {
       el('span', { class: 'cat-ing-name', text: t('cat.total') }),
       amountEl({ num: nf.format(total), unit: 'g' }),
     ]));
+    lastExport = exportModelOf(recipe, amounts, total);
     clearBtn.hidden = !scaled;
   }
 
@@ -587,6 +594,22 @@ export function renderDetail({ recipe, app }) {
   // so hide the whole panel. getScaledTarget stays 0 in that case too.
   if (weighableTotalGrams(recipe) <= 0) weightPanel.hidden = true;
 
+  // Export as PDF or Excel (js/export-sheet.js). ⚠️ AT THE END OF THE PAGE, with the other secondary
+  // actions, by Federico's choice (14 Oct 2026): «non è un'azione che si fa tutti i giorni». Under the
+  // list it pushed the weight box — the thing this screen is opened for — 50px further down. The file
+  // is still made from what renderRows() drew last, so where the button stands changes nothing in it.
+  // Absent for a recipe with no ingredients; `hidden` is assigned afterwards for the reason explained
+  // at importBtn below.
+  const exportBtn = el('button', { class: 'cat-import-btn cat-export-btn', type: 'button' }, [
+    el('span', { 'aria-hidden': 'true' }),
+    el('span', {}, t('export.button')),
+  ]);
+  exportBtn.firstChild.appendChild(svgElement(DOWNLOAD_PATHS, 18));
+  exportBtn.addEventListener('click', () => {
+    openExportSheet({ model: lastExport, totalLabel: t('cat.total'), opener: exportBtn });
+  });
+  exportBtn.hidden = recipe.ingredients.length === 0;
+
   // "Import into Calculator" WRITES the Calculator's configuration. A location
   // that does not use the Calculator is refused that write by the rules, so the
   // button would only ever produce a permission error: hide it instead.
@@ -605,6 +628,10 @@ export function renderDetail({ recipe, app }) {
     t('cat.importIntoCalculator'),
   ]);
   importBtn.hidden = !isSectionAllowed(currentSession().location, 'calculator');
+  // ⚠️ Its explanation goes with it. Left alone under a hidden Import, the line «makes a copy you can
+  // edit for the Calculator» sat right under Export and read as Export's caption (review, 15 Oct 2026).
+  const importHint = el('p', { class: 'cat-import-hint', text: t('cat.makesACopyYou') });
+  importHint.hidden = importBtn.hidden;
 
   // Low-key delete (P20 — de-emphasised destructive action): routed through the
   // shared guard, which warns if the recipe was imported into the Calculator and
@@ -682,11 +709,9 @@ export function renderDetail({ recipe, app }) {
       guidedCard,
     ]),
     el('div', { class: 'cat-detail-bottom' }, [
+      exportBtn,
       importBtn,
-      el('p', {
-        class: 'cat-import-hint',
-        text: t('cat.makesACopyYou'),
-      }),
+      importHint,
       deleteBtn,
     ]),
   ]);
