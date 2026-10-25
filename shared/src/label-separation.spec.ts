@@ -24,6 +24,12 @@ import recipeAllergenSource from './recipe-allergen-model.ts?raw';
 import labelTemplateSource from './label-template-model.ts?raw';
 import labelSheetSource from './label-sheet.ts?raw';
 import printRoadsSource from './print-roads.ts?raw';
+import imageLayoutSource from './label-image-layout.ts?raw';
+import textCheckSource from './label-text-check.ts?raw';
+import imageRasterSource from './label-image-raster.ts?raw';
+import imageFontsSource from './label-image-fonts.ts?raw';
+import imageMetricsSource from './label-image-metrics.ts?raw';
+import zplZ64Source from './zpl-z64.ts?raw';
 import { stringsIn } from '../../tests/helpers/strings-in.mjs';
 
 // The glob is typed by Vite's client types, which this package does not load (it has no DOM).
@@ -45,7 +51,18 @@ const LABEL_FILES: Readonly<Record<string, string>> = {
   'label-template-model.ts': labelTemplateSource,
   'label-sheet.ts': labelSheetSource,
   'print-roads.ts': printRoadsSource,
+  // The image label (the «with logo» template): its layout adds one word of its own («PRODOTTO IL:», by the country’s
+  // language handed in), the check reads the label’s text, and the rest measure, draw and send it.
+  'label-image-layout.ts': imageLayoutSource,
+  'label-text-check.ts': textCheckSource,
+  'label-image-raster.ts': imageRasterSource,
+  'label-image-fonts.ts': imageFontsSource,
+  'label-image-metrics.ts': imageMetricsSource,
+  'zpl-z64.ts': zplZ64Source,
 };
+
+// The pure drawing files that need nothing from any other module.
+const IMPORT_NOTHING: readonly string[] = ['print-roads.ts', 'label-image-raster.ts'];
 
 // The source without its comments: explaining the rule in prose is exactly where a forbidden word belongs.
 const codeOf = (source: string): string => source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
@@ -54,9 +71,10 @@ describe('the label files do not know the interface exists', () => {
   test('they import nothing from app/ and nothing that is a dictionary', () => {
     for (const [file, source] of Object.entries(LABEL_FILES)) {
       const imports = [...codeOf(source).matchAll(/(?:^|\n)\s*(?:import|export)\b[^;]*?\bfrom\s+['"]([^'"]+)['"]/g)].map(match => match[1] as string);
-      // print-roads.ts imports nothing at all (it names keys and decisions only), which is the strongest form of
-      // this guard; every other file must show the scan its imports, or the scan guards nothing.
-      if (file === 'print-roads.ts') expect(imports, `${file} is meant to import nothing`).toStrictEqual([]);
+      // print-roads.ts imports nothing at all (it names keys and decisions only), nor does the raster (pixels only),
+      // which is the strongest form of this guard; every other file must show the scan its imports, or the scan
+      // guards nothing.
+      if (IMPORT_NOTHING.includes(file)) expect(imports, `${file} is meant to import nothing`).toStrictEqual([]);
       else expect(imports.length, `${file}: the scan must find its imports, or it guards nothing`).toBeGreaterThan(0);
       for (const target of imports) {
         expect(target, `${file} imports ${target}`).not.toMatch(/(^|\/)app(\/|$)/);
@@ -170,6 +188,28 @@ describe('the label template asks the country for every word it adds', () => {
   test('the sheet and the roads hold no food word at all', () => {
     for (const [file, source] of [['label-sheet.ts', labelSheetSource], ['print-roads.ts', printRoadsSource]] as const) {
       expect(codeOf(source), `${file} draws and routes; the words are the template's`).not.toMatch(/\b(labelWord|allergenName|allergenGroupName|nutrientName)\s*\(/);
+    }
+  });
+});
+
+describe('the image label adds one word, by the country', () => {
+  // «PRODOTTO IL:» is printed on the label, so it is a label word: it is chosen from the language handed in (the
+  // country's), and the layout is handed the chosen word — it never picks a language itself.
+  test('the date line’s word is asked in the language handed in', () => {
+    const code = codeOf(imageLayoutSource);
+    expect(code).toMatch(/export function producedOnWord\(lang: unknown\)/);
+    expect(code).not.toMatch(/outputLanguage|countryOf|navigator|document|window/);
+  });
+
+  test('the check is handed the label’s language and never works it out', () => {
+    const code = codeOf(textCheckSource);
+    expect(code).toMatch(/lang !== 'it'/);
+    expect(code).not.toMatch(/outputLanguage|countryOf|navigator|document|window/);
+  });
+
+  test('the measuring, drawing and sending files hold no food word', () => {
+    for (const [file, source] of [['label-image-raster.ts', imageRasterSource], ['label-image-fonts.ts', imageFontsSource], ['zpl-z64.ts', zplZ64Source]] as const) {
+      expect(codeOf(source), file).not.toMatch(/\b(labelWord|allergenName|allergenGroupName|nutrientName|producedOnWord)\s*\(/);
     }
   });
 });
