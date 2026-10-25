@@ -11,6 +11,7 @@ import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { ItemRow, ItemRows } from './ItemRow';
+import { NotInUseGroup, useNotInUseOpen } from './NotInUseGroup';
 import { useMayImport } from './invoiceImport/useMayImport';
 import { IMPORT_OPENER, NEW_OPENER, SEARCH_OPENER, SETTINGS_OPENER, itemOpener, supplierOpener, useHandBack } from './handBack';
 import type { SuppliersTab } from './suppliersPath';
@@ -384,25 +385,40 @@ function ItemList({ tab, items, suppliers, query, broken, openItemId, onOpenItem
     const q = normalizeText(query);
     return all.filter(item => ingredientNameMatches(item, q, normalizeText));
   }, [all, query]);
+  // ⚠️ 3e-5b: the items switched off with «Not in use at the moment» are never hidden: they sit under the active ones in a folded
+  // group. The group opens by itself when the item open beside the list is in it (a just-switched-off item keeps its row, and
+  // Back hands the focus to it) or when the search finds one.
+  const active = useMemo(() => visible.filter(item => item.active !== false), [visible]);
+  const inactive = useMemo(() => visible.filter(item => item.active === false), [visible]);
+  const group = useNotInUseOpen(
+    (openItemId !== null && inactive.some(item => item.id === openItemId)) || (query.trim() !== '' && inactive.length > 0),
+  );
   const labels = useMemo(() => new Map(suppliers.map(supplier => [supplier.id, supplierLabel(supplier)] as const)), [suppliers]);
 
   if (all.length === 0) return broken ? null : <EmptyState tab={tab} />;
   if (visible.length === 0) return <p className={styles.nothing}>{t(NO_MATCH_KEY[tab])}</p>;
+  const rowOf = (item: StoredDoc, inNotInUse: boolean) => (
+    // ⚠️ '' and never undefined for an item whose supplier is gone: undefined means «on the supplier's own screen».
+    <ItemRow
+      key={item.id}
+      item={item}
+      supplier={typeof item.supplierId === 'string' ? (labels.get(item.supplierId) ?? '') : ''}
+      isOpen={item.id === openItemId}
+      onOpen={onOpenItem}
+      opener={itemOpener(item.id)}
+      register={handBack.register}
+      inNotInUse={inNotInUse}
+    />
+  );
   return (
-    <ItemRows>
-      {visible.map(item => (
-        // ⚠️ '' and never undefined for an item whose supplier is gone: undefined means «on the supplier's own screen».
-        <ItemRow
-          key={item.id}
-          item={item}
-          supplier={typeof item.supplierId === 'string' ? (labels.get(item.supplierId) ?? '') : ''}
-          isOpen={item.id === openItemId}
-          onOpen={onOpenItem}
-          opener={itemOpener(item.id)}
-          register={handBack.register}
-        />
-      ))}
-    </ItemRows>
+    <>
+      {active.length > 0 ? <ItemRows>{active.map(item => rowOf(item, false))}</ItemRows> : null}
+      {inactive.length > 0 ? (
+        <NotInUseGroup count={inactive.length} open={group.open} onToggle={group.onToggle}>
+          <ItemRows>{inactive.map(item => rowOf(item, true))}</ItemRows>
+        </NotInUseGroup>
+      ) : null}
+    </>
   );
 }
 

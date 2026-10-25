@@ -11,6 +11,8 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useCopyWait } from './copyWait';
 import { ItemRow, ItemRows } from './ItemRow';
+import { NotInUseGroup, useNotInUseOpen } from './NotInUseGroup';
+import type { StoredDoc } from './suppliersSource';
 import { ADD_INGREDIENT_OPENER, SEARCH_OPENER, supplierItemOpener, supplierOpener, useHandBack } from './handBack';
 import { DAY_KEY, isWeekday } from './supplierDays';
 import { useSupplierDeletions } from './supplierDeletions';
@@ -69,13 +71,30 @@ export function SupplierScreen({ id }: { id: string }) {
   // Back from an ingredient's card opened from here is owed to the row or to «Add ingredient» it was opened from.
   const owed = useRef<string | null | undefined>(undefined);
   const addButton = useCallback((node: HTMLButtonElement | null) => { handBack.register(ADD_INGREDIENT_OPENER, node); }, [handBack]);
+  // The folded «Not in use» group. ⚠️ A row inside a closed <details> cannot take the focus, so when Back owes the focus to the
+  // row of an item that is switched off, the group is opened first and the focus is given once it is open (`pendingFocus`).
+  const group = useNotInUseOpen(false);
+  const pendingFocus = useRef<string | null>(null);
   useEffect(() => {
     if (!shown) return;
     owed.current ??= handBack.takeEdit(id) ? 'edit' : handBack.takeOn(id);
-    if (owed.current === 'edit') editButton.current?.focus();
-    else if (owed.current) handBack.focus(owed.current);
-    else if (cameFromList(state)) title.current?.focus();
+    const target = owed.current;
+    if (target === 'edit') editButton.current?.focus();
+    else if (target) {
+      const inGroup = snapshot.ingredients.some(item => item.supplierId === id && item.active === false && supplierItemOpener(item.id) === target);
+      if (inGroup) {
+        pendingFocus.current = target;
+        group.show();
+      } else {
+        handBack.focus(target);
+      }
+    } else if (cameFromList(state)) title.current?.focus();
   }, [shown]);
+  useEffect(() => {
+    if (!group.open || pendingFocus.current === null) return;
+    handBack.focus(pendingFocus.current);
+    pendingFocus.current = null;
+  }, [group.open]);
 
   // The card of an item, one level below this screen: Back is the browser's Back, which lands here.
   const openItem = (itemId: string) => {
@@ -128,6 +147,22 @@ export function SupplierScreen({ id }: { id: string }) {
     .filter(item => item.supplierId === id)
     .sort((a, b) => ingredientDisplayName(a).localeCompare(ingredientDisplayName(b)));
   const starred = snapshot.favourites.includes(id);
+  // 3e-5b: what a supplier sells that is switched off with «Not in use at the moment» sits under the rest in a folded group.
+  const sold = mine.filter(item => item.active !== false);
+  const inactive = mine.filter(item => item.active === false);
+  const rowOf = (item: StoredDoc, inNotInUse: boolean) => (
+    // ⚠️ undefined, NOT '': on the supplier's own screen the supplier is not named again (parity S58).
+    <ItemRow
+      key={item.id}
+      item={item}
+      supplier={undefined}
+      isOpen={false}
+      onOpen={openItem}
+      opener={supplierItemOpener(item.id)}
+      register={handBack.register}
+      inNotInUse={inNotInUse}
+    />
+  );
 
   // ⚠️ SWITCHING OFF ASKS, SWITCHING ON DOES NOT (parity S88), AND IT IS FOR EVERYBODY: it can be undone in one tap, so the
   // reversible half of the job stays with whoever is working. Local-first: the row dims at once, a refusal puts it back and
@@ -216,20 +251,14 @@ export function SupplierScreen({ id }: { id: string }) {
         ) : mine.length === 0 ? (
           <p className={styles.nothing}>{t('sup.noIngredientsYet')}</p>
         ) : (
-          <ItemRows>
-            {/* ⚠️ undefined, NOT '': on the supplier's own screen the supplier is not named again (parity S58). */}
-            {mine.map(item => (
-              <ItemRow
-                key={item.id}
-                item={item}
-                supplier={undefined}
-                isOpen={false}
-                onOpen={openItem}
-                opener={supplierItemOpener(item.id)}
-                register={handBack.register}
-              />
-            ))}
-          </ItemRows>
+          <>
+            {sold.length > 0 ? <ItemRows>{sold.map(item => rowOf(item, false))}</ItemRows> : null}
+            {inactive.length > 0 ? (
+              <NotInUseGroup count={inactive.length} open={group.open} onToggle={group.onToggle}>
+                <ItemRows>{inactive.map(item => rowOf(item, true))}</ItemRows>
+              </NotInUseGroup>
+            ) : null}
+          </>
         )}
 
         {/* ⚠️ DISABLED UNTIL THE INGREDIENTS HAVE ANSWERED: the question says how many products stay without a supplier, and before

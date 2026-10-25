@@ -119,6 +119,46 @@ describe('the doors', () => {
     await waitFor(() => { expect(newIngredient()).toHaveFocus(); });
   });
 
+  describe('⚠️ a switched-off item sits in a folded group, and Back still lands on its row (3e-5b)', () => {
+    const withOff = () => fakeSuppliersSource({
+      suppliers: SUPPLIERS,
+      ingredients: [...ITEMS, item('i-off', { name: 'Zesty lemon', supplierId: 's-alp', active: false })],
+    });
+
+    it('from the list: the group opens for the card, and Back gives the focus to the row inside it', async () => {
+      const { user } = await loaded('/suppliers', withOff());
+      const group = () => main().getByText('Not in use (1)').closest('details') as HTMLDetailsElement;
+      expect(group().open).toBe(false);
+      await user.click(main().getByText('Not in use (1)'));
+      await user.click(main().getByRole('button', { name: /^Zesty lemon/ }));
+      await card('Edit ingredient');
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      await waitFor(() => { expect(main().getByRole('button', { name: /^Zesty lemon/ })).toHaveFocus(); });
+      expect(group().open).toBe(true);
+    });
+
+    it('opened by its address (the group closed before): it opens by itself and the row can take the focus', async () => {
+      const { user } = await loaded('/suppliers/ingredient/i-off', withOff());
+      await card('Edit ingredient');
+      expect((main().getByText('Not in use (1)').closest('details') as HTMLDetailsElement).open).toBe(true);
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      await waitFor(() => { expect(main().getByRole('button', { name: /^Zesty lemon/ })).toHaveFocus(); });
+    });
+
+    it('from a supplier\'s screen: Back opens the folded group and gives the focus to the row', async () => {
+      const { user } = await loaded('/suppliers/supplier/s-alp', withOff());
+      const region = within(await screen.findByRole('region', { name: 'Alpine' }, LOAD));
+      expect((region.getByText('Not in use (1)').closest('details') as HTMLDetailsElement).open).toBe(false);
+      await user.click(region.getByText('Not in use (1)'));
+      await user.click(region.getByRole('button', { name: /^Zesty lemon/ }));
+      await card('Edit ingredient');
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      const back = within(await screen.findByRole('region', { name: 'Alpine' }, LOAD));
+      await waitFor(() => { expect(back.getByRole('button', { name: /^Zesty lemon/ })).toHaveFocus(); });
+      expect((back.getByText('Not in use (1)').closest('details') as HTMLDetailsElement).open).toBe(true);
+    });
+  });
+
   it('opened by its address, Back replaces it with the tab of its kind', async () => {
     const { router, user } = renderSuppliers('/suppliers/ingredient/i-box', { source: seeded() });
     await card('Edit packaging');
