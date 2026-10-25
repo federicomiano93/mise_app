@@ -11,8 +11,8 @@
 //     tolerance of the legacy focaccia math (and is exactly equal at the 0.65%
 //     default) — the small drift is a correction at high yeast %, see the project plan.
 //
-// The recipes are the shipped defaults (RECIPE_DEFAULTS in recipes.js), copied here
-// so the test stays pure (recipes.js reads localStorage on import).
+// The recipes are the invented fixture bakery's (tests/fixtures/bakery-config.mjs),
+// copied here so the test stays pure.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -23,9 +23,9 @@ import {
   scaleSourdough,
 } from '../js/calculator-dough-math.js';
 
-const FOCACCIA = { flourBlu: 278, flourT65: 278, malt: 3, sugar: 8, salt: 11, yeast: 3.6, oil: 56, water1: 334, water2: 24 };
-const BRIOCHE = { flour: 3185, yeast: 127.4, water: 1575 };
-const SOURDOUGH = { flourBlu: 2560, flourT65: 2560, flourWhole: 570, water1: 3800, starter: 1024, malt: 30, salt: 124, water2: 300 };
+const FOCACCIA = { flourBlu: 260, flourT65: 290, malt: 4, sugar: 10, salt: 12, yeast: 3.4, oil: 50, water1: 340, water2: 30 };
+const BRIOCHE = { flour: 3000, yeast: 120, water: 1500 };
+const SOURDOUGH = { flourBlu: 2400, flourT65: 2400, flourWhole: 600, water1: 3700, starter: 980, malt: 25, salt: 115, water2: 250 };
 
 const sum = (arr) => arr.reduce((a, b) => a + b, 0);
 
@@ -77,7 +77,8 @@ const FOCACCIA_TOLERANCE_FULL_G = 6;
 test('scaleBrioche equals the legacy math across the full knob range and edited recipes', () => {
   // Brioche yeast knob: min 0.1, max 6 (calculator.html #b-yeast-pct).
   for (const R of variants(BRIOCHE)) {
-    for (const target of [2000, 4887.4, 9000, 9774.8, 18000]) {
+    // Fractional targets (4620.6, 9240.4) keep a case where Math.round(target) differs from the target.
+    for (const target of [2000, 4620, 4620.6, 9000, 9240, 9240.4, 18000]) {
       for (const pct of [0.1, 2, 4, 6]) {
         assert.deepEqual(
           scaleBrioche(R, target, pct),
@@ -163,8 +164,8 @@ test('scaleRecipe never produces NaN on a zero-mass recipe', () => {
 
 test('scaleRecipe output always sums exactly to Math.round(target)', () => {
   const cases = [
-    [{ amounts: FOCACCIA, leaveningKey: 'yeast', baselinePct: 3.6 / 556 * 100 }, 5000, 0.65],
-    [{ amounts: BRIOCHE, leaveningKey: 'yeast', baselinePct: 4 }, 9774.8, 4],
+    [{ amounts: FOCACCIA, leaveningKey: 'yeast', baselinePct: 3.4 / 550 * 100 }, 5000, 0.65],
+    [{ amounts: BRIOCHE, leaveningKey: 'yeast', baselinePct: 4 }, 9240, 4],
     [{ amounts: SOURDOUGH, leaveningKey: 'starter', baselinePct: 18 }, 9000, 18],
     [{ amounts: SOURDOUGH, leaveningKey: 'starter', baselinePct: 18 }, 18100, 25],
   ];
