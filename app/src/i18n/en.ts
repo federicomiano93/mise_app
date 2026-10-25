@@ -952,7 +952,7 @@ export const en = {
   'calc.clientCanSendOrders': '{client} can send orders straight into the app. Anyone with the link can order as this client, so send it to them and no one else.',
   'calc.createALinkAnd': 'Create a link and send it to this client. They will see only their own products, and can order without a password.',
   'calc.thisClientCannotHave': 'This client cannot have an ordering link until it has been saved.',
-  'calc.thisClientCannotOrder': 'This client cannot order through the app yet. The owner or a manager can set that up.',
+  'calc.orderingLinkManagersOnly': 'The owner or a manager looks after this client’s ordering link and sends it to them.',
   // New in Mise 2: the links could not be read, so «Create» is not offered (it could cut off a link that works).
   'calc.orderingLink.failed': 'The ordering links could not be read. Check your connection and open this client again.',
   'calc.copyLink': 'Copy link',

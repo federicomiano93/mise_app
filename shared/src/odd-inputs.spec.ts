@@ -2204,13 +2204,13 @@ describe('catalogue-model: odd inputs', () => {
   agree('filterByName', m.filterByName as AnyFn, l.filterByName as AnyFn, product(FILTER_LISTS, [...ODD, 'bri', 'O', '   ', ' ab ', 'AB', 'ó', 5, { toString: () => 'foc' }]));
 
   const SCALE_RECIPES: readonly unknown[] = [...ODD, 'recipe', 5, RECIPE_BASE, { ingredients: [] }, { ingredients: 'x' }, { ingredients: [null] },
-    { ingredients: [{ label: 'F', grams: 278 }, { label: 'F2', grams: 278 }, { label: 'M', grams: 3 }, { label: 'Y', grams: 3.6 }, { label: 'W', grams: 334 }] },
+    { ingredients: [{ label: 'F', grams: 260 }, { label: 'F2', grams: 290 }, { label: 'M', grams: 4 }, { label: 'Y', grams: 3.4 }, { label: 'W', grams: 340 }] },
     { ingredients: [{ label: 'Flour', grams: 1000, unit: 'g' }, { label: 'Eggs', grams: 2, unit: 'pcs' }, { label: 'Salt', grams: 0, unit: 'to taste' }] },
     { ingredients: [{ label: 'F', grams: 1, unit: 'kg' }, { label: 'W', grams: 1, unit: 'l' }] },
     { ingredients: [{ grams: 'x' }, { grams: 3, unit: 'kg' }, { grams: -2, unit: 'cl' }, { unit: 'mg', grams: 5000 }] },
     { ingredients: [{ label: 'Salt', grams: 5, unit: 'to taste' }, { label: 'Pinch', grams: 1, unit: 'pinch' }] },
     { ingredients: [{ grams: 0.4 }, { grams: 0.4 }, { grams: 0.4 }] }, { ingredients: [{ grams: 1 }, null] }, { ingredients: [{ grams: 1, unit: 'kg' }, undefined] }];
-  const TARGETS: readonly unknown[] = [...PRICE_VALUES.slice(0, 40), 10000, 17500, 17500000, 1, 0.4, 995.6, '2000', 4000];
+  const TARGETS: readonly unknown[] = [...PRICE_VALUES.slice(0, 40), 10000, 17500, 17500000, 1, 0.4, 999.4, '2000', 4000];
   agree('scaleCatalogue', m.scaleCatalogue, l.scaleCatalogue, product(SCALE_RECIPES, TARGETS));
   agree('baseAmounts', m.baseAmounts, l.baseAmounts, product(SCALE_RECIPES));
 
