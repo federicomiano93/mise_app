@@ -52,6 +52,32 @@ test('no Mise 2 package may run code at install, and new versions are saved exac
   }
 });
 
+// ⚠️ ONE ORIGIN, ONE DATABASE ON THE PHONE. Mise 2 is served from the same address as the current
+// app, so both open the SAME IndexedDB: Firestore's offline cache and Auth's record of who is
+// signed in. Two SDK versions on one database is how one app's cache migration breaks the
+// other's — so the npm package is the exact version the current app loads from gstatic, and the
+// two are upgraded together or not at all.
+test('Mise 2\'s Firebase is exactly the SDK version the current app loads', () => {
+  const gstatic = new Set();
+  for (const file of ['js/firebase.js', 'sw.js']) {
+    for (const m of read(file).matchAll(/gstatic\.com\/firebasejs\/(\d+\.\d+\.\d+)\//g)) gstatic.add(m[1]);
+  }
+  assert.equal(gstatic.size, 1, `the current app loads more than one SDK version: ${[...gstatic]}`);
+  const app = JSON.parse(read('app/package.json'));
+  assert.equal(app.dependencies.firebase, [...gstatic][0]);
+});
+
+// An override forces a version deep in the tree (today: a patched @grpc/grpc-js under Firestore,
+// which only Node builds use). It is a version like any other: exact, never a range.
+test('every override is an exact version', () => {
+  for (const dir of ['app', 'shared']) {
+    const pkg = JSON.parse(read(`${dir}/package.json`));
+    for (const [name, version] of Object.entries(pkg.overrides || {})) {
+      assert.match(version, /^\d+\.\d+\.\d+$/, `${dir}: override ${name}@${version} is a range`);
+    }
+  }
+});
+
 test('every Mise 2 dependency is pinned exactly and comes from the npm registry', () => {
   for (const dir of ['app', 'shared']) {
     const pkg = JSON.parse(read(`${dir}/package.json`));

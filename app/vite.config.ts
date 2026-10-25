@@ -24,7 +24,15 @@ export default defineConfig({
     include: ['src/**/*.spec.{ts,tsx}'],
     setupFiles: ['src/testing/setup.ts'],
     // Vitest replaces every CSS file with an empty string unless told otherwise — `?raw`
-    // included — so src/css-modules.spec.ts would check nothing and pass.
-    css: true,
+    // included — so src/css-modules.spec.ts would be handed empty text: its var(--x) check would
+    // pass with nothing to look at, and only its class check and its «tokens.css is not empty»
+    // guards would notice. It reads the files as `?raw` text, so those are processed.
+    //
+    // ⚠️ ONLY THOSE. Applied to a screen, the real stylesheets make jsdom honour the
+    // phone-side `display: none` of the rail and the top bar (jsdom ignores the media query
+    // that shows them), so the accessibility tree a spec queries would no longer contain the
+    // rail. A module imported normally is a proxy that returns each class name, and the specs
+    // see the same DOM at any width.
+    css: { include: [/\.css\?raw$/] },
   },
 });
