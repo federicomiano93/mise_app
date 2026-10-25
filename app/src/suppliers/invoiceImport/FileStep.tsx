@@ -8,7 +8,7 @@ import type { FileVerdict } from './importLog';
 import type { ImportRun } from './importRun';
 import { LogBlock } from './LogBlock';
 import type { LogState } from './LogBlock';
-import { dayWord, invoicesWord, momentWord } from './logWords';
+import { dayWord, elided, invoicesWord, momentWord } from './logWords';
 import styles from './InvoiceImportScreen.module.css';
 
 // The groups that stay closed until opened (parity I86): [selection group, title, the tick-box that puts a product back].
@@ -46,6 +46,7 @@ export function FileStep({
 }: Props) {
   const { t, locale } = useT();
   const inputId = useId();
+  const verdictId = useId();
   // Every invoice of the file was imported before: nothing to read further, and no way on (the person may choose another file).
   const allOld = !run && verdict !== null && verdict.newCount === 0 && verdict.oldCount > 0 ? verdict : null;
   const mixed = run && verdict !== null && verdict.newCount > 0 ? verdict : null;
@@ -85,9 +86,11 @@ export function FileStep({
           {allOldWord(allOld, t, locale)}
         </p>
       ) : null}
-      {mixed ? <p className={styles.note}>{verdictWord(mixed, t, locale)}</p> : null}
+      {mixed ? <p id={verdictId} className={styles.note}>{verdictWord(mixed, t, locale)}</p> : null}
+      {/* The focus lands on the counts line after a read: it carries the verdict above as its description, so a screen reader also
+          says how many invoices were set aside. */}
       {run ? (
-        <p ref={resultRef} role="status" tabIndex={-1} className={`${styles.status} ${styles.ok}`}>
+        <p ref={resultRef} role="status" tabIndex={-1} aria-describedby={mixed ? verdictId : undefined} className={`${styles.status} ${styles.ok}`}>
           {`${t('sup.imp.zip.invoices', { n: run.selection.counts.invoices })} · ${t('sup.imp.file.found.suppliers', { n: run.file.suppliers.length })} · ${t('sup.imp.file.found.ingredients', { n: run.file.ingredients.length })}`}
         </p>
       ) : null}
@@ -104,15 +107,17 @@ function verdictWord(verdict: FileVerdict, t: Say, locale: string): string {
   const fresh = t('sup.imp.file.verdictNew', { n: verdict.newCount });
   const old = t('sup.imp.file.verdictOld', { n: verdict.oldCount });
   if (verdict.firstDate === '') return t('sup.imp.file.verdictNoDate', { invoices, fresh, old });
-  if (verdict.firstDate === verdict.lastDate) return t('sup.imp.file.verdictOneDay', { invoices, day: dayWord(locale, verdict.firstDate), fresh, old });
-  return t('sup.imp.file.verdict', { invoices, from: dayWord(locale, verdict.firstDate), to: dayWord(locale, verdict.lastDate), fresh, old });
+  if (verdict.firstDate === verdict.lastDate) {
+    return elided(locale, t('sup.imp.file.verdictOneDay', { invoices, day: dayWord(locale, verdict.firstDate), fresh, old }));
+  }
+  return elided(locale, t('sup.imp.file.verdict', { invoices, from: dayWord(locale, verdict.firstDate), to: dayWord(locale, verdict.lastDate), fresh, old }));
 }
 
 function allOldWord(verdict: FileVerdict, t: Say, locale: string): string {
   const date = momentWord(locale, verdict.importedAt);
   return date === ''
     ? t('sup.imp.file.allOldNoDate', { n: verdict.oldCount })
-    : t('sup.imp.file.allOld', { n: verdict.oldCount, date });
+    : elided(locale, t('sup.imp.file.allOld', { n: verdict.oldCount, date }));
 }
 
 // What the invoices held that is NOT in this import, each product with a tick-box that puts it back (or, for a remembered

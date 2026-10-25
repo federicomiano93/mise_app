@@ -13,6 +13,16 @@ const MONTH = { month: 'long', year: 'numeric' } as const satisfies Intl.DateTim
 
 const say = (locale: string, date: Date, options: Intl.DateTimeFormatOptions): string => new Intl.DateTimeFormat(locale, options).format(date);
 
+// ⚠️ ITALIAN ELIDES BEFORE A VOWEL SOUND: «dall’8», «all’11», «dell’8», «l’8 ott», «ad agosto». Every sentence of the log puts a
+// preposition right before a day or a month, so the finished Italian sentence is mended here; other languages pass untouched.
+export function elided(locale: string, text: string): string {
+  if (!locale.toLowerCase().startsWith('it')) return text;
+  return text
+    .replace(/\b(dal|al|del) (8|11)\b/g, (_, word: string, day: string) => `${word}l’${day}`)
+    .replace(/\bil (8|11)\b/g, 'l’$1')
+    .replace(/\ba (aprile|agosto|ottobre)\b/g, 'ad $1');
+}
+
 // «1 Mar 2026» for '2026-03-01'; the text itself when it is not a day.
 export function dayWord(locale: string, day: string): string {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
@@ -44,7 +54,7 @@ export function missingWord(t: Say, locale: string, gaps: LogSummary['gaps']): s
     : t('sup.imp.log.gap', { from: monthWord(locale, gap.from), to: monthWord(locale, gap.to) }));
   const only = gaps.length === 1 ? gaps[0] : undefined;
   if (only && only.from === only.to) return t('sup.imp.log.missingOne', { month: word(only) });
-  return t('sup.imp.log.missing', { months: gaps.map(word).join('; ') });
+  return elided(locale, t('sup.imp.log.missing', { months: gaps.map(word).join('; ') }));
 }
 
 // One line of the list of past imports.
@@ -52,9 +62,9 @@ export function entryWord(t: Say, locale: string, record: ImportRecord): string 
   const invoices = invoicesWord(t, record.invoiceIds.length);
   const date = momentWord(locale, record.importedAt);
   if (record.firstDate === record.lastDate) {
-    return t('sup.imp.log.entryOneDay', { file: record.fileName, date, invoices, day: dayWord(locale, record.firstDate) });
+    return elided(locale, t('sup.imp.log.entryOneDay', { file: record.fileName, date, invoices, day: dayWord(locale, record.firstDate) }));
   }
-  return t('sup.imp.log.entry', {
+  return elided(locale, t('sup.imp.log.entry', {
     file: record.fileName, date, invoices, from: dayWord(locale, record.firstDate), to: dayWord(locale, record.lastDate),
-  });
+  }));
 }

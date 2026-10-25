@@ -145,7 +145,8 @@ describe('choosing a file', () => {
     await screen.findByText(/^Invoices loaded:/);
     await chooseFiles(user, twoInvoices());
     expect(screen.getByText(/^This file: 2 invoices from 1 \w+ 2026 to 10 \w+ 2026 — 1 new, 1 already imported$/)).toBeInTheDocument();
-    expect(screen.getByText('1 invoice read · 1 supplier found · 1 ingredient found')).toBeInTheDocument();
+    // The counts line, where the focus lands, carries the verdict as its description (a screen reader says both).
+    expect(screen.getByText('1 invoice read · 1 supplier found · 1 ingredient found')).toHaveAccessibleDescription(/^This file: 2 invoices .* 1 new, 1 already imported$/);
     expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
   });
 

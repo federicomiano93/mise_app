@@ -263,6 +263,28 @@ describe('the rows not seen through (unfinishedOf)', () => {
     expect([...unfinished].sort()).toEqual(['b', 'c', 'd', 'g']);
   });
 
+  it('a row whose price was held for a look is unfinished although its result says «skipped»', () => {
+    const unfinished = unfinishedOf([entry('h'), entry('s')], [
+      { key: 'h', name: 'H', outcome: 'skipped' },
+      { key: 's', name: 'S', outcome: 'skipped' },
+    ], [], new Set(['h']));
+    expect([...unfinished]).toEqual(['h']);
+  });
+
+  it('a run with a price left «for now» (the default answer to a price that needs a look) keeps that row unfinished', async () => {
+    // An ingredient already in Mise whose newest invoice price is unverified: the row asks «This price?» and the default
+    // answer leaves it for now. A new product beside it is created.
+    const stored: StoredDoc = { id: 'ing-9', name: 'Due', supplierId: 'sup-1', supplierCode: 'D2', weight: '10 kg', kind: 'ingredient', invoiceName: 'DUE' };
+    const source = fakeImportSource({ ingredients: [stored] });
+    const file = fileOf(
+      product({ key: 'k1', name: 'Uno' }),
+      product({ key: 'k2', name: 'Due', supplierCode: 'D2', latestUnverified: true, prices: [point({ invoiceId: '18000000002' })] }),
+    );
+    const { outcome, entries } = await run(source, file, { stored: [stored] });
+    expect(entries.find(e => e.planned.key === 'k2')?.row.held).toBe(true);
+    expect([...outcome.unfinishedKeys]).toEqual(['k2']);
+  });
+
   it('a row already in Mise that a stop passed over is unfinished although its result says «unchanged»', () => {
     const unfinished = unfinishedOf([entry('q')], [{ key: 'q', name: 'Q', outcome: 'unchanged' }], [entry('q')]);
     expect([...unfinished]).toEqual(['q']);

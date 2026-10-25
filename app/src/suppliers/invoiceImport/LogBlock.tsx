@@ -3,7 +3,7 @@ import { TriangleAlert } from 'lucide-react';
 import { useT } from '../../i18n/useT';
 import { pastImports, summarizeLog } from './importLog';
 import type { ImportRecord } from './importLog';
-import { dayWord, entryWord, missingWord } from './logWords';
+import { dayWord, elided, entryWord, missingWord } from './logWords';
 import styles from './InvoiceImportScreen.module.css';
 
 // What the screen knows of the import log: still being read, could not be read, or the records.
@@ -29,7 +29,7 @@ export function LogBlock({ log }: { log: LogState }) {
       {summary ? (
         <>
           <p className={styles.logRange}>
-            {t('sup.imp.log.range', { from: dayWord(locale, summary.firstDate), to: dayWord(locale, summary.lastDate) })}
+            {elided(locale, t('sup.imp.log.range', { from: dayWord(locale, summary.firstDate), to: dayWord(locale, summary.lastDate) }))}
           </p>
           {summary.gaps.length > 0 ? (
             <p className={styles.logMissing}>

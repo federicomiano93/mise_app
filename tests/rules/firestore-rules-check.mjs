@@ -3087,6 +3087,13 @@ async function roles() {
     () => wholeWrite(`${IMP}/imp2`, imported, asAccount(ALICE)));
   await expectAllowed('a manager reads the record',
     readAs(MAYA, `${IMP}/imp1`));
+  // The screen reads the whole list (a collection query), not one record.
+  await expectAllowed('a manager LISTS the records (what the import screen reads)',
+    () => fetch(`${FS}/${IMP}`, { headers: asAccount(MAYA) }));
+  await expectDenied('an employee cannot list them',
+    () => fetch(`${FS}/${IMP}`, { headers: asAccount(SAM) }));
+  await expectDenied('a member of ANOTHER venue cannot list them',
+    () => fetch(`${FS}/${IMP}`, { headers: asAccount(BOB) }));
   await expectDenied('an employee cannot read it',
     readAs(SAM, `${IMP}/imp1`));
   await expectDenied('a member of ANOTHER venue cannot read it',

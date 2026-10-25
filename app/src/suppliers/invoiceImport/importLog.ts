@@ -175,11 +175,11 @@ export function fileVerdict(built: ImportResult, records: readonly ImportRecord[
 }
 
 // The rows of step 3 that were NOT seen through when the screen closed with «Done» and nothing to write: every row is either
-// skipped by the person or already in Mise, except a row the plan could not handle (an error) or one in a state this file does
-// not know — left out, never guessed.
+// skipped by the person or already in Mise, except a row whose price was held for a look («Lascia per ora»: it comes back on the
+// next load), a row the plan could not handle (an error) or one in a state this file does not know — left out, never guessed.
 export function unfinishedWithoutRun(entries: readonly PlanEntry[]): Set<string> {
   const done = new Set(['skipped', 'unchanged']);
-  return new Set(entries.filter(entry => !done.has(entry.row.status)).map(entry => entry.planned.key));
+  return new Set(entries.filter(entry => !done.has(entry.row.status) || entry.row.held === true).map(entry => entry.planned.key));
 }
 
 // The picked files' names as the record keeps them: a personal tax code blanked (the SDI names a sole trader's file after it),

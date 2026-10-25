@@ -742,8 +742,10 @@ re-import writes nothing thanks to the create-only `inv-<SDI>-<line>` points, I1
   never edited; `firestore.rules`), owner/manager with Food cost like `invoice-decisions`: `fileName` (the picked files' names, a
   personal tax code blanked, ≤500), `importedAt`, `firstDate`/`lastDate` (the invoices' own `Data`, never the upload day),
   `months[]`, `invoiceIds[]`. **No «who imported»** (P13). Rules tests in `tests/rules/firestore-rules-check.mjs`. ⚠️ The rules
-  must be DEPLOYED before Mise 2 goes live, or every record is refused (the import itself still works; the summary says the file
-  could not be added to the list).
+  must be DEPLOYED before Mise 2 goes live: without them the default-deny refuses the READ of the log, and the screen refuses
+  every file (it cannot tell new invoices from old), so nobody can import in Mise 2. The block only adds a collection, so an
+  early deploy is safe for the current app — from a branch carrying the latest `main` (this one sits on a stack of unmerged PRs
+  whose rules it also carries).
 - **An invoice is known by its own id, never by the file name** (`docId` = the SDI id; a renamed or merged zip is the same
   invoices). The reader sets aside every invoice already in the log right after reading it, BEFORE any product, price or supplier
   is made of it — a Mise-2-only option `alreadyImported` of `shared/src/invoice-zip/build-import.ts` (without it the result is the
@@ -751,9 +753,11 @@ re-import writes nothing thanks to the create-only `inv-<SDI>-<line>` points, I1
   price points stay the second guard.
 - **What a run records** (`app/src/suppliers/invoiceImport/importLog.ts` `logEntryOf`): the file's NEW invoices less every invoice
   an ingredient row holds a price of when that row was not seen through — failed, never reached because the run stopped, price
-  changes not recorded, a chosen name not saved (`ingredientsRun.ts` `unfinishedKeys`). A record says «done», never «tried»: loading
-  the same file again offers the unfinished invoices again. «Fine» with nothing to write records the file too (a row the plan could
-  not handle stays out). Rows the person skipped count as handled: the import «skips already-imported invoices entirely», his words.
+  changes not recorded, a chosen name not saved, or a price HELD for a look — «Lascia per ora», the default answer to «Questo
+  prezzo?», or a reason only the run's fresh read found (`ingredientsRun.ts` `unfinishedKeys`). A record says «done», never
+  «tried»: loading the same file again offers the unfinished invoices again. «Fine» with nothing to write records the file too (a
+  held row or one the plan could not handle stays out). Rows the person skipped («Non importare», a product or supplier left
+  unticked) count as handled: the import «skips already-imported invoices entirely», his words.
 - **The screen** (step 1): at the top the log — «Fatture caricate: dal X al Y», «Mancano: da <mese> a <mese>» for the months
   strictly between the first and last imported invoice that no imported invoice falls in (a month before the first or after the
   last is not missing: the log cannot know where the books start), and every past import newest first, «file, data — N fatture dal X
@@ -769,7 +773,7 @@ re-import writes nothing thanks to the create-only `inv-<SDI>-<line>` points, I1
 - Driven: `algprobe/mise-drive/drive-mise2-suppliers.mjs <url> <port> i` — IT owner at 1024/360/296 with FAKE zips only (empty
   log said; the verdict before any write, reading writes nothing; one record read back — file, SDI ids, dates, month, stamp, no
   person; the same file again «già importate … niente di nuovo», no Next, nothing written; a renamed mix «1 nuova, 1 già importata»,
-  only the new invoice recorded, three price points not four; «Mancano: da luglio 2026 a agosto 2026», newest import first; the tag
+  only the new invoice recorded, three price points not four; «Mancano: da luglio 2026 ad agosto 2026», newest import first; the tag
   on the imported item and its supplier only; axe clean, every control ≥44px, no sideways scroll, no console errors) and in English
   (the venue's language switched for the run: range, «Missing: April 2026», the past import, all old, the verdict).
 

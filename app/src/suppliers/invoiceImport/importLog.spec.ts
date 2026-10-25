@@ -184,4 +184,9 @@ describe('what a run may record', () => {
     expect([...unfinishedWithoutRun([entry('a', 'skipped'), entry('b', 'unchanged'), entry('c', 'error'), entry('d', 'mystery')])])
       .toEqual(['c', 'd']);
   });
+
+  it('«Done» with nothing to write: a row whose price was held for a look («Lascia per ora») is unfinished, so it comes back', () => {
+    const held = { planned: { key: 'h' }, row: { status: 'skipped', held: true } } as unknown as PlanEntry;
+    expect([...unfinishedWithoutRun([entry('a', 'skipped'), held])]).toEqual(['h']);
+  });
 });

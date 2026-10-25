@@ -5,7 +5,7 @@ import { format } from '../../i18n/i18n';
 import type { Language } from '../../i18n/i18n';
 import { localeOf } from '../../i18n/i18n';
 import type { ImportRecord } from './importLog';
-import { dayWord, entryWord, invoicesWord, missingWord, momentWord, monthWord } from './logWords';
+import { dayWord, elided, entryWord, invoicesWord, missingWord, momentWord, monthWord } from './logWords';
 import type { Say } from './logWords';
 
 const sayIn = (lang: Language): Say => (key, params) => format(lang, (lang === 'it' ? italian : en)[key], params);
@@ -18,6 +18,16 @@ const record = (over: Partial<ImportRecord>): ImportRecord => ({
 });
 
 describe('the import log words', () => {
+  it('elides the Italian prepositions before a vowel sound, and touches no other language', () => {
+    expect(entryWord(sayIn('it'), IT, record({ firstDate: '2026-03-08', lastDate: '2026-04-11', importedAt: '2026-10-08T12:00:00.000Z' })))
+      .toMatch(/^fatture.zip, 8 ott 2026 — 2 fatture dall’8 mar 2026 all’11 apr 2026$/);
+    expect(entryWord(sayIn('it'), IT, record({ firstDate: '2026-03-08', lastDate: '2026-03-08' }))).toMatch(/2 fatture dell’8 mar 2026$/);
+    expect(missingWord(sayIn('it'), IT, [{ from: '2026-07', to: '2026-08' }])).toBe('Mancano: da luglio 2026 ad agosto 2026');
+    expect(missingWord(sayIn('it'), IT, [{ from: '2026-03', to: '2026-04' }])).toBe('Mancano: da marzo 2026 ad aprile 2026');
+    expect(elided(IT, 'già importate il 8 ott 2026; il 18 ott; dal 1 mar al 28 mar')).toBe('già importate l’8 ott 2026; il 18 ott; dal 1 mar al 28 mar');
+    expect(elided(EN, 'from 8 Mar to 11 Apr; a agosto')).toBe('from 8 Mar to 11 Apr; a agosto');
+  });
+
   it('says a day without the UTC shift (the first of a month stays the first)', () => {
     expect(dayWord(EN, '2026-03-01')).toBe('1 Mar 2026');
     expect(dayWord(IT, '2026-03-01')).toMatch(/^1 mar/);
