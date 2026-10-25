@@ -59,13 +59,16 @@ describe('the suggestion list under a row’s name', () => {
     expect(optionTexts().at(-2)).toBe('See all (7)');
   });
 
-  it('⚠️ never offers the recipe itself, a switched-off ingredient or packaging', async () => {
+  it('⚠️ never offers the recipe itself or packaging; a switched-off ingredient comes LAST, marked «Not in use» (3e-5b)', async () => {
     const off = { id: 'ing-off', name: 'Farina vecchia', active: false };
     const box = { id: 'ing-box', name: 'Farina sacco', kind: 'packaging' };
     const { region, user } = await openEditor('/recipes/r1/edit', { recipes: [FOCACCIA, FARINATA], ingredients: [FLOUR, off, box], suppliers: SUPPLIERS });
     await user.clear(ingredientBoxes(region)[0]!);
     await user.type(ingredientBoxes(region)[0]!, 'fa');
-    expect(optionTexts()).toEqual(['Caputo 25 kg  ·  Rossi', 'Farinata Recipe', '+ Add «fa» as an ingredient']);
+    expect(optionTexts()).toEqual(['Caputo 25 kg  ·  Rossi', 'Farinata Recipe', 'Farina vecchia Not in use', '+ Add «fa» as an ingredient']);
+    expect(options()[2]).toHaveAccessibleName('Farina vecchia Not in use');
+    await user.click(options()[2]!);
+    expect(ingredientBoxes(region)[0]).toHaveValue('Farina vecchia');
     await user.clear(ingredientBoxes(region)[0]!);
     await user.type(ingredientBoxes(region)[0]!, 'foc');
     expect(optionTexts()).toEqual(['+ Add «foc» as an ingredient']);
@@ -164,6 +167,19 @@ describe('the full chooser', () => {
     expect(ingredientBoxes(region)[0]).toHaveValue('Farinata');
     expect(within(region).getByRole('button', { name: '→ Farinata · Recipe' })).toBeInTheDocument();
     await waitFor(() => { expect(amountBoxes(region)[0]).toHaveFocus(); });
+  });
+
+  it('lists a switched-off ingredient LAST under «Not in use», after the recipes, and picks it like any other (3e-5b)', async () => {
+    const off = { id: 'ing-off', name: 'Farina vecchia', weight: '10 kg', active: false };
+    const { region, user } = await openEditor('/recipes/r1/edit', { recipes: [FOCACCIA, FARINATA], ingredients: [FLOUR, off], suppliers: SUPPLIERS });
+    await user.click(within(region).getByRole('button', { name: '+ Link to an ingredient' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'Link to' }));
+    expect(dialog.getAllByRole('heading', { level: 3 }).map(node => node.textContent)).toEqual(['Ingredients', 'Recipes', 'Not in use']);
+    const section = dialog.getByRole('heading', { name: 'Not in use' }).closest('section') as HTMLElement;
+    expect(within(section).getAllByRole('button').map(node => node.textContent)).toEqual(['Farina vecchia 10 kg']);
+    await user.click(within(section).getByRole('button', { name: 'Farina vecchia 10 kg' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
+    expect(ingredientBoxes(region)[0]).toHaveValue('Farina vecchia');
   });
 
   it('⚠️ removes the link (and keeps the name) only when asked, and dismissing changes NOTHING', async () => {

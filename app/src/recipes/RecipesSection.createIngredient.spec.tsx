@@ -142,12 +142,18 @@ describe('the door in the suggestions', () => {
     }
   });
 
-  it('is present when the only match is switched off, or is packaging', async () => {
+  it('is present when the only match is packaging', async () => {
+    const view = await open('/recipes/new', { ingredients: [{ id: 'box', name: 'Rye flour', kind: 'packaging' }] });
+    await typeInto(view, 'Rye flour');
+    expect(optionTexts()).toEqual([CREATE]);
+  });
+
+  it('⚠️ is NOT offered when the name is a switched-off ingredient: the list offers it, last, marked «Not in use» (3e-5b)', async () => {
     const view = await open('/recipes/new', {
       ingredients: [{ id: 'off', name: 'Rye flour', active: false }, { id: 'box', name: 'Rye flour', kind: 'packaging' }],
     });
     await typeInto(view, 'Rye flour');
-    expect(optionTexts()).toEqual([CREATE]);
+    expect(optionTexts()).toEqual(['Rye flour Not in use']);
   });
 });
 
