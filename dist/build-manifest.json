@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "a8d6af30ea4e29e0",
-      "mapSha": "948275030eeae82c",
+      "sha": "d9b2eadf5efcba3e",
+      "mapSha": "98f82be39f80fbc2",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -34,7 +34,7 @@
         "js/calculator-recipe-source.js": "174cab8b24db7c8a",
         "js/calculator-recipe-text.js": "ee635ea31fc7eef8",
         "js/calculator-render.js": "81322338855d184a",
-        "js/calculator-settings.js": "4fdb320e42a6e3fe",
+        "js/calculator-settings.js": "7679a428a3806209",
         "js/calculator-whatsapp-settings.js": "11892c6efe27a510",
         "js/catalogue/catalogue-model.js": "3641bea33600e7c8",
         "js/catalogue/guided-model.js": "6a7e0f736c63b6e6",
@@ -373,10 +373,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "a50583697ed3ca7a",
-      "mapSha": "1175603078a925cb",
+      "sha": "6aa08ff56bd6a4d3",
+      "mapSha": "331e9462868a60c3",
       "inputs": {
-        "js/i18n.js": "16e6cdeb5bca93f9"
+        "js/i18n.js": "e3fc5f6fb4af87d9"
       }
     },
     "dist/index.js": {
