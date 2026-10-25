@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "a8d6af30ea4e29e0",
-      "mapSha": "948275030eeae82c",
+      "sha": "943471e19aa2f2c1",
+      "mapSha": "38038e7decb6acdd",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -24,17 +24,17 @@
         "js/calc.js": "81dbc03c55165730",
         "js/calculator-catalogue-link.js": "21b6d2cb54f087b7",
         "js/calculator-client-orders.js": "75b6b34cf168ed73",
-        "js/calculator-config-store.js": "b4ee0932871e785e",
+        "js/calculator-config-store.js": "981b8d5b57392ff1",
         "js/calculator-config.js": "792725c78baa042d",
         "js/calculator-confirm.js": "88458e4102b3c35f",
-        "js/calculator-dough-math.js": "9a9270b860489e03",
+        "js/calculator-dough-math.js": "9a9ecfed7d875c41",
         "js/calculator-icons.js": "77b9acabd880525f",
         "js/calculator-order-prefill.js": "c1403faca4eb8ca3",
         "js/calculator-order-text.js": "ff3a743a90bfda88",
         "js/calculator-recipe-source.js": "174cab8b24db7c8a",
         "js/calculator-recipe-text.js": "ee635ea31fc7eef8",
         "js/calculator-render.js": "81322338855d184a",
-        "js/calculator-settings.js": "4fdb320e42a6e3fe",
+        "js/calculator-settings.js": "7679a428a3806209",
         "js/calculator-whatsapp-settings.js": "11892c6efe27a510",
         "js/catalogue/catalogue-model.js": "3641bea33600e7c8",
         "js/catalogue/guided-model.js": "6a7e0f736c63b6e6",
@@ -52,7 +52,7 @@
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "1c818a81166fffec",
         "js/firebase-target.js": "974d7726c8d1dda4",
-        "js/firebase.js": "e1a4a779ee8cc74b",
+        "js/firebase.js": "01568ed1c08ea4bf",
         "js/guard.js": "e2d7748bfefce6fb",
         "js/help-button.js": "e3da47ba146887f1",
         "js/help-content.js": "de6cf776b71d0842",
@@ -117,7 +117,7 @@
         "js/supplier-label.js": "06277b76d92b5273",
         "js/sw-update.js": "551895bb384b8474",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
-        "js/update-gate.js": "4abdd66640ea294d",
+        "js/update-gate.js": "6e22f2191ce371e8",
         "js/usage-model.js": "d6703bc466f26817",
         "js/usage.js": "5c4d5ace756fcfa3",
         "js/vendor/sortable.esm.js": "6c9b20f666b97a0d",
@@ -135,8 +135,8 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "b0f3512f752e05af",
-      "mapSha": "949a2f57602ec52b",
+      "sha": "bb52df3f5d948ae6",
+      "mapSha": "bba543a1742c6780",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -187,7 +187,7 @@
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "1c818a81166fffec",
         "js/firebase-target.js": "974d7726c8d1dda4",
-        "js/firebase.js": "e1a4a779ee8cc74b",
+        "js/firebase.js": "01568ed1c08ea4bf",
         "js/form-dirty.js": "0a9656342b7fe22a",
         "js/guard.js": "e2d7748bfefce6fb",
         "js/help-button.js": "e3da47ba146887f1",
@@ -255,7 +255,7 @@
         "js/supplier-record-form.js": "b7f619febb186642",
         "js/sw-update.js": "551895bb384b8474",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
-        "js/update-gate.js": "4abdd66640ea294d",
+        "js/update-gate.js": "6e22f2191ce371e8",
         "js/usage-model.js": "d6703bc466f26817",
         "js/usage.js": "5c4d5ace756fcfa3",
         "js/vat-number.js": "7dda6577bbf5aedf",
@@ -273,8 +273,8 @@
       }
     },
     "dist/foodcost.js": {
-      "sha": "a1a0a3df4f3a18c8",
-      "mapSha": "68af2f8c7d9938ad",
+      "sha": "49b5bacf5c469423",
+      "mapSha": "7e45217b4a66d502",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -293,7 +293,7 @@
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "1c818a81166fffec",
         "js/firebase-target.js": "974d7726c8d1dda4",
-        "js/firebase.js": "e1a4a779ee8cc74b",
+        "js/firebase.js": "01568ed1c08ea4bf",
         "js/foodcost/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/foodcost/crossing-route.js": "ab3dc4743da26c00",
         "js/foodcost/dom.js": "02aea52bb04819e8",
@@ -363,7 +363,7 @@
         "js/supplier-label.js": "06277b76d92b5273",
         "js/sw-update.js": "551895bb384b8474",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
-        "js/update-gate.js": "4abdd66640ea294d",
+        "js/update-gate.js": "6e22f2191ce371e8",
         "js/usage-model.js": "d6703bc466f26817",
         "js/usage.js": "5c4d5ace756fcfa3",
         "js/vat-rates.js": "1c08624a241026df",
@@ -373,15 +373,15 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "a50583697ed3ca7a",
-      "mapSha": "1175603078a925cb",
+      "sha": "6aa08ff56bd6a4d3",
+      "mapSha": "331e9462868a60c3",
       "inputs": {
-        "js/i18n.js": "16e6cdeb5bca93f9"
+        "js/i18n.js": "e3fc5f6fb4af87d9"
       }
     },
     "dist/index.js": {
-      "sha": "c981388bad260c29",
-      "mapSha": "2e588e9b8ec28db0",
+      "sha": "72f7211cbf6f0be6",
+      "mapSha": "9de8d166e531414a",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -403,7 +403,7 @@
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "1c818a81166fffec",
         "js/firebase-target.js": "974d7726c8d1dda4",
-        "js/firebase.js": "e1a4a779ee8cc74b",
+        "js/firebase.js": "01568ed1c08ea4bf",
         "js/help-button.js": "e3da47ba146887f1",
         "js/help-content.js": "de6cf776b71d0842",
         "js/hold-to-zoom.js": "f4f0162c9aefecdd",
@@ -479,7 +479,7 @@
         "js/supplier-label.js": "06277b76d92b5273",
         "js/sw-update.js": "551895bb384b8474",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
-        "js/update-gate.js": "4abdd66640ea294d",
+        "js/update-gate.js": "6e22f2191ce371e8",
         "js/usage-model.js": "d6703bc466f26817",
         "js/usage.js": "5c4d5ace756fcfa3",
         "js/vendor/sortable.esm.js": "6c9b20f666b97a0d",
@@ -509,8 +509,8 @@
       }
     },
     "dist/inventory.js": {
-      "sha": "f275c523ad47189a",
-      "mapSha": "f21bb99a1bce647f",
+      "sha": "50d445756cd9d6e5",
+      "mapSha": "dabe618109d036d6",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -526,7 +526,7 @@
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "1c818a81166fffec",
         "js/firebase-target.js": "974d7726c8d1dda4",
-        "js/firebase.js": "e1a4a779ee8cc74b",
+        "js/firebase.js": "01568ed1c08ea4bf",
         "js/guard.js": "e2d7748bfefce6fb",
         "js/help-button.js": "e3da47ba146887f1",
         "js/help-content.js": "de6cf776b71d0842",
@@ -589,7 +589,7 @@
         "js/supplier-label.js": "06277b76d92b5273",
         "js/sw-update.js": "551895bb384b8474",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
-        "js/update-gate.js": "4abdd66640ea294d",
+        "js/update-gate.js": "6e22f2191ce371e8",
         "js/usage-model.js": "d6703bc466f26817",
         "js/usage.js": "5c4d5ace756fcfa3",
         "js/venue-features.js": "d1dd442e6767bba8",
@@ -610,8 +610,8 @@
       }
     },
     "dist/order.js": {
-      "sha": "c067df3c69595f87",
-      "mapSha": "3bcaf1ab081acc8f",
+      "sha": "08f172a5250e94ee",
+      "mapSha": "329aef652f10b25e",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/calculator-config.js": "792725c78baa042d",
@@ -623,7 +623,7 @@
         "js/client-orders/order-main.js": "3779235de09187d6",
         "js/currency.js": "ab379ca69bc00b84",
         "js/firebase-target.js": "974d7726c8d1dda4",
-        "js/firebase.js": "e1a4a779ee8cc74b",
+        "js/firebase.js": "01568ed1c08ea4bf",
         "js/i18n-dom.js": "6e9d8700a6b5db94",
         "js/keyboard-done.js": "571c769004340cf9",
         "js/local-data.js": "c6dfd9f3ee09711a",
@@ -635,7 +635,7 @@
         "js/roles.js": "e98863032b2f2d54",
         "js/same-data.js": "f86f5defaed51eaf",
         "js/sections.js": "3c8ee410aa212b2c",
-        "js/update-gate.js": "4abdd66640ea294d"
+        "js/update-gate.js": "6e22f2191ce371e8"
       }
     },
     "dist/orders.css": {
@@ -645,8 +645,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "0cca156306e06bfa",
-      "mapSha": "f26e8708bd4e2aaf",
+      "sha": "efe796f2ee45a627",
+      "mapSha": "acb39098a0202bbc",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -666,7 +666,7 @@
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "1c818a81166fffec",
         "js/firebase-target.js": "974d7726c8d1dda4",
-        "js/firebase.js": "e1a4a779ee8cc74b",
+        "js/firebase.js": "01568ed1c08ea4bf",
         "js/form-dirty.js": "0a9656342b7fe22a",
         "js/help-button.js": "e3da47ba146887f1",
         "js/help-content.js": "de6cf776b71d0842",
@@ -777,7 +777,7 @@
         "js/supplier-record-form.js": "b7f619febb186642",
         "js/sw-update.js": "551895bb384b8474",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
-        "js/update-gate.js": "4abdd66640ea294d",
+        "js/update-gate.js": "6e22f2191ce371e8",
         "js/usage-model.js": "d6703bc466f26817",
         "js/usage.js": "5c4d5ace756fcfa3",
         "js/vat-number.js": "7dda6577bbf5aedf",
@@ -795,8 +795,8 @@
       }
     },
     "dist/pastries.js": {
-      "sha": "6e4cab91c6fe8523",
-      "mapSha": "8323779ef63af65d",
+      "sha": "b110882df5cb763a",
+      "mapSha": "3fd2d50ec8258ab2",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -812,7 +812,7 @@
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "1c818a81166fffec",
         "js/firebase-target.js": "974d7726c8d1dda4",
-        "js/firebase.js": "e1a4a779ee8cc74b",
+        "js/firebase.js": "01568ed1c08ea4bf",
         "js/guard.js": "e2d7748bfefce6fb",
         "js/help-button.js": "e3da47ba146887f1",
         "js/help-content.js": "de6cf776b71d0842",
@@ -849,7 +849,7 @@
         "js/pastries/dom.js": "247525e429f4ec4a",
         "js/pastries/firebase-pastries.js": "18a4973c36f3391f",
         "js/pastries/pastries-day.js": "118c5d1cd60f777c",
-        "js/pastries/pastries-editor.js": "46797e4a563fdca9",
+        "js/pastries/pastries-editor.js": "467b20344a3066e4",
         "js/pastries/pastries-lock.js": "2a6043cb6111bb9a",
         "js/pastries/pastries-log-model.js": "de0511e490f1eecc",
         "js/pastries/pastries-logs-store.js": "e3555053c1b80b2a",
@@ -878,7 +878,7 @@
         "js/supplier-label.js": "06277b76d92b5273",
         "js/sw-update.js": "551895bb384b8474",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
-        "js/update-gate.js": "4abdd66640ea294d",
+        "js/update-gate.js": "6e22f2191ce371e8",
         "js/usage-model.js": "d6703bc466f26817",
         "js/usage.js": "5c4d5ace756fcfa3",
         "js/venue-features.js": "d1dd442e6767bba8",
@@ -899,8 +899,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "856077d296f31be7",
-      "mapSha": "305982ccbf54510f",
+      "sha": "a20d57f3a705d048",
+      "mapSha": "f2ce886ecf298f6c",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -919,7 +919,7 @@
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "1c818a81166fffec",
         "js/firebase-target.js": "974d7726c8d1dda4",
-        "js/firebase.js": "e1a4a779ee8cc74b",
+        "js/firebase.js": "01568ed1c08ea4bf",
         "js/form-dirty.js": "0a9656342b7fe22a",
         "js/help-button.js": "e3da47ba146887f1",
         "js/help-content.js": "de6cf776b71d0842",
@@ -960,7 +960,7 @@
         "js/orders/invoice-import-data.js": "cb7f4d414f95a8f0",
         "js/orders/invoice-import-model.js": "4d014b59e5e4081b",
         "js/orders/invoice-import-plan.js": "7dcfdd2b03d1161c",
-        "js/orders/invoice-import-screen.js": "6b0ff01221201c5a",
+        "js/orders/invoice-import-screen.js": "c86593a34a44a087",
         "js/orders/invoice-zip/build-import.js": "ecbf5f25ff58bc73",
         "js/orders/invoice-zip/classify.js": "4839e973bcb0eaa9",
         "js/orders/invoice-zip/fatturapa.js": "8b0a407b2302b957",
@@ -1017,7 +1017,7 @@
         "js/supplier-record-form.js": "b7f619febb186642",
         "js/sw-update.js": "551895bb384b8474",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
-        "js/update-gate.js": "4abdd66640ea294d",
+        "js/update-gate.js": "6e22f2191ce371e8",
         "js/usage-model.js": "d6703bc466f26817",
         "js/usage.js": "5c4d5ace756fcfa3",
         "js/vat-number.js": "7dda6577bbf5aedf",

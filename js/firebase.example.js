@@ -888,12 +888,14 @@ export function readOldLogsOnce() {
 // js/calculator-config.js. See firestore.rules.
 
 // Subscribe to the config document in real time. onChange receives the raw data
-// object, or null when the document does not exist yet (fresh project).
+// object, or null when the document does not exist yet (fresh project), and whether
+// the answer came from Firestore's offline copy (see js/firebase.js).
 export function watchCalculatorConfig(onChange) {
   authReady.then(() => {
     onSnapshot(
       doc(db, pathFor('config'), 'calculator'),
-      snap => onChange(snap.exists() ? snap.data() : null),
+      { includeMetadataChanges: true },
+      snap => onChange(snap.exists() ? snap.data() : null, snap.metadata.fromCache),
       err => { console.error('Config listener failed:', err); },
     );
   });

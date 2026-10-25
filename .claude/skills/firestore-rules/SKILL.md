@@ -24,7 +24,8 @@ The full data model — every collection and field, with the reason behind each 
 - `canManage(lid, section)` = `canUse` + role is `'owner'` or `'manager'`. Among others it
   guards DELETING suppliers, ingredients, recipes, products, client menus; WRITING
   `config/orders`, `config/labels`, `ingredient-prices`, `client-accounts`; and even
-  READING `foodcost-settings`. Always read the block itself — it is not only a delete gate. ⚠️ Two tiers only: hiring lives in
+  READING `foodcost-settings` and `client-accounts` (its `linkToken` is the ordering account's
+  password — the account itself reads its own). Always read the block itself — it is not only a delete gate. ⚠️ Two tiers only: hiring lives in
   `functions/onboarding.js`, never in the rules.
 - `cardAccess(lid, section, card)` → `'manage' | 'staff' | 'none'` — the MONEY screens
   (Food cost, Magazzino). An employee gets `'staff'` only where the venue set
