@@ -41,12 +41,13 @@ describe.each([
   });
 
   test('a normal ingredient stays one line', () => {
-    const single = m.buildRecipeText('Brioche', [{ name: 'Water', grams: 1575 }], 1575);
+    const single = m.buildRecipeText('Brioche', [{ name: 'Water', grams: 1500 }], 1500);
     expect(single.split('\n').length).toBe(3); // title + separator + one line
   });
 
   test('grams are rounded the same way the screen rounds them', () => {
-    expect(m.buildRecipeText('Brioche', [{ name: 'Yeast', grams: 127.4 }], 3000)).toMatch(/Yeast:\s+127 g/);
+    // 118.6 is an invented fractional amount: it must round to a whole gram on screen.
+    expect(m.buildRecipeText('Brioche', [{ name: 'Yeast', grams: 118.6 }], 3000)).toMatch(/Yeast:\s+119 g/);
     expect(m.buildRecipeText('Brioche', [{ name: 'Yeast', grams: 4.5 }], 3000)).toMatch(/Yeast:\s+5 g/);
   });
 
