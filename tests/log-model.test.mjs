@@ -13,10 +13,10 @@ import {
 import { computeTarget, getRecipeById, pairId } from '../js/calculator-config.js';
 
 // ⚠️ THE BAKERY'S DATA IS A FIXTURE NOW, NOT THE APP'S DEFAULT (13 Aug 2026).
-// These assertions run through The Italian Club Bakery's own clients, products
+// These assertions run through an invented bakery's clients, products
 // and formulas — including the ones proving the config-driven scaler is
-// byte-identical to the three hand-written scalers it replaced. Every number is
-// unchanged; only where it is kept has moved, out of js/ and into tests/, so that
+// byte-identical to the three hand-written scalers it replaced. The numbers are
+// invented (audit, 25 Oct 2026); the fixture lives in tests/, out of js/, so that
 // a customer who buys the app no longer opens it holding somebody else's recipes.
 import { BAKERY_CONFIG } from './fixtures/bakery-config.mjs';
 
@@ -48,7 +48,7 @@ test('buildSheet: orders total = Σ qty×weightG + extra; names the recipe + par
 });
 
 test('buildSheet: ingredient grams sum exactly to the rounded total', () => {
-  const sheet = buildSheet({ recipe: FOCACCIA, leaveningPct: 0.65, items: [{ id: 'a', name: 'X', qty: 10, weightG: 151 }] });
+  const sheet = buildSheet({ recipe: FOCACCIA, leaveningPct: 0.65, items: [{ id: 'a', name: 'X', qty: 10, weightG: 160 }] });
   assert.equal(sheet.ingredients.reduce((s, r) => s + r.grams, 0), sheet.total_g);
   assert.equal(sheet.ingredients.length, 9);
   assert.equal(sheet.ingredients[0].name, 'Flour uniqua blue');
@@ -78,8 +78,8 @@ test('buildSheet: matches the live computeTarget for the same quantities', () =>
   const sheet = buildSheet({
     recipe: FOCACCIA, leaveningPct: 0.65,
     items: [
-      { id: 'f-pizze', name: 'Pizzas', qty: 4, weightG: 201 },
-      { id: 'f-focacce', name: 'Focaccias', qty: 2, weightG: 181 },
+      { id: 'f-pizze', name: 'Pizzas', qty: 4, weightG: 210 },
+      { id: 'f-focacce', name: 'Focaccias', qty: 2, weightG: 175 },
     ],
   });
   assert.equal(sheet.total_g, Math.round(target));
