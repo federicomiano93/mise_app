@@ -47,9 +47,7 @@
   .detail {
     position: sticky;
     top: var(--s4);
-    /* Two declarations: Chrome 107 (the lab tablet's floor) has no dvh and keeps the first. */
-    max-height: calc(100vh - var(--topbar-h) - 2 * var(--s4));
-    max-height: calc(100dvh - var(--topbar-h) - 2 * var(--s4));
+    max-height: calc(var(--vh100) - var(--topbar-h) - 2 * var(--s4));
     overflow-y: auto;
   }
 }

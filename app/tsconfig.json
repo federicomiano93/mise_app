@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    // The oldest browsers Mise 2 must run on: the lab tablet SM-T550 (Chrome 119) and
+    // The oldest browsers Mise 2 must run on: the lab tablet SM-T550 (Chrome 101, the newest Google Play serves it) and
     // iPhone Safari 16.4. ES2022 is fully supported by both, so nothing is polyfilled.
     "target": "ES2022",
     "lib": ["ES2022", "DOM", "DOM.Iterable"],

@@ -971,7 +971,7 @@ export const it: Messages = {
   'language.en.inSentence': 'inglese',
   'language.it.inSentence': 'italiano',
   'cat.allergenSheet': 'Scheda allergeni',
-  'cat.sheet.declaredCount': '{n} ricette su {total} completamente dichiarate',
+  'cat.sheet.declaredCount': { one: '{n} ricetta su {total} completamente dichiarata', other: '{n} ricette su {total} completamente dichiarate' },
   'cat.sheet.blockedCount': {
     one: '{n} non può ancora avere un’etichetta.',
     other: '{n} non possono ancora avere un’etichetta.',

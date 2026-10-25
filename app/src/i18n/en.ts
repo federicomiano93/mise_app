@@ -1074,7 +1074,8 @@ export const en = {
   'language.it.inSentence': 'Italian',
   // The Allergen sheet (the screen at the counter).
   'cat.allergenSheet': 'Allergen sheet',
-  'cat.sheet.declaredCount': '{n} of {total} recipes fully declared',
+  // A plural so a language whose words agree with {n} can say «1 ricetta … dichiarata»; English reads the same both ways.
+  'cat.sheet.declaredCount': { one: '{n} of {total} recipes fully declared', other: '{n} of {total} recipes fully declared' },
   'cat.sheet.blockedCount': {
     one: '{n} cannot be labelled yet.',
     other: '{n} cannot be labelled yet.',

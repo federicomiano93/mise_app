@@ -108,8 +108,7 @@ describe('the split of the frame', () => {
     expect(declaration(detail, 'overscroll-behavior')).toBeUndefined();
     const heights = [...detail.matchAll(/max-height:\s*([^;]+);/g)].map(([, value = '']) => value.trim());
     expect(heights).toEqual([
-      'calc(100vh - var(--topbar-h) - 2 * var(--s4))',
-      'calc(100dvh - var(--topbar-h) - 2 * var(--s4))',
+      'calc(var(--vh100) - var(--topbar-h) - 2 * var(--s4))',
     ]);
   });
 
