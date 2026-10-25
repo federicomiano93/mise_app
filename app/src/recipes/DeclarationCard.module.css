@@ -1,0 +1,104 @@
+/* The recipe's ingredient declaration: a card with a static head (an answer, never a fold). */
+
+.card {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.head {
+  margin: 0 0 var(--s2);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.list,
+.contains,
+.traces,
+.caveat,
+.blocked,
+.checking {
+  margin: 0 0 var(--s2);
+  overflow-wrap: anywhere;
+}
+
+.list {
+  font-size: var(--fs-md);
+}
+
+/* The allergen is emphasised INSIDE the list, which is what the regulation asks for: bold and underlined,
+   so it does not rest on weight alone. The same look as the label screen's. */
+.allergen {
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.contains {
+  font-weight: 650;
+}
+
+.caveat,
+.checking {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.blocked {
+  color: var(--ink-2);
+}
+
+.share {
+  display: flex;
+  gap: var(--s2);
+  margin-top: var(--s3);
+}
+
+.copy,
+.send {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.copy {
+  flex: 1;
+}
+
+.send svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.copy:hover,
+.send:hover {
+  background: var(--sunken);
+}
+
+.copy:focus-visible,
+.send:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A live region that exists before it speaks. */
+.status {
+  min-height: 1.4em;
+  margin: var(--s2) 0 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}

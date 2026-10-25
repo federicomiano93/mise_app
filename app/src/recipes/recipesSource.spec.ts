@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { FirestoreKit } from '../session/firebaseBackend';
+import { PRICE_FIELDS } from '@mise/shared/price-model';
 import { createFirestoreRecipesSource } from './recipesSource';
 
 // The ONLY code in Mise 2 that reads the Recipe catalogue from the real database, against a recording
@@ -84,6 +85,56 @@ describe('the Recipe catalogue source', () => {
     createFirestoreRecipesSource(() => Promise.reject(new Error('chunk')), 'bakery').watchRecipes(vi.fn(), failed);
     await settle();
     expect(failed).toHaveBeenCalledTimes(1);
+  });
+
+  test('watches the open venue’s ingredients, with metadata changes, the id winning over a stored `id`', async () => {
+    const { kit, listeners } = fakeKit();
+    const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'panificio-miano');
+    const onChange = vi.fn();
+    source.watchIngredients(onChange, vi.fn());
+    await settle();
+    expect(listeners).toHaveLength(1);
+    expect(listeners[0]!.target.path).toBe('locations/panificio-miano/ingredients');
+    expect(listeners[0]!.options).toEqual({ includeMetadataChanges: true });
+    listeners[0]!.next({ docs: [{ id: 'real', data: () => ({ id: 'forged', name: 'Flour' }) }], metadata: { fromCache: true } });
+    expect(onChange).toHaveBeenCalledWith([{ id: 'real', name: 'Flour' }], { fromServer: false });
+  });
+
+  test('⚠️ NO PRICE reaches the catalogue: every old price key on an ingredient is dropped by the source', async () => {
+    // tests/catalogue-no-money.test.mjs: prices entered before v270 sit on the ingredient document itself
+    // until it is saved again; the catalogue never shows a price, so none may reach its store or its copy.
+    const { kit, listeners } = fakeKit();
+    const onChange = vi.fn();
+    createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery').watchIngredients(onChange, vi.fn());
+    await settle();
+    const priced: Record<string, unknown> = { name: 'Butter', allergens: ['milk'], allergensCheckedAt: '2026-09-01' };
+    for (const key of PRICE_FIELDS) priced[key] = key === 'priceUnit' ? 'kg' : 4.2;
+    listeners[0]!.next({ docs: [{ id: 'b', data: () => priced }], metadata: { fromCache: false } });
+    const [list] = onChange.mock.calls[0]!;
+    expect(list).toEqual([{ id: 'b', name: 'Butter', allergens: ['milk'], allergensCheckedAt: '2026-09-01' }]);
+    for (const key of PRICE_FIELDS) expect(Object.keys(list[0]), key).not.toContain(key);
+  });
+
+  test('the catalogue never opens a listener on ingredient-prices', async () => {
+    const { kit, listeners } = fakeKit();
+    const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery');
+    source.watchRecipes(vi.fn(), vi.fn());
+    source.watchIngredients(vi.fn(), vi.fn());
+    await settle();
+    expect(listeners.map(l => l.target.path)).toEqual(['locations/bakery/recipes', 'locations/bakery/ingredients']);
+  });
+
+  test('a refused ingredients stream reaches onError QUIETLY (a warning, never an error in the console)', async () => {
+    const { kit, listeners } = fakeKit();
+    const onError = vi.fn();
+    createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery').watchIngredients(vi.fn(), onError);
+    await settle();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    listeners[0]!.error(new Error('permission-denied'));
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalledTimes(1);
   });
 
   test('⚠️ a venue id that could name another path is refused before anything is read', () => {

@@ -1,0 +1,136 @@
+/* The recipe's allergen card. The state is a WORD in the head, never a colour alone; the answer (what the
+   recipe contains) stays outside the fold, and only the job folds away. */
+
+.card {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+/* The head is an h3 holding the button that folds the job away. */
+.heading {
+  margin: 0;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.toggle:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.label {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+/* Only the head, with the fold, in a static card of its own while the ingredients arrive. */
+.staticHead {
+  margin: 0 0 var(--s2);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.state {
+  padding: var(--s1) var(--s3);
+  border-radius: var(--r-pill);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.blocked {
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
+
+.ok {
+  background: var(--ok-tint);
+  color: var(--ok-ink);
+}
+
+.chevron {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-left: auto;
+  color: var(--ink-3);
+  transition: transform 0.15s var(--ease);
+}
+
+.toggle[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+/* What the recipe contains: always on the screen, never behind a tap. */
+.answer {
+  margin: var(--s2) 0 0;
+  font-size: var(--fs-lg);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.body {
+  margin-top: var(--s3);
+}
+
+.warn {
+  margin: 0 0 var(--s2);
+  font-weight: 600;
+}
+
+.gaps {
+  margin: 0 0 var(--s3);
+  padding-left: var(--s5);
+}
+
+.gaps li {
+  margin-bottom: var(--s1);
+  overflow-wrap: anywhere;
+}
+
+.more {
+  color: var(--ink-2);
+}
+
+.soFar {
+  margin: 0 0 var(--s2);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+.traces {
+  margin: 0 0 var(--s2);
+  overflow-wrap: anywhere;
+}
+
+.caveat {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.checking {
+  margin: 0;
+  color: var(--ink-2);
+}
