@@ -2155,6 +2155,21 @@ async function clientOrders() {
     readAs(CLIENT_A, `${L}/client-menus/c-two`));
   await expectDenied('a client CANNOT read another client\'s account document',
     readAs(CLIENT_A, `${L}/client-accounts/${CLIENT_B.uid}`));
+  await expectDenied('a client CANNOT list the ordering accounts',
+    readAs(CLIENT_A, `${L}/client-accounts`));
+
+  // ── Who else reads a grant: only those who may manage the Calculator ──
+  // ⚠️ The grant carries linkToken, which IS the ordering account's password (audit,
+  // 25 Oct 2026): an employee who read it kept a way to order as that client after
+  // leaving. The people who mint and revoke a link read it; nobody else on the staff.
+  await expectDenied('an employee CANNOT read an ordering account — it holds the link\'s secret',
+    readAs(SAM, `${L}/client-accounts/${CLIENT_A.uid}`));
+  await expectDenied('…nor list them', readAs(SAM, `${L}/client-accounts`));
+  await expectAllowed('a manager reads an ordering account',
+    readAs(MAYA, `${L}/client-accounts/${CLIENT_A.uid}`));
+  await expectAllowed('…and lists them, to re-send a link', readAs(MAYA, `${L}/client-accounts`));
+  await expectAllowed('the owner lists them', readAs(ALICE, `${L}/client-accounts`));
+  await expectDenied('a member of another venue CANNOT list them', readAs(BOB, `${L}/client-accounts`));
   await seedDoc(`${L}/client-orders/${TOMORROW}_c-two`,
     { ...order({ clientId: 'c-two', clientName: 'CLIENT B' }) });
   await expectDenied('a client CANNOT read another client\'s order',

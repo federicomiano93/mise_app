@@ -132,20 +132,23 @@ describe('the hint and who may do what', () => {
     expect(group().queryByRole('button', { name: 'Turn off ordering' })).toBeNull();
   });
 
-  it('somebody who cannot manage sees Copy and Send but not Create, Replace or Turn off', async () => {
-    await open({ accounts: [ROMA], session: MANAGER_NOT });
+  // ⚠️ The link's secret is the ordering account's password (audit, 25 Oct 2026): firestore.rules lets only those who
+  // can manage read the links, so anybody else gets one sentence — no link, no Copy, no Send — and is never made to ask.
+  it('somebody who cannot manage sees one sentence and nothing else, and the links are never read', async () => {
+    const orderSource = fakeClientOrdersSource({ accounts: [ROMA] });
+    const read = vi.spyOn(orderSource, 'listAccounts');
+    await open({ session: MANAGER_NOT, orderSource });
     await ready();
-    expect(group().getByText(/^Cafe Roma can send orders straight into the app\./)).toBeInTheDocument();
-    expect(group().getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
-    expect(group().getByRole('button', { name: 'Send' })).toBeInTheDocument();
-    expect(group().queryByRole('button', { name: 'Replace with a new link' })).toBeNull();
-    expect(group().queryByRole('button', { name: 'Turn off ordering' })).toBeNull();
+    expect(group().getByText('The owner or a manager looks after this client’s ordering link and sends it to them.')).toBeInTheDocument();
+    expect(group().queryByText(/can send orders/)).toBeNull();
+    expect(group().queryByRole('button')).toBeNull();
+    expect(read).not.toHaveBeenCalled();
   });
 
-  it('somebody who cannot manage, on a client without a link, is told the owner or a manager can set it up', async () => {
+  it('somebody who cannot manage, on a client without a link, gets the same sentence: whether one exists is not theirs to know', async () => {
     await open({ session: MANAGER_NOT });
     await ready();
-    expect(group().getByText('This client cannot order through the app yet. The owner or a manager can set that up.')).toBeInTheDocument();
+    expect(group().getByText('The owner or a manager looks after this client’s ordering link and sends it to them.')).toBeInTheDocument();
     expect(group().queryByRole('button')).toBeNull();
   });
 
@@ -159,11 +162,11 @@ describe('the hint and who may do what', () => {
     expect(group().queryByRole('button')).toBeNull();
   });
 
-  it('the same sentence for somebody who cannot manage, in Italian too', async () => {
+  it('somebody who cannot manage gets their one sentence in Italian too, whatever the client', async () => {
     const config = configOf({ clients: [{ id: 'bad_id', name: 'Odd Client', products: [] }, ...CLIENTS] });
     await open({ config, path: '/calculator/settings/clients/bad_id', session: MANAGER_NOT, lang: 'it' });
     await waitFor(() => { expect(main().queryByRole('group', { name: 'Link per ordinare' })?.textContent).not.toContain('Caricamento'); }, LOAD);
-    expect(within(main().getByRole('group', { name: 'Link per ordinare' })).getByText('Questo cliente non può avere un link per ordinare finché non è stato salvato.')).toBeInTheDocument();
+    expect(within(main().getByRole('group', { name: 'Link per ordinare' })).getByText('Il link per gli ordini di questo cliente lo gestisce il titolare o un responsabile, che glielo manda.')).toBeInTheDocument();
   });
 
   it('a grant without its secret cannot be shown: no Copy or Send, only Replace', async () => {
@@ -243,13 +246,6 @@ describe('copy and send', () => {
     expect(decodeURIComponent(url)).toContain('you can send your order to us here:');
   });
 
-  it('Copy and Send work for somebody who cannot manage', async () => {
-    const { user, copied } = await open({ accounts: [ROMA], session: MANAGER_NOT });
-    await ready();
-    await user.click(group().getByRole('button', { name: 'Copy link' }));
-    await alertWith('The ordering link for Cafe Roma is copied.');
-    expect(copied).toHaveBeenCalledTimes(1);
-  });
 });
 
 describe('creating and replacing', () => {
