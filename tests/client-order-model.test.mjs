@@ -216,7 +216,7 @@ test('…and it is a valid, unreachable address whatever the token starts with',
 const CLIENT = {
   id: 'c-one', name: 'CLIENT A', products: [
     { id: 'p-buns', name: 'Buns', kind: 'number', weight: 71, recipeId: 'brioche' },
-    { id: 'p-loaf', name: 'Loaf', kind: 'kg', weight: 905, recipeId: 'sourdough' },
+    { id: 'p-loaf', name: 'Loaf', kind: 'kg', weight: 900, recipeId: 'sourdough' },
   ],
 };
 

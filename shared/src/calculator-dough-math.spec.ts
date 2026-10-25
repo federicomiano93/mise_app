@@ -19,9 +19,9 @@ import * as legacyJs from '../../js/calculator-dough-math.js';
 
 const legacy = legacyJs as unknown as typeof ported;
 
-const FOCACCIA = { flourBlu: 278, flourT65: 278, malt: 3, sugar: 8, salt: 11, yeast: 3.6, oil: 56, water1: 334, water2: 24 };
-const BRIOCHE = { flour: 3185, yeast: 127.4, water: 1575 };
-const SOURDOUGH = { flourBlu: 2560, flourT65: 2560, flourWhole: 570, water1: 3800, starter: 1024, malt: 30, salt: 124, water2: 300 };
+const FOCACCIA = { flourBlu: 260, flourT65: 290, malt: 4, sugar: 10, salt: 12, yeast: 3.4, oil: 50, water1: 340, water2: 30 };
+const BRIOCHE = { flour: 3000, yeast: 120, water: 1500 };
+const SOURDOUGH = { flourBlu: 2400, flourT65: 2400, flourWhole: 600, water1: 3700, starter: 980, malt: 25, salt: 115, water2: 250 };
 
 const sum = (arr: readonly number[]): number => arr.reduce((a, b) => a + b, 0);
 
@@ -79,7 +79,7 @@ describe.each([
 
   test('recipeTotal sums every ingredient amount', () => {
     expect(m.recipeTotal({ a: 1, b: 2, c: 3 })).toBe(6);
-    expect(m.recipeTotal(BRIOCHE)).toBe(3185 + 127.4 + 1575);
+    expect(m.recipeTotal(BRIOCHE)).toBe(3000 + 120 + 1500);
   });
 
   // ── fixRounding (the rounding fairness rule) ──────────────────────────────
@@ -113,7 +113,7 @@ describe.each([
 
   test('scaleFocaccia matches the locked golden breakdown (5000 g, 0.65%)', () => {
     // [flourBlu, flourT65, malt, sugar, salt, yeast, oil, water1, water2]
-    expect(m.scaleFocaccia(FOCACCIA, 5000, 0.65)).toStrictEqual([1396, 1396, 15, 40, 55, 18, 281, 1678, 121]);
+    expect(m.scaleFocaccia(FOCACCIA, 5000, 0.65)).toStrictEqual([1301, 1451, 20, 50, 60, 18, 250, 1700, 150]);
   });
 
   test('scaleFocaccia ingredients always sum to the target', () => {
@@ -125,16 +125,16 @@ describe.each([
   // ── Brioche ───────────────────────────────────────────────────────────────
 
   test('scaleBrioche at the recipe baseline returns the rounded recipe itself', () => {
-    // target = provisional total (4887.4) and yeast 4% → factor 1 → the recipe values.
-    expect(m.scaleBrioche(BRIOCHE, 4887.4, 4)).toStrictEqual([3185, 127, 1575]);
+    // target = provisional total (4620) and yeast 4% → factor 1 → the recipe values.
+    expect(m.scaleBrioche(BRIOCHE, 4620, 4)).toStrictEqual([3000, 120, 1500]);
   });
 
-  test('scaleBrioche matches the locked golden breakdown (9774.8 g, 4%)', () => {
-    expect(m.scaleBrioche(BRIOCHE, 9774.8, 4)).toStrictEqual([6370, 255, 3150]);
+  test('scaleBrioche matches the locked golden breakdown (9240 g, 4%)', () => {
+    expect(m.scaleBrioche(BRIOCHE, 9240, 4)).toStrictEqual([6000, 240, 3000]);
   });
 
   test('scaleBrioche ingredients always sum to the target', () => {
-    for (const target of [2000, 4887, 9775]) {
+    for (const target of [2000, 4620, 9240]) {
       expect(sum(m.scaleBrioche(BRIOCHE, target, 4))).toBe(Math.round(target));
     }
   });
@@ -149,7 +149,7 @@ describe.each([
 
   test('scaleSourdough matches the locked golden breakdown (9000 g, 18%)', () => {
     // [flourBlu, flourT65, flourWhole, water1, starter, malt, salt, water2]
-    expect(m.scaleSourdough(SOURDOUGH, 9000, 18)).toStrictEqual([2101, 2101, 468, 3117, 840, 25, 102, 246]);
+    expect(m.scaleSourdough(SOURDOUGH, 9000, 18)).toStrictEqual([2063, 2063, 516, 3181, 842, 21, 99, 215]);
   });
 
   test('scaleSourdough ingredients always sum to the target', () => {
@@ -169,7 +169,7 @@ describe.each([
   test('scaleBrioche equals the pre-unification math across the full knob range and edited recipes', () => {
     // Brioche yeast knob: min 0.1, max 6.
     for (const R of variants(BRIOCHE)) {
-      for (const target of [2000, 4887.4, 9000, 9774.8, 18000]) {
+      for (const target of [2000, 4620, 9000, 9240, 18000]) {
         for (const pct of [0.1, 2, 4, 6]) {
           expect(m.scaleBrioche(R, target, pct), `brioche mismatch at target=${target}, pct=${pct}`)
             .toStrictEqual(legacyBrioche(R, target, pct));
@@ -249,8 +249,8 @@ describe.each([
 
   test('scaleRecipe output always sums exactly to Math.round(target)', () => {
     const cases: [ported.ScaleSpec, number, number][] = [
-      [{ amounts: FOCACCIA, leaveningKey: 'yeast', baselinePct: 3.6 / 556 * 100 }, 5000, 0.65],
-      [{ amounts: BRIOCHE, leaveningKey: 'yeast', baselinePct: 4 }, 9774.8, 4],
+      [{ amounts: FOCACCIA, leaveningKey: 'yeast', baselinePct: 3.4 / 550 * 100 }, 5000, 0.65],
+      [{ amounts: BRIOCHE, leaveningKey: 'yeast', baselinePct: 4 }, 9240, 4],
       [{ amounts: SOURDOUGH, leaveningKey: 'starter', baselinePct: 18 }, 9000, 18],
       [{ amounts: SOURDOUGH, leaveningKey: 'starter', baselinePct: 18 }, 18100, 25],
     ];
