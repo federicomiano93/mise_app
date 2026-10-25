@@ -408,7 +408,8 @@ test('a STORED entry that declares a compressed size as long as the archive is j
 });
 
 // One archive holding two entries under ONE name, a small one and a huge one, put together by hand (zipSync keys by name).
-const twoOfOneName = (smallBytes, bigBytes) => {
+// forgeStoredTwin: the twin is STORED, holds bigBytes, and its central-directory compressed size is forged to 2 GB.
+const twoOfOneName = (smallBytes, bigBytes, { forgeStoredTwin = false } = {}) => {
   const parts = (zip) => {
     const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
     let end = zip.length - 22;
@@ -418,8 +419,9 @@ const twoOfOneName = (smallBytes, bigBytes) => {
     return { local: zip.subarray(0, cdOffset), cd: zip.slice(cdOffset, cdOffset + cdSize) };
   };
   const a = parts(zipSync({ 'a.xml': new Uint8Array(smallBytes) }));
-  const b = parts(zipSync({ 'a.xml': new Uint8Array(bigBytes) }, { level: 9 }));
+  const b = parts(zipSync({ 'a.xml': new Uint8Array(bigBytes) }, { level: forgeStoredTwin ? 0 : 9 }));
   new DataView(b.cd.buffer).setUint32(42, a.local.length, true); // the twin's local header sits after the first entry
+  if (forgeStoredTwin) new DataView(b.cd.buffer).setUint32(20, 0x7fffffff, true);
   const cd = new Uint8Array([...a.cd, ...b.cd]);
   const eocd = new Uint8Array(22);
   const view = new DataView(eocd.buffer);
@@ -440,8 +442,18 @@ test('two entries of one name: the huge twin is never inflated, only the entry w
   assert.equal(read.containers[0].entries['a.xml'].length, 10);
 });
 
+test('pass 2 judges a STORED twin by its forged compressed size too, so it is never copied', () => {
+  // The twin declares 20 bytes but a 2 GB compressed size: pass 1 already refuses it, and pass 2 must not let the
+  // small entry's NAME carry it through (fflate copies a stored entry up to the end of the archive).
+  const c = newCase();
+  c.files.push({ name: 'twins.zip', bytes: twoOfOneName(10, 20, { forgeStoredTwin: true }) });
+  const read = c.read({ limits: { maxXmlBytes: 1000 } });
+  assert.deepEqual(Object.keys(read.containers[0].entries), ['a.xml']);
+  assert.equal(read.containers[0].entries['a.xml'].length, 10);
+});
+
 test('two entries of one name both count towards the archive total', () => {
-  // The total is summed per entry, not per name, so twins that each fit cannot slip a double size past the limit.
+  // Pass 1 sums per entry, not per name (it always did), so twins that each fit cannot slip a double size past the limit.
   const c = newCase();
   c.files.push({ name: 'twins.zip', bytes: twoOfOneName(60, 60) });
   const read = c.read({ limits: { maxXmlBytes: 100, maxArchiveBytes: 100 } });
