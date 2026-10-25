@@ -125,6 +125,11 @@ export interface RecipesStore {
   // Puts a label job in the shop computer's queue. ⚠️ NOT LOCAL-FIRST: it rejects when the write cannot be made,
   // and the caller says so (the source explains why). Nothing is remembered here.
   queuePrintJob(job: Readonly<Record<string, unknown>>): Promise<void>;
+  // Changes some fields of the label profile (config/labels), LOCAL-FIRST: the store's copy and the phone's copy
+  // change at once and the snapshot is announced, then the source is asked. Resolves when the database has taken
+  // the change. On a refusal the keys of THIS patch are put back to what they were just before it (except a key a
+  // later patch has set since) and the promise rejects, so the screen can say so.
+  saveLabelProfile(patch: Readonly<Record<string, unknown>>): Promise<void>;
 }
 
 // A map read back from storage: a plain object, or nothing (corrupt, an array, a number…).
@@ -221,6 +226,14 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   let labelConfig: Record<string, unknown> | null = asLabelConfig(bootLabel);
   let labelConfigKnown = bootLabel === null || labelConfig !== null;
   let labelConfigFromServer = false;
+  // The label profile's local writes (saveLabelProfile): a running number per patch, and which patch last set each key.
+  let labelPatchNumber = 0;
+  // Per key, while some patch on it is still in the air: the value it held before the first of them (`base`, the
+  // confirmed one) and every patch's value with how it ended.
+  type KeyEntry = { n: number; value: unknown; state: 'pending' | 'ok' | 'refused' };
+  const labelKeyLog = new Map<string, { base: { had: boolean; value: unknown }; entries: KeyEntry[] }>();
+  // Whether the venue had no label document when the first patch in the air was made.
+  let labelNoneBeforeLog = false;
   let printAgents: readonly StoredDoc[] = [];
   // The counts are kept even when a corrupt entry is dropped: they are a nicety, not data.
   let usage: Readonly<Record<string, number>> = asUsage(readJson(USAGE_KEY));
@@ -431,6 +444,80 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     },
 
     queuePrintJob: job => source.queuePrintJob(job),
+
+    // ⚠️ THE WRITES ARE NOT CHAINED, AND THAT IS ON PURPOSE (the current app chains them behind each other). Each call
+    // asks the source at once, in the order the taps were made: Firestore commits ONE client's writes in the order
+    // they were made, and keeps the ones it has not sent in its own persistent queue across a reload while offline.
+    // A chain held in memory would keep the later changes in the page, and a reload while offline would lose them —
+    // after the screen had shown them as saved. (The defect the chain was made for, a height landing before a width,
+    // came from two writes with no ordering; one client's writes have one.)
+    //
+    // ⚠️ ON A REFUSAL ONLY THE KEYS OF THE REFUSED PATCH ARE PUT BACK — and a key a LATER patch (still in the air, or
+    // accepted) has set since keeps that later value: taking the whole document back would also undo a change the person
+    // made after. A key is put back to the value of the most recent EARLIER patch on it that was not itself refused,
+    // else to the value it held before the first patch in the air (the confirmed one): two refused patches on one key,
+    // in whichever order they are refused, never leave the first one's refused value behind.
+    saveLabelProfile(patch) {
+      const keys = Object.keys(patch);
+      if (labelKeyLog.size === 0) labelNoneBeforeLog = labelConfig === null;
+      const current: Record<string, unknown> = labelConfig ?? {};
+      const mine = ++labelPatchNumber;
+      for (const key of keys) {
+        let log = labelKeyLog.get(key);
+        if (!log) {
+          log = { base: { had: key in current, value: current[key] }, entries: [] };
+          labelKeyLog.set(key, log);
+        }
+        log.entries.push({ n: mine, value: patch[key], state: 'pending' });
+      }
+      // Forgets a key's history once nothing on it is in the air.
+      const tidy = () => {
+        for (const [key, log] of [...labelKeyLog]) {
+          if (!log.entries.some(entry => entry.state === 'pending')) labelKeyLog.delete(key);
+        }
+      };
+      const settle = (state: 'ok' | 'refused') => {
+        for (const key of keys) {
+          const entry = labelKeyLog.get(key)?.entries.find(candidate => candidate.n === mine);
+          if (entry) entry.state = state;
+        }
+      };
+
+      labelConfig = { ...current, ...patch };
+      writeJson(LABEL_CONFIG_KEY, labelConfig);
+      changed();
+
+      let written: Promise<void>;
+      try {
+        written = source.saveLabelConfig(patch);
+      } catch (err) {
+        written = Promise.reject(err);
+      }
+      return written.then(() => {
+        settle('ok');
+        tidy();
+      }, (err: unknown) => {
+        settle('refused');
+        const next: Record<string, unknown> = { ...(labelConfig ?? {}) };
+        for (const key of keys) {
+          const log = labelKeyLog.get(key);
+          if (!log) continue;
+          const mineAt = log.entries.findIndex(entry => entry.n === mine);
+          // A later patch that was not refused owns the key now.
+          if (log.entries.slice(mineAt + 1).some(entry => entry.state !== 'refused')) continue;
+          const earlier = log.entries.slice(0, mineAt).filter(entry => entry.state !== 'refused').at(-1);
+          if (earlier) next[key] = earlier.value;
+          else if (log.base.had) next[key] = log.base.value;
+          else delete next[key];
+        }
+        tidy();
+        // A venue that had no document goes back to having none, not to an empty one.
+        labelConfig = Object.keys(next).length === 0 && labelNoneBeforeLog ? null : next;
+        writeJson(LABEL_CONFIG_KEY, labelConfig);
+        changed();
+        throw err;
+      });
+    },
   };
 }
 

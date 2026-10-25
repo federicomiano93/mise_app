@@ -52,11 +52,13 @@ function handSource() {
     return stopAgents;
   });
   const queuePrintJob = vi.fn<RecipesSource['queuePrintJob']>(() => Promise.resolve());
-  const source: RecipesSource = { watchRecipes, watchIngredients, watchLabelConfig, watchPrintAgents, queuePrintJob };
+  const saveLabelConfig = vi.fn<RecipesSource['saveLabelConfig']>(() => Promise.resolve());
+  const source: RecipesSource = { watchRecipes, watchIngredients, watchLabelConfig, watchPrintAgents, queuePrintJob, saveLabelConfig };
   return {
     source,
     watchPrintAgents,
     queuePrintJob,
+    saveLabelConfig,
     stopAgents,
     agents: (list: StoredDoc[]) => onAgents!(list),
     agentsFail: () => onAgentsError!(new Error('permission-denied')),
@@ -482,6 +484,150 @@ describe('the Recipe catalogue store', () => {
       store.start();
       expect(() => hand.labelServer(SMALL)).not.toThrow();
       expect(store.getSnapshot().labelConfig).toEqual(SMALL);
+    });
+  });
+
+  describe('saving the label profile (step 3d-5)', () => {
+    const HELD = { widthMm: 76, heightMm: 51, dpi: 203 };
+    const deferred = () => {
+      let resolve: () => void = () => undefined;
+      let reject: (err: unknown) => void = () => undefined;
+      const promise = new Promise<void>((res, rej) => { resolve = res; reject = rej; });
+      return { promise, resolve, reject };
+    };
+
+    test('⚠️ is LOCAL-FIRST: the store and the phone’s copy change at once, before the source answers', async () => {
+      const { store, data, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      const gate = deferred();
+      saveLabelConfig.mockReturnValueOnce(gate.promise);
+      const heard = vi.fn();
+      store.subscribe(heard);
+      const saving = store.saveLabelProfile({ dpi: 300 });
+      expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, dpi: 300 });
+      expect(JSON.parse(data.get(LABEL_CONFIG_KEY)!)).toEqual({ ...HELD, dpi: 300 });
+      expect(heard).toHaveBeenCalledTimes(1);
+      expect(saveLabelConfig).toHaveBeenCalledWith({ dpi: 300 });
+      gate.resolve();
+      await saving;
+      expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, dpi: 300 });
+    });
+
+    test('a venue with no document gets one made of the patch', async () => {
+      const { store, labelServer } = makeStore();
+      store.start();
+      labelServer(null);
+      await store.saveLabelProfile({ showDate: true });
+      expect(store.getSnapshot().labelConfig).toEqual({ showDate: true });
+    });
+
+    test('⚠️ two quick saves reach the source in the order they were made, NOT chained behind each other', async () => {
+      const { store, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      const first = deferred();
+      saveLabelConfig.mockReturnValueOnce(first.promise);
+      const a = store.saveLabelProfile({ widthMm: 25 });
+      const b = store.saveLabelProfile({ heightMm: 40 });
+      // The second was handed over while the first was still in the air.
+      expect(saveLabelConfig.mock.calls.map(call => call[0])).toEqual([{ widthMm: 25 }, { heightMm: 40 }]);
+      first.resolve();
+      await Promise.all([a, b]);
+      expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, widthMm: 25, heightMm: 40 });
+    });
+
+    test('the final local value is the LAST tap even when the first rejects after the second resolved', async () => {
+      const { store, data, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      const first = deferred();
+      saveLabelConfig.mockReturnValueOnce(first.promise);
+      const a = store.saveLabelProfile({ dpi: 300 });
+      const b = store.saveLabelProfile({ dpi: 600 });
+      await b;
+      first.reject(new Error('permission-denied'));
+      await expect(a).rejects.toThrow('permission-denied');
+      expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, dpi: 600 });
+      expect(JSON.parse(data.get(LABEL_CONFIG_KEY)!)).toEqual({ ...HELD, dpi: 600 });
+    });
+
+    test('⚠️ a rejected patch puts back ONLY its own keys, and not a key a later patch has set', async () => {
+      const { store, data, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      const first = deferred();
+      saveLabelConfig.mockReturnValueOnce(first.promise);
+      const a = store.saveLabelProfile({ widthMm: 25, heightMm: 40, showWeight: true });
+      const b = store.saveLabelProfile({ heightMm: 99 });
+      first.reject(new Error('offline'));
+      await expect(a).rejects.toThrow('offline');
+      await b;
+      // width and showWeight are as they were (showWeight did not exist at all); height keeps the LATER 99.
+      expect(store.getSnapshot().labelConfig).toEqual({ widthMm: 76, heightMm: 99, dpi: 203 });
+      expect(JSON.parse(data.get(LABEL_CONFIG_KEY)!)).toEqual({ widthMm: 76, heightMm: 99, dpi: 203 });
+    });
+
+    test.each([
+      ['the first refused first', true],
+      ['the second refused first', false],
+    ])('⚠️ two refused patches on one key never leave the first one’s refused value behind (%s)', async (_order, firstFirst) => {
+      const { store, data, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      const one = deferred();
+      const two = deferred();
+      saveLabelConfig.mockReturnValueOnce(one.promise).mockReturnValueOnce(two.promise);
+      const a = store.saveLabelProfile({ widthMm: 10 });
+      const b = store.saveLabelProfile({ widthMm: 5 });
+      expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, widthMm: 5 });
+      const refuse = (d: ReturnType<typeof deferred>, p: Promise<void>) => { d.reject(new Error('no')); return expect(p).rejects.toThrow('no'); };
+      if (firstFirst) {
+        await refuse(one, a);
+        // The second is still in the air and owns the key.
+        expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, widthMm: 5 });
+        await refuse(two, b);
+      } else {
+        await refuse(two, b);
+        // The first is still in the air: its value is what the key holds meanwhile.
+        expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, widthMm: 10 });
+        await refuse(one, a);
+      }
+      expect(store.getSnapshot().labelConfig).toEqual(HELD);
+      expect(JSON.parse(data.get(LABEL_CONFIG_KEY)!)).toEqual(HELD);
+    });
+
+    test('a refused patch gives the key back to an earlier accepted one, not to the confirmed value before it', async () => {
+      const { store, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      const two = deferred();
+      saveLabelConfig.mockReturnValueOnce(Promise.resolve()).mockReturnValueOnce(two.promise);
+      const a = store.saveLabelProfile({ dpi: 300 });
+      const b = store.saveLabelProfile({ dpi: 600 });
+      await a;
+      two.reject(new Error('no'));
+      await expect(b).rejects.toThrow('no');
+      expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, dpi: 300 });
+    });
+
+    test('a rejected save on a venue that had no document goes back to having none', async () => {
+      const { store, data, saveLabelConfig, labelServer } = makeStore();
+      store.start();
+      labelServer(null);
+      saveLabelConfig.mockRejectedValueOnce(new Error('permission-denied'));
+      await expect(store.saveLabelProfile({ showDate: true })).rejects.toThrow('permission-denied');
+      expect(store.getSnapshot().labelConfig).toBeNull();
+      expect(data.get(LABEL_CONFIG_KEY)).toBe('null');
+    });
+
+    test('a source that throws at once is a rejection too, and the change is put back', async () => {
+      const { store, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      saveLabelConfig.mockImplementationOnce(() => { throw new Error('sync'); });
+      await expect(store.saveLabelProfile({ dpi: 300 })).rejects.toThrow('sync');
+      expect(store.getSnapshot().labelConfig).toEqual(HELD);
     });
   });
 

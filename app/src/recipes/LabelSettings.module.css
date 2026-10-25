@@ -1,0 +1,245 @@
+/* The label Settings: a card holding the form bar and two cards of rows, in the Calculator hub's settings look. On the
+   split it is the right-hand pane; below 1000px it replaces the list.
+
+   ⚠️ NOTHING ON THE OUTER CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's scrolling area,
+   and a clipping ancestor would turn it into an ordinary row. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.loading {
+  padding: var(--s6);
+  color: var(--ink-2);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s3) var(--s4);
+}
+
+.headTitle {
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.note,
+.sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+/* A switch row: the words on the left, the switch on the right, as tall as a thumb's target. */
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.title {
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+/* A choice with its words above it and its note below. */
+.block {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.blockLabel {
+  font-weight: 600;
+}
+
+/* The segments: one choice among a few, side by side, wrapping rather than shrinking below a thumb's width. */
+.segments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.segment {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .segment:hover {
+    background: var(--sunken);
+  }
+}
+
+/* The chosen one is told apart by colour AND by the frame (and by aria-checked for a screen reader). */
+.segment[data-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  color: var(--accent-ink);
+}
+
+.segment[data-focus-visible="true"] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* A labelled box: its name above, the box below. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+/* The two boxes of a custom size, side by side. A box inside the size block needs no rule of its own above it. */
+.customRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+
+.customRow .field {
+  flex: 1 1 140px;
+  padding: 0;
+  border-top: 0;
+}
+
+.fieldName {
+  font-weight: 600;
+}
+
+.fieldBox {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* 18px type on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
+.input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--font);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.unit {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+/* A switch that is on with nothing to print: a warning, not an error. */
+.hint {
+  padding: var(--s3);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.setup {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+/* The live region is there, empty, before it speaks; it takes no room until it does. */
+.quiet {
+  margin: 0;
+}
+
+.failed {
+  padding: var(--s3);
+  border-radius: var(--r-md);
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+  font-weight: 600;
+}
+
+.failed {
+  margin-top: var(--s3);
+}
+
+/* Inside a block of the flex column the empty region would still take one gap: it takes it back. */
+.quietInBlock {
+  margin: calc(-1 * var(--s2)) 0 0;
+}
+
+.rangeError {
+  padding: var(--s3);
+  border-radius: var(--r-md);
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+  font-weight: 600;
+}

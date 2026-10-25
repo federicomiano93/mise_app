@@ -1,7 +1,7 @@
 // recipesSource.ts — the Recipe catalogue's data in Firestore, and nothing else.
 //
 // A port of js/catalogue/firebase-catalogue.js, one function at a time as the steps of 3d need them
-// (docs/parity/catalogue.md, «Proposed slices»). Steps 3d-1 to 3d-3 only READ: the recipes, the
+// (docs/parity/catalogue.md, «Proposed slices»). Steps 3d-1 to 3d-3 only READ (3d-5 writes config/labels, merge only): the recipes, the
 // ingredients and the label profile (config/labels), live, while the section is on screen. Behind an interface, so the store (recipesStore.ts) is a spec with a fake
 // source and never needs a database to be tested.
 //
@@ -59,6 +59,10 @@ export interface RecipesSource {
   // Puts a label job in the queue (print-jobs) for the shop computer to take. The job is built by
   // @mise/shared/print-queue-model; the venue stamp is applied here. REJECTS when the write cannot be made.
   queuePrintJob(job: Readonly<Record<string, unknown>>): Promise<void>;
+  // Merges a patch into the venue's label profile (config/labels). ⚠️ A MERGE, NEVER A WHOLE WRITE: two people can
+  // have Settings open, and a whole write would take the other one's paper size with it. The venue stamp is applied
+  // here. Local-first on Firestore's side (the promise settles when the SERVER answers); REJECTS when refused.
+  saveLabelConfig(patch: Readonly<Record<string, unknown>>): Promise<void>;
 }
 
 const RECIPES = 'recipes';
@@ -169,6 +173,13 @@ export function createFirestoreRecipesSource(
     queuePrintJob: async job => {
       const kit = await firestore();
       await kit.fs.addDoc(kit.fs.collection(kit.db, printJobsPath), { ...job, bakery: locationId });
+    },
+
+    // The rules check `bakery` against the folder the document lands in, so the stamp is applied here, after the
+    // patch (a caller cannot name another venue). `merge: true` keeps every field this build does not know about.
+    saveLabelConfig: async patch => {
+      const kit = await firestore();
+      await kit.fs.setDoc(kit.fs.doc(kit.db, configPath, LABELS_DOC), { ...patch, bakery: locationId }, { merge: true });
     },
   };
 }
