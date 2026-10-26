@@ -21,6 +21,7 @@ import { cleanUnit, storedUnitFor } from '@mise/shared/order-unit';
 import { normalizeFavourites } from '@mise/shared/favourite-suppliers';
 import { INGREDIENT_DRAINED_FIELDS, PRICE_FIELDS, withPrices } from '@mise/shared/price-model';
 import { supplierLabel } from '@mise/shared/supplier-label';
+import { DEFAULT_WEEK_START, weekStartOf } from '@mise/shared/work-week';
 import { markBusy as markBusyOfSession } from '../session/busy';
 import { priceWriteOf } from './priceSave';
 import type { PricePatch } from '@mise/shared/price-model';
@@ -77,6 +78,9 @@ export interface SuppliersSnapshot {
   // Whether config/orders has REALLY arrived (parity S28): a document, or the server's word that there is none. Until
   // then the category list is only the defaults, and a category delete would write them over the venue's real list.
   readonly configLoaded: boolean;
+  // The day a week starts on (config/orders.weekStartsOn through weekStartOf: "Sunday" when missing or unreadable). «Price
+  // changes» cuts its weeks there (parity I107), as the current app's page listener does.
+  readonly weekStartsOn: string;
 }
 
 export interface SuppliersDeps {
@@ -193,6 +197,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
   let storedCategories: readonly string[] | null = null;
   let favourites: readonly string[] = [];
   let configLoaded = false;
+  let weekStartsOn = DEFAULT_WEEK_START;
 
   const listeners = new Set<() => void>();
   const messageListeners = new Set<(message: SuppliersMessage) => void>();
@@ -204,7 +209,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
   function build(): SuppliersSnapshot {
     return {
       suppliers, suppliersLoaded, suppliersFromServer, suppliersBroken, ingredients, ingredientsLoaded, ingredientsFromServer, ingredientsBroken, pricesReadable, pricesFromServer, prices,
-      storedCategories, favourites, configLoaded,
+      storedCategories, favourites, configLoaded, weekStartsOn,
     };
   }
 
@@ -325,6 +330,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
             ? (data.ingredientCategories as unknown[]).filter((c): c is string => typeof c === 'string')
             : null;
           favourites = normalizeFavourites(data?.favouriteSuppliers);
+          weekStartsOn = weekStartOf(data);
           // ⚠️ «MISSING» COUNTS ONLY WHEN THE SERVER SAID IT (parity S28).
           if (data !== null || meta.fromServer) configLoaded = true;
           changed();
