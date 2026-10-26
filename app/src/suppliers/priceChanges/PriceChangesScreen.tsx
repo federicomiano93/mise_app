@@ -34,6 +34,7 @@ import styles from './PriceChangesScreen.module.css';
 type Body =
   | { readonly status: 'loading' }
   | { readonly status: 'error' }
+  | { readonly status: 'needConnection' }
   | { readonly status: 'ready'; readonly changes: StoredDoc[]; readonly fromCache: boolean };
 
 function todayISO(now = new Date()): string {
@@ -98,6 +99,12 @@ export function PriceChangesScreen() {
     source.latestPriceChangeDate().then(
       latest => {
         if (mine !== ticket.current) return;
+        // ⚠️ AN EMPTY ANSWER FROM THE CACHE IS NOT «NOTHING AT ALL»: the cache may simply not hold them. Ask for the connection;
+        // «Try again» starts over from here. A cache answer WITH a date is usable (its period is flagged).
+        if (latest.fromCache && latest.date === '') {
+          setBody({ status: 'needConnection' });
+          return;
+        }
         setAnyAtAll(latest.date !== '');
         started.current = true;
         load(periodOf(periodNow.current.kind, latest.date || todayISO(), weekStartsOn));
@@ -186,6 +193,7 @@ function KindButton({ kind, labelKey, current, onPick }: {
 function Results({ body, anyAtAll, onRetry }: { body: Body; anyAtAll: boolean; onRetry: () => void }) {
   const { t } = useT();
   if (body.status === 'loading') return <p role="status" className={styles.note}>{t('sup.pc.loading')}</p>;
+  if (body.status === 'needConnection') return <NeedConnection onRetry={onRetry} />;
   if (body.status === 'error') {
     const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
     return (
@@ -197,7 +205,7 @@ function Results({ body, anyAtAll, onRetry }: { body: Body; anyAtAll: boolean; o
   }
   const { increases, decreases, counts } = summarize<StoredDoc & { name?: unknown; pct?: unknown }>(body.changes);
   // ⚠️ An empty answer from the cache is not «no changes»: the cache may simply not hold them.
-  if (counts.total === 0 && body.fromCache) return <p role="status" className={styles.error}>{t('sup.pc.needConnection')}</p>;
+  if (counts.total === 0 && body.fromCache) return <NeedConnection onRetry={onRetry} />;
   if (counts.total === 0) {
     return (
       <div className={styles.block}>
@@ -212,6 +220,16 @@ function Results({ body, anyAtAll, onRetry }: { body: Body; anyAtAll: boolean; o
       <p className={styles.summary}>{t('sup.pc.up', { n: counts.increases })} · {t('sup.pc.down', { n: counts.decreases })}</p>
       <Section titleKey="sup.pc.increases" list={increases} />
       <Section titleKey="sup.pc.decreases" list={decreases} />
+    </div>
+  );
+}
+
+function NeedConnection({ onRetry }: { onRetry: () => void }) {
+  const { t } = useT();
+  return (
+    <div className={styles.block}>
+      <p role="status" className={styles.error}>{t('sup.pc.needConnection')}</p>
+      <Button onPress={onRetry}>{t('sup.pc.retry')}</Button>
     </div>
   );
 }

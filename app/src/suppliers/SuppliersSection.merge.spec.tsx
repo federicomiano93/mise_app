@@ -112,6 +112,8 @@ describe('the door on the card', () => {
     await user.click(chooser.getByRole('button', { name: 'Back' }));
     await screen.findByRole('region', { name: CARD });
     expect(router.state.location.pathname).toBe('/suppliers/ingredient/i-flour');
+    // ⚠️ The focus is handed back to the door that opened the chooser (P18), not left on the page.
+    await waitFor(() => { expect(screen.getByRole('button', { name: DOOR })).toHaveFocus(); });
   });
 
   it('on the split the list stays on the left while the chooser opens on the right', async () => {
@@ -144,6 +146,16 @@ describe('the address', () => {
     const region = within(await screen.findByRole('region', { name: CHOOSER }, LOAD));
     expect(await region.findByText('This ingredient no longer exists.', undefined, LOAD)).toBeInTheDocument();
     expect(region.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+  });
+
+  it('⚠️ a packaging item has no chooser: its typed address goes to its card (replaced)', async () => {
+    const merge = fakeMergeSource();
+    const view = renderSuppliers('/suppliers/ingredient/i-box/merge', { source: seeded(), data: { merge: () => merge } });
+    await screen.findByRole('region', { name: CARD }, LOAD);
+    expect(view.router.state.location.pathname).toBe('/suppliers/ingredient/i-box');
+    expect(view.router.state.historyAction).toBe('REPLACE');
+    expect(screen.queryByRole('region', { name: CHOOSER })).not.toBeInTheDocument();
+    expect(merge.calls).toHaveLength(0);
   });
 
   it('Back from a typed address replaces itself with the card', async () => {
@@ -284,15 +296,78 @@ describe('the flow after a tap', () => {
     expect(isBusy()).toBe(false);
   });
 
-  it('a success replaces the chooser with the card of A and says «Merged ✓»', async () => {
+  it('a success from the card goes BACK onto it (no extra entry), says «Merged ✓» and focuses the door', async () => {
     const view = await openChooser();
     const dialog = await tapUntilAsked(view);
     await view.user.click(within(dialog).getByRole('button', { name: 'Merge' }));
     await screen.findByRole('region', { name: CARD });
     expect(view.router.state.location.pathname).toBe('/suppliers/ingredient/i-flour');
+    expect(view.router.state.historyAction).toBe('POP');
+    expect(await screen.findByText('Merged ✓')).toBeInTheDocument();
+    await waitFor(() => { expect(screen.getByRole('button', { name: DOOR })).toHaveFocus(); });
+    expect(view.merge.calls.at(-1)).toEqual({ method: 'mergeIngredients', args: ['i-flour', 'i-big'] });
+  });
+
+  it('a success from a typed address replaces the chooser with the card (nothing is underneath)', async () => {
+    const merge = fakeMergeSource();
+    const view = renderSuppliers('/suppliers/ingredient/i-flour/merge', { source: seeded(), data: { merge: () => merge } });
+    const chooser = within(await screen.findByRole('region', { name: CHOOSER }, LOAD));
+    await view.user.click(rowOf(chooser, /^Flour 00 25kg/));
+    const dialog = await alertOf('Merge “Flour 00 25kg” into “Flour”?');
+    await view.user.click(within(dialog).getByRole('button', { name: 'Merge' }));
+    await screen.findByRole('region', { name: CARD });
+    expect(view.router.state.location.pathname).toBe('/suppliers/ingredient/i-flour');
     expect(view.router.state.historyAction).toBe('REPLACE');
     expect(await screen.findByText('Merged ✓')).toBeInTheDocument();
-    expect(view.merge.calls.at(-1)).toEqual({ method: 'mergeIngredients', args: ['i-flour', 'i-big'] });
+  });
+
+  describe('Back after a merge', () => {
+    async function mergeFrom(view: { user: ReturnType<typeof renderSuppliers>['user'] }) {
+      await view.user.click(within(await screen.findByRole('region', { name: CARD })).getByRole('button', { name: DOOR }));
+      const chooser = within(await screen.findByRole('region', { name: CHOOSER }));
+      await view.user.click(rowOf(chooser, /^Flour 00 25kg/));
+      const dialog = await alertOf('Merge “Flour 00 25kg” into “Flour”?');
+      await view.user.click(within(dialog).getByRole('button', { name: 'Merge' }));
+      await screen.findByText('Merged ✓');
+      await screen.findByRole('region', { name: CARD });
+    }
+
+    it('⚠️ opened from the list: one Back lands on the list', async () => {
+      const merge = fakeMergeSource();
+      const view = renderSuppliers('/suppliers', { source: seeded(), data: { merge: () => merge } });
+      const list = await screen.findByRole('button', { name: /^Flour(?! )/ }, LOAD);
+      await view.user.click(list);
+      await mergeFrom(view);
+      await view.user.click(screen.getByRole('button', { name: 'Back' }));
+      await waitFor(() => { expect(view.router.state.location.pathname).toBe('/suppliers'); });
+    });
+
+    it('⚠️ opened from a supplier’s screen: Back lands on that supplier’s screen', async () => {
+      const merge = fakeMergeSource();
+      const view = renderSuppliers('/suppliers/supplier/s-alp', { source: seeded(), data: { merge: () => merge } });
+      const sells = await screen.findByRole('region', { name: /Alpine/ }, LOAD);
+      await view.user.click(within(sells).getByRole('button', { name: /^Flour(?! )/ }));
+      await mergeFrom(view);
+      await view.user.click(screen.getByRole('button', { name: 'Back' }));
+      await waitFor(() => { expect(view.router.state.location.pathname).toBe('/suppliers/supplier/s-alp'); });
+    });
+  });
+
+  it('⚠️ while it writes, A leaving the list does not unmount the screen: «Merging…» and the blocker stay', async () => {
+    const view = await openChooser();
+    const release = view.merge.hold('mergeIngredients');
+    const dialog = await tapUntilAsked(view);
+    await view.user.click(within(dialog).getByRole('button', { name: 'Merge' }));
+    await waitFor(() => { expect(view.chooser.getByRole('status')).toHaveTextContent('Merging…'); });
+    await act(async () => {
+      view.source.ingredients.delete('i-flour');
+      view.source.push();
+    });
+    expect(screen.getByRole('region', { name: CHOOSER })).toBeInTheDocument();
+    expect(screen.queryByText('This ingredient no longer exists.')).not.toBeInTheDocument();
+    expect(view.chooser.getByRole('status')).toHaveTextContent('Merging…');
+    release();
+    await waitFor(() => { expect(isBusy()).toBe(false); });
   });
 
   it.each([

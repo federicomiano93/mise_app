@@ -1,8 +1,9 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { MutableRefObject } from 'react';
-import { useLocation, useNavigate, useNavigationType } from 'react-router';
+import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { useBlocker } from 'react-router';
 import { ChevronRight, Search } from 'lucide-react';
+import { isPackaging } from '@mise/shared/ingredient-kind';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { mergeCandidates } from '@mise/shared/ingredient-merge';
 import type { UsageFound } from '@mise/shared/ingredient-merge';
@@ -18,6 +19,7 @@ import { useStatusMessage } from '../../ui/StatusMessage';
 import { useAlert } from '../../ui/useAlert';
 import { useConfirm } from '../../ui/useConfirm';
 import { useCopyWait } from '../copyWait';
+import { useHandBack } from '../handBack';
 import { pricePerUnitText } from '../priceText';
 import { useSuppliers } from '../SuppliersContext';
 import { cameFromCard, tabOfState, useLeave } from '../suppliersNav';
@@ -72,6 +74,7 @@ export function MergeScreen({ id }: { id: string }) {
   const navigationType = useNavigationType();
   const [confirm, confirmDialog] = useConfirm();
   const [alert, alertDialog] = useAlert();
+  const handBack = useHandBack();
   const titleId = useId();
   const title = useRef<HTMLHeadingElement>(null);
 
@@ -81,11 +84,18 @@ export function MergeScreen({ id }: { id: string }) {
   // A tap is being handled (checking, asking or writing): a second one is ignored.
   const flowing = useRef(false);
 
-  const a = snapshot.ingredients.find(candidate => candidate.id === id) ?? null;
+  const live = snapshot.ingredients.find(candidate => candidate.id === id) ?? null;
+  // ⚠️ WHILE THE MERGE WRITES, A STAYS WHAT IT WAS: a store update that drops A mid-write must not unmount the blocker and the
+  // dialogs (the «stopped half way» words are shown by them). Once the write settles, the screen follows the store again.
+  const kept = useRef(live);
+  if (live !== null) kept.current = live;
+  const a = live ?? (working ? kept.current : null);
   const waited = useCopyWait(snapshot.ingredientsFromServer || snapshot.ingredientsBroken);
   const missing = a === null && snapshot.ingredientsLoaded && waited;
 
-  const leave = useLeave(ingredientPath(id), () => undefined, cameFromCard);
+  // Back from the chooser: A's card is owed the focus on its merge door (handBack.ts).
+  const leaving = useCallback(() => { handBack.wantDoor(id); }, [handBack, id]);
+  const leave = useLeave(ingredientPath(id), leaving, cameFromCard);
 
   useEffect(() => (working ? markBusy() : undefined), [working]);
 
@@ -93,6 +103,9 @@ export function MergeScreen({ id }: { id: string }) {
   useEffect(() => {
     if (cameFromCard(state) && navigationType !== 'POP') title.current?.focus();
   }, []);
+
+  // Packaging is never merged (the door is not drawn for it): somebody who types the address is sent to its card.
+  if (a !== null && isPackaging(a)) return <Navigate to={ingredientPath(id)} replace state={KEEP_FOCUS} />;
 
   if (a === null) {
     if (!missing) {
@@ -207,10 +220,17 @@ export function MergeScreen({ id }: { id: string }) {
         return;
       }
       release();
-      // A's card again, in the chooser's place, on the merged history. The Suppliers store's listeners drop B and update A by
-      // themselves. The card's state keeps only the list tab: Back from it must not step back into the chooser's entry.
-      const tab = tabOfState(state);
-      void navigate(ingredientPath(a.id), { replace: true, state: tab === null ? KEEP_FOCUS : { ...KEEP_FOCUS, tab } });
+      // A's card again, on the merged history; its merge door takes the focus. The Suppliers store's listeners drop B and update A
+      // by themselves. Opened from the card, the entry underneath IS A's own card with its own state, so Back steps onto it (it
+      // draws afresh from the store) and the history stays [list, card]. Opened by address there is no card underneath: the
+      // chooser is replaced by it, keeping only the list tab.
+      handBack.wantDoor(a.id);
+      if (cameFromCard(state)) {
+        void navigate(-1);
+      } else {
+        const tab = tabOfState(state);
+        void navigate(ingredientPath(a.id), { replace: true, state: tab === null ? KEEP_FOCUS : { ...KEEP_FOCUS, tab } });
+      }
       say(t('sup.merge.done'));
     } finally {
       flowing.current = false;

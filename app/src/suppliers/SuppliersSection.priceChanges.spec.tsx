@@ -165,6 +165,22 @@ describe('never a false «no changes»', () => {
     expect(inScreen.queryByText('No changes in this period.')).not.toBeInTheDocument();
   });
 
+  it('an empty NEWEST-DATE answer from the cache is not «nothing at all»: it asks for the connection, and Try again recovers', async () => {
+    const fake = fakePriceChangesSource([]);
+    fake.fromCache = true;
+    const { user } = open([], '/suppliers/price-changes', { data: { priceChanges: () => fake } });
+    const inScreen = await report();
+    expect(await inScreen.findByText('The connection is needed to see the changes.')).toBeInTheDocument();
+    expect(inScreen.queryByText('No changes in this period.')).not.toBeInTheDocument();
+    expect(inScreen.queryByText('Changes appear when you import invoices.')).not.toBeInTheDocument();
+    expect(fake.calls.filter(call => call.method === 'list')).toHaveLength(0);
+    fake.fromCache = false;
+    fake.changes = SEPTEMBER;
+    await user.click(inScreen.getByRole('button', { name: 'Try again' }));
+    await inScreen.findByText('Flour 00');
+    expect(fake.calls.filter(call => call.method === 'latest')).toHaveLength(2);
+  });
+
   it('a failed start shows the error, and Try again reads the newest date again', async () => {
     const fake = fakePriceChangesSource(SEPTEMBER);
     fake.failNext(new Error('boom'));

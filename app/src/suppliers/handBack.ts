@@ -24,6 +24,8 @@ export const SETTINGS_OPENER = 'settings-door';
 export const IMPORT_OPENER = 'import-door';
 // The door to «Price changes», right after the import's: Back from the report returns the focus to it.
 export const PRICE_CHANGES_OPENER = 'price-changes-door';
+// The «Merge another pack…» door on an ingredient's card: Back from the chooser, and a finished merge, return the focus to it.
+export const MERGE_OPENER = 'merge-door';
 // An ingredient or packaging row of a list: Back from its card returns the focus to it.
 export const itemOpener = (id: string): string => `item:${id}`;
 // The same item on a supplier's own screen, and that screen's «Add ingredient» button.
@@ -47,6 +49,10 @@ export interface HandBack {
   // «Add ingredient») when it is drawn again. Taken once, for that supplier only; null when nothing is owed.
   wantOn(supplierId: string, opener: string): void;
   takeOn(supplierId: string): string | null;
+  // The merge chooser is closing: that ingredient's card is owed the focus on its merge door when it is drawn again. Taken once,
+  // for that ingredient only.
+  wantDoor(id: string): void;
+  takeDoor(id: string): boolean;
   // Gives the focus to a registered opener now; false when it is not there.
   focus(name: string): boolean;
 }
@@ -60,6 +66,8 @@ const NOTHING: HandBack = {
   takeEdit: () => false,
   wantOn() { /* ditto */ },
   takeOn: () => null,
+  wantDoor() { /* ditto */ },
+  takeDoor: () => false,
   focus: () => false,
 };
 
@@ -88,6 +96,7 @@ export function useHandBackState(deletions: SupplierDeletions): HandBack {
   const openers = useRef(new Map<string, HTMLElement>());
   const wanted = useRef<string | null>(null);
   const editOf = useRef<string | null>(null);
+  const doorOf = useRef<string | null>(null);
   const onSupplier = useRef<{ supplierId: string; opener: string } | null>(null);
   // The opener whose row went away while it held the focus, until the end of that commit.
   const moving = useRef<string | null>(null);
@@ -135,6 +144,14 @@ export function useHandBackState(deletions: SupplierDeletions): HandBack {
       if (owed === null || owed.supplierId !== supplierId) return null;
       onSupplier.current = null;
       return owed.opener;
+    },
+    wantDoor(id) {
+      doorOf.current = id;
+    },
+    takeDoor(id) {
+      if (doorOf.current !== id) return false;
+      doorOf.current = null;
+      return true;
     },
     focus(name) {
       const node = openers.current.get(name);

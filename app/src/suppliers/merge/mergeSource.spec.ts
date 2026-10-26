@@ -190,11 +190,21 @@ describe('the merge', () => {
     expect(later.fs.updateDoc, 'B was not deleted: its draft line stays').not.toHaveBeenCalled();
   });
 
-  test('a commit that never answers is a stop («timeout»), not a hang', async () => {
+  test('a commit that never answers is a stop («timeout»), not a hang, and may have landed', async () => {
     vi.useFakeTimers();
     const parts = make();
     seed(parts);
     parts.fs.writeBatch.mockImplementationOnce(() => ({ set: () => undefined, delete: () => undefined, commit: () => new Promise(() => undefined) }));
+    const pending = parts.source.mergeIngredients('a', 'b').catch((err: unknown) => err);
+    await vi.advanceTimersByTimeAsync(MERGE_TIMEOUT_MS);
+    expect(await pending).toMatchObject({ code: 'timeout', committed: true });
+  });
+
+  test('a read that never answers stops with «timeout» before any write: nothing was committed', async () => {
+    vi.useFakeTimers();
+    const parts = make();
+    seed(parts);
+    parts.fs.getDocFromServer.mockImplementation(() => new Promise(() => undefined));
     const pending = parts.source.mergeIngredients('a', 'b').catch((err: unknown) => err);
     await vi.advanceTimersByTimeAsync(MERGE_TIMEOUT_MS);
     expect(await pending).toMatchObject({ code: 'timeout', committed: false });

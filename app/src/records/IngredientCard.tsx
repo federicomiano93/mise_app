@@ -105,6 +105,8 @@ type Props = {
   // «Merge another pack…»: the door is drawn only when this is given AND the card shows an EXISTING ingredient (never packaging, never a
   // new item). With unsaved edits it says so and does NOT call this: a merge closes and reopens the card, so typing must never be lost.
   onMerge?: () => void;
+  // The merge door's element, so the screen can hand the focus back to it.
+  mergeDoorRef?: Ref<HTMLButtonElement>;
   // The supplier card, to draw in a dialog above this one. Without it «+ New supplier…» is not offered (parity C40).
   renderNewSupplier?: (host: NewSupplierHost) => ReactNode;
   // Hears the store's refusal of a supplier save (the name it was saved under); returns the way to stop listening. See host.
@@ -134,7 +136,7 @@ type Refused = RefusedField | PriceBox | LegacyBox | 'priceWeight' | 'legacyPack
 //
 // ⚠️ THE FOOD WORDS (the categories, the package words, the carton word) COME FROM THE VENUE'S COUNTRY, never from `t()`.
 export function IngredientCard({
-  item, presetName, host, kind, preset, suppliers, categories, packs, orderUnits = [], language, titleRef, onSave, onLeave, onDelete, deleting = false, onMerge, renderNewSupplier, watchRefusedSupplier,
+  item, presetName, host, kind, preset, suppliers, categories, packs, orderUnits = [], language, titleRef, onSave, onLeave, onDelete, deleting = false, onMerge, mergeDoorRef, renderNewSupplier, watchRefusedSupplier,
   mayPrice = false, country, money = FALLBACK_MONEY, readHistory,
 }: Props) {
   const { t, locale } = useT();
@@ -923,6 +925,7 @@ export function IngredientCard({
         {opened && kind === 'ingredient' && onMerge ? (
           <Button
             variant="secondary"
+            ref={mergeDoorRef}
             className={styles.mergeDoor}
             onPress={() => {
               if (unsaved()) {

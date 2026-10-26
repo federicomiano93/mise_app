@@ -50,7 +50,8 @@ export type MergeStop = 'gone' | 'used';
 
 // Every failure of this source. `code` is what the screen words: 'offline' | 'timeout' | 'gone' | 'used', or the Firestore
 // code of a refusal, untouched ('unknown' when the error carried none). `committed` says whether at least one batch already
-// landed — the only thing that decides between «nothing was changed» and «stopped half way» (parity I126).
+// landed OR MAY HAVE: a commit that timed out is not cancelled by Firestore and can still land, so it counts as landed (a
+// read that timed out before any write does not) — the only thing that decides between «nothing was changed» and «stopped half way» (parity I126).
 export class MergeError extends Error {
   readonly code: string;
   readonly committed: boolean;
@@ -194,12 +195,12 @@ export function createFirestoreMergeSource(
     };
   }
 
-  // A planned write's document: only A's own document, A's price document or a point of A's history.
-  function refOf({ fs, db }: FirestoreKit, path: readonly string[]) {
+  // A planned write's document: only A's own document, A's price document or a point of A's history (the id is compared).
+  function refOf({ fs, db }: FirestoreKit, path: readonly string[], aId: string) {
     const [folder, ...rest] = path;
     const point = folder === INGREDIENTS && rest.length === 3 && rest[1] === PRICES;
     const own = (folder === INGREDIENTS || folder === INGREDIENT_PRICES) && rest.length === 1;
-    if (!point && !own) throw new Error(`The merge may not write to ${JSON.stringify(path.join('/'))}`);
+    if ((!point && !own) || rest[0] !== aId) throw new Error(`The merge may not write to ${JSON.stringify(path.join('/'))}`);
     return fs.doc(db, pathOf(folder as string), ...rest.map(checkId));
   }
 
@@ -229,6 +230,17 @@ export function createFirestoreMergeSource(
 
     async mergeIngredients(aId, bId) {
       let committed = false;
+      // ⚠️ A TIMED-OUT COMMIT MAY STILL LAND (Firestore does not cancel it): it is treated as landed, so the screen says «stopped
+      // half way, tap Merge again» (the second try is safe) rather than «nothing was changed».
+      const commit = async (batch: { commit(): Promise<unknown> }) => {
+        try {
+          await bounded(batch.commit());
+        } catch (err) {
+          if (err instanceof MergeError && err.code === 'timeout') committed = true;
+          throw err;
+        }
+        committed = true;
+      };
       try {
         const k = await kit();
         const { fs, db } = k;
@@ -242,12 +254,11 @@ export function createFirestoreMergeSource(
           refuseOffline();
           const batch = fs.writeBatch(db);
           for (const { path, data, merge } of step) {
-            const ref = refOf(k, path);
+            const ref = refOf(k, path, a.id);
             if (merge) batch.set(ref, { ...data, bakery: locationId }, { merge: true });
             else batch.set(ref, { ...data, bakery: locationId });
           }
-          await bounded(batch.commit());
-          committed = true;
+          await commit(batch);
         }
 
         // B's price changes go with B (A's own are recomputed by the next import).
@@ -255,8 +266,7 @@ export function createFirestoreMergeSource(
           refuseOffline();
           const batch = fs.writeBatch(db);
           for (const id of ids) batch.delete(fs.doc(db, pathOf(PRICE_CHANGES), checkId(id)));
-          await bounded(batch.commit());
-          committed = true;
+          await commit(batch);
         }
 
         // B itself, with its price document, LAST. Its history under it stays (the rules forbid deleting it), unreachable.
@@ -265,8 +275,7 @@ export function createFirestoreMergeSource(
         for (const step of deletePlan({ id: b.id, mayPrice: true })) {
           last.delete(fs.doc(db, pathOf(step.collection), step.id));
         }
-        await bounded(last.commit());
-        committed = true;
+        await commit(last);
 
         // Its line in the order in progress (a quantity of zero: above zero the merge was refused). ⚠️ updateDoc and a
         // FieldPath, as suppliersSource.clearDraftEntry: no draft means nothing to clear, and an id is data, not a path.
