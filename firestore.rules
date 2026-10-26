@@ -1445,7 +1445,13 @@ service cloud.firestore {
                // Settings like everything else here (canManage). Kept on this
                // document because it is the Catalogue's only settings document and
                // every recipe screen already watches it: no extra read.
-               'recipeCategories'
+               'recipeCategories',
+               // Mise 2's HACCP label for semi-finished goods (26 Oct 2026): which
+               // of its eleven fields are off, printed or a blank line to write on,
+               // the label's size from a fixed set, and the one category the HACCP
+               // list shows (none = every recipe). The current app never sends them
+               // and its merge writes keep them.
+               'haccpFields', 'haccpSize', 'haccpCategory'
              ])
           // ⚠️ THE BOUNDS ARE THE APP'S OWN, REPEATED HERE ON PURPOSE. A 0 mm label
           // is drawn as an empty rectangle with no error anywhere, and the app that
@@ -1507,7 +1513,39 @@ service cloud.firestore {
           // keeps each one short and never offers the same word twice.
           && (!('recipeCategories' in request.resource.data)
               || (request.resource.data.recipeCategories is list
-                  && request.resource.data.recipeCategories.size() <= 100));
+                  && request.resource.data.recipeCategories.size() <= 100))
+          // ⚠️ A FLAT MAP OF CLOSED LISTS: the field ids the app knows, each one of
+          // the three states. A state nobody has heard of would be read by the app as
+          // that field's default, but it has no business in the database — and an
+          // unbounded map would be free storage.
+          && (!('haccpFields' in request.resource.data)
+              || haccpFieldsOk(request.resource.data.haccpFields))
+          // A CLOSED SET: every size is a page file in the app (the print dialog
+          // takes the page size from a static stylesheet), so a size it does not
+          // have could not be printed.
+          && (!('haccpSize' in request.resource.data)
+              || request.resource.data.haccpSize in ['40x30', '50x30', '60x40', '62x29', '80x60'])
+          // Bounded, not judged, like a recipe's category: whether the word is still
+          // on the venue's list is the app's business («every recipe» when not).
+          && (!('haccpCategory' in request.resource.data)
+              || (request.resource.data.haccpCategory is string
+                  && request.resource.data.haccpCategory.size() > 0
+                  && request.resource.data.haccpCategory.size() <= 100));
+
+        function haccpStateOk(fields, key) {
+          return !(key in fields) || fields[key] in ['off', 'print', 'blank'];
+        }
+        function haccpFieldsOk(fields) {
+          return fields is map
+            && fields.keys().hasOnly(['name', 'preparedOn', 'useBy', 'lot', 'preparedBy', 'storage',
+                                      'blastChilledOn', 'frozenOn', 'openedOn', 'quantity', 'allergens'])
+            && haccpStateOk(fields, 'name') && haccpStateOk(fields, 'preparedOn')
+            && haccpStateOk(fields, 'useBy') && haccpStateOk(fields, 'lot')
+            && haccpStateOk(fields, 'preparedBy') && haccpStateOk(fields, 'storage')
+            && haccpStateOk(fields, 'blastChilledOn') && haccpStateOk(fields, 'frozenOn')
+            && haccpStateOk(fields, 'openedOn') && haccpStateOk(fields, 'quantity')
+            && haccpStateOk(fields, 'allergens');
+        }
 
         // Nothing deletes a settings document. Turning a setting off is a write.
         allow delete: if false;
@@ -2190,7 +2228,12 @@ service cloud.firestore {
                                                    // list in config/labels) and whether it is archived —
                                                    // kept, out of the list, still linked everywhere.
                                                    // Optional both ways; the current app's merge keeps them.
-                                                   'category', 'archived'])
+                                                   'category', 'archived',
+                                                   // Mise 2's HACCP label (26 Oct 2026): how this
+                                                   // semi-finished good is kept («In frigorifero a
+                                                   // +4 °C»), printed when the venue prints that
+                                                   // field. Optional both ways; the merge keeps it.
+                                                   'haccpStorage'])
           && stampedFor(lid)
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
@@ -2272,6 +2315,9 @@ service cloud.firestore {
                   && request.resource.data.category.size() <= 100))
           && (!('archived' in request.resource.data)
               || request.resource.data.archived is bool)
+          && (!('haccpStorage' in request.resource.data)
+              || (request.resource.data.haccpStorage is string
+                  && request.resource.data.haccpStorage.size() <= 200))
           // ⚠️ ARCHIVING AND RESTORING ARE FOR WHOEVER RUNS THE PLACE (Federico, 24 Oct
           // 2026), but the rest of a recipe is everybody's work. So the role is asked only
           // when the archived state MOVES — a recipe created archived, archived, or
