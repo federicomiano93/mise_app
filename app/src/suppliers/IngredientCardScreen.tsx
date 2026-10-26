@@ -19,8 +19,8 @@ import { ADD_INGREDIENT_OPENER, NEW_OPENER, SEARCH_OPENER, itemOpener, supplierI
 import { useIngredientDeletions } from './ingredientDeletions';
 import { SupplierCard } from './SupplierCard';
 import { useSuppliers, useSuppliersStore } from './SuppliersContext';
-import { cameFromList, cameFromListOrSupplierScreen, supplierScreenOf, tabOfState, useLeave } from './suppliersNav';
-import { tabPath } from './suppliersPath';
+import { cameFromList, cameFromListOrSupplierScreen, fromCard, supplierScreenOf, tabOfState, useLeave } from './suppliersNav';
+import { ingredientMergePath, tabPath } from './suppliersPath';
 import { useDeleteIngredient } from './useDeleteIngredient';
 import { useMayWritePrices } from './useMayWritePrices';
 import styles from './SupplierCard.module.css';
@@ -201,6 +201,10 @@ export function IngredientCardScreen({ id, packaging, preset }: Props) {
         deleting={counting}
         onDelete={canManage && item !== null && id !== null
           ? markClean => runDelete({ id, name: ingredientDisplayName(item) }, () => { markClean(); leaveAfterDelete(); })
+          : undefined}
+        // ⚠️ THE MERGE DOOR IS FOR A PRICE WRITER OF AN EXISTING INGREDIENT (parity I117); the card itself draws it for an ingredient only.
+        onMerge={mayPrice && item !== null && id !== null
+          ? () => { void navigate(ingredientMergePath(id), { state: fromCard(state) }); }
           : undefined}
         renderNewSupplier={host => <SupplierCard id={null} supplier={null} titleRef={noTitle} host={host} />}
         watchRefusedSupplier={listener => store.onMessage(message => {

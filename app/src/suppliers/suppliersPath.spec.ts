@@ -2,12 +2,23 @@ import { describe, expect, test } from 'vitest';
 import {
   NEW_INGREDIENT_PATH, NEW_PACKAGING_PATH, NEW_SUPPLIER_PATH, PACKAGING_TAB_PATH, SUPPLIERS_IMPORT_PATH, SUPPLIERS_PRICE_CHANGES_PATH, SUPPLIERS_PATH, SUPPLIERS_SETTINGS_PATH,
   SUPPLIERS_TAB_PATH,
-  ingredientPath, newIngredientPath, parseSuppliersPath, supplierEditPath, supplierPath, suppliersScreenName, tabOf, tabPath,
+  ingredientMergePath, ingredientPath, newIngredientPath, parseSuppliersPath, supplierEditPath, supplierPath, suppliersScreenName, tabOf, tabPath,
 } from './suppliersPath';
 
 const rest = (path: string) => path.slice(SUPPLIERS_PATH.length);
 
 describe('the addresses of Ingredients & suppliers', () => {
+  test('the merge chooser is one level below an ingredient card, and new is never an id', () => {
+    expect(ingredientMergePath('abc')).toBe('/suppliers/ingredient/abc/merge');
+    expect(parseSuppliersPath('/ingredient/abc/merge')).toEqual({ kind: 'ingredient-merge', id: 'abc' });
+    expect(parseSuppliersPath(rest(ingredientMergePath('a b/c')))).toEqual({ kind: 'ingredient-merge', id: 'a b/c' });
+    expect(parseSuppliersPath('/ingredient/new/merge')).toEqual({ kind: 'unknown' });
+    expect(parseSuppliersPath('/ingredient/abc/merge/x')).toEqual({ kind: 'unknown' });
+    expect(parseSuppliersPath('/ingredient/abc/other')).toEqual({ kind: 'unknown' });
+    expect(tabOf({ kind: 'ingredient-merge', id: 'abc' })).toBe('ingredients');
+  });
+
+
   test('the three tabs: Ingredients is the plain address', () => {
     expect(parseSuppliersPath('')).toEqual({ kind: 'list', tab: 'ingredients' });
     expect(parseSuppliersPath('/')).toEqual({ kind: 'list', tab: 'ingredients' });
@@ -106,6 +117,7 @@ describe('the addresses of Ingredients & suppliers', () => {
     expect(suppliersScreenName('/settings')).toBe('suppliers-settings');
     expect(suppliersScreenName('/import')).toBe('suppliers-import');
     expect(suppliersScreenName('/price-changes')).toBe('suppliers-price-changes');
+    expect(suppliersScreenName('/ingredient/abc/merge')).toBe('suppliers-merge');
     expect(suppliersScreenName('/ingredient/abc')).toBe('suppliers-ingredient');
     expect(suppliersScreenName('/ingredient/new')).toBe('suppliers-ingredient');
     expect(suppliersScreenName('/junk')).toBe('suppliers');

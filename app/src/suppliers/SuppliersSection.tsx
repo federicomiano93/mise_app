@@ -12,6 +12,7 @@ import { useMediaQuery } from '../ui/useMediaQuery';
 import { HandBackProvider, IMPORT_OPENER, NEW_OPENER, PRICE_CHANGES_OPENER, SETTINGS_OPENER, itemOpener, supplierOpener, useHandBackState } from './handBack';
 import { createIngredientDeletions, IngredientDeletionsProvider } from './ingredientDeletions';
 import { useMayImport } from './invoiceImport/useMayImport';
+import { useMayWritePrices } from './useMayWritePrices';
 import { createSupplierDeletions, SupplierDeletionsProvider } from './supplierDeletions';
 import { SuppliersProvider, useSuppliers, useSuppliersStore } from './SuppliersContext';
 import { SuppliersDetail } from './SuppliersDetail';
@@ -63,6 +64,7 @@ function SuppliersScreen() {
   const navigationType = useNavigationType();
   const { canManage } = useSession();
   const mayImport = useMayImport();
+  const mayWritePrices = useMayWritePrices();
   // The address as it is written, not React Router's «*»: a supplier id is split before it is decoded (suppliersPath.ts).
   const view = parseSuppliersPath(pathname.slice(SUPPLIERS_PATH.length), search);
 
@@ -82,6 +84,11 @@ function SuppliersScreen() {
   // «Price changes» has the import's gate (parity I101): the report fills only from imports.
   if ((view.kind === 'import' || view.kind === 'price-changes') && !mayImport) {
     return <Navigate to={SUPPLIERS_PATH} replace state={KEEP_FOCUS} />;
+  }
+  // ⚠️ THE MERGE IS FOR A PRICE WRITER (parity I117: owner or manager with Food cost on): anybody else who types the address is
+  // sent to the ingredient's own card. The rules are the real guard; this is courtesy.
+  if (view.kind === 'ingredient-merge' && !mayWritePrices) {
+    return <Navigate to={ingredientPath(view.id)} replace state={KEEP_FOCUS} />;
   }
   return <SuppliersLayout view={view} />;
 }
@@ -105,9 +112,11 @@ function SuppliersLayout({ view }: { view: ShownView }) {
 
   // ⚠️ THE LIST BESIDE (OR BEHIND) AN ITEM'S CARD: opened from a supplier's screen, the Suppliers tab; otherwise the tab it was
   // opened from (carried in the navigation state), and by its address alone, the tab of its kind.
-  const supplierOrigin = view.kind === 'ingredient' || view.kind === 'ingredient-new' ? supplierScreenOf(state) : null;
+  // The merge chooser sits one level below a card and keeps the card's list beside it.
+  const cardLike = view.kind === 'ingredient' || view.kind === 'ingredient-new' || view.kind === 'ingredient-merge';
+  const supplierOrigin = cardLike ? supplierScreenOf(state) : null;
   let listTab = tabOf(view);
-  if (view.kind === 'ingredient' || view.kind === 'ingredient-new') {
+  if (cardLike) {
     const item = view.kind === 'ingredient' ? ingredients.find(candidate => candidate.id === view.id) : undefined;
     listTab = supplierOrigin !== null ? 'suppliers' : (tabOfState(state) ?? (item && isPackaging(item) ? 'packaging' : listTab));
   }
@@ -260,7 +269,7 @@ function SuppliersLayout({ view }: { view: ShownView }) {
                 openSupplierId={view.kind === 'supplier' || view.kind === 'supplier-edit' ? view.id : supplierOrigin}
                 onTab={openTab}
                 onOpenSupplier={openSupplier}
-                openItemId={view.kind === 'ingredient' ? view.id : null}
+                openItemId={view.kind === 'ingredient' || view.kind === 'ingredient-merge' ? view.id : null}
                 onOpenItem={openItem}
                 newOpen={newOpen}
                 onNew={openNew}

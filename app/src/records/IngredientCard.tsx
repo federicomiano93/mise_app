@@ -102,6 +102,9 @@ type Props = {
   onDelete?: (markClean: () => void) => void | Promise<boolean>;
   // The delete is counting what uses the item: the bin is disabled and says it is busy.
   deleting?: boolean;
+  // «Merge another pack…»: the door is drawn only when this is given AND the card shows an EXISTING ingredient (never packaging, never a
+  // new item). With unsaved edits it says so and does NOT call this: a merge closes and reopens the card, so typing must never be lost.
+  onMerge?: () => void;
   // The supplier card, to draw in a dialog above this one. Without it «+ New supplier…» is not offered (parity C40).
   renderNewSupplier?: (host: NewSupplierHost) => ReactNode;
   // Hears the store's refusal of a supplier save (the name it was saved under); returns the way to stop listening. See host.
@@ -131,7 +134,7 @@ type Refused = RefusedField | PriceBox | LegacyBox | 'priceWeight' | 'legacyPack
 //
 // ⚠️ THE FOOD WORDS (the categories, the package words, the carton word) COME FROM THE VENUE'S COUNTRY, never from `t()`.
 export function IngredientCard({
-  item, presetName, host, kind, preset, suppliers, categories, packs, orderUnits = [], language, titleRef, onSave, onLeave, onDelete, deleting = false, renderNewSupplier, watchRefusedSupplier,
+  item, presetName, host, kind, preset, suppliers, categories, packs, orderUnits = [], language, titleRef, onSave, onLeave, onDelete, deleting = false, onMerge, renderNewSupplier, watchRefusedSupplier,
   mayPrice = false, country, money = FALLBACK_MONEY, readHistory,
 }: Props) {
   const { t, locale } = useT();
@@ -913,6 +916,24 @@ export function IngredientCard({
             nutrientBoxes={nutrientBoxes}
             controls={allergenControls}
           />
+        ) : null}
+
+        {/* «Merge another pack…» (3e-7): two ingredients that are one product bought in two packs. Existing ingredients only; the screen
+            hands the door in to whoever may write prices. */}
+        {opened && kind === 'ingredient' && onMerge ? (
+          <Button
+            variant="secondary"
+            className={styles.mergeDoor}
+            onPress={() => {
+              if (unsaved()) {
+                void alert({ message: t('sup.merge.saveFirst'), okLabel: t('common.ok') });
+                return;
+              }
+              onMerge();
+            }}
+          >
+            {t('sup.merge.button')}
+          </Button>
         ) : null}
 
         {/* «Not in use at the moment» (3e-5b): an EXISTING item only, edited on the working copy like every other field and
