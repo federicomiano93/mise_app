@@ -12,6 +12,15 @@
 // while the screen lock is let go so Android can switch the backlight off. One tap wakes
 // it WITHOUT reaching what is underneath.
 //
+// ⚠️ NOTHING RELOADS THE PAGE WHILE THE REST COVER IS UP. In 'rest' the screen is kept on by
+// the Wake Lock alone, and Android's own screen timeout counts from the last TOUCH: a reload
+// drops the lock for a few seconds, Android sees a timeout long expired and switches the
+// screen off at once — the lock screen, although the setting says «never switch off». So an
+// update is applied by itself only in 'night' (the screen is going off anyway), and with
+// nightHours 0 the daily reload is done by the waking tap itself (shouldReloadOnWake): that
+// touch is what keeps Android's screen on through the reload. The lock is also asked for again
+// on every tick (refreshWakeLock), since a lost one is otherwise never requested twice.
+//
 // Pause drawing while resting: deliberately NOT coupled to the Orders render scheduler.
 // The cover is enough. The Orders page answers the rest screen from its live data; every
 // other page gets the same answer from js/kiosk-orders.js (a few reads while resting).
@@ -20,10 +29,10 @@ import { t, onLanguageChange, localeTag } from './i18n.js';
 import { isSectionAllowed } from './sections.js';
 import { cardVisibleTo } from './home-cards.js';
 import { BUSY_SELECTORS, MAX_ATTEMPTS, readAttempts } from './update-gate.js';
-import { acquireWakeLock, releaseWakeLock } from './wake-lock.js';
+import { acquireWakeLock, releaseWakeLock, refreshWakeLock } from './wake-lock.js';
 import {
   KIOSK_STORAGE_KEY, KIOSK_LAST_RELOAD_KEY, KIOSK_RESUME_KEY,
-  readKioskSettings, nextKioskState, shouldAutoUpdate, shouldDailyReload, workDayDate,
+  readKioskSettings, nextKioskState, shouldAutoUpdate, shouldDailyReload, shouldReloadOnWake, workDayDate,
   shouldRestNow, wakeArmDelay, REST_NOW_GUARD_MS,
 } from './kiosk-model.js';
 
@@ -34,6 +43,7 @@ const FADE_MS = 200;
 // timer is the normal wake path on a tablet, and the click is the path for a mouse.
 const LIFT_WAIT_MS = 700;
 const SHIFT_PX = 6;
+const RELOAD_STALL_MS = 15 * 1000;
 const WAKE_OWNER = 'kiosk';
 const INPUT_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart'];
 const SWALLOWED = ['pointerdown', 'pointerup', 'pointercancel', 'mousedown', 'mouseup',
@@ -114,6 +124,7 @@ let wakeGuardUntil = 0;
 let tickTimer = null;
 let lockHeld = false;
 let updating = false;
+let reloadingOnWake = false;
 let unsubLanguage = null;
 let unsubSession = null;
 let started = false;
@@ -248,9 +259,13 @@ function paintRest() {
   parts.offline.hidden = !offline;
   parts.offline.textContent = offline ? t('kiosk.rest.offline') : '';
   parts.centre.textContent = '';
-  collectSections().forEach(section => parts.centre.append(sectionBlock(section)));
-  // The tap hint is no longer drawn; it stays as the cover's accessible name.
+  // While the page reloads after the waking tap, one line replaces the Orders sections.
+  if (reloadingOnWake) parts.centre.append(line('kiosk-rest-section-title', t('kiosk.rest.reloading')));
+  else collectSections().forEach(section => parts.centre.append(sectionBlock(section)));
+  // The tap hint is no longer drawn; it stays as the cover's accessible name (while the page
+  // reloads after the waking tap, the name says so — what TalkBack reads on the focused cover).
   overlay.setAttribute('aria-label', t('kiosk.rest.tap'));
+  if (reloadingOnWake) overlay.setAttribute('aria-label', t('kiosk.rest.reloading'));
   // Burn-in: the block moves a few pixels when the MINUTE changes (the paint itself runs
   // on every 15 s tick), by transform only.
   const minute = Math.floor(now.getTime() / 60000);
@@ -303,10 +318,10 @@ function showRest() {
     const cover = overlay;
     armTimer = setTimeout(() => {
       armTimer = null;
-      if (overlay === cover) disarmWake = armWakeTap(window, overlay, wake);
+      if (overlay === cover) disarmWake = armWakeTap(window, overlay, onWakeTap);
     }, delay);
   } else {
-    disarmWake = armWakeTap(window, overlay, wake);
+    disarmWake = armWakeTap(window, overlay, onWakeTap);
   }
 }
 
@@ -316,6 +331,7 @@ function hideRest() {
   const gone = overlay;
   overlay = null;
   overlayParts = null;
+  reloadingOnWake = false;
   if (!gone) return;
   // js/whats-new-boot.js waits for this before opening its notice, so an unattended
   // update never lights a dialog over the black cover (both are js/ root: no import).
@@ -396,42 +412,75 @@ function wake(viaKey) {
   }
 }
 
+// The waking tap. With nightHours 0, after a long rest, this tap does the day's reload: the
+// cover stays up with one line, and the page comes back 'active' (no resume key). The tap is
+// already disarmed; `updating` keeps every later tick from starting or hiding anything.
+function onWakeTap(viaKey) {
+  if (!updating && settings && state === 'rest') {
+    const verdict = shouldReloadOnWake({
+      state, restSince, now: Date.now(),
+      busy: busyBySelectors() || typingNow(), signedIn: isSignedIn(),
+      nightHours: settings.nightHours, lastReloadDay: safeGet(localStorage, KIOSK_LAST_RELOAD_KEY),
+    });
+    if (verdict.reload) {
+      updating = true;
+      reloadingOnWake = true;
+      safeSet(localStorage, KIOSK_LAST_RELOAD_KEY, verdict.day);
+      try { sessionStorage.removeItem(KIOSK_RESUME_KEY); } catch { /* ignore */ }
+      paintRest();
+      location.reload();
+      // Failsafe: a reload that stalls (a network-first page with no timeout) must not leave
+      // the cover on screen for good — if this page is still here, give the app back.
+      setTimeout(() => {
+        if (!updating || !reloadingOnWake) return;
+        updating = false;
+        reloadingOnWake = false;
+        wake(viaKey);
+      }, RELOAD_STALL_MS);
+      return;
+    }
+  }
+  wake(viaKey);
+}
+
 async function maybeReload(prev, busy, signedIn) {
   if (updating) return;
   const now = Date.now();
   const daily = shouldDailyReload({
-    prevState: prev, state, restSince, now, busy, signedIn,
+    prevState: prev, state, now, busy, signedIn,
     visible: document.visibilityState === 'visible',
-    nightHours: settings.nightHours, lastReloadDay: safeGet(localStorage, KIOSK_LAST_RELOAD_KEY),
+    lastReloadDay: safeGet(localStorage, KIOSK_LAST_RELOAD_KEY),
   });
+  // ⚠️ Both reloads happen ONLY at the night-entry tick (rest → night); see shouldAutoUpdate.
+  if (!(prev === 'rest' && state === 'night')) return;
+  // A waiting update is applied INSTEAD of the plain daily reload: it reloads anyway, so it
+  // also counts as the day's reload and the page comes back dark.
+  if (!busy && readAttempts() < MAX_ATTEMPTS && 'serviceWorker' in navigator) {
+    let waiting = false;
+    try {
+      const reg = await navigator.serviceWorker.getRegistration();
+      waiting = !!(reg && reg.waiting && navigator.serviceWorker.controller);
+    } catch { waiting = false; }
+    // The world may have moved while we asked (somebody woke it): re-check the current state.
+    if (updating) return;
+    const stillBusy = busyBySelectors() || typingNow();
+    if (shouldAutoUpdate({ prevState: 'rest', state, busy: stillBusy, updateWaiting: waiting })) {
+      updating = true;
+      safeSet(localStorage, KIOSK_LAST_RELOAD_KEY, daily.day);
+      safeSet(sessionStorage, KIOSK_RESUME_KEY, 'night');
+      try {
+        await updateNowImpl();
+      } catch { updating = false; }
+      return;
+    }
+    if (state !== 'night') return;
+  }
   if (daily.reload) {
     updating = true;
     safeSet(localStorage, KIOSK_LAST_RELOAD_KEY, daily.day);
     safeSet(sessionStorage, KIOSK_RESUME_KEY, daily.resume);
     location.reload();
-    return;
   }
-  if (busy || readAttempts() >= MAX_ATTEMPTS) return;
-  if (!('serviceWorker' in navigator)) return;
-  let waiting = false;
-  try {
-    const reg = await navigator.serviceWorker.getRegistration();
-    waiting = !!(reg && reg.waiting && navigator.serviceWorker.controller);
-  } catch { waiting = false; }
-  // The world may have moved while we asked: re-check with the current state.
-  const stillBusy = busyBySelectors() || typingNow();
-  if (!shouldAutoUpdate({ state, busy: stillBusy, updateWaiting: waiting })) return;
-  updating = true;
-  safeSet(sessionStorage, KIOSK_RESUME_KEY, state);
-  // Woken in the same breath: do not reload under a person who is here.
-  if (state === 'active') {
-    try { sessionStorage.removeItem(KIOSK_RESUME_KEY); } catch { /* ignore */ }
-    updating = false;
-    return;
-  }
-  try {
-    await updateNowImpl();
-  } catch { updating = false; }
 }
 
 function tick() {
@@ -452,6 +501,7 @@ function tick() {
   // The model says no lock for a signed-out tablet; a page still loading its session (a
   // resumed one) keeps it until the answer comes.
   syncLock(result.wakeLock || (sessionStatus === 'loading' && result.state !== 'night'));
+  if (lockHeld) refreshWakeLock();
   if (state !== 'active') {
     paintRest();
     maybeReload(prev, busySelectors || typingNow(), signedIn);
@@ -509,6 +559,8 @@ function start() {
   // A reload we started ourselves (update, daily) comes back in the state it left, so
   // the screen is not lit up in the middle of the night. It is dropped again as soon as
   // the session turns out not to be a working one (see onSessionChange).
+  // Resuming 'rest' only serves pages reloaded by older versions of this file: nothing here
+  // reloads under the rest cover any more.
   const resume = safeGet(sessionStorage, KIOSK_RESUME_KEY);
   try { sessionStorage.removeItem(KIOSK_RESUME_KEY); } catch { /* ignore */ }
   if (resume === 'rest' || resume === 'night') {

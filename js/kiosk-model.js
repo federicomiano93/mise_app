@@ -78,9 +78,18 @@ export function wakeArmDelay(guardUntil, now) {
   return left > 0 ? left : 0;
 }
 
-// An update may be applied only while nobody is looking at the screen.
-export function shouldAutoUpdate({ state, busy, updateWaiting } = {}) {
-  return (state === 'rest' || state === 'night') && !busy && !!updateWaiting;
+// An update may be applied by itself only at the moment the tablet ENTERS night (rest → night),
+// when the screen is going off anyway and the page is about to reload for the day regardless.
+// ⚠️ NEVER in 'rest': the screen is kept on there by the Wake Lock alone, while Android's own
+// timeout counts from the last TOUCH — so any reload under the rest cover drops the lock for a
+// few seconds, Android sees the timeout long expired and switches the screen off at once (the
+// lock screen comes up although the setting says «never»).
+// ⚠️ NOT later in night either: there the lock is released, Android has switched the screen off
+// and timers freeze, so a visible page means somebody pressed the power button — a reload then
+// happens in front of the baker and comes back dark. An update arriving later waits for the
+// wake, and the update gate of js/sw-update.js (a tap keeps the screen on).
+export function shouldAutoUpdate({ prevState, state, busy, updateWaiting } = {}) {
+  return prevState === 'rest' && state === 'night' && !busy && !!updateWaiting;
 }
 
 function pad(n) { return String(n).padStart(2, '0'); }
@@ -94,27 +103,37 @@ export function workDayDate(now) {
   return dayString(d);
 }
 
-// The daily safety reload — once per calendar day, and only while nobody is looking:
-//  • at the moment the tablet ENTERS night (rest → night) it reloads and comes back dark
-//    (resume 'night', no wake lock);
-//  • with nightHours 0 («never») there is no night, so after REST_RELOAD_MINUTES of
-//    continuous rest it reloads and comes back resting (resume 'rest').
-// Never in 'active'. ⚠️ NOT «the first rest after 03:00»: that reloaded in front of a baker
-// reading a recipe at 03:10, and with the screen off Android freezes timers, so it fired
-// when somebody lit the screen in the morning.
+// The daily safety reload — once per calendar day, and only while nobody is looking: at the
+// moment the tablet ENTERS night (rest → night) it reloads and comes back dark (resume
+// 'night', no wake lock — the screen is going off anyway).
+// ⚠️ NEVER in 'rest' (see shouldAutoUpdate: a reload under the cover switches the screen off
+// at once, because Android's timeout counts from the last touch). With nightHours 0 there is
+// no night, so that venue's daily reload happens on the WAKING TAP instead
+// (shouldReloadOnWake). Never in 'active'.
+// ⚠️ NOT «the first rest after 03:00»: that reloaded in front of a baker reading a recipe at
+// 03:10, and with the screen off Android freezes timers, so it fired when somebody lit the
+// screen in the morning.
 // `busy` here includes a focused text field; `visible` is the page's visibility.
 // Returns { reload, day, resume } — `day` is what to store as kiosk-last-reload.
 export const REST_RELOAD_MINUTES = 60;
-export function shouldDailyReload({ prevState, state, restSince, now, busy, signedIn, visible, nightHours, lastReloadDay } = {}) {
+export function shouldDailyReload({ prevState, state, now, busy, signedIn, visible, lastReloadDay } = {}) {
   const day = dayString(new Date(Number(now)));
   const no = { reload: false, day, resume: null };
   if (busy || !signedIn || !visible || lastReloadDay === day) return no;
   if (prevState === 'rest' && state === 'night') return { reload: true, day, resume: 'night' };
-  if (Number(nightHours) === 0 && state === 'rest'
-      && Number(now) - Number(restSince) >= REST_RELOAD_MINUTES * MINUTE) {
-    return { reload: true, day, resume: 'rest' };
-  }
   return no;
+}
+
+// «Never switch off» (nightHours 0): the daily reload is done by the tap that wakes a cover
+// which has rested for REST_RELOAD_MINUTES or more, once per calendar day. That tap is a
+// touch, so Android keeps the screen on through the reload; the page comes back 'active'
+// (no resume). `state` is the state BEFORE waking. Returns { reload, day }.
+export function shouldReloadOnWake({ state, restSince, now, busy, signedIn, nightHours, lastReloadDay } = {}) {
+  const day = dayString(new Date(Number(now)));
+  const reload = Number(nightHours) === 0 && state === 'rest' && !busy && !!signedIn
+    && lastReloadDay !== day
+    && Number(now) - Number(restSince) >= REST_RELOAD_MINUTES * MINUTE;
+  return { reload, day };
 }
 
 // The Home's kiosk band (Rest / Exit) is shown only where kiosk mode is on, whoever signs in.

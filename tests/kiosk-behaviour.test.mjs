@@ -81,6 +81,12 @@ async function makeEnv({ settings = { enabled: true, restMinutes: 2, nightHours:
     cover: () => doc.body.children.find(c => c.id === 'kiosk-rest') || null,
     advance(ms) { clock.now += ms; },
     fire(type) { (listeners.get(type) || []).forEach(fn => fn({ type })); },
+    // The waking tap: a key press aimed at the cover (the path armWakeTap finishes at once).
+    tap() {
+      const ev = { type: 'keydown', target: doc.body.children.find(c => c.id === 'kiosk-rest'),
+        preventDefault() {}, stopPropagation() {} };
+      (listeners.get('keydown') || []).forEach(fn => fn(ev));
+    },
     async tick() { k.tick(); await settle(); },
     stop() {
       localStorage.setItem('kiosk-mode', JSON.stringify({ enabled: false }));
@@ -107,30 +113,59 @@ test('rests after restMinutes of silence, and the cover is up', () => inEnv({}, 
   assert.ok(e.cover());
 }));
 
-test('⚠ the update gate appearing while resting does not stop the auto-update', () => inEnv({}, async e => {
-  e.advance(3 * MIN);
-  await e.tick();                       // now resting, nothing waiting yet
+// A day already reloaded, so the rest→night transition does not start the daily reload and the
+// auto-update is what is being looked at.
+const RELOADED_TODAY = { 'kiosk-last-reload': '2026-10-05' };
+
+// Rests, then (with an update waiting or not) crosses into night; that tick is the night-ENTRY.
+async function toNight(e, { waiting = false } = {}) {
+  e.advance(3 * MIN); await e.tick();
   assert.equal(e.k.state(), 'rest');
-  e.waiting.value = true;
+  e.waiting.value = waiting;
+  e.advance(61 * MIN); await e.tick();
+  assert.equal(e.k.state(), 'night');
+}
+
+test('⚠ the update gate appearing at the night entry does not stop the auto-update, which replaces the plain reload', () => inEnv({}, async e => {
   const gate = new El(e.doc, 'div'); gate.id = 'sw-update-gate';
   e.doc.busy['.app-dialog-backdrop'] = [gate];
-  await e.tick();
+  await toNight(e, { waiting: true });
   assert.equal(e.updates.n, 1, 'updateNow was called');
-  assert.equal(sessionStorage.getItem('kiosk-resume'), 'rest');
+  assert.equal(e.reloads.n, 0, 'no second, plain reload');
+  assert.equal(sessionStorage.getItem('kiosk-resume'), 'night');
+  assert.match(localStorage.getItem('kiosk-last-reload'), /^2026-10-05$/);
+}));
+
+test('⚠ an update arriving later in the night waits: not on a tick, not when the page becomes visible', () => inEnv({ local: RELOADED_TODAY }, async e => {
+  await toNight(e);
+  e.waiting.value = true;
+  e.advance(5 * MIN); await e.tick();
+  e.fire('visibilitychange');
+  await e.settle();
+  assert.equal(e.updates.n, 0);
+  assert.equal(e.reloads.n, 0);
+}));
+
+test('⚠ an update waiting under the rest cover is NOT applied: a reload there switches the screen off', () => inEnv({}, async e => {
+  e.advance(3 * MIN); await e.tick();
+  e.waiting.value = true;
+  e.advance(30 * MIN); await e.tick();
+  assert.equal(e.k.state(), 'rest');
+  assert.equal(e.updates.n, 0);
+  assert.equal(e.reloads.n, 0);
 }));
 
 test('a real dialog still holds the update back, and so do too many failed attempts', async () => {
-  await inEnv({}, async e => {
+  await inEnv({ local: RELOADED_TODAY }, async e => {
     e.advance(3 * MIN); await e.tick();
     e.waiting.value = true;
     e.doc.busy['.app-dialog-backdrop'] = [new El(e.doc, 'div')];
-    await e.tick();
+    e.advance(61 * MIN); await e.tick();
+    assert.equal(e.k.state(), 'night');
     assert.equal(e.updates.n, 0);
   });
-  await inEnv({ session: { 'sw-update-attempts': '2' } }, async e => {
-    e.advance(3 * MIN); await e.tick();
-    e.waiting.value = true;
-    await e.tick();
+  await inEnv({ local: RELOADED_TODAY, session: { 'sw-update-attempts': '2' } }, async e => {
+    await toNight(e, { waiting: true });
     assert.equal(e.updates.n, 0, 'attempts >= MAX_ATTEMPTS: no reload loop all night');
   });
 });
@@ -190,15 +225,16 @@ test('a focused field does not stop the rest, but holds back the reloads', () =>
   assert.equal(e.reloads.n, 0, 'no daily reload either');
   input.remove();                         // the field is gone from the page
   await e.tick();
-  assert.equal(e.updates.n, 1);
+  assert.equal(e.updates.n, 0, 'the night-entry tick has passed: the update waits for the wake and the gate');
 }));
 
-test('a focused checkbox is not typing', () => inEnv({}, async e => {
+test('a focused checkbox is not typing', () => inEnv({ local: RELOADED_TODAY }, async e => {
   const box = new El(e.doc, 'input'); box.type = 'checkbox';
   e.doc.body.append(box); box.focus();
   e.advance(3 * MIN); await e.tick();
   e.waiting.value = true;
-  await e.tick();
+  e.advance(61 * MIN); await e.tick();
+  assert.equal(e.k.state(), 'night');
   assert.equal(e.updates.n, 1);
 }));
 
@@ -297,11 +333,119 @@ test('a module that fails to load leaves the kiosk working, and is not retried i
   } finally { console.warn = warn; }
 }));
 
-test('waking while a reload is on its way drops the resume marker', () => inEnv({}, async e => {
-  e.advance(3 * MIN); await e.tick();
-  e.waiting.value = true;
-  await e.tick();                         // the update starts: resume = rest
-  assert.equal(sessionStorage.getItem('kiosk-resume'), 'rest');
+test('waking while a reload is on its way drops the resume marker', () => inEnv({ local: RELOADED_TODAY }, async e => {
+  await toNight(e, { waiting: true });    // the update starts: resume = night
+  assert.equal(sessionStorage.getItem('kiosk-resume'), 'night');
   e.k.session({ status: 'signed-out' });  // any wake path
   assert.equal(sessionStorage.getItem('kiosk-resume'), null);
+}));
+
+// «Never switch off» (nightHours 0): no reload under the cover, the day's reload is the waking tap.
+const NEVER = { enabled: true, restMinutes: 2, nightHours: 0 };
+
+test('⚠ nightHours 0: two hours of rest reload nothing and the lock stays held', () => inEnv({ settings: NEVER }, async e => {
+  e.advance(3 * MIN); await e.tick();
+  assert.equal(e.k.state(), 'rest');
+  e.waiting.value = true;
+  e.advance(2 * 60 * MIN); await e.tick();
+  assert.equal(e.k.state(), 'rest');
+  assert.equal(e.reloads.n, 0);
+  assert.equal(e.updates.n, 0);
+  assert.equal(e.k.hasLock(), true);
+  assert.equal(sessionStorage.getItem('kiosk-resume'), null);
+}));
+
+test('nightHours 0: the waking tap after a long rest reloads once, covered, and comes back active', () => inEnv({ settings: NEVER }, async e => {
+  e.advance(3 * MIN); await e.tick();
+  e.advance(2 * 60 * MIN); await e.tick();
+  e.tap();
+  assert.equal(e.reloads.n, 1);
+  assert.match(localStorage.getItem('kiosk-last-reload'), /^2026-10-05$/);
+  assert.equal(sessionStorage.getItem('kiosk-resume'), null, 'it comes back active');
+  assert.ok(e.cover(), 'the cover stays up until the page is gone');
+  assert.equal(e.k.state(), 'rest');
+  const centre = e.cover().children[0].children[1];
+  assert.equal(centre.children.length, 1);
+  assert.equal(centre.children[0].className, 'kiosk-rest-section-title');
+  assert.equal(centre.children[0].textContent, 'One moment, reloading Mise…');
+  assert.equal(e.cover().attrs['aria-label'], 'One moment, reloading Mise…');
+  e.advance(15 * 1000); await e.tick();   // a later tick neither hides the cover nor reloads again
+  assert.equal(e.reloads.n, 1);
+  assert.ok(e.cover());
+}));
+
+test('⚠ a wake reload that stalls gives the app back after 15 seconds', () => inEnv({ settings: NEVER }, async e => {
+  const timers = [];
+  const realSet = globalThis.setTimeout;
+  globalThis.setTimeout = (fn, ms, ...rest) => { timers.push({ fn, ms }); return realSet(fn, ms, ...rest); };
+  try {
+    e.advance(3 * MIN); await e.tick();
+    e.advance(2 * 60 * MIN); await e.tick();
+    e.tap();
+    assert.equal(e.reloads.n, 1);
+    const stall = timers.find(x => x.ms === 15000);
+    assert.ok(stall, 'a failsafe timer was set');
+    assert.ok(e.cover());
+    stall.fn();                           // the page is still here
+    assert.equal(e.k.state(), 'active');
+    assert.equal(e.cover(), null);
+  } finally { globalThis.setTimeout = realSet; }
+}));
+
+test('every tick re-requests a wake lock the browser let go of', () => inEnv({}, async e => {
+  const log = { requests: 0, sentinels: [] };
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, writable: true, value: {
+    onLine: true, serviceWorker: { controller: {}, getRegistration: async () => ({ waiting: null }) },
+    wakeLock: { async request() {
+      log.requests++;
+      const s = { listener: null, addEventListener(t, f) { s.listener = f; }, release() {} };
+      log.sentinels.push(s);
+      return s;
+    } },
+  } });
+  // The kiosk already holds its owner (start() ran before the API existed, so nothing was
+  // requested then): the first tick asks, and so does the first tick after a release.
+  await e.tick(); await e.settle();
+  assert.equal(log.requests, 1, 'the tick asked for the lock');
+  await e.tick(); await e.settle();
+  assert.equal(log.requests, 1, 'a live sentinel is not asked for twice');
+  log.sentinels[0].listener();            // released by the browser, the page never hidden
+  await e.tick(); await e.settle();
+  assert.equal(log.requests, 2, 'the next tick asked again');
+}));
+
+test('nightHours 0: a second long rest and wake the same day does not reload again', () => inEnv({ settings: NEVER, local: RELOADED_TODAY }, async e => {
+  e.advance(3 * MIN); await e.tick();
+  e.advance(2 * 60 * MIN); await e.tick();
+  e.tap();
+  assert.equal(e.reloads.n, 0);
+  assert.equal(e.k.state(), 'active');
+  assert.equal(e.cover(), null);
+}));
+
+test('nightHours 0: a short rest or a focused text field makes the waking tap a plain wake', async () => {
+  await inEnv({ settings: NEVER }, async e => {
+    e.advance(3 * MIN); await e.tick();
+    e.advance(30 * MIN); await e.tick();
+    e.tap();
+    assert.equal(e.reloads.n, 0);
+    assert.equal(e.k.state(), 'active');
+  });
+  await inEnv({ settings: NEVER }, async e => {
+    const input = new El(e.doc, 'input');
+    e.doc.body.append(input); input.focus();
+    e.advance(3 * MIN); await e.tick();
+    e.advance(2 * 60 * MIN); await e.tick();
+    e.tap();
+    assert.equal(e.reloads.n, 0, 'typing: no reload');
+    assert.equal(e.k.state(), 'active');
+  });
+});
+
+test('with a night the waking tap never reloads (their daily reload is the night transition)', () => inEnv({}, async e => {
+  e.advance(3 * MIN); await e.tick();
+  e.advance(30 * MIN); await e.tick();
+  e.tap();
+  assert.equal(e.reloads.n, 0);
+  assert.equal(e.k.state(), 'active');
 }));

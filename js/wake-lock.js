@@ -44,6 +44,14 @@ function onVisible() {
   if (document.visibilityState === 'visible') acquire();
 }
 
+// Asks again for a lock that was lost: the browser can release the sentinel without the page
+// ever being hidden, and a refused request is not retried by anything else. Cheap to call
+// often — acquire() does nothing with no owner, a live sentinel or a request in flight.
+export function refreshWakeLock() {
+  if (typeof document === 'undefined' || document.visibilityState !== 'visible') return;
+  acquire();
+}
+
 export function acquireWakeLock(owner) {
   if (owners.has(owner)) return;
   owners.add(owner);
