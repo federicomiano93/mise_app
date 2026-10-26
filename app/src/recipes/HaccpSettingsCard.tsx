@@ -34,8 +34,9 @@ export const sizeText = (size: HaccpSize): string => {
 // the eleven fields with three states each. NEW IN MISE 2.
 //
 // ⚠️ SAVES ON THE TAP, like every other card, through the same `save` (the store puts a refused change back and the page's
-// status line says so). THE FIELDS ARE WRITTEN AS ONE WHOLE MAP `{ haccpFields: { …all 11 } }`: the rules take the map as a
-// unit, and a write of one key would replace the others. The map is built from what the venue holds now with the one change.
+// status line says so). THE FIELDS ARE WRITTEN AS ONE WHOLE MAP `{ haccpFields: { …all 11 } }`, built from what the venue
+// holds now with the one change: the stored map then says every field's state outright, never «missing = its default»
+// (a merge write would keep the other keys anyway; sending all eleven is what makes the stored map complete).
 //
 // ⚠️ THE LIST FILTER OFFERS ONLY WHAT THE VENUE HAS: «All recipes» and each recipe category. A word stored that is no longer
 // on the list shows as «All recipes» (haccpListCategory), the same reading the HACCP list itself has.

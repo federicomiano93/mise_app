@@ -1773,3 +1773,16 @@ reason («too long: switch a field off or choose a bigger label»), never shrunk
 `config/labels` `haccpFields` (map, keys and values from closed lists), `haccpSize` (closed set), `haccpCategory` (string 1–100).
 The prepared-by name is read from `locations/{lid}/members/{uid}.firstName` — one read when the label opens, only when that field
 is printed. ⚠️ P13: a person's first name goes on paper on the food; off by default, Federico told.
+
+### Image labels 2 — as built, after the review (26 Oct 2026)
+
+- **The prepared-on date is a box whenever the use-by date or the lot counts from it**, even with the prepared-on date itself
+  off the label (a note says it is not printed): a date nobody can see must not decide a use-by date. Cleared, the use-by date
+  is a blank line and the screen says why.
+- **Every untouched date follows the day**: asked again when the screen comes back, every minute, and at Print — a Print after
+  midnight with no look in between redraws today's label first and prints on the next tap. A typed date stays the person's.
+- **The storage box follows the recipe's text until somebody types in it.**
+- **Every line to write on is at least 22 mm long**: a long caption on a narrow label (40 × 30, «Da consumarsi entro il:») puts
+  its line on the row underneath, margin to margin.
+- The refusals say who can change Settings («whoever manages the venue»), and «too long» first says to shorten what was typed.
+- A HACCP print is announced as `haccp-label-printed` (the product label's stays `label-printed`).

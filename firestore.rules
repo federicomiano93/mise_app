@@ -1535,6 +1535,9 @@ service cloud.firestore {
         function haccpStateOk(fields, key) {
           return !(key in fields) || fields[key] in ['off', 'print', 'blank'];
         }
+        // ⚠️ THE ELEVEN FIELD IDS ARE A CLOSED LIST THE APP STORES WHOLE (every Settings tap writes all eleven): a field id
+        // dropped from this list while a venue's stored map still holds it makes config/labels unwritable for that venue —
+        // every later write carries the old key and is refused. Retire a field by keeping its id here.
         function haccpFieldsOk(fields) {
           return fields is map
             && fields.keys().hasOnly(['name', 'preparedOn', 'useBy', 'lot', 'preparedBy', 'storage',
