@@ -7,24 +7,12 @@ import type { HaccpField, HaccpSize, HaccpState } from '@mise/shared/haccp-label
 import { sortedCategories } from '@mise/shared/recipe-shelf';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
+import { HACCP_FIELD_TEXT } from './haccpText';
 import { useRecipes } from './RecipesContext';
 import { SegmentedChoice } from './SegmentedChoice';
 import styles from './LabelSettings.module.css';
 
-// What each field and each state SAYS, as KEYS resolved while drawing (the language arrives after the module is read).
-export const HACCP_FIELD_TEXT: Readonly<Record<HaccpField, MessageKey>> = {
-  name: 'haccp.field.name',
-  preparedOn: 'haccp.field.preparedOn',
-  useBy: 'haccp.field.useBy',
-  lot: 'haccp.field.lot',
-  preparedBy: 'haccp.field.preparedBy',
-  storage: 'haccp.field.storage',
-  blastChilledOn: 'haccp.field.blastChilledOn',
-  frozenOn: 'haccp.field.frozenOn',
-  openedOn: 'haccp.field.openedOn',
-  quantity: 'haccp.field.quantity',
-  allergens: 'haccp.field.allergens',
-};
+// What each state SAYS, as KEYS resolved while drawing (the language arrives after the module is read).
 const STATE_TEXT: Readonly<Record<HaccpState, MessageKey>> = {
   off: 'haccp.state.off',
   print: 'haccp.state.print',

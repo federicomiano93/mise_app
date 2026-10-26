@@ -4,6 +4,7 @@ import * as labelModel from '@mise/shared/recipe-label-model';
 import * as market from '@mise/shared/market';
 import * as imageLayout from '@mise/shared/label-image-layout';
 import * as textCheck from '@mise/shared/label-text-check';
+import * as haccpLabel from '@mise/shared/haccp-label';
 
 // The interface language must never reach a word that names a FOOD — the app side of the guard (parity doc items 54,
 // 55 and 110e; shared/src/label-separation.spec.ts guards the pure modules).
@@ -33,6 +34,7 @@ const LABEL_FILES: readonly string[] = [
   './recipes/DeclarationCard.tsx', // the ingredient declaration: Contains / May contain, and the text sent or copied
   './recipes/AllergenSheet.tsx', // the law card (the fourteen groups) and what each recipe contains
   './recipes/LabelScreen.tsx', // the label screen: the refusals, the notes, the date, Copy and Send (the text of the whole label)
+  './recipes/HaccpLabelBody.tsx', // the HACCP label: its captions and values in the country's words, the allergens' names
   './recipes/ImageLabelBody.tsx', // the «with logo» image label: PRODOTTO IL, the allergen name in the text check, the typed ingredients
   './recipes/LabelCard.tsx', // the label as words: the ingredients, Contains, May contain and the nutrition table
   './records/AllergenSections.tsx', // the ingredient card's allergen rows, their group headings and the nutrient names, where an allergen is DECLARED
@@ -50,6 +52,8 @@ const LABEL_WORDS = [
   'allergenLabel', 'allergenWordIt', 'nutrientWordIt',
   // «PRODOTTO IL:» / «PRODUCED ON:» of the image label: a label word, the language last.
   'producedOnWord',
+  // The HACCP label's captions («Preparato il», «Lotto»…) and its content (captions + the allergens' names): the language last.
+  'haccpCaption', 'haccpContent',
 ] as const;
 const NEVER_CALLED: readonly string[] = ['allergenLabel', 'allergenWordIt', 'nutrientWordIt'];
 const TAKE_NO_LANGUAGE: readonly string[] = ['ingredientLine'];
@@ -59,7 +63,7 @@ const LANGUAGE_IS_SECOND: readonly string[] = ['declarationText'];
 //
 // Anything not here, and not a type, makes the importing file a label file: it must then be on LABEL_FILES, where the
 // rules above apply to it. Each name is allowed for the reason beside it; none returns a word a person reads.
-const MODULES = '@mise/shared/(?:market|recipe-label-model|allergen-model|label-image-layout|label-text-check)';
+const MODULES = '@mise/shared/(?:market|recipe-label-model|allergen-model|label-image-layout|label-text-check|haccp-label)';
 const ALLOWED_VALUES: Readonly<Record<string, string>> = {
   countryOf: 'a country CODE (GB / IT), used for sums and links, not a word',
   currencyOf: 'a currency symbol, not a food word',
@@ -94,12 +98,35 @@ const ALLOWED_VALUES: Readonly<Record<string, string>> = {
   LINE_HEIGHT: 'dots between two lines of ingredients, a number',
   TEXT_LIMIT_Y: 'where the ingredients must end, a number',
   LOGO_W: 'the logo’s width in pixels, a number',
+  // The HACCP label (shared/haccp-label.ts): the fields, states, sizes and the settings are codes and numbers; the words of the
+  // label come only from haccpCaption / haccpContent (on LABEL_WORDS), which take the country's language.
+  HACCP_FIELDS: 'field CODES; the words come only from haccpCaption / haccpContent',
+  HACCP_STATES: 'state codes (off / print / blank)',
+  HACCP_DEFAULTS: 'a state per field CODE',
+  HACCP_DATE_FIELDS: 'field codes',
+  HACCP_TEXT_FIELDS: 'field codes',
+  HACCP_TEXT_MAX: 'a box’s bound, a number',
+  HACCP_SIZES: 'size codes (40x30 …), not words',
+  HACCP_DEFAULT_SIZE: 'a size code',
+  DOTS_PER_MM: 'dots to the millimetre, a number',
+  haccpSizeMm: 'a size in millimetres, numbers',
+  haccpSizeDots: 'a size in dots, numbers',
+  haccpSettingsOf: 'the stored settings read into codes and a size',
+  haccpListCategory: 'the venue’s own category word (data it typed), or null — not a food word of the label',
+  lotFromDate: 'a date as digits (ddmmyy), not a word',
+  dateFromInput: 'a date box’s text read into a date',
+  inputFromDate: 'a date written for a date box (YYYY-MM-DD), digits',
+  firstNameOf: 'the first name a person typed in the venue’s roster, data and not a food word',
+  HACCP_MARGIN: 'the label’s margin in dots, a number',
+  ROW: 'a text line’s height in dots, a number',
+  BLANK_ROW: 'a blank line’s height in dots, a number',
 };
 // Exported by the three modules and NOT allowed outside a label file, because they carry or compose words: the tables
 // hold each allergen's and nutrient's English `label`, and the builders compose ingredient names into the declaration.
 const FOOD_CARRYING: readonly string[] = [
   'ALLERGENS', 'NUTRIENTS', 'buildAllergenFields', 'buildLabel', 'flattenIngredients', 'nutritionPer100g',
   // The image label: it composes the typed title and ingredients into the drawing, and its check names allergens.
+  'layoutHaccpLabel', // composes the HACCP content (captions and the allergens' names) into the drawing
   'layoutLogoLabel', // composes the typed words (and «PRODOTTO IL:») into the drawing
   'ingredientWords', // hands out the typed words one by one
   'CHECKED_WORDS', 'NOT_ALLERGENS', 'BOLD_WORDS', 'DECLARED_WORDS', // the Italian allergen words
@@ -326,7 +353,7 @@ describe('the interface language never reaches a food word', () => {
   test('every runtime export of the label modules is a label word, allowed with a reason, or food-carrying', () => {
     const exported = [
       ...Object.keys(market), ...Object.keys(allergenModel), ...Object.keys(labelModel),
-      ...Object.keys(imageLayout), ...Object.keys(textCheck),
+      ...Object.keys(imageLayout), ...Object.keys(textCheck), ...Object.keys(haccpLabel),
     ];
     const decided = new Set<string>([...LABEL_WORDS, ...Object.keys(ALLOWED_VALUES), ...FOOD_CARRYING]);
     expect(exported.filter(name => !decided.has(name))).toEqual([]);

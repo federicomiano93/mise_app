@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALLERGENS_PATH, NEW_PATH, PHOTO_PATH, RECIPES_PATH, SETTINGS_PATH, editPath, labelPath, mixPath, parseRecipesPath, recipePath, resolveRecipesPath, stepsPath } from './recipesPath';
+import { ALLERGENS_PATH, HACCP_PATH, NEW_PATH, PHOTO_PATH, RECIPES_PATH, SETTINGS_PATH, editPath, haccpPath, labelPath, mixPath, parseRecipesPath, recipePath, resolveRecipesPath, stepsPath } from './recipesPath';
 
 describe('the addresses of the Recipe catalogue', () => {
   it('has the list at /recipes and a recipe at /recipes/<id>', () => {
@@ -151,5 +151,31 @@ describe('the guided mix address (step 3d-8, slice B)', () => {
     expect(parseRecipesPath('/abc/Mix')).toEqual({ kind: 'unknown' });
     expect(parseRecipesPath('/abc/mixes')).toEqual({ kind: 'unknown' });
     expect(parseRecipesPath('/abc/mix/x')).toEqual({ kind: 'unknown' });
+  });
+});
+
+describe('the HACCP addresses (image labels step 2)', () => {
+  it('has the HACCP list at /recipes/haccp, and nothing more under it', () => {
+    expect(HACCP_PATH).toBe('/recipes/haccp');
+    expect(parseRecipesPath('/haccp')).toEqual({ kind: 'haccp' });
+    expect(parseRecipesPath('/haccp/')).toEqual({ kind: 'haccp' });
+    expect(parseRecipesPath('/haccp/x')).toEqual({ kind: 'unknown' });
+    expect(resolveRecipesPath('/haccp')).toEqual({ view: { kind: 'haccp' } });
+  });
+
+  it('has the HACCP label of a recipe at /recipes/<id>/haccp, the id written whole and read back whole', () => {
+    expect(haccpPath('abc')).toBe('/recipes/abc/haccp');
+    expect(parseRecipesPath('/abc/haccp')).toEqual({ kind: 'haccpLabel', id: 'abc' });
+    for (const id of ['a/b c', '100%', 'é', 'x?y#z']) {
+      expect(parseRecipesPath(haccpPath(id).slice(RECIPES_PATH.length))).toEqual({ kind: 'haccpLabel', id });
+    }
+  });
+
+  it('keeps the reserved words and bad ids out of the HACCP label address', () => {
+    for (const word of ['new', 'allergens', 'settings', 'photo', 'haccp']) {
+      expect(parseRecipesPath(`/${word}/haccp`), word).toEqual({ kind: 'unknown' });
+    }
+    expect(parseRecipesPath('/%/haccp')).toEqual({ kind: 'unknown' });
+    expect(parseRecipesPath('/abc/HACCP')).toEqual({ kind: 'unknown' });
   });
 });

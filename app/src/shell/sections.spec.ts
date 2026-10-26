@@ -158,6 +158,10 @@ describe('screenNameFor', () => {
     ['/recipes/abc/mix', 'recipes-run'],
     ['/recipes/photo', 'recipes-photo'],
     ['/recipes/photo/x', 'recipes'],
+    ['/recipes/haccp', 'recipes-haccp'],
+    ['/recipes/abc/haccp', 'recipes-haccp-label'],
+    ['/recipes/haccp/haccp', 'recipes'],
+    ['/recipes/haccp/x', 'recipes'],
     ['/recipes/new/mix', 'recipes'],
     ['/recipes/settings/steps', 'recipes'],
   ])('%s → %s', (pathname, expected) => {
