@@ -77,9 +77,22 @@ export function buildJob({ payload, copies = 1, createdBy, bakery, now }: {
 // ⚠️ NO TILDE ANYWHERE, AND THAT COSTS NO LABEL ANYTHING: label-zpl writes every ^, ~ and _ in a product's text
 // as its hex code, so a tilde in the job can only be a control command. For the same reason every ^ in the job
 // begins a command.
+//
+// ⚠️ GF, PO AND PR ARE THE IMAGE LABEL'S (zpl-z64.ts), and each is let through in the ONE shape that label writes and
+// no other (SHAPES below): a ^GF that is not `A` + Z64 could be hex or raw bytes the printer reads as it pleases, and a
+// ^PO or ^PR with anything after its digits is not something the app wrote.
 export const LABEL_COMMANDS: readonly string[] = Object.freeze([
   'XA', 'XZ', 'CI', 'PW', 'LL', 'LH', 'LT', 'FO', 'A0', 'FB', 'FH', 'FD', 'FS', 'PQ',
+  'GF', 'PO', 'PR',
 ]);
+
+// What may follow each of those three, up to the next ^ (a Z64 field has no ^ in it: Base64, digits and colons only).
+// Read the way a printer reads it, case aside.
+const SHAPES: readonly (readonly [RegExp, RegExp])[] = Object.freeze([
+  [/\^GF([^^]*)/gi, /^A,\d{1,6},\d{1,6},\d{1,4},:Z64:[A-Za-z0-9+/]+={0,2}:[0-9A-F]{4}$/i],
+  [/\^PO([^^]*)/gi, /^[NI]$/i],
+  [/\^PR([^^]*)/gi, /^\d{1,2}(,\d{1,2}){0,2}$/],
+] as const);
 
 export function isSingleLabel(payload: unknown): boolean {
   if (typeof payload !== 'string' || payload.length > MAX_JOB_CHARS) return false;
@@ -94,6 +107,11 @@ export function isSingleLabel(payload: unknown): boolean {
   if (commands.filter(c => c === 'XA').length !== 1) return false;
   if (commands.filter(c => c === 'XZ').length !== 1) return false;
   if (!commands.every(c => LABEL_COMMANDS.includes(c))) return false;
+  for (const [command, shape] of SHAPES) {
+    for (const m of text.matchAll(command)) {
+      if (!shape.test((m[1] ?? '').trim())) return false;
+    }
+  }
   // ⚠️ AND NO MORE COPIES THAN A JOB MAY ASK FOR (code review, 23 Sep 2026). ^PQ is on the list because a label
   // for three loaves asks for three, but `^PQ99999` would run a whole roll through the printer. The same ceiling
   // the rules put on `copies`.
