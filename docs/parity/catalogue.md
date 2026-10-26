@@ -1721,3 +1721,55 @@ a job carrying the darkness `~SD28` is denied, a `darkness` key is denied.
 - While a send hangs only the queue's button waits; once the heartbeat goes stale the print dialog is usable again.
 - The sentence when the computer does not answer says what happens instead: «…non risponde, quindi si stampa dalla finestra di
   stampa di questo dispositivo».
+
+## Image labels 2 — the HACCP label for semi-finished goods (26 Oct 2026) — NEW IN MISE 2, differences from the current app
+
+Step 2 of the image labels (memory `piano-etichette-immagine`). Federico's decisions of 25 Oct 2026: a label for what the lab
+makes and keeps (creams, doughs, fillings), different from the product label but drawn by the SAME engine (`shared/label-image-*`,
+the label fonts and their width table, the 1-bit picture); EVERY field optional, chosen in Settings, each with three states —
+**off / printed / a blank line to write by hand**; the HACCP list shows every recipe, with a Settings option to show only one
+category (his «Semilavorati»). The current app has nothing like it. **Size M, one PR.** NOT in this step: the lab printer's own
+road (2b — the printer and its label size are not chosen yet; until then Print opens this device's print dialog with the label
+at its exact size) and the Home cards and recipe-page buttons (step 4).
+
+**The fields, in the order they are printed** (the words are LABEL words: the venue's COUNTRY, never the interface):
+
+| id | printed as | where the value comes from | default |
+|---|---|---|---|
+| `name` | the recipe's name, large, at the top (no caption) | the recipe | printed |
+| `preparedOn` | «Preparato il: 26/10/2026» | a date on the label screen, today unless changed | printed |
+| `useBy` | «Da consumarsi entro il: …» | the prepared-on date + the recipe's `shelfLifeDays`; NOT editable (a safety statement); a recipe with no shelf life gets the blank line and the screen says why | printed |
+| `lot` | «Lotto: …» | a box, filled with the prepared-on date as digits (ddmmyy) until somebody types | off |
+| `preparedBy` | «Preparato da: …» | a box, filled with the first name of whoever is signed in (the venue's roster); editable, because the lab tablet is one shared account | off |
+| `storage` | «Conservazione: …» | the recipe's own `haccpStorage` text (the recipe editor), editable for one print | off |
+| `blastChilledOn` / `frozenOn` / `openedOn` | «Abbattuto il / Congelato il / Aperto il: …» | a date each, today unless changed | off |
+| `quantity` | «Quantità: …» | a box, empty | off |
+| `allergens` | «Allergeni: …» in capitals, then «Può contenere: …» when there are traces | the recipe's declarations (the same verdict as the product label) | printed |
+
+A printed field whose box is left empty prints its blank line instead (it never blocks). A blank line is a taller row (5 mm) so a
+pen fits. **The allergens field printed on a recipe that is not fully declared refuses the label**, as the product label does
+(the reason, nothing to print); set to «blank line» it never needs the declarations.
+
+**Settings** (the Catalogue's, owner + manager, saved on the tap like every other card): a card «Etichetta HACCP» with the label
+size, the list filter and the eleven three-way switches. Stored in `config/labels`: `haccpFields` (a flat map field id → `off` |
+`print` | `blank`; a missing id = its default), `haccpSize` (a closed set of sizes, below) and `haccpCategory` (the one category the
+list shows; none = every recipe; a word no longer on the venue's list = every recipe, as a removed category reads as none).
+
+**The size is a choice from fixed sizes, not two millimetre boxes:** 40 × 30, 50 × 30, 60 × 40 (default), 62 × 29 and 80 × 60 mm,
+all landscape. Why: the print dialog needs the page size in a STATIC stylesheet (the page's CSP forbids style built at run time,
+`labelSource.spec.ts`), so every size is one small page file; and the printer is not chosen yet — 2b adds its size if it is none
+of these. The label is drawn at 203 dpi (8 dots per mm) like the product label; a label whose fields do not fit is REFUSED with the
+reason («too long: switch a field off or choose a bigger label»), never shrunk below the body size.
+
+**The screens:**
+1. **«Etichette HACCP»** — a door at the foot of the recipe list (with the Allergen sheet and Settings doors), for everybody in
+   the section, opening `/recipes/haccp`: the HACCP list (a search box, the venue's recipes — or the chosen category's —, archived
+   recipes left out), drawn like the Allergen sheet (the right-hand pane on the split).
+2. **The HACCP label** at `/recipes/<id>/haccp`, one level below the HACCP list: the boxes of the printed fields that take a value,
+   the preview (the very dots, as the product label), the refusals, and Print (this device's print dialog, the label at its size).
+3. **The recipe editor** gains «Conservazione (etichetta HACCP)», a box drawn only when the venue prints that field.
+
+**Data** (`firestore.rules`): `recipes.haccpStorage` (string ≤ 200, optional both ways, the current app's merge keeps it);
+`config/labels` `haccpFields` (map, keys and values from closed lists), `haccpSize` (closed set), `haccpCategory` (string 1–100).
+The prepared-by name is read from `locations/{lid}/members/{uid}.firstName` — one read when the label opens, only when that field
+is printed. ⚠️ P13: a person's first name goes on paper on the food; off by default, Federico told.
