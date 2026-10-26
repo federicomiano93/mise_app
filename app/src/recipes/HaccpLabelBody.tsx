@@ -52,7 +52,7 @@ import own from './HaccpLabelBody.module.css';
 //
 // ⚠️ NOTHING TYPED HERE IS SAVED ANYWHERE, and leaving never asks: the boxes are this print's (a lot, a quantity, a date). The
 // storage text starts from the recipe's own (the recipe editor), the lot from the prepared-on date, «prepared by» from the
-// signed-in person's first name, and every date from today.
+// signed-in person's first name, and every date from today — and each FOLLOWS its source until somebody types in its box.
 
 // The first half: the refusals that need no font and no width table. A venue that cannot print this label downloads none of it.
 export function HaccpLabelBody({ recipe }: { recipe: CatalogueRecipe }) {
@@ -158,14 +158,29 @@ function HaccpLabelReady({ recipe, fieldsKey, size, declared }: ReadyProps) {
   }, [fieldsKey]);
 
   // ── The values of this print ───────────────────────────────────────────────
-  const [startDay] = useState(() => inputFromDate(today()));
-  const [dates, setDates] = useState<Record<HaccpDateField, string>>({
-    preparedOn: startDay, blastChilledOn: startDay, frozenOn: startDay, openedOn: startDay,
-  });
+  // ⚠️ TODAY IS TODAY WHEN THE LABEL IS PRINTED, NOT WHEN THE SCREEN WAS OPENED: the lab tablet stays on this screen overnight,
+  // and a label printed in the morning with yesterday's prepared-on date carries a use-by date a day too early. An untouched
+  // date box follows the day (asked again when the screen comes back, every minute, and at Print); a typed one is the person's.
+  const [day, setDay] = useState(() => inputFromDate(today()));
+  const [datesTyped, setDatesTyped] = useState<Partial<Record<HaccpDateField, string>>>({});
+  const dates = useMemo(() => Object.fromEntries(
+    DATE_BOXES.map(field => [field, datesTyped[field] ?? day]),
+  ) as Record<HaccpDateField, string>, [datesTyped, day]);
+  useEffect(() => {
+    const check = () => { setDay(inputFromDate(today())); };
+    const timer = window.setInterval(check, 60_000);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, []);
   // null = the lot still FOLLOWS the prepared-on date; any typing in the box (even emptying it) is the person's.
   const [lotTyped, setLotTyped] = useState<string | null>(null);
   const [preparedBy, setPreparedBy] = useState('');
-  const [storage, setStorage] = useState(() => labelTextsOf(recipe).haccpStorage);
+  // null = the storage text still FOLLOWS the recipe's (edited on another device meanwhile, it changes here too).
+  const [storageTyped, setStorageTyped] = useState<string | null>(null);
+  const storage = storageTyped ?? labelTextsOf(recipe).haccpStorage;
   const [quantity, setQuantity] = useState('');
 
   // ⚠️ THE ROSTER IS READ ONCE, ONLY WHEN THE FIELD IS PRINTED, and what it gives is a starting point: a person who has typed
@@ -181,6 +196,11 @@ function HaccpLabelReady({ recipe, fieldsKey, size, declared }: ReadyProps) {
     });
     return () => { alive = false; };
   }, [printsBy, uid, store]);
+
+  // Does a date box still follow the day AND does the label use it? The prepared-on date is used by the use-by date and by a
+  // lot nobody typed even when it is not printed itself.
+  const followsDay = (field: HaccpDateField): boolean => datesTyped[field] === undefined && (fields[field] === 'print'
+    || (field === 'preparedOn' && (fields.useBy === 'print' || (fields.lot === 'print' && lotTyped === null))));
 
   const preparedOn = dateFromInput(dates.preparedOn);
   const lot = lotTyped ?? lotFromDate(preparedOn);
@@ -305,10 +325,16 @@ function HaccpLabelReady({ recipe, fieldsKey, size, declared }: ReadyProps) {
   // device's print window, the label at its exact size. The lab printer's own road is a later step.
   const print = () => {
     if (current === null) return;
+    // A day that turned since the last look redraws the label with today's dates first; Print comes back with the new drawing.
+    const now = inputFromDate(today());
+    if (now !== day) {
+      setDay(now);
+      if (DATE_BOXES.some(followsDay)) return;
+    }
     openHaccpPrintHost(current.png, size);
     try {
       window.print();
-      announceAction('label-printed');
+      announceAction('haccp-label-printed');
     } catch {
       closePrintHost();
     }
@@ -351,7 +377,7 @@ function HaccpLabelReady({ recipe, fieldsKey, size, declared }: ReadyProps) {
         type="date"
         className={own.input}
         value={dates[field]}
-        onChange={event => { setDates(current => ({ ...current, [field]: event.target.value })); }}
+        onChange={event => { const typed = event.target.value; setDatesTyped(current => ({ ...current, [field]: typed })); }}
       />
     </div>
   );
@@ -371,7 +397,11 @@ function HaccpLabelReady({ recipe, fieldsKey, size, declared }: ReadyProps) {
     </div>
   );
 
-  const anyBox = DATE_BOXES.some(box) || TEXT_BOXES.some(box) || box('useBy');
+  // ⚠️ THE USE-BY DATE AND THE LOT ARE COUNTED FROM THE PREPARED-ON DATE, so its box is there whenever either is printed, even
+  // with the prepared-on date itself off the label: a date nobody can see or change must not decide a use-by date.
+  const countsFromDay = box('useBy') || box('lot');
+  const dayBox = box('preparedOn') || countsFromDay;
+  const anyBox = dayBox || DATE_BOXES.some(box) || TEXT_BOXES.some(box);
 
   return (
     <>
@@ -379,19 +409,22 @@ function HaccpLabelReady({ recipe, fieldsKey, size, declared }: ReadyProps) {
         <section className={own.boxes} aria-labelledby={`${idBase}-boxes`}>
           <h3 id={`${idBase}-boxes`} className={own.boxesTitle}>{t('haccp.label.valuesTitle')}</h3>
           <p className={own.boxesNote}>{t('haccp.label.valuesNote')}</p>
-          {box('preparedOn') ? dateBox('preparedOn') : null}
+          {dayBox ? dateBox('preparedOn') : null}
+          {dayBox && !box('preparedOn') ? <p className={own.note}>{t('haccp.label.preparedOnNotPrinted')}</p> : null}
           {/* ⚠️ THE USE-BY DATE IS SHOWN, NEVER A BOX: it is a statement about safety, worked out from the date it was
               prepared and the recipe's shelf life, and nobody types over it on a label. */}
           {box('useBy') ? (
             <div className={own.cell}>
               <p className={own.label}>{t(HACCP_FIELD_TEXT.useBy)}</p>
               <p className={own.fixed}>{useBy === null ? '—' : dateText(useBy, lang)}</p>
-              {useBy === null && shelfLifeDays === undefined ? <p className={own.note}>{t('haccp.label.useByNoShelfLife')}</p> : null}
+              {useBy !== null ? null : preparedOn === null
+                ? <p className={own.note}>{t('haccp.label.useByNoDate')}</p>
+                : <p className={own.note}>{t('haccp.label.useByNoShelfLife')}</p>}
             </div>
           ) : null}
           {box('lot') ? textBox('lot', lot, setLotTyped) : null}
           {box('preparedBy') ? textBox('preparedBy', preparedBy, text => { typedBy.current = true; setPreparedBy(text); }) : null}
-          {box('storage') ? textBox('storage', storage, setStorage, HACCP_STORAGE_MAX) : null}
+          {box('storage') ? textBox('storage', storage, setStorageTyped, HACCP_STORAGE_MAX) : null}
           {box('blastChilledOn') ? dateBox('blastChilledOn') : null}
           {box('frozenOn') ? dateBox('frozenOn') : null}
           {box('openedOn') ? dateBox('openedOn') : null}

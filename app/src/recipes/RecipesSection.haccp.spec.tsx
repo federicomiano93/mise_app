@@ -244,14 +244,14 @@ describe('the refusals', () => {
   it('every field off: says to choose at least one in Settings', async () => {
     const off = Object.fromEntries(['name', 'preparedOn', 'useBy', 'allergens'].map(field => [field, 'off']));
     openLabel({ haccpFields: off });
-    expect(await main().findByText('Every field is off: choose at least one in Settings.', undefined, LOAD)).toBeInTheDocument();
+    expect(await main().findByText('Every field is off: whoever manages the venue can choose at least one in Settings.', undefined, LOAD)).toBeInTheDocument();
     expect(main().queryByRole('button', { name: 'Print' })).not.toBeInTheDocument();
   });
 
   it('a label that does not fit is refused, never shrunk', async () => {
     const all = Object.fromEntries(['lot', 'preparedBy', 'storage', 'blastChilledOn', 'frozenOn', 'openedOn', 'quantity'].map(field => [field, 'print']));
     openLabel({ haccpFields: all, haccpSize: '40x30' });
-    expect(await main().findByText('It does not fit: switch a field off in Settings or choose a bigger label size.', undefined, LOAD)).toBeInTheDocument();
+    expect(await main().findByText('It does not fit: shorten what you typed, or whoever manages the venue can switch a field off or choose a bigger label size in Settings.', undefined, LOAD)).toBeInTheDocument();
     expect(main().queryByRole('button', { name: 'Print' })).not.toBeInTheDocument();
     expect(canvas.render).not.toHaveBeenCalled();
   });
@@ -318,6 +318,79 @@ describe('the boxes of this print', () => {
   it('leaves prepared-by empty when the roster has nobody for this person', async () => {
     openLabel({ haccpFields: { preparedBy: 'print' } });
     expect(await main().findByLabelText('Prepared by', undefined, LOAD)).toHaveValue('');
+  });
+
+  it('⚠️ a roster answer that arrives after the person typed leaves their words, and one after leaving changes nothing', async () => {
+    let answer: (member: Record<string, unknown> | null) => void = () => undefined;
+    const { source, user } = openLabel({ haccpFields: { preparedBy: 'print' } });
+    vi.mocked(source.readMember).mockImplementation(() => new Promise(resolve => { answer = resolve; }));
+    const box = await main().findByLabelText('Prepared by', undefined, LOAD);
+    await waitFor(() => { expect(source.readMember).toHaveBeenCalled(); });
+    await user.type(box, 'Anna');
+    await act(async () => { answer({ firstName: 'Federico' }); await Promise.resolve(); });
+    expect(box).toHaveValue('Anna');
+    const errors = vi.spyOn(console, 'error');
+    await user.click(main().getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(main().queryByLabelText('Prepared by')).not.toBeInTheDocument(); });
+    await act(async () => { answer({ firstName: 'Giulia' }); await Promise.resolve(); });
+    expect(errors).not.toHaveBeenCalled();
+  });
+
+  it('⚠️ the prepared-on date is a box whenever the use-by date or the lot counts from it, even when it is not printed', async () => {
+    openLabel({ haccpFields: { preparedOn: 'off', useBy: 'print' } });
+    const date = await main().findByLabelText('Prepared on', undefined, LOAD);
+    expect(main().getByText('Not printed: the use-by date and the lot are counted from it.')).toBeInTheDocument();
+    setDate(date, '2026-12-30');
+    expect(main().getByText('02/01/2027')).toBeInTheDocument();
+    const content = canvas.render.mock.calls.at(-1)?.[0] as Array<{ kind: string; text?: string }> | undefined;
+    expect(content?.some(el => el.text === 'Prepared on:')).not.toBe(true);
+  });
+
+  it('the lot alone also brings the prepared-on box; nothing that counts from it, no box', async () => {
+    openLabel({ haccpFields: { preparedOn: 'off', useBy: 'off', lot: 'print' } });
+    expect(await main().findByLabelText('Prepared on', undefined, LOAD)).toBeInTheDocument();
+  });
+
+  it('a cleared prepared-on date says why the use-by date is left to the pen', async () => {
+    openLabel();
+    setDate(await main().findByLabelText('Prepared on', undefined, LOAD), '');
+    expect(main().getByText('No prepared-on date, so the use-by date stays to be written by hand.')).toBeInTheDocument();
+    expect(main().queryByText(/this recipe has no shelf life/i)).not.toBeInTheDocument();
+  });
+
+  it('⚠️ an untouched date follows the day when the screen comes back; a typed one stays the person’s', async () => {
+    openLabel({ haccpFields: { frozenOn: 'print' } });
+    const prepared = await main().findByLabelText('Prepared on', undefined, LOAD);
+    setDate(main().getByLabelText('Frozen on'), '2026-10-20');
+    vi.setSystemTime(new Date(2026, 9, 27, 6, 0, 0));
+    act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+    expect(prepared).toHaveValue('2026-10-27');
+    expect(main().getByText('30/10/2026')).toBeInTheDocument();
+    expect(main().getByLabelText('Frozen on')).toHaveValue('2026-10-20');
+  });
+
+  it('⚠️ Print after midnight with no look in between draws today’s label first, and prints it on the next tap', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const { user } = openLabel();
+    await preview();
+    vi.setSystemTime(new Date(2026, 9, 27, 0, 0, 30));
+    await user.click(printButton());
+    expect(print).not.toHaveBeenCalled();
+    expect(main().getByLabelText('Prepared on')).toHaveValue('2026-10-27');
+    await waitFor(() => { expect(printButton()).toBeEnabled(); });
+    await user.click(printButton());
+    expect(print).toHaveBeenCalledTimes(1);
+  });
+
+  it('the storage box follows the recipe’s text until somebody types in it', async () => {
+    const { source, user } = openLabel({ haccpFields: { storage: 'print' } });
+    const box = await main().findByLabelText('Storage', undefined, LOAD);
+    act(() => { source.recipes.set('cream', { ...CREAM, haccpStorage: 'Frozen at -18 °C' }); source.push(); });
+    await waitFor(() => { expect(box).toHaveValue('Frozen at -18 °C'); });
+    await user.clear(box);
+    await user.type(box, 'Fridge');
+    act(() => { source.recipes.set('cream', { ...CREAM, haccpStorage: 'Something else' }); source.push(); });
+    expect(box).toHaveValue('Fridge');
   });
 
   it('⚠️ a recipe with no shelf life says the use-by date stays to be written by hand', async () => {
@@ -414,7 +487,7 @@ describe('the label and Print', () => {
       const { user } = openLabel();
       await preview();
       await user.click(printButton());
-      await waitFor(() => { expect(actions).toContain('label-printed'); });
+      await waitFor(() => { expect(actions).toContain('haccp-label-printed'); });
     } finally {
       window.removeEventListener('mise:action', listen);
     }
