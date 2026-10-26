@@ -5,9 +5,11 @@
 // whether its printer is a Zebra (config/labels `printerLanguage`); the image label IS a Zebra label (640 × 480 dots at
 // 203 dpi, ^GFA Z64), and its settings screen hides that card. So the only question is whether a computer that can
 // print it is listening RIGHT NOW:
-//   'ready'    a computer answered within the stale limit with an agent that knows the image label → the queue;
-//   'outdated' computers are answering, but every one runs an agent older than IMAGE_AGENT_VERSION, which would refuse
-//              the picture as «not a single label» → the print dialog, and the screen says the program needs updating;
+//   'ready'    computers answered within the stale limit, EVERY one with an agent that knows the image label → the queue;
+//   'outdated' computers are answering, but at least one runs an agent older than IMAGE_AGENT_VERSION → the print dialog,
+//              and the screen says the program needs updating. ⚠️ ONE OLD AGENT IS ENOUGH (code review, 26 Oct 2026): every
+//              answering agent polls the same queue and whichever comes first takes the job, so an old one would take
+//              about half the labels and throw them away as «not a single label», with «sent» on the screen;
 //   'offline'  computers reported once and none is answering now → the print dialog, and the screen says so;
 //   'none'     no computer has ever reported → the print dialog and nothing said (a venue printing through the system
 //              dialog must not be told every day about a computer it never had).
@@ -43,7 +45,7 @@ export function imageAgentState(agents: unknown, now: number): ImageAgentState {
   if (list.length === 0) return 'none';
   const fresh = list.filter(agent => printerPresence([agent], now).ready);
   if (fresh.length === 0) return 'offline';
-  const knows = fresh.some(agent => versionAtLeast(agent ? (agent as { version?: unknown }).version : undefined, IMAGE_AGENT_VERSION));
+  const knows = fresh.every(agent => versionAtLeast(agent ? (agent as { version?: unknown }).version : undefined, IMAGE_AGENT_VERSION));
   return knows ? 'ready' : 'outdated';
 }
 

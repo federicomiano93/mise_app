@@ -83,13 +83,33 @@ export const LABEL_COMMANDS = Object.freeze([
   'GF', 'PO', 'PR',
 ]);
 
-// What may follow each of those three, up to the next ^ (a Z64 field has no ^ in it:
-// Base64, digits and colons only). Read the way a printer reads it, case aside.
+// What may follow each of those three, and ^PQ, up to the next ^ (a Z64 field has no ^
+// in it: Base64, digits and colons only). Read the way a printer reads it, case aside.
+// ⚠️ ^PQ IS HERE TOO (code review, 26 Oct 2026): the copies were read as the digits
+// before the first line break, so `^PQ9\n9\n9` passed as 9 copies while a printer that
+// skips line breaks reads 999.
 const SHAPES = Object.freeze([
   [/\^GF([^^]*)/gi, /^A,\d{1,6},\d{1,6},\d{1,4},:Z64:[A-Za-z0-9+/]+={0,2}:[0-9A-F]{4}$/i],
   [/\^PO([^^]*)/gi, /^[NI]$/i],
   [/\^PR([^^]*)/gi, /^\d{1,2}(,\d{1,2}){0,2}$/],
+  [/\^PQ([^^]*)/gi, /^\d{1,2}$/],
 ]);
+
+// ⚠️ ONE PICTURE, OF A SIZE A LABEL CAN BE (code review, 26 Oct 2026). Each ^GF asks the
+// printer for memory to hold its dots; many small fields that each unpack to megabytes
+// would run it out. So a label holds at most one, its two byte counts agree, the rows
+// are whole, and it is no wider than 1 024 dots nor longer than 2 000.
+const MAX_GF_ROW_BYTES = 128;
+const MAX_GF_ROWS = 2000;
+function graphicFits(text) {
+  const fields = [...text.matchAll(/\^GFA,(\d+),(\d+),(\d+),/gi)];
+  if (fields.length > 1) return false;
+  return fields.every(([, b, c, d]) => {
+    const total = Number(b), row = Number(d);
+    return total === Number(c) && row >= 1 && row <= MAX_GF_ROW_BYTES
+      && total % row === 0 && total / row <= MAX_GF_ROWS;
+  });
+}
 
 export function isSingleLabel(payload) {
   if (typeof payload !== 'string' || payload.length > MAX_JOB_CHARS) return false;
@@ -109,6 +129,7 @@ export function isSingleLabel(payload) {
       if (!shape.test(m[1].trim())) return false;
     }
   }
+  if (!graphicFits(text)) return false;
   // ⚠️ AND NO MORE COPIES THAN A JOB MAY ASK FOR (code review, 23 Sep 2026). ^PQ is on
   // the list because a label for three loaves asks for three, but `^PQ99999` would run a
   // whole roll through the printer. The same ceiling the rules put on `copies`.

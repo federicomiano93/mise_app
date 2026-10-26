@@ -62,8 +62,11 @@ describe('which road Print takes', () => {
     expect(imageAgentState([agent(at(-1000), 'nonsense')], T0)).toBe('outdated');
   });
 
-  test('one good computer among others is enough; a stale new one does not make an old one ready', () => {
-    expect(imageAgentState([agent(at(-1000), '1.0.1'), agent(at(-2000), '1.1.0')], T0)).toBe('ready');
+  test('ONE old computer answering is enough to keep the queue off: it would take some of the jobs and refuse them', () => {
+    expect(imageAgentState([agent(at(-1000), '1.0.1'), agent(at(-2000), '1.1.0')], T0)).toBe('outdated');
+    expect(imageAgentState([agent(at(-1000), '1.2.0'), agent(at(-2000), '1.1.0')], T0)).toBe('ready');
+    // A stale old computer is not answering, so it takes nothing: the new one alone decides.
+    expect(imageAgentState([agent(at(-STALE_AFTER_MS - 1), '1.0.1'), agent(at(-2000), '1.1.0')], T0)).toBe('ready');
     expect(imageAgentState([agent(at(-1000), '1.0.1'), agent(at(-STALE_AFTER_MS - 1), '1.1.0')], T0)).toBe('outdated');
   });
 

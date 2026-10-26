@@ -512,7 +512,10 @@ function ImageLabelReady({ recipe, typed, declared }: { recipe: CatalogueRecipe;
           <button
             type="button"
             className={`${styles.button} ${styles.printButton}`}
-            disabled={off || sending}
+            // ⚠️ ONLY THE QUEUE ROAD waits for a send in flight (code review, 26 Oct 2026): an offline tablet's write
+            // never lands (no timeout, by decision), and once the beat goes stale the button becomes the print dialog,
+            // which must work — as on the standard label.
+            disabled={off || (sending && road === 'agent')}
             aria-describedby={why}
             onClick={pressPrint}
           >

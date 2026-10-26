@@ -139,3 +139,28 @@ test('…and a ^GF, ^PO or ^PR in any other shape is refused', () => {
     ['the darkness, which belongs to the agent', `~SD28\n${imageJob()}`],
   ]) assert.equal(isSingleLabel(payload), false, `${what} was let through`);
 });
+
+// ── Code review, 26 Oct 2026 ─────────────────────────────────────────────────
+
+test('⚠️ copies split across line breaks are refused (a printer that skips them reads 999)', () => {
+  assert.equal(isSingleLabel('^XA^FDx^FS^PQ9\n9\n9^XZ'), false);
+  assert.equal(isSingleLabel('^XA^FDx^FS^PQ1\r\n00^XZ'), false);
+  assert.equal(isSingleLabel('^XA^FDx^FS^PQ3\n^XZ'), true, 'a line break AFTER the count is how the app writes it');
+});
+
+test('⚠️ one picture per label, of a size a label can be', () => {
+  const one = imageJob();
+  const field = one.slice(one.indexOf('^FO0,0^GFA'), one.indexOf('^FS') + 3);
+  assert.equal(isSingleLabel(one.replace('^XZ', `${field}\n^XZ`)), false, 'two pictures');
+  assert.equal(isSingleLabel(one.replace('^GFA,38400,38400,80,', '^GFA,38400,38401,80,')), false, 'counts that disagree');
+  assert.equal(isSingleLabel(one.replace('^GFA,38400,38400,80,', '^GFA,38400,38400,0,')), false, 'no row');
+  assert.equal(isSingleLabel(one.replace('^GFA,38400,38400,80,', '^GFA,38401,38401,80,')), false, 'a part row');
+  assert.equal(isSingleLabel(one.replace('^GFA,38400,38400,80,', '^GFA,999999,999999,111,')), false, 'too long a picture');
+  assert.equal(isSingleLabel(one.replace('^GFA,38400,38400,80,', '^GFA,2600,2600,130,')), false, 'too wide a picture');
+});
+
+test('⚠️ the standard label says it is upright, so it never inherits the image label\'s ^POI', () => {
+  const out = zpl({}, {}, { copies: 2 });
+  assert.match(out, /\n\^PON\n/);
+  assert.equal(isSingleLabel(out), true);
+});

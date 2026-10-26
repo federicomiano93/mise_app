@@ -81,7 +81,7 @@ const main = () => within(screen.getByRole('main'));
 const preview = (name = 'Label preview, 80 × 60 mm') => main().findByRole('img', { name }, LOAD);
 const printButton = (name: string | RegExp = /^(Print|Print dialog|Stampa|Finestra di stampa)$/) => main().getByRole('button', { name });
 const READY_SENTENCE = 'Printer ready: Print sends the label to the shop computer.';
-const OFFLINE = /^The shop computer is not answering, so Print opens this device’s print dialog/;
+const OFFLINE = /^The shop computer is not answering, so labels print through this device’s print dialog/;
 const OUTDATED = /^The printing program on the shop computer is too old for this label/;
 const QUEUED = 'Sent to the shop computer — it prints it';
 const COPIES_QUEUE = 'Counts for Print and for the printer code.';
@@ -198,6 +198,23 @@ describe('a fresh beat from an agent that knows the image label: the queue', () 
     act(() => { source.setPrintAgents([beat(STALE_AFTER_MS + MIN, '1.1.0')]); });
     expect(await main().findByText(OFFLINE)).toBeVisible();
     expect(main().queryByText(QUEUED)).toBeNull();
+  });
+
+  // ⚠️ Code review, 26 Oct 2026: an offline tablet's queue write never lands; once the beat goes stale the button is the
+  // print dialog, and a send still hanging must not keep it off.
+  it('⚠️ a send that hangs does not keep the print dialog off once the beat has gone stale', async () => {
+    const print = vi.spyOn(window, 'print').mockImplementation(() => undefined);
+    const { source } = open(READY());
+    await preview();
+    source.holdQueue();
+    await act(async () => { fireEvent.click(printButton()); });
+    expect(printButton()).toBeDisabled();
+    act(() => { source.setPrintAgents([beat(STALE_AFTER_MS + MIN, '1.1.0')]); });
+    expect(await main().findByText(OFFLINE)).toBeVisible();
+    expect(printButton()).toHaveTextContent('Print dialog');
+    expect(printButton()).toBeEnabled();
+    fireEvent.click(printButton());
+    expect(print).toHaveBeenCalledTimes(1);
   });
 });
 

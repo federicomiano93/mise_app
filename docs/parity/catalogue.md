@@ -1707,3 +1707,17 @@ a job carrying the darkness `~SD28` is denied, a `darkness` key is denied.
 3. The tap says only «sent», never «printed»; a second tap while one is on its way does nothing; a refused write says so and keeps
    the screen. Copy ZPL stays as the fallback, unchanged.
 4. Before queueing, the app checks the job with the agent's own `isSingleLabel`: a job the agent would refuse is never queued.
+
+**As built, after the code review (26 Oct 2026):**
+
+- **One old agent answering is enough for «va aggiornato».** Every answering agent polls the same queue, so an old one would take
+  about half the jobs and refuse them in silence. «Stampante pronta» needs EVERY answering computer on 1.1.0 or later; a computer
+  that stopped answering takes nothing and does not count.
+- **The standard label now says ^PON (upright)** — a change to the CURRENT app's printer code too. A Zebra keeps the last
+  orientation it was given, and the image label prints turned round (^POI), so a standard label after it would have come out
+  upside down. The print speed (^PR2) still carries over to the next standard label: slower, never wrong, so it was left.
+- **The agent's filter is stricter:** copies split across line breaks (^PQ9⏎9) are refused, and a job carries at most one picture,
+  of a size a label can be (rows of at most 128 bytes, at most 2000 rows, the counts agreeing).
+- While a send hangs only the queue's button waits; once the heartbeat goes stale the print dialog is usable again.
+- The sentence when the computer does not answer says what happens instead: «…non risponde, quindi si stampa dalla finestra di
+  stampa di questo dispositivo».

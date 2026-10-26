@@ -60,7 +60,9 @@ or newer.
    setting the app prints them through the normal print dialog and never queues
    anything. The **«with logo»** label (Mise 2) needs no setting: it is a Zebra label by
    construction, and the app queues it whenever an agent of version **1.1.0** or later
-   is answering.
+   is answering. It prints turned round and at speed 2; the standard label resets the
+   turn (^PON), but the slower speed stays until the printer is switched off — slower,
+   never wrong.
 
 4. Run it:
 

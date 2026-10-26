@@ -323,6 +323,12 @@ describe('the port decides what the original decides', () => {
       '^XA^PON^POI^PR2^PR2,4,6^FO0,0^GFA,8,8,1,:Z64:eJwDAAAAAAE=:1C2B^FS^XZ', '^XA^por^XZ', '^XA^PO^XZ', '^XA^PRx^XZ',
       '^XA^GFA,8,8,1,FFFF^FS^XZ', '^XA^GFB,1,1,1,a^FS^XZ', '^XA^gfa,8,8,1,:z64:eJwDAAAAAAE=:1c2b^FS^XZ',
       '^XA^GFA,8,8,1,:Z64:eJwDAAAAAAE=:1C2B,R:X.GRF^FS^XZ', '^XA^GFA,1234567,8,1,:Z64:AA==:0000^FS^XZ',
+      // Code review, 26 Oct 2026: copies split across lines, and pictures no label could hold.
+      '^XA^PQ9\n9\n9^XZ', '^XA^PQ1\r\n00^XZ', '^XA^PQ3\n^XZ',
+      '^XA^GFA,8,8,1,:Z64:eJwDAAAAAAE=:1C2B^FS^GFA,8,8,1,:Z64:eJwDAAAAAAE=:1C2B^FS^XZ',
+      '^XA^GFA,8,9,1,:Z64:eJwDAAAAAAE=:1C2B^FS^XZ', '^XA^GFA,8,8,0,:Z64:eJwDAAAAAAE=:1C2B^FS^XZ',
+      '^XA^GFA,9,9,2,:Z64:eJwDAAAAAAE=:1C2B^FS^XZ', '^XA^GFA,2600,2600,130,:Z64:eJwDAAAAAAE=:1C2B^FS^XZ',
+      '^XA^GFA,999999,999999,111,:Z64:eJwDAAAAAAE=:1C2B^FS^XZ',
     ];
     for (const payload of payloads) {
       expect(isSingleLabel(payload), JSON.stringify(payload)?.slice(0, 60)).toBe(legacy.isSingleLabel(payload));
