@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
-  NEW_INGREDIENT_PATH, NEW_PACKAGING_PATH, NEW_SUPPLIER_PATH, PACKAGING_TAB_PATH, SUPPLIERS_IMPORT_PATH, SUPPLIERS_PATH, SUPPLIERS_SETTINGS_PATH,
+  NEW_INGREDIENT_PATH, NEW_PACKAGING_PATH, NEW_SUPPLIER_PATH, PACKAGING_TAB_PATH, SUPPLIERS_IMPORT_PATH, SUPPLIERS_PRICE_CHANGES_PATH, SUPPLIERS_PATH, SUPPLIERS_SETTINGS_PATH,
   SUPPLIERS_TAB_PATH,
   ingredientPath, newIngredientPath, parseSuppliersPath, supplierEditPath, supplierPath, suppliersScreenName, tabOf, tabPath,
 } from './suppliersPath';
@@ -30,6 +30,14 @@ describe('the addresses of Ingredients & suppliers', () => {
     expect(parseSuppliersPath(rest(SUPPLIERS_IMPORT_PATH))).toEqual({ kind: 'import' });
     expect(parseSuppliersPath('/import/')).toEqual({ kind: 'import' });
     expect(tabOf({ kind: 'import' })).toBe('ingredients');
+  });
+
+  test('«Price changes» is one address, and belongs to no tab', () => {
+    expect(SUPPLIERS_PRICE_CHANGES_PATH).toBe('/suppliers/price-changes');
+    expect(parseSuppliersPath(rest(SUPPLIERS_PRICE_CHANGES_PATH))).toEqual({ kind: 'price-changes' });
+    expect(parseSuppliersPath('/price-changes/')).toEqual({ kind: 'price-changes' });
+    expect(parseSuppliersPath('/price-changes/x')).toEqual({ kind: 'unknown' });
+    expect(tabOf({ kind: 'price-changes' })).toBe('ingredients');
   });
 
   test('an id with a slash, a percent sign or a space comes back whole', () => {
@@ -97,6 +105,7 @@ describe('the addresses of Ingredients & suppliers', () => {
     expect(suppliersScreenName('/supplier/new')).toBe('suppliers-supplier-edit');
     expect(suppliersScreenName('/settings')).toBe('suppliers-settings');
     expect(suppliersScreenName('/import')).toBe('suppliers-import');
+    expect(suppliersScreenName('/price-changes')).toBe('suppliers-price-changes');
     expect(suppliersScreenName('/ingredient/abc')).toBe('suppliers-ingredient');
     expect(suppliersScreenName('/ingredient/new')).toBe('suppliers-ingredient');
     expect(suppliersScreenName('/junk')).toBe('suppliers');

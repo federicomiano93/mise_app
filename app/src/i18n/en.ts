@@ -1816,6 +1816,31 @@ export const en = {
   // NEW: «1,550» in an energy box would be read as 1.55; it is refused instead of guessed at.
   'sup.nut.noThousands': 'Write it without the thousands separator — e.g. 1550.',
 
+  // «Price changes» (step 3e-7): the current app's words, `priceChanges.*` in js/i18n.js, one for one.
+  'sup.pc.open': 'Price changes',
+  'sup.pc.title': 'Price changes',
+  'sup.pc.groupBy': 'Group by',
+  'sup.pc.week': 'Week',
+  'sup.pc.month': 'Month',
+  'sup.pc.previous': 'Previous period',
+  'sup.pc.next': 'Next period',
+  'sup.pc.up': { one: '{n} increase', other: '{n} increases' },
+  'sup.pc.down': { one: '{n} decrease', other: '{n} decreases' },
+  'sup.pc.increases': 'Increases',
+  'sup.pc.decreases': 'Decreases',
+  'sup.pc.meta': '{supplier} · invoice of {date}',
+  'sup.pc.metaNoSupplier': 'Invoice of {date}',
+  'sup.pc.priceLine': '{old} → {new}',
+  'sup.pc.packDiffers': 'Different pack: {old} → {new}',
+  'sup.pc.empty': 'No changes in this period.',
+  'sup.pc.emptyAll': 'Changes appear when you import invoices.',
+  'sup.pc.loading': 'Loading…',
+  'sup.pc.error': 'The price changes could not be loaded. Try again.',
+  'sup.pc.offline': 'You are offline. Price changes need the connection.',
+  'sup.pc.retry': 'Try again',
+  'sup.pc.cacheNote': 'No connection: some changes may be missing.',
+  'sup.pc.needConnection': 'The connection is needed to see the changes.',
+
   // «Import from invoices» (step 3e-6, part B3a: the door, choosing the file, the suppliers). The current app's words,
   // `invoiceImport.*` in js/i18n.js, one for one — except the explanation, which no longer offers a .json file (decision F6).
   'sup.imp.title': 'Import from invoices',

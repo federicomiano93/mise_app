@@ -4,6 +4,7 @@ import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { SETTINGS_OPENER, useHandBack } from './handBack';
 import { IngredientCardScreen } from './IngredientCardScreen';
+import { PriceChangesScreen } from './priceChanges/PriceChangesScreen';
 import { SupplierCardScreen } from './SupplierCardScreen';
 import { SupplierScreen } from './SupplierScreen';
 import { useSuppliers } from './SuppliersContext';
@@ -43,6 +44,7 @@ export function SuppliersDetail({ view }: { view: ShownView }) {
       </Suspense>
     );
   }
+  if (view.kind === 'price-changes') return <PriceChangesScreen />;
   return <SupplierScreen id={view.id} />;
 }
 

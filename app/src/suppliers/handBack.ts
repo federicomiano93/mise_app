@@ -22,6 +22,8 @@ export const NEW_OPENER = 'new-door';
 export const SETTINGS_OPENER = 'settings-door';
 // The door to «Import from invoices», beside the one to Settings: Back from the import returns the focus to it.
 export const IMPORT_OPENER = 'import-door';
+// The door to «Price changes», right after the import's: Back from the report returns the focus to it.
+export const PRICE_CHANGES_OPENER = 'price-changes-door';
 // An ingredient or packaging row of a list: Back from its card returns the focus to it.
 export const itemOpener = (id: string): string => `item:${id}`;
 // The same item on a supplier's own screen, and that screen's «Add ingredient» button.
