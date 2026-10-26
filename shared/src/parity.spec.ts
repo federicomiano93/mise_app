@@ -46,8 +46,8 @@
 // ingredient-edit-model.ts IS paired (step 3e-2, the ingredient card's product data): a full port. allergen-terms.ts and
 // allergen-match.ts ARE paired too (step 3e-4, the pack-list allergen reader): full ports. records.ts IS paired (T15, the Recipe
 // catalogue's create-ingredient door): a full port. pack-format.ts is NOT: its
-// `formatSummary` and `formatChanged` take the translate function and the locale as arguments; order-request-model.ts and
-// ingredient-merge.ts are partial ports (`remainingIds`; `findUsage` and the two month keys); their specs compare names and shapes.
+// `formatSummary` and `formatChanged` take the translate function and the locale as arguments; order-request-model.ts is a
+// partial port (`remainingIds`); its spec compares names and shapes. ingredient-merge.ts IS paired since step 3e-7 (the merge itself).
 // catalogue-photo-model.ts is not paired: it exports its table of sentences as well (`CATALOGUE_PHOTO_KEYS`, private in the
 // original) and leaves out the sizes the original re-exports from photo-model; its spec compares what it ports.
 // invoice-zip/reasons.ts, py-compat.ts, sha256.ts, classify.ts and pricing.ts ARE paired (step 3e-6, slice A1, the first
@@ -126,6 +126,7 @@ import * as workWeek from './work-week';
 import * as priceChangesModel from './price-changes-model';
 import * as invoiceImportModel from './invoice-import-model';
 import * as invoiceImportPlan from './invoice-import-plan';
+import * as ingredientMerge from './ingredient-merge';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -184,6 +185,7 @@ import * as legacyWorkWeek from '../../js/orders/work-week.js';
 import * as legacyPriceChangesModel from '../../js/orders/price-changes-model.js';
 import * as legacyInvoiceImportModel from '../../js/orders/invoice-import-model.js';
 import * as legacyInvoiceImportPlan from '../../js/orders/invoice-import-plan.js';
+import * as legacyIngredientMerge from '../../js/orders/ingredient-merge.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -244,6 +246,7 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['price-changes-model', priceChangesModel, legacyPriceChangesModel],
   ['invoice-import-model', invoiceImportModel, legacyInvoiceImportModel],
   ['invoice-import-plan', invoiceImportPlan, legacyInvoiceImportPlan],
+  ['ingredient-merge', ingredientMerge, legacyIngredientMerge],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -305,7 +308,7 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all fifty-eight models are compared', () => {
+test('all fifty-nine models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
@@ -315,5 +318,5 @@ test('all fifty-eight models are compared', () => {
       'supplier-label', 'vat-number', 'favourite-suppliers', 'record-choices', 'category-batches', 'ingredient-edit-model',
       'allergen-terms', 'allergen-match', 'records', 'invoice-zip/reasons', 'invoice-zip/py-compat', 'invoice-zip/sha256',
       'invoice-zip/classify', 'invoice-zip/pricing', 'invoice-zip/fatturapa', 'invoice-zip/products', 'invoice-zip/selection',
-      'work-week', 'price-changes-model', 'invoice-import-model', 'invoice-import-plan']);
+      'work-week', 'price-changes-model', 'invoice-import-model', 'invoice-import-plan', 'ingredient-merge']);
 });
