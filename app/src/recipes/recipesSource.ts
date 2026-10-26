@@ -95,6 +95,10 @@ export interface RecipesSource {
   // The Calculator's configuration (config/calculator) as stored, read ONCE, or null when there is none. Read only
   // to warn before a delete that the Calculator uses the recipe.
   getCalculatorConfig(): Promise<Record<string, unknown> | null>;
+  // One person's line of the venue's roster (locations/{lid}/members/{uid}: email, first and last name), read ONCE, or
+  // null when there is none or it cannot be read now (offline and not in the phone's copy). Read only by the HACCP label,
+  // for the first name it prints when the venue prints «prepared by». A label, never an identity: nothing decides on it.
+  readMember(uid: string): Promise<Record<string, unknown> | null>;
   // LINKS a recipe to the Calculator (config/calculator) in ONE transaction on the document as the server holds it: a tab
   // linked to it is added at the end, or the tab that already stands for it (an old copy 'cat-<id>', or one linked by hand)
   // is refreshed in place and linked (owner's decision, 18 Oct 2026; the current app copies). NOT local-first —
@@ -109,8 +113,12 @@ export interface RecipesSource {
 // typed» is never a stored empty string — and the shelf's two (@mise/shared/recipe-shelf): «no category» and «not
 // archived» are NO FIELD, so a cleared category and a restore travel as removals too.
 export const CLEARABLE_RECIPE_FIELDS = [
-  'netWeightG', 'shelfLifeDays', 'labelName', 'labelIngredientsText', 'category', 'archived',
+  'netWeightG', 'shelfLifeDays', 'labelName', 'labelIngredientsText', 'category', 'archived', 'haccpStorage',
 ] as const;
+
+// The label profile's keys a person can take away (config/labels): the HACCP list's category — «every recipe» is NO
+// field, because the rules refuse an empty word. A `null` in a patch travels as a removal.
+export const CLEARABLE_LABEL_CONFIG_FIELDS = ['haccpCategory'] as const;
 
 // A new recipe's id, made on the phone (no write), so a new recipe appears at once and offline. The same shape as the
 // id Firestore makes itself (20 letters and digits, from the browser's cryptographic random source): the current app's
@@ -138,6 +146,7 @@ const LOGO_DOC = 'logo';
 const PRINT_AGENTS = 'print-agents';
 const PRINT_JOBS = 'print-jobs';
 const SUPPLIERS = 'suppliers';
+const MEMBERS = 'members';
 const CALCULATOR_DOC = 'calculator';
 
 // A copy of the document without any of the price keys (header).
@@ -159,6 +168,7 @@ export function createFirestoreRecipesSource(
   const labelAssetsPath = buildPath(locationId, LABEL_ASSETS);
   const printJobsPath = buildPath(locationId, PRINT_JOBS);
   const suppliersPath = buildPath(locationId, SUPPLIERS);
+  const membersPath = buildPath(locationId, MEMBERS);
 
   // A live listener whose Firestore may not be loaded yet. The returned stop works at any moment.
   function listen(subscribe: (kit: FirestoreKit) => () => void, onError: (err: unknown) => void): () => void {
@@ -249,7 +259,11 @@ export function createFirestoreRecipesSource(
     // patch (a caller cannot name another venue). `merge: true` keeps every field this build does not know about.
     saveLabelConfig: async patch => {
       const kit = await firestore();
-      await kit.fs.setDoc(kit.fs.doc(kit.db, configPath, LABELS_DOC), { ...patch, bakery: locationId }, { merge: true });
+      const out: Record<string, unknown> = { ...patch };
+      for (const key of CLEARABLE_LABEL_CONFIG_FIELDS) {
+        if (key in out && out[key] === null) out[key] = kit.fs.deleteField();
+      }
+      await kit.fs.setDoc(kit.fs.doc(kit.db, configPath, LABELS_DOC), { ...out, bakery: locationId }, { merge: true });
     },
 
     // ⚠️ QUIET (warn), like the label profile: a refused or failed read is a label that says its logo is missing.
@@ -340,6 +354,18 @@ export function createFirestoreRecipesSource(
       const kit = await firestore();
       const snap = await kit.fs.getDoc(kit.fs.doc(kit.db, configPath, CALCULATOR_DOC));
       return snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null;
+    },
+
+    // ⚠️ QUIET: a roster line that cannot be read is a box left for the person to fill, never an error on a label screen.
+    readMember: async uid => {
+      try {
+        const kit = await firestore();
+        const snap = await kit.fs.getDoc(kit.fs.doc(kit.db, membersPath, uid));
+        return snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null;
+      } catch (err) {
+        console.warn('readMember failed:', err);
+        return null;
+      }
     },
   };
 }

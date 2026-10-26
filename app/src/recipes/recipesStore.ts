@@ -86,6 +86,8 @@ export interface RecipeToSave {
   // they were when opened, exactly like the name and the ingredients.
   readonly labelName?: unknown;
   readonly labelIngredientsText?: unknown;
+  // The HACCP label's storage text (labelTexts.ts), with the same life as the two above.
+  readonly haccpStorage?: unknown;
   // The category word chosen (the shelf, @mise/shared/recipe-shelf): a word, '' for «no category» (a removal), or undefined
   // when the save does not touch it — then it is not sent and stays as stored. ⚠️ THE EDITOR SENDS IT ONLY WHEN THE PERSON
   // MOVED THE CHOICE (or for a new recipe): a recipe filed under a word taken off the list shows «no category» in the editor,
