@@ -41,8 +41,13 @@
 // paired: they are full ports. calculator-recipe-text.ts is paired although it differs from the original in ONE input (the line called
 // `Flour uniqua blue`, one venue's data): the exports are the same, and its spec says where the text differs.
 // supplier-label.ts, vat-number.ts, favourite-suppliers.ts, record-choices.ts and category-batches.ts ARE paired (step 3e-1,
-// the Suppliers page): full ports. ingredient-search.ts is NOT: it ports only `normalizeText` and `filterSuppliers` of
-// js/orders/ingredient-search.js (the row builders use order-text); its spec compares names and shapes itself.
+// the Suppliers page): full ports. ingredient-search.ts IS paired since step 3f-1 (it was a partial port, `normalizeText` and
+// `filterSuppliers` only, until the row builders could use the ported order-text). Also paired since 3f-1, the pure core of
+// the Orders section: send-routes.ts, supplier-order.ts, orders-config.ts, line-supplier.ts, order-text.ts and order-day.ts,
+// all full ports. NOT paired, for the usual reasons: day.ts (adapted: the seven functions that spell a day take the translate
+// function as their last argument, and the original's WEEKDAY_LONG is private), no-supplier.ts (adapted: `noSupplier` and
+// `orderSuppliers` are handed the pseudo-supplier's word, and the constant `NO_SUPPLIER` built at import is left out) and
+// archive.ts (partial: eleven functions of js/orders/archive.js); their specs compare names and shapes themselves.
 // ingredient-edit-model.ts IS paired (step 3e-2, the ingredient card's product data): a full port. allergen-terms.ts and
 // allergen-match.ts ARE paired too (step 3e-4, the pack-list allergen reader): full ports. records.ts IS paired (T15, the Recipe
 // catalogue's create-ingredient door): a full port. pack-format.ts is NOT: its
@@ -127,6 +132,13 @@ import * as priceChangesModel from './price-changes-model';
 import * as invoiceImportModel from './invoice-import-model';
 import * as invoiceImportPlan from './invoice-import-plan';
 import * as ingredientMerge from './ingredient-merge';
+import * as sendRoutes from './send-routes';
+import * as supplierOrder from './supplier-order';
+import * as ordersConfig from './orders-config';
+import * as lineSupplier from './line-supplier';
+import * as orderText from './order-text';
+import * as ingredientSearch from './ingredient-search';
+import * as orderDay from './order-day';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -186,6 +198,13 @@ import * as legacyPriceChangesModel from '../../js/orders/price-changes-model.js
 import * as legacyInvoiceImportModel from '../../js/orders/invoice-import-model.js';
 import * as legacyInvoiceImportPlan from '../../js/orders/invoice-import-plan.js';
 import * as legacyIngredientMerge from '../../js/orders/ingredient-merge.js';
+import * as legacySendRoutes from '../../js/orders/send-routes.js';
+import * as legacySupplierOrder from '../../js/orders/supplier-order.js';
+import * as legacyOrdersConfig from '../../js/orders/orders-config.js';
+import * as legacyLineSupplier from '../../js/orders/line-supplier.js';
+import * as legacyOrderText from '../../js/orders/order-text.js';
+import * as legacyIngredientSearch from '../../js/orders/ingredient-search.js';
+import * as legacyOrderDay from '../../js/orders/order-day.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -247,6 +266,13 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['invoice-import-model', invoiceImportModel, legacyInvoiceImportModel],
   ['invoice-import-plan', invoiceImportPlan, legacyInvoiceImportPlan],
   ['ingredient-merge', ingredientMerge, legacyIngredientMerge],
+  ['send-routes', sendRoutes, legacySendRoutes],
+  ['supplier-order', supplierOrder, legacySupplierOrder],
+  ['orders-config', ordersConfig, legacyOrdersConfig],
+  ['line-supplier', lineSupplier, legacyLineSupplier],
+  ['order-text', orderText, legacyOrderText],
+  ['ingredient-search', ingredientSearch, legacyIngredientSearch],
+  ['order-day', orderDay, legacyOrderDay],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -308,7 +334,7 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all fifty-nine models are compared', () => {
+test('all sixty-six models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
@@ -318,5 +344,5 @@ test('all fifty-nine models are compared', () => {
       'supplier-label', 'vat-number', 'favourite-suppliers', 'record-choices', 'category-batches', 'ingredient-edit-model',
       'allergen-terms', 'allergen-match', 'records', 'invoice-zip/reasons', 'invoice-zip/py-compat', 'invoice-zip/sha256',
       'invoice-zip/classify', 'invoice-zip/pricing', 'invoice-zip/fatturapa', 'invoice-zip/products', 'invoice-zip/selection',
-      'work-week', 'price-changes-model', 'invoice-import-model', 'invoice-import-plan', 'ingredient-merge']);
+      'work-week', 'price-changes-model', 'invoice-import-model', 'invoice-import-plan', 'ingredient-merge', 'send-routes', 'supplier-order', 'orders-config', 'line-supplier', 'order-text', 'ingredient-search', 'order-day']);
 });
