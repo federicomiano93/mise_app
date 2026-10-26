@@ -13,6 +13,8 @@ import type { Language } from '../i18n/i18n';
 import { routes as appRoutes } from '../routes';
 import { SessionProvider } from '../session/SessionContext';
 import { fakeImportSource } from '../suppliers/invoiceImport/testing/fakeImportSource';
+import { fakeMergeSource } from '../suppliers/merge/testing/fakeMergeSource';
+import { fakePriceChangesSource } from '../suppliers/priceChanges/testing/fakePriceChangesSource';
 import type { Session } from '../session/session';
 import { fakeCalculatorSource } from './fakeCalculatorSource';
 import { fakeClientOrdersSource } from './fakeClientOrdersSource';
@@ -53,7 +55,8 @@ export function renderApp(path: string, { lang = 'en', routes = appRoutes, sessi
     foodcost: () => fakeFoodcostSource(), calculator: () => fakeCalculatorSource(),
     clientOrders: () => fakeClientOrdersSource(), recipes: () => fakeRecipesSource(),
     photo: () => ({ readRecipe: () => Promise.reject(new Error('no photo reader in this spec')), setRecipePhoto: () => Promise.reject(new Error('no photo switch in this spec')) }),
-    suppliers: () => fakeSuppliersSource(), invoiceImport: () => fakeImportSource(), ...data };
+    suppliers: () => fakeSuppliersSource(), invoiceImport: () => fakeImportSource(),
+    priceChanges: () => fakePriceChangesSource(), merge: () => fakeMergeSource(), ...data };
 
   render(
     <I18nProvider initialLanguage={lang} initialMessages={messages}>
