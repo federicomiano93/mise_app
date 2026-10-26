@@ -288,6 +288,9 @@ export const HACCP_MARGIN = 16; // 2 mm all round
 export const ROW = 25; // a line of text, as the product label's ingredients
 export const BLANK_ROW = 40; // a line to write on: 5 mm, room for a pen
 const BLANK_TEXT_DROP = BLANK_ROW - ROW; // the caption sits at the bottom of its tall row, beside the line
+// ⚠️ THE SHORTEST LINE SOMEBODY CAN WRITE ON: 22 mm, room for a date (26/10/2026) or a short name by hand. A long caption on a
+// narrow label left a few millimetres beside it; below this the line goes under the caption, the whole label's width.
+export const MIN_WRITE = 176;
 const BODY_ASCENT = 17; // DejaVu Sans at the body size, top of the ascender to the baseline (label-image-metrics: 68 px)
 const RULE = 2; // the rule under the name, and the line to write on
 const TITLE_GAP = 6; // between the name's last line and the rule, and between the rule and the first row
@@ -384,11 +387,18 @@ export function layoutHaccpLabel(content: HaccpContent, size: HaccpSize, rawMeas
     if (captionW > innerW) tooWide.add('caption');
     if (row.value === null) {
       // The caption at the bottom of a tall row, and the line to write on from after it to the right margin, just under
-      // the caption's baseline.
-      const top = y + BLANK_TEXT_DROP;
-      text(left, top, caption, 'bold', BODY_PX);
+      // the caption's baseline — or, with less than MIN_WRITE left beside the caption, the caption on a row of its own and
+      // the line on the next, from margin to margin.
       const lineStart = left + captionW + space;
-      if (lineStart < W - left) band(lineStart, W - left, top + BODY_ASCENT + 2, RULE);
+      if (W - left - lineStart >= MIN_WRITE * S) {
+        const top = y + BLANK_TEXT_DROP;
+        text(left, top, caption, 'bold', BODY_PX);
+        band(lineStart, W - left, top + BODY_ASCENT + 2, RULE);
+      } else {
+        text(left, y, caption, 'bold', BODY_PX);
+        y += ROW;
+        band(left, W - left, y + BLANK_TEXT_DROP + BODY_ASCENT + 2, RULE);
+      }
       y += BLANK_ROW;
       continue;
     }

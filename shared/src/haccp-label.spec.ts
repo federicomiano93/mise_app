@@ -3,7 +3,7 @@
 
 import { describe, expect, test } from 'vitest';
 import {
-  BLANK_ROW, HACCP_DEFAULTS, HACCP_DEFAULT_SIZE, HACCP_FIELDS, HACCP_MARGIN, HACCP_SIZES, ROW,
+  BLANK_ROW, HACCP_DEFAULTS, HACCP_DEFAULT_SIZE, HACCP_FIELDS, HACCP_MARGIN, HACCP_SIZES, MIN_WRITE, ROW,
   dateFromInput, firstNameOf, haccpCaption, haccpContent, haccpListCategory, haccpSettingsOf, haccpSizeDots, inputFromDate,
   layoutHaccpLabel, lotFromDate,
 } from './haccp-label';
@@ -185,6 +185,27 @@ describe('where everything goes', () => {
     expect(caption.text).toBe('Lotto:');
     expect(line?.x0).toBeGreaterThan(caption.x + measure('Lotto:', 'bold', BODY_PX));
     expect((line?.x1 ?? 0) + 1).toBe(l.width - HACCP_MARGIN * S);
+  });
+
+  test('⚠️ every line to write on is at least 22 mm long: a long caption on a narrow label puts its line underneath', () => {
+    // 40 × 30, Italian, the use-by date left to the pen: «Da consumarsi entro il:» leaves a few millimetres beside it.
+    const c = haccpContent(only({ useBy: 'blank', lot: 'blank' }), values(), 'it');
+    const l = lay(c, '40x30');
+    expect(l.refused).toBe(false);
+    const lines = rects(l.elements);
+    expect(lines).toHaveLength(2);
+    for (const line of lines) expect(line.x1 + 1 - line.x0).toBeGreaterThanOrEqual(MIN_WRITE * S);
+    // The use-by caption is long: its line runs margin to margin on the row under it, and the row is the taller for it.
+    const [useByLine, lotLine] = lines as [Rect, Rect];
+    expect(useByLine.x0).toBe(HACCP_MARGIN * S);
+    expect(useByLine.x1 + 1).toBe(l.width - HACCP_MARGIN * S);
+    const useByCaption = texts(l.elements)[0] as Text;
+    expect(useByLine.y0).toBeGreaterThan(useByCaption.y + BODY_PX);
+    // «Lotto:» is short: its line stays beside it.
+    expect(lotLine.x0).toBeGreaterThan(HACCP_MARGIN * S);
+    expect(l.endY).toBe(HACCP_MARGIN + ROW + BLANK_ROW + BLANK_ROW);
+    // The same two fields on the default size have room beside both captions.
+    expect(rects(lay(c).elements).every(line => line.x0 > HACCP_MARGIN * S)).toBe(true);
   });
 
   test('a long value goes on over lines of its own from the left margin', () => {

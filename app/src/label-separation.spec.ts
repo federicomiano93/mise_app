@@ -120,6 +120,7 @@ const ALLOWED_VALUES: Readonly<Record<string, string>> = {
   HACCP_MARGIN: 'the label’s margin in dots, a number',
   ROW: 'a text line’s height in dots, a number',
   BLANK_ROW: 'a blank line’s height in dots, a number',
+  MIN_WRITE: 'the shortest line to write on, in dots, a number',
 };
 // Exported by the three modules and NOT allowed outside a label file, because they carry or compose words: the tables
 // hold each allergen's and nutrient's English `label`, and the builders compose ingredient names into the declaration.
