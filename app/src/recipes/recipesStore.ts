@@ -211,6 +211,9 @@ export interface RecipesStore {
   // Puts a label job in the shop computer's queue. ⚠️ NOT LOCAL-FIRST: it rejects when the write cannot be made,
   // and the caller says so (the source explains why). Nothing is remembered here.
   queuePrintJob(job: Readonly<Record<string, unknown>>): Promise<void>;
+  // One person's line of the venue's roster, straight through to the source (never rejects, null when unreadable). Read once by
+  // the HACCP label for the first name it prints; nothing is remembered here.
+  readMember: RecipesSource['readMember'];
   // Changes some fields of the label profile (config/labels), LOCAL-FIRST: the store's copy and the phone's copy
   // change at once and the snapshot is announced, then the source is asked. Resolves when the database has taken
   // the change. On a refusal the keys of THIS patch are put back to what they were just before it (except a key a
@@ -618,6 +621,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     },
 
     queuePrintJob: job => source.queuePrintJob(job),
+    readMember: uid => source.readMember(uid),
     watchLabelLogo: (onChange, onError) => source.watchLabelLogo(onChange, onError),
     saveLabelLogo: logo => source.saveLabelLogo(logo),
     removeLabelLogo: () => source.removeLabelLogo(),

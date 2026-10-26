@@ -19,6 +19,7 @@ import { FormBar } from '../ui/FormBar';
 import { SettingSwitch } from '../ui/SettingSwitch';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
+import { HaccpSettingsCard } from './HaccpSettingsCard';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import { recipePhotoOn } from './photoGate';
 import { SegmentedChoice } from './SegmentedChoice';
@@ -298,6 +299,11 @@ function Controls() {
       </Card>
       </>
       )}
+
+      {/* ⚠️ THE HACCP LABEL'S CARD IS THERE WHATEVER THE PRODUCT LABEL'S MODEL: it is a label of its own. It stands after the
+          product label's cards (the model, the logo or the paper) and before the closing note: it is the last thing
+          somebody sets up, and it reads the category words from the card near the top. */}
+      <HaccpSettingsCard save={save} />
 
       {/* The live region sits in the same block as the note, outside the column's gap: empty, it takes no room. */}
       <div>

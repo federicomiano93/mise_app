@@ -167,6 +167,12 @@
 @page p102x76 { size: 102mm 76mm; margin: 0; }
 /* The image label («with logo») is always 80 × 60 mm: its dots are drawn for that paper alone. */
 @page p80x60  { size: 80mm 60mm;  margin: 0; }
+/* The HACCP label comes in five fixed sizes, each its own static page (a size cannot be built at run time: the page CSP). */
+@page haccp40x30 { size: 40mm 30mm; margin: 0; }
+@page haccp50x30 { size: 50mm 30mm; margin: 0; }
+@page haccp60x40 { size: 60mm 40mm; margin: 0; }
+@page haccp62x29 { size: 62mm 29mm; margin: 0; }
+@page haccp80x60 { size: 80mm 60mm; margin: 0; }
 
 .lab-print { display: none; }
 :where(.lab-print) .lab-sheet { page: labcustom; }
@@ -176,6 +182,43 @@
 /* The picture IS the page: exactly 80 × 60 mm, its dots kept square (a 640 × 480 image is 8 dots to the millimetre). */
 .lab-print--p80x60 .lab-print-image {
   page: p80x60;
+  display: block;
+  width: 80mm;
+  height: 60mm;
+  image-rendering: pixelated;
+}
+
+/* The HACCP label's picture IS the page too: its size in millimetres, 8 dots to the millimetre. */
+.lab-print--haccp-40x30 .lab-print-image {
+  page: haccp40x30;
+  display: block;
+  width: 40mm;
+  height: 30mm;
+  image-rendering: pixelated;
+}
+.lab-print--haccp-50x30 .lab-print-image {
+  page: haccp50x30;
+  display: block;
+  width: 50mm;
+  height: 30mm;
+  image-rendering: pixelated;
+}
+.lab-print--haccp-60x40 .lab-print-image {
+  page: haccp60x40;
+  display: block;
+  width: 60mm;
+  height: 40mm;
+  image-rendering: pixelated;
+}
+.lab-print--haccp-62x29 .lab-print-image {
+  page: haccp62x29;
+  display: block;
+  width: 62mm;
+  height: 29mm;
+  image-rendering: pixelated;
+}
+.lab-print--haccp-80x60 .lab-print-image {
+  page: haccp80x60;
   display: block;
   width: 80mm;
   height: 60mm;

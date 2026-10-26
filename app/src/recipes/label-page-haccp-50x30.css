@@ -1,0 +1,6 @@
+/* The page the HACCP label prints on at 50 × 30 mm, for EVERY browser — the size its dots were drawn for.
+
+   ⚠️⚠️ ONE STATIC FILE PER SIZE, SWITCHED ON ONLY WHILE A HACCP LABEL OF THAT SIZE PRINTS (printHost.tsx, same lifetime as
+   label-page-image.css, and only one page file is ever on). The page's CSP forbids style built at run time, and a browser
+   that ignores named pages (the lab tablet's Chrome 101) would otherwise lay the dots on its default page. */
+@page { size: 50mm 30mm; margin: 0; }
