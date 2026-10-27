@@ -776,3 +776,36 @@ Titles read for all; bodies read where I name behaviour. All under `tests/`.
 - `kiosk-rest-orders.test.mjs` — the page as the kiosk's live source (the other `kiosk-*` tests are step 3g).
 - Cross-cutting: `run-in-order.test.mjs`, `store-notify-guarded.test.mjs`, `preconnect.test.mjs`,
   `screen-gutter.test.mjs`, `mise2-isolation.test.mjs` (no double curly brace or curly-percent in docs).
+
+## Step 3f-1 as built — the order list and the shared draft
+
+Items L1–L16, L18, L22–L26, L31–L37, L40–L41, D1–D2 (the stamp only), M10–M11, F6 and L38's read side. Rules unchanged: the
+current app already reads `suppliers`, `ingredients`, `config/orders` and `drafts/current` and writes the draft's merge.
+
+**Shared.** Ported in `bc7c1275`: `send-routes`, `supplier-order`, `orders-config`, `line-supplier`, `order-text`,
+`ingredient-search` (full), `day` and the no-supplier helpers (adapted), `order-day` (full), `archive` (the change-detection half).
+
+**Data.** `orders/ordersSource.ts` (four listeners while the section is on screen, one merge write; NO prices — the money line is
+3f-8 and an employee must not load them), `orders/draftSync.ts` (the port of `draft.js`: changed keys only, unsent typing laid over
+every snapshot, 800 ms, `flush`), `orders/ordersStore.ts`, `orders/ordersLens.ts`, `OrdersContext.tsx`; fake
+`testing/fakeOrdersSource.ts`, handed out by `DataServices`.
+
+**Screens.** `/orders` (the supplier list: search, the «Ordering» filter, Favourites, «No supplier», the count and the «for later»
+tag), `/orders/supplier/<id>` (the rows: Order box with − / + and ×, the unit menu only when the card offers a choice, the Stock
+box, «Not in use» folded at the foot, the «What they sell» button) and `/orders/supplier/<id>/items` (read-only). From 1000px the
+supplier opens beside the list.
+
+**Differences from the current app, on purpose (tell him):**
+- O1. **Lines switched off («Not in use») are on the supplier's screen**, last, in a folded group that opens by itself when one of
+  them has a quantity (F6, T10). The current app leaves them out of Orders altogether.
+- O2. **Leaving the section sends unsaved typing at once** (`stop()` flushes the 800 ms pause). The current app can lose the last
+  keystrokes when the page is left inside the pause.
+- O3. **A box that has the focus is never rewritten by another phone**; it picks up the shared value when the finger leaves it.
+- O4. **No copy of `config/orders` in this phone's storage** (T14): Firestore's offline database already answers at once.
+- O5. **Moved to later slices to keep this one to a session**: the flat view (L17) and the tablet summary (L19) → 3f-8; the day
+  line and placing → 3f-2; the supplier name as a door to its card → 3f-8. No progress bar.
+- O6. **Back to 0 before the pause saves nothing for that line**: an empty line and 0 are the same thing (L26), so no write
+  carries a zero for a line that was never saved.
+
+**P13.** This slice stores no personal data: the draft holds no person. Order lists (3f-7) store the sender's name — flagged
+before that slice is built.

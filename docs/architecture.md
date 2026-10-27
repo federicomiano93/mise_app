@@ -391,6 +391,19 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   price — the Catalogue loads no money); `CreateIngredientProvider` sits inside the Catalogue's `StatusMessageProvider` and
   says the store's refusals there. The ingredients and suppliers the card needs are handed in by the editor from the
   Catalogue's own store.
+- `orders/` — «Orders» (section id `orders`, step 3f, built in slices; its parity list is `docs/parity/orders.md`). Slice 3f-1 is
+  the supplier list and the shared order in progress. The data layer: `ordersSource.ts` (the Firestore half: four listeners —
+  suppliers, ingredients WITHOUT prices, `config/orders`, `drafts/current` — and one write, a merge of the changed lines and days),
+  `draftSync.ts` (the port of `js/orders/draft.js`: only the keys this phone changed are sent, its unsent typing is laid over every
+  snapshot, 800 ms pause, `flush()`), `ordersStore.ts` (plain TypeScript: `editLine` stamps the day the lines are FOR — never for a
+  stock-only edit — and settles whose order a line is in; `stop()` sends a change still waiting at once), `ordersLens.ts` (pure: the
+  ONE place that decides which supplier a line sits under; «Not in use» lines LAST, decision F6), `OrdersContext.tsx` (started on
+  mount, stopped on unmount, P14). No localStorage copy of `config/orders` (T14). Addresses, in `ordersPath.ts`: `/orders`,
+  `/orders/supplier/<id>` (`no-supplier` is a valid id) and `/orders/supplier/<id>/items`; the usage record names `orders`,
+  `orders-supplier` and `orders-supplier-items`. The frame (`OrdersSection.tsx`) is the suppliers' shape: the list on the left, the
+  supplier beside it from 1000px, the section owns the scroll, `handBack.ts` gives the focus back to the row, the list icon or the
+  «What they sell» button that opened a screen. `OrderLine` + `NumberBox`: ⚠️ A BOX THAT HAS THE FOCUS IS NEVER OVERWRITTEN by a
+  snapshot from another phone; the steppers and the × write through the box's handle. Nothing in 3f-1 is role-gated (L2).
 - `settings/` — the Settings page (today: the Account card).
 - `styles/` — `tokens.css` (every colour, size, radius, shadow) and `base.css`.
 - `testing/` — `renderApp`, the fake session store and other spec helpers.
