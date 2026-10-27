@@ -127,6 +127,39 @@ describe('draftSync — two phones in one document', () => {
     const view = h.sync.receive({ entries: { a: { qty: 7, stock: 0 } } });
     expect(view.entries.a).toEqual({ qty: 8, stock: 0 });
   });
+
+  // Found driving 3f-1 against the emulator (27 Oct 2026): the queued map was the whole screen as it was at the keystroke,
+  // so a snapshot that cleared lines during the pause made every one of them «changed here» against the new baseline.
+  it('⚠️ another phone clearing lines during the debounce: the autosave sends ONLY this phone\'s line, never the cleared ones back', async () => {
+    const h = harness();
+    h.sync.receive({ entries: { a: { qty: 2, stock: 0 }, b: { qty: 5, stock: 1 } }, days: { s1: '2026-10-26' } });
+    h.sync.change({ a: { qty: 2, stock: 0 }, b: { qty: 5, stock: 1 }, c: { qty: 3, stock: 0 } }, { s1: '2026-10-26' });
+    // Another phone places the order: its lines go to 0 and its day stamp goes.
+    h.sync.receive({ entries: { a: { qty: 0, stock: 0 }, b: { qty: 0, stock: 1 } }, days: {} });
+    await h.tick();
+    expect(h.saves).toEqual([{ updatedAt: '2026-10-26T10:00:00.000Z', entries: { c: { qty: 3, stock: 0 } } }]);
+  });
+
+  it('⚠️ typed over the phone\'s OLD copy before the server answered: the server\'s emptied order is not filled back in', async () => {
+    const h = harness();
+    // The first snapshot comes from this phone's cache, the order as it was before another phone emptied it.
+    h.sync.receive({ entries: { a: { qty: 9, stock: 0 }, b: { qty: 2, stock: 0 } } });
+    h.sync.change({ a: { qty: 3, stock: 0 }, b: { qty: 2, stock: 0 } }, {});
+    // The server's copy arrives: the order is empty.
+    const view = h.sync.receive({ entries: {} });
+    expect(view.entries).toEqual({ a: { qty: 3, stock: 0 } });
+    await h.tick();
+    expect(h.saves).toEqual([{ updatedAt: '2026-10-26T10:00:00.000Z', entries: { a: { qty: 3, stock: 0 } } }]);
+  });
+
+  it('flush after such a snapshot sends only this phone\'s line too', async () => {
+    const h = harness();
+    h.sync.receive({ entries: { a: { qty: 4, stock: 0 } } });
+    h.sync.change({ a: { qty: 4, stock: 0 }, c: { qty: 1, stock: 0 } }, {});
+    h.sync.receive({ entries: { a: { qty: 0, stock: 0 } } });
+    await h.sync.flush();
+    expect(h.saves).toEqual([{ updatedAt: '2026-10-26T10:00:00.000Z', entries: { c: { qty: 1, stock: 0 } } }]);
+  });
 });
 
 describe('draftSync — a refused write', () => {

@@ -175,12 +175,18 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       known = { entries: detach(doc?.entries), days: daysOf(doc?.days) };
       // …but anything typed here and not yet written goes back ON TOP, or the snapshot would erase it mid-keystroke.
       const stored = (doc?.entries && typeof doc.entries === 'object' ? doc.entries : {}) as Record<string, DraftEntry>;
-      return {
+      const view: DraftView = {
         entries: { ...stored, ...pending.entries },
         days: { ...daysOf(doc?.days), ...pending.days },
         updatedAt: typeof doc?.updatedAt === 'string' ? doc.updatedAt : '',
         exists: doc !== null && doc !== undefined,
       };
+      // ⚠️ A WAITING SAVE IS REBUILT ON THE NEW BASELINE. It held the whole screen as it was at the keystroke; against this
+      // snapshot every line another phone has since cleared (an order placed, a cache copy replaced by the server's) would
+      // look «changed here» and be written back — a placed order's quantities coming back. Only `pending` is this phone's.
+      // (Found driving 3f-1 on the emulator; the current app's draft.js has the same hole.)
+      if (queued) queued = { entries: view.entries, days: view.days };
+      return view;
     },
 
     change(entries, days) {
