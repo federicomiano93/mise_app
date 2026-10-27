@@ -178,6 +178,21 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
 
   const inAir = (id: string, field: Field) => flights.some(flight => flight.entries[id] !== undefined && field in flight.entries[id]);
   const dayInAir = (id: string) => flights.some(flight => id in flight.days);
+  // What the LATEST write in the air says for a field (or a supplier's day): undefined when none carries it.
+  function carried(id: string, field: Field): number | string | undefined {
+    for (let i = flights.length - 1; i >= 0; i -= 1) {
+      const row = flights[i]?.entries[id];
+      if (row !== undefined && field in row) return row[field];
+    }
+    return undefined;
+  }
+  function dayCarried(id: string): string | undefined {
+    for (let i = flights.length - 1; i >= 0; i -= 1) {
+      const days = flights[i]?.days;
+      if (days !== undefined && id in days) return days[id];
+    }
+    return undefined;
+  }
 
   // What this phone's screen holds that the server does not.
   function differences(entries: DraftEntries, days: DraftDays): { entries: Rows; days: MutableDays } {
@@ -224,11 +239,19 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
   function saveNow(): Promise<void> {
     disarm();
     waiting = false;
-    // Copies: a change typed while the write is in the air must not alter what this write says it sent.
-    const sent = {
-      entries: Object.fromEntries(Object.entries(pending.entries).map(([id, row]) => [id, { ...row }])) as Rows,
-      days: { ...pending.days },
-    };
+    // Copies: a change typed while the write is in the air must not alter what this write says it sent. ⚠️ LEFT OUT: what
+    // a write still in the air already says at the same value (the group only whole). Sent again — leaving the section a
+    // moment after the autosave went — it could land after a colleague's newer value and put this phone's old one back
+    // (found in the fourth review of 3f-1).
+    const sent: { entries: Rows; days: MutableDays } = { entries: {}, days: {} };
+    for (const [id, held] of Object.entries(pending.entries)) {
+      const row: Row = { ...held };
+      const group = GROUP.filter(field => field in row);
+      if (group.length > 0 && group.every(field => carried(id, field) === row[field])) for (const field of group) delete row[field];
+      if ('stock' in row && carried(id, 'stock') === row.stock) delete row.stock;
+      if (!isEmpty(row)) sent.entries[id] = row;
+    }
+    for (const [id, day] of Object.entries(pending.days)) if (dayCarried(id) !== day) sent.days[id] = day;
     // Nothing this phone changed, so nothing to say. Staying quiet also stops a snapshot bouncing straight back as a write.
     if (isEmpty(sent.entries) && isEmpty(sent.days)) return Promise.resolve();
 

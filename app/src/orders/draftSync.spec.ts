@@ -357,6 +357,34 @@ describe('draftSync — two phones in one document', () => {
     expect(h.sync.receive({ entries: { a: { qty: 1, stock: 0 } } }).entries.a).toEqual({ qty: 6, stock: 0, unit: '', supplierId: '' });
   });
 
+  // Found in the fourth review of 3f-1 (28 Oct 2026).
+  it('⚠️ leaving while the autosave is in the air does not send the same write again (it could land after a colleague)', async () => {
+    const h = harness();
+    h.holdSaves();
+    h.sync.receive({ entries: { a: { qty: 1, stock: 0 } } });
+    h.sync.change({ a: { qty: 5, stock: 0 } }, { s1: '2026-10-29' });
+    await h.tick();
+    h.sync.receive({ entries: { a: { qty: 5, stock: 0 } }, days: { s1: '2026-10-29' } });
+    const flushed = h.sync.flush();
+    expect(h.saves).toHaveLength(1);
+    expect(h.sync.hasUnsaved()).toBe(true);
+    h.pendingSaves[0]?.resolve();
+    await flushed;
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(h.sync.hasUnsaved()).toBe(false);
+  });
+
+  it('⚠️ … but what changed since that write goes: a new stock count on the same line, alone', async () => {
+    const h = harness();
+    h.holdSaves();
+    h.sync.receive({ entries: { a: { qty: 1, stock: 0 } } });
+    h.sync.change({ a: { qty: 5, stock: 0 } }, {});
+    await h.tick();
+    h.sync.change({ a: { qty: 5, stock: 3 } }, {});
+    void h.sync.flush();
+    expect(h.saves[1]?.entries).toEqual({ a: { stock: 3 } });
+  });
+
   it('flush after such a snapshot sends only this phone\'s line too', async () => {
     const h = harness();
     h.sync.receive({ entries: { a: { qty: 4, stock: 0 } } });
