@@ -26,6 +26,9 @@ export interface HandBack {
   forget(): void;
   // Gives the focus to the opener that was expected, if it is still there, and forgets it.
   deliver(): void;
+  // Like deliver(), but only when the opener that is expected is this one: a screen that must not take the focus from
+  // another opener's hand-back (a supplier opened FROM the list) asks for its own door only.
+  deliverIf(name: string): void;
   // Gives the focus to a registered opener now; false when it is not there.
   focus(name: string): boolean;
 }
@@ -35,6 +38,7 @@ const NOTHING: HandBack = {
   expect() { /* ditto */ },
   forget() { /* ditto */ },
   deliver() { /* ditto */ },
+  deliverIf() { /* ditto */ },
   focus: () => false,
 };
 
@@ -71,6 +75,9 @@ export function useHandBackState(): HandBack {
       const node = openers.current.get(name);
       if (node) reveal(node).focus();
       return node !== undefined;
+    },
+    deliverIf(name) {
+      if (wanted.current === name) this.deliver();
     },
     deliver() {
       const name = wanted.current;

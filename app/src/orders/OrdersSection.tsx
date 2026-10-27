@@ -10,7 +10,7 @@ import { OrdersProvider, useOrders } from './OrdersContext';
 import { OrdersList } from './OrdersList';
 import { SupplierItemsScreen } from './SupplierItemsScreen';
 import { SupplierOrderScreen } from './SupplierOrderScreen';
-import { HandBackProvider, itemsOpener, supplierOpener, useHandBackState } from './handBack';
+import { HandBackProvider, ITEMS_DOOR, itemsOpener, supplierOpener, useHandBackState } from './handBack';
 import { FROM_LIST, cameFromList } from './ordersNav';
 import { ORDERS_PATH, parseOrdersPath, supplierItemsPath, supplierPath } from './ordersPath';
 import type { OrdersView } from './ordersPath';
@@ -136,6 +136,9 @@ function OrdersLayout({ view }: { view: ShownView }) {
   // list is on screen again (on a phone it was hidden behind the supplier, not unmounted).
   useLayoutEffect(() => {
     if (view.kind === 'list') handBack.deliver();
+    // The supplier's screen coming back from «What they sell»: only its own button is owed the focus. ⚠️ NOT deliver(): a
+    // supplier opened from the list expects the list row, which must keep its focus (phone: the title takes it; split: the row).
+    else if (view.kind === 'supplier') handBack.deliverIf(ITEMS_DOOR);
   }, [view.kind, handBack]);
 
   // On the split the right-hand side scrolls on its own and stays mounted from one supplier to the next: another supplier

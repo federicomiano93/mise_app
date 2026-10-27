@@ -33,7 +33,7 @@ function seeded(extra: Partial<Parameters<typeof fakeOrdersSource>[0]> = {}): Fa
 
 async function opened(supplierId = 's-alp', source = seeded(), options = {}) {
   const view = renderOrders(`/orders/supplier/${supplierId}`, { source, ...options });
-  await screen.findByRole('spinbutton', undefined, LOAD);
+  await screen.findAllByRole('spinbutton', undefined, LOAD);
   return view;
 }
 
@@ -176,7 +176,8 @@ describe('− + and ×', () => {
     expect(qtyBox('Flour 00')).toHaveValue(null);
     expect(minus).toBeDisabled();
     await waitFor(() => { expect(source.writes.length).toBeGreaterThan(0); }, SAVED);
-    expect(source.writes.at(-1)?.entries?.['i-flour']).toMatchObject({ qty: 0 });
+    // Back to 0 before the pause: an empty line and 0 are the same thing (L26), so the write carries no quantity for it.
+    expect(source.writes.at(-1)?.entries?.['i-flour']?.qty ?? 0).toBe(0);
   });
 
   it('a keyboard − that reaches 0 moves the focus to the box, not to the page', async () => {
@@ -367,7 +368,7 @@ describe('the status line', () => {
     const source = seeded();
     source.refuseWrites = true;
     const { user } = await opened('s-alp', source, { lang: 'it' });
-    await user.type(qtyBox('Flour 00'), '3');
+    await user.type(box('Quantità da ordinare di Flour 00'), '3');
     expect(await screen.findByText('Non è stato possibile salvare l’ordine — controlla la rete. Tieni aperta questa pagina.', undefined, SAVED)).toBeInTheDocument();
   });
 
@@ -435,5 +436,62 @@ describe('«What they sell»', () => {
     renderOrders('/orders/supplier/s-alp/items', { source: seeded(), lang: 'it' });
     expect(await screen.findByText('Cosa vendono', undefined, LOAD)).toBeInTheDocument();
     expect(screen.getByText('6 ingredienti')).toBeInTheDocument();
+  });
+});
+
+describe('«What they sell» from the supplier screen', () => {
+  const door = () => screenOf('Alpine Mills').getByRole('button', { name: 'What they sell' });
+
+  it('has a button for it on the supplier’s order screen, named in the interface language', async () => {
+    await opened();
+    expect(door()).toBeInTheDocument();
+    expect(door().querySelector('svg')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('says it in Italian', async () => {
+    await opened('s-alp', seeded(), { lang: 'it' });
+    expect(screenOf('Alpine Mills').getByRole('button', { name: 'Cosa vendono' })).toBeInTheDocument();
+  });
+
+  it('opens the read-only list, one level down', async () => {
+    const { user } = await opened();
+    await user.click(door());
+    expect(await screen.findByText('6 ingredients', undefined, LOAD)).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Alpine Mills' })).toBeInTheDocument();
+    expect(screen.getByText('What they sell')).toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+  });
+
+  it('hands the focus back to the button when Back returns to the supplier’s order', async () => {
+    const { user } = await opened();
+    await user.click(door());
+    await screen.findByText('6 ingredients', undefined, LOAD);
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    await waitFor(() => { expect(door()).toHaveFocus(); });
+  });
+
+  it('hands the focus back to the button too when the supplier was opened from the list', async () => {
+    const { user } = renderOrders('/orders', { source: seeded() });
+    await user.click(await screen.findByRole('button', { name: /^Alpine Mills/ }, LOAD));
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    await user.click(door());
+    await screen.findByText('6 ingredients', undefined, LOAD);
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    await waitFor(() => { expect(door()).toHaveFocus(); });
+  });
+
+  it('does not take the focus from the title when a supplier is opened from the list', async () => {
+    const { user } = renderOrders('/orders', { source: seeded() });
+    await user.click(await screen.findByRole('button', { name: /^Alpine Mills/ }, LOAD));
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    await waitFor(() => { expect(screen.getByRole('heading', { level: 2, name: 'Alpine Mills' })).toHaveFocus(); });
+  });
+
+  it('is not on the «not in the order list» screen', async () => {
+    renderOrders('/orders/supplier/nobody', { source: seeded() });
+    expect(await screen.findByText('This supplier is not in the order list.', undefined, LOAD)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'What they sell' })).not.toBeInTheDocument();
   });
 });

@@ -36,10 +36,10 @@ describe('a built section', () => {
     expect(main().queryByText('Loading…')).not.toBeInTheDocument();
   });
 
-  it('is not fetched by the other sections either, which still show their placeholder', async () => {
-    renderApp('/orders');
-    expect(main().getByRole('heading', { level: 1, name: 'Orders' })).toBeInTheDocument();
-    expect(main().getByText('This section will arrive in one of the next steps of Mise 2.')).toBeInTheDocument();
+  // Every section in the list is built now (Orders was the last, step 3f-1), so the other screen opened is Settings.
+  it('is not fetched by the other screens either', async () => {
+    renderApp('/settings');
+    expect(main().getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(control.imports).toBe(0);
   });

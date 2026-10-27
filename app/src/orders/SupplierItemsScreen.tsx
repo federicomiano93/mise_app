@@ -6,8 +6,8 @@ import { useT } from '../i18n/useT';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { FormBar } from '../ui/FormBar';
 import { useOrders } from './OrdersContext';
-import { itemsOpener, useHandBack } from './handBack';
-import { cameFromList, useLeave } from './ordersNav';
+import { ITEMS_DOOR, itemsOpener, useHandBack } from './handBack';
+import { cameFromList, cameFromSupplier, useLeave } from './ordersNav';
 import { supplierPath } from './ordersPath';
 import type { OrderRow, OrdersLens } from './ordersLens';
 import styles from './SupplierItemsScreen.module.css';
@@ -28,7 +28,7 @@ export function SupplierItemsScreen({ id, lens }: { id: string; lens: OrdersLens
   const title = useRef<HTMLHeadingElement>(null);
   // Back is the browser's Back when the list is the entry behind (the list icon opened this); an address typed in goes up
   // one level, to the supplier's order.
-  const leave = useLeave(supplierPath(id), () => { handBack.expect(itemsOpener(id)); });
+  const leave = useLeave(supplierPath(id), () => { handBack.expect(cameFromSupplier(state) ? ITEMS_DOOR : itemsOpener(id)); });
 
   const supplier = lens.supplierById(id);
   const sold = lens.rowsFor(id);

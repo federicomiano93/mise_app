@@ -1,14 +1,16 @@
-import { useEffect, useId, useRef } from 'react';
-import { useLocation } from 'react-router';
+import { useCallback, useEffect, useId, useRef } from 'react';
+import { List } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { useT } from '../i18n/useT';
+import { Button } from '../ui/Button';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { FormBar } from '../ui/FormBar';
 import { OrderLine } from './OrderLine';
 import { useOrders, useOrdersStore } from './OrdersContext';
-import { supplierOpener, useHandBack } from './handBack';
-import { ORDERS_PATH } from './ordersPath';
-import { cameFromList, useLeave } from './ordersNav';
+import { ITEMS_DOOR, supplierOpener, useHandBack } from './handBack';
+import { ORDERS_PATH, supplierItemsPath } from './ordersPath';
+import { FROM_SUPPLIER, cameFromList, useLeave } from './ordersNav';
 import type { OrderRow, OrdersLens } from './ordersLens';
 import styles from './SupplierOrderScreen.module.css';
 
@@ -18,12 +20,16 @@ import styles from './SupplierOrderScreen.module.css';
 export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens }) {
   const { t } = useT();
   const { state } = useLocation();
+  const navigate = useNavigate();
   const store = useOrdersStore();
   const snapshot = useOrders();
   const handBack = useHandBack();
   const titleId = useId();
   const title = useRef<HTMLHeadingElement>(null);
   const leave = useLeave(ORDERS_PATH, () => { handBack.expect(supplierOpener(id)); });
+
+  // «What they sell» one level down: Back from it hands the focus back to this button.
+  const itemsNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(ITEMS_DOOR, node); }, [handBack]);
 
   const supplier = lens.supplierById(id);
   const rows = lens.rowsFor(id);
@@ -35,9 +41,12 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
 
   // Opened from the list the page does not move the focus (FROM_LIST): it goes to this title, once, when the screen first
   // shows a supplier. Another supplier picked beside it (the split) keeps the focus on the row that was pressed.
+  // ⚠️ NOT WHEN THE FOCUS IS ALREADY ON THIS SCREEN: coming back from «What they sell» the section has just handed it to the
+  // «What they sell» button (a layout effect, so before this one), and the title must not take it away.
+  const screen = useRef<HTMLElement>(null);
   const shown = supplier !== undefined;
   useEffect(() => {
-    if (shown && cameFromList(state)) title.current?.focus();
+    if (shown && cameFromList(state) && !screen.current?.contains(document.activeElement)) title.current?.focus();
   }, [shown]);
 
   if (supplier === undefined) {
@@ -63,10 +72,29 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   const empty = rows.active.length === 0 && rows.inactive.length === 0;
 
   return (
-    <section className={styles.screen} aria-labelledby={titleId}>
+    <section ref={screen} className={styles.screen} aria-labelledby={titleId}>
       {/* The bar and the column names stick together: the names stay over the boxes while the rows scroll. */}
       <div className={styles.sticky}>
-        <FormBar backLabel={t('ui.back')} onBack={leave} title={label} titleId={titleId} titleRef={title} />
+        <FormBar
+          backLabel={t('ui.back')}
+          onBack={leave}
+          title={label}
+          titleId={titleId}
+          titleRef={title}
+          action={(
+            <Button
+              ref={itemsNode}
+              variant="secondary"
+              onPress={() => {
+                handBack.expect(ITEMS_DOOR);
+                void navigate(supplierItemsPath(id), { state: FROM_SUPPLIER });
+              }}
+            >
+              <List aria-hidden="true" />
+              {t('ord.whatTheySell')}
+            </Button>
+          )}
+        />
         {empty ? null : (
           <div className={styles.columns} data-stock={showStock}>
             <span />
