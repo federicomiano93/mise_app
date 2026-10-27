@@ -806,10 +806,16 @@ supplier opens beside the list.
   line and placing → 3f-2; the supplier name as a door to its card → 3f-8. No progress bar.
 - O6. **Back to 0 before the pause saves nothing for that line**: an empty line and 0 are the same thing (L26), so no write
   carries a zero for a line that was never saved.
-- O7. **A waiting autosave never writes back lines another phone cleared** (`draftSync.ts` receive): the save waiting out
-  the pause is rebuilt on every snapshot from the server's copy plus this phone's own lines. The current app's `draft.js`
-  keeps the whole order as it was at the keystroke, so another phone placing the order inside those 800 ms gets its
-  quantities written back — found driving 3f-1 on the emulator; a fix for the current app is its own branch.
+- O7. **The shared order sends only the fields this phone changed, and lets go of a line put back** (`draftSync.ts`). What
+  this phone claims is recomputed at every change as what differs from the server, field by field, and is what a save
+  sends; a snapshot that agrees releases it (not while a write is in the air, so a refused write keeps the typing, L37).
+  Three holes of the current app's `draft.js` that this closes, each able to bring back quantities of an order another
+  phone had just placed: the claims only grew (a line corrected back inside the pause, or typed to the value another
+  phone had just written, came back and was re-sent with the next keystroke); whole rows were sent (a stock count
+  re-asserted this phone's copy of the quantity); and the waiting save kept the DAYS map of the keystroke
+  (`orders-main.js` replaces `state.days` on each snapshot, so a stamp another phone's placing deleted is written back —
+  the entries map is refilled in place there, so quantities are not affected by this last one). Found driving and
+  reviewing 3f-1; the current-app fixes are their own branch.
 
 **P13.** This slice stores no personal data: the draft holds no person. Order lists (3f-7) store the sender's name — flagged
 before that slice is built.
