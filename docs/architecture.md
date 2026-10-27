@@ -394,7 +394,7 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
 - `orders/` — «Orders» (section id `orders`, step 3f, built in slices; its parity list is `docs/parity/orders.md`). Slice 3f-1 is
   the supplier list and the shared order in progress. The data layer: `ordersSource.ts` (the Firestore half: four listeners —
   suppliers, ingredients WITHOUT prices, `config/orders`, `drafts/current` — and one write, a merge of the changed lines and days),
-  `draftSync.ts` (the port of `js/orders/draft.js`: only the keys this phone changed are sent, its unsent typing is laid over every
+  `draftSync.ts` (the port of `js/orders/draft.js`: only the keys this phone changed are sent — quantity, unit and «this time» supplier always together — its unsent typing is laid over every
   snapshot, 800 ms pause, `flush()`), `ordersStore.ts` (plain TypeScript: `editLine` stamps the day the lines are FOR — never for a
   stock-only edit — and settles whose order a line is in; `stop()` sends a change still waiting at once), `ordersLens.ts` (pure: the
   ONE place that decides which supplier a line sits under; «Not in use» lines LAST, decision F6), `OrdersContext.tsx` (started on

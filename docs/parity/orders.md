@@ -809,6 +809,10 @@ supplier opens beside the list.
 - O7. **The shared order sends only the fields this phone changed, and lets go of a line put back** (`draftSync.ts`). What
   this phone claims is recomputed at every change as what differs from the server, field by field, and is what a save
   sends; a snapshot that agrees releases it (not while a write is in the air, so a refused write keeps the typing, L37).
+  Quantity, unit and the «this time» supplier are ONE meaning and always travel together, `''` included (sent apart, a
+  colleague switching the unit or moving the line in the same second turned «5 buste» into 5 of the card's unit); the
+  stock goes on its own. After leaving the section the busy marker waits only for writes in the air, so a refused
+  change cannot block the phone's self-started reloads for good.
   Three holes of the current app's `draft.js` that this closes, each able to bring back quantities of an order another
   phone had just placed: the claims only grew (a line corrected back inside the pause, or typed to the value another
   phone had just written, came back and was re-sent with the next keystroke); whole rows were sent (a stock count
