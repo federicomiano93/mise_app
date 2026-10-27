@@ -90,7 +90,7 @@ describe('ordersStore — typing a quantity', () => {
     await h.autosave();
     // Tuesday is not one of the mill's order days: the line is FOR its next one, Thursday (parity D1).
     expect(h.source.writes).toEqual([{
-      updatedAt: '2026-10-27T09:00:00.000Z', entries: { flour: { qty: 4, stock: 0 } }, days: { mill: '2026-10-29' },
+      updatedAt: '2026-10-27T09:00:00.000Z', entries: { flour: { qty: 4 } }, days: { mill: '2026-10-29' },
     }]);
   });
 
@@ -125,7 +125,7 @@ describe('ordersStore — typing a quantity', () => {
     const h = await started({ suppliers: [mill], ingredients: [flour] });
     h.store.editLine(mill, flour, { stock: 6 });
     await h.autosave();
-    expect(h.source.writes[0]).toEqual({ updatedAt: '2026-10-27T09:00:00.000Z', entries: { flour: { qty: 0, stock: 6 } } });
+    expect(h.source.writes[0]).toEqual({ updatedAt: '2026-10-27T09:00:00.000Z', entries: { flour: { stock: 6 } } });
   });
 
   it('the × clears the quantity AND the unit in one write', async () => {
@@ -181,7 +181,7 @@ describe('ordersStore — saving', () => {
     h.store.editLine(mill, flour, { qty: 7 });
     h.source.remoteMerge({ entries: { yeast: { qty: 1, stock: 0 } } });
     const entries = h.store.getSnapshot().draft.entries;
-    expect(entries.flour).toEqual({ qty: 7, stock: 0 });
+    expect(entries.flour).toEqual({ qty: 7 });
     expect(entries.yeast).toEqual({ qty: 1, stock: 0 });
   });
 
@@ -203,6 +203,6 @@ describe('ordersStore — saving', () => {
     h.store.stop();
     await h.settle();
     expect(h.source.writes).toHaveLength(1);
-    expect(h.source.writes[0]?.entries).toEqual({ flour: { qty: 9, stock: 0 } });
+    expect(h.source.writes[0]?.entries).toEqual({ flour: { qty: 9 } });
   });
 });

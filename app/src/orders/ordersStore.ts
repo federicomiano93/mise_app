@@ -142,7 +142,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         set({ draftSaveFailed: false });
         say({ kind: 'draft-saved' });
       } else if (!ok) {
-        set({ draftSaveFailed: true });
+        // The refusal handed the typing back to the sync: drawn again now, in case Firestore took its copy back first.
+        set({ draftSaveFailed: true, draft: sync.view() });
         say({ kind: 'draft-not-saved' });
       }
       dropBusyWhenSaved();

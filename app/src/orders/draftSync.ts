@@ -72,10 +72,12 @@ export interface DraftSync {
   receive(doc: Readonly<Record<string, unknown>> | null): DraftView;
   // The whole local state after an edit: the changed rows are claimed as this phone's and the autosave is (re)armed.
   change(entries: DraftEntries, days: DraftDays): void;
-  // Sends a waiting change RIGHT NOW (leaving the section, or before a record is written). Resolves at once when nothing
-  // waits; otherwise as the save does — and REJECTS when it is refused.
+  // Sends a waiting (or refused) change RIGHT NOW (leaving the section, or before a record is written). Resolves at once
+  // when nothing waits; otherwise as the save does — and REJECTS when it is refused.
   flush(): Promise<void>;
-  // True while a change is waiting for the debounce or a save is in the air.
+  // The screen's draft now: the last snapshot with this phone's unconfirmed typing on top (redrawn after a refusal).
+  view(): DraftView;
+  // True while a change is waiting for the debounce, a save is in the air, or a refused change waits to be sent again.
   hasUnsaved(): boolean;
 }
 
@@ -115,149 +117,193 @@ function daysOf(days: unknown): MutableDays {
 
 const isEmpty = (map: object) => Object.keys(map).length === 0;
 
-// The four fields of a line, each compared on its own: a stock count must not re-send this phone's copy of the quantity.
+// A line's fields, as the comparison reads them (changedEntries' own rules): whole numbers; the card's unit as ''; on THIS
+// phone's side the override exists only while there is a quantity (overrideOf), on the server's side it is the stored
+// value, raw.
+//
+// ⚠️ QUANTITY, UNIT AND OVERRIDE ARE ONE MEANING («5 buste from Brava this time») and always travel together; only the
+// stock is independent. Sent apart, a colleague placing the order in the same second turned «5 buste» into 5 of the card's
+// unit, or filed the line back under its usual supplier (found reviewing 3f-1).
 type Field = 'qty' | 'stock' | 'unit' | 'supplierId';
-const FIELDS: readonly Field[] = ['qty', 'stock', 'unit', 'supplierId'];
+const GROUP: readonly Field[] = ['qty', 'unit', 'supplierId'];
 type Row = Partial<Record<Field, number | string>>;
 type Rows = Record<string, Row>;
+type Flat = { qty: number; stock: number; unit: string; supplierId: string };
 
-// A field as the comparison reads it (changedEntries' own rules): whole numbers; the card's unit as ''; on THIS phone's side
-// the override exists only while there is a quantity (overrideOf), on the server's side it is the stored value, raw — so a
-// leftover {qty: 0, supplierId: 'X'} is still seen and cleared.
-function localField(entry: unknown, field: Field): number | string {
+function local(entry: unknown): Flat {
   const row = (entry ?? {}) as Record<string, unknown>;
-  if (field === 'qty' || field === 'stock') return wholeNumber(row[field]);
-  return field === 'unit' ? cleanUnit(row.unit) : overrideOf(entry);
+  return { qty: wholeNumber(row.qty), stock: wholeNumber(row.stock), unit: cleanUnit(row.unit), supplierId: overrideOf(entry) };
 }
-function storedField(entry: unknown, field: Field): number | string {
+function stored(entry: unknown): Flat {
   const row = (entry ?? {}) as Record<string, unknown>;
-  if (field === 'qty' || field === 'stock') return wholeNumber(row[field]);
-  return field === 'unit' ? cleanUnit(row.unit) : cleanSupplierId(row.supplierId);
+  return {
+    qty: wholeNumber(row.qty), stock: wholeNumber(row.stock), unit: cleanUnit(row.unit), supplierId: cleanSupplierId(row.supplierId),
+  };
 }
+const blank = (field: Field, value: number | string | undefined) => value === undefined || value === (field === 'qty' || field === 'stock' ? 0 : '');
 
 export function createDraftSync(deps: DraftSyncDeps): DraftSync {
   // The draft as this phone last agreed on it with the server: what a snapshot reported, plus what it has since sent and
   // had accepted. ⚠️ NOT updated when a write fails: the change then still counts as unsent and goes out again with the
   // next save, instead of being forgotten.
   let known: { entries: MutableEntries; days: MutableDays } = { entries: {}, days: {} };
-  // ⚠️ WHAT THIS PHONE HAS TYPED AND THE SERVER HAS NOT CONFIRMED — field by field. Every snapshot replaces the whole map,
-  // and a change is not sent for up to 800 ms: when another phone wrote anything in that window, its snapshot took the
-  // half-typed number with it (reproduced against the emulator in the current app). Laid over each snapshot: the server
-  // owns every field this phone has not touched, and this phone owns the one it is typing into until the write lands.
+  // ⚠️ WHAT THIS PHONE HAS TYPED AND THE SERVER HAS NOT CONFIRMED. Every snapshot replaces the whole map, and a change is
+  // not sent for up to 800 ms: when another phone wrote anything in that window, its snapshot took the half-typed number
+  // with it (reproduced against the emulator in the current app). Laid over each snapshot: the server owns every field
+  // this phone has not touched, and this phone owns the one it is typing into until the write lands.
   //
-  // ⚠️ IT IS ALWAYS «WHAT DIFFERS FROM `known`», recomputed at every change, and IT IS WHAT A SAVE SENDS. Three holes of the
-  // current app's draft.js (found driving and reviewing 3f-1) came from keeping the whole screen as it was at the keystroke,
-  // letting the claims only grow and sending whole rows:
-  //   • another phone clearing lines during the pause (an order placed) got them written back;
+  // ⚠️ IT IS ALWAYS «WHAT DIFFERS FROM `known`», recomputed at every change, and IT IS WHAT A SAVE SENDS. The current app's
+  // draft.js kept the whole screen as it was at the keystroke, let the claims only grow and sent whole rows; found driving
+  // and reviewing 3f-1, each of these brought back quantities of an order another phone had just placed:
+  //   • another phone clearing lines during the pause got them written back;
   //   • a line corrected back inside the pause (+ then −), or typed to the value another phone had just written, stayed
   //     claimed for ever, came back on screen at the next snapshot and was written with the next keystroke;
   //   • a stock count sent the whole row, re-asserting this phone's copy of a quantity another phone had just cleared.
   let pending: { entries: Rows; days: MutableDays } = { entries: {}, days: {} };
+  // The writes in the air, as sent: a snapshot never releases their fields (it may be Firestore showing this phone's own
+  // write before the server answers), and a refused one hands them back.
+  const flights: Array<{ entries: Rows; days: MutableDays }> = [];
+  // The last snapshot, so the screen can be redrawn when a refusal hands typing back.
+  let lastDoc: Readonly<Record<string, unknown>> | null = null;
   let timer: unknown = null;
   // A change is waiting for the pause to end.
   let waiting = false;
-  let inFlight = 0;
 
   function disarm() {
     if (timer !== null) deps.clearTimer(timer);
     timer = null;
   }
 
-  // What this phone's screen holds that the server does not, field by field. A line the document does not have yet goes
-  // whole ({qty, stock}, as changedEntries shapes it); a line looked at and left blank is not a change.
+  const inAir = (id: string, field: Field) => flights.some(flight => flight.entries[id] !== undefined && field in flight.entries[id]);
+  const dayInAir = (id: string) => flights.some(flight => id in flight.days);
+
+  // What this phone's screen holds that the server does not.
   function differences(entries: DraftEntries, days: DraftDays): { entries: Rows; days: MutableDays } {
-    const whole = changedEntries(entries, known.entries) as MutableEntries;
     const rows: Rows = {};
-    for (const [id, row] of Object.entries(whole)) {
-      const before = known.entries[id];
-      if (!before) {
-        rows[id] = { ...row };
-        continue;
+    for (const id of Object.keys(changedEntries(entries, known.entries))) {
+      const exists = known.entries[id] !== undefined;
+      const mine = local(entries[id]);
+      const theirs = stored(known.entries[id]);
+      const row: Row = {};
+      // ⚠️ A LEFTOVER {qty: 0, supplierId: 'X'} IS NOT THIS PHONE'S TO CLEAN on an edit of another line: it is harmless at
+      // zero, and cleaning it could erase a colleague typing a quantity under X in the same second. The first quantity
+      // typed here for that line sends the override with it (below), which clears it.
+      const overrideDiffers = mine.supplierId !== theirs.supplierId && !(mine.qty === 0 && theirs.qty === 0);
+      if (mine.qty !== theirs.qty || mine.unit !== theirs.unit || overrideDiffers) {
+        // The group goes whole; '' is sent only to clear something the server has (a merge cannot delete a nested key).
+        if (exists || mine.qty !== 0) row.qty = mine.qty;
+        if (mine.unit !== '' || theirs.unit !== '') row.unit = mine.unit;
+        if (mine.supplierId !== '' || theirs.supplierId !== '') row.supplierId = mine.supplierId;
       }
-      const fields: Row = {};
-      for (const field of FIELDS) {
-        const mine = localField(entries[id], field);
-        if (mine !== storedField(before, field)) fields[field] = mine;
-      }
-      if (!isEmpty(fields)) rows[id] = fields;
+      // ⚠️ A LINE THE SERVER DOES NOT HAVE CARRIES ONLY WHAT IS IN IT: padded with stock 0, it erased the shelf count a
+      // colleague put on the same line in the same second.
+      if (mine.stock !== theirs.stock) row.stock = mine.stock;
+      if (!isEmpty(row)) rows[id] = row;
     }
     return { entries: rows, days: changedDays(days, known.days) as MutableDays };
+  }
+
+  // The screen's draft: the server's lines with this phone's unconfirmed fields on top.
+  function view(): DraftView {
+    const doc = lastDoc;
+    const storedEntries = (doc?.entries && typeof doc.entries === 'object' ? doc.entries : {}) as Record<string, DraftEntry>;
+    const entries: Record<string, DraftEntry> = { ...storedEntries };
+    for (const [id, row] of Object.entries(pending.entries)) entries[id] = { ...(storedEntries[id] ?? {}), ...row } as DraftEntry;
+    return {
+      entries,
+      days: { ...daysOf(doc?.days), ...pending.days },
+      updatedAt: typeof doc?.updatedAt === 'string' ? doc.updatedAt : '',
+      exists: doc !== null && doc !== undefined,
+    };
   }
 
   function saveNow(): Promise<void> {
     disarm();
     waiting = false;
     // Copies: a change typed while the write is in the air must not alter what this write says it sent.
-    const entriesDelta: Rows = Object.fromEntries(Object.entries(pending.entries).map(([id, row]) => [id, { ...row }]));
-    const daysDelta: MutableDays = { ...pending.days };
+    const sent = {
+      entries: Object.fromEntries(Object.entries(pending.entries).map(([id, row]) => [id, { ...row }])) as Rows,
+      days: { ...pending.days },
+    };
     // Nothing this phone changed, so nothing to say. Staying quiet also stops a snapshot bouncing straight back as a write.
-    if (isEmpty(entriesDelta) && isEmpty(daysDelta)) return Promise.resolve();
+    if (isEmpty(sent.entries) && isEmpty(sent.days)) return Promise.resolve();
 
     const payload: { updatedAt: string; entries?: MutableEntries; days?: MutableDays } = { updatedAt: deps.nowIso() };
-    if (!isEmpty(entriesDelta)) payload.entries = entriesDelta as MutableEntries;
-    if (!isEmpty(daysDelta)) payload.days = daysDelta;
+    if (!isEmpty(sent.entries)) payload.entries = sent.entries as MutableEntries;
+    if (!isEmpty(sent.days)) payload.days = sent.days;
 
-    inFlight += 1;
+    flights.push(sent);
+    const land = () => { flights.splice(flights.indexOf(sent), 1); };
     return deps.save(payload).then(() => {
+      land();
       const entries: MutableEntries = { ...known.entries };
-      for (const [id, row] of Object.entries(entriesDelta)) entries[id] = { ...(entries[id] ?? {}), ...row } as DraftEntry;
-      known = { entries, days: { ...known.days, ...daysDelta } };
+      for (const [id, row] of Object.entries(sent.entries)) entries[id] = { ...(entries[id] ?? {}), ...row } as DraftEntry;
+      known = { entries, days: { ...known.days, ...sent.days } };
       // Release only what was actually sent, and only if it has not been typed over meanwhile: a value changed again
       // while this write was in the air is still this phone's, and must stay claimed.
-      for (const [id, sent] of Object.entries(entriesDelta)) {
+      for (const [id, row] of Object.entries(sent.entries)) {
         const held = pending.entries[id];
         if (!held) continue;
-        for (const field of FIELDS) {
-          if (field in sent && held[field] === sent[field]) delete held[field];
+        for (const field of Object.keys(row) as Field[]) {
+          if (held[field] === row[field]) delete held[field];
         }
         if (isEmpty(held)) delete pending.entries[id];
       }
-      for (const [id, sent] of Object.entries(daysDelta)) {
-        if (pending.days[id] === sent) delete pending.days[id];
+      for (const [id, day] of Object.entries(sent.days)) {
+        if (pending.days[id] === day) delete pending.days[id];
       }
-    }).finally(() => {
-      inFlight -= 1;
+    }, (err: unknown) => {
+      land();
+      // ⚠️ A REFUSED WRITE HANDS ITS TYPING BACK (parity L37: «the typing is kept»). A change made while it was in the air
+      // may have dropped those fields from the claims — Firestore showed the write at once, so they matched `known` — and the
+      // snapshot that takes the write back would then erase them. Each group or stock goes back unless typed over since.
+      for (const [id, row] of Object.entries(sent.entries)) {
+        const held: Row = pending.entries[id] ?? {};
+        const groupHeld = GROUP.some(field => field in held);
+        for (const field of Object.keys(row) as Field[]) {
+          const typedOver = field === 'stock' ? 'stock' in held : groupHeld;
+          if (!typedOver) held[field] = row[field];
+        }
+        if (!isEmpty(held)) pending.entries[id] = held;
+      }
+      for (const [id, day] of Object.entries(sent.days)) {
+        if (!(id in pending.days)) pending.days[id] = day;
+      }
+      throw err;
     });
   }
 
   return {
     receive(doc) {
+      lastDoc = doc;
       // The server's word becomes the baseline, so a row somebody else changed is not «changed here» and never gets
       // re-asserted at this phone's stale value…
       known = { entries: detach(doc?.entries), days: daysOf(doc?.days) };
-      // …a field the server now holds at exactly this phone's value is no longer this phone's to send. ⚠️ NOT WHILE A
-      // WRITE IS IN THE AIR: Firestore shows this phone's own write at once, and if the server then refuses it the snapshot
-      // taken back would erase the typing the message says is kept (parity L37). That write's own success releases it.
-      if (inFlight === 0) {
-        for (const [id, row] of Object.entries(pending.entries)) {
-          // A line the server does not have (any more) goes whole, {qty, stock} as changedEntries shapes it — unless it is
-          // blank, which says nothing worth storing.
-          if (!known.entries[id]) {
-            const whole: Row = { ...row, qty: row.qty ?? 0, stock: row.stock ?? 0 };
-            if (whole.qty === 0 && whole.stock === 0 && !whole.unit && !whole.supplierId) delete pending.entries[id];
-            else pending.entries[id] = whole;
-            continue;
+      // …and what the server now holds at exactly this phone's value is no longer this phone's to send. ⚠️ NEVER A FIELD
+      // OF A WRITE IN THE AIR: that snapshot may be Firestore showing this phone's own write before the server answers.
+      for (const [id, row] of Object.entries(pending.entries)) {
+        const exists = known.entries[id] !== undefined;
+        const theirs = stored(known.entries[id]);
+        const group = GROUP.filter(field => field in row);
+        if (group.length > 0 && !group.some(field => inAir(id, field))) {
+          // The group is released whole or not at all. On a line the server does not have, only what is in it stays.
+          if (exists ? group.every(field => row[field] === theirs[field]) : group.every(field => blank(field, row[field]))) {
+            for (const field of group) delete row[field];
+          } else if (!exists) {
+            for (const field of group) if (blank(field, row[field])) delete row[field];
           }
-          for (const field of FIELDS) {
-            if (field in row && row[field] === storedField(known.entries[id], field)) delete row[field];
-          }
-          if (isEmpty(row)) delete pending.entries[id];
         }
-        for (const [id, day] of Object.entries(pending.days)) {
-          if (known.days[id] === day) delete pending.days[id];
-        }
+        if ('stock' in row && !inAir(id, 'stock') && row.stock === (exists ? theirs.stock : 0)) delete row.stock;
+        if (isEmpty(row)) delete pending.entries[id];
+      }
+      for (const [id, day] of Object.entries(pending.days)) {
+        if (!dayInAir(id) && known.days[id] === day) delete pending.days[id];
       }
       // …but anything typed here and not yet written goes back ON TOP, or the snapshot would erase it mid-keystroke.
-      const stored = (doc?.entries && typeof doc.entries === 'object' ? doc.entries : {}) as Record<string, DraftEntry>;
-      const entries: Record<string, DraftEntry> = { ...stored };
-      for (const [id, row] of Object.entries(pending.entries)) entries[id] = { ...(stored[id] ?? {}), ...row } as DraftEntry;
-      return {
-        entries,
-        days: { ...daysOf(doc?.days), ...pending.days },
-        updatedAt: typeof doc?.updatedAt === 'string' ? doc.updatedAt : '',
-        exists: doc !== null && doc !== undefined,
-      };
+      return view();
     },
+
+    view,
 
     change(entries, days) {
       waiting = true;
@@ -278,8 +324,9 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       }, SAVE_DELAY_MS);
     },
 
+    // Also after a refusal with nothing typed since: leaving the section tries the refused typing once more.
     flush() {
-      if (!waiting) return Promise.resolve();
+      if (!waiting && isEmpty(pending.entries) && isEmpty(pending.days)) return Promise.resolve();
       return saveNow().then(
         () => deps.onResult(true),
         (err: unknown) => {
@@ -289,6 +336,8 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       );
     },
 
-    hasUnsaved: () => waiting || inFlight > 0,
+    // ⚠️ A REFUSED CHANGE IS STILL UNSAVED: it lives only here (Firestore took its copy back), so a self-started reload
+    // must not throw it away (rule 2 of every screen).
+    hasUnsaved: () => waiting || flights.length > 0 || !isEmpty(pending.entries) || !isEmpty(pending.days),
   };
 }
