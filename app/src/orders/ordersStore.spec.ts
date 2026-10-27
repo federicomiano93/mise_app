@@ -90,7 +90,7 @@ describe('ordersStore — typing a quantity', () => {
     await h.autosave();
     // Tuesday is not one of the mill's order days: the line is FOR its next one, Thursday (parity D1).
     expect(h.source.writes).toEqual([{
-      updatedAt: '2026-10-27T09:00:00.000Z', entries: { flour: { qty: 4 } }, days: { mill: '2026-10-29' },
+      updatedAt: '2026-10-27T09:00:00.000Z', entries: { flour: { qty: 4, unit: '', supplierId: '' } }, days: { mill: '2026-10-29' },
     }]);
   });
 
@@ -135,7 +135,7 @@ describe('ordersStore — typing a quantity', () => {
     });
     h.store.editLine(mill, { ...flour, unit: 'cartone' }, { clear: true });
     await h.autosave();
-    expect(h.source.writes[0]?.entries).toEqual({ flour: { qty: 0, unit: '' } });
+    expect(h.source.writes[0]?.entries).toEqual({ flour: { qty: 0, unit: '', supplierId: '' } });
   });
 });
 
@@ -156,7 +156,7 @@ describe('ordersStore — whose order a line is in (js/orders/ingredients.js cla
     });
     h.store.editLine(mill, flour, { qty: 5 });
     await h.autosave();
-    expect(h.source.writes[0]?.entries).toEqual({ flour: { qty: 5, supplierId: '' } });
+    expect(h.source.writes[0]?.entries).toEqual({ flour: { qty: 5, supplierId: '', unit: '' } });
   });
 });
 
@@ -173,7 +173,7 @@ describe('ordersStore — saving', () => {
     h.store.editLine(mill, flour, { stock: 1 });
     await h.autosave();
     expect(h.messages.at(-1)).toEqual({ kind: 'draft-saved' });
-    expect(h.source.writes.at(-1)?.entries).toEqual({ flour: { qty: 4, stock: 1 } });
+    expect(h.source.writes.at(-1)?.entries).toEqual({ flour: { qty: 4, stock: 1, unit: '', supplierId: '' } });
   });
 
   it('⚠️ another phone\'s write during the debounce does not erase this phone\'s typing', async () => {
@@ -181,7 +181,7 @@ describe('ordersStore — saving', () => {
     h.store.editLine(mill, flour, { qty: 7 });
     h.source.remoteMerge({ entries: { yeast: { qty: 1, stock: 0 } } });
     const entries = h.store.getSnapshot().draft.entries;
-    expect(entries.flour).toEqual({ qty: 7 });
+    expect(entries.flour).toEqual({ qty: 7, unit: '', supplierId: '' });
     expect(entries.yeast).toEqual({ qty: 1, stock: 0 });
   });
 
@@ -197,12 +197,38 @@ describe('ordersStore — saving', () => {
     expect(h.busy()).toBe(0);
   });
 
+  // Found in the third review of 3f-1 (28 Oct 2026): the marker stayed for good, and no self-started reload ever ran again.
+  it('⚠️ leaving after a refused save releases the busy marker once the last try has settled', async () => {
+    const h = await started({ suppliers: [mill], ingredients: [flour] });
+    h.source.refuseWrites = true;
+    h.store.editLine(mill, flour, { qty: 4 });
+    await h.autosave();
+    expect(h.busy()).toBe(1);
+    h.store.stop();
+    await h.settle();
+    expect(h.busy()).toBe(0);
+  });
+
+  it('⚠️ … and when the save still in the air is refused after leaving', async () => {
+    const h = await started({ suppliers: [mill], ingredients: [flour] });
+    h.source.refuseWrites = true;
+    const release = h.source.holdWrites();
+    h.store.editLine(mill, flour, { qty: 4 });
+    await h.autosave();
+    h.store.stop();
+    await h.settle();
+    expect(h.busy()).toBe(1);
+    release();
+    await h.settle();
+    expect(h.busy()).toBe(0);
+  });
+
   it('leaving the section within the debounce sends the change at once', async () => {
     const h = await started({ suppliers: [mill], ingredients: [flour] });
     h.store.editLine(mill, flour, { qty: 9 });
     h.store.stop();
     await h.settle();
     expect(h.source.writes).toHaveLength(1);
-    expect(h.source.writes[0]?.entries).toEqual({ flour: { qty: 9 } });
+    expect(h.source.writes[0]?.entries).toEqual({ flour: { qty: 9, unit: '', supplierId: '' } });
   });
 });

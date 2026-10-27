@@ -110,6 +110,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
   const messageListeners = new Set<(message: OrdersMessage) => void>();
   let stops: Array<() => void> = [];
   let releaseBusy: (() => void) | null = null;
+  // The section was left: nothing can be typed any more, so the marker waits only for the writes still in the air.
+  let stopped = false;
 
   function set(patch: Partial<OrdersSnapshot>) {
     snapshot = { ...snapshot, ...patch };
@@ -126,7 +128,9 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     if (!releaseBusy) releaseBusy = deps.markBusy();
   }
   function dropBusyWhenSaved() {
-    if (releaseBusy && !sync.hasUnsaved()) {
+    // ⚠️ After stop() a refused change can never be sent again from here (it was said, and the section is gone): holding
+    // the marker for it blocked every self-started reload of the phone for good (found in the third review of 3f-1).
+    if (releaseBusy && (stopped ? !sync.saving() : !sync.hasUnsaved())) {
       releaseBusy();
       releaseBusy = null;
     }
@@ -169,6 +173,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
 
     start() {
       if (stops.length) return;
+      stopped = false;
       stops = [
         source.watchSuppliers(
           (list, meta) => set({
@@ -212,7 +217,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       for (const stop of stops) stop();
       stops = [];
       // The write is handed to Firestore now; it carries on without the listeners and lands when it can.
-      sync.flush().catch(() => { /* said through onResult; the busy marker is released there */ });
+      stopped = true;
+      sync.flush().then(dropBusyWhenSaved, () => { /* said through onResult, which also releases the busy marker */ });
     },
 
     editLine(supplier, ingredient, edit) {

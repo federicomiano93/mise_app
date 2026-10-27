@@ -79,6 +79,8 @@ export interface DraftSync {
   view(): DraftView;
   // True while a change is waiting for the debounce, a save is in the air, or a refused change waits to be sent again.
   hasUnsaved(): boolean;
+  // True while a write is in the air (sent, no answer yet).
+  saving(): boolean;
 }
 
 type MutableEntries = Record<string, DraftEntry>;
@@ -190,10 +192,12 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       // typed here for that line sends the override with it (below), which clears it.
       const overrideDiffers = mine.supplierId !== theirs.supplierId && !(mine.qty === 0 && theirs.qty === 0);
       if (mine.qty !== theirs.qty || mine.unit !== theirs.unit || overrideDiffers) {
-        // The group goes whole; '' is sent only to clear something the server has (a merge cannot delete a nested key).
-        if (exists || mine.qty !== 0) row.qty = mine.qty;
-        if (mine.unit !== '' || theirs.unit !== '') row.unit = mine.unit;
-        if (mine.supplierId !== '' || theirs.supplierId !== '') row.supplierId = mine.supplierId;
+        // ⚠️ THE GROUP GOES WHOLE, '' INCLUDED: «5 of the card's unit, from the usual supplier» must say both, or a colleague
+        // switching the unit (or moving the line) in the same second turns this phone's 5 into 5 buste, or files it under
+        // their supplier. '' is also the clear (a merge cannot delete a nested key).
+        row.qty = mine.qty;
+        row.unit = mine.unit;
+        row.supplierId = mine.supplierId;
       }
       // ⚠️ A LINE THE SERVER DOES NOT HAVE CARRIES ONLY WHAT IS IN IT: padded with stock 0, it erased the shelf count a
       // colleague put on the same line in the same second.
@@ -236,17 +240,25 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     const land = () => { flights.splice(flights.indexOf(sent), 1); };
     return deps.save(payload).then(() => {
       land();
+      // What landed joins the baseline — except a field a LATER write still in the air also carries: the baseline already
+      // holds that newer value (Firestore showed it), and going back to this older one would make it look changed here
+      // and be sent again over whatever a colleague writes meanwhile.
       const entries: MutableEntries = { ...known.entries };
-      for (const [id, row] of Object.entries(sent.entries)) entries[id] = { ...(entries[id] ?? {}), ...row } as DraftEntry;
-      known = { entries, days: { ...known.days, ...sent.days } };
+      for (const [id, row] of Object.entries(sent.entries)) {
+        const landed = Object.fromEntries(Object.entries(row).filter(([field]) => !inAir(id, field as Field)));
+        entries[id] = { ...(entries[id] ?? {}), ...landed } as DraftEntry;
+      }
+      const days: MutableDays = { ...known.days };
+      for (const [id, day] of Object.entries(sent.days)) if (!dayInAir(id)) days[id] = day;
+      known = { entries, days };
       // Release only what was actually sent, and only if it has not been typed over meanwhile: a value changed again
-      // while this write was in the air is still this phone's, and must stay claimed.
+      // while this write was in the air is still this phone's, and must stay claimed. The group only as a whole.
       for (const [id, row] of Object.entries(sent.entries)) {
         const held = pending.entries[id];
         if (!held) continue;
-        for (const field of Object.keys(row) as Field[]) {
-          if (held[field] === row[field]) delete held[field];
-        }
+        const group = GROUP.filter(field => field in held);
+        if (group.length > 0 && group.every(field => held[field] === row[field])) for (const field of group) delete held[field];
+        if ('stock' in held && held.stock === row.stock) delete held.stock;
         if (isEmpty(held)) delete pending.entries[id];
       }
       for (const [id, day] of Object.entries(sent.days)) {
@@ -257,18 +269,27 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       // ⚠️ A REFUSED WRITE HANDS ITS TYPING BACK (parity L37: «the typing is kept»). A change made while it was in the air
       // may have dropped those fields from the claims — Firestore showed the write at once, so they matched `known` — and the
       // snapshot that takes the write back would then erase them. Each group or stock goes back unless typed over since.
+      // The baseline forgets those fields too (it may hold Firestore's showing of this very write), so a keystroke before the
+      // take-back arrives still counts them as this phone's.
+      const entries: MutableEntries = { ...known.entries };
       for (const [id, row] of Object.entries(sent.entries)) {
         const held: Row = pending.entries[id] ?? {};
         const groupHeld = GROUP.some(field => field in held);
+        const base: Record<string, unknown> = { ...(entries[id] ?? {}) };
         for (const field of Object.keys(row) as Field[]) {
           const typedOver = field === 'stock' ? 'stock' in held : groupHeld;
           if (!typedOver) held[field] = row[field];
+          delete base[field];
         }
         if (!isEmpty(held)) pending.entries[id] = held;
+        if (entries[id] !== undefined) entries[id] = base as DraftEntry;
       }
+      const days: MutableDays = { ...known.days };
       for (const [id, day] of Object.entries(sent.days)) {
         if (!(id in pending.days)) pending.days[id] = day;
+        delete days[id];
       }
+      known = { entries, days };
       throw err;
     });
   }
@@ -285,13 +306,10 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
         const exists = known.entries[id] !== undefined;
         const theirs = stored(known.entries[id]);
         const group = GROUP.filter(field => field in row);
-        if (group.length > 0 && !group.some(field => inAir(id, field))) {
-          // The group is released whole or not at all. On a line the server does not have, only what is in it stays.
-          if (exists ? group.every(field => row[field] === theirs[field]) : group.every(field => blank(field, row[field]))) {
-            for (const field of group) delete row[field];
-          } else if (!exists) {
-            for (const field of group) if (blank(field, row[field])) delete row[field];
-          }
+        // The group is released whole or not at all (on a line the server does not have: when it is blank).
+        if (group.length > 0 && !group.some(field => inAir(id, field))
+          && (exists ? group.every(field => row[field] === theirs[field]) : group.every(field => blank(field, row[field])))) {
+          for (const field of group) delete row[field];
         }
         if ('stock' in row && !inAir(id, 'stock') && row.stock === (exists ? theirs.stock : 0)) delete row.stock;
         if (isEmpty(row)) delete pending.entries[id];
@@ -339,5 +357,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     // ⚠️ A REFUSED CHANGE IS STILL UNSAVED: it lives only here (Firestore took its copy back), so a self-started reload
     // must not throw it away (rule 2 of every screen).
     hasUnsaved: () => waiting || flights.length > 0 || !isEmpty(pending.entries) || !isEmpty(pending.days),
+
+    saving: () => flights.length > 0,
   };
 }
