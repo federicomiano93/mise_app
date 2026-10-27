@@ -97,7 +97,7 @@ export function OrderLine({ row, entry, showStock, onEdit }: Props) {
           handle={orderBox}
           value={qty}
           className={styles.box}
-          ariaLabel={t('ord.qtyToOrderFor', { name })}
+          ariaLabel={t('ord.qtyToOrderFor', { name: label })}
           onChange={n => { onEdit(row, { qty: n }); }}
         />
         <div className={styles.steps}>
@@ -126,7 +126,7 @@ export function OrderLine({ row, entry, showStock, onEdit }: Props) {
           <NumberBox
             value={stock}
             className={styles.box}
-            ariaLabel={t('ord.stockOnHandFor', { name })}
+            ariaLabel={t('ord.stockOnHandFor', { name: label })}
             onChange={n => { onEdit(row, { stock: n }); }}
           />
         </div>

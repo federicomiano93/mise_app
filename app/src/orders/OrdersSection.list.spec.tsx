@@ -321,4 +321,31 @@ describe('the tablet’s split', () => {
     expect(router.state.location.pathname).toBe('/orders/supplier/s-zed');
     expect(router.state.historyAction).toBe('REPLACE');
   });
+
+  it('Back from a supplier picked beside another reaches the list, with the focus on its row', async () => {
+    split();
+    const { user, router } = await loaded();
+    await user.click(screen.getByRole('button', { name: /^Alpine Mills/ }));
+    await screen.findByRole('heading', { level: 2, name: 'Alpine Mills' });
+    await user.click(screen.getByRole('button', { name: /^Zed/ }));
+    expect(await screen.findByRole('heading', { level: 2, name: 'Zed' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/orders'); });
+    await waitFor(() => { expect(screen.getByRole('button', { name: /^Zed/ })).toHaveFocus(); });
+  });
+
+  it('Back from a supplier picked beside «What they sell» reaches the list, not the supplier before it', async () => {
+    split();
+    const { user, router } = await loaded();
+    await user.click(screen.getByRole('button', { name: /^Alpine Mills/ }));
+    await screen.findByRole('heading', { level: 2, name: 'Alpine Mills' });
+    await user.click(screen.getByRole('button', { name: /What they sell/ }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/orders/supplier/s-alp/items'); });
+    await user.click(screen.getByRole('button', { name: /^Zed/ }));
+    expect(await screen.findByRole('heading', { level: 2, name: 'Zed' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/orders/supplier/s-zed');
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/orders'); });
+    await waitFor(() => { expect(screen.getByRole('button', { name: /^Zed/ })).toHaveFocus(); });
+  });
 });

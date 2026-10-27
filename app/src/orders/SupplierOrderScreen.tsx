@@ -10,7 +10,7 @@ import { OrderLine } from './OrderLine';
 import { useOrders, useOrdersStore } from './OrdersContext';
 import { ITEMS_DOOR, supplierOpener, useHandBack } from './handBack';
 import { ORDERS_PATH, supplierItemsPath } from './ordersPath';
-import { FROM_SUPPLIER, cameFromList, useLeave } from './ordersNav';
+import { cameFromList, fromSupplierState, useLeave } from './ordersNav';
 import type { OrderRow, OrdersLens } from './ordersLens';
 import styles from './SupplierOrderScreen.module.css';
 
@@ -87,7 +87,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
               variant="secondary"
               onPress={() => {
                 handBack.expect(ITEMS_DOOR);
-                void navigate(supplierItemsPath(id), { state: FROM_SUPPLIER });
+                void navigate(supplierItemsPath(id), { state: fromSupplierState(state) });
               }}
             >
               <List aria-hidden="true" />

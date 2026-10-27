@@ -61,19 +61,26 @@ describe('the screen', () => {
     expect(within(lineOf('Flour 00')).getByText('25kg')).toBeInTheDocument();
   });
 
-  it('names each box by the ingredient (and the steppers, the × and the unit menu by the ingredient AND its weight)', async () => {
+  it('names every control by the ingredient AND its weight: the boxes, the steppers, the × and the unit menu', async () => {
     const draft = { entries: { 'i-flour': { qty: 2 } }, days: {} };
     await opened('s-alp', seeded({ draft }));
-    expect(qtyBox('Flour 00')).toBeInTheDocument();
-    expect(stockBox('Flour 00')).toBeInTheDocument();
+    expect(qtyBox('Flour 00 25kg')).toBeInTheDocument();
+    expect(stockBox('Flour 00 25kg')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'One more Flour 00 25kg' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'One fewer Flour 00 25kg' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Clear the quantity of Flour 00 25kg' })).toBeInTheDocument();
   });
 
+  it('gives two rows with the same name and different weights different box names', async () => {
+    await opened();
+    expect(qtyBox('Rye 5kg')).not.toBe(qtyBox('Rye 25kg'));
+    expect(stockBox('Rye 5kg')).not.toBe(stockBox('Rye 25kg'));
+    expect(screen.queryAllByRole('spinbutton', { name: 'Rye quantity to order' })).toHaveLength(0);
+  });
+
   it('draws the Order box for numbers: whole, never below 0', async () => {
     await opened();
-    const input = qtyBox('Flour 00');
+    const input = qtyBox('Flour 00 25kg');
     expect(input).toHaveAttribute('type', 'number');
     expect(input).toHaveAttribute('min', '0');
     expect(input).toHaveAttribute('inputmode', 'numeric');
@@ -92,8 +99,8 @@ describe('the screen', () => {
 
   it('works for an employee: nothing in this slice is role-gated', async () => {
     const { user } = await opened('s-alp', seeded(), { session: { canManage: false, role: 'staff', isOwner: false } });
-    await user.type(qtyBox('Flour 00'), '3');
-    expect(qtyBox('Flour 00')).toHaveValue(3);
+    await user.type(qtyBox('Flour 00 25kg'), '3');
+    expect(qtyBox('Flour 00 25kg')).toHaveValue(3);
   });
 
   it('says its words in Italian', async () => {
@@ -101,8 +108,8 @@ describe('the screen', () => {
     await opened('s-alp', seeded({ draft }), { lang: 'it' });
     expect(screenOf('Alpine Mills').getByText('Ordine')).toBeInTheDocument();
     expect(screenOf('Alpine Mills').getByText('Giacenza')).toBeInTheDocument();
-    expect(box('Quantità da ordinare di Flour 00')).toHaveValue(2);
-    expect(box('Giacenza di Flour 00')).toBeInTheDocument();
+    expect(box('Quantità da ordinare di Flour 00 25kg')).toHaveValue(2);
+    expect(box('Giacenza di Flour 00 25kg')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Uno in più: Flour 00 25kg' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Azzera la quantità di Flour 00 25kg' })).toBeInTheDocument();
     expect(screen.getByText('Non in uso (1)')).toBeInTheDocument();
@@ -113,8 +120,8 @@ describe('typing a quantity', () => {
   it('is on screen at once, and saved after the pause with the line and the day', async () => {
     const source = seeded();
     const { user } = await opened('s-alp', source);
-    await user.type(qtyBox('Flour 00'), '12');
-    expect(qtyBox('Flour 00')).toHaveValue(12);
+    await user.type(qtyBox('Flour 00 25kg'), '12');
+    expect(qtyBox('Flour 00 25kg')).toHaveValue(12);
     expect(source.writes).toHaveLength(0);
     await waitFor(() => { expect(source.writes.length).toBeGreaterThan(0); }, SAVED);
     const sent = source.writes.at(-1);
@@ -126,15 +133,15 @@ describe('typing a quantity', () => {
 
   it('shows the count on the list the moment a box is filled', async () => {
     const { user } = await opened();
-    await user.type(qtyBox('Flour 00'), '3');
+    await user.type(qtyBox('Flour 00 25kg'), '3');
     expect(screen.getByRole('button', { name: /^Alpine Mills/ })).toHaveTextContent('1 item');
   });
 
   it('turns an empty box into 0 and a number into a whole number', async () => {
     const source = seeded({ draft: { entries: { 'i-flour': { qty: 5 } }, days: {} } });
     const { user } = await opened('s-alp', source);
-    expect(qtyBox('Flour 00')).toHaveValue(5);
-    await user.clear(qtyBox('Flour 00'));
+    expect(qtyBox('Flour 00 25kg')).toHaveValue(5);
+    await user.clear(qtyBox('Flour 00 25kg'));
     await waitFor(() => { expect(source.writes.length).toBeGreaterThan(0); }, SAVED);
     expect(source.writes.at(-1)?.entries?.['i-flour']).toMatchObject({ qty: 0 });
   });
@@ -144,7 +151,7 @@ describe('the Stock box', () => {
   it('saves the reading WITHOUT stamping the day', async () => {
     const source = seeded();
     const { user } = await opened('s-alp', source);
-    await user.type(stockBox('Flour 00'), '7');
+    await user.type(stockBox('Flour 00 25kg'), '7');
     await waitFor(() => { expect(source.writes.length).toBeGreaterThan(0); }, SAVED);
     const sent = source.writes.at(-1);
     expect(sent?.entries?.['i-flour']).toMatchObject({ stock: 7 });
@@ -153,9 +160,9 @@ describe('the Stock box', () => {
 
   it('is hidden, with its column name, when the venue switched the Stock box off', async () => {
     await opened('s-alp', seeded({ ordersConfig: { showStock: false } }));
-    expect(screen.queryByRole('spinbutton', { name: 'Flour 00 stock on hand' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton', { name: 'Flour 00 25kg stock on hand' })).not.toBeInTheDocument();
     expect(screenOf('Alpine Mills').queryByText('Stock')).not.toBeInTheDocument();
-    expect(qtyBox('Flour 00')).toBeInTheDocument();
+    expect(qtyBox('Flour 00 25kg')).toBeInTheDocument();
   });
 });
 
@@ -168,12 +175,12 @@ describe('− + and ×', () => {
     expect(minus).toBeDisabled();
     await user.click(plus);
     await user.click(plus);
-    expect(qtyBox('Flour 00')).toHaveValue(2);
+    expect(qtyBox('Flour 00 25kg')).toHaveValue(2);
     expect(minus).toBeEnabled();
     await user.click(minus);
-    expect(qtyBox('Flour 00')).toHaveValue(1);
+    expect(qtyBox('Flour 00 25kg')).toHaveValue(1);
     await user.click(minus);
-    expect(qtyBox('Flour 00')).toHaveValue(null);
+    expect(qtyBox('Flour 00 25kg')).toHaveValue(null);
     expect(minus).toBeDisabled();
     await waitFor(() => { expect(source.writes.length).toBeGreaterThan(0); }, SAVED);
     // Back to 0 before the pause: an empty line and 0 are the same thing (L26), so the write carries no quantity for it.
@@ -185,14 +192,14 @@ describe('− + and ×', () => {
     const minus = screen.getByRole('button', { name: 'One fewer Flour 00 25kg' });
     minus.focus();
     await user.keyboard('{Enter}');
-    expect(qtyBox('Flour 00')).toHaveFocus();
-    expect(qtyBox('Flour 00')).toHaveValue(null);
+    expect(qtyBox('Flour 00 25kg')).toHaveFocus();
+    expect(qtyBox('Flour 00 25kg')).toHaveValue(null);
   });
 
   it('a tap on − that reaches 0 leaves the focus alone (the phone’s keyboard must not pop up)', async () => {
     const { user } = await opened('s-alp', seeded({ draft: { entries: { 'i-flour': { qty: 1 } }, days: {} } }));
     await user.click(screen.getByRole('button', { name: 'One fewer Flour 00 25kg' }));
-    expect(qtyBox('Flour 00')).not.toHaveFocus();
+    expect(qtyBox('Flour 00 25kg')).not.toHaveFocus();
   });
 
   it('shows the × only while there is a quantity; it clears the quantity and the unit in ONE save', async () => {
@@ -213,7 +220,7 @@ describe('− + and ×', () => {
     const clearFlour = screen.getByRole('button', { name: 'Clear the quantity of Flour 00 25kg' });
     clearFlour.focus();
     await user.keyboard('{Enter}');
-    expect(qtyBox('Flour 00')).toHaveFocus();
+    expect(qtyBox('Flour 00 25kg')).toHaveFocus();
     await user.click(screen.getByRole('button', { name: 'Clear the quantity of Barley' }));
     expect(qtyBox('Barley')).not.toHaveFocus();
   });
@@ -256,20 +263,20 @@ describe('a line ordered elsewhere', () => {
 
   it('shows an EMPTY Order box on its own supplier’s screen, and says where it is ordered this time', async () => {
     await opened('s-alp', seeded({ draft }));
-    expect(qtyBox('Flour 00')).toHaveValue(null);
+    expect(qtyBox('Flour 00 25kg')).toHaveValue(null);
     expect(within(lineOf('Flour 00')).getByText('this time ordered from Zed')).toBeInTheDocument();
   });
 
   it('is drawn on the other supplier’s screen, with its quantity and «usually from»', async () => {
     await opened('s-zed', seeded({ draft }), { lang: 'en' });
-    expect(qtyBox('Flour 00')).toHaveValue(3);
+    expect(qtyBox('Flour 00 25kg')).toHaveValue(3);
     expect(within(lineOf('Flour 00')).getByText('usually from Alpine Mills')).toBeInTheDocument();
   });
 
   it('typing a quantity on its own screen takes the line back, in the same write', async () => {
     const source = seeded({ draft });
     const { user } = await opened('s-alp', source);
-    await user.type(qtyBox('Flour 00'), '2');
+    await user.type(qtyBox('Flour 00 25kg'), '2');
     await waitFor(() => { expect(source.writes.length).toBeGreaterThan(0); }, SAVED);
     expect(source.writes.at(-1)?.entries?.['i-flour']).toMatchObject({ qty: 2, supplierId: '' });
     expect(within(lineOf('Flour 00')).queryByText(/this time ordered from/)).not.toBeInTheDocument();
@@ -279,7 +286,7 @@ describe('a line ordered elsewhere', () => {
     const source = seeded({ draft });
     const { user } = await opened('s-alp', source);
     await user.click(screen.getByRole('button', { name: 'One more Flour 00 25kg' }));
-    expect(qtyBox('Flour 00')).toHaveValue(1);
+    expect(qtyBox('Flour 00 25kg')).toHaveValue(1);
     await waitFor(() => { expect(source.writes.length).toBeGreaterThan(0); }, SAVED);
     expect(source.writes.at(-1)?.entries?.['i-flour']).toMatchObject({ qty: 1, supplierId: '' });
   });
@@ -320,13 +327,13 @@ describe('another phone', () => {
     const source = seeded();
     await opened('s-alp', source);
     act(() => { source.remoteMerge({ entries: { 'i-flour': { qty: 6 } }, days: { 's-alp': todayISO() } }); });
-    await waitFor(() => { expect(qtyBox('Flour 00')).toHaveValue(6); });
+    await waitFor(() => { expect(qtyBox('Flour 00 25kg')).toHaveValue(6); });
   });
 
   it('never overwrites a box that has the focus, and shows the draft when the focus leaves', async () => {
     const source = seeded();
     const { user } = await opened('s-alp', source);
-    const input = qtyBox('Flour 00');
+    const input = qtyBox('Flour 00 25kg');
     await user.click(input);
     act(() => { source.remoteMerge({ entries: { 'i-flour': { qty: 9 } } }); });
     // The snapshot has landed (the count on the list says so), the box under the finger has not moved.
@@ -334,13 +341,13 @@ describe('another phone', () => {
     expect(input).toHaveFocus();
     expect(input).toHaveValue(null);
     await user.tab();
-    await waitFor(() => { expect(qtyBox('Flour 00')).toHaveValue(9); });
+    await waitFor(() => { expect(qtyBox('Flour 00 25kg')).toHaveValue(9); });
   });
 
   it('keeps the digits being typed when another phone changes the same line', async () => {
     const source = seeded();
     const { user } = await opened('s-alp', source);
-    const input = qtyBox('Flour 00');
+    const input = qtyBox('Flour 00 25kg');
     await user.type(input, '4');
     act(() => { source.remoteMerge({ entries: { 'i-flour': { qty: 9 } } }); });
     await user.type(input, '5');
@@ -353,22 +360,22 @@ describe('the status line', () => {
     const source = seeded();
     source.refuseWrites = true;
     const { user } = await opened('s-alp', source);
-    await user.type(qtyBox('Flour 00'), '3');
+    await user.type(qtyBox('Flour 00 25kg'), '3');
     expect(await screen.findByText('Could not save the order — check your network. Keep this page open.', undefined, SAVED)).toBeInTheDocument();
-    expect(qtyBox('Flour 00')).toHaveValue(3);
+    expect(qtyBox('Flour 00 25kg')).toHaveValue(3);
     source.refuseWrites = false;
-    await user.type(qtyBox('Flour 00'), '1');
+    await user.type(qtyBox('Flour 00 25kg'), '1');
     await waitFor(() => {
       expect(screen.queryByText('Could not save the order — check your network. Keep this page open.')).not.toBeInTheDocument();
     }, SAVED);
-    expect(qtyBox('Flour 00')).toHaveValue(31);
+    expect(qtyBox('Flour 00 25kg')).toHaveValue(31);
   });
 
   it('says it in Italian', async () => {
     const source = seeded();
     source.refuseWrites = true;
     const { user } = await opened('s-alp', source, { lang: 'it' });
-    await user.type(box('Quantità da ordinare di Flour 00'), '3');
+    await user.type(box('Quantità da ordinare di Flour 00 25kg'), '3');
     expect(await screen.findByText('Non è stato possibile salvare l’ordine — controlla la rete. Tieni aperta questa pagina.', undefined, SAVED)).toBeInTheDocument();
   });
 

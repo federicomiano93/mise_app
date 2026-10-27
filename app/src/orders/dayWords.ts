@@ -4,7 +4,7 @@ import type { MessageParams } from '../i18n/i18n';
 
 // The word functions of @mise/shared/day take the translator as their LAST argument and ask it for keys of the current
 // app's dictionary (`day.weekdayShort.N`, `day.shortDate`, `day.for`, `day.delivery`). Mise 2's dictionary carries the same
-// keys; `ordersMessages.spec.ts` fails if one is missing in either language.
+// keys; `dayWords.spec.ts` fails if one is missing in either language.
 export function dayTranslate(t: (key: MessageKey, params?: MessageParams) => string): DayTranslate {
   return (key, params) => t(key as MessageKey, params);
 }

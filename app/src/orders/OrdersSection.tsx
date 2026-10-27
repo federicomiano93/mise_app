@@ -11,7 +11,7 @@ import { OrdersList } from './OrdersList';
 import { SupplierItemsScreen } from './SupplierItemsScreen';
 import { SupplierOrderScreen } from './SupplierOrderScreen';
 import { HandBackProvider, ITEMS_DOOR, itemsOpener, supplierOpener, useHandBackState } from './handBack';
-import { FROM_LIST, cameFromList } from './ordersNav';
+import { FROM_LIST, replacedState } from './ordersNav';
 import { ORDERS_PATH, parseOrdersPath, supplierItemsPath, supplierPath } from './ordersPath';
 import type { OrdersView } from './ordersPath';
 import { buildOrdersLens } from './ordersLens';
@@ -100,7 +100,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const open = (opener: string, path: string) => {
     handBack.expect(opener);
     if (split && view.kind !== 'list') {
-      void navigate(path, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
+      void navigate(path, { replace: true, state: replacedState(state) });
     } else {
       // On a phone the list is hidden behind the screen: the place in it is written down now, while it is what is on screen.
       if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
