@@ -59,7 +59,8 @@ describe('draftSync — what an autosave sends', () => {
     h.sync.receive({ entries: { a: { qty: 2, stock: 0 }, b: { qty: 5, stock: 1 } }, days: { s1: '2026-10-26' } });
     h.sync.change({ a: { qty: 3, stock: 0 }, b: { qty: 5, stock: 1 } }, { s1: '2026-10-26' });
     await h.tick();
-    expect(h.saves[0]).toEqual({ updatedAt: '2026-10-26T10:00:00.000Z', entries: { a: { qty: 3, stock: 0 } } });
+    // Field by field: the stock of line a did not change, so it is not said either.
+    expect(h.saves[0]).toEqual({ updatedAt: '2026-10-26T10:00:00.000Z', entries: { a: { qty: 3 } } });
   });
 
   it('looking at a supplier stores nothing: a blank line the document never had is not a change', async () => {
@@ -70,12 +71,12 @@ describe('draftSync — what an autosave sends', () => {
     expect(h.saves).toEqual([]);
   });
 
-  it('a line taken DOWN to zero is a real change, and so is a stock-only change', async () => {
+  it('a line taken DOWN to zero is a real change, and so is a stock-only change — each sending only its own field', async () => {
     const h = harness();
     h.sync.receive({ entries: { a: { qty: 4, stock: 0 }, b: { qty: 0, stock: 0 } } });
     h.sync.change({ a: { qty: 0, stock: 0 }, b: { qty: 0, stock: 6 } }, {});
     await h.tick();
-    expect(h.saves[0]?.entries).toEqual({ a: { qty: 0, stock: 0 }, b: { qty: 0, stock: 6 } });
+    expect(h.saves[0]?.entries).toEqual({ a: { qty: 0 }, b: { stock: 6 } });
   });
 
   it('⚠️ sends unit: \'\' and supplierId: \'\' to CLEAR them (a merge write cannot delete a nested key)', async () => {
@@ -83,7 +84,7 @@ describe('draftSync — what an autosave sends', () => {
     h.sync.receive({ entries: { a: { qty: 2, stock: 0, unit: 'busta', supplierId: 'other' } } });
     h.sync.change({ a: { qty: 0, stock: 0, unit: '', supplierId: '' } }, {});
     await h.tick();
-    expect(h.saves[0]?.entries).toEqual({ a: { qty: 0, stock: 0, unit: '', supplierId: '' } });
+    expect(h.saves[0]?.entries).toEqual({ a: { qty: 0, unit: '', supplierId: '' } });
   });
 
   it('sends a changed day stamp, and only that one', async () => {
@@ -150,6 +151,64 @@ describe('draftSync — two phones in one document', () => {
     expect(view.entries).toEqual({ a: { qty: 3, stock: 0 } });
     await h.tick();
     expect(h.saves).toEqual([{ updatedAt: '2026-10-26T10:00:00.000Z', entries: { a: { qty: 3, stock: 0 } } }]);
+  });
+
+  // Found in the 3f-1 review (27 Oct 2026): the claims only ever grew, and whole rows were sent.
+  it('⚠️ a line corrected back inside the pause (+ then −) is released: nothing is sent and it never comes back', async () => {
+    const h = harness();
+    h.sync.receive({ entries: { a: { qty: 2, stock: 0 } } });
+    h.sync.change({ a: { qty: 3, stock: 0 } }, {});
+    h.sync.change({ a: { qty: 2, stock: 0 } }, {});
+    await h.tick();
+    expect(h.saves).toEqual([]);
+    // A colleague's write on another line: line a still reads the server's 2, and the next edit says nothing about a.
+    const view = h.sync.receive({ entries: { a: { qty: 2, stock: 0 }, b: { qty: 1, stock: 0 } } });
+    expect(view.entries.a).toEqual({ qty: 2, stock: 0 });
+    h.sync.change({ ...view.entries, c: { qty: 4, stock: 0 } }, {});
+    await h.tick();
+    expect(h.saves).toEqual([{ updatedAt: '2026-10-26T10:00:00.000Z', entries: { c: { qty: 4, stock: 0 } } }]);
+  });
+
+  it('⚠️ typed to the value another phone had just written: released, so that phone\'s later change or clear is not undone', async () => {
+    const h = harness();
+    h.sync.receive({ entries: { a: { qty: 1, stock: 0 } } });
+    h.sync.change({ a: { qty: 5, stock: 0 } }, {});
+    // The colleague's 5 lands before this phone's pause ends.
+    h.sync.receive({ entries: { a: { qty: 5, stock: 0 } } });
+    await h.tick();
+    expect(h.saves).toEqual([]);
+    // The colleague places the order: line a is cleared. It stays cleared here, and the next edit leaves it alone.
+    const view = h.sync.receive({ entries: { a: { stock: 0 } } });
+    expect(view.entries.a).toEqual({ stock: 0 });
+    h.sync.change({ ...view.entries, c: { qty: 2, stock: 0 } }, {});
+    await h.tick();
+    expect(h.saves[0]?.entries).toEqual({ c: { qty: 2, stock: 0 } });
+  });
+
+  it('⚠️ a stock count sends the stock alone: a quantity another phone clears meanwhile stays cleared', async () => {
+    const h = harness();
+    h.sync.receive({ entries: { a: { qty: 9, stock: 0 } } });
+    h.sync.change({ a: { qty: 9, stock: 2 } }, {});
+    // Another phone places the order during the pause: the quantity goes.
+    const view = h.sync.receive({ entries: { a: { stock: 0 } } });
+    expect(view.entries.a).toEqual({ stock: 2 });
+    await h.tick();
+    expect(h.saves[0]?.entries).toEqual({ a: { stock: 2 } });
+  });
+
+  it('⚠️ this phone\'s own write shown at once is NOT taken as the server agreeing: refused, the typing stays (L37)', async () => {
+    const h = harness();
+    h.holdSaves();
+    h.sync.receive({ entries: { a: { qty: 1, stock: 0 } } });
+    h.sync.change({ a: { qty: 6, stock: 0 } }, {});
+    await h.tick();
+    // Firestore shows the write before the server answers…
+    h.sync.receive({ entries: { a: { qty: 6, stock: 0 } } });
+    // …then the server refuses it and the snapshot is taken back.
+    h.pendingSaves[0]?.reject(new Error('permission-denied'));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const view = h.sync.receive({ entries: { a: { qty: 1, stock: 0 } } });
+    expect(view.entries.a).toEqual({ qty: 6, stock: 0 });
   });
 
   it('flush after such a snapshot sends only this phone\'s line too', async () => {

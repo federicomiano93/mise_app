@@ -135,7 +135,7 @@ describe('ordersStore — typing a quantity', () => {
     });
     h.store.editLine(mill, { ...flour, unit: 'cartone' }, { clear: true });
     await h.autosave();
-    expect(h.source.writes[0]?.entries).toEqual({ flour: { qty: 0, stock: 0, unit: '' } });
+    expect(h.source.writes[0]?.entries).toEqual({ flour: { qty: 0, unit: '' } });
   });
 });
 
@@ -156,7 +156,7 @@ describe('ordersStore — whose order a line is in (js/orders/ingredients.js cla
     });
     h.store.editLine(mill, flour, { qty: 5 });
     await h.autosave();
-    expect(h.source.writes[0]?.entries).toEqual({ flour: { qty: 5, stock: 0, supplierId: '' } });
+    expect(h.source.writes[0]?.entries).toEqual({ flour: { qty: 5, supplierId: '' } });
   });
 });
 

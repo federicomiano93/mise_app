@@ -806,6 +806,10 @@ supplier opens beside the list.
   line and placing → 3f-2; the supplier name as a door to its card → 3f-8. No progress bar.
 - O6. **Back to 0 before the pause saves nothing for that line**: an empty line and 0 are the same thing (L26), so no write
   carries a zero for a line that was never saved.
+- O7. **A waiting autosave never writes back lines another phone cleared** (`draftSync.ts` receive): the save waiting out
+  the pause is rebuilt on every snapshot from the server's copy plus this phone's own lines. The current app's `draft.js`
+  keeps the whole order as it was at the keystroke, so another phone placing the order inside those 800 ms gets its
+  quantities written back — found driving 3f-1 on the emulator; a fix for the current app is its own branch.
 
 **P13.** This slice stores no personal data: the draft holds no person. Order lists (3f-7) store the sender's name — flagged
 before that slice is built.
