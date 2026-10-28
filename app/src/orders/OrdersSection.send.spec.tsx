@@ -70,6 +70,12 @@ async function toSend(view: View, ...names: string[]) {
   for (const name of names) await tick(view, new RegExp(`^${name}`));
 }
 
+// Escape, once the focus is inside the open dialog: before that, on a slow runner, the key lands on the page and nothing hears it.
+async function escapeFrom(view: View, dialog: HTMLElement) {
+  await waitFor(() => { expect(dialog.contains(document.activeElement)).toBe(true); }, LOAD);
+  await view.user.keyboard('{Escape}');
+}
+
 // The confirm screen that follows a send, once its working copy is on screen.
 async function orderSent() {
   await screen.findByText('This is what will be recorded:', undefined, LOAD);
@@ -262,7 +268,7 @@ describe('several roads', () => {
     expect(roads[2]).toContain('Email to the supplier');
     expect(roads[2]).toContain('it does not send it by itself');
     expect(roads[3]).toBe('Cancel');
-    await view.user.keyboard('{Escape}');
+    await escapeFrom(view, await screen.findByRole('dialog', { name: 'How should this order go?' }, LOAD));
     await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'How should this order go?' })).not.toBeInTheDocument(); });
     expect(open).not.toHaveBeenCalled();
     expect(view.router.state.location.pathname).toBe('/orders/send');
@@ -342,8 +348,7 @@ describe('the order picture', () => {
     const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
     await toSend(view, 'Zed');
     await view.user.click(sendButton());
-    await screen.findByRole('dialog', { name: 'How do you want to send it?' }, LOAD);
-    await view.user.keyboard('{Escape}');
+    await escapeFrom(view, await screen.findByRole('dialog', { name: 'How do you want to send it?' }, LOAD));
     await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'How do you want to send it?' })).not.toBeInTheDocument(); });
     expect(open).not.toHaveBeenCalled();
     expect(view.router.state.location.pathname).toBe('/orders/send');
@@ -484,8 +489,7 @@ describe('one window per tap', () => {
       expect(open).toHaveBeenCalledTimes(1);
     });
     expect(pressed(open)[0]?.startsWith('mailto:')).toBe(true);
-    await screen.findByRole('dialog', { name: 'Open the email for Two Dairy (2 of 2)' }, LOAD);
-    await view.user.keyboard('{Escape}');
+    await escapeFrom(view, await screen.findByRole('dialog', { name: 'Open the email for Two Dairy (2 of 2)' }, LOAD));
     const notice = await screen.findByRole('alertdialog', undefined, LOAD);
     expect(within(notice).getByText('Not sent: Two Dairy')).toBeInTheDocument();
     expect(open).toHaveBeenCalledTimes(1);
@@ -578,8 +582,7 @@ describe('«Did you send it?»', () => {
     await view.user.click(await screen.findByRole('button', { name: 'Order placed' }));
     await screen.findByText('This is what will be recorded:', undefined, LOAD);
     await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
-    await screen.findByRole('alertdialog', undefined, LOAD);
-    await view.user.keyboard('{Escape}');
+    await escapeFrom(view, await screen.findByRole('alertdialog', undefined, LOAD));
     await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
     expect(source.records.size).toBe(0);
     expect(view.router.state.location.pathname).toBe('/orders/place-all/confirm');
