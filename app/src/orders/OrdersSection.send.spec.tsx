@@ -190,7 +190,7 @@ describe('one open road', () => {
     await view.user.click(sendButton());
     const confirm = await orderSent();
     await view.user.click(confirm.getByRole('button', { name: 'Mark as placed' }));
-    const asked = await screen.findByRole('alertdialog');
+    const asked = await screen.findByRole('alertdialog', undefined, LOAD);
     expect(within(asked).getByText('Did you send the order to Alpine Mills?')).toBeInTheDocument();
     await view.user.click(within(asked).getByRole('button', { name: 'Yes, sent' }));
     await waitFor(() => { expect(source.records.has(`${TODAY}_s-alp`)).toBe(true); });
@@ -218,7 +218,7 @@ describe('one open road', () => {
     const view = await atList(source, STAFF);
     await toSend(view, 'Alpine Mills');
     await view.user.click(sendButton());
-    const alert = await screen.findByRole('alertdialog');
+    const alert = await screen.findByRole('alertdialog', undefined, LOAD);
     expect(within(alert).getByText(/^Already ordered from this supplier today: Cake box — carton\./)).toBeInTheDocument();
     expect(open).not.toHaveBeenCalled();
     await view.user.click(within(alert).getByRole('button', { name: 'OK' }));
@@ -242,7 +242,7 @@ describe('one open road', () => {
     const view = await atList(source, STAFF);
     await toSend(view, 'Alpine Mills');
     await view.user.click(sendButton());
-    const alert = await screen.findByRole('alertdialog');
+    const alert = await screen.findByRole('alertdialog', undefined, LOAD);
     expect(within(alert).getByText(/^There is no way to send this order/)).toBeInTheDocument();
     expect(open).not.toHaveBeenCalled();
   });
@@ -254,7 +254,7 @@ describe('several roads', () => {
     const view = await atList(seeded());
     await toSend(view, 'Zed');
     await view.user.click(sendButton());
-    const chooser = await screen.findByRole('dialog', { name: 'How should this order go?' });
+    const chooser = await screen.findByRole('dialog', { name: 'How should this order go?' }, LOAD);
     const roads = within(chooser).getAllByRole('button').map(button => button.textContent ?? '');
     expect(roads).toHaveLength(4);
     expect(roads[0]).toContain('WhatsApp — I choose the chat');
@@ -273,7 +273,7 @@ describe('several roads', () => {
     const view = await atList(seeded());
     await toSend(view, 'Zed');
     await view.user.click(sendButton());
-    const chooser = within(await screen.findByRole('dialog', { name: 'How should this order go?' }));
+    const chooser = within(await screen.findByRole('dialog', { name: 'How should this order go?' }, LOAD));
     const road = chooser.getByRole('button', { name: /^WhatsApp straight to the supplier/ });
     act(() => {
       road.click();
@@ -289,7 +289,7 @@ describe('several roads', () => {
     const view = await atList(seeded());
     await toSend(view, 'Alpine Mills', 'Zed');
     await view.user.click(sendButton());
-    const chooser = within(await screen.findByRole('dialog', { name: 'How should this order go?' }));
+    const chooser = within(await screen.findByRole('dialog', { name: 'How should this order go?' }, LOAD));
     expect(chooser.getByRole('button', { name: /^WhatsApp straight to the supplier/ })).toHaveTextContent('no contact saved for Alpine Mills');
   });
 });
@@ -302,18 +302,18 @@ describe('the order picture', () => {
     const view = await atList(source, STAFF);
     await toSend(view, 'Zed', 'Café');
     await view.user.click(sendButton());
-    const format = within(await screen.findByRole('dialog', { name: 'How do you want to send it?' }));
+    const format = within(await screen.findByRole('dialog', { name: 'How do you want to send it?' }, LOAD));
     expect(format.getByRole('button', { name: 'Order photo' })).toHaveFocus();
     await view.user.click(format.getByRole('button', { name: 'Order photo' }));
 
-    const first = within(await screen.findByRole('dialog', { name: 'Photo for Café Bar Srl (1 of 2)' }));
+    const first = within(await screen.findByRole('dialog', { name: 'Photo for Café Bar Srl (1 of 2)' }, LOAD));
     await view.user.click(first.getByRole('button', { name: 'Share' }));
     expect(share).toHaveBeenCalledTimes(1);
 
-    const second = within(await screen.findByRole('dialog', { name: 'Photo for Zed (2 of 2)' }));
+    const second = within(await screen.findByRole('dialog', { name: 'Photo for Zed (2 of 2)' }, LOAD));
     await view.user.click(second.getByRole('button', { name: 'Skip' }));
 
-    const notice = await screen.findByRole('alertdialog');
+    const notice = await screen.findByRole('alertdialog', undefined, LOAD);
     expect(within(notice).getByText('Not sent: Zed')).toBeInTheDocument();
     await view.user.click(within(notice).getByRole('button', { name: 'OK' }));
     expect(open).not.toHaveBeenCalled();
@@ -330,7 +330,7 @@ describe('the order picture', () => {
     const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
     await toSend(view, 'Zed');
     await view.user.click(sendButton());
-    const format = within(await screen.findByRole('dialog', { name: 'How do you want to send it?' }));
+    const format = within(await screen.findByRole('dialog', { name: 'How do you want to send it?' }, LOAD));
     await pressThenMicrotasks(format.getByRole('button', { name: 'Text' }));
     // ⚠️ No waitFor: the window opens in the press's own task.
     expect(open).toHaveBeenCalledTimes(1);
@@ -342,7 +342,7 @@ describe('the order picture', () => {
     const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
     await toSend(view, 'Zed');
     await view.user.click(sendButton());
-    await screen.findByRole('dialog', { name: 'How do you want to send it?' });
+    await screen.findByRole('dialog', { name: 'How do you want to send it?' }, LOAD);
     await view.user.keyboard('{Escape}');
     await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'How do you want to send it?' })).not.toBeInTheDocument(); });
     expect(open).not.toHaveBeenCalled();
@@ -367,7 +367,7 @@ describe('«Send it now» on the confirm screen', () => {
     await view.user.type(rye, '9');
     const confirm = within(screen.getByRole('region', { name: 'Record these orders' }));
     await view.user.click(confirm.getByRole('button', { name: 'Order placed' }));
-    const asked = within(await screen.findByRole('alertdialog'));
+    const asked = within(await screen.findByRole('alertdialog', undefined, LOAD));
     expect(asked.getByRole('button', { name: 'Yes, sent' })).toHaveFocus();
     await view.user.click(asked.getByRole('button', { name: 'Send them now' }));
     await waitFor(() => { expect(open).toHaveBeenCalled(); });
@@ -382,10 +382,10 @@ describe('«Send it now» on the confirm screen', () => {
     const view = await atList(source, STAFF);
     await toConfirmAll(view);
     await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
-    await pressThenMicrotasks(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Send them now' }));
+    await pressThenMicrotasks(within(await screen.findByRole('alertdialog', undefined, LOAD)).getByRole('button', { name: 'Send them now' }));
     // ⚠️ ONE window per tap: the first opens in «Send them now», the second waits for its own Open press.
     expect(open).toHaveBeenCalledTimes(1);
-    const next = within(await screen.findByRole('dialog', { name: 'Open the chat for Zed (2 of 2)' }));
+    const next = within(await screen.findByRole('dialog', { name: 'Open the chat for Zed (2 of 2)' }, LOAD));
     act(() => {
       next.getByRole('button', { name: 'Open' }).click();
       expect(open).toHaveBeenCalledTimes(2);
@@ -401,7 +401,7 @@ describe('«Send it now» on the confirm screen', () => {
     const view = await atList(source, STAFF);
     await toConfirmAll(view);
     await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
-    await view.user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Send them now' }));
+    await view.user.click(within(await screen.findByRole('alertdialog', undefined, LOAD)).getByRole('button', { name: 'Send them now' }));
     expect(await screen.findByText(/Not sent, still to do: /)).toBeInTheDocument();
     expect(source.records.size).toBe(0);
     expect(view.router.state.location.pathname).toBe('/orders/place-all/confirm');
@@ -412,7 +412,7 @@ describe('«Send it now» on the confirm screen', () => {
     const view = await atList(source, STAFF);
     await toConfirmAll(view);
     await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
-    const asked = within(await screen.findByRole('alertdialog'));
+    const asked = within(await screen.findByRole('alertdialog', undefined, LOAD));
     expect(asked.getByRole('button', { name: 'Yes, sent' })).toBeInTheDocument();
     expect(asked.queryByRole('button', { name: /Send (it|them) now/ })).not.toBeInTheDocument();
   });
@@ -438,7 +438,7 @@ describe('one window per tap', () => {
       button.click();
       expect(open).toHaveBeenCalledTimes(1);
     });
-    const next = within(await screen.findByRole('dialog', { name: 'Open the chat for Zed (2 of 2)' }));
+    const next = within(await screen.findByRole('dialog', { name: 'Open the chat for Zed (2 of 2)' }, LOAD));
     expect(open).toHaveBeenCalledTimes(1);
     const press = next.getByRole('button', { name: 'Open' });
     await waitFor(() => { expect(press).toHaveFocus(); });
@@ -459,9 +459,9 @@ describe('one window per tap', () => {
     const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
     await toSend(view, 'Zed', 'Café');
     await view.user.click(sendButton());
-    const next = within(await screen.findByRole('dialog', { name: 'Open the chat for Zed (2 of 2)' }));
+    const next = within(await screen.findByRole('dialog', { name: 'Open the chat for Zed (2 of 2)' }, LOAD));
     await view.user.click(next.getByRole('button', { name: 'Skip' }));
-    const notice = await screen.findByRole('alertdialog');
+    const notice = await screen.findByRole('alertdialog', undefined, LOAD);
     expect(within(notice).getByText('Not sent: Zed')).toBeInTheDocument();
     await view.user.click(within(notice).getByRole('button', { name: 'OK' }));
     expect(open).toHaveBeenCalledTimes(1);
@@ -477,16 +477,16 @@ describe('one window per tap', () => {
     const view = await atList(source);
     await toSend(view, 'One Mill', 'Two Dairy');
     await view.user.click(sendButton());
-    const chooser = within(await screen.findByRole('dialog', { name: 'How should this order go?' }));
+    const chooser = within(await screen.findByRole('dialog', { name: 'How should this order go?' }, LOAD));
     const road = chooser.getByRole('button', { name: /^Email to the supplier/ });
     act(() => {
       road.click();
       expect(open).toHaveBeenCalledTimes(1);
     });
     expect(pressed(open)[0]?.startsWith('mailto:')).toBe(true);
-    await screen.findByRole('dialog', { name: 'Open the email for Two Dairy (2 of 2)' });
+    await screen.findByRole('dialog', { name: 'Open the email for Two Dairy (2 of 2)' }, LOAD);
     await view.user.keyboard('{Escape}');
-    const notice = await screen.findByRole('alertdialog');
+    const notice = await screen.findByRole('alertdialog', undefined, LOAD);
     expect(within(notice).getByText('Not sent: Two Dairy')).toBeInTheDocument();
     expect(open).toHaveBeenCalledTimes(1);
   });
@@ -521,10 +521,10 @@ describe('the order picture, when the share goes wrong', () => {
   async function toPhoto(view: View) {
     await toSend(view, 'Zed');
     await view.user.click(sendButton());
-    const format = within(await screen.findByRole('dialog', { name: 'How do you want to send it?' }));
+    const format = within(await screen.findByRole('dialog', { name: 'How do you want to send it?' }, LOAD));
     await view.user.click(format.getByRole('button', { name: 'Order photo' }));
   }
-  const photoDialog = () => screen.findByRole('dialog', { name: 'Photo for Zed (1 of 1)' });
+  const photoDialog = () => screen.findByRole('dialog', { name: 'Photo for Zed (1 of 1)' }, LOAD);
 
   it('keeps the dialog and records nothing when the person closes the share sheet', async () => {
     const share = allowShare(Object.assign(new Error('closed'), { name: 'AbortError' }));
@@ -548,7 +548,7 @@ describe('the order picture, when the share goes wrong', () => {
     await toPhoto(view);
     const photo = within(await photoDialog());
     await view.user.click(photo.getByRole('button', { name: 'Share' }));
-    const ask = within(await screen.findByRole('alertdialog'));
+    const ask = within(await screen.findByRole('alertdialog', undefined, LOAD));
     expect(ask.getByText('Couldn’t share the photo, sending the text instead.')).toBeInTheDocument();
     expect(open).not.toHaveBeenCalled();
     await pressThenMicrotasks(ask.getByRole('button', { name: 'OK' }));
@@ -562,7 +562,7 @@ describe('the order picture, when the share goes wrong', () => {
     const open = spyOpen();
     const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
     await toPhoto(view);
-    const ask = within(await screen.findByRole('alertdialog'));
+    const ask = within(await screen.findByRole('alertdialog', undefined, LOAD));
     expect(open).not.toHaveBeenCalled();
     await pressThenMicrotasks(ask.getByRole('button', { name: 'OK' }));
     expect(open).toHaveBeenCalledTimes(1);
@@ -578,7 +578,7 @@ describe('«Did you send it?»', () => {
     await view.user.click(await screen.findByRole('button', { name: 'Order placed' }));
     await screen.findByText('This is what will be recorded:', undefined, LOAD);
     await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
-    await screen.findByRole('alertdialog');
+    await screen.findByRole('alertdialog', undefined, LOAD);
     await view.user.keyboard('{Escape}');
     await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
     expect(source.records.size).toBe(0);
