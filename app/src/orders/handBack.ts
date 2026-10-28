@@ -16,6 +16,11 @@ export const supplierOpener = (id: string): string => `supplier:${id}`;
 export const itemsOpener = (id: string): string => `items:${id}`;
 // A supplier's screen: its «What they sell» button, where Back from the items list returns the focus.
 export const ITEMS_DOOR = 'items-door';
+// A supplier's screen: its «Order placed…» button, where Back from the confirm screen returns the focus.
+export const PLACE_DOOR = 'place-door';
+// The list's two buttons under the suppliers: «Order placed…» (the picker of the suppliers to record) and «Clear quantities…».
+export const PLACE_ALL_OPENER = 'place-all';
+export const CLEAR_OPENER = 'clear';
 
 export interface HandBack {
   // A control that opens a screen. null when it goes away.

@@ -1,16 +1,19 @@
 import { useCallback, useEffect, useId, useRef } from 'react';
-import { List } from 'lucide-react';
+import { Check, List } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { FormBar } from '../ui/FormBar';
+import { useStatusMessage } from '../ui/StatusMessage';
+import { DayLine } from './DayLine';
 import { OrderLine } from './OrderLine';
 import { useOrders, useOrdersStore } from './OrdersContext';
-import { ITEMS_DOOR, supplierOpener, useHandBack } from './handBack';
-import { ORDERS_PATH, supplierItemsPath } from './ordersPath';
-import { cameFromList, fromSupplierState, useLeave } from './ordersNav';
+import { ITEMS_DOOR, PLACE_DOOR, supplierOpener, useHandBack } from './handBack';
+import { ORDERS_PATH, supplierConfirmPath, supplierItemsPath } from './ordersPath';
+import { cameFromList, confirmState, fromSupplierState, useLeave } from './ordersNav';
+import { LONG_MS, useClearQuantities } from './useClearQuantities';
 import type { OrderRow, OrdersLens } from './ordersLens';
 import styles from './SupplierOrderScreen.module.css';
 
@@ -27,9 +30,13 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   const titleId = useId();
   const title = useRef<HTMLHeadingElement>(null);
   const leave = useLeave(ORDERS_PATH, () => { handBack.expect(supplierOpener(id)); });
+  const say = useStatusMessage();
+  const [clearQuantities, clearDialog] = useClearQuantities(lens);
 
   // «What they sell» one level down: Back from it hands the focus back to this button.
   const itemsNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(ITEMS_DOOR, node); }, [handBack]);
+  // «Order placed…» one level down: Back from the confirm screen hands the focus back to this button.
+  const placeNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(PLACE_DOOR, node); }, [handBack]);
 
   const supplier = lens.supplierById(id);
   const rows = lens.rowsFor(id);
@@ -70,6 +77,18 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
     />
   );
   const empty = rows.active.length === 0 && rows.inactive.length === 0;
+  // What is typed for this supplier: «Order placed…» needs some, «Clear quantities…» is offered only when there is some.
+  const filled = lens.filledFor(id);
+  const placing = snapshot.placing.includes(id);
+  const place = () => {
+    // Refused offline: the record and the clear would land at two different moments of connectivity (parity X3).
+    if (navigator.onLine === false) {
+      say(t('ord.offline.place'), LONG_MS);
+      return;
+    }
+    handBack.expect(PLACE_DOOR);
+    void navigate(supplierConfirmPath(id), { state: confirmState(state) });
+  };
 
   return (
     <section ref={screen} className={styles.screen} aria-labelledby={titleId}>
@@ -95,6 +114,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
             </Button>
           )}
         />
+        <DayLine supplier={supplier} lens={lens} />
         {empty ? null : (
           <div className={styles.columns} data-stock={showStock}>
             <span />
@@ -115,8 +135,21 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
               </FoldedGroup>
             </div>
           ) : null}
+          {/* After the rows and NOT stuck: a bar stuck to the bottom of a phone would take the rows' room. */}
+          <div className={styles.actions}>
+            <Button ref={placeNode} variant="primary" isDisabled={filled === 0 || placing} onPress={place}>
+              <Check aria-hidden="true" />
+              {t('ord.placeAction')}
+            </Button>
+            {filled > 0 ? (
+              <Button variant="quiet" onPress={() => { void clearQuantities([id]).then(cleared => { if (cleared) leave(); }); }}>
+                {t('ord.clearAction')}
+              </Button>
+            ) : null}
+          </div>
         </>
       )}
+      {clearDialog}
     </section>
   );
 }
