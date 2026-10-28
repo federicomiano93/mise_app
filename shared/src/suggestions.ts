@@ -50,9 +50,6 @@ function num(value: unknown): number {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-const hasOwn = (map: unknown, key: string): boolean =>
-  typeof map === 'object' && map !== null && Object.prototype.hasOwnProperty.call(map, key);
-
 function newestFirst(a: HistoryRecord, b: HistoryRecord): number {
   return String(b.date || b.weekStart || '').localeCompare(String(a.date || a.weekStart || ''));
 }
@@ -88,7 +85,7 @@ export function computeSuggestion(
   ing: unknown = null,
 ): Suggestion {
   const orders = ((history || []) as readonly HistoryRecord[])
-    .filter(r => r.quantities && hasOwn(r.quantities, ingredientId))
+    .filter(r => r.quantities && Object.prototype.hasOwnProperty.call(r.quantities, ingredientId))
     .filter(r => !ing || sameUnit(recordUnit(r, ingredientId, ing), (ing as { unit?: unknown }).unit))
     .sort(newestFirst);
 

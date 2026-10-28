@@ -68,9 +68,11 @@ export interface OrdersSnapshot {
   readonly draftSaveFailed: boolean;
   // The suppliers whose order is being recorded right now: their «Order placed…» is off (parity X1).
   readonly placing: readonly string[];
-  // The order records of the live window (the last two months, step 3f-2b), as stored. Empty until they arrive, and for
-  // good if the stream fails: the suggestions are then simply not shown.
+  // The order records of the live window (the last two months, step 3f-2b), as stored. Empty until they arrive.
   readonly history: readonly StoredDoc[];
+  // The live stream of the records died (no resubscribe): the suggestions may be counting from a list that no longer
+  // updates, and the page says so like the other streams (parity L5; the current app's «past orders»).
+  readonly historyBroken: boolean;
   // The suggestion engine over `history` and `ingredients` — ONE per snapshot of those two, asked by every row, the Stock
   // box and the confirm screen alike (suggester.ts).
   readonly suggester: Suggester;
@@ -191,7 +193,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     config: normalizeOrdersConfig(null), configLoaded: false,
     draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false,
     placing: [],
-    history: [], suggester: NO_SUGGESTIONS,
+    history: [], historyBroken: false, suggester: NO_SUGGESTIONS,
   };
   const listeners = new Set<() => void>();
   const messageListeners = new Set<(message: OrdersMessage) => void>();
@@ -388,11 +390,10 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
           () => set({ draftBroken: true, draftLoaded: true }),
         ),
         // The window starts two calendar months before TODAY when the section opens (the current app's liveHistoryStart).
-        // A failure is logged by the source and leaves the suggestions off: nothing else on these screens reads it.
         source.watchRecentHistory(
           liveHistoryStart(parseISODate(deps.today())),
-          list => set({ history: list }),
-          () => { /* logged by the source */ },
+          list => set({ history: list, historyBroken: false }),
+          () => set({ historyBroken: true }),
         ),
       ];
     },

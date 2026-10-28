@@ -2188,6 +2188,7 @@ export const en = {
   'ord.live.draft': 'the order in progress',
   'ord.live.suppliers': 'suppliers',
   'ord.live.ingredients': 'ingredients',
+  'ord.live.history': 'past orders',
   'ord.field.order': 'Order',
   'ord.field.stock': 'Stock',
   'ord.line.usuallyFrom': 'usually from {supplier}',

@@ -1992,6 +1992,7 @@ export const it: Messages = {
   'ord.live.draft': 'l’ordine in corso',
   'ord.live.suppliers': 'i fornitori',
   'ord.live.ingredients': 'gli ingredienti',
+  'ord.live.history': 'gli ordini passati',
   'ord.field.order': 'Ordine',
   'ord.field.stock': 'Giacenza',
   'ord.line.usuallyFrom': 'di solito da {supplier}',

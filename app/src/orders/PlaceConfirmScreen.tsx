@@ -170,6 +170,11 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
   const say = useStatusMessage();
   const [confirm, confirmDialog] = useConfirm();
   const titleId = useId();
+  const usualIdBase = useId();
+  // ⚠️ THE «EXTRA DIGIT» LINE IS WRITTEN ONLY AFTER THE FIRST PAINT: its status region must be on the page before it speaks,
+  // or a row already unusual when the screen opens is never announced (review of 3f-2b).
+  const [speaking, setSpeaking] = useState(false);
+  useEffect(() => { setSpeaking(true); }, []);
   const title = useRef<HTMLHeadingElement>(null);
   const dt = dayTranslate(t);
   const today = todayISO();
@@ -345,7 +350,7 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
         {/* ⚠️ THE CONTAINER IS THERE FROM THE START and only its text changes: a live region inserted already filled is not
             announced. */}
         <div role="status" aria-live="polite">
-          {anyUnusual ? <p className={styles.check}>{t('ord.checkExtraDigit')}</p> : null}
+          {speaking && anyUnusual ? <p className={styles.check}>{t('ord.checkExtraDigit')}</p> : null}
         </div>
         {groups.map(group => (
           <div key={group.supplierId} className={styles.group}>
@@ -362,7 +367,7 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
             <ul className={styles.rows}>
               {group.rows.map(row => {
                 const usual = usualOf(group.supplierId, row);
-                const usualId = `${group.supplierId}-${row.id}-usual`;
+                const usualId = `${usualIdBase}-${group.supplierId}-${row.id}`;
                 return (
                 <li key={row.id} className={styles.row} data-unusual={usual !== null}>
                   <span className={styles.name}>{row.name}</span>

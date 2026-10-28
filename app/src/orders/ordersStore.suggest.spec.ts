@@ -78,6 +78,8 @@ describe('ordersStore — the records behind the suggestions', () => {
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(store.getSnapshot().suppliersLoaded).toBe(true);
     expect(store.getSnapshot().suggester.hint(flour, { stock: 1 })).toStrictEqual({ kind: 'none' });
+    // Said on the page like the other streams (parity L5).
+    expect(store.getSnapshot().historyBroken).toBe(true);
   });
 });
 
