@@ -646,14 +646,14 @@
       }
     },
     "dist/orders.css": {
-      "sha": "8cdf1c749b7ccd14",
+      "sha": "07111b8dcb00e97a",
       "inputs": {
-        "orders.css": "b2193fde565b77fb"
+        "orders.css": "d0a4efeaeda7c73e"
       }
     },
     "dist/orders.js": {
-      "sha": "205d72f3265569b6",
-      "mapSha": "f42c54851b47e8bf",
+      "sha": "0a67cac5db94636c",
+      "mapSha": "6f94b83727bfaf58",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -734,7 +734,7 @@
         "js/orders/order-summary.js": "ae2df3d8e163c852",
         "js/orders/order-text.js": "40ad3ba8ddb014c3",
         "js/orders/orders-config.js": "c968ce3171a34b1f",
-        "js/orders/orders-main.js": "5839135eac0ef4f3",
+        "js/orders/orders-main.js": "797ae445310de732",
         "js/orders/place-confirm.js": "61cd2d604037e847",
         "js/orders/preview.js": "daa32cf26e8b4e87",
         "js/orders/reminder-view.js": "2d263696a18298f2",
@@ -908,8 +908,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "297ccbb8dbd6d014",
-      "mapSha": "607a02264f4d6440",
+      "sha": "c796e7e68e76a873",
+      "mapSha": "2c0ca446b79e8087",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -995,7 +995,7 @@
         "js/orders/price-changes-screen.js": "9dc81f214b196440",
         "js/orders/registry-main.js": "c2f5f09a6ab2906c",
         "js/orders/registry-settings.js": "ebcbc495269008bf",
-        "js/orders/registry.js": "cc2529b457afcbc0",
+        "js/orders/registry.js": "d717f3385fb3f27c",
         "js/orders/reminders.js": "de7b21d852fd6259",
         "js/orders/search-box.js": "d63164cf3cc0565e",
         "js/orders/supplier-picker.js": "80850a11f61ab7fc",
