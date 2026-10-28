@@ -7,7 +7,9 @@ import type { OrdersMeta, OrdersSource, StoredDoc } from '../orders/ordersSource
 // the returned release is called. From step 3f-2 it also holds the order records (`records`), and each of the three writes of
 // placing can be made to fail once (`fail`), so every step of the sequence has a spec. From step 3f-2b the records are watched
 // too (`watchRecentHistory`: those dated on or after the window's start; a recorded order is told at once), and `init.records`
-// seeds them.
+// seeds them. From step 3f-4 (History) it pages the records older than the window like the real query (`date < before`, newest
+// first, `pageSize` at a time, then the legacy records with a `weekStart`), and rewrites or deletes one record in a fake
+// transaction; `fail.older`, `fail.legacy` and `fail.rewrite` refuse the next one, `duringRewrite` acts in its second.
 type ListListener = { onChange: (list: StoredDoc[], meta: OrdersMeta) => void; onError: (err: unknown) => void };
 type DocListener = { onChange: (data: Record<string, unknown> | null, meta: OrdersMeta) => void; onError: (err: unknown) => void };
 
@@ -45,6 +47,16 @@ export type FakeOrdersSource = OrdersSource & {
   fail: { read: boolean; record: boolean; clear: boolean };
   // Runs inside the next record transaction, after the read and before the write (another phone acting in that second).
   duringRecord: (() => void) | null;
+  // The page size of getOlderHistory (the real one is OLDER_PAGE_SIZE, 100), and every page asked for.
+  pageSize: number;
+  olderReads: Array<{ before: string; cursor: unknown }>;
+  legacyReads: number;
+  // The next older page / legacy read / rewrite transaction is refused (then the flag goes back to false).
+  failHistory: { older: boolean; legacy: boolean; rewrite: boolean };
+  // Runs inside the next rewrite transaction, after the read and before `decide` (another phone writing in that second).
+  duringRewrite: (() => void) | null;
+  // Every rewrite attempted, by record id.
+  rewrites: string[];
 };
 
 // A merge like setDoc(…, { merge: true }): maps merged key by key at every depth, everything else replaced.
@@ -178,6 +190,71 @@ export function fakeOrdersSource(init: {
       }
       const record = source.records.get(id);
       return record ? structuredClone(record) : null;
+    },
+
+    pageSize: 100,
+    olderReads: [],
+    legacyReads: 0,
+    failHistory: { older: false, legacy: false, rewrite: false },
+    duringRewrite: null,
+    rewrites: [],
+
+    // `date < before`, by `date` descending (ids break ties, as Firestore orders by the field and then the document), after the
+    // cursor, `pageSize` at a time. The cursor here is the last record's id.
+    async getOlderHistory({ before, cursor }) {
+      source.olderReads.push({ before, cursor });
+      await Promise.resolve();
+      if (source.failHistory.older) {
+        source.failHistory.older = false;
+        throw new Error('unavailable');
+      }
+      const all = [...source.records.entries()]
+        .filter(([, r]) => typeof r.date === 'string' && r.date < before)
+        .map(([id, r]) => ({ ...structuredClone(r), id }) as StoredDoc)
+        .sort((a, b) => (String(b.date).localeCompare(String(a.date)) || b.id.localeCompare(a.id)));
+      const start = cursor ? all.findIndex(r => r.id === cursor) + 1 : 0;
+      const records = all.slice(start, start + source.pageSize);
+      return {
+        records,
+        cursor: records.length ? (records[records.length - 1] as StoredDoc).id : cursor,
+        done: records.length < source.pageSize,
+      };
+    },
+
+    async getLegacyHistory() {
+      source.legacyReads += 1;
+      await Promise.resolve();
+      if (source.failHistory.legacy) {
+        source.failHistory.legacy = false;
+        throw new Error('unavailable');
+      }
+      return [...source.records.entries()]
+        .filter(([, r]) => typeof r.weekStart === 'string')
+        .map(([id, r]) => ({ ...structuredClone(r), id }) as StoredDoc);
+    },
+
+    async rewriteRecord(id, decide) {
+      source.rewrites.push(id);
+      await Promise.resolve();
+      const run = source.duringRewrite;
+      source.duringRewrite = null;
+      run?.();
+      if (source.failHistory.rewrite) {
+        source.failHistory.rewrite = false;
+        throw new Error('unavailable');
+      }
+      const existing = source.records.get(id);
+      // What decide throws aborts the write, as in a real transaction.
+      const next = decide(existing ? structuredClone(existing) : null);
+      if (next === null) {
+        source.records.delete(id);
+        tellHistory();
+        return null;
+      }
+      const stamped = { ...next, bakery: 'bakery' };
+      source.records.set(id, stamped);
+      tellHistory();
+      return stamped;
     },
 
     async recordOrder(id, merge) {
