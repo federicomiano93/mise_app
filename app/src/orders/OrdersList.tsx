@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { Check, ChevronRight, List, Search } from 'lucide-react';
+import { Check, ChevronRight, List, Search, Share } from 'lucide-react';
 import { spellShortDate, todayISO } from '@mise/shared/day';
 import { isFutureDay, nextDeliveryAfter } from '@mise/shared/order-day';
 import { supplierLabel } from '@mise/shared/supplier-label';
@@ -9,7 +9,7 @@ import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { useOrders } from './OrdersContext';
 import { dayTranslate, deliveryDaysText } from './dayWords';
-import { CLEAR_OPENER, PLACE_ALL_OPENER, itemsOpener, supplierOpener, useHandBack } from './handBack';
+import { CLEAR_OPENER, PLACE_ALL_OPENER, SEND_OPENER, itemsOpener, supplierOpener, useHandBack } from './handBack';
 import { orderingCount, supplierListGroups } from './ordersLens';
 import type { OrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
@@ -26,6 +26,8 @@ type Props = {
   // The two buttons under the list: the picker of the suppliers to record together, and the one to clear.
   onPlaceAll: () => void;
   onClearAll: () => void;
+  // The arrow beside the search box: the send screen.
+  onSend: () => void;
 };
 
 const HEADING_KEY = {
@@ -38,7 +40,7 @@ const HEADING_KEY = {
 // ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a component that stays mounted, and
 // only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard where the person
 // left them (the current app built the box once for the same reason).
-export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll }: Props) {
+export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend }: Props) {
   const { t } = useT();
   const { config, draft, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
@@ -48,6 +50,7 @@ export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, o
   // Back from a picker hands the focus back to the button that opened it.
   const placeAllNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(PLACE_ALL_OPENER, node); }, [handBack]);
   const clearNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(CLEAR_OPENER, node); }, [handBack]);
+  const sendNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SEND_OPENER, node); }, [handBack]);
 
   const ordering = orderingCount(lens);
   const groups = useMemo(
@@ -77,17 +80,27 @@ export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, o
   return (
     <div className={styles.column}>
       <div className={styles.head}>
-        <div className={styles.search}>
-          <Search aria-hidden="true" />
-          <input
-            type="search"
-            autoComplete="off"
-            className={styles.input}
-            aria-label={t('ord.searchASupplier')}
-            placeholder={t('ord.searchASupplier')}
-            value={query}
-            onChange={event => { setQuery(event.target.value); }}
-          />
+        <div className={styles.top}>
+          <div className={styles.search}>
+            <Search aria-hidden="true" />
+            <input
+              type="search"
+              autoComplete="off"
+              className={styles.input}
+              aria-label={t('ord.searchASupplier')}
+              placeholder={t('ord.searchASupplier')}
+              value={query}
+              onChange={event => { setQuery(event.target.value); }}
+            />
+          </div>
+          {/* ⚠️ AN ARROW OUT OF A TRAY, NOT A WHATSAPP MARK: the screen it opens offers several roads. Here only once the list
+              is ready and has suppliers, so it never offers to send what has not arrived. */}
+          {ready && lens.suppliers.length > 0 ? (
+            <Button ref={sendNode} className={styles.send} onPress={onSend}>
+              <Share aria-hidden="true" />
+              {t('ord.send.action')}
+            </Button>
+          ) : null}
         </div>
         {showFilter ? (
           <div role="radiogroup" aria-label={t('ord.whichSuppliers')} className={styles.filter}>
