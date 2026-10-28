@@ -4,7 +4,8 @@ import type { OrdersMeta, OrdersSource, StoredDoc } from '../orders/ordersSource
 // An «Orders» source for the specs, in memory, that behaves like Firestore's own local view: a draft write is in the
 // document and every watcher is told AT ONCE (Firestore shows its pending writes), and a refused write is taken back and
 // the watchers are told again — then its promise rejects. `holdWrites` keeps the next writes «in the air» (offline) until
-// the returned release is called.
+// the returned release is called. From step 3f-2 it also holds the order records (`records`), and each of the three writes of
+// placing can be made to fail once (`fail`), so every step of the sequence has a spec.
 type ListListener = { onChange: (list: StoredDoc[], meta: OrdersMeta) => void; onError: (err: unknown) => void };
 type DocListener = { onChange: (data: Record<string, unknown> | null, meta: OrdersMeta) => void; onError: (err: unknown) => void };
 
@@ -28,6 +29,16 @@ export type FakeOrdersSource = OrdersSource & {
   openListeners(): number;
   // Keeps every later write waiting until the returned function is called (then they settle, in order).
   holdWrites(): () => void;
+  // orders-history as stored, by id.
+  records: Map<string, Record<string, unknown>>;
+  // Every clear of the draft, in order (refused ones included).
+  clears: Array<{ paths: readonly string[]; updatedAt: string }>;
+  // How many record transactions were attempted.
+  recordAttempts: number;
+  // The NEXT read of a record / record transaction / draft clear is refused (then the flag goes back to false).
+  fail: { read: boolean; record: boolean; clear: boolean };
+  // Runs inside the next record transaction, after the read and before the write (another phone acting in that second).
+  duringRecord: (() => void) | null;
 };
 
 // A merge like setDoc(…, { merge: true }): maps merged key by key at every depth, everything else replaced.
@@ -109,6 +120,64 @@ export function fakeOrdersSource(init: {
         if (held) held.push(() => settle(resolve, reject));
         else queueMicrotask(() => settle(resolve, reject));
       });
+    },
+
+    records: new Map(),
+    clears: [],
+    recordAttempts: 0,
+    fail: { read: false, record: false, clear: false },
+    duringRecord: null,
+
+    // updateDoc with deleteField(): only the named dotted paths go; a nested map left empty stays as {} (Firestore does
+    // the same). A refused clear changes nothing.
+    async clearDraft(paths, updatedAt) {
+      source.clears.push({ paths: [...paths], updatedAt });
+      await Promise.resolve();
+      if (source.fail.clear) {
+        source.fail.clear = false;
+        throw new Error('permission-denied');
+      }
+      if (!source.draft) throw new Error('not-found');
+      const next = structuredClone(source.draft);
+      for (const path of paths) {
+        const keys = path.split('.');
+        let at: Record<string, unknown> | undefined = next;
+        for (const key of keys.slice(0, -1)) {
+          const inner: unknown = at?.[key];
+          at = inner && typeof inner === 'object' ? inner as Record<string, unknown> : undefined;
+        }
+        if (at) delete at[keys[keys.length - 1] as string];
+      }
+      next.updatedAt = updatedAt;
+      source.draft = next;
+      tellDraft();
+    },
+
+    async readRecord(id) {
+      await Promise.resolve();
+      if (source.fail.read) {
+        source.fail.read = false;
+        throw new Error('unavailable');
+      }
+      const record = source.records.get(id);
+      return record ? structuredClone(record) : null;
+    },
+
+    async recordOrder(id, merge) {
+      source.recordAttempts += 1;
+      await Promise.resolve();
+      const existing = source.records.get(id);
+      const run = source.duringRecord;
+      source.duringRecord = null;
+      run?.();
+      if (source.fail.record) {
+        source.fail.record = false;
+        throw new Error('unavailable');
+      }
+      // What merge throws (orders/unit-conflict) aborts the write, as in a real transaction.
+      const next = { ...merge(existing ? structuredClone(existing) : null), bakery: 'bakery' };
+      source.records.set(id, next);
+      return next;
     },
 
     remoteMerge(payload) {

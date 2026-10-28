@@ -81,6 +81,11 @@ export interface DraftSync {
   hasUnsaved(): boolean;
   // True while a write is in the air (sent, no answer yet).
   saving(): boolean;
+  // These lines (and these suppliers' day stamps) leave THIS phone now, before their clear is written: from the screen's
+  // copy, from the baseline and from what this phone claims. `quantitiesOnly` keeps each line's stock reading (a «Clear
+  // quantities», draft.js clearQuantities); otherwise the whole line goes (an order was recorded, draft.js clearSupplier).
+  // Returns what the screens draw.
+  forget(ingredientIds: readonly string[], supplierIds: readonly string[], options?: { quantitiesOnly?: boolean }): DraftView;
 }
 
 type MutableEntries = Record<string, DraftEntry>;
@@ -382,5 +387,50 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     hasUnsaved: () => waiting || flights.length > 0 || !isEmpty(pending.entries) || !isEmpty(pending.days),
 
     saving: () => flights.length > 0,
+
+    // ⚠️ ALL THREE COPIES, OR THE LINES COME BACK (draft.js forgetKnown):
+    //   • `pending`: re-applied over every snapshot, so a quantity left there after its order was recorded would reappear on
+    //     screen and be ordered a second time;
+    //   • `known`: until the clear's snapshot arrives the baseline would still hold the old quantity, so typing that SAME
+    //     number again would read as unchanged and never be sent;
+    //   • the last snapshot: the screen draws from it, and the clear's own snapshot may come a moment later.
+    // Called AFTER the record is written and BEFORE the clear: if the clear is refused, Firestore's take-back snapshot puts
+    // the lines back on screen, which is the truth (they are still in the draft) and is said by the caller.
+    forget(ingredientIds, supplierIds, { quantitiesOnly = false } = {}) {
+      const entries: MutableEntries = { ...known.entries };
+      const stored = (lastDoc?.entries && typeof lastDoc.entries === 'object' ? lastDoc.entries : {}) as Record<string, DraftEntry>;
+      const shown: Record<string, DraftEntry> = { ...stored };
+      for (const id of ingredientIds) {
+        const held = pending.entries[id];
+        if (quantitiesOnly) {
+          // The stock reading stays this phone's to send if it was typed here and not yet sent.
+          if (held) {
+            for (const field of GROUP) delete held[field];
+            if (isEmpty(held)) delete pending.entries[id];
+          }
+          const keep = (row: DraftEntry | undefined) => (Number(row?.stock) > 0 ? { stock: row?.stock } : undefined);
+          const base = keep(entries[id]);
+          if (base) entries[id] = base; else delete entries[id];
+          // Nothing ordered and nothing on the shelf is not a line at all — what Firestore does when the last key of a map
+          // is deleted.
+          const row = keep(shown[id]);
+          if (row) shown[id] = row; else delete shown[id];
+        } else {
+          delete pending.entries[id];
+          delete entries[id];
+          delete shown[id];
+        }
+      }
+      const days: MutableDays = { ...known.days };
+      const shownDays = daysOf(lastDoc?.days);
+      for (const id of supplierIds) {
+        delete pending.days[id];
+        delete days[id];
+        delete shownDays[id];
+      }
+      known = { entries, days };
+      if (lastDoc) lastDoc = { ...lastDoc, entries: shown, days: shownDays };
+      return view();
+    },
   };
 }
