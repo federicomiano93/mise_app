@@ -162,6 +162,32 @@ test('a refused direct save the page undoes does not come back on the next snaps
   assert.equal(stub.held.length, 1, 'and nothing is written');
 });
 
+// «Azzera le quantità» and placing an order release every claim on the lines they clear. A stock
+// count typed while that clear is in the air is new typing, and must still go out.
+test('a stock count typed while «clear the quantities» is in the air is still sent', async () => {
+  snapshot({ c12: { qty: 3, stock: 2 } }, { aldo: DAY });
+  delete page.entries.c12.qty;                     // orders-main forgets the quantity locally…
+  delete page.days.aldo;
+  const clearing = draft.clearQuantities(['aldo'], [{ id: 'c12', name: 'c12', supplierId: 'aldo' }]);
+  type('c12', { stock: 4 });                       // …and the count is typed before the clear lands
+  await clearing;
+  await pause();
+  assert.deepEqual(sent().at(-1).entries, { c12: { stock: 4 } }, 'the count, and only the count');
+  assert.equal(sent().at(-1).days, undefined);
+});
+
+test('a stock count typed while a placed order is being cleared is sent once the page claims again', async () => {
+  snapshot({ c13: { qty: 3, stock: 2 } }, { aldo: DAY });
+  delete page.entries.c13;                         // orders-main forgets the placed rows…
+  delete page.days.aldo;
+  const clearing = draft.clearSupplier('aldo', [{ id: 'c13', name: 'c13', supplierId: 'aldo' }]);
+  type('c13', { stock: 4 });                       // …the count is typed in the clear's flight…
+  await clearing;
+  draft.scheduleDraftSave(page.entries, page.days); // …and placeOrder claims again after it lands
+  await pause();
+  assert.deepEqual(sent().at(-1).entries, { c13: { stock: 4 } }, 'never the placed quantity');
+});
+
 test('a value a write in the air already carries is not sent a second time', async () => {
   stub.holdSaves();
   snapshot({});

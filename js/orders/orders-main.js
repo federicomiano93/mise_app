@@ -2068,8 +2068,8 @@ function unitConflictText(day, list, conflicts) {
 }
 
 // Drop a supplier's rows from the in-memory draft immediately, so the screen
-// clears without waiting for the write to come back (and so a debounced save
-// already in flight cannot resurrect them).
+// clears without waiting for the write to come back. What the autosave sends is
+// draft.js's claims, not this map: clearSupplier is what releases those.
 function forgetSupplierLocally(supplierId) {
   ingredientsOf(supplierId, orderIngredients(), { activeOnly: false })
     .forEach(ing => { delete state.entries[ing.id]; });
@@ -2177,9 +2177,9 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
   // would retry, and the retry would ADD the same items to the record all over
   // again (mergeArchives adds by design).
   //
-  // Forget the rows LOCALLY first: a keystroke during the archive above may have
-  // queued a draft save, and that save holds state.entries BY REFERENCE. Dropping
-  // the keys before it fires is what stops it writing them back after the clear.
+  // Forget the rows LOCALLY first, so the screen clears at once. A keystroke on these
+  // rows during the archive above is dropped with them: clearSupplier releases every
+  // claim on those lines when it lands.
   forgetSupplierLocally(supplierId);
   globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'order-sent' }));
   // Recorded, so there is nothing left on that supplier's screen — back to the list
@@ -2193,6 +2193,9 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
     // another phone moved to a different supplier meanwhile is that supplier's, and clearing by
     // the old list would wipe its entry.
     await clearSupplier(supplierId, orderIngredients());
+    // ⚠️ The clear released the claims on those lines, typing made AFTER the rows were
+    // forgotten above included: claim again from the screen, which holds only that.
+    scheduleDraftSave(state.entries, state.days);
     setStatus(t('orders.orderSavedToHistory', { names: supplierLabel(supplier) }), 'ok', 5000);
   } catch (err) {
     console.error('Clearing the draft after archiving failed:', err);
@@ -2211,10 +2214,9 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
 // confirmation: the STOCK readings stay, and nothing already recorded is touched.
 
 // Drop the quantities from the in-memory draft first, keeping the readings, so the
-// screen clears immediately — and so a debounced save already in flight cannot
-// resurrect them: it holds state.entries BY REFERENCE, so removing the keys before
-// it fires is what stops it writing them back. Same reasoning as
-// forgetSupplierLocally above, which is why they sit together.
+// screen clears immediately. Same reasoning as forgetSupplierLocally above, which is
+// why they sit together: clearQuantities releases the claims on the quantities, and
+// keeps a stock count typed while it was in the air.
 function forgetQuantitiesLocally(supplierIds) {
   const ingredients = orderIngredients();
   supplierIds.forEach(supplierId => {

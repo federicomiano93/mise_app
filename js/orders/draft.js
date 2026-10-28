@@ -415,13 +415,23 @@ export function clearSupplier(supplierId, ingredients) {
 // back in which `known` still holds the old quantity — so retyping that SAME
 // number reads as "unchanged" and is never sent. The row would sit on screen
 // looking saved while Firestore had nothing.
-// ⚠️ It drops the row from `pending` too, and that part is not optional: pending
+// ⚠️ It drops the claim from `pending` too, and that part is not optional: pending
 // rows are re-applied on top of every snapshot, so a quantity left there after
 // its order was archived would reappear on screen and be ordered a second time.
+// A path that names a FIELD (`entries.<id>.qty`, «Azzera le quantità») forgets only
+// that field — the quantity group whole — so a stock count typed while the clear
+// was in the air is still claimed, and sent.
 function forgetKnown(paths) {
   paths.forEach(path => {
-    const [root, id] = path.split('.');
-    if (root === 'entries' && id) {
+    const [root, id, field] = path.split('.');
+    if (root === 'entries' && id && field) {
+      if (known.entries[id]) delete known.entries[id][field];
+      const row = pending.entries[id];
+      if (row) {
+        (GROUP.includes(field) ? GROUP : [field]).forEach(name => { delete row[name]; });
+        if (isEmpty(row)) delete pending.entries[id];
+      }
+    } else if (root === 'entries' && id) {
       delete known.entries[id];
       delete pending.entries[id];
     }
@@ -506,10 +516,8 @@ export function clearQuantities(supplierIds, ingredients) {
   return clearFields(COLLECTIONS.drafts, DRAFT_ID, paths, {
     updatedAt: new Date().toISOString(),
   }).then(result => {
-    // These paths are `entries.<id>.qty`, so forgetKnown drops the whole entry
-    // from the baseline. Slightly broader than what was cleared, and deliberately
-    // so: the stock reading is then simply re-sent unchanged on the next save,
-    // which costs one field and cannot lose anything.
+    // Field paths: the baseline and the claims lose the quantity, its unit and its
+    // supplier, and keep the stock — the server still has that reading.
     forgetKnown(paths);
     return result;
   });
