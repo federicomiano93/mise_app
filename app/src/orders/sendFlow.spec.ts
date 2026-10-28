@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { normalizeSendRoutes } from '@mise/shared/send-routes';
 import chooserSource from '../../../shared/src/send-chooser.ts?raw';
 import { sendOffers } from '@mise/shared/send-chooser';
+import { fallbackSupplierName } from '@mise/shared/order-text';
 import type { SendJob } from '@mise/shared/send-chooser';
 import { en } from '../i18n/en';
 import { it as itWords } from '../i18n/it';
@@ -14,7 +15,7 @@ import type { MessageParams } from '../i18n/i18n';
 import { buildOrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
 import {
-  SEND_KEYS, confirmedSendRows, draftSendRows, jobsFor, openWindow, runTextBatch, sendTranslate, takeRoad,
+  SEND_KEYS, confirmedSendRows, draftSendRows, jobsFor, openWindow, recordSendRows, runTextBatch, sendTranslate, takeRoad,
 } from './sendFlow';
 import type { OpenQuestion, RoadInput, SendRow, SendUi, TextOutcome } from './sendFlow';
 
@@ -316,5 +317,31 @@ describe('the links and the words', () => {
   it('the port\'s plural words come out of the dictionary', () => {
     expect(t('orders.send.onePerSupplier', { n: 3 })).toBe('one message each — 3 chats');
     expect(() => t('orders.unknown')).toThrow();
+  });
+});
+
+describe('recordSendRows — a recorded order sent again from History (step 3f-4)', () => {
+  const ingredients = [{ id: 'flour', name: 'Farina', weight: '25kg' }, { id: 'yeast', name: 'Lievito' }];
+
+  it('one row per record, by its supplier, with the lines as recorded and only the frozen units', () => {
+    const rows = recordSendRows([
+      { id: '2026-10-27_mill', supplierId: 'mill', supplierName: 'Mill', quantities: { yeast: 2, flour: 1, gone: 3, zero: 0 },
+        names: { gone: 'Ricotta 1.5kg' }, units: { yeast: 'busta' } },
+      { id: '2026-10-27_dairy', supplierId: 'dairy', supplierName: 'Dairy', quantities: {} },
+    ], ingredients, 'it');
+    expect(rows).toStrictEqual([{
+      id: 'mill', name: 'Mill',
+      items: [
+        { name: 'Farina', weight: '25kg', qty: 1 },
+        { name: 'Lievito', weight: '', qty: 2, unit: 'busta' },
+        { name: 'Ricotta 1.5kg', weight: '', qty: 3 },
+      ],
+    }]);
+  });
+
+  it('the legacy weekly record has no supplier: its own id, and the stand-in name in the venue\'s language', () => {
+    const [row] = recordSendRows([{ id: '2026-W28', weekStart: '2026-07-06', quantities: { flour: 1 } }], ingredients, 'it');
+    expect(row?.id).toBe('2026-W28');
+    expect(row?.name).toBe(fallbackSupplierName('it'));
   });
 });
