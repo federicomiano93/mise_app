@@ -667,4 +667,15 @@ test('moving a line writes the draft only — nothing is marked resolved — and
   assert.match(fn, /supplierId,\s*\};/, 'the line carries the override');
   assert.match(fn, /stampNow\(supplierId, previousDay\);/, 'stamped by the order-day rule, not blindly today');
   assert.match(fn, /catch \(err\) \{\s*if \(hadEntry\) state\.entries\[id\] = previousEntry; else delete state\.entries\[id\];/);
+  // draft.js hands a refused write's fields back as unsent typing: re-claimed from the undone state,
+  // or the moved line would come back on the next snapshot (tests/draft-claims.test.mjs).
+  assert.match(fn, /else delete state\.days\[supplierId\];[\s\S]*?scheduleDraftSave\(state\.entries, state\.days\);\s*throw err;/);
+});
+
+test('placing an order claims the draft again once its clear has landed', () => {
+  // clearSupplier releases every claim on the placed lines, typing made after they were forgotten
+  // included: placeOrder re-claims from the screen (tests/draft-claims.test.mjs).
+  const main = readFileSync(new URL('../js/orders/orders-main.js', import.meta.url), 'utf8');
+  const fn = main.slice(main.indexOf('async function placeOrder('), main.indexOf('// ── Clearing what has been typed'));
+  assert.match(fn, /await clearSupplier\(supplierId, orderIngredients\(\)\);[\s\S]*?scheduleDraftSave\(state\.entries, state\.days\);\s*setStatus\(t\('orders\.orderSavedToHistory'/);
 });

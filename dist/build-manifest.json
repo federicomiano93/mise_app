@@ -645,8 +645,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "3ad71842b493fd09",
-      "mapSha": "74a0810e3303acce",
+      "sha": "9f48b8a75cc4b957",
+      "mapSha": "455567066a88308d",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -699,7 +699,7 @@
         "js/orders/deliveries-view.js": "3398d0bacdcbfbfa",
         "js/orders/deliveries.js": "39df74692fef5a8c",
         "js/orders/dom.js": "99c731d8aa890a20",
-        "js/orders/draft.js": "8a46ba68099d581c",
+        "js/orders/draft.js": "c37f84c3ab56e56c",
         "js/orders/favourite-suppliers.js": "9b54dd3bba8b4164",
         "js/orders/firebase-orders.js": "949c618dd0d5ff67",
         "js/orders/history-edit.js": "2a7bc27082d1ce54",
@@ -726,7 +726,7 @@
         "js/orders/order-summary.js": "ae2df3d8e163c852",
         "js/orders/order-text.js": "40ad3ba8ddb014c3",
         "js/orders/orders-config.js": "c968ce3171a34b1f",
-        "js/orders/orders-main.js": "8859767c15058f42",
+        "js/orders/orders-main.js": "a9a1e992771a1b78",
         "js/orders/place-confirm.js": "61cd2d604037e847",
         "js/orders/preview.js": "daa32cf26e8b4e87",
         "js/orders/reminder-view.js": "2d263696a18298f2",
@@ -899,8 +899,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "60fcdc78472f97f0",
-      "mapSha": "c55eb89bd2762a86",
+      "sha": "e5e57b7e2676d946",
+      "mapSha": "800935cb7ee36cf8",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -948,7 +948,7 @@
         "js/orders/day.js": "8417a4e02c09cbfa",
         "js/orders/deliveries.js": "39df74692fef5a8c",
         "js/orders/dom.js": "99c731d8aa890a20",
-        "js/orders/draft.js": "8a46ba68099d581c",
+        "js/orders/draft.js": "c37f84c3ab56e56c",
         "js/orders/favourite-suppliers.js": "9b54dd3bba8b4164",
         "js/orders/firebase-features.js": "5c93f14c6ab6eddd",
         "js/orders/firebase-orders.js": "949c618dd0d5ff67",

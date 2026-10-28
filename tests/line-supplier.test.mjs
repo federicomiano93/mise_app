@@ -205,7 +205,8 @@ test('a supplier whose rows are all ordered elsewhere draws a 0% bar, never NaN%
 
 test('placing an order clears by the lens as it is NOW', () => {
   const main = read('js/orders/orders-main.js');
-  assert.match(main, /await clearSupplier\(supplierId, orderIngredients\(\)\);\s*setStatus\(t\('orders\.orderSavedToHistory'/);
+  // The draft is claimed again between the clear and the message (tests/reorder-list.test.mjs).
+  assert.match(main, /await clearSupplier\(supplierId, orderIngredients\(\)\);\s*(\/\/[^\n]*\n\s*)*scheduleDraftSave\(state\.entries, state\.days\);\s*setStatus\(t\('orders\.orderSavedToHistory'/);
 });
 
 const MISSED = [{
