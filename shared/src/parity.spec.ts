@@ -40,6 +40,8 @@
 // names, constants and shapes itself. market.ts (with the label vocabulary), venue-features.ts, recipe-label-model.ts, label-template-model.ts and photo-model.ts ARE
 // paired: they are full ports. calculator-recipe-text.ts is paired although it differs from the original in ONE input (the line called
 // `Flour uniqua blue`, one venue's data): the exports are the same, and its spec says where the text differs.
+// order-text.ts is paired although its flat list sorts numerically where the original does not (finding F-5, fixed in
+// the port only): the exports are the same, and order-text.spec.ts says where the two differ.
 // supplier-label.ts, vat-number.ts, favourite-suppliers.ts, record-choices.ts and category-batches.ts ARE paired (step 3e-1,
 // the Suppliers page): full ports. ingredient-search.ts IS paired since step 3f-1 (it was a partial port, `normalizeText` and
 // `filterSuppliers` only, until the row builders could use the ported order-text). Also paired since 3f-1, the pure core of
