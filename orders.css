@@ -1600,6 +1600,11 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   cursor: pointer;
 }
 .reg-word-off { color: var(--crust-ink); }
+/* ⚠️ A NARROW PHONE (296px measured): at 100px the word left the name 106px, and «non dichiarato»
+   (106.4px) broke onto two lines. A narrower cell gives the name back ~16px; the word still fits. */
+@media (max-width: 340px) {
+  .reg-word { min-width: 84px; padding: 0 10px; }
+}
 .reg-word:active { background: var(--surface2); transform: scale(0.97); }
 
 /* The name and, for a hand-made item, the pencil: a flex row so the icon sits on the text's centre line. */
