@@ -341,7 +341,10 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
     } else {
       speak(t('ord.nothingLeft'), 5000);
     }
-    // P20: after a save, back to the list.
+    // P20: after a save, back to the list — ⚠️ only from THIS screen. toList steps back through the history, so fired after the
+    // screen has gone (left by a way the blocker cannot hold: an address typed, a slow save) it would land on whatever lies two
+    // steps behind the screen the person is on now.
+    if (!mounted.current) return;
     leaving.current = true;
     toList();
   }

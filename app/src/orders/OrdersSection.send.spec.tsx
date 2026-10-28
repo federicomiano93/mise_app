@@ -60,7 +60,7 @@ type View = Awaited<ReturnType<typeof atList>>;
 const arrow = () => screen.getByRole('button', { name: 'Send' });
 const sendScreen = () => within(screen.getByRole('region', { name: 'Send order' }));
 const sendButton = () => sendScreen().getByRole('button', { name: 'Send' });
-const tick = (view: View, name: string) => view.user.click(sendScreen().getByRole('checkbox', { name }));
+const tick = (view: View, name: string | RegExp) => view.user.click(sendScreen().getByRole('checkbox', { name }));
 
 // From the list to the send screen, with the named suppliers ticked.
 async function toSend(view: View, ...names: string[]) {
