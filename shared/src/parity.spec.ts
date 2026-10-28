@@ -47,7 +47,11 @@
 // all full ports. NOT paired, for the usual reasons: day.ts (adapted: the seven functions that spell a day take the translate
 // function as their last argument, and the original's WEEKDAY_LONG is private), no-supplier.ts (adapted: `noSupplier` and
 // `orderSuppliers` are handed the pseudo-supplier's word, and the constant `NO_SUPPLIER` built at import is left out) and
-// archive.ts (partial: eleven functions of js/orders/archive.js); their specs compare names and shapes themselves.
+// archive.ts (partial: twenty functions and one constant of js/orders/archive.js; History's are left out); their specs compare names and shapes themselves.
+// sent-check.ts IS paired (step 3f-2, placing an order): a full port of js/orders/sent-check.js. untold-changes.ts is NOT: it is a
+// partial port (only `confirmedEntries`; the reminders and the untold-changes banner stay in js/ until their screens come), so its spec
+// compares names and shapes itself. order-day-choices.ts is new in Mise 2 (the seven-day choice of a supplier with no order days) and has
+// no original, like calculator-tab-keys.ts, so there is nothing to pair it with.
 // ingredient-edit-model.ts IS paired (step 3e-2, the ingredient card's product data): a full port. allergen-terms.ts and
 // allergen-match.ts ARE paired too (step 3e-4, the pack-list allergen reader): full ports. records.ts IS paired (T15, the Recipe
 // catalogue's create-ingredient door): a full port. pack-format.ts is NOT: its
@@ -139,6 +143,7 @@ import * as lineSupplier from './line-supplier';
 import * as orderText from './order-text';
 import * as ingredientSearch from './ingredient-search';
 import * as orderDay from './order-day';
+import * as sentCheck from './sent-check';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -205,6 +210,7 @@ import * as legacyLineSupplier from '../../js/orders/line-supplier.js';
 import * as legacyOrderText from '../../js/orders/order-text.js';
 import * as legacyIngredientSearch from '../../js/orders/ingredient-search.js';
 import * as legacyOrderDay from '../../js/orders/order-day.js';
+import * as legacySentCheck from '../../js/orders/sent-check.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -273,6 +279,7 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['order-text', orderText, legacyOrderText],
   ['ingredient-search', ingredientSearch, legacyIngredientSearch],
   ['order-day', orderDay, legacyOrderDay],
+  ['sent-check', sentCheck, legacySentCheck],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -334,7 +341,7 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all sixty-six models are compared', () => {
+test('all sixty-seven models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
@@ -344,5 +351,5 @@ test('all sixty-six models are compared', () => {
       'supplier-label', 'vat-number', 'favourite-suppliers', 'record-choices', 'category-batches', 'ingredient-edit-model',
       'allergen-terms', 'allergen-match', 'records', 'invoice-zip/reasons', 'invoice-zip/py-compat', 'invoice-zip/sha256',
       'invoice-zip/classify', 'invoice-zip/pricing', 'invoice-zip/fatturapa', 'invoice-zip/products', 'invoice-zip/selection',
-      'work-week', 'price-changes-model', 'invoice-import-model', 'invoice-import-plan', 'ingredient-merge', 'send-routes', 'supplier-order', 'orders-config', 'line-supplier', 'order-text', 'ingredient-search', 'order-day']);
+      'work-week', 'price-changes-model', 'invoice-import-model', 'invoice-import-plan', 'ingredient-merge', 'send-routes', 'supplier-order', 'orders-config', 'line-supplier', 'order-text', 'ingredient-search', 'order-day', 'sent-check']);
 });
