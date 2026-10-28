@@ -4,7 +4,8 @@ import { Button } from './Button';
 import { Dialog } from './Dialog';
 
 export type ConfirmOptions = {
-  title: string;
+  // Left out, the message names the dialog instead (Dialog.tsx), as a one-sentence notice does.
+  title?: string;
   // One paragraph each.
   message?: string | readonly string[];
   // More than paragraphs, drawn under the message: a list of what is about to change.
