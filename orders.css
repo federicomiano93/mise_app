@@ -1565,8 +1565,8 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
 
 /* An ingredient / packaging row: a FRAME carrying the card look, holding the drill button and the
    word at the right («Disattiva» / «Riattiva»). A button cannot nest in a button, so the two are
-   siblings (same reasoning as .wa-entry-card in style.css). The tablet's picked look
-   (aria-current, tokens.css) lands on the frame, so it covers the whole card. */
+   siblings (same reasoning as .wa-entry-card in style.css). The tablet's picked look covers the
+   whole card: see .reg-row-picked below. */
 .reg-row {
   display: flex;
   align-items: stretch;
