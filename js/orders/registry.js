@@ -95,7 +95,7 @@ export function buildRegistry(data, actions, hooks = {}) {
   // jumped into the «Not in use» group under the finger would be a row you tap the wrong one of.
   // Cleared when the tab changes; a supplier's own screen keeps its own on its stack entry.
   // `group.open` is the «Not in use» group's open/closed state, kept for the same reason.
-  let listCtx = { switched: new Set(), group: { open: false } };
+  let listCtx = { switched: new Map(), group: { open: false } };
   // Everything above the page itself. Each entry is { view, overlay }; Back pops one.
   const stack = [];
   // The tablet's right-hand pane, its placeholder, and each overlay's own Back.
@@ -163,7 +163,7 @@ export function buildRegistry(data, actions, hooks = {}) {
     // Clear the search when switching, so one list's query never filters the other.
     query = '';
     search.input.value = '';
-    listCtx = { switched: new Set(), group: { open: false } };
+    listCtx = { switched: new Map(), group: { open: false } };
     paintList();
   }
 
@@ -328,9 +328,11 @@ export function buildRegistry(data, actions, hooks = {}) {
   // `items` is already sorted A–Z and already filtered by the search, so the group's count is the
   // number SHOWN. The group opens itself when a search found something in it, or when the item
   // open in the tablet's pane is in it; once open it stays open (ctx.group.open) across repaints.
-  //   ctx — { switched: Set<id>, group: { open } } of this list or this supplier's screen
+  //   ctx — { switched: Map<id, in-use side at the first tap>, group: { open } } of this list or this supplier's screen
   function appendItemRows(host, items, ctx, rowFor, searching) {
-    const stays = (i) => i.active !== false || ctx.switched.has(i.id);
+    // A switched id keeps the side it was on at its FIRST tap (true = the in-use rows): switched off
+    // in the list, it stays in the list; switched back on inside the group, it stays in the group.
+    const stays = (i) => (ctx.switched.has(i.id) ? ctx.switched.get(i.id) : i.active !== false);
     const inUse = items.filter(stays);
     const notInUse = items.filter(i => !stays(i));
     if (inUse.length) {
@@ -403,7 +405,7 @@ export function buildRegistry(data, actions, hooks = {}) {
   // («Disattiva» / «Riattiva») are two siblings — a button cannot nest in a button. The word saves ON
   // THE TAP, no confirmation (it is reversible by the same tap), flips at once and never waits for
   // the write (offline, a write resolves only when the server answers); a refusal puts it back and
-  // says so. `stay` — the Sets that remember this id was switched, so the row keeps its place.
+  // says so. `stay` — the maps that remember this id was switched (and on which side), so the row keeps its place.
   function ingredientRow(item, supplierName, stay = []) {
     const meta = [
       // On a supplier's own screen both kinds share one list, so packaging says so.
@@ -440,7 +442,7 @@ export function buildRegistry(data, actions, hooks = {}) {
     paintWord();
     word.addEventListener('click', () => {
       const next = !active;
-      stay.forEach(set => set.add(item.id));
+      stay.forEach(map => { if (!map.has(item.id)) map.set(item.id, active); });
       active = next;
       paintWord();
       let written;
@@ -518,10 +520,13 @@ export function buildRegistry(data, actions, hooks = {}) {
       } else {
         // This screen's own memory of what was switched while it is open (see listCtx): it lives on
         // the entry, which refresh() hands back to build() again; reopening the supplier = a new entry.
-        entry.ctx = entry.ctx || { switched: new Set(), group: { open: false } };
+        entry.ctx = entry.ctx || { switched: new Map(), group: { open: false } };
         // The list beside it (tablet) must not jump either; `listCtx` is asked at tap time, because a
         // tab change replaces it while this screen stays open.
-        const stay = [entry.ctx.switched, { add: id => listCtx.switched.add(id) }];
+        const stay = [entry.ctx.switched, {
+          has: id => listCtx.switched.has(id),
+          set: (id, side) => listCtx.switched.set(id, side),
+        }];
         appendItemRows(body, mine, entry.ctx, i => ingredientRow(i, undefined, stay), false);
       }
 

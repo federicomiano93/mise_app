@@ -264,15 +264,21 @@ test('after the live snapshot the switched row is still in its A–Z place, now 
   assert.equal(s.rowOf('Burro').querySelector('.reg-drill').classList.contains('inactive'), true);
 });
 
-test('a row switched back on stays in the in-use rows too', () => {
+// ⚠️ IN PLACE BOTH WAYS: a row switched back on from inside the group stays in the group (saying
+// «Disattiva») until the list is opened again — it does not jump up under the finger.
+test('a row switched back on inside the group stays in the group while the list is open', () => {
   const s = screen(items());
   s.word('Zucchero'); // inside the folded group, still drawn
   s.groups()[0].open = true;
   s.groups()[0].fire('toggle');
   s.word('Zucchero').fire('click');
   s.set(items().map(i => (i.id === 'c' ? { ...i, active: true } : i)));
-  assert.deepEqual(s.mainNames(), ['Burro', 'Farina', 'Zucchero']);
-  assert.deepEqual(s.groupNames(), ['Latte']);
+  assert.deepEqual(s.mainNames(), ['Burro', 'Farina']);
+  assert.deepEqual(s.groupNames(), ['Latte', 'Zucchero']);
+  // Switched off again: still the group, its side was decided by the FIRST tap.
+  s.word('Zucchero').fire('click');
+  s.set(items());
+  assert.deepEqual(s.groupNames(), ['Latte', 'Zucchero']);
 });
 
 test('after a tab change away and back the switched-off row sits in the folded group, with the count', () => {
