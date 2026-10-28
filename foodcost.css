@@ -74,7 +74,10 @@ body {
 }
 .fc-row:active { transform: scale(.97); }
 .fc-row:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
-.fc-row.incomplete { opacity: .75; }
+/* ⚠️ NOT opacity on the whole row: it took the line saying what is missing to 3.3:1 (ui-check,
+   28 Oct 2026) — and products made from the recipe book all start incomplete. A dashed
+   border says «not finished» without fading the words. */
+.fc-row.incomplete { border-style: dashed; }
 .fc-row-main { min-width: 0; flex: 1; }
 .fc-row-name { display: block; font-size: .96rem; font-weight: 600; color: var(--fc-text); }
 .fc-row-sub { display: block; margin-top: 3px; font-size: .72rem; color: var(--fc-text-2); font-family: var(--fc-font-mono); }
@@ -487,13 +490,14 @@ select.fc-input, .fc-select {
   cursor: pointer;
 }
 .fc-pick-row:first-child { border-top: 0; }
-.fc-pick-row input { flex: none; width: 22px; height: 22px; margin: 0; accent-color: var(--brand); }
+.fc-pick-row input { flex: none; width: 24px; height: 24px; margin: 0; accent-color: var(--brand); }
 .fc-pick-text { display: flex; flex-direction: column; min-width: 0; }
 .fc-pick-name { font-size: .92rem; font-weight: 600; color: var(--fc-text); overflow-wrap: anywhere; }
 .fc-pick-meta { font-size: .76rem; color: var(--fc-text-2); }
 .fc-frombook-bar {
   flex: none;
-  padding: 12px var(--app-gutter, 16px) calc(16px + env(safe-area-inset-bottom));
+  /* max(): on a phone --app-gutter is 0 and the button would touch both edges. */
+  padding: 12px max(16px, var(--app-gutter)) calc(16px + env(safe-area-inset-bottom));
   background: var(--fc-surface);
   border-top: 1px solid var(--fc-border);
 }

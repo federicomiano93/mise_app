@@ -267,9 +267,9 @@
       }
     },
     "dist/foodcost.css": {
-      "sha": "fc443cce772ad2f7",
+      "sha": "e7fdc76e2a8e8a2b",
       "inputs": {
-        "foodcost.css": "aa4e17ed7690dbab"
+        "foodcost.css": "bf437490af5d302a"
       }
     },
     "dist/foodcost.js": {
