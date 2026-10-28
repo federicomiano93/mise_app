@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v692';
+const CACHE_NAME = 'theitalianclub-v693';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -149,11 +149,11 @@ const ASSET_HASHES = {
   "./suppliers.html": '0f24580d8d5a1e05',
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
-  "./dist/i18n.js": 'cb09221a291bf065',
+  "./dist/i18n.js": '04744fc0b1b8d4b5',
   "./dist/index.js": '67695dc0fe78bde2',
   "./dist/calculator.js": 'adb1e87d528ccecc',
-  "./dist/orders.js": '4c9147e3deaa75e9',
-  "./dist/suppliers.js": 'ceb4d105ffa21b01',
+  "./dist/orders.js": 'd3e88f607bc7c714',
+  "./dist/suppliers.js": '500e953453111bf9',
   "./dist/install-guide.js": '86df880954faeae9',
   "./js/allergen-model.js": 'a9ad7592da832a56',
   "./js/calculator-config.js": '2a04f05879932378',
@@ -162,7 +162,7 @@ const ASSET_HASHES = {
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/firebase.js": '69ed2d1174c3b4a7',
   "./js/i18n-dom.js": '24249af4367511e5',
-  "./js/i18n.js": 'a3f916279b0be354',
+  "./js/i18n.js": 'cb84929ca7a1e9a8',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/local-data.js": '91aa7f1699c897a1',
   "./js/location.js": '6aaf53615a8739d1',
@@ -175,7 +175,7 @@ const ASSET_HASHES = {
   "./js/sections.js": 'abcfdecb2bd5766d',
   "./js/sw-update.js": 'a00457e671ba95c6',
   "./js/update-gate.js": '95f4f9f99e1fd1f4',
-  "./dist/catalogue.js": '85a24e2197a56a84',
+  "./dist/catalogue.js": '6b2a930a7a20a62b',
   "./dist/pastries.js": '841ddfc560fa9af1',
   "./dist/foodcost.js": 'ebf1be32b5acef17',
   "./dist/inventory.js": 'bfd17f4a0c4a3aaf',
@@ -183,7 +183,7 @@ const ASSET_HASHES = {
   "./dist/tokens.css": '86359636bea1c94f',
   "./dist/auth.css": '58cd14bdbf808ecc',
   "./dist/style.css": '97ba2c33e071292d',
-  "./dist/orders.css": 'dc27c1f5c1840cea',
+  "./dist/orders.css": 'a27317ab3362ce9b',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',

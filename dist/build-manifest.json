@@ -135,8 +135,8 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "d5758b8a7f6c1120",
-      "mapSha": "eb829a1b47e26579",
+      "sha": "c1922c28d3bdca51",
+      "mapSha": "c57928193b55e311",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -199,7 +199,7 @@
         "js/ingredient-edit-model.js": "4aa9df389998ef05",
         "js/ingredient-kind.js": "29f19b5cae6c3969",
         "js/ingredient-name.js": "db8018ddb4e1b832",
-        "js/ingredient-record-form.js": "7b6a3760b29a52f7",
+        "js/ingredient-record-form.js": "cf7ae28fba2811ad",
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/join-code.js": "ebf5b5e52507b80b",
         "js/join-link.js": "ebc14e887861385a",
@@ -373,10 +373,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "13423940ea1bb92e",
-      "mapSha": "cea067369866b669",
+      "sha": "2021cc899024fc7d",
+      "mapSha": "c897ea0064b10f5b",
       "inputs": {
-        "js/i18n.js": "dc0228ae58382472"
+        "js/i18n.js": "b7b56e3051f12604"
       }
     },
     "dist/index.js": {
@@ -639,14 +639,14 @@
       }
     },
     "dist/orders.css": {
-      "sha": "21754921e891fbbb",
+      "sha": "79e4a98037b02937",
       "inputs": {
-        "orders.css": "f799bbee5cbca1db"
+        "orders.css": "a4911a6da84bb29b"
       }
     },
     "dist/orders.js": {
-      "sha": "9f48b8a75cc4b957",
-      "mapSha": "455567066a88308d",
+      "sha": "6bfdbbc303591bf4",
+      "mapSha": "12b3bdc772cacbe2",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -677,7 +677,7 @@
         "js/ingredient-edit-model.js": "4aa9df389998ef05",
         "js/ingredient-kind.js": "29f19b5cae6c3969",
         "js/ingredient-name.js": "db8018ddb4e1b832",
-        "js/ingredient-record-form.js": "7b6a3760b29a52f7",
+        "js/ingredient-record-form.js": "cf7ae28fba2811ad",
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/join-code.js": "ebf5b5e52507b80b",
         "js/join-link.js": "ebc14e887861385a",
@@ -899,8 +899,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "e5e57b7e2676d946",
-      "mapSha": "800935cb7ee36cf8",
+      "sha": "1b4a6a54bc1b2e2c",
+      "mapSha": "73372678128e2cfc",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -929,7 +929,8 @@
         "js/ingredient-edit-model.js": "4aa9df389998ef05",
         "js/ingredient-kind.js": "29f19b5cae6c3969",
         "js/ingredient-name.js": "db8018ddb4e1b832",
-        "js/ingredient-record-form.js": "7b6a3760b29a52f7",
+        "js/ingredient-origin.js": "720702ef195bae05",
+        "js/ingredient-record-form.js": "cf7ae28fba2811ad",
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/join-code.js": "ebf5b5e52507b80b",
         "js/join-link.js": "ebc14e887861385a",
@@ -984,7 +985,7 @@
         "js/orders/price-changes-screen.js": "9dc81f214b196440",
         "js/orders/registry-main.js": "c2f5f09a6ab2906c",
         "js/orders/registry-settings.js": "ebcbc495269008bf",
-        "js/orders/registry.js": "4ea6b8fabe6ea8c2",
+        "js/orders/registry.js": "0dc32e253e46882e",
         "js/orders/reminders.js": "de7b21d852fd6259",
         "js/orders/search-box.js": "d63164cf3cc0565e",
         "js/orders/supplier-picker.js": "80850a11f61ab7fc",
