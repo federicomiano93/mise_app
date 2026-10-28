@@ -300,11 +300,18 @@ function markedIngredients() {
   return markLens(state.ingredients, noteHeld(state.ingredients, state.entries, heldNotInUse));
 }
 
-// A send or a clear lets the switched-off lines of those suppliers go: call it AFTER their
-// quantities are forgotten locally, and repaint (the flat list keeps rows it already drew).
-function releaseHeldFor(supplierIds) {
-  const ids = supplierIds.flatMap(id => ingredientsOf(id, orderIngredients(), { activeOnly: false }))
-    .map(ing => ing.id);
+// A send, a clear or a discard lets the switched-off lines of those suppliers go, in two steps.
+// ⚠️ TAKE THE LINES BEFORE ANYTHING IS FORGOTTEN: a line ordered from another supplier this once
+// belongs to that supplier only while its per-order override lasts, and forgetting the quantity
+// drops the override too — asked afterwards, the lens files it back under its usual supplier
+// and the empty «Non in uso» row stayed on screen until a reload.
+function heldLinesOf(supplierIds) {
+  return supplierIds.flatMap(id => ingredientsOf(id, orderIngredients(), { activeOnly: false }))
+    .map(ing => ing.id).filter(id => heldNotInUse.has(id));
+}
+// Then, AFTER the quantities are forgotten locally: let go of those now empty, and repaint (the
+// flat list keeps rows it already drew).
+function releaseHeldLines(ids) {
   releaseHeld(heldNotInUse, ids, state.entries);
   scheduleRender('list');
 }
@@ -2201,6 +2208,7 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
   // Forget the rows LOCALLY first, so the screen clears at once. A keystroke on these
   // rows during the archive above is dropped with them: clearSupplier releases every
   // claim on those lines when it lands.
+  const heldLines = heldLinesOf([supplierId]);
   forgetSupplierLocally(supplierId);
   globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'order-sent' }));
   // Recorded, so there is nothing left on that supplier's screen — back to the list
@@ -2225,9 +2233,8 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
       'warn',
     );
   }
-  // ⚠️ AFTER the clear, never before: clearSupplier builds its paths from the lens, and a
-  // released switched-off line would no longer be in it — its quantity would stay in Firestore.
-  releaseHeldFor([supplierId]);   // a sent switched-off line leaves Orders
+  // After the clear: the row stays drawn until its quantity is gone from Firestore too.
+  releaseHeldLines(heldLines);   // a sent switched-off line leaves Orders
   placing.delete(supplierId);
   return true;
 }
@@ -2295,8 +2302,9 @@ async function clearQuantitiesFor(supplierIds) {
     console.error('Flushing the draft before clearing failed:', err);
   }
 
+  const heldLines = heldLinesOf(ids);
   forgetQuantitiesLocally(ids);
-  releaseHeldFor(ids);   // a switched-off line leaves Orders with its cleared quantity
+  releaseHeldLines(heldLines);   // a switched-off line leaves Orders with its cleared quantity
   if (state.openSupplier && ids.includes(state.openSupplier)) closeSupplier();
   syncInputsFromState();
   renderReminders();
@@ -2629,8 +2637,10 @@ async function discardPending(supplierId) {
   if (!ok) return;
 
   try {
+    const heldLines = heldLinesOf([supplierId]);
     await clearSupplier(supplierId, orderIngredients());
     forgetSupplierLocally(supplierId);
+    releaseHeldLines(heldLines);   // a discarded switched-off line leaves Orders too
     syncInputsFromState();
     dismissPending(supplierId);
     renderSummary();              // the open summary sheet must not go stale
@@ -2911,12 +2921,18 @@ async function init() {
     // are on screen, and a draft snapshot never rebuilds the rows. Compared with what THIS
     // phone held a moment ago, so the echo of its own typing never triggers a repaint.
     const overridesBefore = overrideSignature(state.entries);
+    // ⚠️ SO DOES A SWITCHED-OFF LINE THE DRAFT NOW HOLDS: on a cold open the ingredients can be
+    // drawn a frame before the draft lands, and another phone can type on a switched-off row —
+    // either way the line is counted, so it must be drawn too. The held set is sticky, so the
+    // echo of this phone's own typing (on a row already held) never changes it.
+    const heldBefore = noteHeld(state.ingredients, state.entries, heldNotInUse);
     setEntries(draft.entries);
     state.days = draft.days || {};
     state.draftUpdatedAt = draft.updatedAt;
     state.loaded.draft = true;
     // Everything below is stored at once and drawn in one pass next frame (scheduleRender).
-    if (overrideSignature(state.entries) !== overridesBefore) scheduleRender('list');
+    if (overrideSignature(state.entries) !== overridesBefore
+      || noteHeld(state.ingredients, state.entries, heldNotInUse) !== heldBefore) scheduleRender('list');
     scheduleRender('sync', 'reminders');
     checkPendingOnce();
     // ⚠️ AND THE OPEN SUMMARY SHEET, for the same reason as the open list just

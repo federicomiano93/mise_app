@@ -136,12 +136,39 @@ test('pin: both lenses read markedIngredients(); send and clear release the held
   assert.match(main, /resolveLens\(markedIngredients\(\)/);
   assert.match(main, /resolveCatalogue\(markedIngredients\(\)/);
   assert.match(main, /markLens\(state\.ingredients, noteHeld\(/);
-  const clear = main.slice(main.indexOf('async function clearQuantitiesFor'));
-  assert.match(clear.slice(0, clear.indexOf('\n}\n')), /releaseHeldFor\(ids\)/);
-  assert.match(main, /function releaseHeldFor[\s\S]*?releaseHeld\(heldNotInUse/);
-  const place = main.slice(main.indexOf('async function placeOrder'));
-  const placeBody = place.slice(0, place.indexOf('\n}\n'));
-  assert.ok(placeBody.indexOf('await clearSupplier') < placeBody.indexOf('releaseHeldFor([supplierId])'),
+  assert.match(main, /function releaseHeldLines[\s\S]*?releaseHeld\(heldNotInUse/);
+  // Send, clear and discard each take the held lines BEFORE forgetting anything locally (a line
+  // ordered elsewhere this once loses its override with its quantity), and release them after.
+  const body = (name) => {
+    const from = main.slice(main.indexOf(`async function ${name}`));
+    return from.slice(0, from.indexOf('\n}\n'));
+  };
+  [['placeOrder', 'forgetSupplierLocally(supplierId)'],
+    ['clearQuantitiesFor', 'forgetQuantitiesLocally(ids)'],
+    ['discardPending', 'forgetSupplierLocally(supplierId)']].forEach(([name, forget]) => {
+    const fn = body(name);
+    const take = fn.indexOf('heldLinesOf(');
+    const release = fn.indexOf('releaseHeldLines(heldLines)');
+    assert.ok(take > -1 && release > -1, `${name} takes and releases the held lines`);
+    assert.ok(take < fn.indexOf(forget), `${name}: taken before ${forget}`);
+    assert.ok(fn.indexOf(forget) < release, `${name}: released after ${forget}`);
+  });
+  const place = body('placeOrder');
+  assert.ok(place.indexOf('await clearSupplier') < place.indexOf('releaseHeldLines(heldLines)'),
     'release comes AFTER clearSupplier');
   assert.doesNotMatch(main, /i\.active !== false\), 'supplierId'/);
+});
+
+test('pin: a draft snapshot that changes the held lines repaints the list', () => {
+  const main = src('orders-main.js');
+  const watch = main.slice(main.indexOf('watchDraft(draft =>'));
+  const before = watch.indexOf('const heldBefore = noteHeld(');
+  assert.ok(before > -1 && before < watch.indexOf('setEntries(draft.entries)'), 'held signature taken before setEntries');
+  assert.match(watch.slice(0, 1600), /noteHeld\(state\.ingredients, state\.entries, heldNotInUse\) !== heldBefore\) scheduleRender\('list'\)/);
+});
+
+test('releaseHeld lets go only of ids whose quantity is gone', () => {
+  const held = new Set(['A', 'B', 'C']);
+  releaseHeld(held, ['A', 'B'], { A: { qty: 0 }, B: { qty: 2 } });
+  assert.deepEqual([...held].sort(), ['B', 'C']);
 });

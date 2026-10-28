@@ -275,7 +275,8 @@ test('the order flow reads ingredients through the lens that knows the draft, an
   assert.match(main, /ingredients: screenRowsFor\(supplier\.id\)/, 'a supplier\'s own screen');
   // A draft snapshot that moves a line repaints, the echo of this phone\'s own typing does not.
   assert.match(main, /const overridesBefore = overrideSignature\(state\.entries\);/);
-  assert.match(main, /if \(overrideSignature\(state\.entries\) !== overridesBefore\) scheduleRender\('list'\);/);
+  // A switched-off line the draft now holds repaints too (tests/orders-not-in-use.test.mjs pins that half).
+  assert.match(main, /if \(overrideSignature\(state\.entries\) !== overridesBefore\s*\|\|[^)]*\)[^;]*scheduleRender\('list'\);/);
   // «start again» also forgets the key in memory.
   assert.match(main, /delete entry\.supplierId;/);
   // «put back» never lands in an order an old override pointed at.
