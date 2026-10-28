@@ -130,14 +130,14 @@
       }
     },
     "dist/catalogue.css": {
-      "sha": "3939fe108cb6ce46",
+      "sha": "7716ec402e258545",
       "inputs": {
-        "catalogue.css": "0fb386227ffe6a25"
+        "catalogue.css": "24b8e591e2aac9d3"
       }
     },
     "dist/catalogue.js": {
-      "sha": "447ac6d2ca7960fb",
-      "mapSha": "2cf7d40881accca7",
+      "sha": "100240380d68591c",
+      "mapSha": "b1c6fc7ca4b0dc00",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -147,14 +147,15 @@
         "js/calculator-config.js": "792725c78baa042d",
         "js/catalogue/allergen-sheet.js": "0a1ec5ee0d8c6a56",
         "js/catalogue/catalogue-detail.js": "640001055ae0b1fc",
-        "js/catalogue/catalogue-editor.js": "be31547594a8efd9",
+        "js/catalogue/catalogue-editor.js": "45a08ab8355e0046",
         "js/catalogue/catalogue-list.js": "289d824f889b3757",
-        "js/catalogue/catalogue-main.js": "28863c59f8f79a95",
+        "js/catalogue/catalogue-main.js": "ddd15627faed18fd",
         "js/catalogue/catalogue-model.js": "3641bea33600e7c8",
         "js/catalogue/catalogue-settings.js": "1ab632d02e1f2ed5",
         "js/catalogue/catalogue-store.js": "0bd16dee60e0e825",
         "js/catalogue/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/catalogue/dom.js": "ccb295509b508828",
+        "js/catalogue/editor-prices.js": "c7ce0820fcfe292c",
         "js/catalogue/firebase-catalogue.js": "30bd1c2f26d01f76",
         "js/catalogue/firebase-photo.js": "38b16af4b97630a5",
         "js/catalogue/guided-alarm.js": "5abbc05b8da5804c",
@@ -176,6 +177,7 @@
         "js/catalogue/recipe-label-model.js": "d18b858bd007813a",
         "js/catalogue/search-box.js": "6cd5b7c92acc83fe",
         "js/catalogue/tablet.js": "89a53f5776a0f78a",
+        "js/catalogue/unpriced-rows.js": "fff9763e05688179",
         "js/catalogue/zoom-steps.js": "027da1e4fc29f6dc",
         "js/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/credentials.js": "d09988397825b537",
@@ -376,10 +378,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "789bb19cbb537225",
-      "mapSha": "3cbb59335a50ffb5",
+      "sha": "8ae53b3bf8f1c495",
+      "mapSha": "b918caa80884467b",
       "inputs": {
-        "js/i18n.js": "23dd62c13083fb12"
+        "js/i18n.js": "ddc7e301d6dee298"
       }
     },
     "dist/index.js": {
