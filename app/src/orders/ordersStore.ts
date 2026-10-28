@@ -77,6 +77,9 @@ export interface OrdersSnapshot {
   readonly placing: readonly string[];
   // The order records of the live window (the last two months, step 3f-2b), as stored. Empty until they arrive.
   readonly history: readonly StoredDoc[];
+  // The live window has answered once (or its stream died): until then an empty `history` means «not here yet», and History's
+  // editor, opened by its address, waits instead of saying the order is not there (step 3f-4).
+  readonly historyLoaded: boolean;
   // The live stream of the records died (no resubscribe): the suggestions may be counting from a list that no longer
   // updates, and the page says so like the other streams (parity L5; the current app's «past orders»).
   readonly historyBroken: boolean;
@@ -223,7 +226,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     config: normalizeOrdersConfig(null), configLoaded: false,
     draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false,
     placing: [],
-    history: [], historyBroken: false, suggester: NO_SUGGESTIONS,
+    history: [], historyLoaded: false, historyBroken: false, suggester: NO_SUGGESTIONS,
     olderHistory: [], older: { loading: false, done: false, error: false },
   };
   const listeners = new Set<() => void>();
@@ -477,8 +480,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         // The window starts two calendar months before TODAY when the section opens (the current app's liveHistoryStart).
         source.watchRecentHistory(
           windowStart,
-          list => set({ history: list, historyBroken: false }),
-          () => set({ historyBroken: true }),
+          list => set({ history: list, historyLoaded: true, historyBroken: false }),
+          () => set({ historyBroken: true, historyLoaded: true }),
         ),
       ];
     },

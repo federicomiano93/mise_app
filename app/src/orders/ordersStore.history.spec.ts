@@ -64,6 +64,7 @@ describe('older orders, on demand', () => {
     s.source.pageSize = 2;
     await s.settle();
     expect(s.source.historyFrom).toBe(WINDOW);
+    expect(s.store.getSnapshot().historyLoaded).toBe(true);
     expect(s.store.getSnapshot().history.map(r => r.id)).toStrictEqual(['2026-10-20_mill']);
     expect(s.store.getSnapshot().older).toStrictEqual({ loading: false, done: false, error: false });
 
