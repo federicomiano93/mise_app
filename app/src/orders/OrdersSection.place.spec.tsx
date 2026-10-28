@@ -254,6 +254,8 @@ describe('the confirm screen — one supplier', () => {
     expect(source.recordAttempts).toBe(0);
     expect(view.router.state.location.pathname).toBe('/orders/supplier/s-alp/confirm');
     expect(screen.getByRole('spinbutton', { name: 'Rye 25kg — Order' })).toHaveValue(7);
+    // The focus comes back to the button, not to the page (it was disabled while asking; found in the review of 3f-2).
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Order placed' })).toHaveFocus(); });
   });
 
   it('says «Add to the order» and «Add to it» when today’s record exists, and ADDS to it', async () => {

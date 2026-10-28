@@ -188,7 +188,8 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
   ));
   // Suppliers already recorded from this screen (a later one failed): they leave the screen and are never recorded twice.
   const [recorded, setRecorded] = useState<readonly string[]>([]);
-  const [submitting, setSubmitting] = useState(false);
+  // ⚠️ A REF, NOT A DISABLED BUTTON: «Did you send it?» hands the focus back to this button on Cancel, and a disabled one
+  // drops it on the page (found in the review of 3f-2). While the order is being recorded `placing` disables it.
   const submittingRef = useRef(false);
 
   const groups = ready.groups.filter(group => !recorded.includes(group.supplierId));
@@ -197,14 +198,16 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
   dirtyRef.current = dirty;
   const leaving = useRef(false);
 
-  // ⚠️ EVERY WAY OUT asks while a number was corrected: Back, the browser's Back, the rail, a day picked in a list.
+  // ⚠️ EVERY WAY OUT asks while a number was corrected: Back, the browser's Back, the rail, a day picked in a list. And
+  // none leaves while the order is being recorded: the section's message area would go with the screen, and «NOT
+  // recorded» would never be read. The result itself goes back to the list.
   const asking = useRef(false);
   const mounted = useRef(true);
   useEffect(() => {
     mounted.current = true;
     return () => { mounted.current = false; };
   }, []);
-  const blocker = useBlocker(useCallback(() => dirtyRef.current && !leaving.current, []));
+  const blocker = useBlocker(useCallback(() => (dirtyRef.current || submittingRef.current) && !leaving.current, []));
   const latestBlocker = useRef(blocker);
   useEffect(() => {
     latestBlocker.current = blocker;
@@ -213,6 +216,10 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
       return;
     }
     if (asking.current) return;
+    if (submittingRef.current) {
+      blocker.reset();
+      return;
+    }
     asking.current = true;
     void (async () => {
       const discard = await confirm({
@@ -298,7 +305,6 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
   async function submit() {
     if (submittingRef.current) return;
     submittingRef.current = true;
-    setSubmitting(true);
     try {
       const items = confirmedItems(groups, typed);
       if (items.length === 0) {
@@ -322,7 +328,6 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
       await record(items);
     } finally {
       submittingRef.current = false;
-      if (mounted.current) setSubmitting(false);
     }
   }
 
@@ -364,7 +369,7 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
         <p className={styles.hint}>{t('ord.confirm.zeroHint')}</p>
         <p className={styles.hint}>{t('ord.confirm.sendFirst')}</p>
         <div className={styles.actions}>
-          <Button variant="primary" isDisabled={submitting || groups.some(group => placing.includes(group.supplierId))} onPress={() => { void submit(); }}>
+          <Button variant="primary" isDisabled={groups.some(group => placing.includes(group.supplierId))} onPress={() => { void submit(); }}>
             <Check aria-hidden="true" />
             {action}
           </Button>

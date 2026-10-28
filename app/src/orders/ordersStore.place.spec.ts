@@ -81,7 +81,8 @@ describe('ordersStore — placing one supplier\'s order', () => {
     h.source.remoteMerge({ entries: { flour: { qty: 9 } } });
     await h.settle();
 
-    const report = await h.store.place(one({ flour: 4 }), NO_SUPPLIER);
+    // The screen showed both rows (its `units` name every row); the semola was set to 0.
+    const report = await h.store.place(one({ flour: 4 }, { flour: '', semola: '' }), NO_SUPPLIER);
 
     expect(report).toStrictEqual({ offline: false, outcomes: [{ supplierId: 'mill', kind: 'saved' }] });
     const record = h.source.records.get(RECORD)!;
@@ -176,6 +177,7 @@ describe('ordersStore — placing one supplier\'s order', () => {
     expect(h.source.clears).toHaveLength(0);
     expect(h.store.getSnapshot().draft.entries.flour).toMatchObject({ qty: 4, stock: 1 });
     expect(h.store.getSnapshot().placing).toStrictEqual([]);
+    expect(h.busy()).toBe(0);
   });
 
   it('a refused clear AFTER the record says «recorded, not cleared» — never «not saved» (after the point of no return)', async () => {
@@ -187,6 +189,7 @@ describe('ordersStore — placing one supplier\'s order', () => {
     expect(report).toStrictEqual({ offline: false, outcomes: [{ supplierId: 'mill', kind: 'not-cleared' }] });
     expect(h.source.records.get(RECORD)!.quantities).toStrictEqual({ flour: 4 });
     expect(h.store.getSnapshot().placing).toStrictEqual([]);
+    expect(h.busy()).toBe(0);
   });
 
   it('a unit the day\'s record cannot add to is refused inside the write: nothing recorded, nothing cleared', async () => {
@@ -201,6 +204,7 @@ describe('ordersStore — placing one supplier\'s order', () => {
     expect(report).toStrictEqual({ offline: false, outcomes: [{ supplierId: 'mill', kind: 'unit-conflict', ids: ['flour'] }] });
     expect(h.source.records.get(RECORD)!.quantities).toStrictEqual({ flour: 3 });
     expect(h.source.clears).toHaveLength(0);
+    expect(h.busy()).toBe(0);
   });
 
   it('is refused offline before anything is written (parity X3)', async () => {
@@ -250,6 +254,64 @@ describe('ordersStore — placing one supplier\'s order', () => {
     });
     expect(h.source.records.get('2026-10-26_dairy')!.quantities).toStrictEqual({ butter: 1 });
     expect(h.store.getSnapshot().draft.entries.flour).toMatchObject({ qty: 4 });
+  });
+});
+
+describe('ordersStore — placing while another phone works (found in the review of 3f-2)', () => {
+  it('⚠️ a line a colleague types while the record is written, not on the confirm screen, stays in the order', async () => {
+    const h = await started({ draft: { entries: { flour: { qty: 4, stock: 0 } }, days: { mill: TODAY } } });
+    h.source.duringRecord = () => { h.source.remoteMerge({ entries: { semola: { qty: 5, stock: 0 } } }); };
+
+    const report = await h.store.place(one({ flour: 4 }, { flour: '' }), NO_SUPPLIER);
+
+    expect(report).toStrictEqual({ offline: false, outcomes: [{ supplierId: 'mill', kind: 'saved' }] });
+    expect(h.source.records.get(RECORD)!.quantities).toStrictEqual({ flour: 4 });
+    expect(h.source.clears[0]!.paths).not.toContain('entries.semola');
+    expect((h.source.draft as { entries: Record<string, unknown> }).entries).toStrictEqual({ semola: { qty: 5, stock: 0 } });
+    expect(h.store.getSnapshot().draft.entries.semola).toMatchObject({ qty: 5 });
+  });
+
+  it('a supplier gone since the screen opened is NOT recorded and says so; the others are', async () => {
+    const h = await started({ draft: { entries: { flour: { qty: 4, stock: 0 } }, days: { mill: TODAY } } });
+
+    const report = await h.store.place([
+      { supplierId: 'gone', date: TODAY, quantities: { lost: 1 }, units: {} },
+      { supplierId: 'mill', date: TODAY, quantities: { flour: 4 }, units: {} },
+    ], NO_SUPPLIER);
+
+    expect(report).toStrictEqual({
+      offline: false,
+      outcomes: [{ supplierId: 'gone', kind: 'failed' }, { supplierId: 'mill', kind: 'saved' }],
+    });
+    expect(h.source.recordAttempts).toBe(1);
+  });
+
+  it('⚠️ an autosave still in the air is answered BEFORE the record: refused twice, nothing is recorded and the typing stays', async () => {
+    const h = await started({ draft: { entries: {}, days: {} } });
+    h.source.refuseWrites = true;
+    const release = h.source.holdWrites();
+    h.store.editLine(mill, flour, { qty: 4 });
+    await h.autosave();
+
+    const placing = h.store.place(one({ flour: 4 }), NO_SUPPLIER);
+    release();
+    const report = await placing;
+
+    expect(report).toStrictEqual({ offline: false, outcomes: [{ supplierId: 'mill', kind: 'failed' }] });
+    expect(h.source.recordAttempts).toBe(0);
+    expect(h.store.getSnapshot().draft.entries.flour).toMatchObject({ qty: 4 });
+  });
+
+  it('after placing, typing the same number again on that line is sent (the baseline forgot it)', async () => {
+    const h = await started({ draft: { entries: { flour: { qty: 4, stock: 0 } }, days: { mill: TODAY } } });
+    await h.store.place(one({ flour: 4 }), NO_SUPPLIER);
+    const before = h.source.writes.length;
+
+    h.store.editLine(mill, flour, { qty: 4 });
+    await h.autosave();
+
+    expect(h.source.writes.slice(before).at(-1)?.entries).toStrictEqual({ flour: { qty: 4, unit: '', supplierId: '' } });
+    expect(h.busy()).toBe(0);
   });
 });
 

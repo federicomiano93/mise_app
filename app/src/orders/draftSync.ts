@@ -75,6 +75,9 @@ export interface DraftSync {
   // Sends a waiting (or refused) change RIGHT NOW (leaving the section, or before a record is written). Resolves at once
   // when nothing waits; otherwise as the save does — and REJECTS when it is refused.
   flush(): Promise<void>;
+  // flush, but first every write already in the air has its answer: before an order is recorded and its lines forgotten.
+  // A refused one hands its typing back, which then goes again — and a second refusal REJECTS, before anything is recorded.
+  settle(): Promise<void>;
   // The screen's draft now: the last snapshot with this phone's unconfirmed typing on top (redrawn after a refusal).
   view(): DraftView;
   // True while a change is waiting for the debounce, a save is in the air, or a refused change waits to be sent again.
@@ -170,6 +173,8 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
   // The writes in the air, as sent: a snapshot never releases their fields (it may be Firestore showing this phone's own
   // write before the server answers), and a refused one hands them back.
   const flights: Array<{ entries: Rows; days: MutableDays }> = [];
+  // The same writes as answers to wait for (settle).
+  const answers = new Set<Promise<unknown>>();
   // The last snapshot, so the screen can be redrawn when a refusal hands typing back.
   let lastDoc: Readonly<Record<string, unknown>> | null = null;
   let timer: unknown = null;
@@ -266,7 +271,11 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
 
     flights.push(sent);
     const land = () => { flights.splice(flights.indexOf(sent), 1); };
-    return deps.save(payload).then(() => {
+    const answer = deps.save(payload);
+    const settled = answer.then(() => undefined, () => undefined);
+    answers.add(settled);
+    void settled.then(() => { answers.delete(settled); });
+    return answer.then(() => {
       land();
       // What landed joins the baseline — except a field a LATER write still in the air also carries: the baseline already
       // holds that newer value (Firestore showed it), and going back to this older one would make it look changed here
@@ -322,6 +331,18 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     });
   }
 
+  // Also after a refusal with nothing typed since: leaving the section tries the refused typing once more.
+  function flush(): Promise<void> {
+    if (!waiting && isEmpty(pending.entries) && isEmpty(pending.days)) return Promise.resolve();
+    return saveNow().then(
+      () => deps.onResult(true),
+      (err: unknown) => {
+        deps.onResult(false);
+        throw err;
+      },
+    );
+  }
+
   return {
     receive(doc) {
       lastDoc = doc;
@@ -370,16 +391,13 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       }, SAVE_DELAY_MS);
     },
 
-    // Also after a refusal with nothing typed since: leaving the section tries the refused typing once more.
-    flush() {
-      if (!waiting && isEmpty(pending.entries) && isEmpty(pending.days)) return Promise.resolve();
-      return saveNow().then(
-        () => deps.onResult(true),
-        (err: unknown) => {
-          deps.onResult(false);
-          throw err;
-        },
-      );
+    flush,
+
+    // ⚠️ AN AUTOSAVE STILL IN THE AIR IS NOT IN THE CLAIMS that forget() wipes: landing after it, it would put a placed line
+    // back in the baseline, or — refused — back in the claims, on screen and into the next write: ordered twice.
+    async settle() {
+      while (answers.size > 0) await Promise.all([...answers]);
+      await flush();
     },
 
     // ⚠️ A REFUSED CHANGE IS STILL UNSAVED: it lives only here (Firestore took its copy back), so a self-started reload

@@ -258,13 +258,17 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     // ⚠️ A SECOND TAP IN THE SECOND THE WRITE TAKES would pass every check and record the same lines again — and the merge
     // ADDS by design, doubling them.
     if (snapshot.placing.includes(supplierId)) return { supplierId, kind: 'busy' };
+    if (Object.keys(quantities).length === 0) return { supplierId, kind: 'nothing' };
+    // A supplier gone since the screen opened (switched off on another phone) is NOT recorded, and is said so: its lines
+    // stay in the order (the current app's placeOrder counts it as failed).
     const supplier = lensNow(noSupplierName).supplierById(supplierId);
-    if (!supplier || Object.keys(quantities).length === 0) return { supplierId, kind: 'nothing' };
+    if (!supplier) return { supplierId, kind: 'failed' };
     setPlacing(supplierId, true);
     try {
       // A keystroke from the last 800 ms may still wait for the autosave — possibly for ANOTHER supplier. It goes now, or
-      // the clear's snapshot would arrive before it and it would be lost.
-      await sync.flush();
+      // the clear's snapshot would arrive before it and it would be lost; and an autosave already in the air is answered
+      // first, so nothing lands after the lines are forgotten.
+      await sync.settle();
       // ⚠️⚠️ WHAT IS RECORDED IS WHAT WAS CONFIRMED, NEVER THE SHARED ORDER AS IT IS NOW (Federico's rule, 24 Aug 2026):
       // the order is live on every phone, and a colleague may have typed since the screen opened. confirmedEntries rewrites
       // EVERY line of this supplier from the confirmed numbers (a line left out was set to 0 and is not ordered) with the
@@ -294,8 +298,15 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     // The lines leave this phone first (the screen clears at once, and nothing waiting to be sent can write them back), by
     // the lens AS IT IS NOW: a line another phone moved to another supplier while the record was written is that
     // supplier's, and clearing by the old list would wipe it. The whole line goes, overrides included (parity X6).
-    const cleared = lensNow(noSupplierName).linesOf(supplierId).map(line => line.id);
+    // ⚠️ EXCEPT A LINE THAT WAS NOT ON THE CONFIRM SCREEN AND HAS A QUANTITY NOW: a colleague typed it (or moved it here)
+    // while the screen was open. It was not recorded, so it stays for the next order instead of vanishing from both
+    // (the current app clears it; found in the review of 3f-2). The screen's rows are the confirmed quantities and, for a
+    // row set to 0 there, its unit (`units` holds every row the screen showed).
+    const typedSince = (id: string) => !(id in quantities) && !(id in units) && Number(snapshot.draft.entries[id]?.qty) > 0;
+    const cleared = lensNow(noSupplierName).linesOf(supplierId).map(line => line.id).filter(id => !typedSince(id));
     set({ draft: sync.forget(cleared, [supplierId]) });
+    // Forgetting may have taken away the last unsaved change (a refused one among those lines): the marker goes with it.
+    dropBusyWhenSaved();
     try {
       await source.clearDraft([...cleared.map(id => `entries.${id}`), `days.${supplierId}`], deps.draft.nowIso());
       return { supplierId, kind: 'saved' };
@@ -490,7 +501,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         // A keystroke from the last 800 ms goes first, or it comes back with the next snapshot. A refusal is said by the
         // status line and does not stop the clear.
         try {
-          await sync.flush();
+          await sync.settle();
         } catch (err) {
           console.error('Flushing the draft before clearing failed:', err);
         }
@@ -498,6 +509,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         // The lines as the lens files them, switched-off ones included (quantityPathsFor reads them unfiltered).
         const lines = ids.flatMap(id => lens.linesOf(id));
         set({ draft: sync.forget(lines.map(line => line.id), ids, { quantitiesOnly: true }) });
+        dropBusyWhenSaved();
         try {
           await source.clearDraft(quantityPathsFor(ids, lines), deps.draft.nowIso());
           return 'cleared';

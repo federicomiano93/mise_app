@@ -2043,7 +2043,7 @@ export const it: Messages = {
   'ord.unitConflictHint': 'Oppure scrivi nella scheda dell’ingrediente quante confezioni ci sono in un cartone: allora vengono sommate in confezioni.',
   'ord.unitConflictNothingRecorded': 'Non è stato registrato ancora niente.',
   'ord.notRecorded': '{names} — NON registrato, le righe sono ancora lì.',
-  'ord.andSaved': '{names} salvato.',
+  'ord.andSaved': 'Salvato l’ordine di {names}.',
   'ord.tryAgain': 'Riprova.',
   'ord.savedToHistory': '{names} — ordine salvato nello storico ✓',
   'ord.savedNotCleared': '{name} — ordine salvato nello Storico, ma non è stato possibile azzerare le righe. Ricarica la pagina; NON registrarlo di nuovo.',
