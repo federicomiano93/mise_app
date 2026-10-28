@@ -17,6 +17,7 @@ import {
 } from './firebase-foodcost.js';
 import { positiveNumber } from '../price-model.js';
 import { restoreAfterRefusal } from './foodcost-weighing.js';
+import { productFromRecipe } from './from-recipes.js';
 
 const PRODUCTS_KEY = 'foodcost-products';
 const RECIPES_KEY = 'foodcost-recipes';
@@ -238,6 +239,23 @@ function saveRecipeLosses(patches) {
       if (onSyncError) onSyncError(t('fc.couldNotSaveLoss', { name: prev.name || '' }));
     });
   }
+}
+
+// The products for the recipes he ticked (28 Oct 2026), each saved LOCAL-FIRST like any
+// product, one write each. Returns how many were started.
+//
+// ⚠️ THE CHECK IS MADE AGAIN HERE, ON THE LIST AS IT IS NOW. A product's id comes from its
+// recipe and a save writes the document WHOLE, so creating one that has meanwhile arrived
+// from another phone would overwrite whatever was typed on it there. Skipped instead.
+export function createProductsFromRecipes(recipeList) {
+  let made = 0;
+  (Array.isArray(recipeList) ? recipeList : []).forEach(recipe => {
+    const product = productFromRecipe(recipe);
+    if (!product || products.some(p => p.id === product.id)) return;
+    saveProduct(product, null, null);
+    made += 1;
+  });
+  return made;
 }
 
 export function deleteProduct(id) {
