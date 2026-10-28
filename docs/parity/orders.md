@@ -823,3 +823,43 @@ supplier opens beside the list.
 
 **P13.** This slice stores no personal data: the draft holds no person. Order lists (3f-7) store the sender's name — flagged
 before that slice is built.
+
+## Step 3f-2 as built — the day and placing an order
+
+Items D3–D8, X1–X3, X5–X14 (not X4's «Send it now», 3f-3), H1–H4, L27, L38–L39, and F2 and F3. Moved to **3f-2b**, to keep
+this one to a session: the suggestion hint «Suggested: N», the stock filling the suggestion and the «much more than usual»
+warning (L28–L29's hint side, `suggestions`). Rules unchanged: the current app already writes `orders-history` in a
+transaction and clears the draft with `deleteField`. F4 (the goods-arrived switch) is not needed by this slice.
+
+**Shared.** In `cd1a4f99`: `archive` (the rest: the supplier record, `mergeArchives`, the send ids and their cap, the unit
+conflicts, `isUnitConflict`), `sent-check` (full), `untold-changes` (`confirmedEntries` only) and `order-day-choices`
+(new, F2: `weekChoices`, `hasOrderDays`).
+
+**Data** (`561174cf`). `ordersSource.ts`: `clearDraft` (dotted paths with `deleteField`), `readRecord`, `recordOrder` (a
+transaction). `draftSync.ts`: `forget` (a placed or cleared line leaves the pending claims, the baseline and the shown copy
+together, so no later save can bring it back). `ordersStore.ts`: `setDay`, `checkRecords`, `place`, `clearQuantities`, and
+`placing` in the snapshot. One placing, in order: send the waiting typing → record what was CONFIRMED in a transaction
+(adding to the same day's record) → forget the lines locally → clear them from the shared order. After the record nothing
+may say «not saved»: a refused clear is said as «recorded, but the lines are still there».
+
+**Screens** (`8356d31f`, `31b2ae15`). The day line under a supplier's bar; `/orders/supplier/<id>/confirm`, `/orders/place-all`
+(the picker) and its confirm, `/orders/clear` (the picker for «Clear quantities…»).
+
+**Differences from the current app, on purpose (tell him):**
+- P1. **Suppliers without order days, and «No supplier», get seven days to choose from** (F2): Today, Tomorrow, then the
+  weekday and its date. The current app offers today only. The expected delivery is under the line.
+- P2. **An order stamped for a later day is recorded under today, and the confirm screen says so** (F3: «recorded as today,
+  <date>»), instead of silently.
+- P3. **The confirm screen stays open on Cancel at the sent-check**, with the corrected numbers, so nothing typed is lost.
+  Leaving it with corrections asks «Discard the changes?» first (P20).
+- P4. **A supplier already recorded leaves the confirm screen** of a place-all that failed half-way; when nothing is left the
+  screen goes back by itself.
+- P5. **The same day's record is read once when the confirm screen opens**, not watched live: the note «adds to the order
+  already recorded» comes from that read, and the transaction adds safely whatever happened since.
+- P6. **The status messages after placing stay 8 seconds** (errors and warnings), so they can be read on a tablet across the
+  bench.
+- P7. **The day line scrolls away; the bar and the column names stay** (`--bar-height`, measured): stuck with them, on a
+  phone it took half the screen from the rows. On the confirm screen, under 480px, a name has its own line over its box.
+- P8. **Italian «a Alpine Mills»**: a supplier's name takes no article, so the preposition stays plain.
+
+**P13.** This slice stores no personal data: an order record holds suppliers, ingredients, quantities and dates.
