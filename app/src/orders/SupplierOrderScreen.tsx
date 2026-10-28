@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import type { CSSProperties } from 'react';
 import { Check, List } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { supplierLabel } from '@mise/shared/supplier-label';
@@ -125,7 +124,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
         <div
           className={styles.columns}
           data-stock={showStock}
-          style={{ '--bar-height': `${barHeight.px}px` } as CSSProperties}
+          style={{ top: barHeight.px }}
         >
           <span />
           <span className={styles.columnName}>{t('ord.field.order')}</span>

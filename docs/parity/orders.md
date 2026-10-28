@@ -858,8 +858,19 @@ may say «not saved»: a refused clear is said as «recorded, but the lines are 
   already recorded» comes from that read, and the transaction adds safely whatever happened since.
 - P6. **The status messages after placing stay 8 seconds** (errors and warnings), so they can be read on a tablet across the
   bench.
-- P7. **The day line scrolls away; the bar and the column names stay** (`--bar-height`, measured): stuck with them, on a
+- P7. **The day line scrolls away; the bar and the column names stay** (the names' `top` is the bar's measured height): stuck with them, on a
   phone it took half the screen from the rows. On the confirm screen, under 480px, a name has its own line over its box.
 - P8. **Italian «a Alpine Mills»**: a supplier's name takes no article, so the preposition stays plain.
+- P9. **Placing never clears a line it did not record** (found in the review of 3f-2): a line that was not on the confirm
+  screen and has a quantity when the record lands — a colleague typed it, or moved it here, meanwhile — stays in the order
+  for next time. The current app deletes it, recorded nowhere.
+- P10. **A supplier gone while the confirm screen was open is said as «NOT recorded»** (as the current app does), never
+  skipped in silence; and an autosave still in the air is answered before anything is recorded, so a refused one can never
+  bring a placed line back.
+- P11. **The confirm screen cannot be left while the order is being recorded**: its message («NOT recorded», «recorded, but
+  the lines are still there») would go with it. The result goes back to the list by itself.
+
+**Left as in the current app** (from the review, low): a refused day choice puts the previous day back with a write of its
+own, which can land over a colleague's newer day in the same second.
 
 **P13.** This slice stores no personal data: an order record holds suppliers, ingredients, quantities and dates.
