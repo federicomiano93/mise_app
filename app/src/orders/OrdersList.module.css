@@ -29,6 +29,13 @@
   flex: none;
 }
 
+/* The gear is icon-only: a square 48px target that does not shrink. */
+.top .gear {
+  flex: none;
+  width: var(--hit);
+  padding: 0;
+}
+
 /* The icon and the box on one line: an SVG in a flex container is centred on the box, not left on the text baseline. */
 .search {
   display: flex;
