@@ -49,7 +49,7 @@
 // all full ports. NOT paired, for the usual reasons: day.ts (adapted: the seven functions that spell a day take the translate
 // function as their last argument, and the original's WEEKDAY_LONG is private), no-supplier.ts (adapted: `noSupplier` and
 // `orderSuppliers` are handed the pseudo-supplier's word, and the constant `NO_SUPPLIER` built at import is left out) and
-// archive.ts (partial: twenty functions and one constant of js/orders/archive.js; History's are left out); their specs compare names and shapes themselves.
+// archive.ts (adapted since 3f-4: everything is ported, but `recordedName` takes the deleted-ingredient word as a fourth argument); their specs compare names and shapes themselves.
 // sent-check.ts IS paired (step 3f-2, placing an order): a full port of js/orders/sent-check.js. suggestions.ts and
 // history-window.ts ARE paired (step 3f-2b, the suggestion hint and its live window of orders-history): full ports. untold-changes.ts is NOT: it is a
 // partial port (only `confirmedEntries`; the reminders and the untold-changes banner stay in js/ until their screens come), so its spec
