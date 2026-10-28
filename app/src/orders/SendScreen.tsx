@@ -9,6 +9,7 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useOrders } from './OrdersContext';
 import { SEND_OPENER, useHandBack } from './handBack';
 import { cameFromList, confirmState, useLeave } from './ordersNav';
+import { joinList } from './orderWords';
 import { ORDERS_PATH, PLACE_ALL_CONFIRM_PATH } from './ordersPath';
 import type { OrdersLens } from './ordersLens';
 import { draftSendRows } from './sendFlow';
@@ -75,27 +76,51 @@ export function SendScreen({ lens }: { lens: OrdersLens }) {
     if (pendingRef.current || chosen.length === 0) return;
     pendingRef.current = true;
     setPending(true);
-    // ⚠️ CALLED HERE, IN THE PRESS: takeRoad opens its windows before its first await.
-    const sending = send({ rows: chosen, grouped, supplierRoadsOnly: false });
+    // ⚠️ A SEND THAT THROWS OR REJECTS MUST NOT LEAVE THE BUTTON DISABLED FOR GOOD: both the synchronous part (the road's first
+    // window) and the promise end here, the screen is freed and a friendly line is said. The log carries the error, never the order.
+    const failed = (err: unknown) => {
+      console.error('Sending the order failed:', err);
+      pendingRef.current = false;
+      if (!mounted.current) return;
+      setPending(false);
+      say(t('ord.send.failed'), LONG_MS);
+    };
+    const going = chosen;
+    let sending: ReturnType<typeof send>;
+    try {
+      // ⚠️ CALLED HERE, IN THE PRESS: takeRoad opens its first window before its first await.
+      sending = send({ rows: going, grouped, supplierRoadsOnly: false });
+    } catch (err) {
+      failed(err);
+      return;
+    }
     void sending.then(result => {
       pendingRef.current = false;
       if (!mounted.current) return;
       setPending(false);
+      // ⚠️ THE TICKED SUPPLIERS THE SEND DID NOT REACH ARE NAMED, never dropped silently (X17): a skipped or blocked window, or a
+      // road that has no phone or email for one of them (an employee whose only road is «straight to the supplier» is never shown
+      // the chooser's note).
+      const reached = result?.kind === 'sent' ? result.ids : [];
+      const missed = going.filter(row => !reached.includes(row.id)).map(row => row.name);
+      const notReached = result?.kind === 'sent' && missed.length > 0
+        ? t('ord.sentCheck.notReached', { names: joinList(t, missed) }) : '';
       if (result?.kind === 'sent' && result.ids.length > 0) {
         // Record-after-send: the confirm screen takes the suppliers that were reached.
         void navigate(PLACE_ALL_CONFIRM_PATH, { state: confirmState(state, { ids: result.ids, afterSend: true }) });
+        if (notReached !== '') say(notReached, LONG_MS);
         return;
       }
       if (result?.kind === 'sent' && result.blocked) say(t('ord.send.nothingOpened'), LONG_MS);
-      // The button was disabled while it ran and a disabled button drops the focus on the page: it goes back to the button,
-      // or to the title when it is somewhere else.
+      else if (notReached !== '') say(notReached, LONG_MS);
+      // The button was disabled while it ran and a disabled button drops the focus on the page: it goes back to the button. A
+      // focus that is somewhere else (the person moved on) is left alone.
       requestAnimationFrame(() => {
         if (!mounted.current) return;
         const active = document.activeElement;
         if (active === null || active === document.body) action.current?.focus();
-        else title.current?.focus();
       });
-    });
+    }).catch(failed);
   };
 
   return (

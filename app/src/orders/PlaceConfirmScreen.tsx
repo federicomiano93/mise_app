@@ -331,12 +331,17 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
         savedNames.length > 0 ? t('ord.andSaved', { names: joinList(t, savedNames) }) : t('ord.tryAgain')}`, LONG_MS);
       return;
     }
-    if (clashes.length > 0) return;
+    // ⚠️ THESE TWO RETURNS SAY NOTHING OF THEIR OWN, but the suppliers a send did not reach are still named (X17).
+    if (clashes.length > 0) {
+      if (notReached !== '') say(notReached, LONG_MS);
+      return;
+    }
     if (notCleared.length > 0) {
       speak(t('ord.savedNotCleared', { name: joinList(t, names(notCleared)) }), LONG_MS);
     } else if (saved.length > 0) {
       speak(t('ord.savedToHistory', { names: joinList(t, names(saved)) }), 5000);
     } else if (of('busy').length > 0) {
+      if (notReached !== '') say(notReached, LONG_MS);
       return;
     } else {
       speak(t('ord.nothingLeft'), 5000);
