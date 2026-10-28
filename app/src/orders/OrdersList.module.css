@@ -19,8 +19,11 @@
 }
 
 /* The search box grows; the send arrow stays its own width after it, and neither wraps (a 296px phone). */
+/* On the narrowest phone the search box would shrink under a usable box beside «Manda» and the gear: it takes a line of its own
+   instead (6rem keeps the field inside at least 44px wide after the icon and the padding). */
 .top {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
 }
@@ -39,7 +42,7 @@
 /* The icon and the box on one line: an SVG in a flex container is centred on the box, not left on the text baseline. */
 .search {
   display: flex;
-  flex: 1;
+  flex: 1 1 6rem;
   min-width: 0;
   align-items: center;
   gap: var(--s2);
