@@ -4,6 +4,7 @@ import { todayISO } from '@mise/shared/day';
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
 import { LOAD, ingredient, renderOrders, supplier } from '../testing/renderOrders';
+import { renderOrderImage } from './orderImage';
 
 // There is no canvas in jsdom: the order picture is a stand-in file.
 vi.mock('./orderImage', async importOriginal => ({
@@ -82,9 +83,16 @@ function spyOpen(result: unknown = { opener: null }) {
   return vi.spyOn(window, 'open').mockImplementation(() => result as Window | null);
 }
 
-function allowShare() {
+// ⚠️ A press and what follows it IN THE SAME TASK: the click, then only microtasks (no timer, no waitFor). A window opened by
+// a later task would be a blocked pop-up in a real browser; an answer that is merely awaited from the press is still the tap.
+async function pressThenMicrotasks(button: HTMLElement) {
+  act(() => { button.click(); });
+  for (let hop = 0; hop < 60; hop++) await Promise.resolve();
+}
+
+function allowShare(rejection?: unknown) {
   Object.defineProperty(navigator, 'canShare', { value: vi.fn(() => true), configurable: true });
-  const share = vi.fn(() => Promise.resolve());
+  const share = vi.fn(() => (rejection === undefined ? Promise.resolve() : Promise.reject(rejection as Error)));
   Object.defineProperty(navigator, 'share', { value: share, configurable: true });
   return share;
 }
@@ -266,7 +274,12 @@ describe('several roads', () => {
     await toSend(view, 'Zed');
     await view.user.click(sendButton());
     const chooser = within(await screen.findByRole('dialog', { name: 'How should this order go?' }));
-    await view.user.click(chooser.getByRole('button', { name: /^WhatsApp straight to the supplier/ }));
+    const road = chooser.getByRole('button', { name: /^WhatsApp straight to the supplier/ });
+    act(() => {
+      road.click();
+      // ⚠️ Synchronously, in the road button's own press: the chooser closes and the road is taken in the same handler.
+      expect(open).toHaveBeenCalledTimes(1);
+    });
     expect(pressed(open)[0]?.startsWith('https://wa.me/447700900123?text=')).toBe(true);
     await orderSent();
   });
@@ -318,8 +331,9 @@ describe('the order picture', () => {
     await toSend(view, 'Zed');
     await view.user.click(sendButton());
     const format = within(await screen.findByRole('dialog', { name: 'How do you want to send it?' }));
-    await view.user.click(format.getByRole('button', { name: 'Text' }));
-    await waitFor(() => { expect(open).toHaveBeenCalledTimes(1); });
+    await pressThenMicrotasks(format.getByRole('button', { name: 'Text' }));
+    // ⚠️ No waitFor: the window opens in the press's own task.
+    expect(open).toHaveBeenCalledTimes(1);
   });
 
   it('sends nothing when «Photo or text?» is cancelled', async () => {
@@ -368,9 +382,15 @@ describe('«Send it now» on the confirm screen', () => {
     const view = await atList(source, STAFF);
     await toConfirmAll(view);
     await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
-    await view.user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Send them now' }));
+    await pressThenMicrotasks(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Send them now' }));
+    // ⚠️ ONE window per tap: the first opens in «Send them now», the second waits for its own Open press.
+    expect(open).toHaveBeenCalledTimes(1);
+    const next = within(await screen.findByRole('dialog', { name: 'Open the chat for Zed (2 of 2)' }));
+    act(() => {
+      next.getByRole('button', { name: 'Open' }).click();
+      expect(open).toHaveBeenCalledTimes(2);
+    });
     await waitFor(() => { expect(source.records.size).toBe(2); });
-    expect(open).toHaveBeenCalledTimes(2);
     expect(source.records.has(`${TODAY}_s-alp`)).toBe(false);
     expect(await screen.findByText(/Not sent, still to do: Alpine Mills/)).toBeInTheDocument();
   });
@@ -395,6 +415,175 @@ describe('«Send it now» on the confirm screen', () => {
     const asked = within(await screen.findByRole('alertdialog'));
     expect(asked.getByRole('button', { name: 'Yes, sent' })).toBeInTheDocument();
     expect(asked.queryByRole('button', { name: /Send (it|them) now/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('one window per tap', () => {
+  const TWO_EMAILS = [
+    supplier('s-one', { name: 'One Mill', email: 'one@mill.test' }),
+    supplier('s-two', { name: 'Two Dairy', email: 'two@dairy.test' }),
+  ];
+  const TWO_ITEMS = [
+    ingredient('i-a', { name: 'Flour', supplierId: 's-one' }),
+    ingredient('i-b', { name: 'Milk', supplierId: 's-two' }),
+  ];
+  const TWO_DRAFT = { entries: { 'i-a': { qty: 1 }, 'i-b': { qty: 2 } }, days: { 's-one': TODAY, 's-two': TODAY } };
+
+  it('opens the first window in the tap and each further one inside its own Open press', async () => {
+    const open = spyOpen();
+    const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
+    await toSend(view, 'Zed', 'Café');
+    const button = sendButton();
+    act(() => {
+      button.click();
+      expect(open).toHaveBeenCalledTimes(1);
+    });
+    const next = within(await screen.findByRole('dialog', { name: 'Open the chat for Zed (2 of 2)' }));
+    expect(open).toHaveBeenCalledTimes(1);
+    const press = next.getByRole('button', { name: 'Open' });
+    await waitFor(() => { expect(press).toHaveFocus(); });
+    act(() => {
+      press.click();
+      // ⚠️ Synchronously, in the Open button's own press.
+      expect(open).toHaveBeenCalledTimes(2);
+    });
+    expect(pressed(open)[0]?.startsWith('https://wa.me/39021234567?text=')).toBe(true);
+    expect(pressed(open)[1]?.startsWith('https://wa.me/447700900123?text=')).toBe(true);
+    const confirm = await orderSent();
+    expect(confirm.getByText('Café Bar Srl')).toBeInTheDocument();
+    expect(confirm.getByText('Zed')).toBeInTheDocument();
+  });
+
+  it('Skip leaves that supplier unsent and names it', async () => {
+    const open = spyOpen();
+    const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
+    await toSend(view, 'Zed', 'Café');
+    await view.user.click(sendButton());
+    const next = within(await screen.findByRole('dialog', { name: 'Open the chat for Zed (2 of 2)' }));
+    await view.user.click(next.getByRole('button', { name: 'Skip' }));
+    const notice = await screen.findByRole('alertdialog');
+    expect(within(notice).getByText('Not sent: Zed')).toBeInTheDocument();
+    await view.user.click(within(notice).getByRole('button', { name: 'OK' }));
+    expect(open).toHaveBeenCalledTimes(1);
+    const confirm = await orderSent();
+    expect(confirm.getByText('Café Bar Srl')).toBeInTheDocument();
+    expect(confirm.queryByText('Zed')).not.toBeInTheDocument();
+    expect(await screen.findByText(/Not sent, still to do: Zed/)).toBeInTheDocument();
+  });
+
+  it('by email, Escape stops the batch and names the rest', async () => {
+    const open = spyOpen();
+    const source = fakeOrdersSource({ suppliers: TWO_EMAILS, ingredients: TWO_ITEMS, draft: TWO_DRAFT });
+    const view = await atList(source);
+    await toSend(view, 'One Mill', 'Two Dairy');
+    await view.user.click(sendButton());
+    const chooser = within(await screen.findByRole('dialog', { name: 'How should this order go?' }));
+    const road = chooser.getByRole('button', { name: /^Email to the supplier/ });
+    act(() => {
+      road.click();
+      expect(open).toHaveBeenCalledTimes(1);
+    });
+    expect(pressed(open)[0]?.startsWith('mailto:')).toBe(true);
+    await screen.findByRole('dialog', { name: 'Open the email for Two Dairy (2 of 2)' });
+    await view.user.keyboard('{Escape}');
+    const notice = await screen.findByRole('alertdialog');
+    expect(within(notice).getByText('Not sent: Two Dairy')).toBeInTheDocument();
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('says a friendly line and frees the button when the send throws', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.spyOn(window, 'open').mockImplementation(() => { throw new Error('boom'); });
+    const view = await atList(seeded(), STAFF);
+    await toSend(view, 'Alpine Mills');
+    await view.user.click(sendButton());
+    expect(await screen.findByText('Something went wrong while sending. Try again.')).toBeInTheDocument();
+    await waitFor(() => { expect(sendButton()).toBeEnabled(); });
+    expect(error).toHaveBeenCalled();
+    expect(view.router.state.location.pathname).toBe('/orders/send');
+  });
+});
+
+describe('naming the suppliers a send did not reach', () => {
+  it('says so on the way to the confirm screen when a ticked supplier has no phone (no chooser to warn)', async () => {
+    const open = spyOpen();
+    const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
+    await toSend(view, 'Alpine Mills', 'Zed');
+    await view.user.click(sendButton());
+    const confirm = await orderSent();
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(confirm.queryByText('Alpine Mills')).not.toBeInTheDocument();
+    expect(await screen.findByText(/Not sent, still to do: Alpine Mills/)).toBeInTheDocument();
+  });
+});
+
+describe('the order picture, when the share goes wrong', () => {
+  async function toPhoto(view: View) {
+    await toSend(view, 'Zed');
+    await view.user.click(sendButton());
+    const format = within(await screen.findByRole('dialog', { name: 'How do you want to send it?' }));
+    await view.user.click(format.getByRole('button', { name: 'Order photo' }));
+  }
+  const photoDialog = () => screen.findByRole('dialog', { name: 'Photo for Zed (1 of 1)' });
+
+  it('keeps the dialog and records nothing when the person closes the share sheet', async () => {
+    const share = allowShare(Object.assign(new Error('closed'), { name: 'AbortError' }));
+    const open = spyOpen();
+    const source = seeded({ ordersConfig: DIRECT_ONLY });
+    const view = await atList(source, STAFF);
+    await toPhoto(view);
+    const photo = within(await photoDialog());
+    await view.user.click(photo.getByRole('button', { name: 'Share' }));
+    await waitFor(() => { expect(share).toHaveBeenCalledTimes(1); });
+    await waitFor(() => { expect(photo.getByRole('button', { name: 'Share' })).toBeEnabled(); });
+    expect(open).not.toHaveBeenCalled();
+    expect(source.records.size).toBe(0);
+    expect(view.router.state.location.pathname).toBe('/orders/send');
+  });
+
+  it('offers the text when the share fails any other way, and OK opens it', async () => {
+    allowShare(new Error('no sheet'));
+    const open = spyOpen();
+    const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
+    await toPhoto(view);
+    const photo = within(await photoDialog());
+    await view.user.click(photo.getByRole('button', { name: 'Share' }));
+    const ask = within(await screen.findByRole('alertdialog'));
+    expect(ask.getByText('Couldn’t share the photo, sending the text instead.')).toBeInTheDocument();
+    expect(open).not.toHaveBeenCalled();
+    await pressThenMicrotasks(ask.getByRole('button', { name: 'OK' }));
+    expect(open).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the text in the press of the OK when the picture could not be drawn', async () => {
+    allowShare();
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    vi.mocked(renderOrderImage).mockRejectedValueOnce(new Error('no canvas'));
+    const open = spyOpen();
+    const view = await atList(seeded({ ordersConfig: DIRECT_ONLY }), STAFF);
+    await toPhoto(view);
+    const ask = within(await screen.findByRole('alertdialog'));
+    expect(open).not.toHaveBeenCalled();
+    await pressThenMicrotasks(ask.getByRole('button', { name: 'OK' }));
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalled();
+  });
+});
+
+describe('«Did you send it?»', () => {
+  it('records nothing and keeps the screen on Escape', async () => {
+    const source = seeded();
+    const view = await atList(source, STAFF);
+    await view.user.click(screen.getByRole('button', { name: 'Order placed…' }));
+    await view.user.click(await screen.findByRole('button', { name: 'Order placed' }));
+    await screen.findByText('This is what will be recorded:', undefined, LOAD);
+    await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
+    await screen.findByRole('alertdialog');
+    await view.user.keyboard('{Escape}');
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    expect(source.records.size).toBe(0);
+    expect(view.router.state.location.pathname).toBe('/orders/place-all/confirm');
+    expect(screen.getByText('This is what will be recorded:')).toBeInTheDocument();
   });
 });
 
