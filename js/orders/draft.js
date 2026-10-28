@@ -19,28 +19,30 @@ import {
 } from './firebase-orders.js';
 import {
   buildSupplierArchive, mergeArchives, historyDocId, ingredientsOf, quantityPathsFor,
-  changedEntries, changedDays,
+  changedEntries, changedDays, wholeNumber,
 } from './archive.js';
 import { cleanUnit, storedUnitFor } from '../order-unit.js';
 import { draftEntryPath } from '../ingredient-edit-model.js';
-import { cleanSupplierId } from './line-supplier.js';
+import { cleanSupplierId, overrideOf } from './line-supplier.js';
 
 const DRAFT_ID = 'current';
 const SAVE_DELAY_MS = 800; // debounce to limit Firestore writes (cost control)
 
 let saveTimer = null;
-let queued = null;         // the change waiting for the debounce, so it can be flushed
+let waiting = false;       // a change is waiting for the debounce, so it can be flushed
 let reportSaveResult = null;   // (ok: boolean) => void — injected by orders-main.js
 
 // The draft as this device last agreed on it with the server: what a snapshot
-// reported, plus what we have since sent and had accepted. Everything the
-// autosave sends is the difference against this — see changedEntries.
+// reported, plus what we have since sent and had accepted. What this phone claims
+// as its own is measured against this — see `pending`.
 //
 // It is deliberately NOT updated when a write fails: the change then still counts
 // as unsent and goes out again with the next save, instead of being forgotten.
 let known = { entries: {}, days: {} };
 
-// What THIS phone has typed and the server has not confirmed yet.
+// What THIS phone has typed and the server has not confirmed yet, FIELD BY FIELD:
+// `entries` holds per line only the fields that differ ({ stock: 2 }, or the
+// quantity group — see GROUP), `days` the day stamps.
 //
 // ⚠️ WITHOUT THIS, A TYPED QUANTITY CAN VANISH. Every incoming snapshot replaces
 // the whole local entries map, and a change is not sent for up to 800ms (the
@@ -50,9 +52,91 @@ let known = { entries: {}, days: {} };
 // from memory and never saved. Reproduced against the emulator before fixing.
 //
 // Re-applying this over each snapshot keeps the two truths straight: the server
-// owns every row this phone has not touched, and this phone owns the one it is
+// owns every field this phone has not touched, and this phone owns the one it is
 // typing into until the write lands.
+//
+// ⚠️ IT IS ALWAYS «WHAT DIFFERS FROM `known`», RECOMPUTED AT EVERY CHANGE, AND IT IS
+// EXACTLY WHAT A SAVE SENDS. It used to only grow, hold whole rows and be sent
+// together with the screen's days map as it was at the keystroke; each of these put
+// back quantities of an order another phone had just placed (found building Mise 2's
+// Orders, 28 Oct 2026 — app/src/orders/draftSync.ts is the reviewed twin):
+//   • a line corrected back inside the pause, or typed to the value another phone had
+//     just written, stayed claimed for ever, came back on screen once that order was
+//     placed, and was written with the next keystroke;
+//   • a stock count sent the whole row, re-asserting this phone's copy of a quantity
+//     another phone had just cleared;
+//   • the waiting save sent the days map it was armed with, putting back the day
+//     stamp another phone's placing had just removed.
 let pending = { entries: {}, days: {} };
+
+// The writes in the air, as sent. A snapshot never releases their fields (it may be
+// Firestore showing this phone's own write before the server answers), and a refused
+// one hands them back.
+const flights = [];
+
+// QUANTITY, UNIT AND THE «THIS TIME» SUPPLIER ARE ONE MEANING («5 buste from Bruno this
+// time») and always travel together, '' included; only the stock is independent. Sent
+// apart, a colleague changing the unit (or moving the line) in the same second turned
+// «5» into 5 of something else, or filed it under another supplier.
+const GROUP = ['qty', 'unit', 'supplierId'];
+
+// A line's fields as the comparison reads them (changedEntries' own rules): on THIS
+// phone's side the override exists only while there is a quantity (overrideOf); on the
+// server's side it is the stored value, raw.
+function mine(entry) {
+  return {
+    qty: wholeNumber(entry?.qty), stock: wholeNumber(entry?.stock),
+    unit: cleanUnit(entry?.unit), supplierId: overrideOf(entry),
+  };
+}
+function stored(entry) {
+  return {
+    qty: wholeNumber(entry?.qty), stock: wholeNumber(entry?.stock),
+    unit: cleanUnit(entry?.unit), supplierId: cleanSupplierId(entry?.supplierId),
+  };
+}
+const blank = (field, value) => value === undefined || value === (field === 'qty' || field === 'stock' ? 0 : '');
+const isEmpty = map => Object.keys(map).length === 0;
+
+const inAir = (id, field) => flights.some(f => f.entries[id] !== undefined && field in f.entries[id]);
+const dayInAir = id => flights.some(f => id in f.days);
+// What the LATEST write in the air says for a field or a day: undefined when none carries it.
+function carried(id, field) {
+  for (let i = flights.length - 1; i >= 0; i -= 1) {
+    const row = flights[i].entries[id];
+    if (row !== undefined && field in row) return row[field];
+  }
+  return undefined;
+}
+function dayCarried(id) {
+  for (let i = flights.length - 1; i >= 0; i -= 1) {
+    if (id in flights[i].days) return flights[i].days[id];
+  }
+  return undefined;
+}
+
+// What this phone's screen holds that the server does not.
+function differences(entries, days) {
+  const rows = {};
+  Object.keys(changedEntries(entries, known.entries)).forEach(id => {
+    const here = mine(entries[id]);
+    const there = stored(known.entries[id]);
+    const row = {};
+    // ⚠️ A LEFTOVER {qty: 0, supplierId: 'X'} IS NOT THIS PHONE'S TO CLEAN on an edit of
+    // another field: harmless at zero, and cleaning it could erase a colleague typing a
+    // quantity under X in the same second. The first quantity typed here sends the
+    // override with it, which clears it.
+    const overrideDiffers = here.supplierId !== there.supplierId && !(here.qty === 0 && there.qty === 0);
+    if (here.qty !== there.qty || here.unit !== there.unit || overrideDiffers) {
+      GROUP.forEach(field => { row[field] = here[field]; });
+    }
+    // ⚠️ A LINE THE SERVER DOES NOT HAVE CARRIES ONLY WHAT IS IN IT: padded with stock 0,
+    // it erased the shelf count a colleague put on the same line in the same second.
+    if (here.stock !== there.stock) row.stock = here.stock;
+    if (!isEmpty(row)) rows[id] = row;
+  });
+  return { entries: rows, days: changedDays(days, known.days) };
+}
 
 // A DETACHED copy of an entries map: same numbers, none of the same objects.
 //
@@ -95,16 +179,18 @@ export function setDraftSaveReporter(fn) {
 // Success is reported too, not just failure: a transient blip must not leave a
 // permanent alarm on screen once a later save has carried the same values through.
 export function scheduleDraftSave(entries, days) {
-  queued = { entries, days };
-  // Claim these rows as this phone's until the write lands, so an incoming
-  // snapshot during the debounce cannot quietly take the typing away.
-  pending = {
-    entries: { ...pending.entries, ...changedEntries(entries, known.entries) },
-    days: { ...pending.days, ...changedDays(days, known.days) },
-  };
+  waiting = true;
+  // Claim exactly what differs from the server now — so an incoming snapshot during
+  // the debounce cannot quietly take the typing away, and a line put back to the
+  // server's value is released at once.
+  pending = differences(entries, days);
   clearTimeout(saveTimer);
+  // ⚠️ The timer sends `pending`, never the maps it was armed with: the page REPLACES
+  // its days map on every snapshot, so the old one could carry a stamp another phone
+  // has removed since.
   saveTimer = setTimeout(() => {
-    saveDraftNow(entries, days)
+    if (!waiting) return;
+    sendPending()
       .then(() => reportSaveResult?.(true))
       .catch(err => {
         console.error('Draft autosave failed:', err);
@@ -113,45 +199,109 @@ export function scheduleDraftSave(entries, days) {
   }, SAVE_DELAY_MS);
 }
 
+// Save the page's draft RIGHT NOW (a re-order, a line moved to another supplier, a
+// restamped day): the same claims a keystroke makes, sent without waiting.
 export function saveDraftNow(entries, days) {
-  clearTimeout(saveTimer);
-  queued = null;
+  pending = differences(entries, days);
+  return sendPending();
+}
 
-  const entriesDelta = changedEntries(entries, known.entries);
-  const daysDelta = changedDays(days, known.days);
+function sendPending() {
+  clearTimeout(saveTimer);
+  waiting = false;
+
+  // Copies: a change typed while the write is in the air must not alter what this
+  // write says it sent. ⚠️ LEFT OUT: what a write still in the air already says at the
+  // same value (the group only whole). Sent again — leaving the section a moment after
+  // the autosave went — it could land after a colleague's newer value and put this
+  // phone's old one back.
+  const sent = { entries: {}, days: {} };
+  Object.entries(pending.entries).forEach(([id, held]) => {
+    const row = { ...held };
+    const group = GROUP.filter(field => field in row);
+    if (group.length && group.every(field => carried(id, field) === row[field])) {
+      group.forEach(field => { delete row[field]; });
+    }
+    if ('stock' in row && carried(id, 'stock') === row.stock) delete row.stock;
+    if (!isEmpty(row)) sent.entries[id] = row;
+  });
+  Object.entries(pending.days).forEach(([id, day]) => {
+    if (dayCarried(id) !== day) sent.days[id] = day;
+  });
 
   // Nothing this device changed — so nothing to say. Staying quiet here also stops
   // an incoming snapshot from bouncing straight back as a write.
-  if (!Object.keys(entriesDelta).length && !Object.keys(daysDelta).length) {
-    return Promise.resolve();
-  }
+  if (isEmpty(sent.entries) && isEmpty(sent.days)) return Promise.resolve();
 
   const payload = { updatedAt: new Date().toISOString() };
-  if (Object.keys(entriesDelta).length) payload.entries = entriesDelta;
-  if (Object.keys(daysDelta).length) payload.days = daysDelta;
+  if (!isEmpty(sent.entries)) payload.entries = sent.entries;
+  if (!isEmpty(sent.days)) payload.days = sent.days;
 
-  // setDoc(merge) with a PARTIAL map: Firestore merges key by key, so the rows
-  // not mentioned here keep whatever anyone else has put there. It also still
-  // creates drafts/current on the very first order, which an updateDoc of
-  // dotted paths could not.
+  flights.push(sent);
+  const land = () => { flights.splice(flights.indexOf(sent), 1); };
+
+  // setDoc(merge) with a PARTIAL map: Firestore merges key by key, so the rows and
+  // fields not mentioned here keep whatever anyone else has put there. It also still
+  // creates drafts/current on the very first order, which an updateDoc of dotted
+  // paths could not.
   return saveDoc(COLLECTIONS.drafts, DRAFT_ID, payload).then(result => {
-    known = {
-      entries: { ...known.entries, ...entriesDelta },
-      days: { ...known.days, ...daysDelta },
-    };
-    // Release only what was actually sent, and only if it has not been typed
-    // over in the meantime — a value changed again while this write was in
-    // flight is still this phone's, and must stay claimed.
-    Object.entries(entriesDelta).forEach(([id, sent]) => {
-      const held = pending.entries[id];
-      if (held && held.qty === sent.qty && held.stock === sent.stock
-        && cleanUnit(held.unit) === cleanUnit(sent.unit)
-        && cleanSupplierId(held.supplierId) === cleanSupplierId(sent.supplierId)) delete pending.entries[id];
+    land();
+    // What landed joins the baseline — except a field a LATER write still in the air
+    // also carries: the baseline already holds that newer value (Firestore showed it).
+    const entries = { ...known.entries };
+    Object.entries(sent.entries).forEach(([id, row]) => {
+      const landed = {};
+      Object.entries(row).forEach(([field, value]) => { if (!inAir(id, field)) landed[field] = value; });
+      entries[id] = { ...(entries[id] || {}), ...landed };
     });
-    Object.entries(daysDelta).forEach(([id, sent]) => {
-      if (pending.days[id] === sent) delete pending.days[id];
+    const days = { ...known.days };
+    Object.entries(sent.days).forEach(([id, day]) => { if (!dayInAir(id)) days[id] = day; });
+    known = { entries, days };
+    // Release only what was actually sent, and only if it has not been typed over in
+    // the meantime — a value changed again while this write was in flight is still
+    // this phone's, and must stay claimed. The group only as a whole.
+    Object.entries(sent.entries).forEach(([id, row]) => {
+      const held = pending.entries[id];
+      if (!held) return;
+      const group = GROUP.filter(field => field in held);
+      if (group.length && group.every(field => held[field] === row[field])) {
+        group.forEach(field => { delete held[field]; });
+      }
+      if ('stock' in held && held.stock === row.stock) delete held.stock;
+      if (isEmpty(held)) delete pending.entries[id];
+    });
+    Object.entries(sent.days).forEach(([id, day]) => {
+      if (pending.days[id] === day) delete pending.days[id];
     });
     return result;
+  }, err => {
+    land();
+    // ⚠️ A REFUSED WRITE HANDS ITS TYPING BACK. A change made while it was in the air
+    // may have dropped those fields from the claims — Firestore showed the write at
+    // once, so they matched `known` — and the snapshot that takes the write back would
+    // then erase them. Each group or stock goes back unless typed over since. The
+    // baseline forgets those fields too (it may hold Firestore's showing of this very
+    // write), so a keystroke before the take-back arrives still counts them as ours.
+    const entries = { ...known.entries };
+    Object.entries(sent.entries).forEach(([id, row]) => {
+      const held = pending.entries[id] || {};
+      const groupHeld = GROUP.some(field => field in held);
+      const base = { ...(entries[id] || {}) };
+      Object.keys(row).forEach(field => {
+        const typedOver = field === 'stock' ? 'stock' in held : groupHeld;
+        if (!typedOver) held[field] = row[field];
+        delete base[field];
+      });
+      if (!isEmpty(held)) pending.entries[id] = held;
+      if (entries[id] !== undefined) entries[id] = base;
+    });
+    const days = { ...known.days };
+    Object.entries(sent.days).forEach(([id, day]) => {
+      if (!(id in pending.days)) pending.days[id] = day;
+      delete days[id];
+    });
+    known = { entries, days };
+    throw err;
   });
 }
 
@@ -160,8 +310,8 @@ export function saveDraftNow(entries, days) {
 // sitting in the timer, the archive's surgical clear does not carry it, and the
 // next snapshot quietly reverts it on screen.
 export function flushDraftSave() {
-  if (!queued) return Promise.resolve();
-  return saveDraftNow(queued.entries, queued.days);
+  if (!waiting) return Promise.resolve();
+  return sendPending();
 }
 
 // Real-time subscription. onChange receives { entries, days, updatedAt, exists }.
@@ -171,17 +321,46 @@ export function watchDraft(onChange, onError) {
   return watchDoc(COLLECTIONS.drafts, DRAFT_ID, doc => {
     // The server's word on the draft becomes the baseline the next autosave
     // measures itself against, so a row someone else changed is not "changed
-    // here" and never gets re-asserted at this phone's stale value.
+    // here" and never gets re-asserted at this phone's stale value…
     known = { entries: detach(doc?.entries), days: { ...(doc?.days || {}) } };
-    // ...but anything typed here and not yet written goes back ON TOP, or the
-    // snapshot would erase it mid-keystroke. See `pending`.
+    releaseConfirmed();
+    // …but anything typed here and not yet written goes back ON TOP, field by
+    // field, or the snapshot would erase it mid-keystroke. See `pending`.
+    const storedEntries = doc?.entries || {};
+    const entries = { ...storedEntries };
+    Object.entries(pending.entries).forEach(([id, row]) => {
+      entries[id] = { ...(storedEntries[id] || {}), ...row };
+    });
     onChange({
-      entries: { ...(doc?.entries || {}), ...pending.entries },
+      entries,
       days: { ...(doc?.days || {}), ...pending.days },
       updatedAt: doc?.updatedAt || '',
       exists: Boolean(doc),
     });
   }, onError);
+}
+
+// What the server now holds at exactly this phone's value is no longer this phone's to
+// send — otherwise it stays claimed, and comes back on screen (and into the next write)
+// once another phone places that order. ⚠️ NEVER A FIELD OF A WRITE IN THE AIR: this
+// snapshot may be Firestore showing this phone's own write before the server answers.
+function releaseConfirmed() {
+  Object.entries(pending.entries).forEach(([id, row]) => {
+    const exists = known.entries[id] !== undefined;
+    const there = stored(known.entries[id]);
+    const group = GROUP.filter(field => field in row);
+    // The group is released whole or not at all (on a line the server does not have:
+    // when it is blank).
+    if (group.length && !group.some(field => inAir(id, field))
+      && (exists ? group.every(field => row[field] === there[field]) : group.every(field => blank(field, row[field])))) {
+      group.forEach(field => { delete row[field]; });
+    }
+    if ('stock' in row && !inAir(id, 'stock') && row.stock === (exists ? there.stock : 0)) delete row.stock;
+    if (isEmpty(row)) delete pending.entries[id];
+  });
+  Object.entries(pending.days).forEach(([id, day]) => {
+    if (!dayInAir(id) && known.days[id] === day) delete pending.days[id];
+  });
 }
 
 // Record one supplier's order under `date`, and return the stored record (or null

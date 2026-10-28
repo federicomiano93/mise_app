@@ -667,4 +667,7 @@ test('moving a line writes the draft only — nothing is marked resolved — and
   assert.match(fn, /supplierId,\s*\};/, 'the line carries the override');
   assert.match(fn, /stampNow\(supplierId, previousDay\);/, 'stamped by the order-day rule, not blindly today');
   assert.match(fn, /catch \(err\) \{\s*if \(hadEntry\) state\.entries\[id\] = previousEntry; else delete state\.entries\[id\];/);
+  // draft.js hands a refused write's fields back as unsent typing: re-claimed from the undone state,
+  // or the moved line would come back on the next snapshot (tests/draft-claims.test.mjs).
+  assert.match(fn, /else delete state\.days\[supplierId\];[\s\S]*?scheduleDraftSave\(state\.entries, state\.days\);\s*throw err;/);
 });

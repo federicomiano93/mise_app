@@ -1163,6 +1163,10 @@ function incomingContext() {
       } catch (err) {
         if (hadEntry) state.entries[id] = previousEntry; else delete state.entries[id];
         if (previousDay) state.days[supplierId] = previousDay; else delete state.days[supplierId];
+        // ⚠️ A refused write hands its fields back to draft.js as unsent typing, so the line
+        // would come back moved on the next snapshot: re-claim from the state just put back.
+        // Keystrokes that rode on the failed write go out with it, as in restamp().
+        scheduleDraftSave(state.entries, state.days);
         throw err;
       }
       syncInputsFromState();
