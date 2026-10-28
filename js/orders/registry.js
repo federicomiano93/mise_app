@@ -432,7 +432,8 @@ export function buildRegistry(data, actions, hooks = {}) {
     const row = drillRow(name, meta, active,
       () => (onList ? openFromList(() => openIngredientForm(item, null), `ingredient:${item.id}`) : openIngredientForm(item, null)),
       null, nameNode);
-    const word = el('button', { type: 'button', class: 'reg-word' });
+    // `data-word` lets refresh() find this word again in the repainted list and give it focus back.
+    const word = el('button', { type: 'button', class: 'reg-word', 'data-word': item.id });
     const paintWord = () => {
       word.textContent = t(active ? 'ui.deactivate' : 'ui.activate');
       word.setAttribute('aria-label', t(active ? 'orders.row.deactivate' : 'orders.row.activate', { name }));
@@ -904,11 +905,17 @@ export function buildRegistry(data, actions, hooks = {}) {
 
   // Re-run after every repaint of the list (refresh() repaints on each snapshot) and every
   // change of the stack.
+  // ⚠️ «CURRENT» GOES ON THE BUTTON, so a screen reader says it on the control it lands on. An
+  // ingredient row is a frame around its drill button: the button carries aria-current, and the
+  // frame a class that paints the same picked look over the whole card, word cell included.
   function paintSelection() {
     const key = selectedKey();
     listHost.querySelectorAll('[data-sel]').forEach(row => {
-      if (key !== null && row.dataset.sel === key) row.setAttribute('aria-current', 'true');
-      else row.removeAttribute('aria-current');
+      const picked = key !== null && row.dataset.sel === key;
+      const target = row.querySelector('.reg-drill') || row;
+      if (picked) target.setAttribute('aria-current', 'true');
+      else target.removeAttribute('aria-current');
+      if (target !== row) row.classList.toggle('reg-row-picked', picked);
     });
   }
 
@@ -1059,9 +1066,18 @@ export function buildRegistry(data, actions, hooks = {}) {
   // is exactly where somebody adding sixty-seven of them is standing. Only the
   // first render was ever checked in this project before v1.60.1 deleted an
   // allergen card on the second one.
+  //
+  // ⚠️ A REPAINT KEEPS THE PLACE: the scroll of a supplier's screen and the word that had focus.
+  // Every «Disattiva» / «Riattiva» tap is a save, and Firestore answers the open listener at once,
+  // so each tap ends here: without this the screen jumped back to the top on every tap, and the
+  // keyboard (or a screen reader) fell back to the page header.
   let redrawOwed = false;
   function refresh() {
+    const focused = document.activeElement;
+    const wordId = focused?.classList?.contains('reg-word') ? focused.dataset.word : null;
+    const wordInList = wordId !== null && listHost.contains(focused);
     paintList();
+    if (wordInList) refocusWord(listHost, wordId);
     const top = stack[stack.length - 1];
     if (!top || !top.overlay) return;
     if (top.overlay.querySelector('.mgmt-form')) return;   // a form: leave it be
@@ -1069,10 +1085,24 @@ export function buildRegistry(data, actions, hooks = {}) {
     // only in that node, and a rebuild would drop both (and let the update gate reload over
     // a paid reading). One redraw is owed and runs when the level closes (popEntry).
     if (top.keepAlive) { redrawOwed = true; return; }
+    const wordOnTop = wordId !== null && top.overlay.contains(focused);
+    const scrollTop = top.overlay.querySelector('.mgmt-scroll')?.scrollTop || 0;
     const next = top.build(top);
     if (!next) return;                                     // build() popped it
     top.overlay.replaceWith(next);
     top.overlay = next;
+    const scroller = next.querySelector('.mgmt-scroll');
+    if (scroller) scroller.scrollTop = scrollTop;
+    if (wordOnTop) refocusWord(next, wordId);
+  }
+
+  function refocusWord(host, id) {
+    const again = [...host.querySelectorAll('.reg-word')].find(w => w.dataset.word === id);
+    if (!again) return;
+    for (let up = again.parentNode; up && up !== host; up = up.parentNode) {
+      if (up.tagName === 'DETAILS' && !up.open) return;   // folded away: nowhere visible to land
+    }
+    again.focus({ preventScroll: true });
   }
 
   paintList();

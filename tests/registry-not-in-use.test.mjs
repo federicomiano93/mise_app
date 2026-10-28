@@ -346,12 +346,15 @@ test('the item open in the tablet pane opens its group by itself', () => {
     const pane = new Node('div');
     const s = screen(items(), { pane });
     s.rowOf('Burro').querySelector('.reg-drill').fire('click');
-    assert.equal(s.rowOf('Burro').getAttribute('aria-current'), 'true');
+    assert.equal(s.rowOf('Burro').querySelector('.reg-drill').getAttribute('aria-current'), 'true', '«current» is on the button');
+    assert.equal(s.rowOf('Burro').getAttribute('aria-current'), undefined, 'not on the frame');
+    assert.equal(s.rowOf('Burro').classList.contains('reg-row-picked'), true, 'the frame paints the picked look');
     // Another phone switches it off: it is not in this screen's own «switched» memory, so it falls in the group.
     s.set(items().map(i => (i.id === 'a' ? { ...i, active: false } : i)));
     assert.deepEqual(s.groupNames(), ['Burro', 'Latte', 'Zucchero']);
     assert.equal(s.groups()[0].open, true);
-    assert.equal(s.rowOf('Burro').getAttribute('aria-current'), 'true', 'the whole row card is the picked one');
+    assert.equal(s.rowOf('Burro').querySelector('.reg-drill').getAttribute('aria-current'), 'true');
+    assert.equal(s.rowOf('Burro').classList.contains('reg-row-picked'), true, 'the whole row card is the picked one');
   } finally {
     tablet.on = false;
   }
@@ -377,6 +380,15 @@ test('focus returning to a row inside a closed group opens the group first, and 
   } finally {
     tablet.on = false;
   }
+});
+
+test('a tap keeps the keyboard on the word: the repaint after the save gives it focus back', () => {
+  const s = screen(items());
+  s.word('Burro').focus();
+  s.word('Burro').fire('click');
+  s.set(items().map(i => (i.id === 'a' ? { ...i, active: false } : i)));
+  assert.equal(ACTIVE.el, s.word('Burro'), 'focus is on the repainted word, not on the page');
+  assert.equal(ACTIVE.el.textContent, 'Riattiva');
 });
 
 // ── A rejected write ────────────────────────────────────────────────────────
@@ -479,6 +491,22 @@ test('a tap on a supplier screen also keeps the row in place on the list beside 
   } finally {
     tablet.on = false;
   }
+});
+
+test('a tap on a supplier screen keeps its scroll and the focus on the word', () => {
+  body.children.length = 0;
+  const s = screen(items());
+  const sup = openSupplierScreen(s);
+  sup.overlay.querySelector('.mgmt-scroll').scrollTop = 420;
+  sup.word('Burro').focus();
+  sup.word('Burro').fire('click');
+  s.set(items().map(i => (i.id === 'a' ? { ...i, active: false } : i)));
+  const rebuilt = body.children.find(n => n.classList.contains('mgmt-overlay'));
+  assert.notEqual(rebuilt, sup.overlay, 'the screen was rebuilt');
+  assert.equal(rebuilt.querySelector('.mgmt-scroll').scrollTop, 420, 'not back to the top');
+  const word = walk(rebuilt).find(n => n.classList.contains('reg-word') && n.dataset.word === 'a');
+  assert.equal(ACTIVE.el, word);
+  body.children.length = 0;
 });
 
 test('a refused write on a supplier screen puts the row back and says so', async () => {

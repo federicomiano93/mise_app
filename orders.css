@@ -1606,6 +1606,16 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   .reg-word { min-width: 84px; padding: 0 10px; }
 }
 .reg-word:active { background: var(--surface2); transform: scale(0.97); }
+/* ⚠️ THE RING IS DRAWN INSIDE: the frame clips (overflow: hidden), so the browser's own ring,
+   drawn outside the button, was cut off on every edge that touches the frame. */
+.reg-row .reg-drill:focus-visible,
+.reg-word:focus-visible { outline: 3px solid var(--accent-2); outline-offset: -3px; }
+/* The tablet's picked row: aria-current sits on the drill button (tokens.css paints it); the frame
+   takes the same tint and border so the word cell is part of the picked card too. */
+.app-split-list .reg-row.reg-row-picked {
+  background: var(--accent-light);
+  border-color: var(--accent-border);
+}
 
 /* The name and, for a hand-made item, the pencil: a flex row so the icon sits on the text's centre line. */
 .reg-name { display: flex; align-items: center; gap: 7px; }
