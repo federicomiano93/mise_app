@@ -355,7 +355,7 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
                       setTyped(before => ({ ...before, [group.supplierId]: { ...before[group.supplierId], [row.id]: n } }));
                     }}
                   />
-                  {row.unit !== '' ? <span className={styles.unit}>{row.unit}</span> : <span />}
+                  <span className={styles.unit}>{row.unit}</span>
                 </li>
               ))}
             </ul>

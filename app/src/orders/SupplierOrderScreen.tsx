@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useId, useRef } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import type { CSSProperties } from 'react';
 import { Check, List } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { supplierLabel } from '@mise/shared/supplier-label';
@@ -56,6 +57,9 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
     if (shown && cameFromList(state) && !screen.current?.contains(document.activeElement)) title.current?.focus();
   }, [shown]);
 
+  // The column names stick right under the bar, whose height changes with the title's lines and the width.
+  const barHeight = useHeight();
+
   if (supplier === undefined) {
     return (
       <section className={styles.screen} aria-label={t('section.orders')}>
@@ -92,8 +96,9 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
 
   return (
     <section ref={screen} className={styles.screen} aria-labelledby={titleId}>
-      {/* The bar and the column names stick together: the names stay over the boxes while the rows scroll. */}
-      <div className={styles.sticky}>
+      {/* The bar and the column names stick, the names over the boxes while the rows scroll. The day line between them
+          scrolls away: stuck too, on a phone it took half the screen from the rows. */}
+      <div ref={barHeight.ref} className={styles.sticky}>
         <FormBar
           backLabel={t('ui.back')}
           onBack={leave}
@@ -114,15 +119,19 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
             </Button>
           )}
         />
-        <DayLine supplier={supplier} lens={lens} />
-        {empty ? null : (
-          <div className={styles.columns} data-stock={showStock}>
-            <span />
-            <span className={styles.columnName}>{t('ord.field.order')}</span>
-            {showStock ? <span className={styles.columnName}>{t('ord.field.stock')}</span> : null}
-          </div>
-        )}
       </div>
+      <DayLine supplier={supplier} lens={lens} />
+      {empty ? null : (
+        <div
+          className={styles.columns}
+          data-stock={showStock}
+          style={{ '--bar-height': `${barHeight.px}px` } as CSSProperties}
+        >
+          <span />
+          <span className={styles.columnName}>{t('ord.field.order')}</span>
+          {showStock ? <span className={styles.columnName}>{t('ord.field.stock')}</span> : null}
+        </div>
+      )}
       {empty ? (
         <p className={styles.nothing}>{t('ord.noIngredientsYet')}</p>
       ) : (
@@ -152,4 +161,22 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
       {clearDialog}
     </section>
   );
+}
+
+// A box's height in CSS pixels, kept current as it changes.
+function useHeight(): { ref: (node: HTMLElement | null) => void; px: number } {
+  const [px, setPx] = useState(0);
+  const observer = useRef<ResizeObserver | null>(null);
+  const ref = useCallback((node: HTMLElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (node === null) return;
+    const measure = () => { setPx(node.getBoundingClientRect().height); };
+    measure();
+    if (typeof ResizeObserver === 'function') {
+      observer.current = new ResizeObserver(measure);
+      observer.current.observe(node);
+    }
+  }, []);
+  return { ref, px };
 }
