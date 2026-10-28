@@ -14,6 +14,7 @@
 import { itemLabel } from './order-text.js';
 import { supplierLabel, supplierMatches } from '../supplier-label.js';
 import { ingredientDisplayName, ingredientNameMatches } from '../ingredient-name.js';
+import { inOrderFlow } from './not-in-use.js';
 
 // Everything NFD splits an accent into: "è" becomes "e" + a combining grave.
 const COMBINING_MARKS = /[̀-ͯ]/g;
@@ -84,7 +85,7 @@ export function flatRows({ ingredients, suppliers, query, only }) {
   const byId = new Map((suppliers || []).map(s => [s.id, s]));
 
   const all = (ingredients || [])
-    .filter(ing => ing.active !== false && byId.has(ing.supplierId))
+    .filter(ing => inOrderFlow(ing) && byId.has(ing.supplierId))
     .map(ing => ({
       ingredient: ing,
       supplier: byId.get(ing.supplierId),
@@ -130,7 +131,7 @@ export function orderSummary({ ingredients, suppliers, entries }) {
   const suppliersUsed = new Set();
 
   (ingredients || []).forEach(ing => {
-    if (ing.active === false || !known.has(ing.supplierId)) return;
+    if (!inOrderFlow(ing) || !known.has(ing.supplierId)) return;
     const qty = Number(entries?.[ing.id]?.qty);
     if (!Number.isFinite(qty) || qty <= 0) return;
     ids.push(ing.id);

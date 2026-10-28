@@ -45,11 +45,11 @@ test('the supplier lens is keyed on the ingredients, suppliers, loaded flag and 
   const start = main.indexOf('const resolveLens = memoLast(resolveSuppliers)');
   assert.ok(start >= 0);
   const fn = main.slice(start, main.indexOf('\n}\n', start));
-  assert.match(fn, /resolveLens\(state\.ingredients, state\.suppliers, state\.loaded\.suppliers, state\.entries,\s*overrideSignature\(state\.entries\)\)/);
+  assert.match(fn, /resolveLens\(markedIngredients\(\), state\.suppliers, state\.loaded\.suppliers, state\.entries,\s*overrideSignature\(state\.entries\)\)/);
 });
 
 test('the catalogue lens, the grouping and the supplier list are memoised on their inputs', () => {
-  assert.match(main, /resolveCatalogue\(state\.ingredients, state\.suppliers, state\.loaded\.suppliers\)/);
+  assert.match(main, /resolveCatalogue\(markedIngredients\(\), state\.suppliers, state\.loaded\.suppliers\)/);
   assert.match(main, /groupLensBySupplier\(orderIngredients\(\)\)/);
   assert.match(main, /buildSupplierList\(activeSuppliers\(\), orderIngredients\(\), t\('orders\.noSupplier'\)\)/);
   assert.match(main, /sortActiveSuppliers\(state\.suppliers, ordersConfig\.supplierOrder\)/);

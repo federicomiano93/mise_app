@@ -11,6 +11,7 @@
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
+import { lineNoteText } from './not-in-use.js';
 import { isUnusualQuantity } from './suggestions.js';
 import { wholeNumber, sortByLabel, ingredientDisplayLabel } from './archive.js';
 import { ingredientDisplayName } from '../ingredient-name.js';
@@ -154,9 +155,9 @@ export function buildRow(ing, supplier, suggest, entries, hooks, { meta = '' } =
   let away = ing.elsewhereId || '';
   const note = el('div', { class: 'ing-line-note' });
   function paintNote() {
-    const text = away
+    const text = lineNoteText(ing, away
       ? t('orders.line.thisTimeFrom', { supplier: ing.elsewhereLabel || '' })
-      : ing.usualSupplierId ? t('orders.line.usuallyFrom', { supplier: ing.usualLabel || '' }) : '';
+      : ing.usualSupplierId ? t('orders.line.usuallyFrom', { supplier: ing.usualLabel || '' }) : '');
     note.textContent = text;
     note.hidden = !text;
   }

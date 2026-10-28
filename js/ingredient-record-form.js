@@ -2333,7 +2333,10 @@ export function buildIngredientForm({
       // ⚠️ ONLY WHEN THERE IS SOMETHING TO SAY: a save that sent `packUnit: ''` on every ingredient
       // would be refused whole by a database whose rules do not know the key yet.
       ...(packUnit || item?.packUnit ? { packUnit } : {}),
-      active: item ? item.active !== false : true,
+      // ⚠️ `active` IS SENT ONLY FOR A NEW ITEM. The save is a merge write, so an existing item keeps
+      // what is stored — and a card left open on another phone can no longer undo the
+      // «Disattiva» / «Riattiva» tap made on the list row since it was opened.
+      ...(item ? {} : { active: true }),
       kind: startKind,
       ...patch,
       // ⚠️ NOT READ FOR PACKAGING: the merge then leaves any declaration already stored untouched.
@@ -2431,7 +2434,10 @@ export function buildIngredientForm({
       category: category.read() || 'Other',
       ...(item ? {} : { unit: looseWord }),
       ...formatKeys,
-      active: item ? item.active !== false : true,
+      // ⚠️ `active` IS SENT ONLY FOR A NEW ITEM. The save is a merge write, so an existing item keeps
+      // what is stored — and a card left open on another phone can no longer undo the
+      // «Disattiva» / «Riattiva» tap made on the list row since it was opened.
+      ...(item ? {} : { active: true }),
       kind: startKind,
       ...patch,
       // ⚠️ NOT READ FOR PACKAGING: the merge then leaves any declaration already stored

@@ -19,6 +19,7 @@ import {
   cleanUnit, sameUnit, lineUnit, entryUnit, recordUnit, inPackages, addableInPackages, hasUnitChoice,
 } from '../order-unit.js';
 import { overrideOf, cleanSupplierId } from './line-supplier.js';
+import { inOrderFlow } from './not-in-use.js';
 
 // A quantity, made safe: whole, never negative, never NaN — and never Infinity.
 //
@@ -53,7 +54,7 @@ export function recordDate(record) {
 // invisible and unclearable.
 export function ingredientsOf(supplierId, ingredients, { activeOnly = true } = {}) {
   return (ingredients || []).filter(i =>
-    i.supplierId === supplierId && (!activeOnly || i.active !== false));
+    i.supplierId === supplierId && (!activeOnly || inOrderFlow(i)));
 }
 
 // Does this supplier have anything worth recording? (Stock on its own is not an
