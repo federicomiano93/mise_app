@@ -14,9 +14,9 @@ import type { MessageParams } from '../i18n/i18n';
 import { buildOrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
 import {
-  SEND_KEYS, confirmedSendRows, draftSendRows, jobsFor, openWindow, sendTranslate, takeRoad,
+  SEND_KEYS, confirmedSendRows, draftSendRows, jobsFor, openWindow, runTextBatch, sendTranslate, takeRoad,
 } from './sendFlow';
-import type { RoadInput, SendRow, SendUi } from './sendFlow';
+import type { OpenQuestion, RoadInput, SendRow, SendUi, TextOutcome } from './sendFlow';
 
 const tEn = (key: MessageKey, params?: MessageParams) => format('en', en[key], params);
 const t = sendTranslate(tEn);
@@ -51,16 +51,18 @@ const offer = (route: string, suppliers: StoredDoc[]) => {
   return found;
 };
 
-function ui(over: Partial<SendUi> = {}): SendUi & { said: string[] } {
+function ui(over: Partial<SendUi> = {}): SendUi & { said: string[]; asked: string[] } {
   const said: string[] = [];
   return {
     said,
+    asked: [],
     alert: async message => { said.push(message); },
     canSharePhotos: () => false,
     askFormat: async () => 'text',
     render: async text => ({ text }) as unknown as File,
     askPhoto: async () => 'shared',
     confirmText: async () => true,
+    askOpen: async question => (question.open() ? 'opened' : 'blocked'),
     ...over,
   };
 }
@@ -195,6 +197,90 @@ describe('taking a road', () => {
 
   it('the in-app list is not a road of this slice: it opens nothing', async () => {
     expect(await takeRoad(input({ offer: offer('manager', [mill]) }), ui())).toStrictEqual({ kind: 'cancelled' });
+  });
+});
+
+describe('one window per tap (runTextBatch)', () => {
+  const job = (id: string, name?: string): SendJob => ({ ids: [id], ...(name ? { name } : {}), text: id, url: `https://wa.me/${id}` });
+  const jobs = [job('a', 'Alpha'), job('b', 'Beta'), job('c', 'Gamma')];
+  const batch = (over: Partial<Parameters<typeof runTextBatch>[0]> = {}) => {
+    const said: string[] = [];
+    const asked: OpenQuestion[] = [];
+    const input = {
+      jobs, open: () => true, notify: async (message: string) => { said.push(message); }, t,
+      // A person's press comes after the question is drawn, never in the same tick.
+      askOpen: async (question: OpenQuestion): Promise<TextOutcome> => { await Promise.resolve(); asked.push(question); return question.open() ? 'opened' : 'blocked'; },
+      ...over,
+    };
+    return { said, asked, input };
+  };
+
+  it('⚠️ opens the first window before any await and asks for each further one', async () => {
+    const open = vi.fn(() => true);
+    const { asked, input } = batch({ open });
+    const pending = runTextBatch(input);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledWith('https://wa.me/a');
+    expect(await pending).toStrictEqual({ ids: ['a', 'b', 'c'], blocked: false });
+    expect(asked.map(question => [question.job.ids[0], question.i, question.n])).toStrictEqual([['b', 1, 3], ['c', 2, 3]]);
+    expect(open).toHaveBeenCalledTimes(3);
+  });
+
+  it('⚠️ a further window opens only when its dialog calls open', async () => {
+    const open = vi.fn(() => true);
+    let release: (outcome: TextOutcome) => void = () => undefined;
+    const { input } = batch({ open, askOpen: () => new Promise<TextOutcome>(resolve => { release = resolve; }), jobs: jobs.slice(0, 2) });
+    const pending = runTextBatch(input);
+    await Promise.resolve();
+    expect(open).toHaveBeenCalledTimes(1);
+    release('skipped');
+    expect(await pending).toStrictEqual({ ids: ['a'], blocked: false });
+  });
+
+  it('Skip leaves that one unsent, names it and carries on', async () => {
+    const { said, input } = batch({ askOpen: async ({ job: asked, open }) => (asked.ids[0] === 'b' ? 'skipped' : open() ? 'opened' : 'blocked') });
+    expect(await runTextBatch(input)).toStrictEqual({ ids: ['a', 'c'], blocked: false });
+    expect(said).toStrictEqual(['Not sent: Beta']);
+  });
+
+  it('Cancel stops the batch and names the one it stopped at and every one after it', async () => {
+    const { said, asked, input } = batch({ askOpen: async question => { asked.push(question); return 'cancelled'; } });
+    expect(await runTextBatch(input)).toStrictEqual({ ids: ['a'], blocked: false });
+    expect(asked).toHaveLength(1);
+    expect(said).toStrictEqual(['Not sent: Beta, Gamma']);
+  });
+
+  it('a blocked window is not counted and is named', async () => {
+    const { said, input } = batch({ open: (url: string) => url !== 'https://wa.me/b' });
+    expect(await runTextBatch(input)).toStrictEqual({ ids: ['a', 'c'], blocked: false });
+    expect(said).toStrictEqual(['Not sent: Beta']);
+  });
+
+  it('every window blocked is «blocked»; a blocked first window is named too', async () => {
+    const { said, input } = batch({ open: () => false });
+    expect(await runTextBatch(input)).toStrictEqual({ ids: [], blocked: true });
+    expect(said).toStrictEqual(['Not sent: Alpha, Beta, Gamma']);
+  });
+
+  it('nobody to name for the single grouped chat: nothing is said', async () => {
+    const { said, input } = batch({ jobs: [job('x')], open: () => false });
+    expect(await runTextBatch(input)).toStrictEqual({ ids: [], blocked: true });
+    expect(said).toStrictEqual([]);
+  });
+
+  it('takeRoad by email asks for the second supplier instead of opening it in the same tap', async () => {
+    const open = vi.fn(() => true);
+    const screen = ui({ askOpen: async question => { await Promise.resolve(); screen.asked.push(question.kind); return question.open() ? 'opened' : 'blocked'; } });
+    const two: SendRow[] = [
+      { id: 'mill', name: 'Mill', items: [{ name: 'Flour', weight: '', qty: 1 }] },
+      { id: 'twin', name: 'Mill', items: [{ name: 'Salt', weight: '', qty: 1 }] },
+    ];
+    const pending = takeRoad({
+      offer: offer('email', [mill, { ...twin, email: 'twin@example.test' }]), rows: two, settings, unitRefusal: () => '', open, t,
+    }, screen);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(await pending).toStrictEqual({ kind: 'sent', ids: ['mill', 'twin'], blocked: false });
+    expect(screen.asked).toStrictEqual(['email']);
   });
 });
 

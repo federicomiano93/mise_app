@@ -11,13 +11,13 @@ import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import { useOrders, useOrdersStore } from './OrdersContext';
 import { RoadChooser } from './RoadChooser';
-import { FormatDialog, PhotoDialog } from './SendDialogs';
+import { FormatDialog, OpenDialog, PhotoDialog } from './SendDialogs';
 import { recordDateFor } from './orderDay';
 import { canSharePhotos, renderOrderImage } from './orderImage';
 import type { OrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
 import { openWindow, sendTranslate, takeRoad } from './sendFlow';
-import type { RoadResult, SendRow, SendUi } from './sendFlow';
+import type { OpenQuestion, RoadResult, SendRow, SendUi, TextOutcome } from './sendFlow';
 import { unitConflictText } from './unitConflictText';
 
 export interface SendRequest {
@@ -32,6 +32,7 @@ export interface SendRequest {
 type Offer = SendOffer<StoredDoc>;
 type Chooser = { offers: readonly Offer[]; pick: (offer: Offer) => void; cancel: () => void };
 type FormatQuestion = { answer: (format: 'photo' | 'text' | null) => void };
+type OpenAsk = { question: OpenQuestion; answer: (outcome: TextOutcome) => void };
 type PhotoQuestion = { job: SendJob; file: File | undefined; i: number; n: number; answer: (outcome: PhotoOutcome) => void };
 
 // Sending an order, from the send screen and from «Send it now» on the confirm screen — ONE flow, so the two can never behave
@@ -58,6 +59,7 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
   const [chooser, setChooser] = useState<Chooser | null>(null);
   const [format, setFormat] = useState<FormatQuestion | null>(null);
   const [photo, setPhoto] = useState<PhotoQuestion | null>(null);
+  const [opening, setOpening] = useState<OpenAsk | null>(null);
   // What is waiting for an answer, so a screen that goes away leaves nothing hanging.
   const waiting = useRef(new Set<() => void>());
 
@@ -106,6 +108,7 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
       askFormat: () => ask<'photo' | 'text' | null, FormatQuestion>(setFormat, answer => ({ answer }), null),
       render: text => renderOrderImage(text, { language }),
       askPhoto: question => ask<PhotoOutcome, PhotoQuestion>(setPhoto, answer => ({ ...question, answer }), 'cancelled'),
+      askOpen: question => ask<TextOutcome, OpenAsk>(setOpening, answer => ({ question, answer }), 'cancelled'),
       confirmText: () => latest.current.confirm({
         message: latest.current.t('ord.sendFormat.photoFailed'),
         okLabel: latest.current.t('common.ok'),
@@ -147,7 +150,10 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
       setChooser({
         offers,
         // ⚠️ THE ROAD'S OWN PRESS: the chooser closes and the road is taken here, in the same handler, never in an effect.
+        // ⚠️ ONLY WHILE THE CHOOSER IS STILL WAITING: `take` opens windows, and a second press (or one after Cancel) must find the
+        // question already answered, never open them again — settleOnce alone would ignore the answer AFTER `take` had run.
         pick: offer => {
+          if (!waiting.current.has(giveUp)) return;
           waiting.current.delete(giveUp);
           settle(take(offer));
         },
@@ -163,6 +169,7 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
     <>
       {chooser ? <RoadChooser offers={chooser.offers} onPick={chooser.pick} onCancel={chooser.cancel} /> : null}
       {format ? <FormatDialog answer={format.answer} /> : null}
+      {opening ? <OpenDialog key={opening.question.i} question={opening.question} answer={opening.answer} /> : null}
       {photo ? <PhotoDialog key={photo.i} job={photo.job} file={photo.file} i={photo.i} n={photo.n} answer={photo.answer} /> : null}
       {confirmDialog}
       {alertDialog}

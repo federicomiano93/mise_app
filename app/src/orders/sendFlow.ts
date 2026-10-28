@@ -5,7 +5,7 @@
 // ⚠️⚠️ A WINDOW IS OPENED ONLY INSIDE THE TAP. A browser lets a page open a window (WhatsApp, the mail app) only while it is
 // answering a person's tap; a window opened after an await of something that is NOT that tap — a read, a timer — is
 // blocked as a pop-up, on iPhone Safari above all. So `takeRoad` is an async function whose part BEFORE its first await does
-// the unit check and opens every text window, and the screen calls it straight from the press of the road's own button
+// the unit check and opens the first text window (ONE window per tap: see runTextBatch), and the screen calls it straight from the press of the road's own button
 // (or of «Send» when only one road is open). Its later awaits only follow dialogs, whose own taps then carry on.
 //
 // ⚠️ A WINDOW THAT DID NOT OPEN IS NOT A SEND. `openWindow` answers whether the browser really opened it, and only the
@@ -15,7 +15,7 @@
 import { buildOrderMessage, emailSubject, orderedItems, whatsappUrl } from '@mise/shared/order-text';
 import type { OrderItem } from '@mise/shared/order-text';
 import { confirmedRows } from '@mise/shared/sent-check';
-import { digitsOf, mailto, runPhotoBatch, sendTexts } from '@mise/shared/send-chooser';
+import { digitsOf, mailto, runPhotoBatch } from '@mise/shared/send-chooser';
 import type { PhotoOutcome, SendJob, SendOffer, Translate } from '@mise/shared/send-chooser';
 import { routeSendsToSupplier } from '@mise/shared/send-routes';
 import { supplierLabel } from '@mise/shared/supplier-label';
@@ -102,6 +102,64 @@ export function openWindow(url: string): boolean {
   return true;
 }
 
+// How one further window went: the person's Open press opened it (or the browser blocked it), or they skipped it or backed out.
+export type TextOutcome = 'opened' | 'blocked' | 'skipped' | 'cancelled';
+
+// What `askOpen` is asked about: ONE further supplier's window. `open` opens THIS job's window and answers whether the browser
+// really opened one; the dialog's Open button calls it inside its own press, then answers 'opened' or 'blocked'.
+export interface OpenQuestion {
+  readonly job: SendJob;
+  readonly kind: 'chat' | 'email';
+  readonly i: number;
+  readonly n: number;
+  readonly open: () => boolean;
+}
+
+export interface TextBatch {
+  readonly jobs: readonly SendJob[];
+  readonly open: (url: string) => boolean;
+  readonly askOpen: (question: OpenQuestion) => Promise<TextOutcome>;
+  readonly notify: (message: string) => Promise<unknown>;
+  readonly kind?: 'chat' | 'email';
+  readonly t: Translate;
+}
+
+// The text windows of a road, ONE WINDOW PER TAP.
+//
+// ⚠️⚠️ A BROWSER LETS ONE TAP OPEN ONE POP-UP: the first window.open uses the tap up and the rest are blocked. So the FIRST job's
+// window opens here, synchronously, before any await, inside the tap that started the road; every further job gets a small
+// dialog whose own Open press opens it (the same way PhotoDialog starts share() inside its Share press).
+//   Skip   → that one is not sent, carry on
+//   Cancel → that one and every one after it is not sent (Escape is Cancel)
+//   a window the browser blocked is not sent either, and is not counted.
+// Whoever was not sent is named at the end with the same words as the picture batch, never dropped silently (suppliers only: the
+// single grouped chat has no name). `blocked` is true only when windows were due and none opened because the browser refused
+// them all — a person who skipped or cancelled is not told their browser is at fault.
+export async function runTextBatch({ jobs, open, askOpen, notify, kind = 'chat', t }: TextBatch): Promise<{ ids: string[]; blocked: boolean }> {
+  const sent: string[] = [];
+  const notSent: SendJob[] = [];
+  let refused = 0;
+  let declined = false;
+  const [first, ...rest] = jobs;
+  if (first) {
+    if (open(first.url)) sent.push(...first.ids);
+    else { notSent.push(first); refused += 1; }
+  }
+  for (let index = 0; index < rest.length; index++) {
+    const job = rest[index];
+    if (!job) continue;
+    const outcome = await askOpen({ job, kind, i: index + 1, n: jobs.length, open: () => open(job.url) });
+    if (outcome === 'opened') { sent.push(...job.ids); continue; }
+    notSent.push(job);
+    if (outcome === 'blocked') { refused += 1; continue; }
+    declined = true;
+    if (outcome === 'cancelled') { notSent.push(...rest.slice(index + 1)); break; }
+  }
+  const names = notSent.map(job => job.name).filter(Boolean);
+  if (names.length) await notify(t('orders.sendFormat.notSent', { names: names.join(', ') }));
+  return { ids: sent, blocked: jobs.length > 0 && sent.length === 0 && !declined && refused === jobs.length };
+}
+
 // The questions a road may ask on the way, answered by the screen's dialogs.
 export interface SendUi {
   // A notice with an OK (the unit clash, «Not sent: …»).
@@ -116,6 +174,8 @@ export interface SendUi {
   askPhoto(question: { job: SendJob; file: File | undefined; i: number; n: number }): Promise<PhotoOutcome>;
   // «Couldn't share the photo, sending the text instead.» with OK / Cancel.
   confirmText(): Promise<boolean>;
+  // «Open the chat for {name} (2 of 3)»: the dialog for ONE further window, whose own Open button opens it (question.open).
+  askOpen(question: OpenQuestion): Promise<TextOutcome>;
 }
 
 export interface RoadInput {
@@ -155,12 +215,15 @@ export async function takeRoad({ offer, rows, settings, unitRefusal, open, t }: 
   }
   const jobs = jobsFor(offer, rows, settings);
   if (jobs.length === 0) return { kind: 'cancelled' };
-  const texts = () => {
-    const ids = sendTexts(jobs, open);
-    return { kind: 'sent', ids, blocked: ids.length === 0 } as const;
+  // ⚠️ The first window opens in this very call (see runTextBatch); a second and later one wait for their own Open press.
+  const texts = async (): Promise<RoadResult> => {
+    const { ids, blocked } = await runTextBatch({
+      jobs, open, askOpen: ui.askOpen, notify: ui.alert, kind: offer.route === 'email' ? 'email' : 'chat', t,
+    });
+    return { kind: 'sent', ids, blocked };
   };
 
-  // Email, and WhatsApp where the browser cannot share a picture: every window opens now, inside the tap.
+  // Email, and WhatsApp where the browser cannot share a picture: the first window opens now, inside the tap.
   if (offer.route === 'email' || !ui.canSharePhotos()) return texts();
 
   // ⚠️ THE TWO WHATSAPP ROADS, where a picture can be shared: «photo or text?» first (photo first).
