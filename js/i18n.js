@@ -2230,6 +2230,9 @@ const DICTIONARIES = Object.freeze({
     'fc.fromBook.confirmMsg': 'You will find them in the Food cost list, to complete with price and pieces.',
     'fc.fromBook.confirmOk': 'Create',
     'fc.fromBook.done': { one: '{n} product created', other: '{n} products created' },
+    'fc.fromBook.creating': 'Creating…',
+    'fc.fromBook.already': 'They were already in Food cost',
+    'fc.fromBook.failed': { one: '{n} product was not created: this needs an internet connection. Try again when you are online.', other: '{n} products were not created: this needs an internet connection. Try again when you are online.' },
     // ── What a product is made of, and how it is sold (13 Sep 2026) ──
     'fc.addRecipeOrIngredient': '+ Add recipe or ingredient',
     'fc.pickRecipe': 'Choose a recipe',
@@ -5174,6 +5177,9 @@ const DICTIONARIES = Object.freeze({
     'fc.fromBook.confirmMsg': 'Le trovi nella lista del Food cost, da completare con prezzo e pezzi.',
     'fc.fromBook.confirmOk': 'Crea',
     'fc.fromBook.done': { one: '{n} scheda creata', other: '{n} schede create' },
+    'fc.fromBook.creating': 'Creo le schede…',
+    'fc.fromBook.already': 'Erano già nel Food cost',
+    'fc.fromBook.failed': { one: '{n} scheda non è stata creata: serve la connessione a internet. Riprova quando sei online.', other: '{n} schede non sono state create: serve la connessione a internet. Riprova quando sei online.' },
     // ── Di che cosa è fatto un prodotto, e come si vende (13 set 2026) ──
     'fc.addRecipeOrIngredient': '+ Aggiungi ricetta o ingrediente',
     'fc.pickRecipe': 'Scegli una ricetta',

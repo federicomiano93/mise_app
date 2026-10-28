@@ -104,11 +104,22 @@ test('junk in, empty out', () => {
 
 // ── The write ────────────────────────────────────────────────────────────────
 
-test('⚠️ the store checks again before writing, so another phone’s product is not overwritten', () => {
-  const src = read('js/foodcost/foodcost-store.js');
-  const body = src.slice(src.indexOf('export function createProductsFromRecipes'));
-  assert.match(body.slice(0, 800), /products\.some\(p => p\.id === product\.id\)/);
-  assert.match(body.slice(0, 800), /saveProduct\(product, null, null\)/);
+test('⚠️⚠️ a create asks the SERVER first, so another device’s product is never overwritten', () => {
+  // The phone's list can be an old offline copy; a plain set at a fixed id would land on a
+  // product filled in elsewhere since. The store goes through the transaction, never saveProduct.
+  const store = read('js/foodcost/foodcost-store.js').replace(/\r\n/g, '\n');
+  const body = store.slice(store.indexOf('export async function createProductsFromRecipes'));
+  const fn = body.slice(0, body.indexOf('\n}'));
+  assert.match(fn, /createProductIfAbsent\(product\.id, productDocument\(product\)\)/);
+  assert.doesNotMatch(fn, /saveProduct\(|saveProductWithSnapshot\(/);
+
+  const data = read('js/foodcost/firebase-foodcost.js').replace(/\r\n/g, '\n');
+  const tx = data.slice(data.indexOf('export async function createProductIfAbsent'));
+  const txBody = tx.slice(0, tx.indexOf('\n}'));
+  assert.match(txBody, /runTransaction\(db,/);
+  const existsAt = txBody.indexOf('if (snap.exists()) return false;');
+  const setAt = txBody.indexOf('tx.set(ref, withBakery(data))');
+  assert.ok(existsAt > 0 && setAt > existsAt, 'the existing product must be checked before the set');
 });
 
 test('the product fields the store writes are all in the rules whitelist', () => {

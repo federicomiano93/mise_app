@@ -12,7 +12,7 @@ import { guarded } from '../guard.js';
 import { normalizeProduct, normalizeProducts, PRODUCT_MODEL } from './foodcost-model.js';
 import {
   watchProducts, watchRecipes, watchIngredients,
-  saveProductWithSnapshot, removeProduct, newProductId, saveRecipeLoss,
+  saveProductWithSnapshot, removeProduct, newProductId, saveRecipeLoss, createProductIfAbsent,
   watchFoodcostSettings, saveLabourCostPerHour, canManageHere, authReady,
 } from './firebase-foodcost.js';
 import { positiveNumber } from '../price-model.js';
@@ -174,7 +174,27 @@ function removeLocal(id) {
 export function saveProduct(product, snapshot, lossPatches) {
   const id = product.id || newProductId();
   saveRecipeLosses(lossPatches);
-  const data = {
+  const data = productDocument(product);
+  const prev = products.find(p => p.id === id) || null;
+
+  upsertLocal({ id, ...data });
+  // ⚠️ ALWAYS the id, never null. The id was minted above so the product could
+  // appear instantly; letting the data layer mint its own for a new product would
+  // write the document under a DIFFERENT id from the one already on screen — two
+  // products, one of them invisible, and the rollback would then remove the wrong
+  // one.
+  saveProductWithSnapshot(id, data, snapshot).catch(err => {
+    console.warn('Product did not sync to Firestore:', err);
+    if (prev) upsertLocal(prev); else removeLocal(id);
+    if (onSyncError) onSyncError(t('fc.couldNotSaveProduct', { name: product.name || t('fc.productWord') }));
+  });
+  return id;
+}
+
+// The Firestore document of a product. The FIELDS ARE LISTED BY HAND because the rules
+// whitelist exactly these — spreading the product would send `id` and be refused.
+function productDocument(product) {
+  return {
     name: product.name,
     components: product.components || [],
     packaging: product.packaging || [],
@@ -197,20 +217,6 @@ export function saveProduct(product, snapshot, lossPatches) {
     // phone gets «could not save» instead of quietly destroying the product.
     model: PRODUCT_MODEL,
   };
-  const prev = products.find(p => p.id === id) || null;
-
-  upsertLocal({ id, ...data });
-  // ⚠️ ALWAYS the id, never null. The id was minted above so the product could
-  // appear instantly; letting the data layer mint its own for a new product would
-  // write the document under a DIFFERENT id from the one already on screen — two
-  // products, one of them invisible, and the rollback would then remove the wrong
-  // one.
-  saveProductWithSnapshot(id, data, snapshot).catch(err => {
-    console.warn('Product did not sync to Firestore:', err);
-    if (prev) upsertLocal(prev); else removeLocal(id);
-    if (onSyncError) onSyncError(t('fc.couldNotSaveProduct', { name: product.name || t('fc.productWord') }));
-  });
-  return id;
 }
 
 // The weighings typed on a product's recipe lines, LOCAL-FIRST like the product.
@@ -241,21 +247,30 @@ function saveRecipeLosses(patches) {
   }
 }
 
-// The products for the recipes he ticked (28 Oct 2026), each saved LOCAL-FIRST like any
-// product, one write each. Returns how many were started.
+// The products for the recipes he ticked (28 Oct 2026). Resolves { made, skipped, failed }.
 //
-// ⚠️ THE CHECK IS MADE AGAIN HERE, ON THE LIST AS IT IS NOW. A product's id comes from its
-// recipe and a save writes the document WHOLE, so creating one that has meanwhile arrived
-// from another phone would overwrite whatever was typed on it there. Skipped instead.
-export function createProductsFromRecipes(recipeList) {
-  let made = 0;
-  (Array.isArray(recipeList) ? recipeList : []).forEach(recipe => {
-    const product = productFromRecipe(recipe);
-    if (!product || products.some(p => p.id === product.id)) return;
-    saveProduct(product, null, null);
-    made += 1;
+// ⚠️⚠️ NOT LOCAL-FIRST, AND THAT IS DELIBERATE (an exception to P20's local-first rule, with
+// its reason). A product's id comes from its recipe, so the only way a create can go wrong
+// is by landing on a product that already exists — made on another device since this
+// phone's copy was taken, and filled in there. Each one is therefore created by a
+// transaction that asks the SERVER first (createProductIfAbsent); offline it fails and
+// nothing waits in a queue to overwrite anybody's work later. Nothing he typed can be lost
+// by a failure here: the recipes stay in the list, and he tries again online. The listener
+// brings the new products in, so no local copy is touched.
+export async function createProductsFromRecipes(recipeList) {
+  const wanted = (Array.isArray(recipeList) ? recipeList : []).map(productFromRecipe).filter(Boolean);
+  const results = await Promise.allSettled(wanted.map(product => {
+    // Already on this phone: there is nothing to ask the server.
+    if (products.some(p => p.id === product.id)) return Promise.resolve(false);
+    return createProductIfAbsent(product.id, productDocument(product));
+  }));
+  const out = { made: 0, skipped: 0, failed: 0 };
+  results.forEach(r => {
+    if (r.status === 'rejected') { out.failed += 1; console.warn('Product from a recipe was not created:', r.reason); }
+    else if (r.value) out.made += 1;
+    else out.skipped += 1;
   });
-  return made;
+  return out;
 }
 
 export function deleteProduct(id) {

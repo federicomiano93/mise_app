@@ -54,7 +54,7 @@ export function renderList({
       ]),
       el('button', {
         class: 'empty-action', type: 'button', text: t('fc.fromBook.boxAction', { n }),
-        onclick: (e) => onFromBook?.(e.currentTarget),
+        onclick: () => onFromBook?.(),
       }),
     ]));
   }

@@ -14,7 +14,9 @@ import { el } from './dom.js';
 
 const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
 
-// options: { create, maybe, confirm(opts), onCreate(recipes), returnFocus }
+// options: { create, maybe, confirm(opts), onCreate(recipes) → Promise<{ made, failed }>,
+//           returnFocus() → the element to focus on close (asked THEN: the list may have
+//           been redrawn while this was open, and the button that opened it with it) }
 export function openFromRecipes({ create = [], maybe = [], confirm, onCreate, returnFocus = null } = {}) {
   // Read here, not at module load: the venue's language arrives after the page starts.
   const kgFormat = new Intl.NumberFormat(localeTag(), { maximumFractionDigits: 2 });
@@ -24,9 +26,16 @@ export function openFromRecipes({ create = [], maybe = [], confirm, onCreate, re
   const close = () => {
     overlay.remove();
     document.removeEventListener('keydown', onKey);
-    try { returnFocus?.focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
+    try { returnFocus?.()?.focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
   };
-  const onKey = e => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
+  // ⚠️ An Escape the confirm dialog has already taken is not ours: it closes the dialog
+  // only, never this screen and the ticks on it.
+  const onKey = e => {
+    if (e.key !== 'Escape' || e.defaultPrevented || busy) return;
+    e.preventDefault();
+    close();
+  };
+  let busy = false;
 
   const back = el('button', {
     class: 'app-icon-btn', type: 'button', icon: BACK_ICON, 'aria-label': t('ui.back'), onclick: close,
@@ -39,6 +48,7 @@ export function openFromRecipes({ create = [], maybe = [], confirm, onCreate, re
   const chosen = () => [...ticked].filter(([, on]) => on).map(([item]) => item);
 
   function sync() {
+    if (busy) return;
     const n = chosen().length;
     createBtn.disabled = n === 0;
     createBtn.textContent = n === 0 ? t('fc.fromBook.none') : t('fc.fromBook.create', { n });
@@ -95,7 +105,18 @@ export function openFromRecipes({ create = [], maybe = [], confirm, onCreate, re
       cancelLabel: t('ui.cancel'),
     });
     if (!yes) return;
-    onCreate?.(picked.map(item => item.recipe));
+    // ⚠️ Created on the SERVER, one by one (foodcost-store.js says why), so it takes a
+    // moment and can fail offline. While it runs the screen holds still; if nothing could be
+    // created it stays open with the ticks as they were, for another try online.
+    busy = true;
+    createBtn.disabled = true;
+    back.disabled = true;
+    createBtn.textContent = t('fc.fromBook.creating');
+    let result = null;
+    try { result = await onCreate?.(picked.map(item => item.recipe)); } catch (e) { result = null; }
+    busy = false;
+    back.disabled = false;
+    if (result && result.failed > 0 && result.made === 0) { sync(); return; }
     close();
   });
 

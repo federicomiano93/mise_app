@@ -21,7 +21,7 @@ import { openFoodcostSettings } from './foodcost-settings.js';
 import { renderList } from './foodcost-list.js';
 import { renderEditor } from './foodcost-editor.js';
 import { getProductHistory, canWriteRecipes, venueCountry, authReady, canManageHere } from './firebase-foodcost.js';
-import { confirmDialog } from './confirm-dialog.js';
+import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { el } from './dom.js';
 import { productsUsingRecipe, draftFromRecipe } from './foodcost-model.js';
 import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
@@ -183,16 +183,25 @@ function recipesWithoutProductCount() {
 }
 
 // The choice screen, over everything. The lists are a snapshot taken now.
-function openFromBook(returnFocus) {
+function openFromBook() {
   const { create, maybe } = recipesWithoutProducts(getRecipes(), getProducts());
+  let made = 0;
   openFromRecipes({
     create,
     maybe,
     confirm: app.confirm,
-    returnFocus,
-    onCreate(recipes) {
-      const made = createProductsFromRecipes(recipes);
-      if (made > 0) toast(t('fc.fromBook.done', { n: made }));
+    // Closed without creating: the box's button that opened it. After a create, the list
+    // itself — the products arrive a moment later and redraw the list, the box (and a focus
+    // left on its button) going with it.
+    returnFocus: () => (made === 0 && document.querySelector('.fc-frombook .empty-action')) || activeList?.root || null,
+    async onCreate(recipes) {
+      const result = await createProductsFromRecipes(recipes);
+      made += result.made;
+      if (result.made > 0) toast(t('fc.fromBook.done', { n: result.made }));
+      else if (!result.failed && result.skipped > 0) toast(t('fc.fromBook.already'));
+      // Offline, or refused: say so, and how many — the rest were created.
+      if (result.failed > 0) await alertDialog(t('fc.fromBook.failed', { n: result.failed }));
+      return result;
     },
   });
 }

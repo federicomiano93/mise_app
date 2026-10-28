@@ -36,8 +36,21 @@ test('nothing is created before the confirm, and a refusal creates nothing', () 
   assert.match(view, /if \(!yes\) return;/);
 });
 
-test('the made products are announced only when some were made', () => {
-  assert.match(main, /if \(made > 0\) toast\(t\('fc\.fromBook\.done', \{ n: made \}\)\)/);
+test('what happened is said: made, already there, or not created offline', () => {
+  assert.match(main, /if \(result\.made > 0\) toast\(t\('fc\.fromBook\.done', \{ n: result\.made \}\)\)/);
+  assert.match(main, /if \(result\.failed > 0\) await alertDialog\(t\('fc\.fromBook\.failed', \{ n: result\.failed \}\)\)/);
+});
+
+test('⚠️ nothing created offline: the screen stays open with its ticks for another try', () => {
+  assert.match(view, /if \(result && result\.failed > 0 && result\.made === 0\) \{ sync\(\); return; \}/);
+});
+
+test('⚠️ an Escape the confirm dialog took does not also close the screen', () => {
+  assert.match(view, /e\.defaultPrevented/);
+});
+
+test('focus goes back to something still on the page (the list is redrawn by a create)', () => {
+  assert.match(main, /returnFocus: \(\) => \(made === 0 && document\.querySelector\('\.fc-frombook \.empty-action'\)\) \|\| activeList\?\.root/);
 });
 
 test('the possible matches start unticked and the new ones ticked', () => {
