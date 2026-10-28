@@ -74,7 +74,10 @@ body {
 }
 .fc-row:active { transform: scale(.97); }
 .fc-row:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
-.fc-row.incomplete { opacity: .75; }
+/* ⚠️ NOT opacity on the whole row: it took the line saying what is missing to 3.3:1 (ui-check,
+   28 Oct 2026) — and products made from the recipe book all start incomplete. A dashed
+   border says «not finished» without fading the words. */
+.fc-row.incomplete { border-style: dashed; }
 .fc-row-main { min-width: 0; flex: 1; }
 .fc-row-name { display: block; font-size: .96rem; font-weight: 600; color: var(--fc-text); }
 .fc-row-sub { display: block; margin-top: 3px; font-size: .72rem; color: var(--fc-text-2); font-family: var(--fc-font-mono); }
@@ -445,6 +448,61 @@ select.fc-input, .fc-select {
 .fc-guide-sources p { margin: 0; }
 .fc-guide-sources ul { margin: 4px 0 0; padding-left: 18px; }
 .fc-guide-sources a { color: var(--crust-ink); overflow-wrap: anywhere; }
+
+/* ── Products from the recipe book (28 Oct 2026) ───────────────────────────────
+   The box above the list, and the choice screen it opens. */
+.fc-frombook {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
+  border-radius: var(--radius-sm);
+}
+.fc-frombook-head { display: flex; align-items: center; gap: 10px; }
+.fc-frombook-icon { flex: none; display: flex; align-items: center; color: var(--fc-brand); }
+.fc-frombook-text { margin: 0; font-size: .9rem; font-weight: 600; color: var(--fc-text); }
+.fc-frombook-sub { margin: 2px 0 0; font-size: .8rem; color: var(--fc-text-2); }
+.fc-frombook .empty-action { margin-top: 0; width: 100%; min-height: 44px; }
+
+.fc-pick-intro { margin: 0; font-size: .86rem; color: var(--fc-text-2); line-height: 1.4; }
+.fc-pick-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 4px; }
+.fc-pick-head .fc-link { align-self: auto; min-height: 44px; padding: 0 4px; }
+.fc-pick-group {
+  margin: 4px 0 0;
+  font-family: var(--fc-font-mono);
+  font-size: .72rem;
+  font-weight: 400;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-4);
+}
+.fc-pick-head .fc-pick-group { margin: 0; }
+.fc-pick-list { border: 1px solid var(--fc-border); border-radius: var(--radius-sm); background: var(--fc-surface); overflow: hidden; }
+.fc-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--fc-border);
+  cursor: pointer;
+}
+.fc-pick-row:first-child { border-top: 0; }
+.fc-pick-row input { flex: none; width: 24px; height: 24px; margin: 0; accent-color: var(--brand); }
+.fc-pick-text { display: flex; flex-direction: column; min-width: 0; }
+.fc-pick-name { font-size: .92rem; font-weight: 600; color: var(--fc-text); overflow-wrap: anywhere; }
+.fc-pick-meta { font-size: .76rem; color: var(--fc-text-2); }
+.fc-frombook-bar {
+  flex: none;
+  /* max(): on a phone --app-gutter is 0 and the button would touch both edges. */
+  padding: 12px max(16px, var(--app-gutter)) calc(16px + env(safe-area-inset-bottom));
+  background: var(--fc-surface);
+  border-top: 1px solid var(--fc-border);
+}
+.fc-frombook-bar .empty-action { margin: 0; width: 100%; min-height: 48px; }
+.fc-frombook-bar .empty-action:disabled { opacity: .5; box-shadow: none; cursor: default; }
 
 /* ── Margin history ───────────────────────────────────────────────────────── */
 .fc-hist-row {

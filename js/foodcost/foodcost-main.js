@@ -13,12 +13,15 @@ import { t, localeTag, onLanguageChange } from '../i18n.js';
 import {
   initFoodCost, getProducts, tables, saveProduct, deleteProduct, setSyncErrorHandler,
   getRecipes, getIngredients, hasLiveProducts, hasLiveRecipes, getLabourCostPerHour, saveLabourRate,
+  createProductsFromRecipes,
 } from './foodcost-store.js';
+import { recipesWithoutProducts } from './from-recipes.js';
+import { openFromRecipes } from './from-recipes-view.js';
 import { openFoodcostSettings } from './foodcost-settings.js';
 import { renderList } from './foodcost-list.js';
 import { renderEditor } from './foodcost-editor.js';
 import { getProductHistory, canWriteRecipes, venueCountry, authReady, canManageHere } from './firebase-foodcost.js';
-import { confirmDialog } from './confirm-dialog.js';
+import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { el } from './dom.js';
 import { productsUsingRecipe, draftFromRecipe } from './foodcost-model.js';
 import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
@@ -160,11 +163,46 @@ function buildList(selectedId) {
   return renderList({
     products: listedProducts(), tables: tables(), onOpen: requestOpen, onAdd: () => requestOpen(null),
     selectedId,
+    fromBook: recipesWithoutProductCount,
+    onFromBook: openFromBook,
     filter: listFilter ? {
       title: filterTitle(listFilter),
       // Everything, and the page stops being «the recipe's»: Back becomes Home again.
       onShowAll: requestShowAll,
     } : null,
+  });
+}
+
+// How many recipes have no product — the box at the top of the list. ⚠️ NEVER DECIDED ON THE
+// LOCAL COPY: a product's id comes from its recipe and a save writes the WHOLE document, so
+// a list that had not arrived could overwrite a real product. Both lists must be live, only
+// the people who run the place see it, and not while the list is narrowed to a recipe.
+function recipesWithoutProductCount() {
+  if (!canManageHere() || !hasLiveProducts() || !hasLiveRecipes() || listFilter) return 0;
+  return recipesWithoutProducts(getRecipes(), getProducts()).create.length;
+}
+
+// The choice screen, over everything. The lists are a snapshot taken now.
+function openFromBook() {
+  const { create, maybe } = recipesWithoutProducts(getRecipes(), getProducts());
+  let made = 0;
+  openFromRecipes({
+    create,
+    maybe,
+    confirm: app.confirm,
+    // Closed without creating: the box's button that opened it. After a create, the list
+    // itself — the products arrive a moment later and redraw the list, the box (and a focus
+    // left on its button) going with it.
+    returnFocus: () => (made === 0 && document.querySelector('.fc-frombook .empty-action')) || activeList?.root || null,
+    async onCreate(recipes) {
+      const result = await createProductsFromRecipes(recipes);
+      made += result.made;
+      if (result.made > 0) toast(t('fc.fromBook.done', { n: result.made }));
+      else if (!result.failed && result.skipped > 0) toast(t('fc.fromBook.already'));
+      // Offline, or refused: say so, and how many — the rest were created.
+      if (result.failed > 0) await alertDialog(t('fc.fromBook.failed', { n: result.failed }));
+      return result;
+    },
   });
 }
 
@@ -582,7 +620,11 @@ settingsBtn.addEventListener('click', () => {
   });
 });
 // Who is looking arrives with the session, after the first paint.
-authReady.then(paintFooter);
+// The list's «recipes without a product» box also depends on who is looking.
+authReady.then(() => {
+  paintFooter();
+  if (view === 'list' && activeList) activeList.refresh(listedProducts(), tables());
+});
 setSyncErrorHandler(msg => toast(msg));
 
 initFoodCost(

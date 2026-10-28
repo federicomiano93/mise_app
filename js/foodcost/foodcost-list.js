@@ -15,21 +15,52 @@ const STATUS_TEXT = { green: 'fc.onTarget', amber: 'fc.slightlyOver', red: 'fc.o
 // `filter` — { title, onShowAll } — is set when the page was opened from a recipe that
 // more than one product uses (Federico's choice, 13 Sep 2026): the caller passes only
 // those products, and this says so on screen and offers the way back to all of them.
-export function renderList({ products, tables, onOpen, onAdd, filter = null, selectedId = null }) {
+const BOOK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
+
+// `fromBook` — () => number — is asked on EVERY paint: how many recipes have no product,
+// which changes as the recipes arrive. 0 draws no box. `onFromBook` opens the choice screen.
+export function renderList({
+  products, tables, onOpen, onAdd, filter = null, selectedId = null, fromBook = null, onFromBook = null,
+}) {
   // The product open beside the list on a tablet, marked aria-current (tokens.css gives it
   // the picked look). Held here because refresh() repaints every row.
   let selected = selectedId;
   const rows = el('div', { class: 'fc-list' });
+  const bookSlot = el('div');
 
   const root = el('div', { class: 'fc-view' }, [
     filter ? el('div', { class: 'fc-filter' }, [
       el('p', { class: 'fc-filter-title', text: filter.title }),
       el('button', { class: 'fc-link', type: 'button', text: t('fc.showAll'), onclick: filter.onShowAll }),
     ]) : null,
+    bookSlot,
     rows,
   ]);
 
+  // The box for recipes without a product. Redrawn with the rows so a count that changes
+  // (recipes arriving, products created) is never stale, and gone at 0.
+  function paintBook() {
+    bookSlot.replaceChildren();
+    const n = fromBook ? Number(fromBook()) || 0 : 0;
+    bookSlot.hidden = n <= 0;
+    if (n <= 0) return;
+    bookSlot.appendChild(el('div', { class: 'fc-frombook' }, [
+      el('div', { class: 'fc-frombook-head' }, [
+        el('span', { class: 'fc-frombook-icon', 'aria-hidden': 'true', icon: BOOK_ICON }),
+        el('div', {}, [
+          el('p', { class: 'fc-frombook-text', text: t('fc.fromBook.boxTitle', { n }) }),
+          el('p', { class: 'fc-frombook-sub', text: t('fc.fromBook.boxSub') }),
+        ]),
+      ]),
+      el('button', {
+        class: 'empty-action', type: 'button', text: t('fc.fromBook.boxAction', { n }),
+        onclick: () => onFromBook?.(),
+      }),
+    ]));
+  }
+
   function paint(nextProducts, nextTables) {
+    paintBook();
     const list = sortByMargin(nextProducts, nextTables);
     rows.replaceChildren();
 

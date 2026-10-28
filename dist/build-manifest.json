@@ -267,14 +267,14 @@
       }
     },
     "dist/foodcost.css": {
-      "sha": "9f179b4ad402a03f",
+      "sha": "e7fdc76e2a8e8a2b",
       "inputs": {
-        "foodcost.css": "774f21d3a0cdd7d7"
+        "foodcost.css": "bf437490af5d302a"
       }
     },
     "dist/foodcost.js": {
-      "sha": "927064e20640dd47",
-      "mapSha": "fec515eaa5f7a0dd",
+      "sha": "3d3531e8ebc458d6",
+      "mapSha": "10b432a9cb2821e0",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -297,14 +297,16 @@
         "js/foodcost/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/foodcost/crossing-route.js": "ab3dc4743da26c00",
         "js/foodcost/dom.js": "02aea52bb04819e8",
-        "js/foodcost/firebase-foodcost.js": "57fdd414809c1caa",
+        "js/foodcost/firebase-foodcost.js": "a3f8e6b473c48a15",
         "js/foodcost/foodcost-editor.js": "7459d663730cdac8",
-        "js/foodcost/foodcost-list.js": "0c2368f0f2960ac0",
-        "js/foodcost/foodcost-main.js": "ec325c05f9ebe954",
+        "js/foodcost/foodcost-list.js": "e69c25f6bd6cedcc",
+        "js/foodcost/foodcost-main.js": "d3a720d5e9954828",
         "js/foodcost/foodcost-model.js": "3a1f4c889fc46b14",
         "js/foodcost/foodcost-settings.js": "515cc9a266758252",
-        "js/foodcost/foodcost-store.js": "14bdf03ac55ab459",
+        "js/foodcost/foodcost-store.js": "f06d1619b5197f8a",
         "js/foodcost/foodcost-weighing.js": "df1da92b51cbcc92",
+        "js/foodcost/from-recipes-view.js": "f80e6af01f5b52d9",
+        "js/foodcost/from-recipes.js": "248ca57401afd438",
         "js/foodcost/product-limits.js": "ed45299d01a6997b",
         "js/foodcost/tablet.js": "39ca59d6515191ad",
         "js/foodcost/vat-guide-view.js": "1b7355c4f514ca80",
@@ -373,10 +375,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "13423940ea1bb92e",
-      "mapSha": "cea067369866b669",
+      "sha": "9ec4460609d46c0e",
+      "mapSha": "33c1a7e71c10b55e",
       "inputs": {
-        "js/i18n.js": "dc0228ae58382472"
+        "js/i18n.js": "b5706ab4fe37d1fb"
       }
     },
     "dist/index.js": {

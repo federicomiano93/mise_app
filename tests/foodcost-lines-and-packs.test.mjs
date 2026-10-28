@@ -200,7 +200,10 @@ test('an ingredient line is never taken for a recipe', () => {
 test('⚠️⚠️ every save carries the product model, and the rules refuse a save without it over one that has it', () => {
   assert.equal(PRODUCT_MODEL, 2);
   const store = codeOf(read('js/foodcost/foodcost-store.js'));
-  const save = store.slice(store.indexOf('export function saveProduct('), store.indexOf('const prev = products.find'));
+  // The fields every save writes live in productDocument(), used by saveProduct and by the
+  // products made from the recipe book alike (28 Oct 2026).
+  assert.match(store, /const data = productDocument\(product\);/);
+  const save = store.slice(store.indexOf('function productDocument('), store.indexOf('export async function createProductsFromRecipes'));
   assert.match(save, /model: PRODUCT_MODEL,/, 'the store writes the model on every save');
   assert.match(save, /packSize: product\.packSize \?\? null,/);
   assert.match(save, /packUnit: product\.packUnit \?\? null,/);
