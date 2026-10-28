@@ -53,6 +53,9 @@
 // partial port (only `confirmedEntries`; the reminders and the untold-changes banner stay in js/ until their screens come), so its spec
 // compares names and shapes itself. order-day-choices.ts is new in Mise 2 (the seven-day choice of a supplier with no order days) and has
 // no original, like calculator-tab-keys.ts, so there is nothing to pair it with.
+// order-image.ts and send-chooser.ts are NOT paired (step 3f-3, sending): partial ports — the order picture's layout without
+// the canvas, the File and the share sheet, and the send chooser's offers, links and photo batch without its screen
+// (`chooseAndSend`); their specs compare names, constants and shapes themselves.
 // ingredient-edit-model.ts IS paired (step 3e-2, the ingredient card's product data): a full port. allergen-terms.ts and
 // allergen-match.ts ARE paired too (step 3e-4, the pack-list allergen reader): full ports. records.ts IS paired (T15, the Recipe
 // catalogue's create-ingredient door): a full port. pack-format.ts is NOT: its
