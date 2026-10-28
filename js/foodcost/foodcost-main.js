@@ -13,7 +13,10 @@ import { t, localeTag, onLanguageChange } from '../i18n.js';
 import {
   initFoodCost, getProducts, tables, saveProduct, deleteProduct, setSyncErrorHandler,
   getRecipes, getIngredients, hasLiveProducts, hasLiveRecipes, getLabourCostPerHour, saveLabourRate,
+  createProductsFromRecipes,
 } from './foodcost-store.js';
+import { recipesWithoutProducts } from './from-recipes.js';
+import { openFromRecipes } from './from-recipes-view.js';
 import { openFoodcostSettings } from './foodcost-settings.js';
 import { renderList } from './foodcost-list.js';
 import { renderEditor } from './foodcost-editor.js';
@@ -160,11 +163,37 @@ function buildList(selectedId) {
   return renderList({
     products: listedProducts(), tables: tables(), onOpen: requestOpen, onAdd: () => requestOpen(null),
     selectedId,
+    fromBook: recipesWithoutProductCount,
+    onFromBook: openFromBook,
     filter: listFilter ? {
       title: filterTitle(listFilter),
       // Everything, and the page stops being «the recipe's»: Back becomes Home again.
       onShowAll: requestShowAll,
     } : null,
+  });
+}
+
+// How many recipes have no product — the box at the top of the list. ⚠️ NEVER DECIDED ON THE
+// LOCAL COPY: a product's id comes from its recipe and a save writes the WHOLE document, so
+// a list that had not arrived could overwrite a real product. Both lists must be live, only
+// the people who run the place see it, and not while the list is narrowed to a recipe.
+function recipesWithoutProductCount() {
+  if (!canManageHere() || !hasLiveProducts() || !hasLiveRecipes() || listFilter) return 0;
+  return recipesWithoutProducts(getRecipes(), getProducts()).create.length;
+}
+
+// The choice screen, over everything. The lists are a snapshot taken now.
+function openFromBook(returnFocus) {
+  const { create, maybe } = recipesWithoutProducts(getRecipes(), getProducts());
+  openFromRecipes({
+    create,
+    maybe,
+    confirm: app.confirm,
+    returnFocus,
+    onCreate(recipes) {
+      const made = createProductsFromRecipes(recipes);
+      if (made > 0) toast(t('fc.fromBook.done', { n: made }));
+    },
   });
 }
 
@@ -582,7 +611,11 @@ settingsBtn.addEventListener('click', () => {
   });
 });
 // Who is looking arrives with the session, after the first paint.
-authReady.then(paintFooter);
+// The list's «recipes without a product» box also depends on who is looking.
+authReady.then(() => {
+  paintFooter();
+  if (view === 'list' && activeList) activeList.refresh(listedProducts(), tables());
+});
 setSyncErrorHandler(msg => toast(msg));
 
 initFoodCost(
