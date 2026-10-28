@@ -19,7 +19,8 @@
 // phone at once, and a key outside KEEP_PREFIXES would be one more thing a venue switch must wipe.
 
 import { stampFor } from '@mise/shared/order-day';
-import { todayISO } from '@mise/shared/day';
+import { parseISODate, todayISO } from '@mise/shared/day';
+import { liveHistoryStart } from '@mise/shared/history-window';
 import { normalizeOrdersConfig } from '@mise/shared/orders-config';
 import { storedUnitFor } from '@mise/shared/order-unit';
 import {
@@ -31,6 +32,8 @@ import { markBusy as markBusyOfSession } from '../session/busy';
 import { createDraftSync, EMPTY_DRAFT } from './draftSync';
 import type { DraftDays, DraftEntries, DraftEntry, DraftSync, DraftSyncDeps, DraftView } from './draftSync';
 import { buildOrdersLens } from './ordersLens';
+import { createSuggester, NO_SUGGESTIONS } from './suggester';
+import type { Suggester } from './suggester';
 import type { LensIngredient, OrdersLens } from './ordersLens';
 import type { OrdersMeta, OrdersSource, StoredDoc } from './ordersSource';
 
@@ -65,13 +68,20 @@ export interface OrdersSnapshot {
   readonly draftSaveFailed: boolean;
   // The suppliers whose order is being recorded right now: their «Order placed…» is off (parity X1).
   readonly placing: readonly string[];
+  // The order records of the live window (the last two months, step 3f-2b), as stored. Empty until they arrive, and for
+  // good if the stream fails: the suggestions are then simply not shown.
+  readonly history: readonly StoredDoc[];
+  // The suggestion engine over `history` and `ingredients` — ONE per snapshot of those two, asked by every row, the Stock
+  // box and the confirm screen alike (suggester.ts).
+  readonly suggester: Suggester;
 }
 
 // One change to one line, as a row makes it.
 export type LineEdit =
   // The Order box, the − / + steppers: a whole number, never below 0 (parity L26).
   | { readonly qty: number }
-  // The Stock box: a reading of the shelf. ⚠️ It never moves the supplier's day (parity L28).
+  // The Stock box: a reading of the shelf. ⚠️ It never moves the supplier's day (parity L28) — unless it fills the Order box
+  // with the suggestion (suggester.ts fillFor), which is ordering and stamps the day like typing the number would.
   | { readonly stock: number }
   // The unit menu, only for a card that offers a choice (parity L25): stored as `storedUnitFor` says ('' = the card's).
   | { readonly unit: string }
@@ -135,7 +145,7 @@ export interface OrdersStore {
   getSnapshot(): OrdersSnapshot;
   subscribe(listener: () => void): () => void;
   onMessage(listener: (message: OrdersMessage) => void): () => void;
-  // Starts the four listeners; stop() ends them and sends a change still waiting for the autosave at once, so leaving the
+  // Starts the five listeners; stop() ends them and sends a change still waiting for the autosave at once, so leaving the
   // section within 800 ms of a keystroke loses nothing. Safe to call start → stop → start (React's development mode does).
   start(): void;
   stop(): void;
@@ -181,6 +191,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     config: normalizeOrdersConfig(null), configLoaded: false,
     draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false,
     placing: [],
+    history: [], suggester: NO_SUGGESTIONS,
   };
   const listeners = new Set<() => void>();
   const messageListeners = new Set<(message: OrdersMessage) => void>();
@@ -191,6 +202,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
 
   function set(patch: Partial<OrdersSnapshot>) {
     snapshot = { ...snapshot, ...patch };
+    // A new engine only when what it reads changed: a keystroke keeps the one the rows already asked.
+    if (patch.history || patch.ingredients) snapshot = { ...snapshot, suggester: createSuggester(snapshot.history, snapshot.ingredients) };
     for (const listener of listeners) listener();
   }
 
@@ -374,6 +387,13 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
           }),
           () => set({ draftBroken: true, draftLoaded: true }),
         ),
+        // The window starts two calendar months before TODAY when the section opens (the current app's liveHistoryStart).
+        // A failure is logged by the source and leaves the suggestions off: nothing else on these screens reads it.
+        source.watchRecentHistory(
+          liveHistoryStart(parseISODate(deps.today())),
+          list => set({ history: list }),
+          () => { /* logged by the source */ },
+        ),
       ];
     },
 
@@ -408,6 +428,16 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       else if ('stock' in edit) {
         next.stock = wholeNumber(edit.stock);
         stockOnly = true;
+        // The Stock box fills the Order box with the suggestion (parity L28, decision 1 of 3f-2b in suggester.ts) — never on a
+        // row whose line is in another supplier's order this time: that box is empty on purpose, and its number is theirs.
+        // Asked of the lens as it is NOW, the one the screen draws.
+        const rows = lensNow('').rowsFor(supplier.id);
+        const elsewhere = [...rows.active, ...rows.inactive].some(r => r.ingredient.id === id && r.elsewhere);
+        const fill = elsewhere ? null : snapshot.suggester.fillFor(ingredient, current, next.stock);
+        if (fill !== null) {
+          setQty(fill);
+          stockOnly = false;
+        }
       } else if ('unit' in edit) {
         next.unit = storedUnitFor(edit.unit, ingredient);
       } else {
