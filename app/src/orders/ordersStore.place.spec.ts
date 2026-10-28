@@ -403,3 +403,29 @@ describe('ordersStore — the record check before the confirm screen (parity X2,
     expect(check).toStrictEqual({ supplierId: 'mill', date: TODAY, exists: false, conflicts: [] });
   });
 });
+
+describe('ordersStore — the unit check at the moment of sending (parity X7, step 3f-3)', () => {
+  it('answers at once from the live window of the records, with no read of its own', async () => {
+    const h = await started({ draft: { entries: { flour: { qty: 2, stock: 0, unit: 'sacco' } }, days: { mill: TODAY } } });
+    h.source.records.set(RECORD, { date: TODAY, supplierId: 'mill', quantities: { flour: 3 } });
+    h.source.emitHistory();
+    await h.settle();
+    h.source.fail.read = true;   // a read would fail: the check must not need one
+
+    const checks = h.store.conflictsNow([{ supplierId: 'mill', date: TODAY }, { supplierId: 'dairy', date: TODAY }], NO_SUPPLIER);
+
+    expect(Array.isArray(checks)).toBe(true);
+    expect(checks[0]).toMatchObject({ supplierId: 'mill', date: TODAY, exists: true });
+    expect(checks[0]!.conflicts.map(c => c.id)).toStrictEqual(['flour']);
+    expect(checks[1]).toStrictEqual({ supplierId: 'dairy', date: TODAY, exists: false, conflicts: [] });
+  });
+
+  it('the same unit as the record is no clash', async () => {
+    const h = await started({ draft: { entries: { flour: { qty: 2, stock: 0 } }, days: { mill: TODAY } } });
+    h.source.records.set(RECORD, { date: TODAY, supplierId: 'mill', quantities: { flour: 3 } });
+    h.source.emitHistory();
+    await h.settle();
+
+    expect(h.store.conflictsNow([{ supplierId: 'mill', date: TODAY }], NO_SUPPLIER)[0]!.conflicts).toStrictEqual([]);
+  });
+});
