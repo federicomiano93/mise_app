@@ -155,9 +155,11 @@ export async function runTextBatch({ jobs, open, askOpen, notify, kind = 'chat',
     declined = true;
     if (outcome === 'cancelled') { notSent.push(...rest.slice(index + 1)); break; }
   }
-  const names = notSent.map(job => job.name).filter(Boolean);
+  const blocked = jobs.length > 0 && sent.length === 0 && !declined && refused === jobs.length;
+  // Every window refused by the browser: the screen says «Nothing was opened» with what to do, so no second notice names them.
+  const names = blocked ? [] : notSent.map(job => job.name).filter(Boolean);
   if (names.length) await notify(t('orders.sendFormat.notSent', { names: names.join(', ') }));
-  return { ids: sent, blocked: jobs.length > 0 && sent.length === 0 && !declined && refused === jobs.length };
+  return { ids: sent, blocked };
 }
 
 // The questions a road may ask on the way, answered by the screen's dialogs.

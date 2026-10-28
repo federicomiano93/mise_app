@@ -256,10 +256,17 @@ describe('one window per tap (runTextBatch)', () => {
     expect(said).toStrictEqual(['Not sent: Beta']);
   });
 
-  it('every window blocked is «blocked»; a blocked first window is named too', async () => {
+  it('every window blocked is «blocked», with no second notice: the screen says «Nothing was opened»', async () => {
     const { said, input } = batch({ open: () => false });
     expect(await runTextBatch(input)).toStrictEqual({ ids: [], blocked: true });
-    expect(said).toStrictEqual(['Not sent: Alpha, Beta, Gamma']);
+    expect(said).toStrictEqual([]);
+  });
+
+  it('a blocked FIRST window with the others opened is named', async () => {
+    let calls = 0;
+    const { said, input } = batch({ open: () => { calls += 1; return calls > 1; } });
+    expect((await runTextBatch(input)).blocked).toBe(false);
+    expect(said).toStrictEqual(['Not sent: Alpha']);
   });
 
   it('nobody to name for the single grouped chat: nothing is said', async () => {
