@@ -1563,6 +1563,70 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   font-weight: 600;
 }
 
+/* An ingredient / packaging row: a FRAME carrying the card look, holding the drill button and the
+   word at the right («Disattiva» / «Riattiva»). A button cannot nest in a button, so the two are
+   siblings (same reasoning as .wa-entry-card in style.css). The tablet's picked look
+   (aria-current, tokens.css) lands on the frame, so it covers the whole card. */
+.reg-row {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.reg-row .reg-drill {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+/* ⚠️ Only the drill part is dimmed (.mgmt-item.inactive): the word keeps its full contrast. */
+.reg-word {
+  flex-shrink: 0;
+  min-width: 100px;
+  min-height: 44px;
+  padding: 0 14px;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--border);
+  font-family: 'Manrope', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+  color: var(--brand);
+  cursor: pointer;
+}
+.reg-word-off { color: var(--crust-ink); }
+.reg-word:active { background: var(--surface2); transform: scale(0.97); }
+
+/* The name and, for a hand-made item, the pencil: a flex row so the icon sits on the text's centre line. */
+.reg-name { display: flex; align-items: center; gap: 7px; }
+.reg-name-text { min-width: 0; }
+.reg-handmade { flex-shrink: 0; display: flex; align-items: center; color: var(--text-3); }
+
+/* The folded «Not in use (N)» group. A native <details>: it opens and closes with no script. */
+.reg-notinuse { margin-top: 18px; }
+.reg-notinuse-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.reg-notinuse-head::-webkit-details-marker { display: none; }
+.reg-notinuse-chev { display: flex; align-items: center; transition: transform 0.15s; }
+.reg-notinuse[open] .reg-notinuse-chev { transform: rotate(90deg); }
+
 /* ── Management forms ─────────────────────────────────────────────────────── */
 .mgmt-form { display: flex; flex-direction: column; gap: 14px; }
 .mgmt-field { display: flex; flex-direction: column; gap: 6px; }

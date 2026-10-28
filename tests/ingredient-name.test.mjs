@@ -120,7 +120,7 @@ test('the source: the order rows and Fornitori draw the display name, not the in
   assert.match(rows, /text: ingredientDisplayName\(ing\)/);
   assert.doesNotMatch(rows, /ing\.name/);
   const registry = read('js/orders/registry.js');
-  assert.match(registry, /drillRow\(ingredientDisplayName\(item\)/);
+  assert.match(registry, /const name = ingredientDisplayName\(item\);[\s\S]*drillRow\(name, meta/);
   assert.match(registry, /matches\(i\.name\) \|\| matches\(i\.shortName\)/);
 });
 

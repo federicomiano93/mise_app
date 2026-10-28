@@ -991,6 +991,10 @@ const DICTIONARIES = Object.freeze({
     // ⚠️ A WORD, NEVER A COLOUR ALONE. «Nobody has looked» and «checked, contains
     // none of the 14» are the same empty list; only the stamp separates them.
     'orders.notDeclaredShort': 'not declared',
+    'orders.row.deactivate': 'Deactivate {name}',
+    'orders.row.activate': 'Activate {name}',
+    'orders.notInUse.group': 'Not in use ({n})',
+    'orders.handMade': 'Added by hand',
     'orders.registry.loadFailed': 'Could not load the suppliers. Check your connection and try again.',
     'orders.registry.whichList': 'Which list to show',
     // The example follows the interface language (Italian writes «7,20»): since 4 Oct 2026
@@ -3997,6 +4001,10 @@ const DICTIONARIES = Object.freeze({
     'orders.deliveryShort': 'consegna',
     'orders.orderShort': 'ordine',
     'orders.notDeclaredShort': 'non dichiarato',
+    'orders.row.deactivate': 'Disattiva {name}',
+    'orders.row.activate': 'Riattiva {name}',
+    'orders.notInUse.group': 'Non in uso ({n})',
+    'orders.handMade': 'Inserito a mano',
     'orders.registry.loadFailed': 'Non è stato possibile caricare i fornitori. Controlla la connessione e riprova.',
     'orders.registry.whichList': 'Quale elenco mostrare',
     'orders.eg.packWeight': 'es. 2,5',
