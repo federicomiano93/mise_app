@@ -981,3 +981,79 @@ Pastries editor.
 
 **P13.** No new personal data: a supplier's phone and email travel only in the `wa.me` / `mailto:` link the person taps; the
 picture and the logs carry no contact.
+
+## Step 3f-4 as built — History
+
+Items H7–H12: the door, the bounded read with older pages from the server and the legacy record, the window of `historyDays`,
+the cards with their send sections, sending again (a card or a whole day), and the editor (correct, delete). Rules unchanged:
+the correction and the delete write `orders-history` as the current app does (H6).
+
+**Shared.** `archive` becomes an ADAPTED port (no longer paired): `recordedName` takes the word for a deleted ingredient as an
+argument instead of reading the language; `withCorrection`, `recordSends`, `sendSections`, `splitHistoryByAge`, `countRecords`
+and `groupHistoryByDay` are ported as they are. `archive.spec.ts` runs every test against both files; `odd-inputs.spec.ts`
+feeds both the same odd inputs.
+
+**Data.** `ordersSource.getOlderHistory` (`getDocsFromServer`, never the offline cache: `date < before`, newest first, 100 a
+page after a cursor), `getLegacyHistory` (the records with a `weekStart`), `rewriteRecord` (one transaction: read, decide, write
+or delete). `ordersStore`: the window's start is fixed once when the page starts, so the live listener and the older pages meet
+exactly; `loadOlderHistory` (a second press while a page is on its way asks for nothing; a failed page keeps what was loaded
+and the retry asks for the same page); `correctRecord` / `deleteRecord`, never offline, holding `markBusy` while they write; a
+record in an older page (which no listener watches) is brought in step after the write. `orders/historyEdit.ts`: the editor's
+rows, the record a correction writes (`correctedRecord`), and `sameOrder`.
+
+**Logic.** `sendFlow.recordSendRows`: the rows of a recorded order sent again (the legacy record keeps its own id and the
+fallback supplier name). `useSendOrder` takes `resend: true`, which skips the same-day unit check — the order was recorded
+already.
+
+**Screens.** A gear on the order list → «Impostazioni» with one door, «Ordini passati» («Mostra gli ultimi 15 giorni») →
+History: the days of the window, today first, each day with two or more orders offering «Manda tutti»; the cards collapsed,
+opening on the lines (with two or more sends: «Ordine · ore 9:10», «Aggiunta · ore 11:30», «Corretto · ore …», then «Totale del
+giorno»), «Manda di nuovo» and «Correggi»; the days beyond `historyDays` behind «Mostra gli ordini precedenti (n)», then «Carica
+ordini più vecchi» for the pages before the live window and the legacy week («Settimana intera — tutti i fornitori»). «Manda
+tutti» → «Manda oggi», the send screen's body (`SendPicker`, now shared) with nothing ticked. «Correggi» → «Correggi l’ordine»:
+edits on a copy, «Salva» with a confirm, Back with edits asks to discard, «Elimina questo ordine» with a confirm; after a save or
+a delete, back to History. History stays mounted under the editor and the day screen, so its open cards and loaded pages are
+kept; Back steps up one level at a time and hands the focus back to what opened the screen.
+
+**Decisions of this slice (his, 29 Oct 2026):**
+- A. History's door lives in a Settings screen opened from a gear on the list — where Federico moved it in the current app
+  (H7). The door reads «Ordini passati» (the title of the screen it opens).
+- B. (F8) «Manda di nuovo» and «Manda tutti» use the same road chooser as the send arrow, not always WhatsApp.
+
+**Differences from the current app, on purpose (tell him):**
+- E1. ⚠️ **A correction or a delete never overwrites a colleague's order.** The current app saves the edited record WHOLE: if
+  another phone added a second order to that supplier after the editor opened, the save wipes it out (and a delete deletes it).
+  Mise 2 checks, inside the transaction, that the stored record is still the order the editor opened (quantities, units, stock
+  and sends; a delivery answer written meanwhile does not count); otherwise nothing is written and the editor says «Questo ordine
+  è cambiato mentre lo correggevi…». A record deleted meanwhile is «non c’è più», and nothing is created.
+- E2. A correction that leaves every line at 0 is not saved and never deletes the record: the editor says so and points to
+  «Elimina questo ordine».
+- E3. Correcting and deleting need the connection (they are refused at once offline, with a message): the check of E1 must read
+  the server. Sending again works offline as the send arrow does.
+- E4. «Salva» with nothing changed goes back to History and writes nothing (the current app adds a «Corretto» line that
+  corrects nothing).
+
+**Implementation choices (listed for him):** «Manda di nuovo» stays pressable while a send is on its way, and a second press is
+ignored; the day heading reads like the order list's day line («Oggi», «ven 9 ott 2026»), the day screen's title says it in
+words («Manda oggi»); a record whose supplier is unknown takes the fallback supplier name; extra messages for «nothing to send
+for that order» and «you are offline: nothing was deleted».
+
+**Found driving and in the review, fixed:** the order list's search box shrank under 44px at 296px once the gear stood beside
+«Manda» (it now takes a line of its own there); «Manda di nuovo» said nothing when the browser blocked the window (now «Non si è
+aperto niente», or the supplier a road could not reach is named); History counted the phone's own empty copy as loaded (offline
+it said «no orders» and an editor opened by its address bounced back — it now waits for the server's first word or records in
+hand); after a delete the focus landed on the deleted card's button a moment before it vanished (History's title takes it); the
+Italian «changed» message read as «another phone added the order».
+
+**Left open (tell him):**
+- Leaving History with the phone's back gesture after coming back from the editor may not give the focus back to the «Ordini
+  passati» door (found in the review, not confirmed; the on-screen Back does).
+- A correction and a delete are checked against the rules only through the fake source; the emulator drive wrote both through
+  the real rules.
+- To try on the tablet: «Manda di nuovo» on WhatsApp and email from a real phone, and History offline.
+
+**Tests.** Flaky under load in the full app run (each passes alone): RecipesSection haccpSettings, PastriesSection days,
+SuppliersSection ingredient allergens.
+
+**P13.** No new personal data: History shows what the records already hold (suppliers, ingredients, quantities, times); a
+supplier's phone and email travel only in the link the person taps.
