@@ -1097,6 +1097,51 @@ input.cp-prod-weight {
   font-weight: 700;
 }
 .cp-prod-card-row { display: flex; align-items: center; gap: 8px; }
+
+/* Reordering a recipe's ingredients (same look as the Catalogue's editor, Calculator tokens).
+   The drag states reuse .cp-sortable-ghost/-chosen/-drag above. */
+.cp-ing-head { display: flex; align-items: center; gap: 8px; }
+.cp-ing-head .cp-label { margin-bottom: 0; }
+.cp-reorder-btn {
+  margin-left: auto;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cp-reorder-btn[hidden] { display: none; }
+.cp-reorder-btn:active { transform: scale(.97); }
+.cp-reorder-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.cp-reorder-hint { margin: 0 0 6px; font-size: 13px; color: var(--text2); }
+.cp-reorder-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.cp-reorder-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 2px 8px 2px 2px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.cp-reorder-row:last-child { border-bottom: 0; }
+/* The Home's grip pulls itself left into its row's padding; this row has 2px of it. */
+.cp-reorder-grip { margin-left: 0; }
+.cp-reorder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; color: var(--text); }
+.cp-reorder-amount { flex-shrink: 0; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text2); }
 /* A fixed label column, so Recipe / Weight / Type all begin on the same x. Only the
    FIRST .cp-unit of a row is a label; a trailing one ("g", "pz") stays as wide as its
    own text. */

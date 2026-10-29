@@ -412,6 +412,22 @@ export function recipeSpec(recipe) {
   return { amounts, leaveningKey, baselinePct };
 }
 
+// The ingredients in a new order: the one at `from` moved to `to`. A NEW list holding the
+// SAME row objects, so each row keeps its `key` (the leavening is found by it). An index
+// outside the list, or a move to where it already is, gives the list back as it was.
+// ⚠️ A deliberate copy of the Catalogue's moveRow (js/catalogue/catalogue-model.js): cheap,
+// and a feature may not import from another feature's folder.
+export function moveIngredient(list, from, to) {
+  const rows = Array.isArray(list) ? list.slice() : [];
+  const a = Math.trunc(Number(from));
+  const b = Math.trunc(Number(to));
+  if (!Number.isInteger(a) || !Number.isInteger(b) || a === b
+    || a < 0 || b < 0 || a >= rows.length || b >= rows.length) return rows;
+  const [row] = rows.splice(a, 1);
+  rows.splice(b, 0, row);
+  return rows;
+}
+
 // The saved independent WhatsApp lists (empty array for a missing/garbage config).
 export function getWhatsappLists(config) {
   return (config && Array.isArray(config.whatsappLists)) ? config.whatsappLists : [];

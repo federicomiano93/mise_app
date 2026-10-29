@@ -25,7 +25,9 @@ import { getConfig, saveConfigOrSay } from './calculator-config-store.js';
 import {
   cloneConfig, getRecipes, getIngredients, getProducts, LOGICS, MAX_VISIBLE_RECIPES, tabLeaveningId,
   usesOrders, usesTrays, isValidTrayWeight, DEFAULT_TRAY_WEIGHT, MAX_TRAY_WEIGHT, MIN_TRAY_WEIGHT,
+  moveIngredient,
 } from './calculator-config.js';
+import Sortable from './vendor/sortable.esm.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
 import { isLinked, chooseLeavening, leaveningLost } from './calculator-recipe-source.js';
@@ -50,6 +52,8 @@ let focusRow = null;      // the row whose head takes keyboard focus when the li
 let freshlyAdded = false;
 let showErrors = false;
 let dirty = false;
+let reorderingIngredients = false; // the recipe detail shows the ingredients as a draggable list
+let ingredientSortable = null;     // the Sortable on that list, destroyed before every redraw
 
 function genId(prefix) { return prefix + '-' + Math.random().toString(36).slice(2, 8); }
 function isBlank(s) { return !s || !String(s).trim(); }
@@ -81,6 +85,7 @@ export function openRecipes() {
   openRow = null;
   focusRow = null;
   freshlyAdded = false;
+  reorderingIngredients = false;
   showErrors = false;
   dirty = false;
   renderEditor();
@@ -105,6 +110,7 @@ export async function closeRecipes() {
       focusRow = activeRecipe;
     }
     freshlyAdded = false;
+    reorderingIngredients = false;
     activeRecipe = null;
     renderEditor();
     return;
@@ -120,6 +126,9 @@ export async function goHomeFromRecipes() {
 }
 
 function renderEditor() {
+  // The old Sortable goes first: a second instance on the same container moves rows twice.
+  ingredientSortable?.destroy();
+  ingredientSortable = null;
   if (activeRecipe === null) renderRecipeList();
   else renderRecipeDetail(activeRecipe);
 }
@@ -151,6 +160,8 @@ async function doSaveRecipes() {
   const invalid = findInvalid();
   if (invalid !== null) {
     showErrors = true;
+    // The reorder rows have no name box to highlight: leave the mode so the blank one shows.
+    reorderingIngredients = false;
     activeRecipe = invalid;
     renderEditor();
     alertDialog(t('calc.pleaseGiveEveryRecipe'));
@@ -174,6 +185,7 @@ async function doSaveRecipes() {
     showErrors = false;
     dirty = false;
     freshlyAdded = false;
+    reorderingIngredients = false;
     // The list is rebuilt: keyboard focus goes back to the row that was being edited.
     focusRow = activeRecipe;
     activeRecipe = null;
@@ -251,6 +263,7 @@ function renderRecipeList() {
     });
     markDirty();
     freshlyAdded = true;
+    reorderingIngredients = false;
     activeRecipe = recipes().length - 1;
     renderEditor();
   });
@@ -343,7 +356,7 @@ function recipePanel(r, ri, panelId, subEl) {
   });
 
   const edit = el('button', { class: 'btn-secondary rc-edit-btn', type: 'button' }, t('calc.editRecipe'));
-  edit.addEventListener('click', () => { freshlyAdded = false; openRow = ri; activeRecipe = ri; renderEditor(); });
+  edit.addEventListener('click', () => { freshlyAdded = false; reorderingIngredients = false; openRow = ri; activeRecipe = ri; renderEditor(); });
 
   return el('div', { class: 'rc-panel', id: panelId, role: 'group', 'aria-label': r.name || t('calc.unnamedRecipe'), hidden: '' }, [
     el('div', { class: 'cp-field' }, [
@@ -370,6 +383,7 @@ async function deleteRecipe(ri) {
   if (!(await confirmDialog({ message: r.name ? t('calc.deleteRecipeNamed', { name: r.name }) : t('calc.deleteThisRecipe'), okLabel: t('ui.delete'), danger: true, cancelLabel: t('ui.cancel') }))) return;
   recipes().splice(ri, 1);
   markDirty();
+  reorderingIngredients = false;
   activeRecipe = null;
   openRow = null;
   renderEditor();
@@ -407,7 +421,8 @@ function renderRecipeDetail(ri) {
   const linked = isLinked(r);
   const resolved = effectiveRecipe(r);
 
-  const ingField = el('div', { class: 'cp-field' }, [el('label', { class: 'cp-label' }, t('ui.ingredients'))]);
+  const ingLabel = el('label', { class: 'cp-label' }, t('ui.ingredients'));
+  const ingField = el('div', { class: 'cp-field' }, [ingLabel]);
 
   if (linked) {
     // ⚠️ READ-ONLY, AND THAT IS THE POINT (Federico, 14 Aug 2026): the recipe is
@@ -426,14 +441,37 @@ function renderRecipeDetail(ri) {
       ingField.appendChild(el('div', { class: 'cp-hint' }, t('calc.editedInCatalogue')));
     }
   } else {
-    r.ingredients.forEach((ing, gi) => ingField.appendChild(ingredientRow(r, ing, gi, listId, showLeaveningPicker)));
-    const addIng = el('button', { class: 'cp-add-prod', type: 'button' }, t('calc.addIngredient'));
-    addIng.addEventListener('click', () => {
-      r.ingredients.push({ key: '', label: '', grams: 0 });
-      markDirty();
+    // «Reorder» beside the heading (29 Oct 2026), a mode like the Catalogue's editor.
+    const reorderBtn = el('button', {
+      class: 'cp-reorder-btn', type: 'button', 'aria-pressed': String(reorderingIngredients),
+    }, t(reorderingIngredients ? 'calc.reorderDone' : 'calc.reorderIngredients'));
+    // Nothing to put in order with a single row.
+    reorderBtn.hidden = r.ingredients.length < 2;
+    reorderBtn.addEventListener('click', () => {
+      reorderingIngredients = !reorderingIngredients;
       renderEditor();
+      // Entering: the first grip. Leaving: back on the button that was pressed (Done stays
+      // under the finger, unlike the Catalogue which jumps to the first name).
+      const target = reorderingIngredients
+        ? document.querySelector('#recipe-content .cp-reorder-grip')
+        : document.querySelector('#recipe-content .cp-reorder-btn');
+      try { target?.focus({ preventScroll: true }); } catch (e) { /* focus is best-effort */ }
     });
-    ingField.appendChild(addIng);
+    ingField.replaceChildren(el('div', { class: 'cp-ing-head' }, [ingLabel, reorderBtn]));
+
+    if (reorderingIngredients) {
+      ingField.appendChild(el('p', { class: 'cp-reorder-hint', id: 'cpReorderHint' }, t('calc.reorderHint')));
+      ingField.appendChild(reorderList(r));
+    } else {
+      r.ingredients.forEach((ing, gi) => ingField.appendChild(ingredientRow(r, ing, gi, listId, showLeaveningPicker)));
+      const addIng = el('button', { class: 'cp-add-prod', type: 'button' }, t('calc.addIngredient'));
+      addIng.addEventListener('click', () => {
+        r.ingredients.push({ key: '', label: '', grams: 0 });
+        markDirty();
+        renderEditor();
+      });
+      ingField.appendChild(addIng);
+    }
   }
   content.appendChild(ingField);
 
@@ -447,6 +485,65 @@ function renderRecipeDetail(ri) {
   if (showLeaveningPicker) {
     content.appendChild(leaveningBox(r));
   }
+}
+
+// ── Reordering the ingredients (29 Oct 2026) ─────────────────────────────────
+//
+// Federico: «inserisci la funzione di ordinare gli ingredienti nella scheda calcolatore
+// come è fatta nella scheda ricette».
+// ⚠️ A MODE, NOT A GRIP ON EVERY ROW: while reordering each row is its grip, its name and
+// its amount — nothing to type into while a finger is dragging.
+// ⚠️ THE SAME ROW OBJECTS MOVE (moveIngredient) and only their order changes: keys, grams,
+// leaveningKey, leaveningDefaultPct and baselinePct are untouched, so the leavening (found
+// by `key`) still points at the right ingredient and the dough does not change.
+const GRIP_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.6"/><circle cx="15" cy="6" r="1.6"/><circle cx="9" cy="12" r="1.6"/><circle cx="15" cy="12" r="1.6"/><circle cx="9" cy="18" r="1.6"/><circle cx="15" cy="18" r="1.6"/></svg>';
+
+function reorderList(r) {
+  const list = el('div', { class: 'cp-reorder-list' });
+  r.ingredients.forEach((ing, idx) => {
+    const name = String(ing.label || '').trim() || t('calc.unnamedIngredient');
+    const grip = el('button', {
+      type: 'button', class: 'home-cards-grip cp-reorder-grip',
+      'aria-label': t('calc.moveIngredient', { name }), 'aria-describedby': 'cpReorderHint',
+    });
+    grip.innerHTML = GRIP_ICON;
+    grip.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
+      event.preventDefault();
+      const to = event.key === 'ArrowUp' ? idx - 1 : idx + 1;
+      if (to < 0 || to >= r.ingredients.length) return;
+      moveTo(r, idx, to, true);
+    });
+    list.appendChild(el('div', { class: 'cp-reorder-row' }, [
+      grip,
+      el('span', { class: 'cp-reorder-name' }, name),
+      el('span', { class: 'cp-reorder-amount' }, `${String(ing.grams)} g`),
+    ]));
+  });
+  // ⚠️ HOLD TO DRAG ON A PHONE (200ms), so scrolling with a thumb never moves a row.
+  if (r.ingredients.length > 1) {
+    ingredientSortable = Sortable.create(list, {
+      animation: 150,
+      delay: 200,
+      delayOnTouchOnly: true,
+      draggable: '.cp-reorder-row',
+      ghostClass: 'cp-sortable-ghost',
+      chosenClass: 'cp-sortable-chosen',
+      dragClass: 'cp-sortable-drag',
+      onEnd: (evt) => moveTo(r, evt.oldDraggableIndex, evt.newDraggableIndex),
+    });
+  }
+  return list;
+}
+
+// Move a row in the WORKING COPY and redraw from it, so the screen is always the model's.
+function moveTo(r, from, to, focusGrip = false) {
+  if (from === undefined || to === undefined || from === to) return;
+  r.ingredients = moveIngredient(r.ingredients, from, to);
+  markDirty();
+  renderEditor();
+  // The rows were rebuilt: put the focus back on the grip that moved (P18).
+  if (focusGrip) document.querySelectorAll('#recipe-content .cp-reorder-grip')[to]?.focus();
 }
 
 // One ingredient row: name (autocomplete) + grams + optional "leavening" radio + remove.
@@ -654,6 +751,8 @@ function sourceBox(recipe) {
 //
 // withRowIds is idempotent, so a recipe already carrying ids is untouched.
 async function link(recipe, catalogueId) {
+  // A linked recipe is read-only: the reorder mode must not outlive the change of source.
+  reorderingIngredients = false;
   if (!catalogueId) {
     // ⚠️ UNLINKING LEAVES THE TAB WITH NOTHING RATHER THAN A STALE COPY. Its own
     // ingredient list was left behind when it was linked; silently resurrecting
