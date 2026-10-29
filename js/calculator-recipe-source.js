@@ -201,8 +201,13 @@ export function chooseLeavening(recipe, value, linkedRows) {
     if (!ing) return false;
     // An ingredient with no key cannot be pointed at yet; it gets one the moment
     // it is chosen, exactly as the old tick did.
+    // ⚠️ A KEY NO OTHER ROW HAS: rows can be reordered, so «name-<index>» may already be
+    // the key of an older row, and two rows sharing it would hand the leavening to whichever
+    // comes first.
     if (!ing.key) {
-      ing.key = (ing.label || 'ing').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + own.indexOf(ing);
+      let key = (ing.label || 'ing').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + own.indexOf(ing);
+      while (own.some(o => o && o !== ing && o.key === key)) key += '-x';
+      ing.key = key;
     }
     recipe.leaveningKey = ing.key;
   }
