@@ -189,7 +189,7 @@ describe('⚠️ the new supplier is written as the model says, after a confirma
     await user.click(primary('Save 1 supplier'));
     await user.click(within(await saveDialog()).getByRole('button', { name: 'Save' }));
     await screen.findByRole('heading', { level: 3, name: 'Ingredients' }, LOAD);
-    expect(importing.calls.map(call => call[0])).toEqual(['loadDecisions', 'freshSuppliers', 'createSupplier']);
+    expect(importing.calls.map(call => call[0])).toEqual(['loadImportLog', 'loadImportLog', 'loadDecisions', 'freshSuppliers', 'createSupplier']);
   });
 
   it('«Do not import anything from this supplier» leaves nothing to save: Next goes on, and nothing is written', async () => {
@@ -200,7 +200,7 @@ describe('⚠️ the new supplier is written as the model says, after a confirma
     await user.click(primary('Next'));
     expect(await screen.findByRole('heading', { level: 3, name: 'Ingredients' })).toBeInTheDocument();
     expect(importing.writes).toEqual([]);
-    expect(importing.calls.map(call => call[0])).toEqual(['loadDecisions']);
+    expect(importing.calls.map(call => call[0])).toEqual(['loadImportLog', 'loadImportLog', 'loadDecisions']);
   });
 });
 

@@ -4,7 +4,11 @@ import type { SelectionItem } from '@mise/shared/invoice-zip/selection';
 import type { MessageKey } from '../../i18n/en';
 import { useT } from '../../i18n/useT';
 import { codeKeys } from './importWords';
+import type { FileVerdict } from './importLog';
 import type { ImportRun } from './importRun';
+import { LogBlock } from './LogBlock';
+import type { LogState } from './LogBlock';
+import { dayWord, elided, invoicesWord, momentWord } from './logWords';
 import styles from './InvoiceImportScreen.module.css';
 
 // The groups that stay closed until opened (parity I86): [selection group, title, the tick-box that puts a product back].
@@ -24,6 +28,9 @@ type Props = {
   error: MessageKey | null;
   // What was read, or null.
   run: ImportRun | null;
+  // The import log (the top of the step) and what the file just read holds against it, or null.
+  log: LogState;
+  verdict: FileVerdict | null;
   // Which groups the person has opened.
   open: Readonly<Record<string, boolean>>;
   onToggle: (group: string, open: boolean) => void;
@@ -35,12 +42,17 @@ type Props = {
 
 // Step 1 of 3: choose the file. The explanation, the picker, and — once a zip is read — what the invoices held.
 export function FileStep({
-  headingRef, errorRef, resultRef, fileName, reading, error, run, open, onToggle, onFiles, onTick, onSupplierTick,
+  headingRef, errorRef, resultRef, fileName, reading, error, run, log, verdict, open, onToggle, onFiles, onTick, onSupplierTick,
 }: Props) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const inputId = useId();
+  const verdictId = useId();
+  // Every invoice of the file was imported before: nothing to read further, and no way on (the person may choose another file).
+  const allOld = !run && verdict !== null && verdict.newCount === 0 && verdict.oldCount > 0 ? verdict : null;
+  const mixed = run && verdict !== null && verdict.newCount > 0 ? verdict : null;
   return (
     <>
+      <LogBlock log={log} />
       <h3 ref={headingRef} tabIndex={-1} className={styles.heading}>{t('sup.imp.step.file')}</h3>
       <p className={styles.note}>{t('sup.imp.file.explain')}</p>
       {/* ONE input for the life of the screen: it is never drawn again (its value is emptied after each choice, so the same file can be chosen twice). The zip is the
@@ -69,14 +81,43 @@ export function FileStep({
       </div>
       {reading ? <p role="status" className={styles.note}>{t('sup.imp.file.reading')}</p> : null}
       {error ? <p ref={errorRef} role="alert" tabIndex={-1} className={`${styles.status} ${styles.error}`}>{t(error)}</p> : null}
-      {run ? (
+      {allOld ? (
         <p ref={resultRef} role="status" tabIndex={-1} className={`${styles.status} ${styles.ok}`}>
+          {allOldWord(allOld, t, locale)}
+        </p>
+      ) : null}
+      {mixed ? <p id={verdictId} className={styles.note}>{verdictWord(mixed, t, locale)}</p> : null}
+      {/* The focus lands on the counts line after a read: it carries the verdict above as its description, so a screen reader also
+          says how many invoices were set aside. */}
+      {run ? (
+        <p ref={resultRef} role="status" tabIndex={-1} aria-describedby={mixed ? verdictId : undefined} className={`${styles.status} ${styles.ok}`}>
           {`${t('sup.imp.zip.invoices', { n: run.selection.counts.invoices })} · ${t('sup.imp.file.found.suppliers', { n: run.file.suppliers.length })} · ${t('sup.imp.file.found.ingredients', { n: run.file.ingredients.length })}`}
         </p>
       ) : null}
       {run ? <Selection run={run} open={open} onToggle={onToggle} onTick={onTick} onSupplierTick={onSupplierTick} /> : null}
     </>
   );
+}
+
+type Say = ReturnType<typeof useT>['t'];
+
+// «This file: 3 invoices from X to Y — 2 new, 1 already imported».
+function verdictWord(verdict: FileVerdict, t: Say, locale: string): string {
+  const invoices = invoicesWord(t, verdict.total);
+  const fresh = t('sup.imp.file.verdictNew', { n: verdict.newCount });
+  const old = t('sup.imp.file.verdictOld', { n: verdict.oldCount });
+  if (verdict.firstDate === '') return t('sup.imp.file.verdictNoDate', { invoices, fresh, old });
+  if (verdict.firstDate === verdict.lastDate) {
+    return elided(locale, t('sup.imp.file.verdictOneDay', { invoices, day: dayWord(locale, verdict.firstDate), fresh, old }));
+  }
+  return elided(locale, t('sup.imp.file.verdict', { invoices, from: dayWord(locale, verdict.firstDate), to: dayWord(locale, verdict.lastDate), fresh, old }));
+}
+
+function allOldWord(verdict: FileVerdict, t: Say, locale: string): string {
+  const date = momentWord(locale, verdict.importedAt);
+  return date === ''
+    ? t('sup.imp.file.allOldNoDate', { n: verdict.oldCount })
+    : elided(locale, t('sup.imp.file.allOld', { n: verdict.oldCount, date }));
 }
 
 // What the invoices held that is NOT in this import, each product with a tick-box that puts it back (or, for a remembered

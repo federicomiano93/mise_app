@@ -37,5 +37,7 @@ export function createLazyImportSource(firestore: () => Promise<FirestoreKit>, l
     runImportBatches: async batches => (await load()).runImportBatches(batches),
     loadDecisions: async () => (await load()).loadDecisions(),
     writeDecisions: async changes => (await load()).writeDecisions(changes),
+    loadImportLog: async () => (await load()).loadImportLog(),
+    saveImportLog: async record => (await load()).saveImportLog(record),
   };
 }

@@ -172,6 +172,7 @@ function Rows({
       {nothingToWrite && waiting === 0 ? (
         <div className={styles.nothing}>
           <p className={styles.hint}>{t('sup.imp.ing.nothing')}</p>
+          <p className={styles.note}>{t('sup.imp.log.doneMarks')}</p>
           {canRecordChanges ? <Button variant="secondary" onPress={onRecordChanges}>{t('sup.imp.ing.recordChanges')}</Button> : null}
         </div>
       ) : null}
