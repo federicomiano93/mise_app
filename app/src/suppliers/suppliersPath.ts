@@ -9,7 +9,9 @@
 //   /suppliers/supplier/<id>/edit   that supplier's card, one level below its screen
 //   /suppliers/settings             Settings of this page (owner and manager), full width at every size
 //   /suppliers/import               «Import from invoices» (price writers of an Italian venue), full width at every size
+//   /suppliers/price-changes        «Price changes», the read-only report (same gate as the import), full width at every size
 //   /suppliers/ingredient/<id>      an ingredient's or a packaging item's card, one level below the list
+//   /suppliers/ingredient/<id>/merge  «Merge another pack…»: the chooser one level below that card (owner or manager with Food cost)
 //   /suppliers/ingredient/new       a new ingredient; `?kind=packaging` makes it a new packaging item and
 //                                   `?supplier=<id>` starts it on that supplier (opened from the supplier's screen)
 //   anything else                   unknown: the section goes back to /suppliers
@@ -23,6 +25,7 @@ export const PACKAGING_TAB_PATH = '/suppliers/packaging';
 export const NEW_SUPPLIER_PATH = '/suppliers/supplier/new';
 export const SUPPLIERS_SETTINGS_PATH = '/suppliers/settings';
 export const SUPPLIERS_IMPORT_PATH = '/suppliers/import';
+export const SUPPLIERS_PRICE_CHANGES_PATH = '/suppliers/price-changes';
 export const NEW_INGREDIENT_PATH = '/suppliers/ingredient/new';
 export const NEW_PACKAGING_PATH = `${NEW_INGREDIENT_PATH}?kind=packaging`;
 
@@ -34,15 +37,19 @@ export type SuppliersView =
   | { readonly kind: 'supplier-edit'; readonly id: string }
   | { readonly kind: 'supplier-new' }
   | { readonly kind: 'ingredient'; readonly id: string }
+  // «Merge another pack…»: the chooser one level below an ingredient's card (A, the card's item, is `id`).
+  | { readonly kind: 'ingredient-merge'; readonly id: string }
   // A new ingredient or packaging item; `supplier` is the preset of a new item opened from a supplier's screen.
   | { readonly kind: 'ingredient-new'; readonly packaging: boolean; readonly supplier: string | null }
   | { readonly kind: 'settings' }
   | { readonly kind: 'import' }
+  | { readonly kind: 'price-changes' }
   | { readonly kind: 'unknown' };
 
 export const supplierPath = (id: string): string => `${SUPPLIERS_PATH}/supplier/${encodeURIComponent(id)}`;
 export const supplierEditPath = (id: string): string => `${supplierPath(id)}/edit`;
 export const ingredientPath = (id: string): string => `${SUPPLIERS_PATH}/ingredient/${encodeURIComponent(id)}`;
+export const ingredientMergePath = (id: string): string => `${ingredientPath(id)}/merge`;
 
 // A new item's address: the kind and the supplier it starts on, when there are any.
 export function newIngredientPath({ packaging = false, supplier = null }: { packaging?: boolean; supplier?: string | null } = {}): string {
@@ -92,6 +99,7 @@ export function parseSuppliersPath(rest: string | undefined, search = ''): Suppl
     if (first === 'packaging') return { kind: 'list', tab: 'packaging' };
     if (first === 'settings') return { kind: 'settings' };
     if (first === 'import') return { kind: 'import' };
+    if (first === 'price-changes') return { kind: 'price-changes' };
     return { kind: 'unknown' };
   }
   if (first === 'ingredient' && second !== undefined && parts.length === 2) {
@@ -102,6 +110,10 @@ export function parseSuppliersPath(rest: string | undefined, search = ''): Suppl
       return { kind: 'ingredient-new', packaging: query.get('kind') === 'packaging', supplier: supplier === null || supplier === '' ? null : supplier };
     }
     return isSupplierId(id) ? { kind: 'ingredient', id } : { kind: 'unknown' };
+  }
+  if (first === 'ingredient' && second !== undefined && parts.length === 3 && third === 'merge') {
+    const id = decoded(second);
+    return isSupplierId(id) ? { kind: 'ingredient-merge', id } : { kind: 'unknown' };
   }
   if (first !== 'supplier' || second === undefined) return { kind: 'unknown' };
   const id = decoded(second);
@@ -122,6 +134,8 @@ export function suppliersScreenName(rest: string): string {
   if (view.kind === 'supplier-edit' || view.kind === 'supplier-new') return 'suppliers-supplier-edit';
   if (view.kind === 'settings') return 'suppliers-settings';
   if (view.kind === 'import') return 'suppliers-import';
+  if (view.kind === 'price-changes') return 'suppliers-price-changes';
+  if (view.kind === 'ingredient-merge') return 'suppliers-merge';
   // A new item and an existing one's card are one screen in the statistics.
   if (view.kind === 'ingredient' || view.kind === 'ingredient-new') return 'suppliers-ingredient';
   return 'suppliers';

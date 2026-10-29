@@ -339,6 +339,11 @@
   list-style: none;
 }
 
+/* «Merge another pack…»: a secondary button above the switch, as wide as its words (never stretched across the card). */
+.mergeDoor {
+  align-self: flex-start;
+}
+
 /* «Not in use at the moment»: the switch beside its name, the hint under it. */
 .switchField {
   display: flex;

@@ -9,9 +9,10 @@ import { useOwnScrollArea } from '../shell/scrollArea';
 import { SPLIT_QUERY } from '../ui/split';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { useMediaQuery } from '../ui/useMediaQuery';
-import { HandBackProvider, IMPORT_OPENER, NEW_OPENER, SETTINGS_OPENER, itemOpener, supplierOpener, useHandBackState } from './handBack';
+import { HandBackProvider, IMPORT_OPENER, NEW_OPENER, PRICE_CHANGES_OPENER, SETTINGS_OPENER, itemOpener, supplierOpener, useHandBackState } from './handBack';
 import { createIngredientDeletions, IngredientDeletionsProvider } from './ingredientDeletions';
 import { useMayImport } from './invoiceImport/useMayImport';
+import { useMayWritePrices } from './useMayWritePrices';
 import { createSupplierDeletions, SupplierDeletionsProvider } from './supplierDeletions';
 import { SuppliersProvider, useSuppliers, useSuppliersStore } from './SuppliersContext';
 import { SuppliersDetail } from './SuppliersDetail';
@@ -20,7 +21,7 @@ import { SuppliersList } from './SuppliersList';
 import { FROM_LIST, cameFromList, fromListTab, supplierScreenOf, tabOfState } from './suppliersNav';
 import { messageText } from './suppliersMessages';
 import {
-  NEW_INGREDIENT_PATH, NEW_PACKAGING_PATH, NEW_SUPPLIER_PATH, SUPPLIERS_IMPORT_PATH, SUPPLIERS_PATH, SUPPLIERS_SETTINGS_PATH,
+  NEW_INGREDIENT_PATH, NEW_PACKAGING_PATH, NEW_SUPPLIER_PATH, SUPPLIERS_IMPORT_PATH, SUPPLIERS_PATH, SUPPLIERS_PRICE_CHANGES_PATH, SUPPLIERS_SETTINGS_PATH,
   ingredientPath, parseSuppliersPath, supplierPath, tabOf, tabPath,
 } from './suppliersPath';
 import type { SuppliersTab } from './suppliersPath';
@@ -63,6 +64,7 @@ function SuppliersScreen() {
   const navigationType = useNavigationType();
   const { canManage } = useSession();
   const mayImport = useMayImport();
+  const mayWritePrices = useMayWritePrices();
   // The address as it is written, not React Router's «*»: a supplier id is split before it is decoded (suppliersPath.ts).
   const view = parseSuppliersPath(pathname.slice(SUPPLIERS_PATH.length), search);
 
@@ -79,14 +81,20 @@ function SuppliersScreen() {
   }
   // ⚠️ THE IMPORT IS FOR A PRICE WRITER OF AN ITALIAN VENUE (decision F3 (b)): anybody else who types the address is sent to the
   // list, and nothing of the screen is drawn. The rules are the real guard; this is courtesy.
-  if (view.kind === 'import' && !mayImport) {
+  // «Price changes» has the import's gate (parity I101): the report fills only from imports.
+  if ((view.kind === 'import' || view.kind === 'price-changes') && !mayImport) {
     return <Navigate to={SUPPLIERS_PATH} replace state={KEEP_FOCUS} />;
+  }
+  // ⚠️ THE MERGE IS FOR A PRICE WRITER (parity I117: owner or manager with Food cost on): anybody else who types the address is
+  // sent to the ingredient's own card. The rules are the real guard; this is courtesy.
+  if (view.kind === 'ingredient-merge' && !mayWritePrices) {
+    return <Navigate to={ingredientPath(view.id)} replace state={KEEP_FOCUS} />;
   }
   return <SuppliersLayout view={view} />;
 }
 
 // The screens that take the whole row at every size (the list is not drawn beside them).
-const isWide = (kind: ShownView['kind']): boolean => kind === 'settings' || kind === 'import';
+const isWide = (kind: ShownView['kind']): boolean => kind === 'settings' || kind === 'import' || kind === 'price-changes';
 
 function SuppliersLayout({ view }: { view: ShownView }) {
   const { t } = useT();
@@ -104,9 +112,11 @@ function SuppliersLayout({ view }: { view: ShownView }) {
 
   // ⚠️ THE LIST BESIDE (OR BEHIND) AN ITEM'S CARD: opened from a supplier's screen, the Suppliers tab; otherwise the tab it was
   // opened from (carried in the navigation state), and by its address alone, the tab of its kind.
-  const supplierOrigin = view.kind === 'ingredient' || view.kind === 'ingredient-new' ? supplierScreenOf(state) : null;
+  // The merge chooser sits one level below a card and keeps the card's list beside it.
+  const cardLike = view.kind === 'ingredient' || view.kind === 'ingredient-new' || view.kind === 'ingredient-merge';
+  const supplierOrigin = cardLike ? supplierScreenOf(state) : null;
   let listTab = tabOf(view);
-  if (view.kind === 'ingredient' || view.kind === 'ingredient-new') {
+  if (cardLike) {
     const item = view.kind === 'ingredient' ? ingredients.find(candidate => candidate.id === view.id) : undefined;
     listTab = supplierOrigin !== null ? 'suppliers' : (tabOfState(state) ?? (item && isPackaging(item) ? 'packaging' : listTab));
   }
@@ -171,6 +181,18 @@ function SuppliersLayout({ view }: { view: ShownView }) {
       void navigate(SUPPLIERS_IMPORT_PATH, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
     } else {
       void navigate(SUPPLIERS_IMPORT_PATH, { state: FROM_LIST });
+    }
+  };
+
+  // «Price changes» opens the same way: full width at every size, one level down.
+  const openPriceChanges = () => {
+    if (view.kind === 'price-changes') return;
+    handBack.expect(PRICE_CHANGES_OPENER);
+    listTop.current = scrollArea()?.scrollTop ?? null;
+    if (split && view.kind !== 'list') {
+      void navigate(SUPPLIERS_PRICE_CHANGES_PATH, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
+    } else {
+      void navigate(SUPPLIERS_PRICE_CHANGES_PATH, { state: FROM_LIST });
     }
   };
 
@@ -247,7 +269,7 @@ function SuppliersLayout({ view }: { view: ShownView }) {
                 openSupplierId={view.kind === 'supplier' || view.kind === 'supplier-edit' ? view.id : supplierOrigin}
                 onTab={openTab}
                 onOpenSupplier={openSupplier}
-                openItemId={view.kind === 'ingredient' ? view.id : null}
+                openItemId={view.kind === 'ingredient' || view.kind === 'ingredient-merge' ? view.id : null}
                 onOpenItem={openItem}
                 newOpen={newOpen}
                 onNew={openNew}
@@ -255,6 +277,8 @@ function SuppliersLayout({ view }: { view: ShownView }) {
                 onOpenSettings={openSettings}
                 importOpen={view.kind === 'import'}
                 onOpenImport={openImport}
+                priceChangesOpen={view.kind === 'price-changes'}
+                onOpenPriceChanges={openPriceChanges}
               />
             </PartBoundary>
           </div>

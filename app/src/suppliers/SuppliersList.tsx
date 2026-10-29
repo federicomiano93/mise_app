@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { ChevronRight, FileUp, Plus, Search, Settings } from 'lucide-react';
+import { ChevronRight, FileUp, Plus, Search, Settings, TrendingUp } from 'lucide-react';
 import { favouriteGroups } from '@mise/shared/favourite-suppliers';
 import { ingredientDisplayName, ingredientNameMatches } from '@mise/shared/ingredient-name';
 import { isPackaging } from '@mise/shared/ingredient-kind';
@@ -14,7 +14,7 @@ import { ItemRow, ItemRows } from './ItemRow';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { suppliersFromInvoices } from './invoiceTag';
 import { useMayImport } from './invoiceImport/useMayImport';
-import { IMPORT_OPENER, NEW_OPENER, SEARCH_OPENER, SETTINGS_OPENER, itemOpener, supplierOpener, useHandBack } from './handBack';
+import { IMPORT_OPENER, NEW_OPENER, PRICE_CHANGES_OPENER, SEARCH_OPENER, SETTINGS_OPENER, itemOpener, supplierOpener, useHandBack } from './handBack';
 import type { SuppliersTab } from './suppliersPath';
 import { useSuppliers } from './SuppliersContext';
 import type { StoredDoc } from './suppliersSource';
@@ -85,6 +85,9 @@ type Props = {
   // «Import from invoices» is the screen shown, and the door to it beside Settings (drawn only where the import is allowed).
   importOpen: boolean;
   onOpenImport: () => void;
+  // «Price changes» is the screen shown, and the door to it right after the import's (the same gate).
+  priceChangesOpen: boolean;
+  onOpenPriceChanges: () => void;
 };
 
 // Where an arrow, Home or End key sends the selection.
@@ -112,13 +115,14 @@ function targetOf(key: string, index: number, last: number): number | null {
 // the person left them. The three tabs share it, so it is not even remounted by a tab (parity S48).
 //
 // ⚠️ A TAB CLEARS THE SEARCH (parity S49), however the tab came to change — one list's query must never filter the other.
-export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, openItemId, onOpenItem, newOpen, onNew, settingsOpen, onOpenSettings, importOpen, onOpenImport }: Props) {
+export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, openItemId, onOpenItem, newOpen, onNew, settingsOpen, onOpenSettings, importOpen, onOpenImport, priceChangesOpen, onOpenPriceChanges }: Props) {
   const { t } = useT();
   const { canManage } = useSession();
   const handBack = useHandBack();
   const newDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(NEW_OPENER, node); }, [handBack]);
   const mayImport = useMayImport();
   const importDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(IMPORT_OPENER, node); }, [handBack]);
+  const priceChangesDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(PRICE_CHANGES_OPENER, node); }, [handBack]);
   const settingsDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
   const snapshot = useSuppliers();
   const searchOpener = useCallback((node: HTMLInputElement | null) => { handBack.register(SEARCH_OPENER, node); }, [handBack]);
@@ -253,6 +257,19 @@ export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, open
         >
           <FileUp aria-hidden="true" />
           <span>{t('sup.imp.title')}</span>
+        </Button>
+      ) : null}
+      {/* ⚠️ THE REPORT HAS THE IMPORT'S GATE (parity I101): it fills only from imports, and its rule reads for Food cost. */}
+      {mayImport ? (
+        <Button
+          ref={priceChangesDoor}
+          variant="secondary"
+          className={styles.door}
+          aria-current={priceChangesOpen ? 'true' : undefined}
+          onPress={onOpenPriceChanges}
+        >
+          <TrendingUp aria-hidden="true" />
+          <span>{t('sup.pc.open')}</span>
         </Button>
       ) : null}
       {/* ⚠️ THE DOOR TO SETTINGS EXISTS ONLY FOR WHOEVER RUNS THE PLACE (owner or manager): a screen of switches that an

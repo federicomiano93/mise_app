@@ -4,6 +4,8 @@ import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { SETTINGS_OPENER, useHandBack } from './handBack';
 import { IngredientCardScreen } from './IngredientCardScreen';
+import { MergeScreen } from './merge/MergeScreen';
+import { PriceChangesScreen } from './priceChanges/PriceChangesScreen';
 import { SupplierCardScreen } from './SupplierCardScreen';
 import { SupplierScreen } from './SupplierScreen';
 import { useSuppliers } from './SuppliersContext';
@@ -31,6 +33,8 @@ export function SuppliersDetail({ view }: { view: ShownView }) {
   if (view.kind === 'supplier-edit') return <SupplierCardScreen key="edit" id={view.id} />;
   // Keyed on what the card is, so a card opened for another item starts afresh (it copies its item once).
   if (view.kind === 'ingredient') return <IngredientCardScreen key={`ingredient-${view.id}`} id={view.id} packaging={false} preset={null} />;
+  // The chooser of «Merge another pack…», keyed like the card so a chooser for another item starts afresh.
+  if (view.kind === 'ingredient-merge') return <MergeScreen key={`merge-${view.id}`} id={view.id} />;
   if (view.kind === 'ingredient-new') {
     return <IngredientCardScreen key="ingredient-new" id={null} packaging={view.packaging} preset={view.supplier} />;
   }
@@ -43,6 +47,7 @@ export function SuppliersDetail({ view }: { view: ShownView }) {
       </Suspense>
     );
   }
+  if (view.kind === 'price-changes') return <PriceChangesScreen />;
   return <SupplierScreen id={view.id} />;
 }
 
