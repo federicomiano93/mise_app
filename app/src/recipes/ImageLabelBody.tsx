@@ -15,6 +15,7 @@ import { normalizeLabelProfile } from '@mise/shared/label-template-model';
 import { allergenName, canPrintLabel, outputLanguage } from '@mise/shared/market';
 import { canLabel, recipeAllergens } from '@mise/shared/recipe-allergen-model';
 import type { RecipeAllergens } from '@mise/shared/recipe-allergen-model';
+import { imageAgentState, imageLabelJob } from '@mise/shared/image-label-print';
 import { MAX_IMAGE_COPIES, MAX_JOB_CHARS, imageLabelZpl } from '@mise/shared/zpl-z64';
 import { allergensOn } from '@mise/shared/venue-features';
 import type { MessageKey } from '../i18n/en';
@@ -29,15 +30,25 @@ import { bitmapPng, loadLogoImage, paintBitmap, renderLogoLabelBitmap } from './
 import { useLabelFonts } from './labelFonts';
 import { labelTextsOf, labelTitleOf } from './labelTexts';
 import { closePrintHost, openImagePrintHost } from './printHost';
-import { useRecipes } from './RecipesContext';
+import { useRecipes, useRecipesStore } from './RecipesContext';
 import { useLabelLogo } from './useLabelLogo';
+import { usePresenceClock } from './usePresenceClock';
 import { useStillWaiting } from './useStillWaiting';
 import styles from './LabelScreen.module.css';
 import own from './ImageLabelBody.module.css';
 
 // The label screen for the «with logo» model: the product label, 80 × 60 mm, drawn as an IMAGE (the owner's script,
-// ported in shared/src/label-image-*.ts) and put on paper either through the system's print dialog or as the Zebra's own
-// code to paste into its setup program. NEW IN MISE 2 (no original in js/).
+// ported in shared/src/label-image-*.ts) and put on paper through the shop computer's print queue, through the system's
+// print dialog, or as the Zebra's own code to paste into its setup program. NEW IN MISE 2 (no original in js/).
+//
+// ⚠️⚠️ THE ROAD OF PRINT IS THE SHOP COMPUTER'S HEARTBEAT, NOT THE VENUE'S PRINTER SETTING (shared/image-label-print.ts).
+// The standard label asks the venue whether its printer is a Zebra; the image label IS a Zebra label by construction and
+// its settings hide that card, so the only question is whether a computer that knows this label is listening right now.
+// If it is, Print queues the job; if not, Print opens the system's dialog as it always did, and says why when a computer
+// has reported before (a venue that never had one is told nothing).
+//
+// ⚠️ THE QUEUE ROAD CAN ONLY SAY «SENT», NEVER «PRINTED»: raw bytes to a printer come back with nothing. It re-judges the
+// heartbeat at tap time and refuses a second send while one is in flight, exactly as the standard label does.
 //
 // ⚠️⚠️ WHAT YOU SEE IS WHAT THE PRINTER GETS. The preview is the very 640 × 480 dots the printer receives (and the print
 // dialog's picture is a PNG of the same dots), never a second drawing of the same text: the screen cannot show a label
@@ -154,8 +165,9 @@ export function ImageLabelBody({ recipe }: { recipe: CatalogueRecipe }) {
 // `declared` is FULLY declared (canLabel): ImageLabelBody never draws this part otherwise.
 function ImageLabelReady({ recipe, typed, declared }: { recipe: CatalogueRecipe; typed: string; declared: RecipeAllergens }) {
   const { t } = useT();
-  const { location } = useSession();
-  const { labelConfig } = useRecipes();
+  const { location, locationId, user } = useSession();
+  const { labelConfig, printAgents } = useRecipes();
+  const store = useRecipesStore();
   const logo = useLabelLogo();
   const fonts = useLabelFonts();
   const metrics = useLabelMetrics();
@@ -171,6 +183,24 @@ function ImageLabelReady({ recipe, typed, declared }: { recipe: CatalogueRecipe;
   const [shownWidth, setShownWidth] = useState<number | null>(null);
   const [copiesText, setCopiesText] = useState('1');
   const [note, setNote] = useState<Note>(null);
+  // A job is on its way to the shop computer: Print is dead until it has landed or failed. The ref is the real guard (two
+  // taps in one frame both see the state as it was); the state only draws the button off.
+  const [sending, setSending] = useState(false);
+  const sendingRef = useRef(false);
+
+  // The shop computer's heartbeat judged against a clock that moves while this screen is open.
+  const { now, refresh: refreshClock } = usePresenceClock(printAgents.length > 0);
+  const agentState = imageAgentState(printAgents, now);
+  const road = agentState === 'ready' ? 'agent' : 'dialog';
+  // ⚠️ WHEN THE ROAD CHANGES, THE LAST ANSWER GOES: «Sent to the shop computer» beside «not answering» describes a road
+  // that is no longer on offer. A send that lands after the change is not shown either (see sendToShopComputer).
+  const roadRef = useRef(road);
+  roadRef.current = road;
+  const [noteRoad, setNoteRoad] = useState(road);
+  if (noteRoad !== road) {
+    setNoteRoad(road);
+    if (note !== null) setNote(null);
+  }
 
   const lang = outputLanguage(location);
   const profile = useMemo(() => normalizeLabelProfile(labelConfig), [labelConfig]);
@@ -325,6 +355,59 @@ function ImageLabelReady({ recipe, typed, declared }: { recipe: CatalogueRecipe;
     }
   };
 
+  // The agent road: the label's ZPL goes into the queue the shop computer reads.
+  const sendToShopComputer = async () => {
+    if (current === null || hasErrors || sendingRef.current) return;
+    // ⚠️ RE-JUDGED AT TAP TIME: the 30 s clock may be behind (a phone woken from sleep). A job queued for a computer that
+    // stopped answering is a tap that looks like it worked. Queue nothing; re-read the clock so the screen redraws.
+    if (imageAgentState(printAgents, Date.now()) !== 'ready') {
+      refreshClock();
+      return;
+    }
+    sendingRef.current = true;
+    setSending(true);
+    setNote(null);
+    let answer: Note = null;
+    try {
+      const copies = clampCopies(copiesText);
+      let payload: string;
+      try {
+        payload = await imageLabelZpl(current.bitmap, { copies, rotate180: choice.rotate180 }, browserDeflate);
+      } catch (error) {
+        answer = { key: error instanceof Error && error.message === 'no-compression' ? 'label.image.noCompression' : 'label.print.queueFailed' };
+        return;
+      }
+      // A job the queue would refuse is stopped here, in words, before anything is written.
+      if (payload.length > MAX_JOB_CHARS) {
+        answer = { key: 'label.image.zplTooLong', params: { n: payload.length, max: MAX_JOB_CHARS } };
+        return;
+      }
+      const job = imageLabelJob({ payload, copies, createdBy: user?.uid, bakery: locationId, now: Date.now() });
+      if (job === null) {
+        answer = { key: 'label.print.queueFailed' };
+        return;
+      }
+      try {
+        await store.queuePrintJob(job as unknown as Record<string, unknown>);
+        announceAction('label-printed');
+        answer = { key: 'label.print.queued' };
+      } catch {
+        answer = { key: 'label.print.queueFailed' };
+      }
+    } finally {
+      sendingRef.current = false;
+      setSending(false);
+      // ⚠️ AN ANSWER FOR A ROAD THAT IS NO LONGER ON OFFER IS NOT SHOWN: a send that lands after the heartbeat went stale
+      // would put «Sent to the shop computer» back beside «not answering».
+      if (roadRef.current === 'agent') setNote(answer);
+    }
+  };
+
+  const pressPrint = () => {
+    if (road === 'agent') void sendToShopComputer();
+    else print();
+  };
+
   const neutral = (key: MessageKey): ReactNode => <p className={styles.checking} aria-busy="true">{t(key)}</p>;
 
   // Missing parts, in the order somebody can fix them: the text is checked by the first half, then the logo, the typeface
@@ -401,6 +484,13 @@ function ImageLabelReady({ recipe, typed, declared }: { recipe: CatalogueRecipe;
   // Off while the drawing on screen is from before the last change (it is being replaced), and while the text has errors.
   const off = !showing || drawing || hasErrors;
   const why = hasErrors ? checkId : undefined;
+  const printLabelKey: MessageKey = road === 'agent' ? 'label.print.viaAgent'
+    : agentState === 'none' ? 'label.print' : 'label.print.viaSystem';
+  // The sentence about the shop computer; empty when there is nothing to say.
+  let printerSentence: ReactNode = null;
+  if (agentState === 'ready') printerSentence = <p className={own.printerReady}>{t('label.image.printerReady')}</p>;
+  else if (agentState === 'offline') printerSentence = <p className="lab-nofit">{t('label.image.printerOffline')}</p>;
+  else if (agentState === 'outdated') printerSentence = <p className="lab-nofit">{t('label.image.agentOutdated')}</p>;
 
   return (
     <>
@@ -415,17 +505,22 @@ function ImageLabelReady({ recipe, typed, declared }: { recipe: CatalogueRecipe;
           <p className={styles.caveatText}>{t('label.caveat.body')}</p>
         </div>
       ) : null}
+      {/* ⚠️ ALWAYS THERE WHILE THE LABEL IS SHOWN, EMPTY OR NOT, so a change of road is announced. */}
+      {showing ? <div role="status">{printerSentence}</div> : null}
       {showing ? (
         <div className={styles.actions}>
           <button
             type="button"
             className={`${styles.button} ${styles.printButton}`}
-            disabled={off}
+            // ⚠️ ONLY THE QUEUE ROAD waits for a send in flight (code review, 26 Oct 2026): an offline tablet's write
+            // never lands (no timeout, by decision), and once the beat goes stale the button becomes the print dialog,
+            // which must work — as on the standard label.
+            disabled={off || (sending && road === 'agent')}
             aria-describedby={why}
-            onClick={print}
+            onClick={pressPrint}
           >
             <Printer aria-hidden="true" />
-            <span>{t('label.print')}</span>
+            <span>{t(printLabelKey)}</span>
           </button>
           <div className={own.zplGroup}>
             <div className={own.copies}>
@@ -444,7 +539,7 @@ function ImageLabelReady({ recipe, typed, declared }: { recipe: CatalogueRecipe;
                 onBlur={() => { setCopiesText(String(clampCopies(copiesText))); }}
               />
             </div>
-            <p id={copiesNoteId} className={own.copiesNote}>{t('label.image.copiesNote')}</p>
+            <p id={copiesNoteId} className={own.copiesNote}>{t(road === 'agent' ? 'label.image.copiesNoteQueue' : 'label.image.copiesNote')}</p>
             <button
               type="button"
               className={styles.button}

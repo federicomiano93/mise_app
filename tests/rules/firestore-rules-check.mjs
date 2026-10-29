@@ -36,6 +36,7 @@
 // .github/workflows/test.yml. Keep the naming as it is.
 
 import { toFields, wipe, seedDoc, readDoc, requireEmulators, PROJECT, FIXTURE } from './seed-emulator.mjs';
+import { deflateSync } from 'node:zlib';
 
 // PROJECT is imported, never re-declared: two independent defaults for the same id
 // would drift, and the day they did, this file and the seeder would be writing into
@@ -1752,6 +1753,23 @@ async function configAndLogs() {
     () => wholeWrite(`${A}/print-jobs/J_RESET`, job({ payload: '~JR' })));
   await expectDenied('queue: a control command tucked inside a label, past a line break',
     () => wholeWrite(`${A}/print-jobs/J_HIDDEN`, job({ payload: '^XA\n^FDPane^FS\n~JR\n^XZ' })));
+
+  // ⚠️ THE «WITH LOGO» LABEL (Mise 2, image labels 1b): a picture as ^GFA Z64, through the
+  // same door and under the same limit — measured far under it, so the limit was kept.
+  // Its darkness (the owner's ~SD28) belongs to the agent's own settings, never to a job.
+  const z64 = deflateSync(Buffer.alloc(80 * 480, 0x0f)).toString('base64');
+  const imageLabel = ['^XA', '^PW640', '^LL480', '^LH0,0', '^POI', '^PR2', '^PQ2',
+    `^FO0,0^GFA,38400,38400,80,:Z64:${z64}:1A2B^FS`, '^XZ', ''].join('\n');
+  await expectAllowed('queue: the «with logo» label, a picture, as the app writes it',
+    () => wholeWrite(`${A}/print-jobs/J_IMAGE`, job({ payload: imageLabel, copies: 2 })));
+  await expectAllowed('queue: …up to the limit itself, 20 000 characters',
+    () => wholeWrite(`${A}/print-jobs/J_EDGE`, job({ payload: `^XA^FD${'x'.repeat(20000 - 12)}^FS^XZ` })));
+  await expectDenied('queue: the darkness sent from a phone instead of the agent’s settings',
+    () => wholeWrite(`${A}/print-jobs/J_DARK`, job({ payload: `~SD28\n${imageLabel}` })));
+  await expectDenied('queue: a darkness key beside the job',
+    () => wholeWrite(`${A}/print-jobs/J_DARKKEY`, { ...job({ payload: imageLabel }), darkness: 28 }));
+  await expectDenied('queue: an employee cannot queue a picture in somebody else s name either',
+    () => wholeWrite(`${A}/print-jobs/J_IMG_FAKE`, job({ payload: imageLabel, createdBy: ALICE.uid }), asAccount(SAM)));
 
   // Claiming it.
   await expectAllowed('queue: an agent claims a waiting job', () =>

@@ -77,9 +77,40 @@ export function buildJob({ payload, copies = 1, createdBy, bakery, now }: {
 // ⚠️ NO TILDE ANYWHERE, AND THAT COSTS NO LABEL ANYTHING: label-zpl writes every ^, ~ and _ in a product's text
 // as its hex code, so a tilde in the job can only be a control command. For the same reason every ^ in the job
 // begins a command.
+//
+// ⚠️ GF, PO AND PR ARE THE IMAGE LABEL'S (zpl-z64.ts), and each is let through in the ONE shape that label writes and
+// no other (SHAPES below): a ^GF that is not `A` + Z64 could be hex or raw bytes the printer reads as it pleases, and a
+// ^PO or ^PR with anything after its digits is not something the app wrote.
 export const LABEL_COMMANDS: readonly string[] = Object.freeze([
   'XA', 'XZ', 'CI', 'PW', 'LL', 'LH', 'LT', 'FO', 'A0', 'FB', 'FH', 'FD', 'FS', 'PQ',
+  'GF', 'PO', 'PR',
 ]);
+
+// What may follow each of those three, and ^PQ, up to the next ^ (a Z64 field has no ^ in it: Base64, digits and colons
+// only). Read the way a printer reads it, case aside.
+// ⚠️ ^PQ IS HERE TOO (code review, 26 Oct 2026): the copies were read as the digits before the first line break, so
+// `^PQ9\n9\n9` passed as 9 copies while a printer that skips line breaks reads 999.
+const SHAPES: readonly (readonly [RegExp, RegExp])[] = Object.freeze([
+  [/\^GF([^^]*)/gi, /^A,\d{1,6},\d{1,6},\d{1,4},:Z64:[A-Za-z0-9+/]+={0,2}:[0-9A-F]{4}$/i],
+  [/\^PO([^^]*)/gi, /^[NI]$/i],
+  [/\^PR([^^]*)/gi, /^\d{1,2}(,\d{1,2}){0,2}$/],
+  [/\^PQ([^^]*)/gi, /^\d{1,2}$/],
+] as const);
+
+// ⚠️ ONE PICTURE, OF A SIZE A LABEL CAN BE (code review, 26 Oct 2026). Each ^GF asks the printer for memory to hold its
+// dots; many small fields that each unpack to megabytes would run it out. So a label holds at most one, its two byte
+// counts agree, the rows are whole, and it is no wider than 1 024 dots nor longer than 2 000.
+const MAX_GF_ROW_BYTES = 128;
+const MAX_GF_ROWS = 2000;
+function graphicFits(text: string): boolean {
+  const fields = [...text.matchAll(/\^GFA,(\d+),(\d+),(\d+),/gi)];
+  if (fields.length > 1) return false;
+  return fields.every(([, b, c, d]) => {
+    const total = Number(b), row = Number(d);
+    return total === Number(c) && row >= 1 && row <= MAX_GF_ROW_BYTES
+      && total % row === 0 && total / row <= MAX_GF_ROWS;
+  });
+}
 
 export function isSingleLabel(payload: unknown): boolean {
   if (typeof payload !== 'string' || payload.length > MAX_JOB_CHARS) return false;
@@ -94,6 +125,12 @@ export function isSingleLabel(payload: unknown): boolean {
   if (commands.filter(c => c === 'XA').length !== 1) return false;
   if (commands.filter(c => c === 'XZ').length !== 1) return false;
   if (!commands.every(c => LABEL_COMMANDS.includes(c))) return false;
+  for (const [command, shape] of SHAPES) {
+    for (const m of text.matchAll(command)) {
+      if (!shape.test((m[1] ?? '').trim())) return false;
+    }
+  }
+  if (!graphicFits(text)) return false;
   // ⚠️ AND NO MORE COPIES THAN A JOB MAY ASK FOR (code review, 23 Sep 2026). ^PQ is on the list because a label
   // for three loaves asks for three, but `^PQ99999` would run a whole roll through the printer. The same ceiling
   // the rules put on `copies`.
