@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Ref } from 'react';
-import { Camera, Check, Trash2 } from 'lucide-react';
+import { Camera, Check, ChevronDown, Trash2 } from 'lucide-react';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import { findInvalidRecipe, linkOf } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe, InvalidRecipeProblem } from '@mise/shared/catalogue-model';
 import { normalizeLabelProfile } from '@mise/shared/label-template-model';
 import { mayEditRecords } from '@mise/shared/records';
+import { categoryOf, sortedCategories } from '@mise/shared/recipe-shelf';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
 import { useSession } from '../session/SessionContext';
@@ -20,7 +21,7 @@ import { CreateIngredientOverlay } from '../suppliers/CreateIngredientOverlay';
 import { KEEP_FOCUS } from '../shell/Page';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import {
-  NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, labelIngredientsBoxText, labelNameText, linkRowTo, netWeightText, notWeighedCount, removeRow, setName, setRowFields, shelfLifeText,
+  NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, labelIngredientsBoxText, labelNameText, linkRowTo, netWeightText, notWeighedCount, removeRow, setCategory, setName, setRowFields, shelfLifeText,
   stepWorkingRow, totalText, workingFrom,
 } from './editorModel';
 import type { Chosen, DropPosition, Row, Working } from './editorModel';
@@ -59,9 +60,9 @@ type Props = {
 // (the Pastries' editor-copies-too-early trap), keyed on the id. A recipe changed on another phone afterwards NEVER
 // replaces the copy.
 export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
-  const { t } = useT();
+  const { t, locale } = useT();
   const store = useRecipesStore();
-  const { labelConfig, ingredients, recipes, suppliers } = useRecipes();
+  const { labelConfig, ingredients, recipes, suppliers, categories } = useRecipes();
   const { canManage, location: venue, user, locationId } = useSession();
   // Who typed what this editor may carry, and where (photoCarry.ts).
   const owner = carryOwner(user?.uid, locationId);
@@ -74,6 +75,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   const ids = useId();
   const titleId = `${ids}-title`;
   const nameId = `${ids}-name`;
+  const categoryId = `${ids}-category`;
   const headingId = `${ids}-ingredients`;
   const netId = `${ids}-net`;
   const shelfId = `${ids}-shelf`;
@@ -93,9 +95,24 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     const typedCopy = typedCopyOf(state, owner);
     return typedCopy === null ? null : { working: typedCopy, by: 'typed' };
   });
-  const [working, setWorking] = useState<Working>(() => carried?.working ?? workingFrom(recipe));
+  const [working, setWorking] = useState<Working>(() => carried?.working ?? workingFrom(recipe, categories));
   // The name the recipe had when this screen opened: what the delete question calls it.
   const [storedName] = useState(recipe?.name ?? '');
+
+  // ⚠️ THE MENU'S STARTING WORD FOLLOWS THE LIST UNTIL THE MENU IS TOUCHED: the form can open (after the patience of
+  // RecipeEditorScreen) before the label profile, which holds the list, has arrived. Then the copy was made with an empty list and
+  // would show «No category» for a recipe filed under a listed word. When the list arrives, the starting word (both halves,
+  // so nothing counts as moved) is worked out again — but only while the person has not chosen: their choice stays. The rest of
+  // the form is never rebuilt, so typing elsewhere survives.
+  const [openedWith] = useState(recipe);
+  const categoryTouched = useRef(false);
+  const listedStart = id === null ? null : categoryOf(openedWith, categories);
+  useEffect(() => {
+    if (listedStart === null || categoryTouched.current) return;
+    setWorking(current => (current.category === listedStart && current.categoryStart === listedStart
+      ? current
+      : { ...current, category: listedStart, categoryStart: listedStart }));
+  }, [listedStart]);
 
   // ⚠️ DIRTY IS «SOMETHING WAS TYPED», also kept in a ref: the router's blocker reads it at the moment of a navigation, and a
   // state value read there could be one render behind.
@@ -485,6 +502,27 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
             onChange={event => { edit(current => setName(current, event.target.value)); }}
           />
         </div>
+
+        {/* ⚠️ DRAWN ONLY WHEN THE VENUE HAS A CATEGORY: a menu with one option is clutter. It is a native select (the phone's own
+            picker), with its chevron as a sibling like the unit menu. A recipe filed under a word that has left the list shows
+            «No category» here, and an unrelated save leaves its word alone (editorModel.cleanWorking). */}
+        {categories.length > 0 ? (
+          <div className={styles.field}>
+            <label htmlFor={categoryId} className={styles.label}>{t('cat.shelf.categoryLabel')}</label>
+            <span className={styles.selectCell}>
+              <select
+                id={categoryId}
+                className={styles.select}
+                value={working.category}
+                onChange={event => { categoryTouched.current = true; edit(current => setCategory(current, event.target.value)); }}
+              >
+                <option value="">{t('cat.shelf.categoryNone')}</option>
+                {sortedCategories(categories, locale).map(word => <option key={word} value={word}>{word}</option>)}
+              </select>
+              <ChevronDown aria-hidden="true" className={styles.selectChevron} />
+            </span>
+          </div>
+        ) : null}
 
         <section className={styles.ingredients} aria-labelledby={headingId}>
           <div className={styles.head}>

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { normalizeSearchText } from '@mise/shared/catalogue-model';
+import { withoutArchived } from '@mise/shared/recipe-shelf';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
@@ -14,7 +15,7 @@ type Props = {
   onClose: () => void;
 };
 
-type Reading = { status: 'loading' } | { status: 'failed' } | { status: 'ready'; recipes: StoredDoc[] };
+type Reading = { status: 'loading' } | { status: 'failed' } | { status: 'ready'; recipes: StoredDoc[]; allArchived: boolean };
 
 const nameOf = (doc: StoredDoc): string => String(doc.name ?? '').trim();
 
@@ -40,7 +41,12 @@ export function CataloguePicker({ onChoose, onClose }: Props) {
   useEffect(() => {
     let live = true;
     loadCatalogue().then(
-      recipes => { if (live) setReading({ status: 'ready', recipes }); },
+      recipes => {
+        if (!live) return;
+        const offered = withoutArchived(recipes);
+        // Recipes exist but none may be chosen: the sentence says why, instead of «no recipes yet».
+        setReading({ status: 'ready', recipes: offered, allArchived: recipes.length > 0 && offered.length === 0 });
+      },
       () => { if (live) setReading({ status: 'failed' }); },
     );
     return () => { live = false; };
@@ -86,7 +92,8 @@ export function CataloguePicker({ onChoose, onClose }: Props) {
         <div role="alert">
           {reading.status === 'failed' ? <p className={styles.note}>{t('calc.catalogueListFailed')}</p> : null}
         </div>
-        {reading.status === 'ready' && reading.recipes.length === 0 ? <p className={styles.note}>{t('calc.catalogueEmpty')}</p> : null}
+        {reading.status === 'ready' && reading.recipes.length === 0
+          ? <p className={styles.note}>{t(reading.allArchived ? 'cat.shelf.allArchived' : 'calc.catalogueEmpty')}</p> : null}
         {reading.status === 'ready' && reading.recipes.length > 0 && shown.length === 0
           ? <p className={styles.note}>{t('calc.nothingMatches')}</p> : null}
         {shown.length > 0 ? (

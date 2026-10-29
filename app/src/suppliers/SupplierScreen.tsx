@@ -11,7 +11,7 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useCopyWait } from './copyWait';
 import { ItemRow, ItemRows } from './ItemRow';
-import { NotInUseGroup, useNotInUseOpen } from './NotInUseGroup';
+import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import type { StoredDoc } from './suppliersSource';
 import { ADD_INGREDIENT_OPENER, SEARCH_OPENER, supplierItemOpener, supplierOpener, useHandBack } from './handBack';
 import { DAY_KEY, isWeekday } from './supplierDays';
@@ -72,7 +72,7 @@ export function SupplierScreen({ id }: { id: string }) {
   const owed = useRef<string | null | undefined>(undefined);
   const addButton = useCallback((node: HTMLButtonElement | null) => { handBack.register(ADD_INGREDIENT_OPENER, node); }, [handBack]);
   // The folded «Not in use» group. When Back owes the focus to one of its rows, handBack opens it first.
-  const group = useNotInUseOpen(false, id);
+  const group = useFoldedOpen(false, id);
   useEffect(() => {
     if (!shown) return;
     owed.current ??= handBack.takeEdit(id) ? 'edit' : handBack.takeOn(id);
@@ -239,9 +239,9 @@ export function SupplierScreen({ id }: { id: string }) {
           <>
             {sold.length > 0 ? <ItemRows>{sold.map(item => rowOf(item, false))}</ItemRows> : null}
             {inactive.length > 0 ? (
-              <NotInUseGroup count={inactive.length} open={group.open} onToggle={group.onToggle}>
+              <FoldedGroup title={t('sup.notInUseGroup', { n: inactive.length })} open={group.open} onToggle={group.onToggle}>
                 <ItemRows>{inactive.map(item => rowOf(item, true))}</ItemRows>
-              </NotInUseGroup>
+              </FoldedGroup>
             ) : null}
           </>
         )}

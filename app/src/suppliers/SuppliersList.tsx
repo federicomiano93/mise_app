@@ -11,7 +11,7 @@ import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { ItemRow, ItemRows } from './ItemRow';
-import { NotInUseGroup, useNotInUseOpen } from './NotInUseGroup';
+import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { suppliersFromInvoices } from './invoiceTag';
 import { useMayImport } from './invoiceImport/useMayImport';
 import { IMPORT_OPENER, NEW_OPENER, SEARCH_OPENER, SETTINGS_OPENER, itemOpener, supplierOpener, useHandBack } from './handBack';
@@ -395,7 +395,7 @@ function ItemList({ tab, items, suppliers, query, broken, openItemId, onOpenItem
   // Back hands the focus to it) or when the search finds one.
   const active = useMemo(() => visible.filter(item => item.active !== false), [visible]);
   const inactive = useMemo(() => visible.filter(item => item.active === false), [visible]);
-  const group = useNotInUseOpen(
+  const group = useFoldedOpen(
     (openItemId !== null && inactive.some(item => item.id === openItemId)) || (query.trim() !== '' && inactive.length > 0),
   );
   const labels = useMemo(() => new Map(suppliers.map(supplier => [supplier.id, supplierLabel(supplier)] as const)), [suppliers]);
@@ -419,9 +419,9 @@ function ItemList({ tab, items, suppliers, query, broken, openItemId, onOpenItem
     <>
       {active.length > 0 ? <ItemRows>{active.map(item => rowOf(item, false))}</ItemRows> : null}
       {inactive.length > 0 ? (
-        <NotInUseGroup count={inactive.length} open={group.open} onToggle={group.onToggle}>
+        <FoldedGroup title={t('sup.notInUseGroup', { n: inactive.length })} open={group.open} onToggle={group.onToggle}>
           <ItemRows>{inactive.map(item => rowOf(item, true))}</ItemRows>
-        </NotInUseGroup>
+        </FoldedGroup>
       ) : null}
     </>
   );

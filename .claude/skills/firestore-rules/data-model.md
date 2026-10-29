@@ -99,6 +99,15 @@ match any new name there — `{ bakery, png (a `data:image/png;base64,…` addre
 height (int 1–1920), updatedAt? }`: written and deleted by `canManage` catalogue, read by members with the catalogue
 on; no other id. The current app saves recipes and `config/labels` with merge, so it keeps these keys.
 
+**Recipe shelf (Mise 2, 25 Oct 2026, rules not yet deployed).** Recipes may carry `category` (string 1–100; «no
+category» is NO field — an emptied choice is a removal; a word not on the venue's list reads as «no category» and comes
+back if the word is put back) and `archived` (bool; only `true` is stored, a restore removes it). ⚠️ The rules ask
+`canManage(catalogue)` ONLY when the archived state MOVES (created archived, archived, restored): an employee's ordinary
+save of an archived recipe still passes. `config/labels` gains `recipeCategories` (list ≤ 100, written whole from the
+Catalogue Settings, canManage like the rest of that document). An archived recipe stays readable by id everywhere
+(Calculator tabs, Food cost lines, sub-recipe rows, labels); only the list and the pickers for NEW links leave it out
+(`shared/src/recipe-shelf.ts`). The current app neither reads nor writes them; its merge saves keep them.
+
 ⚠️ **The language rule, for every screen:** a word that names a FOOD follows the venue's COUNTRY
 (`allergenName` / `allergenGroupName` / `nutrientName`, passed the output language); a word that
 tells somebody what to tap follows `t()`. A file that does the first is a label file and may never

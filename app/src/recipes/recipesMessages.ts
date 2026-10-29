@@ -17,5 +17,9 @@ export function messageText(
       return t('cat.couldNotSaveRecipe', { name: message.name.trim() || t('cat.recipeWord') });
     case 'recipe-not-deleted':
       return t('cat.couldnTDeleteThe');
+    case 'recipe-not-archived':
+      return t(message.archived ? 'cat.shelf.couldNotArchive' : 'cat.shelf.couldNotRestore', {
+        name: message.name.trim() || t('cat.recipeWord'),
+      });
   }
 }

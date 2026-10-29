@@ -9,9 +9,13 @@
 //
 // Stored as typed (the rules bound them: 200 and 2000 characters). An EMPTY field is not stored at all: an emptied box
 // travels as a removal (recipesSource CLEARABLE_RECIPE_FIELDS), so «nothing typed» is always «no field».
+//
+// The store's normaliser also puts back, for the same reason, the two fields of the recipe SHELF (25 Oct 2026,
+// @mise/shared/recipe-shelf): the category word and the archived flag.
 
 import { normalizeCatalogueRecipe } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
+import { shelfFieldsOf } from '@mise/shared/recipe-shelf';
 
 export const LABEL_TEXT_FIELDS = ['labelName', 'labelIngredientsText'] as const;
 export type LabelTextField = (typeof LABEL_TEXT_FIELDS)[number];
@@ -21,10 +25,13 @@ export const LABEL_NAME_MAX = 200;
 export const LABEL_TEXT_MAX = 2000;
 const MAX: Readonly<Record<LabelTextField, number>> = { labelName: LABEL_NAME_MAX, labelIngredientsText: LABEL_TEXT_MAX };
 
-// A recipe as the store holds it: the shared shape, plus the two texts when they were stored.
+// A recipe as the store holds it: the shared shape, plus the two texts when they were stored, plus the shelf's two fields
+// (a category word, `archived: true`) when they were.
 export type LabelledRecipe = CatalogueRecipe & {
   readonly labelName?: string;
   readonly labelIngredientsText?: string;
+  readonly category?: string;
+  readonly archived?: true;
 };
 
 // The two texts of a stored document, as stored: a string with something in it, else nothing.
@@ -39,10 +46,10 @@ function storedTexts(raw: unknown): Partial<Record<LabelTextField, string>> {
   return out;
 }
 
-// The store's normaliser: the shared one, then the two texts put back.
+// The store's normaliser: the shared one, then the two texts and the shelf's fields put back.
 export function normalizeStoredRecipe(raw: unknown): LabelledRecipe | null {
   const norm = normalizeCatalogueRecipe(raw);
-  return norm === null ? null : { ...norm, ...storedTexts(raw) };
+  return norm === null ? null : { ...norm, ...storedTexts(raw), ...shelfFieldsOf(raw) };
 }
 
 export function normalizeStoredRecipes(list: unknown): LabelledRecipe[] {

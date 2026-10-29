@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { linkOptions, nameTaken } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
+import { withoutArchived } from '@mise/shared/recipe-shelf';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
@@ -31,12 +32,13 @@ type Props = {
 // many ingredients for a <select> on a phone). A dialog — the focus stays inside, Escape closes, the focus goes back to the
 // button that opened it — mounted only while it is open. The matching is linkOptions (tested where it lives).
 //
+// ⚠️ AN ARCHIVED RECIPE IS NOT OFFERED (a NEW link); «Remove the link» still works for a row already linked to one.
 // ⚠️ NO PRICE (13 Sep 2026): name · pack weight · supplier is what tells two similar-looking articles apart.
 export function LinkDialog({ ingredients, recipes, suppliers, excludeRecipeId, hasLink, initialQuery = '', onChoose, onClose, mayCreate, onCreate }: Props) {
   const { t } = useT();
   const [query, setQuery] = useState(initialQuery);
   const options = useMemo(
-    () => linkOptions({ ingredients, recipes, suppliers, query, excludeRecipeId, inactiveLast: true }),
+    () => linkOptions({ ingredients, recipes: withoutArchived(recipes), suppliers, query, excludeRecipeId, inactiveLast: true }),
     [ingredients, recipes, suppliers, query, excludeRecipeId],
   );
   // Same three conditions as the suggestion list's last row.
