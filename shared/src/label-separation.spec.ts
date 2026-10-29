@@ -31,6 +31,7 @@ import imageFontsSource from './label-image-fonts.ts?raw';
 import imageMetricsSource from './label-image-metrics.ts?raw';
 import zplZ64Source from './zpl-z64.ts?raw';
 import haccpLabelSource from './haccp-label.ts?raw';
+import orderTextSource from './order-text.ts?raw';
 import { stringsIn } from '../../tests/helpers/strings-in.mjs';
 
 // The glob is typed by Vite's client types, which this package does not load (it has no DOM).
@@ -62,6 +63,9 @@ const LABEL_FILES: Readonly<Record<string, string>> = {
   'zpl-z64.ts': zplZ64Source,
   // The HACCP label (image labels step 2): its captions are label words, by the country’s language handed in.
   'haccp-label.ts': haccpLabelSource,
+  // Step 3f-1: the Orders message. Its title, the nameless supplier’s heading, the email subject and the stand-in for a
+  // deleted ingredient are label words by the venue’s country, handed in as `language` (the supplier reads them).
+  'order-text.ts': orderTextSource,
 };
 
 // The pure drawing files that need nothing from any other module.

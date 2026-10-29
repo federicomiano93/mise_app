@@ -75,6 +75,15 @@ import * as ingredientSearch from './ingredient-search';
 import * as packFormat from './pack-format';
 import * as orderRequestModel from './order-request-model';
 import * as ingredientMerge from './ingredient-merge';
+import * as sendRoutes from './send-routes';
+import * as supplierOrder from './supplier-order';
+import * as ordersConfig from './orders-config';
+import * as lineSupplier from './line-supplier';
+import * as orderText from './order-text';
+import * as orderDay from './order-day';
+import * as day from './day';
+import * as noSupplier from './no-supplier';
+import * as archive from './archive';
 import { BAKERY_CONFIG } from '../../tests/fixtures/bakery-config.mjs';
 import * as legacyJoinCodeJs from '../../js/join-code.js';
 import * as legacyPushModelJs from '../../js/push-model.js';
@@ -126,6 +135,15 @@ import * as legacyIngredientSearchJs from '../../js/orders/ingredient-search.js'
 import * as legacyPackFormatJs from '../../js/pack-format.js';
 import * as legacyOrderRequestModelJs from '../../js/orders/order-request-model.js';
 import * as legacyIngredientMergeJs from '../../js/orders/ingredient-merge.js';
+import * as legacySendRoutesJs from '../../js/orders/send-routes.js';
+import * as legacySupplierOrderJs from '../../js/orders/supplier-order.js';
+import * as legacyOrdersConfigJs from '../../js/orders/orders-config.js';
+import * as legacyLineSupplierJs from '../../js/orders/line-supplier.js';
+import * as legacyOrderTextJs from '../../js/orders/order-text.js';
+import * as legacyOrderDayJs from '../../js/orders/order-day.js';
+import * as legacyDayJs from '../../js/orders/day.js';
+import * as legacyNoSupplierJs from '../../js/orders/no-supplier.js';
+import * as legacyArchiveJs from '../../js/orders/archive.js';
 import { localeTag, setLanguage, t } from '../../js/i18n.js';
 import * as legacyCalculatorConfigJs from '../../js/calculator-config.js';
 import * as legacyCalculatorDoughMathJs from '../../js/calculator-dough-math.js';
@@ -3714,4 +3732,299 @@ describe('ingredient-merge: odd inputs', () => {
   }
   PLAN_INPUTS.push(...ODD.map(odd => ({ a: ING({}), b: ING({ id: 'b' }), bPoints: odd, aPointIds: odd, changeIds: odd })));
   agree('planMerge', m.planMerge as AnyFn, l.planMerge as AnyFn, [...PLAN_INPUTS.map(input => [input]), ...product(ODD)]);
+});
+
+// ── Step 3f-1: the pure core of the Orders section ───────────────────────────
+
+const legacySendRoutes = legacySendRoutesJs as unknown as typeof sendRoutes;
+const legacySupplierOrder = legacySupplierOrderJs as unknown as typeof supplierOrder;
+const legacyOrdersConfig = legacyOrdersConfigJs as unknown as typeof ordersConfig;
+const legacyLineSupplier = legacyLineSupplierJs as unknown as typeof lineSupplier;
+const legacyOrderText = legacyOrderTextJs as unknown as typeof orderText;
+const legacyOrderDay = legacyOrderDayJs as unknown as typeof orderDay;
+const legacyDay = legacyDayJs as unknown as Record<string, AnyFn>;
+const legacyNoSupplier = legacyNoSupplierJs as unknown as Record<string, AnyFn>;
+const legacyArchive = legacyArchiveJs as unknown as typeof archive;
+
+const ROUTE_SETS = { manager: true, whatsapp: true, whatsappSupplier: false, email: false };
+const ALL_ROUTES_OFF = { manager: false, whatsapp: false, whatsappSupplier: false, email: false };
+const SEND_DOCS: readonly unknown[] = [...ODD, 'sendRoutes', { sendRoutes: ALL_ROUTES_OFF }, { sendRoutes: { email: true } },
+  { sendRoutes: { whatsappSupplier: 'false', email: 1 } }, { sendRoutes: 'yes' }, { sendRoutes: [] }, { sendRoutes: ROUTE_SETS },
+  { sendRoutes: { email: true }, preferredRoute: 'email' }, { preferredRoute: 'constructor' }, { preferredRoute: 'email' },
+  { preferredRoute: ['manager'] }, { sendRoutes: { manager: false, whatsapp: false, whatsappSupplier: true, email: false }, preferredRoute: 'manager' }];
+
+describe('send-routes: odd inputs', () => {
+  const m = sendRoutes;
+  const l = legacySendRoutes;
+  const ROUTE_NAMES: readonly unknown[] = [...ODD, 'manager', 'whatsapp', 'whatsappSupplier', 'email', 'constructor', 'Email'];
+  agree('routeSendsToSupplier', m.routeSendsToSupplier, l.routeSendsToSupplier, product(ROUTE_NAMES));
+  agree('normalizeSendRoutes', m.normalizeSendRoutes, l.normalizeSendRoutes, product(SEND_DOCS));
+
+  const SETTINGS: readonly unknown[] = [...ODD, { routes: ROUTE_SETS }, { routes: ROUTE_SETS, orderLists: false }, { routes: ALL_ROUTES_OFF },
+    { routes: ALL_ROUTES_OFF, orderLists: false }, { routes: { manager: true, whatsapp: false, whatsappSupplier: false, email: false } },
+    { routes: { whatsapp: 'true' } }, { routes: 'x' }, { orderLists: false }, { orderLists: 'no' },
+    ...SEND_DOCS.map(doc => m.normalizeSendRoutes(doc))];
+  agree('routesFor', m.routesFor, l.routesFor, [...product(SETTINGS), ...product(SETTINGS, [{}, { canManage: true }, { canManage: false }, { canManage: 1 }, { canManage: 'yes' }, undefined, null])]);
+  agree('effectiveRoutes', m.effectiveRoutes, l.effectiveRoutes, product([...ODD, ROUTE_SETS, ALL_ROUTES_OFF], [undefined, true, false, null, 0, 'no']));
+  agree('listsAreTheOnlyRoad', m.listsAreTheOnlyRoad, l.listsAreTheOnlyRoad, product(SETTINGS));
+
+  const SUPPLIERS_REACH: readonly unknown[] = [...ODD, { phone: '447700900123' }, { phone: '  ' }, { email: 'a@b.test' }, { phone: 5, email: [] }, { phone: ' 1 ', email: ' ' }];
+  agree('routeAvailableFor', m.routeAvailableFor, l.routeAvailableFor, product(ROUTE_NAMES, SUPPLIERS_REACH));
+  agree('unreachable', m.unreachable as AnyFn, l.unreachable as AnyFn, product(ROUTE_NAMES, [...ODD, SUPPLIERS_REACH, [null, undefined, { phone: 'x' }, { email: 'y' }, {}]]));
+  agree('validateRoutes', m.validateRoutes, l.validateRoutes, product([...ODD, ROUTE_SETS, ALL_ROUTES_OFF, { whatsappSupplier: true }, { email: 'true' }, { manager: true, email: true }],
+    [...ROUTE_NAMES, '']));
+  agree('toStored', m.toStored, l.toStored, product([...ODD, ROUTE_SETS, ALL_ROUTES_OFF, { manager: true, whatsapp: 'yes' }, { email: 1 }], [...ODD, 'email', 'manager']));
+});
+
+describe('supplier-order: odd inputs', () => {
+  const m = supplierOrder;
+  const l = legacySupplierOrder;
+  const ORDERS: readonly unknown[] = [...ODD, ['b', 'a', 'b', '', 3, null, 'c', 'a'], ['x'.repeat(201), 'ok'], ['x'.repeat(200)], Array.from({ length: 400 }, (_, i) => `id${i}`),
+    'junk', new Set(['a']), [['a']], ['ghost', 'b', 'a']];
+  agree('normalizeSupplierOrder', m.normalizeSupplierOrder, l.normalizeSupplierOrder, product(ORDERS));
+
+  const SUPPLIERS: readonly unknown[] = [undefined, null, 'abc', 7, {}, [], [{ id: 'a', name: 'Alpha' }, { id: 'b', name: 'Beta' }, { id: 'z', name: 'Zulu' }, { id: 'm', name: 'Mike' }, { id: 'c', name: 'Charlie' }],
+    [{ id: 'b', name: 'Beta' }, { id: 'a', name: 'Alpha' }], [{ id: 'a', name: 5 }, { id: 'b' }, { id: 'c', name: null }], [{ id: 'a', name: 'été' }, { id: 'b', name: 'zèbre' }, { id: 'c', name: 'Zebra' }]];
+  const LABELS: readonly unknown[] = [(s: { name?: unknown }) => s.name, (s: { id?: unknown }) => s.id, () => 'same', () => undefined];
+  agree('sortSuppliersByOrder', m.sortSuppliersByOrder as AnyFn, l.sortSuppliersByOrder as AnyFn, product(SUPPLIERS, ORDERS, LABELS));
+});
+
+describe('orders-config: odd inputs', () => {
+  const m = ordersConfig;
+  const l = legacyOrdersConfig;
+  const CONFIGS: readonly unknown[] = [...ODD, ...SEND_DOCS, { showStock: false }, { showStock: 'false' }, { historyDays: 7 }, { historyDays: '30' }, { historyDays: 15.8 }, { historyDays: 100000 },
+    ...[0, -1, NaN, Infinity, '', ' ', 'abc', null, {}, [], true, false, '1e3', '0x10', 365, 366].map(historyDays => ({ historyDays })),
+    { orderLists: false }, { orderLists: 'no' }, { weekStartsOn: 'Monday' }, { weekStartsOn: ['Monday'] }, { weekStartsOn: ' tuesday ' },
+    { supplierOrder: ['a', 'a', 'b'] }, { supplierOrder: 'oops' }, { favouriteSuppliers: ['b', 'a', 'b', '', 3] }, { favouriteSuppliers: 'x' },
+    { get showStock(): boolean { throw new Error('boom'); } }];
+  agree('normalizeOrdersConfig', m.normalizeOrdersConfig, l.normalizeOrdersConfig, product(CONFIGS));
+});
+
+describe('line-supplier: odd inputs', () => {
+  const m = lineSupplier;
+  const l = legacyLineSupplier;
+  const ENTRY_LIKE: readonly unknown[] = [...ODD, { qty: 3, supplierId: 'bruno' }, { qty: 3 }, { qty: 0, supplierId: 'bruno' }, { qty: '', supplierId: 'bruno' }, { qty: 0.4, supplierId: 'bruno' },
+    { qty: 3, supplierId: '' }, { qty: 3, supplierId: '   ' }, { qty: 3, supplierId: null }, { qty: 3, supplierId: 7 }, { qty: '2', supplierId: ' bruno ' }, { qty: Infinity, supplierId: 'x' },
+    { qty: -3, supplierId: 'x' }, { qty: 'abc', supplierId: 'x' }, { qty: 3, supplierId: ['x'] }];
+  const INGS: readonly unknown[] = [...ODD, { id: 'flour', supplierId: 'aldo' }, { id: 'flour' }, { supplierId: 7 }];
+  agree('cleanSupplierId', m.cleanSupplierId, l.cleanSupplierId, product([...ODD, ' bruno ', 'bruno', '\t', 'no-supplier']));
+  agree('overrideOf', m.overrideOf, l.overrideOf, product(ENTRY_LIKE));
+  agree('lineSupplierId', m.lineSupplierId, l.lineSupplierId, product(INGS, ENTRY_LIKE));
+
+  const LIST: readonly unknown[] = [undefined, null, [], 'abc', [{ id: 'flour', supplierId: 'aldo' }, { id: 'yeast', supplierId: 'aldo' }, { id: 'o', supplierId: 'no-supplier' }],
+    [{ id: 'flour', supplierId: 'bruno' }], [{ id: 'flour' }], [null], [{ id: 'f', supplierId: 'aldo', usualSupplierId: 'z' }]];
+  const ENTRY_MAPS: readonly unknown[] = [undefined, null, {}, 'abc', 5, [], { flour: { qty: 4, supplierId: 'bruno' } }, { flour: { qty: 4, supplierId: 'aldo' } },
+    { flour: { qty: 0, supplierId: 'bruno' }, yeast: { qty: 2, supplierId: 'cielo' } }, { flour: { qty: 4, supplierId: 'no-supplier' } }, { flour: { qty: 4, supplierId: 'off' } },
+    { o: { qty: 1, supplierId: 'bruno' } }, { f: { qty: 1, supplierId: 'bruno' } }, { flour: 5, yeast: null }];
+  const SUPPLIER_SETS: readonly unknown[] = [undefined, null, [], 'abc', [{ id: 'aldo' }, { id: 'bruno' }], [{ id: 'aldo' }, { id: 'bruno', active: false }], [{ id: 'aldo' }], [null, undefined, { id: 'bruno' }],
+    [{ id: 'no-supplier' }, { id: 'bruno' }], [{ id: 'aldo' }, { id: 'bruno', active: 'no' }]];
+  agree('withLineSuppliers', m.withLineSuppliers as AnyFn, l.withLineSuppliers as AnyFn, product(LIST, ENTRY_MAPS, SUPPLIER_SETS));
+  agree('overrideSignature', m.overrideSignature, l.overrideSignature, product([...ENTRY_MAPS, { b: { qty: 1, supplierId: 'x' }, a: { qty: 1, supplierId: 'y' } }]));
+});
+
+describe('order-text: odd inputs', () => {
+  const m = orderText;
+  const l = legacyOrderText;
+  const LANGS: readonly unknown[] = [undefined, null, 'it', 'en', 'IT', 'xx', 5, ''];
+  agree('orderTitle', m.orderTitle, l.orderTitle, product([...ODD, 'The Italian Club', '  Panificio  '], LANGS));
+  agree('itemLabel', m.itemLabel, l.itemLabel, product(ODD, ODD));
+  agree('fallbackSupplierName', m.fallbackSupplierName, l.fallbackSupplierName, product(LANGS));
+  agree('emailSubject', m.emailSubject, l.emailSubject, product([...ODD, 'Panificio Miano', ' X '], LANGS));
+  agree('whatsappUrl', m.whatsappUrl, l.whatsappUrl, product([...ODD, '*Order*\n- x: 1', 'à è & ? # ']));
+  agree('compareLabels', m.compareLabels, l.compareLabels, product(['Flour 5kg', 'Flour 25kg', 'a', 'B', '', 'é', 'e'], ['Flour 5kg', 'Flour 25kg', 'a', 'B', '', 'é', 'e']));
+
+  const ITEMS: readonly unknown[] = [undefined, null, [], 'abc', 7, {},
+    [{ name: 'Bacon', weight: '2.27kg', qty: 5 }, { name: 'Mozzarella', weight: '1kg', qty: '2' }],
+    [{ name: 'Flour', weight: '25kg', qty: 3 }, { name: 'Bacon', weight: '2.27kg', qty: 1 }, { name: 'FLOUR', weight: '5kg', qty: 2 }],
+    [{ name: 5, weight: null, qty: NaN }, { name: undefined, weight: undefined, qty: 2.4 }], [{ name: 'F', weight: '', qty: 2, unit: 'busta' }, { name: 'F', weight: '', qty: 1, unit: 'Busta' }, { name: 'F', weight: '', qty: 1, unit: 'cartone' }],
+    [{ name: 'Bacon', weight: '', qty: 0 }, { name: 'Flour', weight: '', qty: 3 }, { name: 'Dates', weight: '', qty: -5 }, { name: 'Cream', weight: '', qty: 'HELLO' }],
+    [{ name: 'Flour', weight: '2.5kg', qty: 2, unit: 'busta' }, { name: 'Flour', weight: '2.5kg', qty: 3, unit: 'busta' }], [null], [{ name: 'x', weight: 'y', qty: 1, unit: 7 }]];
+  agree('sortItems', m.sortItems as AnyFn, l.sortItems as AnyFn, product(ITEMS));
+  agree('summaryLines', m.summaryLines as AnyFn, l.summaryLines as AnyFn, product(ITEMS));
+  agree('messageLabels', m.messageLabels as AnyFn, l.messageLabels as AnyFn, product(ITEMS.filter(i => Array.isArray(i) && !i.includes(null))));
+
+  const GROUPS: readonly unknown[] = [undefined, null, [], 'abc', {}, ...ITEMS.slice(6, 13).map(items => [{ supplierName: 'Brava', items }]),
+    [{ supplierName: 'Etna', items: ITEMS[6] }, { supplierName: 'Alba', items: ITEMS[7] }], [{ supplierName: '', items: ITEMS[6] }, { supplierName: 'Alba', items: ITEMS[7] }],
+    [{ supplierName: 'A', items: [] }, { supplierName: 'B', items: ITEMS[6] }], [{ supplierName: 'A', items: undefined }], [null], [{ items: ITEMS[8] }],
+    [{ supplierName: 'A', items: ITEMS[9] }, { supplierName: 'B', items: ITEMS[9] }], [{ supplierName: 'A', items: ITEMS[11] }, { supplierName: 'B', items: ITEMS[11] }]];
+  const OPTIONS: readonly unknown[] = [undefined, {}, { grouped: false }, { grouped: true }, { locationName: 'The Italian Club' }, { locationName: 'Panificio', language: 'it' },
+    { grouped: false, locationName: 'Panificio', language: 'it' }, { language: 'en' }, { grouped: 0 }, { locationName: null, language: 'xx' }, null];
+  agree('buildOrderMessage', m.buildOrderMessage as AnyFn, l.buildOrderMessage as AnyFn, product(GROUPS, OPTIONS));
+
+  const INGREDIENTS: readonly unknown[] = [undefined, null, [], 'abc', [{ id: 'f', name: 'Flour', weight: '2.5kg', unit: 'cartone', packUnit: 'busta' }, { id: 'b', name: 'Bacon', weight: '2.27kg', unit: 'casse' }, { id: 'n' }],
+    [{ id: 'f', name: 'Flour', unit: 'cartone', packUnit: 'busta' }, null]];
+  const ENTRIES: readonly unknown[] = [undefined, null, {}, 'abc', { f: { qty: 2, stock: 0, unit: 'busta' }, b: { qty: 3 } }, { f: { qty: 2 } }, { f: { qty: 0 }, b: { qty: -1 } }, { b: { qty: '4' } }, { f: 5, b: null }, { f: { qty: 2, unit: 'Busta' } }];
+  agree('orderedItems', m.orderedItems as AnyFn, l.orderedItems as AnyFn, product(INGREDIENTS.filter(i => !Array.isArray(i) || !i.includes(null)), ENTRIES));
+
+  const BY_ID = [{ i1: { name: 'Bacon', weight: '2.27kg' }, i2: { name: 'Mozzarella', weight: '1kg' }, i3: { name: 'Loose apples', weight: '' } }, undefined, null, {}, 'abc', { f: { name: 'Flour', weight: '2.5kg' } }];
+  const QUANTITIES: readonly unknown[] = [undefined, null, {}, 'abc', 5, { i1: 5, i2: 2 }, { i2: 1, i1: 1, i3: 1 }, { gone: 3 }, { i1: 0 }, { i1: -2 }, { i1: 'HELLO' }, { i1: null }, { i1: 2.4 }, { f: 4, b: 2 }, { i1: Infinity, i2: '3' }];
+  const NAMES: readonly unknown[] = [undefined, null, {}, { gone: 'Ricotta 1.5kg' }, { i1: 'Old name' }, { gone: 42 }, 'abc'];
+  const UNITS: readonly unknown[] = [undefined, null, {}, { f: 'busta' }, { f: 7 }, { i1: ' Busta ' }];
+  agree('itemsFromQuantities', m.itemsFromQuantities as AnyFn, l.itemsFromQuantities as AnyFn, [
+    ...product(QUANTITIES, BY_ID, NAMES, UNITS), ...product(QUANTITIES, BY_ID.slice(0, 1), NAMES.slice(0, 2), UNITS.slice(0, 1), LANGS), ...product(QUANTITIES.slice(0, 8), [undefined], [undefined], [undefined], LANGS)]);
+  agree('indexById', m.indexById as AnyFn, l.indexById as AnyFn, product([undefined, null, [], 'abc', [{ id: 'a' }, { id: 'b', x: 1 }, { id: 'a', y: 2 }], [{ id: 7 }, { id: undefined }], [{}]]));
+});
+
+describe('ingredient-search (rows): odd inputs', () => {
+  const m = ingredientSearch;
+  const l = legacyIngredientSearch;
+  const LABELS: readonly unknown[] = [...ODD, 'Bacon 2.27kg', 'Èspresso', '00 Flour', '  zest', 'ñandú', '-', 'Ωmega'];
+  agree('letterOf', m.letterOf, l.letterOf, product(LABELS));
+
+  const ROWS: readonly unknown[] = [undefined, null, 5, {}, { label: 'Bacon 2.27kg', ingredient: { brand: 'Denny' }, supplierName: 'Cielo' }, { label: 'Bacon', ingredient: { name: 'Bacon', shortName: 'Bak', invoiceName: 'BACON LTD' }, supplierName: 'Cielo', supplier: { name: 'Cielo Ltd', shortName: 'Cielo' } },
+    { label: 5, ingredient: null, supplierName: undefined }, { label: 'x', supplier: { name: 'Legacy Foods Ltd', shortName: 'Aldo' } }, { ingredient: { get brand(): string { throw new Error('boom'); } } }];
+  const QUERIES: readonly unknown[] = [...SEARCHES, 'bac', '2.27', 'denny', 'CIELO', 'alba', 'bak', 'legacy', 'aldo', '   '];
+  agree('matchesQuery', m.matchesQuery as AnyFn, l.matchesQuery as AnyFn, product(ROWS, QUERIES));
+
+  const SUPPLIER_LISTS: readonly unknown[] = [undefined, null, [], 'abc', [{ id: 'cielo', name: 'Cielo' }, { id: 'alba', name: 'Alba' }, { id: 'no-supplier', name: 'No supplier' }], [{ id: 'alba', name: 'Alba' }], [null, { id: 'x' }]];
+  const ING_LISTS: readonly unknown[] = [undefined, null, [], 'abc', [
+    { id: 'bacon', name: 'Bacon', weight: '2.27kg', brand: 'Denny', supplierId: 'cielo' }, { id: 'mozza', name: 'Mozzarella', weight: '5kg', supplierId: 'alba' },
+    { id: 'almonds', name: 'Almond Flakes', weight: '1kg', supplierId: 'alba' }, { id: 'paper', name: 'Baking Paper', supplierId: 'no-supplier' }, { id: 'old', name: 'Old', supplierId: 'alba', active: false },
+    { id: 'z', name: 'Zest', shortName: 'Zz', supplierId: 'cielo' }, { id: 'dup', name: 'Same', supplierId: 'alba' }, { id: 'dup2', name: 'Same', supplierId: 'alba' }, { id: 'ghost', name: 'Ghost', supplierId: 'deleted' }],
+    [{ id: 5, name: 'x', supplierId: 'alba' }, { id: 6, name: 'x', supplierId: 'alba' }], [{ id: 'q', supplierId: 'alba' }]];
+  const ONLY: readonly unknown[] = [undefined, null, new Set(['bacon', 'paper']), new Set(), new Set(['deleted-since'])];
+  const FLAT_QUERIES: readonly unknown[] = [undefined, '', 'alba', 'bak', 'no supplier', 'zz', 'same', ' ', 5];
+  agree('flatRows', m.flatRows as AnyFn, l.flatRows as AnyFn, [
+    ...product(ING_LISTS, SUPPLIER_LISTS, FLAT_QUERIES, ONLY).map(([ingredients, suppliers, query, only]) => [{ ingredients, suppliers, query, only }]),
+    [{}], [undefined], [null]]);
+  const ENTRY_MAPS: readonly unknown[] = [undefined, null, {}, 5, { bacon: { qty: 4 }, mozza: { qty: 2 }, almonds: { qty: 1 } }, { bacon: { qty: 0, stock: 9 }, mozza: { stock: 3 } },
+    { bacon: { qty: 'HELLO' } }, { bacon: { qty: '4' } }, { bacon: { qty: Infinity }, paper: { qty: -3 } }, { paper: { qty: 2 }, old: { qty: 5 }, ghost: { qty: 1 } }, { bacon: null }];
+  agree('orderSummary', m.orderSummary as AnyFn, l.orderSummary as AnyFn, [
+    ...product(ING_LISTS, SUPPLIER_LISTS, ENTRY_MAPS).map(([ingredients, suppliers, entries]) => [{ ingredients, suppliers, entries }]), [{}], [undefined], [null]]);
+});
+
+describe('day: odd inputs', () => {
+  const m = day;
+  const l = legacyDay;
+  const DATES: readonly unknown[] = [new Date(2026, 6, 13), new Date(2026, 0, 5), new Date(2026, 2, 29), new Date(2026, 9, 25), new Date(2025, 11, 31, 23, 59), new Date(NaN), new Date(0), undefined, null, 5, '2026-07-13', {}];
+  const ISOS: readonly unknown[] = [...ODD, '2026-07-13', '2026-07-19', '2025-12-31', '2026-02-30', '2026-13-01', 'not-a-date', '2026-7-3', ' 2026-07-13', '2026-07-13T10:00:00', '2024-02-29'];
+  agree('toISODate', m.toISODate as AnyFn, l.toISODate!, product(DATES));
+  agree('parseISODate', m.parseISODate as AnyFn, l.parseISODate!, product(ISOS));
+  agree('todayISO', m.todayISO as AnyFn, l.todayISO!, [...product(DATES), []]);
+  agree('addDays', m.addDays as AnyFn, l.addDays!, product(DATES, [...ODD, 1, -1, 7, 31, -365, 1.5]));
+  agree('isBefore', m.isBefore, l.isBefore! as typeof m.isBefore, product(ISOS, ISOS));
+  agree('weekdayOf', m.weekdayOf as AnyFn, l.weekdayOf!, product(ISOS));
+  const STAMPS: readonly unknown[] = [...ODD, '2026-07-12T12:00:00.000Z', 'rubbish', 0, 1.7e12, '2026-07-12', new Date(2026, 6, 12), new Date(NaN), '2026-02-30', {}, [2026]];
+  agree('localDayOf', m.localDayOf as AnyFn, l.localDayOf!, product(STAMPS));
+
+  // The seven functions that spell a day: the original reads the dictionary, the port is handed it. The original's
+  // own `t` stands in, so the same text is demanded of both, in both languages.
+  const NOWS_DAY: readonly unknown[] = [undefined, new Date(2026, 6, 13), new Date(2026, 6, 13, 9, 30), new Date(2026, 0, 1), new Date(2026, 2, 30)];
+  const DAY_ISOS: readonly unknown[] = [...ISOS, '2026-07-12', '2026-07-11', '2026-07-06', '2026-01-01', '2025-12-31', '2026-03-29'];
+  for (const language of ['en', 'it'] as const) {
+    test(`the day-spelling functions: the same text as the original in ${language}`, () => {
+      setLanguage(language);
+      try {
+        const disagreements: string[] = [];
+        const compare = (name: string, args: unknown[], mine: () => unknown, theirs: () => unknown): void => {
+          const a = outcome(mine);
+          const b = outcome(theirs);
+          try { expect(a).toStrictEqual(b); } catch { disagreements.push(`${name}(${args.map(show).join(', ')}): ported ${show(a)} / current ${show(b)}`); }
+        };
+        for (const args of product(DAY_ISOS)) {
+          for (const name of ['spellDay', 'spellShortDate', 'spellLongDate']) {
+            compare(name, args, () => (m as unknown as Record<string, AnyFn>)[name]!(args[0], t), () => l[name]!(args[0]));
+          }
+        }
+        for (const args of product(DAY_ISOS, NOWS_DAY)) {
+          for (const name of ['dayLabel', 'daySpoken', 'dayWhen', 'dayPhrase']) {
+            compare(name, args, () => (m as unknown as Record<string, AnyFn>)[name]!(args[0], args[1], t), () => l[name]!(args[0], args[1]));
+          }
+        }
+        expect(disagreements.slice(0, 10)).toStrictEqual([]);
+      } finally { setLanguage('en'); }
+    }, 60_000);
+  }
+});
+
+describe('order-day: odd inputs', () => {
+  const m = orderDay;
+  const l = legacyOrderDay;
+  const SUPPLIER_DAYS: readonly unknown[] = [undefined, null, 5, 'abc', {}, { id: 'x', orderDays: [] }, { orderDays: ['Monday'] }, { orderDays: ['Monday', 'Thursday'] }, { orderDays: ['Saturday'] },
+    { orderDays: ['Lunedì'] }, { orderDays: ['Monday', 'monday', 5, null] }, { deliveryDays: ['Tuesday', 'Friday'] }, { deliveryDays: ['Lunedì'] }, { deliveryDays: [] },
+    { orderDays: ['Monday'], deliveryDays: ['Tuesday'] }, { orderDays: 'Monday' }, { orderDays: null }];
+  const TODAYS: readonly unknown[] = [undefined, null, '', '2026-10-12', '2026-10-14', '2026-10-15', '2026-10-17', '2026-10-18', '2026-12-31', '2026-03-28', '2026-10-24', 'junk', 5, '2024-02-28'];
+  const STAMPS: readonly unknown[] = [undefined, null, '', '2026-10-12', '2026-10-14', '2026-10-15', '2026-10-19', '2026-10-26', 'junk', 5];
+  agree('isFutureDay', m.isFutureDay, l.isFutureDay, product(STAMPS, TODAYS));
+  agree('nextOrderDay', m.nextOrderDay as AnyFn, l.nextOrderDay as AnyFn, product(SUPPLIER_DAYS, TODAYS));
+  agree('nextDeliveryAfter', m.nextDeliveryAfter as AnyFn, l.nextDeliveryAfter as AnyFn, product(SUPPLIER_DAYS, TODAYS));
+  agree('nextOrderOffer', m.nextOrderOffer as AnyFn, l.nextOrderOffer as AnyFn, product(SUPPLIER_DAYS, TODAYS));
+  agree('recordDay', m.recordDay as AnyFn, l.recordDay as AnyFn, product(STAMPS, TODAYS));
+  agree('targetDayFor', m.targetDayFor as AnyFn, l.targetDayFor as AnyFn, [...product(SUPPLIER_DAYS, TODAYS).map(([supplier, today]) => [{ supplier, today }]), [undefined], [null], [{}]]);
+  agree('stampFor', m.stampFor as AnyFn, l.stampFor as AnyFn, [...product(STAMPS, SUPPLIER_DAYS, TODAYS).map(([current, supplier, today]) => [{ current, supplier, today }]), [undefined], [{}]]);
+  agree('previewDay', m.previewDay as AnyFn, l.previewDay as AnyFn, [...product(STAMPS, SUPPLIER_DAYS, TODAYS).map(([current, supplier, today]) => [{ current, supplier, today }]), [undefined], [{}]]);
+  agree('dayChoices', m.dayChoices as AnyFn, l.dayChoices as AnyFn, [...product(SUPPLIER_DAYS, STAMPS, [true, false, 0, 'x', undefined], TODAYS.slice(1)).map(([supplier, stamp, hasItems, today]) => [{ supplier, stamp, hasItems, today }]), [undefined], [{}]]);
+  const SUPPLIER_LISTS: readonly unknown[] = [undefined, null, [], 'abc', [{ id: 'a' }, { id: 'b' }, { id: 'c' }], [null, { id: 'a' }, {}], [{ id: 5 }]];
+  const DAY_MAPS: readonly unknown[] = [undefined, null, {}, 'abc', { a: '2026-10-14', b: '2026-10-19', c: '2026-10-12' }, { a: 5, b: null }];
+  agree('notForLater', m.notForLater as AnyFn, l.notForLater as AnyFn, product(SUPPLIER_LISTS, DAY_MAPS, TODAYS));
+});
+
+describe('no-supplier: odd inputs', () => {
+  const m = noSupplier;
+  const l = legacyNoSupplier;
+  agree('isNoSupplier', m.isNoSupplier, l.isNoSupplier!, product([...ODD, 'no-supplier', 'No supplier', 'alba']));
+
+  const INGS: readonly unknown[] = [undefined, null, [], 'abc', [{ id: 'bacon', supplierId: 'cielo' }, { id: 'gone', supplierId: 'deleted' }, { id: 'paper', supplierId: 'no-supplier' }, { id: 'none' }, { id: 'o', supplierId: null }],
+    [{ id: 'flour', supplierId: 'aldo' }, { id: 'yeast', supplierId: 'aldo' }], [{ id: 'old', supplierId: 'no-supplier', active: false }], [{ id: 'x', supplierId: 'no-supplier', active: 'no' }], [null]];
+  const SUPPLIER_LISTS: readonly unknown[] = [undefined, null, [], 'abc', [{ id: 'cielo' }, { id: 'alba' }], [{ id: 'aldo' }, { id: 'bruno' }], [{ id: 'aldo' }], [null]];
+  const ENTRIES: readonly unknown[] = [undefined, null, {}, { flour: { qty: 4, supplierId: 'bruno' } }, { bacon: { qty: 2, supplierId: 'alba' } }, { gone: { qty: 1, supplierId: 'cielo' } }, 'abc'];
+  agree('resolveSuppliers', m.resolveSuppliers as AnyFn, l.resolveSuppliers!, [
+    ...product(INGS.filter(i => !Array.isArray(i) || !i.includes(null)), SUPPLIER_LISTS.filter(i => !Array.isArray(i) || !i.includes(null)), [true, false, 0, 'x', undefined], ENTRIES),
+    ...product(INGS.filter(i => !Array.isArray(i) || !i.includes(null)), SUPPLIER_LISTS.filter(i => !Array.isArray(i) || !i.includes(null)), [true, false]),
+  ]);
+
+  // The two that name the pseudo-supplier: the original reads the dictionary, the port is handed the word.
+  for (const language of ['en', 'it'] as const) {
+    test(`noSupplier and orderSuppliers: the same answer as the original in ${language}`, () => {
+      setLanguage(language);
+      try {
+        const word = t('orders.noSupplier');
+        expect((m.noSupplier as AnyFn)(word)).toStrictEqual((l.noSupplier as AnyFn)());
+        const disagreements: string[] = [];
+        for (const args of product(SUPPLIER_LISTS, INGS)) {
+          const a = outcome(() => (m.orderSuppliers as AnyFn)(args[0], args[1], word));
+          const b = outcome(() => (l.orderSuppliers as AnyFn)(args[0], args[1]));
+          try { expect(a).toStrictEqual(b); } catch { disagreements.push(`orderSuppliers(${args.map(show).join(', ')}): ported ${show(a)} / current ${show(b)}`); }
+        }
+        expect(disagreements.slice(0, 10)).toStrictEqual([]);
+      } finally { setLanguage('en'); }
+    }, 60_000);
+  }
+});
+
+describe('archive (partial): odd inputs', () => {
+  const m = archive;
+  const l = legacyArchive;
+  const QUANTITIES: readonly unknown[] = [...ODD, '7', 2.6, '-4', '1e999', ' 3 ', '3abc', 1e21, -0.4, [5], { valueOf: () => 4 }];
+  agree('wholeNumber', m.wholeNumber, l.wholeNumber, product(QUANTITIES));
+  agree('historyDocId', m.historyDocId, l.historyDocId, product(ODD, ODD));
+
+  const INGS: readonly unknown[] = [undefined, null, [], 'abc', [
+    { id: 'flour', name: 'Flour uniqua blue', supplierId: 'alba' }, { id: 'semola', name: 'Semola', supplierId: 'alba' }, { id: 'oldbag', name: 'Discontinued bag', supplierId: 'alba', active: false },
+    { id: 'nutella', name: 'Nutella 3kg', supplierId: 'etna' }, { id: 'x', supplierId: 'alba', active: 'no' }], [{ id: 'a', supplierId: 'alba' }, { id: 'a', supplierId: 'alba' }]];
+  const SUPPLIER_IDS: readonly unknown[] = ['alba', 'etna', 'none', undefined, null, '', 5];
+  agree('ingredientsOf', m.ingredientsOf as AnyFn, l.ingredientsOf as AnyFn, [
+    ...product(SUPPLIER_IDS, INGS), ...product(SUPPLIER_IDS, INGS, [{ activeOnly: false }, { activeOnly: true }, {}, undefined, { activeOnly: 0 }, null]),
+  ]);
+  const ENTRY_MAPS: readonly unknown[] = [undefined, null, {}, 'abc', { flour: { qty: 3, stock: 0 } }, { flour: { qty: 0, stock: 9 } }, { semola: { qty: '2' } }, { oldbag: { qty: 5 } }, { flour: { qty: 'x' }, nutella: { qty: 1 } }, { flour: null }, { flour: { qty: Infinity } }];
+  agree('supplierHasItems', m.supplierHasItems as AnyFn, l.supplierHasItems as AnyFn, product(SUPPLIER_IDS, INGS, ENTRY_MAPS));
+
+  const LABELLED: readonly unknown[] = [...ODD, { name: 'Bacon', weight: '2.27kg' }, { name: 'Loose apples' }, { name: 'Flour Invoice', shortName: 'Flour', weight: '25kg' }, { name: 'Flour', shortName: '  ', weight: '5kg' },
+    { name: 5, weight: 6 }, { weight: '1kg' }, { id: 'x' }];
+  agree('ingredientLabel', m.ingredientLabel, l.ingredientLabel, product(LABELLED));
+  agree('ingredientDisplayLabel', m.ingredientDisplayLabel, l.ingredientDisplayLabel, product(LABELLED));
+  agree('compareByLabel', m.compareByLabel, l.compareByLabel, product(LABELLED, LABELLED));
+  agree('sortByLabel', m.sortByLabel as AnyFn, l.sortByLabel as AnyFn, product([undefined, null, [], 'abc', [{ id: 'b', name: 'Flour', weight: '25kg' }, { id: 'a', name: 'Flour', weight: '5kg' }, null, { id: 'c', name: 'Flour', weight: '5kg' }],
+    [{ id: 'z' }, { name: 'A' }, { id: 'y', name: 'a' }], [{ id: 2, name: 'X' }, { id: 10, name: 'X' }]]));
+  agree('quantityPathsFor', m.quantityPathsFor as AnyFn, l.quantityPathsFor as AnyFn, product([undefined, null, [], 'abc', ['alba'], ['alba', 'etna'], ['alba', '', null, 'etna'], [5], ['none']], INGS));
+
+  const NEXT_ENTRIES: readonly unknown[] = [undefined, null, {}, 'abc', 5, { flour: { qty: 5, stock: 1 } }, { flour: { qty: 0, stock: 0 }, semola: { qty: '', stock: '' } }, { flour: { qty: '', stock: undefined } },
+    { flour: { qty: 4, stock: 0, supplierId: 'bruno' } }, { flour: { qty: 0, stock: 0, supplierId: 'bruno' } }, { flour: { qty: 4, stock: 0, supplierId: '' } }, { flour: { qty: 1, unit: ' busta ' } },
+    { flour: { qty: 0, stock: 0, unit: 'busta' } }, { flour: { qty: 2, stock: 1, supplierId: '  x ' } }, { flour: null, semola: 5 }, { flour: { qty: Infinity, stock: -3 } }, { flour: { qty: '4.6', stock: 'x' }, nutella: { qty: 7 } }];
+  const KNOWN_ENTRIES: readonly unknown[] = [undefined, null, {}, 'abc', { flour: { qty: 3, stock: 1 } }, { flour: { qty: 5, stock: 1 } }, { flour: { qty: 0, stock: 0 } }, { flour: { qty: 6, stock: 0 } },
+    { flour: { qty: 4, stock: 0, supplierId: 'bruno' } }, { flour: { qty: 0, stock: 0, unit: 'busta', supplierId: 'X' } }, { flour: { qty: undefined, stock: 2, supplierId: 'X' } }, { flour: { qty: 1, unit: 'busta' } },
+    { flour: { qty: 4, stock: 0, supplierId: 7 } }, { semola: { qty: 1, stock: 0 } }, { flour: 5 }];
+  agree('changedEntries', m.changedEntries, l.changedEntries, product(NEXT_ENTRIES, KNOWN_ENTRIES));
+  const DAY_STAMPS: readonly unknown[] = [undefined, null, {}, 'abc', { alba: '2026-08-05', etna: '2026-07-20' }, { etna: '2026-07-20' }, { alba: undefined }, { alba: null }, { alba: 5 }];
+  agree('changedDays', m.changedDays, l.changedDays, product(DAY_STAMPS, DAY_STAMPS));
 });

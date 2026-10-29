@@ -1,0 +1,63 @@
+/* A supplier's order: the bar and the column names stuck together at the top, then the rows. The card does not clip (no
+   `overflow`), so what sticks inside it is never cut. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+/* ⚠️ THE BAR AND «ORDER / STOCK» STICK TOGETHER to the top of the scroll area (the shell's main, or the split's right-hand
+   side): nothing between them and it clips. The bar's own sticking is a no-op inside this box, which is as tall as they are. */
+.sticky {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--surface);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+}
+
+/* The same columns as a row (OrderLine.module.css; ordersCss.spec.ts compares them). */
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px 64px;
+  gap: var(--s2);
+  padding: var(--s2);
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+}
+
+.columns[data-stock="false"] {
+  grid-template-columns: minmax(0, 1fr) 104px;
+}
+
+@media (min-width: 480px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr) 104px 88px;
+    gap: var(--s3);
+    padding: var(--s2) var(--s3);
+  }
+}
+
+.columnName {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  text-align: center;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.folded {
+  padding: 0 var(--s3) var(--s3);
+}
+
+.nothing {
+  padding: var(--s6) var(--s3);
+  color: var(--ink-2);
+}

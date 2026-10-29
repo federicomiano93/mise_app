@@ -1,0 +1,172 @@
+/* One ingredient of a supplier's order: the name column, the Order column (the box with its − / + under it) and the Stock
+   column. The column widths are the SAME numbers as the sticky header's in SupplierOrderScreen.module.css
+   (`ordersCss.spec.ts` fails when they drift). */
+
+.line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px 64px;
+  align-items: start;
+  gap: var(--s2);
+  padding: var(--s3) var(--s2);
+  border-bottom: 1px solid var(--line);
+}
+
+.line:last-child {
+  border-bottom: 0;
+}
+
+/* Without the Stock column (the venue switched it off) the name has the room. */
+.line[data-stock="false"] {
+  grid-template-columns: minmax(0, 1fr) 104px;
+}
+
+@media (min-width: 480px) {
+  .line {
+    grid-template-columns: minmax(0, 1fr) 104px 88px;
+    gap: var(--s3);
+    padding: var(--s3);
+  }
+}
+
+/* A line with a quantity is told by a tint AND by the number in its box, never by colour alone. */
+.line[data-filled="true"] {
+  background: var(--accent-tint);
+}
+
+.main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+/* The pack weight on a small line of its own: beside the name it pushed a long name onto four lines on a 296px phone. */
+.weight,
+.note {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.note {
+  font-style: italic;
+}
+
+.unitSelect {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: var(--hit);
+  margin-top: var(--s1);
+  padding: 0 var(--s2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-sm);
+}
+
+.clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.clear svg {
+  width: 18px;
+  height: 18px;
+}
+
+.order,
+.stock {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s1);
+}
+
+.box {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--fs-lg)/1 var(--font);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.steps {
+  display: flex;
+  gap: var(--s2);
+}
+
+.step {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.step:disabled {
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.step svg {
+  width: 18px;
+  height: 18px;
+}
+
+.unit {
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.box:focus-visible,
+.step:focus-visible,
+.clear:focus-visible,
+.unitSelect:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .step:hover:not(:disabled),
+  .clear:hover {
+    background: var(--sunken);
+  }
+}
