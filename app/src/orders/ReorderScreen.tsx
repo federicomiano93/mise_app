@@ -26,6 +26,10 @@ import styles from './ReorderScreen.module.css';
 
 const keyOf = (item: ReorderItem): string => `${item.recordId}|${item.id}`;
 
+// How long every card ignores a press after an action on the list. ⚠️ A card that was acted on leaves in the same tick and the
+// NEXT card's identical button slides under the finger that is still tapping: a double tap on «Put back» would put back two lines.
+const QUIET_MS = 600;
+
 // «To re-order» (parity V7–V11), at /orders/reorder, one level below the list: every ingredient that did not arrive and has not been
 // dealt with, newest first, ONE CARD PER LINE. Each line waits until somebody decides — Federico buys a missing ingredient
 // «somewhere else» as often as from the same supplier, so there is no single «put everything back»: per line, «put it back in
@@ -54,6 +58,10 @@ export function ReorderScreen() {
   // redraw. Re-enabled only on failure — on success the card is about to go, and a live button on it would invite a second tap.
   const [busy, setBusy] = useState<ReadonlySet<string>>(new Set());
   const [choosing, setChoosing] = useState<string | null>(null);
+  // Until when the cards ignore a press (a Date.now() reading): set by every action on the list, read by every handler.
+  const quietUntil = useRef(0);
+  const quiet = (): boolean => Date.now() < quietUntil.current;
+  const hush = (): void => { quietUntil.current = Date.now() + QUIET_MS; };
 
   const ingredientsById = useMemo(() => indexById(ingredients), [ingredients]);
   const suppliersById = useMemo(() => indexById(suppliers), [suppliers]);
@@ -96,22 +104,30 @@ export function ReorderScreen() {
     return recordedName(item.id, ingredientsById, record?.names, t('ord.deletedIngredient'));
   };
 
+  // ⚠️ 'gone' is NOT a failed save: the ingredient or the supplier was switched off since the card was drawn, so the sentence says
+  // that, instead of sending somebody to check a connection that is fine.
+  const lineGone = () => { say(t('ord.reorder.lineGone'), LONG_MS); };
+
   function putBack(item: ReorderItem): void {
+    if (quiet()) return;
     const outcome = store.putBack(item);
+    hush();
     if (outcome === 'skipped') say(t('ord.reorder.someSkipped', { n: 1 }), LONG_MS);
-    else if (outcome === 'gone') couldNotSave();
+    else if (outcome === 'gone') lineGone();
   }
 
   function chooseSupplier(item: ReorderItem, supplier: StoredDoc): void {
+    if (quiet()) return;
     const outcome = store.orderElsewhere(item, supplier.id);
+    hush();
     setChoosing(null);
     if (outcome === 'skipped') say(t('ord.reorder.someSkipped', { n: 1 }), LONG_MS);
-    else if (outcome === 'gone') couldNotSave();
+    else if (outcome === 'gone') lineGone();
   }
 
   async function resolve(item: ReorderItem): Promise<void> {
     const key = keyOf(item);
-    if (busy.has(key)) return;
+    if (busy.has(key) || quiet()) return;
     const name = nameOf(item);
     const yes = await confirm({
       title: t('ord.reorder.resolveTitle'),
@@ -120,6 +136,7 @@ export function ReorderScreen() {
       cancelLabel: t('common.cancel'),
     });
     if (!yes) return;
+    hush();
     setBusy(before => new Set(before).add(key));
     let outcome: 'saved' | 'refused' | 'failed';
     try {
@@ -139,6 +156,12 @@ export function ReorderScreen() {
 
   const chosen = choosing === null ? null : reorder.find(item => keyOf(item) === choosing) ?? null;
   const choices = chosen === null ? [] : otherChoices(chosen);
+
+  // The line the chooser is about left the list (put back or resolved on another phone): forget it, or the chooser would open by
+  // itself when the same line comes back.
+  useEffect(() => {
+    if (choosing !== null && chosen === null) setChoosing(null);
+  }, [choosing, chosen]);
 
   return (
     <section className={styles.screen} aria-labelledby={titleId}>
@@ -183,7 +206,7 @@ export function ReorderScreen() {
                       className={styles.full}
                       isDisabled={off}
                       aria-label={t('ord.reorder.otherSupplierAria', { name })}
-                      onPress={() => { setChoosing(key); }}
+                      onPress={() => { if (!quiet()) setChoosing(key); }}
                     >
                       {t('ord.reorder.otherSupplier')}
                     </Button>

@@ -2384,6 +2384,10 @@ export const en = {
   'ord.settings.deliveryCheck': 'Check deliveries',
   'ord.settings.deliveryCheckSub': 'Asks “Did it all arrive?” for every order and keeps reminding about unanswered ones. Off, “Incoming” and “To re-order” disappear on every phone.',
   'ord.settings.managersOnly': 'Only an owner or a manager can change this.',
+  'ord.settings.turnOnTitle': 'Turn the check back on?',
+  'ord.settings.turnOnMessage': 'Orders placed before today will not be asked about: “Incoming” counts from today.',
+  'ord.settings.turnOnOk': 'Turn on',
+  'ord.reorder.lineGone': 'This line cannot be put back any more: the ingredient or the supplier is no longer in use.',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

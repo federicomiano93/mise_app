@@ -2187,4 +2187,8 @@ export const it: Messages = {
   'ord.settings.deliveryCheck': 'Controlla la merce arrivata',
   'ord.settings.deliveryCheckSub': 'Chiede «È arrivato tutto?» per ogni ordine e ricorda quelli senza risposta. Spento, «In arrivo» e «Da riordinare» spariscono su tutti i telefoni.',
   'ord.settings.managersOnly': 'Solo un titolare o un manager può cambiarlo.',
+  'ord.settings.turnOnTitle': 'Riattivare il controllo?',
+  'ord.settings.turnOnMessage': 'Gli ordini fatti prima di oggi non verranno più chiesti: «In arrivo» conta da oggi.',
+  'ord.settings.turnOnOk': 'Riattiva',
+  'ord.reorder.lineGone': 'Questa riga non si può più rimettere: l’ingrediente o il fornitore non è più in uso.',
 };

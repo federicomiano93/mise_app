@@ -31,14 +31,16 @@ export function IncomingMissingScreen({ id }: { id: string }) {
   const { t } = useT();
   const navigate = useNavigate();
   const say = useStatusMessage();
-  const { history, historyLoaded } = useOrders();
+  const { history, historyLoaded, historyBroken } = useOrders();
   const [opened, setOpened] = useState<StoredDoc | null>(null);
   const found = useMemo(() => history.find(record => record.id === id), [history, id]);
   if (opened === null && found !== undefined) setOpened(structuredClone(found));
 
   const handBack = useHandBack();
   const leave = useLeave(INCOMING_PATH, useCallback(() => { handBack.expect(arrivalOpener(id)); }, [handBack, id]));
-  const gone = historyLoaded && opened === null;
+  // ⚠️ NOT WHEN THE HISTORY STREAM DIED: `historyLoaded` is then true too, and «no longer there» would be a lie — the order may well
+  // exist. The screen stays on its loading line; the page's status line already says the live data was lost.
+  const gone = historyLoaded && !historyBroken && opened === null;
   useEffect(() => {
     if (!gone) return;
     say(t('ord.incoming.orderGone'), LONG_MS);

@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useId, useRef } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
+import { todayISO } from '@mise/shared/day';
+import { turningOnForgets } from '@mise/shared/delivery-check';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { SettingSwitch } from '../ui/SettingSwitch';
 import { useStatusMessage } from '../ui/StatusMessage';
+import { useConfirm } from '../ui/useConfirm';
 import { useOrders, useOrdersStore } from './OrdersContext';
 import { HISTORY_DOOR, SETTINGS_OPENER, useHandBack } from './handBack';
 import { FROM_LIST, cameFromList, useLeave } from './ordersNav';
@@ -20,7 +23,8 @@ export function SettingsScreen() {
   const { t } = useT();
   const { state } = useLocation();
   const navigate = useNavigate();
-  const { config, deliveryCheck } = useOrders();
+  const { config, configLoaded, deliveryCheck } = useOrders();
+  const [confirm, confirmDialog] = useConfirm();
   const store = useOrdersStore();
   const { canManage } = useSession();
   const say = useStatusMessage();
@@ -73,10 +77,22 @@ export function SettingsScreen() {
             </span>
             <SettingSwitch
               selected={deliveryCheck.on}
-              isDisabled={!canManage}
+              // ⚠️ OFF UNTIL THE CONFIG HAS ARRIVED: before that the switch shows the default (ON) and a tap would write the wrong thing.
+              isDisabled={!canManage || !configLoaded}
               labelledBy={switchTitle}
               describedBy={canManage ? switchSub : `${switchSub} ${switchNote}`}
-              onChange={next => {
+              onChange={async next => {
+                // ⚠️ TURNING IT ON FORGETS THE ORDERS BEFORE TODAY, so it asks first (not on the day it was turned off: nothing is
+                // forgotten then). Cancel writes nothing and the switch, which follows the data, stays off.
+                if (next && turningOnForgets(deliveryCheck, todayISO())) {
+                  const yes = await confirm({
+                    title: t('ord.settings.turnOnTitle'),
+                    message: t('ord.settings.turnOnMessage'),
+                    okLabel: t('ord.settings.turnOnOk'),
+                    cancelLabel: t('common.cancel'),
+                  });
+                  if (!yes) return;
+                }
                 void store.setDeliveryCheck(next).then(outcome => {
                   if (outcome === 'refused') say(t('ord.settings.managersOnly'), LONG_MS);
                   else if (outcome === 'failed') say(t('ord.incoming.couldNotSave'), LONG_MS);
@@ -86,6 +102,7 @@ export function SettingsScreen() {
           </div>
         </div>
       </div>
+      {confirmDialog}
     </section>
   );
 }

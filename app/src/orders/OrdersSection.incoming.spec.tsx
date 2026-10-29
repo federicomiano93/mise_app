@@ -325,6 +325,48 @@ describe('Incoming', () => {
     await waitFor(() => { expect(incoming().getByRole('heading', { name: 'Due today' })).toBeInTheDocument(); });
   });
 
+  it('opens the rows instead of answering when the order gained missing marks while the question was open', async () => {
+    const source = seeded(week());
+    const view = await atIncoming(source);
+    await screen.findByRole('heading', { name: 'Due today' }, LOAD);
+    await view.user.click(rowOf('Alpine Mills', 2));
+    const question = await dialog();
+    // A same-day second order merged in: the order carries a mark again and is still unanswered.
+    const id = idOf(inDays(-1), 's-alp');
+    act(() => { source.records.set(id, { ...(source.records.get(id) as Record<string, unknown>), missing: { 'i-rye': true } }); source.emitHistory(); });
+    await view.user.click(within(question).getByRole('button', { name: 'Everything arrived' }));
+    await screen.findByRole('region', { name: 'What arrived?' });
+    expect(source.deliveryWrites).toEqual([]);
+    expect(path(view)).toBe(`/orders/incoming/${id}`);
+  });
+
+  it('closes the question for good when its order is answered elsewhere, and does not bring it back', async () => {
+    const source = seeded(week());
+    const view = await atIncoming(source);
+    await screen.findByRole('heading', { name: 'Due today' }, LOAD);
+    await view.user.click(rowOf('Alpine Mills', 2));
+    await dialog();
+    const id = idOf(inDays(-1), 's-alp');
+    const before = source.records.get(id) as Record<string, unknown>;
+    act(() => { source.records.set(id, { ...before, deliveredAt: ARRIVED, missing: {} }); source.emitHistory(); });
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    act(() => { source.records.set(id, before); source.emitHistory(); });
+    await screen.findByRole('heading', { name: 'Due today' });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(source.deliveryWrites).toEqual([]);
+  });
+
+  it('stays on the loading line, without «no longer there», when the order stream died', async () => {
+    const source = seeded(week());
+    source.refuse.history = true;
+    const view = renderOrders(`/orders/incoming/${idOf(inDays(-1), 's-alp')}`, { source });
+    await screen.findByRole('region', { name: 'What arrived?' }, LOAD);
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(screen.queryByText('This order is no longer there.')).not.toBeInTheDocument();
+    expect(path(view)).toBe(`/orders/incoming/${idOf(inDays(-1), 's-alp')}`);
+    expect(arrivedPicker().getByText('Loading…')).toBeInTheDocument();
+  });
+
   it('says «This order is no longer there.» for an order that is not in the window, and goes back to Incoming', async () => {
     const view = renderOrders('/orders/incoming/2026-01-01_s-alp', { source: seeded(week()) });
     expect(await screen.findByText('This order is no longer there.', undefined, LOAD)).toBeInTheDocument();
@@ -414,6 +456,52 @@ describe('To re-order', () => {
     await waitFor(() => { expect(source.writes.at(-1)?.entries?.['i-flour']).toMatchObject({ qty: 4 }); }, LOAD);
     await waitFor(() => { expect(cards()).toHaveLength(3); });
     expect(within(reorder().getByRole('list')).queryByText('Flour')).not.toBeInTheDocument();
+  });
+
+  it('ignores a second press on the list right after «Put back», so the next card’s line is not put back too', async () => {
+    const source = seeded({
+      [idOf(inDays(-5), 's-alp')]: record(inDays(-5), 's-alp', 'Alpine Mills', { 'i-flour': 4, 'i-rye': 2 }, {
+        deliveredAt: ARRIVED, units: { 'i-flour': 'kg', 'i-rye': 'kg' }, missing: { 'i-flour': true, 'i-rye': true },
+      }),
+    });
+    const view = await atReorder(source);
+    await waitFor(() => { expect(cards()).toHaveLength(2); }, LOAD);
+    const first = () => reorder().getAllByRole('button', { name: /^Put back in/ })[0] as HTMLElement;
+    await view.user.click(first());
+    await view.user.click(first());
+    await waitFor(() => { expect(source.writes.length).toBeGreaterThan(0); }, LOAD);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(Object.keys(source.writes.at(-1)?.entries ?? {})).toHaveLength(1);
+    expect(cards()).toHaveLength(1);
+  });
+
+  it('says the line cannot be put back any more, not «Not saved», when its ingredient went off meanwhile', async () => {
+    const source = seeded(missed());
+    const view = await atReorder(source);
+    await waitFor(() => { expect(cards()).toHaveLength(4); }, LOAD);
+    const button = within(cardOf('Flour')).getByRole('button', { name: /^Put back in/ });
+    // The data moves and the press lands before the screen has redrawn: the store, which reads the data as it is, says 'gone'.
+    source.ingredients.set('i-flour', { ...(source.ingredients.get('i-flour') as Record<string, unknown>), active: false } as never);
+    source.emit();
+    button.click();
+    expect(await screen.findByText('This line cannot be put back any more: the ingredient or the supplier is no longer in use.', undefined, LOAD)).toBeInTheDocument();
+    expect(screen.queryByText('Not saved. Check the connection and try again.')).not.toBeInTheDocument();
+    expect(source.writes).toEqual([]);
+  });
+
+  it('does not reopen the chooser by itself when the line it was about comes back', async () => {
+    const source = seeded(missed());
+    const view = await atReorder(source);
+    await waitFor(() => { expect(cards()).toHaveLength(4); }, LOAD);
+    await view.user.click(within(cardOf('Flour')).getByRole('button', { name: /^Order from another supplier/ }));
+    await dialog('dialog');
+    const id = idOf(inDays(-5), 's-alp');
+    const before = source.records.get(id) as Record<string, unknown>;
+    act(() => { source.records.set(id, { ...before, missing: { ...(before.missing as object), 'i-flour': undefined } }); source.emitHistory(); });
+    await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
+    act(() => { source.records.set(id, before); source.emitHistory(); });
+    await waitFor(() => { expect(cards()).toHaveLength(4); });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('opens the chooser with the right suppliers, writes nothing on Escape, and orders from the one chosen for this order only', async () => {
@@ -539,18 +627,51 @@ describe('the goods-arrived switch in the settings', () => {
     expect(toggle).toBeEnabled();
     expect(screen.getByText(/Asks “Did it all arrive\?” for every order/)).toBeInTheDocument();
     await view.user.click(toggle);
-    await waitFor(() => { expect(source.deliveryWrites).toEqual([{ kind: 'config', patch: { deliveryCheck: false } }]); });
+    await waitFor(() => { expect(source.deliveryWrites).toEqual([{ kind: 'config', patch: { deliveryCheck: false, deliveryCheckOffOn: TODAY } }]); });
     await waitFor(() => { expect(screen.getByRole('switch', { name: 'Check deliveries' })).not.toBeChecked(); });
     await view.user.click(within(screen.getByRole('region', { name: 'Settings' })).getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(path(view)).toBe('/orders'); });
     expect(screen.queryByRole('button', { name: /^Incoming/ })).not.toBeInTheDocument();
   });
 
-  it('turns it back on with today as the first day asked about', async () => {
+  it('asks before turning it back on, and then counts from today', async () => {
     const source = seeded(week(), { ordersConfig: { ...CONFIG, deliveryCheck: false } });
     const view = renderOrders('/orders/settings', { source });
     await view.user.click(await screen.findByRole('switch', { name: 'Check deliveries' }, LOAD));
+    const asked = await dialog();
+    expect(within(asked).getByText('Turn the check back on?')).toBeInTheDocument();
+    expect(within(asked).getByText('Orders placed before today will not be asked about: “Incoming” counts from today.')).toBeInTheDocument();
+    expect(source.deliveryWrites).toEqual([]);
+    await view.user.click(within(asked).getByRole('button', { name: 'Turn on' }));
     await waitFor(() => { expect(source.deliveryWrites).toEqual([{ kind: 'config', patch: { deliveryCheck: true, deliveryCheckFrom: TODAY } }]); });
+  });
+
+  it('writes nothing and leaves the switch off when the question is cancelled', async () => {
+    const source = seeded(week(), { ordersConfig: { ...CONFIG, deliveryCheck: false } });
+    const view = renderOrders('/orders/settings', { source });
+    await view.user.click(await screen.findByRole('switch', { name: 'Check deliveries' }, LOAD));
+    await view.user.click(within(await dialog()).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    expect(source.deliveryWrites).toEqual([]);
+    expect(screen.getByRole('switch', { name: 'Check deliveries' })).not.toBeChecked();
+  });
+
+  it('turns it back on the day it went off with no question, keeping the day it counted from', async () => {
+    const source = seeded(week(), { ordersConfig: { ...CONFIG, deliveryCheck: false, deliveryCheckOffOn: TODAY, deliveryCheckFrom: inDays(-20) } });
+    const view = renderOrders('/orders/settings', { source });
+    await view.user.click(await screen.findByRole('switch', { name: 'Check deliveries' }, LOAD));
+    await waitFor(() => { expect(source.deliveryWrites).toEqual([{ kind: 'config', patch: { deliveryCheck: true } }]); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
+  it('keeps the switch off until the config has arrived', async () => {
+    const source = seeded(week());
+    source.watchOrdersConfig = () => () => {};
+    const view = renderOrders('/orders/settings', { source });
+    const toggle = await screen.findByRole('switch', { name: 'Check deliveries' }, LOAD);
+    expect(toggle).toBeDisabled();
+    await view.user.click(toggle);
+    expect(source.deliveryWrites).toEqual([]);
   });
 
   it('shows it switched off for staff, with the sentence, and writes nothing', async () => {

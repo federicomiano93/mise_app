@@ -123,6 +123,22 @@ export function IncomingScreen({ hidden, onOpenMissing }: Props) {
 
   const askedEntry = asking === null ? null : sections.flatMap(section => section.rows).find(row => row.entry.order.id === asking.id)?.entry ?? null;
 
+  // The order the question is about left the list (answered on another phone): forget it, or the question would come back by
+  // itself if the order re-opened.
+  useEffect(() => {
+    if (asking !== null && askedEntry === null) setAsking(null);
+  }, [asking, askedEntry]);
+
+  // ⚠️ «Everything arrived» answers for the order AS IT IS NOW (askedEntry is read from the live data, not from the row that was
+  // tapped): a same-day second order may have merged into it while the question was open, bringing «did not arrive» marks that
+  // `missing: {}` would erase. Then it goes to the rows instead, as an order that carried them at the start does.
+  function everythingArrived(): void {
+    setAsking(null);
+    if (askedEntry === null) return;
+    if (carriedMissingIds(askedEntry.order).length > 0) onOpenMissing(askedEntry.order);
+    else answer(askedEntry.order);
+  }
+
   return (
     <section className={styles.screen} aria-labelledby={titleId} hidden={hidden}>
       <FormBar backLabel={t('ui.back')} onBack={leave} title={t('ord.incoming.title')} titleId={titleId} titleRef={title} />
@@ -167,7 +183,7 @@ export function IncomingScreen({ hidden, onOpenMissing }: Props) {
           actions={(
             <>
               <Button onPress={() => { setAsking(null); onOpenMissing(askedEntry.order); }}>{t('ord.incoming.somethingMissing')}</Button>
-              <Button variant="primary" autoFocus onPress={() => { setAsking(null); answer(askedEntry.order); }}>
+              <Button variant="primary" autoFocus onPress={everythingArrived}>
                 {t('ord.incoming.allArrivedBtn')}
               </Button>
             </>
