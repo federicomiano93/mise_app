@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizeCatalogueRecipe } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import {
-  NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, duplicateWorking, linkRowTo, moveWorkingRow, netWeightText, notWeighedCount, removeRow, setRowFields, shelfLifeText, stepWorkingRow, totalText, workingFrom, workingFromDraft, restoreWorking, setCategory,
+  NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, duplicateWorking, haccpStorageText, linkRowTo, moveWorkingRow, netWeightText, notWeighedCount, removeRow, setRowFields, shelfLifeText, stepWorkingRow, totalText, workingFrom, workingFromDraft, restoreWorking, setCategory,
 } from './editorModel';
 
 // The editor's working copy and the rules that turn it into what is saved (the pure half of catalogue-editor.js).
@@ -348,6 +348,15 @@ describe('a duplicate (the recipe page’s «Duplicate»)', () => {
     });
     expect(working.netWeight).toBeNull();
     expect(working.shelfLife).toBeNull();
+  });
+
+  it('copies the HACCP storage text, like the label ingredients, and a typed one replaces it', () => {
+    const stored = { ...original(), haccpStorage: 'In the fridge at +4 °C' } as CatalogueRecipe;
+    const working = duplicateWorking(stored, copyOf);
+    expect(working.rest.haccpStorage).toBe('In the fridge at +4 °C');
+    expect(haccpStorageText(working)).toBe('In the fridge at +4 °C');
+    expect(cleanWorking(working)).not.toHaveProperty('haccpStorage', null);
+    expect(cleanWorking({ ...working, haccpStorage: '' })).toMatchObject({ haccpStorage: '' });
   });
 
   it('⚠️⚠️ NEVER carries the original’s id, its venue or its Food cost weighings — and none of them survives cleanWorking', () => {

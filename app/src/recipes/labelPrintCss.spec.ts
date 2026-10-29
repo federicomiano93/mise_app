@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { HACCP_SIZES, haccpSizeMm } from '@mise/shared/haccp-label';
 import { LABEL_SIZES } from '@mise/shared/label-template-model';
 import tokensCss from '../styles/tokens.css?raw';
 import baseCss from '../styles/base.css?raw';
@@ -67,9 +68,11 @@ describe('label-print.css', () => {
     expect(css).not.toMatch(/@page\s*\{/);
     expect(css).not.toMatch(/@page\s*:/);
     const names = [...css.matchAll(/@page\s+([\w-]+)/g)].map(match => match[1]);
-    // The preset sizes, the custom one, and the image label's own 80 × 60 mm page.
-    expect(names.length).toBe(LABEL_SIZES.length + 2);
-    for (const name of names) expect(['labcustom', 'p80x60', ...LABEL_SIZES.map(size => size.id)]).toContain(name);
+    // The preset sizes, the custom one, the image label's own 80 × 60 mm page and the HACCP label's five.
+    expect(names.length).toBe(LABEL_SIZES.length + 2 + HACCP_SIZES.length);
+    for (const name of names) {
+      expect(['labcustom', 'p80x60', ...LABEL_SIZES.map(size => size.id), ...HACCP_SIZES.map(size => `haccp${size}`)]).toContain(name);
+    }
   });
 
   // The image label is always 80 × 60 mm: a static named page, and the picture itself selects it.
@@ -79,6 +82,17 @@ describe('label-print.css', () => {
     expect(image).toMatch(/page:\s*p80x60;/);
     expect(image).toMatch(/width:\s*80mm;/);
     expect(image).toMatch(/height:\s*60mm;/);
+    expect(image).toMatch(/image-rendering:\s*pixelated;/);
+  });
+
+  // The HACCP label is one of five fixed sizes: a static named page each, selected by the picture, sized in millimetres.
+  it.each(HACCP_SIZES)('has the HACCP label page %s: its size in mm, margin 0, selected by the picture', size => {
+    const { width, height } = haccpSizeMm(size);
+    expect(css).toMatch(new RegExp(String.raw`@page\s+haccp${size}\s*\{\s*size:\s*${width}mm\s+${height}mm;\s*margin:\s*0;\s*\}`));
+    const image = new RegExp(String.raw`\.lab-print--haccp-${size}\s+\.lab-print-image\s*\{([^}]*)\}`).exec(css)?.[1] ?? '';
+    expect(image).toMatch(new RegExp(String.raw`page:\s*haccp${size};`));
+    expect(image).toMatch(new RegExp(String.raw`width:\s*${width}mm;`));
+    expect(image).toMatch(new RegExp(String.raw`height:\s*${height}mm;`));
     expect(image).toMatch(/image-rendering:\s*pixelated;/);
   });
 

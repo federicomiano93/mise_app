@@ -11,7 +11,7 @@ import { describe, expect, test } from 'vitest';
 //  - the print host is never the class that holds back a compulsory update (`preview-overlay`);
 //  - the paper's stylesheet is imported where the sheet is drawn, as a plain file.
 const sources = import.meta.glob<string>(
-  ['./LabelSheet.tsx', './LabelScreen.tsx', './LabelCard.tsx', './useSheetFit.ts', './printHost.tsx', './labelFontPreload.ts', './ImageLabelBody.tsx'],
+  ['./LabelSheet.tsx', './LabelScreen.tsx', './LabelCard.tsx', './useSheetFit.ts', './printHost.tsx', './labelFontPreload.ts', './ImageLabelBody.tsx', './HaccpLabelBody.tsx', './HaccpLabelScreen.tsx', './HaccpList.tsx'],
   { query: '?raw', import: 'default', eager: true },
 );
 
@@ -20,7 +20,7 @@ const codeOf = (source: string): string => source
   .replace(/^\s*\/\/.*$/gm, '')
   .replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
 
-const FILES = ['./LabelSheet.tsx', './LabelScreen.tsx', './LabelCard.tsx', './useSheetFit.ts', './printHost.tsx', './labelFontPreload.ts', './ImageLabelBody.tsx'];
+const FILES = ['./LabelSheet.tsx', './LabelScreen.tsx', './LabelCard.tsx', './useSheetFit.ts', './printHost.tsx', './labelFontPreload.ts', './ImageLabelBody.tsx', './HaccpLabelBody.tsx', './HaccpLabelScreen.tsx', './HaccpList.tsx'];
 
 describe('the label\'s files and the page CSP', () => {
   test('the scan finds every one of the label files, and reads real text', () => {
@@ -43,6 +43,15 @@ describe('the label\'s files and the page CSP', () => {
 
   test.each(FILES)('%s never names the print host «preview-overlay»', file => {
     expect(codeOf(sources[file] ?? '')).not.toMatch(/preview-overlay/);
+  });
+
+  // ⚠️ THE HACCP LABEL HAS FIVE SIZES AND NO CSS BUILT AT RUN TIME: each size is a static page file and a static rule, chosen by
+  // a class name. The host never writes a size into a style.
+  test('the HACCP label’s print host chooses its page by a class and a link, never by writing a size', () => {
+    const hostCode = codeOf(sources['./printHost.tsx'] ?? '');
+    expect(hostCode).toMatch(/lab-print--haccp-\$\{size\}/);
+    expect(hostCode).toMatch(/label-page-haccp-40x30\.css\?url/);
+    expect(hostCode).toMatch(/label-page-haccp-80x60\.css\?url/);
   });
 
   test('the sheet takes its variable values through the style PROP (an object) and imports the plain stylesheet', () => {

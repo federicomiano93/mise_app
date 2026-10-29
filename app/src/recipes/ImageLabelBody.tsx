@@ -32,6 +32,7 @@ import { labelTextsOf, labelTitleOf } from './labelTexts';
 import { closePrintHost, openImagePrintHost } from './printHost';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import { useLabelLogo } from './useLabelLogo';
+import { useLabelMetrics } from './useLabelMetrics';
 import { usePresenceClock } from './usePresenceClock';
 import { useStillWaiting } from './useStillWaiting';
 import styles from './LabelScreen.module.css';
@@ -97,21 +98,6 @@ function missingChars(metrics: LabelMetrics, input: LogoLabelInput, layout: Logo
   }
   add(unsupportedChars(metrics, input.producedOn, 'bold', SMALL_BOLD_PX));
   return found;
-}
-
-// The width table is large (every character at every size), so it is fetched when this screen first needs it and is in
-// no other screen's bundle.
-function useLabelMetrics(): LabelMetrics | 'failed' | null {
-  const [metrics, setMetrics] = useState<LabelMetrics | 'failed' | null>(null);
-  useEffect(() => {
-    let alive = true;
-    import('@mise/shared/label-image-metrics').then(
-      module => { if (alive) setMetrics(module.labelMetrics()); },
-      () => { if (alive) setMetrics('failed'); },
-    );
-    return () => { alive = false; };
-  }, []);
-  return metrics;
 }
 
 const blocked = (title: string, sentences: readonly string[]): ReactNode => (

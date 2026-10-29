@@ -64,6 +64,8 @@ export type FakeRecipesSource = RecipesSource & {
   holdRecipeWrites(): () => void;
   // config/calculator as stored (null = none), what the delete warning reads; `calculatorHold` makes the read hang.
   calculatorConfig: Record<string, unknown> | null;
+  // The venue's roster lines by uid (readMember).
+  members: Record<string, Record<string, unknown>>;
   holdCalculatorRead(): () => void;
   // Every import into the Calculator, in order, as it was handed over (refused ones are not here), and what the next
   // ones answer. `refuseImport` makes the next imports reject with that error (null = they succeed); `holdImport`
@@ -77,7 +79,8 @@ export type FakeRecipesSource = RecipesSource & {
 export function fakeRecipesSource(
   seed: {
     recipes?: StoredDoc[]; ingredients?: StoredDoc[]; labelConfig?: Record<string, unknown> | null; printAgents?: StoredDoc[];
-    suppliers?: StoredDoc[]; calculatorConfig?: Record<string, unknown> | null; logo?: Record<string, unknown> | null;
+    suppliers?: StoredDoc[]; calculatorConfig?: Record<string, unknown> | null;
+    members?: Record<string, Record<string, unknown>>; logo?: Record<string, unknown> | null;
   } = {},
 ): FakeRecipesSource {
   const recipes = new Map((seed.recipes ?? []).map(doc => [doc.id, doc] as const));
@@ -132,6 +135,7 @@ export function fakeRecipesSource(
     recipeWrites: [],
     refuseRecipeWrites: { save: false, remove: false },
     calculatorConfig: seed.calculatorConfig ?? null,
+    members: seed.members ?? {},
     logo: seed.logo ?? null,
     refuseLogo: false,
     refuseLogoWrites: false,
@@ -300,6 +304,7 @@ export function fakeRecipesSource(
       if (calculatorHold) await calculatorHold;
       return fake.calculatorConfig;
     }),
+    readMember: vi.fn<RecipesSource['readMember']>(async uid => fake.members[uid] ?? null),
   };
   return fake;
 }

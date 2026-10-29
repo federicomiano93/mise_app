@@ -1670,6 +1670,42 @@ async function configAndLogs() {
   await expectDenied('labels: an employee cannot switch the model',
     () => mergeWrite(`${A}/config/labels`, { bakery: 'main', template: 'standard' }, asAccount(SAM)));
 
+  // ── Mise 2's HACCP label (image labels step 2, 26 Oct 2026) ──────────────
+  await expectAllowed('labels: the HACCP fields, size and list category', () =>
+    mergeWrite(`${A}/config/labels`, {
+      bakery: 'main',
+      haccpFields: {
+        name: 'print', preparedOn: 'print', useBy: 'print', lot: 'blank', preparedBy: 'off', storage: 'print',
+        blastChilledOn: 'blank', frozenOn: 'off', openedOn: 'off', quantity: 'blank', allergens: 'print',
+      },
+      haccpSize: '60x40', haccpCategory: 'Semilavorati',
+    }));
+  await expectAllowed('labels: the manager changes the HACCP fields', () =>
+    mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpFields: { lot: 'print', allergens: 'blank' } }, asAccount(MAYA)));
+  await expectAllowed('labels: the HACCP list category taken away (every recipe)', () =>
+    clearWrite(`${A}/config/labels`, { bakery: 'main' }, ['haccpCategory']));
+  await expectDenied('labels: a HACCP field the app does not know',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpFields: { colour: 'print' } }));
+  await expectDenied('labels: a HACCP state the app does not know',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpFields: { lot: 'maybe' } }));
+  await expectDenied('labels: the last HACCP field with a state the app does not know',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpFields: { allergens: 'never' } }));
+  await expectDenied('labels: the HACCP fields sent as a list',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpFields: ['name'] }));
+  await expectDenied('labels: a HACCP size the app has no page for',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpSize: '100x100' }));
+  await expectDenied('labels: an empty HACCP list category (none is no field)',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpCategory: '' }));
+  await expectDenied('labels: an employee cannot change the HACCP label',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpSize: '50x30' }, asAccount(SAM)));
+  await expectAllowed('recipes: an employee writes how a semi-finished good is kept', () =>
+    mergeWrite(`${A}/recipes/R_LOGO`, { bakery: 'main', name: 'Biscotti', ingredients: [], haccpStorage: 'In frigorifero a +4 °C' },
+      asAccount(SAM)));
+  await expectDenied('recipes: a storage text of a whole page',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], haccpStorage: 'x'.repeat(201) }));
+  await expectDenied('recipes: a storage text sent as a list',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], haccpStorage: ['frigo'] }));
+
   const logo = (over = {}) => ({
     bakery: 'main', png: 'data:image/png;base64,iVBORw0KGgo=', width: 1320, height: 364,
     updatedAt: '2026-10-25T10:00:00.000Z', ...over,

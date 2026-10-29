@@ -3,10 +3,11 @@ import { act } from '@testing-library/react';
 import { LABEL_CORPUS, TEMPLATE_PROFILES } from '@mise/shared/fixtures/label-corpus';
 import { resolveLabel } from '@mise/shared/label-template-model';
 import { buildLabel } from '@mise/shared/recipe-label-model';
+import { HACCP_SIZES, haccpSizeMm } from '@mise/shared/haccp-label';
 import imagePageCss from './label-page-image.css?raw';
 import pageCss from './label-page.css?raw';
 import type { SheetSource } from './LabelSheet';
-import { closePrintHost, LABEL_PAGE_ID, LABEL_PAGE_IMAGE_ID, LABEL_PAGE_OFF, LABEL_PAGE_ON, openImagePrintHost, openPrintHost, PRINTING_CLASS } from './printHost';
+import { closePrintHost, LABEL_PAGE_ID, LABEL_PAGE_IMAGE_ID, LABEL_PAGE_OFF, LABEL_PAGE_ON, openHaccpPrintHost, openImagePrintHost, openPrintHost, PRINTING_CLASS } from './printHost';
 
 // ⚠️⚠️ THE ZERO-MARGIN PAGE IS ON EXACTLY AS LONG AS THE PRINT HOST (driven on the lab tablet, Chrome 101, 14 Oct 2026).
 // Without it the label went onto the browser's default page — off its corner and onto a second, blank page. Left on
@@ -29,6 +30,44 @@ const imagePageLink = (): HTMLLinkElement => {
   if (!(link instanceof HTMLLinkElement)) throw new Error('the image label page stylesheet is not linked');
   return link;
 };
+
+// One static page file per HACCP size, read as text (the page CSP forbids building it at run time).
+const haccpPageFiles = import.meta.glob<string>('./label-page-haccp-*.css', { query: '?raw', import: 'default', eager: true });
+const haccpPageLink = (size: string): HTMLLinkElement => {
+  const link = document.getElementById(`labelPageHaccp${size}`);
+  if (!(link instanceof HTMLLinkElement)) throw new Error(`the HACCP ${size} page stylesheet is not linked`);
+  return link;
+};
+
+describe('the HACCP label host', () => {
+  afterEach(() => { act(() => { closePrintHost(); }); });
+
+  it.each(HACCP_SIZES)('⚠️ %s has a page file of exactly its size, linked and off until the host opens', size => {
+    const { width, height } = haccpSizeMm(size);
+    const css = (haccpPageFiles[`./label-page-haccp-${size}.css`] ?? '').replace(/\/\*[\s\S]*?\*\//g, '');
+    expect(css).toMatch(new RegExp(String.raw`@page\s*\{\s*size:\s*${width}mm ${height}mm;\s*margin:\s*0;\s*\}`));
+    expect(haccpPageLink(size).media).toBe(LABEL_PAGE_OFF);
+  });
+
+  it('switches on the page of the size asked for, and only that one, and everything off with the host', () => {
+    act(() => { openHaccpPrintHost('data:image/png;base64,AAAA', '62x29'); });
+    expect(haccpPageLink('62x29').media).toBe(LABEL_PAGE_ON);
+    for (const size of HACCP_SIZES.filter(s => s !== '62x29')) expect(haccpPageLink(size).media).toBe(LABEL_PAGE_OFF);
+    expect(pageLink().media).toBe(LABEL_PAGE_OFF);
+    expect(imagePageLink().media).toBe(LABEL_PAGE_OFF);
+    const host = document.getElementById('labelPrint');
+    expect(host?.className).toBe('lab-print lab-print--haccp-62x29');
+    expect(host?.querySelector('img.lab-print-image')?.getAttribute('src')).toBe('data:image/png;base64,AAAA');
+    // A second print of another size takes the first one's page off.
+    act(() => { openHaccpPrintHost('data:image/png;base64,BBBB', '40x30'); });
+    expect(haccpPageLink('62x29').media).toBe(LABEL_PAGE_OFF);
+    expect(haccpPageLink('40x30').media).toBe(LABEL_PAGE_ON);
+    act(() => { closePrintHost(); });
+    for (const size of HACCP_SIZES) expect(haccpPageLink(size).media).toBe(LABEL_PAGE_OFF);
+    expect(document.getElementById('labelPrint')).toBeNull();
+    expect(document.documentElement.classList.contains(PRINTING_CLASS)).toBe(false);
+  });
+});
 
 describe('the print host and the label page', () => {
   afterEach(() => { act(() => { closePrintHost(); }); });
