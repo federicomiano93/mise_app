@@ -573,6 +573,9 @@ const DICTIONARIES = Object.freeze({
     'calc.unnamedIngredient': 'Unnamed ingredient',
     'calc.leaveningHint': 'Which ingredient makes the dough rise. Only this one is scaled by the percentage below.',
     'calc.leaveningStartAt': 'Start at',
+    'calc.leaveningStartPct': 'Start at: leavening percentage',
+    'calc.gramsOf': 'Grams of {name}',
+    'calc.gramsOfUnnamed': 'Grams of an unnamed ingredient',
     // ⚠️ The two hints below are not decoration: they are what makes keeping this
     // field honest instead of confusing. With the knob on it is a STARTING point
     // shared by every phone; with it off it is the only number there is.
@@ -3666,6 +3669,9 @@ const DICTIONARIES = Object.freeze({
     'calc.unnamedIngredient': 'Ingrediente senza nome',
     'calc.leaveningHint': 'Quale ingrediente fa lievitare l’impasto. Solo questo viene scalato dalla percentuale qui sotto.',
     'calc.leaveningStartAt': 'Parti da',
+    'calc.leaveningStartPct': 'Parti da: percentuale di lievito',
+    'calc.gramsOf': 'Grammi di {name}',
+    'calc.gramsOfUnnamed': 'Grammi di un ingrediente senza nome',
     'calc.leaveningPctHintKnob': 'La percentuale da cui parte ogni telefono. Poi ognuno può muovere la propria manopola senza cambiare questa.',
     'calc.leaveningPctHintFixed': 'La percentuale che questa ricetta usa sempre. Con la manopola nascosta, questo è l’unico posto dove si può impostare.',
     'calc.leaveningKnobHint': 'Permette a chi impasta di alzare o abbassare la percentuale sul momento, sul proprio telefono.',
