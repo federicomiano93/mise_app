@@ -243,3 +243,85 @@
   color: var(--danger-ink);
   font-weight: 600;
 }
+
+/* The logo card: the picture, its two buttons and the sentence about the last pick. */
+.logoBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.logoPreview {
+  align-self: flex-start;
+  max-width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.logoActions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.logoButton {
+  min-height: var(--hit);
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.logoButton:disabled,
+.logoRemove:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* Remove: small and low-key, the icon centred in a full-size target. */
+.logoRemove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.logoRemove svg {
+  width: 20px;
+  height: 20px;
+}
+
+.logoButton:focus-visible,
+.logoRemove:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Visually hidden, still a real file box: the button above opens it. */
+.fileBox {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.logoSaid {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}

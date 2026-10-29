@@ -66,6 +66,19 @@ export interface RecipesSource {
   // have Settings open, and a whole write would take the other one's paper size with it. The venue stamp is applied
   // here. Local-first on Firestore's side (the promise settles when the SERVER answers); REJECTS when refused.
   saveLabelConfig(patch: Readonly<Record<string, unknown>>): Promise<void>;
+  // The logo of the «with logo» image label (label-assets/logo) as stored (null when there is none), live. Same contract
+  // as watchLabelConfig. ⚠️ WATCHED ONLY BY THE SCREENS THAT SHOW IT (the label screen and the label Settings), never by
+  // the section: it is tens of kilobytes that every other recipe screen has no use for (P14).
+  watchLabelLogo(
+    onChange: (data: Record<string, unknown> | null, meta: RecipesMeta) => void,
+    onError: (err: unknown) => void,
+  ): () => void;
+  // Writes the logo WHOLE (a new picture replaces the old one, nothing of it is kept), stamped with the venue and the
+  // time. Local-first on Firestore's side: the watch shows it at once; the promise settles when the SERVER answers and
+  // REJECTS when refused.
+  saveLabelLogo(logo: { readonly png: string; readonly width: number; readonly height: number }): Promise<void>;
+  // Takes the logo away. Same promise contract.
+  removeLabelLogo(): Promise<void>;
   // The suppliers, live, so the link chooser can tell two similar articles apart (their names only). Same contract
   // as watchIngredients, and as quiet when it fails (step 3d-6).
   watchSuppliers(
@@ -92,7 +105,9 @@ export interface RecipesSource {
 
 // The recipe fields a person can EMPTY. A merge never deletes a key it is not sent, and the rules refuse a stored null,
 // so an emptied box travels as a removal (js/catalogue/firebase-catalogue.js, CLEARABLE_RECIPE_FIELDS).
-export const CLEARABLE_RECIPE_FIELDS = ['netWeightG', 'shelfLifeDays'] as const;
+// ⚠️ THE LAST TWO ARE MISE 2'S (the image label's texts, labelTexts.ts): an emptied box removes the field, so «nothing
+// typed» is never a stored empty string.
+export const CLEARABLE_RECIPE_FIELDS = ['netWeightG', 'shelfLifeDays', 'labelName', 'labelIngredientsText'] as const;
 
 // A new recipe's id, made on the phone (no write), so a new recipe appears at once and offline. The same shape as the
 // id Firestore makes itself (20 letters and digits, from the browser's cryptographic random source): the current app's
@@ -115,6 +130,8 @@ const RECIPES = 'recipes';
 const INGREDIENTS = 'ingredients';
 const CONFIG = 'config';
 const LABELS_DOC = 'labels';
+const LABEL_ASSETS = 'label-assets';
+const LOGO_DOC = 'logo';
 const PRINT_AGENTS = 'print-agents';
 const PRINT_JOBS = 'print-jobs';
 const SUPPLIERS = 'suppliers';
@@ -136,6 +153,7 @@ export function createFirestoreRecipesSource(
   const ingredientsPath = buildPath(locationId, INGREDIENTS);
   const configPath = buildPath(locationId, CONFIG);
   const printAgentsPath = buildPath(locationId, PRINT_AGENTS);
+  const labelAssetsPath = buildPath(locationId, LABEL_ASSETS);
   const printJobsPath = buildPath(locationId, PRINT_JOBS);
   const suppliersPath = buildPath(locationId, SUPPLIERS);
 
@@ -229,6 +247,33 @@ export function createFirestoreRecipesSource(
     saveLabelConfig: async patch => {
       const kit = await firestore();
       await kit.fs.setDoc(kit.fs.doc(kit.db, configPath, LABELS_DOC), { ...patch, bakery: locationId }, { merge: true });
+    },
+
+    // ⚠️ QUIET (warn), like the label profile: a refused or failed read is a label that says its logo is missing.
+    watchLabelLogo: (onChange, onError) => listen(kit => kit.fs.onSnapshot(
+      kit.fs.doc(kit.db, labelAssetsPath, LOGO_DOC),
+      { includeMetadataChanges: true },
+      snap => onChange(
+        snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null,
+        { fromServer: !snap.metadata.fromCache },
+      ),
+      err => {
+        console.warn('watchLabelLogo failed:', err);
+        onError(err);
+      },
+    ), onError),
+
+    // The rules take exactly these keys; the stamp and the time are applied here, after what the caller handed over.
+    saveLabelLogo: async logo => {
+      const kit = await firestore();
+      await kit.fs.setDoc(kit.fs.doc(kit.db, labelAssetsPath, LOGO_DOC), {
+        png: logo.png, width: logo.width, height: logo.height, updatedAt: new Date().toISOString(), bakery: locationId,
+      });
+    },
+
+    removeLabelLogo: async () => {
+      const kit = await firestore();
+      await kit.fs.deleteDoc(kit.fs.doc(kit.db, labelAssetsPath, LOGO_DOC));
     },
 
     // ⚠️ QUIET (warn), like the ingredients: a venue without Orders has no suppliers, and the chooser then simply shows

@@ -1,0 +1,7 @@
+/* The page the «with logo» image label prints on, for EVERY browser — the 80 × 60 mm its dots were drawn for.
+
+   ⚠️⚠️ SWITCHED ON ONLY WHILE AN IMAGE LABEL PRINTS, in place of label-page.css (printHost.tsx, same lifetime). That file's
+   `size: auto` leaves the paper to the driver, which is right for the paper sheet: its size is the venue's. The image
+   label has one size only, and a browser that ignores named pages (the lab tablet's Chrome 101) or a PDF made from the
+   page (driven 25 Oct 2026: Letter) would otherwise lay 80 × 60 mm of dots on whatever its default page is. */
+@page { size: 80mm 60mm; margin: 0; }

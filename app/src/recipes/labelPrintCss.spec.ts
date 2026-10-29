@@ -67,8 +67,19 @@ describe('label-print.css', () => {
     expect(css).not.toMatch(/@page\s*\{/);
     expect(css).not.toMatch(/@page\s*:/);
     const names = [...css.matchAll(/@page\s+([\w-]+)/g)].map(match => match[1]);
-    expect(names.length).toBe(LABEL_SIZES.length + 1);
-    for (const name of names) expect(['labcustom', ...LABEL_SIZES.map(size => size.id)]).toContain(name);
+    // The preset sizes, the custom one, and the image label's own 80 × 60 mm page.
+    expect(names.length).toBe(LABEL_SIZES.length + 2);
+    for (const name of names) expect(['labcustom', 'p80x60', ...LABEL_SIZES.map(size => size.id)]).toContain(name);
+  });
+
+  // The image label is always 80 × 60 mm: a static named page, and the picture itself selects it.
+  it('has the image label page: 80 × 60 mm, margin 0, selected by the picture', () => {
+    expect(css).toMatch(/@page\s+p80x60\s*\{\s*size:\s*80mm\s+60mm;\s*margin:\s*0;\s*\}/);
+    const image = /\.lab-print--p80x60\s+\.lab-print-image\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
+    expect(image).toMatch(/page:\s*p80x60;/);
+    expect(image).toMatch(/width:\s*80mm;/);
+    expect(image).toMatch(/height:\s*60mm;/);
+    expect(image).toMatch(/image-rendering:\s*pixelated;/);
   });
 
   it('lets a preset page win over the custom one by specificity, not by the order of the rules', () => {

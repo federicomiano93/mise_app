@@ -2,6 +2,8 @@ import { describe, expect, test } from 'vitest';
 import * as allergenModel from '@mise/shared/allergen-model';
 import * as labelModel from '@mise/shared/recipe-label-model';
 import * as market from '@mise/shared/market';
+import * as imageLayout from '@mise/shared/label-image-layout';
+import * as textCheck from '@mise/shared/label-text-check';
 
 // The interface language must never reach a word that names a FOOD — the app side of the guard (parity doc items 54,
 // 55 and 110e; shared/src/label-separation.spec.ts guards the pure modules).
@@ -31,6 +33,7 @@ const LABEL_FILES: readonly string[] = [
   './recipes/DeclarationCard.tsx', // the ingredient declaration: Contains / May contain, and the text sent or copied
   './recipes/AllergenSheet.tsx', // the law card (the fourteen groups) and what each recipe contains
   './recipes/LabelScreen.tsx', // the label screen: the refusals, the notes, the date, Copy and Send (the text of the whole label)
+  './recipes/ImageLabelBody.tsx', // the «with logo» image label: PRODOTTO IL, the allergen name in the text check, the typed ingredients
   './recipes/LabelCard.tsx', // the label as words: the ingredients, Contains, May contain and the nutrition table
   './records/AllergenSections.tsx', // the ingredient card's allergen rows, their group headings and the nutrient names, where an allergen is DECLARED
 ];
@@ -45,6 +48,8 @@ const LABEL_WORDS = [
   'allergenName', 'allergenGroupName', 'allergenGroupCodes', 'labelWord', 'nutrientName',
   'containsLine', 'mayContainLine', 'declarationText', 'ingredientLine',
   'allergenLabel', 'allergenWordIt', 'nutrientWordIt',
+  // «PRODOTTO IL:» / «PRODUCED ON:» of the image label: a label word, the language last.
+  'producedOnWord',
 ] as const;
 const NEVER_CALLED: readonly string[] = ['allergenLabel', 'allergenWordIt', 'nutrientWordIt'];
 const TAKE_NO_LANGUAGE: readonly string[] = ['ingredientLine'];
@@ -54,7 +59,7 @@ const LANGUAGE_IS_SECOND: readonly string[] = ['declarationText'];
 //
 // Anything not here, and not a type, makes the importing file a label file: it must then be on LABEL_FILES, where the
 // rules above apply to it. Each name is allowed for the reason beside it; none returns a word a person reads.
-const MODULES = '@mise/shared/(?:market|recipe-label-model|allergen-model)';
+const MODULES = '@mise/shared/(?:market|recipe-label-model|allergen-model|label-image-layout|label-text-check)';
 const ALLOWED_VALUES: Readonly<Record<string, string>> = {
   countryOf: 'a country CODE (GB / IT), used for sums and links, not a word',
   currencyOf: 'a currency symbol, not a food word',
@@ -78,11 +83,29 @@ const ALLOWED_VALUES: Readonly<Record<string, string>> = {
   isDeclared: 'a yes / no',
   hasFullNutrition: 'a yes / no',
   missingNutrients: 'nutrient KEYS, not words',
+  S: 'the canvas scale (4), a number',
+  CANVAS_W: 'the canvas width in pixels, a number',
+  CANVAS_H: 'the canvas height in pixels, a number',
+  BODY_PX: 'the ingredients’ type size in pixels, a number',
+  SMALL_BOLD_PX: 'the size of «PRODOTTO IL:» in pixels, a number',
+  TITLE_MAX: 'the title’s largest size, a number',
+  TITLE_MIN: 'the title’s smallest size, a number',
+  TITLE_LINE: 'dots between two title lines, a number',
+  LINE_HEIGHT: 'dots between two lines of ingredients, a number',
+  TEXT_LIMIT_Y: 'where the ingredients must end, a number',
+  LOGO_W: 'the logo’s width in pixels, a number',
 };
 // Exported by the three modules and NOT allowed outside a label file, because they carry or compose words: the tables
 // hold each allergen's and nutrient's English `label`, and the builders compose ingredient names into the declaration.
 const FOOD_CARRYING: readonly string[] = [
   'ALLERGENS', 'NUTRIENTS', 'buildAllergenFields', 'buildLabel', 'flattenIngredients', 'nutritionPer100g',
+  // The image label: it composes the typed title and ingredients into the drawing, and its check names allergens.
+  'layoutLogoLabel', // composes the typed words (and «PRODOTTO IL:») into the drawing
+  'ingredientWords', // hands out the typed words one by one
+  'CHECKED_WORDS', 'NOT_ALLERGENS', 'BOLD_WORDS', 'DECLARED_WORDS', // the Italian allergen words
+  'checkLabelText', // returns the allergen words found in the text, and the code of the one it lacks
+  'ingredientAt', // a piece of the typed ingredients
+  'runsOf', // the typed words split into bold allergens and plain text
 ];
 
 // The source without its comments and string literals: explaining the rule in prose is exactly where a forbidden word
@@ -93,9 +116,9 @@ const codeOf = (source: string): string => source
   .replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
 
 // Every call of a label-word function in the code, with the text of its arguments (parentheses balanced).
-function callsIn(code: string): Array<{ name: string; args: string[] }> {
+function callsIn(code: string, names: readonly string[] = LABEL_WORDS): Array<{ name: string; args: string[] }> {
   const calls: Array<{ name: string; args: string[] }> = [];
-  const pattern = new RegExp(`(?<![\\w.])(${LABEL_WORDS.join('|')})\\s*\\(`, 'g');
+  const pattern = new RegExp(`(?<![\\w.])(${names.join('|')})\\s*\\(`, 'g');
   for (const match of code.matchAll(pattern)) {
     let depth = 1;
     let index = match.index + match[0].length;
@@ -217,6 +240,19 @@ function problemsIn(file: string, source: string): string[] {
   return problems;
 }
 
+// ⚠️ THE TEXT CHECK TAKES ITS LANGUAGE IN AN OPTIONS OBJECT, so the «last argument» rule above cannot see it. Its own
+// rule: every call of `checkLabelText(` hands over the country's `lang` in that object — the shorthand `{ lang, … }`, so
+// the one name a listed file may use is the one declared from `outputLanguage(`. Without it the check would run in the
+// wrong language, or in none: Italian lists applied to an English label, or no check at all on an Italian one.
+const OPTION_CALLS: readonly string[] = ['checkLabelText'];
+const PASSES_LANG = /(?:^|[{,]\s*)lang\s*(?:,|\}|:\s*lang\b)/;
+
+function optionProblemsIn(file: string, code: string): string[] {
+  return callsIn(code, OPTION_CALLS)
+    .filter(({ args }) => !PASSES_LANG.test(args[1] ?? ''))
+    .map(({ name, args }) => `${file}: ${name}(${args.join(', ')}) does not pass the country's «lang» in its options`);
+}
+
 // The only problem message the import door lets through, word for word (see the test that uses it).
 const REVIEWED_EXCEPTION = './records/allergenCardModel.ts: imports «buildAllergenFields» from @mise/shared/allergen-model'
   + ' but is not on LABEL_FILES — add it there, or it must not draw a food word';
@@ -242,6 +278,30 @@ describe('the interface language never reaches a food word', () => {
     expect(problems).toEqual([]);
   });
 
+  test('every call of the text check passes the country\'s «lang» in its options', () => {
+    const problems = appFiles().flatMap(([file, source]) => optionProblemsIn(file, codeOf(source)));
+    expect(problems).toEqual([]);
+    // The scan must find the call it guards, or a green result means nothing.
+    const calls = appFiles().flatMap(([, source]) => callsIn(codeOf(source), OPTION_CALLS));
+    expect(calls.length).toBeGreaterThan(0);
+  });
+
+  test('and the options rule finds a call without «lang», with another language, or with none', () => {
+    const problems = (call: string) => optionProblemsIn('x.tsx', call);
+    expect(problems('checkLabelText(text, { lang, declared })')).toEqual([]);
+    expect(problems('checkLabelText(text, { declared, lang })')).toEqual([]);
+    expect(problems('checkLabelText(text, { lang })')).toEqual([]);
+    expect(problems('checkLabelText(text, { lang: lang, declared })')).toEqual([]);
+    expect(problems('const r = checkLabelText(\n  text,\n  { lang, declared: codes },\n);')).toEqual([]);
+    expect(problems("checkLabelText(text, { lang: 'it', declared })")).toHaveLength(1);
+    expect(problems('checkLabelText(text, { declared })')).toHaveLength(1);
+    expect(problems('checkLabelText(text, { language: lang })')).toHaveLength(1);
+    expect(problems('checkLabelText(text, options)')).toHaveLength(1);
+    expect(problems('checkLabelText(text)')).toHaveLength(1);
+    // A comment that mentions the call is not one.
+    expect(optionProblemsIn('x.tsx', codeOf('// checkLabelText(text, { lang: "it" })'))).toEqual([]);
+  });
+
   // ⚠️ THE DOOR CANNOT BE WALKED ROUND: a file that is not on the list may import from the three label modules only the
   // names that are not food words, and nobody may rename or star-import them.
   test('no app file imports a food-carrying value from the label modules without being on the list, or hides one', () => {
@@ -263,8 +323,11 @@ describe('the interface language never reaches a food word', () => {
   });
 
   // ⚠️ AN ALLOWLIST THAT DRIFTS FROM THE MODULES IS A HOLE: a new export must be decided on, on purpose.
-  test('every runtime export of the three label modules is a label word, allowed with a reason, or food-carrying', () => {
-    const exported = [...Object.keys(market), ...Object.keys(allergenModel), ...Object.keys(labelModel)];
+  test('every runtime export of the label modules is a label word, allowed with a reason, or food-carrying', () => {
+    const exported = [
+      ...Object.keys(market), ...Object.keys(allergenModel), ...Object.keys(labelModel),
+      ...Object.keys(imageLayout), ...Object.keys(textCheck),
+    ];
     const decided = new Set<string>([...LABEL_WORDS, ...Object.keys(ALLOWED_VALUES), ...FOOD_CARRYING]);
     expect(exported.filter(name => !decided.has(name))).toEqual([]);
     const exports = new Set(exported);
