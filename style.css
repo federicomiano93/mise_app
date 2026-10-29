@@ -1100,7 +1100,7 @@ input.cp-prod-weight {
 
 /* Reordering a recipe's ingredients (same look as the Catalogue's editor, Calculator tokens).
    The drag states reuse .cp-sortable-ghost/-chosen/-drag above. */
-.cp-ing-head { display: flex; align-items: center; gap: 8px; }
+.cp-ing-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .cp-ing-head .cp-label { margin-bottom: 0; }
 .cp-reorder-btn {
   margin-left: auto;

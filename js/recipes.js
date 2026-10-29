@@ -751,9 +751,8 @@ function sourceBox(recipe) {
 //
 // withRowIds is idempotent, so a recipe already carrying ids is untouched.
 async function link(recipe, catalogueId) {
-  // A linked recipe is read-only: the reorder mode must not outlive the change of source.
-  reorderingIngredients = false;
   if (!catalogueId) {
+    reorderingIngredients = false;
     // ⚠️ UNLINKING LEAVES THE TAB WITH NOTHING RATHER THAN A STALE COPY. Its own
     // ingredient list was left behind when it was linked; silently resurrecting
     // it would bring back exactly the copy this change removed.
@@ -778,6 +777,9 @@ async function link(recipe, catalogueId) {
   }
 
   recipe.catalogueId = catalogueId;
+  // A linked recipe is read-only: the reorder mode ends here, once the link has worked —
+  // a failed link leaves the screen, and the mode, as they were.
+  reorderingIngredients = false;
   // The leavening has to be chosen again: it now points at a row in a different
   // recipe, and guessing by name is the thing being avoided.
   delete recipe.leaveningRid;

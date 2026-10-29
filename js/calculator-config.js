@@ -943,17 +943,30 @@ function normalizeRecipe(raw, index) {
   const id = String(raw.id || ('r-' + (slug(name) || index)));
   const logic = LOGICS.includes(raw.logic) ? raw.logic : 'orders';
 
-  const ingredients = [];
+  // ⚠️ ROWS THAT ALREADY HAVE A KEY CLAIM IT FIRST, then the new ones (no key yet) get theirs.
+  // A new row's key is made from its name, and when two rows ask for the same key the first
+  // one in the list used to win. Since the ingredients can be reordered (29 Oct 2026), a new
+  // «Yeast» dragged above the saved Yeast would have taken the key `yeast` — and the leavening,
+  // which is found by that key, would have moved onto the new row, changing every dough.
+  // Rows that all have keys, or none, are keyed exactly as before.
   const usedKeys = new Set();
   const rawIngs = Array.isArray(raw.ingredients) ? raw.ingredients : [];
+  const rows = [];
   rawIngs.forEach((ri, i) => {
     const row = normalizeIngredientRow(ri, i);
-    if (!row) return;
-    let key = row.key;
-    while (usedKeys.has(key)) key = key + '-' + i; // keep keys unique within the recipe
-    usedKeys.add(key);
-    ingredients.push({ key, label: row.label, grams: row.grams });
+    if (row) rows.push({ row, i, saved: !!ri.key });
   });
+  const keyOf = new Map();
+  for (const pass of [true, false]) {
+    for (const r of rows) {
+      if (r.saved !== pass) continue;
+      let key = r.row.key;
+      while (usedKeys.has(key)) key = key + '-' + r.i; // keep keys unique within the recipe
+      usedKeys.add(key);
+      keyOf.set(r, key);
+    }
+  }
+  const ingredients = rows.map(r => ({ key: keyOf.get(r), label: r.row.label, grams: r.row.grams }));
 
   const leaveningKey = (raw.leaveningKey && usedKeys.has(String(raw.leaveningKey)))
     ? String(raw.leaveningKey) : null;
