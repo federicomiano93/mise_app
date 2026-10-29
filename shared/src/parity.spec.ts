@@ -54,7 +54,8 @@
 // history-window.ts ARE paired (step 3f-2b, the suggestion hint and its live window of orders-history): full ports. untold-changes.ts is NOT: it is a
 // partial port (only `confirmedEntries`; the reminders and the untold-changes banner stay in js/ until their screens come), so its spec
 // compares names and shapes itself. order-day-choices.ts is new in Mise 2 (the seven-day choice of a supplier with no order days) and has
-// no original, like calculator-tab-keys.ts, so there is nothing to pair it with.
+// no original, like calculator-tab-keys.ts, so there is nothing to pair it with; delivery-check.ts is new in Mise 2 as well (step 3f-5, the venue's
+// «check deliveries» switch) and has no original either. deliveries.ts IS paired (step 3f-5, Incoming): a full port of js/orders/deliveries.js.
 // order-image.ts and send-chooser.ts are NOT paired (step 3f-3, sending): partial ports — the order picture's layout without
 // the canvas, the File and the share sheet, and the send chooser's offers, links and photo batch without its screen
 // (`chooseAndSend`); their specs compare names, constants and shapes themselves.
@@ -152,6 +153,7 @@ import * as orderDay from './order-day';
 import * as sentCheck from './sent-check';
 import * as suggestions from './suggestions';
 import * as historyWindow from './history-window';
+import * as deliveries from './deliveries';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -221,6 +223,7 @@ import * as legacyOrderDay from '../../js/orders/order-day.js';
 import * as legacySentCheck from '../../js/orders/sent-check.js';
 import * as legacySuggestions from '../../js/orders/suggestions.js';
 import * as legacyHistoryWindow from '../../js/orders/history-window.js';
+import * as legacyDeliveries from '../../js/orders/deliveries.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -292,6 +295,7 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['sent-check', sentCheck, legacySentCheck],
   ['suggestions', suggestions, legacySuggestions],
   ['history-window', historyWindow, legacyHistoryWindow],
+  ['deliveries', deliveries, legacyDeliveries],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -353,7 +357,7 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all sixty-nine models are compared', () => {
+test('all seventy models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
@@ -364,5 +368,5 @@ test('all sixty-nine models are compared', () => {
       'allergen-terms', 'allergen-match', 'records', 'invoice-zip/reasons', 'invoice-zip/py-compat', 'invoice-zip/sha256',
       'invoice-zip/classify', 'invoice-zip/pricing', 'invoice-zip/fatturapa', 'invoice-zip/products', 'invoice-zip/selection',
       'work-week', 'price-changes-model', 'invoice-import-model', 'invoice-import-plan', 'ingredient-merge', 'send-routes', 'supplier-order', 'orders-config', 'line-supplier', 'order-text', 'ingredient-search', 'order-day', 'sent-check', 'suggestions',
-      'history-window']);
+      'history-window', 'deliveries']);
 });
