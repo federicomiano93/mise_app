@@ -170,3 +170,17 @@
     background: var(--sunken);
   }
 }
+
+/* The suggestion, or — taking its place — the warning that the typed quantity is far above the usual. Never by colour alone:
+   the words say it, the weight underlines it. */
+.hint {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--accent-ink);
+  font-size: var(--fs-sm);
+}
+
+.hint[data-unusual="true"] {
+  color: var(--danger-ink);
+  font-weight: 600;
+}

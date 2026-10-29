@@ -6,7 +6,7 @@ import { createOrdersStore } from './ordersStore';
 import type { OrdersDeps, OrdersSnapshot, OrdersStore } from './ordersStore';
 
 // One Orders store for as long as the section is on screen: created from the open venue's source, started on mount and
-// stopped on unmount — so the four listeners exist only while somebody is on the page (P14), and a change still waiting
+// stopped on unmount — so the five listeners exist only while somebody is on the page (P14), and a change still waiting
 // for the autosave is sent the moment the section closes.
 //
 // The venue cannot change under it: a venue switch reloads the whole app (session.ts).

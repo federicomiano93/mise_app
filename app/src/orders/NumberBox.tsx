@@ -19,6 +19,8 @@ type Props = {
   // Every input, as a whole number, never below 0 (the store saves it after its own pause).
   onChange: (n: number) => void;
   handle?: Ref<BoxHandle>;
+  // The id of the line that explains this box (a hint, a warning); read out with it.
+  describedBy?: string;
 };
 
 const textOf = (n: number): string => (n > 0 ? String(n) : '');
@@ -29,7 +31,7 @@ const textOf = (n: number): string => (n > 0 ? String(n) : '');
 // echo of what is being typed, must not rewrite the digits under the finger. The box follows the draft only while it is not
 // focused, and picks the draft up again the moment it loses the focus. A stepper or the × writes through `handle.show`, so
 // they do not wait for a blur.
-export function NumberBox({ value, className, ariaLabel, onChange, handle }: Props) {
+export function NumberBox({ value, className, ariaLabel, onChange, handle, describedBy }: Props) {
   const shown = textOf(value);
   const [text, setText] = useState(shown);
   const [seen, setSeen] = useState(shown);
@@ -63,6 +65,7 @@ export function NumberBox({ value, className, ariaLabel, onChange, handle }: Pro
       inputMode="numeric"
       className={className}
       aria-label={ariaLabel}
+      aria-describedby={describedBy}
       value={text}
       onFocus={() => { focused.current = true; }}
       onBlur={() => {

@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useId, useRef } from 'react';
 import type { MouseEvent } from 'react';
 import { Minus, Plus, X } from 'lucide-react';
 import { ingredientDisplayLabel, wholeNumber } from '@mise/shared/archive';
@@ -10,6 +10,7 @@ import type { BoxHandle } from './NumberBox';
 import type { DraftEntry } from './draftSync';
 import type { OrderRow } from './ordersLens';
 import type { LineEdit } from './ordersStore';
+import type { RowHint } from './suggester';
 import styles from './OrderLine.module.css';
 
 type Props = {
@@ -17,6 +18,8 @@ type Props = {
   // What the draft holds for this ingredient (undefined: nothing typed yet).
   entry: DraftEntry | undefined;
   showStock: boolean;
+  // The line under the name: the suggested quantity, or the warning that the typed one is far above the usual.
+  hint: RowHint;
   // Changes this line, local-first (the store stamps the day, claims the line and saves after its pause).
   onEdit: (row: OrderRow, edit: LineEdit) => void;
 };
@@ -27,10 +30,13 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
 //
 // ⚠️ A ROW MARKED `elsewhere` SHOWS AN EMPTY ORDER BOX whatever the draft says: that number belongs to the other supplier's
 // order. Typing there (or + ) takes the line back — the store does it in the same write (ordersStore.ts editLine).
-export function OrderLine({ row, entry, showStock, onEdit }: Props) {
+export function OrderLine({ row, entry, showStock, hint, onEdit }: Props) {
   const { t } = useT();
   const { ingredient } = row;
   const orderBox = useRef<BoxHandle>(null);
+  const hintId = useId();
+  const hintText = hint.kind === 'suggested' ? t('ord.suggestedN', { n: hint.n })
+    : hint.kind === 'unusual' ? t('ord.muchMoreThanUsual', { n: hint.usual }) : '';
   const qty = row.elsewhere ? 0 : wholeNumber(entry?.qty);
   const stock = wholeNumber(entry?.stock);
   const name = ingredientDisplayName(ingredient) || t('ord.unnamedProduct');
@@ -64,6 +70,7 @@ export function OrderLine({ row, entry, showStock, onEdit }: Props) {
         <span className={styles.name}>{name}</span>
         {weight !== '' ? <span className={styles.weight}>{weight}</span> : null}
         {note !== '' ? <span className={styles.note}>{note}</span> : null}
+        {hintText !== '' ? <span id={hintId} className={styles.hint} data-unusual={hint.kind === 'unusual'}>{hintText}</span> : null}
         {choices.length >= 2 ? (
           <select
             className={styles.unitSelect}
@@ -98,6 +105,7 @@ export function OrderLine({ row, entry, showStock, onEdit }: Props) {
           value={qty}
           className={styles.box}
           ariaLabel={t('ord.qtyToOrderFor', { name: label })}
+          describedBy={hintText !== '' ? hintId : undefined}
           onChange={n => { onEdit(row, { qty: n }); }}
         />
         <div className={styles.steps}>

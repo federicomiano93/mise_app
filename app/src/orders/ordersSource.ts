@@ -12,8 +12,10 @@
 //   • drafts/current — the order in progress, shared live by every phone of the venue (parity L31).
 // It writes the draft (a merge of the changed lines and days, draftSync.ts decides what changed; and, from step 3f-2, the
 // clear of the lines an order took or a «Clear quantities» threw away) and ONE order record at a time
-// (orders-history/<day>_<supplier>, in a transaction — parity H1, H2). It reads a record once, never live: the confirm screen
-// asks whether today's record exists before it opens (the live, bounded history comes with History, slice 3f-4).
+// (orders-history/<day>_<supplier>, in a transaction — parity H1, H2). It reads a record once: the confirm screen asks whether
+// today's record exists before it opens. From step 3f-2b it also watches the LIVE WINDOW of orders-history — the last two
+// calendar months (@mise/shared/history-window), exactly the query of the current app's watchRecentHistory — which the
+// suggestions are worked out from (parity L27); older orders are fetched on demand with History (slice 3f-4).
 //
 // ⚠️ NO ROLE IS READ HERE, ON PURPOSE: the section gate and firestore.rules decide (P2).
 //
@@ -53,6 +55,9 @@ export interface OrdersSource {
     onChange: (data: Record<string, unknown> | null, meta: OrdersMeta) => void,
     onError: (err: unknown) => void,
   ): () => void;
+  // orders-history from `fromDate` ('YYYY-MM-DD') onwards, live: `date >= fromDate`, one field, so no composite index. Same
+  // contract. The legacy weekly record has no `date` and is never in it — as in the current app.
+  watchRecentHistory(fromDate: string, onChange: (list: StoredDoc[]) => void, onError: (err: unknown) => void): () => void;
   // Merges the changed lines and days into drafts/current — and creates it on the very first order, which an update of
   // dotted paths could not. The venue stamp is applied here. Settles when the SERVER answers; REJECTS when refused
   // (offline, it simply waits, and Firestore shows the write at once in every answer meanwhile).
@@ -145,6 +150,19 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
     watchIngredients: watchCollection(ingredientsPath, INGREDIENTS),
     watchOrdersConfig: watchDocument(configPath, ORDERS_DOC, 'config/orders'),
     watchDraft: watchDocument(draftsPath, DRAFT_ID, 'drafts/current'),
+
+    // No includeMetadataChanges here: nothing waits for the server's word on the history (no «Loading…» depends on it), and
+    // every metadata-only answer would cut the window into lists again for nothing.
+    watchRecentHistory(fromDate, onChange, onError) {
+      return listen(kit => kit.fs.onSnapshot(
+        kit.fs.query(kit.fs.collection(kit.db, historyPath), kit.fs.where('date', '>=', fromDate)),
+        snap => onChange(docsOf(snap)),
+        err => {
+          console.error('watch(orders-history) failed:', err);
+          onError(err);
+        },
+      ), onError);
+    },
 
     // ⚠️ setDoc WITH merge AND A PARTIAL MAP: Firestore merges key by key, so the lines not mentioned keep whatever
     // anybody else has put there. The venue stamp goes on LAST: the rules require `bakery` to name the folder (stampedFor).
