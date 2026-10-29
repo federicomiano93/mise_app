@@ -9,7 +9,10 @@ import type { OrdersMeta, OrdersSource, StoredDoc } from '../orders/ordersSource
 // too (`watchRecentHistory`: those dated on or after the window's start; a recorded order is told at once), and `init.records`
 // seeds them. From step 3f-4 (History) it pages the records older than the window like the real query (`date < before`, newest
 // first, `pageSize` at a time, then the legacy records with a `weekStart`), and rewrites or deletes one record in a fake
-// transaction; `fail.older`, `fail.legacy` and `fail.rewrite` refuse the next one, `duringRewrite` acts in its second.
+// transaction; `fail.older`, `fail.legacy` and `fail.rewrite` refuse the next one, `duringRewrite` acts in its second. From step 3f-5
+// (Incoming) it answers a delivery, resolves a missing line and merges config/orders like Firestore's local view: the change is
+// in the record (or the config) and told AT ONCE, and a refused one (`failDelivery`) is taken back and told again — then its
+// promise rejects. `holdWrites` holds these too.
 type ListListener = { onChange: (list: StoredDoc[], meta: OrdersMeta) => void; onError: (err: unknown) => void };
 type DocListener = { onChange: (data: Record<string, unknown> | null, meta: OrdersMeta) => void; onError: (err: unknown) => void };
 
@@ -59,6 +62,13 @@ export type FakeOrdersSource = OrdersSource & {
   duringRewrite: (() => void) | null;
   // Every rewrite attempted, by record id.
   rewrites: string[];
+  // Every delivery answer, «Resolved» and config/orders merge sent, in order (refused ones included).
+  deliveryWrites: Array<
+    | { kind: 'confirm'; id: string; patch: Record<string, unknown> }
+    | { kind: 'resolve'; id: string; ingredientId: string; at: string }
+    | { kind: 'config'; patch: Record<string, unknown> }>;
+  // The NEXT write of that kind is refused (then the flag goes back to false).
+  failDelivery: { confirm: boolean; resolve: boolean; config: boolean };
 };
 
 // A merge like setDoc(…, { merge: true }): maps merged key by key at every depth, everything else replaced.
@@ -278,6 +288,40 @@ export function fakeOrdersSource(init: {
       return next;
     },
 
+    deliveryWrites: [],
+    failDelivery: { confirm: false, resolve: false, config: false },
+
+    // updateDoc: refused when the record is not there (not-found), `missing` replaced whole.
+    confirmDelivery(id, patch) {
+      source.deliveryWrites.push({ kind: 'confirm', id, patch: { ...patch } });
+      const before = source.records.get(id);
+      if (!before) return Promise.reject(new Error('not-found'));
+      source.records.set(id, { ...structuredClone(before), ...structuredClone(patch), bakery: 'bakery' });
+      tellHistory();
+      return settleWrite('confirm', () => { source.records.set(id, before); tellHistory(); });
+    },
+
+    // setDoc merge: the map is added to, key by key; a record that is not there is created (as Firestore's merge would).
+    resolveMissing(recordId, ingredientId, at) {
+      source.deliveryWrites.push({ kind: 'resolve', id: recordId, ingredientId, at });
+      const before = source.records.get(recordId);
+      source.records.set(recordId, deepMerge(before ? structuredClone(before) : {},
+        { missingResolved: { [ingredientId]: at }, updatedAt: at, bakery: 'bakery' }));
+      tellHistory();
+      return settleWrite('resolve', () => {
+        if (before) source.records.set(recordId, before); else source.records.delete(recordId);
+        tellHistory();
+      });
+    },
+
+    mergeOrdersConfig(patch) {
+      source.deliveryWrites.push({ kind: 'config', patch: { ...patch } });
+      const before = source.ordersConfig;
+      source.ordersConfig = deepMerge(before ? structuredClone(before) : {}, { ...patch, bakery: 'bakery' });
+      tellConfig();
+      return settleWrite('config', () => { source.ordersConfig = before; tellConfig(); });
+    },
+
     remoteMerge(payload) {
       source.draft = deepMerge(source.draft ?? {}, payload);
       tellDraft();
@@ -286,7 +330,7 @@ export function fakeOrdersSource(init: {
     emit() {
       for (const l of supplierWatchers) l.onChange([...source.suppliers.values()], fromServer);
       for (const l of ingredientWatchers) l.onChange([...source.ingredients.values()], fromServer);
-      for (const l of configWatchers) l.onChange(source.ordersConfig, fromServer);
+      tellConfig();
       tellDraft();
       tellHistory();
     },
@@ -317,6 +361,27 @@ export function fakeOrdersSource(init: {
   }
   function historyMeta(): OrdersMeta {
     return { fromServer: !source.historyCached };
+  }
+
+  function tellConfig() {
+    const doc = source.ordersConfig ? structuredClone(source.ordersConfig) : null;
+    for (const l of configWatchers) l.onChange(doc, fromServer);
+  }
+
+  // A write already shown to the watchers settles a moment later (or when `holdWrites` lets it go): refused, it is taken back.
+  function settleWrite(kind: keyof FakeOrdersSource['failDelivery'], takeBack: () => void): Promise<void> {
+    const refused = source.failDelivery[kind];
+    source.failDelivery[kind] = false;
+    const settle = (resolve: () => void, reject: (err: unknown) => void) => {
+      if (refused) {
+        takeBack();
+        reject(new Error('permission-denied'));
+      } else resolve();
+    };
+    return new Promise<void>((resolve, reject) => {
+      if (held) held.push(() => settle(resolve, reject));
+      else queueMicrotask(() => settle(resolve, reject));
+    });
   }
 
   function tellDraft() {
