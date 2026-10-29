@@ -31,6 +31,8 @@ export type FakeOrdersSource = OrdersSource & {
   emit(): void;
   // The window's start the store asked for (null before it watched).
   historyFrom: string | null;
+  // The history watchers are told the answer comes from the browser's copy, not the server (a phone offline).
+  historyCached: boolean;
   // Every history watcher is told again (after `records` was changed by hand).
   emitHistory(): void;
   // How many listeners are open now.
@@ -80,7 +82,7 @@ export function fakeOrdersSource(init: {
   const ingredientWatchers = new Set<ListListener>();
   const configWatchers = new Set<DocListener>();
   const draftWatchers = new Set<DocListener>();
-  const historyWatchers = new Set<{ from: string; onChange: (list: StoredDoc[]) => void }>();
+  const historyWatchers = new Set<{ from: string; onChange: (list: StoredDoc[], meta: OrdersMeta) => void }>();
   let held: Array<() => void> | null = null;
   const fromServer: OrdersMeta = { fromServer: true };
 
@@ -93,6 +95,7 @@ export function fakeOrdersSource(init: {
     refuseWrites: false,
     refuse: { suppliers: false, ingredients: false, config: false, draft: false, history: false },
     historyFrom: null,
+    historyCached: false,
 
     watchSuppliers(onChange, onError) {
       const l = { onChange, onError };
@@ -128,7 +131,7 @@ export function fakeOrdersSource(init: {
       if (source.refuse.history) { queueMicrotask(() => onError(new Error('permission-denied'))); return () => {}; }
       const l = { from: fromDate, onChange };
       historyWatchers.add(l);
-      queueMicrotask(() => { if (historyWatchers.has(l)) onChange(historyFrom(fromDate)); });
+      queueMicrotask(() => { if (historyWatchers.has(l)) onChange(historyFrom(fromDate), historyMeta()); });
       return () => { historyWatchers.delete(l); };
     },
 
@@ -310,7 +313,10 @@ export function fakeOrdersSource(init: {
       .map(([id, r]) => ({ ...structuredClone(r), id }));
   }
   function tellHistory() {
-    for (const l of historyWatchers) l.onChange(historyFrom(l.from));
+    for (const l of historyWatchers) l.onChange(historyFrom(l.from), historyMeta());
+  }
+  function historyMeta(): OrdersMeta {
+    return { fromServer: !source.historyCached };
   }
 
   function tellDraft() {

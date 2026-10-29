@@ -60,7 +60,7 @@ export interface OrdersSource {
   ): () => void;
   // orders-history from `fromDate` ('YYYY-MM-DD') onwards, live: `date >= fromDate`, one field, so no composite index. Same
   // contract. The legacy weekly record has no `date` and is never in it — as in the current app.
-  watchRecentHistory(fromDate: string, onChange: (list: StoredDoc[]) => void, onError: (err: unknown) => void): () => void;
+  watchRecentHistory(fromDate: string, onChange: (list: StoredDoc[], meta: OrdersMeta) => void, onError: (err: unknown) => void): () => void;
   // Merges the changed lines and days into drafts/current — and creates it on the very first order, which an update of
   // dotted paths could not. The venue stamp is applied here. Settles when the SERVER answers; REJECTS when refused
   // (offline, it simply waits, and Firestore shows the write at once in every answer meanwhile).
@@ -171,12 +171,22 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
     watchOrdersConfig: watchDocument(configPath, ORDERS_DOC, 'config/orders'),
     watchDraft: watchDocument(draftsPath, DRAFT_ID, 'drafts/current'),
 
-    // No includeMetadataChanges here: nothing waits for the server's word on the history (no «Loading…» depends on it), and
-    // every metadata-only answer would cut the window into lists again for nothing.
+    // includeMetadataChanges for ONE answer: the server's first word, which may be identical to the browser's copy (History's
+    // «Loading…» and an editor opened by its address wait for it, step 3f-4). Every other metadata-only answer is dropped, so the
+    // window is not cut into lists again for nothing.
     watchRecentHistory(fromDate, onChange, onError) {
+      let told = false;
+      let toldServer = false;
       return listen(kit => kit.fs.onSnapshot(
         kit.fs.query(kit.fs.collection(kit.db, historyPath), kit.fs.where('date', '>=', fromDate)),
-        snap => onChange(docsOf(snap)),
+        { includeMetadataChanges: true },
+        snap => {
+          const fromServer = !snap.metadata.fromCache;
+          if (told && snap.docChanges().length === 0 && (toldServer || !fromServer)) return;
+          told = true;
+          toldServer = toldServer || fromServer;
+          onChange(docsOf(snap), { fromServer });
+        },
         err => {
           console.error('watch(orders-history) failed:', err);
           onError(err);

@@ -17,7 +17,7 @@ function recordingKit() {
     onSnapshot: (target: unknown, ...rest: unknown[]) => {
       calls.push(['onSnapshot', target, ...rest]);
       const onNext = rest.find(arg => typeof arg === 'function') as (snap: unknown) => void;
-      onNext({ docs: [{ id: '2026-10-01_mill', data: () => ({ date: '2026-10-01' }) }], metadata: { fromCache: false } });
+      onNext({ docs: [{ id: '2026-10-01_mill', data: () => ({ date: '2026-10-01' }) }], docChanges: () => [{ type: 'added' }], metadata: { fromCache: false } });
       return () => { stopped += 1; };
     },
   };
@@ -42,6 +42,33 @@ describe('ordersSource — the live window of orders-history', () => {
     const listened = calls.find(c => c[0] === 'onSnapshot')?.[1] as { constraints?: unknown[] };
     expect(listened.constraints).toHaveLength(1);
     expect(seen).toEqual([[{ date: '2026-10-01', id: '2026-10-01_mill' }]]);
+    stop();
+  });
+
+  it('tells the server’s first word even when it is identical to the phone’s copy, and drops every other metadata-only answer', async () => {
+    let push: (snap: unknown) => void = () => {};
+    const fs = {
+      collection: (_db: unknown, path: string) => ({ path }),
+      where: (field: string, op: string, value: unknown) => ({ field, op, value }),
+      query: (ref: unknown, ...constraints: unknown[]) => ({ ref, constraints }),
+      onSnapshot: (_target: unknown, options: unknown, onNext: (snap: unknown) => void) => {
+        expect(options).toEqual({ includeMetadataChanges: true });
+        push = onNext;
+        return () => {};
+      },
+    };
+    const source = createFirestoreOrdersSource(() => Promise.resolve({ fs, db: {} } as unknown as FirestoreKit), 'bakery');
+    const seen: Array<{ n: number; fromServer: boolean }> = [];
+    const stop = source.watchRecentHistory('2026-08-27', (list, meta) => { seen.push({ n: list.length, fromServer: meta.fromServer }); }, () => {});
+    await Promise.resolve();
+    await Promise.resolve();
+    const snap = (fromCache: boolean, changes: number) => ({ docs: [], docChanges: () => Array(changes).fill({}), metadata: { fromCache } });
+    push(snap(true, 0));
+    push(snap(true, 0));
+    push(snap(false, 0));
+    push(snap(false, 0));
+    push(snap(true, 0));
+    expect(seen).toEqual([{ n: 0, fromServer: false }, { n: 0, fromServer: true }]);
     stop();
   });
 

@@ -24,15 +24,16 @@ function setup(records: Record<string, Record<string, unknown>> = {}, { online =
   const source = fakeOrdersSource({ records });
   let busy = 0;
   let connected = online;
+  let today = TODAY;
   const deps: OrdersDeps = {
     markBusy: () => { busy += 1; return () => { busy -= 1; }; },
-    today: () => TODAY,
+    today: () => today,
     draft: { nowIso: () => NOW, setTimer: () => 1, clearTimer: () => {} },
     online: () => connected,
   };
   const store = createOrdersStore(source, deps);
   const settle = () => new Promise(resolve => setTimeout(resolve, 0));
-  return { source, store, settle, busy: () => busy, goOffline: () => { connected = false; } };
+  return { source, store, settle, busy: () => busy, goOffline: () => { connected = false; }, setToday: (day: string) => { today = day; } };
 }
 
 let stops: Array<() => void> = [];
@@ -50,6 +51,40 @@ const opened = (s: ReturnType<typeof setup>, id: string): StoredDoc => {
   if (!found) throw new Error(`no record ${id}`);
   return found;
 };
+
+describe('the live window has answered', () => {
+  it('an empty copy from the phone alone is not an answer: History waits for the server’s word, then knows it is empty', async () => {
+    const s = setup();
+    s.source.historyCached = true;
+    s.store.start();
+    stops.push(() => s.store.stop());
+    await s.settle();
+    expect(s.store.getSnapshot().historyLoaded).toBe(false);
+    s.source.historyCached = false;
+    s.source.emitHistory();
+    expect(s.store.getSnapshot().historyLoaded).toBe(true);
+  });
+
+  it('records in the phone’s copy are shown at once', async () => {
+    const s = setup({ '2026-10-20_mill': record('2026-10-20', 'mill', { flour: 1 }) });
+    s.source.historyCached = true;
+    s.store.start();
+    stops.push(() => s.store.stop());
+    await s.settle();
+    expect(s.store.getSnapshot().historyLoaded).toBe(true);
+  });
+
+  it('the window’s start stays the one fixed at the first start once older pages are loaded (the two must meet)', async () => {
+    const s = started({ '2026-08-01_mill': record('2026-08-01', 'mill', { flour: 3 }) });
+    await s.settle();
+    await s.store.loadOlderHistory();
+    s.setToday('2026-11-15');
+    s.store.stop();
+    s.store.start();
+    await s.settle();
+    expect(s.source.historyFrom).toBe(WINDOW);
+  });
+});
 
 describe('older orders, on demand', () => {
   it('pages from BEFORE the live window, newest first, then the legacy record, and says where it stands', async () => {

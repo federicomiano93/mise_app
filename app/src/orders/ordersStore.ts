@@ -480,7 +480,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         // The window starts two calendar months before TODAY when the section opens (the current app's liveHistoryStart).
         source.watchRecentHistory(
           windowStart,
-          list => set({ history: list, historyLoaded: true, historyBroken: false }),
+          (list, meta) => set({ history: list, historyLoaded: snapshot.historyLoaded || loadedBy(list, meta), historyBroken: false }),
           () => set({ historyBroken: true, historyLoaded: true }),
         ),
       ];
