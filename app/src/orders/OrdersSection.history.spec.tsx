@@ -352,6 +352,15 @@ describe('«Send again»', () => {
     await view.user.click(again);
     await waitFor(() => { expect(open).toHaveBeenCalledTimes(2); });
   });
+
+  it('says so when the browser blocked the window: a send that reached nobody is never silent', async () => {
+    const open = vi.spyOn(window, 'open').mockImplementation(() => null);
+    const view = await atHistory(seeded(fortnight()), STAFF);
+    await openCard(view, 'Zed');
+    await view.user.click(history().getAllByRole('button', { name: 'Send again' })[0] as HTMLElement);
+    expect(open).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/^Nothing was opened/)).toBeInTheDocument();
+  });
 });
 
 describe('«Send all» for a day', () => {
@@ -458,6 +467,17 @@ describe('the editor', () => {
     expect(card('Alpine Mills')).toHaveAttribute('aria-expanded', 'true');
   });
 
+  it('goes back to History writing nothing when Save is pressed with nothing changed', async () => {
+    const source = seeded(fortnight());
+    const before = structuredClone(source.records.get(ID));
+    const { view } = await toEditor(source);
+    await view.user.click(editor().getByRole('button', { name: 'Save' }));
+    await waitFor(() => { expect(path(view)).toBe('/orders/history'); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(source.rewrites).toEqual([]);
+    expect(source.records.get(ID)).toEqual(before);
+  });
+
   it('keeps Cancel on the save question quiet: nothing written, still on the editor', async () => {
     const source = seeded(fortnight());
     const { view } = await toEditor(source);
@@ -556,6 +576,8 @@ describe('the editor', () => {
     expect(await screen.findByText('Order deleted')).toBeInTheDocument();
     await screen.findByRole('region', { name: 'Past orders' });
     expect(history().queryByRole('button', { name: /^Alpine Mills3 items/ })).not.toBeInTheDocument();
+    // The «Correct» that opened the editor went with the order: History's title takes the focus, never the page.
+    await waitFor(() => { expect(history().getByRole('heading', { name: 'Past orders' })).toHaveFocus(); });
   });
 
   it('writes nothing on a delete when the order changed meanwhile, says so, and goes back', async () => {

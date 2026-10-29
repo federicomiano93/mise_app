@@ -64,6 +64,7 @@ function Editor({ opened, leave }: { opened: StoredDoc; leave: () => void }) {
   const { t } = useT();
   const { state } = useLocation();
   const store = useOrdersStore();
+  const handBack = useHandBack();
   const { ingredients } = useOrders();
   const say = useStatusMessage();
   const [alert, alertDialog] = useAlert();
@@ -145,11 +146,14 @@ function Editor({ opened, leave }: { opened: StoredDoc; leave: () => void }) {
     })();
   });
 
-  // Back to History after the answer: only from THIS screen (a result that arrives after it went moves nobody).
-  const backToHistory = () => {
+  // Back to History after the answer: only from THIS screen (a result that arrives after it went moves nobody). ⚠️ An order
+  // that is gone takes its card's «Correct» with it, a moment AFTER History is back: nobody is owed the focus, so it does not
+  // land on a button about to vanish and drop on the page — History's title takes it.
+  const backToHistory = (orderGone = false) => {
     if (!mounted.current) return;
     leaving.current = true;
     leave();
+    if (orderGone) handBack.forget();
   };
 
   // A write in the air: the screen cannot be left, Save and Delete are off, and the focus returns to the button when it stays.
@@ -180,6 +184,11 @@ function Editor({ opened, leave }: { opened: StoredDoc; leave: () => void }) {
 
   async function save() {
     if (workingRef.current) return;
+    // Nothing changed: back to History, writing nothing (the current app would add a «Corretto» line that corrects nothing).
+    if (!dirty) {
+      backToHistory();
+      return;
+    }
     // An order with nothing in it is not an order: point at the action that means «this never happened».
     if (rows.every(row => (typed.qty[row.id] ?? 0) <= 0)) {
       await nothingLeft();
@@ -199,7 +208,7 @@ function Editor({ opened, leave }: { opened: StoredDoc; leave: () => void }) {
         backToHistory();
       } else if (outcome === 'changed' || outcome === 'gone') {
         await alert({ message: t(outcome === 'changed' ? 'ord.history.changedSave' : 'ord.history.gone'), okLabel: t('common.ok') });
-        backToHistory();
+        backToHistory(outcome === 'gone');
       } else if (outcome === 'empty') {
         await nothingLeft();
       } else {
@@ -222,10 +231,10 @@ function Editor({ opened, leave }: { opened: StoredDoc; leave: () => void }) {
       const outcome = await store.deleteRecord(opened);
       if (outcome === 'deleted') {
         say(t('ord.history.deleted'), 4000);
-        backToHistory();
+        backToHistory(true);
       } else if (outcome === 'changed' || outcome === 'gone') {
         await alert({ message: t(outcome === 'changed' ? 'ord.history.changedDelete' : 'ord.history.gone'), okLabel: t('common.ok') });
-        backToHistory();
+        backToHistory(outcome === 'gone');
       } else {
         say(t(outcome === 'offline' ? 'ord.history.offlineDelete' : 'ord.history.failedDelete'), LONG_MS);
       }

@@ -14,6 +14,7 @@ import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { HistoryCard } from './HistoryCard';
+import { joinList } from './orderWords';
 import { useOrders, useOrdersStore } from './OrdersContext';
 import { dayTranslate } from './dayWords';
 import { HISTORY_DOOR, sendDayOpener, useHandBack } from './handBack';
@@ -22,6 +23,7 @@ import { SETTINGS_PATH } from './ordersPath';
 import type { OrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
 import { recordSendRows } from './sendFlow';
+import { LONG_MS } from './useClearQuantities';
 import { useSendOrder } from './useSendOrder';
 import styles from './HistoryScreen.module.css';
 
@@ -84,6 +86,17 @@ export function HistoryScreen({ lens, hidden, onOpenEdit, onOpenDay }: Props) {
     if (!hidden && cameFromList(state)) title.current?.focus();
   }, []);
 
+  // Back from the editor or the day screen: the section hands the focus to the button that opened it. When that button is gone
+  // (its order was just deleted, or deleted by another phone) the focus would drop on the page: this title takes it instead.
+  useEffect(() => {
+    if (hidden) return undefined;
+    const frame = requestAnimationFrame(() => {
+      const active = document.activeElement;
+      if (active === null || active === document.body) title.current?.focus();
+    });
+    return () => { cancelAnimationFrame(frame); };
+  }, [hidden]);
+
   // «Load older orders» keeps the focus: the button is disabled while the page is on its way (a disabled button drops the focus
   // on the page), so the wish waits until it is back, or — when it is gone for good — the list takes the focus.
   const wantsLoadFocus = useRef(false);
@@ -119,7 +132,8 @@ export function HistoryScreen({ lens, hidden, onOpenEdit, onOpenDay }: Props) {
 
   // «Send again»: ONE road chooser, the same as the send arrow's. ⚠️ `send` IS CALLED STRAIGHT FROM THE PRESS, with nothing
   // awaited first (a window opened later is blocked as a pop-up). A second press while one is pending is ignored; a send that
-  // throws or rejects frees the button and says a friendly line. Nothing is recorded after it.
+  // throws or rejects frees the button and says a friendly line. Nothing is recorded after it. ⚠️ A SEND THAT REACHED NOBODY IS
+  // SAID, never silent (X17): every window blocked → «Non si è aperto niente»; the road had no phone or email → the supplier named.
   const pending = useRef(false);
   const sendAgain = (record: StoredDoc) => {
     if (pending.current) return;
@@ -132,7 +146,7 @@ export function HistoryScreen({ lens, hidden, onOpenEdit, onOpenDay }: Props) {
     const failed = (err: unknown) => {
       console.error('Sending the order again failed:', err);
       pending.current = false;
-      say(t('ord.send.failed'), 5000);
+      say(t('ord.send.failed'), LONG_MS);
     };
     let sending: ReturnType<typeof send>;
     try {
@@ -141,7 +155,11 @@ export function HistoryScreen({ lens, hidden, onOpenEdit, onOpenDay }: Props) {
       failed(err);
       return;
     }
-    void sending.then(() => { pending.current = false; }).catch(failed);
+    void sending.then(result => {
+      pending.current = false;
+      if (result?.kind !== 'sent' || result.ids.length > 0) return;
+      say(result.blocked ? t('ord.send.nothingOpened') : t('ord.sentCheck.notReached', { names: joinList(t, rows.map(row => row.name)) }), LONG_MS);
+    }).catch(failed);
   };
 
   const dt = dayTranslate(t);
