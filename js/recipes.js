@@ -467,12 +467,17 @@ function ingredientRow(recipe, ing, gi, listId, showLeaveningPicker) {
     ing.label = nameInput.value;
     nameInput.classList.remove('cp-invalid');
     syncLeaveningOption(ing, gi);
+    // Typing does not re-render (see above), so the grams field's name follows here.
+    grams.setAttribute('aria-label', gramsLabel(ing));
     markDirty();
   });
 
+  // The grams field has no visible label of its own — the name above it is another
+  // field — so it says whose grams it holds to a screen reader.
   const grams = el('input', {
     class: 'cp-prod-weight', type: 'number', min: '0', step: '0.1',
     value: String(ing.grams != null ? ing.grams : 0), inputmode: 'decimal',
+    'aria-label': gramsLabel(ing),
   });
   grams.addEventListener('input', () => { ing.grams = +grams.value || 0; markDirty(); });
 
@@ -500,6 +505,11 @@ function ingredientRow(recipe, ing, gi, listId, showLeaveningPicker) {
   }
 
   return el('div', { class: 'cp-prod-card' }, rows);
+}
+
+function gramsLabel(ing) {
+  const name = (ing.label || '').trim();
+  return name ? t('calc.gramsOf', { name }) : t('calc.gramsOfUnnamed');
 }
 
 // ── The Leavening box ────────────────────────────────────────────────────────
@@ -562,6 +572,8 @@ function leaveningBox(recipe) {
     const pct = el('input', {
       class: 'cp-prod-weight', type: 'number', min: '0', max: '100', step: '0.05',
       value: String(recipe.leaveningDefaultPct || 0), inputmode: 'decimal',
+      // «Start at» beside it is too short to name the field on its own.
+      'aria-label': t('calc.leaveningStartPct'),
     });
     pct.addEventListener('input', () => {
       recipe.leaveningDefaultPct = +pct.value || 0;

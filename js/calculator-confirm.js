@@ -12,11 +12,12 @@
 import { t } from './i18n.js';
 import { confirmDialog } from './confirm-dialog.js';
 
-export const UNSAVED_MESSAGE =
-  t('calc.youHaveUnsavedChanges');
-
 // Resolves true when it is safe to leave the editor now: either nothing was
 // changed, or the user confirmed they want to discard their edits.
+//
+// ⚠️ The question is translated HERE, when it is asked, never at module load: the
+// module loads before the venue's language arrives, so a constant was frozen in
+// English and an Italian venue saw an English question over Italian buttons.
 export async function confirmDiscard(dirty) {
-  return !dirty || confirmDialog({ message: UNSAVED_MESSAGE, okLabel: t('ui.discard'), danger: true, cancelLabel: t('ui.cancel') });
+  return !dirty || confirmDialog({ message: t('calc.youHaveUnsavedChanges'), okLabel: t('ui.discard'), danger: true, cancelLabel: t('ui.cancel') });
 }
