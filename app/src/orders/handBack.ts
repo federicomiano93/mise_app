@@ -21,6 +21,8 @@ export const PLACE_DOOR = 'place-door';
 // The list's two buttons under the suppliers: «Order placed…» (the picker of the suppliers to record) and «Clear quantities…».
 export const PLACE_ALL_OPENER = 'place-all';
 export const CLEAR_OPENER = 'clear';
+// The list's send arrow, beside the search box: where Back from the send screen returns the focus.
+export const SEND_OPENER = 'send';
 
 export interface HandBack {
   // A control that opens a screen. null when it goes away.

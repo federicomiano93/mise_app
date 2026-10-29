@@ -9,14 +9,15 @@ import { useMediaQuery } from '../ui/useMediaQuery';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { OrdersProvider, useOrders, useOrdersStore } from './OrdersContext';
 import { OrdersList } from './OrdersList';
+import { SendScreen } from './SendScreen';
 import { PlaceAllConfirmScreen, SupplierConfirmScreen } from './PlaceConfirmScreen';
 import { SupplierItemsScreen } from './SupplierItemsScreen';
 import { SupplierOrderScreen } from './SupplierOrderScreen';
 import { SupplierPicker } from './SupplierPicker';
 import { LONG_MS } from './useClearQuantities';
-import { CLEAR_OPENER, HandBackProvider, ITEMS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, itemsOpener, supplierOpener, useHandBackState } from './handBack';
+import { CLEAR_OPENER, HandBackProvider, ITEMS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, SEND_OPENER, itemsOpener, supplierOpener, useHandBackState } from './handBack';
 import { FROM_LIST, replacedState } from './ordersNav';
-import { CLEAR_PATH, ORDERS_PATH, PLACE_ALL_PATH, parseOrdersPath, supplierItemsPath, supplierPath } from './ordersPath';
+import { CLEAR_PATH, ORDERS_PATH, PLACE_ALL_PATH, SEND_PATH, parseOrdersPath, supplierItemsPath, supplierPath } from './ordersPath';
 import type { OrdersView } from './ordersPath';
 import { buildOrdersLens } from './ordersLens';
 import styles from './OrdersSection.module.css';
@@ -127,6 +128,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const openItems = (id: string) => { open(itemsOpener(id), supplierItemsPath(id)); };
   const openPlaceAll = () => { open(PLACE_ALL_OPENER, PLACE_ALL_PATH); };
   const openClear = () => { open(CLEAR_OPENER, CLEAR_PATH); };
+  const openSend = () => { open(SEND_OPENER, SEND_PATH); };
 
   // Where the scroll area goes at every move inside the section. Before the hand-back below, so the place is back when the row
   // takes the focus: focusing a row that is in view scrolls nothing.
@@ -183,6 +185,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
                 onOpenItems={openItems}
                 onPlaceAll={openPlaceAll}
                 onClearAll={openClear}
+                onSend={openSend}
               />
             </PartBoundary>
           </div>
@@ -223,5 +226,6 @@ function Detail({ view, lens, ready }: { view: ShownView; lens: ReturnType<typeo
   if (view.kind === 'place-all') return <SupplierPicker mode="place-all" lens={lens} />;
   if (view.kind === 'place-all-confirm') return <PlaceAllConfirmScreen lens={lens} />;
   if (view.kind === 'clear') return <SupplierPicker mode="clear" lens={lens} />;
+  if (view.kind === 'send') return <SendScreen lens={lens} />;
   return <SupplierOrderScreen id={view.id} lens={lens} />;
 }

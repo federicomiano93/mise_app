@@ -160,6 +160,11 @@ export interface OrdersStore {
   // What the confirm screen needs before it opens, read once from the server (parity X2, X7). A record that cannot be read
   // counts as none: the transaction inside `place` still refuses a real clash.
   checkRecords(items: ReadonlyArray<{ readonly supplierId: string; readonly date: string }>, noSupplierName: string): Promise<RecordCheck[]>;
+  // The same check at the moment of SENDING (parity X7, step 3f-3), answered at once from the live window of the records:
+  // the send road opens a window that must stay inside the tap, so nothing may be awaited before it. It mirrors the current
+  // app's refuseOnUnitConflict, which reads its live history too; a record outside the window is today's at the latest
+  // (decision F3), so it is always inside. A check that throws reports no clash: the write still refuses a real one.
+  conflictsNow(items: ReadonlyArray<{ readonly supplierId: string; readonly date: string }>, noSupplierName: string): RecordCheck[];
   // Records these orders, one supplier after the other (parity X5, X8). `noSupplierName` names the pseudo-supplier.
   place(items: readonly PlaceItem[], noSupplierName: string): Promise<PlaceReport>;
   // «Clear quantities» (parity X11): these suppliers' quantities, units and overrides go, in ONE write; the stock readings
@@ -506,6 +511,21 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         }
         return { supplierId, date, exists: record !== null, conflicts };
       }));
+    },
+
+    conflictsNow(items, noSupplierName) {
+      const lens = lensNow(noSupplierName);
+      return items.map(({ supplierId, date }) => {
+        const id = historyDocId(date, supplierId);
+        const record: Record<string, unknown> | null = snapshot.history.find(doc => doc.id === id) ?? null;
+        let conflicts: ReturnType<typeof unitConflicts> = [];
+        try {
+          conflicts = unitConflicts(record, snapshot.draft.entries, orderable(lens.linesOf(supplierId)), supplierId);
+        } catch (err) {
+          console.error('Unit check failed, carrying on:', err);
+        }
+        return { supplierId, date, exists: record !== null, conflicts };
+      });
     },
 
     async place(items, noSupplierName) {

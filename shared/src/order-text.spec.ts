@@ -1,6 +1,7 @@
 // Unit tests for the Orders WhatsApp message builder (P15), run against BOTH implementations: the TypeScript
 // port in shared/ and js/orders/order-text.js, which the live app uses today. Ported from
-// tests/order-text.test.mjs; the module is a FULL port, so parity.spec.ts also compares its exports.
+// tests/order-text.test.mjs; the module is a FULL port, so parity.spec.ts also compares its exports. It differs from the
+// original in ONE place, on purpose: the flat list's order (finding F-5), shown by the last test.
 //
 // PORTED: 42 of 42 tests of tests/order-text.test.mjs. (tests/order-cost-message.test.mjs and
 // tests/same-day-sends.test.mjs are left out: they exercise order-cost, the sends and the archive, which are not
@@ -339,7 +340,9 @@ describe.each([
       { supplierName: 'Etna', items: [{ name: 'Flour', weight: '25kg', qty: 4 }, { name: 'Bacon', weight: '1kg', qty: 1 }] },
       { supplierName: 'Alba', items: [{ name: 'Flour', weight: '5kg', qty: 3 }] },
     ], { grouped: false, ...CLUB });
-    expect(text).toBe('*Order — The Italian Club*\n\n- Bacon: 1\n- Flour 25kg: 4\n- Flour 5kg: 3');
+    // The ORDER of the two Flour lines is where the files differ (F-5, the last test); here only the weights matter.
+    expect(text.split('\n').sort()).toStrictEqual(
+      ['', '*Order — The Italian Club*', '- Bacon: 1', '- Flour 25kg: 4', '- Flour 5kg: 3'].sort());
   });
 
   test('one shopping list never adds different units together, and does add equal ones', () => {
@@ -431,5 +434,14 @@ describe('order-text: what only the port can say', () => {
   test('compareLabels compares numerically, so «Flour 5kg» comes before «Flour 25kg»', () => {
     expect(ported.compareLabels('Flour 5kg', 'Flour 25kg')).toBeLessThan(0);
     expect(legacy.compareLabels('Flour 5kg', 'Flour 25kg')).toBeLessThan(0);
+  });
+
+  // ⚠️ THE ONE PLACE THE TWO FILES DIFFER (finding F-5, decision T7: fixed in the port only). The current app sorts the flat
+  // list with a plain localeCompare, which reads digits as letters; the port sorts it like every other list of labels.
+  test('⚠️ the flat list sorts numerically in the port; the current app puts 25kg first', () => {
+    const groups = [{ supplierName: 'Etna', items: [{ name: 'Flour', weight: '25kg', qty: 1 }, { name: 'Flour', weight: '5kg', qty: 2 }] }];
+    const lines = (m: typeof ported) => m.buildOrderMessage(groups, { grouped: false, ...CLUB }).split('\n').filter(l => l.startsWith('- '));
+    expect(lines(ported)).toStrictEqual(['- Flour 5kg: 2', '- Flour 25kg: 1']);
+    expect(lines(legacy)).toStrictEqual(['- Flour 25kg: 1', '- Flour 5kg: 2']);
   });
 });

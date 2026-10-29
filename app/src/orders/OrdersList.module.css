@@ -18,9 +18,22 @@
   background: var(--bg);
 }
 
+/* The search box grows; the send arrow stays its own width after it, and neither wraps (a 296px phone). */
+.top {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.send {
+  flex: none;
+}
+
 /* The icon and the box on one line: an SVG in a flex container is centred on the box, not left on the text baseline. */
 .search {
   display: flex;
+  flex: 1;
+  min-width: 0;
   align-items: center;
   gap: var(--s2);
   min-height: var(--hit);

@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { cleanup, screen, waitFor, within } from '@testing-library/react';
 import { addDays, parseISODate, spellLongDate, spellShortDate, todayISO, toISODate, weekdayOf } from '@mise/shared/day';
 import { en } from '../i18n/en';
 import { format } from '../i18n/i18n';
@@ -239,6 +239,26 @@ describe('the confirm screen — one supplier', () => {
     // The rows are gone from the order.
     const entries = source.draft?.entries as Record<string, unknown>;
     expect(entries['i-flour']).toBeUndefined();
+  });
+
+  it('⚠️ a save that ends after the screen has gone moves nobody: «back to the list» steps back through the history', async () => {
+    const source = seeded(FILLED);
+    const view = await atSupplier('s-alp', source);
+    await toConfirm(view);
+    const recordOrder = source.recordOrder.bind(source);
+    let release = () => undefined as void;
+    source.recordOrder = (id, merge) => new Promise((resolve, reject) => {
+      release = () => { recordOrder(id, merge).then(resolve, reject); };
+    });
+    await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
+    await view.user.click(await dialogButton('Yes, sent'));
+    const where = view.router.state.location.pathname;
+    // The screen goes while the record is still being written.
+    cleanup();
+    release();
+    await waitFor(() => { expect(source.records.get(recordId('s-alp'))).toBeDefined(); });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(view.router.state.location.pathname).toBe(where);
   });
 
   it('records nothing on Cancel and keeps the screen, with the corrections', async () => {
