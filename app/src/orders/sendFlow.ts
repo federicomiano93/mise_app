@@ -12,7 +12,7 @@
 // suppliers whose window opened are reported sent — for email too (finding F-3: the current app counts an email as sent
 // without looking).
 
-import { buildOrderMessage, emailSubject, orderedItems, whatsappUrl } from '@mise/shared/order-text';
+import { buildOrderMessage, emailSubject, fallbackSupplierName, indexById, itemsFromQuantities, orderedItems, whatsappUrl } from '@mise/shared/order-text';
 import type { OrderItem } from '@mise/shared/order-text';
 import { confirmedRows } from '@mise/shared/sent-check';
 import { digitsOf, mailto, runPhotoBatch } from '@mise/shared/send-chooser';
@@ -64,6 +64,22 @@ export function confirmedSendRows(lens: OrdersLens, items: readonly PlaceItem[],
   const units = Object.fromEntries(items.map(item => [item.supplierId, item.units]));
   const bySupplier = Object.fromEntries(items.map(item => [item.supplierId, [...lens.linesOf(item.supplierId)]]));
   return confirmedRows(suppliers, bySupplier, { quantities, units }).map(row => ({ ...row, name: String(row.name) }));
+}
+
+// Sending a RECORDED order again, from History (parity H11, step 3f-4): one row per record, in the order given, with the lines
+// as they were recorded — the names live where the ingredient still exists, frozen otherwise, and only the units frozen into
+// the record (itemsFromQuantities: the message reads as it did the first time). The row's id is the record's SUPPLIER, so the
+// roads to a supplier find its phone and email by id; the legacy weekly record has none and goes only by the chat. A record
+// with nothing left in it is left out. `language` is the venue's output language (the supplier reads the stand-in word).
+export function recordSendRows(records: readonly StoredDoc[], ingredients: readonly StoredDoc[], language: unknown): SendRow[] {
+  const byId = indexById(ingredients);
+  return records
+    .map(record => ({
+      id: typeof record.supplierId === 'string' && record.supplierId ? record.supplierId : record.id,
+      name: typeof record.supplierName === 'string' && record.supplierName ? record.supplierName : fallbackSupplierName(language),
+      items: itemsFromQuantities(record.quantities, byId, record.names, record.units, language),
+    }))
+    .filter(row => row.items.length > 0);
 }
 
 // The windows a road opens, one job each. The grouped chat is ONE job for every row; a road to the supplier is one job per

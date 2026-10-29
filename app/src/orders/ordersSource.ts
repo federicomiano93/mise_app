@@ -15,7 +15,10 @@
 // (orders-history/<day>_<supplier>, in a transaction — parity H1, H2). It reads a record once: the confirm screen asks whether
 // today's record exists before it opens. From step 3f-2b it also watches the LIVE WINDOW of orders-history — the last two
 // calendar months (@mise/shared/history-window), exactly the query of the current app's watchRecentHistory — which the
-// suggestions are worked out from (parity L27); older orders are fetched on demand with History (slice 3f-4).
+// suggestions are worked out from (parity L27). From step 3f-4 (History) it fetches the orders OLDER than that window on
+// demand, a page of 100 at a time and then the legacy weekly record, ALWAYS FROM THE SERVER (parity H8); and it rewrites or
+// deletes ONE record from History's editor, in a transaction that refuses when the record changed since the editor opened it
+// (parity H12, and the difference E1 of 3f-4).
 //
 // ⚠️ NO ROLE IS READ HERE, ON PURPOSE: the section gate and firestore.rules decide (P2).
 //
@@ -57,7 +60,7 @@ export interface OrdersSource {
   ): () => void;
   // orders-history from `fromDate` ('YYYY-MM-DD') onwards, live: `date >= fromDate`, one field, so no composite index. Same
   // contract. The legacy weekly record has no `date` and is never in it — as in the current app.
-  watchRecentHistory(fromDate: string, onChange: (list: StoredDoc[]) => void, onError: (err: unknown) => void): () => void;
+  watchRecentHistory(fromDate: string, onChange: (list: StoredDoc[], meta: OrdersMeta) => void, onError: (err: unknown) => void): () => void;
   // Merges the changed lines and days into drafts/current — and creates it on the very first order, which an update of
   // dotted paths could not. The venue stamp is applied here. Settles when the SERVER answers; REJECTS when refused
   // (offline, it simply waits, and Firestore shows the write at once in every answer meanwhile).
@@ -75,7 +78,24 @@ export interface OrdersSource {
     id: string,
     merge: (existing: Record<string, unknown> | null) => Record<string, unknown>,
   ): Promise<Record<string, unknown>>;
+  // One page of orders-history OLDER than `before` ('YYYY-MM-DD'), newest first: `date < before`, ordered by `date`
+  // descending, after `cursor` (the opaque value the previous page returned; null for the first). `done` when the page came
+  // back short. ⚠️ FROM THE SERVER ONLY: rejects offline (see the implementation).
+  getOlderHistory(args: { before: string; cursor: unknown }): Promise<{ records: StoredDoc[]; cursor: unknown; done: boolean }>;
+  // The legacy weekly records — the only ones with a `weekStart` and no `date` (parity H5). From the server only, as above.
+  getLegacyHistory(): Promise<StoredDoc[]>;
+  // Rewrites orders-history/<id> in a TRANSACTION: `decide` gets the record as stored (null when there is none) and returns
+  // the WHOLE new record (it replaces the stored one; the venue stamp is applied here) or null to DELETE it. What `decide`
+  // throws aborts and rejects with it. Resolves with what was written (null after a delete). A transaction needs the
+  // server, so offline it rejects.
+  rewriteRecord(
+    id: string,
+    decide: (existing: Record<string, unknown> | null) => Record<string, unknown> | null,
+  ): Promise<Record<string, unknown> | null>;
 }
+
+// Orders older than the live window are read 100 at a time (the current app's getOlderHistory).
+export const OLDER_PAGE_SIZE = 100;
 
 const SUPPLIERS = 'suppliers';
 const INGREDIENTS = 'ingredients';
@@ -151,12 +171,22 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
     watchOrdersConfig: watchDocument(configPath, ORDERS_DOC, 'config/orders'),
     watchDraft: watchDocument(draftsPath, DRAFT_ID, 'drafts/current'),
 
-    // No includeMetadataChanges here: nothing waits for the server's word on the history (no «Loading…» depends on it), and
-    // every metadata-only answer would cut the window into lists again for nothing.
+    // includeMetadataChanges for ONE answer: the server's first word, which may be identical to the browser's copy (History's
+    // «Loading…» and an editor opened by its address wait for it, step 3f-4). Every other metadata-only answer is dropped, so the
+    // window is not cut into lists again for nothing.
     watchRecentHistory(fromDate, onChange, onError) {
+      let told = false;
+      let toldServer = false;
       return listen(kit => kit.fs.onSnapshot(
         kit.fs.query(kit.fs.collection(kit.db, historyPath), kit.fs.where('date', '>=', fromDate)),
-        snap => onChange(docsOf(snap)),
+        { includeMetadataChanges: true },
+        snap => {
+          const fromServer = !snap.metadata.fromCache;
+          if (told && snap.docChanges().length === 0 && (toldServer || !fromServer)) return;
+          told = true;
+          toldServer = toldServer || fromServer;
+          onChange(docsOf(snap), { fromServer });
+        },
         err => {
           console.error('watch(orders-history) failed:', err);
           onError(err);
@@ -197,6 +227,53 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
         const next = { ...merge(snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null), bakery: locationId };
         tx.set(ref, next);
         return next;
+      });
+    },
+
+    // ⚠️ getDocsFromServer, NEVER getDocs: offline, getDocs quietly answers from the browser's own database — often empty or
+    // partial — and a short page would read as `done`, so «Load older orders» would vanish under a false «no more orders».
+    // getDocsFromServer REJECTS when the server cannot be reached, which puts the error line and the retry on screen.
+    // Ordered by the `date` FIELD, not the document id: Firestore refuses a descending scan by key, and one field needs no
+    // composite index.
+    async getOlderHistory({ before, cursor }) {
+      const { fs, db } = await firestore();
+      const snap = await fs.getDocsFromServer(fs.query(
+        fs.collection(db, historyPath),
+        fs.where('date', '<', before),
+        fs.orderBy('date', 'desc'),
+        ...(cursor ? [fs.startAfter(cursor)] : []),
+        fs.limit(OLDER_PAGE_SIZE),
+      ));
+      const records = docsOf(snap);
+      return {
+        records,
+        cursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : cursor,
+        done: records.length < OLDER_PAGE_SIZE,
+      };
+    },
+
+    // Only legacy records carry `weekStart` (the rules keep it off modern ones), so ordering by it returns just them.
+    async getLegacyHistory() {
+      const { fs, db } = await firestore();
+      const snap = await fs.getDocsFromServer(fs.query(fs.collection(db, historyPath), fs.orderBy('weekStart')));
+      return docsOf(snap);
+    },
+
+    // ⚠️ ONE TRANSACTION FOR THE CHECK AND THE WRITE: a correction saved while a colleague added a second order to the same
+    // record would otherwise overwrite their order (the current app's replaceDoc does). `decide` compares and throws.
+    async rewriteRecord(id, decide) {
+      const { fs, db } = await firestore();
+      const ref = fs.doc(db, historyPath, id);
+      return fs.runTransaction(db, async tx => {
+        const snap = await tx.get(ref);
+        const next = decide(snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null);
+        if (next === null) {
+          tx.delete(ref);
+          return null;
+        }
+        const stamped = { ...next, bakery: locationId };
+        tx.set(ref, stamped);
+        return stamped;
       });
     },
   };

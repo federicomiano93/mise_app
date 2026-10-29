@@ -14,13 +14,18 @@
 // and not in a screen — flush the typing → write the record in a transaction → forget the lines here → clear them in the
 // draft — with ONE point of no return (placeOne). The screens only confirm and ask; they never write.
 //
+// HISTORY (step 3f-4): the live window above is what History lists first; older orders are fetched on demand, page by page,
+// FROM THE SERVER (`loadOlderHistory`, the shared createOlderLoader), and kept only while the section is open. A correction or
+// a delete of one record goes through ONE transaction that refuses when the record changed since the editor opened it
+// (historyEdit.ts sameOrder).
+//
 // ⚠️ NO COPY OF ITS OWN IN localStorage (decision T14): the current app cached config/orders in `orders-config` so the
 // Stock column did not flash before the snapshot (parity M11); Firestore's offline database already answers from this
 // phone at once, and a key outside KEEP_PREFIXES would be one more thing a venue switch must wipe.
 
 import { stampFor } from '@mise/shared/order-day';
 import { parseISODate, todayISO } from '@mise/shared/day';
-import { liveHistoryStart } from '@mise/shared/history-window';
+import { createOlderLoader, liveHistoryStart } from '@mise/shared/history-window';
 import { normalizeOrdersConfig } from '@mise/shared/orders-config';
 import { storedUnitFor } from '@mise/shared/order-unit';
 import {
@@ -32,6 +37,8 @@ import { markBusy as markBusyOfSession } from '../session/busy';
 import { createDraftSync, EMPTY_DRAFT } from './draftSync';
 import type { DraftDays, DraftEntries, DraftEntry, DraftSync, DraftSyncDeps, DraftView } from './draftSync';
 import { buildOrdersLens } from './ordersLens';
+import { correctedRecord, sameOrder } from './historyEdit';
+import type { RecordEdits } from './historyEdit';
 import { createSuggester, NO_SUGGESTIONS } from './suggester';
 import type { Suggester } from './suggester';
 import type { LensIngredient, OrdersLens } from './ordersLens';
@@ -70,13 +77,27 @@ export interface OrdersSnapshot {
   readonly placing: readonly string[];
   // The order records of the live window (the last two months, step 3f-2b), as stored. Empty until they arrive.
   readonly history: readonly StoredDoc[];
+  // The live window has answered once (or its stream died): until then an empty `history` means «not here yet», and History's
+  // editor, opened by its address, waits instead of saying the order is not there (step 3f-4).
+  readonly historyLoaded: boolean;
   // The live stream of the records died (no resubscribe): the suggestions may be counting from a list that no longer
   // updates, and the page says so like the other streams (parity L5; the current app's «past orders»).
   readonly historyBroken: boolean;
   // The suggestion engine over `history` and `ingredients` — ONE per snapshot of those two, asked by every row, the Stock
   // box and the confirm screen alike (suggester.ts).
   readonly suggester: Suggester;
+  // The orders older than the live window that History fetched on demand (step 3f-4), as stored, and where that paging stands:
+  // `done` once every page and the legacy record are in, `error` when the last attempt failed (the same button retries).
+  readonly olderHistory: readonly StoredDoc[];
+  readonly older: { readonly loading: boolean; readonly done: boolean; readonly error: boolean };
 }
+
+// How a correction or a delete from History ended (step 3f-4).
+//   'saved' / 'deleted' — written; 'changed' — the record is no longer the order the editor opened (a colleague added to it or
+//   corrected it meanwhile): NOTHING written; 'gone' — the record is no longer there: nothing written; 'empty' — every line was
+//   set to 0 (a correction cannot leave an empty order: delete it instead); 'offline' — refused before trying (a transaction
+//   needs the server); 'failed' — refused or failed: nothing written.
+export type RecordWriteOutcome = 'saved' | 'deleted' | 'changed' | 'gone' | 'empty' | 'offline' | 'failed';
 
 // One change to one line, as a row makes it.
 export type LineEdit =
@@ -170,6 +191,13 @@ export interface OrdersStore {
   // «Clear quantities» (parity X11): these suppliers' quantities, units and overrides go, in ONE write; the stock readings
   // stay; nothing recorded is touched.
   clearQuantities(supplierIds: readonly string[], noSupplierName: string): Promise<ClearOutcome>;
+  // History's «Load older orders» (parity H8): the next page from before the live window, then the legacy record. A failure
+  // keeps what was loaded and sets `older.error`; a second call while one is on its way does nothing.
+  loadOlderHistory(): Promise<void>;
+  // History's editor (parity H12). `opened` is the record as the editor opened it; the write happens only if the stored record
+  // is still that order (historyEdit.ts sameOrder).
+  correctRecord(opened: StoredDoc, edits: RecordEdits): Promise<RecordWriteOutcome>;
+  deleteRecord(opened: StoredDoc): Promise<RecordWriteOutcome>;
 }
 
 export function browserOrdersDeps(): OrdersDeps {
@@ -198,7 +226,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     config: normalizeOrdersConfig(null), configLoaded: false,
     draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false,
     placing: [],
-    history: [], historyBroken: false, suggester: NO_SUGGESTIONS,
+    history: [], historyLoaded: false, historyBroken: false, suggester: NO_SUGGESTIONS,
+    olderHistory: [], older: { loading: false, done: false, error: false },
   };
   const listeners = new Set<() => void>();
   const messageListeners = new Set<(message: OrdersMessage) => void>();
@@ -206,6 +235,11 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
   let releaseBusy: (() => void) | null = null;
   // The section was left: nothing can be typed any more, so the marker waits only for the writes still in the air.
   let stopped = false;
+  // The first day of the live window, fixed when the listeners start: the older pages are fetched from BEFORE it, so the two
+  // never overlap and never leave a gap.
+  let windowStart = liveHistoryStart(parseISODate(deps.today()));
+  type OlderLoader = ReturnType<typeof createOlderLoader<StoredDoc>>;
+  let olderLoader: OlderLoader | null = null;
 
   function set(patch: Partial<OrdersSnapshot>) {
     snapshot = { ...snapshot, ...patch };
@@ -338,6 +372,53 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     }
   }
 
+  function loader(): OlderLoader {
+    if (!olderLoader) {
+      const made: OlderLoader = createOlderLoader<StoredDoc>({
+        fetchPage: ({ before, cursor }) => source.getOlderHistory({ before, cursor }),
+        fetchLegacy: () => source.getLegacyHistory(),
+        before: windowStart,
+        onChange: () => {
+          const { loading, done, error, records } = made.state();
+          set({ olderHistory: records, older: { loading, done, error } });
+        },
+      });
+      olderLoader = made;
+    }
+    return olderLoader;
+  }
+
+  // ⚠️ A RECORD IN AN OLDER PAGE IS NOT WATCHED: after a write that SUCCEEDED, the loaded copy is brought in step by hand
+  // (the live window's listener tells the rest). `next` null = deleted.
+  function patchOlder(id: string, next: Record<string, unknown> | null) {
+    olderLoader?.patch(id, next ? { ...next, id } as StoredDoc : null);
+  }
+
+  // The one write of History's editor: online only, the decision taken inside the transaction.
+  async function rewrite(opened: StoredDoc, decide: (stored: Record<string, unknown>) => Record<string, unknown> | null,
+    done: RecordWriteOutcome): Promise<RecordWriteOutcome> {
+    if (!deps.online()) return 'offline';
+    let refused: RecordWriteOutcome | null = null;
+    const release = deps.markBusy();
+    try {
+      const written = await source.rewriteRecord(opened.id, stored => {
+        // A transaction may run its function more than once: the answer is the LAST run's.
+        refused = null;
+        if (!stored) { refused = 'gone'; throw new Error('orders/record-gone'); }
+        if (!sameOrder(stored, opened)) { refused = 'changed'; throw new Error('orders/record-changed'); }
+        return decide(stored);
+      });
+      patchOlder(opened.id, written);
+      return done;
+    } catch (err) {
+      if (refused) return refused;
+      console.error('Writing the order record failed:', err);
+      return 'failed';
+    } finally {
+      release();
+    }
+  }
+
   // A snapshot that came from the browser's own database and holds nothing proves nothing (that database can be empty
   // because this phone never synced the collection): until the server speaks, or the copy holds something, «Loading…».
   const loadedBy = (list: readonly unknown[], meta: OrdersMeta) => meta.fromServer || list.length > 0;
@@ -358,6 +439,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     start() {
       if (stops.length) return;
       stopped = false;
+      // Fixed before the first older page is asked for; once a page is in, the window it was cut from stays.
+      if (!olderLoader) windowStart = liveHistoryStart(parseISODate(deps.today()));
       stops = [
         source.watchSuppliers(
           (list, meta) => set({
@@ -396,9 +479,9 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         ),
         // The window starts two calendar months before TODAY when the section opens (the current app's liveHistoryStart).
         source.watchRecentHistory(
-          liveHistoryStart(parseISODate(deps.today())),
-          list => set({ history: list, historyBroken: false }),
-          () => set({ historyBroken: true }),
+          windowStart,
+          (list, meta) => set({ history: list, historyLoaded: snapshot.historyLoaded || loadedBy(list, meta), historyBroken: false }),
+          () => set({ historyBroken: true, historyLoaded: true }),
         ),
       ];
     },
@@ -572,6 +655,24 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       } finally {
         release();
       }
+    },
+
+    loadOlderHistory: () => loader().load(),
+
+    correctRecord(opened, edits) {
+      // Checked before the write too, so «nothing left» is said without a round trip; the transaction decides on the stored
+      // record, where the answer is the same (the lines are the opened ones, or it refuses as 'changed').
+      if (correctedRecord(opened, edits, deps.draft.nowIso()) === null) return Promise.resolve('empty');
+      return rewrite(opened, stored => {
+        const next = correctedRecord(stored, edits, deps.draft.nowIso());
+        // ⚠️ null from `decide` DELETES the record: a correction must never reach that, whatever happens upstream.
+        if (next === null) throw new Error('orders/record-empty');
+        return next;
+      }, 'saved');
+    },
+
+    deleteRecord(opened) {
+      return rewrite(opened, () => null, 'deleted');
     },
   };
 }

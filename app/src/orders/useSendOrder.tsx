@@ -27,6 +27,9 @@ export interface SendRequest {
   readonly grouped: boolean;
   // «Send it now»: only the roads that put the order in a SUPPLIER's hands.
   readonly supplierRoadsOnly: boolean;
+  // A recorded order sent again from History (step 3f-4): it will not be recorded again, so today's record cannot clash with
+  // it and the same-day unit check is skipped. Left out: checked.
+  readonly resend?: boolean;
 }
 
 type Offer = SendOffer<StoredDoc>;
@@ -134,7 +137,7 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
       offer,
       rows: request.rows,
       settings: { grouped: request.grouped, locationName: who.name, language },
-      unitRefusal,
+      unitRefusal: request.resend ? () => '' : unitRefusal,
       open: openWindow,
       t: words,
     }, ui);

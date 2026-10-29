@@ -36,6 +36,8 @@ export interface HandBack {
   // Like deliver(), but only when the opener that is expected is this one: a screen that must not take the focus from
   // another opener's hand-back (a supplier opened FROM the list) asks for its own door only.
   deliverIf(name: string): void;
+  // Like deliverIf(), for an opener whose name is built from an id (a card's button): any expected name the test accepts.
+  deliverWhere(accepts: (name: string) => boolean): void;
   // Gives the focus to a registered opener now; false when it is not there.
   focus(name: string): boolean;
 }
@@ -46,6 +48,7 @@ const NOTHING: HandBack = {
   forget() { /* ditto */ },
   deliver() { /* ditto */ },
   deliverIf() { /* ditto */ },
+  deliverWhere() { /* ditto */ },
   focus: () => false,
 };
 
@@ -83,6 +86,9 @@ export function useHandBackState(): HandBack {
       if (node) reveal(node).focus();
       return node !== undefined;
     },
+    deliverWhere(accepts) {
+      if (wanted.current !== null && accepts(wanted.current)) this.deliver();
+    },
     deliverIf(name) {
       if (wanted.current === name) this.deliver();
     },
@@ -95,3 +101,12 @@ export function useHandBackState(): HandBack {
     },
   }), []);
 }
+
+// The list's gear (step 3f-4): where Back from the Orders settings returns the focus.
+export const SETTINGS_OPENER = 'settings';
+// The settings screen's «Past orders» door: where Back from History returns the focus.
+export const HISTORY_DOOR = 'history-door';
+// A History card's «Correct» button (the record's id), and a day's «Send all» (the day): where Back from the editor and from the
+// day screen return the focus.
+export const correctOpener = (id: string): string => `correct:${id}`;
+export const sendDayOpener = (date: string): string => `send-day:${date}`;
