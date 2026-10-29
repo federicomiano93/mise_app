@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CLEAR_PATH, HISTORY_PATH, PLACE_ALL_CONFIRM_PATH, PLACE_ALL_PATH, SEND_PATH, SETTINGS_PATH, historyDayPath, historyEditPath, ordersScreenName, parseOrdersPath, supplierConfirmPath,
+  CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, REORDER_PATH, PLACE_ALL_CONFIRM_PATH, PLACE_ALL_PATH, SEND_PATH, SETTINGS_PATH, historyDayPath, historyEditPath, incomingMissingPath, ordersScreenName, parseOrdersPath, supplierConfirmPath,
 } from './ordersPath';
 
 describe('parseOrdersPath', () => {
@@ -20,6 +20,23 @@ describe('parseOrdersPath', () => {
 
   it('sends anything deeper or unknown back to the list', () => {
     for (const rest of ['/place-all/other', '/place-all/confirm/x', '/clear/x', '/send/x', '/supplier/s/confirm/x', '/supplier/s/other', '/nope']) {
+      expect(parseOrdersPath(rest)).toEqual({ kind: 'unknown' });
+    }
+  });
+
+  it('reads Incoming, the screen for one order below it, and «To re-order»', () => {
+    expect(parseOrdersPath('/incoming')).toEqual({ kind: 'incoming' });
+    expect(parseOrdersPath('/incoming/2026-10-27_mill')).toEqual({ kind: 'incoming-missing', id: '2026-10-27_mill' });
+    expect(parseOrdersPath('/incoming/2026-10-27_a%2Fb')).toEqual({ kind: 'incoming-missing', id: '2026-10-27_a/b' });
+    expect(parseOrdersPath(incomingMissingPath('2026-10-27_a b/c%').slice('/orders'.length)))
+      .toEqual({ kind: 'incoming-missing', id: '2026-10-27_a b/c%' });
+    expect(parseOrdersPath('/reorder')).toEqual({ kind: 'reorder' });
+    expect(parseOrdersPath(INCOMING_PATH.slice('/orders'.length))).toEqual({ kind: 'incoming' });
+    expect(parseOrdersPath(REORDER_PATH.slice('/orders'.length))).toEqual({ kind: 'reorder' });
+  });
+
+  it('refuses junk after Incoming and «To re-order»', () => {
+    for (const rest of ['/incoming/a/b', '/incoming/%E0%A4%A', '/reorder/x', '/incoming//x/y']) {
       expect(parseOrdersPath(rest)).toEqual({ kind: 'unknown' });
     }
   });
@@ -82,5 +99,9 @@ describe('the settings and History addresses (slice 3f-4)', () => {
     expect(ordersScreenName('/history/day/2026-10-27')).toBe('orders-history-day');
     expect(ordersScreenName('/history/2026-W28')).toBe('orders-history-edit');
     expect(ordersScreenName('/history/day')).toBe('orders');
+    expect(ordersScreenName('/incoming')).toBe('orders-incoming');
+    expect(ordersScreenName('/incoming/2026-10-27_mill')).toBe('orders-incoming-missing');
+    expect(ordersScreenName('/reorder')).toBe('orders-reorder');
+    expect(ordersScreenName('/reorder/x')).toBe('orders');
   });
 });
