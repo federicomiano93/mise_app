@@ -568,7 +568,8 @@ dialog on screen while it decides (`send-chooser.js:86-88`); harmless today beca
   was sent, and cannot be added to by a second order on its «real» day. The difference from today's code: none in the
   arithmetic (`recordDay` is kept); the difference is that with F2 a future choice becomes common, and Mise 2 must say
   it on the place-confirm screen («recorded as today, Monday 26 Oct»).
-- **F4. A switch to turn off the goods-arrived check — OPEN.** Some venues will not answer «did it all arrive?», and the
+- **F4. A switch to turn off the goods-arrived check — DECIDED 29 Oct 2026 (Federico chose the three recommendations
+  below: per venue, owner or manager only, off hides everything; built in 3f-5).** Some venues will not answer «did it all arrive?», and the
   debt banner then never goes quiet (V6). Questions: (a) per venue or per phone? (b) who may flip it? (c) what does
   Incoming show when it is off? **Recommended**: (a) **per venue**, a new `config/orders` key (e.g. `deliveryCheck`,
   absent = ON) — it changes what everybody sees and what the kiosk shows, so a per-phone switch would leave two
@@ -1057,3 +1058,70 @@ SuppliersSection ingredient allergens.
 
 **P13.** No new personal data: History shows what the records already hold (suppliers, ingredients, quantities, times); a
 supplier's phone and email travel only in the link the person taps.
+
+## Step 3f-5 as built — Incoming
+
+Items V1–V11 and F4: the debt banner and the two doors on the order list, Incoming with its groups, «È arrivato da …?»,
+«Cosa è arrivato?», «Da riordinare» (put back, another supplier, resolved) and the goods-arrived switch in Settings.
+⚠️ **Rules changed: deploy them BEFORE Mise 2 goes live** (three new optional keys on `config/orders`; old phones never
+send them, so an early deploy is safe).
+
+**Shared.** `deliveries` is ported as it is (`isDelivered`, `shortfall`, `expectedDeliveryOn`, `pendingDeliveries`,
+`resolvedOn`, `stillToReorder`, `applyReorder`, `unansweredBefore`); `deliveries.spec.ts` runs every test against both
+files (except three that read the old file's source text) and the pair is in `parity.spec.ts`. New, with no original:
+`delivery-check.ts` — the switch read from `config/orders` (`deliveryCheckOf`, absent = on), the patch a flip writes
+(`deliveryCheckPatch`), `turningOnForgets` and `askedAbout` (no record when off; only records from `deliveryCheckFrom`
+on).
+
+**Data.** `ordersSource`: `confirmDelivery` (an `updateDoc` of `deliveredAt`, `missing` replaced whole, `updatedAt`, as
+`draft.js:367`), `resolveMissing` (a merge of `missingResolved.<id>`), `mergeOrdersConfig`. `ordersStore`:
+`confirmDelivery`, `resolveMissing`, `putBack`, `orderElsewhere` (the draft line written through the same local-first draft
+sync as typing, the supplier's own day stamped), `setDeliveryCheck`; every outcome is `saved | refused | failed` or
+`applied | skipped | gone`. Rules: `deliveryCheck` (bool), `deliveryCheckFrom` and `deliveryCheckOffOn` (a plain
+`YYYY-MM-DD`) join the `config/orders` whitelist under the existing owner-or-manager write; cases in
+`tests/rules/firestore-rules-check.mjs` (employee refused, manager and owner allowed, other venue refused, bad values
+refused).
+
+**Screens.** On the order list, under the day: the debt banner («1 ordine di prima di questa settimana»), then two doors,
+«In arrivo» (its count of orders to confirm) and «Da riordinare (n)». «In arrivo» → the groups «Di prima di questa
+settimana», «In ritardo», «Previsti oggi», «In arrivo», each order a row with its supplier and expected day; a tap asks «È
+arrivato da …?» (all arrived / something missing). «Manca qualcosa» → «Cosa è arrivato?»: every line ticked as arrived,
+untick what did not come, Save in the header; Back with changes asks to discard. «Da riordinare» → one card per missing
+line, newest first: «Rimetti nell’ordine di …», «Ordina da un altro fornitore» (a chooser of the other active suppliers)
+and «Risolto» (asks first). Settings gains «Controlla la merce arrivata» with its sentence; an employee sees it locked
+with «Solo un titolare o un manager può cambiarlo.».
+
+**Decisions of this slice (his, 29 Oct 2026 — F4):** per venue; owner or manager only (shown to everybody, locked for
+employees); off hides the Incoming door and count, the debt banner, «Da riordinare» and (from 3f-8) the kiosk's arriving
+lines; nothing is deleted.
+- Taken for him (recommended option): turned back on, only orders from that day on are asked about (`deliveryCheckFrom`),
+  and the switch asks first «Riattivare il controllo? — Gli ordini fatti prima di oggi non verranno più chiesti». ⚠️ But
+  turned off and on again **the same day** (a slip of the finger) it forgets nothing and asks nothing: the day it went
+  off is kept in `deliveryCheckOffOn`, and the old `deliveryCheckFrom` stays.
+- Taken for him: «Da riordinare» is not reset by the switch. The lines somebody already said did not arrive are facts, not
+  questions, so turned back on they are all there again; only the questions («È arrivato?», the debt) start from today.
+
+**Differences from the current app, on purpose (tell him):**
+- D1. The debt is a group of its own at the top of «In arrivo» («Di prima di questa settimana»), answered one order at a
+  time like the others, instead of a chain of dialogs opened from the banner.
+- D2. Escape on «È arrivato da …?» answers nothing.
+- D3. Save on «Cosa è arrivato?» does not ask a second time (P20 exception, stated): the screen itself is the question,
+  and it already took a tap per missing line.
+- D4. «Rimetti» and «Ordina da un altro fornitore» stamp the supplier's own order day on the draft line, as typing does.
+- D5. A put back that the rules refuse stays on the phone like refused typing (the draft's usual retry), never lost.
+- D6. A double tap on «Rimetti» never puts back the next card: every card ignores a press for 600 ms after an action.
+- D7. «Tutto arrivato» answers for the order as it is now: if a second order merged in while the question was open and
+  brought «did not arrive» marks, it goes to «Cosa è arrivato?» instead of erasing them (V4, now also mid-question).
+- D8. A day with a year writes the year in digits («2026», never «2.026») — fixed in `dayWords` for every screen.
+
+**Left open (tell him):**
+- ⚠️ **Coexistence:** the current app and its kiosk do not know the switch. While both apps run side by side, a venue
+  that turns the check off in Mise 2 still sees «In arrivo» and the debt in the current app. The kiosk's arriving lines
+  are built in 3f-8 (`kiosk-lines`), which must honour `deliveryCheck`.
+- When another phone turns the switch off while a «Cosa è arrivato?» is open, the screen closes and the unsaved ticks are
+  dropped (accepted: the check is off).
+- A «Cosa è arrivato?» Save overwrites an answer a colleague gave meanwhile — exactly as the current app does.
+- «Previsto Oggi» keeps the capital O of the current app's string.
+- To try on the tablet: the whole flow with real deliveries, and the switch from an employee's account.
+
+**P13.** No new personal data: who answered is not recorded; the three new keys are days and a yes/no.

@@ -350,6 +350,14 @@ steps is at the end.
     the recipe is linked. The percentage stays because it is the value every phone STARTS from (the knob is
     per phone). Typing an ingredient name updates the leavening select without a re-render (focus must not be
     lost). Back from a fresh empty recipe asks to discard it; the list returns focus to the row edited.
+    **Reorder the ingredients** (current app since PR «feat(calculator): reorder a recipe's ingredients»,
+    29 Oct 2026, not in Mise 2 yet): beside «Ingredients», a «Reorder» / «Done» toggle (hidden under 2 rows,
+    absent on a recipe linked to the Catalogue, read-only there); in the mode each row is grip + name +
+    grams, moved by a held drag (200 ms on touch) or ArrowUp/ArrowDown on the grip (the focus follows the
+    row); «+ Add ingredient» hidden meanwhile; the hint «Hold an ingredient and drag it to its place. With a
+    keyboard, use the up and down arrows.». Only the working copy changes — Save stores the new order of
+    `config/calculator.recipes[].ingredients`, Back asks first. The same rows move: keys, grams and
+    `leaveningKey` untouched. Mise 2 must do the same (the Catalogue's recipe editor already has «Reorder»).
 79. **Linking a recipe to the Catalogue**: the Catalogue's recipes are listed ONCE when the editor opens
     (never on boot); choosing one first stamps a stable row id on every Catalogue row
     (`stampRecipeRowIds`, a merge write of `ingredients` on `recipes/{id}`, idempotent via `withRowIds`),

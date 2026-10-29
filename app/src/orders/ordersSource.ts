@@ -18,7 +18,10 @@
 // suggestions are worked out from (parity L27). From step 3f-4 (History) it fetches the orders OLDER than that window on
 // demand, a page of 100 at a time and then the legacy weekly record, ALWAYS FROM THE SERVER (parity H8); and it rewrites or
 // deletes ONE record from History's editor, in a transaction that refuses when the record changed since the editor opened it
-// (parity H12, and the difference E1 of 3f-4).
+// (parity H12, and the difference E1 of 3f-4). From step 3f-5 (Incoming) it answers «did it all arrive?» on one record
+// (`confirmDelivery`, a patch that replaces `missing` whole), marks one missing line «Resolved» (`resolveMissing`, a merge that
+// ADDS to `missingResolved`), and writes the venue's goods-arrived switch into config/orders (`mergeOrdersConfig`, decision F4;
+// the rules let only an owner or a manager write that document).
 //
 // ⚠️ NO ROLE IS READ HERE, ON PURPOSE: the section gate and firestore.rules decide (P2).
 //
@@ -92,6 +95,16 @@ export interface OrdersSource {
     id: string,
     decide: (existing: Record<string, unknown> | null) => Record<string, unknown> | null,
   ): Promise<Record<string, unknown> | null>;
+  // «Did it all arrive?» answered for orders-history/<id> (parity V4): an UPDATE of `deliveredAt`, `missing` (REPLACED whole)
+  // and `updatedAt`, the current app's confirmDelivery. Settles when the server answers; offline it waits (Firestore shows the
+  // answer at once meanwhile); rejects when refused or when the record is gone.
+  confirmDelivery(id: string, patch: { deliveredAt: string; missing: Record<string, true>; updatedAt: string }): Promise<void>;
+  // «Resolved» on one missing line of orders-history/<recordId> (parity V9, V11): a MERGE of `missingResolved.<ingredientId>` =
+  // `at` and `updatedAt`; `missing` is never touched. Same contract.
+  resolveMissing(recordId: string, ingredientId: string, at: string): Promise<void>;
+  // Merges these keys into config/orders (decision F4: the goods-arrived switch). Same contract; a person who is not an owner or
+  // a manager is refused by the rules (permission-denied).
+  mergeOrdersConfig(patch: Record<string, unknown>): Promise<void>;
 }
 
 // Orders older than the live window are read 100 at a time (the current app's getOlderHistory).
@@ -275,6 +288,27 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
         tx.set(ref, stamped);
         return stamped;
       });
+    },
+
+    // ⚠️ updateDoc, NOT A MERGE: `missing` is REPLACED WHOLE, so a second answer can say «the flour came after all» (a merge
+    // would keep the old mark, and the flour would stay on «To re-order» and out of the stocktake for ever). An empty
+    // `deliveredAt` is a real value («looked, not arrived») and is written, never omitted (js/orders/draft.js).
+    async confirmDelivery(id, patch) {
+      const { fs, db } = await firestore();
+      await fs.updateDoc(fs.doc(db, historyPath, id), { ...patch, bakery: locationId });
+    },
+
+    // ⚠️ A MERGE, on purpose: the map is ADDED to, one line at a time, maybe from two phones (js/orders/draft.js resolveMissing).
+    async resolveMissing(recordId, ingredientId, at) {
+      const { fs, db } = await firestore();
+      await fs.setDoc(fs.doc(db, historyPath, recordId),
+        { missingResolved: { [ingredientId]: at }, updatedAt: at, bakery: locationId }, { merge: true });
+    },
+
+    // A merge: only the keys named change, every other setting of the venue stays (js/orders/firebase-orders.js saveDoc).
+    async mergeOrdersConfig(patch) {
+      const { fs, db } = await firestore();
+      await fs.setDoc(fs.doc(db, configPath, ORDERS_DOC), { ...patch, bakery: locationId }, { merge: true });
     },
   };
 }
