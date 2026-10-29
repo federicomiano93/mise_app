@@ -62,7 +62,7 @@ both, and the switch keeps the address) and it has consequences that every chang
 | jspdf | 4.2.1 | the recipe export's PDF; loaded only when someone taps Export |
 | write-excel-file | 4.1.1 | the recipe export's Excel file; loaded only when someone taps Export |
 | Vitest + Testing Library + jsdom | — | specs |
-| fflate | 0.8.3 (dev only) | unzips the .xlsx inside a spec to read what was written; never in the bundle |
+| fflate | 0.8.2 (runtime, `app/` only — the version the current app vendors; ⚠️ NOT 0.8.3, which walks a forged ZIP64 count: see the header of `zipRead.ts` before any upgrade) | opens the zip archives of the invoice import (`app/src/suppliers/invoiceImport/zipRead.ts`; `shared/` has no runtime dependency, so the zip reader is app code); specs also use it to unzip the .xlsx the recipe export wrote |
 | Geist / Geist Mono | @fontsource-variable | bundled, so the app starts offline and no third party sees who opens it |
 
 Preact was evaluated in step 2c and NOT adopted: React is about a fifth of the bundle, and React
@@ -308,7 +308,7 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   reported with fixed words only (`Recipe export failed:`, the file kind, `library` or `build`), never the recipe.
 - `suppliers/` — Ingredients & suppliers (section id `suppliers`, step 3e, built in slices; its parity list is
   `docs/parity/suppliers.md`). Slice A looks (the three lists and a supplier's own screen), slice B writes suppliers and adds
-  Settings; 3e-2 onwards is the ingredient card, the pack photo, the invoice import. The data layer: `suppliersSource.ts` (the
+  Settings; 3e-2 onwards is the ingredient card, the pack photo, the invoice import. The invoice import is built end to end: the door, step 1 (the file), step 2 (the suppliers), step 3 (the ingredients: `IngredientsStep`, `ingredientsRun.ts`) and the summary (`SummaryStep`). The data layer: `suppliersSource.ts` (the
   Firestore half: suppliers, ingredients, prices, `config/orders`, and the one Cloud Function `setIngredientPanels`), `suppliersStore.ts`
   (plain TypeScript, local-first writes, `SuppliersMessage` kinds that `suppliersMessages.ts` words), `SuppliersContext.tsx`
   (started on mount, stopped on unmount, P14). Addresses, in `suppliersPath.ts`: `/suppliers` (Ingredients tab), `/suppliers/suppliers`,

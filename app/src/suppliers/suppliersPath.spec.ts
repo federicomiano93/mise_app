@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import {
-  NEW_INGREDIENT_PATH, NEW_PACKAGING_PATH, NEW_SUPPLIER_PATH, PACKAGING_TAB_PATH, SUPPLIERS_PATH, SUPPLIERS_SETTINGS_PATH, SUPPLIERS_TAB_PATH,
+  NEW_INGREDIENT_PATH, NEW_PACKAGING_PATH, NEW_SUPPLIER_PATH, PACKAGING_TAB_PATH, SUPPLIERS_IMPORT_PATH, SUPPLIERS_PATH, SUPPLIERS_SETTINGS_PATH,
+  SUPPLIERS_TAB_PATH,
   ingredientPath, newIngredientPath, parseSuppliersPath, supplierEditPath, supplierPath, suppliersScreenName, tabOf, tabPath,
 } from './suppliersPath';
 
@@ -22,6 +23,13 @@ describe('the addresses of Ingredients & suppliers', () => {
     expect(parseSuppliersPath(rest(supplierEditPath('abc')))).toEqual({ kind: 'supplier-edit', id: 'abc' });
     expect(parseSuppliersPath(rest(NEW_SUPPLIER_PATH))).toEqual({ kind: 'supplier-new' });
     expect(parseSuppliersPath(rest(SUPPLIERS_SETTINGS_PATH))).toEqual({ kind: 'settings' });
+  });
+
+  test('«Import from invoices» is one address, and belongs to no tab', () => {
+    expect(SUPPLIERS_IMPORT_PATH).toBe('/suppliers/import');
+    expect(parseSuppliersPath(rest(SUPPLIERS_IMPORT_PATH))).toEqual({ kind: 'import' });
+    expect(parseSuppliersPath('/import/')).toEqual({ kind: 'import' });
+    expect(tabOf({ kind: 'import' })).toBe('ingredients');
   });
 
   test('an id with a slash, a percent sign or a space comes back whole', () => {
@@ -66,7 +74,7 @@ describe('the addresses of Ingredients & suppliers', () => {
 
   test('anything else is unknown (the section goes back to the list)', () => {
     for (const path of ['/supplier', '/supplier/', '/supplier/%', '/supplier/a/b', '/supplier/a/edit/x', '/ingredient',
-      '/ingredient/', '/ingredient/%', '/ingredient/a/b', '/ingredient/a/edit', '/import', '/nope', '/suppliers/x', '/settings/x']) {
+      '/ingredient/', '/ingredient/%', '/ingredient/a/b', '/ingredient/a/edit', '/import/x', '/nope', '/suppliers/x', '/settings/x']) {
       expect(parseSuppliersPath(path)).toEqual({ kind: 'unknown' });
     }
   });
@@ -88,6 +96,7 @@ describe('the addresses of Ingredients & suppliers', () => {
     expect(suppliersScreenName('/supplier/abc/edit')).toBe('suppliers-supplier-edit');
     expect(suppliersScreenName('/supplier/new')).toBe('suppliers-supplier-edit');
     expect(suppliersScreenName('/settings')).toBe('suppliers-settings');
+    expect(suppliersScreenName('/import')).toBe('suppliers-import');
     expect(suppliersScreenName('/ingredient/abc')).toBe('suppliers-ingredient');
     expect(suppliersScreenName('/ingredient/new')).toBe('suppliers-ingredient');
     expect(suppliersScreenName('/junk')).toBe('suppliers');
