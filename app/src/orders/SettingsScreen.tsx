@@ -2,21 +2,31 @@ import { useCallback, useEffect, useId, useRef } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
-import { useOrders } from './OrdersContext';
+import { SettingSwitch } from '../ui/SettingSwitch';
+import { useStatusMessage } from '../ui/StatusMessage';
+import { useOrders, useOrdersStore } from './OrdersContext';
 import { HISTORY_DOOR, SETTINGS_OPENER, useHandBack } from './handBack';
 import { FROM_LIST, cameFromList, useLeave } from './ordersNav';
 import { HISTORY_PATH, ORDERS_PATH } from './ordersPath';
+import { LONG_MS } from './useClearQuantities';
 import styles from './SettingsScreen.module.css';
 
 // «Settings» of Orders, at /orders/settings (step 3f-4), one level below the list. For now it holds ONE door, «Past orders»
-// (History); the rest of the Orders settings arrive with slice 3f-8. Back is Back (P20).
+// (History) and the goods-arrived switch (step 3f-5); the rest of the Orders settings arrive with slice 3f-8. Back is Back (P20).
 export function SettingsScreen() {
   const { t } = useT();
   const { state } = useLocation();
   const navigate = useNavigate();
-  const { config } = useOrders();
+  const { config, deliveryCheck } = useOrders();
+  const store = useOrdersStore();
+  const { canManage } = useSession();
+  const say = useStatusMessage();
+  const switchTitle = useId();
+  const switchSub = useId();
+  const switchNote = useId();
   const handBack = useHandBack();
   const leave = useLeave(ORDERS_PATH, () => { handBack.expect(SETTINGS_OPENER); });
   const titleId = useId();
@@ -50,6 +60,30 @@ export function SettingsScreen() {
             </span>
             <ChevronRight aria-hidden="true" />
           </Button>
+        </div>
+        {/* ⚠️ ONE SWITCH FOR THE WHOLE VENUE (decision F4): every phone must agree about what is owed. Only an owner or a manager
+            flips it (the rules' canManage on config/orders), so a person without that sees it OFF-limits and told why, rather
+            than a switch that answers «refused» after the tap. */}
+        <div className={styles.card}>
+          <div className={styles.switchRow}>
+            <span className={styles.text}>
+              <span id={switchTitle} className={styles.doorTitle}>{t('ord.settings.deliveryCheck')}</span>
+              <span id={switchSub} className={styles.sub}>{t('ord.settings.deliveryCheckSub')}</span>
+              {canManage ? null : <span id={switchNote} className={styles.sub}>{t('ord.settings.managersOnly')}</span>}
+            </span>
+            <SettingSwitch
+              selected={deliveryCheck.on}
+              isDisabled={!canManage}
+              labelledBy={switchTitle}
+              describedBy={canManage ? switchSub : `${switchSub} ${switchNote}`}
+              onChange={next => {
+                void store.setDeliveryCheck(next).then(outcome => {
+                  if (outcome === 'refused') say(t('ord.settings.managersOnly'), LONG_MS);
+                  else if (outcome === 'failed') say(t('ord.incoming.couldNotSave'), LONG_MS);
+                }, () => { say(t('ord.incoming.couldNotSave'), LONG_MS); });
+              }}
+            />
+          </div>
         </div>
       </div>
     </section>

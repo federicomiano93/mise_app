@@ -11,7 +11,10 @@ import { OrdersProvider, useOrders, useOrdersStore } from './OrdersContext';
 import { OrdersList } from './OrdersList';
 import { DaySendScreen } from './DaySendScreen';
 import { HistoryEditScreen } from './HistoryEditScreen';
+import { IncomingMissingScreen } from './IncomingMissingScreen';
+import { IncomingScreen } from './IncomingScreen';
 import { HistoryScreen } from './HistoryScreen';
+import { ReorderScreen } from './ReorderScreen';
 import { SendScreen } from './SendScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { PlaceAllConfirmScreen, SupplierConfirmScreen } from './PlaceConfirmScreen';
@@ -20,13 +23,13 @@ import { SupplierOrderScreen } from './SupplierOrderScreen';
 import { SupplierPicker } from './SupplierPicker';
 import { LONG_MS } from './useClearQuantities';
 import {
-  CLEAR_OPENER, HandBackProvider, HISTORY_DOOR, ITEMS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, SEND_OPENER, SETTINGS_OPENER, correctOpener,
-  itemsOpener, sendDayOpener, supplierOpener, useHandBackState,
+  CLEAR_OPENER, HandBackProvider, HISTORY_DOOR, INCOMING_DOOR, ITEMS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, REORDER_DOOR, SEND_OPENER,
+  SETTINGS_OPENER, arrivalOpener, correctOpener, itemsOpener, sendDayOpener, supplierOpener, useHandBackState,
 } from './handBack';
 import { FROM_LIST, replacedState } from './ordersNav';
 import {
-  CLEAR_PATH, ORDERS_PATH, PLACE_ALL_PATH, SEND_PATH, SETTINGS_PATH, historyDayPath, historyEditPath, parseOrdersPath, supplierItemsPath,
-  supplierPath,
+  CLEAR_PATH, INCOMING_PATH, ORDERS_PATH, PLACE_ALL_PATH, REORDER_PATH, SEND_PATH, SETTINGS_PATH, historyDayPath, historyEditPath,
+  incomingMissingPath, parseOrdersPath, supplierItemsPath, supplierPath,
 } from './ordersPath';
 import type { OrdersView } from './ordersPath';
 import { buildOrdersLens } from './ordersLens';
@@ -89,6 +92,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const { t } = useT();
   const navigate = useNavigate();
   const { pathname, state } = useLocation();
+  const navigationType = useNavigationType();
   const split = useMediaQuery(SPLIT_QUERY);
   const handBack = useHandBackState();
   const snapshot = useOrders();
@@ -140,15 +144,20 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const openClear = () => { open(CLEAR_OPENER, CLEAR_PATH); };
   const openSend = () => { open(SEND_OPENER, SEND_PATH); };
   const openSettings = () => { open(SETTINGS_OPENER, SETTINGS_PATH); };
+  // Back from Incoming and from «To re-order» gives the focus to the list's door (the debt banner opens Incoming the same way).
+  const openIncoming = () => { open(INCOMING_DOOR, INCOMING_PATH); };
+  const openReorder = () => { open(REORDER_DOOR, REORDER_PATH); };
 
-  // From History to the editor or the day screen: one level down, so Back is the browser's Back. The place in History is written
-  // down now, while it is what is on screen, and put back when Back returns to it (the editor can be far down a long list).
+  // From History to the editor or the day screen, and from Incoming to the screen for one order: one level down, so Back is the
+  // browser's Back. The place in the screen above is written down now, while it is what is on screen, and put back when Back
+  // returns to it (History and Incoming can be long lists).
   const historyPlace = useRef<{ area: number | null; pane: number } | null>(null);
   const openFromHistory = (opener: string, path: string) => {
     handBack.expect(opener);
     historyPlace.current = { area: scrollArea()?.scrollTop ?? null, pane: detail.current?.scrollTop ?? 0 };
     void navigate(path, { state: FROM_LIST });
   };
+  const openMissing = (id: string) => { openFromHistory(arrivalOpener(id), incomingMissingPath(id)); };
   const openEdit = (id: string) => { openFromHistory(correctOpener(id), historyEditPath(id)); };
   const openDay = (date: string) => { openFromHistory(sendDayOpener(date), historyDayPath(date)); };
 
@@ -169,7 +178,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
     } else if (view.kind === 'list' && listTop.current !== null) {
       area.scrollTop = listTop.current;
       listTop.current = null;
-    } else if (view.kind === 'history' && historyPlace.current?.area != null) {
+    } else if ((view.kind === 'history' || view.kind === 'incoming') && historyPlace.current?.area != null) {
       area.scrollTop = historyPlace.current.area;
     } else {
       area.scrollTop = 0;
@@ -184,6 +193,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
     // button or the day's «Send all». ⚠️ NOT deliver(): History opened from the settings expects the DOOR, which is not on screen.
     else if (view.kind === 'settings') handBack.deliverIf(HISTORY_DOOR);
     else if (view.kind === 'history') handBack.deliverWhere(name => name.startsWith('correct:') || name.startsWith('send-day:'));
+    // Back from «What arrived?» to Incoming: the row that opened it (gone when the order was answered: the title takes the focus).
+    else if (view.kind === 'incoming') handBack.deliverWhere(name => name.startsWith('arrival:'));
     // The supplier's screen coming back from «What they sell»: only its own button is owed the focus. ⚠️ NOT deliver(): a
     // supplier opened from the list expects the list row, which must keep its focus (phone: the title takes it; split: the row).
     else if (view.kind === 'supplier') {
@@ -196,11 +207,19 @@ function OrdersLayout({ view }: { view: ShownView }) {
   // starts at its top instead of where the last one was left. On a phone it is not a scroll area and this is a no-op.
   useLayoutEffect(() => {
     if (!detail.current) return;
-    const inHistory = view.kind === 'history' || view.kind === 'history-edit' || view.kind === 'history-day';
-    detail.current.scrollTop = view.kind === 'history' ? historyPlace.current?.pane ?? 0 : 0;
+    const inHistory = view.kind === 'history' || view.kind === 'history-edit' || view.kind === 'history-day'
+      || view.kind === 'incoming' || view.kind === 'incoming-missing';
+    detail.current.scrollTop = view.kind === 'history' || view.kind === 'incoming' ? historyPlace.current?.pane ?? 0 : 0;
     // The place is only owed to History while it is the screen in play; leaving it for good forgets it.
     if (!inHistory) historyPlace.current = null;
   }, [pathname]);
+
+  // ⚠️ WITH THE VENUE'S SWITCH OFF the three delivery addresses do not exist (decision F4): a bookmark, or a phone that was on
+  // Incoming when somebody turned it off, goes to the list. Only once config/orders has answered (before that the switch reads on).
+  const deliveryAddress = view.kind === 'incoming' || view.kind === 'incoming-missing' || view.kind === 'reorder';
+  if (deliveryAddress && snapshot.configLoaded && !snapshot.deliveryCheck.on) {
+    return <Navigate to={ORDERS_PATH} replace state={navigationType === 'POP' ? KEEP_FOCUS : state} />;
+  }
 
   return (
     <HandBackProvider value={handBack}>
@@ -219,12 +238,14 @@ function OrdersLayout({ view }: { view: ShownView }) {
                 onClearAll={openClear}
                 onSend={openSend}
                 onSettings={openSettings}
+                onIncoming={openIncoming}
+                onReorder={openReorder}
               />
             </PartBoundary>
           </div>
           <div ref={detail} className={styles.detail}>
             <PartBoundary resetKey={pathname}>
-              <Detail view={view} lens={lens} ready={ready} onOpenEdit={openEdit} onOpenDay={openDay} />
+              <Detail view={view} lens={lens} ready={ready} onOpenEdit={openEdit} onOpenDay={openDay} onOpenMissing={openMissing} />
             </PartBoundary>
           </div>
         </div>
@@ -238,14 +259,16 @@ function OrdersLayout({ view }: { view: ShownView }) {
 //
 // (No `key` on the screens: the section keeps one from one supplier to the next on the split, so the focus stays on the row
 // that was pressed.)
-function Detail({ view, lens, ready, onOpenEdit, onOpenDay }: {
+function Detail({ view, lens, ready, onOpenEdit, onOpenDay, onOpenMissing }: {
   view: ShownView;
   lens: ReturnType<typeof buildOrdersLens>;
   ready: boolean;
   onOpenEdit: (id: string) => void;
   onOpenDay: (date: string) => void;
+  onOpenMissing: (id: string) => void;
 }) {
   const { t } = useT();
+  const { configLoaded } = useOrders();
   if (view.kind === 'list') {
     // ⚠️ NOT BESIDE «NO SUPPLIERS YET»: a prompt to tap a row, next to a list that says there are none, would send somebody
     // looking for what is not there.
@@ -267,6 +290,21 @@ function Detail({ view, lens, ready, onOpenEdit, onOpenDay }: {
   if (view.kind === 'clear') return <SupplierPicker mode="clear" lens={lens} />;
   if (view.kind === 'send') return <SendScreen lens={lens} />;
   if (view.kind === 'settings') return <SettingsScreen />;
+  // The three delivery screens wait for config/orders: it holds the switch that decides whether they exist at all.
+  if ((view.kind === 'incoming' || view.kind === 'incoming-missing' || view.kind === 'reorder') && !configLoaded) {
+    return <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>;
+  }
+  if (view.kind === 'reorder') return <ReorderScreen />;
+  if (view.kind === 'incoming' || view.kind === 'incoming-missing') {
+    // ⚠️ INCOMING STAYS MOUNTED UNDER THE SCREEN FOR ONE ORDER (hidden, not drawn), like History under its editor: Back finds it, and
+    // the place in it, as it was left.
+    return (
+      <>
+        <IncomingScreen hidden={view.kind !== 'incoming'} onOpenMissing={record => { onOpenMissing(record.id); }} />
+        {view.kind === 'incoming-missing' ? <IncomingMissingScreen key={view.id} id={view.id} /> : null}
+      </>
+    );
+  }
   if (view.kind === 'history' || view.kind === 'history-day' || view.kind === 'history-edit') {
     // ⚠️ HISTORY STAYS MOUNTED UNDER THE EDITOR AND THE DAY SCREEN (hidden, not drawn): the cards that were opened and the older days
     // that were asked for are still there when Back returns to it.
