@@ -782,7 +782,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     },
 
     setDeliveryCheck(on) {
-      return deliveryWrite('Saving the goods-arrived switch', () => source.mergeOrdersConfig(deliveryCheckPatch(on, deps.today())));
+      return deliveryWrite('Saving the goods-arrived switch', () => source.mergeOrdersConfig(deliveryCheckPatch(on, deps.today(), snapshot.deliveryCheck)));
     },
   };
 }

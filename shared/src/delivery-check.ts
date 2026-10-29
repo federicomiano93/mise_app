@@ -9,6 +9,9 @@
 //
 // ⚠️ TURNED BACK ON, IT COUNTS FROM THAT DAY: the switch stores `deliveryCheckFrom` with it, and an order recorded before that day
 // is never asked about. Without it, months of orders nobody was asked about would flood the debt banner the moment it came back.
+// ⚠️ EXCEPT ON THE DAY IT WAS TURNED OFF (found in the review of 3f-5): turning it off stores `deliveryCheckOffOn`, and switching it
+// back on that same day keeps the day it counted from — so an off-and-on by mistake never makes the venue's open deliveries vanish.
+// On any later day the screen asks first, because the orders before today will not be asked about again.
 //
 // ⚠️ ABSENT = ON, and only an explicit `false` turns it off: a corrupt value or a document that does not exist yet must leave the
 // venue as it has always been (the same direction as `showStock`, orders-config.ts).
@@ -20,24 +23,34 @@ export interface DeliveryCheck {
   readonly on: boolean;
   // 'YYYY-MM-DD': an order recorded before it is never asked about; '' = every order is.
   readonly from: string;
+  // 'YYYY-MM-DD': the day it was last turned off; '' = never (or unreadable).
+  readonly offOn: string;
 }
 
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+const isoDay = (v: unknown): string => (typeof v === 'string' && ISO_DAY.test(v) ? v : '');
 
 // A stored config/orders (or null) → the switch as Orders reads it.
 export function deliveryCheckOf(doc?: unknown): DeliveryCheck {
   const d = doc && typeof doc === 'object' ? doc as Record<string, unknown> : null;
-  const from = d?.deliveryCheckFrom;
   return {
     on: d?.deliveryCheck !== false,
-    from: typeof from === 'string' && ISO_DAY.test(from) ? from : '',
+    from: isoDay(d?.deliveryCheckFrom),
+    offOn: isoDay(d?.deliveryCheckOffOn),
   };
 }
 
-// What flipping the switch writes into config/orders (a merge). Turning it ON stamps today as the first day asked about; turning
-// it OFF leaves the stored day alone (it only matters while the switch is on, and the next «on» replaces it).
-export function deliveryCheckPatch(on: boolean, today: string): Record<string, unknown> {
-  return on ? { deliveryCheck: true, deliveryCheckFrom: today } : { deliveryCheck: false };
+// Whether turning the switch ON today drops the orders recorded before today (the screen asks first when it does): not when it
+// was turned off today — the day it counted from is kept.
+export function turningOnForgets(check: DeliveryCheck, today: string): boolean {
+  return !check.on && check.offOn !== today;
+}
+
+// What flipping the switch writes into config/orders (a merge). OFF stamps the day it went off; ON stamps today as the first day
+// asked about — unless it went off today, when the stored day stays (turningOnForgets).
+export function deliveryCheckPatch(on: boolean, today: string, current: DeliveryCheck): Record<string, unknown> {
+  if (!on) return { deliveryCheck: false, deliveryCheckOffOn: today };
+  return turningOnForgets(current, today) ? { deliveryCheck: true, deliveryCheckFrom: today } : { deliveryCheck: true };
 }
 
 // The records the delivery questions are asked about: none while the switch is off; from `from` on while it is on. The rest of

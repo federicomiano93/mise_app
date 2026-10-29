@@ -568,7 +568,8 @@ dialog on screen while it decides (`send-chooser.js:86-88`); harmless today beca
   was sent, and cannot be added to by a second order on its «real» day. The difference from today's code: none in the
   arithmetic (`recordDay` is kept); the difference is that with F2 a future choice becomes common, and Mise 2 must say
   it on the place-confirm screen («recorded as today, Monday 26 Oct»).
-- **F4. A switch to turn off the goods-arrived check — OPEN.** Some venues will not answer «did it all arrive?», and the
+- **F4. A switch to turn off the goods-arrived check — DECIDED 29 Oct 2026 (Federico chose the three recommendations
+  below: per venue, owner or manager only, off hides everything; built in 3f-5).** Some venues will not answer «did it all arrive?», and the
   debt banner then never goes quiet (V6). Questions: (a) per venue or per phone? (b) who may flip it? (c) what does
   Incoming show when it is off? **Recommended**: (a) **per venue**, a new `config/orders` key (e.g. `deliveryCheck`,
   absent = ON) — it changes what everybody sees and what the kiosk shows, so a per-phone switch would leave two

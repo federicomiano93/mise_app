@@ -64,26 +64,32 @@ const theRecord = (s: Awaited<ReturnType<typeof started>>) =>
 describe('the goods-arrived switch (decision F4)', () => {
   it('reads as ON while config/orders says nothing', async () => {
     const s = await started();
-    expect(s.store.getSnapshot().deliveryCheck).toStrictEqual({ on: true, from: '' });
+    expect(s.store.getSnapshot().deliveryCheck).toStrictEqual({ on: true, from: '', offOn: '' });
   });
 
   it('reads an explicit false as OFF, and the day it was turned back on', async () => {
     expect((await started({ config: { deliveryCheck: false } })).store.getSnapshot().deliveryCheck.on).toBe(false);
     expect((await started({ config: { deliveryCheck: true, deliveryCheckFrom: '2026-10-20' } })).store.getSnapshot().deliveryCheck)
-      .toStrictEqual({ on: true, from: '2026-10-20' });
+      .toStrictEqual({ on: true, from: '2026-10-20', offOn: '' });
   });
 
-  it('OFF writes only the switch; ON writes it with today as the first day asked about; the other settings stay', async () => {
-    const s = await started({ config: { showStock: false } });
+  it('OFF stamps the day it went off; ON the same day keeps the day it counted from; the other settings stay', async () => {
+    const s = await started({ config: { showStock: false, deliveryCheckFrom: '2026-10-01' } });
     expect(await s.store.setDeliveryCheck(false)).toBe('saved');
     expect(s.store.getSnapshot().deliveryCheck.on).toBe(false);
     expect(await s.store.setDeliveryCheck(true)).toBe('saved');
     expect(s.source.deliveryWrites).toStrictEqual([
-      { kind: 'config', patch: { deliveryCheck: false } },
-      { kind: 'config', patch: { deliveryCheck: true, deliveryCheckFrom: TODAY } },
+      { kind: 'config', patch: { deliveryCheck: false, deliveryCheckOffOn: TODAY } },
+      { kind: 'config', patch: { deliveryCheck: true } },
     ]);
-    expect(s.store.getSnapshot().deliveryCheck).toStrictEqual({ on: true, from: TODAY });
+    expect(s.store.getSnapshot().deliveryCheck).toStrictEqual({ on: true, from: '2026-10-01', offOn: TODAY });
     expect(s.store.getSnapshot().config.showStock).toBe(false);
+  });
+
+  it('ON on a later day than it went off counts from today', async () => {
+    const s = await started({ config: { deliveryCheck: false, deliveryCheckOffOn: '2026-10-20', deliveryCheckFrom: '2026-10-01' } });
+    expect(await s.store.setDeliveryCheck(true)).toBe('saved');
+    expect(s.source.deliveryWrites).toStrictEqual([{ kind: 'config', patch: { deliveryCheck: true, deliveryCheckFrom: TODAY } }]);
   });
 
   it('a refusal by the rules is said apart, and the switch is back as stored', async () => {

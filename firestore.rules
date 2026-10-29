@@ -1776,7 +1776,7 @@ service cloud.firestore {
                'favouriteSuppliers',
                // Whether Incoming asks «did it all arrive?» at all, and from which day
                // (Mise 2, decision F4, 29 Oct 2026).
-               'deliveryCheck', 'deliveryCheckFrom',
+               'deliveryCheck', 'deliveryCheckFrom', 'deliveryCheckOffOn',
                // Retired, still writable by an un-updated phone (see above)
                'products', 'groups', 'focaccia', 'brioche', 'sourdough', 'market'
              ])
@@ -1842,7 +1842,9 @@ service cloud.firestore {
           // fields of orders-history stay writable by every member, as they are today.
           // Written only by an owner or a manager (canManage, above). Absent = on.
           // `deliveryCheckFrom` is the day it was last turned on: an order recorded
-          // before it is never asked about. A plain YYYY-MM-DD, nothing else.
+          // before it is never asked about; `deliveryCheckOffOn` the day it was last
+          // turned off (back on that same day, the app keeps the old day). Each a plain
+          // YYYY-MM-DD, nothing else.
           // ⚠️ OPTIONAL IN BOTH DIRECTIONS, like every field here: the current app
           // never sends either key.
           && (!('deliveryCheck' in request.resource.data)
@@ -1850,6 +1852,9 @@ service cloud.firestore {
           && (!('deliveryCheckFrom' in request.resource.data)
               || (request.resource.data.deliveryCheckFrom is string
                   && request.resource.data.deliveryCheckFrom.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')))
+          && (!('deliveryCheckOffOn' in request.resource.data)
+              || (request.resource.data.deliveryCheckOffOn is string
+                  && request.resource.data.deliveryCheckOffOn.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')))
           // The category words an ingredient can be filed under. A list of text, capped so
           // it cannot be used as free storage. ⚠️ OPTIONAL IN BOTH DIRECTIONS, as every
           // field here has to be: a phone still on the previous version never sends it.

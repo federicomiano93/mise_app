@@ -2831,7 +2831,11 @@ async function roles() {
   await expectDenied('staff cannot move the day it counts from either',
     () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheckFrom: '2026-10-29' }, asAccount(SAM)));
   await expectAllowed('a manager can turn the goods-arrived check off',
-    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheck: false }, asAccount(MAYA)));
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheck: false, deliveryCheckOffOn: '2026-10-29' }, asAccount(MAYA)));
+  await expectDenied('staff cannot stamp the day it went off',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheckOffOn: '2026-10-29' }, asAccount(SAM)));
+  await expectDenied('the day it went off must be a plain day',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheckOffOn: 'yesterday' }, asAccount(MAYA)));
   await expectAllowed('…and an owner on again, from today',
     () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheck: true, deliveryCheckFrom: '2026-10-29' }, asAccount(ALICE)));
   await expectDenied('the goods-arrived check must be a true/false, not text',
