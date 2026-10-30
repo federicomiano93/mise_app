@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "b53e60048d3ed345",
-      "mapSha": "4462abbee4e9f49b",
+      "sha": "61aa5f51761797a7",
+      "mapSha": "1c4e59f451489e18",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -73,12 +73,12 @@
         "js/location.js": "0bf3beb2a2fe7a6f",
         "js/log-add.js": "0e2dc1681df3e36c",
         "js/log-edit.js": "d42d93b042675910",
-        "js/log-model.js": "e55bdd3dfd7c38ee",
+        "js/log-model.js": "ccf0d8eb5d9301a0",
         "js/log-qty.js": "e000efad9d1546cf",
         "js/log-settings.js": "3e17c699ab59b736",
         "js/log-store.js": "af96918def0fd7a8",
         "js/log-time.js": "45dd4ecab6898d71",
-        "js/log-view.js": "5a534228f8f90918",
+        "js/log-view.js": "19a4f9d0a3563c22",
         "js/log.js": "8a60b72021a4086b",
         "js/market.js": "296703359daa115b",
         "js/order-unit.js": "e3ee9a62a60959f7",
@@ -375,10 +375,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "9ec4460609d46c0e",
-      "mapSha": "33c1a7e71c10b55e",
+      "sha": "b7afdc51d63fa2dc",
+      "mapSha": "d2561afb55b7fe65",
       "inputs": {
-        "js/i18n.js": "b5706ab4fe37d1fb"
+        "js/i18n.js": "4ea514b1c347a2dc"
       }
     },
     "dist/index.js": {

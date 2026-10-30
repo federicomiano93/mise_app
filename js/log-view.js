@@ -8,7 +8,7 @@
 import { t } from './i18n.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
-import { dayLabel } from './log-model.js';
+import { dayLabel, doughAmountLine } from './log-model.js';
 import { formatGrams } from './calculator-config.js';
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -60,6 +60,13 @@ function renderItems(version) {
     ]));
     const typed = num(sh.total_g) - trays * num(sh.trayWeight_g);
     if (typed > 0) wrap.appendChild(el('div', { class: 'log-item' }, t('calc.traysTypedPart', { g: formatGrams(typed) })));
+  }
+  // A «from a total» dough: its total, never «No products entered» (doughAmountLine says why).
+  const amount = doughAmountLine(version);
+  if (amount && amount.kind === 'total') {
+    wrap.appendChild(el('div', { class: 'log-item' }, [el('strong', {}, t('calc.historyTotal', { g: formatGrams(amount.g) }))]));
+  } else if (amount) {
+    wrap.appendChild(el('div', { class: 'log-item' }, t('calc.traysTypedPart', { g: formatGrams(amount.g) })));
   }
   if (version.sheet && num(version.sheet.extra_g) > 0) {
     wrap.appendChild(el('div', { class: 'log-item' }, t('calc.extraDough') + num(version.sheet.extra_g) + ' g'));
