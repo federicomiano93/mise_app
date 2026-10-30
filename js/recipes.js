@@ -187,6 +187,14 @@ function findInvalid() {
 export function saveRecipes() { return saveGuard.run(doSaveRecipes); }
 
 async function doSaveRecipes() {
+  // Save tapped while a pick is still linking: the pick is dropped, as Back would drop it.
+  // Left running, it could land between the confirm and the write and vanish when the saved
+  // list replaced the edited one.
+  if (addingBusy) {
+    pickToken++;
+    addingBusy = false;
+    renderEditor();
+  }
   const invalid = findInvalid();
   if (invalid !== null) {
     showErrors = true;
@@ -339,12 +347,17 @@ async function addCatalogueRecipe(catalogueId) {
   const mine = ++pickToken;
   renderEditor();
   const r = { ...newRecipe(addHidden), logic: 'total' };
-  const linked = await link(r, catalogueId, { quiet: true });
-  // Left the choice meanwhile (Back, Save, the screen closed and opened): this pick is stale.
+  let failed = null;
+  const linked = await link(r, catalogueId, { quiet: true, onFail: key => { failed = key; } });
+  // Left the choice meanwhile (Back, Save, the screen closed and opened): this pick is stale,
+  // its message included — it would be about a choice no longer on screen.
   if (mine !== pickToken) return;
   addingBusy = false;
   if (linked) { openAdded(r); return; }
+  // Redrawn BEFORE the message, so the message's OK hands focus back to the choice — drawn
+  // after, the choice took focus from behind the message and Enter picked a recipe.
   renderEditor();
+  if (failed) alertDialog(t(failed));
 }
 
 function renderSourceChooser() {
@@ -365,7 +378,9 @@ function renderSourceChooser() {
     content.appendChild(el('p', { class: 'cp-hint', role: 'alert' }, t('calc.addFrom.failed')));
   } else if (catalogueList === null) {
     content.appendChild(el('p', { class: 'cp-hint', role: 'status' }, t('calc.addFrom.loading')));
-    loadCatalogue().then(() => { if (choosingSource && activeRecipe === null) renderEditor(); });
+    // Only the read this screen started may redraw it: an older one would move focus for nothing.
+    const gen = catalogueGen;
+    loadCatalogue().then(() => { if (gen === catalogueGen && choosingSource && activeRecipe === null) renderEditor(); });
   } else if (!choices.length) {
     content.appendChild(el('p', { class: 'cp-hint' }, t('calc.addFrom.none')));
   }
@@ -828,7 +843,12 @@ const LINK_TIMEOUT_MS = 10000;
 // Resolves true once linked (or unlinked), false when it could not be (already explained).
 // `quiet`: the choice of recipe links a recipe not yet in the list, and decides itself what
 // is marked edited and drawn — a late answer must not redraw a screen opened meanwhile.
-async function link(recipe, catalogueId, { quiet = false } = {}) {
+// `onFail(key)` takes the failure message instead of showing it, for the same reason.
+async function link(recipe, catalogueId, { quiet = false, onFail = null } = {}) {
+  const fail = key => {
+    if (onFail) onFail(key); else alertDialog(t(key));
+    return false;
+  };
   if (!catalogueId) {
     // ⚠️ UNLINKING LEAVES THE TAB WITH NOTHING RATHER THAN A STALE COPY. Its own
     // ingredient list was left behind when it was linked; silently resurrecting
@@ -853,13 +873,9 @@ async function link(recipe, catalogueId, { quiet = false } = {}) {
     ]);
   } catch (err) {
     console.error('Could not give the Catalogue rows stable ids:', err);
-    alertDialog(t('calc.sourceLinkFailed'));
-    return false;
+    return fail('calc.sourceLinkFailed');
   }
-  if (rows === null) {
-    alertDialog(t('calc.sourceMissing'));
-    return false;
-  }
+  if (rows === null) return fail('calc.sourceMissing');
   source.ingredients = rows;
 
   recipe.catalogueId = catalogueId;

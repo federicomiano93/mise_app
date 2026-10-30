@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "762b1b35bd932b7e",
-      "mapSha": "78ff3e42b390a91d",
+      "sha": "07a03f708d96f30e",
+      "mapSha": "a4c9163633d6eab3",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -97,7 +97,7 @@
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
         "js/price-model.js": "e6aa115d5280fb75",
-        "js/recipes.js": "ff4af9bcdc390fc0",
+        "js/recipes.js": "1040b683c18bb6ef",
         "js/record-data.js": "260607f13e2f4033",
         "js/records.js": "79c792c647a519cd",
         "js/result-place.js": "932c2ccc0482be0c",

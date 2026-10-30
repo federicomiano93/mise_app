@@ -44,7 +44,7 @@ test('«+ Add recipe» opens the choice; a catalogue recipe is linked, named, an
   assert.match(src, /catalogueChoices\(catalogueList, recipes\(\)\)/);
   // Picking one links it through the same link() as the source box (row ids stamped first),
   // and only a link that worked adds the recipe.
-  assert.match(src, /const r = \{ \.\.\.newRecipe\(addHidden\), logic: 'total' \};\s*const linked = await link\(r, catalogueId, \{ quiet: true \}\);/);
+  assert.match(src, /const r = \{ \.\.\.newRecipe\(addHidden\), logic: 'total' \};\s*let failed = null;\s*const linked = await link\(r, catalogueId, \{ quiet: true, onFail/);
   assert.match(src, /if \(linked\) \{ openAdded\(r\); return; \}/);
   // link() names a recipe that has no name yet — the source box too.
   assert.match(src, /if \(isBlank\(recipe\.name\)\) recipe\.name = String\(source\.name \|\| ''\)\.trim\(\);/);
@@ -90,7 +90,9 @@ test('linking writes the Recipe catalogue only where a row lacks its id — neve
   const recipes = read('js/recipes.js');
   assert.match(recipes, /stampRecipeRowIds\(catalogueId, rowsToStamp\)/);
   assert.match(recipes, /setTimeout\(\(\) => reject\(new Error\('link timed out'\)\), LINK_TIMEOUT_MS\)/);
-  assert.match(recipes, /if \(rows === null\) \{\s*alertDialog\(t\('calc\.sourceMissing'\)\);\s*return false;/);
+  assert.match(recipes, /if \(rows === null\) return fail\('calc\.sourceMissing'\);/);
+  assert.match(recipes, /return fail\('calc\.sourceLinkFailed'\);/);
+  assert.match(recipes, /if \(onFail\) onFail\(key\); else alertDialog\(t\(key\)\);/);
   assert.match(recipes, /source\.ingredients = rows;/);
 });
 
@@ -100,7 +102,7 @@ test('one pick at a time; a pick left behind changes nothing; Back from the empt
   assert.match(src, /if \(mine !== pickToken\) return;/);
   // A pick being linked holds the whole choice: every button off, a line saying so, and link()
   // neither marks the list as edited nor redraws — the pick decides both when it answers.
-  assert.match(src, /link\(r, catalogueId, \{ quiet: true \}\)/);
+  assert.match(src, /link\(r, catalogueId, \{ quiet: true, onFail/);
   assert.match(src, /if \(!quiet\) \{\s*markDirty\(\);\s*renderEditor\(\);\s*\}/);
   assert.match(src, /blank\.disabled = busy;/);
   assert.doesNotMatch(src, /dirty = wasDirty/);
@@ -110,8 +112,46 @@ test('one pick at a time; a pick left behind changes nothing; Back from the empt
   assert.match(src, /freshlyAdded = false;\s*leaveChooser\(\);\s*chooserFromCalculator = false;\s*catalogueGen\+\+;/);
   // The list's own «+ Add recipe»: Back from that choice is the list.
   assert.match(src, /catalogueFailed = false;\s*chooserFromCalculator = false;\s*choosingSource = true;/);
-  // A list read from before the screen was reopened is dropped.
+  // A list read from before the screen was reopened is dropped, and redraws nothing.
   assert.match(src, /if \(gen === catalogueGen\) catalogueList = list;/);
+  assert.match(src, /if \(gen !== catalogueGen\) return false;/);
+  assert.match(src, /loadCatalogue\(\)\.then\(\(\) => \{ if \(gen === catalogueGen && choosingSource && activeRecipe === null\) renderEditor\(\); \}\);/);
+});
+
+// ── The third code review, 30 Oct 2026 ──────────────────────────────────────────────────
+test('every way out of the choice leaves it, and the waiting choice is drawn as waiting', () => {
+  const src = read('js/recipes.js');
+  const body = name => {
+    const start = src.indexOf(`function ${name}(`);
+    assert.ok(start !== -1, name);
+    const next = src.indexOf('\nfunction ', start + 1);
+    const nextAsync = src.indexOf('\nasync function ', start + 1);
+    const ends = [next, nextAsync, src.indexOf('\nexport ', start + 1)].filter(i => i !== -1);
+    return src.slice(start, Math.min(...ends));
+  };
+  // Both refused saves, the saved one, the added recipe, Back, reopening the screen.
+  assert.equal(body('doSaveRecipes').match(/leaveChooser\(\);/g).length, 3, 'two refused saves and the saved one');
+  assert.match(body('openAdded'), /leaveChooser\(\);/);
+  assert.match(body('closeRecipes'), /if \(choosingSource\) \{\s*leaveChooser\(\);/);
+  assert.match(body('openRecipes'), /leaveChooser\(\);/);
+  // The pick draws the waiting choice before it waits.
+  assert.match(body('addCatalogueRecipe'), /const mine = \+\+pickToken;\s*renderEditor\(\);/);
+  const chooser = body('renderSourceChooser');
+  assert.match(chooser, /btn\.disabled = busy;/);
+  assert.match(chooser, /blank\.disabled = busy;/);
+  assert.match(chooser, /role: 'status', tabindex: '-1' \}, t\('calc\.addFrom\.linking'\)\)/);
+  assert.match(chooser, /if \(status\) \{\s*content\.appendChild\(status\);\s*status\.focus\(\);/);
+  assert.match(chooser, /if \(!catalogueDenied\) content\.appendChild\(el\('p', \{ class: 'extra-help' \}, t\('calc\.addFrom\.intro'\)\)\);/);
+});
+
+test('Save during a pick drops it; a failed pick speaks only if still current, after the redraw', () => {
+  const src = read('js/recipes.js');
+  // Save drops the pick before its first wait (the confirm), as Back does.
+  assert.match(src, /async function doSaveRecipes\(\) \{[\s\S]*?if \(addingBusy\) \{\s*pickToken\+\+;\s*addingBusy = false;\s*renderEditor\(\);\s*\}\s*const invalid = findInvalid\(\);/);
+  // The failure message waits for the stale check, and comes after the redraw so its OK
+  // gives focus back to the choice instead of the choice taking it from behind the message.
+  assert.match(src, /link\(r, catalogueId, \{ quiet: true, onFail: key => \{ failed = key; \} \}\)/);
+  assert.match(src, /if \(mine !== pickToken\) return;[\s\S]*?if \(linked\) \{ openAdded\(r\); return; \}[\s\S]*?renderEditor\(\);\s*if \(failed\) alertDialog\(t\(failed\)\);/);
   assert.match(src, /if \(chooserFromCalculator && !dirty\) \{/);
   assert.match(src, /contentEl\(\)\.querySelector\('\.cp-add-client'\)\?\.focus\(\);/);
   // A Recipe catalogue the rules refuse is not «check the connection».
