@@ -181,6 +181,29 @@ export function typedTotalOf(recipe, version) {
   return Math.max(0, Math.round(num(sheet.total_g) - products - num(sheet.extra_g)));
 }
 
+// The amount line a history card shows for a dough its product lines do not explain:
+// { kind: 'total', g } when no product was entered (a «from a total» dough), { kind: 'typed', g }
+// for the grams typed on top of the products («orders + total»), or null.
+//
+// ⚠️ WITHOUT IT A «FROM A TOTAL» DOUGH READ «No products entered.» (Panificio Miano, 29 Oct
+// 2026: a dough confirmed on the PC looked missing on the tablet). The card listed products,
+// trays and extra only, so the grams typed — the one number such a dough is made from — showed
+// nowhere until the card was opened. Trays carry their own line, so they are left out here.
+// A sheet saved before typed_g still has its total, so no product means total_g is the amount.
+export function doughAmountLine(version) {
+  const sheet = version && version.sheet;
+  if (!sheet || sheet.trays !== undefined) return null;
+  const hasProducts = (version.items || []).some(it => num(it.qty) > 0)
+    || (version.occasional || []).some(o => (o.products || []).some(p => num(p.qty) > 0));
+  if (hasProducts) {
+    const typed = Math.round(num(sheet.typed_g));
+    return typed > 0 ? { kind: 'typed', g: typed } : null;
+  }
+  const total = Math.round(num(sheet.total_g));
+  // Extra dough alone already has its own line.
+  return total > 0 && total > Math.round(num(sheet.extra_g)) ? { kind: 'total', g: total } : null;
+}
+
 // Human-readable grouped text (client header + indented product lines + extra),
 // matching the old log text so sharing/preview keep the same look.
 export function buildLogText(items, occasional, extra) {
