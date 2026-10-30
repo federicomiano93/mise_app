@@ -6,12 +6,12 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import { createOrdersStore } from './ordersStore';
 import type { OrdersDeps, OrdersMessage } from './ordersStore';
-import type { StoredDoc } from './ordersSource';
+import type { OrdersSource, StoredDoc } from './ordersSource';
 
 // 2026-10-27 is a Tuesday.
 const TODAY = '2026-10-27';
 
-function setup(init: Parameters<typeof fakeOrdersSource>[0] = {}) {
+function setup(init: Parameters<typeof fakeOrdersSource>[0] = {}, wrap: (source: OrdersSource) => OrdersSource = s => s) {
   const source = fakeOrdersSource(init);
   let timer: (() => void) | null = null;
   let busy = 0;
@@ -25,7 +25,7 @@ function setup(init: Parameters<typeof fakeOrdersSource>[0] = {}) {
     },
     online: () => true,
   };
-  const store = createOrdersStore(source, deps);
+  const store = createOrdersStore(wrap(source), deps);
   const messages: OrdersMessage[] = [];
   store.onMessage(m => messages.push(m));
   const settle = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -73,6 +73,24 @@ describe('ordersStore — loading', () => {
     stops.push(() => h.store.stop());
     await h.settle();
     expect(h.store.getSnapshot().draftBroken).toBe(true);
+  });
+
+  it('⚠️ says when the SERVER has answered for the suppliers, the ingredients and the draft, apart from the copy on the phone (the reminders wait for it)', async () => {
+    const replay: Array<() => void> = [];
+    const h = setup({ suppliers: [mill], ingredients: [flour], draft: { entries: { flour: { qty: 1 } }, days: { mill: TODAY } } }, base => ({
+      ...base,
+      watchSuppliers: (onChange, onError) => base.watchSuppliers((list, meta) => { onChange(list, { fromServer: false }); replay.push(() => onChange(list, meta)); }, onError),
+      watchIngredients: (onChange, onError) => base.watchIngredients((list, meta) => { onChange(list, { fromServer: false }); replay.push(() => onChange(list, meta)); }, onError),
+      watchDraft: (onChange, onError) => base.watchDraft((data, meta) => { onChange(data, { fromServer: false }); replay.push(() => onChange(data, meta)); }, onError),
+    }));
+    h.store.start();
+    stops.push(() => h.store.stop());
+    await h.settle();
+    const cached = h.store.getSnapshot();
+    expect(cached.suppliersLoaded && cached.ingredientsLoaded && cached.draftLoaded).toBe(true);
+    expect(cached.serverSeen).toEqual({ suppliers: false, ingredients: false, draft: false });
+    replay.forEach(run => run());
+    expect(h.store.getSnapshot().serverSeen).toEqual({ suppliers: true, ingredients: true, draft: true });
   });
 
   it('stop() closes every listener (P14)', async () => {

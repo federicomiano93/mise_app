@@ -57,6 +57,12 @@ describe('buildConfirmGroups', () => {
     expect(group).toMatchObject({ later: false, date: '2026-10-26' });
   });
 
+  it('files under the day a pending banner pinned, whatever the draft says, and is not «later»', () => {
+    const { draft, lens } = setup({ 'i-rye': { qty: 1 } }, { 's-alp': '2026-10-31' });
+    const [group] = buildConfirmGroups({ ids: ['s-alp'], checks: [], lens, draft, today: TODAY, pinnedDay: '2026-10-27' });
+    expect(group).toMatchObject({ date: '2026-10-27', later: false });
+  });
+
   it('leaves out a supplier that is gone and one with nothing typed', () => {
     const { draft, lens } = setup({ 'i-rye': { qty: 1 } });
     expect(buildConfirmGroups({ ids: ['s-gone', 's-zed'], checks: [], lens, draft, today: TODAY })).toEqual([]);
