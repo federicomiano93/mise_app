@@ -31,8 +31,9 @@ export interface ConfirmGroup {
 
 // A supplier with nothing above zero, or one that is gone from the list, has no group: there is nothing to confirm for it.
 export function buildConfirmGroups(
-  { ids, checks, lens, draft, today }:
-  { ids: readonly string[]; checks: readonly RecordCheck[]; lens: OrdersLens; draft: DraftView; today: string },
+  { ids, checks, lens, draft, today, pinnedDay = null }:
+  // `pinnedDay`: the day a pending banner's «Placed yesterday» pinned (PlaceConfirmScreen pendingDayIn): the order is recorded under it.
+  { ids: readonly string[]; checks: readonly RecordCheck[]; lens: OrdersLens; draft: DraftView; today: string; pinnedDay?: string | null },
 ): ConfirmGroup[] {
   const groups: ConfirmGroup[] = [];
   for (const supplierId of ids) {
@@ -51,9 +52,9 @@ export function buildConfirmGroups(
     groups.push({
       supplierId,
       name: supplierLabel(supplier),
-      date: recordDateFor(draft, supplierId, today),
+      date: pinnedDay ?? recordDateFor(draft, supplierId, today),
       exists: checks.find(check => check.supplierId === supplierId)?.exists === true,
-      later: isFutureDay(rawDayFor(draft, supplierId, today), today),
+      later: pinnedDay === null && isFutureDay(rawDayFor(draft, supplierId, today), today),
       rows,
     });
   }

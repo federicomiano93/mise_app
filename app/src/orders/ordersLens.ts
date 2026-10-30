@@ -70,6 +70,9 @@ export interface OrdersLens {
   // ones included: what placing records and clears, and what «Clear quantities» clears (js/orders/orders-main.js
   // ingredientsOf(…, orderIngredients(), { activeOnly: false })).
   linesOf(supplierId: string): readonly LensIngredient[];
+  // Every line as it is ordered NOW (overrides applied), switched-off ones included: the list `linesOf` draws from. What the
+  // reminders read (an order typed on an earlier day and never placed, an addition nobody was told about).
+  readonly lines: readonly LensIngredient[];
 }
 
 const isActive = (item: object) => (item as { readonly active?: unknown }).active !== false;
@@ -102,6 +105,7 @@ export function buildOrdersLens(input: LensInput): OrdersLens {
 
   return {
     suppliers: list,
+    lines: lens,
     supplierById: id => byId.get(id),
 
     rowsFor(supplierId) {

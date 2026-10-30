@@ -98,6 +98,13 @@ function afterSendIn(state: unknown): boolean {
   return typeof state === 'object' && state !== null && (state as { afterSend?: unknown }).afterSend === true;
 }
 
+// A pending banner's «Placed yesterday» (step 3f-6, parity X9): the day the order really went out, as the banner showed it. Only a real
+// day that has come counts: a day written into the state by hand, or one in the future, is ignored and the screen is the usual one.
+export function pendingDayIn(state: unknown, today: string): string | null {
+  const day = typeof state === 'object' && state !== null ? (state as { pendingDay?: unknown }).pendingDay : undefined;
+  return typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day) && day <= today ? day : null;
+}
+
 function idsIn(state: unknown): string[] {
   const ids = typeof state === 'object' && state !== null ? (state as { ids?: unknown }).ids : undefined;
   return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string' && id !== '') : [];
@@ -128,7 +135,10 @@ function PlaceConfirmScreen({ ids, lens, leave, toList }: Props) {
       const now = latest.current;
       const today = todayISO();
       const draft = store.getSnapshot().draft;
-      const items = ids.map(supplierId => ({ supplierId, date: recordDateFor(draft, supplierId, today) }));
+      const pinned = ids.length === 1 ? pendingDayIn(state, today) : null;
+      // ⚠️ FROM A PENDING BANNER the record goes under the day the banner showed, not under the draft's stamp (which touching any row
+      // of that supplier restamps): «Placed yesterday» must file the order under yesterday.
+      const items = ids.map(supplierId => ({ supplierId, date: pinned ?? recordDateFor(draft, supplierId, today) }));
       const checks = await store.checkRecords(items, now.t('ord.noSupplier'));
       if (!live) return;
       const { t: tt, lens: current, leave: back, alert: tell, say: speak } = latest.current;
@@ -150,7 +160,7 @@ function PlaceConfirmScreen({ ids, lens, leave, toList }: Props) {
       }
 
       // The working copy, once.
-      const groups = buildConfirmGroups({ ids, checks, lens: current, draft: store.getSnapshot().draft, today });
+      const groups = buildConfirmGroups({ ids, checks, lens: current, draft: store.getSnapshot().draft, today, pinnedDay: pinned });
       if (groups.length === 0) {
         // Everything selected has since lost its rows — another phone placed the order, or it was cleared. Said, not ignored.
         speak(tt('ord.nothingLeft'), 5000);
@@ -196,6 +206,8 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
   const [askSent, sentDialog] = useSentCheck();
   const [send, sendDialogs] = useSendOrder(lens);
   const afterSend = afterSendIn(state);
+  // From a pending banner's «Placed yesterday»: it WAS sent (that is what the button says), so it is not asked again (parity X9).
+  const alreadySent = ids.length === 1 && pendingDayIn(state, todayISO()) !== null;
   const titleId = useId();
   const usualIdBase = useId();
   // ⚠️ THE «EXTRA DIGIT» LINE IS WRITTEN ONLY AFTER THE FIRST PAINT: its status region must be on the page before it speaks,
@@ -361,6 +373,11 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
       const items = confirmedItems(groups, typed);
       if (items.length === 0) {
         await alert({ title: t('ord.nothingLeft'), message: t('ord.confirm.allZero'), okLabel: t('common.ok') });
+        return;
+      }
+      // From a pending banner's «Placed …»: recorded as it is, with nothing asked.
+      if (alreadySent) {
+        await record(items);
         return;
       }
       // ⚠️ «DID YOU SEND IT?» COMES BEFORE ANYTHING IS RECORDED: opening WhatsApp is not sending. Only suppliers with

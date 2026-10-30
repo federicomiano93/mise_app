@@ -97,3 +97,34 @@
 .switchRow > :last-child {
   flex: none;
 }
+
+/* The notices block: words on top of each other, the enable button after them. An icon beside text is a flex row. */
+.block {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+}
+
+.block > h2,
+.block > p {
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.status {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--ok-ink);
+  font-weight: 600;
+}
+
+.status > svg {
+  flex: none;
+}
+
+.enable {
+  align-self: flex-start;
+}

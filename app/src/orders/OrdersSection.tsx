@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
+import { todayISO } from '@mise/shared/day';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS, Page } from '../shell/Page';
@@ -21,6 +22,7 @@ import { PlaceAllConfirmScreen, SupplierConfirmScreen } from './PlaceConfirmScre
 import { SupplierItemsScreen } from './SupplierItemsScreen';
 import { SupplierOrderScreen } from './SupplierOrderScreen';
 import { SupplierPicker } from './SupplierPicker';
+import { PendingLatchProvider, pendingNow, usePendingLatch } from './pendingLatch';
 import { LONG_MS } from './useClearQuantities';
 import {
   CLEAR_OPENER, HandBackProvider, HISTORY_DOOR, INCOMING_DOOR, ITEMS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, REORDER_DOOR, SEND_OPENER,
@@ -29,7 +31,7 @@ import {
 import { FROM_LIST, replacedState } from './ordersNav';
 import {
   CLEAR_PATH, INCOMING_PATH, ORDERS_PATH, PLACE_ALL_PATH, REORDER_PATH, SEND_PATH, SETTINGS_PATH, historyDayPath, historyEditPath,
-  incomingMissingPath, parseOrdersPath, supplierItemsPath, supplierPath,
+  incomingMissingPath, parseOrdersPath, supplierConfirmPath, supplierItemsPath, supplierPath,
 } from './ordersPath';
 import type { OrdersView } from './ordersPath';
 import { buildOrdersLens } from './ordersLens';
@@ -48,7 +50,9 @@ export default function OrdersSection() {
   return (
     <OrdersProvider>
       <StatusMessageProvider>
-        <OrdersScreen />
+        <PendingLatchProvider>
+          <OrdersScreen />
+        </PendingLatchProvider>
       </StatusMessageProvider>
     </OrdersProvider>
   );
@@ -118,6 +122,15 @@ function OrdersLayout({ view }: { view: ShownView }) {
   }), [snapshot.suppliers, snapshot.suppliersLoaded, snapshot.ingredients, snapshot.draft.entries, snapshot.config.supplierOrder, noSupplierName]);
   const ready = snapshot.suppliersLoaded && snapshot.ingredientsLoaded && snapshot.draftLoaded;
 
+  // ⚠️ LOOK FOR ORDERS TYPED ON AN EARLIER DAY AND NEVER PLACED ONCE PER OPENING, once the suppliers, the ingredients and the draft
+  // have ALL arrived (any of them missing would make every supplier look empty). The set found is kept above the routes, so it
+  // survives the confirm screen and back (pendingLatch.tsx).
+  const pendingLatch = usePendingLatch();
+  useEffect(() => {
+    if (!ready || pendingLatch.latched !== null) return;
+    pendingLatch.latch(pendingNow(lens, snapshot.draft, todayISO()).map(row => row.supplier.id as string));
+  }, [ready, pendingLatch, lens, snapshot.draft]);
+
   // ⚠️ THIS SECTION OWNS THE SCROLL for the moves inside itself (shell/scrollArea.tsx): its list and its suppliers are
   // separate addresses, so the shell's reset to the top at every address would send the list back to the top at each supplier
   // on the split, and bring Back on a phone to the top of the list while the focus went to a row far below.
@@ -143,6 +156,17 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const openPlaceAll = () => { open(PLACE_ALL_OPENER, PLACE_ALL_PATH); };
   const openClear = () => { open(CLEAR_OPENER, CLEAR_PATH); };
   const openSend = () => { open(SEND_OPENER, SEND_PATH); };
+  // «Placed yesterday» on a pending banner: the supplier's confirm screen, recording under the banner's day without asking whether it
+  // was sent (it was: that is what the button says). The list is right behind the screen, so Back and a recorded order both go to it.
+  const openPending = (id: string, day: string) => {
+    handBack.expect(supplierOpener(id));
+    if (split && view.kind !== 'list') {
+      void navigate(supplierConfirmPath(id), { replace: true, state: { ...replacedState(state), pendingDay: day } });
+    } else {
+      if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
+      void navigate(supplierConfirmPath(id), { state: { ...FROM_LIST, toList: 1, pendingDay: day } });
+    }
+  };
   const openSettings = () => { open(SETTINGS_OPENER, SETTINGS_PATH); };
   // Back from Incoming and from «To re-order» gives the focus to the list's door (the debt banner opens Incoming the same way).
   const openIncoming = () => { open(INCOMING_DOOR, INCOMING_PATH); };
@@ -240,6 +264,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
                 onSettings={openSettings}
                 onIncoming={openIncoming}
                 onReorder={openReorder}
+                onOpenPending={openPending}
               />
             </PartBoundary>
           </div>
