@@ -5,7 +5,7 @@ import {
   restoreRevealed, clearRevealed, restoreLock, clearLock, getLock,
 } from './calc.js';
 import { saveDay, editTab, renderLog } from './log.js';
-import { openRecipes, closeRecipes, goHomeFromRecipes, saveRecipes } from './recipes.js';
+import { openRecipes, addRecipe, closeRecipes, goHomeFromRecipes, saveRecipes } from './recipes.js';
 import { openSettings } from './calculator-settings.js';
 import './log-settings.js';
 import { shareMarketOrder, closeLoafModal, sendWithLoaves, closeListPicker, closeWhoPicker } from './whatsapp.js';
@@ -366,7 +366,8 @@ function renderAll() {
   if (host) {
     host.textContent = '';
     recipes.forEach(r => host.appendChild(buildRecipePanel(r, effectiveRecipe(r))));
-    if (emptyReason) host.appendChild(buildEmptyPanel(emptyReason, openRecipes));
+    // «Add a recipe» goes straight to the choice of recipe; «Choose which to show» to the list.
+    if (emptyReason) host.appendChild(buildEmptyPanel(emptyReason, emptyReason === 'no-recipes' ? addRecipe : openRecipes));
   }
 
   // ⚠️ Expire BEFORE restoring: doing it after would paint yesterday's numbers and

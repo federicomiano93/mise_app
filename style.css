@@ -1290,6 +1290,9 @@ input.cp-prod-weight {
   border-radius: 0;
 }
 .wa-entry-card .wa-entry-open:active { background: var(--surface2); }
+#recipe-content .wa-entry-open:disabled,
+#recipe-content .cp-add-client:disabled { opacity: 0.5; cursor: default; }
+#recipe-content .cp-add-client + .cp-hint { margin-top: 10px; }
 .wa-entry-card .cp-del-icon { padding: 0 16px; }
 .wa-entry-open { flex: 1; margin-bottom: 12px; }
 .wa-entry-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; text-align: left; }

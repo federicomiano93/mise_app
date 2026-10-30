@@ -14,7 +14,7 @@
 // No DOM, no Firestore. Every rule below is asserted in a unit test, because the
 // numbers it decides are how much dough gets made.
 
-import { ridOf } from './catalogue/guided-model.js';
+import { ridOf, withRowIds } from './catalogue/guided-model.js';
 // The Catalogue's own unit table, never a copy of it: a second table is a second
 // place for kg to drift. No new coupling either — guided-model.js above already
 // imports catalogue-model.js, so this file depended on it before this import.
@@ -79,6 +79,30 @@ export function linkedRecipeIds(recipes) {
 
 export function isLinked(recipe) {
   return !!String(recipe?.catalogueId || '').trim();
+}
+
+// A Catalogue recipe's rows with an id stamped on each row that lacks one, or null when
+// every row already has its own — and then nothing needs writing. withRowIds hands back the
+// very same row object for a row it keeps, which is what tells the two apart.
+export function rowsToStamp(rows) {
+  const current = Array.isArray(rows) ? rows : [];
+  const stamped = withRowIds(current);
+  return stamped.every((row, i) => row === current[i]) ? null : stamped;
+}
+
+// The Catalogue recipes «+ Add recipe» offers, by name (an unnamed one last), each marked
+// `used` when a Calculator recipe already takes it — linked, or imported as 'cat-<id>'.
+// Marked, never hidden: a second tab of the same recipe with another logic is legitimate.
+export function catalogueChoices(catalogue, calculatorRecipes) {
+  const used = new Set(linkedRecipeIds(calculatorRecipes));
+  for (const r of calculatorRecipes || []) {
+    const id = String(r?.id || '');
+    if (id.startsWith('cat-')) used.add(id.slice(4));
+  }
+  return (catalogue || [])
+    .filter(c => c && String(c.id || '').trim())
+    .map(c => ({ id: c.id, name: String(c.name || '').trim(), used: used.has(c.id) }))
+    .sort((a, b) => (!a.name - !b.name) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
 }
 
 // The effective recipe a Calculator tab should use.
