@@ -86,3 +86,13 @@ describe('ordersLens — a supplier\'s rows', () => {
     expect(lensOf({ entries: { semola: { qty: 1, stock: 0 } } }).filledFor('mill')).toBe(1);
   });
 });
+
+describe('ordersLens — lines (what the reminders read)', () => {
+  it('holds every line as it is ordered now: overrides applied, switched-off lines and «No supplier» included', () => {
+    const lens = lensOf({ entries: { milk: { qty: 2, stock: 0, supplierId: 'mill' } } });
+    const filed = Object.fromEntries(lens.lines.map(line => [line.id, line.supplierId]));
+    expect(filed).toEqual({ flour25: 'mill', flour5: 'mill', semola: 'mill', milk: 'mill', orphan: 'no-supplier' });
+    // The same lines `linesOf` draws from.
+    expect(lens.linesOf('mill').map(line => line.id).sort()).toEqual(['flour25', 'flour5', 'milk', 'semola']);
+  });
+});
