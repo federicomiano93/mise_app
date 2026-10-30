@@ -58,6 +58,12 @@
 // reminders.ts, untold-changes.ts, alert-dismissal.ts and holidays-it.ts ARE paired (step 3f-6, Reminders and the bell): full ports of
 // js/orders/reminders.js, untold-changes.js (completed in 3f-6: `askedToday`, `orderedToday` and `untoldChanges` joined
 // `confirmedEntries`), alert-dismissal.js and holidays-it.js.
+// holidays.ts and notifications.ts are NOT paired (step 3f-6, adapted on purpose): holidays.ts has no module state, no localStorage and no
+// fetch — the UK list is an argument (with a built-in default that now runs to 2028, finding F-8) and the download and its cache move to
+// Mise 2's data layer — and adds `ukDatesFromFeed`, `HOLIDAY_COUNTRIES` and the exported constants, leaving out `refreshHolidays`;
+// notifications.ts is a partial port (only `computeAlerts` and `isReminderDue`; the renderers and `maybeNotify` become screen code) whose
+// alerts are DATA, not words (finding F-6: the original pours English «tomorrow», English weekdays and raw ISO dates into Italian
+// sentences). Their specs (holidays.spec.ts, notifications.spec.ts) run the shared assertions against both files and test the rest on the port.
 // order-image.ts and send-chooser.ts are NOT paired (step 3f-3, sending): partial ports — the order picture's layout without
 // the canvas, the File and the share sheet, and the send chooser's offers, links and photo batch without its screen
 // (`chooseAndSend`); their specs compare names, constants and shapes themselves.
