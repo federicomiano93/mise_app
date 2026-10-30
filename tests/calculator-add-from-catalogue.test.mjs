@@ -44,8 +44,8 @@ test('«+ Add recipe» opens the choice; a catalogue recipe is linked, named, an
   assert.match(src, /catalogueChoices\(catalogueList, recipes\(\)\)/);
   // Picking one links it through the same link() as the source box (row ids stamped first),
   // and only a link that worked adds the recipe.
-  assert.match(src, /const r = \{ \.\.\.newRecipe\(addHidden\), logic: 'total' \};\s*const linked = await link\(r, catalogueId\);/);
-  assert.match(src, /if \(linked && choosingSource\) \{ openAdded\(r\); return; \}/);
+  assert.match(src, /const r = \{ \.\.\.newRecipe\(addHidden\), logic: 'total' \};\s*const linked = await link\(r, catalogueId, \{ quiet: true \}\);/);
+  assert.match(src, /if \(linked\) \{ openAdded\(r\); return; \}/);
   // link() names a recipe that has no name yet — the source box too.
   assert.match(src, /if \(isBlank\(recipe\.name\)\) recipe\.name = String\(source\.name \|\| ''\)\.trim\(\);/);
   // A recipe just chosen is not watched until Save: the editor shows the listed copy instead of
@@ -56,13 +56,13 @@ test('«+ Add recipe» opens the choice; a catalogue recipe is linked, named, an
   assert.match(src, /const src = editorRecipe\(recipe\);/);
   assert.equal(src.match(/effectiveRecipe\(/g).length, 1, 'only editorRecipe asks the live link');
   // Back from the choice goes to the list, one level up (or to the empty Calculator it came from).
-  assert.match(src, /if \(choosingSource\) \{\s*choosingSource = false;[\s\S]*?renderEditor\(\);\s*contentEl\(\)/);
+  assert.match(src, /if \(choosingSource\) \{\s*leaveChooser\(\);[\s\S]*?renderEditor\(\);\s*contentEl\(\)/);
 });
 
 test('the choice speaks both languages', () => {
   const d = _dictionaries();
   for (const key of ['calc.addFrom.intro', 'calc.addFrom.blank', 'calc.addFrom.catalogue', 'calc.addFrom.used',
-    'calc.addFrom.loading', 'calc.addFrom.none', 'calc.addFrom.failed']) {
+    'calc.addFrom.loading', 'calc.addFrom.none', 'calc.addFrom.failed', 'calc.addFrom.linking']) {
     assert.ok(d.en[key] && d.it[key], key);
     assert.match(read('js/recipes.js'), new RegExp(`t\\('${key.replace(/\./g, '\\.')}'\\)`), key);
   }
@@ -98,10 +98,20 @@ test('one pick at a time; a pick left behind changes nothing; Back from the empt
   const src = read('js/recipes.js');
   assert.match(src, /const mine = \+\+pickToken;/);
   assert.match(src, /if \(mine !== pickToken\) return;/);
-  assert.match(src, /dirty = wasDirty;/);
-  // Leaving the choice or reopening the screen makes a late answer stale and frees the guard.
-  assert.match(src, /choosingSource = false;\s*pickToken\+\+;\s*addingBusy = false;/);
-  assert.match(src, /addingBusy = false;\s*pickToken\+\+;/);
+  // A pick being linked holds the whole choice: every button off, a line saying so, and link()
+  // neither marks the list as edited nor redraws — the pick decides both when it answers.
+  assert.match(src, /link\(r, catalogueId, \{ quiet: true \}\)/);
+  assert.match(src, /if \(!quiet\) \{\s*markDirty\(\);\s*renderEditor\(\);\s*\}/);
+  assert.match(src, /blank\.disabled = busy;/);
+  assert.doesNotMatch(src, /dirty = wasDirty/);
+  // Every way out of the choice — and reopening the screen — makes a late answer stale.
+  assert.match(src, /function leaveChooser\(\) \{\s*choosingSource = false;\s*pickToken\+\+;\s*addingBusy = false;\s*\}/);
+  assert.equal(src.match(/^\s+choosingSource = false;/gm).length, 1, 'only leaveChooser leaves the choice');
+  assert.match(src, /freshlyAdded = false;\s*leaveChooser\(\);\s*chooserFromCalculator = false;\s*catalogueGen\+\+;/);
+  // The list's own «+ Add recipe»: Back from that choice is the list.
+  assert.match(src, /catalogueFailed = false;\s*chooserFromCalculator = false;\s*choosingSource = true;/);
+  // A list read from before the screen was reopened is dropped.
+  assert.match(src, /if \(gen === catalogueGen\) catalogueList = list;/);
   assert.match(src, /if \(chooserFromCalculator && !dirty\) \{/);
   assert.match(src, /contentEl\(\)\.querySelector\('\.cp-add-client'\)\?\.focus\(\);/);
   // A Recipe catalogue the rules refuse is not «check the connection».

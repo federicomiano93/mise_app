@@ -88,10 +88,9 @@ export function openRecipes() {
   openRow = null;
   focusRow = null;
   freshlyAdded = false;
-  choosingSource = false;
+  leaveChooser();
   chooserFromCalculator = false;
-  addingBusy = false;
-  pickToken++;
+  catalogueGen++;
   // The Recipe catalogue's names are read again each time this screen opens (one read of the
   // list, only when the choice or the source box needs it): a recipe written there since shows.
   catalogueList = null;
@@ -121,9 +120,7 @@ function isEmptyRecipe(r) {
 export async function closeRecipes() {
   if (saveGuard.saving) return;
   if (choosingSource) {
-    choosingSource = false;
-    pickToken++;
-    addingBusy = false;
+    leaveChooser();
     // Opened from the empty Calculator, Back goes straight back there: nothing was added.
     if (chooserFromCalculator && !dirty) {
       chooserFromCalculator = false;
@@ -193,7 +190,7 @@ async function doSaveRecipes() {
   const invalid = findInvalid();
   if (invalid !== null) {
     showErrors = true;
-    choosingSource = false;
+    leaveChooser();
     activeRecipe = invalid;
     renderEditor();
     alertDialog(t('calc.pleaseGiveEveryRecipe'));
@@ -203,7 +200,7 @@ async function doSaveRecipes() {
   const badTray = recipes().findIndex(r => usesTrays(logicOf(r)) && !isValidTrayWeight(r.trayWeight));
   if (badTray !== -1) {
     showErrors = true;
-    choosingSource = false;
+    leaveChooser();
     activeRecipe = null;
     openRow = badTray;
     renderEditor();
@@ -218,7 +215,7 @@ async function doSaveRecipes() {
     showErrors = false;
     dirty = false;
     freshlyAdded = false;
-    choosingSource = false;
+    leaveChooser();
     // The list is rebuilt: keyboard focus goes back to the row that was being edited.
     focusRow = activeRecipe;
     activeRecipe = null;
@@ -291,6 +288,7 @@ function renderRecipeList() {
     }))) return;
     addHidden = full;
     catalogueFailed = false;
+    chooserFromCalculator = false;
     choosingSource = true;
     renderEditor();
   });
@@ -300,6 +298,14 @@ function renderRecipeList() {
 }
 
 // ── Adding a recipe: the choice ────────────────────────────────────────────────
+// Every way out of the choice goes through here, so a pick still waiting becomes stale and
+// can never land on — or redraw — whatever screen came next.
+function leaveChooser() {
+  choosingSource = false;
+  pickToken++;
+  addingBusy = false;
+}
+
 function newRecipe(hidden) {
   return {
     id: genId('r'), name: '', logic: 'orders', trayWeight: DEFAULT_TRAY_WEIGHT, ingredients: [],
@@ -312,7 +318,7 @@ function openAdded(r) {
   recipes().push(r);
   markDirty();
   freshlyAdded = true;
-  choosingSource = false;
+  leaveChooser();
   activeRecipe = recipes().length - 1;
   renderEditor();
 }
@@ -323,21 +329,22 @@ function addBlankRecipe() { openAdded(newRecipe(addHidden)); }
 // (toCalculatorRecipe). A catalogue recipe is written as amounts for one dough; «from orders»
 // would also leave the tab empty in a venue with no clients in the Calculator. The logic is
 // changed in the list row like any other.
+//
+// ⚠️ WHILE A PICK IS LINKING, THE WHOLE CHOICE WAITS — every button off, a line saying so.
+// On a slow line the wait can be 10 s, and a second tap (another recipe, or «new recipe»)
+// used to start a second piece of work that the first one's answer then trampled.
 async function addCatalogueRecipe(catalogueId) {
   if (addingBusy) return;
   addingBusy = true;
   const mine = ++pickToken;
-  const wasDirty = dirty;
-  contentEl().querySelectorAll('.wa-entry-open').forEach(b => { b.disabled = true; });
+  renderEditor();
   const r = { ...newRecipe(addHidden), logic: 'total' };
-  const linked = await link(r, catalogueId);
+  const linked = await link(r, catalogueId, { quiet: true });
   // Left the choice meanwhile (Back, Save, the screen closed and opened): this pick is stale.
   if (mine !== pickToken) return;
   addingBusy = false;
-  if (linked && choosingSource) { openAdded(r); return; }
-  // A pick that did not land changes nothing: link() marked the list as edited.
-  dirty = wasDirty;
-  if (choosingSource) renderEditor();
+  if (linked) { openAdded(r); return; }
+  renderEditor();
 }
 
 function renderSourceChooser() {
@@ -345,7 +352,8 @@ function renderSourceChooser() {
   setHomeVisible(false);
   const content = contentEl();
   content.textContent = '';
-  content.appendChild(el('p', { class: 'extra-help' }, t('calc.addFrom.intro')));
+  // Where the Recipe catalogue is closed to this account the intro would offer what is not there.
+  if (!catalogueDenied) content.appendChild(el('p', { class: 'extra-help' }, t('calc.addFrom.intro')));
 
   // The Recipe catalogue first — what was asked for — and the blank recipe last, where the
   // list screen keeps its own «+ Add recipe».
@@ -362,6 +370,7 @@ function renderSourceChooser() {
     content.appendChild(el('p', { class: 'cp-hint' }, t('calc.addFrom.none')));
   }
   const busy = addingBusy;
+  const status = busy ? el('p', { class: 'cp-hint', role: 'status', tabindex: '-1' }, t('calc.addFrom.linking')) : null;
   const buttons = choices.map(c => {
     const btn = el('button', { class: 'drill-item wa-entry-open', type: 'button' }, [
       el('span', { class: 'wa-entry-text' }, [
@@ -377,9 +386,15 @@ function renderSourceChooser() {
   });
 
   const blank = el('button', { class: 'cp-add-client', type: 'button' }, t('calc.addFrom.blank'));
+  blank.disabled = busy;
   blank.addEventListener('click', addBlankRecipe);
   content.appendChild(blank);
-  (buttons[0] || blank).focus();
+  if (status) {
+    content.appendChild(status);
+    status.focus();
+  } else {
+    (buttons[0] || blank).focus();
+  }
 }
 
 function logicOf(r) { return LOGICS.includes(r.logic) ? r.logic : 'orders'; }
@@ -741,13 +756,16 @@ let catalogueList = null;
 let catalogueLoad = null;     // the read in flight, shared by the choice and the source box
 let catalogueFailed = false;  // the last read failed: say so, and try again on the next «+ Add recipe»
 let catalogueDenied = false;  // the rules refuse the list (Recipe catalogue off): not a connection problem
+let catalogueGen = 0;         // bumped when the screen opens: an older read's answer is dropped
 
 function loadCatalogue() {
   if (!catalogueLoad) {
+    const gen = catalogueGen;
     catalogueLoad = getCatalogueRecipesOnce()
-      .then(list => { catalogueList = list; return true; })
+      .then(list => { if (gen === catalogueGen) catalogueList = list; return gen === catalogueGen; })
       .catch(err => {
         console.warn('The Catalogue could not be listed:', err);
+        if (gen !== catalogueGen) return false;
         if (err && err.code === 'permission-denied') catalogueDenied = true;
         catalogueFailed = true;
         catalogueLoad = null;
@@ -808,7 +826,9 @@ const LINK_TIMEOUT_MS = 10000;
 //
 // withRowIds is idempotent, so a recipe already carrying ids is untouched.
 // Resolves true once linked (or unlinked), false when it could not be (already explained).
-async function link(recipe, catalogueId) {
+// `quiet`: the choice of recipe links a recipe not yet in the list, and decides itself what
+// is marked edited and drawn — a late answer must not redraw a screen opened meanwhile.
+async function link(recipe, catalogueId, { quiet = false } = {}) {
   if (!catalogueId) {
     // ⚠️ UNLINKING LEAVES THE TAB WITH NOTHING RATHER THAN A STALE COPY. Its own
     // ingredient list was left behind when it was linked; silently resurrecting
@@ -849,8 +869,10 @@ async function link(recipe, catalogueId) {
   // The leavening has to be chosen again: it now points at a row in a different
   // recipe, and guessing by name is the thing being avoided.
   delete recipe.leaveningRid;
-  markDirty();
-  renderEditor();
+  if (!quiet) {
+    markDirty();
+    renderEditor();
+  }
   return true;
 }
 

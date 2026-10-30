@@ -1885,6 +1885,7 @@ const DICTIONARIES = Object.freeze({
     'calc.addFrom.loading': 'Loading the Recipe catalogue…',
     'calc.addFrom.none': 'The Recipe catalogue has no recipes yet.',
     'calc.addFrom.failed': 'The Recipe catalogue could not be loaded: check the connection.',
+    'calc.addFrom.linking': 'Linking the recipe…',
     // Products are edited inside each client (Settings → Clients): there is no Products screen.
     'calc.recipeUsedByProducts': { one: 'This recipe is used by {n} product. Reassign or delete it in Settings → Clients first.', other: 'This recipe is used by {n} products. Reassign or delete them in Settings → Clients first.' },
     'calc.deleteRecipeNamed': 'Delete the {name} recipe?',
@@ -4873,6 +4874,7 @@ const DICTIONARIES = Object.freeze({
     'calc.addFrom.loading': 'Sto caricando il Ricettario…',
     'calc.addFrom.none': 'Il Ricettario non ha ancora ricette.',
     'calc.addFrom.failed': 'Non riesco a caricare il Ricettario: controlla la connessione.',
+    'calc.addFrom.linking': 'Sto collegando la ricetta…',
     'calc.recipeUsedByProducts': { one: 'Questa ricetta è usata da {n} prodotto. Prima collegalo a un’altra ricetta o eliminalo in Impostazioni → Clienti.', other: 'Questa ricetta è usata da {n} prodotti. Prima collegali a un’altra ricetta o eliminali in Impostazioni → Clienti.' },
     'calc.deleteRecipeNamed': 'Vuoi eliminare la ricetta {name}?',
     'calc.deleteThisRecipe': 'Vuoi eliminare questa ricetta?',
