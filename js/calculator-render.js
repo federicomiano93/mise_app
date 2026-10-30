@@ -193,6 +193,11 @@ export function buildRecipePanel(recipe, resolved) {
     ]));
   }
 
+  // Why a linked tab cannot be calculated, filled and shown by calc.js (paintSourceProblem).
+  content.appendChild(el('p', {
+    class: 'cp-source-problem calc-source-problem', id: id + '-source-problem', role: 'status', hidden: '',
+  }));
+
   content.appendChild(el('button', { class: 'confirm-btn-primary', id: id + '-day-confirm', type: 'button', 'data-confirm-tab': id }, t('ui.confirm')));
   content.appendChild(el('button', { class: 'confirm-btn-primary is-edit', id: id + '-edit-btn', type: 'button' }, [icon('pencil', 16), t('ui.edit')]));
 

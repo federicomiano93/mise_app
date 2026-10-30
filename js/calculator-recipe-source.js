@@ -181,6 +181,17 @@ export function canCalculate(resolved) {
   return !!resolved && !resolved.problem && resolved.ingredients.length > 0;
 }
 
+// Does the tab show the sentence saying why it cannot be calculated?
+//
+// ⚠️ A REFUSAL THAT SAYS NOTHING READS AS A BROKEN APP. The tab used to refuse in
+// silence — the total typed, no ingredient, no sentence — and the reason came out
+// only after Confirm (Panificio Miano, 30 Oct 2026: «Le ricette nel calcolatore non
+// funzionano»). Only a LINKED tab: an own recipe with no rows is still being written
+// in Settings. And not while the recipe is on its way, which is not «it is gone».
+export function showsSourceProblem(recipe, resolved, stillLoading) {
+  return isLinked(recipe) && !!resolved?.problem && !stillLoading;
+}
+
 // Settings → Recipes: the leavening dropdown's answer, written on the tab being
 // edited (a working copy). `value` is the option's value — '' for «nothing rises»,
 // a row key, or '#<index>' for an own row that has no key yet. `linkedRows` is the
