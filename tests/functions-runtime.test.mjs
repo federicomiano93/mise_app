@@ -28,6 +28,9 @@ const DECOMMISSION = {
   18: '2025-10-30',
   20: '2026-10-30',
   22: '2027-10-30',
+  // GA for 2nd-gen functions (all of ours) and in firebase-tools 15.26.0, the
+  // CLI CI deploys with; Google publishes 2028-10-31 for it.
+  24: '2028-10-31',
 };
 
 test('the functions runtime is one Firebase actually offers', () => {

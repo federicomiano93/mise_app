@@ -11,12 +11,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      # ⚠️ 22 IS NOT A PREFERENCE, IT IS THE VERSION THE SERVER RUNS. Every
-      # deployed function is on nodejs22 and `functions/package.json` says
-      # `"engines": { "node": "22" }`, so a CI on anything else tests the code on
+      # ⚠️ 24 IS NOT A PREFERENCE, IT IS THE VERSION THE SERVER RUNS. Every
+      # deployed function is on nodejs24 and `functions/package.json` says
+      # `"engines": { "node": "24" }`, so a CI on anything else tests the code on
       # a runtime nobody uses. It was on 20 until 10 Sep 2026 — by then out of
       # support since April, and the `npm ci` in the deploy job below was warning
-      # EBADENGINE on every run. Move all three jobs together, and move them when
+      # EBADENGINE on every run — then on 22 until Oct 2026, when it moved to 24
+      # (the current LTS, GA for 2nd-gen functions) to match the PC it is built
+      # on. Move all the jobs together, and move them when
       # `functions/package.json` moves, not before.
       #
       # ⚠️ AND THAT INSTRUCTION IS NOW ENFORCED, because a comment is not a
@@ -26,7 +28,7 @@ jobs:
       # package.json — at which point nothing else would make these lines follow.
       - uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '24'
       # No install step: the suite is pure Node with zero dependencies, run by the
       # built-in test runner (`node --test`, see package.json).
       - run: npm test
@@ -65,7 +67,7 @@ jobs:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '24'
       # The Firestore emulator is a Java program. 21 is the current LTS and the
       # version this was verified on locally.
       - uses: actions/setup-java@v5
@@ -122,7 +124,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '24'
 
       # The lockfiles decide, and no package may run code while it installs (each folder's
       # .npmrc says the same; the flag makes it true even if a .npmrc is lost).
@@ -197,7 +199,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '24'
 
       # Reproducible: the lockfile decides, not whatever npm feels like today.
       # `--ignore-scripts`: see the firebase-tools step below. Measured on the

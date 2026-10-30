@@ -50,7 +50,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '24'
       # The lockfiles decide; no package may run code while it installs.
       - run: npm ci --ignore-scripts
         working-directory: shared
@@ -91,7 +91,7 @@ jobs:
           persist-credentials: false
       - uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '24'
 
       # Mise 2's built files from the job above — outside the workspace until staged below.
       - if: needs.build-mise2.result == 'success'
