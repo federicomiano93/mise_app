@@ -199,8 +199,10 @@ export interface OrdersStore {
   // «No supplier» included); `ingredient` is the row's line as the lens filed it.
   editLine(supplier: StoredDoc, ingredient: LensIngredient, edit: LineEdit): void;
   // The day line (parity D7): the supplier's lines are for `day` ('YYYY-MM-DD'). Written at once, LOCAL-FIRST; a refusal
-  // puts the stored day back and says 'day-not-saved'.
-  setDay(supplier: StoredDoc, day: string): void;
+  // puts the stored day back and says 'day-not-saved'. Resolves once the server answered: true = saved (or nothing to change),
+  // false = refused. ⚠️ Offline it waits for the connection, so no screen may wait on it before showing the change (step 3f-6:
+  // the pending banner goes at once and comes back on false).
+  setDay(supplier: StoredDoc, day: string): Promise<boolean>;
   // What the confirm screen needs before it opens, read once from the server (parity X2, X7). A record that cannot be read
   // counts as none: the transaction inside `place` still refuses a real clash.
   checkRecords(items: ReadonlyArray<{ readonly supplierId: string; readonly date: string }>, noSupplierName: string): Promise<RecordCheck[]>;
@@ -570,7 +572,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       stops = [];
       // The write is handed to Firestore now; it carries on without the listeners and lands when it can.
       stopped = true;
-      sync.flush().then(dropBusyWhenSaved, () => { /* said through onResult, which also releases the busy marker */ });
+      return sync.flush().then(() => { dropBusyWhenSaved(); return true; }, () => { /* said through onResult, which also releases the busy marker */ });
     },
 
     editLine(supplier, ingredient, edit) {
@@ -634,12 +636,12 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     setDay(supplier, day) {
       const id = supplier.id;
       const previous = snapshot.draft.days[id];
-      if (previous === day) return;
+      if (previous === day) return Promise.resolve(true);
       const days: DraftDays = { ...snapshot.draft.days, [id]: day };
       set({ draft: { ...snapshot.draft, days } });
       holdBusy();
       sync.change(snapshot.draft.entries, days);
-      sync.flush().then(dropBusyWhenSaved, () => {
+      return sync.flush().then(() => { dropBusyWhenSaved(); return true; }, () => {
         // ⚠️ THE LINE NEVER SHOWS A DAY THAT WAS NOT SAVED: back to the one stored — unless another day was chosen since,
         // which is newer than this refusal.
         if (snapshot.draft.days[id] === day) {
@@ -651,6 +653,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         }
         say({ kind: 'day-not-saved' });
         dropBusyWhenSaved();
+        return false;
       });
     },
 
