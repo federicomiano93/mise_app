@@ -14,7 +14,7 @@
 // No DOM, no Firestore. Every rule below is asserted in a unit test, because the
 // numbers it decides are how much dough gets made.
 
-import { ridOf } from './catalogue/guided-model.js';
+import { ridOf, withRowIds } from './catalogue/guided-model.js';
 // The Catalogue's own unit table, never a copy of it: a second table is a second
 // place for kg to drift. No new coupling either — guided-model.js above already
 // imports catalogue-model.js, so this file depended on it before this import.
@@ -79,6 +79,15 @@ export function linkedRecipeIds(recipes) {
 
 export function isLinked(recipe) {
   return !!String(recipe?.catalogueId || '').trim();
+}
+
+// A Catalogue recipe's rows with an id stamped on each row that lacks one, or null when
+// every row already has its own — and then nothing needs writing. withRowIds hands back the
+// very same row object for a row it keeps, which is what tells the two apart.
+export function rowsToStamp(rows) {
+  const current = Array.isArray(rows) ? rows : [];
+  const stamped = withRowIds(current);
+  return stamped.every((row, i) => row === current[i]) ? null : stamped;
 }
 
 // The Catalogue recipes «+ Add recipe» offers, by name (an unnamed one last), each marked

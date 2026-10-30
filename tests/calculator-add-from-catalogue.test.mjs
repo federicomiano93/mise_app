@@ -7,7 +7,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { catalogueChoices } from '../js/calculator-recipe-source.js';
+import { catalogueChoices, rowsToStamp } from '../js/calculator-recipe-source.js';
 import { _dictionaries, translate } from '../js/i18n.js';
 
 const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
@@ -44,11 +44,19 @@ test('«+ Add recipe» opens the choice; a catalogue recipe is linked, named, an
   assert.match(src, /catalogueChoices\(catalogueList, recipes\(\)\)/);
   // Picking one links it through the same link() as the source box (row ids stamped first),
   // and only a link that worked adds the recipe.
-  assert.match(src, /const r = \{ \.\.\.newRecipe\(addHidden\), logic: 'total' \};\s*if \(!\(await link\(r, catalogueId\)\)\) return;/);
+  assert.match(src, /const r = \{ \.\.\.newRecipe\(addHidden\), logic: 'total' \};\s*const linked = await link\(r, catalogueId\);/);
+  assert.match(src, /if \(linked && choosingSource\) \{ openAdded\(r\); return; \}/);
   // link() names a recipe that has no name yet — the source box too.
   assert.match(src, /if \(isBlank\(recipe\.name\)\) recipe\.name = String\(source\.name \|\| ''\)\.trim\(\);/);
-  // Back from the choice goes to the list, one level up.
-  assert.match(src, /if \(choosingSource\) \{ choosingSource = false; renderEditor\(\); return; \}/);
+  // A recipe just chosen is not watched until Save: the editor shows the listed copy instead of
+  // «cannot be read from the Recipe catalogue», in the ingredients and in the leavening box.
+  assert.match(src, /if \(live\.problem !== 'missing' \|\| !catalogueList\) return live;/);
+  assert.match(src, /return source \? resolveRecipe\(recipe, \{ \[source\.id\]: source \}\) : live;/);
+  assert.match(src, /const resolved = editorRecipe\(r\);/);
+  assert.match(src, /const src = editorRecipe\(recipe\);/);
+  assert.equal(src.match(/effectiveRecipe\(/g).length, 1, 'only editorRecipe asks the live link');
+  // Back from the choice goes to the list, one level up (or to the empty Calculator it came from).
+  assert.match(src, /if \(choosingSource\) \{\s*choosingSource = false;[\s\S]*?renderEditor\(\);\s*contentEl\(\)/);
 });
 
 test('the choice speaks both languages', () => {
@@ -60,4 +68,44 @@ test('the choice speaks both languages', () => {
   }
   assert.equal(translate(d, 'it', 'calc.addFrom.blank'), '+ Ricetta nuova, scritta qui');
   assert.equal(translate(d, 'it', 'calc.addFrom.catalogue'), 'Dal Ricettario');
+});
+
+// ── The code review, 30 Oct 2026 ────────────────────────────────────────────────────────
+test('linking writes the Recipe catalogue only where a row lacks its id — never a copy read earlier', () => {
+  const kept = [{ rid: 'a', label: 'Farina', grams: 1000 }, { rid: 'b', label: 'Acqua', grams: 650 }];
+  assert.equal(rowsToStamp(kept), null, 'every row has its id: nothing to write');
+  const old = [{ label: 'Farina', grams: 1000 }, { rid: 'b', label: 'Acqua', grams: 650 }];
+  const stamped = rowsToStamp(old);
+  assert.equal(stamped.length, 2);
+  assert.ok(stamped[0].rid && stamped[0].rid !== 'b');
+  assert.equal(stamped[1], old[1], 'a row that had its id is the same row');
+  assert.equal(rowsToStamp(null), null);
+  // The write is a transaction on the recipe as the server holds it NOW.
+  for (const f of ['js/firebase.js', 'js/firebase.example.js']) {
+    const src = read(f);
+    assert.match(src, /export function stampRecipeRowIds\(id, stamp\) \{\s*return authReady\.then\(\(\) => runTransaction\(db, async \(tx\) => \{/, f);
+    assert.match(src, /const stamped = stamp\(rows\);\s*if \(!stamped\) return rows;\s*tx\.set\(ref, \{ ingredients: stamped \}, \{ merge: true \}\);/, f);
+    assert.match(src, /if \(!snap\.exists\(\)\) return null;/, f);
+  }
+  const recipes = read('js/recipes.js');
+  assert.match(recipes, /stampRecipeRowIds\(catalogueId, rowsToStamp\)/);
+  assert.match(recipes, /setTimeout\(\(\) => reject\(new Error\('link timed out'\)\), LINK_TIMEOUT_MS\)/);
+  assert.match(recipes, /if \(rows === null\) \{\s*alertDialog\(t\('calc\.sourceMissing'\)\);\s*return false;/);
+  assert.match(recipes, /source\.ingredients = rows;/);
+});
+
+test('one pick at a time; a pick left behind changes nothing; Back from the empty Calculator goes back there', () => {
+  const src = read('js/recipes.js');
+  assert.match(src, /const mine = \+\+pickToken;/);
+  assert.match(src, /if \(mine !== pickToken\) return;/);
+  assert.match(src, /dirty = wasDirty;/);
+  // Leaving the choice or reopening the screen makes a late answer stale and frees the guard.
+  assert.match(src, /choosingSource = false;\s*pickToken\+\+;\s*addingBusy = false;/);
+  assert.match(src, /addingBusy = false;\s*pickToken\+\+;/);
+  assert.match(src, /if \(chooserFromCalculator && !dirty\) \{/);
+  assert.match(src, /contentEl\(\)\.querySelector\('\.cp-add-client'\)\?\.focus\(\);/);
+  // A Recipe catalogue the rules refuse is not «check the connection».
+  assert.match(src, /if \(err && err\.code === 'permission-denied'\) catalogueDenied = true;/);
+  // The empty Calculator's button opens the choice; «Choose which to show» still the list.
+  assert.match(read('js/app.js'), /buildEmptyPanel\(emptyReason, emptyReason === 'no-recipes' \? addRecipe : openRecipes\)/);
 });

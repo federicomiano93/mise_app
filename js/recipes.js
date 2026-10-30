@@ -28,9 +28,8 @@ import {
 } from './calculator-config.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
-import { isLinked, chooseLeavening, leaveningLost, catalogueChoices } from './calculator-recipe-source.js';
+import { isLinked, chooseLeavening, leaveningLost, catalogueChoices, resolveRecipe, rowsToStamp } from './calculator-recipe-source.js';
 import { effectiveRecipe } from './calculator-catalogue-link.js';
-import { withRowIds } from './catalogue/guided-model.js';
 import { getCatalogueRecipesOnce, stampRecipeRowIds } from './firebase.js';
 
 // recipeTotal is re-exported so any importer keeps its path unchanged.
@@ -54,6 +53,8 @@ let freshlyAdded = false;
 let choosingSource = false;
 let addHidden = false;    // the recipe being added is created hidden (the visible limit was reached)
 let addingBusy = false;   // a catalogue recipe is being linked: a second tap must not add it twice
+let pickToken = 0;        // the pick in flight; leaving the choice makes a late answer stale
+let chooserFromCalculator = false; // opened by the empty Calculator: Back goes back there
 let showErrors = false;
 let dirty = false;
 
@@ -88,6 +89,15 @@ export function openRecipes() {
   focusRow = null;
   freshlyAdded = false;
   choosingSource = false;
+  chooserFromCalculator = false;
+  addingBusy = false;
+  pickToken++;
+  // The Recipe catalogue's names are read again each time this screen opens (one read of the
+  // list, only when the choice or the source box needs it): a recipe written there since shows.
+  catalogueList = null;
+  catalogueLoad = null;
+  catalogueFailed = false;
+  catalogueDenied = false;
   showErrors = false;
   dirty = false;
   renderEditor();
@@ -99,8 +109,8 @@ export function openRecipes() {
 export function addRecipe() {
   openRecipes();
   addHidden = false;
-  catalogueFailed = false;
   choosingSource = true;
+  chooserFromCalculator = true;
   renderEditor();
 }
 
@@ -110,7 +120,20 @@ function isEmptyRecipe(r) {
 
 export async function closeRecipes() {
   if (saveGuard.saving) return;
-  if (choosingSource) { choosingSource = false; renderEditor(); return; }
+  if (choosingSource) {
+    choosingSource = false;
+    pickToken++;
+    addingBusy = false;
+    // Opened from the empty Calculator, Back goes straight back there: nothing was added.
+    if (chooserFromCalculator && !dirty) {
+      chooserFromCalculator = false;
+      document.getElementById('recipe-overlay').classList.remove('visible');
+      return;
+    }
+    renderEditor();
+    contentEl().querySelector('.cp-add-client')?.focus();
+    return;
+  }
   if (activeRecipe !== null) {
     const r = recipes()[activeRecipe];
     if (freshlyAdded && isEmptyRecipe(r)) {
@@ -303,13 +326,18 @@ function addBlankRecipe() { openAdded(newRecipe(addHidden)); }
 async function addCatalogueRecipe(catalogueId) {
   if (addingBusy) return;
   addingBusy = true;
-  try {
-    const r = { ...newRecipe(addHidden), logic: 'total' };
-    if (!(await link(r, catalogueId))) return;
-    if (choosingSource) openAdded(r);
-  } finally {
-    addingBusy = false;
-  }
+  const mine = ++pickToken;
+  const wasDirty = dirty;
+  contentEl().querySelectorAll('.wa-entry-open').forEach(b => { b.disabled = true; });
+  const r = { ...newRecipe(addHidden), logic: 'total' };
+  const linked = await link(r, catalogueId);
+  // Left the choice meanwhile (Back, Save, the screen closed and opened): this pick is stale.
+  if (mine !== pickToken) return;
+  addingBusy = false;
+  if (linked && choosingSource) { openAdded(r); return; }
+  // A pick that did not land changes nothing: link() marked the list as edited.
+  dirty = wasDirty;
+  if (choosingSource) renderEditor();
 }
 
 function renderSourceChooser() {
@@ -321,9 +349,11 @@ function renderSourceChooser() {
 
   // The Recipe catalogue first — what was asked for — and the blank recipe last, where the
   // list screen keeps its own «+ Add recipe».
-  content.appendChild(el('div', { class: 'cp-label' }, t('calc.addFrom.catalogue')));
   const choices = catalogueList === null ? [] : catalogueChoices(catalogueList, recipes());
-  if (catalogueList === null && catalogueFailed) {
+  if (!catalogueDenied) content.appendChild(el('div', { class: 'cp-label' }, t('calc.addFrom.catalogue')));
+  if (catalogueDenied) {
+    // The venue's Recipe catalogue is not open to this account: only a new recipe is offered.
+  } else if (catalogueList === null && catalogueFailed) {
     content.appendChild(el('p', { class: 'cp-hint', role: 'alert' }, t('calc.addFrom.failed')));
   } else if (catalogueList === null) {
     content.appendChild(el('p', { class: 'cp-hint', role: 'status' }, t('calc.addFrom.loading')));
@@ -331,6 +361,7 @@ function renderSourceChooser() {
   } else if (!choices.length) {
     content.appendChild(el('p', { class: 'cp-hint' }, t('calc.addFrom.none')));
   }
+  const busy = addingBusy;
   const buttons = choices.map(c => {
     const btn = el('button', { class: 'drill-item wa-entry-open', type: 'button' }, [
       el('span', { class: 'wa-entry-text' }, [
@@ -339,6 +370,7 @@ function renderSourceChooser() {
       ]),
       el('span', { class: 'drill-chevron' }, icon('chevronRight', 18)),
     ]);
+    btn.disabled = busy;
     btn.addEventListener('click', () => addCatalogueRecipe(c.id));
     content.appendChild(el('div', { class: 'wa-entry-card' }, [btn]));
     return btn;
@@ -496,7 +528,7 @@ function renderRecipeDetail(ri) {
 
   const showLeaveningPicker = usesOrders(r.logic);
   const linked = isLinked(r);
-  const resolved = effectiveRecipe(r);
+  const resolved = editorRecipe(r);
 
   const ingField = el('div', { class: 'cp-field' }, [el('label', { class: 'cp-label' }, t('ui.ingredients'))]);
 
@@ -614,7 +646,7 @@ function leaveningBox(recipe) {
   // ⚠️ WHEN LINKED, THE ROWS COME FROM THE CATALOGUE and the choice is stored as
   // leaveningRid — the row's own id. Offering the tab's own leftover list here
   // would let somebody pick an ingredient the dough no longer contains.
-  const src = effectiveRecipe(recipe);
+  const src = editorRecipe(recipe);
   const linkedRows = isLinked(recipe) ? src.ingredients : null;
   const rows = [el('label', { class: 'cp-label' }, t('calc.leavening'))];
 
@@ -708,6 +740,7 @@ function syncLeaveningOption(ing, index) {
 let catalogueList = null;
 let catalogueLoad = null;     // the read in flight, shared by the choice and the source box
 let catalogueFailed = false;  // the last read failed: say so, and try again on the next «+ Add recipe»
+let catalogueDenied = false;  // the rules refuse the list (Recipe catalogue off): not a connection problem
 
 function loadCatalogue() {
   if (!catalogueLoad) {
@@ -715,12 +748,26 @@ function loadCatalogue() {
       .then(list => { catalogueList = list; return true; })
       .catch(err => {
         console.warn('The Catalogue could not be listed:', err);
+        if (err && err.code === 'permission-denied') catalogueDenied = true;
         catalogueFailed = true;
         catalogueLoad = null;
         return false;
       });
   }
   return catalogueLoad;
+}
+
+// What a recipe's ingredients are, for this editor.
+//
+// ⚠️ A RECIPE LINKED HERE, NOT YET SAVED, IS NOT WATCHED YET: the live link
+// (calculator-catalogue-link.js) starts from the SAVED config, so it answered «cannot be read
+// from the Recipe catalogue» the moment a recipe was chosen — the first thing the choice of
+// recipe showed. Until the live copy arrives, the copy this screen has just listed stands in.
+function editorRecipe(recipe) {
+  const live = effectiveRecipe(recipe);
+  if (live.problem !== 'missing' || !catalogueList) return live;
+  const source = catalogueList.find(c => c.id === String(recipe.catalogueId || '').trim());
+  return source ? resolveRecipe(recipe, { [source.id]: source }) : live;
 }
 
 function sourceBox(recipe) {
@@ -748,6 +795,9 @@ function sourceBox(recipe) {
   return el('div', { class: 'cp-field' }, rows);
 }
 
+// How long linking waits for the server before saying it could not.
+const LINK_TIMEOUT_MS = 10000;
+
 // ⚠️ LINKING STAMPS A STABLE id ON EVERY CATALOGUE ROW FIRST, and that order is
 // the whole reason this is not a one-line assignment. The twelve recipes in the
 // Catalogue carry no row ids — they predate the guided-mixing work that mints
@@ -773,15 +823,24 @@ async function link(recipe, catalogueId) {
   const source = (catalogueList || []).find(c => c.id === catalogueId);
   if (!source) return false;
 
+  // The rows as they are NOW, stamped only where an id is missing (firebase.js says why), and
+  // a limit on the wait: offline the server never answers, and the tap would hang for ever.
+  let rows;
   try {
-    const stamped = withRowIds(Array.isArray(source.ingredients) ? source.ingredients : []);
-    await stampRecipeRowIds(catalogueId, stamped);
-    source.ingredients = stamped;
+    rows = await Promise.race([
+      stampRecipeRowIds(catalogueId, rowsToStamp),
+      new Promise((resolve, reject) => setTimeout(() => reject(new Error('link timed out')), LINK_TIMEOUT_MS)),
+    ]);
   } catch (err) {
     console.error('Could not give the Catalogue rows stable ids:', err);
     alertDialog(t('calc.sourceLinkFailed'));
     return false;
   }
+  if (rows === null) {
+    alertDialog(t('calc.sourceMissing'));
+    return false;
+  }
+  source.ingredients = rows;
 
   recipe.catalogueId = catalogueId;
   // A recipe with no name yet takes the catalogue recipe's: the choice above and the source
