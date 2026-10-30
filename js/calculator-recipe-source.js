@@ -18,7 +18,7 @@ import { ridOf } from './catalogue/guided-model.js';
 // The Catalogue's own unit table, never a copy of it: a second table is a second
 // place for kg to drift. No new coupling either — guided-model.js above already
 // imports catalogue-model.js, so this file depended on it before this import.
-import { ingredientGrams } from './catalogue/catalogue-model.js';
+import { ingredientGrams, isWeighableUnit } from './catalogue/catalogue-model.js';
 
 // ── What can go wrong, named ─────────────────────────────────────────────────
 //
@@ -33,7 +33,11 @@ export const PROBLEMS = Object.freeze({
 });
 
 const num = v => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
-const unitKey = row => String(row?.unit || '').trim().toLowerCase();
+// The row's unit as the Catalogue's table names it: no unit (a legacy row) and «gr» are grams.
+const unitKey = row => {
+  const unit = String(row?.unit || '').trim().toLowerCase();
+  return unit === 'gr' || !unit ? 'g' : unit;
+};
 
 // A weighable row's amount IN GRAMS.
 //
@@ -46,8 +50,7 @@ const unitKey = row => String(row?.unit || '').trim().toLowerCase();
 // recipe arrives raw from Firestore, not through the Catalogue's normaliser.
 // Rounded to the milligram so 1.005 kg reads 1005 g, not 1004.9999999999999 g.
 function rowGrams(row) {
-  const unit = unitKey(row);
-  const g = ingredientGrams({ grams: num(row?.grams), unit: unit === 'gr' || !unit ? 'g' : unit });
+  const g = ingredientGrams({ grams: num(row?.grams), unit: unitKey(row) });
   return Math.round(g * 1000) / 1000;
 }
 
@@ -58,10 +61,14 @@ function rowGrams(row) {
 // ⚠️ IT BLOCKS THE WHOLE RECIPE AND NAMES THE ROW (decided 1 Aug 2026). Skipping
 // it would produce a dough that is quietly light by exactly that ingredient —
 // the one direction a recipe must not be wrong in.
+//
+// ⚠️⚠️ WEIGHABLE MEANS WHAT THE RECIPE BOOK SAYS IT MEANS — its own table, litres
+// included at 1 ml = 1 g. This used to accept only g and kg, so a Ricettario recipe
+// with «Acqua 0,65 l» refused the whole tab while the Ricettario counted the same
+// litres in its total and its Food cost (Panificio Miano, 30 Oct 2026: «Le ricette
+// nel calcolatore non funzionano»).
 export function isWeighable(row) {
-  const unit = unitKey(row);
-  if (unit && unit !== 'g' && unit !== 'gr' && unit !== 'kg') return false;
-  return num(row?.grams) > 0;
+  return isWeighableUnit(unitKey(row)) && num(row?.grams) > 0;
 }
 
 // Which Catalogue recipes a Calculator config actually needs.

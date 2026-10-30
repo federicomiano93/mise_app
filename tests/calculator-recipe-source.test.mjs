@@ -12,6 +12,7 @@ import {
   PROBLEMS, isWeighable, linkedRecipeIds, isLinked, resolveRecipe, canCalculate,
   leaveningLost,
 } from '../js/calculator-recipe-source.js';
+import { CATALOGUE_UNITS, isWeighableUnit } from '../js/catalogue/catalogue-model.js';
 
 const OLD = {
   name: 'Focaccia',
@@ -180,14 +181,43 @@ test('kg is read loosely, and a fractional kg has no float tail', () => {
   assert.deepEqual(r.ingredients.map(i => i.grams), [1500, 1005, 250, 30, 400]);
 });
 
-test('volume rows are still refused, not converted', () => {
-  const ml = { x: { name: 'X', ingredients: [
-    { rid: 'a', label: 'Flour', grams: 1, unit: 'kg' },
-    { rid: 'b', label: 'Milk', grams: 0.5, unit: 'l' },
-  ] } };
-  const r = resolveRecipe({ catalogueId: 'x' }, ml);
-  assert.equal(r.problem, PROBLEMS.unweighable);
-  assert.equal(r.problemRow, 'Milk');
+// ⚠️⚠️ A VOLUME ROW IS WEIGHED AS THE RECIPE BOOK WEIGHS IT, 1 ml = 1 g. It used to
+// refuse the whole tab — «“Acqua” non ha un peso» — while the Ricettario counted the
+// same litres in its total, its Food cost and its own «Importa nel Calcolatore». An
+// Italian bakery writes its water in litres, so every linked recipe calculated
+// nothing (Panificio Miano, 30 Oct 2026: «Le ricette nel calcolatore non funzionano»).
+test('⚠️ litre, dl, cl and ml rows reach the Calculator in grams, 1 ml = 1 g', () => {
+  const rows = [
+    { rid: 'a', label: 'Farina 0', grams: 1, unit: 'kg' },
+    { rid: 'b', label: 'Acqua', grams: 0.65, unit: 'l' },
+    { rid: 'c', label: 'Latte', grams: 2, unit: 'dl' },
+    { rid: 'd', label: 'Olio', grams: 3, unit: 'cl' },
+    { rid: 'e', label: 'Malto', grams: 15, unit: 'ml' },
+    { rid: 'f', label: 'Acqua tiepida', grams: '0.1', unit: 'L' },
+  ];
+  const r = resolveRecipe({ catalogueId: 'x' }, { x: { name: 'Pane', ingredients: rows } });
+  assert.equal(r.problem, null);
+  assert.equal(canCalculate(r), true);
+  assert.deepEqual(r.ingredients.map(i => i.grams), [1000, 650, 200, 30, 15, 100]);
+});
+
+test('pieces, spoons, a pinch and «to taste» still refuse the whole tab and name the row', () => {
+  for (const unit of ['pcs', 'tsp', 'tbsp', 'pinch', 'to taste']) {
+    const r = resolveRecipe({ catalogueId: 'x' }, { x: { name: 'X', ingredients: [
+      { rid: 'a', label: 'Farina', grams: 1, unit: 'kg' },
+      { rid: 'b', label: 'Uova', grams: 4, unit },
+    ] } });
+    assert.equal(r.problem, PROBLEMS.unweighable, unit);
+    assert.equal(r.problemRow, 'Uova', unit);
+  }
+});
+
+// ⚠️ ONE ANSWER TO «CAN THIS ROW BE WEIGHED?». The Calculator and the recipe book
+// disagreed on litres for months; this pins every unit the recipe book can save.
+test('the Calculator weighs exactly the units the recipe book weighs', () => {
+  for (const unit of CATALOGUE_UNITS) {
+    assert.equal(isWeighable({ grams: 5, unit }), isWeighableUnit(unit), unit);
+  }
 });
 
 // ── ⚠️ THE COST TRAP ─────────────────────────────────────────────────────────
