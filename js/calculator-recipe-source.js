@@ -81,6 +81,21 @@ export function isLinked(recipe) {
   return !!String(recipe?.catalogueId || '').trim();
 }
 
+// The Catalogue recipes «+ Add recipe» offers, by name (an unnamed one last), each marked
+// `used` when a Calculator recipe already takes it — linked, or imported as 'cat-<id>'.
+// Marked, never hidden: a second tab of the same recipe with another logic is legitimate.
+export function catalogueChoices(catalogue, calculatorRecipes) {
+  const used = new Set(linkedRecipeIds(calculatorRecipes));
+  for (const r of calculatorRecipes || []) {
+    const id = String(r?.id || '');
+    if (id.startsWith('cat-')) used.add(id.slice(4));
+  }
+  return (catalogue || [])
+    .filter(c => c && String(c.id || '').trim())
+    .map(c => ({ id: c.id, name: String(c.name || '').trim(), used: used.has(c.id) }))
+    .sort((a, b) => (!a.name - !b.name) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
+}
+
 // The effective recipe a Calculator tab should use.
 //
 // Returns { name, ingredients, leaveningKey, linked, problem, problemRow }.

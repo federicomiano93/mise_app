@@ -28,7 +28,7 @@ import {
 } from './calculator-config.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
-import { isLinked, chooseLeavening, leaveningLost } from './calculator-recipe-source.js';
+import { isLinked, chooseLeavening, leaveningLost, catalogueChoices } from './calculator-recipe-source.js';
 import { effectiveRecipe } from './calculator-catalogue-link.js';
 import { withRowIds } from './catalogue/guided-model.js';
 import { getCatalogueRecipesOnce, stampRecipeRowIds } from './firebase.js';
@@ -48,6 +48,12 @@ let activeRecipe = null;  // null = the recipe list, an index = a recipe's detai
 let openRow = null;       // the list row opened in place (an index), at most one
 let focusRow = null;      // the row whose head takes keyboard focus when the list is next drawn
 let freshlyAdded = false;
+// «+ Add recipe» opens a choice first (Federico, 29 Oct 2026: «mi chiede di aggiungere una
+// ricetta nuova»): the Recipe catalogue's recipes, or a new one written here. The choice is
+// a level of its own between the list and a recipe's detail.
+let choosingSource = false;
+let addHidden = false;    // the recipe being added is created hidden (the visible limit was reached)
+let addingBusy = false;   // a catalogue recipe is being linked: a second tap must not add it twice
 let showErrors = false;
 let dirty = false;
 
@@ -81,10 +87,21 @@ export function openRecipes() {
   openRow = null;
   focusRow = null;
   freshlyAdded = false;
+  choosingSource = false;
   showErrors = false;
   dirty = false;
   renderEditor();
   document.getElementById('recipe-overlay').classList.add('visible');
+}
+
+// The empty Calculator's «Add a recipe»: the Recipes screen, straight on the choice of
+// recipe. With no recipe at all there is no visible limit to ask about; Back shows the list.
+export function addRecipe() {
+  openRecipes();
+  addHidden = false;
+  catalogueFailed = false;
+  choosingSource = true;
+  renderEditor();
 }
 
 function isEmptyRecipe(r) {
@@ -93,6 +110,7 @@ function isEmptyRecipe(r) {
 
 export async function closeRecipes() {
   if (saveGuard.saving) return;
+  if (choosingSource) { choosingSource = false; renderEditor(); return; }
   if (activeRecipe !== null) {
     const r = recipes()[activeRecipe];
     if (freshlyAdded && isEmptyRecipe(r)) {
@@ -120,8 +138,9 @@ export async function goHomeFromRecipes() {
 }
 
 function renderEditor() {
-  if (activeRecipe === null) renderRecipeList();
-  else renderRecipeDetail(activeRecipe);
+  if (activeRecipe !== null) renderRecipeDetail(activeRecipe);
+  else if (choosingSource) renderSourceChooser();
+  else renderRecipeList();
 }
 
 function deleteIcon(label, onDelete) {
@@ -151,6 +170,7 @@ async function doSaveRecipes() {
   const invalid = findInvalid();
   if (invalid !== null) {
     showErrors = true;
+    choosingSource = false;
     activeRecipe = invalid;
     renderEditor();
     alertDialog(t('calc.pleaseGiveEveryRecipe'));
@@ -160,6 +180,7 @@ async function doSaveRecipes() {
   const badTray = recipes().findIndex(r => usesTrays(logicOf(r)) && !isValidTrayWeight(r.trayWeight));
   if (badTray !== -1) {
     showErrors = true;
+    choosingSource = false;
     activeRecipe = null;
     openRow = badTray;
     renderEditor();
@@ -174,6 +195,7 @@ async function doSaveRecipes() {
     showErrors = false;
     dirty = false;
     freshlyAdded = false;
+    choosingSource = false;
     // The list is rebuilt: keyboard focus goes back to the row that was being edited.
     focusRow = activeRecipe;
     activeRecipe = null;
@@ -244,19 +266,88 @@ function renderRecipeList() {
       okLabel: t('calc.recipe.createHidden'),
       cancelLabel: t('ui.cancel'),
     }))) return;
-    recipes().push({
-      id: genId('r'), name: '', logic: 'orders', trayWeight: DEFAULT_TRAY_WEIGHT, ingredients: [],
-      leaveningKey: null, leaveningDefaultPct: 0, showLeavening: true, baselinePct: null,
-      order: recipes().length, visible: !full,
-    });
-    markDirty();
-    freshlyAdded = true;
-    activeRecipe = recipes().length - 1;
+    addHidden = full;
+    catalogueFailed = false;
+    choosingSource = true;
     renderEditor();
   });
   content.appendChild(add);
   // The list itself can be saved (e.g. after a delete or a visibility change): the
   // header Save (#recipe-save-btn, wired in app.js) is on both levels.
+}
+
+// ── Adding a recipe: the choice ────────────────────────────────────────────────
+function newRecipe(hidden) {
+  return {
+    id: genId('r'), name: '', logic: 'orders', trayWeight: DEFAULT_TRAY_WEIGHT, ingredients: [],
+    leaveningKey: null, leaveningDefaultPct: 0, showLeavening: true, baselinePct: null,
+    order: recipes().length, visible: !hidden,
+  };
+}
+
+function openAdded(r) {
+  recipes().push(r);
+  markDirty();
+  freshlyAdded = true;
+  choosingSource = false;
+  activeRecipe = recipes().length - 1;
+  renderEditor();
+}
+
+function addBlankRecipe() { openAdded(newRecipe(addHidden)); }
+
+// ⚠️ «FROM A TOTAL», AS THE RECIPE CATALOGUE'S OWN «Import into Calculator» MAKES IT
+// (toCalculatorRecipe). A catalogue recipe is written as amounts for one dough; «from orders»
+// would also leave the tab empty in a venue with no clients in the Calculator. The logic is
+// changed in the list row like any other.
+async function addCatalogueRecipe(catalogueId) {
+  if (addingBusy) return;
+  addingBusy = true;
+  try {
+    const r = { ...newRecipe(addHidden), logic: 'total' };
+    if (!(await link(r, catalogueId))) return;
+    if (choosingSource) openAdded(r);
+  } finally {
+    addingBusy = false;
+  }
+}
+
+function renderSourceChooser() {
+  titleEl().textContent = t('calc.addARecipe');
+  setHomeVisible(false);
+  const content = contentEl();
+  content.textContent = '';
+  content.appendChild(el('p', { class: 'extra-help' }, t('calc.addFrom.intro')));
+
+  // The Recipe catalogue first — what was asked for — and the blank recipe last, where the
+  // list screen keeps its own «+ Add recipe».
+  content.appendChild(el('div', { class: 'cp-label' }, t('calc.addFrom.catalogue')));
+  const choices = catalogueList === null ? [] : catalogueChoices(catalogueList, recipes());
+  if (catalogueList === null && catalogueFailed) {
+    content.appendChild(el('p', { class: 'cp-hint', role: 'alert' }, t('calc.addFrom.failed')));
+  } else if (catalogueList === null) {
+    content.appendChild(el('p', { class: 'cp-hint', role: 'status' }, t('calc.addFrom.loading')));
+    loadCatalogue().then(() => { if (choosingSource && activeRecipe === null) renderEditor(); });
+  } else if (!choices.length) {
+    content.appendChild(el('p', { class: 'cp-hint' }, t('calc.addFrom.none')));
+  }
+  const buttons = choices.map(c => {
+    const btn = el('button', { class: 'drill-item wa-entry-open', type: 'button' }, [
+      el('span', { class: 'wa-entry-text' }, [
+        el('span', { class: 'wa-entry-name' }, c.name || t('calc.unnamedRecipe')),
+        ...(c.used ? [el('span', { class: 'wa-entry-sub' }, t('calc.addFrom.used'))] : []),
+      ]),
+      el('span', { class: 'drill-chevron' }, icon('chevronRight', 18)),
+    ]);
+    btn.addEventListener('click', () => addCatalogueRecipe(c.id));
+    content.appendChild(el('div', { class: 'wa-entry-card' }, [btn]));
+    return btn;
+  });
+
+  const blank = el('button', { class: 'cp-add-client', type: 'button' }, t('calc.addFrom.blank'));
+  blank.addEventListener('click', addBlankRecipe);
+  content.appendChild(blank);
+  (buttons[0] || blank).focus();
 }
 
 function logicOf(r) { return LOGICS.includes(r.logic) ? r.logic : 'orders'; }
@@ -615,6 +706,22 @@ function syncLeaveningOption(ing, index) {
 // and deliberate — never on the app's boot path, where it would be the v207 cost
 // mistake again.
 let catalogueList = null;
+let catalogueLoad = null;     // the read in flight, shared by the choice and the source box
+let catalogueFailed = false;  // the last read failed: say so, and try again on the next «+ Add recipe»
+
+function loadCatalogue() {
+  if (!catalogueLoad) {
+    catalogueLoad = getCatalogueRecipesOnce()
+      .then(list => { catalogueList = list; return true; })
+      .catch(err => {
+        console.warn('The Catalogue could not be listed:', err);
+        catalogueFailed = true;
+        catalogueLoad = null;
+        return false;
+      });
+  }
+  return catalogueLoad;
+}
 
 function sourceBox(recipe) {
   const rows = [el('label', { class: 'cp-label' }, t('calc.recipeSource'))];
@@ -634,11 +741,8 @@ function sourceBox(recipe) {
     : t('calc.sourceOwnHint')));
 
   // The names arrive after the first paint; repaint once they do.
-  if (catalogueList === null) {
-    catalogueList = [];
-    getCatalogueRecipesOnce()
-      .then(list => { catalogueList = list; renderEditor(); })
-      .catch(err => console.warn('The Catalogue could not be listed:', err));
+  if (catalogueList === null && !catalogueFailed) {
+    loadCatalogue().then(ok => { if (ok) renderEditor(); });
   }
 
   return el('div', { class: 'cp-field' }, rows);
@@ -653,6 +757,7 @@ function sourceBox(recipe) {
 // and "Sourdough starter" in the other.
 //
 // withRowIds is idempotent, so a recipe already carrying ids is untouched.
+// Resolves true once linked (or unlinked), false when it could not be (already explained).
 async function link(recipe, catalogueId) {
   if (!catalogueId) {
     // ⚠️ UNLINKING LEAVES THE TAB WITH NOTHING RATHER THAN A STALE COPY. Its own
@@ -662,11 +767,11 @@ async function link(recipe, catalogueId) {
     delete recipe.leaveningRid;
     markDirty();
     renderEditor();
-    return;
+    return true;
   }
 
   const source = (catalogueList || []).find(c => c.id === catalogueId);
-  if (!source) return;
+  if (!source) return false;
 
   try {
     const stamped = withRowIds(Array.isArray(source.ingredients) ? source.ingredients : []);
@@ -675,15 +780,19 @@ async function link(recipe, catalogueId) {
   } catch (err) {
     console.error('Could not give the Catalogue rows stable ids:', err);
     alertDialog(t('calc.sourceLinkFailed'));
-    return;
+    return false;
   }
 
   recipe.catalogueId = catalogueId;
+  // A recipe with no name yet takes the catalogue recipe's: the choice above and the source
+  // box both left it blank, and Save then refused it for want of a name.
+  if (isBlank(recipe.name)) recipe.name = String(source.name || '').trim();
   // The leavening has to be chosen again: it now points at a row in a different
   // recipe, and guessing by name is the thing being avoided.
   delete recipe.leaveningRid;
   markDirty();
   renderEditor();
+  return true;
 }
 
 function problemText(resolved) {

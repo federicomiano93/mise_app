@@ -156,7 +156,10 @@ test('four shown recipes: the switch alerts and goes back OFF; adding asks first
   assert.match(js, /showCb\.checked = false;\s*alertDialog\(t\('calc\.recipe\.limitReached', \{ n: MAX_VISIBLE_RECIPES \}\)\)/);
   assert.match(js, /message: t\('calc\.recipe\.addLimitConfirm', \{ n: MAX_VISIBLE_RECIPES \}\)/);
   assert.match(js, /okLabel: t\('calc\.recipe\.createHidden'\)/);
-  assert.match(js, /visible: !full/);
+  // The answer travels through the choice of recipe (Federico, 29 Oct 2026) to the new recipe.
+  assert.match(js, /addHidden = full;/);
+  assert.match(js, /visible: !hidden/);
+  assert.match(js, /newRecipe\(addHidden\)/);
   assert.equal(MAX_VISIBLE_RECIPES, 4);
   assert.deepEqual([...LOGICS], ['orders', 'total', 'both', 'trays', 'traysTotal']);
 });
