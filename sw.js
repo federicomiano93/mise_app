@@ -151,7 +151,7 @@ const ASSET_HASHES = {
   "./reset-password.html": '298724d76511df05',
   "./dist/i18n.js": '03c61e06411b30c9',
   "./dist/index.js": '67695dc0fe78bde2',
-  "./dist/calculator.js": 'e5292f7ee1e2a8d6',
+  "./dist/calculator.js": '5a7cbd7797ff81e0',
   "./dist/orders.js": '4c9147e3deaa75e9',
   "./dist/suppliers.js": 'ceb4d105ffa21b01',
   "./dist/install-guide.js": '86df880954faeae9',

@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "61aa5f51761797a7",
-      "mapSha": "1c4e59f451489e18",
+      "sha": "2d8eed7a4ee51b0e",
+      "mapSha": "236c6fd6c344964c",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -78,7 +78,7 @@
         "js/log-settings.js": "3e17c699ab59b736",
         "js/log-store.js": "af96918def0fd7a8",
         "js/log-time.js": "45dd4ecab6898d71",
-        "js/log-view.js": "19a4f9d0a3563c22",
+        "js/log-view.js": "3d1f46fa41538f4b",
         "js/log.js": "8a60b72021a4086b",
         "js/market.js": "296703359daa115b",
         "js/order-unit.js": "e3ee9a62a60959f7",

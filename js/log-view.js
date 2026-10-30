@@ -27,7 +27,7 @@ function renderLegacyText(text) {
 
 // The order content (grouped by client, plus occasional clients) from a version's
 // items. Zero-quantity lines are omitted, like the saved text.
-function renderItems(version) {
+function renderItems(version, sheetFollows) {
   const wrap = el('div', { class: 'logview-order' });
   const groups = new Map();
   const order = [];
@@ -62,25 +62,26 @@ function renderItems(version) {
     if (typed > 0) wrap.appendChild(el('div', { class: 'log-item' }, t('calc.traysTypedPart', { g: formatGrams(typed) })));
   }
   // A «from a total» dough: its total, never «No products entered» (doughAmountLine says why).
+  // Where the sheet card follows (the opened dough) it already shows the total, so neither line.
   const amount = doughAmountLine(version);
   if (amount && amount.kind === 'total') {
-    wrap.appendChild(el('div', { class: 'log-item' }, [el('strong', {}, t('calc.historyTotal', { g: formatGrams(amount.g) }))]));
+    if (!sheetFollows) wrap.appendChild(el('div', { class: 'log-item' }, [el('strong', {}, t('calc.historyTotal', { g: formatGrams(amount.g) }))]));
   } else if (amount) {
     wrap.appendChild(el('div', { class: 'log-item' }, t('calc.traysTypedPart', { g: formatGrams(amount.g) })));
   }
   if (version.sheet && num(version.sheet.extra_g) > 0) {
     wrap.appendChild(el('div', { class: 'log-item' }, t('calc.extraDough') + num(version.sheet.extra_g) + ' g'));
   }
-  if (!wrap.childNodes.length) wrap.appendChild(el('div', { class: 'log-item' }, t('calc.noProductsEntered')));
+  if (!wrap.childNodes.length && !(amount && sheetFollows)) wrap.appendChild(el('div', { class: 'log-item' }, t('calc.noProductsEntered')));
   return wrap;
 }
 
 // The order block for any version (structured or legacy). Used for the list preview
-// and as the top of the read-only screen.
-export function renderOrder(version) {
+// and as the top of the read-only screen (`sheetFollows`: the sheet card is drawn under it).
+export function renderOrder(version, { sheetFollows = false } = {}) {
   if (!version) return el('div', {});
   if (version.legacy || !version.sheet) return renderLegacyText(version.text);
-  return renderItems(version);
+  return renderItems(version, sheetFollows);
 }
 
 // The read-only calculator result sheet, rebuilt from a stored sheet snapshot using
@@ -150,7 +151,7 @@ export function renderVersion(version, log) {
   frag.appendChild(el('div', { class: 'log-timestamp' }, [icon('calendar', 14), ' ' + (at.date || '') + ' — ' + (at.time || '')]));
   if (v.calculatedBy) frag.appendChild(el('div', { class: 'logview-by' }, t('calc.calculatedBy') + v.calculatedBy));
 
-  frag.appendChild(renderOrder(v));
+  frag.appendChild(renderOrder(v, { sheetFollows: !v.legacy && !!v.sheet }));
   if (!v.legacy && v.sheet) frag.appendChild(renderSheetCard(v.sheet));
   return frag;
 }

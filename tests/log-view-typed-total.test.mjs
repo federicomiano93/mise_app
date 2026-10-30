@@ -50,6 +50,11 @@ test('the history card draws the line, in both languages, grouped like grams', (
   assert.match(view, /doughAmountLine\(version\)/);
   assert.match(view, /t\('calc\.historyTotal', \{ g: formatGrams\(amount\.g\) \}\)/);
   assert.match(view, /t\('calc\.traysTypedPart', \{ g: formatGrams\(amount\.g\) \}\)/);
+  // The opened dough draws the sheet card, which already shows the total: no second copy there,
+  // and no «No products entered» over it either.
+  assert.match(view, /renderOrder\(v, \{ sheetFollows: !v\.legacy && !!v\.sheet \}\)/);
+  assert.match(view, /if \(!sheetFollows\) wrap\.appendChild\(el\('div', \{ class: 'log-item' \}, \[el\('strong', \{\}, t\('calc\.historyTotal'/);
+  assert.match(view, /if \(!wrap\.childNodes\.length && !\(amount && sheetFollows\)\)/);
   const d = _dictionaries();
   assert.equal(translate(d, 'en', 'calc.historyTotal', { g: '1,650' }), 'Total dough: 1,650 g');
   assert.equal(translate(d, 'it', 'calc.historyTotal', { g: '1.650' }), 'Impasto totale: 1.650 g');
