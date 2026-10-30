@@ -9,8 +9,6 @@ import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { DeliveryDoors } from './DeliveryDoors';
-import { NoticesBell } from './NoticesBell';
-import { NoticesProvider } from './NoticesContext';
 import { NoticesPanel } from './NoticesPanel';
 import { TodayOrders } from './TodayOrders';
 import { useOrders } from './OrdersContext';
@@ -53,22 +51,12 @@ const HEADING_KEY = {
 // ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a component that stays mounted, and
 // only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard where the person
 // left them (the current app built the box once for the same reason).
-export function OrdersList(props: Props) {
-  // The bell and the panel share one state, kept above the head: the number and what it opens cannot disagree (step 3f-6).
-  return (
-    <NoticesProvider lens={props.lens} ready={props.ready}>
-      <OrdersListBody {...props} />
-    </NoticesProvider>
-  );
-}
-
-function OrdersListBody({ lens, ready, openId, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings, onIncoming, onReorder, onOpenPending }: Props) {
+export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings, onIncoming, onReorder, onOpenPending }: Props) {
   const { t } = useT();
   const { config, draft, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
   const [orderingOnly, setOrderingOnly] = useState(false);
   const radios = useRef(new Map<boolean, HTMLButtonElement>());
-  const bell = useRef<HTMLButtonElement>(null);
   const handBack = useHandBack();
   // Back from a picker hands the focus back to the button that opened it.
   const placeAllNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(PLACE_ALL_OPENER, node); }, [handBack]);
@@ -117,11 +105,6 @@ function OrdersListBody({ lens, ready, openId, onOpenSupplier, onOpenItems, onPl
               onChange={event => { setQuery(event.target.value); }}
             />
           </div>
-          {/* Always there (step 3f-6): only its number comes and goes. In a part of its own: a failure in the bell must not take
-              the list down. */}
-          <PartBoundary>
-            <NoticesBell ref={bell} />
-          </PartBoundary>
           {/* ⚠️ AN ARROW OUT OF A TRAY, NOT A WHATSAPP MARK: the screen it opens offers several roads. Here only once the list
               is ready and has suppliers, so it never offers to send what has not arrived. */}
           {ready && lens.suppliers.length > 0 ? (
@@ -160,7 +143,7 @@ function OrdersListBody({ lens, ready, openId, onOpenSupplier, onOpenItems, onPl
       </div>
 
       <PartBoundary>
-        <NoticesPanel bellRef={bell} onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} />
+        <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} />
       </PartBoundary>
 
       <PartBoundary>

@@ -1,4 +1,4 @@
-import type { KeyboardEvent, RefObject } from 'react';
+import type { KeyboardEvent } from 'react';
 import { CalendarClock, ChevronRight, X } from 'lucide-react';
 import { dayPhrase, daySpoken, spellShortDate, todayISO } from '@mise/shared/day';
 import { nextOrderOffer } from '@mise/shared/order-day';
@@ -17,8 +17,6 @@ import { LONG_MS } from './useClearQuantities';
 import styles from './NoticesPanel.module.css';
 
 type Props = {
-  // The bell: Escape in the panel gives it the focus back.
-  bellRef: RefObject<HTMLButtonElement | null>;
   onOpenSupplier: (id: string) => void;
   // «Placed yesterday»: the supplier's confirm screen, recording under that day.
   onOpenPending: (id: string, day: string) => void;
@@ -30,9 +28,9 @@ type Props = {
 //
 // ⚠️ ONLY THE CALENDAR NOTICES CAN BE CLOSED (Federico, 24 Aug 2026): the rest is WORK, and a closeable piece of work is one somebody
 // can close by mistake and never see again.
-export function NoticesPanel({ bellRef, onOpenSupplier, onOpenPending }: Props) {
+export function NoticesPanel({ onOpenSupplier, onOpenPending }: Props) {
   const { t } = useT();
-  const { open, setOpen, panelId, pending, untold, calendar, closed, close, reopen } = useNotices();
+  const { open, setOpen, panelId, bellRef, pending, untold, calendar, closed, close, reopen } = useNotices();
   const { canManage } = useSession();
   const store = useOrdersStore();
   const say = useStatusMessage();

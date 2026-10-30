@@ -1,4 +1,4 @@
-import { parseISODate, spellShortDate } from '@mise/shared/day';
+import { parseISODate, spellLongDate } from '@mise/shared/day';
 import type { DayTranslate } from '@mise/shared/day';
 import type { CalendarAlert } from '@mise/shared/notifications';
 import { supplierLabel } from '@mise/shared/supplier-label';
@@ -15,7 +15,9 @@ export function noticeText(
   t: (key: MessageKey, params?: MessageParams) => string,
   dt: DayTranslate,
 ): string {
-  const date = spellShortDate(notice.iso, dt);
+  // The whole date, month included («domenica 1 novembre»): a holiday up to two weeks away needs its month (the short form,
+  // «dom 1», was read on the emulator and said too little).
+  const date = spellLongDate(notice.iso, dt);
   if (notice.kind === 'holiday') {
     return notice.inDays === 1
       ? t('ord.notice.holidayTomorrow', { date })

@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
-import { addDays, parseISODate, spellShortDate, todayISO, toISODate, weekdayOf } from '@mise/shared/day';
+import { addDays, parseISODate, spellLongDate, spellShortDate, todayISO, toISODate, weekdayOf } from '@mise/shared/day';
 import { nextOrderOffer } from '@mise/shared/order-day';
 import { en } from '../i18n/en';
 import { format } from '../i18n/i18n';
@@ -338,17 +338,17 @@ describe('the calendar notices', () => {
   const GB = { session: { location: { country: 'GB' } } } as Options;
   const GB_IT = { ...GB, lang: 'it' } as Options;
   const tomorrow = inDays(1);
-  const holidayText = (date: string) => sayEn('ord.notice.holidayTomorrow', { date: spellShortDate(date, sayEn) });
+  const holidayText = (date: string) => sayEn('ord.notice.holidayTomorrow', { date: spellLongDate(date, sayEn) });
 
   it('says it all in the reader’s language: no English weekday and no raw date', async () => {
     holidays(tomorrow);
     const view = await atList(seeded(), GB_IT);
     await waitFor(() => { expect(bell()).toHaveAccessibleName('Avvisi: 2'); }, LOAD);
     const inside = await openPanel(view, 'Avvisi');
-    const holiday = sayIt('ord.notice.holidayTomorrow', { date: spellShortDate(tomorrow, sayIt) });
+    const holiday = sayIt('ord.notice.holidayTomorrow', { date: spellLongDate(tomorrow, sayIt) });
     expect(inside.getByText(holiday)).toBeInTheDocument();
     const weekday = sayIt(`day.weekdayLong.${parseISODate(tomorrow).getDay()}`);
-    const clash = sayIt('ord.notice.deliveryClash', { supplier: 'Zed', day: weekday, date: spellShortDate(tomorrow, sayIt) });
+    const clash = sayIt('ord.notice.deliveryClash', { supplier: 'Zed', day: weekday, date: spellLongDate(tomorrow, sayIt) });
     expect(inside.getByText(clash)).toBeInTheDocument();
     expect(clash).toMatch(/^Attenzione: Zed consegna /);
     for (const text of [holiday, clash]) expect(text).not.toMatch(/\d{4}-\d{2}-\d{2}|tomorrow|Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday/i);
@@ -360,7 +360,7 @@ describe('the calendar notices', () => {
     const view = await atList(seeded({ suppliers: [SUPPLIERS[0] as (typeof SUPPLIERS)[number]] }), GB);
     await waitFor(() => { expect(bell()).toHaveAccessibleName('Notices: 1'); }, LOAD);
     const inside = await openPanel(view);
-    expect(inside.getByText(sayEn('ord.notice.holidayInDays', { n: 3, date: spellShortDate(later, sayEn) }))).toBeInTheDocument();
+    expect(inside.getByText(sayEn('ord.notice.holidayInDays', { n: 3, date: spellLongDate(later, sayEn) }))).toBeInTheDocument();
     expect(sayEn('ord.notice.holidayInDays', { n: 3, date: 'x' })).toMatch(/^Public holiday in 3 days/);
   });
 

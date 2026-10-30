@@ -8,6 +8,8 @@ import { useOwnScrollArea } from '../shell/scrollArea';
 import { SPLIT_QUERY } from '../ui/split';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
+import { NoticesBell } from './NoticesBell';
+import { NoticesProvider } from './NoticesContext';
 import { OrdersProvider, useOrders, useOrdersStore } from './OrdersContext';
 import { OrdersList } from './OrdersList';
 import { DaySendScreen } from './DaySendScreen';
@@ -247,7 +249,14 @@ function OrdersLayout({ view }: { view: ShownView }) {
 
   return (
     <HandBackProvider value={handBack}>
-      <Page title={t('section.orders')}>
+      {/* The bell and its panel share one state, kept above the page: the number and what it opens cannot disagree (step 3f-6). */}
+      <NoticesProvider lens={lens} ready={ready}>
+      <Page
+        title={t('section.orders')}
+        // The bell, only where the panel it opens can be seen: the list on a phone, every screen on the split. In a part of its own:
+        // a failure in the bell must not take the page down.
+        action={view.kind === 'list' || split ? <PartBoundary><NoticesBell /></PartBoundary> : undefined}
+      >
         <StatusLine />
         <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'}>
           <div className={styles.list}>
@@ -275,6 +284,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
           </div>
         </div>
       </Page>
+      </NoticesProvider>
     </HandBackProvider>
   );
 }

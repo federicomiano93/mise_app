@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { hiddenAlerts, visibleAlerts } from '@mise/shared/alert-dismissal';
 import { todayISO } from '@mise/shared/day';
 import { countryOf } from '@mise/shared/market';
@@ -26,6 +26,8 @@ export interface Notices {
   readonly open: boolean;
   setOpen(open: boolean): void;
   readonly panelId: string;
+  // The bell, in the page's title line: Escape in the panel gives it the focus back.
+  readonly bellRef: RefObject<HTMLButtonElement | null>;
   // The orders typed on an earlier day and never placed (latched, then derived: pendingLatch.tsx).
   readonly pending: readonly PendingSupplier<StoredDoc>[];
   // What the shared order holds that nobody was told about, one group per supplier.
@@ -48,7 +50,7 @@ export function useNotices(): Notices {
   return notices;
 }
 
-// ⚠️ THE PANEL IS CLOSED WHENEVER ORDERS OPENS (the state lives here, in the list, which is mounted with the section). A failure
+// ⚠️ THE PANEL IS CLOSED WHENEVER ORDERS OPENS (the state lives here, mounted with the section). A failure
 // while working the notices out is logged and answered with «no notices» — it must never take the list down (T6).
 export function NoticesProvider({ lens, ready, children }: { lens: OrdersLens; ready: boolean; children: ReactNode }) {
   const { t } = useT();
@@ -61,6 +63,7 @@ export function NoticesProvider({ lens, ready, children }: { lens: OrdersLens; r
   const { latched } = usePendingLatch();
   const [open, setOpen] = useState(false);
   const panelId = useId();
+  const bellRef = useRef<HTMLButtonElement>(null);
 
   const model = useMemo(() => {
     try {
@@ -106,7 +109,7 @@ export function NoticesProvider({ lens, ready, children }: { lens: OrdersLens; r
 
   const untoldBlocks = model.untold.reduce((n, group) => n + (group.added.length > 0 ? 1 : 0) + (group.afterOrdering.length > 0 ? 1 : 0), 0);
   const value: Notices = {
-    open, setOpen, panelId,
+    open, setOpen, panelId, bellRef,
     pending: model.pending,
     untold: model.untold,
     calendar,
