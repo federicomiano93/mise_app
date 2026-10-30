@@ -51,11 +51,13 @@
 // `orderSuppliers` are handed the pseudo-supplier's word, and the constant `NO_SUPPLIER` built at import is left out) and
 // archive.ts (adapted since 3f-4: everything is ported, but `recordedName` takes the deleted-ingredient word as a fourth argument); their specs compare names and shapes themselves.
 // sent-check.ts IS paired (step 3f-2, placing an order): a full port of js/orders/sent-check.js. suggestions.ts and
-// history-window.ts ARE paired (step 3f-2b, the suggestion hint and its live window of orders-history): full ports. untold-changes.ts is NOT: it is a
-// partial port (only `confirmedEntries`; the reminders and the untold-changes banner stay in js/ until their screens come), so its spec
-// compares names and shapes itself. order-day-choices.ts is new in Mise 2 (the seven-day choice of a supplier with no order days) and has
+// history-window.ts ARE paired (step 3f-2b, the suggestion hint and its live window of orders-history): full ports. untold-changes.ts WAS a
+// partial port (only `confirmedEntries`) until step 3f-6 and is paired now (see below). order-day-choices.ts is new in Mise 2 (the seven-day choice of a supplier with no order days) and has
 // no original, like calculator-tab-keys.ts, so there is nothing to pair it with; delivery-check.ts is new in Mise 2 as well (step 3f-5, the venue's
 // «check deliveries» switch) and has no original either. deliveries.ts IS paired (step 3f-5, Incoming): a full port of js/orders/deliveries.js.
+// reminders.ts, untold-changes.ts, alert-dismissal.ts and holidays-it.ts ARE paired (step 3f-6, Reminders and the bell): full ports of
+// js/orders/reminders.js, untold-changes.js (completed in 3f-6: `askedToday`, `orderedToday` and `untoldChanges` joined
+// `confirmedEntries`), alert-dismissal.js and holidays-it.js.
 // order-image.ts and send-chooser.ts are NOT paired (step 3f-3, sending): partial ports — the order picture's layout without
 // the canvas, the File and the share sheet, and the send chooser's offers, links and photo batch without its screen
 // (`chooseAndSend`); their specs compare names, constants and shapes themselves.
@@ -154,6 +156,10 @@ import * as sentCheck from './sent-check';
 import * as suggestions from './suggestions';
 import * as historyWindow from './history-window';
 import * as deliveries from './deliveries';
+import * as reminders from './reminders';
+import * as untoldChanges from './untold-changes';
+import * as alertDismissal from './alert-dismissal';
+import * as holidaysIt from './holidays-it';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -224,6 +230,10 @@ import * as legacySentCheck from '../../js/orders/sent-check.js';
 import * as legacySuggestions from '../../js/orders/suggestions.js';
 import * as legacyHistoryWindow from '../../js/orders/history-window.js';
 import * as legacyDeliveries from '../../js/orders/deliveries.js';
+import * as legacyReminders from '../../js/orders/reminders.js';
+import * as legacyUntoldChanges from '../../js/orders/untold-changes.js';
+import * as legacyAlertDismissal from '../../js/orders/alert-dismissal.js';
+import * as legacyHolidaysIt from '../../js/orders/holidays-it.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -296,6 +306,10 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['suggestions', suggestions, legacySuggestions],
   ['history-window', historyWindow, legacyHistoryWindow],
   ['deliveries', deliveries, legacyDeliveries],
+  ['reminders', reminders, legacyReminders],
+  ['untold-changes', untoldChanges, legacyUntoldChanges],
+  ['alert-dismissal', alertDismissal, legacyAlertDismissal],
+  ['holidays-it', holidaysIt, legacyHolidaysIt],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -357,7 +371,7 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all seventy models are compared', () => {
+test('all seventy-four models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
@@ -368,5 +382,5 @@ test('all seventy models are compared', () => {
       'allergen-terms', 'allergen-match', 'records', 'invoice-zip/reasons', 'invoice-zip/py-compat', 'invoice-zip/sha256',
       'invoice-zip/classify', 'invoice-zip/pricing', 'invoice-zip/fatturapa', 'invoice-zip/products', 'invoice-zip/selection',
       'work-week', 'price-changes-model', 'invoice-import-model', 'invoice-import-plan', 'ingredient-merge', 'send-routes', 'supplier-order', 'orders-config', 'line-supplier', 'order-text', 'ingredient-search', 'order-day', 'sent-check', 'suggestions',
-      'history-window', 'deliveries']);
+      'history-window', 'deliveries', 'reminders', 'untold-changes', 'alert-dismissal', 'holidays-it']);
 });
