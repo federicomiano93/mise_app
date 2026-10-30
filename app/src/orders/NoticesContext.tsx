@@ -17,6 +17,7 @@ import { noticeText } from './noticeText';
 import type { CalendarNotice } from './noticeText';
 import type { OrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
+import { orderable } from './ordersStore';
 import { pendingNow, usePendingLatch } from './pendingLatch';
 import { useUkHolidays } from './ukHolidays';
 
@@ -75,7 +76,8 @@ export function NoticesProvider({ lens, ready, children }: { lens: OrdersLens; r
       const untold: UntoldGroup[] = ready && snapshot.historyLoaded
         ? untoldChanges({
           suppliers: notForLater(lens.suppliers, snapshot.draft.days, today),
-          ingredients: lens.lines,
+          // A switched-off line with a quantity is in the order like any other (decision T10).
+          ingredients: orderable(lens.lines),
           entries: snapshot.draft.entries,
           requests: [],
           history: snapshot.history,
@@ -86,16 +88,18 @@ export function NoticesProvider({ lens, ready, children }: { lens: OrdersLens; r
         ? computeAlerts(snapshot.suppliers, new Date(), country, ukDates)
           .filter((alert): alert is CalendarNotice => alert.kind !== 'order')
         : [];
-      return { pending, untold, shown: visibleAlerts(alerts, dismissed), hidden: hiddenAlerts(alerts, dismissed) };
+      // Worded here, inside the try: a notice the words cannot be found for must not take the list down with it.
+      const dt = dayTranslate(t);
+      const calendar = visibleAlerts(alerts, dismissed).map(alert => ({ key: alert.key, text: noticeText(alert, t, dt) }));
+      return { pending, untold, calendar, hidden: hiddenAlerts(alerts, dismissed).length };
     } catch (err) {
       console.error('The notices could not be worked out:', err);
-      return { pending: [], untold: [], shown: [] as CalendarNotice[], hidden: [] as CalendarNotice[] };
+      return { pending: [], untold: [], calendar: [] as { key: string; text: string }[], hidden: 0 };
     }
   }, [lens, ready, latched, snapshot.draft, snapshot.history, snapshot.historyLoaded, snapshot.suppliers, snapshot.suppliersLoaded,
-    country, ukDates, dismissed, today]);
+    country, ukDates, dismissed, today, t]);
 
-  const dt = dayTranslate(t);
-  const calendar = model.shown.map(alert => ({ key: alert.key, text: noticeText(alert, t, dt) }));
+  const { calendar } = model;
 
   // ⚠️ ONLY THE NOTICES STILL OPEN raise a browser notification (finding F-7: the current app raised the ones put away too), and
   // each only once however often this is drawn. It works with the panel closed: the notice exists whether or not it is looked at.
@@ -113,7 +117,7 @@ export function NoticesProvider({ lens, ready, children }: { lens: OrdersLens; r
     pending: model.pending,
     untold: model.untold,
     calendar,
-    closed: model.hidden.length,
+    closed: model.hidden,
     close, reopen,
     count: model.pending.length + untoldBlocks + calendar.length,
   };

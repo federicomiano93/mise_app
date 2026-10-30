@@ -21,7 +21,7 @@ export function NoticesBell() {
       className={styles.bell}
       aria-label={count > 0 ? t('ord.notices.bellCount', { n: count }) : t('ord.notices.title')}
       aria-expanded={open}
-      aria-controls={panelId}
+      aria-controls={open ? panelId : undefined}
       onPress={() => { setOpen(!open); }}
     >
       <Bell aria-hidden="true" />

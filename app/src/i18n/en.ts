@@ -2403,6 +2403,7 @@ export const en = {
   'ord.pending.discardConfirm': 'Delete the quantities typed for {name}? They are not saved anywhere and cannot be recovered.',
   'ord.pending.discarded': '{name} — order discarded',
   'ord.pending.discardFailed': 'Could not discard the order — check your network and try again.',
+  'ord.pending.changed': 'This order changed meanwhile, so nothing was recorded. Check it on the list.',
   'ord.untold.changed': {
     one: '{supplier}: the order changed since it was last sent — 1 addition',
     other: '{supplier}: the order changed since it was last sent — {n} additions',

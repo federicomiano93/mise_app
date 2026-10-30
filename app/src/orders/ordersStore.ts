@@ -81,6 +81,9 @@ export interface OrdersSnapshot {
   // The order in progress: the server's document with this phone's unsent typing on top (draftSync.ts).
   readonly draft: DraftView;
   readonly draftLoaded: boolean;
+  // Whether the SERVER has answered for the suppliers, the ingredients and the draft (not only this phone's own database): the
+  // pending check looks once, and a look at a copy days old would miss an order typed on another phone (step 3f-6, review).
+  readonly serverSeen: { readonly suppliers: boolean; readonly ingredients: boolean; readonly draft: boolean };
   readonly draftBroken: boolean;
   // The last autosave was refused and no later one has landed (parity L37).
   readonly draftSaveFailed: boolean;
@@ -250,8 +253,9 @@ export function browserOrdersDeps(): OrdersDeps {
 }
 
 // A switched-off line with a quantity is ordered, recorded and cleared like any other (decision T10): the record's own lens
-// (ingredientsOf, active only — kept as the current app has it) must see every line of the order as in use.
-function orderable(lines: readonly LensIngredient[]): LensIngredient[] {
+// (ingredientsOf, active only — kept as the current app has it) must see every line of the order as in use. The reminders read
+// the order through it too (step 3f-6: an order not placed, or an addition nobody was told about, may be a «Non in uso» line).
+export function orderable(lines: readonly LensIngredient[]): LensIngredient[] {
   return lines.map(line => ((line as { active?: unknown }).active === false ? { ...line, active: true } : line));
 }
 
@@ -261,6 +265,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     ingredients: [], ingredientsLoaded: false, ingredientsBroken: false,
     config: normalizeOrdersConfig(null), configLoaded: false, deliveryCheck: deliveryCheckOf(null),
     draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false,
+    serverSeen: { suppliers: false, ingredients: false, draft: false },
     placing: [],
     history: [], historyLoaded: false, historyBroken: false, suggester: NO_SUGGESTIONS,
     olderHistory: [], older: { loading: false, done: false, error: false },
@@ -527,6 +532,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
             suppliers: list,
             suppliersLoaded: snapshot.suppliersLoaded || loadedBy(list, meta),
             suppliersBroken: false,
+            serverSeen: meta.fromServer && !snapshot.serverSeen.suppliers ? { ...snapshot.serverSeen, suppliers: true } : snapshot.serverSeen,
           }),
           () => set({ suppliersBroken: true, suppliersLoaded: true }),
         ),
@@ -535,6 +541,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
             ingredients: list,
             ingredientsLoaded: snapshot.ingredientsLoaded || loadedBy(list, meta),
             ingredientsBroken: false,
+            serverSeen: meta.fromServer && !snapshot.serverSeen.ingredients ? { ...snapshot.serverSeen, ingredients: true } : snapshot.serverSeen,
           }),
           () => set({ ingredientsBroken: true, ingredientsLoaded: true }),
         ),
@@ -555,6 +562,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
             draft: sync.receive(data),
             draftLoaded: snapshot.draftLoaded || data !== null || meta.fromServer,
             draftBroken: false,
+            serverSeen: meta.fromServer && !snapshot.serverSeen.draft ? { ...snapshot.serverSeen, draft: true } : snapshot.serverSeen,
           }),
           () => set({ draftBroken: true, draftLoaded: true }),
         ),
@@ -572,7 +580,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       stops = [];
       // The write is handed to Firestore now; it carries on without the listeners and lands when it can.
       stopped = true;
-      return sync.flush().then(() => { dropBusyWhenSaved(); return true; }, () => { /* said through onResult, which also releases the busy marker */ });
+      sync.flush().then(dropBusyWhenSaved, () => { /* said through onResult, which also releases the busy marker */ });
     },
 
     editLine(supplier, ingredient, edit) {

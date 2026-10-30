@@ -1,3 +1,4 @@
+import { useRef } from 'react';
 import type { KeyboardEvent } from 'react';
 import { CalendarClock, ChevronRight, X } from 'lucide-react';
 import { dayPhrase, daySpoken, spellShortDate, todayISO } from '@mise/shared/day';
@@ -12,6 +13,7 @@ import { useConfirm } from '../ui/useConfirm';
 import { useNotices } from './NoticesContext';
 import { useOrdersStore } from './OrdersContext';
 import { dayTranslate } from './dayWords';
+import { pendingOpener, useHandBack } from './handBack';
 import type { StoredDoc } from './ordersSource';
 import { LONG_MS } from './useClearQuantities';
 import styles from './NoticesPanel.module.css';
@@ -35,7 +37,15 @@ export function NoticesPanel({ onOpenSupplier, onOpenPending }: Props) {
   const store = useOrdersStore();
   const say = useStatusMessage();
   const [confirm, confirmDialog] = useConfirm();
+  const handBack = useHandBack();
   const dt = dayTranslate(t);
+  const panel = useRef<HTMLElement>(null);
+  // ⚠️ THE BUTTON PRESSED GOES AWAY WITH WHAT IT ANSWERED (a banner moved to today, a notice put away, the pill): the focus is put
+  // on the panel, or it would fall to the top of the page (review of step 3f-6).
+  const keepFocus = () => { panel.current?.focus(); };
+  // The banners as they are NOW: «Discard» asks first, and the order may have changed while the question was open.
+  const current = useRef(pending);
+  current.current = pending;
   const today = todayISO();
   const now = new Date();
 
@@ -56,8 +66,13 @@ export function NoticesPanel({ onOpenSupplier, onOpenPending }: Props) {
       danger: true,
     });
     if (!sure) return;
+    // ⚠️ STILL THE ORDER THE BANNER SHOWED? Placed or restamped meanwhile (another phone), its quantities are not this banner's to clear.
+    if (!current.current.some(now => now.supplier.id === row.supplier.id && now.day === row.day)) return;
     const outcome = await store.clearQuantities([row.supplier.id], t('ord.noSupplier'));
-    if (outcome === 'cleared') say(t('ord.pending.discarded', { name }), 4000);
+    if (outcome === 'cleared') {
+      say(t('ord.pending.discarded', { name }), 4000);
+      keepFocus();
+    }
     else say(outcome === 'offline' ? t('ord.offline.clear') : t('ord.pending.discardFailed'), LONG_MS);
   }
 
@@ -65,7 +80,15 @@ export function NoticesPanel({ onOpenSupplier, onOpenPending }: Props) {
   const nothing = pending.length === 0 && untold.length === 0 && calendar.length === 0 && closed === 0;
   return (
     <>
-      <section id={panelId} role="region" aria-label={t('ord.notices.title')} className={styles.panel} onKeyDown={onKeyDown}>
+      <section
+        ref={panel}
+        id={panelId}
+        role="region"
+        aria-label={t('ord.notices.title')}
+        className={styles.panel}
+        tabIndex={-1}
+        onKeyDown={onKeyDown}
+      >
         {pending.map(row => {
           const id = row.supplier.id;
           const name = supplierLabel(row.supplier);
@@ -75,12 +98,16 @@ export function NoticesPanel({ onOpenSupplier, onOpenPending }: Props) {
               <p className={styles.title}>{t('ord.pending.title', { supplier: name })}</p>
               <p className={styles.sub}>{t('ord.pending.items', { n: row.itemCount, when: dayPhrase(row.day, now, dt) })}</p>
               <div className={styles.actions}>
-                <Button variant="primary" onPress={() => { onOpenPending(id, row.day); }}>
+                <Button
+                  ref={node => { handBack.register(pendingOpener(id), node); }}
+                  variant="primary"
+                  onPress={() => { onOpenPending(id, row.day); }}
+                >
                   {t('ord.pending.placed', { when: daySpoken(row.day, now, dt) })}
                 </Button>
-                <Button onPress={() => { void store.setDay(row.supplier, today); }}>{t('ord.pending.today')}</Button>
+                <Button onPress={() => { keepFocus(); void store.setDay(row.supplier, today); }}>{t('ord.pending.today')}</Button>
                 {next === null ? null : (
-                  <Button onPress={() => { void store.setDay(row.supplier, next); }}>
+                  <Button onPress={() => { keepFocus(); void store.setDay(row.supplier, next); }}>
                     {t('ord.pending.next', { day: spellShortDate(next, dt) })}
                   </Button>
                 )}
@@ -120,14 +147,14 @@ export function NoticesPanel({ onOpenSupplier, onOpenPending }: Props) {
           <div key={notice.key} className={styles.calendar}>
             <p className={styles.text}>{notice.text}</p>
             {/* ⚠️ A SIBLING OF THE TEXT, never inside it: a button inside the words would be read as part of them. */}
-            <Button variant="bare" className={styles.close} aria-label={t('ord.notice.close')} onPress={() => { close(notice.key); }}>
+            <Button variant="bare" className={styles.close} aria-label={t('ord.notice.close')} onPress={() => { keepFocus(); close(notice.key); }}>
               <X aria-hidden="true" />
             </Button>
           </div>
         ))}
         {/* ⚠️ ONLY WHEN NOTHING IS LEFT OPEN: a pill beside a banner would be two controls for one fact. */}
         {calendar.length === 0 && closed > 0 ? (
-          <Button variant="bare" className={styles.pill} aria-label={t('ord.notice.reopen')} onPress={reopen}>
+          <Button variant="bare" className={styles.pill} aria-label={t('ord.notice.reopen')} onPress={() => { keepFocus(); reopen(); }}>
             <CalendarClock aria-hidden="true" />
             <span aria-hidden="true">{closed}</span>
           </Button>

@@ -2206,6 +2206,7 @@ export const it: Messages = {
   'ord.pending.discardConfirm': 'Cancellare le quantità scritte per {name}? Non sono salvate da nessuna parte e non si possono recuperare.',
   'ord.pending.discarded': '{name} — ordine scartato',
   'ord.pending.discardFailed': 'Non è stato possibile scartare l’ordine — controlla la rete e riprova.',
+  'ord.pending.changed': 'Quest’ordine è cambiato nel frattempo: non è stato registrato nulla. Controllalo nella lista.',
   'ord.untold.changed': {
     one: '{supplier}: l’ordine è cambiato dopo l’ultimo invio — 1 aggiunta',
     other: '{supplier}: l’ordine è cambiato dopo l’ultimo invio — {n} aggiunte',

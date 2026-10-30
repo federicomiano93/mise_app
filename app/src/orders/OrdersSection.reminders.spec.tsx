@@ -7,7 +7,7 @@ import { format } from '../i18n/i18n';
 import { it as italian } from '../i18n/it';
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
-import { LOAD, ingredient, renderOrders, supplier } from '../testing/renderOrders';
+import { LOAD, ingredient, renderOrders, split, supplier } from '../testing/renderOrders';
 
 // «Orders», step 3f-6: today's orders over the list, the bell and its panel — the orders typed on an earlier day and never placed,
 // what was added that nobody was told about, the calendar notices — and the notifications in the Orders settings.
@@ -143,6 +143,8 @@ describe('the bell and its panel', () => {
     expect(inside.getByText('No notices right now.')).toBeInTheDocument();
     await view.user.click(bell());
     expect(screen.queryByRole('region', { name: 'Notices' })).not.toBeInTheDocument();
+    // ⚠️ It names the panel only while there is one.
+    expect(bell()).not.toHaveAttribute('aria-controls');
   });
 
   it('counts what it holds in its name and on a badge, and the pill and the empty line are not counted', async () => {
@@ -197,6 +199,8 @@ describe('orders typed on an earlier day and never placed', () => {
     await waitFor(() => { expect(source.writes.at(-1)?.days?.['s-alp']).toBe(TODAY); });
     await waitFor(() => { expect(screen.queryByText('Alpine Mills — order not placed')).not.toBeInTheDocument(); });
     expect(bell()).toHaveAccessibleName('Notices');
+    // ⚠️ The button pressed is gone: the focus stays in the panel, never on the page.
+    expect(screen.getByRole('region', { name: 'Notices' })).toHaveFocus();
   });
 
   it('«For the next order» restamps it to the next order day when the supplier has one', async () => {
@@ -237,6 +241,36 @@ describe('orders typed on an earlier day and never placed', () => {
     await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders'); });
     // Placed: the order is gone from the draft and so is its banner.
     await waitFor(() => { expect(bell()).toHaveAccessibleName('Notices'); });
+    // The banner's button went with it: the supplier's row takes the focus.
+    await waitFor(() => { expect(screen.getByRole('button', { name: /^Alpine Mills/ })).toHaveFocus(); });
+  });
+
+  it('⚠️ «Placed yesterday» records nothing when the order changed while the screen was open (another phone restamped it)', async () => {
+    const source = seeded({ draft: PENDING_DRAFT });
+    const view = await atList(source);
+    await waitFor(() => { expect(bell()).toHaveAccessibleName('Notices: 1'); }, LOAD);
+    await view.user.click((await openPanel(view)).getByRole('button', { name: 'Placed yesterday' }));
+    await screen.findByRole('region', { name: 'Order placed' }, LOAD);
+    act(() => { source.remoteMerge({ days: { 's-alp': TODAY } }); });
+    await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
+    expect(await screen.findByText('This order changed meanwhile, so nothing was recorded. Check it on the list.', undefined, LOAD)).toBeInTheDocument();
+    expect(source.records.size).toBe(0);
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders'); });
+  });
+
+  it('⚠️ on the split, «Placed yesterday» beside an open supplier walks back to the list after recording, never pushing a second one', async () => {
+    split();
+    const source = seeded({ draft: PENDING_DRAFT });
+    const view = await atList(source);
+    await waitFor(() => { expect(bell()).toHaveAccessibleName('Notices: 1'); }, LOAD);
+    await view.user.click(screen.getByRole('button', { name: /^Alpine Mills/ }));
+    await screen.findByRole('heading', { level: 2, name: 'Alpine Mills' }, LOAD);
+    await view.user.click((await openPanel(view)).getByRole('button', { name: 'Placed yesterday' }));
+    await screen.findByRole('region', { name: 'Order placed' }, LOAD);
+    expect(view.router.state.historyAction).toBe('REPLACE');
+    await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders'); }, LOAD);
+    expect(view.router.state.historyAction).toBe('POP');
   });
 
   it('⚠️ the banner survives a visit to the confirm screen and back (the latch sits above the routes)', async () => {
@@ -248,9 +282,11 @@ describe('orders typed on an earlier day and never placed', () => {
     await view.user.click(screen.getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders'); });
     expect(bell()).toHaveAccessibleName('Notices: 1');
+    // Back hands the focus to the button that opened the screen.
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Placed yesterday' })).toHaveFocus(); });
   });
 
-  it.each([['a day that has not come', inDays(2)], ['something that is not a day', 'yesterday']])(
+  it.each([['a day that has not come', inDays(2)], ['something that is not a day', 'yesterday'], ['a day the order no longer carries', YESTERDAY]])(
     'ignores %s in the navigation state: the usual question is asked',
     async (_what, pendingDay) => {
       const source = seeded({ draft: { entries: { 'i-flour': { qty: 2 } }, days: { 's-alp': TODAY } } });
@@ -386,6 +422,7 @@ describe('the calendar notices', () => {
     await view.user.click(pill);
     expect(bell()).toHaveAccessibleName('Notices: 2');
     expect(inside.queryByRole('button', { name: 'Show the notices again' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Notices' })).toHaveFocus();
   });
 
   it('⚠️ raises a browser notification only for the notices still open, even with the panel closed', async () => {

@@ -1125,3 +1125,72 @@ lines; nothing is deleted.
 - To try on the tablet: the whole flow with real deliveries, and the switch from an employee's account.
 
 **P13.** No new personal data: who answered is not recorded; the three new keys are days and a yes/no.
+
+## Step 3f-6 as built — reminders and the bell
+
+Items R1–R13. Rules unchanged: everything is worked out from what Orders already reads (suppliers, ingredients, the draft, the
+live window of the records); no new collection, no new field, no new read.
+
+**Shared.** Paired full ports: `reminders` (`placedOn`, `suppliersStillToOrder`, `todayOrders`, `pendingSuppliers`),
+`untold-changes` (now whole: `askedToday`, `orderedToday`, `untoldChanges` beside `confirmedEntries`), `alert-dismissal`
+(the storage is an argument) and `holidays-it`. Adapted, not paired: `holidays` keeps no module state and reads no storage —
+the UK list is an argument (default: the built-in list, now 2025–2028 as gov.uk publishes it, finding F-8), with
+`ukDatesFromFeed` for the download; `notifications` ports only `computeAlerts` and `isReminderDue`, and `computeAlerts`
+returns DATA (`order` lines with the next delivery, `holiday` with its day and how far, `conflict` with the supplier and the
+day) — the words are the app's (finding F-6).
+
+**Data.** `ukHolidays.ts`: the UK list = the phone's copy (`uk-bank-holidays`, the SAME key as the current app, kept across a
+venue switch) joined with the built-in one; gov.uk is asked only by a UK venue and at most once a day (`uk-bank-holidays-fetched`),
+a failed or empty answer keeps the copy and is not counted. `calendarNotices.ts`: the notices put away
+(`orders-alerts-dismissed`, pruned by the date each is about), and the browser notification raised once per notice, only for
+the ones still open (F-7), through the service worker registration when one controls the page (Chrome for Android refuses
+`new Notification()`), else the constructor. `ordersStore.setDay` now answers whether the day was saved.
+
+**Screens.** «Ordina oggi» above the delivery doors: the suppliers whose order day is today, ticked once recorded, the others
+buttons that open their order; «Gli ordini di oggi sono tutti fatti» when every one is done; nothing before the records have
+arrived. The bell on the Orders title line (on a phone only on the list; on the split on every screen) with its number, opening
+a panel at the top of the list (not a dialog; Escape gives the focus back to the bell): the orders not placed, the untold
+blocks, the calendar notices — closeable with «L’ho letto», then the pill «Rivedi gli avvisi» — or «Nessun avviso al momento.».
+Settings gains «Avvisi (questo telefono)» with the four states of the browser permission.
+
+**Differences from the current app, on purpose (tell him):**
+- G1. Every word of a calendar notice in the reader's language, the date spelled whole («Fra 2 giorni è festivo (domenica 1
+  novembre)»): the current app pours «tomorrow», «Sunday» and «2026-11-01» into Italian sentences (F-6).
+- G2. A notice put away raises no browser notification (F-7).
+- G3. The UK built-in list reaches 2028 (F-8).
+- G4. Notifications through the service worker: on the lab tablet the current app's never appear. ⚠️ Not provable headless —
+  to try on the tablet once Mise 2 runs under its service worker.
+- G5. gov.uk at most once a day, not on every opening.
+- G6. The bell sits on the title line, not among the search, send and gear buttons: there it pushed the gear onto a second line
+  and cut the search box on a 360px phone.
+- G7. The pending banner is latched once per OPENING of Orders (the current app: once per page load — the same moment, in a
+  single-page app), then follows the data: «È di oggi» hides it at once, a refused save brings it back by itself.
+- G8. «Effettuato ieri» opens the usual confirm screen filed under that day, without «did you send it?» (as the current app).
+- G9. The untold blocks compare only with today's RECORD until the order lists arrive (3f-7): `requests: []`, and no «Rimanda
+  la lista» button yet.
+
+**After the review (opus):**
+- The pending banners are latched only once the SERVER has answered for the suppliers, the ingredients and the draft
+  (`serverSeen`): the first snapshot is often the phone's copy, which may still hold an order another phone placed this
+  morning. Offline, or after 5 s, the copy is used.
+- «Effettuato ieri» is asked again when the screen opens and at the tap (`stillPendingOn`): an order restamped, placed or
+  cleared meanwhile opens the usual screen, or at the tap records nothing and says «Quest’ordine è cambiato nel frattempo».
+  «Scarta» checks the same after its question.
+- A switched-off line with a quantity counts in the pending banners and the untold blocks, as it does when recording (T10).
+- On the split, «Effettuato ieri» beside an open supplier walks back to the list after recording instead of pushing it again.
+- The focus: a pressed banner button, «L’ho letto» and the pill leave it on the panel; Back from the confirm screen gives it to
+  «Effettuato …», or to the supplier's row once the order is recorded; the bell names the panel only while it is open.
+- Put-away notices are joined with the ones on screen, so storage emptied meanwhile never reopens one; a notification the
+  service worker refuses goes through the page, and one never raised is tried again.
+- Noted: «Scarta» clears the quantities only — the stock readings stay, as the current app's «clear». A browser notification is
+  raised once per notice per app session (a reload raises the still-open ones again, as the current app on every page load).
+
+**Left open (tell him):**
+- The browser notification for «order to place today» belongs to the Home (3g), as in the current app; the Settings sentence
+  already mentions it.
+- ⚠️ Mise 2's CSP (owed before the switch) must allow `https://www.gov.uk` in `connect-src`.
+- At 296px the gear of the list head goes to a second line, as it already did before this slice.
+- To try on the tablet: notifications (permission, the popup), the bell on a real finger.
+
+**P13.** No new personal data: the notices are worked out on the phone; the two new phone keys hold public dates and keys of
+notices.

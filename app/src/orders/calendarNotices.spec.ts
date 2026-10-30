@@ -33,6 +33,15 @@ describe('useDismissedNotices', () => {
     expect(JSON.parse(storage.data.get(DISMISSED_KEY) ?? '[]')).toStrictEqual(['bh-2026-11-01', 'conf-mill-2026-11-02']);
   });
 
+  it('⚠️ storage emptied meanwhile never brings back a notice put away earlier in this opening', () => {
+    const storage = memory();
+    const { result } = renderHook(() => useDismissedNotices('2026-10-30', storage));
+    act(() => { result.current.close('bh-2026-12-25'); });
+    storage.data.clear();
+    act(() => { result.current.close('conf-mill-2026-11-02'); });
+    expect(result.current.dismissed).toStrictEqual(['bh-2026-12-25', 'conf-mill-2026-11-02']);
+  });
+
   it('the pill brings every closed notice back', () => {
     const storage = memory({ [DISMISSED_KEY]: JSON.stringify(['bh-2026-12-25']) });
     const { result } = renderHook(() => useDismissedNotices('2026-10-30', storage));
@@ -95,6 +104,24 @@ describe('notifyOnce', () => {
     const granted = deps();
     await notifyOnce([holiday], granted.all);
     expect(granted.showNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it('a service worker that refuses: the page’s constructor instead', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const d = deps({ registration: async () => ({ showNotification: vi.fn(async () => { throw new Error('worker gone'); }) }) });
+    await notifyOnce([holiday], d.all);
+    expect(d.construct).toHaveBeenCalledWith('Public holiday', { body: 'Christmas', tag: 'bh-2026-12-25' });
+    warn.mockRestore();
+  });
+
+  it('⚠️ a notice that could not be raised is not remembered as raised: the next drawing tries again', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const failing = deps({ registration: async () => undefined, construct: vi.fn(() => { throw new TypeError('Illegal constructor'); }) });
+    await notifyOnce([holiday], failing.all);
+    const working = deps();
+    await notifyOnce([holiday], working.all);
+    expect(working.showNotification).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 
   it('a notification that throws is logged and never stops the next one', async () => {

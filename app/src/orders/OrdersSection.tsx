@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { todayISO } from '@mise/shared/day';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS, Page } from '../shell/Page';
 import { useOwnScrollArea } from '../shell/scrollArea';
+import { useOnline } from '../shell/useOnline';
 import { SPLIT_QUERY } from '../ui/split';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
@@ -24,13 +25,14 @@ import { PlaceAllConfirmScreen, SupplierConfirmScreen } from './PlaceConfirmScre
 import { SupplierItemsScreen } from './SupplierItemsScreen';
 import { SupplierOrderScreen } from './SupplierOrderScreen';
 import { SupplierPicker } from './SupplierPicker';
-import { PendingLatchProvider, pendingNow, usePendingLatch } from './pendingLatch';
+import { LATCH_GRACE_MS, PendingLatchProvider, latchCanLook, pendingNow, usePendingLatch } from './pendingLatch';
 import { LONG_MS } from './useClearQuantities';
 import {
   CLEAR_OPENER, HandBackProvider, HISTORY_DOOR, INCOMING_DOOR, ITEMS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, REORDER_DOOR, SEND_OPENER,
-  SETTINGS_OPENER, arrivalOpener, correctOpener, itemsOpener, sendDayOpener, supplierOpener, useHandBackState,
+  SETTINGS_OPENER, arrivalOpener, correctOpener, itemsOpener, pendingFallback, pendingOpener, sendDayOpener, supplierOpener,
+  useHandBackState,
 } from './handBack';
-import { FROM_LIST, replacedState } from './ordersNav';
+import { FROM_LIST, cameFromList, replacedState } from './ordersNav';
 import {
   CLEAR_PATH, INCOMING_PATH, ORDERS_PATH, PLACE_ALL_PATH, REORDER_PATH, SEND_PATH, SETTINGS_PATH, historyDayPath, historyEditPath,
   incomingMissingPath, parseOrdersPath, supplierConfirmPath, supplierItemsPath, supplierPath,
@@ -126,12 +128,18 @@ function OrdersLayout({ view }: { view: ShownView }) {
 
   // ⚠️ LOOK FOR ORDERS TYPED ON AN EARLIER DAY AND NEVER PLACED ONCE PER OPENING, once the suppliers, the ingredients and the draft
   // have ALL arrived (any of them missing would make every supplier look empty). The set found is kept above the routes, so it
-  // survives the confirm screen and back (pendingLatch.tsx).
+  // survives the confirm screen and back (pendingLatch.tsx). ⚠️ From the server's answer, not the copy on the phone (latchCanLook).
   const pendingLatch = usePendingLatch();
+  const online = useOnline();
+  const [graceOver, setGraceOver] = useState(false);
   useEffect(() => {
-    if (!ready || pendingLatch.latched !== null) return;
+    const timer = window.setTimeout(() => { setGraceOver(true); }, LATCH_GRACE_MS);
+    return () => { window.clearTimeout(timer); };
+  }, []);
+  useEffect(() => {
+    if (!ready || pendingLatch.latched !== null || !latchCanLook(snapshot.serverSeen, online, graceOver)) return;
     pendingLatch.latch(pendingNow(lens, snapshot.draft, todayISO()).map(row => row.supplier.id as string));
-  }, [ready, pendingLatch, lens, snapshot.draft]);
+  }, [ready, pendingLatch, lens, snapshot.draft, snapshot.serverSeen, online, graceOver]);
 
   // ⚠️ THIS SECTION OWNS THE SCROLL for the moves inside itself (shell/scrollArea.tsx): its list and its suppliers are
   // separate addresses, so the shell's reset to the top at every address would send the list back to the top at each supplier
@@ -161,9 +169,13 @@ function OrdersLayout({ view }: { view: ShownView }) {
   // «Placed yesterday» on a pending banner: the supplier's confirm screen, recording under the banner's day without asking whether it
   // was sent (it was: that is what the button says). The list is right behind the screen, so Back and a recorded order both go to it.
   const openPending = (id: string, day: string) => {
-    handBack.expect(supplierOpener(id));
+    handBack.expect(pendingOpener(id));
     if (split && view.kind !== 'list') {
-      void navigate(supplierConfirmPath(id), { replace: true, state: { ...replacedState(state), pendingDay: day } });
+      // ⚠️ THE CONFIRM SCREEN WALKS BACK TO THE LIST by `toList` after recording; without it the list would be pushed again on top
+      // of the one already in the history (review of step 3f-6). The screen it replaces knew how far the list is.
+      const kept = replacedState(state);
+      const toList = cameFromList(state) ? ('stepsUp' in kept ? kept.stepsUp : 1) : undefined;
+      void navigate(supplierConfirmPath(id), { replace: true, state: { ...kept, ...(toList === undefined ? {} : { toList }), pendingDay: day } });
     } else {
       if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
       void navigate(supplierConfirmPath(id), { state: { ...FROM_LIST, toList: 1, pendingDay: day } });
@@ -214,7 +226,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   // Back out of a supplier (its own Back, or the phone's back gesture): the button that opened it takes the focus, once the
   // list is on screen again (on a phone it was hidden behind the supplier, not unmounted).
   useLayoutEffect(() => {
-    if (view.kind === 'list') handBack.deliver();
+    if (view.kind === 'list') handBack.deliver(pendingFallback);
     // Back from History to the settings: the door that opened it. Back from the editor or the day screen to History: the card
     // button or the day's «Send all». ⚠️ NOT deliver(): History opened from the settings expects the DOOR, which is not on screen.
     else if (view.kind === 'settings') handBack.deliverIf(HISTORY_DOOR);

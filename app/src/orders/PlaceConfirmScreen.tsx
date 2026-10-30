@@ -21,8 +21,9 @@ import { useOrders, useOrdersStore } from './OrdersContext';
 import { buildConfirmGroups, confirmedItems } from './confirmCopy';
 import type { ConfirmGroup } from './confirmCopy';
 import { dayTranslate } from './dayWords';
-import { PLACE_ALL_OPENER, PLACE_DOOR, SEND_OPENER, supplierOpener, useHandBack } from './handBack';
+import { PLACE_ALL_OPENER, PLACE_DOOR, SEND_OPENER, pendingOpener, supplierOpener, useHandBack } from './handBack';
 import { useLeave, useLeaveToList } from './ordersNav';
+import { stillPendingOn } from './pendingLatch';
 import { PLACE_ALL_PATH, supplierPath } from './ordersPath';
 import { recordDateFor } from './orderDay';
 import { joinList } from './orderWords';
@@ -64,8 +65,14 @@ const nothing = () => undefined;
 // One supplier, at /orders/supplier/<id>/confirm.
 export function SupplierConfirmScreen({ id, lens }: { id: string; lens: OrdersLens }) {
   const handBack = useHandBack();
-  const leave = useLeave(supplierPath(id), () => { handBack.expect(PLACE_DOOR); });
-  const toList = useLeaveToList(useCallback(() => { handBack.expect(supplierOpener(id)); }, [handBack, id]));
+  const { state } = useLocation();
+  // Opened from a pending banner, the focus goes back to its «Placed …» (or, once the order is recorded and the banner gone, to the
+  // supplier's row: handBack's pendingFallback); opened from the supplier's screen, to its «Order placed…».
+  const fromBanner = pendingDayIn(state, todayISO()) !== null;
+  const leave = useLeave(supplierPath(id), () => { handBack.expect(fromBanner ? pendingOpener(id) : PLACE_DOOR); });
+  const toList = useLeaveToList(useCallback(() => {
+    handBack.expect(fromBanner ? pendingOpener(id) : supplierOpener(id));
+  }, [handBack, id, fromBanner]));
   const ids = useMemo(() => [id], [id]);
   return <PlaceConfirmScreen key={id} ids={ids} lens={lens} leave={leave} toList={toList} />;
 }
@@ -112,7 +119,8 @@ function idsIn(state: unknown): string[] {
 
 type Props = { ids: readonly string[]; lens: OrdersLens; leave: () => void; toList: () => void };
 
-type Ready = { readonly groups: readonly ConfirmGroup[]; readonly checks: readonly RecordCheck[] };
+// `pinnedDay`: opened from a pending banner whose order is still the one typed that day — recorded under it, with nothing asked.
+type Ready = { readonly groups: readonly ConfirmGroup[]; readonly checks: readonly RecordCheck[]; readonly pinnedDay: string | null };
 
 // Step 1: read the records, refuse a clash, take the working copy. Nothing is drawn but «Loading…» until then.
 function PlaceConfirmScreen({ ids, lens, leave, toList }: Props) {
@@ -135,7 +143,10 @@ function PlaceConfirmScreen({ ids, lens, leave, toList }: Props) {
       const now = latest.current;
       const today = todayISO();
       const draft = store.getSnapshot().draft;
-      const pinned = ids.length === 1 ? pendingDayIn(state, today) : null;
+      const asked = ids.length === 1 ? pendingDayIn(state, today) : null;
+      // ⚠️ ONLY WHILE THE BANNER IS STILL TRUE (review of step 3f-6): the order may have been restamped, placed or cleared since the
+      // banner was drawn (here or on another phone, or the page restored from history). Then the screen is the usual one.
+      const pinned = asked !== null && stillPendingOn(now.lens, draft, today, ids[0] ?? '', asked) ? asked : null;
       // ⚠️ FROM A PENDING BANNER the record goes under the day the banner showed, not under the draft's stamp (which touching any row
       // of that supplier restamps): «Placed yesterday» must file the order under yesterday.
       const items = ids.map(supplierId => ({ supplierId, date: pinned ?? recordDateFor(draft, supplierId, today) }));
@@ -167,7 +178,7 @@ function PlaceConfirmScreen({ ids, lens, leave, toList }: Props) {
         back();
         return;
       }
-      setReady({ groups, checks });
+      setReady({ groups, checks, pinnedDay: pinned });
     })();
     return () => { live = false; };
   }, [ids, store]);
@@ -207,7 +218,7 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
   const [send, sendDialogs] = useSendOrder(lens);
   const afterSend = afterSendIn(state);
   // From a pending banner's «Placed yesterday»: it WAS sent (that is what the button says), so it is not asked again (parity X9).
-  const alreadySent = ids.length === 1 && pendingDayIn(state, todayISO()) !== null;
+  const alreadySent = ready.pinnedDay !== null;
   const titleId = useId();
   const usualIdBase = useId();
   // ⚠️ THE «EXTRA DIGIT» LINE IS WRITTEN ONLY AFTER THE FIRST PAINT: its status region must be on the page before it speaks,
@@ -377,6 +388,14 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
       }
       // From a pending banner's «Placed …»: recorded as it is, with nothing asked.
       if (alreadySent) {
+        // ⚠️ ASKED AGAIN AT THE TAP: the order may have changed while this screen was open (another phone placed or restamped it).
+        // Then «Placed {day}» is no longer true, nothing is recorded, and the list shows what is there now.
+        if (!stillPendingOn(lens, store.getSnapshot().draft, todayISO(), ids[0] ?? '', ready.pinnedDay ?? '')) {
+          say(t('ord.pending.changed'), LONG_MS);
+          leaving.current = true;
+          toList();
+          return;
+        }
         await record(items);
         return;
       }

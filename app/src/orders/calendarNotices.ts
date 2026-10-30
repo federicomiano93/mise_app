@@ -7,7 +7,7 @@
 // ⚠️ ONLY THE CALENDAR NOTICES ARE CLOSEABLE (Federico, 24 Aug 2026): a coming holiday is read once; an order not placed or an
 // addition nobody was told about is WORK, and is never handed to this file.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   pruneDismissed, readDismissed, reopenAll, withDismissed, writeDismissed,
 } from '@mise/shared/alert-dismissal';
@@ -29,16 +29,20 @@ export interface DismissedNotices {
 // ⚠️⚠️ PRUNED AGAINST THE DATE, NEVER AGAINST THE NOTICES ON SCREEN (alert-dismissal.ts): the first paint comes before the
 // suppliers, so «the notices right now» would forget a delivery clash somebody had put away.
 // ⚠️ READ AGAIN BEFORE EVERY CHANGE: another tab of the app may have closed one meanwhile, and a write from a stale copy would
-// reopen it. Unreadable storage shows everything (silence would hide something true about the week).
+// reopen it. ⚠️ JOINED WITH THE LIST ON SCREEN too (review of step 3f-6): storage that refuses the write, or was emptied meanwhile,
+// would otherwise bring back every notice put away earlier in this opening. Unreadable storage shows everything (silence would hide
+// something true about the week).
 export function useDismissedNotices(today: string, storage: KeyStore | null = browserStorage()): DismissedNotices {
   const [dismissed, setDismissed] = useState<readonly string[]>(() => pruneDismissed(readDismissed(storage), today));
+  const shown = useRef(dismissed);
+  shown.current = dismissed;
   useEffect(() => {
     const kept = pruneDismissed(readDismissed(storage), today);
     writeDismissed(storage, kept);
     setDismissed(kept);
   }, [storage, today]);
   const close = useCallback((key: string) => {
-    const next = withDismissed(readDismissed(storage), key);
+    const next = withDismissed([...new Set([...readDismissed(storage), ...shown.current])], key);
     writeDismissed(storage, next);
     setDismissed(next);
   }, [storage]);
@@ -108,9 +112,20 @@ export async function notifyOnce(notices: readonly PhoneNotice[], deps: NotifyDe
   for (const notice of fresh) {
     const options: NotificationOptions = { body: notice.body, tag: notice.key };
     try {
-      if (registration) await registration.showNotification(notice.title, options);
-      else deps.construct(notice.title, options);
+      if (registration) {
+        try {
+          await registration.showNotification(notice.title, options);
+        } catch (err) {
+          // A worker that refuses (being replaced, say): the constructor, which a desktop page still has.
+          console.warn('Notification through the service worker failed, trying the page:', err);
+          deps.construct(notice.title, options);
+        }
+      } else {
+        deps.construct(notice.title, options);
+      }
     } catch (err) {
+      // ⚠️ NOT RAISED, SO NOT REMEMBERED AS RAISED: the next drawing of the bell tries again.
+      raised.delete(notice.key);
       console.warn('Notification failed:', err);
     }
   }
