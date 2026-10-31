@@ -600,6 +600,7 @@ const DICTIONARIES = Object.freeze({
       other: '{trays} trays × {g} g',
     },
     'calc.traysTypedPart': '+ {g} g typed by hand',
+    'calc.historyTotal': 'Total dough: {g} g',
 
     // ── 'I am on holiday' ────────────────────────────────────────────────────
     'away.title': 'I am on holiday',
@@ -3703,6 +3704,7 @@ const DICTIONARIES = Object.freeze({
       other: '{trays} teglie × {g} g',
     },
     'calc.traysTypedPart': '+ {g} g scritti a mano',
+    'calc.historyTotal': 'Impasto totale: {g} g',
 
     'away.title': 'Sono in ferie',
     'away.untilLabel': 'Via fino a, compreso',
