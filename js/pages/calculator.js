@@ -3,6 +3,7 @@
 import { runInOrder } from './run-in-order.js';
 
 runInOrder([
+  () => import('../viewport-height.js'),
   () => import('../location-title.js'),
   () => import('../i18n-dom.js'),
   () => import('../auth-gate.js'),

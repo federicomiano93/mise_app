@@ -37,14 +37,14 @@ body {
   /* Pin the app shell to the VISIBLE viewport. height:100% resolves to the LARGE
      mobile viewport (address bar hidden), so the body overflowed the visible area
      and the whole page could be dragged — hiding the fixed header. dvh tracks the
-     browser's dynamic chrome (100vh is the fallback); position:fixed stops iOS from
+     browser's dynamic chrome (--vh100, tokens.css; the lab tablet has no dvh and gets
+     the measured height from js/viewport-height.js); position:fixed stops iOS from
      bouncing the whole document. Only the .scroll-area inside still scrolls. */
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 100vh;
-  height: 100dvh;
+  height: var(--vh100);
 }
 
 /* Header
@@ -390,7 +390,7 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
   border-radius: 20px;
   padding: 18px;
   color: var(--text);
-  min-height: 80vh;
+  min-height: calc(var(--vh100) * 0.8);
 }
 .result-header {
   display: flex;
@@ -1543,7 +1543,7 @@ input.cp-prod-weight {
   padding: 24px 20px 32px;
   width: 100%;
   max-width: 480px;
-  max-height: 88vh;
+  max-height: calc(var(--vh100) * 0.88);
   overflow-y: auto;
   text-align: left;
 }
@@ -1561,7 +1561,7 @@ input.cp-prod-weight {
   body[data-card="calculator"] #loaf-modal-box, body[data-card="calculator"] #list-select-box, body[data-card="calculator"] #day-modal-box, body[data-card="calculator"] #send-who-box {
     border-radius: var(--radius);
     padding: 20px;
-    max-height: calc(100dvh - 48px);
+    max-height: calc(var(--vh100) - 48px);
   }
   body[data-card="calculator"] #loaf-modal.visible #loaf-modal-box,
   body[data-card="calculator"] #list-select-modal.visible #list-select-box,
