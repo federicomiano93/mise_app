@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "011f7e1af8ad6905",
-      "mapSha": "fa058e0b715adde9",
+      "sha": "d88492a8ea729987",
+      "mapSha": "03a03a38263ab214",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -93,7 +93,7 @@
         "js/orders/reminders.js": "de7b21d852fd6259",
         "js/orders/work-week.js": "f3357e101a800a8e",
         "js/pack-size.js": "d9a48baaa91226df",
-        "js/pages/calculator.js": "1230473e32b6b512",
+        "js/pages/calculator.js": "db742b60ac706355",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
         "js/price-model.js": "e6aa115d5280fb75",
@@ -122,6 +122,7 @@
         "js/usage.js": "5c4d5ace756fcfa3",
         "js/vendor/sortable.esm.js": "6c9b20f666b97a0d",
         "js/venue-features.js": "d1dd442e6767bba8",
+        "js/viewport-height.js": "79ebea16da39a8ea",
         "js/wake-lock.js": "c6b69350b8771fa8",
         "js/whatsapp.js": "cacb8a66a1a0967f",
         "js/workspace-row.js": "2a2fb474351f90d9",
@@ -129,14 +130,14 @@
       }
     },
     "dist/catalogue.css": {
-      "sha": "3939fe108cb6ce46",
+      "sha": "0412612983211de1",
       "inputs": {
-        "catalogue.css": "0fb386227ffe6a25"
+        "catalogue.css": "7cafa3d110f1997e"
       }
     },
     "dist/catalogue.js": {
-      "sha": "d5758b8a7f6c1120",
-      "mapSha": "eb829a1b47e26579",
+      "sha": "40a2800d86dcf016",
+      "mapSha": "fde315084517bff3",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -224,7 +225,7 @@
         "js/orders/work-week.js": "f3357e101a800a8e",
         "js/pack-format.js": "543f7404a40a476f",
         "js/pack-size.js": "d9a48baaa91226df",
-        "js/pages/catalogue.js": "e386abe4f2692a04",
+        "js/pages/catalogue.js": "ec27e10aad0b31d3",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/photo-model.js": "ce3cd2404907c8d4",
         "js/pick-screen.js": "8248cd40ef3e2e29",
@@ -262,19 +263,20 @@
         "js/vat-rates.js": "1c08624a241026df",
         "js/vendor/sortable.esm.js": "6c9b20f666b97a0d",
         "js/venue-features.js": "d1dd442e6767bba8",
+        "js/viewport-height.js": "79ebea16da39a8ea",
         "js/wake-lock.js": "c6b69350b8771fa8",
         "js/workspace-row.js": "2a2fb474351f90d9"
       }
     },
     "dist/foodcost.css": {
-      "sha": "e7fdc76e2a8e8a2b",
+      "sha": "d9cc4cb03579875f",
       "inputs": {
-        "foodcost.css": "bf437490af5d302a"
+        "foodcost.css": "5f9ca8691b6e4691"
       }
     },
     "dist/foodcost.js": {
-      "sha": "3d3531e8ebc458d6",
-      "mapSha": "10b432a9cb2821e0",
+      "sha": "d3d24d0eb18476c2",
+      "mapSha": "90bed80c4fc46ba1",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -341,7 +343,7 @@
         "js/orders/reminders.js": "de7b21d852fd6259",
         "js/orders/work-week.js": "f3357e101a800a8e",
         "js/pack-size.js": "d9a48baaa91226df",
-        "js/pages/foodcost.js": "2d92f1250286a0e6",
+        "js/pages/foodcost.js": "c647dade0ba27852",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/pick-screen.js": "8248cd40ef3e2e29",
         "js/pick-suggest.js": "11a4974ce3429a4b",
@@ -370,6 +372,7 @@
         "js/usage.js": "5c4d5ace756fcfa3",
         "js/vat-rates.js": "1c08624a241026df",
         "js/venue-features.js": "d1dd442e6767bba8",
+        "js/viewport-height.js": "79ebea16da39a8ea",
         "js/wake-lock.js": "c6b69350b8771fa8",
         "js/workspace-row.js": "2a2fb474351f90d9"
       }
@@ -382,8 +385,8 @@
       }
     },
     "dist/index.js": {
-      "sha": "2212328e1f459bab",
-      "mapSha": "0421861707d88b4b",
+      "sha": "f1392861e08d2533",
+      "mapSha": "b4e81f8fec905e04",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -458,7 +461,7 @@
         "js/orders/supplier-order.js": "8ae6214ead9476d4",
         "js/orders/work-week.js": "f3357e101a800a8e",
         "js/pack-size.js": "d9a48baaa91226df",
-        "js/pages/index.js": "2f2d121c6c93446f",
+        "js/pages/index.js": "0e088a923d3693fa",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
         "js/price-model.js": "e6aa115d5280fb75",
@@ -486,6 +489,7 @@
         "js/usage.js": "5c4d5ace756fcfa3",
         "js/vendor/sortable.esm.js": "6c9b20f666b97a0d",
         "js/venue-features.js": "d1dd442e6767bba8",
+        "js/viewport-height.js": "79ebea16da39a8ea",
         "js/wake-lock.js": "c6b69350b8771fa8",
         "js/whats-new-boot.js": "4e9c752f720f5580",
         "js/whats-new.js": "a7c28364f00a2126",
@@ -493,26 +497,27 @@
       }
     },
     "dist/install-guide.js": {
-      "sha": "4296b62d458089ce",
-      "mapSha": "24be1620b8b3b732",
+      "sha": "78d5f90e3a730908",
+      "mapSha": "24e04a1410b3c137",
       "inputs": {
         "js/i18n-dom.js": "6e9d8700a6b5db94",
         "js/install-guide.js": "671213898481f683",
         "js/keyboard-done.js": "571c769004340cf9",
-        "js/pages/install-guide.js": "040edd7bb020f989",
+        "js/pages/install-guide.js": "eb6c2a288a627a44",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
-        "js/share.js": "85dda5863e4eea85"
+        "js/share.js": "85dda5863e4eea85",
+        "js/viewport-height.js": "79ebea16da39a8ea"
       }
     },
     "dist/inventory.css": {
-      "sha": "805ef3ad56fb4536",
+      "sha": "f9805b34c0b60c44",
       "inputs": {
-        "inventory.css": "16d92dcc5df28dc3"
+        "inventory.css": "0ede8280d88dfb2b"
       }
     },
     "dist/inventory.js": {
-      "sha": "7fe8099beba0f6c3",
-      "mapSha": "0a1a56d352e6dddd",
+      "sha": "7501b99232f30bc8",
+      "mapSha": "6bc5bab781b11880",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -571,7 +576,7 @@
         "js/orders/reminders.js": "de7b21d852fd6259",
         "js/orders/work-week.js": "f3357e101a800a8e",
         "js/pack-size.js": "d9a48baaa91226df",
-        "js/pages/inventory.js": "00455c5c59bd9354",
+        "js/pages/inventory.js": "e7721cee9636e7a5",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
         "js/price-model.js": "e6aa115d5280fb75",
@@ -595,6 +600,7 @@
         "js/usage-model.js": "d6703bc466f26817",
         "js/usage.js": "5c4d5ace756fcfa3",
         "js/venue-features.js": "d1dd442e6767bba8",
+        "js/viewport-height.js": "79ebea16da39a8ea",
         "js/wake-lock.js": "c6b69350b8771fa8",
         "js/workspace-row.js": "2a2fb474351f90d9"
       }
@@ -606,14 +612,14 @@
       }
     },
     "dist/order.css": {
-      "sha": "f639fc4fa6b402af",
+      "sha": "e2a927eca837266b",
       "inputs": {
-        "order.css": "79e8f0efefd915ca"
+        "order.css": "20404ad80c60f5ec"
       }
     },
     "dist/order.js": {
-      "sha": "08f172a5250e94ee",
-      "mapSha": "329aef652f10b25e",
+      "sha": "5a94ca2c77b879bf",
+      "mapSha": "aa478fa78b774b2a",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/calculator-config.js": "792725c78baa042d",
@@ -631,24 +637,25 @@
         "js/local-data.js": "c6dfd9f3ee09711a",
         "js/location.js": "0bf3beb2a2fe7a6f",
         "js/market.js": "296703359daa115b",
-        "js/pages/order.js": "8de372ff0686b1c2",
+        "js/pages/order.js": "dfd3c09352bc180f",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
         "js/roles.js": "e98863032b2f2d54",
         "js/same-data.js": "f86f5defaed51eaf",
         "js/sections.js": "3c8ee410aa212b2c",
-        "js/update-gate.js": "6e22f2191ce371e8"
+        "js/update-gate.js": "6e22f2191ce371e8",
+        "js/viewport-height.js": "79ebea16da39a8ea"
       }
     },
     "dist/orders.css": {
-      "sha": "21754921e891fbbb",
+      "sha": "18530106c89d72f4",
       "inputs": {
-        "orders.css": "f799bbee5cbca1db"
+        "orders.css": "4a1e01e8c147a122"
       }
     },
     "dist/orders.js": {
-      "sha": "9f48b8a75cc4b957",
-      "mapSha": "455567066a88308d",
+      "sha": "55bcf3eb57d459dd",
+      "mapSha": "ad35336da9d04aaf",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -753,7 +760,7 @@
         "js/orders/work-week.js": "f3357e101a800a8e",
         "js/pack-format.js": "543f7404a40a476f",
         "js/pack-size.js": "d9a48baaa91226df",
-        "js/pages/orders.js": "8dc626de7e014bfd",
+        "js/pages/orders.js": "b67676100fa2e75b",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
         "js/price-model.js": "e6aa115d5280fb75",
@@ -786,6 +793,7 @@
         "js/vat-rates.js": "1c08624a241026df",
         "js/vendor/sortable.esm.js": "6c9b20f666b97a0d",
         "js/venue-features.js": "d1dd442e6767bba8",
+        "js/viewport-height.js": "79ebea16da39a8ea",
         "js/wake-lock.js": "c6b69350b8771fa8",
         "js/workspace-row.js": "2a2fb474351f90d9"
       }
@@ -797,8 +805,8 @@
       }
     },
     "dist/pastries.js": {
-      "sha": "ffdf6061507f8439",
-      "mapSha": "df1b8a4b127a444c",
+      "sha": "67c9875a6a2e63d0",
+      "mapSha": "06dafa84dc5737ec",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -845,7 +853,7 @@
         "js/orders/reminders.js": "de7b21d852fd6259",
         "js/orders/work-week.js": "f3357e101a800a8e",
         "js/pack-size.js": "d9a48baaa91226df",
-        "js/pages/pastries.js": "6950f9a439da8b15",
+        "js/pages/pastries.js": "b3be75228cac2908",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/pastries/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/pastries/dom.js": "247525e429f4ec4a",
@@ -884,6 +892,7 @@
         "js/usage-model.js": "d6703bc466f26817",
         "js/usage.js": "5c4d5ace756fcfa3",
         "js/venue-features.js": "d1dd442e6767bba8",
+        "js/viewport-height.js": "79ebea16da39a8ea",
         "js/wake-lock.js": "c6b69350b8771fa8",
         "js/workspace-row.js": "2a2fb474351f90d9"
       }
@@ -895,14 +904,14 @@
       }
     },
     "dist/style.css": {
-      "sha": "24badf0c0a674725",
+      "sha": "2ebca8c8ec1a0489",
       "inputs": {
-        "style.css": "7f39f1de551d7f64"
+        "style.css": "fb460af6a2bc9c6c"
       }
     },
     "dist/suppliers.js": {
-      "sha": "e5e57b7e2676d946",
-      "mapSha": "800935cb7ee36cf8",
+      "sha": "15436d9ae40bd5a6",
+      "mapSha": "7e02d18cd57496bd",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -996,7 +1005,7 @@
         "js/pack-format.js": "543f7404a40a476f",
         "js/pack-size.js": "d9a48baaa91226df",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
-        "js/pages/suppliers.js": "8d84065bf4150d76",
+        "js/pages/suppliers.js": "157776cfb0cd484c",
         "js/photo-model.js": "ce3cd2404907c8d4",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
         "js/price-model.js": "e6aa115d5280fb75",
@@ -1026,14 +1035,15 @@
         "js/vat-rates.js": "1c08624a241026df",
         "js/vendor/fflate.esm.js": "71c4d7d689b851e5",
         "js/venue-features.js": "d1dd442e6767bba8",
+        "js/viewport-height.js": "79ebea16da39a8ea",
         "js/wake-lock.js": "c6b69350b8771fa8",
         "js/workspace-row.js": "2a2fb474351f90d9"
       }
     },
     "dist/tokens.css": {
-      "sha": "e82c9eacbe1c42ec",
+      "sha": "c95221ad007780e0",
       "inputs": {
-        "tokens.css": "7e9eab5eee84e2f2"
+        "tokens.css": "bcb40f22095cf866"
       }
     }
   }

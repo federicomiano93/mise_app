@@ -23,13 +23,13 @@ body {
      on the ONE page a customer's own customer ever sees. (--font-display two
      rules below was always right, which is how the name here reads as correct.) */
   font-family: var(--font-round, system-ui, -apple-system, sans-serif);
-  min-height: 100dvh;
+  min-height: var(--vh100);
 }
 
 #order-root {
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  min-height: var(--vh100);
   max-width: 560px;
   margin: 0 auto;
 }
