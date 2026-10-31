@@ -376,6 +376,17 @@ describe('refusals, in the card of before\'s order', () => {
   });
 });
 
+describe('«Not in use at the moment» on the card of before', () => {
+  test('`active` is sent only when the switch moved, as the opposite of the switch', () => {
+    const card = openCard(MULTIPLIER);
+    expect('active' in saved(card).payload, 'not moved: absent, so a switch moved elsewhere is not undone').toBe(false);
+    card.setWorking({ notInUse: true });
+    expect(saved(card).payload.active).toBe(false);
+    card.setWorking({ notInUse: false });
+    expect('active' in saved(card).payload).toBe(false);
+  });
+});
+
 describe('the two menus', () => {
   test('«Order unit» with «+ New unit…»: a typed word is saved, capped at the rules\' 100', () => {
     const card = openCard(MULTIPLIER);

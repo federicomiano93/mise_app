@@ -116,7 +116,7 @@ describe('a supplier\'s details', () => {
     }
   });
 
-  it('shows the price and «not declared» on those rows too, and the switched-off word', async () => {
+  it('shows the price and «not declared» on those rows too, and the switched-off item under «Not in use»', async () => {
     const source = fakeSuppliersSource({
       suppliers: SUPPLIERS,
       ingredients: [item('i-1', { name: 'Flour', supplierId: 's-alp', active: false })],
@@ -126,7 +126,9 @@ describe('a supplier\'s details', () => {
     const row = within(await screenOf('Alpine')).getByRole('listitem');
     expect(within(row).getByText('£1.20 / kg')).toBeInTheDocument();
     expect(within(row).getByText('not declared')).toBeInTheDocument();
-    expect(within(row).getByText('Switched off')).toBeInTheDocument();
+    expect(within(row).queryByText('Switched off'), 'the group heading says it, not the row').not.toBeInTheDocument();
+    expect(row.closest('details')).not.toBeNull();
+    expect(within(await screenOf('Alpine')).getByText('Not in use (1)')).toBeInTheDocument();
   });
 
   it('says «No ingredients yet.» for a supplier that sells nothing', async () => {

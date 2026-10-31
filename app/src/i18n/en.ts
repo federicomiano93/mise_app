@@ -713,6 +713,7 @@ export const en = {
   'ui.recipe': 'Recipe',
   'ui.active': 'Active',
   'ui.paused': 'Paused',
+  'ui.notInUse': 'Not in use',
   // new in Mise 2 (the current app has no such words)
   'calc.newClient': 'New client',
   'calc.deleteClientNamed': 'Delete client {name}',
@@ -1466,6 +1467,7 @@ export const en = {
   'sup.packagingTag': 'Packaging',
   // NEW: the word beside a switched-off supplier or ingredient, so it is never told apart by being dimmed alone.
   'sup.switchedOff': 'Switched off',
+  'sup.notInUseGroup': 'Not in use ({n})',
   'sup.loadFailed': 'Could not load the suppliers. Check your connection and try again.',
   'sup.pane.suppliers.title': 'Choose a supplier',
   'sup.pane.suppliers.text': 'Tap a supplier on the left: its details and everything it sells open here.',
@@ -1600,6 +1602,8 @@ export const en = {
   'sup.ingredientGone': 'This ingredient no longer exists.',
   'sup.ingredientDeleted': 'Ingredient deleted.',
   'sup.ing.delete': 'Delete ingredient',
+  'sup.ing.notInUse': 'Not in use at the moment',
+  'sup.ing.notInUseHint': 'It moves to the bottom of the lists, under “Not in use”. It never disappears: you can still pick it.',
   // NEW: a packaging item's card says «packaging», not «ingredient», in its question, its confirmation and its bin.
   'sup.pack.save.title': 'Save packaging?',
   'sup.packagingSaved': 'Packaging saved.',

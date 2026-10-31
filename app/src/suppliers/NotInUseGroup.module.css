@@ -1,0 +1,36 @@
+/* The folded group of the items switched off. Under the active rows, closed until opened. */
+
+.group {
+  margin-top: var(--s3);
+}
+
+.title {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s1);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  list-style: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.title:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+  border-radius: var(--r-md);
+}
+
+.chevron {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  transform: rotate(-90deg);
+}
+
+.group[open] .chevron {
+  transform: none;
+}

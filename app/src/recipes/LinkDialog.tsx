@@ -36,12 +36,14 @@ export function LinkDialog({ ingredients, recipes, suppliers, excludeRecipeId, h
   const { t } = useT();
   const [query, setQuery] = useState(initialQuery);
   const options = useMemo(
-    () => linkOptions({ ingredients, recipes, suppliers, query, excludeRecipeId }),
+    () => linkOptions({ ingredients, recipes, suppliers, query, excludeRecipeId, inactiveLast: true }),
     [ingredients, recipes, suppliers, query, excludeRecipeId],
   );
   // Same three conditions as the suggestion list's last row.
-  const canCreate = mayCreate && query.trim() !== '' && !nameTaken(ingredients, query);
-  const shown = options.ingredients.length + options.recipes.length;
+  const canCreate = mayCreate && query.trim() !== '' && !nameTaken(ingredients, query, { inactiveLast: true });
+  // 3e-5b: the ingredients switched off are listed LAST, under their own heading, and chosen like any other.
+  const inactive = options.inactive ?? [];
+  const shown = options.ingredients.length + options.recipes.length + inactive.length;
 
   return (
     <Dialog
@@ -102,6 +104,27 @@ export function LinkDialog({ ingredients, recipes, suppliers, excludeRecipeId, h
                     <span className={styles.name}>{option.name}</span>
                     {' '}
                     <span className={styles.meta}>{t('cat.recipe')}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+        {inactive.length === 0 ? null : (
+          <section className={styles.section}>
+            <h3 className={styles.heading}>{t('ui.notInUse')}</h3>
+            <ul className={styles.rows}>
+              {inactive.map(option => (
+                <li key={String(option.id)}>
+                  <button
+                    type="button"
+                    className={styles.row}
+                    onClick={() => { onChoose({ kind: 'ingredient', refId: String(option.id), name: option.name }); }}
+                  >
+                    <span className={styles.name}>{option.displayName ?? option.name}</span>
+                    {' '}
+                    {/* The row says it too, not only the heading: a keyboard or screen-reader user tabs past the heading. */}
+                    <span className={styles.meta}>{[option.weight, option.supplierName, t('ui.notInUse')].filter(Boolean).join(LINK_SEPARATOR)}</span>
                   </button>
                 </li>
               ))}
