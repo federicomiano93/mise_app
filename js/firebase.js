@@ -1191,13 +1191,26 @@ export function watchCatalogueRecipe(id, onChange) {
 // straight back to matching by name, which is the defect being designed out.
 //
 // withRowIds is idempotent: rows that already have a unique id come back
-// byte-identical, so this can never disturb a recipe that has been saved since.
-export function stampRecipeRowIds(id, ingredients) {
-  return authReady.then(() => setDoc(
-    doc(db, pathFor('recipes'), id),
-    { ingredients },
-    { merge: true },
-  ));
+// byte-identical.
+//
+// ⚠️ A TRANSACTION ON THE RECIPE AS IT IS NOW, NEVER A COPY READ EARLIER. The list the
+// Calculator offers is read when its Recipes screen opens, and writing that copy back
+// replaced the whole ingredients array: a correction made in the Recipe catalogue since then,
+// on another phone, was silently undone (code review, 30 Oct 2026). `stamp(rows)` returns the
+// stamped rows, or null when every row already has its id — and then nothing is written.
+// Resolves the rows now stored, or null when the recipe no longer exists.
+export function stampRecipeRowIds(id, stamp) {
+  return authReady.then(() => runTransaction(db, async (tx) => {
+    const ref = doc(db, pathFor('recipes'), id);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    const rows = Array.isArray(data.ingredients) ? data.ingredients : [];
+    const stamped = stamp(rows);
+    if (!stamped) return rows;
+    tx.set(ref, { ingredients: stamped }, { merge: true });
+    return stamped;
+  }));
 }
 
 // The Catalogue's recipes, for the picker that links one to a Calculator tab.
