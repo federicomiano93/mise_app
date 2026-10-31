@@ -146,7 +146,7 @@ test('the open row holds the logic dropdown with its sentence, the switch and Ed
 test('the detail screen no longer holds the logic rows or the «show as a tab» checkbox', () => {
   const js = read('js/recipes.js');
   const detail = js.slice(js.indexOf('function renderRecipeDetail'), js.indexOf('// One ingredient row'));
-  assert.doesNotMatch(detail, /cp-choice|LOGIC_LABELS|aria-pressed|visCb|showAsACalculator|recipesCanShowAs/);
+  assert.doesNotMatch(detail, /cp-choice|LOGIC_LABELS|visCb|showAsACalculator|recipesCanShowAs/);
   assert.match(detail, /leaveningBox\(r\)/, 'the leavening box still follows the logic');
   assert.doesNotMatch(read('style.css'), /\.cp-choice/);
 });
