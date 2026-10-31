@@ -128,6 +128,13 @@ export function buildRecipePanel(recipe, resolved) {
   const hasTrays = usesTrays(recipe.logic);
   const content = el('div', { class: 'content', id: 'tab-' + id });
 
+  // Why a linked tab cannot be calculated, filled and shown by calc.js (paintSourceProblem).
+  // FIRST in the panel: below a long list of client orders it would be off-screen, and the
+  // tab would read as silent again.
+  content.appendChild(el('p', {
+    class: 'cp-source-problem calc-source-problem', id: id + '-source-problem', role: 'status', hidden: '',
+  }));
+
   // ⚠️ NO KNOB FOR A CATALOGUE ROW THAT IS GONE (deleted, or re-added with a new id):
   // the spec scales pro-rata then, and a knob would move the % and change no gram.
   if (showsLeaveningKnob(recipe) && !leaveningLost(recipe, resolved)) {

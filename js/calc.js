@@ -20,8 +20,8 @@ import {
 } from './calculator-config.js';
 // ⚠️ Where a tab's ingredients really come from. A screen reading
 // recipe.ingredients directly would see the tab's own leftover copy.
-import { effectiveRecipe } from './calculator-catalogue-link.js';
-import { canCalculate, sheetRecipe } from './calculator-recipe-source.js';
+import { effectiveRecipe, isStillLoading, problemMessage } from './calculator-catalogue-link.js';
+import { canCalculate, sheetRecipe, showsSourceProblem } from './calculator-recipe-source.js';
 import { getConfig } from './calculator-config-store.js';
 import { el } from './calculator-render.js';
 import { placeResult } from './result-place.js';
@@ -245,6 +245,18 @@ function renderCrateBoxes(id) {
   }
 }
 
+// Why a linked tab cannot be calculated, written on the tab itself (showsSourceProblem).
+function paintSourceProblem(id, recipe, source) {
+  const box = document.getElementById(id + '-source-problem');
+  if (!box) return;
+  const show = showsSourceProblem(recipe, source, isStillLoading(recipe));
+  const text = show ? problemMessage(source) : '';
+  // Written only when it changes: calc() runs on every keystroke, and a status line
+  // rewritten each time is read out again by some screen readers.
+  if (box.textContent !== text) box.textContent = text;
+  box.hidden = !show;
+}
+
 // The generic calculation for one recipe: compute the target by logic, scale the
 // recipe to it, render the ingredients, badge, total, divisor and crate boxes.
 export function calc(id) {
@@ -257,17 +269,21 @@ export function calc(id) {
     trays: traysFor(id),
   });
   paintTraysGrams(recipe);
+
+  // ⚠️ THE INGREDIENTS COME THROUGH effectiveRecipe(), NEVER STRAIGHT OFF THE TAB.
+  // Once a tab is linked, recipe.ingredients is only its own leftover copy —
+  // exactly the stale data this change exists to stop using. Resolved before the
+  // empty-total return, so the reason a tab cannot be calculated shows before
+  // anything is typed.
+  const source = effectiveRecipe(recipe);
+  paintSourceProblem(id, recipe, source);
+
   const resultId = id + '-result';
   if (target <= 0) {
     hideResult(resultId);
     applyTabState(id);
     return;
   }
-
-  // ⚠️ THE INGREDIENTS COME THROUGH effectiveRecipe(), NEVER STRAIGHT OFF THE TAB.
-  // Once a tab is linked, recipe.ingredients is only its own leftover copy —
-  // exactly the stale data this change exists to stop using.
-  const source = effectiveRecipe(recipe);
 
   // ⚠️ AND A RECIPE THAT CANNOT BE READ REFUSES RATHER THAN BAKING NOTHING. An
   // empty ingredient list scales perfectly happily into a dough of zero, which is
@@ -276,6 +292,8 @@ export function calc(id) {
   if (!canCalculate(source)) {
     renderIngredients(id + '-ingredients', []);
     lastRecipe[id] = null;
+    // The result card goes too: left open, it showed an empty list under the OLD total.
+    hideResult(resultId);
     applyTabState(id);
     return;
   }

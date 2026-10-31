@@ -1902,6 +1902,13 @@ input.cp-prod-weight {
   font-size: 13px;
   line-height: 1.5;
 }
+/* The same sentence on the Calculator tab itself, at reading size: it is the only thing
+   the tab shows when its Ricettario recipe cannot be calculated. */
+.calc-source-problem {
+  margin: 0 0 var(--space-3);
+  font-size: 15px;
+}
+.calc-source-problem[hidden] { display: none; }
 
 /* ══ The Calculator on a tablet (29 Sep 2026) ════════════════════════════════════════
    The page is wide (tokens.css widens body[data-card="calculator"]); a recipe tab is one
