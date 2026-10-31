@@ -140,6 +140,17 @@ test('⚠️ the suppliers step re-reads the suppliers from the server before wr
   assert.match(save, /t\('invoiceImport\.suppliers\.changed'\)/);
 });
 
+test('⚠️ the reads that decide «new or already there» can see this phone’s queued writes, so a retry after a timeout never creates twice', () => {
+  // A timed-out write stays in the SDK's queue. Only the full SDK's listener-based reads lay that queue over the server's
+  // answer; Firestore Lite or a REST read would not, and a quick retry would create the supplier or ingredient again.
+  assert.match(DATA, /from 'https:\/\/www\.gstatic\.com\/firebasejs\/[\d.]+\/firebase-firestore\.js'/);
+  assert.doesNotMatch(DATA, /firestore-lite|firestore\.googleapis\.com/);
+  assert.match(DATA, /export async function freshSuppliers\(\) \{[^}]*getDocsFromServer\(/);
+  assert.match(DATA, /export async function freshIngredientsForSupplier\(supplierId\) \{[^}]*getDocsFromServer\(query\(/);
+  // The queue survives a reload only with the on-disk cache.
+  assert.match(read('js/firebase.js'), /localCache: persistentLocalCache\(/);
+});
+
 test('the screen is a dialog, its file box is a label for a hidden input, and a chip with nothing under it is not drawn', () => {
   assert.match(SCREEN, /role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'invimp-title'/);
   assert.match(SCREEN, /el\('h1', \{ id: 'invimp-title' \}\)/);
