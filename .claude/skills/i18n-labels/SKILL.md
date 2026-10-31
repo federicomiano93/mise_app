@@ -96,7 +96,10 @@ goes through `supplierLabel()`.
 - `order.html` is the CLIENT's page: it names the venue, never «Mise».
 - ⚠️ `install-guide.html` names buttons in the phone's OWN menus — never fold it into a
   language fix.
-- Text already written INTO stored data (old log entries) stays as written.
+- Text already written INTO stored data stays as written. The one shape the screen re-says is the
+  Dough history «when» (`logTimestamp` stores «Saturday 31 October» / «8:19 PM» in English, and Mise 2
+  reads the same logs): show it through `logStampText()` (`js/log-time.js`), which translates that exact
+  shape with Intl and leaves anything else as stored.
 
 ## Before calling it done
 
