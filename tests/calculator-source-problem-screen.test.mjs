@@ -42,7 +42,7 @@ test('a tab that calculates, or one with its own ingredients, shows nothing', ()
   assert.equal(showsSourceProblem(null, null, false), false);
 });
 
-test('every panel carries the problem line, hidden, a polite status, before Confirm', async () => {
+test('every panel carries the problem line FIRST, hidden, a polite status', async () => {
   installDom();
   const make = globalThis.document.createElement;
   globalThis.document.createElement = tag => { const n = make(tag); n.style.setProperty = (k, v) => { n.style[k] = v; }; return n; };
@@ -57,8 +57,8 @@ test('every panel carries the problem line, hidden, a polite status, before Conf
       assert.equal(box.hidden, true, `${logic}: hidden until there is a problem`);
       assert.equal(box.getAttribute('role'), 'status', logic);
       assert.ok(box.className.split(' ').includes('cp-source-problem'), `${logic}: the warning look of Settings`);
-      const confirm = nodes.findIndex(n => n.getAttribute?.('id') === 'r1-day-confirm');
-      assert.ok(nodes.indexOf(box) < confirm, `${logic}: above Confirm`);
+      // First: under a long list of client orders it would be off-screen, the tab silent again.
+      assert.equal(panel.children[0], box, `${logic}: the first thing in the panel`);
     }
   } finally {
     delete globalThis.document;
@@ -73,4 +73,12 @@ test('calc.js paints the problem before it gives up on a zero total', () => {
   assert.ok(paint < zero, 'before the empty-total early return, so it shows before anything is typed');
   assert.match(src, /showsSourceProblem\(recipe, source, isStillLoading\(recipe\)\)/);
   assert.match(src, /problemMessage\(source\)/);
+  assert.match(src, /if \(box\.textContent !== text\) box\.textContent = text;/, 'written only when it changes');
+});
+
+test('a tab that cannot be calculated closes its result card (no empty list under an old total)', () => {
+  const src = read('js/calc.js');
+  const refuse = src.slice(src.indexOf('if (!canCalculate(source)) {'));
+  const body = refuse.slice(0, refuse.indexOf('return;'));
+  assert.match(body, /hideResult\(resultId\)/);
 });

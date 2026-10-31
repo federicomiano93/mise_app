@@ -250,7 +250,10 @@ function paintSourceProblem(id, recipe, source) {
   const box = document.getElementById(id + '-source-problem');
   if (!box) return;
   const show = showsSourceProblem(recipe, source, isStillLoading(recipe));
-  box.textContent = show ? problemMessage(source) : '';
+  const text = show ? problemMessage(source) : '';
+  // Written only when it changes: calc() runs on every keystroke, and a status line
+  // rewritten each time is read out again by some screen readers.
+  if (box.textContent !== text) box.textContent = text;
   box.hidden = !show;
 }
 
@@ -289,6 +292,8 @@ export function calc(id) {
   if (!canCalculate(source)) {
     renderIngredients(id + '-ingredients', []);
     lastRecipe[id] = null;
+    // The result card goes too: left open, it showed an empty list under the OLD total.
+    hideResult(resultId);
     applyTabState(id);
     return;
   }
