@@ -9,6 +9,7 @@ import { t } from './i18n.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
 import { dayLabel } from './log-model.js';
+import { logStampText } from './log-time.js';
 import { formatGrams } from './calculator-config.js';
 
 const num = (v) => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -140,7 +141,7 @@ export function renderVersion(version, log) {
     el('span', { class: 'logday-badge ' + day.tone }, day.text),
   ]));
   const at = v.at || {};
-  frag.appendChild(el('div', { class: 'log-timestamp' }, [icon('calendar', 14), ' ' + (at.date || '') + ' — ' + (at.time || '')]));
+  frag.appendChild(el('div', { class: 'log-timestamp' }, [icon('calendar', 14), ' ' + logStampText(at)]));
   if (v.calculatedBy) frag.appendChild(el('div', { class: 'logview-by' }, t('calc.calculatedBy') + v.calculatedBy));
 
   frag.appendChild(renderOrder(v));
