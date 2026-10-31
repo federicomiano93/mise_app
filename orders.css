@@ -1563,6 +1563,85 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   font-weight: 600;
 }
 
+/* An ingredient / packaging row: a FRAME carrying the card look, holding the drill button and the
+   word at the right («Disattiva» / «Riattiva»). A button cannot nest in a button, so the two are
+   siblings (same reasoning as .wa-entry-card in style.css). The tablet's picked look covers the
+   whole card: see .reg-row-picked below. */
+.reg-row {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+.reg-row .reg-drill {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+/* ⚠️ Only the drill part is dimmed (.mgmt-item.inactive): the word keeps its full contrast. */
+.reg-word {
+  flex-shrink: 0;
+  min-width: 100px;
+  min-height: 44px;
+  padding: 0 14px;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--border);
+  font-family: 'Manrope', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+  color: var(--brand);
+  cursor: pointer;
+}
+.reg-word-off { color: var(--crust-ink); }
+/* ⚠️ A NARROW PHONE (296px measured): at 100px the word left the name 106px, and «non dichiarato»
+   (106.4px) broke onto two lines. A narrower cell gives the name back ~16px; the word still fits. */
+@media (max-width: 340px) {
+  .reg-word { min-width: 84px; padding: 0 10px; }
+}
+.reg-word:active { background: var(--surface2); transform: scale(0.97); }
+/* ⚠️ THE RING IS DRAWN INSIDE: the frame clips (overflow: hidden), so the browser's own ring,
+   drawn outside the button, was cut off on every edge that touches the frame. */
+.reg-row .reg-drill:focus-visible,
+.reg-word:focus-visible { outline: 3px solid var(--accent-2); outline-offset: -3px; }
+/* The tablet's picked row: aria-current sits on the drill button (tokens.css paints it); the frame
+   takes the same tint and border so the word cell is part of the picked card too. */
+.app-split-list .reg-row.reg-row-picked {
+  background: var(--accent-light);
+  border-color: var(--accent-border);
+}
+
+/* The name and, for a hand-made item, the pencil: a flex row so the icon sits on the text's centre line. */
+.reg-name { display: flex; align-items: center; gap: 7px; }
+.reg-name-text { min-width: 0; }
+.reg-handmade { flex-shrink: 0; display: flex; align-items: center; color: var(--text-3); }
+
+/* The folded «Not in use (N)» group. A native <details>: it opens and closes with no script. */
+.reg-notinuse { margin-top: 18px; }
+.reg-notinuse-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.reg-notinuse-head::-webkit-details-marker { display: none; }
+.reg-notinuse-chev { display: flex; align-items: center; transition: transform 0.15s; }
+.reg-notinuse[open] .reg-notinuse-chev { transform: rotate(90deg); }
+
 /* ── Management forms ─────────────────────────────────────────────────────── */
 .mgmt-form { display: flex; flex-direction: column; gap: 14px; }
 .mgmt-field { display: flex; flex-direction: column; gap: 6px; }

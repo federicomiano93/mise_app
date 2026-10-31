@@ -470,6 +470,18 @@ body.cat-zoom-lock { overflow: hidden; }
   cursor: pointer;
 }
 .cat-ing-link.linked { color: var(--brand); }
+/* The crossed-out euro at the END of the link line: a row Food cost cannot price. Inline after
+   the text, so when the line wraps the icon wraps with the last word instead of hanging
+   alone at the edge. No words: the label is for screen readers. */
+.cat-ing-link-text { overflow-wrap: anywhere; }
+.cat-noprice {
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: -3px;
+  line-height: 0;
+  color: var(--warn);
+}
+.cat-noprice svg { display: block; }
 .cat-ing-link:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: -2px; }
 
 /* What the dough weighs before the oven and after — the two numbers the loss is
