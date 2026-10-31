@@ -91,8 +91,8 @@ export function openRecipes() {
   activeRecipe = null;
   openRow = null;
   focusRow = null;
-  freshlyAdded = false;
   reorderingIngredients = false;
+  freshlyAdded = false;
   leaveChooser();
   chooserFromCalculator = false;
   catalogueGen++;
@@ -206,10 +206,10 @@ async function doSaveRecipes() {
   }
   const invalid = findInvalid();
   if (invalid !== null) {
+    leaveChooser();
     showErrors = true;
     // The reorder rows have no name box to highlight: leave the mode so the blank one shows.
     reorderingIngredients = false;
-    leaveChooser();
     activeRecipe = invalid;
     renderEditor();
     alertDialog(t('calc.pleaseGiveEveryRecipe'));
