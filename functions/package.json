@@ -5,7 +5,7 @@
   "description": "Notifications that reach a phone with the app closed. The only code in this project that does not run on a phone.",
   "main": "index.js",
   "engines": {
-    "node": "22"
+    "node": "24"
   },
   "scripts": {
     "lint": "node --check index.js"
