@@ -28,7 +28,7 @@ import {
 } from './calculator-config.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
-import { isLinked, chooseLeavening, leaveningLost, catalogueChoices, resolveRecipe, rowsToStamp } from './calculator-recipe-source.js';
+import { isLinked, chooseLeavening, leaveningLost, catalogueChoices, resolveRecipe, rowsToStamp, ingredientCount } from './calculator-recipe-source.js';
 import { effectiveRecipe } from './calculator-catalogue-link.js';
 import { getCatalogueRecipesOnce, stampRecipeRowIds } from './firebase.js';
 
@@ -415,8 +415,11 @@ function renderSourceChooser() {
 function logicOf(r) { return LOGICS.includes(r.logic) ? r.logic : 'orders'; }
 
 // «From a total · 16 ingredients · shown» — kept in step live by the open row.
+// A linked recipe counts the Recipe catalogue's rows (ingredientCount); one not read yet
+// shows no count rather than «0 ingredients».
 function recipeSubLine(r) {
-  return t(LOGIC_LABELS[logicOf(r)]) + '  ·  ' + t('calc.ingredientCount', { n: (r.ingredients || []).length })
+  const n = ingredientCount(r, editorRecipe(r));
+  return t(LOGIC_LABELS[logicOf(r)]) + (n === null ? '' : '  ·  ' + t('calc.ingredientCount', { n }))
     + (r.visible !== false ? t('calc.shown') : t('calc.hidden'));
 }
 

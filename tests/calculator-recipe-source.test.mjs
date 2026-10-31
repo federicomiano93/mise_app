@@ -10,7 +10,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   PROBLEMS, isWeighable, linkedRecipeIds, isLinked, resolveRecipe, canCalculate,
-  leaveningLost,
+  leaveningLost, ingredientCount,
 } from '../js/calculator-recipe-source.js';
 
 const OLD = {
@@ -216,4 +216,47 @@ test('nothing at all is refused rather than throwing', () => {
   const r = resolveRecipe(null, {});
   assert.equal(canCalculate(r), false);
   assert.deepEqual(r.ingredients, []);
+});
+
+// ── How many ingredients the Recipes list says a recipe has ─────────────────────
+// Found on the lab tablet, 31 Oct 2026: a recipe linked to the Recipe catalogue said
+// «0 ingredienti» in Calculator → Settings → Recipes, because the list counted the tab's
+// own (empty) ingredients instead of the linked recipe's rows.
+
+test('a recipe of its own counts its own rows', () => {
+  assert.equal(ingredientCount(OLD, resolveRecipe(OLD, {})), 2);
+  assert.equal(ingredientCount({ name: 'New' }, resolveRecipe({ name: 'New' }, {})), 0);
+});
+
+test('a linked recipe counts the linked recipe’s rows, not the tab’s empty copy', () => {
+  const tab = { name: 'Pane', catalogueId: 'CAT_1', ingredients: [] };
+  const source = { id: 'CAT_1', name: 'Pane', ingredients: [
+    { label: 'Farina', grams: 1000, unit: 'g' },
+    { label: 'Acqua', grams: 700, unit: 'g' },
+    { label: 'Sale', grams: 20, unit: 'g' },
+  ] };
+  assert.equal(ingredientCount(tab, resolveRecipe(tab, { CAT_1: source })), 3);
+});
+
+test('a linked recipe not read yet gives no number rather than a wrong «0»', () => {
+  const tab = { name: 'Pane', catalogueId: 'CAT_1', ingredients: [] };
+  assert.equal(ingredientCount(tab, resolveRecipe(tab, {})), null);
+});
+
+test('a linked recipe with a row that cannot be weighed still counts its rows; a really empty one says 0', () => {
+  const tab = { name: 'Pane', catalogueId: 'CAT_1' };
+  const pinch = { id: 'CAT_1', ingredients: [{ label: 'Farina', grams: 1000, unit: 'g' }, { label: 'Sale', grams: 1, unit: 'pinch' }, { label: '' }] };
+  const resolved = resolveRecipe(tab, { CAT_1: pinch });
+  assert.equal(resolved.problem, PROBLEMS.unweighable);
+  assert.deepEqual(resolved.ingredients, [], 'still refuses to calculate');
+  assert.equal(ingredientCount(tab, resolved), 2);
+  assert.equal(ingredientCount(tab, resolveRecipe(tab, { CAT_1: { id: 'CAT_1', ingredients: [] } })), 0);
+});
+
+test('the Recipes list row counts through ingredientCount, from the recipe as the editor resolves it', async () => {
+  const { readFileSync } = await import('node:fs');
+  const src = readFileSync(new URL('../js/recipes.js', import.meta.url), 'utf8');
+  const sub = src.slice(src.indexOf('function recipeSubLine('), src.indexOf('function recipePanel('));
+  assert.match(sub, /ingredientCount\(r, editorRecipe\(r\)\)/);
+  assert.doesNotMatch(sub, /r\.ingredients/);
 });

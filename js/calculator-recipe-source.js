@@ -105,6 +105,22 @@ export function catalogueChoices(catalogue, calculatorRecipes) {
     .sort((a, b) => (!a.name - !b.name) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
 }
 
+// How many ingredients the Recipes list says a recipe has, from the recipe as it resolves.
+//
+// ⚠️ A LINKED RECIPE'S OWN `ingredients` IS EMPTY (or a stale copy): its rows live in the
+// Recipe catalogue. Counting the tab's copy made every linked recipe say «0 ingredienti»
+// in Calculator → Settings → Recipes (found on the lab tablet, 31 Oct 2026). So the count
+// comes from the resolved recipe — a recipe with a row the Calculator cannot weigh («salt,
+// to taste») still has its rows, and says how many — and null, no number at all, when the
+// linked recipe has not been read yet: a «0» there would be a wrong fact, while a recipe
+// that really has no rows still says 0.
+export function ingredientCount(recipe, resolved) {
+  if (!isLinked(recipe)) return Array.isArray(recipe?.ingredients) ? recipe.ingredients.length : 0;
+  if (!resolved || resolved.problem === PROBLEMS.missing) return null;
+  if (resolved.problem === PROBLEMS.unweighable) return Number(resolved.rowCount) || 0;
+  return Array.isArray(resolved.ingredients) ? resolved.ingredients.length : 0;
+}
+
 // The effective recipe a Calculator tab should use.
 //
 // Returns { name, ingredients, leaveningKey, linked, problem, problemRow }.
@@ -149,6 +165,7 @@ export function resolveRecipe(recipe, catalogueById) {
       linked: true,
       problem: PROBLEMS.unweighable,
       problemRow: String(blocker.label || '').trim(),
+      rowCount: usable.length, // only for the Recipes list's «N ingredients» (ingredientCount)
     };
   }
 
