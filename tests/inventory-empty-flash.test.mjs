@@ -9,7 +9,7 @@
 // ⚠️ It proves what the screen decides, not how it looks, and no real SDK runs here: that the SDK answers like
 // the fake does (an empty copy first, the server's confirmation after) was seen driving the app on the emulator.
 
-import { test, before, mock } from 'node:test';
+import { test, before, beforeEach, afterEach, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { registerHooks } from 'node:module';
@@ -375,6 +375,10 @@ test('a price answer after the ingredients still emits, and nothing is emitted b
 let scenarioNumber = 0;
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
+// The store's 10 s stall timer, on the test's clock: a real one would hold the run open for ten seconds.
+beforeEach(() => { mock.timers.enable({ apis: ['setTimeout'] }); });
+afterEach(() => { mock.timers.reset(); });
+
 async function openStore({ venue = 'v1', monthRejects = false } = {}) {
   globalThis.__venue = venue;
   globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
@@ -467,42 +471,32 @@ test('a list that has answered stays answered when its last row goes with no sig
 });
 
 test('⚠️ the wait has an end: ten seconds after the venue opens, still unheard, the list says it has not arrived', async () => {
-  mock.timers.enable({ apis: ['setTimeout'] });
-  try {
-    const { store, voice, open } = await openStore();
-    await open();
-    const before = voice.announced;
-    mock.timers.tick(9999);
-    assert.equal(store.getListStatus(), LIST_STATUS.waiting);
-    mock.timers.tick(1);
-    assert.equal(store.getListStatus(), LIST_STATUS.unreachable);
-    assert.equal(voice.announced, before + 1, 'the screen is told, or the words would not change');
-  } finally {
-    mock.timers.reset();
-  }
+  const { store, voice, open } = await openStore();
+  await open();
+  const before = voice.announced;
+  mock.timers.tick(9999);
+  assert.equal(store.getListStatus(), LIST_STATUS.waiting);
+  mock.timers.tick(1);
+  assert.equal(store.getListStatus(), LIST_STATUS.unreachable);
+  assert.equal(voice.announced, before + 1, 'the screen is told, or the words would not change');
 });
 
 test('the timer does not announce when both listeners have answered, and does not run without a venue', async () => {
-  mock.timers.enable({ apis: ['setTimeout'] });
-  try {
-    const answered = await openStore();
-    await answered.open();
-    answered.voice.month(null, { fromServer: true });
-    answered.voice.ingredients([{ id: 'a' }], false);
-    const before = answered.voice.announced;
-    mock.timers.tick(10000);
-    assert.equal(answered.voice.announced, before);
-    assert.equal(answered.store.getListStatus(), LIST_STATUS.answered);
+  const answered = await openStore();
+  await answered.open();
+  answered.voice.month(null, { fromServer: true });
+  answered.voice.ingredients([{ id: 'a' }], false);
+  const before = answered.voice.announced;
+  mock.timers.tick(10000);
+  assert.equal(answered.voice.announced, before);
+  assert.equal(answered.store.getListStatus(), LIST_STATUS.answered);
 
-    const noVenue = await openStore({ venue: null });
-    await noVenue.open();
-    const beforeTick = noVenue.voice.announced;
-    mock.timers.tick(20000);
-    assert.equal(noVenue.store.getListStatus(), LIST_STATUS.starting);
-    assert.equal(noVenue.voice.announced, beforeTick, 'no timer ran, nothing to repaint');
-  } finally {
-    mock.timers.reset();
-  }
+  const noVenue = await openStore({ venue: null });
+  await noVenue.open();
+  const beforeTick = noVenue.voice.announced;
+  mock.timers.tick(20000);
+  assert.equal(noVenue.store.getListStatus(), LIST_STATUS.starting);
+  assert.equal(noVenue.voice.announced, beforeTick, 'no timer ran, nothing to repaint');
 });
 
 test('a dead listener is told apart and announced, from either listener and from a start that failed', async () => {
@@ -538,4 +532,13 @@ test('the venue opening announces, so a list still waiting finds its words', asy
   const before = voice.announced;
   await open();
   assert.ok(voice.announced > before);
+});
+
+// ── The wiring, which only driving the page can execute ─────────────────────
+
+test('⚠️ the screen is handed the store\'s answer: without it the list believes everything has answered', () => {
+  const main = readFileSync(new URL('../js/inventory/inventory-main.js', import.meta.url), 'utf8');
+  const showList = main.slice(main.indexOf('function showList()'), main.indexOf('function openIngredient('));
+  assert.match(showList, /renderList\(\{[\s\S]*?\blistStatus: getListStatus,[\s\S]*?\}\)/);
+  assert.match(main, /import \{[^}]*\bgetListStatus\b[^}]*\} from '\.\/inventory-store\.js'/);
 });
