@@ -95,7 +95,12 @@ function requireAuth(request) {
 // mistake has already been made twice with 'manager' alone: once in
 // js/sections.js locationsOf(), once in firestore.rules member(). Same cause,
 // same shape, three files that must be changed together.
-const ACCESS_VALUES = [true, 'manager', 'owner'];
+//
+// ⚠️ 'owner-sales' AND 'owner-kitchen' HIRE NOBODY AND CHANGE NO VENUE SETTING: every
+// such check below asks for the exact words 'owner' (requireOwner) or 'owner'/'manager'.
+// That is on purpose. A partial owner who could hire could name a second account of
+// their own as the full owner, and hold everything (his decision, 1 Nov 2026).
+const ACCESS_VALUES = [true, 'manager', 'owner', 'owner-sales', 'owner-kitchen'];
 
 // The same question asked of a users/{uid} document somebody is already holding.
 //
@@ -479,15 +484,17 @@ export const deleteWorkspace = onCall(CALL, async (request) => {
 //
 // ⚠️ AND THE FALLBACK IS `true`, THE LEAST POWER. Anything this file does not
 // recognise is written as an ordinary employee, never as something more.
-// js/roles.js reads the same three values the same way, in the other direction.
+// js/roles.js reads the same values the same way, in the other direction.
 function membershipValue(role) {
   if (role === 'owner') return 'owner';
   if (role === 'manager') return 'manager';
+  if (role === 'owner-sales') return 'owner-sales';
+  if (role === 'owner-kitchen') return 'owner-kitchen';
   return true;
 }
 
-// The three roles this file will write down, and nothing else.
-const WRITABLE_ROLES = ['owner', 'manager', 'staff'];
+// The roles this file will write down, and nothing else.
+const WRITABLE_ROLES = ['owner', 'manager', 'owner-sales', 'owner-kitchen', 'staff'];
 
 // The job titles the manager level can be called by. ⚠️ A TITLE IS NOT A ROLE:
 // both write the SAME membership value, so neither can grant or take away
@@ -778,7 +785,7 @@ export const setMemberRole = onCall(CALL, async (request) => {
   // them, and the screen would show the change as if it had been asked for.
   if (role !== null && !WRITABLE_ROLES.includes(role)) {
     throw new HttpsError('invalid-argument',
-      'A person is an owner, a manager, an employee, or gone.');
+      'A person is an owner, an owner of one side, a manager, an employee, or gone.');
   }
 
   const memberRef = db().doc(`locations/${locationId}/members/${targetUid}`);

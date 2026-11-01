@@ -41,8 +41,8 @@ function bodyOf(name) {
 // was missed in all three, on three separate days (v268). 'head-chef' is a word
 // on the roster and must never reach a membership.
 test('head-chef is never written as a membership value', () => {
-  assert.match(SERVER, /const WRITABLE_ROLES = \['owner', 'manager', 'staff'\]/,
-    'the roles this file writes must stay three');
+  assert.match(SERVER, /const WRITABLE_ROLES = \['owner', 'manager', 'owner-sales', 'owner-kitchen', 'staff'\]/,
+    'the roles this file writes are exactly these');
   assert.doesNotMatch(RULES, /'head-chef'/,
     'firestore.rules must never have to know the word');
 

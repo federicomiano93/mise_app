@@ -97,8 +97,10 @@ test('the one Delete gate, and the one price gate, are still where they were', (
     'a price is written only by whoever runs the place AND only where Food cost is on — the rules\' canManage(lid, \'foodcost\')');
   const rules = read('firestore.rules');
   const prices = rules.slice(rules.indexOf('match /ingredient-prices/{id}'), rules.indexOf('match /ingredients/{id}'));
-  assert.match(prices, /allow create, update: if canManage\(lid, 'foodcost'\)/,
-    'and the rule it mirrors is still canManage(lid, \'foodcost\') — change one, change both');
+  assert.match(prices, /allow create, update: if managesPrices\(lid\)/,
+    'and the rule it mirrors is still managesPrices() — change one, change both');
+  assert.match(rules, /function managesPrices\(lid\) \{\s*return cardAccess\(lid, 'foodcost', 'prices'\) == 'manage';/,
+    'whoever runs the place, where Food cost is on: canManage(lid, \'foodcost\') for owner and manager');
   assert.match(codeOf(FORM), /mayPrice \? priceBlock\(/,
     'an employee gets NO price block at all — not a disabled one');
 });

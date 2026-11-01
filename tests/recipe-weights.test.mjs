@@ -241,12 +241,16 @@ test('⚠️⚠️ the rules whitelist carries both new keys', () => {
   for (const key of ['bakery', 'name', 'ingredients', 'lossPct', 'rawGrams', 'cookedGrams']) {
     assert.ok(hasOnly.includes(`'${key}'`), `${key} must be in the recipe whitelist`);
   }
+  // The bounds live in lossFieldsValid() since 1 Nov 2026, shared with the one other door
+  // that may write a weighing; the catalogue's own rule must still ask it.
+  assert.match(block, /lossFieldsValid\(request\.resource\.data\)/,
+    'the rule a recipe is saved through must still check the weighings');
   for (const key of ['rawGrams', 'cookedGrams']) {
-    assert.match(block, new RegExp(`!\\('${key}' in request\\.resource\\.data\\)`),
+    assert.match(block, new RegExp(`!\\('${key}' in data\\)`),
       `${key} must be OPTIONAL: rules reach every phone the instant they deploy while `
       + 'code arrives one device at a time, so a phone on the old build sends neither '
       + 'and must keep saving');
-    assert.match(block, new RegExp(`request\\.resource\\.data\\.${key} is number`),
+    assert.match(block, new RegExp(`data\\.${key} is number`),
       `${key} must still be type-checked when it IS sent`);
   }
 });

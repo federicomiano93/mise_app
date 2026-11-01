@@ -44,7 +44,7 @@ test('the append-only price history is never in the batch — the rules forbid d
 test('the two deletes the batch relies on are still granted by the roles the app mirrors', () => {
   const rules = read('firestore.rules');
   const prices = rules.slice(rules.indexOf('match /ingredient-prices/{id}'), rules.indexOf('match /ingredients/{id}'));
-  assert.match(prices, /allow delete: if canManage\(lid, 'foodcost'\);/, 'price delete = canManage + Food cost = mayWritePrices()');
+  assert.match(prices, /allow delete: if managesPrices\(lid\);/, 'price delete = whoever runs the place + Food cost on = mayWritePrices()');
   const ing = rules.slice(rules.indexOf('match /ingredients/{id}'), rules.indexOf('match /prices/{priceId}'));
   assert.match(ing, /allow delete: if canManage\(lid, 'orders'\);/, 'ingredient delete = canManage + Orders');
 });
