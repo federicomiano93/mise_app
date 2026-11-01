@@ -96,6 +96,8 @@ export function buildRegistry(data, actions, hooks = {}) {
   // Cleared when the tab changes; a supplier's own screen keeps its own on its stack entry.
   // `group.open` is the «Not in use» group's open/closed state, kept for the same reason.
   let listCtx = { switched: new Map(), group: { open: false } };
+  // Each list row's height as last laid out, by its data-sel (rememberRowHeights).
+  const rowHeights = new Map();
   // Everything above the page itself. Each entry is { view, overlay }; Back pops one.
   const stack = [];
   // The tablet's right-hand pane, its placeholder, and each overlay's own Back.
@@ -228,11 +230,24 @@ export function buildRegistry(data, actions, hooks = {}) {
   // ── The lists ───────────────────────────────────────────────────────────────
   function paintList() {
     paintChrome();
+    rememberRowHeights();
     listHost.replaceChildren();
     if (tab === 'suppliers') paintSuppliers();
     else paintItems(tab === 'packaging' ? 'packaging' : 'ingredient');
     paintSelection();
     paintPane();
+  }
+
+  // ⚠️ A REPAINT MUST NOT MOVE THE LIST. A row off screen takes its height from a guess (orders.css,
+  // .reg-list-host .reg-row) and a new row has forgotten the one it had, so every repaint — each
+  // «Disattiva» tap ends in one — would change the height above the row under the finger. So each row hands
+  // its height on to the row that replaces it (ingredientRow). The height of the frame's inside: that is what
+  // contain-intrinsic-size sets, without the border. A row in a closed group has none to hand on.
+  function rememberRowHeights() {
+    listHost.querySelectorAll('.reg-row[data-sel]').forEach((row) => {
+      const height = row.getBoundingClientRect().height - (row.offsetHeight - row.clientHeight);
+      if (height > 0) rowHeights.set(row.dataset.sel, height);
+    });
   }
 
   function matches(name) {
@@ -454,6 +469,8 @@ export function buildRegistry(data, actions, hooks = {}) {
       });
     });
     const frame = el('div', { class: 'reg-row', 'data-sel': onList ? `ingredient:${item.id}` : null }, [row, word]);
+    const knownHeight = onList ? rowHeights.get(`ingredient:${item.id}`) : undefined;
+    if (knownHeight) frame.style.containIntrinsicSize = `auto ${knownHeight}px`;
     // ⚠️ A WORD, NEVER A COLOUR ALONE (P18, and the v1.63.0 rule). «Not declared»
     // and «contains none of the 14» look identical as an empty allergen list, and
     // only the verification stamp tells them apart.

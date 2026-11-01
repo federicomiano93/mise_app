@@ -99,7 +99,7 @@
         "js/pages/calculator.js": "db742b60ac706355",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
-        "js/price-model.js": "a5b7564b9c76b183",
+        "js/price-model.js": "367144e6e2c89a39",
         "js/recipe-export.js": "6d66a5d106e3bd9c",
         "js/recipes.js": "5f3520d9fa02e3ac",
         "js/record-data.js": "260607f13e2f4033",
@@ -241,7 +241,7 @@
         "js/pick-screen.js": "8248cd40ef3e2e29",
         "js/pick-suggest.js": "11a4974ce3429a4b",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
-        "js/price-model.js": "a5b7564b9c76b183",
+        "js/price-model.js": "367144e6e2c89a39",
         "js/print-queue-model.js": "220daf72bada9780",
         "js/push-model.js": "13310d4d79159651",
         "js/push.js": "36bf6a273773a9a1",
@@ -360,7 +360,7 @@
         "js/pick-screen.js": "8248cd40ef3e2e29",
         "js/pick-suggest.js": "11a4974ce3429a4b",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
-        "js/price-model.js": "a5b7564b9c76b183",
+        "js/price-model.js": "367144e6e2c89a39",
         "js/recipe-link.js": "f61d20d37533c310",
         "js/record-data.js": "260607f13e2f4033",
         "js/records.js": "79c792c647a519cd",
@@ -477,7 +477,7 @@
         "js/pages/index.js": "0e088a923d3693fa",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
-        "js/price-model.js": "a5b7564b9c76b183",
+        "js/price-model.js": "367144e6e2c89a39",
         "js/record-data.js": "260607f13e2f4033",
         "js/records.js": "79c792c647a519cd",
         "js/roles.js": "e70309cf7e2693b6",
@@ -523,9 +523,9 @@
       }
     },
     "dist/inventory.css": {
-      "sha": "f9805b34c0b60c44",
+      "sha": "fbb27bb7f7c3dcc3",
       "inputs": {
-        "inventory.css": "0ede8280d88dfb2b"
+        "inventory.css": "63b1fd25412e0c8a"
       }
     },
     "dist/inventory.js": {
@@ -593,7 +593,7 @@
         "js/pages/inventory.js": "e7721cee9636e7a5",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
-        "js/price-model.js": "a5b7564b9c76b183",
+        "js/price-model.js": "367144e6e2c89a39",
         "js/record-data.js": "260607f13e2f4033",
         "js/records.js": "79c792c647a519cd",
         "js/roles.js": "e70309cf7e2693b6",
@@ -662,9 +662,9 @@
       }
     },
     "dist/orders.css": {
-      "sha": "2a540aaefdd94497",
+      "sha": "036fdd965ffab853",
       "inputs": {
-        "orders.css": "f940fc53726690d2"
+        "orders.css": "d08499fc1541a210"
       }
     },
     "dist/orders.js": {
@@ -778,7 +778,7 @@
         "js/pages/orders.js": "b67676100fa2e75b",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
-        "js/price-model.js": "a5b7564b9c76b183",
+        "js/price-model.js": "367144e6e2c89a39",
         "js/push-model.js": "13310d4d79159651",
         "js/push.js": "36bf6a273773a9a1",
         "js/recipe-link.js": "f61d20d37533c310",
@@ -886,7 +886,7 @@
         "js/pastries/pastries-strip.js": "48b7a416a6e0f78d",
         "js/pastries/tablet.js": "464601a358a0978e",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
-        "js/price-model.js": "a5b7564b9c76b183",
+        "js/price-model.js": "367144e6e2c89a39",
         "js/record-data.js": "260607f13e2f4033",
         "js/records.js": "79c792c647a519cd",
         "js/reveal-field.js": "5994569152b139a9",
@@ -926,8 +926,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "a542b1d3b14aab1d",
-      "mapSha": "101e975e86227285",
+      "sha": "b6abb975fb79cc04",
+      "mapSha": "c62c4e91bc299818",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -1011,9 +1011,9 @@
         "js/orders/photo-capture.js": "22fc712bf419f586",
         "js/orders/price-changes-model.js": "1c9910d29dbc8459",
         "js/orders/price-changes-screen.js": "9dc81f214b196440",
-        "js/orders/registry-main.js": "c2f5f09a6ab2906c",
+        "js/orders/registry-main.js": "0a0ee29e59d6d5a5",
         "js/orders/registry-settings.js": "ebcbc495269008bf",
-        "js/orders/registry.js": "d717f3385fb3f27c",
+        "js/orders/registry.js": "4410d10126d73500",
         "js/orders/reminders.js": "de7b21d852fd6259",
         "js/orders/search-box.js": "d63164cf3cc0565e",
         "js/orders/supplier-picker.js": "80850a11f61ab7fc",
@@ -1026,7 +1026,7 @@
         "js/pages/suppliers.js": "157776cfb0cd484c",
         "js/photo-model.js": "ce3cd2404907c8d4",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
-        "js/price-model.js": "a5b7564b9c76b183",
+        "js/price-model.js": "367144e6e2c89a39",
         "js/record-choices.js": "80f538ee4cdcb4f6",
         "js/record-data.js": "260607f13e2f4033",
         "js/record-ui.js": "4829a98298d9ddd9",

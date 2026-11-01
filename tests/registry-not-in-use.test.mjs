@@ -75,6 +75,7 @@ class Node {
   }
   contains(node) { for (let n = node; n; n = n.parentNode) if (n === this) return true; return false; }
   focus() { ACTIVE.el = this; }
+  getBoundingClientRect() { return { height: this.laidOutHeight || 0 }; }
   addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); }
   fire(type) { (this.listeners[type] || []).forEach(fn => fn({ target: this })); }
 
@@ -234,6 +235,18 @@ test('the frame carries data-sel, and the drill button inside does not', () => {
   const row = s.rowOf('Burro');
   assert.equal(row.getAttribute('data-sel'), 'ingredient:a');
   assert.equal(row.querySelector('.reg-drill').getAttribute('data-sel'), undefined);
+});
+
+// A row off screen takes its height from a guess (orders.css): a row that forgot the real one would
+// change the height above the row under the finger, and every tap on the word ends in a repaint.
+test('a repaint hands each row its height, without the border, and a row never laid out takes none', () => {
+  const s = screen(items());
+  const old = s.rowOf('Burro');
+  old.laidOutHeight = 81; old.offsetHeight = 81; old.clientHeight = 79;
+  s.set(items());
+  assert.notEqual(s.rowOf('Burro'), old, 'it really was a new row');
+  assert.equal(s.rowOf('Burro').style.containIntrinsicSize, 'auto 79px');
+  assert.equal(s.rowOf('Farina').style.containIntrinsicSize, undefined);
 });
 
 // ── The tap ─────────────────────────────────────────────────────────────────

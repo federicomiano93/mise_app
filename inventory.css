@@ -216,6 +216,10 @@ body {
   border: 1px solid var(--inv-border);
   border-radius: var(--inv-radius);
   background: var(--inv-surface);
+  /* ⚠️ Off screen a row is not laid out or painted: 302 of them cost the lab tablet about 0.7 s on every
+     open. A count never rebuilds this list (inventory-list.js), so a drawn row keeps its real height. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 47px;
 }
 .inv-row.counted { border-left: 3px solid var(--inv-brand); padding-left: 10px; }
 .inv-row-open {
@@ -460,7 +464,7 @@ body {
   .inv-list > .empty-state { grid-column: 1 / -1; }
 
   /* Kitchen size: a hand with flour on it. */
-  .inv-row { min-height: var(--tap-min); }
+  .inv-row { min-height: var(--tap-min); contain-intrinsic-size: auto 52px; }
   .inv-count {
     width: 88px;
     height: var(--tap-min);
