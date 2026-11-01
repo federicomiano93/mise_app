@@ -146,6 +146,24 @@ test('free and paid deliveries of one product behave as before: the paid price s
   assert.equal(entry.prices.length, 1);
 });
 
+test('the VAT comes from the newest paid line: a free line says 0 only because it is outside the tax base', () => {
+  const c = newCase();
+  c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 6, vat: '10.00' }], { date: '2026-09-01' });
+  c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 0, vat: '0.00' }], { date: '2026-09-10' });
+  assert.equal(c.build().importFile.ingredients[0].vatRate, 10);
+
+  const sameInvoice = newCase();
+  sameInvoice.add([
+    { desc: 'FARINA', code: 'F', qty: 1, unit: 'KG', total: 0, vat: '0.00' },
+    { desc: 'FARINA', code: 'F', qty: 1, unit: 'KG', total: 6, vat: '10.00' },
+  ], { date: '2026-09-01' });
+  assert.equal(sameInvoice.build().importFile.ingredients[0].vatRate, 10);
+
+  const neverPaid = newCase();
+  neverPaid.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 0, vat: '0.00' }], { date: '2026-09-01' });
+  assert.equal(neverPaid.build().importFile.ingredients[0].vatRate, null);
+});
+
 test('products that cannot be read are listed with the reason and cannot be ticked', () => {
   const sel = selectImport(built([FLOUR, { desc: 'SPEZIA MISTA', code: 'MIX', qty: 4, unit: 'PZ', total: 20 }]), {});
   assert.deepEqual(keys(sel), [K_FLOUR]);

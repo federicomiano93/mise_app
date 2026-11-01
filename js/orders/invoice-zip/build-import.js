@@ -47,6 +47,9 @@ function describeProduct(catalogue, product) {
   const evaluation = evaluate(product, params, catalogue, problems);
   const { points } = evaluation;
   const latestLine = latestOf(product).lines[0];
+  // ⚠️ THE VAT OF THE NEWEST PAID LINE: a free line carries 0 % because it is outside the tax base, not because the
+  // goods are zero-rated, and a VAT of 0 is a real answer. Never paid = null, «not stated».
+  const paidLine = [...product.entries].reverse().flatMap((entry) => entry.lines).find((ln) => (ln.total ?? 0) > 0);
   const name = proposeName(product);
   const packUnit = proposePackWord(product);
 
@@ -67,7 +70,7 @@ function describeProduct(catalogue, product) {
     priceUnit: params.priceUnit,
     unitWeightKg: params.priceUnit === 'pcs' && evaluation.unitWeightKg
       ? roundHalfUp(evaluation.unitWeightKg, 6) : null,
-    vatRate: vatOf(latestLine.vatRate),
+    vatRate: vatOf(paidLine ? paidLine.vatRate : null),
     reliability: evaluation.reliability,
     note: evaluation.note,
     prices: points.map((p) => ({
