@@ -45,6 +45,8 @@ const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" w
 // the setting. Same reason ROLE_CHOICES carries a labelKey (js/roles.js).
 const ROLE_MEANS = {
   owner: 'role.means.owner',
+  'owner-sales': 'role.means.ownerSales',
+  'owner-kitchen': 'role.means.ownerKitchen',
   manager: 'role.means.manager',
   'head-chef': 'role.means.headChef',
   staff: 'role.means.staff',
@@ -57,6 +59,8 @@ const ROLE_MEANS = {
 // differ in STRUCTURE and not merely in words, each case gets its own sentence.
 const CONFIRM_TITLE = {
   owner: 'people.confirm.owner',
+  'owner-sales': 'people.confirm.ownerSales',
+  'owner-kitchen': 'people.confirm.ownerKitchen',
   manager: 'people.confirm.manager',
   'head-chef': 'people.confirm.headChef',
   staff: 'people.confirm.staff',
@@ -201,7 +205,9 @@ export function openPeople(session) {
     // Most power first, then alphabetically by name: the question this screen is
     // usually opened to answer is "who can delete things", and that should not
     // need scrolling for.
-    const rank = r => (r === 'owner' ? 0 : r === 'manager' ? 1 : 2);
+    const rank = r => (r === 'owner' ? 0
+      : r === 'owner-sales' || r === 'owner-kitchen' ? 1
+      : r === 'manager' ? 2 : 3);
     const sorted = [...members].sort((a, b) =>
       rank(a.role) - rank(b.role) || displayName(a).localeCompare(displayName(b)));
 

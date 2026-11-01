@@ -233,10 +233,10 @@ test('the two manager pills grant exactly the same thing', () => {
   assert.notEqual(manager.title, chef.title, 'and differ only in the word');
 });
 
-test('four pills, three levels of power', () => {
-  assert.equal(ROLE_CHOICES.length, 4);
+test('six pills, five levels of power', () => {
+  assert.equal(ROLE_CHOICES.length, 6);
   assert.deepEqual([...new Set(ROLE_CHOICES.map(c => c.role))].sort(),
-    ['manager', 'owner', 'staff']);
+    ['manager', 'owner', 'owner-kitchen', 'owner-sales', 'staff']);
 });
 
 test('the title is ignored on anybody who is not a manager', () => {

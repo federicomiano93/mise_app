@@ -17,7 +17,7 @@ import { getRecentOrderRequestsOnce, getDocOnce, COLLECTIONS } from './orders/fi
 import { normalizeOrdersConfig } from './orders/orders-config.js';
 import { waitingRequests } from './orders/order-request-model.js';
 import { onSession } from './firebase.js';
-import { isSectionAllowed } from './sections.js';
+import { isSectionAllowed, roleHasCard } from './sections.js';
 import { t } from './i18n.js';
 
 function paintBadge(count) {
@@ -63,6 +63,9 @@ let started = false;
 onSession(session => {
   if (started || session.status !== 'ready') return;
   if (!isSectionAllowed(session.location, 'orders')) return;
+  // The rules refuse these lists to the owner of the sales side. By the role and not the
+  // card, so an employee from whom the venue hid Orders sees what they see today.
+  if (!roleHasCard(session.role, 'orders')) return;
   started = true;
   showOrderRequestsHome();
 });

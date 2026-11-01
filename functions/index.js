@@ -31,7 +31,7 @@ import {
   timerNotification, orderNotification, orderRequestNotification,
   notificationTag, targetPage, cardForKind,
 } from './push-model.js';
-import { isAway } from './away-model.js';
+import { isAway, receivesOrderLists } from './away-model.js';
 import { isHiddenForStaff, mayBeTold } from './home-cards.js';
 import { membershipIn } from './onboarding.js';
 
@@ -437,8 +437,9 @@ async function managersAmong(tokens, lid, senderUid) {
     // would silence a phone nobody meant to silence.
     if (d.data().muteOrderRequests === true) return false;
     const access = roleByUid.get(uid);
-    // Exactly what runsThePlace() asks in the rules: a string, and one of the two.
-    return access === 'owner' || access === 'manager';
+    // Whoever runs the place, and the kitchen but not the sales side: the same answer the
+    // sending screen gives (away-model.js).
+    return receivesOrderLists(access);
   });
 }
 
@@ -495,3 +496,6 @@ export {
 // not the shared `CALL`. They also share one daily allowance per person and per venue.
 export { readRecipeFromPhotos } from './recipe-photo.js';
 export { readPackIngredientsFromPhotos } from './pack-photo.js';
+
+// Whether a product uses an ingredient, for the owner of the kitchen, who may not read products.
+export { productsUsingIngredient } from './product-usage.js';

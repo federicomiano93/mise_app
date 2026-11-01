@@ -41,7 +41,7 @@ test('⚠️ the rules: a grant is read by its own account or by those who manag
 
 test('the links are not even asked for by somebody who cannot manage', () => {
   const load = body(SETTINGS, 'async function loadOrderingAccounts()');
-  const guard = load.indexOf("if (currentSession().canManage !== true) return;");
+  const guard = load.indexOf("if (currentSession().canManage !== true || !worksOnClients(currentSession().role)) return;");
   const list = load.indexOf('listOrderingAccounts()');
   assert.ok(guard > 0 && list > 0, 'the guard or the read is gone');
   assert.ok(guard < list, 'the guard must come before the read');

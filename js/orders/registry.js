@@ -72,7 +72,8 @@ import {
 //            for the card of before, which an old stored price shape opens)
 // actions: { saveSupplier, saveIngredient, priceHistory, setSupplierActive,
 //            setIngredientActive, deleteSupplier, deleteIngredient, deleteCategory(list, ids),
-//            toggleFavouriteSupplier(id, on) — a function only for owner/manager }
+//            toggleFavouriteSupplier(id, on) — a function only for owner/manager,
+//            mayChangeVenue — true only for owner/manager (the venue's switches in Settings) }
 // hooks:   { onChrome({ addLabel }) } — told on every paint which word the page
 //            header's «+» should carry, because it follows the active tab.
 //          { pane } — the element beside the list where a level opens on a TABLET
@@ -772,6 +773,8 @@ export function buildRegistry(data, actions, hooks = {}) {
       categoriesReady: () => data.categoriesLoaded?.() !== false,
       ingredients: () => data.ingredients(),
       onDeleteCategory: (list, ids) => actions.deleteCategory(list, ids),
+      // Read each time the screen is built, so it follows the session.
+      mayChangeVenue: actions.mayChangeVenue === true,
       onSet: async (key, on) => {
         // ⚠️ TWO CALLABLES, ROUTED BY KEY. setIngredientPanels writes two fields whose
         // absence means YES; setPackPhoto writes one whose absence means NO, because it

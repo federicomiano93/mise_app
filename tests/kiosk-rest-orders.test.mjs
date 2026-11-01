@@ -208,7 +208,7 @@ test('kiosk-orders.js reads once (no listener) and only the bounded week', () =>
   assert.match(src, /getHistoryFrom\(weekStart\(today, weekStartsOn\)\)/);
   const kiosk = read('js/kiosk.js');
   assert.match(kiosk, /isSectionAllowed\(session\.location, 'orders'\)/);
-  assert.match(kiosk, /cardVisibleTo\(session\.location, session\.canManage, 'orders'\)/);
+  assert.match(kiosk, /cardVisibleTo\(session\.location, session\.canManage, 'orders', session\.role\)/);
   assert.match(read('js/orders/firebase-orders.js'), /export async function getHistoryFrom\(fromDate\)[\s\S]*?where\('date', '>=', fromDate\)/);
 });
 

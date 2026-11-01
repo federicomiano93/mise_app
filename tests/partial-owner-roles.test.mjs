@@ -8,7 +8,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import {
   accessValue, locationsOf, sectionsFor, roleHasCard, ROLE_CARDS, NOT_FOR_ROLE,
   OWNER_SALES, OWNER_KITCHEN, SECTIONS,
@@ -234,4 +234,194 @@ test('money the kitchen must not reach stays behind the Food cost card', () => {
   assert.doesNotMatch(settings, /managesPrices/, 'the labour rate is not a purchase price');
   assert.match(ruleBody('cardNarrowedOut'), /value == 'owner-kitchen' && card == 'foodcost'/);
   assert.match(ruleBody('cardNarrowedOut'), /value == 'owner-sales' && card == 'inventory'/);
+});
+
+// ── The screens and the server: who is told, who sees what ───────────────────────────────────
+
+const text = f => read(f);
+const stripComments = src => src
+  .replace(/\/\*[\s\S]*?\*\//g, '')
+  .replace(/(^|[^:'"\\])\/\/.*$/gm, '$1');
+
+test('⚠️ cardVisibleTo answers by role: a partial owner gets exactly their own cards', async () => {
+  const { cardVisibleTo } = await import('../js/home-cards.js');
+  const everything = STAFF_CARDS.map(c => c.id);
+  const hidesAll = { staffHiddenCards: Object.fromEntries(everything.map(id => [id, true])) };
+  const showsAll = { staffShownCards: Object.fromEntries(everything.map(id => [id, true])) };
+  for (const role of [OWNER_SALES, OWNER_KITCHEN]) {
+    for (const venue of [{}, hidesAll, showsAll, null]) {
+      const seen = everything.filter(id => cardVisibleTo(venue, true, id, role));
+      assert.deepEqual(sorted(seen), sorted(ROLE_CARDS[role]), `${role} with ${JSON.stringify(venue)}`);
+    }
+  }
+  // The three older roles are exactly what they were.
+  assert.equal(cardVisibleTo(hidesAll, true, 'foodcost', 'owner'), true);
+  assert.equal(cardVisibleTo(hidesAll, true, 'orders', 'manager'), true);
+  assert.equal(cardVisibleTo(hidesAll, false, 'orders', 'staff'), false);
+  assert.equal(cardVisibleTo({}, false, 'orders', 'staff'), true);
+  assert.equal(cardVisibleTo({ staffShownCards: { foodcost: true } }, false, 'foodcost', 'staff'), true);
+  assert.equal(cardVisibleTo({}, false, 'foodcost', 'staff'), false);
+  assert.equal(cardVisibleTo(hidesAll, true, 'orders'), true, 'no role: nothing narrows it');
+});
+
+test('⚠️ the table of cards has the same keys as the sections', () => {
+  assert.deepEqual(sorted(Object.keys(ROLE_CARDS)), sorted([OWNER_SALES, OWNER_KITCHEN]));
+});
+
+function callsOf(src, name) {
+  const code = stripComments(src);
+  const found = [];
+  const re = new RegExp(`(?<![.\\w$])${name}\\(`, 'g');
+  for (const m of code.matchAll(re)) {
+    if (/function\s+$/.test(code.slice(0, m.index))) continue;
+    let depth = 1, args = 1, empty = true, quote = null;
+    for (let i = m.index + m[0].length; i < code.length && depth > 0; i++) {
+      const ch = code[i];
+      if (quote) { if (ch === '\\') i++; else if (ch === quote) quote = null; continue; }
+      if (ch === "'" || ch === '"' || ch === '`') { quote = ch; empty = false; continue; }
+      if ('([{'.includes(ch)) depth++;
+      else if (')]}'.includes(ch)) depth--;
+      else if (ch === ',' && depth === 1) args++;
+      if (depth > 0 && !/\s/.test(ch)) empty = false;
+    }
+    found.push(empty ? 0 : args);
+  }
+  return found;
+}
+
+function jsFiles(dir) {
+  const out = [];
+  for (const entry of readdirSync(new URL(`../${dir}`, import.meta.url), { withFileTypes: true })) {
+    if (entry.isDirectory()) { if (entry.name !== 'vendor') out.push(...jsFiles(`${dir}/${entry.name}`)); }
+    else if (entry.name.endsWith('.js') && entry.name !== 'firebase.example.js') out.push(`${dir}/${entry.name}`);
+  }
+  return out;
+}
+
+test('⚠️ every caller of the four card gates passes the role', () => {
+  const wanted = { cardVisibleTo: 4, mayOpenFoodCost: 3, mayOpenOrders: 3, mayEditRecords: 3 };
+  const known = {
+    cardVisibleTo: ['js/auth-gate.js', 'js/home-session.js', 'js/home-orders-badge.js', 'js/kiosk.js', 'js/recipe-link.js', 'js/records.js'],
+    mayOpenFoodCost: ['js/catalogue/catalogue-main.js'],
+    mayOpenOrders: ['js/catalogue/catalogue-main.js'],
+    mayEditRecords: ['js/orders/orders-main.js', 'js/catalogue/catalogue-main.js'],
+  };
+  const files = jsFiles('js');
+  assert.ok(files.length > 100, 'the walk found no files');
+  for (const [name, args] of Object.entries(wanted)) {
+    const seenIn = new Set();
+    for (const file of files) {
+      const calls = callsOf(text(file), name);
+      if (calls.length) seenIn.add(file);
+      // ⚠️ mayBeTold() is the one deliberate exception: it applies the role itself (toldAboutCard) and passes
+      // `canManage` for the four roles that run a place, so the 3-argument call inside it is right.
+      if (file === 'js/home-cards.js') continue;
+      calls.forEach(n => assert.equal(n, args, `${file} calls ${name}() with ${n} arguments, not ${args}: the role is missing`));
+    }
+    for (const file of known[name]) assert.ok(seenIn.has(file), `the walk no longer finds ${name}() in ${file}`);
+  }
+});
+
+test('⚠️ mayBeTold: a hidden card tells each partial owner about their own side only', async () => {
+  const { mayBeTold } = await import('../js/home-cards.js');
+  const access = new Map([['kit', OWNER_KITCHEN], ['sal', OWNER_SALES], ['emp', true], ['own', 'owner']]);
+  const who = (card, venue) => [...mayBeTold(venue, card, ['kit', 'sal', 'emp', 'own'], access)].sort();
+  const hide = card => ({ staffHiddenCards: { [card]: true } });
+  assert.deepEqual(who('calculator', hide('calculator')), ['kit', 'own', 'sal'],
+    'a client\'s order opens the Calculator, which is the sales owner\'s business');
+  assert.deepEqual(who('catalogue', hide('catalogue')), ['kit', 'own']);
+  assert.deepEqual(who('orders', hide('orders')), ['kit', 'own']);
+  assert.deepEqual(who('foodcost', {}), ['own'], 'the sales owner is told about the Calculator only (his choice, 1 Nov 2026)');
+  assert.equal(mayBeTold({}, 'orders', ['kit'], access), null, 'nothing hidden: nobody\'s role is read');
+});
+
+test('⚠️ receivesOrderLists: the kitchen and the full roles, never the sales owner', async () => {
+  const { receivesOrderLists, whoWillBeTold, nobodyWillBeTold, awayNames } = await import('../js/away-model.js');
+  for (const role of ['owner', 'manager', OWNER_KITCHEN]) assert.equal(receivesOrderLists(role), true, role);
+  for (const role of [OWNER_SALES, true, 'staff', undefined, null, 'Owner']) assert.equal(receivesOrderLists(role), false, String(role));
+  const roster = [
+    { uid: 'a', role: 'owner' }, { uid: 'b', role: OWNER_KITCHEN }, { uid: 'c', role: OWNER_SALES },
+    { uid: 'd', role: 'staff' }, { uid: 'me', role: 'manager' },
+  ];
+  assert.deepEqual(whoWillBeTold(roster, new Set(), 'me').map(m => m.uid), ['a', 'b']);
+  assert.equal(nobodyWillBeTold(roster, new Set(['a', 'b']), 'me'), true);
+  assert.equal(nobodyWillBeTold(roster, new Set(['a']), 'me'), false);
+  assert.equal(nobodyWillBeTold([{ uid: 'c', role: OWNER_SALES }], new Set(['c']), 'me'), false, 'a sales owner is nobody to wait for');
+  assert.equal(awayNames(roster, new Set(['b', 'c']), 'me').length, 1, 'only the kitchen owner counts');
+  assert.match(text('functions/index.js'), /return receivesOrderLists\(access\);/);
+  assert.equal(text('functions/away-model.js'), text('js/away-model.js'));
+});
+
+test('⚠️ worksOnClients agrees with the list in firestore.rules', async () => {
+  const { worksOnClients } = await import('../js/roles.js');
+  const list = ruleBody('worksOnClientsAs').match(/value in \[([^\]]+)\]/);
+  assert.ok(list, 'worksOnClientsAs() no longer lists the values');
+  // The session carries 'staff' for an employee, whose membership value is `true`.
+  const inRules = values(list[1]).map(v => (v === 'true' ? 'staff' : v));
+  for (const role of ['staff', 'manager', 'owner', OWNER_SALES, OWNER_KITCHEN]) {
+    assert.equal(worksOnClients(role), inRules.includes(role), role);
+  }
+});
+
+test('⚠️ productNamesUsing: names only, from components and packaging', async () => {
+  const { productNamesUsing } = await import('../functions/product-usage-model.js');
+  const products = [
+    { name: 'Loaf', components: [{ ingredientId: 'x' }], sellingPrice: 9 },
+    { name: 'Box', packaging: [{ ingredientId: 'x' }, null] },
+    { name: 'Other', components: [{ ingredientId: 'y' }] },
+    { components: [{ ingredientId: 'x' }] },
+    { name: 7, packaging: [{ ingredientId: 'x' }] },
+    null, 'junk', { components: 'nope', packaging: 4 },
+  ];
+  const names = productNamesUsing('x', products);
+  assert.deepEqual(names, ['Loaf', 'Box', '', '']);
+  assert.ok(names.every(n => typeof n === 'string'));
+  assert.deepEqual(productNamesUsing('x', null), []);
+  assert.deepEqual(productNamesUsing('x', 'junk'), []);
+  assert.match(text('functions/product-usage.js'), /access !== 'owner-kitchen'/);
+  assert.match(text('functions/index.js'), /export \{ productsUsingIngredient \} from '\.\/product-usage\.js';/);
+});
+
+test('findUsage turns the names the server sent into product uses', async () => {
+  const { findUsage } = await import('../js/orders/ingredient-merge.js');
+  assert.deepEqual(findUsage('x', { productNames: ['Loaf', 'Box'] }), [
+    { kind: 'product', name: 'Loaf' }, { kind: 'product', name: 'Box' },
+  ]);
+  assert.deepEqual(findUsage('x', { productNames: [] }), []);
+});
+
+test('both roles are choices, with every word in English and Italian', async () => {
+  const { ROLE_CHOICES } = await import('../js/roles.js');
+  const { _dictionaries } = await import('../js/i18n.js');
+  const dicts = _dictionaries();
+  for (const key of [OWNER_SALES, OWNER_KITCHEN]) {
+    const choice = ROLE_CHOICES.find(c => c.key === key);
+    assert.ok(choice && choice.role === key && choice.title === null, key);
+    const stem = choice.labelKey;
+    for (const lang of ['en', 'it']) {
+      for (const k of [stem, `${stem}.inSentence`, stem.replace('role.', 'role.means.'), stem.replace('role.', 'people.confirm.')]) {
+        assert.ok(typeof dicts[lang][k] === 'string' && dicts[lang][k], `${lang} lacks ${k}`);
+      }
+    }
+  }
+  const people = text('js/staff/people.js');
+  assert.match(people, /'owner-sales': 'role\.means\.ownerSales'/);
+  assert.match(people, /'owner-kitchen': 'people\.confirm\.ownerKitchen'/);
+});
+
+test('⚠️ the screens draw only what the role may use', () => {
+  const settings = text('js/calculator-settings.js');
+  assert.match(settings, /const CLIENT_DOORS = \['open-clients-btn', 'open-whatsapp-btn', 'open-clientorders-btn'\];/);
+  assert.match(settings, /worksOnClients\(currentSession\(\)\.role\)/);
+  assert.match(settings, /export function openSettings\(\) \{\s*paintClientDoors\(\);/);
+  assert.match(text('js/home-settings.js'), /session\.canManageVenue \? item\(t\('lang\.title'\)/);
+  assert.match(text('js/home-settings.js'), /session\.canManageVenue \? item\(t\('homeCards\.title'\)/);
+  assert.match(text('js/catalogue/catalogue-main.js'), /showPhoto: currentSession\(\)\.canManageVenue === true,/);
+  assert.match(text('js/orders/registry-main.js'), /get mayChangeVenue\(\) \{\s*return canManageVenueHere\(\);/);
+  assert.match(text('js/orders/registry.js'), /mayChangeVenue: actions\.mayChangeVenue === true,/);
+  assert.match(text('js/orders/registry-settings.js'), /if \(mayChangeVenue\) content\.appendChild\(card\);/);
+});
+
+test('the hidden attribute really hides a Settings door', () => {
+  assert.match(text('tokens.css'), /\[hidden\] \{ display: none !important; \}/);
 });

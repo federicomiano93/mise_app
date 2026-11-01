@@ -17,7 +17,7 @@ import { withPrices } from '../price-model.js';
 import { buildRegistry } from './registry.js';
 import { dropDeletedIngredientFromDraft, freezeUnitInDraft } from './draft.js';
 import {
-  COLLECTIONS, watchCollection, watchIngredientPrices, canManageHere,
+  COLLECTIONS, watchCollection, watchIngredientPrices, canManageHere, canManageVenueHere,
   saveDoc, removeDoc, saveIngredientWithPrice, saveSupplierRecord, getPriceHistory,
   watchDoc, setCategoryOnMany, deleteIngredientWithPrice, mayWritePrices, setFavouriteSupplier,
 } from './firebase-orders.js';
@@ -128,6 +128,12 @@ const screen = buildRegistry(
     // after this module runs) and is absent for staff. The rules decide either way (P2).
     get toggleFavouriteSupplier() {
       return canManageHere() ? (id, on) => setFavouriteSupplier(id, on) : undefined;
+    },
+    // ⚠️ A GETTER, AND THE GATE LIVES HERE (registry.js may ask no role): the Settings screen draws
+    // the venue's switches (allergens, nutrition, pack photo) only when this is true. canManageHere()
+    // would draw them for a partial owner, whom the server refuses. The rules decide either way (P2).
+    get mayChangeVenue() {
+      return canManageVenueHere();
     },
     // The shortened list and «no category» on every ingredient that used it — one batch.
     deleteCategory: (list, ids) => setCategoryOnMany(ids, 'Other',

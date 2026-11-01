@@ -86,8 +86,8 @@ test('⚠️ the bottom of the Home never carries the holiday — that is a band
 test('⚠️⚠️ every row keeps exactly the gate it had under the cards', () => {
   // Since 28 Sep 2026 the rows sit in three cards (you, the venue, the account), and
   // each gate is a conditional on the row itself.
-  assert.match(SETTINGS, /session\.canManage \? item\(t\('lang\.title'\)/);
-  assert.match(SETTINGS, /session\.canManage \? item\(t\('homeCards\.title'\)/);
+  assert.match(SETTINGS, /session\.canManageVenue \? item\(t\('lang\.title'\)/);
+  assert.match(SETTINGS, /session\.canManageVenue \? item\(t\('homeCards\.title'\)/);
   assert.match(SETTINGS, /session\.isOwner \? item\(t\('people\.title'\)/,
     'hiring is the one power a manager does not have');
   assert.match(SETTINGS, /!session\.isAppAdmin && options\.length > 1 \? item\(t\('home\.switch'\)/);

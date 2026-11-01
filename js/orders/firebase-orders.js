@@ -477,6 +477,14 @@ export function canManageHere() {
   return currentSession().canManage === true;
 }
 
+// Whether this session may change the VENUE's own switches (what it tracks, what it
+// pays for). ⚠️ NOT canManageHere(): that is true for the two partial owners inside their own
+// side, and the server refuses them these switches (functions/onboarding.js asks owner or
+// manager). UX only (P2).
+export function canManageVenueHere() {
+  return currentSession().canManageVenue === true;
+}
+
 // ── Order lists sent from one person to another ──────────────────────────────
 
 // How many lists the screen ever holds. ⚠️ A BOUNDED LIVE READ, and the bound is

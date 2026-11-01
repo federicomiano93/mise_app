@@ -12,6 +12,7 @@
 
 import { firebaseConfig, sessionReady, currentSession } from './firebase.js';
 import { currentLocationId, pathFor } from './location.js';
+import { isSectionAllowed } from './sections.js';
 import { splitPriceFields } from './price-model.js';
 import { deletePlan } from './ingredient-edit-model.js';
 import {
@@ -55,11 +56,12 @@ function withBakery(data) {
 // database refused that write, and a batch is all-or-nothing, so adding or renaming
 // ANY ingredient there failed with «check your network». Found 13 Sep 2026 driving
 // the registry as the owner of such a venue.
-// `sections` is the session's, already narrowed by the location AND the role
-// (js/sections.js sectionsFor), so a missing key reads the same way the rules do.
+// ⚠️ THE VENUE'S SECTION, NOT session.sections, which is narrowed by the role: the owner of the
+// kitchen has no Food cost screen and does buy and load the invoices, so the rules give them
+// purchase prices (managesPrices in firestore.rules). canManage already leaves out employees.
 export function mayWritePrices() {
   const session = currentSession();
-  return session.canManage === true && session.sections?.foodcost === true;
+  return session.canManage === true && isSectionAllowed(session.location, 'foodcost');
 }
 
 // Save an ingredient and, when its price actually changed, record that price —

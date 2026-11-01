@@ -32,7 +32,7 @@ const SVG_NS = 'http://www.w3.org/2000/svg';
 // Hide the cards this location does not use. The cards are static HTML with a
 // data-section, so this only ever REMOVES — a location with everything on gets
 // the markup exactly as written.
-function filterCards({ location, canManage }) {
+function filterCards({ location, canManage, role }) {
   // The parts of the app this VENUE has — the same for everybody in it.
   const allowed = allowedSections(location);
   document.querySelectorAll('.home-card[data-section]').forEach(card => {
@@ -43,7 +43,7 @@ function filterCards({ location, canManage }) {
     // until the venue shows them. It never removes a card from an owner, a manager or
     // a head chef. ⚠️ So EVERY card must carry a data-card; a test walks the Home to
     // say so, because a card without one would be shown to everybody.
-    else if (!cardVisibleTo(location, canManage, card.dataset.card)) card.remove();
+    else if (!cardVisibleTo(location, canManage, card.dataset.card, role)) card.remove();
   });
 }
 

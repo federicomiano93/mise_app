@@ -24,7 +24,7 @@ const TRASH_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>';
 
 export function renderSettings({
-  photoOn, onTogglePhoto, labelProfile, onSaveLabel,
+  photoOn, onTogglePhoto, labelProfile, onSaveLabel, showPhoto = true,
   getCategories = () => [], countRecipes = () => 0,
   onAddCategory = () => Promise.resolve(), onRemoveCategory = () => Promise.resolve(), confirm = null,
 }) {
@@ -435,7 +435,9 @@ export function renderSettings({
   });
   root.append(
     categories.card,
-    photoCard,
+    // ⚠️ NOT DRAWN FOR A PARTIAL OWNER (showPhoto false): the server refuses them the photo
+    // switch (functions/onboarding.js setRecipePhoto). The label settings below stay.
+    ...(showPhoto ? [photoCard] : []),
     el('section', { class: 'set-section' }, [
       el('div', { class: 'set-head' }, [labelHead]),
       el('div', { class: 'set-block' }, [sizeLabel, sizeSwitch, customRow]),

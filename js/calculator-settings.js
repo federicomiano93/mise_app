@@ -43,6 +43,7 @@ import {
   listOrderingAccounts, createOrderingLink, revokeOrderingLink, orderingLinkFor,
 } from './client-orders-data.js';
 import { currentSession } from './firebase.js';
+import { worksOnClients } from './roles.js';
 import Sortable from './vendor/sortable.esm.js';
 
 // A recipe's display name (falls back to its id if the recipe was deleted).
@@ -72,7 +73,22 @@ function genId(prefix) {
 function isBlank(s) { return !s || !String(s).trim(); }
 
 // ── Hub ───────────────────────────────────────────────────────────────────────
+// ⚠️ THE KITCHEN'S OWNER HAS NO CLIENTS TO RUN (js/roles.js worksOnClients, the same list as
+// firestore.rules): the three doors below are not drawn for them. `hidden` wins over the
+// .set-row display rule because tokens.css ends in `[hidden] { display: none !important }`.
+// The switches under them stay, they are the venue's own. Read when the overlay opens, the
+// session is there by then.
+const CLIENT_DOORS = ['open-clients-btn', 'open-whatsapp-btn', 'open-clientorders-btn'];
+function paintClientDoors() {
+  const shown = worksOnClients(currentSession().role);
+  for (const id of CLIENT_DOORS) {
+    const door = document.getElementById(id);
+    if (door) door.hidden = !shown;
+  }
+}
+
 export function openSettings() {
+  paintClientDoors();
   paintOrdersButtonSwitch();
   paintAskDaySwitch();
   show('settings-overlay');
@@ -399,7 +415,7 @@ async function loadOrderingAccounts() {
   orderingAccounts.clear();
   // Only those who can manage the Calculator may read the links (firestore.rules,
   // client-accounts): asking for anybody else would only collect a refusal.
-  if (currentSession().canManage !== true) return;
+  if (currentSession().canManage !== true || !worksOnClients(currentSession().role)) return;
   try {
     for (const account of await listOrderingAccounts()) {
       if (account && account.clientId) orderingAccounts.set(account.clientId, account);
