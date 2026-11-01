@@ -198,22 +198,75 @@ test('an order stops the quantity, not the shelf count typed on the same line', 
   assert.equal(second.entries.flour.stock, 4);
 });
 
-test('the orders cannot be read: nothing comes back and the note waits for the next open', async () => {
+test('the orders cannot be read: nothing comes back, the note waits, and it asks again', async () => {
   const errors = mock.method(console, 'error', () => {});
   const first = await openPage(server());
   type(first, 'flour', { qty: 5 });
   const second = await openPage(server());
   stub.history.fail = true;
   await answer(server());
-  errors.mock.restore();
   assert.equal(second.entries.flour, undefined);
   assert.ok(note().entries.flour, 'still noted');
   await pause();
   assert.deepEqual(sent(), []);
+  mock.timers.tick(30000);
+  await settle();
+  assert.equal(stub.history.reads, 2, 'and still refused');
   stub.history.fail = false;
-  const third = await openPage(server());
+  mock.timers.tick(30000);
+  await settle();
+  errors.mock.restore();
+  assert.equal(second.entries.flour.qty, 5, 'the page stayed open and it came back');
+});
+
+test('a note that waited offline past its day does not come back when the server finally answers', async () => {
+  const first = await openPage(server());
+  type(first, 'flour', { qty: 5 });
+  const typedAt = note().at;
+  const second = await openPage(server());
+  const later = mock.method(Date, 'now', () => typedAt + DRAFT_JOURNAL_MAX_AGE_MS + 1);
   await answer(server());
-  assert.equal(third.entries.flour.qty, 5);
+  later.mock.restore();
+  assert.equal(second.entries.flour, undefined);
+  assert.equal(globalThis.localStorage.getItem(DRAFT_JOURNAL_KEY), null);
+  await pause();
+  assert.deepEqual(sent(), []);
+});
+
+test('a future day stamp does not outlive its dropped line through another line coming back', async () => {
+  const first = await openPage(server());
+  type(first, 'flour', { qty: 5 }, 'sup1');
+  type(first, 'salt', { qty: 2 }, 'sup2');
+  const second = await openPage(server());
+  stub.history.records = [placedAt(Date.now() + 60000, { flour: 6 })];
+  await answer(server());
+  await pause();
+  assert.deepEqual(sent()[0].entries, { salt: { qty: 2, unit: '', supplierId: '' } });
+  assert.equal(sent()[0].days, undefined);
+  assert.deepEqual(second.days, {});
+});
+
+test('a shelf count alone does not bring a day stamp back', async () => {
+  const first = await openPage(server());
+  type(first, 'flour', { qty: 5, stock: 4 }, 'sup1');
+  await openPage(server());
+  stub.history.records = [placedAt(Date.now() + 60000, { flour: 6 })];
+  await answer(server());
+  await pause();
+  assert.equal(sent()[0].days, undefined);
+});
+
+test('the very first keystroke of a page takes that line out of what the last page left', async () => {
+  const first = await openPage(server());
+  type(first, 'flour', { qty: 5 });
+  const mod = await reopenDraft();
+  const page = { entries: {}, days: {}, mod };
+  mod.watchDraft(view => { page.entries = view.entries; page.days = view.days; });
+  type(page, 'flour', { qty: 8 });         // before any snapshot
+  page.entries.flour.qty = 0;              // and erased
+  mod.scheduleDraftSave(page.entries, page.days);
+  await answer(server());
+  assert.equal(page.entries.flour, undefined, 'what was erased does not come back');
 });
 
 test('nothing to bring back: the orders are not read', async () => {
@@ -500,7 +553,8 @@ test('orderedSince reads each send, its time, and only what was really ordered',
   const send = (iso, quantities) => ({ at: iso, quantities });
   const ids = orderedSince([
     { sends: { a: send('2026-11-01T09:00:00Z', { old: 3 }), b: send('2026-11-01T11:00:00Z', { late: 3, zero: 0 }) } },
-    { sends: { c: send('2026-11-01T09:57:00Z', { skewed: 1 }) } },     // within the clocks' margin
+    { sends: { c: send('2026-11-01T09:59:00Z', { skewed: 1 }) } },     // within the clocks' margin
+    { sends: { f: { ...send('2026-11-01T15:00:00Z', { corrected: 2 }), kind: 'edit' } } },   // a History correction
     { createdAt: '2026-11-01T12:00:00Z', quantities: { oldShape: 2 } },   // from before `sends`
     { createdAt: '2026-10-01T12:00:00Z', quantities: { oldShapeOld: 2 } },
     { sends: { d: send('not a date', { broken: 1 }), e: {} } },

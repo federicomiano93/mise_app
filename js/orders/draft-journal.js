@@ -30,7 +30,7 @@ export const DRAFT_JOURNAL_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 // Two phones' clocks can disagree: an order placed this long BEFORE the note still counts as after.
 // Wrong in the safe direction: a number is dropped, never ordered twice.
-export const CLOCK_MARGIN_MS = 5 * 60 * 1000;
+export const CLOCK_MARGIN_MS = 2 * 60 * 1000;
 // An order is filed under the day its lines were FOR, which can be before the day it is placed.
 export const HISTORY_LOOK_BACK_DAYS = 7;
 
@@ -121,7 +121,8 @@ export function historyLookBackDay(at) {
 }
 
 // The ingredients that some order placed since `at` names. From each send, not from the record's
-// total, and not from its updatedAt: confirming a delivery next week orders nothing.
+// total, and not from its updatedAt: confirming a delivery next week orders nothing. Nor from a
+// correction made in History (`kind: 'edit'`), which lists the WHOLE record and orders nothing either.
 export function orderedSince(records, at) {
   const ids = new Set();
   (records || []).forEach(record => {
@@ -131,7 +132,7 @@ export function orderedSince(records, at) {
       : [{ at: record?.createdAt, quantities: record?.quantities }];
     sends.forEach(send => {
       const when = Date.parse(send?.at);
-      if (!(when >= at - CLOCK_MARGIN_MS)) return;
+      if (send?.kind === 'edit' || !(when >= at - CLOCK_MARGIN_MS)) return;
       Object.entries(send?.quantities || {}).forEach(([id, qty]) => { if (Number(qty) > 0) ids.add(id); });
     });
   });

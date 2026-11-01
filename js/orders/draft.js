@@ -19,7 +19,7 @@ import {
   replaceDoc, removeDoc, getDocOnce, currentBakery, COLLECTIONS,
 } from './firebase-orders.js';
 import {
-  readJournal, writeJournal, dropNotedLine, orderedSince, historyLookBackDay,
+  readJournal, writeJournal, dropNotedLine, orderedSince, historyLookBackDay, DRAFT_JOURNAL_MAX_AGE_MS,
 } from './draft-journal.js';
 import {
   buildSupplierArchive, mergeArchives, historyDocId, ingredientsOf, quantityPathsFor,
@@ -31,6 +31,7 @@ import { cleanSupplierId, overrideOf } from './line-supplier.js';
 
 const DRAFT_ID = 'current';
 const SAVE_DELAY_MS = 800; // debounce to limit Firestore writes (cost control)
+const ORDERS_RETRY_MS = 30000; // a tablet can stay open for days: «the next open» may be far away
 
 let saveTimer = null;
 let waiting = false;       // a change is waiting for the debounce, so it can be flushed
@@ -256,16 +257,19 @@ function stillOurs(left, doc) {
   return { entries, days };
 }
 
-// The server has answered. Says whether any line came back.
+// The server has answered, so `known` is its word, and the listener has it first. Says whether any
+// line came back, or null when the orders could not be read and the note goes on waiting.
 //
 // ⚠️⚠️ «STILL READS AS IT DID» CANNOT TELL AN UNTOUCHED LINE FROM ONE THAT WAS FILLED AND ORDERED: placing
 // empties a line, and empty is what most lines were when typed on. Worse, the note may even be for a
 // write that did get through, in the instant between Firestore storing it and telling this page, and
 // any page of the app then sends it. So before anything comes back the server is asked about the
 // orders themselves: a line some order has named since it was typed stays out. Read only when there
-// is something to bring back, which is rare. No answer leaves the note for the next open.
-async function settleRestored(doc) {
-  if (isEmpty(stillOurs(restored, doc).entries)) {
+// is something to bring back, which is rare.
+async function settleRestored() {
+  // ⚠️ AGAIN HERE, not only when the note is read: a page can wait offline for days.
+  const expired = Date.now() - restored.at > DRAFT_JOURNAL_MAX_AGE_MS;
+  if (expired || isEmpty(stillOurs(restored, known).entries)) {
     restored = null;
     saveJournal();
     return false;
@@ -274,23 +278,29 @@ async function settleRestored(doc) {
   try {
     ordered = orderedSince(await getRecentHistoryFromServer(historyLookBackDay(restored.at)), restored.at);
   } catch (err) {
-    console.error('The orders could not be checked, the typed quantities wait for the next open:', err);
-    return false;
+    console.error('The orders could not be checked, the typed quantities wait:', err);
+    return null;
   }
-  // Time has passed: `known` is the latest word, and whatever was typed or cleared since has
-  // already been taken out of `restored`.
-  const { entries, days } = stillOurs(restored, known);
+  // Time has passed: whatever was typed or cleared since has already been taken out of `restored`,
+  // and `known` has moved on with every snapshot.
+  const left = restored;
+  const { entries, days } = stillOurs(left, known);
   restored = null;
   Object.keys(entries).forEach(id => {
     if (!ordered.has(id)) return;
     GROUP.forEach(field => { delete entries[id][field]; });
     if (isEmpty(entries[id])) delete entries[id];
   });
+  const quantities = rows => Object.values(rows).filter(row => GROUP.some(field => field in row)).length;
+  const typed = quantities(Object.values(left.entries).map(({ row }) => row));
+  const back = quantities(entries);
   const anyLine = !isEmpty(entries);
   Object.entries(entries).forEach(([id, row]) => { pending.entries[id] = { ...row, ...pending.entries[id] }; });
-  // ⚠️ A DAY STAMP MEANS NOTHING WITHOUT ITS LINES, and the quantities it came with may just have
-  // been dropped: alone it would date a supplier nobody is ordering from.
-  if (anyLine) {
+  // ⚠️ A DAY STAMP MEANS NOTHING WITHOUT ITS LINES, and a line dropped here may be why: a stamp for next
+  // week left on a supplier whose order has gone would date that supplier's next order too. This file
+  // does not know whose line is whose, so the stamps come back only if every quantity did. A line with
+  // none reads under the draft's own day, as it would anywhere, until the next keystroke stamps it.
+  if (back && back === typed) {
     Object.entries(days).forEach(([id, day]) => { if (!(id in pending.days)) pending.days[id] = day; });
   }
   saveJournal();
@@ -307,6 +317,7 @@ function forgetRestored(id, fields) {
 
 // Claim exactly what differs from the server now, and note it before anything else can happen.
 function claim(entries, days) {
+  if (!journalLid) openJournal?.();   // first, so that typing can take a line out of what it finds
   pending = differences(entries, days);
   if (restored) {
     Object.entries(pending.entries).forEach(([id, row]) => {
@@ -528,14 +539,16 @@ export function watchDraft(onChange, onError) {
     if (!note) return;
     journalAt = note.at;
     restored = note;
-    // An error simply leaves the note for the next open.
-    watchServerAnswer(COLLECTIONS.drafts, DRAFT_ID, doc => {
-      settleRestored(doc).then(cameBack => {
+    const settle = () => {
+      settleRestored().then(cameBack => {
+        if (cameBack === null) setTimeout(settle, ORDERS_RETRY_MS);
         if (!cameBack) return;
         show({ entries: detach(known.entries), days: { ...known.days } }, true);
         armSave();
       });
-    });
+    };
+    // An error simply leaves the note for the next open.
+    watchServerAnswer(COLLECTIONS.drafts, DRAFT_ID, settle);
   };
   return watchDoc(COLLECTIONS.drafts, DRAFT_ID, doc => {
     // The server's word on the draft becomes the baseline the next autosave
