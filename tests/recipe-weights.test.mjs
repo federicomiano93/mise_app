@@ -61,7 +61,7 @@ test('⚠️⚠️ the catalogue no longer writes the loss, so it cannot undo a 
   for (const key of ['lossPct', 'rawGrams', 'cookedGrams']) {
     assert.ok(!data.includes(key), `the catalogue's document must not carry ${key}`);
   }
-  assert.match(save, /\['lossPct', 'rawGrams', 'cookedGrams', 'category'\]\.forEach\(k =>\{ if \(prev\[k\] !== undefined\) kept\[k\] = prev\[k\]; \}\);/,
+  assert.match(save, /\['lossPct', 'rawGrams', 'cookedGrams', 'category'\]\.forEach\(k => \{ if \(prev\[k\] !== undefined\) kept\[k\] = prev\[k\]; \}\);/,
     'and the list on screen keeps the loss it had, rather than dropping it until the next snapshot');
   assert.match(save, /upsertLocal\(\{ \.\.\.kept, id, \.\.\.data \}\)/);
 });
