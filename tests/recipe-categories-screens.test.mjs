@@ -2,8 +2,8 @@
 // (js/catalogue/catalogue-list.js, catalogue-editor.js, catalogue-settings.js, catalogue-main.js). P15.
 //
 // No jsdom in this project, so the wiring is pinned at source level, naming what a later edit could
-// quietly break: headings decided over the WHOLE list, the save flag, the guard against overwriting
-// the saved list, and every word of the screens living in both dictionaries.
+// quietly break: headings decided over the WHOLE list, the save flag, the word-by-word writes that
+// protect the saved list, and every word of the screens living in both dictionaries.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -56,21 +56,26 @@ test('the editor flags a real move only, and keeps the flag off the database', (
   assert.doesNotMatch(store, /categoryMoved:/);
 });
 
-test('Settings writes through the getter, never through a copy of the list', () => {
+test('Settings changes one word at a time, judged against what the store holds now', () => {
   assert.match(SETTINGS, /addCategory\(getCategories\(\), input\.value\)/);
-  assert.match(SETTINGS, /removeCategory\(getCategories\(\), word\)/);
+  assert.match(SETTINGS, /onAddCategory\(word\)/);
+  assert.match(SETTINGS, /onRemoveCategory\(word\)/);
   assert.match(MAIN, /getCategories: \(\) => getRecipeCategories\(\)/);
-  assert.match(MAIN, /onSaveCategories: list => saveRecipeCategories\(list\)/);
+  assert.match(MAIN, /onAddCategory: word => addRecipeCategory\(word\)/);
+  assert.match(MAIN, /onRemoveCategory: word => removeRecipeCategory\(word\)/);
   assert.match(MAIN, /countRecipes: \(word, list\) => countInCategory\(getRecipes\(\), word, list\)/);
 });
 
-test('Settings is locked until the venue\'s list has been answered', () => {
-  assert.match(SETTINGS, /input\.disabled = !loaded/);
-  assert.match(SETTINGS, /addBtn\.disabled = !loaded/);
-  // Both handlers refuse to run too, not only the disabled attribute.
-  assert.match(SETTINGS, /function add\(\) \{\s*if \(!categoriesLoaded\(\)\) return;/);
-  assert.match(SETTINGS, /async function remove\(word\) \{\s*if \(!categoriesLoaded\(\)/);
-  assert.match(MAIN, /categoriesLoaded: \(\) => recipeCategoriesLoaded\(\)/);
+test('⚠️ the list is never written whole: an old copy on a phone would wipe the venue\'s words', () => {
+  const layer = codeOf(read('js/catalogue/firebase-catalogue.js'));
+  assert.match(layer, /recipeCategories: arrayUnion\(word\)/);
+  assert.match(layer, /recipeCategories: arrayRemove\(\.\.\.words\)/);
+  const store = codeOf(read('js/catalogue/catalogue-store.js'));
+  assert.doesNotMatch(store, /saveLabelProfile\(\{ recipeCategories/);
+  assert.doesNotMatch(store, /saveLabelConfig\(\{ recipeCategories/);
+  // What a refusal puts back is that one word, never an earlier copy of the document.
+  assert.match(store, /\.catch\(err => categoryWriteRefused\(err, list => removeCategory\(list, word\)\)\)/);
+  assert.match(store, /\.catch\(err => categoryWriteRefused\(err, list => \[\.\.\.list, word\]\)\)/);
 });
 
 test('deleting a category asks first, and the question says how many recipes are affected', () => {
@@ -78,9 +83,17 @@ test('deleting a category asks first, and the question says how many recipes are
   assert.match(SETTINGS, /t\('cat\.shelf\.deleteCategoryUsed', \{ n \}\)/);
 });
 
-test('a refused or failed save repaints from the store and says so', () => {
-  assert.match(SETTINGS, /categoriesNotSaved/);
+test('a refused save says so wherever the person is, and the refused word comes back to the box', () => {
+  const store = codeOf(read('js/catalogue/catalogue-store.js'));
+  assert.match(store, /onSyncError\(t\('cat\.shelf\.categoriesNotSaved'\)\)/);
+  assert.match(SETTINGS, /if \(root\.isConnected && !input\.value\) input\.value = word/);
   assert.match(SETTINGS, /role: 'alert'/);
+});
+
+test('after a delete the focus goes to the next bin, never to the box: it would raise the keyboard', () => {
+  const remove = SETTINGS.slice(SETTINGS.indexOf('async function remove(word)'), SETTINGS.indexOf("addBtn.addEventListener('click', add)"));
+  assert.match(remove, /next\.focus\(\{ preventScroll: true \}\)/);
+  assert.doesNotMatch(remove, /input\.focus\(\)/);
 });
 
 test('the Settings card is first on the screen and re-worded when the language arrives', () => {

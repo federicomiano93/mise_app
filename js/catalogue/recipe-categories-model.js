@@ -6,7 +6,9 @@
 //   • recipes/{id}.category — a string, 1–100 characters; «no category» is NO field (an emptied
 //     choice travels as a removal). A word that is not on the venue's list (taken off it) reads as
 //     «no category», and comes back if the word is put back — so deleting a category writes no recipe.
-//   • config/labels.recipeCategories — the venue's list, a list of strings (≤ 100), written whole.
+//   • config/labels.recipeCategories — the venue's list, a list of strings (≤ 100), changed one word
+//     at a time. Two phones offline can each add a word in their own case, so a stored list may hold
+//     both spellings; normalizeRecipeCategories() reads them as one.
 
 // The longest word the Settings box takes (the rules allow 100: room for a word stored by a later version).
 export const RECIPE_CATEGORY_MAX = 40;
@@ -72,6 +74,13 @@ export function groupByCategory(recipes, categories) {
   }
   if (none.length) groups.push({ category: '', recipes: none });
   return groups;
+}
+
+// What a save writes about the category: nothing unless the editor's menu moved it. An emptied choice
+// is null, which the data layer sends as a removal (the rules refuse an empty word).
+export function categoryPatchOf(recipe) {
+  if (!recipe || recipe.categoryMoved !== true) return {};
+  return { category: tidyWord(recipe.category) || null };
 }
 
 // How many recipes are filed under a word of the list (all of them leave it if the word goes).

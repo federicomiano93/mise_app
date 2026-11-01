@@ -9,7 +9,7 @@ import {
   initCatalogue, getRecipes, getUsage, bumpUsage, saveRecipe, deleteRecipe, setSyncErrorHandler,
   getIngredients, getSuppliers, getRecipesById, getLabelProfile, saveLabelProfile,
   printerReady, queueLabelJob,
-  getRecipeCategories, recipeCategoriesLoaded, saveRecipeCategories,
+  getRecipeCategories, addRecipeCategory, removeRecipeCategory,
 } from './catalogue-store.js';
 import { countInCategory } from './recipe-categories-model.js';
 import { renderList } from './catalogue-list.js';
@@ -619,12 +619,11 @@ function showSettings() {
     // The store is local-first and rolls its own copy back on a rejection; the
     // screen rolls back what a person can see. Both, because they are two copies.
     onSaveLabel: patch => saveLabelProfile(patch),
-    // ⚠️ GETTERS, not a copy: the list is written whole, so every change starts from what the
-    // store holds NOW. Nothing is writable until the venue's document has answered.
+    // A GETTER, not a copy: the list can change on another phone while this screen is open.
     getCategories: () => getRecipeCategories(),
-    categoriesLoaded: () => recipeCategoriesLoaded(),
     countRecipes: (word, list) => countInCategory(getRecipes(), word, list),
-    onSaveCategories: list => saveRecipeCategories(list),
+    onAddCategory: word => addRecipeCategory(word),
+    onRemoveCategory: word => removeRecipeCategory(word),
     confirm: confirmDialog,
   }));
   swap(activeSettings.root);

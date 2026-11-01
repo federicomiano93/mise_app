@@ -23,6 +23,8 @@ import {
   watchSuppliers,
   watchLabelConfig,
   saveLabelConfig,
+  addRecipeCategoryWord,
+  removeRecipeCategoryWords,
   watchPrintAgents,
   queuePrintJob,
   saveRecipeDoc,
@@ -30,7 +32,7 @@ import {
   newRecipeId,
 } from './firebase-catalogue.js';
 import { normalizeLabelProfile } from './label-template-model.js';
-import { normalizeRecipeCategories } from './recipe-categories-model.js';
+import { normalizeRecipeCategories, categoryKey, removeCategory, categoryPatchOf } from './recipe-categories-model.js';
 import { buildJob, printerPresence } from '../print-queue-model.js';
 import { currentSession } from '../firebase.js';
 import { currentLocationId } from '../location.js';
@@ -50,8 +52,6 @@ let recipes = readCache();
 let ingredients = readIngredientCache();
 let suppliers = readJsonMap(SUPPLIERS_KEY);
 let labelConfig = readJson(LABEL_CONFIG_KEY);
-// Has the listener given a real answer about config/labels? See recipeCategoriesLoaded().
-let labelConfigAnswered = false;
 // ⚠️ NOT CACHED TO localStorage, deliberately, unlike everything else here. A
 // heartbeat is a statement about RIGHT NOW; a remembered one would tell a phone
 // that opened offline that the shop computer is listening, which is the one
@@ -139,10 +139,9 @@ export function initCatalogue(onUpdate, onError) {
   // a venue that has never opened label Settings has no document at all, and the
   // defaults are the right answer for it.
   watchLabelConfig(
-    (remote, fromCache) => {
+    remote => {
       labelConfig = remote;
       writeJson(LABEL_CONFIG_KEY, remote);
-      if (remote || !fromCache) labelConfigAnswered = true;
       if (notify) notify(recipes);
     },
     () => {},
@@ -229,16 +228,36 @@ export function getRecipeCategories() {
   return normalizeRecipeCategories(labelConfig && labelConfig.recipeCategories);
 }
 
-// ⚠️ THE LIST IS WRITTEN WHOLE, so changing it before the listener has answered would overwrite the
-// saved list with this phone's guess — the list empty, on a phone that never opened this venue. The
-// Settings card waits for this. A missing document from this phone's own cache is no answer either.
-export function recipeCategoriesLoaded() {
-  return labelConfigAnswered;
+function setLocalCategories(list) {
+  labelConfig = { ...(labelConfig || {}), recipeCategories: list };
+  writeJson(LABEL_CONFIG_KEY, labelConfig);
+  if (notify) notify(recipes);
 }
 
-// The whole list, local-first with the label profile's own rollback. Rejects when the database refuses.
-export function saveRecipeCategories(list) {
-  return saveLabelProfile({ recipeCategories: list });
+// ⚠️ ONLY THIS WORD IS PUT BACK, never a copy of the document taken before the write: other words,
+// and the label settings, may have changed in the meantime. Said wherever the person is by now.
+function categoryWriteRefused(err, undo) {
+  console.warn('Recipe categories did not sync to Firestore:', err);
+  setLocalCategories(undo(getRecipeCategories()));
+  if (onSyncError) onSyncError(t('cat.shelf.categoriesNotSaved'));
+  throw err;
+}
+
+// Local-first, one word at a time (see the data layer for why). The screen changes at once, offline
+// too, where the promise stays pending until the network is back: nothing may wait for it.
+export function addRecipeCategory(word) {
+  setLocalCategories([...getRecipeCategories(), word]);
+  return addRecipeCategoryWord(word)
+    .catch(err => categoryWriteRefused(err, list => removeCategory(list, word)));
+}
+
+export function removeRecipeCategory(word) {
+  // Every spelling stored: two phones offline may each have added the word in its own case.
+  const stored = Array.isArray(labelConfig && labelConfig.recipeCategories) ? labelConfig.recipeCategories : [];
+  const spellings = stored.filter(held => categoryKey(held) === categoryKey(word));
+  setLocalCategories(removeCategory(getRecipeCategories(), word));
+  return removeRecipeCategoryWords(spellings.length ? spellings : [word])
+    .catch(err => categoryWriteRefused(err, list => [...list, word]));
 }
 
 // ── Ingredients and suppliers (read-only, owned by Orders) ────────────────────
@@ -397,9 +416,8 @@ export function saveRecipe(recipe) {
   //
   // ⚠️ THE CATEGORY TRAVELS ONLY WHEN THE EDITOR'S MENU MOVED IT (`categoryMoved`), on the same
   // reasoning: saving the steps or fixing a typo must not write back the category this screen read,
-  // over a change made on another phone — nor strip a recipe of a word the list no longer has. An
-  // emptied choice is null, which saveRecipeDoc() sends as a removal: the rules refuse an empty word.
-  if (recipe.categoryMoved === true) data.category = recipe.category || null;
+  // over a change made on another phone — nor strip a recipe of a word the list no longer has.
+  Object.assign(data, categoryPatchOf(recipe));
   const id = recipe.id || newRecipeId();
   const prev = recipes.find(r => r.id === id) || null;
   // …and the list on screen keeps them too, for the same reason: the write leaves the

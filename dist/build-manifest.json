@@ -134,14 +134,14 @@
       }
     },
     "dist/catalogue.css": {
-      "sha": "710662be659089e6",
+      "sha": "c58024e507c3c1dc",
       "inputs": {
-        "catalogue.css": "48493c5f69253f99"
+        "catalogue.css": "3615947afc0abc85"
       }
     },
     "dist/catalogue.js": {
-      "sha": "7b48e36660d5a614",
-      "mapSha": "7415f52025f8bb91",
+      "sha": "b2ba1b3acc6f060b",
+      "mapSha": "5462894adaa88ea3",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -153,14 +153,14 @@
         "js/catalogue/catalogue-detail.js": "68478265c24cbef2",
         "js/catalogue/catalogue-editor.js": "ffcdf80d2cdaab43",
         "js/catalogue/catalogue-list.js": "e200fbba7ece642f",
-        "js/catalogue/catalogue-main.js": "b398ed2178098dee",
+        "js/catalogue/catalogue-main.js": "5febac99563fbed6",
         "js/catalogue/catalogue-model.js": "2c796556ddd93106",
-        "js/catalogue/catalogue-settings.js": "c7992cb5bac3abb0",
-        "js/catalogue/catalogue-store.js": "41059740d00c33ae",
+        "js/catalogue/catalogue-settings.js": "11c49162dc9766e7",
+        "js/catalogue/catalogue-store.js": "51431723feac1e2e",
         "js/catalogue/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/catalogue/dom.js": "ccb295509b508828",
         "js/catalogue/editor-prices.js": "c7ce0820fcfe292c",
-        "js/catalogue/firebase-catalogue.js": "f056840b3e4e299f",
+        "js/catalogue/firebase-catalogue.js": "fa43f3ef681285cd",
         "js/catalogue/firebase-photo.js": "38b16af4b97630a5",
         "js/catalogue/guided-alarm.js": "5abbc05b8da5804c",
         "js/catalogue/guided-editor.js": "ff52039f809d1353",
@@ -177,7 +177,7 @@
         "js/catalogue/photo-model.js": "89876cfae4a91de4",
         "js/catalogue/print-transports.js": "2ffa9be4dbda2b30",
         "js/catalogue/recipe-allergen-model.js": "e00d4047f61d5d6f",
-        "js/catalogue/recipe-categories-model.js": "66c6bb7a83f224bf",
+        "js/catalogue/recipe-categories-model.js": "a4d0ef5c9873de04",
         "js/catalogue/recipe-cost-model.js": "7dd027150da03725",
         "js/catalogue/recipe-label-model.js": "d18b858bd007813a",
         "js/catalogue/search-box.js": "6cd5b7c92acc83fe",
@@ -390,10 +390,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "aa23920e37bbca8b",
-      "mapSha": "f9ef8102d116c952",
+      "sha": "456db1eec53f380e",
+      "mapSha": "e71b79d7837c5167",
       "inputs": {
-        "js/i18n.js": "c5340bb4219a7f2d"
+        "js/i18n.js": "cb3c727c33929e3c"
       }
     },
     "dist/index.js": {

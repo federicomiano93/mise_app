@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import {
   RECIPE_CATEGORY_MAX, RECIPE_CATEGORIES_MAX,
   categoryKey, normalizeRecipeCategories, sortedCategories, categoryOf,
-  groupByCategory, countInCategory, addCategory, removeCategory,
+  groupByCategory, countInCategory, addCategory, removeCategory, categoryPatchOf,
 } from '../js/catalogue/recipe-categories-model.js';
 import { normalizeCatalogueRecipe } from '../js/catalogue/catalogue-model.js';
 
@@ -98,9 +98,18 @@ test('the local copy of a recipe carries the category as stored, absent rather t
   assert.equal('category' in normalizeCatalogueRecipe({ ...base, category: 3 }), false);
 });
 
-test('a save sends the category only when the menu moved it, and the screen\'s copy keeps it otherwise', () => {
+test('a save writes the category only when the menu moved it', () => {
+  assert.deepEqual(categoryPatchOf({ category: 'Natale' }), {}, 'a stale copy is not sent');
+  assert.deepEqual(categoryPatchOf({ category: 'Natale', categoryMoved: false }), {});
+  assert.deepEqual(categoryPatchOf({ category: ' Natale ', categoryMoved: true }), { category: 'Natale' });
+  assert.deepEqual(categoryPatchOf({ category: '', categoryMoved: true }), { category: null }, 'a removal');
+  assert.deepEqual(categoryPatchOf({ categoryMoved: true }), { category: null });
+  assert.deepEqual(categoryPatchOf(null), {});
+});
+
+test('the store uses that answer, and the screen\'s copy keeps the category otherwise', () => {
   const store = read('js/catalogue/catalogue-store.js');
-  assert.match(store, /if \(recipe\.categoryMoved === true\) data\.category = recipe\.category \|\| null;/);
+  assert.match(store, /Object\.assign\(data, categoryPatchOf\(recipe\)\);/);
   assert.match(store, /\['lossPct', 'rawGrams', 'cookedGrams', 'category'\]\.forEach/);
   // Whatever marks the move must never reach the document: the rules whitelist the keys by name.
   assert.doesNotMatch(store, /data\.categoryMoved/);
@@ -123,11 +132,8 @@ test('the rules know both fields, bounded like the app', () => {
   assert.match(labels, /recipeCategories\.size\(\) <= 100/);
 });
 
-test('the list is never written before the listener has given a real answer', () => {
-  const store = read('js/catalogue/catalogue-store.js');
-  assert.match(store, /if \(remote \|\| !fromCache\) labelConfigAnswered = true;/);
-  const layer = read('js/catalogue/firebase-catalogue.js');
-  assert.match(layer, /snap\.metadata\.fromCache/);
-  // Without it a venue with no config/labels document never gets the server's answer.
-  assert.match(layer, /doc\(db, pathFor\(CONFIG\), LABELS_DOC\),\s*\{ includeMetadataChanges: true \},/);
+test('a stored list holding one word in two cases, from two phones offline, reads as one word', () => {
+  const list = normalizeRecipeCategories(['Natale', 'natale', 'Pane']);
+  assert.deepEqual(list, ['Natale', 'Pane']);
+  assert.equal(countInCategory([{ category: 'natale' }], 'Natale', list), 1);
 });

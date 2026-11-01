@@ -17,7 +17,7 @@ import {
   LABEL_SIZES, PRINTER_LANGUAGES, DPI_CHOICES, DATE_KINDS, normalizeLabelProfile,
 } from './label-template-model.js';
 import {
-  RECIPE_CATEGORY_MAX, RECIPE_CATEGORIES_MAX, sortedCategories, addCategory, removeCategory,
+  RECIPE_CATEGORY_MAX, RECIPE_CATEGORIES_MAX, sortedCategories, addCategory,
 } from './recipe-categories-model.js';
 
 const TRASH_SVG =
@@ -25,8 +25,8 @@ const TRASH_SVG =
 
 export function renderSettings({
   photoOn, onTogglePhoto, labelProfile, onSaveLabel,
-  getCategories = () => [], categoriesLoaded = () => false, countRecipes = () => 0,
-  onSaveCategories = () => Promise.resolve(), confirm = null,
+  getCategories = () => [], countRecipes = () => 0,
+  onAddCategory = () => Promise.resolve(), onRemoveCategory = () => Promise.resolve(), confirm = null,
 }) {
   const root = el('div', { class: 'cat-view' });
 
@@ -431,7 +431,7 @@ export function renderSettings({
   };
   root.classList.add('set-screen');
   const categories = buildCategoriesCard({
-    root, getCategories, categoriesLoaded, countRecipes, onSaveCategories, confirm,
+    root, getCategories, countRecipes, onAddCategory, onRemoveCategory, confirm,
   });
   root.append(
     categories.card,
@@ -464,17 +464,15 @@ export function renderSettings({
 
 // ── Recipe categories ───────────────────────────────────────────────────────────
 //
-// The venue's own list of words, kept in config/labels.recipeCategories and WRITTEN WHOLE.
+// The venue's own list of words, kept in config/labels.recipeCategories.
 //
-// ⚠️ EVERY CHANGE IS COMPUTED FROM THE GETTER AT THE TAP, never from a copy held here: two people
-// can edit the list, and a stale copy would write the other person's change away.
-// ⚠️ NOTHING IS WRITABLE UNTIL THE LIST HAS BEEN ANSWERED (categoriesLoaded) — a phone that never
-// opened this venue holds an empty list, and adding one word would overwrite the saved ones.
-// ⚠️ THE WRITES ARE NOT CHAINED BEHIND EACH OTHER'S ANSWER (unlike save() above): offline the
-// store's promise never settles, and a second change waiting for it would never reach the screen.
-// Each call changes the store's copy at once and carries the whole list.
+// ⚠️ ONE WORD AT A TIME, NEVER THE WHOLE LIST (firebase-catalogue.js says why), so this card needs no
+// «has the list arrived yet» lock: a phone with an old copy, or none, cannot take anybody's word away.
+// The worst it can do is add a word the venue already has, in another case, and that reads as one.
+// ⚠️ NOTHING WAITS FOR THE WRITE'S ANSWER: offline it never comes, and the screen must change now. The
+// store has changed its copy at once, puts the word back if the database refuses, and says so.
 function buildCategoriesCard({
-  root, getCategories, categoriesLoaded, countRecipes, onSaveCategories, confirm,
+  root, getCategories, countRecipes, onAddCategory, onRemoveCategory, confirm,
 }) {
   const title = el('h3', {});
   const note = el('p', {});
@@ -500,7 +498,9 @@ function buildCategoriesCard({
   let problem = null;
   function paintError() {
     error.hidden = !problem;
-    error.textContent = problem ? t(problem.key, problem.vars) : '';
+    const text = problem ? t(problem.key, problem.vars) : '';
+    // ⚠️ Only when it differs: this is a live region, and the store repaints on every snapshot.
+    if (error.textContent !== text) error.textContent = text;
   }
 
   // The words are rebuilt only when something they show changed: the store notifies on every
@@ -508,7 +508,6 @@ function buildCategoriesCard({
   // coming up on a bin would swallow the tap.
   let paintedKey = null;
   function paint() {
-    const loaded = categoriesLoaded();
     const words = sortedCategories(getCategories(), localeTag());
     // Every phrase is read here, never at build time (see the note at the top of renderSettings).
     title.textContent = t('cat.shelf.settingsTitle');
@@ -516,19 +515,11 @@ function buildCategoriesCard({
     inputLabel.textContent = t('cat.shelf.newCategory');
     input.placeholder = t('cat.shelf.newCategoryPlaceholder');
     addBtn.textContent = t('cat.shelf.add');
-    input.disabled = !loaded;
-    addBtn.disabled = !loaded;
     paintError();
 
-    const key = [loaded, localeTag(), ...words].join('\u0001');
+    const key = [localeTag(), ...words].join('\u0001');
     if (key === paintedKey) return;
     paintedKey = key;
-    if (!loaded) {
-      wordsBox.replaceChildren(el('div', { class: 'set-block' }, [
-        el('p', { class: 'set-sub', text: t('cat.shelf.loading') }),
-      ]));
-      return;
-    }
     if (!words.length) {
       wordsBox.replaceChildren(el('div', { class: 'set-block' }, [
         el('p', { class: 'set-sub', text: t('cat.shelf.settingsEmpty') }),
@@ -545,17 +536,7 @@ function buildCategoriesCard({
     ])));
   }
 
-  function write(list) {
-    // ⚠️ The store has already put its own copy back when this rejects: repaint from it.
-    Promise.resolve(onSaveCategories(list)).catch(() => {
-      if (!root.isConnected) return;
-      problem = { key: 'cat.shelf.categoriesNotSaved' };
-      paint();
-    });
-  }
-
   function add() {
-    if (!categoriesLoaded()) return;
     const result = addCategory(getCategories(), input.value);
     if (result.refusal) {
       const vars = {
@@ -568,15 +549,19 @@ function buildCategoriesCard({
       paint();
       return;
     }
+    const word = result.list[result.list.length - 1];
     problem = null;
     input.value = '';
     input.focus();
-    write(result.list);
+    // A refused word comes back to the box, unless somebody has started typing another (P20).
+    Promise.resolve(onAddCategory(word)).catch(() => {
+      if (root.isConnected && !input.value) input.value = word;
+    });
     paint();
   }
 
   async function remove(word) {
-    if (!categoriesLoaded() || !confirm) return;
+    if (!confirm) return;
     const n = countRecipes(word, getCategories());
     const ok = await confirm({
       title: t('cat.shelf.deleteCategoryTitle', { name: word }),
@@ -585,13 +570,16 @@ function buildCategoriesCard({
       cancelLabel: t('ui.cancel'),
       danger: true,
     });
-    if (!ok || !categoriesLoaded()) return;
+    if (!ok) return;
     problem = null;
-    // From the getter AFTER the question: somebody may have changed the list while it was open.
-    write(removeCategory(getCategories(), word));
+    const place = sortedCategories(getCategories(), localeTag()).indexOf(word);
+    Promise.resolve(onRemoveCategory(word)).catch(() => {});
     paint();
-    // The bin that was tapped is gone: focus goes to the box.
-    input.focus();
+    // The bin that was tapped is gone: focus moves to the one now in its place. ⚠️ Never the box,
+    // which would raise a phone's keyboard over the list somebody is reading.
+    const bins = wordsBox.querySelectorAll('.cat-category-del');
+    const next = bins[Math.min(place, bins.length - 1)];
+    if (next) next.focus({ preventScroll: true });
   }
 
   addBtn.addEventListener('click', add);
