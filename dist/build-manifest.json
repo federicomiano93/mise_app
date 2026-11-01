@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "b6cf397f9bfdfaec",
-      "mapSha": "3305529f6c2940e1",
+      "sha": "57c761a06e37345a",
+      "mapSha": "90746a9dec17cea5",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -106,10 +106,10 @@
         "js/records.js": "79c792c647a519cd",
         "js/result-place.js": "932c2ccc0482be0c",
         "js/reveal-field.js": "5994569152b139a9",
-        "js/roles.js": "e98863032b2f2d54",
+        "js/roles.js": "e70309cf7e2693b6",
         "js/same-data.js": "f86f5defaed51eaf",
         "js/save-guard.js": "3e4c2a10fbe92136",
-        "js/sections.js": "3c8ee410aa212b2c",
+        "js/sections.js": "e45cc79db1e5a80a",
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",
@@ -140,8 +140,8 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "b2ba1b3acc6f060b",
-      "mapSha": "5462894adaa88ea3",
+      "sha": "c975e4f075419eca",
+      "mapSha": "57131e6a6d79209e",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -252,9 +252,9 @@
         "js/record-ui.js": "4829a98298d9ddd9",
         "js/records.js": "79c792c647a519cd",
         "js/reveal-field.js": "5994569152b139a9",
-        "js/roles.js": "e98863032b2f2d54",
+        "js/roles.js": "e70309cf7e2693b6",
         "js/same-data.js": "f86f5defaed51eaf",
-        "js/sections.js": "3c8ee410aa212b2c",
+        "js/sections.js": "e45cc79db1e5a80a",
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",
@@ -286,8 +286,8 @@
       }
     },
     "dist/foodcost.js": {
-      "sha": "f4a05b4189e64258",
-      "mapSha": "628970f118442064",
+      "sha": "ecae978d14c4e9cb",
+      "mapSha": "abdfe1dbeb3eae82",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -365,9 +365,9 @@
         "js/record-data.js": "260607f13e2f4033",
         "js/records.js": "79c792c647a519cd",
         "js/reveal-field.js": "5994569152b139a9",
-        "js/roles.js": "e98863032b2f2d54",
+        "js/roles.js": "e70309cf7e2693b6",
         "js/same-data.js": "f86f5defaed51eaf",
-        "js/sections.js": "3c8ee410aa212b2c",
+        "js/sections.js": "e45cc79db1e5a80a",
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",
@@ -397,8 +397,8 @@
       }
     },
     "dist/index.js": {
-      "sha": "7d09f203aafee0cd",
-      "mapSha": "5239380a1333ade7",
+      "sha": "905caae8cc294c66",
+      "mapSha": "e6359e250c33a19f",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -480,9 +480,9 @@
         "js/price-model.js": "a5b7564b9c76b183",
         "js/record-data.js": "260607f13e2f4033",
         "js/records.js": "79c792c647a519cd",
-        "js/roles.js": "e98863032b2f2d54",
+        "js/roles.js": "e70309cf7e2693b6",
         "js/same-data.js": "f86f5defaed51eaf",
-        "js/sections.js": "3c8ee410aa212b2c",
+        "js/sections.js": "e45cc79db1e5a80a",
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",
@@ -529,8 +529,8 @@
       }
     },
     "dist/inventory.js": {
-      "sha": "b889cb70a3f1d683",
-      "mapSha": "affddc85eab0d6e6",
+      "sha": "56606816d4a2d53c",
+      "mapSha": "c17703df7f2ba9ed",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -596,9 +596,9 @@
         "js/price-model.js": "a5b7564b9c76b183",
         "js/record-data.js": "260607f13e2f4033",
         "js/records.js": "79c792c647a519cd",
-        "js/roles.js": "e98863032b2f2d54",
+        "js/roles.js": "e70309cf7e2693b6",
         "js/same-data.js": "f86f5defaed51eaf",
-        "js/sections.js": "3c8ee410aa212b2c",
+        "js/sections.js": "e45cc79db1e5a80a",
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",
@@ -632,8 +632,8 @@
       }
     },
     "dist/order.js": {
-      "sha": "5a94ca2c77b879bf",
-      "mapSha": "aa478fa78b774b2a",
+      "sha": "0fd0965f9bc2a571",
+      "mapSha": "43fb35c80080d8e8",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/calculator-config.js": "a15c7e07196db320",
@@ -654,9 +654,9 @@
         "js/pages/order.js": "dfd3c09352bc180f",
         "js/pages/run-in-order.js": "5bc8e0b92802e22c",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
-        "js/roles.js": "e98863032b2f2d54",
+        "js/roles.js": "e70309cf7e2693b6",
         "js/same-data.js": "f86f5defaed51eaf",
-        "js/sections.js": "3c8ee410aa212b2c",
+        "js/sections.js": "e45cc79db1e5a80a",
         "js/update-gate.js": "6e22f2191ce371e8",
         "js/viewport-height.js": "79ebea16da39a8ea"
       }
@@ -668,8 +668,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "0a79690426fbf0d5",
-      "mapSha": "2e2d1776446d79a1",
+      "sha": "bc018eb07221dec9",
+      "mapSha": "a7360382939a8d58",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -786,9 +786,9 @@
         "js/record-data.js": "260607f13e2f4033",
         "js/record-ui.js": "4829a98298d9ddd9",
         "js/records.js": "79c792c647a519cd",
-        "js/roles.js": "e98863032b2f2d54",
+        "js/roles.js": "e70309cf7e2693b6",
         "js/same-data.js": "f86f5defaed51eaf",
-        "js/sections.js": "3c8ee410aa212b2c",
+        "js/sections.js": "e45cc79db1e5a80a",
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",
@@ -820,8 +820,8 @@
       }
     },
     "dist/pastries.js": {
-      "sha": "4c4b069dee8f4aae",
-      "mapSha": "faf1dbe4e6a0caab",
+      "sha": "ec47bb6a4104c5dd",
+      "mapSha": "4a1dfa88c3b0334d",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -890,9 +890,9 @@
         "js/record-data.js": "260607f13e2f4033",
         "js/records.js": "79c792c647a519cd",
         "js/reveal-field.js": "5994569152b139a9",
-        "js/roles.js": "e98863032b2f2d54",
+        "js/roles.js": "e70309cf7e2693b6",
         "js/same-data.js": "f86f5defaed51eaf",
-        "js/sections.js": "3c8ee410aa212b2c",
+        "js/sections.js": "e45cc79db1e5a80a",
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",
@@ -926,8 +926,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "6bb19b9a14f210d7",
-      "mapSha": "1d6580bfe74497a0",
+      "sha": "a542b1d3b14aab1d",
+      "mapSha": "101e975e86227285",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -1031,9 +1031,9 @@
         "js/record-data.js": "260607f13e2f4033",
         "js/record-ui.js": "4829a98298d9ddd9",
         "js/records.js": "79c792c647a519cd",
-        "js/roles.js": "e98863032b2f2d54",
+        "js/roles.js": "e70309cf7e2693b6",
         "js/same-data.js": "f86f5defaed51eaf",
-        "js/sections.js": "3c8ee410aa212b2c",
+        "js/sections.js": "e45cc79db1e5a80a",
         "js/send-icon.js": "8ed666e9294de282",
         "js/send-sheet.js": "8b455d524bd2ac3b",
         "js/share.js": "85dda5863e4eea85",

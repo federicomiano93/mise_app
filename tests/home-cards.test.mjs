@@ -434,8 +434,11 @@ test('⚠️ setHomeCardOrder refuses a bad list and an employee, and checks the
 test('⚠️⚠️ setStaffCard writes a money card as SHOWN, into the field the rules read', () => {
   assert.match(CALLABLE,
     /if \(OPT_IN_IDS\.includes\(card\)\) \{\s*await db\(\)\.doc\(`locations\/\$\{locationId\}`\)\.set\(\{ staffShownCards: \{ \[card\]: !hidden \} \}, \{ merge: true \}\);/);
-  assert.match(read('firestore.rules'), /l\.data\.get\('staffShownCards', \{\}\)\.get\(card, false\) == true/,
+  const rules = read('firestore.rules');
+  assert.match(rules, /l\.data\.get\('staffShownCards', \{\}\)\.get\(shownCard, false\) == true/,
     'the rules read the same field, with the same «only true» meaning');
+  assert.match(rules, /let shownCard = card == 'prices' \? 'foodcost' : card;/,
+    'a real card is judged by its own switch; purchase prices by the Food cost switch');
 });
 
 test('the Home applies the order after filtering, by moving the cards it still shows', () => {

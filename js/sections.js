@@ -96,6 +96,8 @@ export function isSectionAllowed(locationDoc, name) {
 //   true       → a member of this location, an ordinary employee
 //   'manager'  → a member who runs this location: deletes too, but hires nobody
 //   'owner'    → a member, and the person whose business it is
+//   'owner-sales'   → runs the sales side only: Food cost and the clients
+//   'owner-kitchen' → runs the kitchen side only: everything but those two
 //   anything else (false, missing, a typo) → no access at all
 //
 // ⚠️ `true` MEANS EMPLOYEE ON PURPOSE, and that is what makes this safe to
@@ -110,12 +112,16 @@ export function isSectionAllowed(locationDoc, name) {
 // deploy, then write, then read it back from the API.
 export const OWNER = 'owner';
 export const MANAGER = 'manager';
+// Federico, 1 Nov 2026. ⚠️ Same deployment order as above: rules first, then the app,
+// and only then may anybody be given one of these.
+export const OWNER_SALES = 'owner-sales';
+export const OWNER_KITCHEN = 'owner-kitchen';
 
 // The values that mean "this account may open this location", in order of power.
 // ⚠️ A value NOT in here is no access at all, never a lesser access. A role from
 // a later version of the app, a typo, a string with a stray space: all refused.
 // Being generous here would let an unrecognised value walk into a location.
-const ACCESS_VALUES = Object.freeze([true, MANAGER, OWNER]);
+const ACCESS_VALUES = Object.freeze([true, OWNER_KITCHEN, OWNER_SALES, MANAGER, OWNER]);
 
 export function accessValue(userDoc, locationId) {
   const raw = userDoc && typeof userDoc === 'object' ? userDoc.locations : null;
@@ -139,17 +145,39 @@ export function accessValue(userDoc, locationId) {
 // not exist. Same reasoning as js/roles.js, and it has to be, because a role
 // arriving from a future version of the app must never open the one screen an
 // employee is not meant to open.
-const ROLE_ONLY = Object.freeze({ foodcost: [OWNER, MANAGER] });
+const ROLE_ONLY = Object.freeze({ foodcost: [OWNER, MANAGER, OWNER_SALES] });
+
+// The other direction: the sections a partial owner is kept out of, the same list
+// firestore.rules narrowedOut() refuses (tests/partial-owner-roles.test.mjs compares
+// them). ⚠️ The rules decide; this only stops a screen collecting their refusals.
+export const NOT_FOR_ROLE = Object.freeze({
+  [OWNER_SALES]: Object.freeze(['calculator', 'catalogue', 'orders', 'pastries']),
+  [OWNER_KITCHEN]: Object.freeze(['foodcost']),
+});
+
+// The Home cards each partial owner has. A role not listed here is not narrowed by this
+// table at all. ⚠️ THE KITCHEN KEEPS STOCKTAKE AND LOSES FOOD COST ALTHOUGH THE TWO SHARE
+// A SECTION, which is why this is by card and not by section (js/home-cards.js).
+export const ROLE_CARDS = Object.freeze({
+  [OWNER_SALES]: Object.freeze(['foodcost']),
+  [OWNER_KITCHEN]: Object.freeze(['calculator', 'catalogue', 'orders', 'suppliers', 'pastries', 'inventory']),
+});
+
+export function roleHasCard(role, cardId) {
+  const cards = Object.prototype.hasOwnProperty.call(ROLE_CARDS, String(role)) ? ROLE_CARDS[role] : null;
+  return cards === null || cards.includes(cardId);
+}
 
 // Which sections this person sees in this location: the location's set NARROWED
 // by the role. Never widened — a role cannot turn on a section the venue does
 // not have, whatever it says.
 export function sectionsFor(locationDoc, role) {
   const fromLocation = allowedSections(locationDoc);
+  const kept = Object.prototype.hasOwnProperty.call(NOT_FOR_ROLE, String(role)) ? NOT_FOR_ROLE[role] : [];
   const out = {};
   SECTIONS.forEach(name => {
     const roles = ROLE_ONLY[name];
-    out[name] = fromLocation[name] === true && (!roles || roles.includes(role));
+    out[name] = fromLocation[name] === true && (!roles || roles.includes(role)) && !kept.includes(name);
   });
   return out;
 }

@@ -29,10 +29,17 @@ open.
   `functions/home-cards.js` keeps a byte copy of the card ids (`tests/home-cards.test.mjs`).
 
 **Access control.** ⚠️ **The role IS the membership value**: `users/{uid}.locations.<lid>` is
-`true` | `'manager'` | `'owner'`; anything else is an employee and also not a member. A new
-membership value goes in THREE places or it is a lockout: `js/sections.js` `locationsOf()`,
-`firestore.rules` `member()`, `functions/onboarding.js` `accessValue()`. `is string` in the rules is
-deliberate (boolean for staff, string above it; the rules language is strongly typed).
+`true` | `'manager'` | `'owner'` | `'owner-sales'` | `'owner-kitchen'`; anything else is an employee
+and also not a member. A new membership value goes in THREE places or it is a lockout:
+`js/sections.js` `ACCESS_VALUES`, `firestore.rules` `isMemberValue()`, `functions/onboarding.js`
+`ACCESS_VALUES`. `is string` in the rules is deliberate (boolean for staff, string above it; the rules
+language is strongly typed).
+- **The two partial owners (his decision, 1 Nov 2026).** They run one side as an owner would, hire
+  nobody and change no venue setting. `'owner-sales'`: Food cost and the clients, reading recipes,
+  ingredients and suppliers because a product is costed from them. `'owner-kitchen'`: Calculator,
+  Catalogue, Pastries, Orders, Stocktake and purchase prices; client names and quantities only as the
+  Calculator needs them. `ROLE_CARDS` in `js/sections.js` deals every Home card to exactly one of them.
+  Only a full `'owner'` counts for the last-owner guard, so a venue always keeps one.
 - `locations/{lid}/members/{uid}` — the roster `{ email, firstName, lastName, joinedAt }`. A label,
   never an identity: no rule reads it; no account may write it. A surname is personal data (UK
   GDPR).

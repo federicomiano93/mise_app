@@ -565,6 +565,9 @@ export async function seedDemoWorld() {
   // The third role, so "Who can get in" can be looked at with all three on screen
   // — which is the only way to see whether the pills read as a choice.
   const mgrUid = await seedAccount('manager@club.test', DEMO_PASSWORD, { bakery: 'manager' });
+  // The two partial owners (1 Nov 2026), so each side can be driven as itself.
+  const salesUid = await seedAccount('sales@club.test', DEMO_PASSWORD, { bakery: 'owner-sales' });
+  const kitchenUid = await seedAccount('kitchen@club.test', DEMO_PASSWORD, { bakery: 'owner-kitchen' });
 
   // ⚠️ THE APP'S OWN ADMINISTRATOR, WHICH IS NOT THE SAME THING AS AN OWNER.
   // An owner runs one venue; this is who may create a NEW CUSTOMER's venue, and
@@ -586,6 +589,14 @@ export async function seedDemoWorld() {
   await seedDoc(`locations/bakery/members/${mgrUid}`, {
     bakery: 'bakery', email: 'manager@club.test',
     firstName: 'Giulia', lastName: 'Bernardi', role: 'manager', joinedAt: Date.now(),
+  });
+  await seedDoc(`locations/bakery/members/${salesUid}`, {
+    bakery: 'bakery', email: 'sales@club.test',
+    firstName: 'Sara', lastName: 'Vendite', role: 'owner-sales', joinedAt: Date.now(),
+  });
+  await seedDoc(`locations/bakery/members/${kitchenUid}`, {
+    bakery: 'bakery', email: 'kitchen@club.test',
+    firstName: 'Carlo', lastName: 'Cucina', role: 'owner-kitchen', joinedAt: Date.now(),
   });
   await seedDoc(`locations/bakery/members/${staffUid}`, {
     bakery: 'bakery', email: 'staff@club.test',

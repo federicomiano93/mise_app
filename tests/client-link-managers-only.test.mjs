@@ -35,7 +35,7 @@ test('⚠️ the rules: a grant is read by its own account or by those who manag
   assert.ok(block.length > 0, 'the client-accounts block is gone');
   const read = block.match(/^\s*allow read: if (.+);$/m);
   assert.ok(read, 'no read rule in the client-accounts block');
-  assert.equal(read[1], "(signedIn() && request.auth.uid == uid) || canManage(lid, 'calculator')");
+  assert.equal(read[1], "(signedIn() && request.auth.uid == uid) || managesClients(lid)");
   assert.doesNotMatch(read[1], /member\(lid\)/);
 });
 

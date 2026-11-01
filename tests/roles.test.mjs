@@ -131,12 +131,14 @@ test('a location that is not yours at all', () => {
 
 // ── The small pieces ─────────────────────────────────────────────────────────
 
-test('there are three roles and no more', () => {
-  assert.deepEqual([...ROLES], ['owner', 'manager', 'staff']);
+test('there are five roles and no more', () => {
+  assert.deepEqual([...ROLES], ['owner', 'owner-sales', 'owner-kitchen', 'manager', 'staff']);
 });
 
-test('isValidRole refuses everything that is not one of the three', () => {
+test('isValidRole refuses everything that is not one of the five', () => {
   assert.equal(isValidRole('owner'), true);
+  assert.equal(isValidRole('owner-sales'), true);
+  assert.equal(isValidRole('owner-kitchen'), true);
   assert.equal(isValidRole('manager'), true);
   assert.equal(isValidRole('staff'), true);
   for (const bad of ['head-chef', 'Owner', 'Manager', '', ' staff', null, undefined, 1, {}, true]) {
