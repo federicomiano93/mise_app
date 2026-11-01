@@ -32,6 +32,54 @@
 .home-scroll > * { flex-shrink: 0; }
 #session-logout-host { margin-top: auto; }
 
+/* ── The Home bar: «Settings» centred, a small quiet «Log out» at the far right ──
+   (Federico, 15 Oct 2026.) Three columns: an empty one, Settings, and Log out. The right
+   column is never narrower than the button's own words (min-content), so at 296px the two
+   buttons cannot overlap: Settings gives way and shifts a little off centre instead. Scoped to
+   the Home bar — .recipe-footer is shared and pinned by tests/bottom-bar.test.mjs. */
+#session-logout-host .recipe-footer {
+  display: grid;
+  /* ⚠️ THE MIDDLE COLUMN CARRIES SETTINGS' WIDTH, the same as every other bar's button: style.css
+     gives it flex 0 1 240px capped at half the bar less 6px, which a grid has no way to say, so it is
+     restated here in viewport units. Set on the ITEM instead, the auto column ignored it and the
+     button spilled out of its column to the right (off centre by 50px on a tablet). It may still
+     grow to its words (max-content), which keeps «Impostazioni» on one line at 296px. */
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(max-content, min(240px, calc(50vw - max(16px, var(--app-gutter)) - 6px)))
+    minmax(min-content, 1fr);
+  align-items: center;
+  column-gap: 8px;
+}
+#session-logout-host .recipe-footer-btn {
+  grid-column: 2;
+  width: 100%;
+  max-width: none;
+  white-space: nowrap;
+}
+#session-logout-host .home-signout {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 4px 8px;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+#session-logout-host .home-signout[hidden] { display: none; }
+#session-logout-host .home-signout svg { flex-shrink: 0; }
+#session-logout-host .home-signout:active { background: var(--accent-light); }
+#session-logout-host .home-signout:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
 .home-header { position: relative; }
 /* A short crust rule fading out to the right, under the venue name. Decorative
    only, so it is drawn from CSS and never announced. */
