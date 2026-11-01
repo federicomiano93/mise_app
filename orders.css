@@ -344,6 +344,9 @@
   transition: transform 0.06s ease;
 }
 .supplier-row-open:active { transform: scale(0.99); }
+/* Tapped while the list is still the local copy: the supplier opens by itself once the live lists
+   land (orders-main.js holdSupplier). A quiet dimming, no animation. */
+.supplier-row--waiting { opacity: 0.6; }
 /* The narrow half: "show me what this supplier sells". Quiet by default — a secondary
    action must not compete with the row's main one.
    ⚠️ 36px WIDE, not 44: on a 282px phone every pixel here comes off the supplier's
