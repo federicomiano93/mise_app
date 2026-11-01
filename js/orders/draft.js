@@ -15,8 +15,12 @@
 // including whatever someone else is typing right now — is left alone.
 
 import {
-  saveDoc, patchDoc, watchDoc, clearFields, transactDoc, replaceDoc, removeDoc, getDocOnce, COLLECTIONS,
+  saveDoc, patchDoc, watchDoc, watchServerAnswer, getRecentHistoryFromServer, clearFields, transactDoc,
+  replaceDoc, removeDoc, getDocOnce, currentBakery, COLLECTIONS,
 } from './firebase-orders.js';
+import {
+  readJournal, writeJournal, dropNotedLine, orderedSince, historyLookBackDay,
+} from './draft-journal.js';
 import {
   buildSupplierArchive, mergeArchives, historyDocId, ingredientsOf, quantityPathsFor,
   changedEntries, changedDays, wholeNumber,
@@ -161,11 +165,185 @@ function detach(entries) {
   return out;
 }
 
+// ── What survives this page ───────────────────────────────────────────────────
+//
+// ⚠️ `pending` DIES WITH THE PAGE. Measured on the lab tablet: on a freshly opened page a write
+// reaches Firestore's queue about 5 s after the keystroke, and a reload before that lost the
+// number for good. So every claim is also noted on this device, in the same keystroke
+// (draft-journal.js), until a snapshot shows it: Firestore only reports a write after storing it
+// in the browser's database, so from then on the queue answers for it.
+//
+// ⚠️⚠️ THE NOTE IS NEVER SENT BLIND, AND NEVER ON THE WORD OF THE OFFLINE COPY. It can be hours old
+// by the time the page opens, and the copy on this device may not know that a colleague has placed
+// that order: sending it then would put back quantities of an order already placed, the very hole
+// `pending` above was rebuilt to close. So what the last page left waits in `restored`, off the
+// screen and out of every save, until the SERVER has answered (settleRestored).
+let journalLid = '';      // the venue the note belongs to; empty until a page watches the draft
+let openJournal = null;   // set by watchDraft: only a page that watches the draft owns the note
+let journalAt = 0;        // when the note was last typed into: what its 24 hours count from
+let restored = null;      // what the last page left, { at, entries, days }, while the server has not answered
+const refused = [];       // writes the server said no to: see wasRefused
+
+// A write the server refused is refused again on the next open, and every save would then carry
+// it: a note that outlived the page would turn one bad line into an order that can never be saved
+// again, for good. So it stays claimed in this page, as before, but is not noted: a reload is
+// still the way out. A saved write proves the rules accept this device again, and clears the list.
+function wasRefused(id, field, value) {
+  return refused.some(write => write.entries[id] && write.entries[id][field] === value);
+}
+
+// Bring the note up to date. `typed` says this comes from a keystroke, which restarts its 24 hours:
+// not while something from an earlier page is still in it, which keeps its own age, or a tablet
+// used offline could carry a number past the day it is allowed.
+function saveJournal(typed = false) {
+  // ⚠️ A row can be drawn a frame before the draft lands (orders-main.js), and what is typed in that
+  // frame needs its note as much as any other. Fornitori can clear a line too: it has no openJournal,
+  // and must not rewrite Orders' note.
+  if (!journalLid) openJournal?.();
+  if (!journalLid) return;
+  if ((typed && !restored) || !journalAt) journalAt = Date.now();
+  const entries = {};
+  const days = {};
+  if (restored) {
+    Object.entries(restored.entries).forEach(([id, left]) => {
+      entries[id] = { row: { ...left.row }, base: { ...left.base } };
+    });
+    Object.assign(days, restored.days);
+  }
+  Object.entries(pending.entries).forEach(([id, held]) => {
+    const there = stored(known.entries[id]);
+    const row = {};
+    const base = {};
+    const noteField = field => { row[field] = held[field]; base[field] = there[field]; };
+    // What a snapshot already shows is in Firestore's queue. The group only as a whole.
+    const group = GROUP.filter(field => field in held);
+    if (group.some(field => held[field] !== there[field])
+      && !group.every(field => wasRefused(id, field, held[field]))) group.forEach(noteField);
+    if ('stock' in held && held.stock !== there.stock && !wasRefused(id, 'stock', held.stock)) noteField('stock');
+    if (isEmpty(row)) return;
+    entries[id] = { row: { ...entries[id]?.row, ...row }, base: { ...entries[id]?.base, ...base } };
+  });
+  Object.entries(pending.days).forEach(([id, day]) => {
+    if (day && known.days[id] !== day && !refused.some(write => write.days[id] === day)) {
+      days[id] = { day, base: known.days[id] || '' };
+    }
+  });
+  writeJournal(journalLid, { at: journalAt, entries, days });
+}
+
+// What the last page left that `doc` still reads as it did when it was typed. Already holding it
+// means it arrived; holding anything else means somebody changed that line meanwhile, and their word
+// wins. The quantity group and the stock are judged apart, as they are written: a colleague's shelf
+// count says nothing about a quantity.
+function stillOurs(left, doc) {
+  const entries = {};
+  Object.entries(left.entries).forEach(([id, { row, base }]) => {
+    const there = stored(doc?.entries?.[id]);
+    const kept = {};
+    [GROUP.filter(field => field in row), 'stock' in row ? ['stock'] : []].forEach(fields => {
+      if (fields.length && fields.every(field => base[field] === there[field])
+        && fields.some(field => row[field] !== there[field])) {
+        fields.forEach(field => { kept[field] = row[field]; });
+      }
+    });
+    if (!isEmpty(kept)) entries[id] = kept;
+  });
+  const days = {};
+  Object.entries(left.days).forEach(([id, { day, base }]) => {
+    const there = doc?.days?.[id] || '';
+    if (there === base && there !== day) days[id] = day;
+  });
+  return { entries, days };
+}
+
+// The server has answered. Says whether any line came back.
+//
+// ⚠️⚠️ «STILL READS AS IT DID» CANNOT TELL AN UNTOUCHED LINE FROM ONE THAT WAS FILLED AND ORDERED: placing
+// empties a line, and empty is what most lines were when typed on. Worse, the note may even be for a
+// write that did get through, in the instant between Firestore storing it and telling this page, and
+// any page of the app then sends it. So before anything comes back the server is asked about the
+// orders themselves: a line some order has named since it was typed stays out. Read only when there
+// is something to bring back, which is rare. No answer leaves the note for the next open.
+async function settleRestored(doc) {
+  if (isEmpty(stillOurs(restored, doc).entries)) {
+    restored = null;
+    saveJournal();
+    return false;
+  }
+  let ordered = null;
+  try {
+    ordered = orderedSince(await getRecentHistoryFromServer(historyLookBackDay(restored.at)), restored.at);
+  } catch (err) {
+    console.error('The orders could not be checked, the typed quantities wait for the next open:', err);
+    return false;
+  }
+  // Time has passed: `known` is the latest word, and whatever was typed or cleared since has
+  // already been taken out of `restored`.
+  const { entries, days } = stillOurs(restored, known);
+  restored = null;
+  Object.keys(entries).forEach(id => {
+    if (!ordered.has(id)) return;
+    GROUP.forEach(field => { delete entries[id][field]; });
+    if (isEmpty(entries[id])) delete entries[id];
+  });
+  const anyLine = !isEmpty(entries);
+  Object.entries(entries).forEach(([id, row]) => { pending.entries[id] = { ...row, ...pending.entries[id] }; });
+  // ⚠️ A DAY STAMP MEANS NOTHING WITHOUT ITS LINES, and the quantities it came with may just have
+  // been dropped: alone it would date a supplier nobody is ordering from.
+  if (anyLine) {
+    Object.entries(days).forEach(([id, day]) => { if (!(id in pending.days)) pending.days[id] = day; });
+  }
+  saveJournal();
+  return anyLine;
+}
+
+// A line typed on this page beats what the last page left for it, whatever comes later.
+function forgetRestored(id, fields) {
+  const left = restored?.entries[id];
+  if (!left) return;
+  fields.forEach(field => { delete left.row[field]; delete left.base[field]; });
+  if (isEmpty(left.row)) delete restored.entries[id];
+}
+
+// Claim exactly what differs from the server now, and note it before anything else can happen.
+function claim(entries, days) {
+  pending = differences(entries, days);
+  if (restored) {
+    Object.entries(pending.entries).forEach(([id, row]) => {
+      if (GROUP.some(field => field in row)) forgetRestored(id, GROUP);
+      if ('stock' in row) forgetRestored(id, ['stock']);
+    });
+    Object.keys(pending.days).forEach(id => { delete restored.days[id]; });
+  }
+  saveJournal(true);
+}
+
 // How the debounced autosave reports whether it landed. Injected one-way from
 // orders-main.js rather than imported, so this module keeps knowing nothing about
 // the page around it — and the user-facing wording stays in the UI layer.
 export function setDraftSaveReporter(fn) {
   reportSaveResult = fn;
+}
+
+// Send what is waiting, reporting the result: there is no caller to hand a rejection to.
+function autosave() {
+  return sendPending()
+    .then(() => reportSaveResult?.(true))
+    .catch(err => {
+      console.error('Draft autosave failed:', err);
+      reportSaveResult?.(false);
+    });
+}
+
+function armSave() {
+  waiting = true;
+  clearTimeout(saveTimer);
+  // ⚠️ The timer sends `pending`, never the maps it was armed with: the page REPLACES
+  // its days map on every snapshot, so the old one could carry a stamp another phone
+  // has removed since.
+  saveTimer = setTimeout(() => {
+    if (waiting) autosave();
+  }, SAVE_DELAY_MS);
 }
 
 // Autosave the draft a short moment after the last change.
@@ -179,30 +357,17 @@ export function setDraftSaveReporter(fn) {
 // Success is reported too, not just failure: a transient blip must not leave a
 // permanent alarm on screen once a later save has carried the same values through.
 export function scheduleDraftSave(entries, days) {
-  waiting = true;
   // Claim exactly what differs from the server now — so an incoming snapshot during
   // the debounce cannot quietly take the typing away, and a line put back to the
   // server's value is released at once.
-  pending = differences(entries, days);
-  clearTimeout(saveTimer);
-  // ⚠️ The timer sends `pending`, never the maps it was armed with: the page REPLACES
-  // its days map on every snapshot, so the old one could carry a stamp another phone
-  // has removed since.
-  saveTimer = setTimeout(() => {
-    if (!waiting) return;
-    sendPending()
-      .then(() => reportSaveResult?.(true))
-      .catch(err => {
-        console.error('Draft autosave failed:', err);
-        reportSaveResult?.(false);
-      });
-  }, SAVE_DELAY_MS);
+  claim(entries, days);
+  armSave();
 }
 
 // Save the page's draft RIGHT NOW (a re-order, a line moved to another supplier, a
 // restamped day): the same claims a keystroke makes, sent without waiting.
 export function saveDraftNow(entries, days) {
-  pending = differences(entries, days);
+  claim(entries, days);
   return sendPending();
 }
 
@@ -246,6 +411,7 @@ function sendPending() {
   // paths could not.
   return saveDoc(COLLECTIONS.drafts, DRAFT_ID, payload).then(result => {
     land();
+    refused.length = 0;
     // What landed joins the baseline — except a field a LATER write still in the air
     // also carries: the baseline already holds that newer value (Firestore showed it).
     const entries = { ...known.entries };
@@ -273,6 +439,7 @@ function sendPending() {
     Object.entries(sent.days).forEach(([id, day]) => {
       if (pending.days[id] === day) delete pending.days[id];
     });
+    saveJournal();
     return result;
   }, err => {
     land();
@@ -301,6 +468,8 @@ function sendPending() {
       delete days[id];
     });
     known = { entries, days };
+    refused.push(sent);
+    saveJournal();
     throw err;
   });
 }
@@ -314,16 +483,28 @@ export function flushDraftSave() {
   return sendPending();
 }
 
+// ⚠️ THE PAGE GOING OUT OF SIGHT IS THE MOMENT TO SEND WHAT IS WAITING. Switching app or locking the
+// screen hides the page while it is still alive, with time for the write to reach the browser's own
+// database and for the snapshot that clears the note. NOT when the page is going away for good
+// (pagehide comes first there): there is no time left, and a write that did get through would leave
+// its note behind, to be read as unsent the next time, after a colleague may have placed that
+// order. Going away for good is what the note is for.
+export function flushDraftWhenHidden(doc = globalThis.document, win = globalThis.window) {
+  let leaving = false;
+  win.addEventListener('pagehide', () => { leaving = true; });
+  win.addEventListener('pageshow', () => { leaving = false; });
+  doc.addEventListener('visibilitychange', () => {
+    if (doc.visibilityState === 'hidden' && !leaving && waiting) autosave();
+  });
+}
+
 // Real-time subscription. onChange receives { entries, days, updatedAt, exists }.
 // onError is passed straight through: losing this stream means the order stops
 // syncing between phones, which nothing on screen would otherwise reveal.
 export function watchDraft(onChange, onError) {
-  return watchDoc(COLLECTIONS.drafts, DRAFT_ID, doc => {
-    // The server's word on the draft becomes the baseline the next autosave
-    // measures itself against, so a row someone else changed is not "changed
-    // here" and never gets re-asserted at this phone's stale value…
-    known = { entries: detach(doc?.entries), days: { ...(doc?.days || {}) } };
-    releaseConfirmed();
+  let updatedAt = '';
+  let exists = false;
+  const show = (doc, cameBack = false) => {
     // …but anything typed here and not yet written goes back ON TOP, field by
     // field, or the snapshot would erase it mid-keystroke. See `pending`.
     const storedEntries = doc?.entries || {};
@@ -334,9 +515,38 @@ export function watchDraft(onChange, onError) {
     onChange({
       entries,
       days: { ...(doc?.days || {}), ...pending.days },
-      updatedAt: doc?.updatedAt || '',
-      exists: Boolean(doc),
+      updatedAt,
+      exists,
+      cameBack,
     });
+  };
+  // Read once, and not when the page starts: only from the first keystroke or snapshot is a venue
+  // certainly open.
+  openJournal = () => {
+    journalLid = currentBakery() || '';
+    const note = readJournal(journalLid);
+    if (!note) return;
+    journalAt = note.at;
+    restored = note;
+    // An error simply leaves the note for the next open.
+    watchServerAnswer(COLLECTIONS.drafts, DRAFT_ID, doc => {
+      settleRestored(doc).then(cameBack => {
+        if (!cameBack) return;
+        show({ entries: detach(known.entries), days: { ...known.days } }, true);
+        armSave();
+      });
+    });
+  };
+  return watchDoc(COLLECTIONS.drafts, DRAFT_ID, doc => {
+    // The server's word on the draft becomes the baseline the next autosave
+    // measures itself against, so a row someone else changed is not "changed
+    // here" and never gets re-asserted at this phone's stale value…
+    known = { entries: detach(doc?.entries), days: { ...(doc?.days || {}) } };
+    releaseConfirmed();
+    updatedAt = doc?.updatedAt || '';
+    exists = Boolean(doc);
+    saveJournal();
+    show(doc);
   }, onError);
 }
 
@@ -400,6 +610,7 @@ export function clearSupplier(supplierId, ingredients) {
   const paths = ingredientsOf(supplierId, ingredients, { activeOnly: false })
     .map(ing => `entries.${ing.id}`);
   paths.push(`days.${supplierId}`);
+  forgetRestoredPaths(paths);
 
   return clearFields(COLLECTIONS.drafts, DRAFT_ID, paths, {
     updatedAt: new Date().toISOString(),
@@ -440,6 +651,20 @@ function forgetKnown(paths) {
       delete pending.days[id];
     }
   });
+  saveJournal();
+}
+
+// ⚠️ WHEN A CLEAR STARTS, NOT WHEN IT LANDS: on a weak connection the server's first answer can come
+// while the clear is in the air, and what the last page left would then come back over it.
+function forgetRestoredPaths(paths) {
+  if (!restored) return;
+  paths.forEach(path => {
+    const [root, id, field] = path.split('.');
+    if (root === 'entries' && id && field) forgetRestored(id, GROUP.includes(field) ? GROUP : [field]);
+    else if (root === 'entries' && id) delete restored.entries[id];
+    if (root === 'days' && id) delete restored.days[id];
+  });
+  saveJournal();
 }
 
 // Take ONE ingredient's row out of the shared draft — called when the ingredient is deleted.
@@ -462,6 +687,10 @@ export function dropDeletedIngredientFromDraft(ingredientId) {
 
 export function clearIngredientFromDraft(ingredientId) {
   const paths = [draftEntryPath(ingredientId)];
+  forgetRestoredPaths(paths);
+  // Fornitori deletes too, and no page there holds the note: a line that came back would be left in
+  // the document for ever, with no row to draw it.
+  if (!journalLid) dropNotedLine(currentBakery(), ingredientId);
   return clearFields(COLLECTIONS.drafts, DRAFT_ID, paths, {
     updatedAt: new Date().toISOString(),
   }).then(result => {
@@ -512,6 +741,7 @@ export async function freezeUnitInDraft({ id, from, item }) {
 export function clearQuantities(supplierIds, ingredients) {
   const paths = quantityPathsFor(supplierIds, ingredients);
   if (!paths.length) return Promise.resolve();
+  forgetRestoredPaths(paths);
 
   return clearFields(COLLECTIONS.drafts, DRAFT_ID, paths, {
     updatedAt: new Date().toISOString(),
