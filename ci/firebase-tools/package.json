@@ -1,0 +1,8 @@
+{
+  "name": "mise-ci-firebase-tools",
+  "private": true,
+  "description": "The firebase-tools copy CI runs (rules, deploy-functions, preview), locked to exact versions.",
+  "devDependencies": {
+    "firebase-tools": "15.26.0"
+  }
+}

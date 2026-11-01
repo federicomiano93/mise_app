@@ -25,7 +25,7 @@ test('the mise2 job may only read the repository, and holds no credential', () =
   const mise2 = job('mise2');
   assert.match(mise2, /\n {4}permissions:\n {6}contents: read\n {4}steps:/);
   assert.doesNotMatch(mise2, /id-token|google-github-actions|firebase|secrets\./);
-  assert.match(mise2, /uses: actions\/checkout@v5\n\s+with:\n\s+persist-credentials: false/);
+  assert.match(mise2, /uses: actions\/checkout@[^\n]*\n\s+with:\n\s+persist-credentials: false/);
 });
 
 test('the mise2 job installs from the lockfiles with no install scripts, then checks everything', () => {
