@@ -23,5 +23,5 @@ test('⚠️ every liveDataLost() call is handed a function that asks t()', () =
 });
 
 test('liveDataLost asks its argument when the stream drops, not before', () => {
-  assert.match(src, /function liveDataLost\(what\) \{\s*return \(\) => setStatus\(\s*t\('orders\.liveConnectionLost', \{ what: what\(\) \}\)/);
+  assert.match(src, /function liveDataLost\(what\) \{\s*return \(\) => \{\s*leaveCopyForGood\(\);\s*setStatus\(t\('orders\.liveConnectionLost', \{ what: what\(\) \}\)/);
 });
