@@ -254,6 +254,14 @@ export function usesOrders(logic) { return logic === 'orders' || logic === 'both
 export function usesTypedTotal(logic) { return logic === 'total' || logic === 'both' || logic === 'traysTotal'; }
 // Logics that take a number of trays.
 export function usesTrays(logic) { return logic === 'trays' || logic === 'traysTotal'; }
+// The trays an exported recipe's title may name («Pizza x 3»): only when the dough IS the trays — a
+// trays recipe, or a trays-plus-total one with nothing typed in the total — otherwise 0 and the
+// title says the grams. Shared by the Calculator now and the Recipe catalogue's export next.
+export function exportTraysFor(logic, trays, typedTotal) {
+  const traysOnly = logic === 'trays' || (logic === 'traysTotal' && !(Number(typedTotal) > 0));
+  const n = Math.floor(Number(trays));
+  return traysOnly && n > 0 ? n : 0;
+}
 // Logics that scale pro-rata with the leavening neutralised (no orders to adjust it for).
 export function isProRata(logic) { return logic === 'total' || usesTrays(logic); }
 
