@@ -60,9 +60,16 @@ test('no workflow grants a Google identity outside a job', () => {
   }
 });
 
+// The two deploy jobs run firebase-tools, so they install it (the rules below). The job that
+// deletes a closed PR's preview channel needs nothing but curl, so it installs NOTHING — a
+// stricter rule than `--ignore-scripts`, with its own test at the end.
+const DEPLOY_JOBS = ['preview.yml: preview', 'test.yml: deploy-functions'];
+const INSTALL_NOTHING = ['preview.yml: delete-channel'];
+const deployJobs = signingJobs.filter((job) => DEPLOY_JOBS.includes(job.id));
+
 // A guard on the guard: a new job that can sign in to Google must be looked at here, not slip past.
-test('the jobs that can sign in to Google are exactly the two deploy jobs', () => {
-  assert.deepEqual(signingJobs.map((job) => job.id).sort(), ['preview.yml: preview', 'test.yml: deploy-functions']);
+test('the jobs that can sign in to Google are exactly the two deploy jobs and the channel cleanup', () => {
+  assert.deepEqual(signingJobs.map((job) => job.id).sort(), [...DEPLOY_JOBS, ...INSTALL_NOTHING].sort());
 });
 
 test('each signs in once, and after the sign-in nothing is installed and no action runs', () => {
@@ -77,8 +84,8 @@ test('each signs in once, and after the sign-in nothing is installed and no acti
   }
 });
 
-test('every install in those jobs is npm ci / npm install with --ignore-scripts', () => {
-  for (const job of signingJobs) {
+test('every install in the deploy jobs is npm ci / npm install with --ignore-scripts', () => {
+  for (const job of deployJobs) {
     const tools = lines(job.text).filter((line) => PACKAGE_TOOL.test(line) && !/\bnpm audit\b/.test(line));
     assert.ok(tools.length > 0, `${job.id}: installs nothing — has the job changed shape?`);
     for (const line of tools) {
@@ -88,7 +95,7 @@ test('every install in those jobs is npm ci / npm install with --ignore-scripts'
 });
 
 test('firebase-tools is installed in its own step before the sign-in', () => {
-  for (const job of signingJobs) {
+  for (const job of deployJobs) {
     const body = code(job.text);
     const step = body.match(/\n {6}- name: [^\n]+\n {8}run: npm install --global --ignore-scripts firebase-tools@\d+\.\d+\.\d+\n/);
     assert.ok(step, `${job.id}: no step of its own installing firebase-tools with --ignore-scripts`);
@@ -113,4 +120,18 @@ test('every firebase-tools line, in every workflow, is the one pinned install wi
   assert.equal(versions.size, 1, `one firebase-tools version everywhere, found ${[...versions].join(', ')}`);
   // The emulator jars are cached against the same pinned version.
   assert.match(read('.github/workflows/test.yml'), new RegExp(`key: firebase-emulators-${[...versions][0].replace(/\./g, '\\.')}\\n`));
+});
+
+// It holds a credential to the preview project only for one HTTP call, so it needs no package and
+// no action besides the sign-in: none may creep in (a checkout to run `firebase` would bring both).
+test('the channel cleanup installs nothing and runs no action but the sign-in', () => {
+  const cleanup = signingJobs.filter((job) => INSTALL_NOTHING.includes(job.id));
+  assert.equal(cleanup.length, INSTALL_NOTHING.length);
+  for (const job of cleanup) {
+    const all = lines(job.text);
+    assert.deepEqual(all.filter((line) => PACKAGE_TOOL.test(line) || /\bfirebase\b/.test(line)), [],
+      `${job.id}: installs or runs a package`);
+    assert.deepEqual(all.filter((line) => /^\s*(- )?uses:/.test(line)).map((line) => line.trim()),
+      ['uses: google-github-actions/auth@v2'], `${job.id}: the sign-in is its only action`);
+  }
 });
