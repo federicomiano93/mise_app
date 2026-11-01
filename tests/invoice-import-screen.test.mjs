@@ -47,7 +47,8 @@ test('the screen is handed live getters and the venue\'s OUTPUT language, read w
   assert.match(call, /ready: \(\) => state\.loaded\.suppliers && state\.loaded\.ingredients && state\.pricesReadable === true/,
     'a plan drawn before the suppliers arrived would call every supplier new');
   assert.match(call, /opener: importBtn/, 'focus goes back to the footer button on close');
-  assert.match(MAIN, /watchCollection\(COLLECTIONS\.suppliers, list => \{\s*state\.suppliers = list;\s*state\.loaded\.suppliers = true;/);
+  // listAnswered sets state.loaded.suppliers, and only on an answer that proves it (registry-empty-flash.test.mjs).
+  assert.match(MAIN, /watchCollection\(COLLECTIONS\.suppliers, \(list, fromCache\) => \{\s*state\.suppliers = list;\s*listAnswered\('suppliers', list, fromCache\);/);
   assert.match(call, /language: \(\) => outputLanguage\(currentSession\(\)\.location\)/);
 });
 

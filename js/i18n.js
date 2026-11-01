@@ -1001,6 +1001,8 @@ const DICTIONARIES = Object.freeze({
     'orders.handMade': 'Added by hand',
     'orders.registry.loadFailed': 'Could not load the suppliers. Check your connection and try again.',
     'orders.registry.whichList': 'Which list to show',
+    'orders.registry.notArrived.title': 'This list has not arrived yet',
+    'orders.registry.notArrived.sub': 'Check your connection: it will appear here as soon as it arrives.',
     // The example follows the interface language (Italian writes «7,20»): since 4 Oct 2026
     // these boxes are text fields that read «7,20» and «7.20» alike (currency.js typedDecimal).
     'orders.eg.packWeight': 'e.g. 2.5',
@@ -4088,6 +4090,8 @@ const DICTIONARIES = Object.freeze({
     'orders.handMade': 'Inserito a mano',
     'orders.registry.loadFailed': 'Non è stato possibile caricare i fornitori. Controlla la connessione e riprova.',
     'orders.registry.whichList': 'Quale elenco mostrare',
+    'orders.registry.notArrived.title': 'Questo elenco non è ancora arrivato',
+    'orders.registry.notArrived.sub': 'Controlla la connessione: comparirà qui appena arriva.',
     'orders.eg.packWeight': 'es. 2,5',
     'orders.eg.ratePerKg': 'es. 7,20 (un chilo)',
     'orders.exVatNote': 'I prezzi sono al netto dell’IVA.',

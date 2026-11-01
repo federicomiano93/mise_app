@@ -14,7 +14,7 @@ import { outputLanguage } from '../market.js';
 import { currentLocationId } from '../location.js';
 import { categoryChoices, unitChoices, packChoices } from '../record-choices.js';
 import { withPrices } from '../price-model.js';
-import { buildRegistry } from './registry.js';
+import { buildRegistry, listStatus } from './registry.js';
 import { dropDeletedIngredientFromDraft, freezeUnitInDraft } from './draft.js';
 import {
   COLLECTIONS, watchCollection, watchIngredientPrices, canManageHere,
@@ -40,6 +40,11 @@ const state = {
   // The venue's starred suppliers (config/orders.favouriteSuppliers), ids only.
   favouriteSuppliers: [],
   loaded: { suppliers: false, ingredients: false, config: false },
+  // What the screen says about a list that has not answered yet (listStatus in registry.js).
+  failed: { suppliers: false, ingredients: false },
+  emptyCopy: { suppliers: false, ingredients: false },
+  stalled: false,
+  stallWatched: false,
   // Whether the live prices have really answered (watchIngredientPrices' second argument): until
   // then an ingredient card reads its own price document before it opens (registry.js).
   pricesReadable: false,
@@ -66,6 +71,10 @@ const screen = buildRegistry(
     // the delete buttons off, or a delete would overwrite the saved list with them.
     categoriesLoaded: () => state.loaded.config,
     pricesLoaded: () => state.pricesReadable === true,
+    listStatus: (list) => listStatus({
+      venueOpen: Boolean(currentLocationId()), loaded: state.loaded[list], failed: state.failed[list], emptyCopy: state.emptyCopy[list],
+      stalled: state.stalled, online: globalThis.navigator?.onLine,
+    }),
     readPrice: (id) => readIngredientPrice(id),
     orderUnits: (current) => unitChoices({
       ingredients: state.ingredients, language: outputLanguage(currentSession().location), current,
@@ -208,6 +217,9 @@ priceChangesBtn?.addEventListener('click', () => {
 });
 
 onSession(() => {
+  watchForStall();
+  // A list still waiting has a word to say now that the venue, and so its language, is known.
+  if (!state.loaded.ingredients) screen.refresh();
   if (!footerEl || !settingsBtn) return;
   settingsBtn.hidden = !canManageHere();
   if (importBtn) importBtn.hidden = !(canManageHere() && mayWritePrices());
@@ -221,6 +233,8 @@ onSession(() => {
 function liveDataLost(what) {
   return (err) => {
     console.error(`Live ${what} failed:`, err);
+    state.failed[what] = true;
+    screen.refresh();
     const box = document.getElementById('registry-error');
     if (!box) return;
     box.hidden = false;
@@ -228,13 +242,33 @@ function liveDataLost(what) {
   };
 }
 
+// ⚠️ «MISSING» COUNTS ONLY WHEN THE SERVER SAID IT, like config/orders below: a cold start offline reports an empty
+// list from an empty cache, and «no ingredients» would be the wrong thing to believe. A list that has answered stays
+// answered: the last row deleted with no signal is an empty list from the cache too, and this time it is true.
+function listAnswered(what, list, fromCache) {
+  state.emptyCopy[what] = list.length === 0 && fromCache;
+  if (!state.emptyCopy[what]) state.loaded[what] = true;
+}
+
+// ⚠️ THE FIRESTORE SDK ITSELF GIVES UP AFTER 10 s without the server and answers from its copy. Past that, and
+// with a browser that believes it is online, nothing else will tell the screen the signal is not there. Counted from
+// the moment a venue opens: time spent on the venue picker says nothing about the signal.
+function watchForStall() {
+  if (state.stallWatched || !currentLocationId()) return;
+  state.stallWatched = true;
+  setTimeout(() => {
+    state.stalled = true;
+    if (!state.loaded.suppliers || !state.loaded.ingredients) screen.refresh();
+  }, 10000);
+}
+
 // Suppliers and ingredients are a handful of documents and every one of them is
 // needed to draw the screen, so both are unbounded — the same choice Orders makes.
-watchCollection(COLLECTIONS.suppliers, list => {
+watchCollection(COLLECTIONS.suppliers, (list, fromCache) => {
   state.suppliers = list;
-  state.loaded.suppliers = true;
+  listAnswered('suppliers', list, fromCache);
   screen.refresh();
-}, liveDataLost('suppliers'));
+}, liveDataLost('suppliers'), { sayFromCache: true });
 
 // ⚠️ THE PRICES ARE A SECOND COLLECTION AND ARRIVE SEPARATELY. They moved off the
 // ingredient document because Orders reads every ingredient to work at all, so a
@@ -264,9 +298,9 @@ watchDoc(COLLECTIONS.config, 'orders', (doc, fromCache) => {
   screen.refresh();
 }, err => console.error('Live category list failed:', err));
 
-watchCollection(COLLECTIONS.ingredients, list => {
+watchCollection(COLLECTIONS.ingredients, (list, fromCache) => {
   state.rawIngredients = list;
   state.ingredients = withPrices(list, state.ingredientPrices);
-  state.loaded.ingredients = true;
+  listAnswered('ingredients', list, fromCache);
   screen.refresh();
-}, liveDataLost('ingredients'));
+}, liveDataLost('ingredients'), { sayFromCache: true });
