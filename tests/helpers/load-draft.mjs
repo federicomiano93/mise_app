@@ -10,7 +10,7 @@ const draftHref = pathToFileURL(fileURLToPath(new URL('../../js/orders/draft.js'
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
-    if (specifier === './firebase-orders.js' && context.parentURL === draftHref) {
+    if (specifier === './firebase-orders.js' && context.parentURL?.startsWith(draftHref)) {
       return { url: stubUrl, shortCircuit: true };
     }
     return nextResolve(specifier, context);
@@ -19,3 +19,10 @@ registerHooks({
 
 export const draft = await import('../../js/orders/draft.js');
 export const stub = await import('./firebase-orders-recording-stub.mjs');
+
+// A new copy of draft.js with nothing in memory, as after a reload; the data layer stays the same stub.
+let copies = 0;
+export function reopenDraft() {
+  copies += 1;
+  return import(`${draftHref}?reopened=${copies}`);
+}
