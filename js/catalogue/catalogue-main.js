@@ -18,6 +18,7 @@ import { setPhotoEnabled } from './firebase-photo.js';
 import { renderLabel } from './label-view.js';
 import { renderDetail } from './catalogue-detail.js';
 import { renderEditor } from './catalogue-editor.js';
+import { readPricesForEditor } from './editor-prices.js';
 import { renderGuidedEditor } from './guided-editor.js';
 import { renderRun, resumableSession, clearSession } from './guided-run.js';
 import { importRecipeIntoCalculator, isRecipeLinkedToCalculator } from './import-to-calculator.js';
@@ -800,6 +801,13 @@ const app = {
   // ⚠️ ASKED OF THE SESSION EACH TIME, never captured: the session arrives after the
   // first paint, and a manager can show Food cost to employees from another phone.
   mayOpenFoodCost: () => { const s = currentSession(); return mayOpenFoodCost(s.location, s.canManage); },
+  // The prices, read once when a recipe editor opens — only for somebody who may read Food
+  // cost (the rules refuse everyone else, so no request is made, no error is logged).
+  // ⚠️ ASKED WHEN THE EDITOR OPENS, never captured at load. editor-prices.js.
+  readEditorPrices: () => {
+    const s = currentSession();
+    return mayOpenFoodCost(s.location, s.canManage) ? readPricesForEditor() : Promise.resolve(null);
+  },
   openFoodCost: (recipe) => { if (recipe && recipe.id) window.location.href = foodCostHref(recipe.id); },
   // A recipe row's missing ingredient, added with the card «Fornitori e ingredienti» uses.
   // Federico, 13 Sep 2026: «semplicemente apri una scheda ingrediente come in fornitori ed

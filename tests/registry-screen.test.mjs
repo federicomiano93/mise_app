@@ -457,7 +457,7 @@ test('a product on its own supplier\'s screen names no supplier at all', () => {
   assert.match(code, /supplierName === undefined \? null :/,
     'omitting the supplier must mean "do not print it", never fall through to '
     + '«No supplier» — on the one screen that exists to say whose product it is');
-  assert.match(code, /ingredientRow\(i\)\)/,
+  assert.match(code, /ingredientRow\(i, undefined, stay\)/,
     'the supplier screen calls it with the name omitted, not with null');
 });
 

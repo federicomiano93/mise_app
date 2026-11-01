@@ -16,6 +16,7 @@ import { getTabProducts, showsLeaveningKnob, usesOrders, usesTypedTotal, usesTra
 import { icon } from './calculator-icons.js';
 import { leaveningLost } from './calculator-recipe-source.js';
 import { SEND_PATHS, svgElement } from './send-icon.js';
+import { DOWNLOAD_PATHS } from './export-icon.js';
 
 // ⚠️⚠️ THE WHATSAPP BRAND MARK USED TO BE DRAWN HERE, one of three copies of the
 // same long path in the app. It is gone: this button no longer means «send on
@@ -128,6 +129,13 @@ export function buildRecipePanel(recipe, resolved) {
   const hasTrays = usesTrays(recipe.logic);
   const content = el('div', { class: 'content', id: 'tab-' + id });
 
+  // Why a linked tab cannot be calculated, filled and shown by calc.js (paintSourceProblem).
+  // FIRST in the panel: below a long list of client orders it would be off-screen, and the
+  // tab would read as silent again.
+  content.appendChild(el('p', {
+    class: 'cp-source-problem calc-source-problem', id: id + '-source-problem', role: 'status', hidden: '',
+  }));
+
   // ⚠️ NO KNOB FOR A CATALOGUE ROW THAT IS GONE (deleted, or re-added with a new id):
   // the spec scales pro-rata then, and a knob would move the % and change no gram.
   if (showsLeaveningKnob(recipe) && !leaveningLost(recipe, resolved)) {
@@ -218,6 +226,12 @@ export function buildRecipePanel(recipe, resolved) {
         el('button', { class: 'copy-btn', id: id + '-copy-btn' }, t('calc.copyRecipe')),
         el('button', { class: 'copy-send-btn', id: id + '-wa-recipe-btn', type: 'button',
           title: t('ui.send'), 'aria-label': t('ui.send') }, [svgElement(SEND_PATHS, 20)]),
+      ]),
+      // Its own full-width line under the copy row: a third square there made «Copia la ricetta» wrap
+      // at 296px. The secondary look is .copy-btn's; the green is reserved for opening the send sheet.
+      el('button', { class: 'copy-btn export-btn', id: id + '-export-btn', type: 'button' }, [
+        svgElement(DOWNLOAD_PATHS, 18),
+        el('span', {}, t('export.button')),
       ]),
       el('div', { class: 'divisor-box', id: id + '-divisor-box' }),
       el('div', { class: 'crate-boxes', id: id + '-crate-boxes' }),

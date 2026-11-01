@@ -21,6 +21,7 @@ import {
 import Sortable from '../vendor/sortable.esm.js';
 import { openLinkPicker } from './ingredient-picker.js';
 import { attachLinkSuggestions } from './ingredient-suggest.js';
+import { unpricedRowFlags } from './unpriced-rows.js';
 
 // Whole grams, no thousands separator — the same reading as the recipe view.
 const nf = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0, useGrouping: false });
@@ -127,6 +128,39 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     countEl.textContent = String(working.ingredients.length);
     // Nothing to put in order with a single row.
     reorderBtn.hidden = working.ingredients.length < 2;
+    // Runs on every amount, unit and name input, and after every redraw of the rows, so
+    // the mark follows what is typed. A no-op until the prices have arrived.
+    paintPriceMarks();
+  }
+
+  // ── The crossed-out euro on a row Food cost cannot price (28 Oct 2026) ──────
+  //
+  // ⚠️ HELD IN THIS CLOSURE ONLY. null until the read answers, and null for good when it is
+  // refused or this person may not read Food cost: no marks, no error. The map is never
+  // stored anywhere and no money is shown — unpricedRowFlags answers with booleans.
+  let editorPrices = null;
+
+  // Lucide «euro» plus a slash; the colour is the warning amber, from the button's context.
+  const NO_PRICE_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h12"/><path d="M4 14h9"/><path d="M19 6a7.7 7.7 0 0 0-5.2-2A7.9 7.9 0 0 0 6 12c0 4.4 3.5 8 7.8 8 2 0 3.8-.8 5.2-2"/><path d="M3 3l18 18"/></svg>';
+
+  function paintPriceMarks() {
+    if (reordering || !editorPrices) return;
+    const flags = unpricedRowFlags(working, {
+      ingredients: app.ingredients(), recipes: app.allRecipes(), prices: editorPrices,
+    });
+    const groups = rowsContainer.querySelectorAll('.cat-ing-editgroup');
+    flags.forEach((unpriced, i) => {
+      const button = groups[i] && groups[i].querySelector('.cat-ing-link');
+      if (!button) return;
+      const mark = button.querySelector('.cat-noprice');
+      if (!unpriced) { if (mark) mark.remove(); return; }
+      if (mark) return;
+      // The label is read NOW, in the language of the moment (never frozen at load).
+      button.appendChild(el('span', {
+        class: 'cat-noprice', role: 'img', 'aria-label': t('cat.noPriceMark'), icon: NO_PRICE_SVG,
+      }));
+    });
   }
 
   // ── Reordering the rows (13 Sep 2026) ───────────────────────────────────────
@@ -317,7 +351,7 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     const button = el('button', {
       class: 'cat-ing-link' + (link ? ' linked' : ''), type: 'button',
       onclick: () => pickFromChooser(idx),
-    }, linkText(ing));
+    }, [el('span', { class: 'cat-ing-link-text', text: linkText(ing) })]);
     return button;
   }
 
@@ -579,6 +613,17 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     : null;
 
   renderIngredientRows();
+
+  // The prices, asked for once as the editor opens. A refusal or a failure resolves null and
+  // leaves the editor without marks; the editor may be gone by the time this answers, and
+  // painting into rows nobody sees is harmless.
+  if (app.readEditorPrices) {
+    Promise.resolve(app.readEditorPrices()).then(prices => {
+      if (!prices) return;
+      editorPrices = prices;
+      paintPriceMarks();
+    }).catch(() => { /* no prices, no marks */ });
+  }
 
   // ⚠️ ONLY ON A NEW RECIPE, AND ONLY WHEN THE VENUE HAS IT SWITCHED ON. `recipe` is
   // null exactly when this is a new one — the same flag that already decides the

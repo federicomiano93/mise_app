@@ -3,5 +3,6 @@
 import { runInOrder } from './run-in-order.js';
 
 runInOrder([
+  () => import('../viewport-height.js'),
   () => import('../install-guide.js'),
 ]);
