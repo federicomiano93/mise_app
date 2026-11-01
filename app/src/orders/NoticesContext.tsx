@@ -53,7 +53,15 @@ export function useNotices(): Notices {
 
 // ⚠️ THE PANEL IS CLOSED WHENEVER ORDERS OPENS (the state lives here, mounted with the section). A failure
 // while working the notices out is logged and answered with «no notices» — it must never take the list down (T6).
-export function NoticesProvider({ lens, ready, children }: { lens: OrdersLens; ready: boolean; children: ReactNode }) {
+//
+// `onPanelOpen` is told when the panel is opened: looking at the notices is a sign that a supplier tapped before the live data
+// landed is no longer wanted (OrdersSection.tsx, the hold).
+export function NoticesProvider({ lens, ready, onPanelOpen, children }: {
+  lens: OrdersLens;
+  ready: boolean;
+  onPanelOpen?: () => void;
+  children: ReactNode;
+}) {
   const { t } = useT();
   const snapshot = useOrders();
   const { location } = useSession();
@@ -62,7 +70,11 @@ export function NoticesProvider({ lens, ready, children }: { lens: OrdersLens; r
   const today = todayISO();
   const { dismissed, close, reopen } = useDismissedNotices(today);
   const { latched } = usePendingLatch();
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    if (next) onPanelOpen?.();
+  };
   const panelId = useId();
   const bellRef = useRef<HTMLButtonElement>(null);
 

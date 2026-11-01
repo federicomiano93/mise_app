@@ -76,6 +76,14 @@
   color: var(--danger-ink);
 }
 
+.wait {
+  padding: var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink-2);
+}
+
 .loading {
   padding: var(--s6);
   color: var(--ink-2);

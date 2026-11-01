@@ -21,13 +21,17 @@ import styles from './OrdersList.module.css';
 
 type Props = {
   lens: OrdersLens;
-  // The rows drawn from the local copy of the last good lists while `ready` is false, or null (OrdersSection.tsx). ONLY for the
-  // rows: everything that acts reads `lens`.
-  copyLens: OrdersLens | null;
+  // What the rows draw before `ready` (the local copy of the last good lists, or the live lists once those have landed), or null
+  // (OrdersSection.tsx). ONLY for the rows: everything that acts reads `lens`.
+  earlyLens: OrdersLens | null;
   // Suppliers, ingredients and the draft have all arrived (or failed): before that nothing may say «no suppliers» (parity L8).
   ready: boolean;
   // The supplier open beside the list (the tablet's split), marked as the current one.
   openId: string | null;
+  // The supplier tapped while the list was drawn from the copy, waiting for the live data: its row is dimmed and busy.
+  heldId: string | null;
+  // The search box took the focus or its text changed: a supplier held for the live data is no longer wanted.
+  onLookingElsewhere: () => void;
   onOpenSupplier: (id: string) => void;
   onOpenItems: (id: string) => void;
   // The two buttons under the list: the picker of the suppliers to record together, and the one to clear.
@@ -54,7 +58,7 @@ const HEADING_KEY = {
 // ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a component that stays mounted, and
 // only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard where the person
 // left them (the current app built the box once for the same reason).
-export function OrdersList({ lens, copyLens, ready, openId, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings, onIncoming, onReorder, onOpenPending }: Props) {
+export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings, onIncoming, onReorder, onOpenPending }: Props) {
   const { t } = useT();
   const { config, draft, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
@@ -71,7 +75,7 @@ export function OrdersList({ lens, copyLens, ready, openId, onOpenSupplier, onOp
   // otherwise. The search box above is the same mounted element either way, so what was typed on the copy survives the move to
   // live and still filters. THE SEND AND BULK BUTTONS BELOW STAY ON `ready` (when it is true `drawn` IS the live lens): nothing is
   // sent or recorded from an old list, and «No suppliers yet» is never said from it.
-  const drawn = copyLens ?? lens;
+  const drawn = earlyLens ?? lens;
   const ordering = orderingCount(drawn);
   const groups = useMemo(
     () => supplierListGroups(drawn, { query, orderingOnly, favourites: config.favouriteSuppliers }),
@@ -110,7 +114,13 @@ export function OrdersList({ lens, copyLens, ready, openId, onOpenSupplier, onOp
               aria-label={t('ord.searchASupplier')}
               placeholder={t('ord.searchASupplier')}
               value={query}
-              onChange={event => { setQuery(event.target.value); }}
+              // ⚠️ onFocus AND onChange, NOT document.activeElement when the supplier finally opens: on WebKit a tap does not
+              // take the focus off the search box, so a person who typed and THEN tapped a row must still get that supplier.
+              onFocus={onLookingElsewhere}
+              onChange={event => {
+                onLookingElsewhere();
+                setQuery(event.target.value);
+              }}
             />
           </div>
           {/* ⚠️ AN ARROW OUT OF A TRAY, NOT A WHATSAPP MARK: the screen it opens offers several roads. Here only once the list
@@ -160,7 +170,7 @@ export function OrdersList({ lens, copyLens, ready, openId, onOpenSupplier, onOp
 
       <DeliveryDoors onIncoming={onIncoming} onReorder={onReorder} />
 
-      {!ready && copyLens === null ? (
+      {!ready && earlyLens === null ? (
         <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>
       ) : drawn.suppliers.length === 0 ? (
         // ⚠️ A DEAD STREAM IS NOT «NO SUPPLIERS»: the status line says what happened.
@@ -195,6 +205,7 @@ export function OrdersList({ lens, copyLens, ready, openId, onOpenSupplier, onOp
                     count={filled}
                     tag={tag}
                     isOpen={supplier.id === openId}
+                    isWaiting={supplier.id === heldId}
                     onOpenSupplier={onOpenSupplier}
                     onOpenItems={onOpenItems}
                   />
@@ -227,6 +238,7 @@ type RowProps = {
   count: number;
   tag: string;
   isOpen: boolean;
+  isWaiting: boolean;
   onOpenSupplier: (id: string) => void;
   onOpenItems: (id: string) => void;
 };
@@ -234,7 +246,7 @@ type RowProps = {
 // ⚠️ TWO BUTTONS, NOT ONE WITH SOMETHING CLICKABLE INSIDE IT: a button in a button is invalid, and a tap on the inner one ran
 // the outer one's handler too. The row is a plain container holding two siblings: the wide one opens the order, the narrow
 // one opens the read-only list of what the supplier sells.
-function SupplierRow({ supplier, meta, count, tag, isOpen, onOpenSupplier, onOpenItems }: RowProps) {
+function SupplierRow({ supplier, meta, count, tag, isOpen, isWaiting, onOpenSupplier, onOpenItems }: RowProps) {
   const { t } = useT();
   const handBack = useHandBack();
   const id = supplier.id;
@@ -243,12 +255,13 @@ function SupplierRow({ supplier, meta, count, tag, isOpen, onOpenSupplier, onOpe
   const openNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(supplierOpener(id), node); }, [handBack, id]);
   const itemsNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(itemsOpener(id), node); }, [handBack, id]);
   return (
-    <li className={styles.item} data-open={isOpen}>
+    <li className={styles.item} data-open={isOpen} data-waiting={isWaiting ? 'true' : undefined}>
       <button
         ref={openNode}
         type="button"
         className={styles.open}
         aria-current={isOpen ? 'true' : undefined}
+        aria-busy={isWaiting ? 'true' : undefined}
         onClick={() => { onOpenSupplier(id); }}
       >
         <span className={styles.main}>

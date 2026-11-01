@@ -4,7 +4,8 @@
 //
 // ⚠️ js/orders/list-copy.js IS NOT ON EVERY BRANCH. Until #433 is merged this file runs on the port only; once the original is
 // there the comparison is on by itself. That is why it is loaded with a variable path and a catch, not imported: a static import
-// of a file that does not exist would fail the whole spec on a branch that has not got it yet.
+// of a file that does not exist would fail the whole spec on a branch that has not got it yet. A file that is there but BROKEN
+// fails the spec on purpose (see the catch below).
 //
 // PORTED: every behaviour of writeListCopy and readListCopy. LEFT OUT with the functions themselves (see list-copy.ts):
 // bothLanded, shouldShowCopy, supplierToOpen, mayWriteCopy.
@@ -21,7 +22,12 @@ declare const URL: new (path: string, base: string) => { href: string };
 type Impl = Pick<typeof ported, 'LIST_COPY_KEY' | 'LIST_COPY_VERSION' | 'LIST_COPY_WRITE_DELAY_MS' | 'writeListCopy' | 'readListCopy'>;
 
 const legacyPath = new URL('../../js/orders/list-copy.js', (import.meta as unknown as { url: string }).url).href;
-const legacy = (await import(/* @vite-ignore */ legacyPath).catch(() => null)) as Impl | null;
+// ⚠️ ONLY «THE FILE IS NOT THERE» MEANS PORT-ONLY. A catch-all would also hide an original that is BROKEN (a syntax error, a
+// failing import of its own), and the comparison would silently switch itself off: anything else is rethrown and fails the spec.
+const legacy = (await import(/* @vite-ignore */ legacyPath).catch((err: unknown) => {
+  if (String((err as { message?: unknown } | null)?.message ?? '').startsWith(`Cannot find module '${legacyPath}'`)) return null;
+  throw err;
+})) as Impl | null;
 
 const implementations: Array<[string, Impl]> = [['shared/ (TypeScript)', ported]];
 if (legacy) implementations.push(['js/ (current app)', legacy]);

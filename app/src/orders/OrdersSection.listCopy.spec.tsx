@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { addDays, parseISODate, todayISO, toISODate, weekdayOf } from '@mise/shared/day';
 import { LIST_COPY_KEY, LIST_COPY_WRITE_DELAY_MS, writeListCopy } from '@mise/shared/list-copy';
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
@@ -7,8 +7,9 @@ import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
 import { LOAD, ingredient, renderOrders, split, supplier } from '../testing/renderOrders';
 
 // «Orders», the instant list: the supplier rows are drawn from a local copy of the last good lists while the live lists have not
-// landed (useListCopy.ts), and NOTHING ELSE reads the copy. THE HOLD IS THE ADDRESS: a tap on a row navigates as ever, and the
-// pane says «Loading…» until suppliers, ingredients and the draft have all landed, then the screen opens by itself.
+// landed (useListCopy.ts), and NOTHING ELSE reads the copy. A supplier tapped meanwhile is HELD in OrdersLayout (the address does not
+// change, the row is busy, the status line says the wait) and opens by itself once everything is live; the doors that open anything
+// else are shut; a hold is dropped by moving elsewhere, by a failed stream, by the bell and by the search box.
 
 beforeAll(async () => { await import('./OrdersSection'); }, 60_000);
 
@@ -57,10 +58,10 @@ function stored(): Record<string, unknown> | null {
 
 // Keeps the first answer of the named streams back, as a tablet whose Firestore is still waking up: until `release()` the
 // section has only what it was handed. A stream opened again after the release (React's development mode starts, stops and
-// starts again) is answered at once.
+// starts again) is answered at once. `fail(stream)` makes the held ones of that stream die instead.
 type Stream = 'watchSuppliers' | 'watchIngredients' | 'watchDraft';
 function holdLive(source: FakeOrdersSource, streams: Stream[] = ['watchSuppliers', 'watchIngredients', 'watchDraft']) {
-  const waiting = new Set<() => void>();
+  const waiting = new Set<{ name: Stream; start: () => void; fail: () => void }>();
   let released = false;
   const loose = source as unknown as Record<Stream, (...args: unknown[]) => () => void>;
   for (const name of streams) {
@@ -68,10 +69,14 @@ function holdLive(source: FakeOrdersSource, streams: Stream[] = ['watchSuppliers
     loose[name] = (onChange, onError) => {
       if (released) return original(onChange, onError);
       let stop: (() => void) | undefined;
-      const start = () => { stop = original(onChange, onError); };
-      waiting.add(start);
+      const entry = {
+        name,
+        start: () => { stop = original(onChange, onError); },
+        fail: () => { (onError as (err: unknown) => void)(new Error('permission-denied')); },
+      };
+      waiting.add(entry);
       return () => {
-        waiting.delete(start);
+        waiting.delete(entry);
         stop?.();
       };
     };
@@ -80,9 +85,20 @@ function holdLive(source: FakeOrdersSource, streams: Stream[] = ['watchSuppliers
     async release() {
       released = true;
       await act(async () => {
-        for (const start of [...waiting]) {
-          waiting.delete(start);
-          start();
+        for (const entry of [...waiting]) {
+          waiting.delete(entry);
+          entry.start();
+        }
+        await Promise.resolve();
+      });
+    },
+    async fail(name: Stream) {
+      await act(async () => {
+        for (const entry of [...waiting]) {
+          if (entry.name === name) {
+            waiting.delete(entry);
+            entry.fail();
+          }
         }
         await Promise.resolve();
       });
@@ -95,14 +111,17 @@ function rowButtons() {
 }
 const row = (name: RegExp | string) => screen.getByRole('button', { name });
 const queryRow = (name: RegExp | string) => screen.queryByRole('button', { name });
+const WAIT = 'Just a moment: loading the latest data.';
+const waitText = () => screen.queryByText(WAIT);
+const busy = () => document.querySelector('[data-waiting="true"]');
 const search = () => screen.getByRole('searchbox', { name: 'Search a supplier…' });
 
 type Options = NonNullable<Parameters<typeof renderOrders>[1]>;
 
 // The list on the copy: planted, with the live lists held back.
-async function onCopy(source: FakeOrdersSource, options: Options = {}, streams?: Stream[]) {
+async function onCopy(source: FakeOrdersSource, options: Options = {}, streams?: Stream[], path = '/orders') {
   const live = holdLive(source, streams);
-  const view = renderOrders('/orders', { source, ...options });
+  const view = renderOrders(path, { source, ...options });
   await screen.findByRole('button', { name: /^Alpine Mills/ }, LOAD);
   return { ...view, live };
 }
@@ -148,85 +167,257 @@ describe('the list before the live lists land', () => {
   });
 });
 
-describe('a tap before the live lists land', () => {
-  it('on the split: «Loading…» in the pane and no quantity box until live, then the supplier opens by itself', async () => {
-    split();
+describe.each([['on the split', true], ['on a phone', false]] as const)('a supplier tapped on the copy, %s', (_where, isSplit) => {
+  beforeEach(() => { if (isSplit) split(); });
+
+  it('stays at the same address with the row busy and the wait said, then opens by itself when live lands', async () => {
     plant();
     const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
     const view = await onCopy(source);
     await view.user.click(row(/^Alpine Mills/));
-    expect(view.router.state.location.pathname).toBe('/orders/supplier/s-alp');
-    expect(screen.getAllByText('Loading…')).toHaveLength(1);
+    expect(view.router.state.location.pathname).toBe('/orders');
+    expect(row(/^Alpine Mills/)).toHaveAttribute('aria-busy', 'true');
+    expect(waitText()).toBeInTheDocument();
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
     await view.live.release();
     expect(await screen.findByRole('spinbutton', { name: 'Flour quantity to order' }, LOAD)).toBeInTheDocument();
-    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+    expect(view.router.state.location.pathname).toBe('/orders/supplier/s-alp');
+    expect(waitText()).not.toBeInTheDocument();
+    expect(busy()).toBeNull();
+    expect(document.querySelector('li [aria-busy="true"]')).toBeNull();
   });
 
-  it('on the split: a second tap on another row before live wins', async () => {
-    split();
+  it('a second tap on another row wins', async () => {
     plant();
     const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
     const view = await onCopy(source);
     await view.user.click(row(/^Alpine Mills/));
     await view.user.click(row(/^Zed/));
-    expect(view.router.state.location.pathname).toBe('/orders/supplier/s-zed');
+    expect(row(/^Zed/)).toHaveAttribute('aria-busy', 'true');
+    expect(row(/^Alpine Mills/)).not.toHaveAttribute('aria-busy');
     await view.live.release();
     expect(await screen.findByRole('spinbutton', { name: 'Milk quantity to order' }, LOAD)).toBeInTheDocument();
     expect(screen.queryByRole('spinbutton', { name: 'Flour quantity to order' })).not.toBeInTheDocument();
+    expect(view.router.state.location.pathname).toBe('/orders/supplier/s-zed');
   });
 
-  it('on a phone: tap a row, go back, then live lands: no supplier screen opens', async () => {
-    plant();
-    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
-    const view = await onCopy(source);
-    await view.user.click(row(/^Alpine Mills/));
-    expect(view.router.state.location.pathname).toBe('/orders/supplier/s-alp');
-    await act(async () => { await view.router.navigate(-1); });
-    expect(view.router.state.location.pathname).toBe('/orders');
-    await view.live.release();
-    await screen.findByRole('button', { name: 'Send' }, LOAD);
-    expect(view.router.state.location.pathname).toBe('/orders');
-    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
-  });
-
-  it('«What they sell» on a row: only «Loading…» in the pane until live', async () => {
-    split();
-    plant();
-    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
-    const view = await onCopy(source);
-    await view.user.click(screen.getByRole('button', { name: 'Ingredients from Alpine Mills' }));
-    expect(view.router.state.location.pathname).toBe('/orders/supplier/s-alp/items');
-    expect(screen.getAllByText('Loading…')).toHaveLength(1);
-    expect(screen.queryByText('Flour')).not.toBeInTheDocument();
-    await view.live.release();
-    await waitFor(() => { expect(screen.queryByText('Loading…')).not.toBeInTheDocument(); }, LOAD);
-    expect(await screen.findByText('Flour', undefined, LOAD)).toBeInTheDocument();
-  });
-
-  it('the settings gear: only «Loading…» in the pane until live', async () => {
-    split();
-    plant();
-    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
-    const view = await onCopy(source);
-    await view.user.click(screen.getByRole('button', { name: 'Orders settings' }));
-    expect(view.router.state.location.pathname).toBe('/orders/settings');
-    expect(screen.getAllByText('Loading…')).toHaveLength(1);
-    expect(screen.queryByText('Past orders')).not.toBeInTheDocument();
-    await view.live.release();
-    expect(await screen.findByText('Past orders', undefined, LOAD)).toBeInTheDocument();
-    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
-  });
-
-  it('a supplier gone from the live list: the «supplier gone» message and nothing to type', async () => {
-    split();
+  it('a supplier gone from the live list: the list stays, nothing opens, nothing is busy and the wait is gone', async () => {
     plant();
     const source = fakeOrdersSource({ suppliers: LIVE_SUPPLIERS, ingredients: LIVE_ITEMS });
     const view = await onCopy(source);
     await view.user.click(row(/^Zed/));
     await view.live.release();
-    expect(await screen.findByText('This supplier is not in the order list.', undefined, LOAD)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Send' }, LOAD)).toBeInTheDocument();
+    expect(view.router.state.location.pathname).toBe('/orders');
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(screen.queryByText('This supplier is not in the order list.')).not.toBeInTheDocument();
+    expect(busy()).toBeNull();
+    expect(waitText()).not.toBeInTheDocument();
+  });
+
+  it('⚠️ the hold is dropped by typing in the search box: the text and the focus stay, nothing opens', async () => {
+    plant();
+    const source = fakeOrdersSource({ suppliers: [...BOTH_SUPPLIERS, supplier('s-bee', { name: 'Bee Farm' })], ingredients: COPY_ITEMS });
+    const view = await onCopy(source);
+    await view.user.click(row(/^Alpine Mills/));
+    expect(busy()).not.toBeNull();
+    const box = search();
+    await view.user.type(box, 'zed');
+    expect(busy()).toBeNull();
+    expect(waitText()).not.toBeInTheDocument();
+    await view.live.release();
+    await screen.findByRole('button', { name: 'Send' }, LOAD);
+    expect(view.router.state.location.pathname).toBe('/orders');
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(search()).toBe(box);
+    expect(box).toHaveValue('zed');
+    expect(box).toHaveFocus();
+    expect(rowButtons()).toHaveLength(1);
+    expect(rowButtons()[0]).toMatch(/^Zed/);
+  });
+
+  it('⚠️ the hold is dropped when the search box takes the focus', async () => {
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    const view = await onCopy(source);
+    await view.user.click(row(/^Alpine Mills/));
+    await view.user.click(search());
+    expect(busy()).toBeNull();
+    expect(waitText()).not.toBeInTheDocument();
+    await view.live.release();
+    await screen.findByRole('button', { name: 'Send' }, LOAD);
+    expect(view.router.state.location.pathname).toBe('/orders');
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(search()).toHaveFocus();
+  });
+
+  it('⚠️ WebKit: search box focused and text typed BEFORE the tap, a click on the row that moves no focus still opens the supplier', async () => {
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    const view = await onCopy(source);
+    await view.user.click(search());
+    await view.user.type(search(), 'alp');
+    expect(search()).toHaveFocus();
+    fireEvent.click(row(/^Alpine Mills/));
+    expect(search()).toHaveFocus();
+    expect(busy()).not.toBeNull();
+    await view.live.release();
+    expect(await screen.findByRole('spinbutton', { name: 'Flour quantity to order' }, LOAD)).toBeInTheDocument();
+    expect(view.router.state.location.pathname).toBe('/orders/supplier/s-alp');
+  });
+
+  it('the hold is dropped when the bell’s panel opens, and the bell keeps the focus', async () => {
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    const view = await onCopy(source);
+    await view.user.click(row(/^Alpine Mills/));
+    const bell = screen.getByRole('button', { name: /^Notices/ });
+    await view.user.click(bell);
+    expect(busy()).toBeNull();
+    expect(waitText()).not.toBeInTheDocument();
+    await view.live.release();
+    await screen.findByRole('button', { name: 'Send' }, LOAD);
+    expect(view.router.state.location.pathname).toBe('/orders');
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(bell).toHaveFocus();
+  });
+
+  it('the hold is dropped when the person goes elsewhere (the address changes): the supplier does not open later', async () => {
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    const view = await onCopy(source);
+    await view.user.click(row(/^Alpine Mills/));
+    await act(async () => { await view.router.navigate('/orders/settings'); });
+    expect(busy()).toBeNull();
+    await view.live.release();
+    await screen.findByText('Past orders', undefined, LOAD);
+    expect(view.router.state.location.pathname).toBe('/orders/settings');
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['watchSuppliers', /Lost the live connection for suppliers/],
+    ['watchIngredients', /Lost the live connection for ingredients/],
+    ['watchDraft', /Lost the live connection for the order in progress/],
+  ] as const)('a failed %s stream drops the hold: nothing opens, nothing is busy, the connection-lost line shows', async (stream, lost) => {
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    const view = await onCopy(source);
+    await view.user.click(row(/^Alpine Mills/));
+    expect(busy()).not.toBeNull();
+    await view.live.fail(stream);
+    expect(await screen.findByText(lost)).toBeInTheDocument();
+    expect(busy()).toBeNull();
+    expect(waitText()).not.toBeInTheDocument();
+    // A list that failed no longer draws its stale rows.
+    if (stream !== 'watchDraft') expect(queryRow(/^Alpine Mills/)).not.toBeInTheDocument();
+    await view.live.release();
+    await act(async () => { await new Promise(resolve => window.setTimeout(resolve, 50)); });
+    expect(view.router.state.location.pathname).toBe('/orders');
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    expect(waitText()).not.toBeInTheDocument();
+  });
+});
+
+describe('the doors that open anything else, shut on the copy', () => {
+  const CONFIG = { ordersConfig: { deliveryCheck: true, deliveryCheckFrom: inDays(-1) } };
+  const DOORS: Array<[string, () => HTMLElement]> = [
+    ['the row’s list icon', () => screen.getByRole('button', { name: 'Ingredients from Alpine Mills' })],
+    ['the settings gear', () => screen.getByRole('button', { name: 'Orders settings' })],
+    ['Incoming', () => screen.getByRole('button', { name: 'Incoming' })],
+    ['To re-order', () => screen.getByRole('button', { name: 'To re-order' })],
+  ];
+
+  it.each(DOORS)('%s: the address is unchanged, the wait is said, nothing opens — then live lands and still nothing opens', async (_name, door) => {
+    split();
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS, ...CONFIG });
+    const view = await onCopy(source);
+    await screen.findByRole('button', { name: 'Incoming' }, LOAD);
+    await view.user.click(door());
+    expect(view.router.state.location.pathname).toBe('/orders');
+    expect(waitText()).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+    await view.live.release();
+    await screen.findByRole('button', { name: 'Send' }, LOAD);
+    expect(view.router.state.location.pathname).toBe('/orders');
+    expect(waitText()).not.toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+  });
+
+  it('are today’s doors again once the list is live', async () => {
+    split();
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    const view = await onCopy(source);
+    await view.live.release();
+    await screen.findByRole('button', { name: 'Send' }, LOAD);
+    await view.user.click(screen.getByRole('button', { name: 'Orders settings' }));
+    await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders/settings'); });
+  });
+});
+
+describe('a half-landed list', () => {
+  it('an «Order today» chip goes through the hold like a row: suppliers and records landed, ingredients held', async () => {
+    const days = { orderDays: [WEEKDAY(0)] };
+    const alpine = supplier('s-alp', { name: 'Alpine Mills', ...days });
+    plant([alpine, COPY_SUPPLIERS[1]]);
+    const source = fakeOrdersSource({ suppliers: [alpine, BOTH_SUPPLIERS[1] as never], ingredients: COPY_ITEMS });
+    const view = await onCopy(source, {}, ['watchIngredients']);
+    await screen.findByText('Order today', undefined, LOAD);
+    // Two buttons carry the name: the chip (first, over the list) and the supplier's row.
+    await view.user.click(screen.getAllByRole('button', { name: 'Alpine Mills' })[0] as HTMLElement);
+    expect(view.router.state.location.pathname).toBe('/orders');
+    expect(waitText()).toBeInTheDocument();
+    expect(document.querySelector('[data-waiting="true"]')).not.toBeNull();
+    await view.live.release();
+    expect(await screen.findByRole('spinbutton', { name: 'Flour quantity to order' }, LOAD)).toBeInTheDocument();
+    expect(view.router.state.location.pathname).toBe('/orders/supplier/s-alp');
+  });
+
+  it('suppliers and ingredients landed, draft held: the rows are the LIVE ones, Send is still hidden, a tap waits for the draft', async () => {
+    plant();
+    const source = fakeOrdersSource({ suppliers: LIVE_SUPPLIERS, ingredients: LIVE_ITEMS });
+    const view = await onCopy(source, {}, ['watchDraft']);
+    await screen.findByRole('button', { name: /^Bee Farm/ }, LOAD);
+    expect(queryRow(/^Zed/)).not.toBeInTheDocument();
+    expect(queryRow(/^Alpine Mills/)).not.toBeInTheDocument();
+    expect(queryRow('Send')).not.toBeInTheDocument();
+    await view.user.click(row(/^Bee Farm/));
+    expect(view.router.state.location.pathname).toBe('/orders');
+    expect(waitText()).toBeInTheDocument();
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    await view.live.release();
+    expect(await screen.findByRole('spinbutton', { name: 'Honey quantity to order' }, LOAD)).toBeInTheDocument();
+    expect(view.router.state.location.pathname).toBe('/orders/supplier/s-bee');
+  });
+});
+
+describe('a screen opened by its address on the copy', () => {
+  it('on the split: «Loading…» in the pane and no quantity box until live, and a tap on another row wins', async () => {
+    split();
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    const view = await onCopy(source, {}, undefined, '/orders/supplier/s-alp');
+    expect(screen.getAllByText('Loading…')).toHaveLength(1);
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    await view.user.click(row(/^Zed/));
+    expect(view.router.state.location.pathname).toBe('/orders/supplier/s-alp');
+    expect(waitText()).toBeInTheDocument();
+    await view.live.release();
+    expect(await screen.findByRole('spinbutton', { name: 'Milk quantity to order' }, LOAD)).toBeInTheDocument();
+    expect(view.router.state.location.pathname).toBe('/orders/supplier/s-zed');
+  });
+
+  it('on a phone: «Loading…» until live, then the supplier', async () => {
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    const view = await onCopy(source, {}, undefined, '/orders/supplier/s-alp');
+    expect(screen.getAllByText('Loading…')).toHaveLength(1);
+    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    await view.live.release();
+    expect(await screen.findByRole('spinbutton', { name: 'Flour quantity to order' }, LOAD)).toBeInTheDocument();
   });
 });
 
@@ -382,9 +573,63 @@ describe('writing the copy', () => {
     expect(armed).toBe(armedBefore);
     expect(pending.size).toBe(1);
   });
+
+  it('⚠️ writes nothing while only cached answers have arrived (this phone’s own database), and writes once the server has answered', async () => {
+    const source = fakeOrdersSource({ suppliers: LIVE_SUPPLIERS, ingredients: LIVE_ITEMS });
+    let cached = true;
+    const loose = source as unknown as Record<'watchSuppliers' | 'watchIngredients', (...args: unknown[]) => () => void>;
+    for (const name of ['watchSuppliers', 'watchIngredients'] as const) {
+      const original = loose[name].bind(source);
+      loose[name] = (onChange, onError) => original(
+        (list: unknown, meta: unknown) => { (onChange as (l: unknown, m: unknown) => void)(list, cached ? { fromServer: false } : meta); },
+        onError,
+      );
+    }
+    renderOrders('/orders', { source });
+    await screen.findByRole('button', { name: 'Send' }, LOAD);
+    await act(async () => { await new Promise(resolve => window.setTimeout(resolve, 50)); });
+    expect(armed).toBe(0);
+    fire();
+    expect(stored()).toBeNull();
+    cached = false;
+    act(() => { source.emit(); });
+    await waitFor(() => { expect(pending.size).toBe(1); }, LOAD);
+    fire();
+    expect(stored()).not.toBeNull();
+  });
+
+  describe('while the device moves to another venue', () => {
+    async function landed() {
+      const source = fakeOrdersSource({ suppliers: LIVE_SUPPLIERS, ingredients: LIVE_ITEMS });
+      renderOrders('/orders', { source });
+      await screen.findByRole('button', { name: 'Send' }, LOAD);
+      await waitFor(() => { expect(pending.size).toBe(1); });
+    }
+
+    it('⚠️ writes nothing when `active-location` already names ANOTHER venue', async () => {
+      await landed();
+      window.localStorage.setItem('active-location', 'cafe');
+      fire();
+      expect(stored()).toBeNull();
+    });
+
+    it('writes when `active-location` names this venue', async () => {
+      await landed();
+      window.localStorage.setItem('active-location', 'bakery');
+      fire();
+      expect(stored()).not.toBeNull();
+    });
+
+    it('writes when `active-location` is missing', async () => {
+      await landed();
+      window.localStorage.removeItem('active-location');
+      fire();
+      expect(stored()).not.toBeNull();
+    });
+  });
 });
 
-describe('the search box and the focus', () => {
+describe('the search box', () => {
   it('keeps what was typed on the copy, in the same input, and still filters when the live rows arrive', async () => {
     plant();
     const source = fakeOrdersSource({ suppliers: [...BOTH_SUPPLIERS, supplier('s-bee', { name: 'Bee Farm' })], ingredients: COPY_ITEMS });
@@ -398,29 +643,5 @@ describe('the search box and the focus', () => {
     expect(box).toHaveValue('zed');
     expect(rowButtons()).toHaveLength(1);
     expect(rowButtons()[0]).toMatch(/^Zed/);
-  });
-
-  it('does not steal the focus from the search box when the supplier screen opens by itself', async () => {
-    split();
-    plant();
-    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
-    const view = await onCopy(source);
-    await view.user.click(row(/^Alpine Mills/));
-    await view.user.click(search());
-    expect(search()).toHaveFocus();
-    await view.live.release();
-    await screen.findByRole('spinbutton', { name: 'Flour quantity to order' }, LOAD);
-    expect(search()).toHaveFocus();
-  });
-
-  it('without typing, the title of the supplier takes the focus as it always did', async () => {
-    split();
-    plant();
-    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
-    const view = await onCopy(source);
-    await view.user.click(row(/^Alpine Mills/));
-    await view.live.release();
-    await screen.findByRole('spinbutton', { name: 'Flour quantity to order' }, LOAD);
-    await waitFor(() => { expect(screen.getByRole('heading', { level: 2, name: 'Alpine Mills' })).toHaveFocus(); });
   });
 });

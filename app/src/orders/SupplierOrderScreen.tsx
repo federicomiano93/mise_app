@@ -52,12 +52,8 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   // «What they sell» button (a layout effect, so before this one), and the title must not take it away.
   const screen = useRef<HTMLElement>(null);
   const shown = supplier !== undefined;
-  // ⚠️ NOR FROM A TEXT FIELD OUTSIDE THIS SCREEN: on the split, a person may tap a row while the list is drawn from the local copy,
-  // then start typing in the search box; this screen mounts only when the live lists land, and must not take the keyboard away.
   useEffect(() => {
-    const active = document.activeElement;
-    const typing = active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement;
-    if (shown && cameFromList(state) && !screen.current?.contains(active) && !typing) title.current?.focus();
+    if (shown && cameFromList(state) && !screen.current?.contains(document.activeElement)) title.current?.focus();
   }, [shown]);
 
   // The column names stick right under the bar, whose height changes with the title's lines and the width.

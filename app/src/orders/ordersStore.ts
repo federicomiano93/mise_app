@@ -29,7 +29,7 @@
 // phone at once, and a key outside KEEP_PREFIXES would be one more thing a venue switch must wipe. T14 still holds for
 // config/orders and for the orders. The supplier and ingredient LIST COPY (`orders-list-copy`, shared/src/list-copy.ts) is a
 // separate thing: it lives OUTSIDE this store (useListCopy.ts), is never in the snapshot, and only draws the rows of the
-// supplier list while the live lists have not landed.
+// supplier list while the live lists have not landed (a supplier tapped meanwhile is held in OrdersSection.tsx until they do).
 
 import { stampFor } from '@mise/shared/order-day';
 import { parseISODate, todayISO } from '@mise/shared/day';

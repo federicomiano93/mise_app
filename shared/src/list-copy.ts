@@ -6,15 +6,16 @@
 // against the original.
 //
 // ⚠️ A PARTIAL PORT, SO parity.spec.ts DOES NOT PAIR IT. NOT PORTED (they are the page logic of the current app; in Mise 2 the
-// «hold» is the ADDRESS — a supplier's screen shows «Loading…» until suppliers, ingredients and the draft have all landed, and
-// then opens by itself — so nothing here needs to decide when the copy may be shown or which supplier to open):
+// hold of a tapped supplier lives in OrdersLayout and is a React state, and the questions these functions answer are answered
+// there by the store's flags — loaded, broken, serverSeen — and by the live lens, so nothing here needs to decide when the copy
+// may be shown, which supplier to open or when to write):
 //   - `bothLanded`, `shouldShowCopy` — when the current app paints the copy;
 //   - `supplierToOpen` — the supplier held until the live lists land;
 //   - `mayWriteCopy` — when the current app writes (Mise 2's hook asks its own store flags).
 //
 // ⚠️ THE COPY IS ONLY FOR LOOKING. It feeds the rows of the supplier list while the live lists have not landed, and nothing else:
 // it never enters the store or its snapshot, so alerts, the bell, the «Order today» chips and every supplier screen read live
-// data only.
+// data only. A supplier tapped meanwhile is held until the live data lands, and what opens something else is shut.
 //
 // ⚠️ ONLY WHAT A SUPPLIER CARD READS. No price (a manager's prices must not sit in this device's storage for an employee to
 // read), no contact, no allergen, no pack list (P8) — and a small value is also a fast one to parse the moment the section opens.
