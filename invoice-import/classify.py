@@ -48,13 +48,13 @@ FOOD_RE = re.compile(
     r"|confettura|crema|ricotta|mascarpone|formaggio|mozzarella)\b",
     re.I,
 )
-# Ready-made goods bought to be sold as they are. Looked at before FOOD_RE because the
-# food word is often only the filling («cornetto alla crema»).
+# Only bar and shelf goods sold as they are are resale (5 Oct 2026, from the first real import).
+# Ready-made FOOD (frozen croissants, panzerotti, sliced potatoes) is proposed as an ingredient,
+# because food cost and the order lists need it (owner's decision, 1 Nov 2026); a keyword list of
+# article prefixes let identical goods land on both sides. Looked at before FOOD_RE because the
+# food word is often only the filling.
 READY_RE = re.compile(
-    r"(?<!fecola di )patate|cornetto|panzerott|pasticciotto|treccia|sg\.cr|cr\.integrale|mini cr"
-    r"|tm cr|tm-midi|cipolle fette"
-    # Bar and shelf goods sold as they are (5 Oct 2026, from the first real import).
-    r"|\byog\.|yogurt|kefir|dolcificante|capsul|\bcaps\b|caff\S*\s*cialde",
+    r"\byog\.|yogurt|kefir|dolcificante|capsul|\bcaps\b|caff\S*\s*cialde",
     re.I,
 )
 PACKAGING_RE = re.compile(
@@ -66,7 +66,9 @@ PACKAGING_RE = re.compile(
     # or «zucchero … bustina» never land here.
     r"|alluminio|grembiul|palett|coprivassoi|carte pizzo|shopper|\bborsa\b|\bbags\b|caraffa"
     r"|coppetta|anticalcare|detersiv|sgrassa|igienizz|candeggin|pennello|asciugaman|organza"
-    r"|spolett|pentol|padell|\bpadel\b|guanti",
+    r"|spolett|pentol|padell|\bpadel\b|guanti"
+    # A potato peeler (the word «patate» no longer catches it as resale).
+    r"|pelapatate",
     re.I,
 )
 # Beverages are bought to be sold: resale, whatever the liquid.
@@ -134,6 +136,19 @@ def _count_after(d: str) -> int | None:
     return int(m.group(1)) if m and int(m.group(1)) > 1 else None
 
 
+def _counts_pieces_in_carton(before: str, size_kg: float, count: int) -> bool:
+    """«35/40gr 2Kg* 55pz»: the piece weight is written too, and 55 pieces of 35–40 g ARE the
+    2 kg, so the 55 counts pieces in one carton, not cartons (real invoice, 1 Nov 2026: read as
+    110 kg, a believable-looking 0.13 €/kg)."""
+    m = re.search(r"(?<![\d/.,])(\d+)(?:\s*/\s*(\d+))?\s*GR?\b", before)
+    if not m:
+        return False
+    low = int(m.group(1))
+    high = int(m.group(2)) if m.group(2) else low
+    grams = (low + high) / 2 * count
+    return abs(grams - size_kg * 1000) <= size_kg * 1000 * 0.25
+
+
 def parse_pack(description: str) -> PackInfo | None:
     d = (description or "").upper()
     # "1/2KG", "1/4 KG": a fraction of a unit. Without this the "2KG" inside "1/2KG" reads as
@@ -144,7 +159,10 @@ def parse_pack(description: str) -> PackInfo | None:
     # "2,5kg* 4pz", "85gr* 50pz", "2,5 KG X 4", "1kgx6", "7gx80"
     m = re.search(_NUM + r"\s*(KG|GR|G)\.?\s*[*X]\s*(\d+)(?!\d)", d)
     if m:
-        return PackInfo(_f(m.group(1)), "kg" if m.group(2) == "KG" else "g", int(m.group(3)))
+        size, count = _f(m.group(1)), int(m.group(3))
+        if m.group(2) == "KG" and _counts_pieces_in_carton(d[: m.start()], size, count):
+            return PackInfo(size, "kg", None)
+        return PackInfo(size, "kg" if m.group(2) == "KG" else "g", count)
     # "PZ.50 GR.85": pieces first, then grams each
     m = re.search(r"\bPZ\.?\s*(\d+)\s*GR\.?\s*(\d+)", d)
     if m:

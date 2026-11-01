@@ -37,13 +37,13 @@ const FOOD_RE = new RegExp(
   `${B_START}(zucchero|farina|semola|sale|lievito|burro|margarina|strutto|olio|uova|uovo|latte|panna`
   + `|cacao|cioccolato|miele|mandorl${WORD}*|nocciol${WORD}*|pistacch${WORD}*|noci|uvetta|canditi|marmellata`
   + `|confettura|crema|ricotta|mascarpone|formaggio|mozzarella)${B_END}`, 'iu');
-// Ready-made goods bought to be sold as they are. Looked at before FOOD_RE because the
-// food word is often only the filling («cornetto alla crema»).
+// Only bar and shelf goods sold as they are are resale (5 Oct 2026, from the first real import).
+// Ready-made FOOD (frozen croissants, panzerotti, sliced potatoes) is proposed as an ingredient,
+// because food cost and the order lists need it (owner's decision, 1 Nov 2026); a keyword list of
+// article prefixes let identical goods land on both sides. Looked at before FOOD_RE because the
+// food word is often only the filling.
 const READY_RE = new RegExp(
-  '(?<!fecola di )patate|cornetto|panzerott|pasticciotto|treccia|sg\\.cr|cr\\.integrale|mini cr'
-  + '|tm cr|tm-midi|cipolle fette'
-  // Bar and shelf goods sold as they are (5 Oct 2026, from the first real import).
-  + `|${B_START}yog\\.|yogurt|kefir|dolcificante|capsul|${B_START}caps${B_END}|caff\\S*\\s*cialde`, 'iu');
+  `${B_START}yog\\.|yogurt|kefir|dolcificante|capsul|${B_START}caps${B_END}|caff\\S*\\s*cialde`, 'iu');
 const PACKAGING_RE = new RegExp(
   'sh\\. ml|b\\.sch|grattugia|flacone|posate|asciugamano|vasch\\.caldo|rotolo|buste|carta |carta$'
   + '|sacch|cont\\. plastica|fogli pol|pellicola|stagnola|vaschette|box +pizza|velina|bicch|tappo'
@@ -53,7 +53,9 @@ const PACKAGING_RE = new RegExp(
   // or «zucchero … bustina» never land here.
   + `|alluminio|grembiul|palett|coprivassoi|carte pizzo|shopper|${B_START}borsa${B_END}|${B_START}bags${B_END}|caraffa`
   + `|coppetta|anticalcare|detersiv|sgrassa|igienizz|candeggin|pennello|asciugaman|organza`
-  + `|spolett|pentol|padell|${B_START}padel${B_END}|guanti`, 'iu');
+  + `|spolett|pentol|padell|${B_START}padel${B_END}|guanti`
+  // A potato peeler (the word «patate» no longer catches it as resale).
+  + '|pelapatate', 'iu');
 // Beverages are bought to be sold: resale, whatever the liquid.
 const BEVERAGE_RE = new RegExp(
   ['coca cola', `${B_START}acqua${B_END}`, 'birra', 'redbull', 'succo', `${B_START}the${B_END}`, 'fanta', 'sprite',
@@ -119,6 +121,18 @@ const P_LT = new RegExp(`${B_START}LT\\.?\\s*${NUM}|${NUM}\\s*(?:LT|L)${B_END}`,
 const P_ML = new RegExp(`${B_START}ML\\.?\\s*(\\d+)|(\\d+)\\s*ML${B_END}`, 'u');
 const P_CL = new RegExp(`(\\d+)\\s*CL${B_END}`, 'u');
 
+// «35/40gr 2Kg* 55pz»: the piece weight is written too, and 55 pieces of 35–40 g ARE the 2 kg, so the 55 counts
+// pieces in one carton, not cartons (real invoice, 1 Nov 2026: read as 110 kg, a believable-looking 0.13 €/kg).
+const P_PIECE_G = new RegExp(`(?<![\\d/.,])(\\d+)(?:\\s*/\\s*(\\d+))?\\s*GR?${B_END}`, 'u');
+function countsPiecesInCarton(before, sizeKg, count) {
+  const m = P_PIECE_G.exec(before);
+  if (!m) return false;
+  const low = Number(m[1]);
+  const high = m[2] ? Number(m[2]) : low;
+  const grams = ((low + high) / 2) * count;
+  return Math.abs(grams - sizeKg * 1000) <= sizeKg * 1000 * 0.25;
+}
+
 export function parsePack(description) {
   let d = String(description || '').toUpperCase();
   // "1/2KG", "1/4 KG": a fraction of a unit. Without this the "2KG" inside "1/2KG" reads as
@@ -127,7 +141,12 @@ export function parsePack(description) {
 
   // "2,5kg* 4pz", "85gr* 50pz", "2,5 KG X 4", "1kgx6", "7gx80"
   let m = P_KG_X.exec(d);
-  if (m) return packInfo(f(m[1]), m[2] === 'KG' ? 'kg' : 'g', Number(m[3]));
+  if (m) {
+    const size = f(m[1]);
+    const count = Number(m[3]);
+    if (m[2] === 'KG' && countsPiecesInCarton(d.slice(0, m.index), size, count)) return packInfo(size, 'kg', null);
+    return packInfo(size, m[2] === 'KG' ? 'kg' : 'g', count);
+  }
   // "PZ.50 GR.85": pieces first, then grams each
   m = P_PZ_GR.exec(d);
   if (m) return packInfo(Number(m[2]), 'g', Number(m[1]));
