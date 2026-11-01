@@ -38,7 +38,7 @@ import { buildSupplierItems } from './supplier-items.js';
 import { buildOrderSummaryView } from './order-summary-view.js';
 import { paintOrderMoney } from './order-cost-view.js';
 import {
-  scheduleDraftSave, saveDraftNow, flushDraftSave, watchDraft, archiveSupplier, clearSupplier,
+  scheduleDraftSave, saveDraftNow, flushDraftSave, flushDraftWhenHidden, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
   confirmDelivery, resolveMissing, dropDeletedIngredientFromDraft, freezeUnitInDraft,
 } from './draft.js';
@@ -2995,6 +2995,7 @@ async function init() {
     if (ok) clearStatusIf(t(DRAFT_SAVE_ERROR_KEY));
     else setStatus(t(DRAFT_SAVE_ERROR_KEY), 'error');
   });
+  flushDraftWhenHidden();
 
   document.getElementById('place-all-btn')?.addEventListener('click', whenLive(openPlaceAllScreen));
   document.getElementById('clear-all-btn')?.addEventListener('click', whenLive(openClearScreen));
@@ -3076,6 +3077,9 @@ async function init() {
     state.days = draft.days || {};
     state.draftUpdatedAt = draft.updatedAt;
     state.loaded.draft = true;
+    // ⚠️ A line a page left behind has just come back, maybe with last night's day stamp, and the
+    // question «this was never placed» was asked before it was here.
+    if (draft.cameBack) pendingChecked = false;
     // Everything below is stored at once and drawn in one pass next frame (scheduleRender).
     if (overrideSignature(state.entries) !== overridesBefore
       || noteHeld(state.ingredients, state.entries, heldNotInUse) !== heldBefore) scheduleRender('list');
