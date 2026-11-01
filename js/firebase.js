@@ -1093,12 +1093,22 @@ export function readOldLogsOnce() {
 // products and per-client weights for the three dough tabs (+ the market order).
 
 // Subscribe to the config document in real time. onChange receives the raw data
-// object, or null when the document does not exist yet (fresh project).
+// object, or null when the document does not exist yet (fresh project), and as its
+// second argument whether the answer came from Firestore's offline copy rather than
+// the server — calculator-config-store.js must not take a cached "no document" for
+// the server's word.
+//
+// ⚠️ includeMetadataChanges, because the store sets that cached "no document" aside
+// and waits: when the server then says the same nothing, only the metadata changes,
+// and without this option that answer is never delivered — a brand-new location
+// would sit on «Loading…» for ever. It costs no reads: a repaint when the phone goes
+// offline or comes back.
 export function watchCalculatorConfig(onChange) {
   authReady.then(() => {
     onSnapshot(
       doc(db, pathFor('config'), 'calculator'),
-      snap => onChange(snap.exists() ? snap.data() : null),
+      { includeMetadataChanges: true },
+      snap => onChange(snap.exists() ? snap.data() : null, snap.metadata.fromCache),
       err => { console.error('Config listener failed:', err); },
     );
   }).catch(err => {
@@ -1181,13 +1191,26 @@ export function watchCatalogueRecipe(id, onChange) {
 // straight back to matching by name, which is the defect being designed out.
 //
 // withRowIds is idempotent: rows that already have a unique id come back
-// byte-identical, so this can never disturb a recipe that has been saved since.
-export function stampRecipeRowIds(id, ingredients) {
-  return authReady.then(() => setDoc(
-    doc(db, pathFor('recipes'), id),
-    { ingredients },
-    { merge: true },
-  ));
+// byte-identical.
+//
+// ⚠️ A TRANSACTION ON THE RECIPE AS IT IS NOW, NEVER A COPY READ EARLIER. The list the
+// Calculator offers is read when its Recipes screen opens, and writing that copy back
+// replaced the whole ingredients array: a correction made in the Recipe catalogue since then,
+// on another phone, was silently undone (code review, 30 Oct 2026). `stamp(rows)` returns the
+// stamped rows, or null when every row already has its id — and then nothing is written.
+// Resolves the rows now stored, or null when the recipe no longer exists.
+export function stampRecipeRowIds(id, stamp) {
+  return authReady.then(() => runTransaction(db, async (tx) => {
+    const ref = doc(db, pathFor('recipes'), id);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    const rows = Array.isArray(data.ingredients) ? data.ingredients : [];
+    const stamped = stamp(rows);
+    if (!stamped) return rows;
+    tx.set(ref, { ingredients: stamped }, { merge: true });
+    return stamped;
+  }));
 }
 
 // The Catalogue's recipes, for the picker that links one to a Calculator tab.

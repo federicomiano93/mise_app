@@ -66,9 +66,16 @@ test('no workflow grants a Google identity outside a job', () => {
   }
 });
 
+// The two deploy jobs run firebase-tools, so they install it (the rules below). The job that
+// deletes a closed PR's preview channel needs nothing but curl, so it installs NOTHING — a
+// stricter rule than `--ignore-scripts`, with its own test at the end.
+const DEPLOY_JOBS = ['preview.yml: preview', 'test.yml: deploy-functions'];
+const INSTALL_NOTHING = ['preview.yml: delete-channel'];
+const deployJobs = signingJobs.filter((job) => DEPLOY_JOBS.includes(job.id));
+
 // A guard on the guard: a new job that can sign in to Google must be looked at here, not slip past.
-test('the jobs that can sign in to Google are exactly the two deploy jobs', () => {
-  assert.deepEqual(signingJobs.map((job) => job.id).sort(), ['preview.yml: preview', 'test.yml: deploy-functions']);
+test('the jobs that can sign in to Google are exactly the two deploy jobs and the channel cleanup', () => {
+  assert.deepEqual(signingJobs.map((job) => job.id).sort(), [...DEPLOY_JOBS, ...INSTALL_NOTHING].sort());
 });
 
 test('each signs in once, and after the sign-in nothing is installed and no action runs', () => {
@@ -83,8 +90,8 @@ test('each signs in once, and after the sign-in nothing is installed and no acti
   }
 });
 
-test('every install in those jobs is npm ci / npm install with --ignore-scripts', () => {
-  for (const job of signingJobs) {
+test('every install in the deploy jobs is npm ci / npm install with --ignore-scripts', () => {
+  for (const job of deployJobs) {
     const tools = lines(job.text).filter((line) => PACKAGE_TOOL.test(line) && !/\bnpm audit\b/.test(line));
     assert.ok(tools.length > 0, `${job.id}: installs nothing — has the job changed shape?`);
     for (const line of tools) {
@@ -110,7 +117,7 @@ const LOCKED_INSTALL = new RegExp([
 const RUNS_FIREBASE = /(^|[\s;&|(])firebase\s/m;
 
 test('firebase-tools is installed from its lockfile in its own step before the sign-in', () => {
-  for (const job of signingJobs) {
+  for (const job of deployJobs) {
     const body = code(job.text);
     const steps = [...body.matchAll(LOCKED_INSTALL)];
     assert.equal(steps.length, 1, `${job.id}: no step of its own installing firebase-tools from ci/firebase-tools`);
@@ -220,4 +227,18 @@ test('the preview job runs the same gate before it installs firebase-tools', () 
   assert.deepEqual(gate.lines, GATE_LINES);
   assert.ok(gate.start < preview.search(LOCKED_INSTALL), 'the gate must come BEFORE the install');
   assert.doesNotMatch(preview, /^ {4}continue-on-error:/m);
+});
+
+// It holds a credential to the preview project only for one HTTP call, so it needs no package and
+// no action besides the sign-in: none may creep in (a checkout to run `firebase` would bring both).
+test('the channel cleanup installs nothing and runs no action but the sign-in', () => {
+  const cleanup = signingJobs.filter((job) => INSTALL_NOTHING.includes(job.id));
+  assert.equal(cleanup.length, INSTALL_NOTHING.length);
+  for (const job of cleanup) {
+    const all = lines(job.text);
+    assert.deepEqual(all.filter((line) => PACKAGE_TOOL.test(line) || /\bfirebase\b/.test(line)), [],
+      `${job.id}: installs or runs a package`);
+    assert.deepEqual(all.filter((line) => /^\s*(- )?uses:/.test(line)).map((line) => line.trim()),
+      ['uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13'], `${job.id}: the sign-in is its only action`);
+  }
 });

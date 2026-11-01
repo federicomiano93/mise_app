@@ -237,7 +237,9 @@ export function renderEditor({ day, items, note, allDays, app }) {
     oninput: (e) => { workingNote = e.target.value; markDirty(); },
   });
 
-  return el('div', { class: 'pas-view' }, [
+  // `pas-editor` names this screen to the update gate (js/update-gate.js): the day is
+  // saved whole, so a release reload mid-edit would throw the whole working copy away.
+  return el('div', { class: 'pas-view pas-editor' }, [
     datalist,
     el('div', { class: 'pas-editor-head' }, [
       el('span', { class: 'pas-editor-heading', text: t('past.toProveFor', { day: weekdayLabel(day) }) }),

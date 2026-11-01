@@ -254,6 +254,14 @@ export function usesOrders(logic) { return logic === 'orders' || logic === 'both
 export function usesTypedTotal(logic) { return logic === 'total' || logic === 'both' || logic === 'traysTotal'; }
 // Logics that take a number of trays.
 export function usesTrays(logic) { return logic === 'trays' || logic === 'traysTotal'; }
+// The trays an exported recipe's title may name («Pizza x 3»): only when the dough IS the trays — a
+// trays recipe, or a trays-plus-total one with nothing typed in the total — otherwise 0 and the
+// title says the grams. Shared by the Calculator now and the Recipe catalogue's export next.
+export function exportTraysFor(logic, trays, typedTotal) {
+  const traysOnly = logic === 'trays' || (logic === 'traysTotal' && !(Number(typedTotal) > 0));
+  const n = Math.floor(Number(trays));
+  return traysOnly && n > 0 ? n : 0;
+}
 // Logics that scale pro-rata with the leavening neutralised (no orders to adjust it for).
 export function isProRata(logic) { return logic === 'total' || usesTrays(logic); }
 
@@ -410,6 +418,22 @@ export function recipeSpec(recipe) {
     ? recipe.leaveningKey : null;
   const baselinePct = (recipe && Number.isFinite(Number(recipe.baselinePct))) ? Number(recipe.baselinePct) : null;
   return { amounts, leaveningKey, baselinePct };
+}
+
+// The ingredients in a new order: the one at `from` moved to `to`. A NEW list holding the
+// SAME row objects, so each row keeps its `key` (the leavening is found by it). An index
+// outside the list, or a move to where it already is, gives the list back as it was.
+// ⚠️ A deliberate copy of the Catalogue's moveRow (js/catalogue/catalogue-model.js): cheap,
+// and a feature may not import from another feature's folder.
+export function moveIngredient(list, from, to) {
+  const rows = Array.isArray(list) ? list.slice() : [];
+  const a = Math.trunc(Number(from));
+  const b = Math.trunc(Number(to));
+  if (!Number.isInteger(a) || !Number.isInteger(b) || a === b
+    || a < 0 || b < 0 || a >= rows.length || b >= rows.length) return rows;
+  const [row] = rows.splice(a, 1);
+  rows.splice(b, 0, row);
+  return rows;
 }
 
 // The saved independent WhatsApp lists (empty array for a missing/garbage config).
@@ -927,17 +951,30 @@ function normalizeRecipe(raw, index) {
   const id = String(raw.id || ('r-' + (slug(name) || index)));
   const logic = LOGICS.includes(raw.logic) ? raw.logic : 'orders';
 
-  const ingredients = [];
+  // ⚠️ ROWS THAT ALREADY HAVE A KEY CLAIM IT FIRST, then the new ones (no key yet) get theirs.
+  // A new row's key is made from its name, and when two rows ask for the same key the first
+  // one in the list used to win. Since the ingredients can be reordered (29 Oct 2026), a new
+  // «Yeast» dragged above the saved Yeast would have taken the key `yeast` — and the leavening,
+  // which is found by that key, would have moved onto the new row, changing every dough.
+  // Rows that all have keys, or none, are keyed exactly as before.
   const usedKeys = new Set();
   const rawIngs = Array.isArray(raw.ingredients) ? raw.ingredients : [];
+  const rows = [];
   rawIngs.forEach((ri, i) => {
     const row = normalizeIngredientRow(ri, i);
-    if (!row) return;
-    let key = row.key;
-    while (usedKeys.has(key)) key = key + '-' + i; // keep keys unique within the recipe
-    usedKeys.add(key);
-    ingredients.push({ key, label: row.label, grams: row.grams });
+    if (row) rows.push({ row, i, saved: !!ri.key });
   });
+  const keyOf = new Map();
+  for (const pass of [true, false]) {
+    for (const r of rows) {
+      if (r.saved !== pass) continue;
+      let key = r.row.key;
+      while (usedKeys.has(key)) key = key + '-' + r.i; // keep keys unique within the recipe
+      usedKeys.add(key);
+      keyOf.set(r, key);
+    }
+  }
+  const ingredients = rows.map(r => ({ key: keyOf.get(r), label: r.row.label, grams: r.row.grams }));
 
   const leaveningKey = (raw.leaveningKey && usedKeys.has(String(raw.leaveningKey)))
     ? String(raw.leaveningKey) : null;

@@ -85,8 +85,8 @@ test('the monthly actions pull request gets no preview, and nothing else is left
   const sameRepo = 'github.event.pull_request.head.repo.full_name == github.repository';
   const notActionsBump = "!startsWith(github.head_ref, 'dependabot/github_actions/')";
   const expected = {
-    'build-mise2': `    if: ${sameRepo} && ${notActionsBump}`,
-    preview: `    if: \${{ !cancelled() && ${sameRepo} && ${notActionsBump} }}`,
+    'build-mise2': `    if: github.event.action != 'closed' && ${sameRepo} && ${notActionsBump}`,
+    preview: `    if: \${{ !cancelled() && github.event.action != 'closed' && ${sameRepo} && ${notActionsBump} }}`,
   };
   for (const [job, line] of Object.entries(expected)) {
     const start = preview.indexOf(`\n  ${job}:\n`);

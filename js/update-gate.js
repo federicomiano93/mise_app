@@ -54,6 +54,14 @@ export const BUSY_SELECTORS = Object.freeze([
   '.fc-editor',
   // The hourly labour cost being typed (Food cost Settings): a reload drops the number.
   '.fc-settings',
+  // ⚠️ A PASTRIES DAY BEING EDITED. Added 25 Oct 2026 (audit): the day is saved WHOLE from
+  // the editor's working copy, so a reload mid-edit throws every pastry typed away. The
+  // editor is built when it opens and swapped out when it closes.
+  '.pas-editor',
+  // ⚠️ AN INVOICE IMPORT HOLDING DECISIONS. Added 25 Oct 2026 (audit): the suppliers linked,
+  // the rows ticked and the questions answered live only on this screen until the import
+  // runs. The class is on exactly while Back would ask before throwing them away.
+  '.invimp-unsaved',
   '.guided-edit',               // writing a mixing procedure
   // ⚠️ A guided mix in progress. An update RELOADS the page, and doing that to
   // somebody standing at a mixer with a timer running is the worst moment this

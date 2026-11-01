@@ -76,7 +76,10 @@ test('⚠️⚠️ the rate is watched, and its screen offered, only to whoever 
     'an employee never starts the listener');
   assert.match(store, /return \{ recipes, ingredients, labourCostPerHour \};/, 'the rate rides in the tables every figure is worked from');
   assert.doesNotMatch(store, /writeJson\([^)]*labour/i, 'the rate is never mirrored to localStorage on a shared phone');
-  const save = store.slice(store.indexOf('export function saveProduct('), store.indexOf('const prev = products.find'));
+  // The fields every save writes live in productDocument(), used by saveProduct and by the
+  // products made from the recipe book alike (28 Oct 2026).
+  assert.match(store, /const data = productDocument\(product\);/);
+  const save = store.slice(store.indexOf('function productDocument('), store.indexOf('export async function createProductsFromRecipes'));
   assert.match(save, /labourMinutes: product\.labourMinutes \?\? null,/);
   assert.match(save, /labourPeople: product\.labourPeople \?\? null,/);
 

@@ -397,6 +397,9 @@ const orderingAccounts = new Map(); // clientId -> { uid, linkToken }
 
 async function loadOrderingAccounts() {
   orderingAccounts.clear();
+  // Only those who can manage the Calculator may read the links (firestore.rules,
+  // client-accounts): asking for anybody else would only collect a refusal.
+  if (currentSession().canManage !== true) return;
   try {
     for (const account of await listOrderingAccounts()) {
       if (account && account.clientId) orderingAccounts.set(account.clientId, account);
@@ -450,21 +453,30 @@ function orderingLinkField(client) {
     return field;
   }
 
+  // ⚠️ canManage, not isOwner: firestore.rules gates the client-ordering account
+  // on canManage(lid, 'calculator'), so a manager really can mint and revoke one.
+  // Asking isOwner here would draw the sentence for a button the database would
+  // have allowed — a screen that refuses what the rules permit is its own bug.
+  //
+  // ⚠️ AND NOBODY ELSE SEES THE LINK AT ALL (audit, 25 Oct 2026). Its secret is the
+  // ordering account's password, so the rules let only those who mint and revoke links
+  // read them: «Copy» and «Send» used to hand it to every employee, who kept a way to
+  // order as that client after leaving. An employee cannot even learn which clients
+  // have one, so the sentence names who looks after it and promises neither answer.
+  const canManage = currentSession().canManage === true;
+  if (!canManage) {
+    field.appendChild(el('p', { class: 'cp-hint' }, t('calc.orderingLinkManagersOnly')));
+    return field;
+  }
+
   const account = orderingAccounts.get(client.id);
   const link = account && account.linkToken ? orderingLinkFor(account.linkToken) : '';
 
   // The sentence has to follow what this person can actually do, or it promises
   // a button that is not there and reads as a broken screen.
-  // ⚠️ canManage, not isOwner: firestore.rules gates the client-ordering account
-  // on canManage(lid, 'calculator'), so a manager really can mint and revoke one.
-  // Asking isOwner here would draw the sentence for a button the database would
-  // have allowed — a screen that refuses what the rules permit is its own bug.
-  const canManage = currentSession().canManage === true;
   field.appendChild(el('p', { class: 'cp-hint' }, account
     ? t('calc.clientCanSendOrders', { client: client.name })
-    : canManage
-      ? t('calc.createALinkAnd')
-      : t('calc.thisClientCannotOrder')));
+    : t('calc.createALinkAnd')));
 
   if (account && link) {
     const copy = el('button', { class: 'cp-add-prod', type: 'button' }, t('calc.copyLink'));
@@ -509,15 +521,9 @@ function orderingLinkField(client) {
       make.disabled = false;
     }
   });
-  // ⚠️ MINTING AND REVOKING ARE OWNER-ONLY; COPYING AND SENDING ARE NOT.
-  // Handing an account to somebody outside the business, or cutting one off
-  // mid-order, is granting and removing access — the owner's job, and the rules
-  // refuse it from anybody else. Passing an EXISTING link on to the client who
-  // already has it is an errand, so "Copy link" and "Send on WhatsApp" above
-  // stay available to whoever is at the counter.
-  if (canManage) field.appendChild(make);
+  field.appendChild(make);
 
-  if (account && canManage) {
+  if (account) {
     const revoke = el('button', { class: 'cp-link-revoke', type: 'button' }, t('calc.turnOffOrdering'));
     revoke.addEventListener('click', async () => {
       if (!(await confirmDialog({

@@ -36,6 +36,7 @@ import {
   deleteDoc,
   onSnapshot,
   writeBatch,
+  runTransaction,
   query,
   orderBy,
   limit,
@@ -133,6 +134,27 @@ export async function saveProductWithSnapshot(id, data, snapshot) {
   if (snapshot) batch.set(doc(collection(ref, SNAPSHOTS)), withBakery(snapshot));
   await batch.commit();
   return ref.id;
+}
+
+// Create a product ONLY IF NO DOCUMENT HAS ITS ID YET — the products made from the recipe
+// book, whose id comes from their recipe (js/foodcost/from-recipes.js). Resolves true when
+// it was created, false when it was already there.
+//
+// ⚠️ A TRANSACTION, NOT A SET. The list on this phone can be an old offline copy (the
+// Firestore cache answers first, and offline it is the only answer), and a set at a fixed
+// id would overwrite a product another device has filled in since — price, pieces, VAT, all
+// gone, with no margin point to show it. A transaction reads the SERVER first; offline it
+// fails instead of queueing, which is the right answer for a bulk create: nothing lands
+// later on top of anybody's work.
+export async function createProductIfAbsent(id, data) {
+  await authReady;
+  const ref = doc(db, pathFor(PRODUCTS), id);
+  return runTransaction(db, async tx => {
+    const snap = await tx.get(ref);
+    if (snap.exists()) return false;
+    tx.set(ref, withBakery(data));
+    return true;
+  });
 }
 
 // The oven loss a person weighed on a product's recipe line, written onto the RECIPE —
