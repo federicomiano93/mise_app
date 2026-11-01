@@ -216,6 +216,10 @@ export function normalizeCatalogueRecipe(raw) {
   if (netG > 0) out.netWeightG = netG;
   const shelf = normalizeShelfLifeDays(raw.shelfLifeDays);
   if (shelf !== null) out.shelfLifeDays = shelf;
+  // The category the recipe is filed under: absent rather than empty, like everything above.
+  // ⚠️ KEPT AS STORED, whether or not the venue's list still has the word: a word taken off the
+  // list reads as «no category» (recipe-categories-model.js) and comes back if it is put back.
+  if (typeof raw.category === 'string' && raw.category.trim()) out.category = raw.category.trim();
   return out;
 }
 

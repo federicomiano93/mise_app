@@ -155,11 +155,15 @@ export async function watchSuppliers(onChange, onError) {
 // ⚠️ AND A MISSING DOCUMENT IS NOT AN ERROR. No venue has one until somebody opens
 // Settings; normalizeLabelProfile(null) answers with the defaults, which is why this
 // emits null rather than refusing.
+//
+// The second argument says whether the answer came from this phone's own cache: a missing document
+// there does not mean the venue has none, which is what the whole-list write of the recipe categories
+// needs to know (catalogue-store.js recipeCategoriesLoaded).
 export async function watchLabelConfig(onChange, onError) {
   await authReady;
   return onSnapshot(
     doc(db, pathFor(CONFIG), LABELS_DOC),
-    snap => onChange(snap.exists() ? snap.data() : null),
+    snap => onChange(snap.exists() ? snap.data() : null, snap.metadata.fromCache),
     err => { console.warn('watchLabelConfig failed:', err); if (onError) onError(err); },
   );
 }
@@ -208,7 +212,7 @@ export async function watchPrintAgents(onChange, onError) {
 
 // The recipe fields a person can EMPTY. A merge never deletes a key it is not sent, and
 // the rules refuse a stored null, so an emptied box travels as a removal.
-const CLEARABLE_RECIPE_FIELDS = ['netWeightG', 'shelfLifeDays'];
+const CLEARABLE_RECIPE_FIELDS = ['netWeightG', 'shelfLifeDays', 'category'];
 
 // Create or merge a recipe document at a known id (id is generated client-side).
 export async function saveRecipeDoc(id, data) {

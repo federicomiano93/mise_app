@@ -30,6 +30,7 @@ import {
   newRecipeId,
 } from './firebase-catalogue.js';
 import { normalizeLabelProfile } from './label-template-model.js';
+import { normalizeRecipeCategories } from './recipe-categories-model.js';
 import { buildJob, printerPresence } from '../print-queue-model.js';
 import { currentSession } from '../firebase.js';
 import { currentLocationId } from '../location.js';
@@ -49,6 +50,8 @@ let recipes = readCache();
 let ingredients = readIngredientCache();
 let suppliers = readJsonMap(SUPPLIERS_KEY);
 let labelConfig = readJson(LABEL_CONFIG_KEY);
+// Has the listener given a real answer about config/labels? See recipeCategoriesLoaded().
+let labelConfigAnswered = false;
 // ⚠️ NOT CACHED TO localStorage, deliberately, unlike everything else here. A
 // heartbeat is a statement about RIGHT NOW; a remembered one would tell a phone
 // that opened offline that the shop computer is listening, which is the one
@@ -136,9 +139,10 @@ export function initCatalogue(onUpdate, onError) {
   // a venue that has never opened label Settings has no document at all, and the
   // defaults are the right answer for it.
   watchLabelConfig(
-    remote => {
+    (remote, fromCache) => {
       labelConfig = remote;
       writeJson(LABEL_CONFIG_KEY, remote);
+      if (remote || !fromCache) labelConfigAnswered = true;
       if (notify) notify(recipes);
     },
     () => {},
@@ -215,6 +219,26 @@ export async function saveLabelProfile(patch) {
     throw err;
   }
   return getLabelProfile();
+}
+
+// ── The recipe categories ────────────────────────────────────────────────────
+
+// The venue's list, as stored and made safe, in no particular order: the screens sort it. Read from
+// the document itself because normalizeLabelProfile() keeps only what a label needs.
+export function getRecipeCategories() {
+  return normalizeRecipeCategories(labelConfig && labelConfig.recipeCategories);
+}
+
+// ⚠️ THE LIST IS WRITTEN WHOLE, so changing it before the listener has answered would overwrite the
+// saved list with this phone's guess — the list empty, on a phone that never opened this venue. The
+// Settings card waits for this. A missing document from this phone's own cache is no answer either.
+export function recipeCategoriesLoaded() {
+  return labelConfigAnswered;
+}
+
+// The whole list, local-first with the label profile's own rollback. Rejects when the database refuses.
+export function saveRecipeCategories(list) {
+  return saveLabelProfile({ recipeCategories: list });
 }
 
 // ── Ingredients and suppliers (read-only, owned by Orders) ────────────────────
@@ -370,12 +394,18 @@ export function saveRecipe(recipe) {
   // field this object does not send is a field it cannot put back: a recipe opened
   // here before somebody weighed it in Food cost, and saved after, keeps the new
   // number. Sending the copy this screen read would silently undo it.
+  //
+  // ⚠️ THE CATEGORY TRAVELS ONLY WHEN THE EDITOR'S MENU MOVED IT (`categoryMoved`), on the same
+  // reasoning: saving the steps or fixing a typo must not write back the category this screen read,
+  // over a change made on another phone — nor strip a recipe of a word the list no longer has. An
+  // emptied choice is null, which saveRecipeDoc() sends as a removal: the rules refuse an empty word.
+  if (recipe.categoryMoved === true) data.category = recipe.category || null;
   const id = recipe.id || newRecipeId();
   const prev = recipes.find(r => r.id === id) || null;
   // …and the list on screen keeps them too, for the same reason: the write leaves the
   // document's loss alone, so the local copy must not drop it until the next snapshot.
   const kept = {};
-  if (prev) ['lossPct', 'rawGrams', 'cookedGrams'].forEach(k => { if (prev[k] !== undefined) kept[k] = prev[k]; });
+  if (prev) ['lossPct', 'rawGrams', 'cookedGrams', 'category'].forEach(k => { if (prev[k] !== undefined) kept[k] = prev[k]; });
   upsertLocal({ ...kept, id, ...data });
   saveRecipeDoc(id, data).catch(err => {
     console.warn('Recipe did not sync to Firestore:', err);
