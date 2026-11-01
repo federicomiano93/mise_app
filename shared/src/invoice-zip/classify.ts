@@ -86,8 +86,10 @@ function fractionText(a: number, b: number): string {
   return Number.isInteger(x) ? x.toFixed(1) : String(x);
 }
 
-const FRACTION_RE = new RegExp(`(?<![\\d/])(\\d)\\s*/\\s*(\\d)(?=\\s*(?:KG|GR|G|LT|L|ML)${B_END})`, 'gu');
-const P_KG_X = new RegExp(`${NUM}\\s*(KG|GR|G)\\.?\\s*[*X]\\s*(\\d+)(?!\\d)`, 'u');
+// A bare K is a kilo only in the shape «2,5k* 4pz», as older invoices of one supplier write it: never in a code.
+const BARE_K = 'K(?=\\s*\\*\\s*\\d+\\s*PZ)';
+const FRACTION_RE = new RegExp(`(?<![\\d/])(\\d)\\s*/\\s*(\\d)(?=\\s*(?:(?:KG|GR|G|LT|L|ML)${B_END}|${BARE_K}))`, 'gu');
+const P_KG_X = new RegExp(`${NUM}\\s*(KG|${BARE_K}|GR|G)\\.?\\s*[*X]\\s*(\\d+)(?!\\d)`, 'u');
 const P_PZ_GR = new RegExp(`${B_START}PZ\\.?\\s*(\\d+)\\s*GR\\.?\\s*(\\d+)`, 'u');
 const P_UNIT_FIRST = new RegExp(`(?<![A-Z])(ML|CL|LT|L|GR|G|KG)\\s*\\.?\\s*${NUM}\\s*[X×*]\\s*(\\d+)(?!\\d)`, 'u');
 const P_KG_NUM_X = new RegExp(`${B_START}KG\\.?\\s*${NUM}\\s*X\\s*(\\d+)(?!\\d)`, 'u');
@@ -100,6 +102,18 @@ const P_LT = new RegExp(`${B_START}LT\\.?\\s*${NUM}|${NUM}\\s*(?:LT|L)${B_END}`,
 const P_ML = new RegExp(`${B_START}ML\\.?\\s*(\\d+)|(\\d+)\\s*ML${B_END}`, 'u');
 const P_CL = new RegExp(`(\\d+)\\s*CL${B_END}`, 'u');
 
+// «35/40gr 2Kg* 55pz»: the piece weight is written too, and 55 pieces of 35–40 g ARE the 2 kg, so the 55 counts
+// pieces in one carton, not cartons (real invoice, 1 Nov 2026: read as 110 kg, a believable-looking 0.13 €/kg).
+const P_PIECE_G = new RegExp(`(?<![\\d/.,])(\\d+)(?:\\s*/\\s*(\\d+))?\\s*GR?${B_END}`, 'u');
+function countsPiecesInCarton(before: string, sizeKg: number, count: number): boolean {
+  const m = P_PIECE_G.exec(before);
+  if (!m) return false;
+  const low = Number(m[1]);
+  const high = m[2] ? Number(m[2]) : low;
+  const grams = ((low + high) / 2) * count;
+  return Math.abs(grams - sizeKg * 1000) <= sizeKg * 1000 * 0.15;
+}
+
 export function parsePack(description?: unknown): PackInfo | null {
   let d = String(description || '').toUpperCase();
   // "1/2KG", "1/4 KG": a fraction of a unit. Without this the "2KG" inside "1/2KG" reads as
@@ -109,7 +123,13 @@ export function parsePack(description?: unknown): PackInfo | null {
 
   // "2,5kg* 4pz", "85gr* 50pz", "2,5 KG X 4", "1kgx6", "7gx80"
   let m = P_KG_X.exec(d);
-  if (m) return packInfo(f(m[1]), m[2] === 'KG' ? 'kg' : 'g', Number(m[3]));
+  if (m) {
+    const size = f(m[1]);
+    const count = Number(m[3]);
+    const kilos = (m[2] as string).startsWith('K');
+    if (kilos && countsPiecesInCarton(d.slice(0, m.index), size, count)) return packInfo(size, 'kg', null);
+    return packInfo(size, kilos ? 'kg' : 'g', count);
+  }
   // "PZ.50 GR.85": pieces first, then grams each
   m = P_PZ_GR.exec(d);
   if (m) return packInfo(Number(m[2]), 'g', Number(m[1]));
@@ -236,7 +256,8 @@ export function packWord(description?: unknown): string {
 const N = '\\d+(?:[.,]\\d+)?';
 const CLEAN_RES = [
   `${B_START}PZ\\.?\\s*\\d+\\s*GR?\\.?\\s*\\d+`,
-  `${B_START}(?:DA\\s+)?${N}\\s*(?:KG|GR|G|LT|L|ML|CL)${B_END}\\.?(?:\\s*[*X]\\s*\\d+(?!\\d)(?:\\s*(?:PZ|NR|PEZZI)${B_END})?)?`,
+  // «35/40gr», «4X2,5k*»: what stands in front of the size goes with it.
+  `${B_START}(?:DA\\s+)?(?:\\d+\\s*[/X]\\s*)?${N}\\s*(?:(?:KG|GR|G|LT|L|ML|CL)${B_END}|K(?=\\s*\\*))\\.?(?:\\s*[*X]\\s*\\d+(?!\\d)(?:\\s*(?:PZ|NR|PEZZI)${B_END})?)?`,
   `${B_START}(?:DA\\s+)?(?:KG|GR?|LT|ML|CL)\\.?\\s*${N}(?:\\s*X\\s*${N})?(?!\\d)`,
   `${B_START}(?:DA\\s+)?\\d+\\s*(?:PZ|NR|PEZZI)${B_END}`,
   `${B_START}PZ\\.?\\s*\\d+${B_END}`,

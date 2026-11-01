@@ -35,6 +35,8 @@ const KG_L_PRICE_RANGE: [number, number] = [0.05, 300.0];
 const PIECE_PRICE_RANGE: [number, number] = [0.01, 50.0];
 // What one egg can plausibly cost, used to tell «the quantity counts eggs» from «counts packs».
 const EGG_PRICE_RANGE: [number, number] = [0.05, 0.90];
+// The heaviest one invoiced unit made of several packs can believably be, in kg or l.
+const MAX_PACK_KG_L = 50;
 export const OUT_OF_SCALE_NOTE = NOTE.PRICE_OUT_OF_SCALE;
 export const EGG_UNCLEAR_NOTE = NOTE.EGG_QUANTITY_UNCLEAR;
 
@@ -205,9 +207,16 @@ export function computeDocument(lines: readonly PricedLine[], p: PricingParams, 
   const [size, dim] = base;
   if (dim !== p.priceUnit) return fail(NOTE.PRICE_UNIT_PACK_MISMATCH);
   const qty = pieces * size * count;
-  return finish(
+  const result = finish(
     computed(total / qty, qty, 'media', NOTE.WEIGHT_FROM_DESCRIPTION, { vatRate: vat }),
     mixed, discountFlag, p.priceUnit);
+  // ⚠️ NO CARTON WEIGHS THIS MUCH: «2Kg* 55pz» read as 55 × 2 kg gives a price that still looks believable, and the
+  // spellings of a piece weight are endless (classify.ts catches the common one). Above this it needs a look.
+  if (count > 1 && size * count > MAX_PACK_KG_L) {
+    result.reliability = 'da verificare';
+    result.note = OUT_OF_SCALE_NOTE;
+  }
+  return result;
 }
 
 export function worse(a: string, b: string): string {

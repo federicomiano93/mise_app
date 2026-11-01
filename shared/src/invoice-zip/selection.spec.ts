@@ -3,7 +3,7 @@
 // Ported from tests/invoice-zip-selection.test.mjs; the module is a FULL port, so parity.spec.ts also compares its
 // exports. Invented invoices only (testing/invoice-builders.ts).
 //
-// PORTED: 20 of 20 tests of tests/invoice-zip-selection.test.mjs. The port is driven with the build of `looseRead`
+// PORTED: 25 of 25 tests of tests/invoice-zip-selection.test.mjs. The port is driven with the build of `looseRead`
 // (every invoice here is a loose file; the zip reader is app code), the original with its own reader. One difference of
 // means, not of what is checked: 'the decision id is … the SHA-256 of the key' compares with the platform's Web Crypto
 // (async) where the original uses node:crypto, which shared/ cannot import.
@@ -132,6 +132,68 @@ describe.each(implementations)('%s', (_name, impl) => {
     const partial = selectImport(c.build(), {});
     expect(partial.groups.toCheck, 'a product that keeps a good point needs no look').toStrictEqual([]);
     expect(((partial.importFile.ingredients[0] as { prices: { invoiceDate: string }[] }).prices).map((p) => p.invoiceDate)).toStrictEqual(['2026-09-01']);
+  });
+
+  test('a product only ever received free is created with no price and asks for a look', () => {
+    const FREE: LineSpec = { desc: 'SPEZIA OMAGGIO', code: 'FREE', qty: 5, unit: 'KG', total: 0 };
+    const K_FREE = `${SUPPLIER}|code:FREE`;
+    const result = built([FLOUR, FREE]);
+    const entry = result.importFile.ingredients.find((i) => i.key === K_FREE) as { prices: unknown[]; priceCheck?: string };
+    expect(entry, 'it is in the import file').toBeTruthy();
+    expect(entry.prices).toStrictEqual([]);
+    expect(entry.priceCheck).toBe('amount-zero-or-negative');
+    const row = result.products.find((p) => p.key === K_FREE) as { inImport: boolean; lastPrice: number | null };
+    expect(row.inImport).toBe(true);
+    expect(row.lastPrice).toBeNull();
+    const sel = selectImport(result, {});
+    expect(sel.groups.toCheck.map((g) => [g.key, g.reason])).toStrictEqual([[K_FREE, 'amount-zero-or-negative']]);
+    expect(sel.groups.unreadable).toStrictEqual([]);
+  });
+
+  test('free and paid deliveries of one product behave as before: the paid price stands, no priceCheck', () => {
+    const c = newCase();
+    c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 6 }], { date: '2026-09-01' });
+    c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 0 }], { date: '2026-09-10' });
+    const entry = c.build().importFile.ingredients[0] as { prices: unknown[]; priceCheck?: string };
+    expect(entry.priceCheck).toBeUndefined();
+    expect(entry.prices.length).toBe(1);
+  });
+
+  test('a return or a credit is never mistaken for a product received free', () => {
+    const RETURN: LineSpec = { desc: 'RESO FARINA', code: 'RET', qty: 10, unit: 'KG', total: -6 };
+    const K_RETURN = `${SUPPLIER}|code:RET`;
+    const result = built([FLOUR, RETURN]);
+    expect(result.importFile.ingredients.some((i) => i.key === K_RETURN)).toBe(false);
+    expect(result.candidates.some((i) => i.key === K_RETURN)).toBe(false);
+    expect((result.products.find((p) => p.key === K_RETURN) as { leftOutReason: string }).leftOutReason).toBe('amount-zero-or-negative');
+  });
+
+  test('a carton read as heavier than any carton can be needs a look, whatever the spelling', () => {
+    const entry = built([{ desc: 'BRIOCHE 37,5gr 2Kg* 55pz', code: 'B', qty: 1, unit: 'CT', total: 14.5 }]).importFile.ingredients[0] as { prices: unknown[]; priceCheck?: string };
+    expect(entry.prices).toStrictEqual([]);
+    expect(entry.priceCheck).toBe('price-out-of-scale');
+    const fine = built([{ desc: 'PATATE 2,5kg* 4pz', code: 'P', qty: 1, unit: 'CT', total: 24.9 }]).importFile.ingredients[0] as { prices: unknown[]; priceCheck?: string };
+    expect(fine.prices.length).toBe(1);
+    expect(fine.priceCheck).toBeUndefined();
+  });
+
+  test('the VAT comes from the newest paid line: a free line says 0 only because it is outside the tax base', () => {
+    const vatOf = (c: InvoiceCase): number | null => (c.build().importFile.ingredients[0] as { vatRate: number | null }).vatRate;
+    const c = newCase();
+    c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 6, vat: '10.00' }], { date: '2026-09-01' });
+    c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 0, vat: '0.00' }], { date: '2026-09-10' });
+    expect(vatOf(c)).toBe(10);
+
+    const sameInvoice = newCase();
+    sameInvoice.add([
+      { desc: 'FARINA', code: 'F', qty: 1, unit: 'KG', total: 0, vat: '0.00' },
+      { desc: 'FARINA', code: 'F', qty: 1, unit: 'KG', total: 6, vat: '10.00' },
+    ], { date: '2026-09-01' });
+    expect(vatOf(sameInvoice)).toBe(10);
+
+    const neverPaid = newCase();
+    neverPaid.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 0, vat: '0.00' }], { date: '2026-09-01' });
+    expect(vatOf(neverPaid)).toBeNull();
   });
 
   test('products that cannot be read are listed with the reason and cannot be ticked', () => {

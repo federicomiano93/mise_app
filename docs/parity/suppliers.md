@@ -829,6 +829,37 @@ usage `suppliers-merge`, door «Merge another pack…» on the card above «Not 
 **Driven** on the emulator (`algprobe/mise-drive/drive-mise2-price-changes-merge.mjs`, invented data): owner of the Italian
 venue at 1024 / 360 / 296, the same venue in English at 360, the employee at 360.
 
+## Invoice reader: ready-made food and carton weights as built
+
+A port of the current app's fix, PR #435 (live `v1.129.1`, 1 Nov 2026), found when a real supplier's zip proposed 5 of its 21
+products. Same behaviour in both apps, pinned by the specs that run against both.
+
+- **Ready-made food is proposed as an ingredient** (his decision, 1 Nov 2026): croissants, panzerotti, pasticciotti, plaits and
+  sliced potatoes left `READY_RE` for `FOOD_RE` (`keywords.ts`), because food cost and the order lists need them. Only bar and
+  shelf goods stay resale. Peelers and free cleaning goods went to `PACKAGING_RE`, or a word like «patate» or a free product
+  would now propose them.
+- **A carton's weight is not multiplied by its piece count** (`classify.ts`): in «35/40gr 2Kg* 55pz» the 55 pieces of 35–40 g ARE
+  the 2 kg, so the pack is one 2 kg carton (`countsPiecesInCarton`, within 15%). «6 pieces» of 35–40 g do not add up to 2 kg, so
+  there the count stands. `BARE_K` reads the older spelling «2,5k* 4pz», and only in that shape, so an article code like «T65K*10»
+  is no weight. `CLEAN_RES` takes «35/40gr» and «4X2,5k*» out of the proposed name.
+- **A pack over 50 kg needs a look** (`MAX_PACK_KG_L`, `pricing.ts`): the spellings of a piece weight are endless, so a carton
+  read as heavier than any carton can be goes to `da verificare`, with no price imported, even when the price looks believable.
+- **A product only ever received free is created with no price** (`build-import.ts`): `onlyFree` reads the line amounts, not the
+  note, because that note also covers negative amounts. A return or a credit stays out. The screen asks for a look through the
+  existing `priceCheck` and `sup.imp.code.amountZero`: no new words, no new screen.
+- **The VAT comes from the newest PAID line**: a free line says 0 % because it is outside the tax base, and a VAT of 0 is a real
+  answer. Never paid = `null`, «not stated».
+
+**How it reached the stack:** only #435's own files (`invoice-import/`, `js/orders/invoice-zip/`, their tests), byte-equal to
+`main`; `dist/` and `sw.js` regenerated. ⚠️ NOT a merge of `main`, on purpose: the specs compare `shared/` with the `js/` files on the
+same branch, and `main` also brings new exports the ports do not have (`sections`, `membership`, `calculator-config`, `log-model`,
+`calculator-recipe-source`, `log-time`, `price-model`: 15 red specs). Merging `main` into the stack is a piece of work of its own,
+with a rules conflict to settle. These hunks will meet their originals unchanged there.
+
+**Not driven:** the reader's logic only, no screen changed; specs and CI cover it, and no real zip was run through Mise 2. An
+ingredient ALREADY saved with a wrong carton keeps its price in both apps (`storedWeightFactor` trusts the stored weight, and a
+re-import offers the wrong price again as `weight-rescaled`): it has to be corrected on its card.
+
 ## Findings — things found while reading, not decided
 
 ### Findings — The page, the lists, suppliers

@@ -21,14 +21,16 @@ export const DISCOUNT_RE = new RegExp(`^[^\\p{L}\\p{N}_]*(sconto|abbuono|ribasso
 export const FOOD_RE = new RegExp(
   `${B_START}(zucchero|farina|semola|sale|lievito|burro|margarina|strutto|olio|uova|uovo|latte|panna`
   + `|cacao|cioccolato|miele|mandorl${WORD}*|nocciol${WORD}*|pistacch${WORD}*|noci|uvetta|canditi|marmellata`
-  + `|confettura|crema|ricotta|mascarpone|formaggio|mozzarella)${B_END}`, 'iu');
-// Ready-made goods bought to be sold as they are. Looked at before FOOD_RE because the
-// food word is often only the filling («cornetto alla crema»).
+  + `|confettura|crema|ricotta|mascarpone|formaggio|mozzarella`
+  // Ready-made food: «patate padellate» is not a pan, «cornetto fantasia» is not a Fanta.
+  + `|patate|cornett[oi]|panzerott${WORD}*|pasticciott${WORD}*|treccia|trecce)${B_END}`, 'iu');
+// Only bar and shelf goods sold as they are are resale (5 Oct 2026, from the first real import).
+// Ready-made FOOD (frozen croissants, panzerotti, sliced potatoes) is proposed as an ingredient,
+// because food cost and the order lists need it (owner's decision, 1 Nov 2026); a keyword list of
+// article prefixes let identical goods land on both sides. Looked at before FOOD_RE because the
+// food word is often only the filling.
 export const READY_RE = new RegExp(
-  '(?<!fecola di )patate|cornetto|panzerott|pasticciotto|treccia|sg\\.cr|cr\\.integrale|mini cr'
-  + '|tm cr|tm-midi|cipolle fette'
-  // Bar and shelf goods sold as they are (5 Oct 2026, from the first real import).
-  + `|${B_START}yog\\.|yogurt|kefir|dolcificante|capsul|${B_START}caps${B_END}|caff\\S*\\s*cialde`, 'iu');
+  `${B_START}yog\\.|yogurt|kefir|dolcificante|capsul|${B_START}caps${B_END}|caff\\S*\\s*cialde`, 'iu');
 export const PACKAGING_RE = new RegExp(
   'sh\\. ml|b\\.sch|grattugia|flacone|posate|asciugamano|vasch\\.caldo|rotolo|buste|carta |carta$'
   + '|sacch|cont\\. plastica|fogli pol|pellicola|stagnola|vaschette|box +pizza|velina|bicch|tappo'
@@ -38,7 +40,11 @@ export const PACKAGING_RE = new RegExp(
   // or «zucchero … bustina» never land here.
   + `|alluminio|grembiul|palett|coprivassoi|carte pizzo|shopper|${B_START}borsa${B_END}|${B_START}bags${B_END}|caraffa`
   + `|coppetta|anticalcare|detersiv|sgrassa|igienizz|candeggin|pennello|asciugaman|organza`
-  + `|spolett|pentol|padell|${B_START}padel${B_END}|guanti`, 'iu');
+  + `|spolett|pentol|padell|${B_START}padel${B_END}|guanti`
+  // A potato peeler (the word «patate» no longer catches it as resale).
+  + '|pelapatate'
+  // Cleaning goods given free: a product received only free is now created with no price (build-import.ts).
+  + '|lavastovigl|micronizzator', 'iu');
 // Beverages are bought to be sold: resale, whatever the liquid.
 export const BEVERAGE_RE = new RegExp(
   ['coca cola', `${B_START}acqua${B_END}`, 'birra', 'redbull', 'succo', `${B_START}the${B_END}`, 'fanta', 'sprite',
