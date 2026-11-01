@@ -1599,6 +1599,7 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
    them apart — so the row has to SAY which one it is (the v1.63.0 rule, and P18).
    The amber pair is the system's own, already shipped on the Log's day badge; no
    new colour is chosen here. */
+.reg-price-room { visibility: hidden; }
 .reg-flag {
   display: inline-block;
   margin-top: 4px;
@@ -1622,6 +1623,18 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
+}
+/* ⚠️ ROWS OFF SCREEN ARE NOT LAID OUT OR PAINTED UNTIL THEY ARE NEAR THE VIEW: 302 of them cost the lab
+   tablet about 1.3 s on every open. Only on the long lists, never in a supplier's own screen, whose
+   rebuild puts its scroll back by number. The height is a guess until a row has been drawn;
+   registry.js carries the real one across a repaint, so a repaint does not move the list. */
+.reg-list-host .reg-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 100px;
+}
+/* The tablet's rows are one line shorter, measured on the lab tablet. */
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
+  .reg-list-host .reg-row { contain-intrinsic-size: auto 79px; }
 }
 .reg-row .reg-drill {
   flex: 1;
