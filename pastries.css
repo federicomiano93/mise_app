@@ -409,7 +409,6 @@ input.pas-item-note:focus {
   border-color: var(--pas-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--pas-accent) 22%, transparent);
 }
-input.pas-item-note::placeholder { color: var(--pas-text-5); }
 input.pas-name.pas-invalid,
 input.pas-qty.pas-invalid {
   border-color: var(--pas-danger);
@@ -632,9 +631,9 @@ input.pas-qty.pas-invalid {
   accent-color: var(--pas-brand);
 }
 .pas-copy-day input:focus-visible { outline: 2px solid var(--pas-accent); outline-offset: 2px; }
-.pas-copy-day-name { font-size: 16px; color: var(--pas-text); }
+.pas-copy-day-name { flex: 1 1 auto; min-width: 0; font-size: 16px; color: var(--pas-text); }
 .pas-copy-day input:checked ~ .pas-copy-day-name { font-weight: 600; color: var(--pas-brand); }
-.pas-copy-day-count { margin-left: auto; font-size: 13px; color: var(--pas-text-3); white-space: nowrap; }
+.pas-copy-day-count { flex: 0 1 auto; text-align: right; font-size: 13px; color: var(--pas-text-3); }
 
 /* ── The records ───────────────────────────────────────────────────────────*/
 .pas-logs { display: flex; flex-direction: column; gap: 12px; }

@@ -8,6 +8,7 @@
 
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { installDom, Node, walk } from './helpers/form-dom.mjs';
 import { standIns, loadPastries } from './helpers/load-pastries.mjs';
 import { WEEKDAYS, provingDayFor, otherWeekdays, weekdayLabel } from '../js/pastries/pastries-model.js';
@@ -106,8 +107,65 @@ test('tapped before the first answers: no dialog, says the list is still loading
   const { ids, dialog, screen } = await boot('copy-early', t, { answered: false });
   await tap(ids);
   assert.equal(dialog.asked.length, 0);
-  assert.equal(ids.get('pasToast').textContent, say('past.listNotLoadedYet'));
+  assert.equal(ids.get('pasToast').textContent, say('past.copyNotLoadedYet'));
   assert.equal(editorOpen(screen), false);
+});
+
+test('⚠️ the early message does not promise an editor that will never open by itself', async (t) => {
+  const { ids } = await boot('copy-early-words', t, { answered: false });
+  await tap(ids);
+  assert.notEqual(ids.get('pasToast').textContent, say('past.listNotLoadedYet'));
+});
+
+test('the days answered but not tonight\'s confirmations: it still waits, or a recorded day would skip «Edit?»', async (t) => {
+  const { ids, dialog, fs } = await boot('copy-half-answered', t, { answered: false });
+  fs.control.days[0].onChange(WEEKDAYS.map(day => ({ id: day, day, items: SOURCE_ROWS, note: '' })));
+  await settle();
+  await tap(ids);
+  assert.equal(dialog.asked.length, 0);
+  assert.equal(ids.get('pasToast').textContent, say('past.copyNotLoadedYet'));
+});
+
+test('the real page carries the button the script attaches to', () => {
+  assert.match(readFileSync(new URL('../pastries.html', import.meta.url), 'utf8'), /id="pasCopyDay"/);
+});
+
+test('Cancel on the picker opens nothing and writes nothing', async (t) => {
+  const { ids, dialog, fs, screen } = await boot('copy-cancel', t, { days: source });
+  dialog.settings.answer = options => !options.node;
+  await tap(ids);
+  assert.equal(dialog.asked.length, 1);
+  assert.equal(editorOpen(screen), false);
+  assert.equal(fs.control.saves.length, 0);
+});
+
+test('a source emptied by another phone during the questions opens nothing', async (t) => {
+  const { ids, dialog, fs, screen } = await boot('copy-source-gone', t, { days: source, confirmed: [NEXT] });
+  dialog.settings.answer = (options) => {
+    if (options.okLabel === say('ui.edit')) {
+      fs.control.days[0].onChange(WEEKDAYS.map(day => ({ id: day, day, items: [], note: '' })));
+    }
+    return true;
+  };
+  await tap(ids);
+  assert.equal(editorOpen(screen), false);
+  assert.equal(ids.get('pasToast').textContent, say('past.nothingToCopy', { day: weekdayLabel(FROM) }));
+});
+
+test('a target filled by another phone during the questions asks before replacing it', async (t) => {
+  const { ids, dialog, fs, screen } = await boot('copy-target-filled', t, { days: source, confirmed: [NEXT] });
+  dialog.settings.answer = (options) => {
+    if (options.okLabel === say('ui.edit')) {
+      fs.control.days[0].onChange(WEEKDAYS.map(day => ({
+        id: day, day, items: day === FROM ? SOURCE_ROWS : [{ name: 'Krapfen', qty: 3 }], note: '',
+      })));
+      return true;
+    }
+    return options.okLabel !== say('ui.replace');
+  };
+  await tap(ids);
+  assert.equal(dialog.asked.at(-1).okLabel, say('ui.replace'));
+  assert.equal(editorOpen(screen), false, 'the «no» is respected');
 });
 
 test('an empty shown day says there is nothing to copy, and asks nothing', async (t) => {
@@ -253,6 +311,25 @@ test('Back from a copied editor asks «Discard?» straight away, and returns to 
   assert.equal(ids.get('pasTitle').textContent, weekdayLabel(FROM));
 });
 
+test('a «no» at Save in a copied editor writes nothing and stays there', async (t) => {
+  const { ids, dialog, fs, screen } = await boot('copy-save-no', t, { days: source });
+  dialog.settings.answer = (o) => (o.okLabel === say('ui.save') ? false : answers()(o));
+  await tap(ids);
+  ids.get('pasSave').fire('click');
+  await settle();
+  assert.equal(dialog.asked.at(-1).okLabel, say('ui.save'));
+  assert.equal(fs.control.saves.length, 0);
+  assert.equal(editorOpen(screen), true);
+});
+
+test('a copied editor names itself: the panel no longer points at the source day\'s tab', async (t) => {
+  const { ids, dialog, screen } = await boot('copy-panel-name', t, { days: source });
+  assert.equal(screen.getAttribute('aria-labelledby'), `pas-tab-${FROM}`);
+  dialog.settings.answer = answers();
+  await tap(ids);
+  assert.equal(screen.getAttribute('aria-labelledby') ?? null, null);
+});
+
 test('a «no» to Discard keeps the copied editor open', async (t) => {
   const { ids, dialog, screen } = await boot('copy-back-no', t, { days: source });
   dialog.settings.answer = (o) => (o.title === say('past.discardChanges') ? false : answers()(o));
@@ -288,6 +365,32 @@ test('the editor loads an existing note into its field and saves a changed one b
   await settle();
   assert.equal(dialog.asked.length, 1);
   assert.deepEqual(fs.control.saves[0].items, [{ name: 'Cornetti', qty: 24 }, { name: 'Girelle', qty: 12, note: '4x6' }]);
+});
+
+test('typing only a note counts as unsaved work: Back asks before losing it', async (t) => {
+  const { ids, dialog, screen } = await boot('note-dirty', t, { days: source });
+  ids.get('pasEdit').fire('click');
+  await settle();
+  const [first] = find(screen, 'pas-item-note');
+  first.value = '4x6';
+  first.fire('input');
+  ids.get('pasBack').fire('click');
+  await settle();
+  assert.equal(dialog.asked.at(-1)?.title, say('past.discardChanges'));
+});
+
+test('the Records screen shows a row\'s note, and a row without one has no such node', async (t) => {
+  cleanUp(t);
+  installDom();
+  const { renderLogs } = await loadPastries('pastries-logs.js', 'note-records');
+  const { node } = renderLogs({
+    app: {},
+    logs: [{ id: '2026-08-05_Monday', date: '2026-08-05', day: 'Monday', note: '', items: SOURCE_ROWS }],
+  });
+  const notes = find(node, 'pas-log-item-note');
+  assert.equal(notes.length, 1);
+  assert.equal(notes[0].textContent, '9x3');
+  assert.equal(find(node, 'pas-log-row').length, 2);
 });
 
 test('the note field is named after its pastry, and a row with only a note asks before it is removed', async (t) => {

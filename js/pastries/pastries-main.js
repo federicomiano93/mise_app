@@ -248,6 +248,8 @@ function openEditor(day, copiedFrom = null) {
   // the unsaved-work question asked from a second place, and there is already a
   // Back that asks it.
   stripHost.hidden = true;
+  // The panel is named by the tab of the day on screen, which a copy has left behind.
+  if (copiedFrom) screen.removeAttribute('aria-labelledby');
   // ⚠️ THE LABEL AND t(), NOT A TEMPLATE: this read «Edit Tuesday / Pastries» on the
   // Italian venue since 5 Aug 2026 — English words AND the stored day id (code review,
   // 29 Sep 2026).
@@ -472,9 +474,18 @@ async function pickCopyTarget(from) {
     message: t('past.copyPickDay'),
     okLabel: t('past.copyDayGo'),
     cancelLabel: t('ui.cancel'),
-    node: el('div', { class: 'pas-copy-days', role: 'radiogroup', 'aria-label': t('past.copyPickDay') }, rows),
+    node: el('div', { class: 'pas-copy-days', role: 'radiogroup', 'aria-label': t('past.copyOnto') }, rows),
   });
   return ok ? chosen : null;
+}
+
+function replaceAllowed(to, from) {
+  return confirmDialog({
+    title: t('past.copyReplaceQ', { day: weekdayLabel(to) }),
+    message: t('past.copyReplaces', { n: getItems(to).length, day: weekdayLabel(to), from: weekdayLabel(from) }),
+    okLabel: t('ui.replace'),
+    cancelLabel: t('ui.cancel'),
+  });
 }
 
 // Copy the shown day onto another weekday. NOTHING is written here: the copy opens
@@ -483,28 +494,25 @@ async function copyShownDay() {
   if (view !== 'day' || copying) return;
   // Same rule as the pencil: until the answers are in, the list on screen may be
   // only this phone's empty copy. Unlike the pencil it does not open by itself
-  // later — a picker appearing unasked would be odd.
-  if (!ready()) { sayStillWaiting(); return; }
+  // later — a picker appearing unasked would be odd — so it says to try again.
+  if (!ready()) { toast(t('past.copyNotLoadedYet')); return; }
   const from = shownDay;
   if (!getItems(from).length) { toast(t('past.nothingToCopy', { day: weekdayLabel(from) })); return; }
   copying = true;
   try {
     const to = await pickCopyTarget(from);
     if (!to) return;
-    const replaced = getItems(to).length;
-    if (replaced) {
-      const ok = await confirmDialog({
-        title: t('past.copyReplaceQ', { day: weekdayLabel(to) }),
-        message: t('past.copyReplaces', { n: replaced, day: weekdayLabel(to), from: weekdayLabel(from) }),
-        okLabel: t('ui.replace'),
-        cancelLabel: t('ui.cancel'),
-      });
-      if (!ok) return;
-    }
+    const askedAboutReplacing = getItems(to).length > 0;
+    if (askedAboutReplacing && !(await replaceAllowed(to, from))) return;
     // AFTER the replace question: requestEdit stores a permission to edit, which a
     // person who then answers «no» to replacing never asked for.
     if (!(await requestEdit(to))) return;
-    // The dialogs take time; the screen may have moved on.
+    // The dialogs take time, and a snapshot from another phone can land during them:
+    // the screen may have moved on, the source may be gone, and a target that was
+    // empty may now hold rows nobody has agreed to replace.
+    if (view !== 'day' || shownDay !== from) return;
+    if (!getItems(from).length) { toast(t('past.nothingToCopy', { day: weekdayLabel(from) })); return; }
+    if (!askedAboutReplacing && getItems(to).length && !(await replaceAllowed(to, from))) return;
     if (view !== 'day' || shownDay !== from) return;
     openEditor(to, from);
   } finally {
@@ -512,7 +520,9 @@ async function copyShownDay() {
   }
 }
 
-copyDayBtn.addEventListener('click', copyShownDay);
+// ⚠️ `?.`: this runs before initPastries below, so a stale pastries.html beside a
+// new bundle would otherwise lose the whole screen over one missing button.
+copyDayBtn?.addEventListener('click', copyShownDay);
 
 strip = renderStrip({
   host: stripHost,

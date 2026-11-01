@@ -1869,6 +1869,8 @@ const DICTIONARIES = Object.freeze({
     'past.liveSyncInterruptedThese': 'Live sync interrupted — these records may be out of date.',
     'past.liveSyncInterruptedThis': 'Live sync interrupted — this list may be out of date.',
     'past.listNotLoadedYet': 'The list hasn’t arrived yet — it opens as soon as it does.',
+    'past.copyNotLoadedYet': 'The list hasn’t arrived yet — try again in a moment.',
+    'past.copyOnto': 'Copy onto',
     'past.listNotArrivedYet': 'The list hasn’t arrived yet.',
     'calc.fieldsClearedThisIs': 'Fields cleared — this is a new day.',
     'calc.resetAllFields': 'Reset all fields?',
@@ -2701,6 +2703,7 @@ const DICTIONARIES = Object.freeze({
     'help.itIsOnlyRight': 'It is only right if the ingredients have prices. An unpriced one is left out, and the answer comes out too low.',
     'help.whatToPutOut': 'What to put out to prove, as one standing list per weekday.',
     'help.confirmKeepsARecord': 'Confirm keeps a record of the night and locks the list until 4am.',
+    'help.copyDay': 'Copy day puts one day’s list on another day, notes included. Nothing changes until you tap Save there.',
     'help.unlikeTheCalculatorA': 'Unlike the Calculator, a new day does NOT empty it: the list is what you normally do on that weekday.',
     // ⚠️ A ONE-OFF ANNOUNCEMENT, NOT A FEATURE. Every app installed before 22 Aug 2026
     // carries a wrapper built from an older manifest, and js/install-version.js CANNOT
@@ -4739,6 +4742,8 @@ const DICTIONARIES = Object.freeze({
     'past.liveSyncInterruptedThese': 'Sincronizzazione interrotta — questi registri potrebbero non essere aggiornati.',
     'past.liveSyncInterruptedThis': 'Sincronizzazione interrotta — questa lista potrebbe non essere aggiornata.',
     'past.listNotLoadedYet': 'La lista non è ancora arrivata: si apre appena arriva.',
+    'past.copyNotLoadedYet': 'La lista non è ancora arrivata: riprova tra un attimo.',
+    'past.copyOnto': 'Copia su',
     'past.listNotArrivedYet': 'La lista non è ancora arrivata.',
     'fc.onTarget': 'In linea con l’obiettivo',
     'fc.slightlyOverTarget': 'Poco sopra l’obiettivo',
@@ -5631,6 +5636,7 @@ const DICTIONARIES = Object.freeze({
     'help.itIsOnlyRight': 'È corretto solo se gli ingredienti hanno un prezzo. Uno senza prezzo viene escluso, e il risultato esce troppo basso.',
     'help.whatToPutOut': 'Cosa mettere a lievitare, come una lista fissa per ogni giorno della settimana.',
     'help.confirmKeepsARecord': 'Conferma tiene un registro della nottata e blocca la lista fino alle 4.',
+    'help.copyDay': 'Copia giorno porta la lista di un giorno su un altro, appunti compresi. Non cambia nulla finché non tocchi Salva.',
     'help.unlikeTheCalculatorA': 'A differenza del Calcolatore, un nuovo giorno NON la svuota: la lista è quello che fai di solito quel giorno della settimana.',
     'help.reinstallOnce': 'Se usi Mise dalla schermata Home, cancellala e riaggiungila una volta — una parte di un’app installata viene fissata quando la aggiungi, e nessun aggiornamento può raggiungerla.',
     'help.reinstallNothingLost': 'Non perdi niente: il tuo lavoro è salvato online, non dentro l’app.',

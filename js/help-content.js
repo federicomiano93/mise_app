@@ -137,6 +137,7 @@ export const HELP = {
     lines: [
       'help.whatToPutOut',
       'help.confirmKeepsARecord',
+      'help.copyDay',
       'help.unlikeTheCalculatorA',
     ],
   },
