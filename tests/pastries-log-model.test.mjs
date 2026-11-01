@@ -228,3 +228,16 @@ test('what buildLog writes is what normalizeLog reads back', () => {
   assert.equal(read.note, built.note);
   assert.equal(isLogVisible(read, NOW), true);
 });
+
+test('a record freezes each row\'s note with it, and a row without one has no key', () => {
+  const built = buildLog({
+    day: 'Wednesday', note: '', nowMs: NOW,
+    items: [{ name: 'Cornetti', qty: 27, note: ' 9x3 ' }, { name: 'Bomboloni', qty: 10 }, { name: 'Girelle', qty: 4, note: 7 }],
+  });
+  assert.deepEqual(built.items, [
+    { name: 'Cornetti', qty: 27, note: '9x3' },
+    { name: 'Bomboloni', qty: 10 },
+    { name: 'Girelle', qty: 4 },
+  ]);
+  assert.deepEqual(normalizeLog(built, built.id).items, built.items);
+});

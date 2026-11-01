@@ -188,5 +188,8 @@ the only other one is `client-accounts` (managers, or the account itself — aud
   write.
 
 **Pastries:** `pastries/{Weekday}` — seven documents, for ever; the work day rolls at 4am.
+A row is `{ name, qty, note? }`: `note` («9x3») is free text up to 40 characters, absent when empty, kept by
+`js/pastries/pastries-model.js` because rules cannot look inside a list. ⚠️ The day is written whole: a writer that
+rebuilds rows as `{ name, qty }` (the app before this note, Mise 2 until it is ported) deletes every note on that day.
 `pastry-logs/{YYYY-MM-DD}_{Weekday}` — nothing deletes it; the read is bounded
 (`orderBy('date','desc') + limit(120)`).
