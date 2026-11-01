@@ -134,6 +134,14 @@ describe('label-print.css', () => {
   });
 
   // ⚠️ The sheet clips instead of growing, or an overflow could not be detected.
+  // Driven on the lab tablet (Chrome 101, 1 Nov 2026): a sheet exactly as tall as its page came out as a label AND a blank page.
+  it('never spills a label onto a blank second page: the host is a hair shorter than the paper, and clips', () => {
+    const print = css.slice(css.indexOf('@media print'));
+    expect(print).toMatch(/\.lab-print\s*\{\s*overflow:\s*hidden;\s*\}/);
+    expect(print).toMatch(/\.lab-print\s*>\s*\*\s*\{\s*margin-bottom:\s*-1px;\s*\}/);
+  });
+
+  // ⚠️ The sheet clips instead of growing, or an overflow could not be detected.
   it('clips the sheet, breaks long words inside themselves and is black on white', () => {
     const sheet = /\.lab-sheet\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
     expect(sheet).toMatch(/overflow:\s*hidden/);
