@@ -30,6 +30,13 @@ class PackParsingTest(unittest.TestCase):
         self.check("PATATE 2,5kg* 4pz", 2.5, "kg", 4)
         self.check("PASTA 85gr* 50pz", 85, "g", 50)
 
+    def test_a_bare_k_before_the_star_is_a_kilo_nowhere_else(self):
+        # Mirrored word for word in tests/invoice-zip-classify.test.mjs.
+        self.check("PATATE FETTE 4X2,5k*    4pz", 2.5, "kg", 4)
+        self.check("PANZEROTTI MIGNON2.5k*    1pz", 2.5, "kg", 1)
+        self.check("BRIOCHE mignon 35/40gr 2k* 55pz", 2, "kg")
+        self.assertIsNone(parse_pack("SERIE 5KX2"))
+
     def test_unit_first_does_not_match_inside_a_word(self):
         self.assertIsNone(parse_pack("BUSTE ML"))
         self.assertIsNone(parse_pack("DOLCE5X3"))
@@ -110,6 +117,8 @@ class ClassifyTest(unittest.TestCase):
                      "PANZEROTTO CREMA 170gr* 25pz", "PASTICCIOTTO AMARENA 110g* 30pz", "TRECCIA NOCI 98g* 60pz"):
             self.assertEqual(self.kind(text)[0], "ingrediente", text)
         self.assertEqual(self.kind("4 PELAPATATE ESEMPIO")[0], "packaging")
+        self.assertEqual(self.kind("LIQUIDO LAVASTOVIGLIE ESEMPIO")[0], "packaging")
+        self.assertEqual(self.kind("MICRONIZZATORE STD LT 1")[0], "packaging")
 
     def test_bar_shelf_and_non_food_goods_are_not_ingredients(self):
         # Mirrored word for word in tests/invoice-zip-classify.test.mjs.

@@ -128,6 +128,8 @@ test('classify: ready-made food is proposed as an ingredient, a potato peeler is
     assert.equal(kind(text)[0], 'ingrediente', text);
   }
   assert.equal(kind('4 PELAPATATE ESEMPIO')[0], 'packaging');
+  assert.equal(kind('LIQUIDO LAVASTOVIGLIE ESEMPIO')[0], 'packaging');
+  assert.equal(kind('MICRONIZZATORE STD LT 1')[0], 'packaging');
 });
 
 // Mirrored word for word in invoice-import/tests/test_classify.py.
@@ -137,6 +139,14 @@ test('pack parsing: a carton weight is not multiplied by its piece count', () =>
   checkPack('ESEMPIO 35/40gr 2Kg* 6pz', 2, 'kg', 6);
   checkPack('PATATE 2,5kg* 4pz', 2.5, 'kg', 4);
   checkPack('PASTA 85gr* 50pz', 85, 'g', 50);
+});
+
+// Mirrored word for word in invoice-import/tests/test_classify.py.
+test('pack parsing: a bare K before the star is a kilo, nowhere else', () => {
+  checkPack('PATATE FETTE 4X2,5k*    4pz', 2.5, 'kg', 4);
+  checkPack('PANZEROTTI MIGNON2.5k*    1pz', 2.5, 'kg', 1);
+  checkPack('BRIOCHE mignon 35/40gr 2k* 55pz', 2, 'kg');
+  assert.equal(parsePack('SERIE 5KX2'), null);
 });
 
 // Mirrored word for word in invoice-import/tests/test_classify.py.

@@ -68,7 +68,9 @@ PACKAGING_RE = re.compile(
     r"|coppetta|anticalcare|detersiv|sgrassa|igienizz|candeggin|pennello|asciugaman|organza"
     r"|spolett|pentol|padell|\bpadel\b|guanti"
     # A potato peeler (the word «patate» no longer catches it as resale).
-    r"|pelapatate",
+    r"|pelapatate"
+    # Cleaning goods given free: the app now creates a product received only free with no price.
+    r"|lavastovigl|micronizz",
     re.I,
 )
 # Beverages are bought to be sold: resale, whatever the liquid.
@@ -157,12 +159,14 @@ def parse_pack(description: str) -> PackInfo | None:
                lambda m: str(round(int(m.group(1)) / int(m.group(2)), 3)), d)
 
     # "2,5kg* 4pz", "85gr* 50pz", "2,5 KG X 4", "1kgx6", "7gx80"
-    m = re.search(_NUM + r"\s*(KG|GR|G)\.?\s*[*X]\s*(\d+)(?!\d)", d)
+    # A bare K is a kilo only right before the star: older invoices of one supplier write "2,5k* 4pz".
+    m = re.search(_NUM + r"\s*(KG|K(?=\s*\*)|GR|G)\.?\s*[*X]\s*(\d+)(?!\d)", d)
     if m:
         size, count = _f(m.group(1)), int(m.group(3))
-        if m.group(2) == "KG" and _counts_pieces_in_carton(d[: m.start()], size, count):
+        kilos = m.group(2).startswith("K")
+        if kilos and _counts_pieces_in_carton(d[: m.start()], size, count):
             return PackInfo(size, "kg", None)
-        return PackInfo(size, "kg" if m.group(2) == "KG" else "g", count)
+        return PackInfo(size, "kg" if kilos else "g", count)
     # "PZ.50 GR.85": pieces first, then grams each
     m = re.search(r"\bPZ\.?\s*(\d+)\s*GR\.?\s*(\d+)", d)
     if m:

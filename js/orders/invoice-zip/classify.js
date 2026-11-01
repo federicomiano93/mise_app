@@ -55,7 +55,9 @@ const PACKAGING_RE = new RegExp(
   + `|coppetta|anticalcare|detersiv|sgrassa|igienizz|candeggin|pennello|asciugaman|organza`
   + `|spolett|pentol|padell|${B_START}padel${B_END}|guanti`
   // A potato peeler (the word «patate» no longer catches it as resale).
-  + '|pelapatate', 'iu');
+  + '|pelapatate'
+  // Cleaning goods given free: a product received only free is now created with no price (build-import.js).
+  + '|lavastovigl|micronizz', 'iu');
 // Beverages are bought to be sold: resale, whatever the liquid.
 const BEVERAGE_RE = new RegExp(
   ['coca cola', `${B_START}acqua${B_END}`, 'birra', 'redbull', 'succo', `${B_START}the${B_END}`, 'fanta', 'sprite',
@@ -108,7 +110,8 @@ function fractionText(a, b) {
 }
 
 const FRACTION_RE = new RegExp(`(?<![\\d/])(\\d)\\s*/\\s*(\\d)(?=\\s*(?:KG|GR|G|LT|L|ML)${B_END})`, 'gu');
-const P_KG_X = new RegExp(`${NUM}\\s*(KG|GR|G)\\.?\\s*[*X]\\s*(\\d+)(?!\\d)`, 'u');
+// A bare K is a kilo only right before the star: older invoices of one supplier write «2,5k* 4pz».
+const P_KG_X = new RegExp(`${NUM}\\s*(KG|K(?=\\s*\\*)|GR|G)\\.?\\s*[*X]\\s*(\\d+)(?!\\d)`, 'u');
 const P_PZ_GR = new RegExp(`${B_START}PZ\\.?\\s*(\\d+)\\s*GR\\.?\\s*(\\d+)`, 'u');
 const P_UNIT_FIRST = new RegExp(`(?<![A-Z])(ML|CL|LT|L|GR|G|KG)\\s*\\.?\\s*${NUM}\\s*[X×*]\\s*(\\d+)(?!\\d)`, 'u');
 const P_KG_NUM_X = new RegExp(`${B_START}KG\\.?\\s*${NUM}\\s*X\\s*(\\d+)(?!\\d)`, 'u');
@@ -144,8 +147,9 @@ export function parsePack(description) {
   if (m) {
     const size = f(m[1]);
     const count = Number(m[3]);
-    if (m[2] === 'KG' && countsPiecesInCarton(d.slice(0, m.index), size, count)) return packInfo(size, 'kg', null);
-    return packInfo(size, m[2] === 'KG' ? 'kg' : 'g', count);
+    const kilos = m[2].startsWith('K');
+    if (kilos && countsPiecesInCarton(d.slice(0, m.index), size, count)) return packInfo(size, 'kg', null);
+    return packInfo(size, kilos ? 'kg' : 'g', count);
   }
   // "PZ.50 GR.85": pieces first, then grams each
   m = P_PZ_GR.exec(d);
