@@ -378,8 +378,34 @@ test('⚠️ productNamesUsing: names only, from components and packaging', asyn
   assert.ok(names.every(n => typeof n === 'string'));
   assert.deepEqual(productNamesUsing('x', null), []);
   assert.deepEqual(productNamesUsing('x', 'junk'), []);
-  assert.match(text('functions/product-usage.js'), /access !== 'owner-kitchen'/);
+  const { mayAskProductUsage } = await import('../functions/product-usage-model.js');
+  assert.equal(mayAskProductUsage('owner-kitchen'), true);
+  for (const access of ['owner', 'manager', 'owner-sales', true, false, undefined, 'owner-kitchen ']) {
+    assert.equal(mayAskProductUsage(access), false, String(access));
+  }
+  const callable = text('functions/product-usage.js');
+  const gate = callable.indexOf('if (!mayAskProductUsage(await accessValue(uid, locationId)))');
+  assert.ok(gate > 0, 'the callable no longer asks');
+  assert.ok(gate < callable.indexOf('/products`'), 'the gate must come before the read');
   assert.match(text('functions/index.js'), /export \{ productsUsingIngredient \} from '\.\/product-usage\.js';/);
+});
+
+test('⚠️ the kitchen merge asks the server, everybody else reads the products', () => {
+  const data = text('js/orders/ingredient-merge-data.js');
+  const fn = data.slice(data.indexOf('async function productsSource'));
+  assert.match(fn, /if \(currentSession\(\)\.role === OWNER_KITCHEN\) \{[\s\S]*productsUsingIngredient/);
+  assert.match(fn, /getDocsFromServer\(collection\(db, pathFor\(PRODUCTS\)\)\)/);
+  assert.match(data, /productsSource\(bId\),/, 'checkUsage must go through it: the rules refuse the kitchen a direct read');
+});
+
+test('⚠️ the Home asks nothing of a side this person does not have', () => {
+  const clients = text('js/home-client-orders-badge.js');
+  assert.match(clients, /if \(!roleHasCard\(session\.role, 'calculator'\)\) return;/);
+  const lists = text('js/home-order-requests-badge.js');
+  assert.match(lists, /if \(!roleHasCard\(session\.role, 'orders'\)\) return;/);
+  assert.equal(roleHasCard('owner-sales', 'calculator'), false);
+  assert.equal(roleHasCard('owner-sales', 'orders'), false);
+  assert.equal(roleHasCard('staff', 'calculator'), true, 'an employee keeps the banner');
 });
 
 test('findUsage turns the names the server sent into product uses', async () => {

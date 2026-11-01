@@ -645,7 +645,7 @@ export function buildRegistry(data, actions, hooks = {}) {
         // The form then knows nothing about overlays and this file stays the only
         // one that navigates — the same seam saveIngredient and priceHistory use.
         // ⚠️ `openMerge` ONLY FOR AN EXISTING INGREDIENT (never packaging) AND ONLY WHEN registry-main.js says this
-        // person may merge (`mergePacks`, a getter like `deleteIngredient`: owner or manager with Food cost).
+        // person may merge (`mergePacks`, a getter like `deleteIngredient`: whoever may write a price).
         actions: {
           ...actions,
           capturePackPhoto,

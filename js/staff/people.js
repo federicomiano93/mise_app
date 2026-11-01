@@ -145,7 +145,7 @@ export function openPeople(session) {
   // cancelling puts the select back on the role the person really holds, so what
   // the screen shows is never a role the server has not been told about. Four
   // buttons per member was also what made this screen read as a wall.
-  // ⚠️ FOUR WORDS, THREE LEVELS OF POWER. "Manager" and "Head chef" are the same
+  // ⚠️ SIX WORDS, FIVE LEVELS OF POWER. "Manager" and "Head chef" are the same
   // level under two names — Federico's own words for it since 11 Aug, and the
   // reason it is a title rather than a fourth role is in js/roles.js. The
   // confirmation below has to say so out loud, or four options read as four levels.

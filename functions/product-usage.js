@@ -14,11 +14,12 @@
 
 import { onCall, HttpsError } from 'firebase-functions/v2/https';
 import { getFirestore } from 'firebase-admin/firestore';
-import { productNamesUsing } from './product-usage-model.js';
+import { accessValue } from './onboarding.js';
+import { mayAskProductUsage, productNamesUsing } from './product-usage-model.js';
 
 // The same shape requireOwner() accepts: an id that could never name a real folder is refused
 // before it reaches a path.
-const LOCATION_ID = /^[A-Za-z0-9_-]{1,128}$/;
+const LOCATION_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 
 export const productsUsingIngredient = onCall({ region: 'us-central1' }, async (request) => {
   const uid = request.auth && request.auth.uid;
@@ -30,12 +31,9 @@ export const productsUsingIngredient = onCall({ region: 'us-central1' }, async (
   if (typeof ingredientId !== 'string' || !ingredientId) {
     throw new HttpsError('invalid-argument', 'That is not an ingredient.');
   }
-  const db = getFirestore();
-  const user = await db.doc(`users/${uid}`).get();
-  const access = user.exists ? (user.data().locations || {})[locationId] : undefined;
-  if (access !== 'owner-kitchen') {
+  if (!mayAskProductUsage(await accessValue(uid, locationId))) {
     throw new HttpsError('permission-denied', 'Only for the owner of the kitchen.');
   }
-  const products = await db.collection(`locations/${locationId}/products`).get();
+  const products = await getFirestore().collection(`locations/${locationId}/products`).get();
   return { names: productNamesUsing(ingredientId, products.docs.map(d => d.data())) };
 });

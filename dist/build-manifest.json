@@ -390,10 +390,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "1d5c86bca72a96c5",
-      "mapSha": "6c0386e1cb45deb7",
+      "sha": "95b9981a1987e04f",
+      "mapSha": "99e0aa81276900a4",
       "inputs": {
-        "js/i18n.js": "928a0a52362686d0"
+        "js/i18n.js": "f987e7b6163153da"
       }
     },
     "dist/index.js": {
@@ -493,7 +493,7 @@
         "js/staff/home-cards-screen.js": "3acfcd54551f4b43",
         "js/staff/language.js": "dbb785955ec6ff62",
         "js/staff/new-customer.js": "2165d226991491f3",
-        "js/staff/people.js": "d36b7cb2eda033ee",
+        "js/staff/people.js": "a5de29ddd24c9580",
         "js/supplier-label.js": "06277b76d92b5273",
         "js/sw-update.js": "ebb6ff2d277ba05b",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
@@ -1014,7 +1014,7 @@
         "js/orders/price-changes-screen.js": "9dc81f214b196440",
         "js/orders/registry-main.js": "50814595baecf719",
         "js/orders/registry-settings.js": "e60b4bec2a6f2958",
-        "js/orders/registry.js": "6b8296dcb478cac4",
+        "js/orders/registry.js": "2c84c778eeaf0af6",
         "js/orders/reminders.js": "de7b21d852fd6259",
         "js/orders/search-box.js": "d63164cf3cc0565e",
         "js/orders/supplier-picker.js": "80850a11f61ab7fc",

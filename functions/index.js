@@ -346,8 +346,8 @@ async function awaySet(lid) {
 // managersAmong below takes the same direction). Either way the order or the timer
 // itself is untouched.
 //
-// ⚠️ NOT USED FOR ORDER LISTS: they reach only whoever runs the place, and those people
-// see every card whatever is hidden.
+// ⚠️ NOT USED FOR ORDER LISTS: they reach only whoever runs the place and the owner of the
+// kitchen (managersAmong), and each of those keeps the Orders card whatever is hidden.
 async function uidsPastHiddenCard(lid, kind, uids) {
   const card = cardForKind(kind);
   const db = getFirestore();

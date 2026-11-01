@@ -122,8 +122,8 @@ const DICTIONARIES = Object.freeze({
     // because the screen said so. «Head chef» must keep saying out loud that it
     // is the manager level under another name, or four choices read as four levels.
     'role.means.owner': 'Everything, including adding people and setting their roles.',
-    'role.means.ownerSales': 'Runs the sales side: Food cost, purchase prices and the clients. Does not use the kitchen screens, cannot add people or change the venue settings.',
-    'role.means.ownerKitchen': 'Runs the kitchen: Calculator, recipes, pastries, supplier orders, stocktake and purchase prices. Sees no selling prices, margins or labour cost, does not manage clients, cannot add people or change the venue settings.',
+    'role.means.ownerSales': 'Runs the sales side: Food cost, with its purchase prices, and the clients. Does not use the kitchen screens, cannot add people or change the app language and Home cards.',
+    'role.means.ownerKitchen': 'Runs the kitchen: Calculator, recipes, pastries, supplier orders, stocktake and purchase prices. Sees no selling prices, margins or labour cost, does not manage clients, cannot add people or change the app language and Home cards.',
     'role.means.manager': 'Runs this location: can delete suppliers, ingredients, recipes and products. Cannot add people.',
     'role.means.headChef': 'The same as Manager — it is only the job title that differs. Runs this location: can delete suppliers, ingredients, recipes and products. Cannot add people.',
     'role.means.staff': 'Does the daily work — quantities, doughs, orders. Cannot delete things or add people.',
@@ -3397,8 +3397,8 @@ const DICTIONARIES = Object.freeze({
     'role.staff.inSentence': 'dipendente',
 
     'role.means.owner': 'Tutto, compreso aggiungere persone e decidere che ruolo hanno.',
-    'role.means.ownerSales': 'Gestisce la parte vendita: Food cost, prezzi di acquisto e clienti. Non usa le schermate della cucina, non può aggiungere persone né cambiare le impostazioni del locale.',
-    'role.means.ownerKitchen': 'Gestisce la cucina: Calcolatore, ricette, paste, ordini ai fornitori, magazzino e prezzi di acquisto. Non vede prezzi di vendita, margini e costo del lavoro, non gestisce i clienti, non può aggiungere persone né cambiare le impostazioni del locale.',
+    'role.means.ownerSales': 'Gestisce la parte vendita: Food cost, con i suoi prezzi di acquisto, e clienti. Non usa le schermate della cucina, non può aggiungere persone né cambiare la lingua dell’app e le schede della Home.',
+    'role.means.ownerKitchen': 'Gestisce la cucina: Calcolatore, ricette, paste, ordini ai fornitori, magazzino e prezzi di acquisto. Non vede prezzi di vendita, margini e costo del lavoro, non gestisce i clienti, non può aggiungere persone né cambiare la lingua dell’app e le schede della Home.',
     'role.means.manager': 'Gestisce questo locale: può cancellare fornitori, ingredienti, ricette e prodotti. Non può aggiungere persone.',
     'role.means.headChef': 'Identico a Responsabile — cambia solo il nome del ruolo. Gestisce questo locale: può cancellare fornitori, ingredienti, ricette e prodotti. Non può aggiungere persone.',
     'role.means.staff': 'Fa il lavoro di ogni giorno — quantità, impasti, ordini. Non può cancellare niente né aggiungere persone.',
