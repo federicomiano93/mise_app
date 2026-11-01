@@ -9,7 +9,9 @@ import {
   initCatalogue, getRecipes, getUsage, bumpUsage, saveRecipe, deleteRecipe, setSyncErrorHandler,
   getIngredients, getSuppliers, getRecipesById, getLabelProfile, saveLabelProfile,
   printerReady, queueLabelJob,
+  getRecipeCategories, recipeCategoriesLoaded, saveRecipeCategories,
 } from './catalogue-store.js';
+import { countInCategory } from './recipe-categories-model.js';
 import { renderList } from './catalogue-list.js';
 import { renderAllergenSheet } from './allergen-sheet.js';
 import { renderPhotoCapture } from './photo-capture.js';
@@ -262,6 +264,8 @@ function buildList(selectedId) {
     onQueryChange: (q) => { searchQuery = q; },
     onOpen: openDetail,
     onAdd: () => openEditor(null),
+    // A GETTER: the list asks at every paint, so a category added on another phone shows at once.
+    getCategories: () => getRecipeCategories(),
   });
 }
 
@@ -532,6 +536,8 @@ function openEditor(recipe, draft) {
     // ⚠️ A GETTER, read when the editor is built: the two label fields appear only
     // for a venue that actually prints them, and that switch lives in Settings.
     getLabelProfile: () => getLabelProfile(),
+    // ⚠️ A GETTER, read once as the editor is built: the menu appears only when the venue has a list.
+    getRecipeCategories: () => getRecipeCategories(),
   }));
 }
 
@@ -587,7 +593,7 @@ async function togglePhoto() {
   }
 }
 
-// What this venue lets itself do. One switch today.
+// What this venue lets itself do: its recipe categories, the label paper, the photo reader.
 //
 // ⚠️ Reached only from the bottom bar, which setHeader() hides from anybody who is
 // not an owner or a manager — and the server refuses the change regardless.
@@ -613,6 +619,13 @@ function showSettings() {
     // The store is local-first and rolls its own copy back on a rejection; the
     // screen rolls back what a person can see. Both, because they are two copies.
     onSaveLabel: patch => saveLabelProfile(patch),
+    // ⚠️ GETTERS, not a copy: the list is written whole, so every change starts from what the
+    // store holds NOW. Nothing is writable until the venue's document has answered.
+    getCategories: () => getRecipeCategories(),
+    categoriesLoaded: () => recipeCategoriesLoaded(),
+    countRecipes: (word, list) => countInCategory(getRecipes(), word, list),
+    onSaveCategories: list => saveRecipeCategories(list),
+    confirm: confirmDialog,
   }));
   swap(activeSettings.root);
 }
@@ -903,6 +916,8 @@ initCatalogue(
     openWantedRecipe();
     // Beside an open recipe on a tablet the list is on screen too, and stays current.
     if (view === 'list' || (view === 'detail' && splitOn)) refreshList();
+    // The category list can arrive, or change on another phone, while Settings is open.
+    if (view === 'settings' && activeSettings) activeSettings.refreshCategories();
     // The offer needs the recipes to have arrived — a session is only worth
     // resuming if its recipe is still in the catalogue.
     if (view === 'list') offerResume();

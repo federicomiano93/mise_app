@@ -82,6 +82,10 @@ body {
 
 /* Recipe list — names only */
 .cat-list { display: flex; flex-direction: column; gap: 10px; }
+/* A category's title in the list: quiet, so the recipe names stay the loudest thing. Only drawn
+   when the venue has a category in use. The gap above it is 10px (the list's) + this margin. */
+.cat-group-head { margin: 10px 2px 0; font-size: .85rem; font-weight: 600; color: var(--cat-text-2); }
+.cat-group-head:first-child { margin-top: 0; }
 .cat-card {
   appearance: none; text-align: left; width: 100%; cursor: pointer;
   background: var(--cat-surface); border: 1px solid var(--cat-border); border-radius: var(--cat-radius);
@@ -216,6 +220,10 @@ body.cat-zoom-lock { overflow: hidden; }
 /* Editor */
 .cat-editor label { display: block; font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); margin: 0 2px 6px; }
 .cat-editor .cat-name-input { width: 100%; padding: 12px 14px; font-size: 1.05rem; font-family: var(--cat-font-round); font-weight: 600; color: var(--cat-text); background: var(--cat-surface); border: 1px solid var(--cat-border); border-radius: 12px; outline: none; margin-bottom: 18px; }
+/* The category menu under the name: full width (.set-select only limits itself inside a .set-row),
+   the same 18px under it as the name box. */
+.cat-editor .cat-category-select { width: 100%; margin-bottom: 18px; }
+.cat-editor .cat-category-select:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
 .cat-editor .cat-name-input:focus { border-color: var(--cat-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cat-accent) 22%, transparent); }
 /* Ingredients: ONE framed list, one row per ingredient, closed by a live Total —
    the same shape as the read-only recipe (.cat-ing-list), so a recipe reads the
@@ -432,6 +440,21 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-del-icon:hover { color: var(--cat-danger); background: var(--cat-surface-2); }
 .cat-add-row { margin-top: 12px; padding: 10px; width: 100%; background: var(--cat-surface-2); border: 1px dashed var(--cat-border); color: var(--cat-text-2); border-radius: 10px; font-family: var(--cat-font); font-size: .92rem; cursor: pointer; }
 .cat-add-row:hover { color: var(--cat-text); border-color: var(--cat-accent); }
+/* Settings → Recipe categories. The Add row: box and button on one line. */
+.cat-category-addrow { display: flex; align-items: center; gap: 8px; }
+.cat-category-addrow .set-input { flex: 1; min-width: 0; }
+.cat-category-add { flex: none; min-height: 44px; padding: 0 18px; background: var(--cat-surface-2); border: 1px solid var(--cat-border); border-radius: 12px; color: var(--cat-text); font-family: var(--cat-font); font-size: 15px; font-weight: 600; cursor: pointer; transition: transform .06s ease; }
+.cat-category-add:active { transform: scale(.97); }
+.cat-category-add:disabled { opacity: .5; cursor: default; }
+.cat-category-add:disabled:active { transform: none; }
+.cat-category-add:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
+.cat-category-error { margin: 0; }
+/* A word of the list: the row is tighter than a plain .set-row because its bin is a 44px target. */
+.set-row.cat-category-row { min-height: 0; padding: 4px 8px 4px 16px; }
+.cat-category-del { flex: none; width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; color: var(--cat-text-2); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.cat-category-del:hover { color: var(--cat-danger); background: var(--cat-surface-2); }
+.cat-category-del:disabled { opacity: .5; cursor: default; }
+.cat-category-del:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: -2px; }
 .cat-editor-actions { display: flex; gap: 10px; align-items: center; margin-top: 22px; }
 .cat-save-btn { flex: 1; padding: 13px; border: 0; border-radius: 12px; background: var(--cat-brand); color: var(--cat-brand-ink); font-size: 1rem; font-weight: 600; font-family: var(--cat-font-round); cursor: pointer; }
 .cat-save-btn:hover { background: var(--cat-brand-2); }
