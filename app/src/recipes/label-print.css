@@ -201,6 +201,16 @@
 
   .lab-print { display: block; }
 
+  /* ⚠️⚠️ A LABEL IS ONE PIECE OF PAPER, AND THIS PAIR KEEPS IT ONE. Driven on the lab tablet (Chrome 101, 1 Nov 2026): a
+     sheet exactly as tall as its page came out as the label AND a blank second page, a wasted label on a label printer.
+     That Chrome's page comes out a fraction shorter than the millimetres asked for (whole points, it seems: 40 mm is 113.39 pt), so the sheet is too
+     tall for it. So the host is 1px shorter than what it holds and clips the rest: the page count comes from the host, and
+     at most a quarter of a millimetre at the very edge of the paper goes. A shorter sheet would not do: the image labels are
+     the very dots sent to the printer, and scaling them would redraw every one. A negative margin alone did not do: the
+     overflow still counted (both tried on the tablet). Written for any child, so a size added later is covered. */
+  .lab-print { overflow: hidden; }
+  .lab-print > * { margin-bottom: -1px; }
+
   /* Nothing from the screen follows the sheet onto the paper. */
   .lab-print .lab-sheet {
     border: 0;
