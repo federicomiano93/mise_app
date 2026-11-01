@@ -98,7 +98,12 @@ function describeProduct(catalogue, product) {
     unreadable = LEFT_OUT.PIECES_NEED_PACK_WEIGHT;
   } else if (!points.length) {
     const last = evaluation.results[evaluation.results.length - 1];
-    unreadable = last ? last.computed.note : LEFT_OUT.NO_COMPUTABLE_PRICE;
+    // A product only ever received free (every line has an amount of zero) is still a product the recipes and the
+    // order lists need: it is created with no price and `priceCheck` below says why. Any other reason for having
+    // no price, and an empty list of results, stays unreadable.
+    const onlyFree = evaluation.results.length > 0
+      && evaluation.results.every((r) => r.computed.note === NOTE.AMOUNT_ZERO_OR_NEGATIVE);
+    if (!onlyFree) unreadable = last ? last.computed.note : LEFT_OUT.NO_COMPUTABLE_PRICE;
   }
   row.canImport = unreadable === null;
   if (row.type !== IMPORTED_TYPE) row.leftOutReason = NOT_IMPORTED_REASON;

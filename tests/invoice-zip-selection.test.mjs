@@ -121,6 +121,31 @@ test('a price «da verificare» keeps its good points; with none left the ingred
   assert.deepEqual(partial.importFile.ingredients[0].prices.map((p) => p.invoiceDate), ['2026-09-01']);
 });
 
+test('a product only ever received free is created with no price and asks for a look', () => {
+  const FREE = { desc: 'SPEZIA OMAGGIO', code: 'FREE', qty: 5, unit: 'KG', total: 0 };
+  const K_FREE = `${SUPPLIER}|code:FREE`;
+  const result = built([FLOUR, FREE]);
+  const entry = result.importFile.ingredients.find((i) => i.key === K_FREE);
+  assert.ok(entry, 'it is in the import file');
+  assert.deepEqual(entry.prices, []);
+  assert.equal(entry.priceCheck, 'amount-zero-or-negative');
+  const row = result.products.find((p) => p.key === K_FREE);
+  assert.equal(row.inImport, true);
+  assert.equal(row.lastPrice, null);
+  const sel = selectImport(result, {});
+  assert.deepEqual(sel.groups.toCheck.map((g) => [g.key, g.reason]), [[K_FREE, 'amount-zero-or-negative']]);
+  assert.deepEqual(sel.groups.unreadable, []);
+});
+
+test('free and paid deliveries of one product behave as before: the paid price stands, no priceCheck', () => {
+  const c = newCase();
+  c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 6 }], { date: '2026-09-01' });
+  c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 0 }], { date: '2026-09-10' });
+  const entry = c.build().importFile.ingredients[0];
+  assert.equal(entry.priceCheck, undefined);
+  assert.equal(entry.prices.length, 1);
+});
+
 test('products that cannot be read are listed with the reason and cannot be ticked', () => {
   const sel = selectImport(built([FLOUR, { desc: 'SPEZIA MISTA', code: 'MIX', qty: 4, unit: 'PZ', total: 20 }]), {});
   assert.deepEqual(keys(sel), [K_FLOUR]);
