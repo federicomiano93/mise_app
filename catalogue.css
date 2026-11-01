@@ -127,7 +127,7 @@ body {
    but only to 56px — on a 1366 tablet that still leaves a 1254px line. */
 .cat-ing-list--zoom { position: fixed; inset: 0; z-index: 50; margin: 0; border: 0; border-radius: 0; overflow-y: auto; cursor: zoom-out; display: flex; flex-direction: column; padding: 20px clamp(16px, 6vw, 56px); padding-inline: max(clamp(16px, 6vw, 56px), var(--app-gutter)); }
 .cat-ing-list--zoom .cat-ing-rows { margin: auto 0; width: 100%; }
-.cat-ing-list--zoom .cat-ing-row { padding: clamp(14px, 3.2vh, 30px) 6px; }
+.cat-ing-list--zoom .cat-ing-row { padding: clamp(14px, calc(var(--vh100) * 0.032), 30px) 6px; }
 /* The − / + text size (js/catalogue/zoom-steps.js): each step multiplies the base size above.
    A row WRAPS when it does not fit, the grams dropping under a long name, right-aligned, so the
    largest step never scrolls sideways at 296px. The bottom is padded so the pair (tokens.css)
@@ -181,8 +181,13 @@ body.cat-zoom-lock { overflow: hidden; }
 /* The recipe + weight panel fill at least a screenful, so Import/Delete always sit
    BELOW the fold and are only reached by scrolling (never on open). The offset is a
    little less than the header height so the block clears the fold without leaving a
-   large gap; svh is the stable mobile unit (ignores the address bar). */
-.cat-detail-top { min-height: calc(100vh - 56px); min-height: calc(100svh - 56px); }
+   large gap; svh is the stable mobile unit (ignores the address bar), so it goes in
+   @supports AFTER the plain line — Chrome before 108 (the lab tablet) has no svh, and
+   --vh100 there is the measured visible height (tokens.css). */
+.cat-detail-top { min-height: calc(var(--vh100) - 56px); }
+@supports (height: 100svh) {
+  .cat-detail-top { min-height: calc(100svh - 56px); }
+}
 
 /* Secondary actions below the recipe — reached by scrolling down, never competing
    with the recipe on open. */
@@ -199,6 +204,8 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-del-btn > span { display: flex; align-items: center; }
 .cat-import-btn:hover { color: var(--cat-text); background: var(--cat-surface); border-color: var(--cat-accent); }
 .cat-import-btn:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
+/* First of the actions at the end of the page; Import follows it. */
+.cat-export-btn { margin-bottom: 10px; }
 .cat-import-hint { text-align: center; font-size: .76rem; color: var(--cat-text-2); margin: 8px 2px 0; }
 
 /* Low-key delete on the detail view (P20 — never competes with Calculate/Import). */
@@ -470,6 +477,18 @@ body.cat-zoom-lock { overflow: hidden; }
   cursor: pointer;
 }
 .cat-ing-link.linked { color: var(--brand); }
+/* The crossed-out euro at the END of the link line: a row Food cost cannot price. Inline after
+   the text, so when the line wraps the icon wraps with the last word instead of hanging
+   alone at the edge. No words: the label is for screen readers. */
+.cat-ing-link-text { overflow-wrap: anywhere; }
+.cat-noprice {
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: -3px;
+  line-height: 0;
+  color: var(--warn);
+}
+.cat-noprice svg { display: block; }
 .cat-ing-link:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: -2px; }
 
 /* What the dough weighs before the oven and after — the two numbers the loss is

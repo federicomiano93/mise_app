@@ -1750,8 +1750,16 @@ service cloud.firestore {
       // The account reads its OWN document to learn which client it is — it cannot
       // list the collection or read anybody else's, so one client can never discover
       // that another exists, let alone who.
+      //
+      // ⚠️ READ BY THOSE WHO CAN MANAGE THE CALCULATOR, NOT BY EVERY MEMBER (audit,
+      // 25 Oct 2026). The document carries linkToken, which IS the ordering account's
+      // password: an employee who read it once kept a working way to order as that
+      // client after leaving the business, and nothing on screen would ever show it.
+      // The same people who may mint and revoke a link may read it; the account
+      // itself still reads its own. The own-document test comes first so a client's
+      // page never pays for canManage's reads.
       match /client-accounts/{uid} {
-        allow read: if member(lid) || (signedIn() && request.auth.uid == uid);
+        allow read: if (signedIn() && request.auth.uid == uid) || canManage(lid, 'calculator');
 
         // OWNER ONLY, and the only WRITE gated in this change rather than a
         // delete. This document is what hands an account outside the business a
@@ -1786,8 +1794,8 @@ service cloud.firestore {
           // for a single-purpose account that can read one product list and write one
           // client's order, nothing else, revoked by deleting this document. It is
           // not a person's password, it is not reused anywhere, and it is readable
-          // only by the location's own staff — who can already read every order and
-          // every price — and by the account it belongs to, which already has it.
+          // only by those who may manage the Calculator — who could mint a new link
+          // anyway — and by the account it belongs to, which already has it.
           //
           // ⚠️ Do NOT copy this pattern for anything a human chooses or reuses.
           && (!('linkToken' in request.resource.data)

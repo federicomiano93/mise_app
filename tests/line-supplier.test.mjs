@@ -205,7 +205,8 @@ test('a supplier whose rows are all ordered elsewhere draws a 0% bar, never NaN%
 
 test('placing an order clears by the lens as it is NOW', () => {
   const main = read('js/orders/orders-main.js');
-  assert.match(main, /await clearSupplier\(supplierId, orderIngredients\(\)\);\s*setStatus\(t\('orders\.orderSavedToHistory'/);
+  // The draft is claimed again between the clear and the message (tests/reorder-list.test.mjs).
+  assert.match(main, /await clearSupplier\(supplierId, orderIngredients\(\)\);\s*(\/\/[^\n]*\n\s*)*scheduleDraftSave\(state\.entries, state\.days\);\s*setStatus\(t\('orders\.orderSavedToHistory'/);
 });
 
 const MISSED = [{
@@ -267,14 +268,15 @@ test('the message to the other supplier carries the line under the INVOICE name;
 test('the order flow reads ingredients through the lens that knows the draft, and the rows claim the line', () => {
   const main = read('js/orders/orders-main.js');
   // (memoised since the render pass: the same call, also keyed on the override signature — tests/orders-memo.test.mjs)
-  assert.match(main, /resolveLens\(state\.ingredients, state\.suppliers, state\.loaded\.suppliers, state\.entries,\s*overrideSignature\(state\.entries\)\)/);
+  assert.match(main, /resolveLens\(markedIngredients\(\), state\.suppliers, state\.loaded\.suppliers, state\.entries,\s*overrideSignature\(state\.entries\)\)/);
   // What a supplier SELLS is the lens without the draft.
-  assert.match(main, /function catalogueIngredients\(\) \{\s*return resolveCatalogue\(state\.ingredients, state\.suppliers, state\.loaded\.suppliers\);/);
+  assert.match(main, /function catalogueIngredients\(\) \{\s*return resolveCatalogue\(markedIngredients\(\), state\.suppliers, state\.loaded\.suppliers\);/);
   assert.match(main, /const ingredients = groupBy\(catalogueIngredients\(\)/, 'the read-only product list');
   assert.match(main, /ingredients: screenRowsFor\(supplier\.id\)/, 'a supplier\'s own screen');
   // A draft snapshot that moves a line repaints, the echo of this phone\'s own typing does not.
   assert.match(main, /const overridesBefore = overrideSignature\(state\.entries\);/);
-  assert.match(main, /if \(overrideSignature\(state\.entries\) !== overridesBefore\) scheduleRender\('list'\);/);
+  // A switched-off line the draft now holds repaints too (tests/orders-not-in-use.test.mjs pins that half).
+  assert.match(main, /if \(overrideSignature\(state\.entries\) !== overridesBefore\s*\|\|[^)]*\)[^;]*scheduleRender\('list'\);/);
   // «start again» also forgets the key in memory.
   assert.match(main, /delete entry\.supplierId;/);
   // «put back» never lands in an order an old override pointed at.

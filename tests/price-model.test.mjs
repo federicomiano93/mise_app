@@ -14,7 +14,7 @@ import {
   roundTo, positiveNumber, isPriceUnit,
   normalizePrice, pricePerKg, costState, isCostable, costReasonText,
   formatMoney, formatRate, formatPricePerUnit,
-  pricePatch, priceChanged, priceRecord,
+  pricePatch, priceChanged, priceRecord, keepPriceDate,
   splitPriceFields,
   withPrices,
 } from '../js/price-model.js';
@@ -285,6 +285,66 @@ test('a first price on an ingredient that never had one is recorded', () => {
   const after = pricePatch({ priceUnit: 'kg', pricePerUnit: 7.2 }, AT);
   assert.equal(priceChanged({ name: 'Flour' }, after), true);
   assert.equal(priceChanged(null, after), true);
+});
+
+// ── The price's date moves only with the money ───────────────────────────────
+// The invoice import keeps an invoice's price only when the invoice is NEWER than this date, so a rename
+// that re-dated an old price as today would silently stop every older-dated invoice from updating it.
+
+const INVOICE_DAY = '2026-09-01T12:00:00.000Z';
+
+test('a rename keeps the date of the price in force', () => {
+  const before = { name: 'Flour', priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: INVOICE_DAY };
+  const patch = keepPriceDate(before, pricePatch({ priceUnit: 'kg', pricePerUnit: 7.2 }, AT));
+  assert.equal(patch.priceUpdatedAt, INVOICE_DAY);
+  assert.equal(patch.pricePerUnit, 7.2);
+});
+
+test('the same money written another way keeps the date', () => {
+  // «7.20 a kilo» re-typed as a 25 kg sack at 180: the same cost per kilo, no history entry, no new date.
+  const before = { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: INVOICE_DAY };
+  const patch = keepPriceDate(before, pricePatch({ priceUnit: 'case', casePrice: 180, caseCount: 1, caseItemSize: 25, caseItemUnit: 'kg' }, AT));
+  assert.equal(priceChanged(before, patch), false);
+  assert.equal(patch.priceUpdatedAt, INVOICE_DAY);
+});
+
+test('a new price takes today as its date', () => {
+  const before = { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: INVOICE_DAY };
+  assert.equal(keepPriceDate(before, pricePatch({ priceUnit: 'kg', pricePerUnit: 7.6 }, AT)).priceUpdatedAt, AT);
+});
+
+test('a changed piece weight is a new price, with a new date', () => {
+  const before = { priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.06, priceUpdatedAt: INVOICE_DAY };
+  assert.equal(keepPriceDate(before, pricePatch({ priceUnit: 'pcs', pricePerUnit: 0.25, unitWeightKg: 0.07 }, AT)).priceUpdatedAt, AT);
+});
+
+test('a first price, or a stored price with no date, takes today', () => {
+  const first = pricePatch({ priceUnit: 'kg', pricePerUnit: 7.2 }, AT);
+  assert.equal(keepPriceDate(null, first).priceUpdatedAt, AT);
+  assert.equal(keepPriceDate({ name: 'Flour' }, first).priceUpdatedAt, AT);
+  assert.equal(keepPriceDate({ name: 'Flour', priceUpdatedAt: INVOICE_DAY }, first).priceUpdatedAt, AT);
+  const undated = { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: null };
+  assert.equal(keepPriceDate(undated, first).priceUpdatedAt, AT);
+});
+
+test('a removed price still clears its date', () => {
+  const before = { priceUnit: 'kg', pricePerUnit: 7.2, unitWeightKg: null, priceUpdatedAt: INVOICE_DAY };
+  const patch = keepPriceDate(before, pricePatch({ priceUnit: null, pricePerUnit: null }, AT));
+  assert.equal(patch.pricePerUnit, null);
+  assert.equal(patch.priceUpdatedAt, null);
+});
+
+test('an employee save (no price keys) is left as it is', () => {
+  assert.deepEqual(keepPriceDate({ priceUpdatedAt: INVOICE_DAY }, {}), {});
+});
+
+test('both saves of the ingredient card keep the date when the money did not move', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const src = await readFile(new URL('../js/ingredient-record-form.js', import.meta.url), 'utf8');
+  const stamped = src.match(/pricePatch\(price\.read\(\), new Date\(\)\.toISOString\(\)/g) || [];
+  const kept = src.match(/keepPriceDate\(item, pricePatch\(price\.read\(\), new Date\(\)\.toISOString\(\)/g) || [];
+  assert.equal(stamped.length, 2);
+  assert.equal(kept.length, stamped.length);
 });
 
 test('changing only the piece weight counts as a price change', () => {

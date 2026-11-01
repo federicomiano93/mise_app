@@ -18,6 +18,7 @@
 
 import { t } from '../i18n.js';
 import { withLineSuppliers } from './line-supplier.js';
+import { inOrderFlow } from './not-in-use.js';
 
 // ⚠️ THE ID ITSELF LIVES IN js/records.js since 13 Sep 2026: the ingredient card is shared
 // with the Catalogue, which may not import this folder, and a stored id must never exist in
@@ -97,7 +98,7 @@ export function resolveSuppliers(ingredients, suppliers, suppliersLoaded, entrie
 // "No supplier" card on every screen would be noise.
 export function orderSuppliers(activeSuppliers, resolvedIngredients) {
   const used = (resolvedIngredients || []).some(
-    i => i.supplierId === NO_SUPPLIER_ID && i.active !== false);
+    i => i.supplierId === NO_SUPPLIER_ID && inOrderFlow(i));
   const list = (activeSuppliers || []).slice();
   if (used) list.push(noSupplier());
   return list;

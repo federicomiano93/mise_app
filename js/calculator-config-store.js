@@ -18,6 +18,7 @@ const CACHE_KEY = 'calculator-config';
 
 let current = readCache();
 let notify = null; // called with the new config whenever it changes (set by initConfig)
+let lastRemoteText = null; // the last server document applied, as JSON (see initConfig)
 
 // Has Firestore ANSWERED yet — including answering "there is no document"?
 //
@@ -31,7 +32,8 @@ let notify = null; // called with the new config whenever it changes (set by ini
 //
 // So a save is only allowed to leave the device once the server has told us what
 // it holds. "No document yet" is a real answer (a brand-new location must be
-// able to save); never having heard back is not.
+// able to save); never having heard back is not — and neither is Firestore's own
+// offline copy saying "no document" (see initConfig).
 let serverAnswered = false;
 
 function readCache() {
@@ -62,7 +64,18 @@ export function getConfig() {
 // config so the first paint never waits on the network.
 export function initConfig(onUpdate) {
   notify = guarded('Calculator config: screen refresh', onUpdate);
-  watchCalculatorConfig(remote => {
+  watchCalculatorConfig((remote, fromCache) => {
+    // ⚠️ A FROM-CACHE "NO DOCUMENT" IS «NOTHING KNOWN», NOT «NOTHING HERE».
+    // Offline, Firestore answers a document it has never fetched on this phone
+    // with "does not exist", from its cache — and entering a location wipes that
+    // cache. Believing it would unlock saving on DEFAULT_CONFIG's sample clients,
+    // and the first Save would replace the real address book (the transaction
+    // rescues only cat-* recipes). So it is ignored, the screen stays on
+    // «Loading…», and the server's own answer is awaited: firebase.js asks for
+    // metadata changes, so that answer arrives even when it is the same nothing
+    // (audit, 25 Oct 2026). A cached document that EXISTS is believed: it can
+    // only have come from the server, and working offline must keep working.
+    if (!remote && fromCache) return;
     const firstAnswer = !serverAnswered;
     // Set BEFORE the early return: "there is no document" is an answer, and a
     // brand-new location has to be able to save its first client.
@@ -78,6 +91,14 @@ export function initConfig(onUpdate) {
       if (firstAnswer && notify) notify(current);
       return; // no document yet — keep cache/default
     }
+    // ⚠️ THE SAME DOCUMENT AGAIN IS NOT NEWS. Metadata changes (see firebase.js) send
+    // it again when the server confirms the cached copy and whenever the phone goes
+    // offline or comes back — and a repaint here is a full rebuild of the Calculator:
+    // it closes the full-screen recipe, drops the focus and jumps to the top (code
+    // review, 25 Oct 2026). Only data that differs from the last applied is drawn.
+    const text = JSON.stringify(remote);
+    if (text === lastRemoteText) return;
+    lastRemoteText = text;
     current = normalizeConfig(remote);
     writeCache(current);
     if (notify) notify(current);

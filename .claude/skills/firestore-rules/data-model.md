@@ -146,8 +146,8 @@ client reads, lists or deletes one. Read, summarised and pruned (400 days) by
 app write another person's `users/{uid}` would be a master key to the whole database. `clientId`
 may not contain `_` (the order id is `{date}_{clientId}`).
 
-**Food cost** — the only collections whose READ is gated on a role (the reading is what is
-protected).
+**Food cost** — collections whose READ is gated on a role (the reading is what is protected);
+the only other one is `client-accounts` (managers, or the account itself — audit, 25 Oct 2026).
 - `products/{id}` · `products/{id}/snapshots/{autoId}`. A `vatRate` of 0 is a real answer.
   `model: 2`; `components[]` may hold `{kind:'ingredient', ingredientId, qty, unit:'g'|'kg'|'pcs'}`
   beside the legacy `{recipeId, qtyKg}`; `sellingMode` adds `'pack'` with `packSize`/`packUnit`;

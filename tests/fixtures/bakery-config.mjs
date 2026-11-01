@@ -1,18 +1,19 @@
-// The Italian Club Bakery's own address book and recipes — the shape DEFAULT_CONFIG
-// held until 13 Aug 2026, kept HERE because it is a TEST FIXTURE and nothing else.
+// An INVENTED bakery's address book and recipes, of the same shape as the real one the
+// dough maths was proven on. It is the shape DEFAULT_CONFIG held until 13 Aug 2026, kept
+// HERE because it is a TEST FIXTURE and nothing else. The real formulas and product
+// weights were removed and replaced with made-up numbers because the repository is
+// public (audit, 25 Oct 2026); the names, labels and keys are unchanged.
 //
-// ⚠️ WHY IT LEFT THE APP. The app now has customers, and this is one bakery's data:
-// four clients, ten products with their weights, and three recipes with their real
-// gram-by-gram formulas. Federico, 13 Aug 2026: «quelle ricette sono solo di The
-// Italian Club Bakery». Shipping it as the default meant every customer who bought
-// the Calculator opened it holding somebody else's recipes.
+// ⚠️ WHY IT LEFT THE APP. The app now has customers, and shipping one bakery's data as
+// the default meant every customer who bought the Calculator opened it holding somebody
+// else's recipes. Federico, 13 Aug 2026.
 //
-// ⚠️ WHY IT IS KEPT AT ALL, and this is the load-bearing half: these numbers are
-// the PROOF OF THE DOUGH MATHS. Fifty-one assertions run through them, including
-// the ones that show the config-driven scaler is byte-identical to the three
-// hand-written scalers it replaced (tests/dynamic-recipes.test.mjs). Deleting them
-// would delete that proof; moving them here keeps every assertion and removes a
-// dependency that should never have existed — a test standing on production data.
+// ⚠️ WHY IT IS KEPT AT ALL, and this is the load-bearing half: this shape is the
+// PROOF OF THE DOUGH MATHS. Fifty-one assertions run through it, including the ones
+// that show the config-driven scaler is byte-identical to the three hand-written
+// scalers it replaced (tests/dynamic-recipes.test.mjs). Deleting it would delete that
+// proof; keeping it here removes a dependency that should never have existed — a test
+// standing on production data.
 //
 // ⚠️ NOTHING IN js/ MAY IMPORT THIS. It is not shipped, it is not in sw.js ASSETS,
 // and a runtime import would put one customer's recipes back on every phone.
@@ -20,22 +21,22 @@
 export const BAKERY_CONFIG = {
   clients: [
     { id: 'c-bakery', name: 'Bakery', products: [
-      { id: 'f-pizze',   name: 'Pizzas',    recipeId: 'focaccia', weight: 201, kind: 'number' },
-      { id: 'f-focacce', name: 'Focaccias', recipeId: 'focaccia', weight: 181, kind: 'number' },
+      { id: 'f-pizze',   name: 'Pizzas',    recipeId: 'focaccia', weight: 210, kind: 'number' },
+      { id: 'f-focacce', name: 'Focaccias', recipeId: 'focaccia', weight: 175, kind: 'number' },
     ] },
     { id: 'c-client-1', name: 'Client 1', products: [
-      { id: 'f-ciabatta',   name: 'Ciabatta',    recipeId: 'focaccia', weight: 151, kind: 'dropdown', crate: { show: true, perBox: 20 } },
-      { id: 'b-burgerbuns', name: 'Burger buns', recipeId: 'brioche',  weight: 81,  kind: 'number' },
-      { id: 'b-subrolls',   name: 'Sub rolls',   recipeId: 'brioche',  weight: 121, kind: 'number' },
+      { id: 'f-ciabatta',   name: 'Ciabatta',    recipeId: 'focaccia', weight: 160, kind: 'dropdown', crate: { show: true, perBox: 20 } },
+      { id: 'b-burgerbuns', name: 'Burger buns', recipeId: 'brioche',  weight: 85,  kind: 'number' },
+      { id: 'b-subrolls',   name: 'Sub rolls',   recipeId: 'brioche',  weight: 125, kind: 'number' },
     ] },
     { id: 'c-client-2', name: 'Client 2', products: [
-      { id: 'f-trayfocaccia', name: 'Tray focaccia', recipeId: 'focaccia',  weight: 1800, kind: 'number' },
-      { id: 'b-bun',          name: 'Buns',          recipeId: 'brioche',   weight: 71,   kind: 'number' },
-      { id: 'b-rolls',        name: 'Rolls',         recipeId: 'brioche',   weight: 71,   kind: 'number' },
-      { id: 's-loaf',         name: 'Loaf',          recipeId: 'sourdough', weight: 905,  kind: 'number' },
+      { id: 'f-trayfocaccia', name: 'Tray focaccia', recipeId: 'focaccia',  weight: 1750, kind: 'number' },
+      { id: 'b-bun',          name: 'Buns',          recipeId: 'brioche',   weight: 75,   kind: 'number' },
+      { id: 'b-rolls',        name: 'Rolls',         recipeId: 'brioche',   weight: 65,   kind: 'number' },
+      { id: 's-loaf',         name: 'Loaf',          recipeId: 'sourdough', weight: 900,  kind: 'number' },
     ] },
     { id: 'c-client-3', name: 'Client 3', products: [
-      { id: 'f-panini', name: 'Panini', recipeId: 'focaccia', weight: 131, kind: 'number' },
+      { id: 'f-panini', name: 'Panini', recipeId: 'focaccia', weight: 115, kind: 'number' },
     ] },
   ],
   // The recipes — the base everything else hangs off. Each has a calc logic, an
@@ -47,36 +48,36 @@ export const BAKERY_CONFIG = {
   recipes: [
     { id: 'focaccia', name: 'Focaccia', logic: 'orders',
       ingredients: [
-        { key: 'flourBlu', label: 'Flour uniqua blue', grams: 278 },
-        { key: 'flourT65', label: 'Flour T65', grams: 278 },
-        { key: 'malt', label: 'Malt', grams: 3 },
-        { key: 'sugar', label: 'Sugar', grams: 8 },
-        { key: 'salt', label: 'Salt', grams: 11 },
-        { key: 'yeast', label: 'Yeast', grams: 3.6 },
-        { key: 'oil', label: 'Oil', grams: 56 },
-        { key: 'water1', label: '1° Water', grams: 334 },
-        { key: 'water2', label: '2° Water', grams: 24 },
+        { key: 'flourBlu', label: 'Flour uniqua blue', grams: 260 },
+        { key: 'flourT65', label: 'Flour T65', grams: 290 },
+        { key: 'malt', label: 'Malt', grams: 4 },
+        { key: 'sugar', label: 'Sugar', grams: 10 },
+        { key: 'salt', label: 'Salt', grams: 12 },
+        { key: 'yeast', label: 'Yeast', grams: 3.4 },
+        { key: 'oil', label: 'Oil', grams: 50 },
+        { key: 'water1', label: '1° Water', grams: 340 },
+        { key: 'water2', label: '2° Water', grams: 30 },
       ],
       leaveningKey: 'yeast', leaveningDefaultPct: 0.65, showLeavening: true,
-      baselinePct: 0.6474820143884892, order: 0, visible: true },
+      baselinePct: 0.6181818181818182, order: 0, visible: true },
     { id: 'brioche', name: 'Brioche', logic: 'orders',
       ingredients: [
-        { key: 'flour', label: 'Mella brioche pof', grams: 3185 },
-        { key: 'yeast', label: 'Yeast', grams: 127.4 },
-        { key: 'water', label: 'Water', grams: 1575 },
+        { key: 'flour', label: 'Mella brioche pof', grams: 3000 },
+        { key: 'yeast', label: 'Yeast', grams: 120 },
+        { key: 'water', label: 'Water', grams: 1500 },
       ],
       leaveningKey: 'yeast', leaveningDefaultPct: 4, showLeavening: true,
       baselinePct: 4, order: 1, visible: true },
     { id: 'sourdough', name: 'Sourdough', logic: 'orders',
       ingredients: [
-        { key: 'flourBlu', label: 'Flour uniqua blue', grams: 2560 },
-        { key: 'flourT65', label: 'Flour T65', grams: 2560 },
-        { key: 'flourWhole', label: 'Flour wholemeal', grams: 570 },
-        { key: 'water1', label: '1° Water', grams: 3800 },
-        { key: 'starter', label: 'Starter', grams: 1024 },
-        { key: 'malt', label: 'Malt', grams: 30 },
-        { key: 'salt', label: 'Salt', grams: 124 },
-        { key: 'water2', label: '2° Water', grams: 300 },
+        { key: 'flourBlu', label: 'Flour uniqua blue', grams: 2400 },
+        { key: 'flourT65', label: 'Flour T65', grams: 2400 },
+        { key: 'flourWhole', label: 'Flour wholemeal', grams: 600 },
+        { key: 'water1', label: '1° Water', grams: 3700 },
+        { key: 'starter', label: 'Starter', grams: 980 },
+        { key: 'malt', label: 'Malt', grams: 25 },
+        { key: 'salt', label: 'Salt', grams: 115 },
+        { key: 'water2', label: '2° Water', grams: 250 },
       ],
       leaveningKey: 'starter', leaveningDefaultPct: 18, showLeavening: true,
       baselinePct: 18, order: 2, visible: true },

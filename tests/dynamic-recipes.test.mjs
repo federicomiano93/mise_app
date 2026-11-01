@@ -14,18 +14,18 @@ import {
 import { scaleRecipe, scaleFocaccia, scaleBrioche, scaleSourdough } from '../js/calculator-dough-math.js';
 
 // ⚠️ THE BAKERY'S DATA IS A FIXTURE NOW, NOT THE APP'S DEFAULT (13 Aug 2026).
-// These assertions run through The Italian Club Bakery's own clients, products
+// These assertions run through an invented bakery's clients, products
 // and formulas — including the ones proving the config-driven scaler is
-// byte-identical to the three hand-written scalers it replaced. Every number is
-// unchanged; only where it is kept has moved, out of js/ and into tests/, so that
+// byte-identical to the three hand-written scalers it replaced. The numbers are
+// invented (audit, 25 Oct 2026); the fixture lives in tests/, out of js/, so that
 // a customer who buys the app no longer opens it holding somebody else's recipes.
 import { BAKERY_CONFIG } from './fixtures/bakery-config.mjs';
 
-// The recipe amount objects the legacy scale functions expect (mirror RECIPE_DEFAULTS
-// in js/recipes.js — recipes.js can't load under Node, it reads localStorage).
-const FOCACCIA = { flourBlu: 278, flourT65: 278, malt: 3, sugar: 8, salt: 11, yeast: 3.6, oil: 56, water1: 334, water2: 24 };
-const BRIOCHE = { flour: 3185, yeast: 127.4, water: 1575 };
-const SOURDOUGH = { flourBlu: 2560, flourT65: 2560, flourWhole: 570, water1: 3800, starter: 1024, malt: 30, salt: 124, water2: 300 };
+// The recipe amount objects the legacy scale functions expect (the invented fixture
+// bakery's, tests/fixtures/bakery-config.mjs).
+const FOCACCIA = { flourBlu: 260, flourT65: 290, malt: 4, sugar: 10, salt: 12, yeast: 3.4, oil: 50, water1: 340, water2: 30 };
+const BRIOCHE = { flour: 3000, yeast: 120, water: 1500 };
+const SOURDOUGH = { flourBlu: 2400, flourT65: 2400, flourWhole: 600, water1: 3700, starter: 980, malt: 25, salt: 115, water2: 250 };
 
 const scaleViaConfig = (config, id, target, pct) => scaleRecipe(recipeSpec(getRecipeById(config, id)), target, pct);
 
@@ -56,7 +56,8 @@ test('focaccia: config-driven scaling equals scaleFocaccia across the knob range
 });
 
 test('brioche: config-driven scaling equals scaleBrioche EXACTLY across the knob range', () => {
-  for (const target of [2000, 4887.4, 9000, 18000]) {
+  // Fractional targets (4620.6, 9240.4) keep a case where Math.round(target) differs from the target.
+  for (const target of [2000, 4620, 4620.6, 9000, 9240.4, 18000]) {
     for (const pct of [2, 4, 6, 8]) {
       assert.deepEqual(scaleViaConfig(BAKERY_CONFIG, 'brioche', target, pct),
         scaleBrioche(BRIOCHE, target, pct), `brioche ${target}g @ ${pct}%`);
@@ -87,9 +88,9 @@ test('the displayed integers always sum to Math.round(target)', () => {
 test('recipeSpec builds ordered amounts, the leavening key and the stored baseline', () => {
   const spec = recipeSpec(getRecipeById(BAKERY_CONFIG, 'focaccia'));
   assert.deepEqual(Object.keys(spec.amounts), ['flourBlu', 'flourT65', 'malt', 'sugar', 'salt', 'yeast', 'oil', 'water1', 'water2']);
-  assert.equal(spec.amounts.yeast, 3.6);
+  assert.equal(spec.amounts.yeast, 3.4);
   assert.equal(spec.leaveningKey, 'yeast');
-  assert.ok(Math.abs(spec.baselinePct - 0.6474820143884892) < 1e-9);
+  assert.ok(Math.abs(spec.baselinePct - 0.6181818181818182) < 1e-9);
 });
 
 test('recipeSpec on a leavening-less recipe scales pro-rata (no leavening key)', () => {
@@ -216,9 +217,9 @@ test('LOGICS lists the five calc logics', () => {
 
 test('computeRecipeTarget: orders = Σ(qty×weight) + extra; ignores any typed total', () => {
   const recipe = getRecipeById(BAKERY_CONFIG, 'focaccia'); // logic 'orders'
-  const getQty = (id) => ({ [pairId('c-bakery', 'f-pizze')]: 10 }[id] || 0); // 10×201
+  const getQty = (id) => ({ [pairId('c-bakery', 'f-pizze')]: 10 }[id] || 0); // 10×210
   const t = computeRecipeTarget(BAKERY_CONFIG, recipe, { getQty, extraGrams: 500, totalInput: 9999 });
-  assert.equal(t, 10 * 201 + 500); // typed total ignored for 'orders'
+  assert.equal(t, 10 * 210 + 500); // typed total ignored for 'orders'
 });
 
 test('computeRecipeTarget: total = the typed total only (no orders, no extra)', () => {
@@ -231,7 +232,7 @@ test('computeRecipeTarget: both = orders + typed total + extra', () => {
   const recipe = { ...getRecipeById(BAKERY_CONFIG, 'focaccia'), logic: 'both' };
   const getQty = (id) => ({ [pairId('c-bakery', 'f-pizze')]: 10 }[id] || 0);
   const t = computeRecipeTarget(BAKERY_CONFIG, recipe, { getQty, extraGrams: 500, totalInput: 2000 });
-  assert.equal(t, 10 * 201 + 2000 + 500);
+  assert.equal(t, 10 * 210 + 2000 + 500);
 });
 
 test('computeRecipeTarget never produces NaN/negative from junk inputs', () => {

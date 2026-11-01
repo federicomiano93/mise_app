@@ -25,7 +25,8 @@ test('a line sent to another supplier is saved with its supplier, in the one mer
   const { name, id, data } = stub.calls.saveDoc[0];
   assert.equal(name, 'drafts');
   assert.equal(id, 'current');
-  assert.deepEqual(data.entries, { w1: { qty: 4, stock: 0, supplierId: 'bruno' } });
+  // Only the fields the line has: the quantity with its unit and supplier, no stock 0 on a new line.
+  assert.deepEqual(data.entries, { w1: { qty: 4, unit: '', supplierId: 'bruno' } });
   assert.deepEqual(data.days, { bruno: '2026-10-02' });
 });
 
@@ -36,7 +37,7 @@ test('the line taken to zero writes the key away in the same write', async () =>
 
   entries.w2.qty = 0;                       // memory may still hold the key
   await draft.saveDraftNow(entries, {});
-  assert.deepEqual(stub.calls.saveDoc[0].data.entries.w2, { qty: 0, stock: 0, supplierId: '' });
+  assert.deepEqual(stub.calls.saveDoc[0].data.entries.w2, { qty: 0, unit: '', supplierId: '' });
 });
 
 test('typing a quantity on the usual supplier\'s row moves the line back and writes the key away', async () => {
@@ -47,7 +48,7 @@ test('typing a quantity on the usual supplier\'s row moves the line back and wri
   entries.w3.qty = 2;
   entries.w3.supplierId = '';
   await draft.saveDraftNow(entries, {});
-  assert.deepEqual(stub.calls.saveDoc[0].data.entries.w3, { qty: 2, stock: 0, supplierId: '' });
+  assert.deepEqual(stub.calls.saveDoc[0].data.entries.w3, { qty: 2, unit: '', supplierId: '' });
 });
 
 test('«start again» for the other supplier deletes the override with the quantity', async () => {

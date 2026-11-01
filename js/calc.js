@@ -16,12 +16,12 @@ import {
   computeRecipeTarget, getTabProducts, doughExtraGrams, isExtraDoughEnabled,
   getDivisorProducts, divisorTotal, splitDough, DIVISOR_MAX,
   isCrateEnabled, getCratePerBox, crateCount,
-  getRecipeById, recipeSpec, showsLeaveningKnob, normalizeTrays, traysGrams, formatGrams, isProRata,
+  getRecipeById, exportTraysFor, recipeSpec, showsLeaveningKnob, normalizeTrays, traysGrams, formatGrams, isProRata,
 } from './calculator-config.js';
 // ⚠️ Where a tab's ingredients really come from. A screen reading
 // recipe.ingredients directly would see the tab's own leftover copy.
-import { effectiveRecipe } from './calculator-catalogue-link.js';
-import { canCalculate, sheetRecipe } from './calculator-recipe-source.js';
+import { effectiveRecipe, isStillLoading, problemMessage } from './calculator-catalogue-link.js';
+import { canCalculate, sheetRecipe, showsSourceProblem } from './calculator-recipe-source.js';
 import { getConfig } from './calculator-config-store.js';
 import { el } from './calculator-render.js';
 import { placeResult } from './result-place.js';
@@ -245,6 +245,18 @@ function renderCrateBoxes(id) {
   }
 }
 
+// Why a linked tab cannot be calculated, written on the tab itself (showsSourceProblem).
+function paintSourceProblem(id, recipe, source) {
+  const box = document.getElementById(id + '-source-problem');
+  if (!box) return;
+  const show = showsSourceProblem(recipe, source, isStillLoading(recipe));
+  const text = show ? problemMessage(source) : '';
+  // Written only when it changes: calc() runs on every keystroke, and a status line
+  // rewritten each time is read out again by some screen readers.
+  if (box.textContent !== text) box.textContent = text;
+  box.hidden = !show;
+}
+
 // The generic calculation for one recipe: compute the target by logic, scale the
 // recipe to it, render the ingredients, badge, total, divisor and crate boxes.
 export function calc(id) {
@@ -257,17 +269,21 @@ export function calc(id) {
     trays: traysFor(id),
   });
   paintTraysGrams(recipe);
+
+  // ⚠️ THE INGREDIENTS COME THROUGH effectiveRecipe(), NEVER STRAIGHT OFF THE TAB.
+  // Once a tab is linked, recipe.ingredients is only its own leftover copy —
+  // exactly the stale data this change exists to stop using. Resolved before the
+  // empty-total return, so the reason a tab cannot be calculated shows before
+  // anything is typed.
+  const source = effectiveRecipe(recipe);
+  paintSourceProblem(id, recipe, source);
+
   const resultId = id + '-result';
   if (target <= 0) {
     hideResult(resultId);
     applyTabState(id);
     return;
   }
-
-  // ⚠️ THE INGREDIENTS COME THROUGH effectiveRecipe(), NEVER STRAIGHT OFF THE TAB.
-  // Once a tab is linked, recipe.ingredients is only its own leftover copy —
-  // exactly the stale data this change exists to stop using.
-  const source = effectiveRecipe(recipe);
 
   // ⚠️ AND A RECIPE THAT CANNOT BE READ REFUSES RATHER THAN BAKING NOTHING. An
   // empty ingredient list scales perfectly happily into a dough of zero, which is
@@ -276,6 +292,8 @@ export function calc(id) {
   if (!canCalculate(source)) {
     renderIngredients(id + '-ingredients', []);
     lastRecipe[id] = null;
+    // The result card goes too: left open, it showed an empty list under the OLD total.
+    hideResult(resultId);
     applyTabState(id);
     return;
   }
@@ -290,7 +308,7 @@ export function calc(id) {
   const scaled = scaleRecipe(spec, target, pct);
   const rows = source.ingredients.map((ing, i) => ({ name: ing.label, grams: scaled[i] || 0 }));
   renderIngredients(id + '-ingredients', rows);
-  lastRecipe[id] = { rows, totalG: Math.round(target), name: source.name || recipe.name };
+  lastRecipe[id] = { rows, totalG: Math.round(target), name: source.name || recipe.name, trays: exportTrays(recipe) };
 
   const disp = document.getElementById(id + '-param-display');
   if (disp) disp.textContent = pct;
@@ -303,6 +321,25 @@ export function calc(id) {
   renderCrateBoxes(id);
   applyTabState(id);
   if (revealed[id]) showResult(resultId); else hideResult(resultId);
+}
+
+// The trays the exported title may name: only when the dough IS the trays (a trays recipe, or a
+// trays-plus-total one with nothing typed in the total), otherwise 0 and the title says the grams.
+function exportTrays(recipe) {
+  return exportTraysFor(recipe.logic, traysFor(recipe.id), totalInputFor(recipe.id));
+}
+
+// What the PDF / Excel export is made from: the SAME rows the result card shows (never recomputed),
+// unrounded, plus the trays the title may name. null when nothing is calculated.
+export function exportModelFor(id) {
+  const model = lastRecipe[id];
+  if (!model) return null;
+  return {
+    name: model.name,
+    trays: model.trays || 0,
+    totalG: model.totalG,
+    rows: model.rows.map(r => ({ name: r.name, grams: r.grams })),
+  };
 }
 
 // What the full-screen view shows: the same rows the result card shows, from the same model.

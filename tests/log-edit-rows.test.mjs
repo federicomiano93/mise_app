@@ -22,7 +22,7 @@ const FOCACCIA = getRecipeById(BAKERY_CONFIG, 'focaccia');
 function saved(over = {}) {
   return {
     id: 'f-pizze', name: 'Pizzas', clientName: 'Bakery',
-    qty: 40, weightG: 201, kind: 'number', crate: { show: false, perBox: 20 },
+    qty: 40, weightG: 210, kind: 'number', crate: { show: false, perBox: 20 },
     ...over,
   };
 }
@@ -31,7 +31,7 @@ function saved(over = {}) {
 function current(over = {}) {
   return {
     id: 'f-pizze', name: 'Pizzas', clientName: 'Bakery',
-    weightG: 201, kind: 'number', crate: { show: false, perBox: 20 },
+    weightG: 210, kind: 'number', crate: { show: false, perBox: 20 },
     ...over,
   };
 }
@@ -53,7 +53,7 @@ test('a saved row keeps the name it had, not the renamed one', () => {
 
 test('a saved row keeps the weight it had, not a changed one', () => {
   const rows = editRows([saved()], [current({ weightG: 250 })]);
-  assert.equal(rows[0].weightG, 201);
+  assert.equal(rows[0].weightG, 210);
 });
 
 test('a product added since the log appears at zero, after the saved rows', () => {
@@ -105,7 +105,7 @@ test('the snapshot carries every field buildSheet reads', () => {
 });
 
 test('a sheet built from the snapshot is identical to one built from the recipe', () => {
-  const items = [{ id: 'f-pizze', name: 'Pizzas', clientName: 'Bakery', qty: 40, weightG: 201, kind: 'number' }];
+  const items = [{ id: 'f-pizze', name: 'Pizzas', clientName: 'Bakery', qty: 40, weightG: 210, kind: 'number' }];
   const fromRecipe = buildSheet({ recipe: FOCACCIA, items, leaveningPct: 0.8 });
   const fromSnapshot = buildSheet({ recipe: recipeSnapshot(FOCACCIA), items, leaveningPct: 0.8 });
   assert.deepEqual(fromSnapshot, fromRecipe);

@@ -83,6 +83,7 @@ import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
 import { overrideSignature } from './line-supplier.js';
 import { memoLast } from './memo.js';
+import { inOrderFlow, noteHeld, markHeld, releaseHeld } from './not-in-use.js';
 import { createRenderScheduler } from './render-scheduler.js';
 import { openIngredientCreate, openIngredientEdit } from '../ingredient-create.js';
 import { normalizeOrdersConfig } from './orders-config.js';
@@ -288,9 +289,36 @@ function watchOrdersConfig() {
 // (the snapshot handlers assign a fresh array/object), so their references are valid keys.
 // state.entries is the exception — mutated in place — which is why the key is the override
 // signature, the only part of it this lens reads (line-supplier.js withLineSuppliers).
+//
+// ⚠️ AN INGREDIENT SWITCHED OFF WHILE IT HOLDS A QUANTITY STAYS (js/orders/not-in-use.js): both
+// lenses below read markedIngredients(), not state.ingredients. Its memo key MUST carry which
+// inactive ids are held — state.entries is mutated in place, so the array reference alone would
+// serve a stale list the moment a quantity is typed on an ingredient that is already off.
+const heldNotInUse = new Set();   // sticky for the life of the page; see releaseHeldFor()
+const markLens = memoLast((ingredients, _heldSignature) => markHeld(ingredients, heldNotInUse));
+function markedIngredients() {
+  return markLens(state.ingredients, noteHeld(state.ingredients, state.entries, heldNotInUse));
+}
+
+// A send, a clear or a discard lets the switched-off lines of those suppliers go, in two steps.
+// ⚠️ TAKE THE LINES BEFORE ANYTHING IS FORGOTTEN: a line ordered from another supplier this once
+// belongs to that supplier only while its per-order override lasts, and forgetting the quantity
+// drops the override too — asked afterwards, the lens files it back under its usual supplier
+// and the empty «Non in uso» row stayed on screen until a reload.
+function heldLinesOf(supplierIds) {
+  return supplierIds.flatMap(id => ingredientsOf(id, orderIngredients(), { activeOnly: false }))
+    .map(ing => ing.id).filter(id => heldNotInUse.has(id));
+}
+// Then, AFTER the quantities are forgotten locally: let go of those now empty, and repaint (the
+// flat list keeps rows it already drew).
+function releaseHeldLines(ids) {
+  releaseHeld(heldNotInUse, ids, state.entries);
+  scheduleRender('list');
+}
+
 const resolveLens = memoLast(resolveSuppliers);
 function orderIngredients() {
-  return resolveLens(state.ingredients, state.suppliers, state.loaded.suppliers, state.entries,
+  return resolveLens(markedIngredients(), state.suppliers, state.loaded.suppliers, state.entries,
     overrideSignature(state.entries));
 }
 
@@ -299,7 +327,7 @@ function orderIngredients() {
 // keeps showing when one of them is ordered elsewhere this time.
 const resolveCatalogue = memoLast(resolveSuppliers);
 function catalogueIngredients() {
-  return resolveCatalogue(state.ingredients, state.suppliers, state.loaded.suppliers);
+  return resolveCatalogue(markedIngredients(), state.suppliers, state.loaded.suppliers);
 }
 
 const sortActiveSuppliers = memoLast((suppliers, order) => sortSuppliersByOrder(
@@ -332,7 +360,7 @@ function findOrderSupplier(supplierId) {
   return orderSupplierEntry().byId.get(supplierId);
 }
 
-const groupLensBySupplier = memoLast(lens => groupBy(lens.filter(i => i.active !== false), 'supplierId'));
+const groupLensBySupplier = memoLast(lens => groupBy(lens.filter(inOrderFlow), 'supplierId'));
 function ingredientsBySupplier() {
   return groupLensBySupplier(orderIngredients());
 }
@@ -352,7 +380,7 @@ function lensById() {
 function screenRowsFor(supplierId) {
   const lens = lensById();
   const label = id => supplierLabel(findOrderSupplier(id)) || '';
-  const own = (groupBy(catalogueIngredients().filter(i => i.active !== false), 'supplierId')[supplierId] || [])
+  const own = (groupBy(catalogueIngredients().filter(inOrderFlow), 'supplierId')[supplierId] || [])
     .map(ing => {
       const now = lens[ing.id];
       return now && now.supplierId !== supplierId
@@ -786,7 +814,7 @@ function renderSupplierItems() {
   // The SAME lens the order screen uses — never state.ingredients raw, or a product
   // left without a supplier would appear on one screen and not the other. Without the
   // per-order overrides: this list says what the supplier SELLS.
-  const ingredients = groupBy(catalogueIngredients().filter(i => i.active !== false), 'supplierId')[supplier.id] || [];
+  const ingredients = groupBy(catalogueIngredients().filter(inOrderFlow), 'supplierId')[supplier.id] || [];
 
   if (itemsView && itemsView.id === supplier.id) {
     itemsView.repaint(ingredients);
@@ -1163,6 +1191,10 @@ function incomingContext() {
       } catch (err) {
         if (hadEntry) state.entries[id] = previousEntry; else delete state.entries[id];
         if (previousDay) state.days[supplierId] = previousDay; else delete state.days[supplierId];
+        // ⚠️ A refused write hands its fields back to draft.js as unsent typing, so the line
+        // would come back moved on the next snapshot: re-claim from the state just put back.
+        // Keystrokes that rode on the failed write go out with it, as in restamp().
+        scheduleDraftSave(state.entries, state.days);
         throw err;
       }
       syncInputsFromState();
@@ -2064,8 +2096,8 @@ function unitConflictText(day, list, conflicts) {
 }
 
 // Drop a supplier's rows from the in-memory draft immediately, so the screen
-// clears without waiting for the write to come back (and so a debounced save
-// already in flight cannot resurrect them).
+// clears without waiting for the write to come back. What the autosave sends is
+// draft.js's claims, not this map: clearSupplier is what releases those.
 function forgetSupplierLocally(supplierId) {
   ingredientsOf(supplierId, orderIngredients(), { activeOnly: false })
     .forEach(ing => { delete state.entries[ing.id]; });
@@ -2173,9 +2205,10 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
   // would retry, and the retry would ADD the same items to the record all over
   // again (mergeArchives adds by design).
   //
-  // Forget the rows LOCALLY first: a keystroke during the archive above may have
-  // queued a draft save, and that save holds state.entries BY REFERENCE. Dropping
-  // the keys before it fires is what stops it writing them back after the clear.
+  // Forget the rows LOCALLY first, so the screen clears at once. A keystroke on these
+  // rows during the archive above is dropped with them: clearSupplier releases every
+  // claim on those lines when it lands.
+  const heldLines = heldLinesOf([supplierId]);
   forgetSupplierLocally(supplierId);
   globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'order-sent' }));
   // Recorded, so there is nothing left on that supplier's screen — back to the list
@@ -2189,6 +2222,9 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
     // another phone moved to a different supplier meanwhile is that supplier's, and clearing by
     // the old list would wipe its entry.
     await clearSupplier(supplierId, orderIngredients());
+    // ⚠️ The clear released the claims on those lines, typing made AFTER the rows were
+    // forgotten above included: claim again from the screen, which holds only that.
+    scheduleDraftSave(state.entries, state.days);
     setStatus(t('orders.orderSavedToHistory', { names: supplierLabel(supplier) }), 'ok', 5000);
   } catch (err) {
     console.error('Clearing the draft after archiving failed:', err);
@@ -2197,6 +2233,8 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
       'warn',
     );
   }
+  // After the clear: the row stays drawn until its quantity is gone from Firestore too.
+  releaseHeldLines(heldLines);   // a sent switched-off line leaves Orders
   placing.delete(supplierId);
   return true;
 }
@@ -2207,10 +2245,9 @@ async function placeOrder(supplierId, { confirm = true, date: pinnedDate, quanti
 // confirmation: the STOCK readings stay, and nothing already recorded is touched.
 
 // Drop the quantities from the in-memory draft first, keeping the readings, so the
-// screen clears immediately — and so a debounced save already in flight cannot
-// resurrect them: it holds state.entries BY REFERENCE, so removing the keys before
-// it fires is what stops it writing them back. Same reasoning as
-// forgetSupplierLocally above, which is why they sit together.
+// screen clears immediately. Same reasoning as forgetSupplierLocally above, which is
+// why they sit together: clearQuantities releases the claims on the quantities, and
+// keeps a stock count typed while it was in the air.
 function forgetQuantitiesLocally(supplierIds) {
   const ingredients = orderIngredients();
   supplierIds.forEach(supplierId => {
@@ -2265,7 +2302,9 @@ async function clearQuantitiesFor(supplierIds) {
     console.error('Flushing the draft before clearing failed:', err);
   }
 
+  const heldLines = heldLinesOf(ids);
   forgetQuantitiesLocally(ids);
+  releaseHeldLines(heldLines);   // a switched-off line leaves Orders with its cleared quantity
   if (state.openSupplier && ids.includes(state.openSupplier)) closeSupplier();
   syncInputsFromState();
   renderReminders();
@@ -2598,8 +2637,10 @@ async function discardPending(supplierId) {
   if (!ok) return;
 
   try {
+    const heldLines = heldLinesOf([supplierId]);
     await clearSupplier(supplierId, orderIngredients());
     forgetSupplierLocally(supplierId);
+    releaseHeldLines(heldLines);   // a discarded switched-off line leaves Orders too
     syncInputsFromState();
     dismissPending(supplierId);
     renderSummary();              // the open summary sheet must not go stale
@@ -2880,12 +2921,18 @@ async function init() {
     // are on screen, and a draft snapshot never rebuilds the rows. Compared with what THIS
     // phone held a moment ago, so the echo of its own typing never triggers a repaint.
     const overridesBefore = overrideSignature(state.entries);
+    // ⚠️ SO DOES A SWITCHED-OFF LINE THE DRAFT NOW HOLDS: on a cold open the ingredients can be
+    // drawn a frame before the draft lands, and another phone can type on a switched-off row —
+    // either way the line is counted, so it must be drawn too. The held set is sticky, so the
+    // echo of this phone's own typing (on a row already held) never changes it.
+    const heldBefore = noteHeld(state.ingredients, state.entries, heldNotInUse);
     setEntries(draft.entries);
     state.days = draft.days || {};
     state.draftUpdatedAt = draft.updatedAt;
     state.loaded.draft = true;
     // Everything below is stored at once and drawn in one pass next frame (scheduleRender).
-    if (overrideSignature(state.entries) !== overridesBefore) scheduleRender('list');
+    if (overrideSignature(state.entries) !== overridesBefore
+      || noteHeld(state.ingredients, state.entries, heldNotInUse) !== heldBefore) scheduleRender('list');
     scheduleRender('sync', 'reminders');
     checkPendingOnce();
     // ⚠️ AND THE OPEN SUMMARY SHEET, for the same reason as the open list just
