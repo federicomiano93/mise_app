@@ -992,15 +992,16 @@ async function link(recipe, catalogueId, { quiet = false, onFail = null } = {}) 
   source.ingredients = rows;
 
   recipe.catalogueId = catalogueId;
-  // A linked recipe is read-only: the reorder mode ends here, once the link has worked —
-  // a failed link leaves the screen, and the mode, as they were.
-  reorderingIngredients = false;
   // A recipe with no name yet takes the catalogue recipe's: the choice above and the source
   // box both left it blank, and Save then refused it for want of a name.
   if (isBlank(recipe.name)) recipe.name = String(source.name || '').trim();
   // The leavening has to be chosen again: it now points at a row in a different
   // recipe, and guessing by name is the thing being avoided.
   delete recipe.leaveningRid;
+  // A linked recipe is read-only: the reorder mode ends here, once the link has worked — a failed
+  // link leaves the screen, and the mode, as they were. A quiet link may be a late answer to a pick
+  // already left behind, so it touches no mode: openAdded() ends it for the recipe it opens.
+  if (!quiet) reorderingIngredients = false;
   if (!quiet) {
     markDirty();
     renderEditor();
