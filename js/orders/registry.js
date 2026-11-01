@@ -98,6 +98,7 @@ export function buildRegistry(data, actions, hooks = {}) {
   let listCtx = { switched: new Map(), group: { open: false } };
   // Each list row's height as last laid out, by its data-sel (rememberRowHeights).
   const rowHeights = new Map();
+  let rowHeightsWidth = null;
   // Everything above the page itself. Each entry is { view, overlay }; Back pops one.
   const stack = [];
   // The tablet's right-hand pane, its placeholder, and each overlay's own Back.
@@ -242,8 +243,14 @@ export function buildRegistry(data, actions, hooks = {}) {
   // .reg-list-host .reg-row) and a new row has forgotten the one it had, so every repaint — each
   // «Disattiva» tap ends in one — would change the height above the row under the finger. So each row hands
   // its height on to the row that replaces it (ingredientRow). The height of the frame's inside: that is what
-  // contain-intrinsic-size sets, without the border. A row in a closed group has none to hand on.
+  // contain-intrinsic-size sets, without the border. Nothing is kept across a new width (the tablet turned): a row
+  // off screen would only report the old width's height, and it would stay written on the row from then on.
   function rememberRowHeights() {
+    if (listHost.clientWidth !== rowHeightsWidth) {
+      rowHeights.clear();
+      rowHeightsWidth = listHost.clientWidth;
+      return;
+    }
     listHost.querySelectorAll('.reg-row[data-sel]').forEach((row) => {
       const height = row.getBoundingClientRect().height - (row.offsetHeight - row.clientHeight);
       if (height > 0) rowHeights.set(row.dataset.sel, height);
@@ -447,6 +454,15 @@ export function buildRegistry(data, actions, hooks = {}) {
     const row = drillRow(name, meta, active,
       () => (onList ? openFromList(() => openIngredientForm(item, null), `ingredient:${item.id}`) : openIngredientForm(item, null)),
       null, nameNode);
+    // ⚠️ THE ROWS DRAW BEFORE THE PRICES (registry-main.js), AND A PRICE CAN WRAP ITS LINE: every row below would
+    // drop under the finger as they land, and «Disattiva» saves on the tap. So the room for one is kept, unseen.
+    // A row that turns out to have no price gives it back.
+    if (!formatPricePerUnit(item) && needsPriceRead({ mayPrice: mayWritePrices(), pricesLoaded: data.pricesLoaded?.() === true })) {
+      row.querySelector('.mgmt-item-meta').appendChild(el('span', {
+        class: 'reg-price-room',
+        text: `${meta ? ' · ' : ''}${formatPricePerUnit({ pricePerUnit: 12.5, priceUnit: 'kg' })}`,
+      }));
+    }
     // `data-word` lets refresh() find this word again in the repainted list and give it focus back.
     const word = el('button', { type: 'button', class: 'reg-word', 'data-word': item.id });
     const paintWord = () => {

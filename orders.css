@@ -1599,6 +1599,7 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
    them apart — so the row has to SAY which one it is (the v1.63.0 rule, and P18).
    The amber pair is the system's own, already shipped on the Log's day badge; no
    new colour is chosen here. */
+.reg-price-room { visibility: hidden; }
 .reg-flag {
   display: inline-block;
   margin-top: 4px;

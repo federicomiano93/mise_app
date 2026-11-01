@@ -62,9 +62,21 @@ test('Fornitori: the listeners open suppliers, config, ingredients, prices', () 
   assert.deepEqual(order, [...order].sort((a, b) => a - b));
 });
 
+test('Fornitori: a tap before the prices land waits for the listener and asks the network only if it was refused', () => {
+  const src = read('js/orders/registry-main.js');
+  assert.match(src, /readPrice: async \(id\) => \{\s+await pricesAnswered;\s+return state\.pricesReadable \? \(state\.ingredientPrices\[id\] \|\| null\) : readIngredientPrice\(id\);/);
+  // Every answer settles it, the refusal included (firebase-orders.js calls back with false), or the tap would hang.
+  const at = src.indexOf('watchIngredientPrices((map, readable) => {');
+  const body = src.slice(at, src.indexOf('});', at));
+  assert.ok(body.indexOf('state.pricesReadable = readable === true') < body.indexOf('answerPrices()'));
+  assert.ok(body.indexOf('answerPrices()') < body.indexOf('if (state.loaded.ingredients'));
+});
+
 test('rows off screen are skipped: on the long list of Fornitori and on Magazzino, not in a supplier\'s own screen', () => {
   const orders = read('orders.css');
   assert.match(orders, /\.reg-list-host \.reg-row \{\s+content-visibility: auto;\s+contain-intrinsic-size: auto \d+px;/);
+  // The room for a price not landed yet takes its place on the line and shows nothing (registry.test: when it is there).
+  assert.match(orders, /\.reg-price-room \{ visibility: hidden; \}/);
   // That screen's rebuild puts its scroll back by number (registry.js refresh), so its rows keep their real height.
   assert.doesNotMatch(orders, /(^|\n)\.reg-row \{[^}]*content-visibility/);
   const inventory = read('inventory.css');
@@ -77,7 +89,8 @@ test('a repaint hands each row\'s height to the row that replaces it', () => {
   // Before the old rows go: afterwards there is nothing left to measure.
   assert.ok(paint.indexOf('rememberRowHeights();') > 0 && paint.indexOf('rememberRowHeights();') < paint.indexOf('listHost.replaceChildren();'));
   const remember = src.slice(src.indexOf('function rememberRowHeights'), src.indexOf('function matches(name)'));
-  assert.ok(remember.includes('if (height > 0)'), 'a row in a closed group has no height to hand on');
+  assert.ok(remember.includes('if (height > 0)'), 'a row that is not laid out has no height to hand on');
+  assert.match(remember, /rowHeights\.clear\(\);/, 'a new width forgets them all: a row off screen would hand on the old guess');
   assert.ok(remember.includes('row.offsetHeight - row.clientHeight'), 'contain-intrinsic-size does not include the border');
   assert.match(src, /const knownHeight = onList \? rowHeights\.get\(`ingredient:\$\{item\.id\}`\) : undefined;\s+if \(knownHeight\) frame\.style\.containIntrinsicSize = `auto \$\{knownHeight\}px`;/);
 });

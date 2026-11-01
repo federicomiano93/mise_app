@@ -46,6 +46,9 @@ const state = {
   // then an ingredient card reads its own price document before it opens (registry.js).
   pricesReadable: false,
 };
+// The price listener's first answer, whatever it said (readPrice below).
+let answerPrices;
+const pricesAnswered = new Promise((resolve) => { answerPrices = resolve; });
 
 const host = document.getElementById('registry-host');
 // The page header's round «+». ⚠️ NEVER HIDDEN ON A ROLE — the dashed button it replaces
@@ -68,7 +71,13 @@ const screen = buildRegistry(
     // the delete buttons off, or a delete would overwrite the saved list with them.
     categoriesLoaded: () => state.loaded.config,
     pricesLoaded: () => state.pricesReadable === true,
-    readPrice: (id) => readIngredientPrice(id),
+    // ⚠️ THE ROWS DRAW BEFORE THE PRICES, so a quick tap lands here while the listener is still on its way, a
+    // moment from answering out of the phone's own copy. A read of its own would ask the network instead: no signal
+    // and a row with no price document is an error dialog, weak signal is seconds with nothing happening.
+    readPrice: async (id) => {
+      await pricesAnswered;
+      return state.pricesReadable ? (state.ingredientPrices[id] || null) : readIngredientPrice(id);
+    },
     orderUnits: (current) => unitChoices({
       ingredients: state.ingredients, language: outputLanguage(currentSession().location), current,
     }),
@@ -282,6 +291,7 @@ watchCollection(COLLECTIONS.ingredients, list => {
 watchIngredientPrices((map, readable) => {
   state.ingredientPrices = map;
   state.pricesReadable = readable === true;
+  answerPrices();
   if (state.loaded.ingredients && !samePriceMaps(map, state.mergedPrices)) {
     mergePrices();
     screen.refresh();
