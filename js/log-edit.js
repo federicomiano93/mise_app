@@ -16,7 +16,7 @@ import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
 import { getConfig } from './calculator-config-store.js';
 import { getTabProducts, getDivisorIncluded, getRecipes, getRecipeById, usesTrays, normalizeTrays, settledTraysText, traysGrams, formatGrams } from './calculator-config.js';
-import { logTimestamp } from './log-time.js';
+import { logTimestamp, logStampText } from './log-time.js';
 import { confirmDiscard } from './calculator-confirm.js';
 import { buildSheet, buildLogText, typedTotalOf, latestVersion, recipeSnapshot, editRows, traysEditState, traysSheetRecipe } from './log-model.js';
 import { getLogById, appendAndSave, restoreAndSave } from './log-store.js';
@@ -232,7 +232,7 @@ function renderHistoryList() {
     const box = el('button', { class: 'drill-item', type: 'button' }, [
       el('div', { class: 'loghist-info' }, [
         el('span', { class: 'loghist-kind' }, 'v' + (i + 1) + ' · ' + kindLabel(v, i) + (last ? t('calc.current') : '')),
-        el('span', { class: 'loghist-meta' }, (at.date ? at.date + ' — ' + at.time : '') + (v.calculatedBy ? ' · ' + v.calculatedBy : '')),
+        el('span', { class: 'loghist-meta' }, (at.date ? logStampText(at) : '') + (v.calculatedBy ? ' · ' + v.calculatedBy : '')),
       ]),
       el('span', { class: 'drill-chevron' }, icon('chevronRight', 18)),
     ]);

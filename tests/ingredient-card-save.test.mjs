@@ -136,6 +136,27 @@ test('an untouched save writes the stored price verbatim and records no history 
   }
 });
 
+// ⚠️ THE PRICE'S DATE MOVES ONLY WITH THE MONEY (20 Oct 2026): the invoice import updates a price only from an
+// invoice newer than this date, so a rename that re-dated it as today stopped every older invoice from counting.
+test('a rename keeps the date of the stored price; a new price takes today', async () => {
+  const dated = '2026-09-01T12:00:00.000Z';
+  for (const stored of [PACK_CASE, LEGACY_KG_COUNTED, PIECES_COUNTED, TYPED_KG, TYPED_SACK, TYPED_PIECE, CUSTOM, BUSTA_UNIT]) {
+    const item = { ...stored, priceUpdatedAt: dated };
+    const card = openCard({ item });
+    type(card.name, 'Farina rinominata');
+    const { payload, record } = await card.save();
+    assert.equal(payload.name, 'Farina rinominata');
+    assert.equal(payload.priceUpdatedAt, dated, `date of ${item.unit}/${item.caseItemUnit}`);
+    assert.equal(record, null);
+  }
+  const card = openCard({ item: { ...TYPED_KG, priceUpdatedAt: dated } });
+  type(card.rate, '7.6');
+  const { payload, record } = await card.save();
+  assert.equal(payload.pricePerUnit, 7.6);
+  assert.notEqual(payload.priceUpdatedAt, dated);
+  assert.equal(record.recordedAt, payload.priceUpdatedAt);
+});
+
 test('an untouched pack case keeps its own stored size even when the weight on the card has changed', async () => {
   // an employee re-weighed it 2.5kg → 3kg; a manager opens the card to fix a typo
   const card = openCard({ item: { ...PACK_CASE, weight: '3kg' } });

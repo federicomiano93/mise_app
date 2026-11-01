@@ -9,14 +9,17 @@
 //      anyway; this is so nobody taps into a screen that will only ever show
 //      permission errors.
 //
-// ⚠️ THE BOTTOM OF THE HOME IS ONE BUTTON, «Settings». Federico, 13 Sep 2026: «io
-// metterei solo un tasto settings perche' senno' diventano troppe scritte in fondo alla
-// pagina». Holiday, App language, Home cards, Who can get in, Switch location and Log
-// out are rows of js/home-settings.js now, each behind exactly the gate it had here.
-// A holiday is shown at the TOP instead, and reminded once a day (js/home-away.js).
+// ⚠️ THE BOTTOM OF THE HOME IS «Settings», PLUS ONE SMALL «Log out». Federico, 13 Sep 2026:
+// «io metterei solo un tasto settings perche' senno' diventano troppe scritte in fondo alla
+// pagina». Holiday, App language, Home cards, Who can get in and Switch location are rows
+// of js/home-settings.js now, each behind exactly the gate it had here. A holiday is shown
+// at the TOP instead, and reminded once a day (js/home-away.js).
 
 import { t } from './i18n.js';
-import { onSession, openVenuePicker } from './firebase.js';
+import { onSession, openVenuePicker, signOutNow } from './firebase.js';
+import { confirmDialog } from './confirm-dialog.js';
+import { mayLeaveWithUnsent } from './unsent-guard.js';
+import { KIOSK_STORAGE_KEY, kioskBandVisible } from './kiosk-model.js';
 import { allowedSections, hasLevelAbove } from './sections.js';
 import { cardVisibleTo, orderedCardIds } from './home-cards.js';
 import { refreshAway, wireAwayReminder } from './home-away.js';
@@ -74,7 +77,41 @@ function gearIcon() {
   return svg;
 }
 
-// The bottom of the Home, after the cards: the app's bottom-bar button, «Settings».
+// The log-out arrow, built as nodes: a door with an arrow leaving it.
+function logOutIcon() {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  const attrs = {
+    viewBox: '0 0 24 24', width: '18', height: '18', fill: 'none', stroke: 'currentColor',
+    'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round', 'aria-hidden': 'true',
+  };
+  for (const [k, v] of Object.entries(attrs)) svg.setAttribute(k, v);
+  ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'M16 17l5-5-5-5', 'M21 12H9'].forEach(d => {
+    const path = document.createElementNS(SVG_NS, 'path');
+    path.setAttribute('d', d);
+    svg.appendChild(path);
+  });
+  return svg;
+}
+
+function kioskIsOn() {
+  try { return kioskBandVisible(localStorage.getItem(KIOSK_STORAGE_KEY)); } catch { return false; }
+}
+
+// ⚠️ NOT ON A KIOSK DEVICE. There the Home already has a red «Exit» that CLOSES the app
+// (js/home-kiosk-band.js); a second button that says «Exit» and means «sign out» is a trap.
+// So on a kiosk device the sign-out stays where it was, at the foot of Settings
+// (js/home-settings.js). Re-read when kiosk mode is switched, here or in another tab.
+function syncSignOut() {
+  const btn = document.querySelector('#session-logout-host .home-signout');
+  if (btn) btn.hidden = kioskIsOn();
+}
+window.addEventListener('kiosk-settings-changed', syncSignOut);
+window.addEventListener('storage', event => {
+  if (event.key === null || event.key === KIOSK_STORAGE_KEY) syncSignOut();
+});
+
+// The bottom of the Home, after the cards: the app's bottom-bar button, «Settings», and
+// at the far right of the same line a small quiet «Log out».
 //
 // ⚠️ "Back to Mise" and "Businesses" are deliberately NOT behind it either. The header
 // arrow steps up to them (renderUpArrow below) — this bar belongs to ONE customer's
@@ -97,9 +134,33 @@ function renderSessionActions(session) {
   const bar = document.createElement('div');
   bar.className = 'recipe-footer';
   bar.appendChild(btn);
+
+  const signOutLabel = document.createElement('span');
+  signOutLabel.textContent = t('auth.logOut');
+  const signOut = document.createElement('button');
+  signOut.type = 'button';
+  signOut.className = 'home-signout';
+  signOut.append(logOutIcon(), signOutLabel);
+  signOut.hidden = kioskIsOn();
+  // The same question Settings used to ask: first "sure?", then — only when something typed
+  // is still waiting for signal — a second one, because signing out clears the offline copy.
+  signOut.addEventListener('click', async () => {
+    const ok = await confirmDialog({
+      title: t('auth.logOut.title'),
+      message: t('auth.logOut.message'),
+      okLabel: t('auth.logOut'),
+      cancelLabel: t('ui.cancel'),
+      danger: true,
+    });
+    if (ok && await mayLeaveWithUnsent(confirmDialog)) signOutNow();
+  });
+  bar.appendChild(signOut);
   logoutHost.appendChild(bar);
-  // ⚠️ AND NOTHING ELSE, EVER — not even a holiday (Federico: «voglio solo un tasto
-  // impostazioni»). Being away is a band at the TOP of the Home: js/home-away.js.
+  // ⚠️ NOTHING ELSE JOINS THIS BAR, not even a holiday (Federico, 13 Sep 2026: «voglio solo
+  // un tasto impostazioni»). On 15 Oct 2026 he asked for exactly one more thing — «sposta il
+  // tasto esci nella home, mettilo tutto a destra nella stessa linea di impostazioni, rendi
+  // il tasto più piccolo» — so the small sign-out sits at the far right. Being away stays a
+  // band at the TOP of the Home: js/home-away.js.
 }
 
 // The way up, in the header. Revealed rather than built, so it can appear the moment

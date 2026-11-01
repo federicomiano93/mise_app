@@ -37,14 +37,14 @@ body {
   /* Pin the app shell to the VISIBLE viewport. height:100% resolves to the LARGE
      mobile viewport (address bar hidden), so the body overflowed the visible area
      and the whole page could be dragged — hiding the fixed header. dvh tracks the
-     browser's dynamic chrome (100vh is the fallback); position:fixed stops iOS from
+     browser's dynamic chrome (--vh100, tokens.css; the lab tablet has no dvh and gets
+     the measured height from js/viewport-height.js); position:fixed stops iOS from
      bouncing the whole document. Only the .scroll-area inside still scrolls. */
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 100vh;
-  height: 100dvh;
+  height: var(--vh100);
 }
 
 /* Header
@@ -390,7 +390,7 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
   border-radius: 20px;
   padding: 18px;
   color: var(--text);
-  min-height: 80vh;
+  min-height: calc(var(--vh100) * 0.8);
 }
 .result-header {
   display: flex;
@@ -638,6 +638,16 @@ body.calc-zoom-lock .scroll-area { overflow: hidden; }
   cursor: pointer;
 }
 .copy-btn:active { background: var(--accent-light); }
+/* The recipe export: a secondary button on its own line under the copy row. Icon + text is a flex
+   row (an SVG in a plain button sits on the text baseline). */
+.export-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+.export-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
 
 /* Footer recipes trigger */
 .recipe-footer {
@@ -1097,6 +1107,51 @@ input.cp-prod-weight {
   font-weight: 700;
 }
 .cp-prod-card-row { display: flex; align-items: center; gap: 8px; }
+
+/* Reordering a recipe's ingredients (same look as the Catalogue's editor, Calculator tokens).
+   The drag states reuse .cp-sortable-ghost/-chosen/-drag above. */
+.cp-ing-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.cp-ing-head .cp-label { margin-bottom: 0; }
+.cp-reorder-btn {
+  margin-left: auto;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cp-reorder-btn[hidden] { display: none; }
+.cp-reorder-btn:active { transform: scale(.97); }
+.cp-reorder-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.cp-reorder-hint { margin: 0 0 6px; font-size: 13px; color: var(--text2); }
+.cp-reorder-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.cp-reorder-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 2px 8px 2px 2px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.cp-reorder-row:last-child { border-bottom: 0; }
+/* The Home's grip pulls itself left into its row's padding; this row has 2px of it. */
+.cp-reorder-grip { margin-left: 0; }
+.cp-reorder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; color: var(--text); }
+.cp-reorder-amount { flex-shrink: 0; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text2); }
 /* A fixed label column, so Recipe / Weight / Type all begin on the same x. Only the
    FIRST .cp-unit of a row is a label; a trailing one ("g", "pz") stays as wide as its
    own text. */
@@ -1290,6 +1345,9 @@ input.cp-prod-weight {
   border-radius: 0;
 }
 .wa-entry-card .wa-entry-open:active { background: var(--surface2); }
+#recipe-content .wa-entry-open:disabled,
+#recipe-content .cp-add-client:disabled { opacity: 0.5; cursor: default; }
+#recipe-content .cp-add-client + .cp-hint { margin-top: 10px; }
 .wa-entry-card .cp-del-icon { padding: 0 16px; }
 .wa-entry-open { flex: 1; margin-bottom: 12px; }
 .wa-entry-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; text-align: left; }
@@ -1543,7 +1601,7 @@ input.cp-prod-weight {
   padding: 24px 20px 32px;
   width: 100%;
   max-width: 480px;
-  max-height: 88vh;
+  max-height: calc(var(--vh100) * 0.88);
   overflow-y: auto;
   text-align: left;
 }
@@ -1561,7 +1619,7 @@ input.cp-prod-weight {
   body[data-card="calculator"] #loaf-modal-box, body[data-card="calculator"] #list-select-box, body[data-card="calculator"] #day-modal-box, body[data-card="calculator"] #send-who-box {
     border-radius: var(--radius);
     padding: 20px;
-    max-height: calc(100dvh - 48px);
+    max-height: calc(var(--vh100) - 48px);
   }
   body[data-card="calculator"] #loaf-modal.visible #loaf-modal-box,
   body[data-card="calculator"] #list-select-modal.visible #list-select-box,

@@ -192,7 +192,7 @@ test('the page Back asks first on a tablet, through the same dialog', () => {
 
 test('focus moves into a level opened in the pane and back to the list when it empties', () => {
   assert.match(bodyOf(REGISTRY, 'focusLevel'), /heading\.focus\(\{ preventScroll: true \}\)/);
-  assert.match(bodyOf(REGISTRY, 'restoreListFocus'), /row\?\.focus\(\{ preventScroll: true \}\)/);
+  assert.match(bodyOf(REGISTRY, 'restoreListFocus'), /\(row\.querySelector\('\.reg-drill'\) \|\| row\)\.focus\(\{ preventScroll: true \}\)/);
   assert.match(bodyOf(REGISTRY, 'stackChanged'), /restoreListFocus\(\)/);
 });
 
