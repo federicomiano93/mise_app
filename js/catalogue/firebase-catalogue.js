@@ -159,10 +159,14 @@ export async function watchSuppliers(onChange, onError) {
 // The second argument says whether the answer came from this phone's own cache: a missing document
 // there does not mean the venue has none, which is what the whole-list write of the recipe categories
 // needs to know (catalogue-store.js recipeCategoriesLoaded).
+// ⚠️ includeMetadataChanges, OR THAT ANSWER NEVER COMES: on a venue with no document, the server
+// confirming the cache's «missing» changes only the metadata, which a plain listener does not report.
+// Found by driving the app: the Settings box stayed disabled for ever. It costs no extra read.
 export async function watchLabelConfig(onChange, onError) {
   await authReady;
   return onSnapshot(
     doc(db, pathFor(CONFIG), LABELS_DOC),
+    { includeMetadataChanges: true },
     snap => onChange(snap.exists() ? snap.data() : null, snap.metadata.fromCache),
     err => { console.warn('watchLabelConfig failed:', err); if (onError) onError(err); },
   );

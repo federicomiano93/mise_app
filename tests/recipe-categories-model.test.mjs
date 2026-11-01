@@ -126,5 +126,8 @@ test('the rules know both fields, bounded like the app', () => {
 test('the list is never written before the listener has given a real answer', () => {
   const store = read('js/catalogue/catalogue-store.js');
   assert.match(store, /if \(remote \|\| !fromCache\) labelConfigAnswered = true;/);
-  assert.match(read('js/catalogue/firebase-catalogue.js'), /snap\.metadata\.fromCache/);
+  const layer = read('js/catalogue/firebase-catalogue.js');
+  assert.match(layer, /snap\.metadata\.fromCache/);
+  // Without it a venue with no config/labels document never gets the server's answer.
+  assert.match(layer, /doc\(db, pathFor\(CONFIG\), LABELS_DOC\),\s*\{ includeMetadataChanges: true \},/);
 });

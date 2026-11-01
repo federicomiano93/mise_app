@@ -140,8 +140,8 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "6e4952c37d9e2e0e",
-      "mapSha": "eb05d07aa34a82f0",
+      "sha": "7b48e36660d5a614",
+      "mapSha": "7415f52025f8bb91",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -160,7 +160,7 @@
         "js/catalogue/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/catalogue/dom.js": "ccb295509b508828",
         "js/catalogue/editor-prices.js": "c7ce0820fcfe292c",
-        "js/catalogue/firebase-catalogue.js": "16b8bac27138e50b",
+        "js/catalogue/firebase-catalogue.js": "f056840b3e4e299f",
         "js/catalogue/firebase-photo.js": "38b16af4b97630a5",
         "js/catalogue/guided-alarm.js": "5abbc05b8da5804c",
         "js/catalogue/guided-editor.js": "ff52039f809d1353",
