@@ -285,3 +285,26 @@ export function toDocument(month) {
     updatedAt: m.updatedAt,
   };
 }
+
+// What the list may SAY about itself while it has no rows. Pure, so every branch is executed by a test.
+//
+// ⚠️ «NO PRODUCTS» NEEDS BOTH ANSWERS. A CLOSED month's rows come from the month document (`names` and
+// its counts, see productsOfMonth), not from the ingredients, so an empty ingredient list says nothing
+// until the month has answered too.
+// ⚠️ A CACHED EMPTY LIST ALONE IS NOT «NO CONNECTION»: a venue that really has none gets it a second
+// before the server confirms it. It counts only with the browser offline, or after `stalled`.
+// ⚠️ NO WORD AT ALL UNTIL A VENUE IS OPEN: the language is not known yet (the English «No products yet»
+// came first, then the Italian one), and with no session the sign-in gate is what speaks.
+//   venueOpen: a venue is open. monthAnswered / ingredientsAnswered: that listener has really answered.
+//   failed: a listener died. emptyCopy: the phone's copy of the ingredients said «none».
+//   stalled: too long without an answer. online: navigator.onLine.
+export const LIST_STATUS = Object.freeze({
+  starting: 'starting', answered: 'answered', waiting: 'waiting', unreachable: 'unreachable', failed: 'failed',
+});
+
+export function listStatus({ venueOpen, monthAnswered, ingredientsAnswered, failed, emptyCopy, stalled, online }) {
+  if (monthAnswered && ingredientsAnswered) return LIST_STATUS.answered;
+  if (!venueOpen) return LIST_STATUS.starting;
+  if (failed) return LIST_STATUS.failed;
+  return stalled || (emptyCopy && online === false) ? LIST_STATUS.unreachable : LIST_STATUS.waiting;
+}

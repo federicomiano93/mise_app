@@ -8,7 +8,7 @@
 
 import { t, localeTag, onLanguageChange } from '../i18n.js';
 import {
-  initInventory, getMonth, getMonthId, getIngredients, setCount, closeMonth,
+  initInventory, getMonth, getMonthId, getIngredients, getListStatus, setCount, closeMonth,
   reopenMonth, pullOpeningFromPrevious, readProposedPurchases, applyPurchases,
   flush, flushBeforeLeaving, setSyncErrorHandler,
 } from './inventory-store.js';
@@ -128,6 +128,7 @@ function showList() {
     onCount: (id, value) => { setCount('closing', id, value); },
     onCarry: mayManage ? handleCarry : null,
     onPurchases: handlePurchases,
+    listStatus: getListStatus,
   });
   swap(activeList.root);
   paintStrip();

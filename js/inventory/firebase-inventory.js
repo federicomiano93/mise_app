@@ -154,15 +154,30 @@ export async function getOrdersInMonth(from, to) {
 // ⚠️ THE PRICE HALF FAILS QUIETLY. A venue with no prices entered is a venue
 // whose stocktake still counts perfectly well; it simply has no money column, and
 // the screen says so in words rather than failing.
+// ⚠️ onChange ALSO GETS WHETHER THE ANSWER CAME FROM THE PHONE'S COPY. An EMPTY list from the copy
+// proves nothing (a cold start with no signal reports one), so the screen must not say «no products» on it.
+// ⚠️ includeMetadataChanges, OR THE SERVER'S «YES, EMPTY» NEVER ARRIVES: confirming an empty copy changes
+// no document, so Firestore would stay silent. And it answers again when the server confirms a full list
+// too, so that one is dropped: an identical answer would redo the work of the screen for nothing.
 export async function watchIngredients(onChange, onError) {
   await authReady;
   let ingredients = null;
   let prices = {};
-  const emit = () => { if (ingredients) onChange(withPrices(ingredients, prices)); };
+  let fromCache = true;
+  let emptyFromCache = null;
+  const emit = () => { if (ingredients) onChange(withPrices(ingredients, prices), fromCache); };
 
   const stopIngredients = onSnapshot(
     collection(db, pathFor(INGREDIENTS)),
-    snap => { ingredients = snap.docs.map(d => ({ id: d.id, ...d.data() })); emit(); },
+    { includeMetadataChanges: true },
+    snap => {
+      const nowEmptyFromCache = snap.empty && snap.metadata.fromCache;
+      if (nowEmptyFromCache === emptyFromCache && !snap.docChanges().length) return;
+      emptyFromCache = nowEmptyFromCache;
+      fromCache = snap.metadata.fromCache;
+      ingredients = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      emit();
+    },
     err => { console.warn('watchIngredients failed:', err); if (onError) onError(err); },
   );
   const stopPrices = onSnapshot(

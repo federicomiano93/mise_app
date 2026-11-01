@@ -26,7 +26,7 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { ingredientDisplayName } from '../ingredient-name.js';
-import { consumption, progressOf } from './inventory-model.js';
+import { consumption, progressOf, LIST_STATUS } from './inventory-model.js';
 
 // A product with no category typed, or the default 'Other', belongs to the same
 // group: three ways of saying "nothing was chosen here" that must not become
@@ -71,8 +71,11 @@ function boxNum(value, locale) {
   return new Intl.NumberFormat(locale, { maximumFractionDigits: 3, useGrouping: false }).format(value);
 }
 
-export function renderList({ month, ingredients, locale, onOpen, onCount, onCarry, onPurchases, readOnly }) {
+// `listStatus` is a getter (inventory-store.js getListStatus): what the list may say while it has no rows.
+// Without one the list behaves as answered, as it always did.
+export function renderList({ month, ingredients, locale, onOpen, onCount, onCarry, onPurchases, readOnly, listStatus }) {
   const state = { query: '', onlyTodo: false };
+  const status = () => listStatus?.() ?? LIST_STATUS.answered;
 
   const summary = el('div', { class: 'inv-summary' });
   const summaryLabel = el('p', { class: 'inv-summary-label', text: t('inv.counted') });
@@ -149,7 +152,33 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
     return matching().filter(i => !state.onlyTodo || !consumption(current.month, i.id).counted);
   }
 
+  // ⚠️ NO PRODUCTS ON SCREEN, AND NOTHING HAS PROVED THERE ARE NONE. `current.ingredients` is the rows of
+  // this month (productsOfMonth), so a closed month with frozen rows is not empty and draws at once.
+  function noWordYet() {
+    return !current.ingredients.length && status() !== LIST_STATUS.answered;
+  }
+
+  // What stands in for the rows until the list has really answered. null = no word yet (no venue open).
+  function noAnswerYet() {
+    switch (status()) {
+      case LIST_STATUS.waiting:
+        return el('p', { class: 'inv-empty', role: 'status', text: t('inv.loading') });
+      case LIST_STATUS.unreachable:
+        return el('div', { class: 'empty-state', role: 'status' }, [
+          el('p', { class: 'empty-title', text: t('inv.notArrived.title') }),
+          el('p', { class: 'empty-sub', text: t('inv.notArrived.sub') }),
+        ]);
+      case LIST_STATUS.failed:
+        return el('p', { class: 'inv-empty', role: 'alert', text: t('inv.loadFailed') });
+      default:
+        return null;
+    }
+  }
+
   function paintSummary() {
+    // ⚠️ No «0 of 0» and no note about boxes while there are no boxes because nothing has arrived. A venue
+    // that has really answered with nothing keeps its summary as today.
+    summary.hidden = noWordYet();
     const progress = progressOf(current.month, current.ingredients.map(i => i.id));
     summaryValue.textContent = t('inv.countedOf', {
       counted: progress.counted, total: progress.total,
@@ -165,6 +194,12 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
     rows.replaceChildren();
 
     if (!list.length) {
+      // ⚠️ FIRST, because «nothing matches» is also a claim about a list that has not arrived.
+      if (noWordYet()) {
+        const word = noAnswerYet();
+        if (word) rows.appendChild(word);
+        return;
+      }
       // A search or filter that matches nothing stays a small line; a stocktake with
       // NO products at all is the screen-level empty state. No button: the products
       // come from Suppliers & ingredients, and this page has no «add» of its own.
@@ -314,7 +349,9 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
   function refresh(nextMonth, nextIngredients) {
     current = { month: nextMonth, ingredients: nextIngredients };
     paintSummary();
-    if (structureChanged()) buildRows(); else updateRows();
+    // With no rows on screen the words may have to change though no row has, and there is no box to take
+    // from under a finger.
+    if (!rendered.length || structureChanged()) buildRows(); else updateRows();
   }
 
   paintSummary();
