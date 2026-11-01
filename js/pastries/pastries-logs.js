@@ -34,6 +34,7 @@ export function renderLogs({ logs, app }) {
   function card(log) {
     const rows = log.items.map(item => el('div', { class: 'pas-log-row' }, [
       el('span', { class: 'pas-log-name', text: item.name }),
+      item.note ? el('span', { class: 'pas-log-item-note', text: item.note }) : null,
       el('span', { class: 'pas-log-qty', text: String(item.qty) }),
     ]));
 

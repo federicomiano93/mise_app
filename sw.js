@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v712';
+const CACHE_NAME = 'theitalianclub-v713';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -154,7 +154,7 @@ const ASSET_HASHES = {
   "./suppliers.html": '0f24580d8d5a1e05',
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
-  "./dist/i18n.js": '4af85ba271b692a5',
+  "./dist/i18n.js": '5f60c7667ef2f107',
   "./dist/index.js": 'b42da8b20dddc0f2',
   "./dist/calculator.js": '09a3479492f91a10',
   "./dist/orders.js": '1eb828f330fae7af',
@@ -167,7 +167,7 @@ const ASSET_HASHES = {
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/firebase.js": '17917515e0c3eef7',
   "./js/i18n-dom.js": '24249af4367511e5',
-  "./js/i18n.js": 'c7e30443083c4542',
+  "./js/i18n.js": '8b2ab5faf5760f1c',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/local-data.js": '91aa7f1699c897a1',
   "./js/location.js": '6aaf53615a8739d1',
@@ -183,7 +183,7 @@ const ASSET_HASHES = {
   "./js/vendor/jspdf.esm.js": 'c59e9f48f24c403f',
   "./js/vendor/write-excel-file.esm.js": '9c9b6920e629cb74',
   "./dist/catalogue.js": '003b048836f6005d',
-  "./dist/pastries.js": '6cd129821057a563',
+  "./dist/pastries.js": '392488922cdbd606',
   "./dist/foodcost.js": 'd2ef851966e88cdc',
   "./dist/inventory.js": '4d5856b91380e945',
   "./qr.png": '761a95e5bc25e2ba',
@@ -206,8 +206,8 @@ const ASSET_HASHES = {
   "./dist/catalogue.css": '7c60b666dad606ad',
   "./dist/label-print.css": 'c96c56dfef069675',
   "./dist/records.css": '0285e69618b83eed',
-  "./pastries.html": '7f35bf54c3ee54db',
-  "./dist/pastries.css": '636ec96ab272ae23',
+  "./pastries.html": 'dabd4d55c68042a1',
+  "./dist/pastries.css": 'c04a3afd4e499cc9',
   "./foodcost.html": '59bab773b490ded3',
   "./dist/foodcost.css": '0f8589065fc5e520',
   "./inventory.html": '4caee7fc2b8256a8',
