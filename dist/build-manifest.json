@@ -668,8 +668,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "c22b4cc095247890",
-      "mapSha": "9ed947b3c886efc2",
+      "sha": "d9536deec92c69ae",
+      "mapSha": "3943b9d8aa393f5b",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -722,8 +722,8 @@
         "js/orders/deliveries-view.js": "3398d0bacdcbfbfa",
         "js/orders/deliveries.js": "39df74692fef5a8c",
         "js/orders/dom.js": "99c731d8aa890a20",
-        "js/orders/draft-journal.js": "ccf1d045fd3d9731",
-        "js/orders/draft.js": "4fb07c113a84c711",
+        "js/orders/draft-journal.js": "bc7da360daeb2b47",
+        "js/orders/draft.js": "4854f1390185b576",
         "js/orders/favourite-suppliers.js": "9b54dd3bba8b4164",
         "js/orders/firebase-orders.js": "76b6e0839537824f",
         "js/orders/history-edit.js": "2a7bc27082d1ce54",
@@ -927,8 +927,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "e49ca4165a08edec",
-      "mapSha": "69befe62e4ddc5f9",
+      "sha": "14acd383a3a9d9d0",
+      "mapSha": "da4d3c527b056853",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -977,8 +977,8 @@
         "js/orders/day.js": "8417a4e02c09cbfa",
         "js/orders/deliveries.js": "39df74692fef5a8c",
         "js/orders/dom.js": "99c731d8aa890a20",
-        "js/orders/draft-journal.js": "ccf1d045fd3d9731",
-        "js/orders/draft.js": "4fb07c113a84c711",
+        "js/orders/draft-journal.js": "bc7da360daeb2b47",
+        "js/orders/draft.js": "4854f1390185b576",
         "js/orders/favourite-suppliers.js": "9b54dd3bba8b4164",
         "js/orders/firebase-features.js": "5c93f14c6ab6eddd",
         "js/orders/firebase-orders.js": "76b6e0839537824f",
