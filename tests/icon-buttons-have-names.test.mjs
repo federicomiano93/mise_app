@@ -14,20 +14,22 @@ const PAGES = readdirSync(root).filter(f => f.endsWith('.html'));
 
 test('every icon-only button in every page has an accessible name', () => {
   const nameless = [];
+  let seen = 0;
   for (const page of PAGES) {
     const html = readFileSync(new URL(page, root), 'utf8').replace(/<!--[\s\S]*?-->/g, '');
     for (const m of html.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)) {
       const [, attrs, inner] = m;
-      const text = inner.replace(/<svg[\s\S]*?<\/svg>/g, '').replace(/<[^>]*>/g, '').trim();
+      seen++;
+      const visible = inner.replace(/<svg[\s\S]*?<\/svg>/g, '').replace(/<[^>]* aria-hidden="true"[^>]*>[\s\S]*?<\/[^>]+>/g, '');
+      const text = visible.replace(/<[^>]*>/g, '').trim();
+      const labelAttr = / aria-label="[^"]+"/.test(attrs);
+      const translatedLabel = / data-i18n="[^"]+"/.test(attrs) && / data-i18n-attr="aria-label"/.test(attrs);
+      const translatedText = / data-i18n="[^"]+"/.test(attrs) && !/data-i18n-attr/.test(attrs);
       const named = NAMED_BY_JS.some(id => attrs.includes(`id="${id}"`))
-        || /\baria-label="[^"]+"/.test(attrs)
-        || /\bdata-i18n-attr="[^"]*aria-label/.test(attrs)
-        || /\baria-labelledby=/.test(attrs)
-        || text !== ''
-        || /\bdata-i18n=/.test(attrs) && !/data-i18n-attr/.test(attrs)
-        || /<[^>]*\b(data-i18n|aria-label)=/.test(inner.replace(/<svg[\s\S]*?<\/svg>/g, ''));
+        || labelAttr || translatedLabel || translatedText || text !== '';
       if (!named) nameless.push(`${page}: <button${attrs.replace(/\s+/g, ' ').slice(0, 80)}>`);
     }
   }
+  assert.ok(PAGES.includes('calculator.html') && seen >= 48, `only ${seen} buttons found: the scan is not reading the pages`);
   assert.deepEqual(nameless, []);
 });
