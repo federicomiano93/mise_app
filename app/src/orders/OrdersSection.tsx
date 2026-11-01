@@ -39,6 +39,7 @@ import {
 } from './ordersPath';
 import type { OrdersView } from './ordersPath';
 import { buildOrdersLens } from './ordersLens';
+import { useListCopy } from './useListCopy';
 import styles from './OrdersSection.module.css';
 
 // «Orders»: the supplier list and, beside it from 1000px, the chosen supplier's order. Loaded only when somebody opens it
@@ -125,6 +126,30 @@ function OrdersLayout({ view }: { view: ShownView }) {
     noSupplierName,
   }), [snapshot.suppliers, snapshot.suppliersLoaded, snapshot.ingredients, snapshot.draft.entries, snapshot.config.supplierOrder, noSupplierName]);
   const ready = snapshot.suppliersLoaded && snapshot.ingredientsLoaded && snapshot.draftLoaded;
+
+  // ⚠️ THE COPY OF THE LAST GOOD LISTS FEEDS ONE THING: THE ROWS OF THE SUPPLIER LIST, while `ready` is false (useListCopy.ts). On
+  // the lab tablet the live lists take seconds, and the copy fills that gap. It is a SECOND lens, never `lens`: the notices, the
+  // bell, «Order today», the debt doors, the pending latch and every supplier screen read the live one, so none of them can act
+  // on an old list.
+  //  - THE HOLD IS THE ADDRESS. A tap on a row navigates as ever; `Detail` says «Loading…» until `ready`, so no quantity box, items
+  //    list or settings can appear before suppliers, ingredients and the draft have all landed — and the screen then opens by
+  //    itself. Moving elsewhere changes the address, which drops the «held» tap; a later tap wins.
+  //  - NOT ONCE A STREAM FAILED: no live list will ever replace an old one that looks real, so the copy leaves the screen at once,
+  //    even while the other streams are still on their way, and the status line tells what happened.
+  //  - NOT WHEN IT HAS NO SUPPLIER: an empty result paints nothing, so «No suppliers yet» never flashes.
+  const copy = useListCopy();
+  const copyLens = useMemo(() => {
+    if (copy === null || ready || snapshot.suppliersBroken || snapshot.ingredientsBroken) return null;
+    const fromCopy = buildOrdersLens({
+      suppliers: copy.suppliers,
+      suppliersLoaded: true,
+      ingredients: copy.ingredients,
+      entries: snapshot.draft.entries,
+      supplierOrder: snapshot.config.supplierOrder,
+      noSupplierName,
+    });
+    return fromCopy.suppliers.length === 0 ? null : fromCopy;
+  }, [copy, ready, snapshot.suppliersBroken, snapshot.ingredientsBroken, snapshot.draft.entries, snapshot.config.supplierOrder, noSupplierName]);
 
   // ⚠️ LOOK FOR ORDERS TYPED ON AN EARLIER DAY AND NEVER PLACED ONCE PER OPENING, once the suppliers, the ingredients and the draft
   // have ALL arrived (any of them missing would make every supplier look empty). The set found is kept above the routes, so it
@@ -275,6 +300,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
             <PartBoundary>
               <OrdersList
                 lens={lens}
+                copyLens={copyLens}
                 ready={ready}
                 openId={'id' in view ? view.id : null}
                 onOpenSupplier={openSupplier}

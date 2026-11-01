@@ -21,6 +21,9 @@ import styles from './OrdersList.module.css';
 
 type Props = {
   lens: OrdersLens;
+  // The rows drawn from the local copy of the last good lists while `ready` is false, or null (OrdersSection.tsx). ONLY for the
+  // rows: everything that acts reads `lens`.
+  copyLens: OrdersLens | null;
   // Suppliers, ingredients and the draft have all arrived (or failed): before that nothing may say «no suppliers» (parity L8).
   ready: boolean;
   // The supplier open beside the list (the tablet's split), marked as the current one.
@@ -51,7 +54,7 @@ const HEADING_KEY = {
 // ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a component that stays mounted, and
 // only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard where the person
 // left them (the current app built the box once for the same reason).
-export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings, onIncoming, onReorder, onOpenPending }: Props) {
+export function OrdersList({ lens, copyLens, ready, openId, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings, onIncoming, onReorder, onOpenPending }: Props) {
   const { t } = useT();
   const { config, draft, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
@@ -64,10 +67,15 @@ export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, o
   const sendNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SEND_OPENER, node); }, [handBack]);
   const settingsNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
 
-  const ordering = orderingCount(lens);
+  // ⚠️ THE ROWS, THE FILTER COUNTS AND THEIR ORDER READ `drawn`: the copy while the live lists have not landed, the live lens
+  // otherwise. The search box above is the same mounted element either way, so what was typed on the copy survives the move to
+  // live and still filters. THE SEND AND BULK BUTTONS BELOW STAY ON `ready` (when it is true `drawn` IS the live lens): nothing is
+  // sent or recorded from an old list, and «No suppliers yet» is never said from it.
+  const drawn = copyLens ?? lens;
+  const ordering = orderingCount(drawn);
   const groups = useMemo(
-    () => supplierListGroups(lens, { query, orderingOnly, favourites: config.favouriteSuppliers }),
-    [lens, query, orderingOnly, config.favouriteSuppliers],
+    () => supplierListGroups(drawn, { query, orderingOnly, favourites: config.favouriteSuppliers }),
+    [drawn, query, orderingOnly, config.favouriteSuppliers],
   );
   const shown = groups.reduce((n, group) => n + group.suppliers.length, 0);
   const broken = suppliersBroken || ingredientsBroken;
@@ -135,7 +143,7 @@ export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, o
                 onClick={() => { setOrderingOnly(only); }}
                 onKeyDown={event => { onRadioKey(event, only); }}
               >
-                {only ? t('ord.filter.ordering', { n: ordering }) : t('ord.filter.all', { n: lens.suppliers.length })}
+                {only ? t('ord.filter.ordering', { n: ordering }) : t('ord.filter.all', { n: drawn.suppliers.length })}
               </button>
             ))}
           </div>
@@ -152,9 +160,9 @@ export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, o
 
       <DeliveryDoors onIncoming={onIncoming} onReorder={onReorder} />
 
-      {!ready ? (
+      {!ready && copyLens === null ? (
         <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>
-      ) : lens.suppliers.length === 0 ? (
+      ) : drawn.suppliers.length === 0 ? (
         // ⚠️ A DEAD STREAM IS NOT «NO SUPPLIERS»: the status line says what happened.
         broken ? null : (
           <div className={styles.empty}>
@@ -170,7 +178,7 @@ export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, o
             {group.headingKey === null ? null : <h2 className={styles.groupTitle}>{t(HEADING_KEY[group.headingKey as keyof typeof HEADING_KEY])}</h2>}
             <ul className={styles.rows}>
               {group.suppliers.map(supplier => {
-                const filled = lens.filledFor(supplier.id);
+                const filled = drawn.filledFor(supplier.id);
                 // «delivery Mon 12» / «for Thu 8»: only with something typed AND a stamp that has not come yet (parity L14).
                 const stamp = draft.days[supplier.id];
                 const forLater = filled > 0 && isFutureDay(stamp, today);
