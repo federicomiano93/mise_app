@@ -61,7 +61,7 @@ test('⚠️⚠️ the catalogue no longer writes the loss, so it cannot undo a 
   for (const key of ['lossPct', 'rawGrams', 'cookedGrams']) {
     assert.ok(!data.includes(key), `the catalogue's document must not carry ${key}`);
   }
-  assert.match(save, /\['lossPct', 'rawGrams', 'cookedGrams'\]\.forEach\(k => \{ if \(prev\[k\] !== undefined\) kept\[k\] = prev\[k\]; \}\);/,
+  assert.match(save, /\['lossPct', 'rawGrams', 'cookedGrams', 'category'\]\.forEach\(k => \{ if \(prev\[k\] !== undefined\) kept\[k\] = prev\[k\]; \}\);/,
     'and the list on screen keeps the loss it had, rather than dropping it until the next snapshot');
   assert.match(save, /upsertLocal\(\{ \.\.\.kept, id, \.\.\.data \}\)/);
 });
@@ -88,7 +88,7 @@ test('⚠️⚠️ the catalogue store WRITES the label fields the editor lets y
 
 test('⚠️ an emptied label box is REMOVED from the document, not left behind by the merge', () => {
   const data = codeOf(read('js/catalogue/firebase-catalogue.js'));
-  assert.match(data, /const CLEARABLE_RECIPE_FIELDS = \['netWeightG', 'shelfLifeDays'\];/);
+  assert.match(data, /const CLEARABLE_RECIPE_FIELDS = \['netWeightG', 'shelfLifeDays', 'category'\];/);
   assert.match(data, /if \(key in out && out\[key\] === null\) out\[key\] = deleteField\(\);/,
     'a null must travel as deleteField(): the rules refuse a stored null');
   assert.match(data, /setDoc\(doc\(db, pathFor\(RECIPES\), id\), withBakery\(out\), \{ merge: true \}\)/,

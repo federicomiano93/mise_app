@@ -29,6 +29,8 @@ import {
   runTransaction,
   addDoc,
   deleteField,
+  arrayUnion,
+  arrayRemove,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
 
 // Reuse the default app if firebase.js already created it; otherwise create it.
@@ -172,6 +174,18 @@ export async function saveLabelConfig(patch) {
   return setDoc(doc(db, pathFor(CONFIG), LABELS_DOC), withBakery(patch), { merge: true });
 }
 
+// The venue's recipe categories, ONE WORD AT A TIME.
+// ⚠️ arrayUnion / arrayRemove, never a write of the whole list: a phone holding an old copy, or none
+// at all, would replace every category of the venue with what it happens to know — silently, and
+// possibly days later when it comes back online. Same reasoning as favouriteSuppliers in Orders.
+export async function addRecipeCategoryWord(word) {
+  return saveLabelConfig({ recipeCategories: arrayUnion(word) });
+}
+
+export async function removeRecipeCategoryWords(words) {
+  return saveLabelConfig({ recipeCategories: arrayRemove(...words) });
+}
+
 // ── The print queue ──────────────────────────────────────────────────────────
 //
 // ⚠️ IT LIVES IN THIS FILE RATHER THAN ITS OWN, and that is a deliberate departure
@@ -208,7 +222,7 @@ export async function watchPrintAgents(onChange, onError) {
 
 // The recipe fields a person can EMPTY. A merge never deletes a key it is not sent, and
 // the rules refuse a stored null, so an emptied box travels as a removal.
-const CLEARABLE_RECIPE_FIELDS = ['netWeightG', 'shelfLifeDays'];
+const CLEARABLE_RECIPE_FIELDS = ['netWeightG', 'shelfLifeDays', 'category'];
 
 // Create or merge a recipe document at a known id (id is generated client-side).
 export async function saveRecipeDoc(id, data) {

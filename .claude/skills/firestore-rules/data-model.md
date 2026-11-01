@@ -83,6 +83,16 @@ both halves.
 named (`gluten-wheat`, not `gluten`). `mayContain` is never merged into `allergens`. In nutrition,
 0 is a real value and `null` is not.
 
+**Recipe categories (1 Nov 2026; the same fields as Mise 2, PR #404).** `recipes/{id}.category` (string 1–100; «no
+category» is NO field — an emptied choice is a removal). A word not on the venue's list reads as «no category» and comes
+back if the word is put back, so deleting a category writes no recipe. `config/labels.recipeCategories` (list ≤ 100,
+canManage like the rest of that document; each word ≤ 40 in the box). ⚠️ The current app changes it ONE WORD AT A TIME
+(`arrayUnion`/`arrayRemove`): a whole write from a phone with an old copy would wipe the venue's other words. Two phones
+offline can store a word in two cases; the reader folds them. ⚠️ A save sends `category` only when the editor's menu moved
+it (`categoryMoved`, never stored). ⚠️ Both fields stay in the whitelists for good once production carries them: an older
+rules file would make those recipes, and the venue's whole label settings, unwritable. The logic:
+`js/catalogue/recipe-categories-model.js`.
+
 ⚠️ **The language rule, for every screen:** a word that names a FOOD follows the venue's COUNTRY
 (`allergenName` / `allergenGroupName` / `nutrientName`, passed the output language); a word that
 tells somebody what to tap follows `t()`. A file that does the first is a label file and may never

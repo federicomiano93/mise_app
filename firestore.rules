@@ -1386,7 +1386,13 @@ service cloud.firestore {
                // empty until somebody fills it in, so a venue that sells over its
                // own counter is untouched by their existence.
                'showWeight', 'showStorage', 'showBusiness',
-               'dateKind', 'storageText', 'businessName', 'businessAddress'
+               'dateKind', 'storageText', 'businessName', 'businessAddress',
+               // Recipe categories (Federico, 1 Nov 2026; the same field as Mise 2): the
+               // venue's own list of words a recipe can be filed under, edited in the
+               // Catalogue's Settings like everything else here (canManage). Kept on this
+               // document because it is the Catalogue's only settings document and every
+               // recipe screen already watches it: no extra read.
+               'recipeCategories'
              ])
           // ⚠️ THE BOUNDS ARE THE APP'S OWN, REPEATED HERE ON PURPOSE. A 0 mm label
           // is drawn as an empty rectangle with no error anywhere, and the app that
@@ -1437,7 +1443,13 @@ service cloud.firestore {
                   && request.resource.data.businessName.size() <= 200))
           && (!('businessAddress' in request.resource.data)
               || (request.resource.data.businessAddress is string
-                  && request.resource.data.businessAddress.size() <= 200));
+                  && request.resource.data.businessAddress.size() <= 200))
+          // A list of words, capped so it cannot be used as free storage. The words
+          // themselves cannot be judged (rules cannot look inside a list); the app
+          // keeps each one short and never offers the same word twice.
+          && (!('recipeCategories' in request.resource.data)
+              || (request.resource.data.recipeCategories is list
+                  && request.resource.data.recipeCategories.size() <= 100));
 
         // Nothing deletes a settings document. Turning a setting off is a write.
         allow delete: if false;
@@ -2062,7 +2074,11 @@ service cloud.firestore {
                                                    // long it keeps. Optional in both directions like every
                                                    // field here — rules reach every phone the instant they
                                                    // deploy while code arrives one device at a time.
-                                                   'netWeightG', 'shelfLifeDays'])
+                                                   'netWeightG', 'shelfLifeDays',
+                                                   // The one category the recipe is filed under, a word
+                                                   // from the venue's list in config/labels (1 Nov 2026).
+                                                   // Optional both ways: an old phone's merge keeps it.
+                                                   'category'])
           && stampedFor(lid)
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
@@ -2126,7 +2142,14 @@ service cloud.firestore {
           && (!('shelfLifeDays' in request.resource.data)
               || (request.resource.data.shelfLifeDays is number
                   && request.resource.data.shelfLifeDays >= 0
-                  && request.resource.data.shelfLifeDays <= 3650));
+                  && request.resource.data.shelfLifeDays <= 3650))
+          // Bounded, not judged: whether the word is on the venue's list is the app's
+          // business (a word taken off the list reads as «no category», and comes back
+          // if the word is put back). «No category» is NO FIELD, never an empty one.
+          && (!('category' in request.resource.data)
+              || (request.resource.data.category is string
+                  && request.resource.data.category.size() > 0
+                  && request.resource.data.category.size() <= 100));
         // OWNER ONLY. A recipe is the business. It also carries the guided
         // procedure, the allergen links and whatever Food Cost products point
         // at it, none of which say so from the delete button.

@@ -15,8 +15,9 @@ test('catalogue settings releases both language listeners and hands dispose to i
   const src = read('js/catalogue/catalogue-settings.js');
   assert.match(src, /const stopPaintOnLanguage = onLanguageChange\(/);
   assert.match(src, /const stopLabelOnLanguage = onLanguageChange\(/);
-  assert.match(src, /const dispose = \(\) => \{ stopPaintOnLanguage\(\); stopLabelOnLanguage\(\); \};/);
-  assert.match(src, /return \{ root, refresh: paint, dispose \};/);
+  // The recipe-categories card holds a third listener; its dispose is released with the other two.
+  assert.match(src, /const dispose = \(\) => \{ stopPaintOnLanguage\(\); stopLabelOnLanguage\(\); categories\.dispose\(\); \};/);
+  assert.match(src, /return \{ root, refresh: paint, refreshCategories: categories\.refresh, dispose \};/);
 });
 
 test('catalogue-main clears Settings only through the helper that disposes it', () => {

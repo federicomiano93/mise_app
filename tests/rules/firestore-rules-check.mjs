@@ -1480,6 +1480,48 @@ async function configAndLogs() {
   await expectAllowed('labels: a phone that only knows about the paper size', () =>
     mergeWrite(`${A}/config/labels`, { bakery: 'main', widthMm: 102, heightMm: 76 }));
 
+  // ── Recipe categories (1 Nov 2026; the same fields as Mise 2) ─────────────
+  //
+  // Filing a recipe under a category is everybody's work, like the rest of the
+  // recipe; the venue's list of words is for whoever runs the place.
+  await expectAllowed('recipes: a recipe filed under a category', () =>
+    wholeWrite(`${A}/recipes/R_CATEGORY`, { bakery: 'main', name: 'Panettone', ingredients: [], category: 'Natale' }));
+  await expectAllowed('recipes: an employee files a recipe under a category', () =>
+    mergeWrite(`${A}/recipes/R_CATEGORY`, { bakery: 'main', name: 'Panettone', ingredients: [], category: 'Dolci' },
+      asAccount(SAM)));
+  await expectAllowed('recipes: an old phone\'s save, which knows nothing of categories, keeps working', () =>
+    mergeWrite(`${A}/recipes/R_CATEGORY`, { bakery: 'main', name: 'Panettone classico', ingredients: [] }, asAccount(SAM)));
+  const filed = await fetch(`${FS}/${A}/recipes/R_CATEGORY`, { headers: asUser() }).then(r => r.json());
+  check('recipes: that save did not take the category away',
+    filed.fields?.category?.stringValue === 'Dolci' && filed.fields?.name?.stringValue === 'Panettone classico');
+  await expectAllowed('recipes: an employee takes the category away (the field removed)', () =>
+    clearWrite(`${A}/recipes/R_CATEGORY`, { bakery: 'main', name: 'Panettone', ingredients: [] }, ['category'],
+      asAccount(SAM)));
+  await expectDenied('recipes: an empty category (no category is no field)',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], category: '' }));
+  await expectDenied('recipes: a category longer than any word on a list',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], category: 'x'.repeat(101) }));
+  await expectDenied('recipes: a category sent as a list',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], category: ['Natale'] }));
+  await expectDenied('recipes: a member of another venue cannot file a recipe here',
+    () => mergeWrite(`${A}/recipes/R_CATEGORY`, { bakery: 'main', name: 'Pane', ingredients: [], category: 'Dolci' },
+      asAccount(BOB)));
+
+  await expectAllowed('labels: the venue\'s list of recipe categories', () =>
+    mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: ['Natale', 'Estate', 'Pane'] }));
+  await expectAllowed('labels: …and an empty one, the manager writing', () =>
+    mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: [] }, asAccount(MAYA)));
+  await expectAllowed('labels: the longest list', () =>
+    mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: Array.from({ length: 100 }, (_, i) => `c${i}`) }));
+  await expectDenied('labels: a list of categories used as free storage',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: Array.from({ length: 101 }, (_, i) => `c${i}`) }));
+  await expectDenied('labels: the categories sent as one word',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: 'Natale' }));
+  await expectDenied('labels: an employee cannot change the categories',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: ['Natale'] }, asAccount(SAM)));
+  await expectDenied('labels: a member of another venue cannot change the categories',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: ['Natale'] }, asAccount(BOB)));
+
   // ⚠️ A 0 mm LABEL IS NOT A SMALLER ANSWER, IT IS NO LABEL — and it would be drawn
   // as an empty rectangle with no error anywhere. The app refuses it too, but the
   // app can be an old build on somebody's phone.

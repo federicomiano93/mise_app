@@ -7,7 +7,8 @@
 // to (ingredient-suggest.js). Persists per document to recipes/{id} via the store (not
 // into config).
 
-import { t } from '../i18n.js';
+import { t, localeTag } from '../i18n.js';
+import { sortedCategories, categoryOf } from './recipe-categories-model.js';
 import { supplierLabel } from '../supplier-label.js';
 import { revealField } from '../reveal-field.js';
 import { canManageHere } from './firebase-catalogue.js';
@@ -44,7 +45,9 @@ const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 // Delete button would appear — and calling it would delete `undefined` — and
 // line 1 below would read `.ingredients` off something that might not have any.
 // Keeping `recipe` null is what makes all four correct without touching them.
-export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile = () => ({}) }) {
+export function renderEditor({
+  recipe, draft, allRecipes, app, getLabelProfile = () => ({}), getRecipeCategories = () => [],
+}) {
   // Working copy — nothing touches the stored recipe until Save.
   // ⚠️ ...i, NOT a hand-listed set of fields. This copy and cleanWorking() below
   // both rebuild every row, so any field named in neither is dropped on save —
@@ -73,6 +76,10 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
         ...(normalizeWeight(draft.netWeightG) > 0 ? { netWeightG: normalizeWeight(draft.netWeightG) } : {}),
         ...(normalizeShelfLifeDays(draft.shelfLifeDays) !== null
           ? { shelfLifeDays: normalizeShelfLifeDays(draft.shelfLifeDays) } : {}),
+        // ⚠️ A CATEGORY CHOSEN BEFORE THE PHOTO SCREEN TRAVELS WITH THE TYPED COPY (the draft is
+        // `working` handed back). A new recipe has no stored category, so any choice is a move.
+        ...(typeof draft.category === 'string' && draft.category
+          ? { category: draft.category, categoryMoved: true } : {}),
       }
       : { id: null, name: '', ingredients: [{ label: '', grams: '', unit: 'g' }] };
 
@@ -660,9 +667,40 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     }, [el('span', { icon: CAMERA_ICON, 'aria-hidden': 'true' }), el('span', { text: t('cat.photo.fill') })])
     : null;
 
+  // ── The category (1 Nov 2026) ───────────────────────────────────────────────
+  //
+  // ⚠️ DRAWN ONLY WHEN THE VENUE HAS A LIST: nothing to choose from is a box nobody can use. Read
+  // once, as the editor is built. Whoever may edit a recipe may file it: no role gate.
+  // ⚠️ `categoryMoved` IS WHAT MAKES THE STORE WRITE THE CATEGORY AT ALL. Left untouched, a recipe
+  // keeps the word it has — even one that is off the list and reads as «none» — and choosing
+  // «none» again after another word is no move either. It is never sent to the database.
+  const categories = getRecipeCategories();
+  // A draft carried a choice made before the photo screen; a word since taken off the list is dropped.
+  if (working.categoryMoved && !categoryOf(working, categories)) {
+    delete working.category;
+    delete working.categoryMoved;
+  }
+  const initialCategory = draft ? '' : categoryOf(working, categories);
+  const categorySelect = categories.length
+    ? el('select', {
+      id: 'catRecipeCategory', class: 'set-select cat-category-select',
+      onchange: (e) => {
+        working.category = e.target.value;
+        working.categoryMoved = e.target.value !== initialCategory;
+        markDirty();
+      },
+    }, [
+      el('option', { value: '' }, t('cat.shelf.categoryNone')),
+      ...sortedCategories(categories, localeTag()).map(word => el('option', { value: word }, word)),
+    ])
+    : null;
+  if (categorySelect) categorySelect.value = categoryOf(working, categories);
+
   return el('div', { class: 'cat-view cat-editor' }, [
     el('label', { for: 'catRecipeName', text: t('cat.recipeName') }),
     nameInput,
+    categorySelect ? el('label', { for: 'catRecipeCategory', text: t('cat.shelf.categoryLabel') }) : null,
+    categorySelect,
     el('div', { class: 'cat-ing-head' }, [
       el('label', { class: 'cat-ing-head-label', text: t('cat.ingredients') }),
       countEl,

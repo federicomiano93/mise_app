@@ -1,23 +1,33 @@
 // catalogue-settings.js — what the Recipe catalogue lets an owner change.
 //
-// One switch today: whether this venue may read a recipe from a photograph. It used to
-// sit on the recipe list, and Federico's note on 23 Aug 2026 is the reason it does not
-// any more — a switch nobody expects on a screen of recipes is worse than a screen with
-// one row on it. The comment it replaces said *"one row does not justify building
-// one"*; using the screen proved otherwise.
+// Three things: the venue's recipe categories (first — what most venues will use), the
+// printed label, and whether this venue may read a recipe from a photograph. The switch
+// used to sit on the recipe list, and Federico's note on 23 Aug 2026 is the reason it does
+// not any more — a switch nobody expects on a screen of recipes is worse than a screen
+// with one row on it.
 //
 // ⚠️ REACHED ONLY BY AN OWNER OR A MANAGER, and the button that leads here is hidden
-// from everybody else — the switch is the only thing on the screen, and an empty
-// Settings screen is worse than no button. Hiding is courtesy either way: the server
-// refuses the change itself (functions/onboarding.js setRecipePhoto).
+// from everybody else. Hiding is courtesy either way: the server refuses the photo
+// change itself (functions/onboarding.js setRecipePhoto), and the rules decide who may
+// write the label configuration the category list lives in.
 
-import { t, onLanguageChange } from '../i18n.js';
+import { t, onLanguageChange, localeTag } from '../i18n.js';
 import { el } from './dom.js';
 import {
   LABEL_SIZES, PRINTER_LANGUAGES, DPI_CHOICES, DATE_KINDS, normalizeLabelProfile,
 } from './label-template-model.js';
+import {
+  RECIPE_CATEGORY_MAX, RECIPE_CATEGORIES_MAX, sortedCategories, addCategory,
+} from './recipe-categories-model.js';
 
-export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLabel }) {
+const TRASH_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>';
+
+export function renderSettings({
+  photoOn, onTogglePhoto, labelProfile, onSaveLabel,
+  getCategories = () => [], countRecipes = () => 0,
+  onAddCategory = () => Promise.resolve(), onRemoveCategory = () => Promise.resolve(), confirm = null,
+}) {
   const root = el('div', { class: 'cat-view' });
 
   // ⚠️ EVERY PHRASE IS SET IN paint(), NEVER ONCE AT BUILD TIME. The interface
@@ -420,7 +430,11 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
     dateKindSwitch.setAttribute('aria-label', dateKindLabel.textContent);
   };
   root.classList.add('set-screen');
+  const categories = buildCategoriesCard({
+    root, getCategories, countRecipes, onAddCategory, onRemoveCategory, confirm,
+  });
   root.append(
+    categories.card,
     photoCard,
     el('section', { class: 'set-section' }, [
       el('div', { class: 'set-head' }, [labelHead]),
@@ -444,6 +458,139 @@ export function renderSettings({ photoOn, onTogglePhoto, labelProfile, onSaveLab
   paintLabel = () => { paintLabelInner(); syncBlocks(); };
   // Called by catalogue-main.js whenever the screen is replaced: both language
   // listeners are let go so reopening Settings never stacks another pair.
-  const dispose = () => { stopPaintOnLanguage(); stopLabelOnLanguage(); };
-  return { root, refresh: paint, dispose };
+  const dispose = () => { stopPaintOnLanguage(); stopLabelOnLanguage(); categories.dispose(); };
+  return { root, refresh: paint, refreshCategories: categories.refresh, dispose };
+}
+
+// ── Recipe categories ───────────────────────────────────────────────────────────
+//
+// The venue's own list of words, kept in config/labels.recipeCategories.
+//
+// ⚠️ ONE WORD AT A TIME, NEVER THE WHOLE LIST (firebase-catalogue.js says why), so this card needs no
+// «has the list arrived yet» lock: a phone with an old copy, or none, cannot take anybody's word away.
+// The worst it can do is add a word the venue already has, in another case, and that reads as one.
+// ⚠️ NOTHING WAITS FOR THE WRITE'S ANSWER: offline it never comes, and the screen must change now. The
+// store has changed its copy at once, puts the word back if the database refuses, and says so.
+function buildCategoriesCard({
+  root, getCategories, countRecipes, onAddCategory, onRemoveCategory, confirm,
+}) {
+  const title = el('h3', {});
+  const note = el('p', {});
+  const inputLabel = el('label', { class: 'set-label', for: 'catNewCategory' });
+  const input = el('input', {
+    id: 'catNewCategory', class: 'set-input', type: 'text', autocomplete: 'off',
+    maxlength: String(RECIPE_CATEGORY_MAX),
+  });
+  const addBtn = el('button', { class: 'cat-category-add', type: 'button' });
+  const error = el('p', { class: 'lab-nofit cat-category-error', role: 'alert' });
+  const wordsBox = el('div');
+  const card = el('section', { class: 'set-section' }, [
+    el('div', { class: 'set-head' }, [title, note]),
+    el('div', { class: 'set-block' }, [
+      inputLabel,
+      el('div', { class: 'cat-category-addrow' }, [input, addBtn]),
+      error,
+    ]),
+    wordsBox,
+  ]);
+
+  // What the message says, kept as a key so a language arriving late re-words it.
+  let problem = null;
+  function paintError() {
+    error.hidden = !problem;
+    const text = problem ? t(problem.key, problem.vars) : '';
+    // ⚠️ Only when it differs: this is a live region, and the store repaints on every snapshot.
+    if (error.textContent !== text) error.textContent = text;
+  }
+
+  // The words are rebuilt only when something they show changed: the store notifies on every
+  // snapshot (the print agent's heartbeat too), and a rebuild between a finger going down and
+  // coming up on a bin would swallow the tap.
+  let paintedKey = null;
+  function paint() {
+    const words = sortedCategories(getCategories(), localeTag());
+    // Every phrase is read here, never at build time (see the note at the top of renderSettings).
+    title.textContent = t('cat.shelf.settingsTitle');
+    note.textContent = t('cat.shelf.settingsNote');
+    inputLabel.textContent = t('cat.shelf.newCategory');
+    input.placeholder = t('cat.shelf.newCategoryPlaceholder');
+    addBtn.textContent = t('cat.shelf.add');
+    paintError();
+
+    const key = [localeTag(), ...words].join('\u0001');
+    if (key === paintedKey) return;
+    paintedKey = key;
+    if (!words.length) {
+      wordsBox.replaceChildren(el('div', { class: 'set-block' }, [
+        el('p', { class: 'set-sub', text: t('cat.shelf.settingsEmpty') }),
+      ]));
+      return;
+    }
+    wordsBox.replaceChildren(...words.map(word => el('div', { class: 'set-row cat-category-row' }, [
+      el('span', { class: 'set-text' }, [el('span', { class: 'set-title', text: word })]),
+      el('button', {
+        class: 'cat-category-del', type: 'button', icon: TRASH_SVG,
+        'aria-label': t('cat.shelf.deleteCategory', { name: word }),
+        onclick: () => remove(word),
+      }),
+    ])));
+  }
+
+  function add() {
+    const result = addCategory(getCategories(), input.value);
+    if (result.refusal) {
+      const vars = {
+        empty: {},
+        tooLong: { n: RECIPE_CATEGORY_MAX },
+        taken: { name: input.value.trim() },
+        full: { n: RECIPE_CATEGORIES_MAX },
+      }[result.refusal];
+      problem = { key: `cat.shelf.refusal.${result.refusal}`, vars };
+      paint();
+      return;
+    }
+    const word = result.list[result.list.length - 1];
+    problem = null;
+    input.value = '';
+    input.focus();
+    // A refused word comes back to the box, unless somebody has started typing another (P20).
+    Promise.resolve(onAddCategory(word)).catch(() => {
+      if (root.isConnected && !input.value) input.value = word;
+    });
+    paint();
+  }
+
+  async function remove(word) {
+    if (!confirm) return;
+    const n = countRecipes(word, getCategories());
+    const ok = await confirm({
+      title: t('cat.shelf.deleteCategoryTitle', { name: word }),
+      message: n ? t('cat.shelf.deleteCategoryUsed', { n }) : t('cat.shelf.deleteCategoryNone'),
+      okLabel: t('ui.delete'),
+      cancelLabel: t('ui.cancel'),
+      danger: true,
+    });
+    if (!ok) return;
+    problem = null;
+    const place = sortedCategories(getCategories(), localeTag()).indexOf(word);
+    Promise.resolve(onRemoveCategory(word)).catch(() => {});
+    paint();
+    // The bin that was tapped is gone: focus moves to the one now in its place. ⚠️ Never the box,
+    // which would raise a phone's keyboard over the list somebody is reading.
+    const bins = wordsBox.querySelectorAll('.cat-category-del');
+    const next = bins[Math.min(place, bins.length - 1)];
+    if (next) next.focus({ preventScroll: true });
+  }
+
+  addBtn.addEventListener('click', add);
+  input.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter') return;
+    event.preventDefault();
+    add();
+  });
+  input.addEventListener('input', () => { if (problem) { problem = null; paintError(); } });
+
+  paint();
+  const stop = onLanguageChange(() => { if (root.isConnected) paint(); });
+  return { card, refresh: paint, dispose: stop };
 }
