@@ -45,7 +45,9 @@ DISCOUNT_RE = re.compile(r"^\W*(sconto|abbuono|ribasso)\b", re.I)
 FOOD_RE = re.compile(
     r"\b(zucchero|farina|semola|sale|lievito|burro|margarina|strutto|olio|uova|uovo|latte|panna"
     r"|cacao|cioccolato|miele|mandorl\w*|nocciol\w*|pistacch\w*|noci|uvetta|canditi|marmellata"
-    r"|confettura|crema|ricotta|mascarpone|formaggio|mozzarella)\b",
+    r"|confettura|crema|ricotta|mascarpone|formaggio|mozzarella"
+    # Ready-made food: «patate padellate» is not a pan, «cornetto fantasia» is not a Fanta.
+    r"|patate|cornett[oi]|panzerott\w*|pasticciott\w*|treccia|trecce)\b",
     re.I,
 )
 # Only bar and shelf goods sold as they are are resale (5 Oct 2026, from the first real import).
@@ -70,7 +72,7 @@ PACKAGING_RE = re.compile(
     # A potato peeler (the word «patate» no longer catches it as resale).
     r"|pelapatate"
     # Cleaning goods given free: the app now creates a product received only free with no price.
-    r"|lavastovigl|micronizz",
+    r"|lavastovigl|micronizzator",
     re.I,
 )
 # Beverages are bought to be sold: resale, whatever the liquid.
@@ -148,19 +150,22 @@ def _counts_pieces_in_carton(before: str, size_kg: float, count: int) -> bool:
     low = int(m.group(1))
     high = int(m.group(2)) if m.group(2) else low
     grams = (low + high) / 2 * count
-    return abs(grams - size_kg * 1000) <= size_kg * 1000 * 0.25
+    return abs(grams - size_kg * 1000) <= size_kg * 1000 * 0.15
+
+
+# A bare K is a kilo only in the shape "2,5k* 4pz", as older invoices of one supplier write it: never in a code.
+_BARE_K = r"K(?=\s*\*\s*\d+\s*PZ)"
 
 
 def parse_pack(description: str) -> PackInfo | None:
     d = (description or "").upper()
     # "1/2KG", "1/4 KG": a fraction of a unit. Without this the "2KG" inside "1/2KG" reads as
     # a 2 kg pack — four times the real half kilo (real invoice, 3 Oct 2026).
-    d = re.sub(r"(?<![\d/])(\d)\s*/\s*(\d)(?=\s*(?:KG|GR|G|LT|L|ML)\b)",
+    d = re.sub(r"(?<![\d/])(\d)\s*/\s*(\d)(?=\s*(?:(?:KG|GR|G|LT|L|ML)\b|" + _BARE_K + "))",
                lambda m: str(round(int(m.group(1)) / int(m.group(2)), 3)), d)
 
     # "2,5kg* 4pz", "85gr* 50pz", "2,5 KG X 4", "1kgx6", "7gx80"
-    # A bare K is a kilo only right before the star: older invoices of one supplier write "2,5k* 4pz".
-    m = re.search(_NUM + r"\s*(KG|K(?=\s*\*)|GR|G)\.?\s*[*X]\s*(\d+)(?!\d)", d)
+    m = re.search(_NUM + r"\s*(KG|" + _BARE_K + r"|GR|G)\.?\s*[*X]\s*(\d+)(?!\d)", d)
     if m:
         size, count = _f(m.group(1)), int(m.group(3))
         kilos = m.group(2).startswith("K")
@@ -304,7 +309,8 @@ def pack_word(description: str) -> str:
 _N = r"\d+(?:[.,]\d+)?"
 _CLEAN_RES = [re.compile(p, re.I) for p in (
     r"\bPZ\.?\s*\d+\s*GR?\.?\s*\d+",
-    rf"\b(?:DA\s+)?{_N}\s*(?:KG|GR|G|LT|L|ML|CL)\b\.?(?:\s*[*X]\s*\d+(?!\d)(?:\s*(?:PZ|NR|PEZZI)\b)?)?",
+    # "35/40gr", "4X2,5k*": what stands in front of the size goes with it.
+    rf"\b(?:DA\s+)?(?:\d+\s*[/X]\s*)?{_N}\s*(?:(?:KG|GR|G|LT|L|ML|CL)\b|K(?=\s*\*))\.?(?:\s*[*X]\s*\d+(?!\d)(?:\s*(?:PZ|NR|PEZZI)\b)?)?",
     rf"\b(?:DA\s+)?(?:KG|GR?|LT|ML|CL)\.?\s*{_N}(?:\s*X\s*{_N})?(?!\d)",
     r"\b(?:DA\s+)?\d+\s*(?:PZ|NR|PEZZI)\b",
     r"\bPZ\.?\s*\d+\b",

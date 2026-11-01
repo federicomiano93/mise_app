@@ -35,7 +35,11 @@ class PackParsingTest(unittest.TestCase):
         self.check("PATATE FETTE 4X2,5k*    4pz", 2.5, "kg", 4)
         self.check("PANZEROTTI MIGNON2.5k*    1pz", 2.5, "kg", 1)
         self.check("BRIOCHE mignon 35/40gr 2k* 55pz", 2, "kg")
+        self.check("SALAME 1/2k* 4pz", 0.5, "kg", 4)
+        self.check("ART123K*5 FARINA KG 25", 25, "kg")
+        self.check("PANINI 30GR 2KG*50PZ", 2, "kg", 50)
         self.assertIsNone(parse_pack("SERIE 5KX2"))
+        self.assertIsNone(parse_pack("T65K*10 FARINA"))
 
     def test_unit_first_does_not_match_inside_a_word(self):
         self.assertIsNone(parse_pack("BUSTE ML"))
@@ -119,6 +123,12 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(self.kind("4 PELAPATATE ESEMPIO")[0], "packaging")
         self.assertEqual(self.kind("LIQUIDO LAVASTOVIGLIE ESEMPIO")[0], "packaging")
         self.assertEqual(self.kind("MICRONIZZATORE STD LT 1")[0], "packaging")
+        for text in ("AVENA MICRONIZZATA KG 25", "PATATE PADELLATE 2,5KG", "PATATE SACCHETTO 2,5KG",
+                     "CORNETTO FANTASIA 85GR* 50PZ", "TRECCIA ALLA BIRRA 98G* 60PZ"):
+            self.assertEqual(self.kind(text)[0], "ingrediente", text)
+        self.assertEqual(clean_name("BRIOCHE mignon 35/40gr 2Kg* 55pz"), "Brioche mignon")
+        self.assertEqual(clean_name("BRIOCHE mignon 35/40gr 2k* 55pz"), "Brioche mignon")
+        self.assertEqual(clean_name("PATATE FETTE 4X2,5k* 4pz"), "Patate fette")
 
     def test_bar_shelf_and_non_food_goods_are_not_ingredients(self):
         # Mirrored word for word in tests/invoice-zip-classify.test.mjs.

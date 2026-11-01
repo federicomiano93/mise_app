@@ -36,7 +36,9 @@ const DISCOUNT_RE = new RegExp(`^[^\\p{L}\\p{N}_]*(sconto|abbuono|ribasso)${B_EN
 const FOOD_RE = new RegExp(
   `${B_START}(zucchero|farina|semola|sale|lievito|burro|margarina|strutto|olio|uova|uovo|latte|panna`
   + `|cacao|cioccolato|miele|mandorl${WORD}*|nocciol${WORD}*|pistacch${WORD}*|noci|uvetta|canditi|marmellata`
-  + `|confettura|crema|ricotta|mascarpone|formaggio|mozzarella)${B_END}`, 'iu');
+  + `|confettura|crema|ricotta|mascarpone|formaggio|mozzarella`
+  // Ready-made food: «patate padellate» is not a pan, «cornetto fantasia» is not a Fanta.
+  + `|patate|cornett[oi]|panzerott${WORD}*|pasticciott${WORD}*|treccia|trecce)${B_END}`, 'iu');
 // Only bar and shelf goods sold as they are are resale (5 Oct 2026, from the first real import).
 // Ready-made FOOD (frozen croissants, panzerotti, sliced potatoes) is proposed as an ingredient,
 // because food cost and the order lists need it (owner's decision, 1 Nov 2026); a keyword list of
@@ -57,7 +59,7 @@ const PACKAGING_RE = new RegExp(
   // A potato peeler (the word «patate» no longer catches it as resale).
   + '|pelapatate'
   // Cleaning goods given free: a product received only free is now created with no price (build-import.js).
-  + '|lavastovigl|micronizz', 'iu');
+  + '|lavastovigl|micronizzator', 'iu');
 // Beverages are bought to be sold: resale, whatever the liquid.
 const BEVERAGE_RE = new RegExp(
   ['coca cola', `${B_START}acqua${B_END}`, 'birra', 'redbull', 'succo', `${B_START}the${B_END}`, 'fanta', 'sprite',
@@ -109,9 +111,10 @@ function fractionText(a, b) {
   return Number.isInteger(x) ? x.toFixed(1) : String(x);
 }
 
-const FRACTION_RE = new RegExp(`(?<![\\d/])(\\d)\\s*/\\s*(\\d)(?=\\s*(?:KG|GR|G|LT|L|ML)${B_END})`, 'gu');
-// A bare K is a kilo only right before the star: older invoices of one supplier write «2,5k* 4pz».
-const P_KG_X = new RegExp(`${NUM}\\s*(KG|K(?=\\s*\\*)|GR|G)\\.?\\s*[*X]\\s*(\\d+)(?!\\d)`, 'u');
+// A bare K is a kilo only in the shape «2,5k* 4pz», as older invoices of one supplier write it: never in a code.
+const BARE_K = 'K(?=\\s*\\*\\s*\\d+\\s*PZ)';
+const FRACTION_RE = new RegExp(`(?<![\\d/])(\\d)\\s*/\\s*(\\d)(?=\\s*(?:(?:KG|GR|G|LT|L|ML)${B_END}|${BARE_K}))`, 'gu');
+const P_KG_X = new RegExp(`${NUM}\\s*(KG|${BARE_K}|GR|G)\\.?\\s*[*X]\\s*(\\d+)(?!\\d)`, 'u');
 const P_PZ_GR = new RegExp(`${B_START}PZ\\.?\\s*(\\d+)\\s*GR\\.?\\s*(\\d+)`, 'u');
 const P_UNIT_FIRST = new RegExp(`(?<![A-Z])(ML|CL|LT|L|GR|G|KG)\\s*\\.?\\s*${NUM}\\s*[X×*]\\s*(\\d+)(?!\\d)`, 'u');
 const P_KG_NUM_X = new RegExp(`${B_START}KG\\.?\\s*${NUM}\\s*X\\s*(\\d+)(?!\\d)`, 'u');
@@ -133,7 +136,7 @@ function countsPiecesInCarton(before, sizeKg, count) {
   const low = Number(m[1]);
   const high = m[2] ? Number(m[2]) : low;
   const grams = ((low + high) / 2) * count;
-  return Math.abs(grams - sizeKg * 1000) <= sizeKg * 1000 * 0.25;
+  return Math.abs(grams - sizeKg * 1000) <= sizeKg * 1000 * 0.15;
 }
 
 export function parsePack(description) {
@@ -276,7 +279,8 @@ export function packWord(description) {
 const N = '\\d+(?:[.,]\\d+)?';
 const CLEAN_RES = [
   `${B_START}PZ\\.?\\s*\\d+\\s*GR?\\.?\\s*\\d+`,
-  `${B_START}(?:DA\\s+)?${N}\\s*(?:KG|GR|G|LT|L|ML|CL)${B_END}\\.?(?:\\s*[*X]\\s*\\d+(?!\\d)(?:\\s*(?:PZ|NR|PEZZI)${B_END})?)?`,
+  // «35/40gr», «4X2,5k*»: what stands in front of the size goes with it.
+  `${B_START}(?:DA\\s+)?(?:\\d+\\s*[/X]\\s*)?${N}\\s*(?:(?:KG|GR|G|LT|L|ML|CL)${B_END}|K(?=\\s*\\*))\\.?(?:\\s*[*X]\\s*\\d+(?!\\d)(?:\\s*(?:PZ|NR|PEZZI)${B_END})?)?`,
   `${B_START}(?:DA\\s+)?(?:KG|GR?|LT|ML|CL)\\.?\\s*${N}(?:\\s*X\\s*${N})?(?!\\d)`,
   `${B_START}(?:DA\\s+)?\\d+\\s*(?:PZ|NR|PEZZI)${B_END}`,
   `${B_START}PZ\\.?\\s*\\d+${B_END}`,

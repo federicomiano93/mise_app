@@ -146,6 +146,24 @@ test('free and paid deliveries of one product behave as before: the paid price s
   assert.equal(entry.prices.length, 1);
 });
 
+test('a return or a credit is never mistaken for a product received free', () => {
+  const RETURN = { desc: 'RESO FARINA', code: 'RET', qty: 10, unit: 'KG', total: -6 };
+  const K_RETURN = `${SUPPLIER}|code:RET`;
+  const result = built([FLOUR, RETURN]);
+  assert.equal(result.importFile.ingredients.some((i) => i.key === K_RETURN), false);
+  assert.equal(result.candidates.some((i) => i.key === K_RETURN), false);
+  assert.equal(result.products.find((p) => p.key === K_RETURN).leftOutReason, 'amount-zero-or-negative');
+});
+
+test('a carton read as heavier than any carton can be needs a look, whatever the spelling', () => {
+  const entry = built([{ desc: 'BRIOCHE 37,5gr 2Kg* 55pz', code: 'B', qty: 1, unit: 'CT', total: 14.5 }]).importFile.ingredients[0];
+  assert.deepEqual(entry.prices, []);
+  assert.equal(entry.priceCheck, 'price-out-of-scale');
+  const fine = built([{ desc: 'PATATE 2,5kg* 4pz', code: 'P', qty: 1, unit: 'CT', total: 24.9 }]).importFile.ingredients[0];
+  assert.equal(fine.prices.length, 1);
+  assert.equal(fine.priceCheck, undefined);
+});
+
 test('the VAT comes from the newest paid line: a free line says 0 only because it is outside the tax base', () => {
   const c = newCase();
   c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 6, vat: '10.00' }], { date: '2026-09-01' });

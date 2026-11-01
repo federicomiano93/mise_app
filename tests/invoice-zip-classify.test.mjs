@@ -130,6 +130,13 @@ test('classify: ready-made food is proposed as an ingredient, a potato peeler is
   assert.equal(kind('4 PELAPATATE ESEMPIO')[0], 'packaging');
   assert.equal(kind('LIQUIDO LAVASTOVIGLIE ESEMPIO')[0], 'packaging');
   assert.equal(kind('MICRONIZZATORE STD LT 1')[0], 'packaging');
+  for (const text of ['AVENA MICRONIZZATA KG 25', 'PATATE PADELLATE 2,5KG', 'PATATE SACCHETTO 2,5KG',
+    'CORNETTO FANTASIA 85GR* 50PZ', 'TRECCIA ALLA BIRRA 98G* 60PZ']) {
+    assert.equal(kind(text)[0], 'ingrediente', text);
+  }
+  assert.equal(cleanName('BRIOCHE mignon 35/40gr 2Kg* 55pz'), 'Brioche mignon');
+  assert.equal(cleanName('BRIOCHE mignon 35/40gr 2k* 55pz'), 'Brioche mignon');
+  assert.equal(cleanName('PATATE FETTE 4X2,5k* 4pz'), 'Patate fette');
 });
 
 // Mirrored word for word in invoice-import/tests/test_classify.py.
@@ -146,7 +153,11 @@ test('pack parsing: a bare K before the star is a kilo, nowhere else', () => {
   checkPack('PATATE FETTE 4X2,5k*    4pz', 2.5, 'kg', 4);
   checkPack('PANZEROTTI MIGNON2.5k*    1pz', 2.5, 'kg', 1);
   checkPack('BRIOCHE mignon 35/40gr 2k* 55pz', 2, 'kg');
+  checkPack('SALAME 1/2k* 4pz', 0.5, 'kg', 4);
+  checkPack('ART123K*5 FARINA KG 25', 25, 'kg');
+  checkPack('PANINI 30GR 2KG*50PZ', 2, 'kg', 50);
   assert.equal(parsePack('SERIE 5KX2'), null);
+  assert.equal(parsePack('T65K*10 FARINA'), null);
 });
 
 // Mirrored word for word in invoice-import/tests/test_classify.py.
