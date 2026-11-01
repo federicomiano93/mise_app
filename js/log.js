@@ -9,7 +9,7 @@ import {
   getTabProducts, getDivisorIncluded, isExtraDoughEnabled, doughExtraGrams,
   isLogVisible, getLogRetentionForDough, getRecipes, getRecipeById, showsLeaveningKnob, normalizeTrays,
 } from './calculator-config.js';
-import { logTimestamp } from './log-time.js';
+import { logTimestamp, logStampText } from './log-time.js';
 import { el } from './calculator-render.js';
 import { icon } from './calculator-icons.js';
 import { buildSheet, buildLogText, latestVersion, filterVisibleLogs, confirmTarget, dayLabel, recipeSnapshot } from './log-model.js';
@@ -181,7 +181,7 @@ function logCard(log) {
     el('span', { class: 'logday-badge ' + day.tone }, day.text),
   ]));
   const at = v.at || {};
-  body.appendChild(el('div', { class: 'log-timestamp' }, [icon('calendar', 14), ' ' + (at.date || '') + ' — ' + (at.time || '')]));
+  body.appendChild(el('div', { class: 'log-timestamp' }, [icon('calendar', 14), ' ' + logStampText(at)]));
   if (v.calculatedBy) body.appendChild(el('div', { class: 'logview-by' }, t('calc.byName', { name: v.calculatedBy })));
   if ((log.versions || []).length > 1) body.appendChild(el('div', { class: 'log-ver-count' }, 'v' + log.versions.length + t('calc.edited')));
   body.appendChild(renderOrder(v));
