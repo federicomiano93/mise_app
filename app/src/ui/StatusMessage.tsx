@@ -27,6 +27,12 @@ export function StatusMessageProvider({ children }: { children: ReactNode }) {
 
   const say = useCallback<Say>((text, ms = MESSAGE_MS) => {
     if (timer.current !== null) clearTimeout(timer.current);
+    // Nothing to say takes the message away now, for one that stopped being true before its time was up.
+    if (text === '') {
+      timer.current = null;
+      setShown(null);
+      return;
+    }
     counter.current += 1;
     setShown({ id: counter.current, text });
     timer.current = setTimeout(() => {
