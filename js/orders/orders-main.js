@@ -783,8 +783,8 @@ function leaveSupplier() {
 // ⚠️ Guarded against a double tap: two layers would be two cards for one ingredient.
 let addingIngredient = false;
 function mayAddIngredient() {
-  const { location, canManage } = currentSession();
-  return mayEditRecords(location, canManage);
+  const { location, canManage, role } = currentSession();
+  return mayEditRecords(location, canManage, role);
 }
 function openAddIngredient(supplierId) {
   if (addingIngredient) return;

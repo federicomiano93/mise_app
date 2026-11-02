@@ -121,7 +121,7 @@ let listUsage = null;
 let ordersWanted = false;
 function paintOrdersBtn() {
   const session = currentSession();
-  ordersBtn.hidden = !(ordersWanted && mayOpenOrders(session.location, session.canManage));
+  ordersBtn.hidden = !(ordersWanted && mayOpenOrders(session.location, session.canManage, session.role));
   ordersBtn.title = t('catalogue.openOrders');
 }
 // Decided at the tap, not when the header was drawn: on a tablet the header stays the list's
@@ -611,6 +611,9 @@ function showSettings() {
   setActiveSettings(renderSettings({
     photoOn: photoIsOn(),
     onTogglePhoto: togglePhoto,
+    // ⚠️ canManageVenue, not canManage: a partial owner has canManage but the photo switch is the
+    // venue's, and the server refuses it to them.
+    showPhoto: currentSession().canManageVenue === true,
     // ⚠️ THE VALUE, not a getter, and the difference is deliberate: this screen is
     // where the profile is EDITED, so it owns a working copy for as long as it is
     // open. Re-reading the store under a half-typed size is how a field fights the
@@ -812,19 +815,19 @@ const app = {
   // The recipe screen's «Apri nel Food cost»: whether to draw it, and where it goes.
   // ⚠️ ASKED OF THE SESSION EACH TIME, never captured: the session arrives after the
   // first paint, and a manager can show Food cost to employees from another phone.
-  mayOpenFoodCost: () => { const s = currentSession(); return mayOpenFoodCost(s.location, s.canManage); },
+  mayOpenFoodCost: () => { const s = currentSession(); return mayOpenFoodCost(s.location, s.canManage, s.role); },
   // The prices, read once when a recipe editor opens — only for somebody who may read Food
   // cost (the rules refuse everyone else, so no request is made, no error is logged).
   // ⚠️ ASKED WHEN THE EDITOR OPENS, never captured at load. editor-prices.js.
   readEditorPrices: () => {
     const s = currentSession();
-    return mayOpenFoodCost(s.location, s.canManage) ? readPricesForEditor() : Promise.resolve(null);
+    return mayOpenFoodCost(s.location, s.canManage, s.role) ? readPricesForEditor() : Promise.resolve(null);
   },
   openFoodCost: (recipe) => { if (recipe && recipe.id) window.location.href = foodCostHref(recipe.id); },
   // A recipe row's missing ingredient, added with the card «Fornitori e ingredienti» uses.
   // Federico, 13 Sep 2026: «semplicemente apri una scheda ingrediente come in fornitori ed
   // ingredienti». ⚠️ Asked of the session each time, like Food cost above.
-  mayCreateIngredient: () => { const s = currentSession(); return mayEditRecords(s.location, s.canManage); },
+  mayCreateIngredient: () => { const s = currentSession(); return mayEditRecords(s.location, s.canManage, s.role); },
   createIngredient: (name) => openIngredientCreate({ name, suppliers: getSuppliers(), ingredients: getIngredients() }),
   // Delete a catalogue recipe with a strong confirm, warning first if the recipe
   // was imported into the Calculator (the two are independent copies — deleting

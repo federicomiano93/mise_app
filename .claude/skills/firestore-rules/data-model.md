@@ -24,7 +24,8 @@ open.
   field needs no rules deploy but a Cloud Function (`allow write: if false`) — and each function
   writes ONE field with `merge`, never a spread, because the same document holds name, sections and
   country. `staffHiddenCards` / `staffShownCards` (`{ <cardId>: true|false }`) are display switches,
-  never access: only a literal `true` counts, `canManage` always sees every card; read by
+  never access: only a literal `true` counts, `canManage` passes them (a partial owner keeps only their
+  `ROLE_CARDS`); read by
   `js/home-cards.js`, `js/auth-gate.js` (body `data-card`) and `js/home-orders-badge.js`.
   `functions/home-cards.js` keeps a byte copy of the card ids (`tests/home-cards.test.mjs`).
 
@@ -38,8 +39,10 @@ language is strongly typed).
   nobody and change no venue setting. `'owner-sales'`: Food cost and the clients, reading recipes,
   ingredients and suppliers because a product is costed from them. `'owner-kitchen'`: Calculator,
   Catalogue, Pastries, Orders, Stocktake and purchase prices; client names and quantities only as the
-  Calculator needs them. `ROLE_CARDS` in `js/sections.js` deals every Home card to exactly one of them.
-  Only a full `'owner'` counts for the last-owner guard, so a venue always keeps one.
+  Calculator needs them. `ROLE_CARDS` in `js/home-cards.js` deals every Home card to exactly one of them.
+  Only a full `'owner'` counts for the last-owner guard, so a venue always keeps one. The kitchen
+  may not read `products`, so the merge asks the callable `productsUsingIngredient`, which answers
+  with names alone (`functions/product-usage.js`).
 - `locations/{lid}/members/{uid}` — the roster `{ email, firstName, lastName, joinedAt }`. A label,
   never an identity: no rule reads it; no account may write it. A surname is personal data (UK
   GDPR).

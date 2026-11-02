@@ -19,7 +19,7 @@
 import { getUpcomingOrdersOnce } from './client-orders-data.js';
 import { isApplied, orderChangedSinceApplied } from './client-order-model.js';
 import { onSession } from './firebase.js';
-import { isSectionAllowed } from './sections.js';
+import { isSectionAllowed, roleHasCard } from './sections.js';
 import { t } from './i18n.js';
 
 // The same rule the Calculator's banner uses: an order never used, or one changed
@@ -61,6 +61,9 @@ let started = false;
 onSession(session => {
   if (started || session.status !== 'ready') return;
   if (!isSectionAllowed(session.location, 'calculator')) return;
+  // ⚠️ THE ROLE, NOT THE CARD: an employee from whom the venue hid this card keeps the banner
+  // they have today. Only somebody with no Calculator at all has no page for it to open.
+  if (!roleHasCard(session.role, 'calculator')) return;
   started = true;
   showClientOrdersHome();
 });

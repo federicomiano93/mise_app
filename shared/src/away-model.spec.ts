@@ -115,6 +115,22 @@ describe.each([
       'an employee sending it tells both').toStrictEqual(['u-own', 'u-mgr']);
   });
 
+  test('⚠️ of the two partial owners, an order list reaches only the kitchen', () => {
+    const owners = [
+      { uid: 'u-kit', role: 'owner-kitchen' },
+      { uid: 'u-sal', role: 'owner-sales' },
+    ];
+    expect(m.whoWillBeTold(owners, new Set(), 'u-staff').map(member => member.uid)).toStrictEqual(['u-kit']);
+    expect(m.nobodyWillBeTold(owners, new Set(['u-kit']), 'u-staff'),
+      'the sales side alone is not somebody who will hear it').toBe(true);
+    expect(m.awayNames([{ uid: 'u-sal', role: 'owner-sales', firstName: 'Sara' }], new Set(['u-sal']), 'u-staff'),
+      'nor is their holiday worth a warning').toStrictEqual([]);
+    expect(['owner', 'manager', 'owner-kitchen'].every(m.receivesOrderLists)).toBe(true);
+    for (const role of ['owner-sales', 'staff', true, undefined, null]) {
+      expect(m.receivesOrderLists(role), String(role)).toBe(false);
+    }
+  });
+
   test('somebody away is not counted as somebody who will hear it', () => {
     const told = m.whoWillBeTold(roster, new Set(['u-mgr']), 'u-staff');
     expect(told.map(member => member.uid)).toStrictEqual(['u-own']);

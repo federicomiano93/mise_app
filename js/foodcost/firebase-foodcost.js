@@ -21,6 +21,7 @@ import { firebaseConfig, sessionReady, currentSession } from '../firebase.js';
 import { currentLocationId, pathFor } from '../location.js';
 import { withPrices } from '../price-model.js';
 import { countryOf } from '../market.js';
+import { isSectionAllowed } from '../sections.js';
 import {
   getApps,
   getApp,
@@ -183,8 +184,10 @@ export async function saveRecipeLoss(id, patch) {
 // them) but not writable (writing is the catalogue's), and two weighing boxes whose
 // Save is always refused would still record a margin point for a loss that never
 // landed. Same default as the rules: a section nobody switched off is on.
+// ⚠️ THE VENUE'S SECTION, NOT session.sections: the owner of the sales side has no catalogue
+// and may still write these three numbers (weighsRecipeLoss in firestore.rules).
 export function canWriteRecipes() {
-  return currentSession().sections?.catalogue === true;
+  return isSectionAllowed(currentSession().location, 'catalogue');
 }
 
 // The country the open venue sells in — which decides the VAT choices a product offers.

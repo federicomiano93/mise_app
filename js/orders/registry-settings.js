@@ -50,9 +50,10 @@ let categoryFocusAfter = null;
 // categoriesReady() — has the venue's saved list arrived? ⚠️ UNTIL IT HAS, DELETING IS OFF:
 //   categories() then answers the DEFAULTS, and a delete would overwrite the stored list with
 //   them. registry.js redraws this screen when the list loads, which re-enables the buttons.
+// mayChangeVenue — false for a partial owner: the three switches and their heading are not drawn
 export function buildRegistrySettings({
   panels, onSet, categories = () => [], ingredients = () => [], onDeleteCategory = null,
-  categoriesReady = () => true,
+  categoriesReady = () => true, mayChangeVenue = true,
 }) {
   const content = el('div', { class: 'mgmt-scroll reg-settings set-screen' });
   let current = { ...panels };
@@ -74,7 +75,10 @@ export function buildRegistrySettings({
       el('p', { text: t('orders.settings.cardNote') }),
     ]),
   ]);
-  content.appendChild(card);
+  // ⚠️ THE CARD IS NOT DRAWN AT ALL for a partial owner (mayChangeVenue false): the server refuses
+  // all three switches to them, and a heading left over an empty card would be worse than nothing.
+  // The categories below stay — the kitchen's owner keeps the ingredient list in order.
+  if (mayChangeVenue) content.appendChild(card);
 
   card.appendChild(toggle({
     key: 'showAllergens',

@@ -179,7 +179,7 @@ function collectSections() {
 export function restOrdersAllowed(session) {
   if (!session || session.status !== 'ready') return false;
   if (!isSectionAllowed(session.location, 'orders')) return false;
-  return cardVisibleTo(session.location, session.canManage, 'orders');
+  return cardVisibleTo(session.location, session.canManage, 'orders', session.role);
 }
 
 // ⚠️ js/kiosk-orders.js (and with it the Orders data layer) is loaded with a dynamic import,
