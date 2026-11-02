@@ -1271,7 +1271,7 @@ started on mount, stopped on unmount, P14).
 
 **Left open (tell him):**
 - Driven on the real tablet: the seven rounds above (the tap held and opened by itself, no reorder, no page errors, the copy's fields
-  read back from storage). The tablet then dropped off USB, so the rest was driven in Edge on this PC, slowed 6×: the wait said over the content without moving a row (also at 360 and 296 px, no sideways scroll), the gear saying it and leaving the hold alone, a quantity typed after the supplier opened by itself and still there after a reload, a held tap dropped on moving to another tab and on pressing the search box, 0 page errors. Still to see on the real tablet: those same steps, by finger.
+  read back from storage). The tablet then dropped off USB, so the rest was driven in Edge on this PC, slowed 6×: the wait said over the content without moving a row (also at 360 and 296 px, no sideways scroll), the gear saying it and leaving the hold alone, a quantity typed after the supplier opened by itself and still there after a reload, a held tap dropped on moving to another tab and on pressing the search box, a venue with no `config/orders` getting the copy first with the real SDK, 0 page errors. Still to see on the real tablet: those same steps, by finger.
 - `list-copy.spec.ts`'s comparison with the original runs only once #433 is in this stack, since `js/orders/list-copy.js` is not on
   this branch yet; the two were compared by hand and they match.
 - The hold has no end of its own: a device back online after a long time opens the supplier tapped long before. Offline with no
