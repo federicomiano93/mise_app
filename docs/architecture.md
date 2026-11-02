@@ -41,6 +41,10 @@ both, and the switch keeps the address) and it has consequences that every chang
   are NOT kept: `inventory-<lid>-<YYYY-MM>` (the month as last seen) and
   `inventory-unsaved-<lid>-<YYYY-MM>` (counts typed here that the browser's own database has not
   shown back yet); the venue is in the key, so a switch wipes them and they cannot cross venues.
+  `orders-list-copy` (the current app's key, shape and meaning; `shared/src/list-copy.ts`) is NOT kept either, and must stay
+  outside those prefixes on purpose: it holds one venue's supplier and ingredient names, so sign-out and a venue switch must
+  wipe it. The keep-list says what SURVIVES; a shared key that must be wiped simply never joins it (`list-copy.spec.ts` pins
+  this through both files' `keysToClear`).
 - **One service worker scope.** The current `sw.js` controls `/mise2/` too. Mise 2 registers no
   service worker until step 5, when it takes over at the same path and name.
 - **No App Check, no reCAPTCHA** (his decision, PR #212) — in either app.
@@ -398,7 +402,7 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   snapshot, 800 ms pause, `flush()`), `ordersStore.ts` (plain TypeScript: `editLine` stamps the day the lines are FOR — never for a
   stock-only edit — and settles whose order a line is in; `stop()` sends a change still waiting at once), `ordersLens.ts` (pure: the
   ONE place that decides which supplier a line sits under; «Not in use» lines LAST, decision F6), `OrdersContext.tsx` (started on
-  mount, stopped on unmount, P14). No localStorage copy of `config/orders` (T14). Addresses, in `ordersPath.ts`: `/orders`,
+  mount, stopped on unmount, P14). No localStorage copy of `config/orders` (T14). `useListCopy.ts` keeps the supplier list's own copy, outside the store: only `OrdersSection`'s `earlyLens` reads it, to DRAW the list until the live lists land, and nothing can be typed, sent or read for alerts from it (parity «List copy as built»). Addresses, in `ordersPath.ts`: `/orders`,
   `/orders/supplier/<id>` (`no-supplier` is a valid id) and `/orders/supplier/<id>/items`; the usage record names `orders`,
   `orders-supplier` and `orders-supplier-items`. The frame (`OrdersSection.tsx`) is the suppliers' shape: the list on the left, the
   supplier beside it from 1000px, the section owns the scroll, `handBack.ts` gives the focus back to the row, the list icon or the
@@ -414,7 +418,7 @@ Pure logic only, no DOM types. Each module is a PORT of a `js/` file, and its sp
 against BOTH files (`describe.each` over the TypeScript port and the `js/` original), so the two
 apps cannot drift apart while both are live. `parity.spec.ts` compares the full ports export by
 export (names, constants, frozen-ness, function names and arity); a partial port (`membership`,
-`location-id`, `pastries-model`, `recipe-allergen-model`, `price-model`, `inventory-value`, `catalogue-model`, `recipe-link`, `recipe-cost-model`, `foodcost-model`) is not paired and its spec says why, and
+`location-id`, `pastries-model`, `recipe-allergen-model`, `price-model`, `inventory-value`, `catalogue-model`, `recipe-link`, `recipe-cost-model`, `foodcost-model`, `list-copy`) is not paired and its spec says why, and
 compares what it does port with the `js/` file itself. `currency` is an ADAPTED port, also not paired:
 the original keeps the venue's money in a module variable (`setCurrency`), and Mise 2 never keeps a
 venue fact in a module variable, so the port is stateless (`moneyOf(symbol, layout)` returns the

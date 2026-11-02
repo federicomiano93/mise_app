@@ -6,7 +6,7 @@
 // against the original.
 //
 // ⚠️ A PARTIAL PORT, SO parity.spec.ts DOES NOT PAIR IT. NOT PORTED (they are the page logic of the current app; in Mise 2 the
-// hold of a tapped supplier lives in OrdersLayout and is a React state, and the questions these functions answer are answered
+// hold of a tapped supplier lives in OrdersSection and is a React state, and the questions these functions answer are answered
 // there by the store's flags — loaded, broken, serverSeen — and by the live lens, so nothing here needs to decide when the copy
 // may be shown, which supplier to open or when to write):
 //   - `bothLanded`, `shouldShowCopy` — when the current app paints the copy;
