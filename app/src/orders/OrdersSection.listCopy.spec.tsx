@@ -144,6 +144,9 @@ describe('the list before the live lists land', () => {
     holdLive(source);
     renderOrders('/orders', { source });
     expect(await screen.findByText('Loading…', undefined, LOAD)).toBeInTheDocument();
+    // config/orders is not held, and the copy waits only for it: look again once it has landed, or «Loading…» proves nothing.
+    await act(async () => { await new Promise(resolve => { setTimeout(resolve, 0); }); });
+    expect(screen.getByText('Loading…')).toBeInTheDocument();
     expect(screen.queryByText('No suppliers yet')).not.toBeInTheDocument();
   });
 
