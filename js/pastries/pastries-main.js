@@ -123,18 +123,25 @@ function lockedFor(day) {
 // to catch a change to something already recorded, not to make every edit slower.
 async function requestEdit(day) {
   if (!lockedFor(day)) return true;
-  const ok = await confirmDialog({
+  if (!(await askToEdit(day))) return false;
+  grantEdit(day);
+  return true;
+}
+
+function askToEdit(day) {
+  return confirmDialog({
     title: t('past.editDayQ', { day: weekdayLabel(day) }),
     message: t('past.alreadyRecordedTonight', { day: weekdayLabel(day) }),
     okLabel: t('ui.edit'),
     cancelLabel: t('ui.cancel'),
   });
-  if (!ok) return false;
-  // The permission carries the work date, so it is spent when the date rolls at
-  // 4am — and spent again by the next Confirm, see grantAfter().
+}
+
+// The permission carries the work date, so it is spent when the date rolls at
+// 4am — and spent again by the next Confirm, see grantAfter().
+function grantEdit(day) {
   setGrant(day, grantAfter('edit', currentWorkDate()));
   repaint();
-  return true;
 }
 
 // ── Waiting for the first answers ────────────────────────────────────────────
@@ -239,7 +246,7 @@ function showDay(day, opts = {}) {
 // `copiedFrom`: the weekday whose list pre-fills this editor ("Copy day"). Only the
 // rows come across; the standing note stays the target's own, and shownDay is left
 // alone so Back returns to the source day while Save lands on the target.
-function openEditor(day, copiedFrom = null) {
+function openEditor(day, copiedFrom = null, editorApp = app) {
   view = 'editor';
   globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'editor' }));
   dayView = null;
@@ -259,7 +266,7 @@ function openEditor(day, copiedFrom = null) {
     items: copiedFrom ? getItems(copiedFrom) : getItems(day),
     note: getNote(day),
     allDays: getDays(),
-    app,
+    app: editorApp,
     copiedFrom,
   }));
 }
@@ -502,19 +509,32 @@ async function copyShownDay() {
   try {
     const to = await pickCopyTarget(from);
     if (!to) return;
-    const askedAboutReplacing = getItems(to).length > 0;
-    if (askedAboutReplacing && !(await replaceAllowed(to, from))) return;
-    // AFTER the replace question: requestEdit stores a permission to edit, which a
-    // person who then answers «no» to replacing never asked for.
-    if (!(await requestEdit(to))) return;
     // The dialogs take time, and a snapshot from another phone can land during them:
-    // the screen may have moved on, the source may be gone, and a target that was
-    // empty may now hold rows nobody has agreed to replace.
-    if (view !== 'day' || shownDay !== from) return;
-    if (!getItems(from).length) { toast(t('past.nothingToCopy', { day: weekdayLabel(from) })); return; }
-    if (!askedAboutReplacing && getItems(to).length && !(await replaceAllowed(to, from))) return;
-    if (view !== 'day' || shownDay !== from) return;
-    openEditor(to, from);
+    // the screen may have moved on, the source may be gone, the target may have filled
+    // up or been confirmed. So everything is looked at again after each answer, and
+    // each question is asked at most once.
+    let agreedToReplace = false;
+    let agreedToEdit = false;
+    for (;;) {
+      if (view !== 'day' || shownDay !== from) return;
+      if (!getItems(from).length) { toast(t('past.nothingToCopy', { day: weekdayLabel(from) })); return; }
+      if (getItems(to).length && !agreedToReplace) {
+        if (!(await replaceAllowed(to, from))) return;
+        agreedToReplace = true;
+      } else if (lockedFor(to) && !agreedToEdit) {
+        if (!(await askToEdit(to))) return;
+        agreedToEdit = true;
+      } else {
+        break;
+      }
+    }
+    // ⚠️ THE PERMISSION COMES WITH SAVE, not with opening. The person is looking at
+    // the source day when they throw a copy away, so a target unlocked here would stay
+    // open all night without anyone seeing it.
+    openEditor(to, from, agreedToEdit ? {
+      ...app,
+      saveDay: (...args) => { grantEdit(to); return app.saveDay(...args); },
+    } : app);
   } finally {
     copying = false;
   }

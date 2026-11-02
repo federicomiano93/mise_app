@@ -25,6 +25,7 @@ const SOURCE_ROWS = [{ name: 'Cornetti', qty: 24, note: '9x3' }, { name: 'Girell
 
 const find = (root, cls) => walk(root).filter(n => n.classList && n.classList.contains(cls));
 const editorOpen = screen => find(screen, 'pas-editrows').length > 0;
+const granted = stored => [...stored.keys()].some(k => k.startsWith('pastries-edit-'));
 
 // The page's own elements (pastries.html), in the small fake DOM.
 function pageDom() {
@@ -153,7 +154,7 @@ test('a source emptied by another phone during the questions opens nothing', asy
 });
 
 test('a target filled by another phone during the questions asks before replacing it', async (t) => {
-  const { ids, dialog, fs, screen } = await boot('copy-target-filled', t, { days: source, confirmed: [NEXT] });
+  const { ids, dialog, fs, screen, stored } = await boot('copy-target-filled', t, { days: source, confirmed: [NEXT] });
   dialog.settings.answer = (options) => {
     if (options.okLabel === say('ui.edit')) {
       fs.control.days[0].onChange(WEEKDAYS.map(day => ({
@@ -166,6 +167,23 @@ test('a target filled by another phone during the questions asks before replacin
   await tap(ids);
   assert.equal(dialog.asked.at(-1).okLabel, say('ui.replace'));
   assert.equal(editorOpen(screen), false, 'the «no» is respected');
+  assert.equal(granted(stored), false, 'no permission to edit was stored');
+});
+
+test('a target confirmed by another phone during the replace question asks «Edit?» too, once', async (t) => {
+  const days = { ...source, [NEXT]: { items: [{ name: 'Old', qty: 1 }], note: '' } };
+  const { ids, dialog, fs, screen } = await boot('copy-target-confirmed', t, { days });
+  const plain = answers();
+  dialog.settings.answer = (options) => {
+    if (options.okLabel === say('ui.replace')) {
+      const tonight = fs.control.dates.at(-1);
+      tonight.onChange([{ id: `${tonight.date}_${NEXT}`, day: NEXT, date: tonight.date }]);
+    }
+    return plain(options);
+  };
+  await tap(ids);
+  assert.deepEqual(dialog.asked.slice(1).map(o => o.okLabel), [say('ui.replace'), say('ui.edit')]);
+  assert.equal(editorOpen(screen), true);
 });
 
 test('an empty shown day says there is nothing to copy, and asks nothing', async (t) => {
@@ -273,11 +291,43 @@ test('a recorded target asks the edit question too, and «no» opens nothing', a
   assert.equal([...stored.keys()].some(k => k.startsWith('pastries-edit-')), false);
 });
 
-test('a recorded target with «yes» to editing opens the editor', async (t) => {
-  const { ids, dialog, screen } = await boot('copy-locked-yes', t, { days: source, confirmed: [NEXT] });
+test('a recorded target with «yes» to editing opens the editor, and stays locked until Save', async (t) => {
+  const { ids, dialog, screen, stored } = await boot('copy-locked-yes', t, { days: source, confirmed: [NEXT] });
   dialog.settings.answer = answers({ edit: true });
   await tap(ids);
   assert.equal(editorOpen(screen), true);
+  assert.equal(granted(stored), false);
+});
+
+test('⚠️ a copy thrown away leaves a recorded target locked: the person is back on another day and would not see it open', async (t) => {
+  const { ids, dialog, screen, stored } = await boot('copy-locked-discard', t, { days: source, confirmed: [NEXT] });
+  dialog.settings.answer = answers({ edit: true });
+  await tap(ids);
+  ids.get('pasBack').fire('click');
+  await settle();
+  assert.equal(editorOpen(screen), false);
+  assert.equal(granted(stored), false);
+});
+
+test('a copy saved onto a recorded target opens that day for tonight, as any edit does', async (t) => {
+  const { ids, dialog, fs, stored } = await boot('copy-locked-save', t, { days: source, confirmed: [NEXT] });
+  dialog.settings.answer = answers({ edit: true });
+  await tap(ids);
+  ids.get('pasSave').fire('click');
+  await settle();
+  assert.equal(fs.control.saves.at(-1).day, NEXT);
+  assert.equal(stored.get(`pastries-edit-${NEXT}`), fs.control.dates.at(-1).date);
+});
+
+test('a permission the target already had survives a copy thrown away', async (t) => {
+  const { ids, dialog, stored, fs } = await boot('copy-locked-kept', t, { days: source, confirmed: [NEXT] });
+  stored.set(`pastries-edit-${NEXT}`, fs.control.dates.at(-1).date);
+  dialog.settings.answer = answers();
+  await tap(ids);
+  assert.equal(dialog.asked.some(o => o.okLabel === say('ui.edit')), false, 'already allowed: not asked again');
+  ids.get('pasBack').fire('click');
+  await settle();
+  assert.equal(granted(stored), true);
 });
 
 // ── Through Save, and Back ───────────────────────────────────────────────────
@@ -377,6 +427,30 @@ test('typing only a note counts as unsaved work: Back asks before losing it', as
   ids.get('pasBack').fire('click');
   await settle();
   assert.equal(dialog.asked.at(-1)?.title, say('past.discardChanges'));
+});
+
+test('adding and removing a row redraws the editor without losing a note, typed or untouched', async (t) => {
+  const days = { [FROM]: { items: [...SOURCE_ROWS, { name: 'Krapfen', qty: 3 }], note: '' } };
+  const { ids, dialog, screen } = await boot('note-redraw', t, { days });
+  dialog.settings.answer = () => true;
+  ids.get('pasEdit').fire('click');
+  await settle();
+  const typed = find(screen, 'pas-item-note')[1];
+  typed.value = '4x6';
+  typed.fire('input');
+  find(screen, 'pas-add-row')[0].fire('click');
+  assert.deepEqual(find(screen, 'pas-item-note').map(n => n.value), ['9x3', '4x6', '', '']);
+  find(screen, 'pas-del-icon')[2].fire('click');
+  await settle();
+  assert.deepEqual(find(screen, 'pas-item-note').map(n => n.value), ['9x3', '4x6', '']);
+});
+
+test('Confirm through the real page keeps a row\'s note in the record', async (t) => {
+  const { dialog, fs, screen } = await boot('note-confirm', t, { days: source });
+  dialog.settings.answer = () => true;
+  find(screen, 'pas-confirm-btn')[0].fire('click');
+  await settle();
+  assert.deepEqual(fs.control.built.at(-1).items, SOURCE_ROWS);
 });
 
 test('the Records screen shows a row\'s note, and a row without one has no such node', async (t) => {
