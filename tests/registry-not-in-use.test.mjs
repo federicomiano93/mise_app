@@ -75,6 +75,7 @@ class Node {
   }
   contains(node) { for (let n = node; n; n = n.parentNode) if (n === this) return true; return false; }
   focus() { ACTIVE.el = this; }
+  getBoundingClientRect() { return { height: this.laidOutHeight || 0 }; }
   addEventListener(type, fn) { (this.listeners[type] = this.listeners[type] || []).push(fn); }
   fire(type) { (this.listeners[type] || []).forEach(fn => fn({ target: this })); }
 
@@ -145,7 +146,7 @@ const CARDS = [];
 globalThis.__registryTest = { REPORTS, CARDS, mkNode: tag => new Node(tag) };
 const stub = (source) => `data:text/javascript,${encodeURIComponent(source)}`;
 const STUBS = {
-  'js/orders/firebase-orders.js': stub('export const mayWritePrices = () => false;'),
+  'js/orders/firebase-orders.js': stub('export const mayWritePrices = () => globalThis.__registryTest.mayPrice === true;'),
   'js/orders/firebase-features.js': stub('export const ingredientPanels = () => ({ allergens: false }); export const setIngredientPanel = async () => {}; export const setPackPhoto = async () => {};'),
   'js/orders/photo-capture.js': stub('export const renderPackPhotoCapture = () => ({ root: null, dispose() {} });'),
   'js/orders/ingredient-merge-screen.js': stub('export const buildMergeChooser = () => null; export const runMergeFlow = async () => null;'),
@@ -234,6 +235,18 @@ test('the frame carries data-sel, and the drill button inside does not', () => {
   const row = s.rowOf('Burro');
   assert.equal(row.getAttribute('data-sel'), 'ingredient:a');
   assert.equal(row.querySelector('.reg-drill').getAttribute('data-sel'), undefined);
+});
+
+// A row off screen takes its height from a guess (orders.css): a row that forgot the real one would
+// change the height above the row under the finger, and every tap on the word ends in a repaint.
+test('a repaint hands each row its height, without the border, and a row never laid out takes none', () => {
+  const s = screen(items());
+  const old = s.rowOf('Burro');
+  old.laidOutHeight = 81; old.offsetHeight = 81; old.clientHeight = 79;
+  s.set(items());
+  assert.notEqual(s.rowOf('Burro'), old, 'it really was a new row');
+  assert.equal(s.rowOf('Burro').style.containIntrinsicSize, 'auto 79px');
+  assert.equal(s.rowOf('Farina').style.containIntrinsicSize, undefined);
 });
 
 // ── The tap ─────────────────────────────────────────────────────────────────
@@ -549,6 +562,35 @@ test('the pencil is not on supplier rows', () => {
   const s = screen([ing('a', 'Fatto a mano', { supplierCode: undefined })]);
   s.tab('Fornitori').fire('click');
   assert.equal(s.all().filter(n => n.classList.contains('reg-handmade')).length, 0);
+});
+
+// ── The room for a price that has not landed ────────────────────────────────
+
+test('before the prices land a row keeps room for one, unseen, and only for somebody who will get them', () => {
+  const room = (s, name) => s.rowOf(name).querySelector('.reg-price-room');
+  globalThis.__registryTest.mayPrice = true;
+  try {
+    const waiting = screen([ing('a', 'Burro')]);
+    waiting.data.pricesLoaded = () => false;
+    waiting.reg.refresh();
+    assert.ok(room(waiting, 'Burro'), 'an owner, prices on their way');
+
+    const landed = screen([ing('a', 'Burro')]);
+    landed.data.pricesLoaded = () => true;
+    landed.reg.refresh();
+    assert.equal(room(landed, 'Burro'), null, 'landed, and this one has no price: the room goes');
+
+    const priced = screen([ing('a', 'Burro', { pricePerUnit: 2, priceUnit: 'kg' })]);
+    priced.data.pricesLoaded = () => false;
+    priced.reg.refresh();
+    assert.equal(room(priced, 'Burro'), null, 'the price itself is already there');
+  } finally {
+    globalThis.__registryTest.mayPrice = false;
+  }
+  const employee = screen([ing('a', 'Burro')]);
+  employee.data.pricesLoaded = () => false;
+  employee.reg.refresh();
+  assert.equal(room(employee, 'Burro'), null, 'an employee never gets prices, so nothing moves');
 });
 
 // ── fromInvoice, on its own ─────────────────────────────────────────────────

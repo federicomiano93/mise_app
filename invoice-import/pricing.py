@@ -30,6 +30,8 @@ PACK_UNITS = {"kg": ("kg", 1.0), "g": ("kg", 0.001), "l": ("l", 1.0), "ml": ("l"
 
 # A price outside these bounds is almost certainly a misread weight or pack, never a real price.
 KG_L_PRICE_RANGE = (0.05, 300.0)
+# The heaviest one invoiced unit made of several packs can believably be, in kg or l.
+MAX_PACK_KG_L = 50
 PIECE_PRICE_RANGE = (0.01, 50.0)
 # What one egg can plausibly cost, used to tell «the quantity counts eggs» from «counts packs».
 EGG_PRICE_RANGE = (0.05, 0.90)
@@ -165,12 +167,18 @@ def compute_document(lines: list[Line], params: Params, discount_flag: bool = Fa
     if dim != params.price_unit:
         return fail("unità prezzo e peso confezione non coerenti")
     qty = pieces * size * count
-    return _finish(
+    result = _finish(
         Computed(total / qty, qty, "media", "peso letto dalla descrizione o indicato nel foglio", vat_rate=vat),
         mixed,
         discount_flag,
         params.price_unit,
     )
+    # ⚠️ NO CARTON WEIGHS THIS MUCH: «2Kg* 55pz» read as 55 × 2 kg gives a price that still looks believable, and the
+    # spellings of a piece weight are endless (classify.py catches the common one). Above this it needs a look.
+    if count > 1 and size * count > MAX_PACK_KG_L:
+        result.reliability = "da verificare"
+        result.note = OUT_OF_SCALE_NOTE
+    return result
 
 
 def _in_range(value: float, bounds: tuple[float, float]) -> bool:

@@ -899,3 +899,14 @@ export function withPrices(ingredients, prices) {
     return price ? { ...clean, ...price } : clean;
   });
 }
+
+// Whether two id → price document maps say the same thing, so a screen can skip a redraw.
+// ⚠️ IT MAY ONLY ERR TOWARDS «DIFFERENT»: the same fields in another order count as different, which
+// costs one redraw and can never leave an old price on screen.
+export function samePriceMaps(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const ids = Object.keys(a);
+  if (ids.length !== Object.keys(b).length) return false;
+  return ids.every(id => id in b && JSON.stringify(a[id]) === JSON.stringify(b[id]));
+}
