@@ -122,7 +122,7 @@ export function refreshSupplierDerived(supplier, ingredients, entries, forDay = 
 
 // container: #suppliers-list.
 // ctx: { query, filterActive, onQuery(text), onFilter(active), onOpen(supplierId),
-//        onView(supplierId) }
+//        onView(supplierId), onPainted() }
 // -> { repaint({ suppliers, ingredientsBySupplier, entries }) }
 export function mountSupplierList(container, ctx) {
   let data = { suppliers: [], ingredientsBySupplier: {}, entries: {} };
@@ -201,6 +201,7 @@ export function mountSupplierList(container, ctx) {
       }
       group.suppliers.forEach(s => list.appendChild(buildSupplierRow(s, data, ctx)));
     }
+    ctx.onPainted?.();
   }
 
   // `ctx.searchExtras` is the "⇄ Ingredienti" swap button orders-main.js builds

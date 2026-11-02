@@ -13,7 +13,7 @@ import { onSession, currentSession } from '../firebase.js';
 import { outputLanguage } from '../market.js';
 import { currentLocationId } from '../location.js';
 import { categoryChoices, unitChoices, packChoices } from '../record-choices.js';
-import { withPrices } from '../price-model.js';
+import { withPrices, samePriceMaps } from '../price-model.js';
 import { buildRegistry } from './registry.js';
 import { dropDeletedIngredientFromDraft, freezeUnitInDraft } from './draft.js';
 import {
@@ -31,6 +31,8 @@ const state = {
   suppliers: [],
   rawIngredients: [],
   ingredientPrices: {},
+  // The prices `ingredients` was last built from: what a new answer is compared with.
+  mergedPrices: null,
   ingredients: [],
   // The venue's saved category list (config/orders). null = never saved one, or not
   // loaded yet: both mean «offer the defaults».
@@ -44,6 +46,9 @@ const state = {
   // then an ingredient card reads its own price document before it opens (registry.js).
   pricesReadable: false,
 };
+// The price listener's first answer, whatever it said (readPrice below).
+let answerPrices;
+const pricesAnswered = new Promise((resolve) => { answerPrices = resolve; });
 
 const host = document.getElementById('registry-host');
 // The page header's round «+». ⚠️ NEVER HIDDEN ON A ROLE — the dashed button it replaces
@@ -66,7 +71,13 @@ const screen = buildRegistry(
     // the delete buttons off, or a delete would overwrite the saved list with them.
     categoriesLoaded: () => state.loaded.config,
     pricesLoaded: () => state.pricesReadable === true,
-    readPrice: (id) => readIngredientPrice(id),
+    // ⚠️ THE ROWS DRAW BEFORE THE PRICES, so a quick tap lands here while the listener is still on its way, a
+    // moment from answering out of the phone's own copy. A read of its own would ask the network instead: no signal
+    // and a row with no price document is an error dialog, weak signal is seconds with nothing happening.
+    readPrice: async (id) => {
+      await pricesAnswered;
+      return state.pricesReadable ? (state.ingredientPrices[id] || null) : readIngredientPrice(id);
+    },
     orderUnits: (current) => unitChoices({
       ingredients: state.ingredients, language: outputLanguage(currentSession().location), current,
     }),
@@ -228,6 +239,16 @@ function liveDataLost(what) {
   };
 }
 
+function mergePrices() {
+  state.ingredients = withPrices(state.rawIngredients, state.ingredientPrices);
+  state.mergedPrices = state.ingredientPrices;
+}
+
+// ⚠️ THE ORDER OF THESE FOUR IS THE ORDER THE SDK ANSWERS IN, AND IT IS WHAT THE SCREEN WAITS FOR. Firestore reads
+// its copy one listener at a time: with the 275 prices asked for first, the ingredients landed about 1.5 s later on
+// the lab tablet (1 Nov 2026). Suppliers first, because a row names its supplier; the one config document before
+// the rows, so its answer does not redraw them; the prices last, the rows draw without them and take them a moment later.
+
 // Suppliers and ingredients are a handful of documents and every one of them is
 // needed to draw the screen, so both are unbounded — the same choice Orders makes.
 watchCollection(COLLECTIONS.suppliers, list => {
@@ -235,21 +256,6 @@ watchCollection(COLLECTIONS.suppliers, list => {
   state.loaded.suppliers = true;
   screen.refresh();
 }, liveDataLost('suppliers'));
-
-// ⚠️ THE PRICES ARE A SECOND COLLECTION AND ARRIVE SEPARATELY. They moved off the
-// ingredient document because Orders reads every ingredient to work at all, so a
-// rate written there is a rate everybody can read (js/price-model.js). Merged in
-// here so the form opens on the price it is meant to edit; an employee is refused
-// that collection and simply sees no price, which is the same thing they see for
-// an ingredient nobody has priced.
-watchIngredientPrices((map, readable) => {
-  state.ingredientPrices = map;
-  state.pricesReadable = readable === true;
-  if (state.loaded.ingredients) {
-    state.ingredients = withPrices(state.rawIngredients, map);
-    screen.refresh();
-  }
-});
 
 // The venue's saved category list. A failure here is not shown on the page: the menus fall
 // back to the defaults plus whatever ingredients already use, which is a usable screen.
@@ -266,7 +272,28 @@ watchDoc(COLLECTIONS.config, 'orders', (doc, fromCache) => {
 
 watchCollection(COLLECTIONS.ingredients, list => {
   state.rawIngredients = list;
-  state.ingredients = withPrices(list, state.ingredientPrices);
+  mergePrices();
   state.loaded.ingredients = true;
   screen.refresh();
 }, liveDataLost('ingredients'));
+
+// ⚠️ THE PRICES ARE A SECOND COLLECTION AND ARRIVE SEPARATELY. They moved off the
+// ingredient document because Orders reads every ingredient to work at all, so a
+// rate written there is a rate everybody can read (js/price-model.js). Merged in
+// here so the form opens on the price it is meant to edit; an employee is refused
+// that collection and simply sees no price, which is the same thing they see for
+// an ingredient nobody has priced.
+//
+// ⚠️ THE SAME PRICES ARRIVE TWICE ON EVERY OPEN: this listener also answers when only the metadata
+// changes, so once the server has confirmed the phone's copy it hands over the identical map. A
+// redraw there rebuilt all 302 rows at about 8 s on the lab tablet and froze the list for about 2 s
+// (1 Nov 2026), to show the same numbers. Whether it may read prices is still taken from every answer.
+watchIngredientPrices((map, readable) => {
+  state.ingredientPrices = map;
+  state.pricesReadable = readable === true;
+  answerPrices();
+  if (state.loaded.ingredients && !samePriceMaps(map, state.mergedPrices)) {
+    mergePrices();
+    screen.refresh();
+  }
+});
