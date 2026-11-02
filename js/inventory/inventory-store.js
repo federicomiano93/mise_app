@@ -27,7 +27,7 @@ import { guarded } from '../guard.js';
 import { currentLocationId } from '../location.js';
 import {
   normalizeMonth, carryOver, toDocument, readCount, isMonthId, nextMonth,
-  monthBounds, COUNT_MAPS, isClosed,
+  monthBounds, COUNT_MAPS, isClosed, listStatus, monthReady, productsOfMonth,
 } from './inventory-model.js';
 import {
   EMPTY_OUTBOX, stage, stageMany, hasWork, take, answered, applyOver,
@@ -46,6 +46,12 @@ const SAVE_DELAY_MS = 700;
 // The longest the SCREEN may wait for a write before carrying on regardless.
 const SETTLE_MS = 1200;
 
+// ⚠️ How long the list may say «loading» before it says the products have not arrived. The Firestore SDK
+// itself gives up after 10 s without the server and answers from its copy; past that, with a browser that
+// believes it is online, nothing else tells the screen the signal is not there. Counted from the venue
+// opening.
+const STALL_MS = 10000;
+
 // ⚠️ THE VENUE IS IN THE KEY. One phone can hold two businesses, and a cache key
 // of "the month" alone would show The Italian Club's counts under Panificio
 // Miano's name — the same shape as the Firestore cache still being per project
@@ -58,6 +64,12 @@ function cacheKey(monthId) {
 // keepUnsaved). The venue is in it for the same reason.
 function unsavedKey(monthId) {
   return `inventory-unsaved-${currentLocationId() || 'none'}-${monthId}`;
+}
+
+// That this phone has read this month for itself, as opposed to having only written to it (hearMonth). The venue is
+// in it for the same reason.
+function seenKey(id) {
+  return `inventory-seen-${currentLocationId() || 'none'}-${id}`;
 }
 
 function readJson(key, fallback) {
@@ -136,6 +148,34 @@ let remoteArrived = false;
 // laid over it — so the screen can be drawn again once the writes have answered.
 let lastRemote = null;
 
+// What the two listeners have PROVED, for the words an empty list may say (listStatus, in the model).
+// `month` and `ingredients` are set only by an answer that proves something; `emptyCopy` is the phone's
+// copy of the ingredients saying «none».
+const heard = { month: false, ingredients: false, prices: false, emptyCopy: false, failed: false, stalled: false };
+let stallWatched = false;
+
+export function getListStatus() {
+  return listStatus({
+    venueOpen: Boolean(currentLocationId()),
+    monthAnswered: heard.month,
+    ingredientsAnswered: heard.ingredients,
+    failed: heard.failed,
+    emptyCopy: heard.emptyCopy,
+    stalled: heard.stalled,
+    online: globalThis.navigator?.onLine,
+  });
+}
+
+// Whether the month may be acted on yet (monthReady, in the model).
+export function isMonthReady() {
+  return monthReady({
+    status: getListStatus(),
+    closed: isClosed(month),
+    rows: productsOfMonth(month, ingredients).length,
+    pricesAnswered: heard.prices,
+  });
+}
+
 export function getMonth() { return month; }
 export function getMonthId() { return monthId; }
 export function getIngredients() { return ingredients; }
@@ -188,13 +228,14 @@ export function initInventory(id, onUpdate, onError) {
   // `inventory-none-2026-09` while every write of the evening went to
   // `inventory-loc-abc-2026-09`. The safety copy was written faithfully and never
   // read once.
-  authReady.then(fromThisPhone).catch(() => {});
+  authReady.then(venueOpened).catch(() => {});
 
   watchMonth(
     monthId,
     (remote, meta) => {
       remoteArrived = true;
       lastRemote = remote;
+      hearMonth(remote, meta);
       // What the snapshot shows back is in the browser's database: no longer only
       // in this page's memory. Judged on the document AS IT ARRIVED.
       outbox = echoed(outbox, remoteMonth(), COUNT_MAPS);
@@ -202,18 +243,76 @@ export function initInventory(id, onUpdate, onError) {
       adoptRemote();
       if (meta && meta.fromServer) releaseHeld();
     },
-    err => { if (onError) onError(err); },
+    err => {
+      heard.failed = true;
+      if (onError) onError(err);
+      announce();
+    },
   ).catch(err => {
     console.error('Stocktake live sync failed to start:', err);
+    heard.failed = true;
     if (onError) onError(err);
+    announce();
   });
 
-  watchIngredients(list => {
+  watchIngredients((list, fromCache, pricesAnswered) => {
     ingredients = Array.isArray(list) ? list : [];
+    if (pricesAnswered === true) heard.prices = true;
+    // ⚠️ AN EMPTY LIST FROM THE PHONE'S COPY IS NOT AN ANSWER. And a list that has answered stays
+    // answered: the last row deleted with no signal is an empty list from the cache too, and that time
+    // it is true.
+    heard.emptyCopy = ingredients.length === 0 && fromCache === true;
+    if (!heard.emptyCopy) heard.ingredients = true;
     announce();
-  }, () => {}).catch(() => {});
+  }, () => {
+    heard.failed = true;
+    announce();
+  }).catch(() => {
+    heard.failed = true;
+    announce();
+  });
 
   return month;
+}
+
+// What a snapshot of the month proves.
+//
+// ⚠️ A MISSING DOCUMENT FROM THE PHONE'S OWN COPY PROVES NOTHING: it could be a closed month never read on this
+// device. Only a document, or the server's word, counts. The localStorage month (hydrateFromCache) deliberately does
+// NOT count either.
+// ⚠️⚠️ NOR DOES A DOCUMENT THAT IS ONLY THIS PHONE'S OWN WRITE. With no signal one count typed into a month never read
+// here makes the document «exist», and the SDK cannot say whether anything lies under it. Taken as an answer, it let
+// that month be closed: over another phone's counts, or over a close already made elsewhere. But a month read here
+// BEFORE and counted since looks exactly the same after a reload, and that is the storeroom this screen is for. So
+// the phone writes down that it has read the month, and that is what tells the two apart.
+function hearMonth(remote, meta) {
+  const proved = (meta && meta.fromServer) || (remote && !(meta && meta.hasPendingWrites));
+  if (proved) {
+    heard.month = true;
+    writeJson(seenKey(monthId), true);
+  } else if (remote && readJson(seenKey(monthId), false)) {
+    heard.month = true;
+  }
+}
+
+// The venue is open, so its name is in the cache keys and its language is known.
+function venueOpened() {
+  fromThisPhone();
+  watchForStall();
+  // A list still waiting has a word to say now.
+  announce();
+}
+
+// ⚠️ THE WAIT HAS AN END. Without a timer a bad signal says «loading» for ever. Once only, and only for an
+// open venue; nothing to say if both listeners have answered by then.
+function watchForStall() {
+  if (stallWatched || !currentLocationId()) return;
+  stallWatched = true;
+  setTimeout(() => {
+    if (heard.month && heard.ingredients) return;
+    heard.stalled = true;
+    announce();
+  }, STALL_MS);
 }
 
 // A fresh copy of the month as Firestore last sent it.
@@ -393,8 +492,16 @@ export function flushBeforeLeaving() {
 // ⚠️ IT IS THE ORDER OF SENDING THAT MATTERS, NOT OF CONFIRMING. Offline neither
 // write is confirmed at all; the SDK holds them in the order they were made and
 // sends them in that order when there is signal.
+//
+// ⚠️⚠️ FALSE, WITH NOTHING WRITTEN, UNTIL THE MONTH IS READY, OR ONCE IT IS KNOWN TO BE CLOSED. Closed from what has not
+// arrived, the month would be stamped with no names and no prices, and the next one opened with nothing but this
+// phone's empty copy; closed twice, today's prices would replace the ones frozen the first time. A dialog can be open
+// while either changes, so the screen's check is not enough.
+// ⚠️ WHAT THIS CANNOT KNOW: with no signal it goes by this phone's copy, as closing in a storeroom must. A copy days
+// old that still says «open» can close again a month another phone has closed since.
 export async function closeMonth(frozen, nowIso = new Date().toISOString()) {
   if (!month || !monthId) return null;
+  if (isClosed(month) || !isMonthReady()) return false;
   const deadline = deadlineFromNow();
   // ⚠️ WHAT IS HELD GOES FIRST. It is on screen, so the next month's opening is
   // copied from it below; closing here is this phone's own word that the month was

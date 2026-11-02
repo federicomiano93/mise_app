@@ -65,8 +65,25 @@ import {
   BACK_ICON, mgmtRow, reportFailure,
 } from './mgmt-ui.js';
 
+// What a list's listener has told the screen so far, for a list with no row to draw.
+export const LIST_STATUS = Object.freeze({ starting: 'starting', answered: 'answered', waiting: 'waiting', unreachable: 'unreachable', failed: 'failed' });
+
+// ⚠️ A CACHED EMPTY LIST ALONE IS NOT «NO CONNECTION»: a venue that really has none gets it the moment the page
+// opens, a second before the server confirms it. So it counts only with the browser offline, or after `stalled`.
+// ⚠️ NOTHING AT ALL UNTIL A VENUE IS OPEN: the screen does not know its language yet, so any word would be in the
+// wrong one on an Italian tablet, and with no session the sign-in gate is what speaks.
+//   venueOpen: a venue is open. loaded: the list has really answered. failed: its listener died.
+//   emptyCopy: the phone's copy said «none». stalled: too long without an answer. online: navigator.onLine.
+export function listStatus({ venueOpen, loaded, failed, emptyCopy, stalled, online }) {
+  if (loaded) return LIST_STATUS.answered;
+  if (failed) return LIST_STATUS.failed;
+  if (!venueOpen) return LIST_STATUS.starting;
+  return stalled || (emptyCopy && online === false) ? LIST_STATUS.unreachable : LIST_STATUS.waiting;
+}
+
 // data:    { suppliers(): [], favouriteSuppliers(): [supplierId], ingredients(): [], categories(current): [], orderUnits(current): [],
 //            packs(current): [], categoriesLoaded(): boolean, pricesLoaded(): boolean,
+//            listStatus('ingredients' | 'suppliers'): one of LIST_STATUS,
 //            readPrice(id): Promise<price doc | null> } — live getters; categories,
 //            orderUnits and packs are the words the ingredient card's menus offer (orderUnits only
 //            for the card of before, which an old stored price shape opens)
@@ -222,6 +239,23 @@ export function buildRegistry(data, actions, hooks = {}) {
     ]);
   }
 
+  // A list with no row to draw. ⚠️ «NOTHING HERE» IS A CLAIM ONLY THE LISTENER CAN MAKE: the page paints
+  // before any answer has arrived, and for 2 to 4 s on the lab tablet (302 ingredients, 1 Nov 2026) every
+  // open told a venue full of ingredients that it had none, with a button inviting it to add the first.
+  //   list: 'ingredients' | 'suppliers', the listener that answers. which: the words of the empty state.
+  function appendNoRows(list, which) {
+    const status = data.listStatus?.(list) ?? LIST_STATUS.answered;
+    if (status === LIST_STATUS.answered) listHost.appendChild(emptyState(which));
+    else if (status === LIST_STATUS.waiting) listHost.appendChild(el('p', { class: 'mgmt-empty', role: 'status', text: t('orders.loading') }));
+    else if (status === LIST_STATUS.unreachable) {
+      listHost.appendChild(el('div', { class: 'empty-state', role: 'status' }, [
+        el('p', { class: 'empty-title', text: t('orders.registry.notArrived.title') }),
+        el('p', { class: 'empty-sub', text: t('orders.registry.notArrived.sub') }),
+      ]));
+    }
+    // LIST_STATUS.starting: no word yet. LIST_STATUS.failed: nothing here, the page's own error line says it.
+  }
+
   // ⚠️ THE SWITCH AND THE SEARCH STAY PUT WHILE THE LIST SCROLLS (Federico, 29 Sep 2026:
   // «la fascia ingredienti, fornitori e imballaggi più la barra di ricerca devono restare
   // fisse quando scorro giù»). One wrapper, so the two stick together; orders.css
@@ -273,7 +307,7 @@ export function buildRegistry(data, actions, hooks = {}) {
     const visible = all.filter(matchesSupplier);
 
     if (!all.length) {
-      listHost.appendChild(emptyState('suppliers'));
+      appendNoRows('suppliers', 'suppliers');
       return;
     }
     if (!visible.length) {
@@ -329,7 +363,7 @@ export function buildRegistry(data, actions, hooks = {}) {
     const visible = all.filter(i => matches(i.name) || matches(i.shortName) || matches(i.invoiceName));
 
     if (!all.length) {
-      listHost.appendChild(emptyState(packaging ? 'packaging' : 'ingredients'));
+      appendNoRows('ingredients', packaging ? 'packaging' : 'ingredients');
       return;
     }
     if (!visible.length) {
@@ -1144,7 +1178,7 @@ export function buildRegistry(data, actions, hooks = {}) {
   paintList();
   // ⚠️ LAST, after every declaration above: both answer at once when there is something to
   // say (tests/early-session-callback.test.mjs).
-  onLanguageChange(paintPane);
+  onLanguageChange(paintList);
   watchTablet(placeOverlays);
   return { node, refresh, openSettings, addCurrent, askBeforeLeaving, leaveWouldAsk };
 }
