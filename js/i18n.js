@@ -871,6 +871,7 @@ const DICTIONARIES = Object.freeze({
     'orders.savedButNotCleared': '{name} — order saved to History, but the rows could not be cleared. Reload the page; do NOT record it again.',
     'orders.quantitiesClearedFor': 'Quantities cleared for {n} suppliers ✓',
     'orders.checkExtraDigit': 'Check it is not an extra digit.',
+    'orders.copy.wait': 'Just a moment: loading the latest data.',
     'orders.liveConnectionLost': 'Lost the live connection for {what}. What you see may be out of date — reload the page.',
     'orders.showOlderOrders': 'Show older orders ({n})',
     // What the live connection was lost FOR — a hole in the sentence above.
@@ -3978,6 +3979,7 @@ const DICTIONARIES = Object.freeze({
     'orders.savedButNotCleared': '{name} — ordine salvato nello Storico, ma non è stato possibile azzerare le righe. Ricarica la pagina; NON registrarlo di nuovo.',
     'orders.quantitiesClearedFor': 'Quantità azzerate per {n} fornitori ✓',
     'orders.checkExtraDigit': 'Controlla che non ci sia una cifra di troppo.',
+    'orders.copy.wait': 'Un attimo: sto caricando i dati aggiornati.',
     'orders.liveConnectionLost': 'Persa la connessione dal vivo per {what}. Quello che vedi potrebbe non essere aggiornato — ricarica la pagina.',
     'orders.showOlderOrders': 'Mostra gli ordini precedenti ({n})',
     // What the live connection was lost FOR — a hole in the sentence above.

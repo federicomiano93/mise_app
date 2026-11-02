@@ -158,7 +158,7 @@ test('Orders hands the action in only to an owner or manager, and the draft row 
   const draftJs = codeOf(read('js/orders/draft.js'));
   assert.match(draftJs, /export function dropDeletedIngredientFromDraft\(ingredientId\) \{\s*clearIngredientFromDraft\(ingredientId\)\.catch\(err => \{\s*console\.error\(/,
     'a failed clean-up is logged, never reported as a failed delete');
-  assert.match(draftJs, /export function clearIngredientFromDraft\(ingredientId\) \{\s*const paths = \[draftEntryPath\(ingredientId\)\];\s*return clearFields\(COLLECTIONS\.drafts, DRAFT_ID, paths,/);
+  assert.match(draftJs, /export function clearIngredientFromDraft\(ingredientId\) \{\s*const paths = \[draftEntryPath\(ingredientId\)\];\s*forgetRestoredPaths\(paths\);[\s\S]{0,300}?return clearFields\(COLLECTIONS\.drafts, DRAFT_ID, paths,/);
   assert.match(draftJs, /forgetKnown\(paths\);/, 'the autosave baseline forgets it too, or it is written straight back');
 });
 

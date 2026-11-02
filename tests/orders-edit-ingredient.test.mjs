@@ -337,7 +337,7 @@ test('the edit opener reads the price BEFORE it draws, and fails closed', () => 
 
 test('Orders opens it over the current screen with the same gate and guard as «+ Add ingredient»', () => {
   assert.match(MAIN, /mayEditIngredient: \(\) => mayAddIngredient\(\),/);
-  assert.match(MAIN, /function openEditIngredient\(ing\) \{\s*if \(addingIngredient \|\| !mayAddIngredient\(\)\) return;/);
+  assert.match(MAIN, /function openEditIngredient\(ing\) \{[^\n]*\n\s*if \(state\.showingCopy \|\| addingIngredient \|\| !mayAddIngredient\(\)\) return;/);
   assert.match(MAIN, /const item = state\.ingredients\.find\(i => i\.id === ing\.id\) \|\| ing;/, 'the merged item, with its price');
   assert.match(MAIN, /pricesLoaded: state\.pricesReadable === true,/);
   assert.match(MAIN, /priceHistory: \(id\) => getPriceHistory\(id\),/);
@@ -419,7 +419,8 @@ test('Fornitori reads the price BEFORE it draws an existing ingredient, and a fa
 test('Fornitori counts the prices as loaded only when the watcher says they are readable', () => {
   assert.match(REGISTRY_MAIN, /watchIngredientPrices\(\(map, readable\) => \{\s*state\.ingredientPrices = map;\s*state\.pricesReadable = readable === true;/);
   assert.match(REGISTRY_MAIN, /pricesLoaded: \(\) => state\.pricesReadable === true,/);
-  assert.match(REGISTRY_MAIN, /readPrice: \(id\) => readIngredientPrice\(id\),/);
+  // Not answered yet: it waits for the watcher. Refused or an empty cache: it still reads the document itself.
+  assert.match(REGISTRY_MAIN, /state\.pricesReadable \? \(state\.ingredientPrices\[id\] \|\| null\) : readIngredientPrice\(id\);/);
   assert.match(REGISTRY_MAIN, /pricesReadable: false,/, 'not loaded until the watcher answers');
 });
 
