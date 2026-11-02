@@ -530,6 +530,18 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       // Fixed before the first older page is asked for; once a page is in, the window it was cut from stays.
       if (!olderLoader) windowStart = liveHistoryStart(parseISODate(deps.today()));
       stops = [
+        // ⚠️ FIRST ON PURPOSE. Firestore answers its listeners in the order they start, and the list copy waits for this one
+        // document (the supplier order and the favourites decide the rows): behind the 302 ingredients it lands a second later.
+        // ⚠️ A config missing from the browser's own database is only «none» once the server says so: until then the
+        // defaults stand (the Stock box shown — only an explicit false hides it, parity M3).
+        source.watchOrdersConfig(
+          (data, meta) => set({
+            config: normalizeOrdersConfig(data),
+            deliveryCheck: deliveryCheckOf(data),
+            configLoaded: snapshot.configLoaded || data !== null || meta.fromServer,
+          }),
+          () => set({ configLoaded: true }),
+        ),
         source.watchSuppliers(
           (list, meta) => set({
             suppliers: list,
@@ -547,16 +559,6 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
             serverSeen: meta.fromServer && !snapshot.serverSeen.ingredients ? { ...snapshot.serverSeen, ingredients: true } : snapshot.serverSeen,
           }),
           () => set({ ingredientsBroken: true, ingredientsLoaded: true }),
-        ),
-        // ⚠️ A config missing from the browser's own database is only «none» once the server says so: until then the
-        // defaults stand (the Stock box shown — only an explicit false hides it, parity M3).
-        source.watchOrdersConfig(
-          (data, meta) => set({
-            config: normalizeOrdersConfig(data),
-            deliveryCheck: deliveryCheckOf(data),
-            configLoaded: snapshot.configLoaded || data !== null || meta.fromServer,
-          }),
-          () => set({ configLoaded: true }),
         ),
         // ⚠️ A DRAFT MISSING FROM THE BROWSER'S OWN DATABASE IS NOT AN EMPTY ORDER: a phone that never opened Orders has
         // no copy of it. The lines are drawn only once the server has answered or the copy holds the document.

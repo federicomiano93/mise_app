@@ -59,7 +59,7 @@ function stored(): Record<string, unknown> | null {
 // Keeps the first answer of the named streams back, as a tablet whose Firestore is still waking up: until `release()` the
 // section has only what it was handed. A stream opened again after the release (React's development mode starts, stops and
 // starts again) is answered at once. `fail(stream)` makes the held ones of that stream die instead.
-type Stream = 'watchSuppliers' | 'watchIngredients' | 'watchDraft';
+type Stream = 'watchSuppliers' | 'watchIngredients' | 'watchDraft' | 'watchOrdersConfig';
 function holdLive(source: FakeOrdersSource, streams: Stream[] = ['watchSuppliers', 'watchIngredients', 'watchDraft']) {
   const waiting = new Set<{ name: Stream; start: () => void; fail: () => void }>();
   let released = false;
@@ -88,6 +88,17 @@ function holdLive(source: FakeOrdersSource, streams: Stream[] = ['watchSuppliers
         for (const entry of [...waiting]) {
           waiting.delete(entry);
           entry.start();
+        }
+        await Promise.resolve();
+      });
+    },
+    async land(name: Stream) {
+      await act(async () => {
+        for (const entry of [...waiting]) {
+          if (entry.name === name) {
+            waiting.delete(entry);
+            entry.start();
+          }
         }
         await Promise.resolve();
       });
@@ -122,11 +133,20 @@ type Options = NonNullable<Parameters<typeof renderOrders>[1]>;
 async function onCopy(source: FakeOrdersSource, options: Options = {}, streams?: Stream[], path = '/orders') {
   const live = holdLive(source, streams);
   const view = renderOrders(path, { source, ...options });
-  await screen.findByRole('button', { name: /^Alpine Mills/ }, LOAD);
+  await screen.findAllByRole('button', { name: /^(Alpine Mills|Bee Farm)/ }, LOAD);
   return { ...view, live };
 }
 
 describe('the list before the live lists land', () => {
+  it('a copy holding only switched-off suppliers paints nothing: «Loading…», never «No suppliers yet»', async () => {
+    plant([supplier('s-off', { name: 'Old Mill', active: false })], [ingredient('i-old', { name: 'Rye', supplierId: 's-off' })]);
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    holdLive(source);
+    renderOrders('/orders', { source });
+    expect(await screen.findByText('Loading…', undefined, LOAD)).toBeInTheDocument();
+    expect(screen.queryByText('No suppliers yet')).not.toBeInTheDocument();
+  });
+
   it('says «Loading…» as before when there is no copy', async () => {
     const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
     holdLive(source);
@@ -134,6 +154,41 @@ describe('the list before the live lists land', () => {
     expect(await screen.findByText('Loading…', undefined, LOAD)).toBeInTheDocument();
     expect(rowButtons()).toEqual([]);
     expect(screen.queryByText('No suppliers yet')).not.toBeInTheDocument();
+  });
+
+  it('waits for the supplier order of the venue: no row before config/orders, then the rows in that order, so none moves under a finger', async () => {
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS, ordersConfig: { supplierOrder: ['s-zed', 's-alp'] } });
+    const live = holdLive(source, ['watchSuppliers', 'watchIngredients', 'watchDraft', 'watchOrdersConfig']);
+    renderOrders('/orders', { source });
+    expect(await screen.findByText('Loading…', undefined, LOAD)).toBeInTheDocument();
+    expect(rowButtons()).toEqual([]);
+    await live.land('watchOrdersConfig');
+    await screen.findByRole('button', { name: /^Alpine Mills/ }, LOAD);
+    const rows = rowButtons();
+    expect(rows.findIndex(text => text.startsWith('Zed'))).toBeLessThan(rows.findIndex(text => text.startsWith('Alpine')));
+    expect(rows.findIndex(text => text.startsWith('Zed'))).toBeGreaterThanOrEqual(0);
+  });
+
+  it('a config/orders that cannot be read does not keep the copy away', async () => {
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    source.refuse.config = true;
+    await onCopy(source);
+    expect(queryRow('Send')).not.toBeInTheDocument();
+  });
+
+  it('starts the config/orders listener first: Firestore answers in that order, and the copy waits for it', async () => {
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    const started: string[] = [];
+    const loose = source as unknown as Record<string, (...args: unknown[]) => () => void>;
+    for (const name of ['watchSuppliers', 'watchIngredients', 'watchDraft', 'watchOrdersConfig']) {
+      const original = loose[name]?.bind(source) as (...args: unknown[]) => () => void;
+      loose[name] = (...args) => { started.push(name); return original(...args); };
+    }
+    renderOrders('/orders', { source });
+    await waitFor(() => { expect(started.length).toBeGreaterThanOrEqual(4); }, LOAD);
+    expect(started[0]).toBe('watchOrdersConfig');
   });
 
   it('draws the rows from the copy before any live answer: no «Loading…», no Send, no bulk buttons, never «No suppliers yet»', async () => {
@@ -311,12 +366,51 @@ describe.each([['on the split', true], ['on a phone', false]] as const)('a suppl
     expect(busy()).toBeNull();
     expect(waitText()).not.toBeInTheDocument();
     // A list that failed no longer draws its stale rows.
-    if (stream !== 'watchDraft') expect(queryRow(/^Alpine Mills/)).not.toBeInTheDocument();
+    expect(queryRow(/^Alpine Mills/)).not.toBeInTheDocument();
     await view.live.release();
     await act(async () => { await new Promise(resolve => window.setTimeout(resolve, 50)); });
     expect(view.router.state.location.pathname).toBe('/orders');
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
     expect(waitText()).not.toBeInTheDocument();
+  });
+});
+
+describe('the wait, said over the content', () => {
+  it('a tap moves no row: the words are in the status message, outside the list', async () => {
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    const view = await onCopy(source);
+    await view.user.click(row(/^Alpine Mills/));
+    const words = waitText() as HTMLElement;
+    expect(words).toBeInTheDocument();
+    expect(words.closest('li, ul')).toBeNull();
+    expect(words.closest('[data-react-aria-top-layer]')).not.toBeNull();
+  });
+
+  it('a shut door says it, and leaving takes the words away at once, for good', async () => {
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    const view = await onCopy(source);
+    await view.user.click(screen.getByRole('button', { name: 'Orders settings' }));
+    expect(waitText()).toBeInTheDocument();
+    expect(busy()).toBeNull();
+    await act(async () => { await view.router.navigate('/orders/history'); });
+    expect(waitText()).not.toBeInTheDocument();
+    await act(async () => { await view.router.navigate('/orders'); });
+    await screen.findByRole('button', { name: /^Alpine Mills/ }, LOAD);
+    expect(waitText()).not.toBeInTheDocument();
+  });
+
+  it('the words go the moment the live data lands, with the hold on a shut door too', async () => {
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    const view = await onCopy(source);
+    await view.user.click(screen.getByRole('button', { name: 'Orders settings' }));
+    expect(waitText()).toBeInTheDocument();
+    await view.live.release();
+    await screen.findByRole('button', { name: 'Send' }, LOAD);
+    expect(waitText()).not.toBeInTheDocument();
+    expect(view.router.state.location.pathname).toBe('/orders');
   });
 });
 
@@ -596,6 +690,26 @@ describe('writing the copy', () => {
     await waitFor(() => { expect(pending.size).toBe(1); }, LOAD);
     fire();
     expect(stored()).not.toBeNull();
+  });
+
+  it('⚠️ one list from the server and the other still from this phone’s own database writes nothing: half a fresh answer is not a good copy', async () => {
+    const source = fakeOrdersSource({ suppliers: LIVE_SUPPLIERS, ingredients: LIVE_ITEMS });
+    let cached = true;
+    const loose = source as unknown as Record<'watchIngredients', (...args: unknown[]) => () => void>;
+    const original = loose.watchIngredients.bind(source);
+    loose.watchIngredients = (onChange, onError) => original(
+      (list: unknown, meta: unknown) => { (onChange as (l: unknown, m: unknown) => void)(list, cached ? { fromServer: false } : meta); },
+      onError,
+    );
+    renderOrders('/orders', { source });
+    await screen.findByRole('button', { name: 'Send' }, LOAD);
+    await act(async () => { await new Promise(resolve => window.setTimeout(resolve, 50)); });
+    expect(armed).toBe(0);
+    fire();
+    expect(stored()).toBeNull();
+    cached = false;
+    act(() => { source.emit(); });
+    await waitFor(() => { expect(pending.size).toBe(1); }, LOAD);
   });
 
   describe('while the device moves to another venue', () => {
