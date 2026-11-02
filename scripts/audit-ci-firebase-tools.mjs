@@ -4,10 +4,9 @@
 // deploy job before its install (that workflow does not wait for `test`). Exit code 1 on any problem.
 //
 // ⚠️ WHY NOT PLAIN `npm audit --audit-level=…`. Neither level works for this tree:
-// - `high` is red for ever: firebase-tools' own tree carries a HIGH advisory that no
-//   firebase-tools release fixes (ALLOWED below; measured 11 Oct 2026 up to 15.33.0, whatever
-//   `npm audit` says about "fix available via firebase-tools@15.33.0" — that release has the same
-//   dependency ranges).
+// - `high` proves nothing on a clean tree: an audit that looked at nothing also reports no high
+//   (see below). And firebase-tools' own tree has carried a HIGH no release fixed before
+//   (basic-ftp, until 15.34.2), so an accepted one may be needed again.
 // - `critical` misses the very thing this lockfile is for. A HIJACKED package is not published
 //   as critical: debug@4.4.2 and color-convert@3.1.1 (the September 2025 account takeover —
 //   GHSA-4x49-vf9v-38px, GHSA-pxx3-g568-hxr4) are HIGH, CWE-506 «embedded malicious code», and
@@ -26,17 +25,22 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-// Each entry: the advisory, why it cannot hurt CI, and why it cannot be fixed. (braces GHSA-vfj7-8cjw-p6xm was
-// removed on 23 Oct 2026: npm no longer reports it for this tree.) Re-measure on every
-// firebase-tools raise; an entry whose advisory is gone from the tree fails the gate until removed.
+// Each entry: the advisory, the severity it was measured at (reported any higher, it fails again:
+// somebody must look), why it cannot hurt CI, and why it cannot be fixed. (braces GHSA-vfj7-8cjw-p6xm was
+// removed on 23 Oct 2026, basic-ftp GHSA-c475-qrg2-pj4r on 2 Nov 2026 with firebase-tools 15.34.2: npm no
+// longer reports them for this tree.) Re-measure on every firebase-tools raise; an entry whose advisory
+// is gone from the tree fails the gate until removed. ⚠️ The list may not simply go empty, or nothing
+// proves the audit looked: with no high left, a moderate still in the tree does that job.
 export const ALLOWED = new Map([
-  ['GHSA-c475-qrg2-pj4r', 'basic-ftp: slow parsing of a hostile FTP directory listing. Reached only through ' +
-    'proxy-agent → pac-proxy-agent → get-uri, i.e. an ftp:// proxy setting CI does not have; get-uri ' +
-    '(even 8.0.1) requires basic-ftp ^5, the fix is 6.2.1.'],
+  ['GHSA-w5hq-g745-h8pq', { upTo: 'moderate', why: 'uuid: missing bounds check when a caller passes its own buffer ' +
+    'to v3/v5/v6. The tree\'s gaxios calls only v4() with no buffer, so CI never reaches it; Google\'s libraries ' +
+    'decide when it goes. Named here as the finding that proves the audit looked (measured on firebase-tools ' +
+    '15.34.2: no high or critical in the tree).' }],
 ]);
 
 const MALICIOUS = 'CWE-506';
 const BLOCKING = new Set(['high', 'critical']);
+const SEVERITIES = ['info', 'low', 'moderate', 'high', 'critical'];
 const ghsaOf = (url) => (String(url ?? '').match(/GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}/) || [])[0];
 
 // Pure, so the tests can feed it reports: { ok, problems: [..], accepted: [..] }.
@@ -55,8 +59,11 @@ export function judge(report) {
       const id = ghsaOf(via.url) ?? String(via.source ?? via.url ?? 'unknown advisory');
       const label = `${id} ${via.severity} ${name}: ${via.title}`;
       if ((via.cwe ?? []).includes(MALICIOUS)) problems.add(`MALICIOUS CODE — ${label}`);
-      else if (ALLOWED.has(id)) accepted.add(id);
-      else if (BLOCKING.has(via.severity)) problems.add(label);
+      else if (ALLOWED.has(id)) {
+        accepted.add(id);
+        const { upTo } = ALLOWED.get(id);
+        if (SEVERITIES.indexOf(via.severity) > SEVERITIES.indexOf(upTo)) problems.add(`${label} — accepted only up to ${upTo}: look at it again`);
+      } else if (BLOCKING.has(via.severity)) problems.add(label);
     }
   }
   for (const id of ALLOWED.keys()) {
