@@ -337,7 +337,7 @@ test('the edit opener reads the price BEFORE it draws, and fails closed', () => 
 
 test('Orders opens it over the current screen with the same gate and guard as «+ Add ingredient»', () => {
   assert.match(MAIN, /mayEditIngredient: \(\) => mayAddIngredient\(\),/);
-  assert.match(MAIN, /function openEditIngredient\(ing\) \{\s*if \(addingIngredient \|\| !mayAddIngredient\(\)\) return;/);
+  assert.match(MAIN, /function openEditIngredient\(ing\) \{[^\n]*\n\s*if \(state\.showingCopy \|\| addingIngredient \|\| !mayAddIngredient\(\)\) return;/);
   assert.match(MAIN, /const item = state\.ingredients\.find\(i => i\.id === ing\.id\) \|\| ing;/, 'the merged item, with its price');
   assert.match(MAIN, /pricesLoaded: state\.pricesReadable === true,/);
   assert.match(MAIN, /priceHistory: \(id\) => getPriceHistory\(id\),/);

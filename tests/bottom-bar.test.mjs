@@ -159,7 +159,7 @@ test('«Reset quantities…» is a quiet text button: no frame, danger text, 44p
   assert.match(rule, /margin:\s*8px auto 0/);
   assert.match(read('orders.html'), /id="clear-all-btn"/);
   assert.match(read('js/orders/orders-main.js'),
-    /getElementById\('clear-all-btn'\)\?\.addEventListener\('click', openClearScreen\)/);
+    /getElementById\('clear-all-btn'\)\?\.addEventListener\('click', whenLive\(openClearScreen\)\)/);
 });
 
 // The supplier screen's summary bar (3 Oct 2026) follows the same pairing: the page's ground
