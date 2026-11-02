@@ -8,6 +8,9 @@ export async function saveDoc(name, id, data) { globalThis.__draftWrites.push({ 
 // patchDoc arrives with PR #253 («Da riordinare»): draft.js imports it there, so the stub offers it too.
 export async function patchDoc(name, id, data) { globalThis.__draftWrites.push({ name, id, data, patch: true }); }
 export async function watchDoc() { return () => {}; }
+export async function watchServerAnswer() { return () => {}; }
+export const currentBakery = () => 'venue-a';
+export async function getRecentHistoryFromServer() { return []; }
 export async function clearFields() {}
 export async function transactDoc() {}
 export async function replaceDoc() {}
