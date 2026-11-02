@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v725';
+const CACHE_NAME = 'theitalianclub-v726';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -15,7 +15,7 @@ const CACHE_NAME = 'theitalianclub-v725';
 // itself failed.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 69-file precache, i.e.
+// small — activate() only happens after a successful 70-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -80,6 +80,7 @@ const ASSETS = [
   './js/currency.js',
   './js/firebase-target.js',
   './js/firebase.js',
+  './js/home-cards.js',
   './js/i18n-dom.js',
   './js/i18n.js',
   './js/keyboard-done.js',
@@ -166,6 +167,7 @@ const ASSET_HASHES = {
   "./js/currency.js": '241b1dbdf4cc465f',
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/firebase.js": 'bc4439829bae8cd2',
+  "./js/home-cards.js": '0b585e1be1830861',
   "./js/i18n-dom.js": '24249af4367511e5',
   "./js/i18n.js": 'a50313df1bf9e2be',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
@@ -245,7 +247,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 69 files.
+// project's post-deploy sweep, which already asks the live site for all 70 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //
