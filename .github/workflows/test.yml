@@ -99,7 +99,7 @@ jobs:
       - uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
           path: ~/.cache/firebase/emulators
-          key: firebase-emulators-15.26.0
+          key: firebase-emulators-15.34.2
 
       # PINNED ON PURPOSE, AND LOCKED. firebase-tools ships the emulator itself, so
       # an unpinned `@latest` would silently change the thing under test between two
