@@ -105,6 +105,14 @@ test('eggs are pieces with the egg weight; a tray of 30 is a carton of 30 eggs',
   assert.equal(ingredient(c.build({ eggWeightG: 52 }), 'uova').unitWeightKg, 0.052);
 });
 
+test('a carton of 55 pieces weighing 2 kg is priced per kg of the carton, not of 55 cartons', () => {
+  const c = newCase();
+  c.add([{ desc: 'BRIOCHE MIGNON 35/40gr 2Kg* 55pz', code: 'BR1', qty: 1, unit: 'CT', total: 14.5 }]);
+  const brioche = ingredient(c.build(), 'BR1');
+  assert.equal(brioche.priceUnit, 'kg');
+  assert.equal(brioche.prices[0].pricePerUnit, 7.25);
+});
+
 test('six trays of ten eggs is a pack count of sixty', () => {
   const c = newCase();
   c.add([{ desc: 'UOVA FRESCHE 6 X 10 UOVA', qty: 2, unit: 'CT', total: 72 }]);

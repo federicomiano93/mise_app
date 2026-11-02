@@ -6,7 +6,7 @@
 // zip reader of app/ joined to `buildImportFromRead` of shared/) and js/orders/invoice-zip/build-import.js, which the
 // live app runs today. Ported from tests/invoice-zip-build.test.mjs. Invented invoices only.
 //
-// PORTED: 29 of 29 tests of tests/invoice-zip-build.test.mjs. Two of them ('parseImportFile accepts…') hand the file that
+// PORTED: 30 of 30 tests of tests/invoice-zip-build.test.mjs. Two of them ('parseImportFile accepts…') hand the file that
 // was built to the CURRENT app's model of the import file (js/orders/invoice-import-model.js), for both implementations:
 // Mise 2's own model of that file comes with its screen. The zip reader's pre-check on forged archives is in
 // zipRead.spec.ts.
@@ -119,6 +119,14 @@ describe.each(implementations)('%s', (_name, impl) => {
     expect(eggs.weight).toBe('');
     expect(eggs.packUnit).toBe('uovo');
     expect(ingredient(c.build({ eggWeightG: 52 }), 'uova').unitWeightKg).toBe(0.052);
+  });
+
+  test('a carton of 55 pieces weighing 2 kg is priced per kg of the carton, not of 55 cartons', () => {
+    const c = newCase();
+    c.add([{ desc: 'BRIOCHE MIGNON 35/40gr 2Kg* 55pz', code: 'BR1', qty: 1, unit: 'CT', total: 14.5 }]);
+    const brioche = ingredient(c.build(), 'BR1');
+    expect(brioche.priceUnit).toBe('kg');
+    expect((brioche.prices[0] as { pricePerUnit: number }).pricePerUnit).toBe(7.25);
   });
 
   test('six trays of ten eggs is a pack count of sixty', () => {

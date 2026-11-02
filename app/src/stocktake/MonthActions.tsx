@@ -7,7 +7,7 @@ import styles from './MonthActions.module.css';
 type Props = {
   // Whether the month on screen is closed.
   closed: boolean;
-  // The month and the ingredients have answered: closing before then would freeze an empty list.
+  // The month may be acted on (the store's `ready`).
   ready: boolean;
   onSeeCost: () => void;
   // Resolve true when the month went ahead and closed (or reopened).
@@ -28,6 +28,10 @@ type Swap = 'to-reopen' | 'to-close';
 // ⚠️ BOTH MONTH BUTTONS ARE ALWAYS BUILT and one is hidden, never one built only when the month is in
 // that state: the month changes live (another phone closes it), and a control built conditionally
 // would appear and vanish at random.
+//
+// ⚠️ WHILE THE MONTH IS NOT READY THE TWO BUTTONS ARE DIMMED, NOT disabled AND NOT HIDDEN: the bar does not jump when the answer
+// lands, the keyboard can still reach them, and a tap says why (useMonthActions refuses, with words). Reopening needs nothing
+// from the list.
 export function MonthActions({ closed, ready, onSeeCost, onClose, onReopen }: Props) {
   const { t } = useT();
   const handBack = useHandBack();
@@ -68,13 +72,13 @@ export function MonthActions({ closed, ready, onSeeCost, onClose, onReopen }: Pr
 
   return (
     <div className={styles.bar}>
-      <Button ref={costButton} className={styles.action} onPress={onSeeCost}>{t('stock.seeCost')}</Button>
+      <Button ref={costButton} className={styles.action} aria-disabled={!ready} onPress={onSeeCost}>{t('stock.seeCost')}</Button>
       <Button
         ref={closeButton}
         variant="primary"
         className={styles.action}
         hidden={closed}
-        isDisabled={!ready}
+        aria-disabled={!ready}
         onPress={() => { void press('to-reopen', onClose); }}
       >
         {t('stock.closeMonth')}
@@ -83,7 +87,6 @@ export function MonthActions({ closed, ready, onSeeCost, onClose, onReopen }: Pr
         ref={reopenButton}
         className={styles.action}
         hidden={!closed}
-        isDisabled={!ready}
         onPress={() => { void press('to-close', onReopen); }}
       >
         {t('stock.reopenMonth')}

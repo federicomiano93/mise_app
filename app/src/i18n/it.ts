@@ -222,6 +222,8 @@ export const it: Messages = {
   'stock.closeMessageMissing': { one: '{n} prodotto non è stato contato e per {month} resterà senza risposta. Il mese viene chiuso così com’è e quello dopo si apre con quello che c’è oggi.', other: '{n} prodotti non sono stati contati e per {month} resteranno senza risposta. Il mese viene chiuso così com’è e quello dopo si apre con quello che c’è oggi.' },
   'stock.closeOk': 'Chiudi il mese',
   'stock.closed': 'Mese chiuso.',
+  'stock.notReady': 'Non ancora: i dati del mese non sono arrivati. Controlla la connessione e riprova.',
+  'stock.closedElsewhere': 'Questo mese è appena stato chiuso da un altro dispositivo.',
   'stock.closedAndOpened': 'Mese chiuso. {month} è aperto, con le rimanenze già portate avanti.',
   'stock.reopenMonth': 'Riapri il mese',
   'stock.reopenTitle': 'Riaprire questo mese?',

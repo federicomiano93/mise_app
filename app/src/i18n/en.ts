@@ -262,6 +262,8 @@ export const en = {
   'stock.closeMessageMissing': { one: '{n} product has not been counted, so {month} will have no answer for it. The month is closed as it stands and the next one opens with what is there today.', other: '{n} products have not been counted, so {month} will have no answer for them. The month is closed as it stands and the next one opens with what is there today.' },
   'stock.closeOk': 'Close the month',
   'stock.closed': 'Month closed.',
+  'stock.notReady': 'Not yet: this month’s figures have not arrived. Check your connection and try again.',
+  'stock.closedElsewhere': 'This month has just been closed on another device.',
   'stock.closedAndOpened': 'Month closed. {month} is open, with what was left as its opening.',
   'stock.reopenMonth': 'Reopen the month',
   'stock.reopenTitle': 'Reopen this month?',
