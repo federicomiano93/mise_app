@@ -802,7 +802,7 @@ supplier opens beside the list.
 - O2. **Leaving the section sends unsaved typing at once** (`stop()` flushes the 800 ms pause). The current app can lose the last
   keystrokes when the page is left inside the pause.
 - O3. **A box that has the focus is never rewritten by another phone**; it picks up the shared value when the finger leaves it.
-- O4. **No copy of `config/orders` in this phone's storage** (T14): Firestore's offline database already answers at once.
+- O4. **No copy of `config/orders` in this phone's storage** (T14): Firestore's offline database already answers at once. ⚠️ At this size it does not, behind 302 ingredients: see CP6 in «List copy as built», where the list copy waits for that document and its listener starts first.
 - O5. **Moved to later slices to keep this one to a session**: the flat view (L17) and the tablet summary (L19) → 3f-8; the day
   line and placing → 3f-2; the supplier name as a door to its card → 3f-8. No progress bar.
 - O6. **Back to 0 before the pause saves nothing for that line**: an empty line and 0 are the same thing (L26), so no write
@@ -1194,3 +1194,85 @@ Settings gains «Avvisi (questo telefono)» with the four states of the browser 
 
 **P13.** No new personal data: the notices are worked out on the phone; the two new phone keys hold public dates and keys of
 notices.
+
+## List copy as built
+
+The current app's PR #433 (`js/orders/list-copy.js`), ported: the supplier list is drawn at once from this phone's own copy, and
+everything else waits for the live data. `shared/src/list-copy.ts` (the copy's shape, the same in both apps), `useListCopy.ts`
+(reads it once, writes it), `OrdersSection.tsx` (`earlyLens`, the hold), `OrdersList.tsx` (draws `earlyLens ?? lens`).
+
+**The copy.** Key `orders-list-copy`, version 1, `{ v, lid, suppliers, ingredients }`, the same as the current app, so one
+person's two apps share it. Only the fields the list draws: a supplier's id, name, category, delivery days, order days and active;
+an ingredient's id, name, supplier and active. No price, contact, allergen or pack list. A copy of another venue, of another
+version or that cannot be read is no copy. ⚠️ The key is NOT under `KEEP_PREFIXES`, on purpose: it holds one venue's names, so
+sign-out and a venue switch wipe it (`list-copy.spec.ts` pins this through both files' `keysToClear`). The keep-list says what
+survives; `docs/architecture.md`, «One localStorage», says why.
+
+**Behaviours that must not be lost:**
+- CP1. On the copy nothing can be typed, sent or recorded: EVERY road to a supplier's screen goes through the hold (a row, an
+  «Order today» chip, the notices panel). The address does not change, so no quantity box, items list or settings page can appear
+  from an old list. A screen opened BY ITS ADDRESS still waits behind `Detail`'s `ready` gate.
+- CP2. Shut while on the copy: send, record, clear, the order lists, settings, the row's items, the summary, the view switch. A
+  shut door says the wait and leaves a held tap alone; the last supplier tapped wins.
+- CP3. The ingredient card cannot open from the copy. The alerts and the re-order list's «put back» read nothing from it: only the
+  live lens feeds them, so a banner never comes from an old list.
+- CP4. A held tap opens the supplier by itself once everything is live. It is dropped if the person moved to another tab or a list,
+  when a stream fails, when the notices panel opens, and when the search box takes the focus or changes. A supplier gone from the
+  live list opens nothing.
+- CP5. A failed live stream removes the copy from the screen at once, even while the others are on their way: no live list will
+  ever replace an old one that looks real. The status line says what happened.
+- CP6. The copy waits for `config/orders`, and that listener starts FIRST. The venue's supplier order and favourites live there, not
+  in the copy (T14, O4). Measured before this rule: the document landed about a second after the first paint and the rows reordered
+  under the finger. Measured after it, on the real tablet: no reorder in 14 of 14 runs. A `config/orders` that cannot be read does
+  not keep the copy away.
+- CP7. A copy with only switched-off suppliers paints nothing, so «No suppliers yet» never flashes.
+- CP8. The wait («Just a moment: loading the latest data.») is the status message, over the content, not a line above the list: a
+  line appearing on the first tap pushes every row down, so a second tap lands on another supplier, and on a list scrolled down it
+  would be out of sight. It leaves the moment the live lists land, and for good on leaving the screen.
+- CP9. The copy is written only after the SERVER has answered for suppliers and ingredients, and not during a venue switch: a list
+  from this phone's own database could be old, and half a switch could write one venue's names under the other's key.
+
+**Differences from the current app, on purpose (tell him):**
+- H1. The rows wait for `config/orders` (CP6). The current app keeps `orders-config` in its storage (M11) and has no reorder to
+  fear; Mise 2 has no such copy (T14), so its list comes a little later than it could.
+- H2. The wait is said over the content (CP8). The current app's line sits above the list.
+- H3. A held tap is also dropped on touching the search box (CP4).
+- H4. Writes only after the server's answer and not during a venue switch (CP9). The current app has both weaknesses: worth its
+  own small fix there.
+
+**Measured** on the lab tablet (SM-T550, Chrome 101, 1 Nov 2026) against a separate emulator with 302 ingredients, 31 suppliers and
+the venue's own supplier order; builds interleaved, 7 rounds each, medians in ms; the person taps the third row the moment the list
+shows. 0 page errors.
+
+| | Cold reload, before | Cold reload, after | Re-entry, before | Re-entry, after |
+|---|---|---|---|---|
+| List on screen, tappable | 7435 | **2711** | 4744 | **404** |
+| Live lists landed | 7435 | 8378 | 4744 | 5361 |
+| Quantity boxes of the tapped supplier | 8249 | 8966 | 5660 | 5854 |
+
+⚠️ The price, in plain words: the list is about 4.7 s earlier from cold and 4.3 s earlier on re-entry, and the boxes about 0.7 s
+later from cold and 0.2 s later on re-entry, most likely because the list is drawn twice (five more long tasks from cold: 25 against 20; a run with nobody tapping, on the PC only, was too noisy to settle it). The
+tapped supplier opened by itself in all 14 runs. Those numbers are from just before #437 and #443 (the invoice reader, the stocktake) came in, neither of which touches Orders.
+
+**Keeping the listeners alive across sections: measured, not built, not agreed.** Documents the server sends for Orders, on the
+tablet against the emulator: a page load 363; each re-entry 361, whether away for 2, 10 or 60 s, or away during 20 draft saves by
+another device (362); staying inside during those 20 saves, 20. ⚠️ The emulator resends everything on re-entry. Firestore's own
+documents say a listener back within 30 minutes is charged only for what changed, and one away for longer as a new query, so
+361 is what a long absence costs and not a short one; this cannot be measured on the emulator. Keeping them alive would cost one
+read per change of those lists while in other sections, and would save up to 361 per return after 30 minutes. It is the only thing
+left that would bring the BOXES forward on re-entry (5.9 s today); the risk is a store that lives on outside its section (today
+started on mount, stopped on unmount, P14).
+
+**Left open (tell him):**
+- Driven on the real tablet: the seven rounds above (the tap held and opened by itself, no reorder, no page errors, the copy's fields
+  read back from storage). The tablet then dropped off USB, so the rest was driven in Edge on this PC, slowed 6×: the wait said over the content without moving a row (also at 360 and 296 px, no sideways scroll), the gear saying it and leaving the hold alone, a quantity typed after the supplier opened by itself and still there after a reload, a held tap dropped on moving to another tab and on pressing the search box, 0 page errors. Still to see on the real tablet: those same steps, by finger.
+- `list-copy.spec.ts`'s comparison with the original runs only once #433 is in this stack, since `js/orders/list-copy.js` is not on
+  this branch yet; the two were compared by hand and they match.
+- The hold has no end of its own: a device back online after a long time opens the supplier tapped long before. Offline with no
+  cached draft it waits indefinitely, no worse than «Loading…».
+- A bookmark to `/orders/incoming` with deliveries off, on the split: the redirect drops a held tap silently.
+- The held row's `opacity: 0.6` copies the current app; short-lived, its contrast not measured.
+- A hand-altered copy: the field types are not validated, so an odd `deliveryDays` could throw inside the section's boundary.
+
+**P13.** No new kind of data, and nothing personal: names of suppliers and ingredients already on this phone, wiped on sign-out and
+on a venue switch.
