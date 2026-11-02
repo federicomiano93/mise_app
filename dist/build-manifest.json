@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "267f49e237c9cebf",
-      "mapSha": "77b7e066740dc95c",
+      "sha": "7988dade4987c32c",
+      "mapSha": "9398e3f72da4e1b7",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -88,7 +88,7 @@
         "js/orders/category-batches.js": "5b7544ce4da479bc",
         "js/orders/day.js": "8417a4e02c09cbfa",
         "js/orders/deliveries.js": "39df74692fef5a8c",
-        "js/orders/firebase-orders.js": "c717d475ee370b1a",
+        "js/orders/firebase-orders.js": "76b6e0839537824f",
         "js/orders/kiosk-lines.js": "e568172d891e9118",
         "js/orders/line-supplier.js": "28982215feb5a04c",
         "js/orders/not-in-use.js": "b2315bc0f0200594",
@@ -140,8 +140,8 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "5afc1c6417412ae0",
-      "mapSha": "312dfa030f55d129",
+      "sha": "6b9e296d88b9c539",
+      "mapSha": "8744950c1baa578c",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -226,7 +226,7 @@
         "js/orders/category-batches.js": "5b7544ce4da479bc",
         "js/orders/day.js": "8417a4e02c09cbfa",
         "js/orders/deliveries.js": "39df74692fef5a8c",
-        "js/orders/firebase-orders.js": "c717d475ee370b1a",
+        "js/orders/firebase-orders.js": "76b6e0839537824f",
         "js/orders/kiosk-lines.js": "e568172d891e9118",
         "js/orders/line-supplier.js": "28982215feb5a04c",
         "js/orders/not-in-use.js": "b2315bc0f0200594",
@@ -286,8 +286,8 @@
       }
     },
     "dist/foodcost.js": {
-      "sha": "94e6838231d89059",
-      "mapSha": "1288fab1790f3b3b",
+      "sha": "a7363d84cf1717c5",
+      "mapSha": "488e828fae50ad68",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -347,7 +347,7 @@
         "js/orders/category-batches.js": "5b7544ce4da479bc",
         "js/orders/day.js": "8417a4e02c09cbfa",
         "js/orders/deliveries.js": "39df74692fef5a8c",
-        "js/orders/firebase-orders.js": "c717d475ee370b1a",
+        "js/orders/firebase-orders.js": "76b6e0839537824f",
         "js/orders/kiosk-lines.js": "e568172d891e9118",
         "js/orders/line-supplier.js": "28982215feb5a04c",
         "js/orders/not-in-use.js": "b2315bc0f0200594",
@@ -390,15 +390,15 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "decc84c951907b26",
-      "mapSha": "f42fef83ccbe1b94",
+      "sha": "20cd8385cd085b63",
+      "mapSha": "8af072a23f7f922e",
       "inputs": {
-        "js/i18n.js": "c4f9bb8401359cd9"
+        "js/i18n.js": "935bd7e538a7419b"
       }
     },
     "dist/index.js": {
-      "sha": "c6f45aab388224b8",
-      "mapSha": "b40c898b5b5dd833",
+      "sha": "2fa7a4a73f142faf",
+      "mapSha": "9589803fec0737ea",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -459,7 +459,7 @@
         "js/orders/deliveries.js": "39df74692fef5a8c",
         "js/orders/dom.js": "99c731d8aa890a20",
         "js/orders/favourite-suppliers.js": "9b54dd3bba8b4164",
-        "js/orders/firebase-orders.js": "c717d475ee370b1a",
+        "js/orders/firebase-orders.js": "76b6e0839537824f",
         "js/orders/holidays-it.js": "024d597c852aea91",
         "js/orders/holidays.js": "e83474f6a1e2420c",
         "js/orders/kiosk-lines.js": "e568172d891e9118",
@@ -523,14 +523,14 @@
       }
     },
     "dist/inventory.css": {
-      "sha": "fbb27bb7f7c3dcc3",
+      "sha": "5d791f848315bf98",
       "inputs": {
-        "inventory.css": "63b1fd25412e0c8a"
+        "inventory.css": "6d713e2abca3852a"
       }
     },
     "dist/inventory.js": {
-      "sha": "c87ddd3da073cf73",
-      "mapSha": "26fb930f1bc83ceb",
+      "sha": "5ee032369fcddf67",
+      "mapSha": "c7f91ac28e9bf28b",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -557,14 +557,14 @@
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/inventory/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/inventory/dom.js": "87390d375dc3246d",
-        "js/inventory/firebase-inventory.js": "cba70050d6577cd0",
+        "js/inventory/firebase-inventory.js": "0d9f054ae87e4c98",
         "js/inventory/inventory-detail.js": "f0619d73cb5efe7f",
-        "js/inventory/inventory-list.js": "707c3500fbbef98b",
-        "js/inventory/inventory-main.js": "92e2576b121b9f90",
-        "js/inventory/inventory-model.js": "3931e39de227a8fa",
+        "js/inventory/inventory-list.js": "d4f7059634db4657",
+        "js/inventory/inventory-main.js": "37d023f8cb904541",
+        "js/inventory/inventory-model.js": "4f69286431ff0085",
         "js/inventory/inventory-outbox.js": "4f168a05e32ba950",
         "js/inventory/inventory-purchases.js": "639d19b4fc0bc4d3",
-        "js/inventory/inventory-store.js": "16861f5525d29067",
+        "js/inventory/inventory-store.js": "ce64e08b545a0bf8",
         "js/inventory/inventory-usage.js": "5cc561e12035afe6",
         "js/inventory/inventory-value.js": "fe714a0057753b63",
         "js/join-code.js": "ebf5b5e52507b80b",
@@ -582,7 +582,7 @@
         "js/orders/category-batches.js": "5b7544ce4da479bc",
         "js/orders/day.js": "8417a4e02c09cbfa",
         "js/orders/deliveries.js": "39df74692fef5a8c",
-        "js/orders/firebase-orders.js": "c717d475ee370b1a",
+        "js/orders/firebase-orders.js": "76b6e0839537824f",
         "js/orders/kiosk-lines.js": "e568172d891e9118",
         "js/orders/line-supplier.js": "28982215feb5a04c",
         "js/orders/not-in-use.js": "b2315bc0f0200594",
@@ -668,8 +668,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "232124e186f630dd",
-      "mapSha": "6aaea7afbf3780a7",
+      "sha": "d5b4cd20cc88fa52",
+      "mapSha": "3634e622ae26ff45",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -722,10 +722,10 @@
         "js/orders/deliveries-view.js": "3398d0bacdcbfbfa",
         "js/orders/deliveries.js": "39df74692fef5a8c",
         "js/orders/dom.js": "99c731d8aa890a20",
-        "js/orders/draft-journal.js": "bc7da360daeb2b47",
-        "js/orders/draft.js": "4854f1390185b576",
+        "js/orders/draft-journal.js": "919a40092aaee035",
+        "js/orders/draft.js": "99d136156c927ac5",
         "js/orders/favourite-suppliers.js": "9b54dd3bba8b4164",
-        "js/orders/firebase-orders.js": "c717d475ee370b1a",
+        "js/orders/firebase-orders.js": "76b6e0839537824f",
         "js/orders/history-edit.js": "2a7bc27082d1ce54",
         "js/orders/history-window.js": "e894cf17bbc60983",
         "js/orders/history.js": "8ad4437ae0ff73df",
@@ -822,8 +822,8 @@
       }
     },
     "dist/pastries.js": {
-      "sha": "f1de16e26ce38d10",
-      "mapSha": "59c823b8f047cb81",
+      "sha": "0332cc9c7e5b3120",
+      "mapSha": "ce20d7f175f7fcbd",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -863,7 +863,7 @@
         "js/orders/category-batches.js": "5b7544ce4da479bc",
         "js/orders/day.js": "8417a4e02c09cbfa",
         "js/orders/deliveries.js": "39df74692fef5a8c",
-        "js/orders/firebase-orders.js": "c717d475ee370b1a",
+        "js/orders/firebase-orders.js": "76b6e0839537824f",
         "js/orders/kiosk-lines.js": "e568172d891e9118",
         "js/orders/line-supplier.js": "28982215feb5a04c",
         "js/orders/not-in-use.js": "b2315bc0f0200594",
@@ -928,8 +928,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "b262b228897d0a21",
-      "mapSha": "7563d46084bbc209",
+      "sha": "0d591173390420a0",
+      "mapSha": "60488d3fb55a0f66",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -978,11 +978,11 @@
         "js/orders/day.js": "8417a4e02c09cbfa",
         "js/orders/deliveries.js": "39df74692fef5a8c",
         "js/orders/dom.js": "99c731d8aa890a20",
-        "js/orders/draft-journal.js": "bc7da360daeb2b47",
-        "js/orders/draft.js": "4854f1390185b576",
+        "js/orders/draft-journal.js": "919a40092aaee035",
+        "js/orders/draft.js": "99d136156c927ac5",
         "js/orders/favourite-suppliers.js": "9b54dd3bba8b4164",
         "js/orders/firebase-features.js": "5c93f14c6ab6eddd",
-        "js/orders/firebase-orders.js": "c717d475ee370b1a",
+        "js/orders/firebase-orders.js": "76b6e0839537824f",
         "js/orders/firebase-photo.js": "452a0d0552c4b7ab",
         "js/orders/ingredient-merge-data.js": "b1d7bedcdba9b89c",
         "js/orders/ingredient-merge-screen.js": "fa57617d24a387fe",
@@ -1014,9 +1014,9 @@
         "js/orders/photo-capture.js": "22fc712bf419f586",
         "js/orders/price-changes-model.js": "1c9910d29dbc8459",
         "js/orders/price-changes-screen.js": "9dc81f214b196440",
-        "js/orders/registry-main.js": "7db72821ef9652b1",
+        "js/orders/registry-main.js": "80f1a9fc71433fc7",
         "js/orders/registry-settings.js": "ebcbc495269008bf",
-        "js/orders/registry.js": "0e41cc2e9a0f43ec",
+        "js/orders/registry.js": "039d30558cc960dc",
         "js/orders/reminders.js": "de7b21d852fd6259",
         "js/orders/search-box.js": "d63164cf3cc0565e",
         "js/orders/supplier-picker.js": "80850a11f61ab7fc",

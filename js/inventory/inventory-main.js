@@ -8,7 +8,7 @@
 
 import { t, localeTag, onLanguageChange } from '../i18n.js';
 import {
-  initInventory, getMonth, getMonthId, getIngredients, setCount, closeMonth,
+  initInventory, getMonth, getMonthId, getIngredients, getListStatus, isMonthReady, setCount, closeMonth,
   reopenMonth, pullOpeningFromPrevious, readProposedPurchases, applyPurchases,
   flush, flushBeforeLeaving, setSyncErrorHandler,
 } from './inventory-store.js';
@@ -102,6 +102,12 @@ function paintFooter() {
   const closed = readOnly();
   closeBtn.textContent = closed ? t('inv.reopenMonth') : t('inv.closeMonth');
   closeBtn.classList.toggle('inv-footer-btn-quiet', closed);
+  // ⚠️ STILL ON SCREEN WHILE THE MONTH HAS NOT ARRIVED, DIMMED, NOT HIDDEN AND NOT disabled: the bar does not jump when
+  // the answer lands, the keyboard can still reach it, and a tap says why (the handlers refuse, with words). Reopening
+  // needs nothing from the list.
+  const ready = isMonthReady();
+  closeBtn.setAttribute('aria-disabled', String(!closed && !ready));
+  costBtn.setAttribute('aria-disabled', String(!ready));
   // Both buttons are money or the end of a month: neither is an employee's.
   costBtn.hidden = !mayManage;
   closeBtn.hidden = !mayManage;
@@ -128,6 +134,8 @@ function showList() {
     onCount: (id, value) => { setCount('closing', id, value); },
     onCarry: mayManage ? handleCarry : null,
     onPurchases: handlePurchases,
+    listStatus: getListStatus,
+    monthReady: isMonthReady,
   });
   swap(activeList.root);
   paintStrip();
@@ -193,6 +201,12 @@ function showUsage() {
   paintFooter();
 }
 
+// ⚠️ A TOTAL OF ZERO AND «NOTHING HAS BEEN COUNTED YET» ARE CLAIMS, and while the month has not arrived they are false.
+function handleCost() {
+  if (!isMonthReady()) { toast(t('inv.notReady')); return; }
+  showUsage();
+}
+
 function goToMonth(id) {
   if (!isMonthId(id)) return;
   // A full reload rather than re-wiring the listeners by hand: the month is in the
@@ -208,6 +222,8 @@ function goToMonth(id) {
 
 async function handleCarry() {
   if (!mayManage) return;
+  // ⚠️ NOT INTO A MONTH THAT HAS NOT ANSWERED: it may be closed on the server, and this would change its figures.
+  if (!isMonthReady()) { toast(t('inv.notReady')); return; }
   const previous = previousMonth(openMonthId);
   const ok = await confirmDialog({
     title: t('inv.carryTitle'),
@@ -216,6 +232,7 @@ async function handleCarry() {
     cancelLabel: t('ui.cancel'),
   });
   if (!ok) return;
+  if (readOnly()) { toast(t('inv.closedElsewhere')); return; }
   const moved = await pullOpeningFromPrevious(previous);
   // ⚠️ THREE ANSWERS, NOT TWO. "That month has nothing in it" and "I could not read
   // it" look the same on screen and mean opposite things — and this screen is used
@@ -233,6 +250,8 @@ async function handleCarry() {
 // "bought" makes the consumption too high by exactly as much. Every row stays
 // editable afterwards, which is the answer — but only if the person knows to look.
 async function handlePurchases() {
+  // ⚠️ THE TOTALS ARE READ THROUGH THE PRODUCT CARDS, so with the cards still out they would be wrong.
+  if (!isMonthReady()) { toast(t('inv.notReady')); return; }
   const found = await readProposedPurchases();
   if (found.failed) { toast(t('inv.purchasesFailed')); return; }
   if (!found.orders) { toast(t('inv.purchasesNone', { month: monthName(openMonthId) })); return; }
@@ -256,6 +275,7 @@ async function handlePurchases() {
     cancelLabel: t('ui.cancel'),
   });
   if (!ok) return;
+  if (readOnly()) { toast(t('inv.closedElsewhere')); return; }
   const filled = applyPurchases(found.totals);
   toast(t('inv.purchasesFilled', { n: filled }));
   if (otherUnit) await alertDialog(otherUnit);
@@ -295,8 +315,11 @@ async function handleClose() {
     return;
   }
 
-  const countable = products();
-  const missing = countable.filter(i => !consumption(getMonth(), i.id).counted).length;
+  // ⚠️⚠️ NOT UNTIL THE MONTH HAS ARRIVED. With no rows there is no «not counted» to warn about, so the dialog read as
+  // the normal one, and confirming it stamped the month closed with no names and no prices.
+  if (!isMonthReady()) { toast(t('inv.notReady')); return; }
+
+  const missing = products().filter(i => !consumption(getMonth(), i.id).counted).length;
 
   const ok = await confirmDialog({
     title: t('inv.closeTitle'),
@@ -307,6 +330,12 @@ async function handleClose() {
     cancelLabel: t('ui.cancel'),
   });
   if (!ok) return;
+
+  // ⚠️ AND AGAIN AFTER THE ANSWER: a dialog takes time to read, and another phone can close the month meanwhile.
+  // Everything below is read from the month as it is now, not as it was when the question was asked.
+  if (readOnly()) { toast(t('inv.closedElsewhere')); return; }
+  if (!isMonthReady()) { toast(t('inv.notReady')); return; }
+  const countable = products();
 
   // ⚠️ WHAT IS FROZEN IS EVERYTHING THE MONTH'S COST DEPENDS ON BUT DOES NOT OWN:
   // the label (so a product deleted next spring is still readable here), what one
@@ -326,6 +355,7 @@ async function handleClose() {
     if (kg !== null) packKg[i.id] = kg;
   });
   const opened = await closeMonth({ names, unitPrice, packKg });
+  if (opened === false) { toast(t('inv.notReady')); return; }
   globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'month-closed' }));
   toast(opened ? t('inv.closedAndOpened', { month: monthName(opened) }) : t('inv.closed'));
   showList();
@@ -383,7 +413,7 @@ function toast(msg) {
 
 backBtn.addEventListener('click', handleBack);
 homeBtn.addEventListener('click', handleHomeLink);
-costBtn.addEventListener('click', showUsage);
+costBtn.addEventListener('click', handleCost);
 prevBtn.addEventListener('click', () => goToMonth(previousMonth(openMonthId)));
 nextBtn.addEventListener('click', () => goToMonth(nextMonth(openMonthId)));
 closeBtn.addEventListener('click', handleClose);
