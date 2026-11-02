@@ -115,7 +115,31 @@ test('the script exits 1 on a problem, 0 on today\'s tree, and says why npm fail
   assert.match(source, /'npm audit --json --include=dev --offline=false'/);
 });
 
-test('the allowlist is exactly the measured advisory, with its reason', () => {
+test('the allowlist is exactly the measured advisory, with its severity and its reason', () => {
   assert.deepEqual([...ALLOWED.keys()].sort(), ['GHSA-w5hq-g745-h8pq']);
-  for (const [id, why] of ALLOWED) assert.ok(why.length > 60, `${id}: say why it cannot hurt CI and cannot be fixed`);
+  for (const [id, { upTo, why }] of ALLOWED) {
+    assert.ok(['low', 'moderate', 'high', 'critical'].includes(upTo), `${id}: say the severity it was measured at`);
+    assert.ok(why.length > 60, `${id}: say why it cannot hurt CI and cannot be fixed`);
+  }
+});
+
+// Accepted at the severity it was measured at, and not one step above it.
+test('an accepted advisory re-rated upward fails again, so somebody looks', () => {
+  for (const severity of ['high', 'critical']) {
+    const tree = today();
+    tree.uuid.via[0].severity = severity;
+    assert.deepEqual(judge(report(tree)).problems,
+      [`GHSA-w5hq-g745-h8pq ${severity} uuid: an advisory — accepted only up to moderate: look at it again`], severity);
+  }
+});
+
+test('a HIGH accepted at high passes, the case the gate exists to allow', () => {
+  ALLOWED.set('GHSA-5555-6666-7777', { upTo: 'high', why: 'a test entry' });
+  try {
+    const v = judge(report({ ...today(), w: { severity: 'high', via: [advisory('GHSA-5555-6666-7777', 'high', ['CWE-400'])] } }));
+    assert.equal(v.ok, true, v.problems.join('\n'));
+    assert.deepEqual(v.accepted.sort(), ['GHSA-5555-6666-7777', 'GHSA-w5hq-g745-h8pq']);
+  } finally {
+    ALLOWED.delete('GHSA-5555-6666-7777');
+  }
 });

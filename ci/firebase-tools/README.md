@@ -36,9 +36,10 @@ If `npm install` leaves an entry marked `"extraneous"`, run `npm prune --ignore-
 **The vulnerability gate** is `scripts/audit-ci-firebase-tools.mjs`, run by the `test` job, not a
 plain `npm audit --audit-level=…`: it fails on any «malicious code» advisory (CWE-506) at any
 severity — the September 2025 hijacks of debug and color-convert were published as HIGH, not
-critical — and on any high or critical except the one it names with its reason. After a raise,
-re-measure it and remove an entry whose advisory is gone. `npm audit` prints «fix available
-via firebase-tools@<newer>» for them: false, the newer releases carry the same ranges.
+critical — and on any high or critical it does not name with a reason. After a raise, re-measure
+it and replace an entry whose advisory is gone: one entry must stay, to prove the audit looked.
+`npm audit` prints «fix available via firebase-tools@<newer>»: check the newer release's ranges
+before believing it (false up to 15.33, true for basic-ftp at 15.34).
 
 **A Dependabot PR on this folder** (security updates are on for the repository) is a raise like
 any other: check that every new version is at least a few days old and run the rules suite with it.

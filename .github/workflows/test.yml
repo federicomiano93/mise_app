@@ -64,11 +64,11 @@ jobs:
 
       # ⚠️ CI's OWN firebase-tools (ci/firebase-tools/ — the copy `rules` and deploy-functions
       # below and preview.yml run) needs a gate of its own, NOT `npm audit --audit-level=…`:
-      # `high` is red for ever (two denial-of-service advisories no firebase-tools release
-      # fixes), and `critical` misses a HIJACKED package — the September 2025 takeovers of
+      # `high` proves nothing on a clean tree (an audit that looked at nothing reports no high
+      # either), and `critical` misses a HIJACKED package — the September 2025 takeovers of
       # debug and color-convert were published as HIGH. The script fails on any «malicious
-      # code» advisory at any severity and on any high or critical except the two it names
-      # with their reasons; why each is harmless to CI is written there. A failure turns every
+      # code» advisory at any severity and on any high or critical it does not name with a
+      # reason; why each named one is harmless to CI is written there. A failure turns every
       # PR and the push to main red, and deploy-functions (which needs this job) cannot run.
       # It reads the lockfile only, no install. Dependabot reports every level as well.
       - name: Vulnerability check of CI's firebase-tools (P11)
@@ -245,7 +245,8 @@ jobs:
       # all the same unreachable `uuid` issue inside Google's own chain, with no
       # fixed version — a permanently red job teaches people to ignore it. On
       # 10 Sep 2026 firebase-functions went 6.5.0 → 7.3.2 and firebase-admin
-      # 13.6.0 → 14.3.0, and the tree is now CLEAN: `npm audit` reports 0.
+      # 13.6.0 → 14.3.0, and no high has been reported since (2 Nov 2026, firebase-admin
+      # 14.5.0: six moderates, which this job does not stop for).
       #
       # So `moderate` is finally reachable — and it is still not what this job
       # wants, for a reason that has nothing to do with how clean the tree is.

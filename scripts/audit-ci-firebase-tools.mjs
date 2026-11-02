@@ -25,19 +25,22 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-// Each entry: the advisory, why it cannot hurt CI, and why it cannot be fixed. (braces GHSA-vfj7-8cjw-p6xm was
+// Each entry: the advisory, the severity it was measured at (reported any higher, it fails again:
+// somebody must look), why it cannot hurt CI, and why it cannot be fixed. (braces GHSA-vfj7-8cjw-p6xm was
 // removed on 23 Oct 2026, basic-ftp GHSA-c475-qrg2-pj4r on 2 Nov 2026 with firebase-tools 15.34.2: npm no
 // longer reports them for this tree.) Re-measure on every firebase-tools raise; an entry whose advisory
 // is gone from the tree fails the gate until removed. ⚠️ The list may not simply go empty, or nothing
 // proves the audit looked: with no high left, a moderate still in the tree does that job.
 export const ALLOWED = new Map([
-  ['GHSA-w5hq-g745-h8pq', 'uuid: missing bounds check when a caller passes its own buffer to v3/v5/v6. Only a ' +
-    'moderate, so it would not block anyway; named here as the finding that proves the audit looked ' +
-    '(measured on firebase-tools 15.34.2: no high or critical in the tree).'],
+  ['GHSA-w5hq-g745-h8pq', { upTo: 'moderate', why: 'uuid: missing bounds check when a caller passes its own buffer ' +
+    'to v3/v5/v6. The tree\'s gaxios calls only v4() with no buffer, so CI never reaches it; Google\'s libraries ' +
+    'decide when it goes. Named here as the finding that proves the audit looked (measured on firebase-tools ' +
+    '15.34.2: no high or critical in the tree).' }],
 ]);
 
 const MALICIOUS = 'CWE-506';
 const BLOCKING = new Set(['high', 'critical']);
+const SEVERITIES = ['info', 'low', 'moderate', 'high', 'critical'];
 const ghsaOf = (url) => (String(url ?? '').match(/GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}/) || [])[0];
 
 // Pure, so the tests can feed it reports: { ok, problems: [..], accepted: [..] }.
@@ -56,8 +59,11 @@ export function judge(report) {
       const id = ghsaOf(via.url) ?? String(via.source ?? via.url ?? 'unknown advisory');
       const label = `${id} ${via.severity} ${name}: ${via.title}`;
       if ((via.cwe ?? []).includes(MALICIOUS)) problems.add(`MALICIOUS CODE — ${label}`);
-      else if (ALLOWED.has(id)) accepted.add(id);
-      else if (BLOCKING.has(via.severity)) problems.add(label);
+      else if (ALLOWED.has(id)) {
+        accepted.add(id);
+        const { upTo } = ALLOWED.get(id);
+        if (SEVERITIES.indexOf(via.severity) > SEVERITIES.indexOf(upTo)) problems.add(`${label} — accepted only up to ${upTo}: look at it again`);
+      } else if (BLOCKING.has(via.severity)) problems.add(label);
     }
   }
   for (const id of ALLOWED.keys()) {
