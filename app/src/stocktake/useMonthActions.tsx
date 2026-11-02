@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import type { ReactNode } from 'react';
-import { previousMonth, productsOfMonth } from '@mise/shared/inventory-model';
+import { isClosed, previousMonth, productsOfMonth } from '@mise/shared/inventory-model';
 import { useT } from '../i18n/useT';
 import { announceAction } from '../telemetry/usage';
 import { useStatusMessage } from '../ui/StatusMessage';
@@ -16,6 +16,8 @@ export type MonthActions = {
   // something that is hard to take back, and says what happened in the status message.
   carry: () => void;
   purchases: () => void;
+  // Opens «What it cost» with what it is handed, once there is something true to say there.
+  seeCost: (open: () => void) => void;
   // Resolve true when the person went ahead (so the screen can follow the focus to the button that
   // takes the pressed one's place), false when they backed out or another action was running.
   close: () => Promise<boolean>;
@@ -36,6 +38,11 @@ export type MonthActions = {
 // and what is frozen into a closed month must be the month as it is when «Close» is pressed. And an
 // action never runs on another month than the one it asked about (the browser's Back can change
 // the month under an open dialog).
+//
+// ⚠️⚠️ AND NOTHING RUNS ON A MONTH THAT IS NOT READY, OR THAT HAS BEEN CLOSED MEANWHILE (`shutOut`), before the question AND after
+// the answer: a dialog takes time to read, and another phone can close the month under it. With nothing arrived there are no
+// rows to warn about, so the close question read as the normal one, and confirming it stamped the month closed with no names
+// and no prices (emulator, 2 Nov 2026). The tap says why; the buttons stay dimmed, not disabled (MonthActions).
 export function useMonthActions(monthId: string): MonthActions {
   const { t, locale } = useT();
   const store = useStocktakeStore();
@@ -45,6 +52,19 @@ export function useMonthActions(monthId: string): MonthActions {
   const running = useRef(false);
 
   const stillHere = () => store.getSnapshot().monthId === monthId;
+
+  function shutOut(): boolean {
+    const now = store.getSnapshot();
+    if (now.month !== null && isClosed(now.month)) {
+      say(t('stock.closedElsewhere'));
+      return true;
+    }
+    if (!now.ready) {
+      say(t('stock.notReady'));
+      return true;
+    }
+    return false;
+  }
 
   async function once(work: () => Promise<boolean>): Promise<boolean> {
     if (running.current) return false;
@@ -77,15 +97,17 @@ export function useMonthActions(monthId: string): MonthActions {
   // Copy last month's closing counts into this month's openings.
   const carry = () => once(async () => {
     const previous = previousMonth(monthId);
-    if (previous === null) return false;
+    if (previous === null || shutOut()) return false;
     const ok = await confirm({
       title: t('stock.carryTitle'),
       message: t('stock.carryMessage', { month: monthName(previous, locale) }),
       okLabel: t('stock.carryOk'),
       cancelLabel: t('common.cancel'),
     });
-    if (!ok || !stillHere()) return false;
+    if (!ok || !stillHere() || shutOut()) return false;
     const moved = await store.pullOpeningFromPrevious(previous);
+    // It may have been closed while the read was out, and then nothing was carried.
+    if (stillHere() && moved === 0 && shutOut()) return true;
     // ⚠️ THREE ANSWERS, NOT TWO. «That month has nothing in it» and «I could not read it» look the
     // same on screen and mean opposite things — and this screen is used where there is no signal.
     if (moved === null) say(t('stock.carryFailed'));
@@ -99,6 +121,7 @@ export function useMonthActions(monthId: string): MonthActions {
   // being a PROPOSAL: the app records what was ORDERED, and knows what did not turn up only where
   // somebody ticked it missing on the delivery. Every row stays editable afterwards.
   const purchases = () => once(async () => {
+    if (shutOut()) return false;
     const found = await store.readProposedPurchases();
     if (!stillHere()) return false;
     const month = monthName(monthId, locale);
@@ -122,7 +145,7 @@ export function useMonthActions(monthId: string): MonthActions {
       okLabel: t('stock.purchasesOk'),
       cancelLabel: t('common.cancel'),
     });
-    if (!ok || !stillHere()) return false;
+    if (!ok || !stillHere() || shutOut()) return false;
     say(t('stock.purchasesFilled', { n: store.applyPurchases(found.totals) }));
     if (otherUnit) await notice();
     return true;
@@ -131,7 +154,7 @@ export function useMonthActions(monthId: string): MonthActions {
   // Freeze the month, and open the next one with these counts as its opening.
   const close = () => once(async () => {
     const before = store.getSnapshot();
-    if (before.monthId !== monthId || before.month === null) return false;
+    if (before.monthId !== monthId || before.month === null || shutOut()) return false;
     const month = monthName(monthId, locale);
     const missing = uncountedIn(before.month, productsOfMonth<Product>(before.month, before.ingredients));
     const ok = await confirm({
@@ -146,14 +169,16 @@ export function useMonthActions(monthId: string): MonthActions {
     // is NOW: an ingredient deleted next spring must still be readable in the month it was counted
     // in, and a price changed next spring must not restate what this month was worth.
     const now = store.getSnapshot();
-    if (now.monthId !== monthId || now.month === null) return false;
+    if (now.monthId !== monthId || now.month === null || shutOut()) return false;
     const frozen = frozenFor(now.month, productsOfMonth<Product>(now.month, now.ingredients));
     const result = await store.closeMonth(frozen);
-    // ⚠️ A REFUSED CLOSE IS NOT SAID, NOR RECORDED: another phone closed the month while this one's
-    // question was open, and the store wrote nothing. «Month closed.» (and a `month-closed` in the
-    // usage record) would be a claim about something this phone did not do. The month on screen is
-    // already the closed one, so there is nothing to follow with the focus either: false.
-    if (result.refused) return false;
+    // ⚠️ A REFUSED CLOSE IS NOT RECORDED, AND NOT SAID AS A CLOSE: the store wrote nothing, so «Month closed.» (and a
+    // `month-closed` in the usage record) would be a claim about something this phone did not do. There is nothing to follow
+    // with the focus either: false.
+    if (result.refused) {
+      shutOut();
+      return false;
+    }
     announceAction('month-closed');
     say(result.opened ? t('stock.closedAndOpened', { month: monthName(result.opened, locale) }) : t('stock.closed'));
     return true;
@@ -175,6 +200,11 @@ export function useMonthActions(monthId: string): MonthActions {
   return {
     carry: () => { void carry(); },
     purchases: () => { void purchases(); },
+    // ⚠️ A TOTAL OF ZERO AND «NOTHING HAS BEEN COUNTED YET» ARE CLAIMS, and while the month has not arrived they are false.
+    seeCost: open => {
+      if (store.getSnapshot().ready) open();
+      else say(t('stock.notReady'));
+    },
     close,
     reopen,
     dialogs: (

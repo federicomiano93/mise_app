@@ -24,7 +24,7 @@
 // can be typed into a month that turns out to be closed.
 
 import {
-  COUNT_MAPS, carryOver, isClosed, isMonthId, monthBounds, nextMonth, normalizeMonth, readCount, toDocument,
+  COUNT_MAPS, carryOver, isClosed, isMonthId, monthBounds, nextMonth, normalizeMonth, productsOfMonth, readCount, toDocument,
 } from '@mise/shared/inventory-model';
 import type { CountMap, InventoryMonth } from '@mise/shared/inventory-model';
 import {
@@ -34,7 +34,8 @@ import {
 import type { Outbox } from '@mise/shared/inventory-outbox';
 import { purchasesInMonth } from '@mise/shared/inventory-purchases';
 import type { KeyValueStorage } from '../session/backend';
-import type { StocktakeSource, StoredDoc } from './stocktakeSource';
+import { monthReady, withoutEmptyMaps } from './stocktakeModel';
+import type { SnapshotMeta, StocktakeSource, StoredDoc } from './stocktakeSource';
 
 // How long after the last change a count is sent. Long enough that typing «12» is one write and
 // not two, short enough that putting the phone down saves.
@@ -55,6 +56,12 @@ export function monthCacheKey(locationId: string, monthId: string): string {
 // wipes it.
 export function unsavedCacheKey(locationId: string, monthId: string): string {
   return `inventory-unsaved-${locationId || 'none'}-${monthId}`;
+}
+
+// ⚠️ THE CURRENT APP'S KEY TOO: that this phone has read this month for itself, as opposed to having only written to it
+// (hearMonth). The venue is in it; not under KEEP_PREFIXES either.
+export function monthSeenKey(locationId: string, monthId: string): string {
+  return `inventory-seen-${locationId || 'none'}-${monthId}`;
 }
 
 export type StocktakeMessage =
@@ -78,6 +85,10 @@ export interface StocktakeSnapshot {
   readonly ingredients: readonly StoredDoc[];
   // Whether the ingredients have answered once (or failed): until then the list says «Loading…».
   readonly ingredientsLoaded: boolean;
+  // ⚠️ WHETHER THE MONTH MAY BE ACTED ON: closed, carried into, filled from the orders, or told what it cost (monthReady).
+  // NOT monthLoaded and ingredientsLoaded: those say the screen has something to draw, and both turn true on the phone's
+  // empty copy and on a failure. This one turns true only on what proves something.
+  readonly ready: boolean;
   // Counts typed here that Firestore has not confirmed yet (waiting, or in the air). While true the
   // section holds the session's busy marker, so a self-started reload never cuts a write short.
   readonly unsent: boolean;
@@ -96,8 +107,8 @@ export type ProposedPurchases = {
 // close the month while this phone's question is still open, and a store that has refused wrote
 // nothing.
 export type CloseResult =
-  // Nothing was written: the month is closed already, has not answered yet, or is no longer the one
-  // being watched.
+  // Nothing was written: the month is closed already, is not `ready`, or is no longer the one being
+  // watched.
   | { readonly refused: true }
   // Closed. `opened` is the id of the month that was opened after it, or null when there was nothing
   // to carry into one.
@@ -163,6 +174,8 @@ type MonthSession = {
   inAir: Set<Promise<void>>;
   // Whether Firestore has answered at all yet; until then the local copy is all there is.
   remoteArrived: boolean;
+  // Whether an answer has PROVED what the month holds (hearMonth).
+  monthProved: boolean;
   // The month exactly as Firestore last sent it, before anything of this phone's was laid over it —
   // so the screen can be drawn again once the writes have answered. null until it has answered, and
   // while the document does not exist.
@@ -198,13 +211,34 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
     monthFailed: false,
     ingredients: [],
     ingredientsLoaded: false,
+    ready: false,
     unsent: false,
   });
   const listeners = new Set<() => void>();
   const messageListeners = new Set<(message: StocktakeMessage) => void>();
 
+  // What the ingredients' listener has PROVED (start()). A list that has answered stays answered: the last row deleted with no
+  // signal is an empty list from the copy too, and that time it is true.
+  let ingredientsProved = false;
+  let pricesAnswered = false;
+
+  function isReady(next: StocktakeSnapshot): boolean {
+    const s = session;
+    if (!s || !s.current || s.id !== next.monthId || next.month === null) return false;
+    const closed = isClosed(next.month);
+    return monthReady({
+      // ⚠️ A STREAM THAT DIED CAN NO LONGER SAY THE MONTH WAS CLOSED MEANWHILE, whatever it said before.
+      monthAnswered: s.monthProved && !s.streamFailed,
+      ingredientsAnswered: ingredientsProved,
+      pricesAnswered,
+      closed,
+      rows: closed ? productsOfMonth(next.month, next.ingredients).length : 0,
+    });
+  }
+
   function update(partial: Partial<StocktakeSnapshot>): void {
-    snapshot = Object.freeze({ ...snapshot, ...partial });
+    const next = { ...snapshot, ...partial };
+    snapshot = Object.freeze({ ...next, ready: isReady(next) });
     for (const listener of [...listeners]) listener();
   }
 
@@ -298,6 +332,28 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
 
   // ── One month ──────────────────────────────────────────────────────────────────────────────
 
+  // What a snapshot of the month proves.
+  //
+  // ⚠️ A MISSING DOCUMENT FROM THE PHONE'S OWN COPY PROVES NOTHING: it could be a closed month never read on this device. Only
+  // a document, or the server's word, counts. The month in localStorage (readCache) deliberately does NOT count either.
+  // ⚠️⚠️ NOR DOES A DOCUMENT THAT IS ONLY THIS PHONE'S OWN WRITE. With no signal one count typed into a month never read here
+  // makes the document «exist», and the SDK cannot say whether anything lies under it. Taken as an answer, it let that month
+  // be closed: over another phone's counts, or over a close already made elsewhere. But a month read here BEFORE and counted
+  // since looks exactly the same after a reload, and that is the storeroom this screen is for. So the phone writes down that
+  // it has read the month, and that is what tells the two apart.
+  function hearMonth(s: MonthSession, remote: StoredDoc | null, meta: SnapshotMeta): void {
+    const key = monthSeenKey(locationId, s.id);
+    if (meta.fromServer || (remote !== null && !meta.hasPendingWrites)) {
+      s.monthProved = true;
+      try { storage?.setItem(key, 'true'); } catch { /* storage full or unavailable: this visit still knows */ }
+      return;
+    }
+    if (remote === null) return;
+    try {
+      if (storage?.getItem(key) === 'true') s.monthProved = true;
+    } catch { /* unavailable: nothing was written down */ }
+  }
+
   // Held is NOT unsent: it is already in localStorage and goes only on the server's word.
   function publish(s: MonthSession, extra: Partial<StocktakeSnapshot> = {}): void {
     if (!s.current) return;
@@ -373,6 +429,7 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
       saveTimer: null,
       inAir: new Set(),
       remoteArrived: false,
+      monthProved: false,
       lastRemote: null,
       stopWatch: null,
       watchTimer: null,
@@ -396,6 +453,7 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
       (remote, meta) => {
         s.remoteArrived = true;
         s.lastRemote = remote;
+        hearMonth(s, remote, meta);
         // ⚠️ WHAT THE SNAPSHOT SHOWS BACK is in the browser's database: no longer only in this page's
         // memory. Judged on the document AS IT ARRIVED, before anything is laid over it.
         s.outbox = echoed(s.outbox, remoteMonth(s), COUNT_MAPS);
@@ -410,7 +468,7 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
         s.streamFailed = false;
         adopt(s, { monthLoaded: true, monthFailed: false });
         // Released by a snapshot the server sent, never by the phone's own copy.
-        if (meta?.fromServer) releaseHeld(s);
+        if (meta.fromServer) releaseHeld(s);
       },
       () => {
         s.streamFailed = true;
@@ -544,6 +602,13 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
     return s;
   }
 
+  // ⚠️⚠️ WRITABLE IS NOT ENOUGH TO ACT ON THE WHOLE MONTH. A count goes into a box on what this phone knows; a close, a carry and
+  // a fill replace what the month holds, so they wait for the proof. A dialog can be open while either changes, so the
+  // screen's check is not enough.
+  function actionable(): MonthSession | null {
+    return snapshot.ready ? writable() : null;
+  }
+
   function setCount(map: CountMap, ingredientId: string, value: unknown): boolean {
     const s = writable();
     if (!s || !COUNT_MAPS.includes(map) || !ingredientId) return false;
@@ -577,10 +642,13 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
   // this month closed and the next one missing — and its openings only ever existed as this month's
   // closings. This order fails towards «closed nothing, lost nothing». It is the order of SENDING
   // that matters: offline neither write is confirmed, and the SDK sends them in the order made.
+  //
+  // ⚠️ WHAT THIS CANNOT KNOW: with no signal it goes by this phone's copy, as closing in a storeroom must. A copy days old that
+  // still says «open» can close again a month another phone has closed since.
   async function closeMonth(frozen: Frozen): Promise<CloseResult> {
     // Only an open month that has answered: closing it twice would freeze today's prices over the
     // ones it was closed with (the original leaves this to the screen; here the store says no too).
-    const s = writable();
+    const s = actionable();
     if (!s) return { refused: true };
     const deadline = deadlineFromNow();
     const nowIso = new Date(deps.now()).toISOString();
@@ -612,7 +680,8 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
       packKg: { ...frozen.packKg },
     };
     await settled(queued(source.saveMonthFields(s.id, patch)), deadline);
-    s.month = { ...s.month, closedAt: nowIso, names: patch.names, unitPrice: patch.unitPrice, packKg: patch.packKg };
+    // What was written, and only that: an empty map did not go out, so the stored one still stands.
+    s.month = { ...s.month, ...withoutEmptyMaps(patch) } as InventoryMonth;
     writeCache(s);
     publish(s);
     return { refused: false, opened: next ? next.month : null };
@@ -652,6 +721,8 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
     if (!s) return none;
     const bounds = monthBounds(s.id);
     if (!bounds) return none;
+    // ⚠️ THE TOTALS ARE READ THROUGH THE PRODUCT CARDS, so with the cards still out they would be wrong.
+    if (!snapshot.ready) return { ...none, failed: true };
     try {
       const records = await source.getOrdersInMonth(bounds.from, bounds.to);
       // The PRICED ingredients: a case of packages (what lets a «busta» line count in «cartone»)
@@ -668,7 +739,7 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
   // figure left from an earlier proposal would otherwise sit there with nothing to explain it. The
   // dialog says so before this runs.
   function applyPurchases(totals: Readonly<Record<string, unknown>>): number {
-    const s = writable();
+    const s = actionable();
     if (!s || !totals) return 0;
     const wanted: Record<string, number> = {};
     for (const [id, value] of Object.entries(totals)) {
@@ -687,7 +758,7 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
 
   // Copy the previous month's closing counts into this month's openings.
   async function pullOpeningFromPrevious(previousId: string): Promise<number | null> {
-    if (!writable() || !isMonthId(previousId)) return 0;
+    if (!actionable() || !isMonthId(previousId)) return 0;
     let previous: StoredDoc | null = null;
     try {
       previous = await source.getMonthOnce(previousId);
@@ -698,7 +769,7 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
       return null;
     }
     // The month may have been closed, or left, while the read was out.
-    const s = writable();
+    const s = actionable();
     if (!s) return 0;
     const seed = carryOver(previous, s.id);
     const opening = seed ? seed.opening : {};
@@ -728,8 +799,14 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
       ingredientsSeq += 1;
       const mine = ingredientsSeq;
       stopIngredients = source.watchIngredients(
-        list => { if (mine === ingredientsSeq) update({ ingredients: list, ingredientsLoaded: true }); },
-        // The original ignores this failure; the list must not say «Loading…» for ever either.
+        (list, answer) => {
+          if (mine !== ingredientsSeq) return;
+          // ⚠️ AN EMPTY LIST FROM THE PHONE'S COPY IS NOT AN ANSWER.
+          if (list.length > 0 || !answer.fromCache) ingredientsProved = true;
+          pricesAnswered = answer.pricesAnswered;
+          update({ ingredients: list, ingredientsLoaded: true });
+        },
+        // The original ignores this failure; the list must not say «Loading…» for ever either. It proves nothing.
         () => { if (mine === ingredientsSeq) update({ ingredientsLoaded: true }); },
       );
       // ⚠️ WHAT IS TYPED IS SENT BEFORE THE PAGE GOES AWAY: the save is debounced, so closing the

@@ -38,6 +38,44 @@ export function frozenFor(month: InventoryMonth, products: readonly Product[]): 
   return { names, unitPrice, packKg };
 }
 
+// ⚠️ THE TWO BELOW ARE THE CURRENT APP'S (js/inventory/inventory-model.js, PR #442), HERE AND NOT IN @mise/shared/inventory-model
+// FOR NOW: that port is paired, parity.spec.ts wants the same exports on both sides, and the stack does not hold the fix yet.
+// When main is merged into the stack they move there, under the paired tests.
+
+// A month's write without its empty maps.
+//
+// ⚠️⚠️ AN EMPTY MAP IN A MERGE DOES NOT MEAN «NOTHING TO ADD»: IT REPLACES THE STORED MAP WITH AN EMPTY ONE. A map with keys
+// merges key by key; `opening: {}` wipes every opening of that month. Driven on the emulator: an ordinary close with nothing
+// counted emptied the opening and the pack weights the next month already held. No write of this feature means to wipe a
+// map: a box is emptied by name, with deleteField(), which is not a plain map and goes through.
+export function withoutEmptyMaps(payload: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    const plainMap = value !== null && typeof value === 'object' && Object.getPrototypeOf(value) === Object.prototype;
+    if (!plainMap || Object.keys(value).length > 0) out[key] = value;
+  }
+  return out;
+}
+
+// Whether what this phone holds is enough to ACT on the month: to close it, carry into it, fill it from the orders, or say
+// what it cost.
+//
+// ⚠️⚠️ AN OPEN MONTH NEEDS ALL THREE ANSWERS: ITSELF, THE INGREDIENTS AND THEIR PRICES. Rows on screen are not enough: they
+// can come from the phone's copy of the ingredients with the month never read here, and that month may already be counted,
+// or closed, on the server. And a close freezes what a unit cost, so with the prices still out a month would be closed with
+// no money in it.
+// ⚠️ A CLOSED MONTH'S ROWS ARE ITS OWN (productsOfMonth): it is ready as soon as it has any.
+export function monthReady({ monthAnswered, ingredientsAnswered, pricesAnswered, closed, rows }: {
+  readonly monthAnswered: boolean;
+  readonly ingredientsAnswered: boolean;
+  readonly pricesAnswered: boolean;
+  readonly closed: boolean;
+  readonly rows: number;
+}): boolean {
+  const answered = monthAnswered && ingredientsAnswered;
+  return closed ? rows > 0 || answered : answered && pricesAnswered;
+}
+
 // How many of the month's rows nobody has counted — what the close question warns about.
 export function uncountedIn(month: InventoryMonth, products: readonly Product[]): number {
   return products.filter(product => !consumption(month, product.id).counted).length;

@@ -74,8 +74,8 @@ export function StocktakeList({ month, current, openProductId, onMove, onOpenPro
       {canManage ? (
         <MonthActions
           closed={closed}
-          ready={named && snapshot.monthLoaded && snapshot.ingredientsLoaded}
-          onSeeCost={onOpenCost}
+          ready={named && snapshot.ready}
+          onSeeCost={() => { actions.seeCost(onOpenCost); }}
           onClose={actions.close}
           onReopen={actions.reopen}
         />
