@@ -45,7 +45,8 @@ export function StocktakeCost({ month: monthId }: { month: string }) {
   const { ingredients, ingredientsLoaded, monthLoaded } = snapshot;
   // The store answers one render late after the address changes (see StocktakeProduct).
   const month = snapshot.monthId === monthId ? snapshot.month : null;
-  const ready = canManage && month !== null && ingredientsLoaded;
+  const closed = month !== null && isClosed(month);
+  const ready = canManage && month !== null && ingredientsLoaded && (monthLoaded || closed);
 
   const onLeaving = useCallback(() => { handBack.expect(COST_OPENER); }, [handBack]);
   const leave = useLeave(monthPath(monthId), onLeaving);
@@ -55,7 +56,6 @@ export function StocktakeCost({ month: monthId }: { month: string }) {
     if (ready && cameFromList(state)) title.current?.focus();
   }, [ready]);
 
-  const closed = month !== null && isClosed(month);
   const cost = useMemo(() => {
     if (month === null) return null;
     const products = productsOfMonth<Product>(month, ingredients);
@@ -69,7 +69,7 @@ export function StocktakeCost({ month: monthId }: { month: string }) {
 
   if (!canManage) return <Navigate to={monthPath(monthId)} replace state={KEEP_FOCUS} />;
 
-  if (month === null || cost === null || !ingredientsLoaded || (!monthLoaded && !closed)) {
+  if (!ready || cost === null) {
     return (
       <section className={styles.cost} aria-busy="true">
         <p className={styles.loading}>{t('session.loading')}</p>

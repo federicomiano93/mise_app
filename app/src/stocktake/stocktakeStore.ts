@@ -806,7 +806,7 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
           pricesAnswered = answer.pricesAnswered;
           update({ ingredients: list, ingredientsLoaded: true });
         },
-        // The original ignores this failure; the list must not say «Loading…» for ever either. It proves nothing.
+        // The list must not say «Loading…» for ever. It proves nothing.
         () => { if (mine === ingredientsSeq) update({ ingredientsLoaded: true }); },
       );
       // ⚠️ WHAT IS TYPED IS SENT BEFORE THE PAGE GOES AWAY: the save is debounced, so closing the

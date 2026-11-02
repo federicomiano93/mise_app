@@ -1,7 +1,8 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { it as italian } from '../i18n/it';
 import { fakeStocktakeSource } from '../testing/fakeStocktakeSource';
+import { FROM_LIST } from './stocktakeNav';
 import {
   closedMonthDoc, freezeClock, ingredient, monthDoc, renderStocktake,
 } from '../testing/renderStocktake';
@@ -230,6 +231,18 @@ describe('what the month cost: who sees it', () => {
 
 describe('what the month cost: arriving and leaving', () => {
   const costButton = () => screen.getByRole('button', { name: 'What it cost' });
+
+  it('still puts the focus on its title when the ingredients answered before the month', async () => {
+    const fake = source();
+    const { router } = renderStocktake('/stocktake/2026-10', { source: fake });
+    await screen.findAllByRole('heading', { level: 3 }, LOAD);
+    fake.hold();
+    await act(() => router.navigate('/stocktake/2026-09/cost', { state: FROM_LIST }));
+    expect(await screen.findByText('Loading…', undefined, LOAD)).toBeInTheDocument();
+    act(() => { fake.release(); });
+    const title = await screen.findByRole('heading', { level: 2, name: 'What the month cost' }, LOAD);
+    await waitFor(() => { expect(title).toHaveFocus(); });
+  });
 
   it('puts the focus on its title when it opens from the list, and Back hands it back to the button', async () => {
     const { router, user } = renderStocktake('/stocktake/2026-10', { source: source() });
