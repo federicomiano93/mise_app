@@ -419,6 +419,199 @@ test('a line typed over while a write is in the air notes the new number against
   await settle();
 });
 
+// ── A correction made while its write is in the air, and the page gone before the correction left ──
+//
+// The write in the air may or may not have reached Firestore's queue: on the next open it either
+// lands or never existed, and nothing on this page can know which. Both have to come out right.
+
+// Typed `first`, sent, corrected to `second` with no snapshot in between, page gone in that instant.
+async function correctedThenGone(start, first, second, field = 'qty') {
+  const page = await openPage(server(start));
+  stub.holdSaves();
+  type(page, 'flour', { [field]: first });
+  await pause();
+  assert.equal(sent().length, 1, 'the first write has gone');
+  type(page, 'flour', { [field]: second });
+  stub.calls.saveDoc.length = 0;
+  stub.letSavesThrough();
+}
+
+test('⚠️ 5 put back to 0, page gone, the 5 was in the queue: the 0 goes out and the 5 does not come back', async () => {
+  await correctedThenGone({}, 5, 0);
+  const landed = server({ flour: { qty: 5, stock: 0 } });
+  const second = await openPage(landed);      // Firestore shows its own queue on the next page
+  await answer(landed);
+  assert.equal(second.entries.flour.qty, 0, 'the screen says what was last typed');
+  await pause();
+  assert.deepEqual(sent().map(({ entries }) => entries), [{ flour: { qty: 0, unit: '', supplierId: '' } }]);
+  assert.equal(globalThis.localStorage.getItem(DRAFT_JOURNAL_KEY), null, 'and the note is done');
+});
+
+test('5 put back to 0, page gone, the 5 never reached the queue: nothing to write', async () => {
+  await correctedThenGone({}, 5, 0);
+  const second = await openPage(server());
+  await answer(server());
+  await pause();
+  assert.deepEqual(sent(), []);
+  assert.equal(second.entries.flour, undefined);
+  assert.equal(globalThis.localStorage.getItem(DRAFT_JOURNAL_KEY), null);
+});
+
+test('a saved 3: 5 put back to 3, page gone, the 5 was in the queue: the 3 goes out', async () => {
+  await correctedThenGone({ flour: { qty: 3, stock: 0 } }, 5, 3);
+  const landed = server({ flour: { qty: 5, stock: 0 } });
+  const second = await openPage(landed);
+  await answer(landed);
+  await pause();
+  assert.equal(second.entries.flour.qty, 3);
+  assert.deepEqual(sent().map(({ entries }) => entries), [{ flour: { qty: 3, unit: '', supplierId: '' } }]);
+});
+
+test('5 corrected to 7, page gone: the 7 wins whether or not the 5 was in the queue', async () => {
+  await correctedThenGone({}, 5, 7);
+  const landed = server({ flour: { qty: 5, stock: 0 } });
+  const inQueue = await openPage(landed);
+  await answer(landed);
+  assert.equal(inQueue.entries.flour.qty, 7, 'the 5 landed');
+  await pause();
+  assert.deepEqual(sent().map(({ entries }) => entries), [{ flour: { qty: 7, unit: '', supplierId: '' } }]);
+
+  stub.reset();
+  globalThis.localStorage = fakeStorage();
+  await correctedThenGone({}, 5, 7);
+  const notInQueue = await openPage(server());
+  await answer(server());
+  assert.equal(notInQueue.entries.flour.qty, 7, 'the 5 never existed');
+  await pause();
+  assert.deepEqual(sent().map(({ entries }) => entries), [{ flour: { qty: 7, unit: '', supplierId: '' } }]);
+});
+
+test('a stock count corrected back, page gone, the first one in the queue: only the stock goes out', async () => {
+  await correctedThenGone({ flour: { qty: 3, stock: 0 } }, 2, 0, 'stock');
+  const landed = server({ flour: { qty: 3, stock: 2 } });
+  const second = await openPage(landed);
+  await answer(landed);
+  await pause();
+  assert.equal(second.entries.flour.stock, 0);
+  assert.deepEqual(sent().map(({ entries }) => entries), [{ flour: { stock: 0 } }]);
+});
+
+test('corrected in the air, then a colleague wrote the line: their number stays', async () => {
+  await correctedThenGone({}, 5, 0);
+  const theirs = server({ flour: { qty: 9, stock: 0 } });
+  const second = await openPage(theirs);
+  await answer(theirs);
+  await pause();
+  assert.deepEqual(sent(), []);
+  assert.equal(second.entries.flour.qty, 9);
+});
+
+test('⚠️ corrected in the air, then the order was placed: the correction does not come back', async () => {
+  await correctedThenGone({}, 5, 7);
+  stub.history.records = [placedAt(Date.now() + 60000, { flour: 5 })];
+  const second = await openPage(server());
+  await answer(server());
+  await pause();
+  assert.deepEqual(sent(), [], 'never a second order');
+  assert.equal(second.entries.flour, undefined);
+});
+
+test('a correction that waited offline through another open still counts the write it corrected', async () => {
+  await correctedThenGone({}, 5, 0);
+  await openPage(server());                   // no answer from the server: the note is written again
+  const landed = server({ flour: { qty: 5, stock: 0 } });
+  const third = await openPage(landed);
+  await answer(landed);
+  assert.equal(third.entries.flour.qty, 0);
+  await pause();
+  assert.deepEqual(sent().map(({ entries }) => entries), [{ flour: { qty: 0, unit: '', supplierId: '' } }]);
+});
+
+test('typed on the new page: the old write in the air no longer speaks for that line', async () => {
+  const first = await openPage(server());
+  stub.holdSaves();
+  type(first, 'flour', { qty: 5 });
+  await pause();
+  type(first, 'flour', { qty: 0, stock: 4 });
+  stub.letSavesThrough();
+  const second = await openPage(server());    // the shelf count stays in the note, the 5 must not
+  type(second, 'flour', { qty: 8 });
+  assert.equal('air' in note().entries.flour, false);
+});
+
+test('the 5 landed inside the pause of its correction, page gone: the 0 goes out', async () => {
+  const first = await openPage(server());
+  stub.holdSaves();
+  type(first, 'flour', { qty: 5 });
+  await pause();
+  type(first, 'flour', { qty: 0 });
+  stub.held[0].resolve();
+  await settle();
+  stub.calls.saveDoc.length = 0;
+  stub.letSavesThrough();
+  const landed = server({ flour: { qty: 5, stock: 0 } });
+  await openPage(landed);
+  await answer(landed);
+  await pause();
+  assert.deepEqual(sent().map(({ entries }) => entries), [{ flour: { qty: 0, unit: '', supplierId: '' } }]);
+});
+
+test('a correction that turned out to need nothing does not cost another line its day stamp', async () => {
+  const first = await openPage(server());
+  stub.holdSaves();
+  type(first, 'flour', { qty: 5 });
+  await pause();
+  type(first, 'flour', { qty: 0 });
+  type(first, 'salt', { qty: 2 }, 'sup1');
+  stub.calls.saveDoc.length = 0;
+  stub.letSavesThrough();
+  const second = await openPage(server());    // the 5 never reached the queue
+  await answer(server());
+  await pause();
+  assert.deepEqual(sent()[0].entries, { salt: { qty: 2, unit: '', supplierId: '' } });
+  assert.deepEqual(sent()[0].days, { sup1: DAY });
+  assert.equal(second.days.sup1, DAY);
+});
+
+test('⚠️ a correction on a line a colleague has since ordered still keeps the day stamps out', async () => {
+  const first = await openPage(server());
+  stub.holdSaves();
+  type(first, 'flour', { qty: 5 }, 'sup1');
+  await pause();
+  type(first, 'flour', { qty: 0 });
+  type(first, 'salt', { qty: 2 }, 'sup2');
+  stub.calls.saveDoc.length = 0;
+  stub.letSavesThrough();
+  // Placing empties the line too, so it reads just as the correction wanted: only the orders tell.
+  stub.history.records = [placedAt(Date.now() + 60000, { flour: 5 })];
+  await openPage(server());
+  await answer(server());
+  await pause();
+  assert.deepEqual(sent()[0].entries, { salt: { qty: 2, unit: '', supplierId: '' } });
+  assert.equal(sent()[0].days, undefined, 'sup1\'s next order must not be dated by a stamp left behind');
+});
+
+test('the note keeps the write in the air only when it says something else', async () => {
+  const page = await openPage(server());
+  stub.holdSaves();
+  type(page, 'flour', { qty: 5 });
+  await pause();
+  assert.equal('air' in note().entries.flour, false, 'the claim is the write in the air');
+  type(page, 'flour', { qty: 0 });
+  assert.deepEqual(note().entries.flour, {
+    row: { qty: 0, unit: '', supplierId: '' },
+    base: { qty: 0, unit: '', supplierId: '' },
+    air: [{ qty: 5, unit: '', supplierId: '' }],
+  });
+  // Both writes land: nothing is left to remember.
+  await pause();
+  stub.held[0].resolve();
+  await settle();
+  stub.held[1].resolve();
+  await settle();
+  assert.equal(globalThis.localStorage.getItem(DRAFT_JOURNAL_KEY), null);
+});
+
 test('a write the server refused is not noted: it could never be saved, and would block every later one', async () => {
   const errors = mock.method(console, 'error', () => {});
   const page = await openPage(server());
@@ -519,6 +712,11 @@ test('it trusts nothing it reads', () => {
     assert.equal(readJournal(VENUE, 1000, storage), null, JSON.stringify(bad));
     assert.equal(storage.getItem(DRAFT_JOURNAL_KEY), null);
   }
+  // A write in the air it cannot read counts as none: the line itself is still good.
+  put({ ...good, entries: { flour: { ...good.entries.flour, air: 'nonsense' } } });
+  assert.deepEqual(readJournal(VENUE, 1000, storage).entries.flour, good.entries.flour);
+  put({ ...good, entries: { flour: { ...good.entries.flour, air: [{ qty: -1 }, 7, { qty: 2 }] } } });
+  assert.deepEqual(readJournal(VENUE, 1000, storage).entries.flour, { ...good.entries.flour, air: [{ qty: 2 }] });
   // One bad line does not cost the good ones.
   put({
     ...good,
