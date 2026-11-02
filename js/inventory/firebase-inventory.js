@@ -204,9 +204,13 @@ export async function watchIngredients(onChange, onError) {
       snap.forEach(d => { prices[d.id] = d.data(); });
       emit();
     },
+    // Any other failure keeps what has already arrived: an answer stays an answer, so wiping the prices here would let
+    // a later close freeze no money.
     err => {
-      prices = {};
-      if (err?.code === 'permission-denied') pricesAnswered = true;
+      if (err?.code === 'permission-denied') {
+        prices = {};
+        pricesAnswered = true;
+      }
       emit();
     },
   );

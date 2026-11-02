@@ -233,8 +233,12 @@ async function listen() {
     return () => {};
   };
   const told = [];
-  await watchIngredients((list, fromCache, pricesAnswered) => told.push(pricesAnswered), () => {});
-  return { told, ingredients: calls.ingredients, prices: calls['ingredient-prices'] };
+  const lists = [];
+  await watchIngredients((list, fromCache, pricesAnswered) => {
+    told.push(pricesAnswered);
+    lists.push(list);
+  }, () => {});
+  return { told, lists, ingredients: calls.ingredients, prices: calls['ingredient-prices'] };
 }
 
 test('⚠️ an empty copy of the prices is not an answer; the server\'s «none» is, and it arrives', async () => {
@@ -269,6 +273,16 @@ test('⚠️ any other price failure does not: a month closed on it would freeze
   ingredients.next(ingredientSnap(['a']));
   prices.error({ code: 'resource-exhausted' });
   assert.deepEqual(told, [false, false]);
+});
+
+test('⚠️ a price failure after an answer keeps the prices: the month stays ready, so a close would freeze no money', async () => {
+  const { told, lists, ingredients, prices } = await listen();
+  ingredients.next(ingredientSnap(['a']));
+  prices.next(priceSnap({ a: { price: 2 } }, { changes: 1 }));
+  const before = lists.at(-1);
+  prices.error({ code: 'resource-exhausted' });
+  assert.equal(told.at(-1), true);
+  assert.deepEqual(lists.at(-1), before);
 });
 
 test('the month\'s listener says whether the snapshot carries this phone\'s own writes', async () => {
