@@ -390,10 +390,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "7f86e65548a96676",
-      "mapSha": "b6f613cde8686431",
+      "sha": "1060b3e75eeac0c9",
+      "mapSha": "a2c7aac40b1fbead",
       "inputs": {
-        "js/i18n.js": "5ad9a5499ab755f3"
+        "js/i18n.js": "e920cbfb0c0aa536"
       }
     },
     "dist/index.js": {
@@ -523,14 +523,14 @@
       }
     },
     "dist/inventory.css": {
-      "sha": "fbb27bb7f7c3dcc3",
+      "sha": "5d791f848315bf98",
       "inputs": {
-        "inventory.css": "63b1fd25412e0c8a"
+        "inventory.css": "6d713e2abca3852a"
       }
     },
     "dist/inventory.js": {
-      "sha": "2213c48ab3cf1723",
-      "mapSha": "2bdee2286a7d7f1f",
+      "sha": "4e5bc47b9f502792",
+      "mapSha": "10c0217db6332758",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -557,14 +557,14 @@
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/inventory/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/inventory/dom.js": "87390d375dc3246d",
-        "js/inventory/firebase-inventory.js": "cba70050d6577cd0",
+        "js/inventory/firebase-inventory.js": "0d9f054ae87e4c98",
         "js/inventory/inventory-detail.js": "f0619d73cb5efe7f",
-        "js/inventory/inventory-list.js": "707c3500fbbef98b",
-        "js/inventory/inventory-main.js": "92e2576b121b9f90",
-        "js/inventory/inventory-model.js": "3931e39de227a8fa",
+        "js/inventory/inventory-list.js": "d4f7059634db4657",
+        "js/inventory/inventory-main.js": "37d023f8cb904541",
+        "js/inventory/inventory-model.js": "4f69286431ff0085",
         "js/inventory/inventory-outbox.js": "4f168a05e32ba950",
         "js/inventory/inventory-purchases.js": "639d19b4fc0bc4d3",
-        "js/inventory/inventory-store.js": "16861f5525d29067",
+        "js/inventory/inventory-store.js": "ce64e08b545a0bf8",
         "js/inventory/inventory-usage.js": "5cc561e12035afe6",
         "js/inventory/inventory-value.js": "fe714a0057753b63",
         "js/join-code.js": "ebf5b5e52507b80b",
@@ -668,8 +668,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "54a2754a93a2e6a8",
-      "mapSha": "eb5b3b67d57d4d71",
+      "sha": "f3d81102ee647088",
+      "mapSha": "274f8055b48956ed",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -722,8 +722,8 @@
         "js/orders/deliveries-view.js": "3398d0bacdcbfbfa",
         "js/orders/deliveries.js": "39df74692fef5a8c",
         "js/orders/dom.js": "99c731d8aa890a20",
-        "js/orders/draft-journal.js": "bc7da360daeb2b47",
-        "js/orders/draft.js": "4854f1390185b576",
+        "js/orders/draft-journal.js": "919a40092aaee035",
+        "js/orders/draft.js": "99d136156c927ac5",
         "js/orders/favourite-suppliers.js": "9b54dd3bba8b4164",
         "js/orders/firebase-orders.js": "76b6e0839537824f",
         "js/orders/history-edit.js": "2a7bc27082d1ce54",
@@ -928,8 +928,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "dcdac8a3a570ea07",
-      "mapSha": "56dff9b3213c8dd5",
+      "sha": "49b035b9adabd83e",
+      "mapSha": "0e1a4fdf3950221c",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -978,8 +978,8 @@
         "js/orders/day.js": "8417a4e02c09cbfa",
         "js/orders/deliveries.js": "39df74692fef5a8c",
         "js/orders/dom.js": "99c731d8aa890a20",
-        "js/orders/draft-journal.js": "bc7da360daeb2b47",
-        "js/orders/draft.js": "4854f1390185b576",
+        "js/orders/draft-journal.js": "919a40092aaee035",
+        "js/orders/draft.js": "99d136156c927ac5",
         "js/orders/favourite-suppliers.js": "9b54dd3bba8b4164",
         "js/orders/firebase-features.js": "5c93f14c6ab6eddd",
         "js/orders/firebase-orders.js": "76b6e0839537824f",

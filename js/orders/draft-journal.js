@@ -11,7 +11,10 @@
 // THE SHAPE. `entries[id] = { row, base }`, `days[supplierId] = { day, base }`: `row`/`day` is the
 // claim, `base` what the server held for those same fields when this device last heard from it.
 // The base is what makes it safe to send later: a line that no longer reads like the base was
-// changed by somebody else meanwhile, and their word wins (draft.js settleRestored).
+// changed by somebody else meanwhile, and their word wins (draft.js settleRestored). An entry may
+// also hold `air`: what writes in the air said that the claim has corrected. Each may be in
+// Firestore's queue and so land after the page has gone, so reading like one of them is not a
+// colleague's doing either.
 //
 // ⚠️ NOT IN KEEP_PREFIXES (js/local-data.js), ON PURPOSE: signing out or switching venue wipes it.
 // It is one venue's order on a device that may be shared, and signing out already throws away
@@ -80,7 +83,10 @@ export function readJournal(lid, now = Date.now(), storage = defaultStorage()) {
   Object.entries(isPlainObject(note.entries) ? note.entries : {}).forEach(([id, claim]) => {
     const row = cleanFields(claim?.row);
     const base = cleanFields(claim?.base);
-    if (row && base) entries[id] = { row, base };
+    if (!row || !base) return;
+    entries[id] = { row, base };
+    const air = (Array.isArray(claim.air) ? claim.air : []).map(cleanFields).filter(Boolean);
+    if (air.length) entries[id].air = air;
   });
   const days = {};
   Object.entries(isPlainObject(note.days) ? note.days : {}).forEach(([id, claim]) => {

@@ -145,8 +145,10 @@ test('⚠️⚠️ the cached month is NOT read while the module is loading', ()
     'currentLocationId() is still null here, so the key would name no venue');
   assert.doesNotMatch(init, /cacheKey\(/,
     'not even to build the key: the key is the whole bug');
-  assert.match(init, /authReady\.then\(fromThisPhone\)/,
+  assert.match(init, /authReady\.then\(venueOpened\)/,
     'the read waits for the session that opens the venue');
+  assert.match(bodyOf(STORE, 'function venueOpened'), /fromThisPhone\(\);/,
+    'and venueOpened is where it happens');
   const local = bodyOf(STORE, 'function fromThisPhone');
   assert.match(local, /hydrateFromCache\(\);\s*reviveUnsaved\(\);/,
     'the month as last seen first, then what had not been saved laid over it');

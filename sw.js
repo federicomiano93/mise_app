@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v720';
+const CACHE_NAME = 'theitalianclub-v724';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -154,11 +154,11 @@ const ASSET_HASHES = {
   "./suppliers.html": '0f24580d8d5a1e05',
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
-  "./dist/i18n.js": '339b784e8bf57647',
+  "./dist/i18n.js": 'b2f30f9186bb7ea6',
   "./dist/index.js": '7330baa812220338',
   "./dist/calculator.js": '4fbbf6495ee27d74',
-  "./dist/orders.js": 'beb1c45c43c98ac4',
-  "./dist/suppliers.js": '0e50a6b7a313fe6a',
+  "./dist/orders.js": '3a25bce2e096b8da',
+  "./dist/suppliers.js": '8858bf8ec54d51fe',
   "./dist/install-guide.js": 'beda437b74a9c6f8',
   "./js/allergen-model.js": 'a9ad7592da832a56',
   "./js/calculator-config.js": '0608b3c515d18cb3',
@@ -167,7 +167,7 @@ const ASSET_HASHES = {
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/firebase.js": '17917515e0c3eef7',
   "./js/i18n-dom.js": '24249af4367511e5',
-  "./js/i18n.js": 'ca456d0ab3b59277',
+  "./js/i18n.js": 'a24f2193cb9c3fa0',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/local-data.js": '91aa7f1699c897a1',
   "./js/location.js": '6aaf53615a8739d1',
@@ -185,7 +185,7 @@ const ASSET_HASHES = {
   "./dist/catalogue.js": 'c230d25311ccb39c',
   "./dist/pastries.js": '003556fccb93c771',
   "./dist/foodcost.js": '127d3db741235a4b',
-  "./dist/inventory.js": '417a5529b2093527',
+  "./dist/inventory.js": '36549e08a6b78aad',
   "./qr.png": '761a95e5bc25e2ba',
   "./dist/tokens.css": '28075b98b55369ed',
   "./dist/auth.css": '58cd14bdbf808ecc',
@@ -211,7 +211,7 @@ const ASSET_HASHES = {
   "./foodcost.html": '59bab773b490ded3',
   "./dist/foodcost.css": '0f8589065fc5e520',
   "./inventory.html": '4caee7fc2b8256a8',
-  "./dist/inventory.css": '7ac0aa0d086fadde',
+  "./dist/inventory.css": 'c77ebe28c5f42fde',
   "./manifest.json": 'b3afdecd54f14f64',
   "./icons/icon-192.png": '16eed7827b42285d',
   "./icons/icon-512.png": '30e4120be12274a1',

@@ -382,6 +382,11 @@ body {
 .inv-footer-btn:active { transform: scale(.97); }
 .inv-footer-btn:focus-visible { outline: 2px solid var(--inv-accent); outline-offset: 2px; }
 .inv-footer-btn[hidden] { display: none; }
+/* The month has not arrived yet: dimmed, not disabled, so it stays reachable and a tap says why. */
+.inv-footer-btn[aria-disabled="true"],
+.inv-action[aria-disabled="true"] { opacity: .4; cursor: default; }
+.inv-footer-btn[aria-disabled="true"]:active,
+.inv-action[aria-disabled="true"]:active { transform: none; }
 .inv-footer-btn-main {
   background: var(--inv-brand);
   border-color: var(--inv-brand);
