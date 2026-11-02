@@ -529,8 +529,8 @@
       }
     },
     "dist/inventory.js": {
-      "sha": "0c4eb2f9c2e7e565",
-      "mapSha": "4a129f143cccb558",
+      "sha": "5ee032369fcddf67",
+      "mapSha": "c7f91ac28e9bf28b",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -557,7 +557,7 @@
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/inventory/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/inventory/dom.js": "87390d375dc3246d",
-        "js/inventory/firebase-inventory.js": "ad736e0b42104e6c",
+        "js/inventory/firebase-inventory.js": "0d9f054ae87e4c98",
         "js/inventory/inventory-detail.js": "f0619d73cb5efe7f",
         "js/inventory/inventory-list.js": "d4f7059634db4657",
         "js/inventory/inventory-main.js": "37d023f8cb904541",
