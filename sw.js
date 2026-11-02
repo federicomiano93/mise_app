@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v723';
+const CACHE_NAME = 'theitalianclub-v724';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -154,11 +154,11 @@ const ASSET_HASHES = {
   "./suppliers.html": '0f24580d8d5a1e05',
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
-  "./dist/i18n.js": '094eed09e656732f',
-  "./dist/index.js": '8a91c93ca6cf2d17',
-  "./dist/calculator.js": 'c3f641a27116a0a3',
-  "./dist/orders.js": 'bf27a1826c41ac11',
-  "./dist/suppliers.js": '10d6905c538a1128',
+  "./dist/i18n.js": 'a75c248c273a6256',
+  "./dist/index.js": 'd4b254f871fe9003',
+  "./dist/calculator.js": 'e3ced146683f8fdf',
+  "./dist/orders.js": '85bf6be8f6acbdef',
+  "./dist/suppliers.js": 'a050c8831888f244',
   "./dist/install-guide.js": 'beda437b74a9c6f8',
   "./js/allergen-model.js": 'a9ad7592da832a56',
   "./js/calculator-config.js": '0608b3c515d18cb3',
@@ -167,7 +167,7 @@ const ASSET_HASHES = {
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/firebase.js": '17917515e0c3eef7',
   "./js/i18n-dom.js": '24249af4367511e5',
-  "./js/i18n.js": 'f77bd940405b4431',
+  "./js/i18n.js": '49d020fd35e0db56',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/local-data.js": '91aa7f1699c897a1',
   "./js/location.js": '6aaf53615a8739d1',
@@ -182,10 +182,10 @@ const ASSET_HASHES = {
   "./js/update-gate.js": '95f4f9f99e1fd1f4',
   "./js/vendor/jspdf.esm.js": 'c59e9f48f24c403f',
   "./js/vendor/write-excel-file.esm.js": '9c9b6920e629cb74',
-  "./dist/catalogue.js": '10d3b6be419560e5',
-  "./dist/pastries.js": '572e6ba5121edb44',
-  "./dist/foodcost.js": '31bbad9d09b797cd',
-  "./dist/inventory.js": 'deb7cbc70cda90e6',
+  "./dist/catalogue.js": '7a74b6e280bb71e8',
+  "./dist/pastries.js": '4070ae847a81ad01',
+  "./dist/foodcost.js": '84f34bedfb0f6337',
+  "./dist/inventory.js": '1027b1c92a710d13',
   "./qr.png": '761a95e5bc25e2ba',
   "./dist/tokens.css": '28075b98b55369ed',
   "./dist/auth.css": '58cd14bdbf808ecc',
