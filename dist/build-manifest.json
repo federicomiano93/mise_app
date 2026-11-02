@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "74777113f99c4dab",
-      "mapSha": "ec4ba1ef3defc604",
+      "sha": "7c56514e03789432",
+      "mapSha": "9662d6cab48f1ac7",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -39,7 +39,7 @@
         "js/catalogue/catalogue-model.js": "2c796556ddd93106",
         "js/catalogue/guided-model.js": "6a7e0f736c63b6e6",
         "js/client-order-history.js": "600f560261dab2bf",
-        "js/client-order-model.js": "19f28b2f7799d8ab",
+        "js/client-order-model.js": "6577856fddfa5416",
         "js/client-orders-data.js": "11a88edd49b8e6ac",
         "js/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/confirm-flow.js": "6b7f535b2dca31ec",
@@ -408,7 +408,7 @@
         "js/away-screen.js": "8db8345e07788d36",
         "js/calculator-config.js": "a15c7e07196db320",
         "js/client-order-history.js": "600f560261dab2bf",
-        "js/client-order-model.js": "19f28b2f7799d8ab",
+        "js/client-order-model.js": "6577856fddfa5416",
         "js/client-orders-data.js": "11a88edd49b8e6ac",
         "js/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/credentials.js": "d09988397825b537",
@@ -637,7 +637,7 @@
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/calculator-config.js": "a15c7e07196db320",
-        "js/client-order-model.js": "19f28b2f7799d8ab",
+        "js/client-order-model.js": "6577856fddfa5416",
         "js/client-orders/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/client-orders/dom.js": "8a8fcbe6f293e135",
         "js/client-orders/firebase-client-orders.js": "c71cda513280f685",

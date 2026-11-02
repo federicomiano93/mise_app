@@ -1906,6 +1906,14 @@ service cloud.firestore {
         // phone mid-order.
         allow create, update: if managesClients(lid)
           && stampedFor(lid)
+          // ⚠️ NEVER A PERSON'S OWN ACCOUNT (security audit, 2 Nov 2026). The grant
+          // goes to whatever uid the document is named after, and nothing tied it to
+          // the throwaway account the link flow creates: a manager could name their
+          // OWN uid, and after being removed from the business still read a client's
+          // product list and rewrite that client's orders — which feed the Calculator.
+          // An ordering account never has a users/{uid} document (see orderClientOf);
+          // a member, or a former member, always does. One read, and only on a write.
+          && !exists(/databases/$(database)/documents/users/$(uid))
           && request.resource.data.keys().hasOnly(
                ['bakery', 'clientId', 'clientName', 'createdAt', 'linkToken'])
           && request.resource.data.clientId is string

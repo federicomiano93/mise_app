@@ -2453,6 +2453,18 @@ async function clientOrders() {
       bakery: 'main', clientId: 'c-three', clientName: 'CLIENT C',
       createdAt: 'now', linkToken: 'a'.repeat(43),
     }));
+  // ⚠️ NEVER A PERSON'S OWN ACCOUNT (security audit, 2 Nov 2026): a manager who named
+  // their own uid kept a client's menu and orders after being removed from the business.
+  await expectDenied('a manager CANNOT turn their own account into a client\'s', () =>
+    wholeWrite(`${L}/client-accounts/${MAYA.uid}`,
+      { bakery: 'main', clientId: 'c-three', clientName: 'CLIENT C', createdAt: 'now' },
+      asAccount(MAYA)));
+  await expectDenied('…nor the owner hand a client\'s grant to any member\'s account', () =>
+    wholeWrite(`${L}/client-accounts/${SAM.uid}`,
+      { bakery: 'main', clientId: 'c-three', clientName: 'CLIENT C', createdAt: 'now' }));
+  await expectDenied('…nor to the account of a member of another business', () =>
+    wholeWrite(`${L}/client-accounts/${BOB.uid}`,
+      { bakery: 'main', clientId: 'c-three', clientName: 'CLIENT C', createdAt: 'now' }));
   await expectDenied('a link token cannot become a payload of its own', () =>
     wholeWrite(`${L}/client-accounts/${NOBODY.uid}`, {
       bakery: 'main', clientId: 'c-three', clientName: 'CLIENT C',

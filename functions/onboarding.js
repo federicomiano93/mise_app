@@ -679,6 +679,32 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
 
     const { locationId, role, title } = doc;
 
+    // ⚠️⚠️ AN INVITATION IS ONLY AS GOOD AS THE OWNER WHO SENT IT (security audit,
+    // 2 Nov 2026). A code stayed valid for its whole lifetime even after the owner
+    // who minted it was removed or demoted — and nothing could revoke it. So an
+    // owner about to be removed could mint an OWNER link, get removed, open it, be
+    // an owner again (the "already a member" check passes, because they no longer
+    // are), and then remove the partner who removed them. The same held for a
+    // manager link sent to the wrong WhatsApp contact by an owner who has since left.
+    //
+    // Asked HERE, inside the transaction and before any write, of the creator's
+    // membership as it is NOW. Removing or demoting an owner therefore kills every
+    // invitation they sent, with no list of codes to keep and nothing to forget.
+    //
+    // ⚠️ NOT FOR A NEW CUSTOMER'S OWNER LINK (purpose 'customer'): that one is
+    // minted by the app's admin for a venue that has nobody in it yet, so its
+    // creator is never a member there. reissueOwnerLink and deleteWorkspace guard it.
+    // Anything else — a staff code, or one written before `purpose` existed — must
+    // name a creator who is still the owner, and a missing or odd creator fails.
+    if (doc.purpose !== 'customer') {
+      const creator = typeof doc.createdBy === 'string' && /^[A-Za-z0-9]{1,128}$/.test(doc.createdBy)
+        ? doc.createdBy : null;
+      const creatorSnap = creator ? await tx.get(db().doc(`users/${creator}`)) : null;
+      const creatorAccess = creatorSnap && creatorSnap.exists
+        ? membershipIn(creatorSnap.data(), locationId) : false;
+      if (creatorAccess !== 'owner') return { ok: false, status: 'revoked' };
+    }
+
     // ⚠️⚠️ A CODE MAY NOT LOWER SOMEBODY WHO IS ALREADY IN, AND THE WORST CASE IS
     // THE OWNER'S OWN. The membership write below is a set() with merge, so it
     // OVERWRITES users/{uid}.locations[locationId] with whatever the code says. An
@@ -828,6 +854,12 @@ export const setMemberRole = onCall(CALL, async (request) => {
     if (role === null) {
       tx.set(userRef, { locations: { [locationId]: FieldValue.delete() } }, { merge: true });
       tx.delete(memberRef);
+      // ⚠️ AND ANY CLIENT GRANT ON THEIR OWN ACCOUNT (security audit, 2 Nov 2026). A
+      // manager could name their own uid in client-accounts and, once removed, keep
+      // reading that client's products and rewriting its orders. The rules now refuse
+      // a grant on a member's account; this clears one written before they did. In
+      // the same transaction, so nobody is ever out of the team but still a client.
+      tx.delete(db().doc(`locations/${locationId}/client-accounts/${targetUid}`));
       return { removed: true };
     }
     tx.set(userRef,
