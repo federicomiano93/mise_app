@@ -516,6 +516,63 @@ test('⚠️ corrected in the air, then the order was placed: the correction doe
   assert.equal(second.entries.flour, undefined);
 });
 
+test('a correction that waited offline through another open still counts the write it corrected', async () => {
+  await correctedThenGone({}, 5, 0);
+  await openPage(server());                   // no answer from the server: the note is written again
+  const landed = server({ flour: { qty: 5, stock: 0 } });
+  const third = await openPage(landed);
+  await answer(landed);
+  assert.equal(third.entries.flour.qty, 0);
+  await pause();
+  assert.deepEqual(sent().map(({ entries }) => entries), [{ flour: { qty: 0, unit: '', supplierId: '' } }]);
+});
+
+test('typed on the new page: the old write in the air no longer speaks for that line', async () => {
+  const first = await openPage(server());
+  stub.holdSaves();
+  type(first, 'flour', { qty: 5 });
+  await pause();
+  type(first, 'flour', { qty: 0, stock: 4 });
+  stub.letSavesThrough();
+  const second = await openPage(server());    // the shelf count stays in the note, the 5 must not
+  type(second, 'flour', { qty: 8 });
+  assert.equal('air' in note().entries.flour, false);
+});
+
+test('the 5 landed inside the pause of its correction, page gone: the 0 goes out', async () => {
+  const first = await openPage(server());
+  stub.holdSaves();
+  type(first, 'flour', { qty: 5 });
+  await pause();
+  type(first, 'flour', { qty: 0 });
+  stub.held[0].resolve();
+  await settle();
+  stub.calls.saveDoc.length = 0;
+  stub.letSavesThrough();
+  const landed = server({ flour: { qty: 5, stock: 0 } });
+  await openPage(landed);
+  await answer(landed);
+  await pause();
+  assert.deepEqual(sent().map(({ entries }) => entries), [{ flour: { qty: 0, unit: '', supplierId: '' } }]);
+});
+
+test('a correction that turned out to need nothing does not cost another line its day stamp', async () => {
+  const first = await openPage(server());
+  stub.holdSaves();
+  type(first, 'flour', { qty: 5 });
+  await pause();
+  type(first, 'flour', { qty: 0 });
+  type(first, 'salt', { qty: 2 }, 'sup1');
+  stub.calls.saveDoc.length = 0;
+  stub.letSavesThrough();
+  const second = await openPage(server());    // the 5 never reached the queue
+  await answer(server());
+  await pause();
+  assert.deepEqual(sent()[0].entries, { salt: { qty: 2, unit: '', supplierId: '' } });
+  assert.deepEqual(sent()[0].days, { sup1: DAY });
+  assert.equal(second.days.sup1, DAY);
+});
+
 test('the note keeps the write in the air only when it says something else', async () => {
   const page = await openPage(server());
   stub.holdSaves();

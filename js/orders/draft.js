@@ -63,9 +63,9 @@ let known = { entries: {}, days: {} };
 // ⚠️ IT IS ALWAYS «WHAT DIFFERS FROM `known`» (OR FROM A WRITE IN THE AIR: `differences`),
 // RECOMPUTED AT EVERY CHANGE, AND IT IS EXACTLY WHAT A SAVE SENDS. It used to only grow,
 // hold whole rows and be sent together with the screen's days map as it was at the
-// keystroke; each of these put
-// back quantities of an order another phone had just placed (found building Mise 2's
-// Orders, 28 Oct 2026 — app/src/orders/draftSync.ts is the reviewed twin):
+// keystroke; each of these put back quantities of an order another phone had just placed
+// (found building Mise 2's Orders, 28 Oct 2026 — app/src/orders/draftSync.ts is the
+// reviewed twin):
 //   • a line corrected back inside the pause, or typed to the value another phone had
 //     just written, stayed claimed for ever, came back on screen once that order was
 //     placed, and was written with the next keystroke;
@@ -128,8 +128,10 @@ function dayCarried(id) {
 // that write (about 5 s on the lab tablet, on a freshly opened page), «5 put back to 0»
 // matches `known`, so measured against `known` alone it said nothing, and the 5 then
 // landed and came back, on screen and on the server. So a field a write in the air says
-// differently is claimed too. ONLY a line and a day still on the screen: one gone from it
-// is an order placed, and a blank row written now would outlive its clear.
+// differently is claimed too. ONLY a line and a day the page still holds: one it has just
+// forgotten is an order placed, and a blank row written now would outlive its clear. A redraw
+// gives that line a blank row back (entryFor), and the next keystroke then writes it at zero:
+// wanted, because a 5 landing after the clear would otherwise stay.
 function differences(entries, days) {
   const rows = {};
   const ids = new Set(Object.keys(changedEntries(entries, known.entries)));
@@ -190,7 +192,8 @@ function detach(entries) {
 // reaches Firestore's queue about 5 s after the keystroke, and a reload before that lost the
 // number for good. So every claim is also noted on this device, in the same keystroke
 // (draft-journal.js), until a snapshot shows it: Firestore only reports a write after storing it
-// in the browser's database, so from then on the queue answers for it.
+// in the browser's database, so from then on the queue answers for it. A correction stays noted
+// until the writes it corrects have landed too.
 //
 // ⚠️⚠️ THE NOTE IS NEVER SENT BLIND, AND NEVER ON THE WORD OF THE OFFLINE COPY. It can be hours old
 // by the time the page opens, and the copy on this device may not know that a colleague has placed
@@ -330,7 +333,11 @@ async function settleRestored() {
     if (isEmpty(entries[id])) delete entries[id];
   });
   const quantities = rows => Object.values(rows).filter(row => GROUP.some(field => field in row)).length;
-  const typed = quantities(Object.values(left.entries).map(({ row }) => row));
+  // A correction whose line already reads as it wanted asked for nothing: it is no line dropped.
+  const typed = quantities(Object.entries(left.entries)
+    .filter(([id, { row, air }]) => !air?.length
+      || GROUP.filter(field => field in row).some(field => row[field] !== stored(known.entries[id])[field]))
+    .map(([, { row }]) => row));
   const back = quantities(entries);
   const anyLine = !isEmpty(entries);
   Object.entries(entries).forEach(([id, row]) => { pending.entries[id] = { ...row, ...pending.entries[id] }; });
@@ -475,19 +482,22 @@ function sendPending() {
     known = { entries, days };
     // Release only what was actually sent, and only if it has not been typed over in
     // the meantime — a value changed again while this write was in flight is still
-    // this phone's, and must stay claimed. The group only as a whole.
+    // this phone's, and must stay claimed. The group only as a whole. ⚠️ NEVER WHILE A
+    // LATER WRITE STILL CARRIES THE FIELD: 5, then 0, then 5 again, and the first 5
+    // landing would release the last one, leaving the 0 to win.
     Object.entries(sent.entries).forEach(([id, row]) => {
       const held = pending.entries[id];
       if (!held) return;
       const group = GROUP.filter(field => field in held);
-      if (group.length && group.every(field => held[field] === row[field])) {
+      if (group.length && !group.some(field => inAir(id, field))
+        && group.every(field => held[field] === row[field])) {
         group.forEach(field => { delete held[field]; });
       }
-      if ('stock' in held && held.stock === row.stock) delete held.stock;
+      if ('stock' in held && !inAir(id, 'stock') && held.stock === row.stock) delete held.stock;
       if (isEmpty(held)) delete pending.entries[id];
     });
     Object.entries(sent.days).forEach(([id, day]) => {
-      if (pending.days[id] === day) delete pending.days[id];
+      if (!dayInAir(id) && pending.days[id] === day) delete pending.days[id];
     });
     saveJournal();
     return result;
@@ -496,7 +506,8 @@ function sendPending() {
     // ⚠️ A REFUSED WRITE HANDS ITS TYPING BACK. A change made while it was in the air
     // may have dropped those fields from the claims — Firestore showed the write at
     // once, so they matched `known` — and the snapshot that takes the write back would
-    // then erase them. Each group or stock goes back unless typed over since. The
+    // then erase them. Each group or stock goes back unless typed over since, or unless
+    // a later write still in the air already says something newer about it. The
     // baseline forgets those fields too (it may hold Firestore's showing of this very
     // write), so a keystroke before the take-back arrives still counts them as ours.
     const entries = { ...known.entries };
@@ -505,7 +516,7 @@ function sendPending() {
       const groupHeld = GROUP.some(field => field in held);
       const base = { ...(entries[id] || {}) };
       Object.keys(row).forEach(field => {
-        const typedOver = field === 'stock' ? 'stock' in held : groupHeld;
+        const typedOver = (field === 'stock' ? 'stock' in held : groupHeld) || inAir(id, field);
         if (!typedOver) held[field] = row[field];
         delete base[field];
       });
@@ -514,7 +525,7 @@ function sendPending() {
     });
     const days = { ...known.days };
     Object.entries(sent.days).forEach(([id, day]) => {
-      if (!(id in pending.days)) pending.days[id] = day;
+      if (!(id in pending.days) && !dayInAir(id)) pending.days[id] = day;
       delete days[id];
     });
     known = { entries, days };

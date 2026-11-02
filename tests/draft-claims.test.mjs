@@ -366,9 +366,144 @@ test('a correction outlives the refusal of the write it corrects', async () => {
   snapshot({ d11: { qty: 3, stock: 0 } });         // Firestore takes the write back
   assert.equal(page.entries.d11.qty, 3);
   await pause();
-  // Nothing is owed: the server never took the 5. A second write of the 3 would be harmless too.
-  stub.held.slice(1).forEach(write => write.resolve());
-  await settle();
+  assert.equal(stub.held.length, 1, 'the take-back shows the 3: nothing is owed');
   snapshot({ d11: { qty: 3, stock: 0 } });
   assert.equal(page.entries.d11.qty, 3);
+});
+
+test('refused, and the pause ends before the take-back: the 3 goes out, what the screen says', async () => {
+  stub.holdSaves();
+  snapshot({ d11b: { qty: 3, stock: 0 } });
+  type('d11b', { qty: 5 });
+  await pause();
+  type('d11b', { qty: 3 });
+  stub.held[0].reject(new Error('permission-denied'));
+  await settle();
+  await pause();
+  // The server never took the 5, so this repeats what it holds: the same exposure as any keystroke,
+  // pinned so that a change to it is a decision.
+  assert.deepEqual(stub.held[1]?.data.entries, { d11b: { qty: 3, unit: '', supplierId: '' } });
+  stub.held[1].resolve();
+  await settle();
+});
+
+test('a refused write does not come back over a correction already on its way', async () => {
+  stub.holdSaves();
+  snapshot({});
+  type('d12', { qty: 5 });
+  await pause();
+  type('d12', { qty: 0 });
+  await pause();
+  type('d12b', { qty: 1 });                        // the 0 is on its way, so its claim is dropped
+  stub.held[0].reject(new Error('permission-denied'));
+  await settle();
+  snapshot({});                                    // Firestore takes the write back
+  assert.equal(page.entries.d12?.qty ?? 0, 0, 'the refused 5 stays off the screen');
+  await pause();
+  assert.deepEqual(Object.keys(stub.held[2].data.entries), ['d12b'], 'and out of the next write');
+  stub.held.slice(1).forEach(write => write.resolve());
+  await settle();
+});
+
+// Changing one's mind twice: the first write lands, and its value is the one typed last.
+test('5, 0, 5 again: the first 5 landing inside the pause does not stop the last 5 going out', async () => {
+  stub.holdSaves();
+  snapshot({});
+  type('d13', { qty: 5 });
+  await pause();
+  type('d13', { qty: 0 });
+  await pause();
+  type('d13', { qty: 5 });
+  stub.held[0].resolve();
+  await settle();
+  await pause();
+  assert.deepEqual(stub.held[2]?.data.entries, { d13: { qty: 5, unit: '', supplierId: '' } });
+  stub.held.slice(1).forEach(write => write.resolve());
+  await settle();
+  assert.equal(page.entries.d13.qty, 5);
+  assert.equal(stub.held.length, 3, 'and that is the end of it');
+});
+
+test('5, 7, 5 again on a saved line ends at 5, not at the number in the middle', async () => {
+  stub.holdSaves();
+  snapshot({ d14: { qty: 3, stock: 0 } });
+  type('d14', { qty: 5 });
+  await pause();
+  type('d14', { qty: 7 });
+  await pause();
+  type('d14', { qty: 5 });
+  stub.held[0].resolve();
+  await settle();
+  await pause();
+  assert.deepEqual(stub.held[2]?.data.entries, { d14: { qty: 5, unit: '', supplierId: '' } });
+  stub.held.slice(1).forEach(write => write.resolve());
+  await settle();
+});
+
+test('a shelf count 2, 1, 2 again ends at 2', async () => {
+  stub.holdSaves();
+  snapshot({ d15: { qty: 3, stock: 0 } });
+  type('d15', { stock: 2 });
+  await pause();
+  type('d15', { stock: 1 });
+  await pause();
+  type('d15', { stock: 2 });
+  stub.held[0].resolve();
+  await settle();
+  await pause();
+  assert.deepEqual(stub.held[2]?.data.entries, { d15: { stock: 2 } });
+  stub.held.slice(1).forEach(write => write.resolve());
+  await settle();
+});
+
+test('a day stamp moved and moved back ends where it was last put', async () => {
+  stub.holdSaves();
+  snapshot({ d16: { qty: 2, stock: 0 } }, { aldo: '2026-10-27' });
+  page.days.aldo = DAY;
+  draft.saveDraftNow(page.entries, page.days);
+  page.days.aldo = '2026-10-29';
+  draft.saveDraftNow(page.entries, page.days);
+  page.days.aldo = DAY;
+  draft.scheduleDraftSave(page.entries, page.days);
+  stub.held[0].resolve();
+  await settle();
+  await pause();
+  assert.deepEqual(stub.held[2]?.data.days, { aldo: DAY });
+  stub.held.slice(1).forEach(write => write.resolve());
+  await settle();
+});
+
+test('with all three writes in the air, the first landing leaves the last one\'s claim standing', async () => {
+  stub.holdSaves();
+  snapshot({});
+  type('d17', { qty: 5 });
+  await pause();
+  type('d17', { qty: 0 });
+  await pause();
+  type('d17', { qty: 5 });
+  await pause();
+  stub.held[0].resolve();
+  await settle();
+  snapshot({ d17: { qty: 0, stock: 0 } });         // a snapshot showing the write in the middle
+  assert.equal(page.entries.d17.qty, 5);
+  type('d17b', { qty: 1 });
+  await pause();
+  assert.deepEqual(Object.keys(stub.held[3].data.entries), ['d17b'], 'the 5 is already on its way');
+  stub.held.slice(1).forEach(write => write.resolve());
+  await settle();
+});
+
+// `differences` claims what the screen holds, and a redraw gives a placed line a blank row back
+// (entryFor): the next keystroke writes it at zero. Wanted: a 5 landing after the clear would stay.
+test('a line placed while its write is in the air and then redrawn is written at zero', async () => {
+  stub.holdSaves();
+  snapshot({ d18: { qty: 3, stock: 0 } });
+  type('d18', { qty: 5 });
+  await pause();
+  page.entries.d18 = { qty: 0, stock: 0 };
+  type('d18b', { qty: 1 });
+  await pause();
+  assert.deepEqual(stub.held[1].data.entries.d18, { qty: 0, unit: '', supplierId: '' });
+  stub.held.forEach(write => write.resolve());
+  await settle();
 });
