@@ -67,10 +67,10 @@ export function catalogueOriginFromHash(hash) {
 
 // May this person open Orders in this venue? The same question js/auth-gate.js asks for
 // orders.html: its section AND its card.
-export function mayOpenOrders(locationDoc, canManage) {
+export function mayOpenOrders(locationDoc, canManage, role) {
   if (!locationDoc || typeof locationDoc !== 'object') return false;
   return isSectionAllowed(locationDoc, 'orders')
-    && cardVisibleTo(locationDoc, canManage === true, 'orders');
+    && cardVisibleTo(locationDoc, canManage === true, 'orders', role);
 }
 
 // May this person open Food cost in this venue?
@@ -81,8 +81,8 @@ export function mayOpenOrders(locationDoc, canManage) {
 //
 // ⚠️ NO VENUE, NO. Before the session has opened a venue there is nothing to judge by,
 // and allowedSections() alone would answer «allowed» for a document that is not there.
-export function mayOpenFoodCost(locationDoc, canManage) {
+export function mayOpenFoodCost(locationDoc, canManage, role) {
   if (!locationDoc || typeof locationDoc !== 'object') return false;
   return isSectionAllowed(locationDoc, 'foodcost')
-    && cardVisibleTo(locationDoc, canManage === true, 'foodcost');
+    && cardVisibleTo(locationDoc, canManage === true, 'foodcost', role);
 }

@@ -122,14 +122,16 @@ export function openHomeSettings(session) {
       section(t('settings.home.you'), [awayRow]),
       section(t('settings.home.venue'), [
         // ⚠️ OWNER AND MANAGER, which includes a head chef — Federico's rule: everybody
-        // else uses the app's language and cannot change it.
-        session.canManage ? item(t('lang.title'), t('lang.intro'), async () => {
+        // else uses the app's language and cannot change it. canManageVenue, not canManage:
+        // a partial owner has canManage but changes nothing of the venue.
+        session.canManageVenue ? item(t('lang.title'), t('lang.intro'), async () => {
           const { openLanguage } = await import('./staff/language.js');
           openLanguage(session);
         }) : null,
         // ⚠️ OWNER AND MANAGER — who decides which cards the employees see. The server
-        // refuses everybody else too (setStaffCard).
-        session.canManage ? item(t('homeCards.title'), t('homeCards.intro'), async () => {
+        // refuses everybody else too (setStaffCard) — a partial owner included, hence
+        // canManageVenue.
+        session.canManageVenue ? item(t('homeCards.title'), t('homeCards.intro'), async () => {
           const { openHomeCards } = await import('./staff/home-cards-screen.js');
           openHomeCards(session);
         }) : null,

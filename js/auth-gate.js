@@ -908,7 +908,8 @@ function render(session) {
       // card that an address typed by hand walks straight past is not hidden. This one
       // is NOT backed by the rules and is not meant to be — it is a display choice, not
       // a permission (js/home-cards.js). Owners, managers and head chefs pass always.
-      if (pageCard && !cardVisibleTo(session.location, session.canManage, pageCard)) {
+      // ⚠️ A PARTIAL OWNER'S CARDS ARE ASKED HERE TOO, and those ARE backed by the rules.
+      if (pageCard && !cardVisibleTo(session.location, session.canManage, pageCard, session.role)) {
         location.replace(HOME);
         return;
       }

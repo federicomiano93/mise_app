@@ -85,6 +85,8 @@ const DICTIONARIES = Object.freeze({
     // where that is easiest to get wrong. `role.staff` shows «Employee»; the
     // value in users/{uid} stays 'staff' whatever any language calls it.
     'role.owner': 'Owner',
+    'role.ownerSales': 'Sales owner',
+    'role.ownerKitchen': 'Kitchen owner',
     'role.manager': 'Manager',
     'role.headChef': 'Head chef',
     'role.staff': 'Employee',
@@ -108,6 +110,8 @@ const DICTIONARIES = Object.freeze({
     'people.add.digits': 'Read out a code',
     'people.add.digitsStaffOnly': 'A manager, a head chef or an owner is invited with a link. A six-digit code is for employees only.',
     'role.owner.inSentence': 'owner',
+    'role.ownerSales.inSentence': 'sales owner',
+    'role.ownerKitchen.inSentence': 'kitchen owner',
     'role.manager.inSentence': 'manager',
     'role.headChef.inSentence': 'head chef',
     'role.staff.inSentence': 'employee',
@@ -118,6 +122,8 @@ const DICTIONARIES = Object.freeze({
     // because the screen said so. «Head chef» must keep saying out loud that it
     // is the manager level under another name, or four choices read as four levels.
     'role.means.owner': 'Everything, including adding people and setting their roles.',
+    'role.means.ownerSales': 'Runs the sales side: Food cost, with its purchase prices, and the clients. Does not use the kitchen screens, cannot add people or change the app language and Home cards.',
+    'role.means.ownerKitchen': 'Runs the kitchen: Calculator, recipes, pastries, supplier orders, stocktake and purchase prices. Sees no selling prices, margins or labour cost, does not manage clients, cannot add people or change the app language and Home cards.',
     'role.means.manager': 'Runs this location: can delete suppliers, ingredients, recipes and products. Cannot add people.',
     'role.means.headChef': 'The same as Manager — it is only the job title that differs. Runs this location: can delete suppliers, ingredients, recipes and products. Cannot add people.',
     'role.means.staff': 'Does the daily work — quantities, doughs, orders. Cannot delete things or add people.',
@@ -126,6 +132,8 @@ const DICTIONARIES = Object.freeze({
     'people.confirm.manager': 'Make {name} a manager?',
     'people.confirm.headChef': 'Make {name} the head chef?',
     'people.confirm.staff': 'Make {name} an employee?',
+    'people.confirm.ownerSales': 'Make {name} the sales owner?',
+    'people.confirm.ownerKitchen': 'Make {name} the kitchen owner?',
 
     // ⚠️ THE PROMISE IN THE OLD COMMENT HERE, KEPT — AND THE DRIFT IT PREDICTED
     // HAD ALREADY HAPPENED. It said the button name was repeated rather than
@@ -1002,6 +1010,8 @@ const DICTIONARIES = Object.freeze({
     'orders.handMade': 'Added by hand',
     'orders.registry.loadFailed': 'Could not load the suppliers. Check your connection and try again.',
     'orders.registry.whichList': 'Which list to show',
+    'orders.registry.notArrived.title': 'This list has not arrived yet',
+    'orders.registry.notArrived.sub': 'Check your connection: it will appear here as soon as it arrives.',
     // The example follows the interface language (Italian writes «7,20»): since 4 Oct 2026
     // these boxes are text fields that read «7,20» and «7.20» alike (currency.js typedDecimal).
     'orders.eg.packWeight': 'e.g. 2.5',
@@ -1761,6 +1771,10 @@ const DICTIONARIES = Object.freeze({
     'inv.nothingMatches': 'Nothing matches.',
     'inv.empty.title': 'No products yet',
     'inv.empty.sub': 'They come from Ingredients & suppliers.',
+    'inv.loading': 'Loading the products…',
+    'inv.notArrived.title': 'The products have not arrived yet',
+    'inv.notArrived.sub': 'Check your connection: they will appear here as soon as they arrive.',
+    'inv.loadFailed': 'Could not load the products. Check your connection and reload the page.',
     'inv.noCategory': 'No category',
     'inv.unnamedProduct': 'Product with no name',
     'inv.packsShort': 'packs',
@@ -1836,6 +1850,8 @@ const DICTIONARIES = Object.freeze({
     'inv.reopenOk': 'Reopen',
     'inv.notSavedYet': 'Not saved online yet. The count is safe on this phone and goes up on its own.',
     'inv.liveSyncInterrupted': 'Live updates interrupted — reopen the page to reconnect.',
+    'inv.notReady': 'Not yet: this month’s figures have not arrived. Check your connection and try again.',
+    'inv.closedElsewhere': 'This month has just been closed on another device.',
     'help.stocktake': 'Once a month, count what is on the shelves. The app already knows what you had and what you bought, so it works out what you used.',
     'help.stocktakeEmpty': 'A box left empty means you have not counted that product yet — it is never read as zero, because a product nobody counted would otherwise look entirely used up.',
     'help.stocktakeClose': 'Closing the month freezes its figures and opens the next one with what is left on the shelves today, so you only ever write the opening figures once.',
@@ -3364,6 +3380,8 @@ const DICTIONARIES = Object.freeze({
   }),
   it: Object.freeze({
     'role.owner': 'Titolare',
+    'role.ownerSales': 'Titolare vendita',
+    'role.ownerKitchen': 'Titolare cucina',
     'role.manager': 'Responsabile',
     'role.headChef': 'Chef di cucina',
     'role.staff': 'Dipendente',
@@ -3381,11 +3399,15 @@ const DICTIONARIES = Object.freeze({
     'people.add.digits': 'Detta un codice',
     'people.add.digitsStaffOnly': 'Un responsabile, uno chef di cucina o un titolare si invita con un link. Il codice di sei cifre è solo per i dipendenti.',
     'role.owner.inSentence': 'titolare',
+    'role.ownerSales.inSentence': 'titolare vendita',
+    'role.ownerKitchen.inSentence': 'titolare cucina',
     'role.manager.inSentence': 'responsabile',
     'role.headChef.inSentence': 'chef di cucina',
     'role.staff.inSentence': 'dipendente',
 
     'role.means.owner': 'Tutto, compreso aggiungere persone e decidere che ruolo hanno.',
+    'role.means.ownerSales': 'Gestisce la parte vendita: Food cost, con i suoi prezzi di acquisto, e clienti. Non usa le schermate della cucina, non può aggiungere persone né cambiare la lingua dell’app e le schede della Home.',
+    'role.means.ownerKitchen': 'Gestisce la cucina: Calcolatore, ricette, paste, ordini ai fornitori, magazzino e prezzi di acquisto. Non vede prezzi di vendita, margini e costo del lavoro, non gestisce i clienti, non può aggiungere persone né cambiare la lingua dell’app e le schede della Home.',
     'role.means.manager': 'Gestisce questo locale: può cancellare fornitori, ingredienti, ricette e prodotti. Non può aggiungere persone.',
     'role.means.headChef': 'Identico a Responsabile — cambia solo il nome del ruolo. Gestisce questo locale: può cancellare fornitori, ingredienti, ricette e prodotti. Non può aggiungere persone.',
     'role.means.staff': 'Fa il lavoro di ogni giorno — quantità, impasti, ordini. Non può cancellare niente né aggiungere persone.',
@@ -3396,6 +3418,8 @@ const DICTIONARIES = Object.freeze({
     'people.confirm.manager': 'Rendere {name} responsabile?',
     'people.confirm.headChef': 'Rendere {name} chef di cucina?',
     'people.confirm.staff': 'Rendere {name} dipendente?',
+    'people.confirm.ownerSales': 'Rendere {name} titolare vendita?',
+    'people.confirm.ownerKitchen': 'Rendere {name} titolare cucina?',
 
     'people.joinsAs': 'Entra come {role} · {expires} · apre l’app, tocca “{button}”, crea il suo account e digita il codice.',
 
@@ -4090,6 +4114,8 @@ const DICTIONARIES = Object.freeze({
     'orders.handMade': 'Inserito a mano',
     'orders.registry.loadFailed': 'Non è stato possibile caricare i fornitori. Controlla la connessione e riprova.',
     'orders.registry.whichList': 'Quale elenco mostrare',
+    'orders.registry.notArrived.title': 'Questo elenco non è ancora arrivato',
+    'orders.registry.notArrived.sub': 'Controlla la connessione: comparirà qui appena arriva.',
     'orders.eg.packWeight': 'es. 2,5',
     'orders.eg.ratePerKg': 'es. 7,20 (un chilo)',
     'orders.exVatNote': 'I prezzi sono al netto dell’IVA.',
@@ -4838,6 +4864,10 @@ const DICTIONARIES = Object.freeze({
     'inv.nothingMatches': 'Nessun risultato.',
     'inv.empty.title': 'Ancora nessun prodotto',
     'inv.empty.sub': 'Arrivano da «Ingredienti e fornitori».',
+    'inv.loading': 'Caricamento dei prodotti…',
+    'inv.notArrived.title': 'I prodotti non sono ancora arrivati',
+    'inv.notArrived.sub': 'Controlla la connessione: compariranno qui appena arrivano.',
+    'inv.loadFailed': 'Non è stato possibile caricare i prodotti. Controlla la connessione e ricarica la pagina.',
     'inv.noCategory': 'Senza categoria',
     'inv.unnamedProduct': 'Prodotto senza nome',
     'inv.packsShort': 'conf.',
@@ -4894,6 +4924,8 @@ const DICTIONARIES = Object.freeze({
     'inv.carriedOver': { one: '{n} rimanenza iniziale portata avanti.', other: '{n} rimanenze iniziali portate avanti.' },
     'inv.nothingToCarry': 'Da quel mese non c’è niente da portare avanti.',
     'inv.carryFailed': 'Non riesco a leggere quel mese — controlla la connessione e riprova.',
+    'inv.notReady': 'Non ancora: i dati del mese non sono arrivati. Controlla la connessione e riprova.',
+    'inv.closedElsewhere': 'Questo mese è appena stato chiuso da un altro dispositivo.',
     'inv.closeMonth': 'Chiudi il mese',
     'inv.closeTitle': 'Chiudere il mese?',
     'inv.closeMessage': 'I numeri di {month} restano come sono e il mese dopo si apre con quello che c’è oggi sugli scaffali. Puoi sempre riaprirlo.',

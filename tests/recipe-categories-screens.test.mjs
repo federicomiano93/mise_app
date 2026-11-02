@@ -97,7 +97,7 @@ test('after a delete the focus goes to the next bin, never to the box: it would 
 });
 
 test('the Settings card is first on the screen and re-worded when the language arrives', () => {
-  assert.match(SETTINGS, /root\.append\(\s*categories\.card,\s*photoCard/);
+  assert.match(SETTINGS, /root\.append\(\s*categories\.card,[\s\S]{0,300}\.\.\.\(showPhoto \? \[photoCard\] : \[\]\)/);
   assert.match(SETTINGS, /categories\.dispose\(\)/);
   assert.match(SETTINGS, /stop = onLanguageChange\(\(\) => \{ if \(root\.isConnected\) paint\(\); \}\)/);
   assert.match(SETTINGS, /refreshCategories: categories\.refresh/);

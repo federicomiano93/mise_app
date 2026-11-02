@@ -183,7 +183,7 @@ test('⚠️ a callable missing from index.js is not deployed at all', () => {
 test('the Home filters on the card, and passes the session\'s canManage', () => {
   const src = withoutComments(read('js/home-session.js'));
   assert.match(src, /import \{ cardVisibleTo, orderedCardIds \} from '\.\/home-cards\.js';/);
-  assert.match(src, /cardVisibleTo\(location, canManage, card\.dataset\.card\)/);
+  assert.match(src, /cardVisibleTo\(location, canManage, card\.dataset\.card, role\)/);
   assert.match(src, /filterCards\(session\);/);
 });
 
@@ -193,7 +193,7 @@ test('⚠️ the button is drawn only for somebody who can manage the venue', ()
   // Since 28 Sep 2026 the rows sit in cards (tokens.css .set-*): the gate is a
   // conditional inside the «venue» card instead of an if around an append.
   assert.match(src,
-    /session\.canManage \? item\(t\('homeCards\.title'\)[\s\S]{0,200}openHomeCards\(session\)/);
+    /session\.canManageVenue \? item\(t\('homeCards\.title'\)[\s\S]{0,200}openHomeCards\(session\)/);
 });
 
 test('⚠️ the page gate asks too, after the section check and before the page is shown', () => {
@@ -202,7 +202,7 @@ test('⚠️ the page gate asks too, after the section check and before the page
   const ready = src.slice(src.indexOf("case 'ready':"), src.indexOf('clearGate();', src.indexOf("case 'ready':")));
   assert.ok(ready.length > 100, 'the slice must hold the ready case');
   assert.match(ready,
-    /if \(pageCard && !cardVisibleTo\(session\.location, session\.canManage, pageCard\)\) \{\s*location\.replace\(HOME\);\s*return;/);
+    /if \(pageCard && !cardVisibleTo\(session\.location, session\.canManage, pageCard, session\.role\)\) \{\s*location\.replace\(HOME\);\s*return;/);
 });
 
 test('the screen lists only the cards the venue has, and writes only after the server agrees', () => {
@@ -259,14 +259,14 @@ test('the callable refuses a location id that could never name a folder', () => 
 });
 
 test('⚠️ the Home filter reads canManage by that name, not another flag under it', () => {
-  assert.match(read('js/home-session.js'), /function filterCards\(\{ location, canManage \}\)/,
+  assert.match(read('js/home-session.js'), /function filterCards\(\{ location, canManage, role \}\)/,
     '`isOwner: canManage` would still match every other check and take the cards away from managers');
 });
 
 test('⚠️ the «order to place today» banner is no door to a hidden Orders card', () => {
   const src = withoutComments(read('js/home-orders-badge.js'));
   assert.match(src, /import \{ cardVisibleTo \} from '\.\/home-cards\.js';/);
-  const guard = src.search(/if \(!cardVisibleTo\(session\.location, session\.canManage, 'orders'\)\) return;/);
+  const guard = src.search(/if \(!cardVisibleTo\(session\.location, session\.canManage, 'orders', session\.role\)\) return;/);
   assert.ok(guard > 0 && guard < src.indexOf('showOrdersHome();', guard),
     'the guard must stop it before anything is read, painted or notified');
 });

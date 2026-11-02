@@ -93,8 +93,8 @@ test('the one Delete gate, and the one price gate, are still where they were', (
   // ⚠️ Found 13 Sep 2026: the role alone let an owner of a venue WITHOUT Food cost put
   // a price write in the batch, and the rules refused the whole save.
   assert.match(codeOf(read('js/record-data.js')),
-    /export function mayWritePrices\(\) \{\s*const session = currentSession\(\);\s*return session\.canManage === true && session\.sections\?\.foodcost === true;\s*\}/,
-    'a price is written only by whoever runs the place AND only where Food cost is on — the rules\' canManage(lid, \'foodcost\')');
+    /export function mayWritePrices\(\) \{\s*const session = currentSession\(\);\s*return session\.canManage === true && isSectionAllowed\(session\.location, 'foodcost'\);\s*\}/,
+    'a price is written only by whoever runs the place AND only where the venue has Food cost — the rules\' managesPrices(lid), which the kitchen owner also passes');
   const rules = read('firestore.rules');
   const prices = rules.slice(rules.indexOf('match /ingredient-prices/{id}'), rules.indexOf('match /ingredients/{id}'));
   assert.match(prices, /allow create, update: if managesPrices\(lid\)/,

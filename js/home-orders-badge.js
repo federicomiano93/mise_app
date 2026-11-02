@@ -134,7 +134,7 @@ onSession(session => {
   // a page the gate then bounces back from reads as a broken app. The badge needs no
   // guard of its own — its card is already gone — but stopping here also spares the
   // two reads nobody would see.
-  if (!cardVisibleTo(session.location, session.canManage, 'orders')) return;
+  if (!cardVisibleTo(session.location, session.canManage, 'orders', session.role)) return;
   started = true;
   showOrdersHome();
 });
