@@ -228,7 +228,8 @@ test('the placeholder words are asked with t() inside a function, and re-asked w
   const paint = bodyOf(REGISTRY, 'paintPane');
   assert.match(paint, /t\(`orders\.registry\.pane\.\$\{which\}\.title`\)/);
   assert.match(paint, /t\(`orders\.registry\.pane\.\$\{which\}\.text`\)/);
-  assert.match(REGISTRY, /onLanguageChange\(paintPane\)/);
+  assert.match(REGISTRY, /onLanguageChange\(paintList\)/);
+  assert.match(bodyOf(REGISTRY, 'paintList'), /paintPane\(\)/);
   // ⚠️ Nothing at the top level of the module asks t(), or the boot language would be frozen.
   const topLevel = REGISTRY.replace(bodyOf(REGISTRY, 'buildRegistry'), '');
   assert.doesNotMatch(topLevel, /\bt\(/);

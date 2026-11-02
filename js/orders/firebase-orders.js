@@ -104,15 +104,33 @@ function withBakery(data) {
 // screen looking exactly like a location with no data in it, and onSnapshot does
 // NOT resubscribe after an error, so it stayed that way until a reload. The
 // console line remains for diagnosis; it is not a substitute for telling the user.
-export async function watchCollection(name, onChange, onError) {
+//
+// `sayFromCache`: for a screen that says «there are none», which only the server can prove. onChange
+// also gets whether the answer came from the phone's copy, and an EMPTY one proves nothing: a cold
+// start with no signal reports an empty list from an empty cache.
+// ⚠️ includeMetadataChanges, OR THE SERVER'S «YES, EMPTY» NEVER ARRIVES: confirming an empty copy changes
+// no document, so Firestore would stay silent (the same trap as watchIngredientPrices). And it answers
+// again when the server confirms a full list too, so that one is dropped: an identical answer would
+// rebuild every row of the screen.
+export async function watchCollection(name, onChange, onError, { sayFromCache = false } = {}) {
   await authReady;
+  const ref = collection(db, pathFor(name));
+  const failed = err => {
+    console.error(`watchCollection(${name}) failed:`, err);
+    onError?.(err);
+  };
+  if (!sayFromCache) return onSnapshot(ref, snap => onChange(snap.docs.map(d => ({ id: d.id, ...d.data() }))), failed);
+  let emptyFromCache = null;
   return onSnapshot(
-    collection(db, pathFor(name)),
-    snap => onChange(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-    err => {
-      console.error(`watchCollection(${name}) failed:`, err);
-      onError?.(err);
+    ref,
+    { includeMetadataChanges: true },
+    snap => {
+      const nowEmptyFromCache = snap.empty && snap.metadata.fromCache;
+      if (nowEmptyFromCache === emptyFromCache && !snap.docChanges().length) return;
+      emptyFromCache = nowEmptyFromCache;
+      onChange(snap.docs.map(d => ({ id: d.id, ...d.data() })), snap.metadata.fromCache);
     },
+    failed,
   );
 }
 
