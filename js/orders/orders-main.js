@@ -21,9 +21,13 @@ import {
   watchCollection, watchDoc, saveDoc, COLLECTIONS,
   watchRecentHistory, getOlderHistory, getLegacyHistory,
   watchIngredientPrices, canManageHere, authReady, getPriceHistory,
-  deleteIngredientWithPrice, mayWritePrices,
+  deleteIngredientWithPrice, mayWritePrices, currentBakery,
 } from './firebase-orders.js';
 import { withPrices } from '../price-model.js';
+import {
+  readListCopy, writeListCopy, shouldShowCopy, bothLanded, supplierToOpen, mayWriteCopy,
+  LIST_COPY_WRITE_DELAY_MS,
+} from './list-copy.js';
 import { currentSession } from '../firebase.js';
 import { catalogueOriginFromHash } from '../recipe-link.js';
 import { el, groupBy } from './dom.js';
@@ -34,7 +38,7 @@ import { buildSupplierItems } from './supplier-items.js';
 import { buildOrderSummaryView } from './order-summary-view.js';
 import { paintOrderMoney } from './order-cost-view.js';
 import {
-  scheduleDraftSave, saveDraftNow, flushDraftSave, watchDraft, archiveSupplier, clearSupplier,
+  scheduleDraftSave, saveDraftNow, flushDraftSave, flushDraftWhenHidden, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
   confirmDelivery, resolveMissing, dropDeletedIngredientFromDraft, freezeUnitInDraft,
 } from './draft.js';
@@ -142,7 +146,15 @@ const state = {
   supplierFilter: false,        // supplier list showing only what is being ordered
   filterIds: null,              // FROZEN Set of ingredient ids, or null for "show everything"
   loaded: { suppliers: false, ingredients: false, draft: false, history: false },
+  // The supplier cards are on screen from the local copy (js/orders/list-copy.js), before the live
+  // lists landed. ⚠️ It NEVER touches `loaded`: every banner and check that needs live data keeps
+  // waiting for it. Nothing can be typed while it is true — opening a supplier is held, and the other
+  // doors are shut (whenLive).
+  showingCopy: false,
 };
+
+let heldSupplierId = null;       // the supplier tapped while showing the copy; opened once live data lands
+let copyWriteTimer = null;       // the one debounced timer that saves the list copy
 
 let olderLoader = null;          // pages of orders older than the live window; made when that listener starts
 let quietSummaryClose = false;   // closeSupplier() closing its own summary: no screen announcement
@@ -318,7 +330,8 @@ function releaseHeldLines(ids) {
 
 const resolveLens = memoLast(resolveSuppliers);
 function orderIngredients() {
-  return resolveLens(markedIngredients(), state.suppliers, state.loaded.suppliers, state.entries,
+  // «suppliers known» is true while the copy is shown, or its ingredients would be filed as supplierless.
+  return resolveLens(markedIngredients(), state.suppliers, state.loaded.suppliers || state.showingCopy, state.entries,
     overrideSignature(state.entries));
 }
 
@@ -327,7 +340,7 @@ function orderIngredients() {
 // keeps showing when one of them is ordered elsewhere this time.
 const resolveCatalogue = memoLast(resolveSuppliers);
 function catalogueIngredients() {
-  return resolveCatalogue(markedIngredients(), state.suppliers, state.loaded.suppliers);
+  return resolveCatalogue(markedIngredients(), state.suppliers, state.loaded.suppliers || state.showingCopy);
 }
 
 const sortActiveSuppliers = memoLast((suppliers, order) => sortSuppliersByOrder(
@@ -463,7 +476,16 @@ function syncInputsFromState() {
 function render() {
   const container = document.getElementById('suppliers-list');
   if (!container) return;
-  if (!state.loaded.suppliers || !state.loaded.ingredients) return;
+  if (!(state.loaded.suppliers && state.loaded.ingredients) && !state.showingCopy) return;
+
+  // From the local copy: the supplier cards and nothing else. No flat list, no quantity box, no
+  // banner, no totals — those wait for the live lists. An empty result paints nothing at all, so
+  // the «no suppliers» message can never flash before the real list arrives.
+  if (state.showingCopy) {
+    const copySuppliers = orderSupplierList();
+    if (copySuppliers.length) renderSupplierList(container, copySuppliers);
+    return;
+  }
 
   // ⚠️ THE RE-ORDER BANNER READS THE DRAFT, so it has to be redrawn here as well
   // as when history lands. The first driven run caught it: putting a missing
@@ -534,6 +556,8 @@ function drawPart(name, draw) {
 function flushRender(parts) {
   const incomingBefore = incomingDrawCount;
   if (parts.has('list')) drawPart('list', render);
+  // A supplier tapped while the copy was showing opens only now: live data is in and drawn.
+  if (heldSupplierId !== null) drawPart('held supplier', openHeldSupplier);
   const incomingDrawn = incomingDrawCount !== incomingBefore;
   if (parts.has('sync')) drawPart('sync', syncInputsFromState);
   else if (parts.has('money')) drawPart('money', paintMoney);
@@ -573,10 +597,11 @@ function renderSupplierList(container, suppliers) {
       onQuery: q => { state.supplierQuery = q; },
       onFilter: active => { state.supplierFilter = active; },
       onOpen: openSupplier,
-      onView: openSupplierItems,
-      onSummary: openSummary,
+      onView: whenLive(openSupplierItems),
+      onSummary: whenLive(openSummary),
       searchExtras: buildOrderTools(),
       favourites: () => ordersConfig.favouriteSuppliers,
+      onPainted: markWaitingRow,
     });
   }
   cardsView.repaint({
@@ -585,6 +610,115 @@ function renderSupplierList(container, suppliers) {
     entries: state.entries,
     forDay: futureDayOf,
   });
+}
+
+// ── The list copy: a tap is held, never acted on ─────────────────────────────────────────
+// While the cards come from the copy the draft may not have landed and a row may be out of date,
+// so opening a supplier (quantity boxes) would let somebody type onto the wrong numbers. openSupplier
+// sends every road here: the tap is remembered (last one wins) and the row says «wait» quietly; the
+// supplier opens by itself once both live lists are in (openHeldSupplier, from flushRender).
+function holdSupplier(supplierId) {
+  heldSupplierId = supplierId;
+  markWaitingRow();
+  sayWaitForLive();
+}
+
+function dropHeldSupplier() {
+  heldSupplierId = null;
+  markWaitingRow();
+}
+
+// The other doors stay shut on the copy: sending or recording would read rows the draft has not
+// reached, and the editors would save what they were shown. Such a tap only says «a moment».
+function whenLive(action) {
+  return (...args) => {
+    if (state.showingCopy) { sayWaitForLive(); return; }
+    action(...args);
+  };
+}
+
+function sayWaitForLive() {
+  setStatus(t('orders.copy.wait'));
+}
+
+function markWaitingRow() {
+  document.querySelectorAll('.supplier-row--waiting').forEach(row => {
+    row.classList.remove('supplier-row--waiting');
+    row.querySelector('.supplier-row-open')?.removeAttribute('aria-busy');
+  });
+  if (!state.showingCopy || !heldSupplierId) return;
+  const open = document.getElementById(`open-${heldSupplierId}`);
+  if (!open) return;
+  open.setAttribute('aria-busy', 'true');
+  open.closest('.supplier-row')?.classList.add('supplier-row--waiting');
+}
+
+// After the list has been drawn from live data. If the held supplier is gone, nothing opens.
+function openHeldSupplier() {
+  if (state.showingCopy || heldSupplierId === null) return;
+  // They moved on while waiting: a supplier screen must not jump over what they are reading now.
+  const movedOn = document.body.dataset.ordersTab !== 'order'
+    || document.getElementById('orders-alerts-btn')?.getAttribute('aria-expanded') === 'true'
+    || document.querySelector('.missing-overlay');
+  if (movedOn) { dropHeldSupplier(); return; }
+  const id = supplierToOpen(heldSupplierId, candidate => Boolean(findOrderSupplier(candidate)));
+  heldSupplierId = null;
+  if (id) openSupplier(id);
+}
+
+// Called by both live listeners: once both lists are in, the copy's job is over.
+function leaveCopyIfLive() {
+  if (!bothLanded(state.loaded)) return;
+  if (state.showingCopy) {
+    state.showingCopy = false;
+    clearStatusIf(t('orders.copy.wait'));
+  }
+  scheduleRender('list');
+  scheduleCopyWrite();
+}
+
+// A live stream failed with the copy on screen: no live list may ever come to replace it. Back to
+// what the page shows without a copy, an empty list and the «reload» message, never an old list
+// that looks real.
+function leaveCopyForGood() {
+  if (!state.showingCopy) return;
+  state.showingCopy = false;
+  heldSupplierId = null;
+  clearStatusIf(t('orders.copy.wait'));
+  if (!state.loaded.suppliers) state.suppliers = [];
+  if (!state.loaded.ingredients) { state.rawIngredients = []; state.ingredients = []; }
+  dropListViews();
+  const container = document.getElementById('suppliers-list');
+  if (container) container.textContent = '';
+  scheduleRender('incoming');
+  showAlerts();
+}
+
+// Debounced, one timer: stringifying ~300 documents must not sit in the first seconds of the page.
+// ⚠️ `rawIngredients`, NEVER `ingredients` (that one has the prices merged in).
+function scheduleCopyWrite() {
+  clearTimeout(copyWriteTimer);
+  copyWriteTimer = setTimeout(() => {
+    let lid = '';
+    try { lid = currentBakery(); } catch { return; }
+    if (!mayWriteCopy({ loaded: state.loaded, lid })) return;
+    writeListCopy(lid, state.suppliers, state.rawIngredients);
+  }, LIST_COPY_WRITE_DELAY_MS);
+}
+
+// When the cover lifts (a venue is open): paint the cards from the copy if the live lists are not
+// in yet. Does nothing otherwise, and nothing when there is no usable copy.
+function showListCopy() {
+  let lid = '';
+  try { lid = currentBakery(); } catch { return; }
+  if (!shouldShowCopy({ loaded: state.loaded, view: state.view })) return;
+  const copy = readListCopy(lid);
+  if (!copy) return;
+  state.suppliers = copy.suppliers;
+  state.rawIngredients = copy.ingredients;
+  state.ingredients = withPrices(state.rawIngredients, state.ingredientPrices);
+  state.showingCopy = true;
+  scheduleRender('list');
 }
 
 // The order TOTAL on the supplier's full-screen view — tablet only, and only for
@@ -607,6 +741,7 @@ function paintMoney() {
 // ⚠️ ALWAYS OPENS, never toggles: a notice that says «Cielo changed» must show
 // Cielo even when Cielo is already open — a toggle closed it (review of 28 Sep 2026).
 function openSupplier(supplierId) {
+  if (state.showingCopy) { holdSupplier(supplierId); return; }
   closeSupplierItems();         // two full-screen screens must never stack up
   closeSummary();
   closeAlertsPanel();           // the panel must never sit on top of a full screen
@@ -713,7 +848,8 @@ function restoreFocusAfterCard(ingredientId) {
 }
 
 function openEditIngredient(ing) {
-  if (addingIngredient || !mayAddIngredient()) return;
+  // ⚠️ From the copy the card would open with no price and old allergens, and an untouched Save writes them.
+  if (state.showingCopy || addingIngredient || !mayAddIngredient()) return;
   const item = state.ingredients.find(i => i.id === ing.id) || ing;
   addingIngredient = true;
   openIngredientEdit({
@@ -1021,7 +1157,7 @@ function buildOrderTools() {
     const label = el('span', { class: 'order-tools-label' });
     const btn = el('button', {
       type: 'button', class: 'order-tools-btn',
-      onClick: () => setView(state.view === 'suppliers' ? 'all' : 'suppliers'),
+      onClick: whenLive(() => setView(state.view === 'suppliers' ? 'all' : 'suppliers')),
     }, [
       el('span', { class: 'order-tools-icon', 'aria-hidden': 'true', icon: SWAP_SVG }),
       label,
@@ -1132,7 +1268,9 @@ function renderIncoming() {
 function incomingContext() {
   const suppliersById = {};
   (state.suppliers || []).forEach(s => { suppliersById[s.id] = s; });
-  const ingredientsById = lensById();
+  // Empty on the copy, as it was before the copy existed: the re-order list offers «put back» only
+  // for a line it knows, and an old list must not put a quantity back on a line that has gone since.
+  const ingredientsById = state.showingCopy ? {} : lensById();
 
   const ctx = {
     history: state.history,
@@ -1419,6 +1557,8 @@ function venueCountry() {
 }
 
 function showAlerts() {
+  // It can raise a browser notification, once per page, so an old supplier list must never feed it.
+  if (state.showingCopy && !state.loaded.suppliers) return;
   renderAlerts(document.getElementById('orders-alerts'), state.suppliers, new Date(), venueCountry());
 }
 
@@ -1707,7 +1847,7 @@ function renderListsButton() {
   const dot = document.getElementById('orders-lists-count');
   if (!btn || !dot) return;
   if (!listsButtonWired) {
-    btn.addEventListener('click', openRequestList);
+    btn.addEventListener('click', whenLive(openRequestList));
     listsButtonWired = true;
   }
   btn.hidden = ordersConfig.orderLists === false;
@@ -2722,6 +2862,7 @@ function setupTabs() {
     const button = document.getElementById(btn);
     if (!button) return;
     button.addEventListener('click', () => {
+      dropHeldSupplier();
       tabs.forEach(t => {
         document.getElementById(t.btn)?.classList.toggle('active', t.btn === btn);
         document.getElementById(t.panel)?.classList.toggle('active', t.panel === panel);
@@ -2790,10 +2931,10 @@ function setStatus(text, kind, autoHideMs) {
 // module load, before the venue's language is known, so a phrase fetched then
 // would be English on an Italian venue — which is exactly what these names were.
 function liveDataLost(what) {
-  return () => setStatus(
-    t('orders.liveConnectionLost', { what: what() }),
-    'error',
-  );
+  return () => {
+    leaveCopyForGood();
+    setStatus(t('orders.liveConnectionLost', { what: what() }), 'error');
+  };
 }
 
 // Hide the status line, but ONLY if it still shows `text`. Same guard as the
@@ -2828,7 +2969,7 @@ async function init() {
   setupViewSwitch();
   setupCatalogueBack();
   trackStickyHead(document.querySelector('.order-box-head'));
-  document.getElementById('orders-wa-btn')?.addEventListener('click', openSendScreen);
+  document.getElementById('orders-wa-btn')?.addEventListener('click', whenLive(openSendScreen));
 
   // ⚠️ WATCHTABLET FIRST, THEN THE PANEL: the panel's first count must see
   // whatever watchTablet already moved into it, including on a page that
@@ -2854,13 +2995,14 @@ async function init() {
     if (ok) clearStatusIf(t(DRAFT_SAVE_ERROR_KEY));
     else setStatus(t(DRAFT_SAVE_ERROR_KEY), 'error');
   });
+  flushDraftWhenHidden();
 
-  document.getElementById('place-all-btn')?.addEventListener('click', openPlaceAllScreen);
-  document.getElementById('clear-all-btn')?.addEventListener('click', openClearScreen);
+  document.getElementById('place-all-btn')?.addEventListener('click', whenLive(openPlaceAllScreen));
+  document.getElementById('clear-all-btn')?.addEventListener('click', whenLive(openClearScreen));
 
   const settingsBtn = document.getElementById('settings-footer-btn');
   if (settingsBtn) {
-    if (isAdmin) settingsBtn.addEventListener('click', openManagement);
+    if (isAdmin) settingsBtn.addEventListener('click', whenLive(openManagement));
     else settingsBtn.hidden = true;
   }
 
@@ -2913,6 +3055,11 @@ async function init() {
     .then(() => refreshHolidays(venueCountry()))
     .then(list => { console.log(`Holidays loaded: ${list.length} dates`); showAlerts(); });
 
+  // The cover has lifted once a venue is open: draw the supplier cards from the last good copy
+  // while the live lists load. .then, not await — nothing queues behind it. Every `state` and
+  // `let` it touches is declared above init(), so an early answer cannot hit a TDZ.
+  authReady.then(showListCopy);
+
   watchOrdersConfig();
 
   // Real-time draft: restores exact state on open and keeps staff in sync.
@@ -2930,6 +3077,9 @@ async function init() {
     state.days = draft.days || {};
     state.draftUpdatedAt = draft.updatedAt;
     state.loaded.draft = true;
+    // ⚠️ A line a page left behind has just come back, maybe with last night's day stamp, and the
+    // question «this was never placed» was asked before it was here.
+    if (draft.cameBack) pendingChecked = false;
     // Everything below is stored at once and drawn in one pass next frame (scheduleRender).
     if (overrideSignature(state.entries) !== overridesBefore
       || noteHeld(state.ingredients, state.entries, heldNotInUse) !== heldBefore) scheduleRender('list');
@@ -2995,6 +3145,7 @@ async function init() {
     // repaint. Two live collections feed one screen, so both must redraw it. Same
     // shape as the recipe cost that computed once and said "no cost yet" (v247).
     scheduleRender('list', 'history', 'incoming', 'reminders');
+    leaveCopyIfLive();
     // NOT deferred: showAlerts() also raises the browser notification for a holiday or a
     // delivery clash (notifications.js maybeNotify), which must fire even while this page is
     // in the background, where animation frames do not run. It is cheap.
@@ -3023,6 +3174,7 @@ async function init() {
     state.ingredients = withPrices(list, state.ingredientPrices);
     state.loaded.ingredients = true;
     scheduleRender('list', 'history', 'reminders');
+    leaveCopyIfLive();
     checkPendingOnce();
   }, liveDataLost(() => t('orders.live.ingredients')));
 }

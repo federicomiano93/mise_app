@@ -121,6 +121,67 @@ test('a price «da verificare» keeps its good points; with none left the ingred
   assert.deepEqual(partial.importFile.ingredients[0].prices.map((p) => p.invoiceDate), ['2026-09-01']);
 });
 
+test('a product only ever received free is created with no price and asks for a look', () => {
+  const FREE = { desc: 'SPEZIA OMAGGIO', code: 'FREE', qty: 5, unit: 'KG', total: 0 };
+  const K_FREE = `${SUPPLIER}|code:FREE`;
+  const result = built([FLOUR, FREE]);
+  const entry = result.importFile.ingredients.find((i) => i.key === K_FREE);
+  assert.ok(entry, 'it is in the import file');
+  assert.deepEqual(entry.prices, []);
+  assert.equal(entry.priceCheck, 'amount-zero-or-negative');
+  const row = result.products.find((p) => p.key === K_FREE);
+  assert.equal(row.inImport, true);
+  assert.equal(row.lastPrice, null);
+  const sel = selectImport(result, {});
+  assert.deepEqual(sel.groups.toCheck.map((g) => [g.key, g.reason]), [[K_FREE, 'amount-zero-or-negative']]);
+  assert.deepEqual(sel.groups.unreadable, []);
+});
+
+test('free and paid deliveries of one product behave as before: the paid price stands, no priceCheck', () => {
+  const c = newCase();
+  c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 6 }], { date: '2026-09-01' });
+  c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 0 }], { date: '2026-09-10' });
+  const entry = c.build().importFile.ingredients[0];
+  assert.equal(entry.priceCheck, undefined);
+  assert.equal(entry.prices.length, 1);
+});
+
+test('a return or a credit is never mistaken for a product received free', () => {
+  const RETURN = { desc: 'RESO FARINA', code: 'RET', qty: 10, unit: 'KG', total: -6 };
+  const K_RETURN = `${SUPPLIER}|code:RET`;
+  const result = built([FLOUR, RETURN]);
+  assert.equal(result.importFile.ingredients.some((i) => i.key === K_RETURN), false);
+  assert.equal(result.candidates.some((i) => i.key === K_RETURN), false);
+  assert.equal(result.products.find((p) => p.key === K_RETURN).leftOutReason, 'amount-zero-or-negative');
+});
+
+test('a carton read as heavier than any carton can be needs a look, whatever the spelling', () => {
+  const entry = built([{ desc: 'BRIOCHE 37,5gr 2Kg* 55pz', code: 'B', qty: 1, unit: 'CT', total: 14.5 }]).importFile.ingredients[0];
+  assert.deepEqual(entry.prices, []);
+  assert.equal(entry.priceCheck, 'price-out-of-scale');
+  const fine = built([{ desc: 'PATATE 2,5kg* 4pz', code: 'P', qty: 1, unit: 'CT', total: 24.9 }]).importFile.ingredients[0];
+  assert.equal(fine.prices.length, 1);
+  assert.equal(fine.priceCheck, undefined);
+});
+
+test('the VAT comes from the newest paid line: a free line says 0 only because it is outside the tax base', () => {
+  const c = newCase();
+  c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 6, vat: '10.00' }], { date: '2026-09-01' });
+  c.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 0, vat: '0.00' }], { date: '2026-09-10' });
+  assert.equal(c.build().importFile.ingredients[0].vatRate, 10);
+
+  const sameInvoice = newCase();
+  sameInvoice.add([
+    { desc: 'FARINA', code: 'F', qty: 1, unit: 'KG', total: 0, vat: '0.00' },
+    { desc: 'FARINA', code: 'F', qty: 1, unit: 'KG', total: 6, vat: '10.00' },
+  ], { date: '2026-09-01' });
+  assert.equal(sameInvoice.build().importFile.ingredients[0].vatRate, 10);
+
+  const neverPaid = newCase();
+  neverPaid.add([{ desc: 'FARINA', code: 'F', qty: 10, unit: 'KG', total: 0, vat: '0.00' }], { date: '2026-09-01' });
+  assert.equal(neverPaid.build().importFile.ingredients[0].vatRate, null);
+});
+
 test('products that cannot be read are listed with the reason and cannot be ticked', () => {
   const sel = selectImport(built([FLOUR, { desc: 'SPEZIA MISTA', code: 'MIX', qty: 4, unit: 'PZ', total: 20 }]), {});
   assert.deepEqual(keys(sel), [K_FLOUR]);

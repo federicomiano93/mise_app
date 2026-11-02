@@ -148,6 +148,15 @@ export async function watchRecentHistory(fromDate, onChange, onError) {
   );
 }
 
+// The orders from `fromDate` on, as the SERVER holds them right now: never the offline copy, which is
+// exactly what may not know about an order another phone has placed (js/orders/draft.js).
+export async function getRecentHistoryFromServer(fromDate) {
+  await authReady;
+  const snap = await getDocsFromServer(
+    query(collection(db, pathFor(COLLECTIONS.history)), where('date', '>=', fromDate)));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+}
+
 // ⚠️ BOTH ONE-OFF READS BELOW USE getDocsFromServer, NEVER getDocs. The app runs Firestore
 // with its persistent offline cache, and offline getDocs quietly answers from that cache —
 // often empty or partial. A short page would then read as `done`, and «Load older orders»
@@ -462,6 +471,26 @@ export async function watchDoc(name, id, onChange, onError) {
       onError?.(err);
     },
   );
+}
+
+// Call back ONCE, the first time the SERVER itself has answered for this document: an answer from
+// the offline copy, however recent it looks, may not know what another phone has done since. Offline
+// it simply waits. ⚠️ includeMetadataChanges, because a server answer identical to the cached copy
+// changes no document and would otherwise never call back. On a document already being watched
+// Firestore shares the one listen, so this costs no extra read.
+export async function watchServerAnswer(name, id, onAnswer) {
+  await authReady;
+  const stop = onSnapshot(
+    doc(db, pathFor(name), id),
+    { includeMetadataChanges: true },
+    snap => {
+      if (snap.metadata.fromCache) return;
+      stop();
+      onAnswer(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+    },
+    err => { console.error(`watchServerAnswer(${name}/${id}) failed:`, err); },
+  );
+  return stop;
 }
 
 // Whether this session may take things away in this location.
