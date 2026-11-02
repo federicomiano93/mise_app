@@ -29,6 +29,7 @@ export function reset() {
 }
 
 export function holdSaves() { holding = true; }
+export function letSavesThrough() { holding = false; }
 
 export function emit(doc) { watcher?.(doc); }
 export const waitingForServer = () => serverWaiter !== null;
