@@ -37,10 +37,11 @@ both, and the switch keeps the address) and it has consequences that every chang
   `active-location`, `offline-cache-uid`, `device-id`, `device-ping-*`, `error-reports`, `usage-*`.
   Either app's sign-out or venue switch runs the same keep-list (`KEEP_PREFIXES`, in
   `js/local-data.js` and `shared/src/local-data.ts`) over the other's keys: a key Mise 2 must keep
-  across a venue switch starts with one of those prefixes, in both files. The Stocktake's two copies
-  are NOT kept: `inventory-<lid>-<YYYY-MM>` (the month as last seen) and
+  across a venue switch starts with one of those prefixes, in both files. The Stocktake's three keys
+  are NOT kept: `inventory-<lid>-<YYYY-MM>` (the month as last seen),
   `inventory-unsaved-<lid>-<YYYY-MM>` (counts typed here that the browser's own database has not
-  shown back yet); the venue is in the key, so a switch wipes them and they cannot cross venues.
+  shown back yet) and `inventory-seen-<lid>-<YYYY-MM>` (this phone has read that month for itself,
+  which is what lets a month counted offline be closed offline); the venue is in the key, so a switch wipes them and they cannot cross venues.
 - **One service worker scope.** The current `sw.js` controls `/mise2/` too. Mise 2 registers no
   service worker until step 5, when it takes over at the same path and name.
 - **No App Check, no reCAPTCHA** (his decision, PR #212) — in either app.

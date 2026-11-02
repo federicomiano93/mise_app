@@ -225,6 +225,38 @@ reason.
     screens; closing a month is the action `month-closed`.
 47. A part that fails to draw never stops the data: one part failing leaves the others working.
 
+## Acting on a month only once it has arrived
+
+The current app's guard (PR #442, `js/inventory/inventory-model.js` `monthReady`, `withoutEmptyMaps`), ported. Driven on a
+private emulator before the port (`algprobe/mise-drive/drive-mise2-stocktake-close.mjs`): no signal and the month never read
+here, Close offered its normal dialog and confirming stamped the month closed with no prices and wiped the next month's
+openings and pack weights; an ordinary close with signal and nothing counted wiped them too; Carry wrote into a closed month.
+
+48. **No empty map goes out with a merge**: it replaces the stored map. A box is still emptied by name
+    (`deleteField()`). **spec** (source)
+49. **`ready`, not `monthLoaded`**: an open month needs the month proved, the ingredients proved and the prices answered; a
+    closed one needs its own rows, or those two answers. **spec** (model, store)
+50. **What proves the month**: the server's word, or a document from the phone's copy with no pending write of its own. A
+    missing document from the copy does not (it could be a closed month never read here), and nor does this phone's own write,
+    unless this phone has read the month before (`inventory-seen-<lid>-<YYYY-MM>`, the current app's key). **spec** (store)
+51. **What proves the ingredients**: any row, or the server's word; an empty list from the copy does not. Once proved they
+    stay proved. **spec** (source, store)
+52. **What answers the prices**: any priced document, the server's «none», or a refused read (that account will never get
+    more). An empty copy does not, nor does any other failure. **spec** (source)
+53. **The same gate on Close, «What it cost», Carry and «From the orders»**, in the store and on screen, before the question
+    and after the answer: the buttons stay where they are, dimmed with `aria-disabled`, and a tap says why. Reopen has no gate.
+    A month closed under an open question says so and writes nothing. **spec** (store, actions)
+54. **«What it cost» by address** says the figures have not arrived instead of showing a total. **spec** (actions)
+55. **Orders read only from the phone's copy are a failed read**: never «no orders», nor a part standing for the month.
+    **spec** (source)
+
+What it cannot know: with no signal it goes by this phone's copy, as closing in a storeroom must, so a copy days old that still
+says «open» can close again a month another phone has closed since. And with rows on screen and the month never read, the boxes
+still accept a typed number, as in the current app: it waits with the rest, and it proves nothing.
+
+`withoutEmptyMaps` and `monthReady` live in `app/src/stocktake/stocktakeModel.ts` for now: `shared/src/inventory-model.ts` is a
+paired port, and the stack does not hold the current app's side yet. When main is merged into the stack they move there.
+
 ## Differences from the current app, on purpose
 
 - **Tablet**: from 1000px wide the list stays on the left and the product (or «What it cost») opens
@@ -263,5 +295,8 @@ reason.
   over a saved number deleted it. A box emptied on purpose (nothing in it, blanks included) still
   removes the count. Covers the list's boxes, the product's three and the pack-weight box.
 - **Enter in a count box moves to the next row's box**, which is what the keyboard's «next» promises.
+- **A price failure other than a refused read takes the answer back**, even after the prices had answered: they are gone from
+  the list, and a month closed then would freeze no money. In the current app the answer stays true with the prices wiped.
+- **A month whose stream has died is not ready**: it can no longer say the month was closed meanwhile.
 - **Messages** are announced in a status region that exists before it changes, instead of a toast.
 - **The other-unit sentence** is a dialog with one button, «OK», as the current app's alert.
