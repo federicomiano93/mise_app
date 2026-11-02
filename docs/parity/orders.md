@@ -1202,8 +1202,8 @@ everything else waits for the live data. `shared/src/list-copy.ts` (the copy's s
 (reads it once, writes it), `OrdersSection.tsx` (`earlyLens`, the hold), `OrdersList.tsx` (draws `earlyLens ?? lens`).
 
 **The copy.** Key `orders-list-copy`, version 1, `{ v, lid, suppliers, ingredients }`, the same as the current app, so one
-person's two apps share it. Only the fields the list draws: a supplier's id, name, category, delivery days, order days and active;
-an ingredient's id, name, supplier and active. No price, contact, allergen or pack list. A copy of another venue, of another
+person's two apps share it. Only the fields the list draws: a supplier's id, name, short name, category, delivery days, order days
+and active; an ingredient's id, name, supplier, kind and active (`shared/src/list-copy.ts` is the whitelist). No price, contact, allergen or pack list. A copy of another venue, of another
 version or that cannot be read is no copy. ⚠️ The key is NOT under `KEEP_PREFIXES`, on purpose: it holds one venue's names, so
 sign-out and a venue switch wipe it (`list-copy.spec.ts` pins this through both files' `keysToClear`). The keep-list says what
 survives; `docs/architecture.md`, «One localStorage», says why.
@@ -1212,23 +1212,29 @@ survives; `docs/architecture.md`, «One localStorage», says why.
 - CP1. On the copy nothing can be typed, sent or recorded: EVERY road to a supplier's screen goes through the hold (a row, an
   «Order today» chip, the notices panel). The address does not change, so no quantity box, items list or settings page can appear
   from an old list. A screen opened BY ITS ADDRESS still waits behind `Detail`'s `ready` gate.
-- CP2. Shut while on the copy: send, record, clear, the order lists, settings, the row's items, the summary, the view switch. A
-  shut door says the wait and leaves a held tap alone; the last supplier tapped wins.
+- CP2. Shut while on the copy: the gear, the row's list icon, Incoming and To re-order. A shut door says the wait and leaves a held
+  tap alone; the last supplier tapped wins. Send, record all and clear are not even drawn until the live lists are in. ⚠️ The order
+  lists, the summary and the view switch are shut in the current app and do not exist here yet: when they arrive (3f-7 and after)
+  they go through `whenLive` too.
 - CP3. The ingredient card cannot open from the copy. The alerts and the re-order list's «put back» read nothing from it: only the
   live lens feeds them, so a banner never comes from an old list.
 - CP4. A held tap opens the supplier by itself once everything is live. It is dropped if the person moved to another tab or a list,
   when a stream fails, when the notices panel opens, and when the search box takes the focus or changes. A supplier gone from the
   live list opens nothing.
-- CP5. A failed live stream removes the copy from the screen at once, even while the others are on their way: no live list will
-  ever replace an old one that looks real. The status line says what happened.
-- CP6. The copy waits for `config/orders`, and that listener starts FIRST. The venue's supplier order and favourites live there, not
-  in the copy (T14, O4). Measured before this rule: the document landed about a second after the first paint and the rows reordered
-  under the finger. Measured after it, on the real tablet: no reorder in 14 of 14 runs. A `config/orders` that cannot be read does
-  not keep the copy away.
+- CP5. A failed suppliers, ingredients or draft stream removes the copy from the screen at once, even while the others are on their
+  way: no live list will ever replace an old one that looks real. The status line says what happened. (A failed history or config
+  stream leaves it: neither feeds the rows.)
+- CP6. The copy waits for the FIRST WORD about `config/orders`, and that listener starts FIRST. The venue's supplier order and
+  favourites live there, not in the copy (T14, O4). Measured before this rule: the document landed about a second after the first
+  paint and the rows reordered under the finger. Measured after it, on the real tablet: no reorder in 14 of 14 runs. Any word will do
+  (`configAnswered`, not `configLoaded`): a refusal, or «none» from this phone's own database, so a venue that never set an order
+  gets the copy too, offline as well. A document created on another device since this phone last saw it can still reorder the rows
+  once; rare, and no worse than the wait.
 - CP7. A copy with only switched-off suppliers paints nothing, so «No suppliers yet» never flashes.
 - CP8. The wait («Just a moment: loading the latest data.») is the status message, over the content, not a line above the list: a
   line appearing on the first tap pushes every row down, so a second tap lands on another supplier, and on a list scrolled down it
-  would be out of sight. It leaves the moment the live lists land, and for good on leaving the screen.
+  would be out of sight. It leaves the moment the live lists land, and for good on leaving the screen. Every tap says it again and
+  it stays up to a minute, so offline a door tapped later is never a dead button.
 - CP9. The copy is written only after the SERVER has answered for suppliers and ingredients, and not during a venue switch: a list
   from this phone's own database could be old, and half a switch could write one venue's names under the other's key.
 
@@ -1270,7 +1276,10 @@ started on mount, stopped on unmount, P14).
   this branch yet; the two were compared by hand and they match.
 - The hold has no end of its own: a device back online after a long time opens the supplier tapped long before. Offline with no
   cached draft it waits indefinitely, no worse than «Loading…».
-- A bookmark to `/orders/incoming` with deliveries off, on the split: the redirect drops a held tap silently.
+- A bookmark to `/orders/incoming` on the split, where the cached `config/orders` says deliveries on and the server then says off:
+  the redirect drops a held tap silently.
+- On the split, reloading on a delivery record that is gone, with a door tapped on the copy: the wait's clearing can take away «order
+  gone» in the same instant, so the person lands on Incoming without the explanation.
 - The held row's `opacity: 0.6` copies the current app; short-lived, its contrast not measured.
 - A hand-altered copy: the field types are not validated, so an odd `deliveryDays` could throw inside the section's boundary.
 

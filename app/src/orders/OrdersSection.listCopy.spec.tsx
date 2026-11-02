@@ -5,10 +5,11 @@ import { LIST_COPY_KEY, LIST_COPY_WRITE_DELAY_MS, writeListCopy } from '@mise/sh
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
 import { LOAD, ingredient, renderOrders, split, supplier } from '../testing/renderOrders';
+import { MESSAGE_MS } from '../ui/StatusMessage';
 
 // «Orders», the instant list: the supplier rows are drawn from a local copy of the last good lists while the live lists have not
 // landed (useListCopy.ts), and NOTHING ELSE reads the copy. A supplier tapped meanwhile is HELD in OrdersLayout (the address does not
-// change, the row is busy, the status line says the wait) and opens by itself once everything is live; the doors that open anything
+// change, the row is busy, the status message says the wait) and opens by itself once everything is live; the doors that open anything
 // else are shut; a hold is dropped by moving elsewhere, by a failed stream, by the bell and by the search box.
 
 beforeAll(async () => { await import('./OrdersSection'); }, 60_000);
@@ -148,6 +149,22 @@ describe('the list before the live lists land', () => {
     await act(async () => { await new Promise(resolve => { setTimeout(resolve, 0); }); });
     expect(screen.getByText('Loading…')).toBeInTheDocument();
     expect(screen.queryByText('No suppliers yet')).not.toBeInTheDocument();
+  });
+
+  // ⚠️ A venue that never set a supplier order has no such document. The first snapshot, from this phone's own database, says «none»:
+  // that is not a document to believe (no Stock box decision follows from it), but it is enough for the rows, and offline it is all there is.
+  it('a venue with no config/orders, answered only by this phone’s own database, still gets the copy', async () => {
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    const loose = source as unknown as { watchOrdersConfig: (onChange: (data: unknown, meta: { fromServer: boolean }) => void) => () => void };
+    loose.watchOrdersConfig = (onChange) => {
+      queueMicrotask(() => { onChange(null, { fromServer: false }); });
+      return () => {};
+    };
+    holdLive(source);
+    renderOrders('/orders', { source });
+    expect(await screen.findByRole('button', { name: /^Alpine Mills/ }, LOAD)).toBeInTheDocument();
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
   });
 
   it('says «Loading…» as before when there is no copy', async () => {
@@ -379,7 +396,7 @@ describe.each([['on the split', true], ['on a phone', false]] as const)('a suppl
 });
 
 describe('the wait, said over the content', () => {
-  it('a tap moves no row: the words are in the status message, outside the list', async () => {
+  it('the words are in the status message, outside the list, where they cannot push a row', async () => {
     plant();
     const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
     const view = await onCopy(source);
@@ -404,7 +421,40 @@ describe('the wait, said over the content', () => {
     expect(waitText()).not.toBeInTheDocument();
   });
 
-  it('the words go the moment the live data lands, with the hold on a shut door too', async () => {
+  it('a shut door leaves a held tap alone: the supplier still opens by itself', async () => {
+    split();
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    const view = await onCopy(source);
+    await view.user.click(row(/^Alpine Mills/));
+    await view.user.click(screen.getByRole('button', { name: 'Orders settings' }));
+    expect(busy()).not.toBeNull();
+    await view.live.release();
+    await waitFor(() => { expect(view.router.state.location.pathname).toMatch(/^\/orders\/supplier\//); }, LOAD);
+  });
+
+  // Offline a draft that is not on the phone never lands: the wait can outlast any message, and a door must not then look dead.
+  it('stays for as long as a slow answer takes, up to a minute, and the next tap says it again', async () => {
+    plant();
+    const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
+    await onCopy(source);
+    vi.useFakeTimers();
+    try {
+      const gear = screen.getByRole('button', { name: 'Orders settings' });
+      fireEvent.click(gear);
+      expect(waitText()).toBeInTheDocument();
+      act(() => { vi.advanceTimersByTime(MESSAGE_MS + 1000); });
+      expect(waitText()).toBeInTheDocument();
+      act(() => { vi.advanceTimersByTime(60_000); });
+      expect(waitText()).not.toBeInTheDocument();
+      fireEvent.click(gear);
+      expect(waitText()).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('the words go the moment the live data lands', async () => {
     plant();
     const source = fakeOrdersSource({ suppliers: BOTH_SUPPLIERS, ingredients: COPY_ITEMS });
     const view = await onCopy(source);

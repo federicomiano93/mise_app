@@ -80,8 +80,8 @@ function OrdersScreen() {
 // The page's status line: a stream that died, and an order that could not be saved. The live region is on the page BEFORE it
 // speaks (an element inserted already filled is announced unreliably); only its text comes and goes. Derived from the
 // store, so «could not be saved» goes the moment a later save lands (parity L5, L37).
-// The wait on the list copy is said for as long as it is true, and taken away the moment it stops: this only bounds a wait that
-// never ends (an offline device whose draft is not on it), where the dimmed row goes on telling it.
+// The wait on the list copy is said at every tap and taken away the moment it stops being true: this only bounds a wait that
+// never ends (an offline device whose draft is not on it). A dimmed row goes on telling it, and the next tap says it again.
 const WAIT_MS = 60_000;
 
 function StatusLine() {
@@ -140,8 +140,9 @@ function OrdersLayout({ view }: { view: ShownView }) {
   //  - NOT ONCE A STREAM FAILED: no live list will ever replace an old one that looks real, so the copy leaves the screen at once,
   //    even while the other streams are still on their way, and the status line tells what happened.
   //  - NOT WHEN IT HAS NO SUPPLIER: an empty result paints nothing, so «No suppliers yet» never flashes.
-  //  - NOT BEFORE `config/orders`: the venue's supplier order and favourites live there, not in the copy, and rows that reorder a
-  //    second after they appear make a finger land on the wrong supplier (measured). The store starts that listener first.
+  //  - NOT BEFORE THE FIRST WORD ABOUT `config/orders`: the venue's supplier order and favourites live there, not in the copy, and rows
+  //    that reorder a second after they appear make a finger land on the wrong supplier (measured). The store starts that listener
+  //    first. Any word will do (`configAnswered`): a venue with no such document must not wait for the server, offline least of all.
   //  - A SUPPLIER TAPPED ON THE COPY IS HELD, NOT OPENED (openOrHold below): the address does not change, so no quantity box,
   //    items list or settings page can appear from an old list, and the supplier opens by itself once everything is live. (A screen
   //    opened BY ITS ADDRESS, a reload on a supplier's page, still waits behind `Detail`'s `ready` gate.) The doors that open
@@ -149,7 +150,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const copy = useListCopy();
   const draftBroken = snapshot.draftBroken;
   const earlyLens = useMemo(() => {
-    if (copy === null || ready || !snapshot.configLoaded || snapshot.suppliersBroken || snapshot.ingredientsBroken || draftBroken) return null;
+    if (copy === null || ready || !snapshot.configAnswered || snapshot.suppliersBroken || snapshot.ingredientsBroken || draftBroken) return null;
     const early = snapshot.suppliersLoaded && snapshot.ingredientsLoaded ? lens : buildOrdersLens({
       suppliers: copy.suppliers,
       suppliersLoaded: true,
@@ -159,7 +160,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
       noSupplierName,
     });
     return early.suppliers.length === 0 ? null : early;
-  }, [copy, ready, lens, snapshot.configLoaded, snapshot.suppliersLoaded, snapshot.ingredientsLoaded, snapshot.suppliersBroken, snapshot.ingredientsBroken,
+  }, [copy, ready, lens, snapshot.configAnswered, snapshot.suppliersLoaded, snapshot.ingredientsLoaded, snapshot.suppliersBroken, snapshot.ingredientsBroken,
     draftBroken, snapshot.draft.entries, snapshot.config.supplierOrder, noSupplierName]);
 
   // ⚠️ LOOK FOR ORDERS TYPED ON AN EARLIER DAY AND NEVER PLACED ONCE PER OPENING, once the suppliers, the ingredients and the draft
@@ -220,9 +221,10 @@ function OrdersLayout({ view }: { view: ShownView }) {
   // ⚠️ ON THE COPY THESE DOORS ARE SHUT: a tap only says the wait, and the address does not change. Nothing they open can be
   // drawn from an old list, and a screen that opened by itself later, long after a tap, would surprise. Off the copy they are
   // today's doors.
-  const [waitSaid, setWaitSaid] = useState(false);
+  // A count, not a flag: every tap says the wait again, so a door tapped after the message has timed out is never a dead button.
+  const [waitTaps, setWaitTaps] = useState(0);
   const whenLive = (action: () => void) => () => {
-    if (earlyLens !== null) setWaitSaid(true);
+    if (earlyLens !== null) setWaitTaps(n => n + 1);
     else action();
   };
   const openSettings = whenLive(() => { open(SETTINGS_OPENER, SETTINGS_PATH); });
@@ -233,7 +235,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
 
   // ⚠️ THE HOLD: a supplier tapped on the copy (a row, an «Order today» chip, the notices panel) waits for the live data and then
   // opens by itself. The path is where the tap happened: if the person moves anywhere else the tap is dropped, and the last supplier
-  // tapped wins (a shut door or the filter only says the wait and leaves the hold alone, as in the current app). It is also dropped when a stream fails (nothing will ever make the wait end well), when the notices panel opens and when
+  // tapped wins (a shut door only says the wait and the All/Ordering filter only filters: both leave the hold alone, as in the current
+  // app). It is also dropped when a stream fails (nothing will ever make the wait end well), when the notices panel opens and when
   // the search box takes the focus or changes (`onLookingElsewhere`) — and a supplier gone from the live list opens nothing.
   const [held, setHeld] = useState<{ id: string; path: string } | null>(null);
   const openOrHold = (id: string) => {
@@ -242,11 +245,11 @@ function OrdersLayout({ view }: { view: ShownView }) {
       return;
     }
     setHeld({ id, path: pathname });
-    setWaitSaid(true);
+    setWaitTaps(n => n + 1);
   };
   const dropHold = () => {
     setHeld(null);
-    setWaitSaid(false);
+    setWaitTaps(0);
   };
   const streamBroke = snapshot.suppliersBroken || snapshot.ingredientsBroken || draftBroken;
   useEffect(() => {
@@ -261,16 +264,16 @@ function OrdersLayout({ view }: { view: ShownView }) {
   }, [held, pathname, streamBroke, ready, lens]);
   // The wait is said while it is true AND the copy is still on screen (derived, so it cannot be left behind); a move to another
   // address ends it for good.
-  useEffect(() => { setWaitSaid(false); }, [pathname]);
-  const waiting = waitSaid && earlyLens !== null;
+  useEffect(() => { setWaitTaps(0); }, [pathname]);
+  const waiting = waitTaps > 0 && earlyLens !== null;
   // ⚠️ A MESSAGE OVER THE CONTENT, NOT A LINE ABOVE IT: a line that appears on the first tap pushes every row down, so a second
   // tap lands on another supplier; and on a list scrolled down it would be out of sight.
   const waitIsSaid = useRef(false);
   useEffect(() => {
-    if (waiting === waitIsSaid.current) return;
+    if (waiting) say(t('ord.copy.wait'), WAIT_MS);
+    else if (waitIsSaid.current) say('');
     waitIsSaid.current = waiting;
-    say(waiting ? t('ord.copy.wait') : '', WAIT_MS);
-  }, [waiting, say, t]);
+  }, [waiting, waitTaps, say, t]);
 
   // From History to the editor or the day screen, and from Incoming to the screen for one order: one level down, so Back is the
   // browser's Back. The place in the screen above is written down now, while it is what is on screen, and put back when Back

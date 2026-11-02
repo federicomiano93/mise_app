@@ -26,8 +26,10 @@ describe('StatusMessage', () => {
     draw('Saved', '');
     press('Saved');
     expect(screen.getByText('Saved')).toBeInTheDocument();
+    act(() => { vi.advanceTimersByTime(2000); });
     fireEvent.click(screen.getByRole('button', { name: 'say' }));
     expect(region()).toBeEmptyDOMElement();
+    // The first message's clock, had it been left running, would end at 2600 and take this one with it.
     press('Saved');
     expect(screen.getByText('Saved')).toBeInTheDocument();
     act(() => { vi.advanceTimersByTime(MESSAGE_MS - 1); });
