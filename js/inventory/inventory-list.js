@@ -72,8 +72,9 @@ function boxNum(value, locale) {
 }
 
 // `listStatus` is a getter (inventory-store.js getListStatus): what the list may say while it has no rows.
-// Without one the list behaves as answered, as it always did.
-export function renderList({ month, ingredients, locale, onOpen, onCount, onCarry, onPurchases, readOnly, listStatus }) {
+// Without one the list behaves as answered, as it always did. `monthReady` likewise (isMonthReady): whether the
+// two fill-in actions may act yet.
+export function renderList({ month, ingredients, locale, onOpen, onCount, onCarry, onPurchases, readOnly, listStatus, monthReady }) {
   const state = { query: '', onlyTodo: false };
   const status = () => listStatus?.() ?? LIST_STATUS.answered;
 
@@ -94,10 +95,11 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
   // ⚠️ «Carry forward» is left out when no handler is given: it reads LAST month, which
   // is closed by then, and an employee may not read a closed month (firestore.rules
   // stocktakeMayRead) — so for them it would be a button that can only fail.
-  const actions = readOnly ? null : el('div', { class: 'inv-actions' }, [
-    onCarry ? el('button', { class: 'inv-action', type: 'button', text: t('inv.carryShort'), onclick: onCarry }) : null,
-    el('button', { class: 'inv-action', type: 'button', text: t('inv.purchasesShort'), onclick: onPurchases }),
-  ]);
+  const carryBtn = readOnly || !onCarry ? null
+    : el('button', { class: 'inv-action', type: 'button', text: t('inv.carryShort'), onclick: onCarry });
+  const purchasesBtn = readOnly ? null
+    : el('button', { class: 'inv-action', type: 'button', text: t('inv.purchasesShort'), onclick: onPurchases });
+  const actions = readOnly ? null : el('div', { class: 'inv-actions' }, [carryBtn, purchasesBtn]);
 
   const search = el('input', {
     class: 'inv-search',
@@ -173,6 +175,13 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
       default:
         return null;
     }
+  }
+
+  // ⚠️ aria-disabled, NOT disabled: dimmed but still reachable, and a tap says why (the handlers in
+  // inventory-main.js check the same answer and refuse).
+  function paintActions() {
+    const waiting = monthReady ? !monthReady() : false;
+    [carryBtn, purchasesBtn].forEach(btn => btn?.setAttribute('aria-disabled', String(waiting)));
   }
 
   function paintSummary() {
@@ -349,12 +358,14 @@ export function renderList({ month, ingredients, locale, onOpen, onCount, onCarr
   function refresh(nextMonth, nextIngredients) {
     current = { month: nextMonth, ingredients: nextIngredients };
     paintSummary();
+    paintActions();
     // With no rows on screen the words may have to change though no row has, and there is no box to take
     // from under a finger.
     if (!rendered.length || structureChanged()) buildRows(); else updateRows();
   }
 
   paintSummary();
+  paintActions();
   buildRows();
   return { root, refresh };
 }

@@ -308,3 +308,32 @@ export function listStatus({ venueOpen, monthAnswered, ingredientsAnswered, fail
   if (failed) return LIST_STATUS.failed;
   return stalled || (emptyCopy && online === false) ? LIST_STATUS.unreachable : LIST_STATUS.waiting;
 }
+
+// Whether what this phone holds is enough to ACT on the month: to close it, carry into it, fill it from the
+// orders, or say what it cost.
+//
+// ⚠️⚠️ AN OPEN MONTH NEEDS ALL THREE ANSWERS: ITSELF, THE INGREDIENTS AND THEIR PRICES. Rows on screen are not
+// enough: they can come from the phone's copy of the ingredients with the month never read here, and that month
+// may already be counted, or closed, on the server. And a close freezes what a unit cost, so with the prices
+// still out a month would be closed with no money in it.
+// ⚠️ A VENUE WITH NO PRICES AT ALL WAITS FOR THE SIGNAL TOO: an empty copy of the prices cannot prove there are none.
+// ⚠️ A CLOSED MONTH'S ROWS ARE ITS OWN (productsOfMonth): it is ready as soon as it has any.
+export function monthReady({ status, closed, rows, pricesAnswered }) {
+  if (closed) return rows > 0 || status === LIST_STATUS.answered;
+  return status === LIST_STATUS.answered && pricesAnswered === true;
+}
+
+// A month's write without its empty maps.
+//
+// ⚠️⚠️ AN EMPTY MAP IN A MERGE DOES NOT MEAN «NOTHING TO ADD»: IT REPLACES THE STORED MAP WITH AN EMPTY ONE. A map
+// with keys merges key by key; `opening: {}` wipes every opening of that month. Seen on the emulator: a month closed
+// with nothing counted emptied the opening and the pack weights the next month already held. No write of this
+// feature means to wipe a map: a box is emptied by name, with deleteField().
+export function withoutEmptyMaps(payload) {
+  const out = {};
+  for (const [key, value] of Object.entries(payload)) {
+    const plainMap = value && Object.getPrototypeOf(value) === Object.prototype;
+    if (!plainMap || Object.keys(value).length) out[key] = value;
+  }
+  return out;
+}

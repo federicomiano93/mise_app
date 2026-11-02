@@ -20,7 +20,7 @@
 import { firebaseConfig, sessionReady } from '../firebase.js';
 import { currentLocationId, pathFor } from '../location.js';
 import { withPrices } from '../price-model.js';
-import { isMonthId } from './inventory-model.js';
+import { isMonthId, withoutEmptyMaps } from './inventory-model.js';
 import {
   getApps,
   getApp,
@@ -69,6 +69,8 @@ function monthRef(monthId) {
 // SERVER says the month is open (js/inventory/inventory-outbox.js, `held`) — and
 // without includeMetadataChanges a server answer identical to that copy would never
 // be reported at all.
+// ⚠️ AND WHETHER IT CARRIES THIS PHONE'S OWN UNSENT WRITES: a merge on a month never read here shows up as a document
+// that exists, and it proves nothing about the month (inventory-store.js).
 export async function watchMonth(monthId, onChange, onError) {
   await authReady;
   return onSnapshot(
@@ -76,7 +78,7 @@ export async function watchMonth(monthId, onChange, onError) {
     { includeMetadataChanges: true },
     snap => onChange(
       snap.exists() ? { id: snap.id, ...snap.data() } : null,
-      { fromServer: !snap.metadata.fromCache },
+      { fromServer: !snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites },
     ),
     err => {
       console.error(`watchMonth(${monthId}) failed:`, err);
@@ -111,6 +113,8 @@ export async function getMonthOnce(monthId) {
 // ⚠️ A NESTED MAP, NEVER A DOTTED 'closing.flour' STRING. An ingredient id is a
 // Firestore document id and may legally contain a dot, and splitting on it would
 // delete the wrong key — or nothing at all — without a sound.
+//
+// ⚠️ AND NO EMPTY MAP EVER GOES OUT: in a merge it wipes the stored one (withoutEmptyMaps, in the model).
 export async function saveMonthFields(monthId, patch, clear = {}) {
   await authReady;
   const payload = withBakery({ ...patch });
@@ -120,7 +124,7 @@ export async function saveMonthFields(monthId, patch, clear = {}) {
     for (const id of Object.keys(ids)) removals[id] = deleteField();
     payload[map] = { ...(payload[map] || {}), ...removals };
   }
-  return setDoc(monthRef(monthId), payload, { merge: true });
+  return setDoc(monthRef(monthId), withoutEmptyMaps(payload), { merge: true });
 }
 
 // Every order placed inside one month, read ONCE — never watched.
@@ -137,6 +141,10 @@ export async function saveMonthFields(monthId, patch, clear = {}) {
 // ⚠️ READING IT NEEDS THE ORDERS SECTION. A venue that does not use Orders is
 // refused here, which is why the caller treats a failure as "nothing to propose"
 // and falls back to typing the purchases by hand.
+//
+// ⚠️ THE PHONE'S COPY IS NOT AN ANSWER. With no signal getDocs does not fail: it answers from whatever orders happen
+// to be on this device, often none. That said «no orders this month» when there were, and a part of them would
+// replace the whole month's purchases. So it counts as a failed read.
 export async function getOrdersInMonth(from, to) {
   await authReady;
   const snap = await getDocs(query(
@@ -144,6 +152,7 @@ export async function getOrdersInMonth(from, to) {
     where('date', '>=', from),
     where('date', '<', to),
   ));
+  if (snap.metadata.fromCache) throw new Error('The orders are only on this device.');
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
@@ -159,13 +168,17 @@ export async function getOrdersInMonth(from, to) {
 // ⚠️ includeMetadataChanges, OR THE SERVER'S «YES, EMPTY» NEVER ARRIVES: confirming an empty copy changes
 // no document, so Firestore would stay silent. And it answers again when the server confirms a full list
 // too, so that one is dropped: an identical answer would redo the work of the screen for nothing.
+// ⚠️ onChange'S THIRD ANSWER IS WHETHER THE PRICES HAVE ANSWERED, by the same rule: an empty copy proves nothing, and
+// a month closed on it would freeze no money. A REFUSED read does count: that account will never get more. Any other
+// failure does not (a quota running out, say): the month would be closed with no money and no warning.
 export async function watchIngredients(onChange, onError) {
   await authReady;
   let ingredients = null;
   let prices = {};
   let fromCache = true;
   let emptyFromCache = null;
-  const emit = () => { if (ingredients) onChange(withPrices(ingredients, prices), fromCache); };
+  let pricesAnswered = false;
+  const emit = () => { if (ingredients) onChange(withPrices(ingredients, prices), fromCache, pricesAnswered); };
 
   const stopIngredients = onSnapshot(
     collection(db, pathFor(INGREDIENTS)),
@@ -182,8 +195,20 @@ export async function watchIngredients(onChange, onError) {
   );
   const stopPrices = onSnapshot(
     collection(db, pathFor(INGREDIENT_PRICES)),
-    snap => { prices = {}; snap.forEach(d => { prices[d.id] = d.data(); }); emit(); },
-    () => { prices = {}; emit(); },
+    { includeMetadataChanges: true },
+    snap => {
+      const proves = !snap.empty || !snap.metadata.fromCache;
+      if ((pricesAnswered || !proves) && !snap.docChanges().length) return;
+      pricesAnswered = pricesAnswered || proves;
+      prices = {};
+      snap.forEach(d => { prices[d.id] = d.data(); });
+      emit();
+    },
+    err => {
+      prices = {};
+      if (err?.code === 'permission-denied') pricesAnswered = true;
+      emit();
+    },
   );
   return () => { stopIngredients(); stopPrices(); };
 }

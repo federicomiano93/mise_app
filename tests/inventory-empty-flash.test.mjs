@@ -307,7 +307,7 @@ const snapshot = (ids, { fromCache, changes = 0 }) => ({
   metadata: { fromCache },
   docChanges: () => Array(changes).fill({}),
 });
-const priceSnapshot = (entries) => ({
+const priceSnapshot = (entries) => ({ empty: false, metadata: { fromCache: false }, docChanges: () => [{}],
   forEach: fn => Object.entries(entries).forEach(([id, data]) => fn({ id, data: () => data })),
 });
 
@@ -335,7 +335,7 @@ test('⚠️ the server confirming an EMPTY copy reaches the screen, or it would
   const { told, ingredients, prices } = await listen();
   assert.equal(ingredients.options?.includeMetadataChanges, true,
     'without it the confirmation changes no document and Firestore never calls back');
-  assert.equal(prices.options, undefined, 'the price listener stays plain');
+  assert.equal(prices.options?.includeMetadataChanges, true, 'the prices too: inventory-close-month.test.mjs');
   ingredients.next(snapshot([], { fromCache: true }));
   ingredients.next(snapshot([], { fromCache: false }));
   assert.deepEqual(told, [{ n: 0, fromCache: true }, { n: 0, fromCache: false }]);
