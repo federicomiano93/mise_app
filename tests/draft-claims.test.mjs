@@ -200,3 +200,175 @@ test('a value a write in the air already carries is not sent a second time', asy
   stub.held.forEach(write => write.resolve());
   await flushing;
 });
+
+// A correction made while the write it corrects is still in the air. The screen then matches
+// `known` (no snapshot has shown the write yet: about 5 s on the lab tablet on a freshly opened
+// page), so measuring against `known` alone said «nothing to send», and the write in the air then
+// landed and put the old number back, on screen and on the server.
+test('a quantity corrected to the server\'s value while the write is in the air goes out, and stays', async () => {
+  stub.holdSaves();
+  snapshot({});
+  type('d1', { qty: 5 });
+  await pause();
+  assert.equal(stub.held.length, 1, 'the 5 is in the air');
+
+  type('d1', { qty: 0 });
+  await pause();
+  assert.equal(stub.held.length, 2, 'the correction has a write of its own');
+  assert.deepEqual(stub.held[1].data.entries, { d1: { qty: 0, unit: '', supplierId: '' } });
+
+  stub.held[0].resolve();
+  await settle();
+  snapshot({ d1: { qty: 5, stock: 0, unit: '', supplierId: '' } }); // the 5 reaches the server first…
+  assert.equal(page.entries.d1.qty, 0, 'and does not come back on screen');
+
+  stub.held[1].resolve();
+  await settle();
+  snapshot({ d1: { qty: 0, stock: 0, unit: '', supplierId: '' } }); // …then the correction does
+  assert.equal(page.entries.d1.qty, 0);
+  type('d1b', { qty: 1 });
+  await pause();
+  assert.deepEqual(Object.keys(stub.held[2].data.entries), ['d1b'], 'the claim on d1 is over');
+  stub.held[2].resolve();
+  await settle();
+});
+
+test('a quantity put back to the one the server already had, while the write is in the air, goes out', async () => {
+  stub.holdSaves();
+  snapshot({ d2: { qty: 3, stock: 0 } });
+  type('d2', { qty: 5 });
+  await pause();
+  type('d2', { qty: 3 });
+  await pause();
+  assert.deepEqual(stub.held[1]?.data.entries, { d2: { qty: 3, unit: '', supplierId: '' } });
+  stub.held.forEach(write => write.resolve());
+  await settle();
+});
+
+test('a correction still in its pause when the earlier write lands goes out after it', async () => {
+  stub.holdSaves();
+  snapshot({});
+  type('d3', { qty: 5 });
+  await pause();
+  type('d3', { qty: 0 });                          // the pause has started…
+  stub.held[0].resolve();                          // …and the 5 lands inside it
+  await settle();
+  await pause();
+  assert.deepEqual(stub.held[1]?.data.entries, { d3: { qty: 0, unit: '', supplierId: '' } });
+  stub.held[1].resolve();
+  await settle();
+});
+
+test('the correction goes out when leaving the section too', async () => {
+  stub.holdSaves();
+  snapshot({});
+  type('d4', { qty: 5 });
+  await pause();
+  type('d4', { qty: 0 });
+  const flushing = draft.flushDraftSave();
+  assert.deepEqual(stub.held[1]?.data.entries, { d4: { qty: 0, unit: '', supplierId: '' } });
+  stub.held.forEach(write => write.resolve());
+  await flushing;
+});
+
+test('a stock count corrected while its write is in the air goes out, and only the stock', async () => {
+  stub.holdSaves();
+  snapshot({ d5: { qty: 3, stock: 1 } });
+  type('d5', { stock: 2 });
+  await pause();
+  type('d5', { stock: 1 });
+  await pause();
+  assert.deepEqual(stub.held[1]?.data.entries, { d5: { stock: 1 } });
+  stub.held.forEach(write => write.resolve());
+  await settle();
+});
+
+test('a unit corrected while the write is in the air goes out with its quantity', async () => {
+  stub.holdSaves();
+  snapshot({ d6: { qty: 2, stock: 0 } });
+  type('d6', { unit: 'busta' });
+  await pause();
+  type('d6', { unit: '' });
+  await pause();
+  assert.deepEqual(stub.held[1]?.data.entries, { d6: { qty: 2, unit: '', supplierId: '' } });
+  stub.held.forEach(write => write.resolve());
+  await settle();
+});
+
+test('a day stamp put back while the write is in the air goes out', async () => {
+  stub.holdSaves();
+  snapshot({ d7: { qty: 2, stock: 0 } }, { aldo: '2026-10-27' });
+  page.days.aldo = DAY;
+  const moving = draft.saveDraftNow(page.entries, page.days);
+  page.days.aldo = '2026-10-27';
+  draft.scheduleDraftSave(page.entries, page.days);
+  await pause();
+  assert.deepEqual(stub.held[1]?.data.days, { aldo: '2026-10-27' });
+  stub.held.forEach(write => write.resolve());
+  await moving;
+  await settle();
+});
+
+// What the fix must NOT do: speak about a line it has no correction for.
+test('retyping the value in the air sends nothing more, after a correction inside the pause', async () => {
+  stub.holdSaves();
+  snapshot({});
+  type('d8', { qty: 5 });
+  await pause();
+  type('d8', { qty: 0 });
+  type('d8', { qty: 5 });
+  await pause();
+  assert.equal(stub.held.length, 1, 'the 5 is already on its way');
+  stub.held[0].resolve();
+  await settle();
+});
+
+test('a line placed while its write is in the air is not written again', async () => {
+  stub.holdSaves();
+  snapshot({ d9: { qty: 3, stock: 0 } }, { aldo: DAY });
+  type('d9', { qty: 5 });
+  page.days.aldo = '2026-10-29';
+  draft.scheduleDraftSave(page.entries, page.days);
+  await pause();
+  delete page.entries.d9;                          // orders-main forgets the placed rows…
+  delete page.days.aldo;
+  type('d9b', { qty: 1 });                         // …and another line is typed
+  await pause();
+  assert.deepEqual(Object.keys(stub.held[1].data.entries), ['d9b'], 'never a blank row for the placed line');
+  assert.equal(stub.held[1].data.days, undefined, 'and never its day stamp');
+  stub.held.forEach(write => write.resolve());
+  await settle();
+});
+
+test('a field the write in the air does not carry is not claimed: a colleague\'s count is not re-asserted', async () => {
+  stub.holdSaves();
+  snapshot({ d10: { qty: 3, stock: 1 } });
+  type('d10', { qty: 5 });
+  await pause();
+  // Firestore shows this phone's 5 with a colleague's new shelf count on the same line.
+  snapshot({ d10: { qty: 5, stock: 7, unit: '', supplierId: '' } });
+  type('d10b', { qty: 1 });
+  await pause();
+  assert.deepEqual(Object.keys(stub.held[1].data.entries), ['d10b']);
+  stub.held.forEach(write => write.resolve());
+  await settle();
+});
+
+test('a correction outlives the refusal of the write it corrects', async () => {
+  stub.holdSaves();
+  snapshot({ d11: { qty: 3, stock: 0 } });
+  type('d11', { qty: 5 });
+  await pause();
+  type('d11', { qty: 3 });
+  stub.held[0].reject(new Error('permission-denied'));
+  await settle();
+  assert.equal(page.entries.d11.qty, 3, 'the refused 5 does not come back');
+  snapshot({ d11: { qty: 3, stock: 0 } });         // Firestore takes the write back
+  assert.equal(page.entries.d11.qty, 3);
+  await pause();
+  // Nothing is owed: the server never took the 5. A second write of the 3 would be harmless too.
+  stub.held.slice(1).forEach(write => write.resolve());
+  await settle();
+  snapshot({ d11: { qty: 3, stock: 0 } });
+  assert.equal(page.entries.d11.qty, 3);
+});

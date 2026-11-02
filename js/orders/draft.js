@@ -55,9 +55,10 @@ let known = { entries: {}, days: {} };
 // owns every field this phone has not touched, and this phone owns the one it is
 // typing into until the write lands.
 //
-// ⚠️ IT IS ALWAYS «WHAT DIFFERS FROM `known`», RECOMPUTED AT EVERY CHANGE, AND IT IS
-// EXACTLY WHAT A SAVE SENDS. It used to only grow, hold whole rows and be sent
-// together with the screen's days map as it was at the keystroke; each of these put
+// ⚠️ IT IS ALWAYS «WHAT DIFFERS FROM `known`» (OR FROM A WRITE IN THE AIR: `differences`),
+// RECOMPUTED AT EVERY CHANGE, AND IT IS EXACTLY WHAT A SAVE SENDS. It used to only grow,
+// hold whole rows and be sent together with the screen's days map as it was at the
+// keystroke; each of these put
 // back quantities of an order another phone had just placed (found building Mise 2's
 // Orders, 28 Oct 2026 — app/src/orders/draftSync.ts is the reviewed twin):
 //   • a line corrected back inside the pause, or typed to the value another phone had
@@ -115,27 +116,44 @@ function dayCarried(id) {
   return undefined;
 }
 
-// What this phone's screen holds that the server does not.
+// What this phone's screen holds that the server does not — or will not once the writes
+// in the air have landed.
+//
+// ⚠️ A CORRECTION MADE WHILE THE WRITE IT CORRECTS IS IN THE AIR. Until a snapshot shows
+// that write (about 5 s on the lab tablet, on a freshly opened page), «5 put back to 0»
+// matches `known`, so measured against `known` alone it said nothing, and the 5 then
+// landed and came back, on screen and on the server. So a field a write in the air says
+// differently is claimed too. ONLY a line and a day still on the screen: one gone from it
+// is an order placed, and a blank row written now would outlive its clear.
 function differences(entries, days) {
   const rows = {};
-  Object.keys(changedEntries(entries, known.entries)).forEach(id => {
+  const ids = new Set(Object.keys(changedEntries(entries, known.entries)));
+  flights.forEach(flight => {
+    Object.keys(flight.entries).forEach(id => { if (entries?.[id]) ids.add(id); });
+  });
+  ids.forEach(id => {
     const here = mine(entries[id]);
     const there = stored(known.entries[id]);
     const row = {};
+    const overtaken = field => inAir(id, field) && carried(id, field) !== here[field];
     // ⚠️ A LEFTOVER {qty: 0, supplierId: 'X'} IS NOT THIS PHONE'S TO CLEAN on an edit of
     // another field: harmless at zero, and cleaning it could erase a colleague typing a
     // quantity under X in the same second. The first quantity typed here sends the
     // override with it, which clears it.
     const overrideDiffers = here.supplierId !== there.supplierId && !(here.qty === 0 && there.qty === 0);
-    if (here.qty !== there.qty || here.unit !== there.unit || overrideDiffers) {
+    if (here.qty !== there.qty || here.unit !== there.unit || overrideDiffers || GROUP.some(overtaken)) {
       GROUP.forEach(field => { row[field] = here[field]; });
     }
     // ⚠️ A LINE THE SERVER DOES NOT HAVE CARRIES ONLY WHAT IS IN IT: padded with stock 0,
     // it erased the shelf count a colleague put on the same line in the same second.
-    if (here.stock !== there.stock) row.stock = here.stock;
+    if (here.stock !== there.stock || overtaken('stock')) row.stock = here.stock;
     if (!isEmpty(row)) rows[id] = row;
   });
-  return { entries: rows, days: changedDays(days, known.days) };
+  const claimedDays = changedDays(days, known.days);
+  Object.entries(days || {}).forEach(([id, day]) => {
+    if (dayInAir(id) && dayCarried(id) !== day) claimedDays[id] = day;
+  });
+  return { entries: rows, days: claimedDays };
 }
 
 // A DETACHED copy of an entries map: same numbers, none of the same objects.
