@@ -390,10 +390,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "5711d4b184f13c2a",
-      "mapSha": "c8ea81c1990c384f",
+      "sha": "20cd8385cd085b63",
+      "mapSha": "8af072a23f7f922e",
       "inputs": {
-        "js/i18n.js": "921b495b866b9100"
+        "js/i18n.js": "935bd7e538a7419b"
       }
     },
     "dist/index.js": {
@@ -523,14 +523,14 @@
       }
     },
     "dist/inventory.css": {
-      "sha": "fbb27bb7f7c3dcc3",
+      "sha": "5d791f848315bf98",
       "inputs": {
-        "inventory.css": "63b1fd25412e0c8a"
+        "inventory.css": "6d713e2abca3852a"
       }
     },
     "dist/inventory.js": {
-      "sha": "069b5d0660814225",
-      "mapSha": "ba182a4d33725c49",
+      "sha": "5ee032369fcddf67",
+      "mapSha": "c7f91ac28e9bf28b",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -557,14 +557,14 @@
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/inventory/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/inventory/dom.js": "87390d375dc3246d",
-        "js/inventory/firebase-inventory.js": "cba70050d6577cd0",
+        "js/inventory/firebase-inventory.js": "0d9f054ae87e4c98",
         "js/inventory/inventory-detail.js": "f0619d73cb5efe7f",
-        "js/inventory/inventory-list.js": "707c3500fbbef98b",
-        "js/inventory/inventory-main.js": "92e2576b121b9f90",
-        "js/inventory/inventory-model.js": "3931e39de227a8fa",
+        "js/inventory/inventory-list.js": "d4f7059634db4657",
+        "js/inventory/inventory-main.js": "37d023f8cb904541",
+        "js/inventory/inventory-model.js": "4f69286431ff0085",
         "js/inventory/inventory-outbox.js": "4f168a05e32ba950",
         "js/inventory/inventory-purchases.js": "639d19b4fc0bc4d3",
-        "js/inventory/inventory-store.js": "16861f5525d29067",
+        "js/inventory/inventory-store.js": "ce64e08b545a0bf8",
         "js/inventory/inventory-usage.js": "5cc561e12035afe6",
         "js/inventory/inventory-value.js": "fe714a0057753b63",
         "js/join-code.js": "ebf5b5e52507b80b",
