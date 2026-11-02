@@ -35,6 +35,9 @@
 // ⚠️ OWNERS, MANAGERS AND HEAD CHEFS ALWAYS SEE EVERY CARD. That was his choice, and it
 // is also what keeps the switch safe to use: the person who hid a card can never lose
 // the way back to it, because the screen that shows it again is on their own Home.
+//
+// ⚠️ A PARTIAL OWNER (Federico, 1 Nov 2026) SEES THE CARDS OF THEIR OWN SIDE AND NO OTHER,
+// whatever the venue hides from its employees: ROLE_CARDS below.
 
 // Every card the Home can show, in the order the markup draws them.
 //
@@ -69,6 +72,23 @@ export const OPT_IN_IDS: readonly OptInCardId[] = Object.freeze(
     .filter((card): card is Extract<StaffCard, { readonly optIn: true }> => card.optIn)
     .map(card => card.id),
 );
+
+// The Home cards each partial owner has. A role not listed here is not narrowed by this
+// table at all. ⚠️ THE KITCHEN KEEPS STOCKTAKE AND LOSES FOOD COST ALTHOUGH THE TWO SHARE
+// A SECTION, which is why this is by card and not by section. The values are the ones in
+// js/sections.js, written out because this file imports nothing
+// (tests/partial-owner-roles.test.mjs compares them).
+export const ROLE_CARDS: Readonly<Record<string, readonly CardId[]>> = Object.freeze({
+  'owner-sales': Object.freeze<CardId[]>(['foodcost']),
+  'owner-kitchen': Object.freeze<CardId[]>(['calculator', 'catalogue', 'orders', 'suppliers', 'pastries', 'inventory']),
+});
+
+export function roleHasCard(role: unknown, cardId: unknown): boolean {
+  const cards: readonly unknown[] | null = Object.prototype.hasOwnProperty.call(ROLE_CARDS, String(role))
+    ? ROLE_CARDS[String(role)] ?? null
+    : null;
+  return cards === null || cards.includes(cardId);
+}
 
 // The fields on locations/{lid}.
 export const HIDDEN_FIELD = 'staffHiddenCards';   // { <everyday card>: true } — hidden from staff
@@ -107,14 +127,31 @@ export function isHiddenForStaff(locationDoc: unknown, cardId: string | null | u
   return flagged(locationDoc, HIDDEN_FIELD, cardId);
 }
 
-// Is this card shown to this person? `canManage` is the session's — true for an owner
-// and for a manager, which includes a head chef.
+// Is this card shown to this person? `canManage` and `role` are the session's: canManage is
+// true for an owner, for a manager (which includes a head chef) and for a partial owner.
+//
+// ⚠️ THE ROLE IS ASKED FIRST, because canManage would answer yes to every card for a partial
+// owner. Leaving it out narrows nothing, so every caller passes it and
+// tests/partial-owner-roles.test.mjs walks them to say so.
 //
 // A card with no id is never hidden by this layer.
-export function cardVisibleTo(locationDoc: unknown, canManage: unknown, cardId: string | null | undefined): boolean {
+export function cardVisibleTo(
+  locationDoc: unknown,
+  canManage: unknown,
+  cardId: string | null | undefined,
+  role?: unknown,
+): boolean {
+  if (cardId && !roleHasCard(role, cardId)) return false;
   if (canManage === true) return true;
   if (!cardId) return true;
   return !isHiddenForStaff(locationDoc, cardId);
+}
+
+// Which notifications reach a partial owner: each only those of their own side. ⚠️ NOT THE
+// SAME AS THE CARDS. A client's order opens the Calculator, which the owner of the sales side
+// does not have, and the order is exactly their business (his choice, 1 Nov 2026).
+function toldAboutCard(access: unknown, cardId: string | null | undefined): boolean {
+  return access === 'owner-sales' ? cardId === 'calculator' : roleHasCard(access, cardId);
 }
 
 // Anything that maps a uid to its membership value and can be asked with `get` — a Map,
@@ -128,7 +165,7 @@ export interface AccessLookup {
 // reading. Otherwise the Set of uids who may.
 //
 // `accessByUid` maps a uid to its membership VALUE for this venue (users/{uid}.locations
-// .<lid>: `true` | 'manager' | 'owner'). ⚠️ A UID ABSENT FROM IT — its role could not be
+// .<lid>: `true` | 'manager' | 'owner' | a partial owner). ⚠️ A UID ABSENT FROM IT — its role could not be
 // read — IS NOT KNOWN TO RUN THE PLACE, and is not told: power nobody granted does not
 // exist (js/roles.js). A head chef holds 'manager', so they are told.
 //
@@ -147,7 +184,8 @@ export function mayBeTold(
   for (const uid of candidates) {
     if (!uid || typeof uid !== 'string') continue;
     const access = accessByUid && typeof accessByUid.get === 'function' ? accessByUid.get(uid) : undefined;
-    if (cardVisibleTo(locationDoc, access === 'owner' || access === 'manager', cardId)) told.add(uid);
+    const runs = access === 'owner' || access === 'manager' || access === 'owner-sales' || access === 'owner-kitchen';
+    if (toldAboutCard(access, cardId) && cardVisibleTo(locationDoc, runs, cardId)) told.add(uid);
   }
   return told;
 }

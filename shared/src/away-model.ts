@@ -166,7 +166,15 @@ export interface RosterMember {
 
 type Roster<M extends RosterMember> = readonly (M | null | undefined)[] | null | undefined;
 
-// Whoever runs the place, minus the sender: the people a notification could reach before
+// Who an order list is for: whoever runs the place, and of the two partial owners only the
+// kitchen, because the owner of the sales side does not order from suppliers. ⚠️ THE SERVER
+// ASKS THIS TOO (functions/index.js managersAmong), so the sending screen and the phones
+// that ring cannot disagree.
+export function receivesOrderLists(role: unknown): boolean {
+  return role === 'owner' || role === 'manager' || role === 'owner-kitchen';
+}
+
+// Whoever receives order lists, minus the sender: the people a notification could reach before
 // anybody's holiday is taken into account. The original repeats these two filters in three
 // functions; here they are written once, and the type says every survivor has a uid.
 function runnersOf<M extends RosterMember>(
@@ -175,7 +183,7 @@ function runnersOf<M extends RosterMember>(
 ): (M & { uid: string })[] {
   return (roster || [])
     .filter((m): m is M & { uid: string } => !!m && !!m.uid && m.uid !== senderUid)
-    .filter(m => m.role === 'owner' || m.role === 'manager');
+    .filter(m => receivesOrderLists(m.role));
 }
 
 // Is this uid in the set of people who are away? `awaySet` may be missing, and then nobody is.

@@ -11,6 +11,10 @@
 
 import { isValidLocationId } from './location.js';
 
+// ⚠️ THE ROLE TABLE LIVES IN js/home-cards.js, because the server asks it through that file's
+// byte copy and the copy may import nothing.
+export { ROLE_CARDS, roleHasCard } from './home-cards.js';
+
 // ⚠️ A NEW NAME HERE IS NOT OPTIONAL, IT IS WHAT MAKES A PAGE REACHABLE. A
 // section missing from this list is not "allowed by default" — allowedSections
 // never produces a key for it, so isSectionAllowed returns false and
@@ -154,19 +158,6 @@ export const NOT_FOR_ROLE = Object.freeze({
   [OWNER_SALES]: Object.freeze(['calculator', 'catalogue', 'orders', 'pastries']),
   [OWNER_KITCHEN]: Object.freeze(['foodcost']),
 });
-
-// The Home cards each partial owner has. A role not listed here is not narrowed by this
-// table at all. ⚠️ THE KITCHEN KEEPS STOCKTAKE AND LOSES FOOD COST ALTHOUGH THE TWO SHARE
-// A SECTION, which is why this is by card and not by section (js/home-cards.js).
-export const ROLE_CARDS = Object.freeze({
-  [OWNER_SALES]: Object.freeze(['foodcost']),
-  [OWNER_KITCHEN]: Object.freeze(['calculator', 'catalogue', 'orders', 'suppliers', 'pastries', 'inventory']),
-});
-
-export function roleHasCard(role, cardId) {
-  const cards = Object.prototype.hasOwnProperty.call(ROLE_CARDS, String(role)) ? ROLE_CARDS[role] : null;
-  return cards === null || cards.includes(cardId);
-}
 
 // Which sections this person sees in this location: the location's set NARROWED
 // by the role. Never widened — a role cannot turn on a section the venue does

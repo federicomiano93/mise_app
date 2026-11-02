@@ -103,6 +103,14 @@ export function canManageVenue(userDoc, locationId) {
   return value === OWNER || value === MANAGER;
 }
 
+// Does this person work on the clients at all — the Clients editor, the WhatsApp lists, the
+// ordering links and menus? Everybody but the owner of the kitchen, who reads names and
+// quantities only inside the Calculator. Same list as worksOnClientsAs() in firestore.rules
+// (tests/partial-owner-roles.test.mjs compares them). `role` is the session's, 'staff' for `true`.
+export function worksOnClients(role) {
+  return role !== OWNER_KITCHEN;
+}
+
 // May this account invite people and decide their roles?
 //
 // ⚠️ OWNER ONLY, and this is the whole difference between the two upper roles.
@@ -119,6 +127,8 @@ export function isOwner(userDoc, locationId) {
 export function roleLabel(role) {
   if (role === OWNER) return t('role.owner');
   if (role === MANAGER) return t('role.manager');
+  if (role === OWNER_SALES) return t('role.ownerSales');
+  if (role === OWNER_KITCHEN) return t('role.ownerKitchen');
   return t('role.staff');
 }
 
@@ -159,10 +169,10 @@ export function personLabel(role, title) {
   return titleLabel(title);
 }
 
-// The role choices on "Who can get in": FOUR words, THREE levels of power.
+// The role choices on "Who can get in": SIX words, FIVE levels of power.
 //
 // ⚠️ Two of them grant exactly the same thing, and the screen has to say so out
-// loud — a row of four that looks like four levels is worse than no title at all.
+// loud — a row that looks like one level per word is worse than no title at all.
 //
 // ⚠️ IT CARRIES A KEY, NOT A WORD, AND THAT IS NOT A STYLE CHOICE. This is a
 // frozen constant built when the file is first imported — long before anybody has
@@ -172,6 +182,8 @@ export function personLabel(role, title) {
 // for the word at the moment it draws it.
 export const ROLE_CHOICES = Object.freeze([
   { key: OWNER, role: OWNER, title: null, labelKey: 'role.owner' },
+  { key: OWNER_SALES, role: OWNER_SALES, title: null, labelKey: 'role.ownerSales' },
+  { key: OWNER_KITCHEN, role: OWNER_KITCHEN, title: null, labelKey: 'role.ownerKitchen' },
   { key: MANAGER, role: MANAGER, title: 'manager', labelKey: 'role.manager' },
   { key: 'head-chef', role: MANAGER, title: 'head-chef', labelKey: 'role.headChef' },
   { key: 'staff', role: 'staff', title: null, labelKey: 'role.staff' },
@@ -190,6 +202,8 @@ export function choiceLabel(choice) {
 export function personLabelInSentence(role, title) {
   if (role !== MANAGER) {
     if (role === OWNER) return t('role.owner.inSentence');
+    if (role === OWNER_SALES) return t('role.ownerSales.inSentence');
+    if (role === OWNER_KITCHEN) return t('role.ownerKitchen.inSentence');
     return t('role.staff.inSentence');
   }
   return title === 'head-chef' ? t('role.headChef.inSentence') : t('role.manager.inSentence');

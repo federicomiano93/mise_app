@@ -89,7 +89,8 @@ export function listStatus({ venueOpen, loaded, failed, emptyCopy, stalled, onli
 //            for the card of before, which an old stored price shape opens)
 // actions: { saveSupplier, saveIngredient, priceHistory, setSupplierActive,
 //            setIngredientActive, deleteSupplier, deleteIngredient, deleteCategory(list, ids),
-//            toggleFavouriteSupplier(id, on) — a function only for owner/manager }
+//            toggleFavouriteSupplier(id, on) — a function only for owner/manager,
+//            mayChangeVenue — true only for owner/manager (the venue's switches in Settings) }
 // hooks:   { onChrome({ addLabel }) } — told on every paint which word the page
 //            header's «+» should carry, because it follows the active tab.
 //          { pane } — the element beside the list where a level opens on a TABLET
@@ -711,7 +712,7 @@ export function buildRegistry(data, actions, hooks = {}) {
         // The form then knows nothing about overlays and this file stays the only
         // one that navigates — the same seam saveIngredient and priceHistory use.
         // ⚠️ `openMerge` ONLY FOR AN EXISTING INGREDIENT (never packaging) AND ONLY WHEN registry-main.js says this
-        // person may merge (`mergePacks`, a getter like `deleteIngredient`: owner or manager with Food cost).
+        // person may merge (`mergePacks`, a getter like `deleteIngredient`: whoever may write a price).
         actions: {
           ...actions,
           capturePackPhoto,
@@ -839,6 +840,8 @@ export function buildRegistry(data, actions, hooks = {}) {
       categoriesReady: () => data.categoriesLoaded?.() !== false,
       ingredients: () => data.ingredients(),
       onDeleteCategory: (list, ids) => actions.deleteCategory(list, ids),
+      // Read each time the screen is built, so it follows the session.
+      mayChangeVenue: actions.mayChangeVenue === true,
       onSet: async (key, on) => {
         // ⚠️ TWO CALLABLES, ROUTED BY KEY. setIngredientPanels writes two fields whose
         // absence means YES; setPackPhoto writes one whose absence means NO, because it

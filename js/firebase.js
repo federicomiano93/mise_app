@@ -75,7 +75,7 @@ import {
   locationDocPath,
 } from './location.js';
 import { allowedSections, sectionsFor, pickStart, locationsOf } from './sections.js';
-import { roleOf, isOwner, canManage } from './roles.js';
+import { roleOf, isOwner, canManage, canManageVenue } from './roles.js';
 import {
   clearLocalData, shouldClearLocalData, offlineCacheVerdict, OFFLINE_CACHE_OWNER_KEY,
 } from './local-data.js';
@@ -353,7 +353,7 @@ function takePickVenue() {
 // is "no owner powers", the same direction the rules take for a value nobody set.
 let session = { status: 'loading', user: null, locationId: null, location: null,
                 sections: allowedSections(null), options: [], optionNames: {},
-                role: 'staff', canManage: false, isOwner: false, isAppAdmin: false };
+                role: 'staff', canManage: false, canManageVenue: false, isOwner: false, isAppAdmin: false };
 let userDocCache = null;
 // ⚠️ STARTS false AND IS CLEARED ON SIGN-OUT, like userDocCache above. A stale
 // `true` surviving a sign-out would draw the "New customer" entry for whoever
@@ -592,6 +592,9 @@ async function enterLocation(locationId, options, user) {
     // button reads canManage; only the "who can get in" entry reads isOwner.
     // Using isOwner for a bin would take the bins away from every manager.
     canManage: canManage(userDocCache, locationId),
+    // ⚠️ AND canManage IS TRUE FOR A PARTIAL OWNER, inside their own side. The whole venue —
+    // its language, its Home cards, its switches — asks this one instead.
+    canManageVenue: canManageVenue(userDocCache, locationId),
     isOwner: isOwner(userDocCache, locationId),
     // ⚠️ A THIRD ANSWER, AND IT IS NOT ABOUT THIS LOCATION AT ALL. isOwner is
     // "may hire into THIS venue"; this is "may create a new customer's venue" —
@@ -773,7 +776,7 @@ onAuthStateChanged(auth, user => {
     markHubPassed(false);
     setSession({ status: 'signed-out', user: null, locationId: null, location: null,
                  options: [], sections: allowedSections(null),
-                 role: 'staff', canManage: false, isOwner: false, isAppAdmin: false });
+                 role: 'staff', canManage: false, canManageVenue: false, isOwner: false, isAppAdmin: false });
     return;
   }
 

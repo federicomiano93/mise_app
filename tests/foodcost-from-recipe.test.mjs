@@ -68,12 +68,12 @@ test('⚠️ before a venue is open, nobody is shown it', () => {
 test('the rule is the auth gate\'s own, section AND card', () => {
   const gate = read('js/auth-gate.js');
   assert.match(gate, /isSectionAllowed\(session\.location, pageSection\)/);
-  assert.match(gate, /cardVisibleTo\(session\.location, session\.canManage, pageCard\)/);
+  assert.match(gate, /cardVisibleTo\(session\.location, session\.canManage, pageCard, session\.role\)/);
   assert.match(read('foodcost.html'), /<body data-section="foodcost" data-card="foodcost">/,
     'the page is judged by the section foodcost and the card foodcost — the two this mirrors');
   const link = codeOf(read('js/recipe-link.js'));
   assert.match(link, /isSectionAllowed\(locationDoc, 'foodcost'\)/);
-  assert.match(link, /cardVisibleTo\(locationDoc, canManage === true, 'foodcost'\)/);
+  assert.match(link, /cardVisibleTo\(locationDoc, canManage === true, 'foodcost', role\)/);
 });
 
 // ── What Food cost opens ────────────────────────────────────────────────────
@@ -126,7 +126,7 @@ test('the recipe screen shows the card only to whoever may open Food cost, first
     'asked on every build, before anything is drawn');
   assert.match(panel, /onclick: \(\) => app\.openFoodCost\(recipe\)/);
   const main = codeOf(read('js/catalogue/catalogue-main.js'));
-  assert.match(main, /mayOpenFoodCost\(s\.location, s\.canManage\)/);
+  assert.match(main, /mayOpenFoodCost\(s\.location, s\.canManage, s\.role\)/);
   assert.match(main, /foodCostHref\(recipe\.id\)/);
 });
 

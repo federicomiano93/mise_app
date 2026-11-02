@@ -12,9 +12,10 @@
 // again from the server, stops if either is gone, plans from the FRESH A (its codes may have changed under the
 // owner's finger) and checks where B is used ONCE MORE, right before the first write.
 
-import { sessionReady } from '../firebase.js';
+import { sessionReady, currentSession, firebaseConfig, isLocalEmulator } from '../firebase.js';
 import { currentLocationId, pathFor } from '../location.js';
 import { deleteIngredientWithPrice } from '../record-data.js';
+import { OWNER_KITCHEN } from '../sections.js';
 import { db } from './firebase-orders.js';
 import { refuseOffline, withTimeout } from './invoice-import-data.js';
 import { dropDeletedIngredientFromDraft } from './draft.js';
@@ -22,6 +23,10 @@ import { findUsage, monthKeyOf, previousMonthKeyOf, planMerge, deletionBatches }
 import {
   collection, doc, getDocsFromServer, getDocFromServer, writeBatch, query, where,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
+import { getApps, getApp, initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
+import {
+  getFunctions, httpsCallable, connectFunctionsEmulator,
+} from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-functions.js';
 
 const INGREDIENTS = 'ingredients';
 const INGREDIENT_PRICES = 'ingredient-prices';
@@ -36,6 +41,22 @@ const ORDER_REQUESTS = 'order-requests';
 
 const docsOf = (snap) => snap.docs.map(d => ({ id: d.id, ...d.data() }));
 
+const functions = getFunctions(getApps().length ? getApp() : initializeApp(firebaseConfig), 'us-central1');
+if (isLocalEmulator) connectFunctionsEmulator(functions, '127.0.0.1', 5001);
+
+// What the products say about B. ⚠️ THE OWNER OF THE KITCHEN MAY NOT READ THEM (they hold selling
+// prices and margins), so for them the server answers with the names alone
+// (functions/product-usage.js). A failed call REJECTS, like every read here.
+async function productsSource(bId) {
+  if (currentSession().role === OWNER_KITCHEN) {
+    const res = await withTimeout(httpsCallable(functions, 'productsUsingIngredient')({
+      locationId: currentLocationId(), ingredientId: bId,
+    }));
+    return { productNames: res.data.names };
+  }
+  return { products: docsOf(await withTimeout(getDocsFromServer(collection(db, pathFor(PRODUCTS))))) };
+}
+
 // Where ingredient B is still used → [{ kind, name?, month? }] (empty = free to merge). Every read comes from the
 // server and the first failure REJECTS: «could not check» must never read as «not used». Both the current AND the
 // previous month's stocktake are read (last month stays open until somebody closes it), and every order list
@@ -45,14 +66,14 @@ export async function checkUsage(bId, nowMs = Date.now()) {
   await sessionReady;
   const months = [monthKeyOf(nowMs), previousMonthKeyOf(nowMs)].filter(Boolean);
   const [products, recipes, draft, requests, ...inventories] = await Promise.all([
-    withTimeout(getDocsFromServer(collection(db, pathFor(PRODUCTS)))),
+    productsSource(bId),
     withTimeout(getDocsFromServer(collection(db, pathFor(RECIPES)))),
     withTimeout(getDocFromServer(doc(collection(db, pathFor(DRAFTS)), CURRENT_DRAFT))),
     withTimeout(getDocsFromServer(collection(db, pathFor(ORDER_REQUESTS)))),
     ...months.map(month => withTimeout(getDocFromServer(doc(collection(db, pathFor(INVENTORY)), month)))),
   ]);
   return findUsage(bId, {
-    products: docsOf(products),
+    ...products,
     recipes: docsOf(recipes),
     inventories: months.map((month, i) => ({ month, data: inventories[i] && inventories[i].exists() ? inventories[i].data() : null })),
     draft: draft.exists() ? draft.data() : null,

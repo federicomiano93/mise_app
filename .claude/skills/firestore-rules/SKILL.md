@@ -41,8 +41,8 @@ The full data model — every collection and field, with the reason behind each 
   (`writesCalculatorConfig`), and only the three weighing fields of a recipe
   (`weighsRecipeLoss`). `'owner-kitchen'` still saves `config/calculator` whole, clients included:
   the Calculator re-normalises the whole document on every save, so a key check would refuse a
-  dough. Their table is `narrowedOut` / `cardNarrowedOut` here and `NOT_FOR_ROLE` / `ROLE_CARDS` in
-  `js/sections.js`; `tests/partial-owner-roles.test.mjs` compares them.
+  dough. Their table is `narrowedOut` / `cardNarrowedOut` here, `NOT_FOR_ROLE` in `js/sections.js`
+  and `ROLE_CARDS` in `js/home-cards.js`; `tests/partial-owner-roles.test.mjs` compares them.
 - Client ordering accounts are NEVER a `member()` — they have no `users/{uid}`; their grant
   is `locations/{lid}/client-accounts/{uid}` (`isOrderClient`). Keep it that way: never let
   the app write another person's `users/{uid}` — that would be a master key.

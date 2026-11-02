@@ -150,8 +150,8 @@ test('⚠️⚠️ saving a product really hands every weighing to the database'
 test('⚠️ no weighing boxes where the database would refuse their Save', () => {
   assert.match(FC_EDITOR, /if \(!id \|\| !app\.tables\(\)\.recipes\[id\] \|\| !app\.canWeigh\(\)\) return null;/,
     'a venue with the catalogue off can READ its recipes in Food cost but not write them');
-  assert.match(FC_DATA, /export function canWriteRecipes\(\) \{\s*return currentSession\(\)\.sections\?\.catalogue === true;/,
-    'the catalogue section, as the session narrowed it — the same default as the rules');
+  assert.match(FC_DATA, /export function canWriteRecipes\(\) \{\s*return isSectionAllowed\(currentSession\(\)\.location, 'catalogue'\);/,
+    'the venue catalogue section, not the role-narrowed one: sales writes these three numbers with no catalogue — the same default as the rules');
   assert.match(codeOf(read('js/foodcost/foodcost-main.js')), /canWeigh: canWriteRecipes,/);
 });
 
