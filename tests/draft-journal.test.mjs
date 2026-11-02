@@ -573,6 +573,24 @@ test('a correction that turned out to need nothing does not cost another line it
   assert.equal(second.days.sup1, DAY);
 });
 
+test('⚠️ a correction on a line a colleague has since ordered still keeps the day stamps out', async () => {
+  const first = await openPage(server());
+  stub.holdSaves();
+  type(first, 'flour', { qty: 5 }, 'sup1');
+  await pause();
+  type(first, 'flour', { qty: 0 });
+  type(first, 'salt', { qty: 2 }, 'sup2');
+  stub.calls.saveDoc.length = 0;
+  stub.letSavesThrough();
+  // Placing empties the line too, so it reads just as the correction wanted: only the orders tell.
+  stub.history.records = [placedAt(Date.now() + 60000, { flour: 5 })];
+  await openPage(server());
+  await answer(server());
+  await pause();
+  assert.deepEqual(sent()[0].entries, { salt: { qty: 2, unit: '', supplierId: '' } });
+  assert.equal(sent()[0].days, undefined, 'sup1\'s next order must not be dated by a stamp left behind');
+});
+
 test('the note keeps the write in the air only when it says something else', async () => {
   const page = await openPage(server());
   stub.holdSaves();

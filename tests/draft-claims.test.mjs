@@ -405,6 +405,25 @@ test('a refused write does not come back over a correction already on its way', 
   await settle();
 });
 
+test('a refused day stamp does not come back over a newer one already on its way', async () => {
+  stub.holdSaves();
+  snapshot({ d19: { qty: 2, stock: 0 } }, { aldo: '2026-10-27' });
+  page.days.aldo = DAY;
+  const first = draft.saveDraftNow(page.entries, page.days).catch(() => {});
+  page.days.aldo = '2026-10-29';
+  draft.saveDraftNow(page.entries, page.days);
+  snapshot({ d19: { qty: 2, stock: 0 } }, { aldo: '2026-10-29' });   // Firestore shows the newer stamp
+  type('d19b', { qty: 1 });                        // so the keystroke drops its claim
+  stub.held[0].reject(new Error('permission-denied'));
+  await first;
+  await settle();
+  await pause();
+  assert.equal(stub.held[2].data.days, undefined, 'the refused stamp stays out of the next write');
+  assert.equal(page.days.aldo, '2026-10-29');
+  stub.held.slice(1).forEach(write => write.resolve());
+  await settle();
+});
+
 // Changing one's mind twice: the first write lands, and its value is the one typed last.
 test('5, 0, 5 again: the first 5 landing inside the pause does not stop the last 5 going out', async () => {
   stub.holdSaves();

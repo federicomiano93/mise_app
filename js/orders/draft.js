@@ -334,8 +334,9 @@ async function settleRestored() {
   });
   const quantities = rows => Object.values(rows).filter(row => GROUP.some(field => field in row)).length;
   // A correction whose line already reads as it wanted asked for nothing: it is no line dropped.
+  // ⚠️ UNLESS AN ORDER NAMES IT: placing empties a line too, and that is the stamp to keep out.
   const typed = quantities(Object.entries(left.entries)
-    .filter(([id, { row, air }]) => !air?.length
+    .filter(([id, { row, air }]) => !air?.length || ordered.has(id)
       || GROUP.filter(field => field in row).some(field => row[field] !== stored(known.entries[id])[field]))
     .map(([, { row }]) => row));
   const back = quantities(entries);
