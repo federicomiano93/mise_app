@@ -226,6 +226,7 @@ function saveJournal(typed = false) {
   if (restored) {
     Object.entries(restored.entries).forEach(([id, left]) => {
       entries[id] = { row: { ...left.row }, base: { ...left.base } };
+      if (left.air?.length) entries[id].air = left.air.map(seen => ({ ...seen }));
     });
     Object.assign(days, restored.days);
   }
@@ -233,14 +234,32 @@ function saveJournal(typed = false) {
     const there = stored(known.entries[id]);
     const row = {};
     const base = {};
-    const noteField = field => { row[field] = held[field]; base[field] = there[field]; };
+    const air = [];
+    const noteFields = (fields, corrected) => {
+      fields.forEach(field => { row[field] = held[field]; base[field] = there[field]; });
+      air.push(...corrected);
+    };
+    // ⚠️ «5 PUT BACK TO 0» MATCHES `known` UNTIL A SNAPSHOT SHOWS THE 5, BUT THE 5 MAY ALREADY BE IN
+    // FIRESTORE'S QUEUE: with the page gone before the 0 left, it lands and comes back. So a claim
+    // that corrects a write in the air is noted even when it matches `known`, and says what that
+    // write said, because on the next open the line can read either way (stillOurs).
+    const corrects = fields => flights.map(flight => flight.entries[id]).filter(sent => sent
+      && fields.every(field => field in sent)
+      && fields.some(field => sent[field] !== held[field])
+      && fields.some(field => sent[field] !== there[field]))
+      .map(sent => Object.fromEntries(fields.map(field => [field, sent[field]])));
     // What a snapshot already shows is in Firestore's queue. The group only as a whole.
     const group = GROUP.filter(field => field in held);
-    if (group.some(field => held[field] !== there[field])
-      && !group.every(field => wasRefused(id, field, held[field]))) group.forEach(noteField);
-    if ('stock' in held && held.stock !== there.stock && !wasRefused(id, 'stock', held.stock)) noteField('stock');
+    const groupCorrects = group.length ? corrects(group) : [];
+    if ((group.some(field => held[field] !== there[field]) || groupCorrects.length)
+      && !group.every(field => wasRefused(id, field, held[field]))) noteFields(group, groupCorrects);
+    const stockCorrects = 'stock' in held ? corrects(['stock']) : [];
+    if ('stock' in held && (held.stock !== there.stock || stockCorrects.length)
+      && !wasRefused(id, 'stock', held.stock)) noteFields(['stock'], stockCorrects);
     if (isEmpty(row)) return;
+    const seen = [...(entries[id]?.air || []), ...air];
     entries[id] = { row: { ...entries[id]?.row, ...row }, base: { ...entries[id]?.base, ...base } };
+    if (seen.length) entries[id].air = seen;
   });
   Object.entries(pending.days).forEach(([id, day]) => {
     if (day && known.days[id] !== day && !refused.some(write => write.days[id] === day)) {
@@ -250,17 +269,18 @@ function saveJournal(typed = false) {
   writeJournal(journalLid, { at: journalAt, entries, days });
 }
 
-// What the last page left that `doc` still reads as it did when it was typed. Already holding it
+// What the last page left that `doc` still reads as it did when it was typed, or as a write it had
+// in the air and had corrected (`air`: that write reached the queue and landed). Already holding it
 // means it arrived; holding anything else means somebody changed that line meanwhile, and their word
 // wins. The quantity group and the stock are judged apart, as they are written: a colleague's shelf
 // count says nothing about a quantity.
 function stillOurs(left, doc) {
   const entries = {};
-  Object.entries(left.entries).forEach(([id, { row, base }]) => {
+  Object.entries(left.entries).forEach(([id, { row, base, air = [] }]) => {
     const there = stored(doc?.entries?.[id]);
     const kept = {};
     [GROUP.filter(field => field in row), 'stock' in row ? ['stock'] : []].forEach(fields => {
-      if (fields.length && fields.every(field => base[field] === there[field])
+      if (fields.length && [base, ...air].some(seen => fields.every(field => seen[field] === there[field]))
         && fields.some(field => row[field] !== there[field])) {
         fields.forEach(field => { kept[field] = row[field]; });
       }
@@ -330,6 +350,7 @@ function forgetRestored(id, fields) {
   const left = restored?.entries[id];
   if (!left) return;
   fields.forEach(field => { delete left.row[field]; delete left.base[field]; });
+  if (left.air) left.air = left.air.filter(seen => !fields.some(field => field in seen));
   if (isEmpty(left.row)) delete restored.entries[id];
 }
 
