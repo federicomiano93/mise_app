@@ -187,6 +187,12 @@ test('orders-main: the write asks about the server, a failed stream and the open
   assert.ok(body.includes('serverSeen: copyServerSeen'));
   assert.ok(body.includes('listFailed: copyListFailed'));
   assert.ok(body.includes('activeLocation: activeLocation()'));
+  // A bare mayWriteCopy(...) would still carry all three arguments and write regardless.
+  const asked = body.indexOf('if (!mayWriteCopy(');
+  assert.ok(asked !== -1, 'the answer must decide');
+  const refused = body.indexOf('})) return;', asked);
+  assert.ok(refused !== -1, 'a no must leave the timer');
+  assert.ok(refused < body.indexOf('writeListCopy(lid'), 'and before the write');
 });
 
 test('orders-main: both lists report the server\'s answer, and it arms the write by itself', () => {
@@ -210,6 +216,7 @@ test('firebase-orders: the server\'s answer is heard, once, on the collection it
   assert.ok(body.slice(0, 500).includes('includeMetadataChanges: true'), 'without it an identical answer never calls back');
   assert.ok(body.slice(0, 500).includes('if (snap.metadata.fromCache) return;'));
   assert.ok(body.slice(0, 500).includes('stop();'));
+  assert.ok(!body.slice(0, 500).includes('console.error'), 'one failed stream must not file a second error report');
 });
 
 test('the held supplier opens only if it still exists', () => {

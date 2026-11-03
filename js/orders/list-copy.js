@@ -129,6 +129,9 @@ export function activeLocation(storage = defaultStorage()) {
 //     wiped this device's data, and this page, still running, has a write waiting: it would put the
 //     old venue's names back. Equal, not «not another one»: the session writes the key before a venue
 //     counts as open, so a missing key means a sign-out or «choose a venue again» in that window.
+//     ⚠️ Not airtight: signOutNow and enterLocation wipe first and change the key after an await, so a
+//     write landing in that moment passes. The names then sit in storage until the next wipe or write,
+//     and readListCopy still refuses them for any other venue.
 export function mayWriteCopy({ loaded, serverSeen, listFailed, lid, activeLocation: active }) {
   return bothLanded(loaded) && bothLanded(serverSeen) && !listFailed
     && typeof lid === 'string' && lid !== '' && active === lid;

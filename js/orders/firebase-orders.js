@@ -513,7 +513,8 @@ export async function watchServerAnswer(name, id, onAnswer) {
 
 // The same for a whole collection already being watched with watchCollection: called ONCE, the first
 // time the server itself has answered for it, and no extra read for the same reason. Its docs are never
-// read, so it costs a weak tablet nothing. An error needs no second telling: the watcher reports it.
+// read, so it costs a weak tablet nothing. console.warn, not console.error: the watcher already reports
+// the failure, and each console.error line becomes a saved error report (js/error-report.js).
 export async function watchCollectionServerAnswer(name, onAnswer) {
   await authReady;
   const stop = onSnapshot(
@@ -524,7 +525,7 @@ export async function watchCollectionServerAnswer(name, onAnswer) {
       stop();
       onAnswer();
     },
-    err => { console.error(`watchCollectionServerAnswer(${name}) failed:`, err); },
+    err => { console.warn(`watchCollectionServerAnswer(${name}) failed:`, err); },
   );
   return stop;
 }
