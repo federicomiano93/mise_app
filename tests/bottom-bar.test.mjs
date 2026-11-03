@@ -143,7 +143,7 @@ test('the Calculator’s three buttons wrap in the shared bar — no grid, no pe
   assert.doesNotMatch(css, /body\[data-section="calculator"\] \.recipe-footer/);
   assert.doesNotMatch(css, /#settings-footer-btn \{/);
   const orders = read('orders.css').replace(/\/\*[\s\S]*?\*\//g, '');
-  assert.doesNotMatch(orders, /#orders-footer/, 'the shared bar already centres one button');
+  assert.doesNotMatch(orders, /#orders-footer/, 'the shared bar already centres its buttons');
   assert.match(orders, /body\[data-section="orders"\] \.recipe-footer-btn \{ min-height: var\(--tap-min\); \}/,
     'the tablet floor stays');
 });

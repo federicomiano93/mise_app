@@ -169,7 +169,9 @@ test('History is only marked out of date while closed, and drawn when it opens',
   assert.match(main, /function historyVisible\(\) \{[^}]*!overlay\.hidden/);
   const open = main.slice(main.indexOf('function openHistory()'), main.indexOf('function renderHistory()'));
   assert.match(open, /overlay\.hidden = false;\s*if \(historyDirty\) renderHistory\(\);/);
-  assert.match(main, /openHistory: \(\) => \{\s*closeAlertsPanel\(\);[^}]*openHistory\(\);/);
+  assert.match(main, /whenLive\(openHistory\)/);
+  assert.ok(open.indexOf('closeAlertsPanel()') > 0 && open.indexOf('closeAlertsPanel()') < open.indexOf('overlay.hidden = false'),
+    'the panel must never sit on top of a full screen');
 });
 
 test('the Incoming list body waits for its tab, the banners and the badge do not', () => {
