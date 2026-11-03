@@ -19,7 +19,7 @@ import { useOrders, useOrdersStore } from './OrdersContext';
 import { dayTranslate } from './dayWords';
 import { HISTORY_DOOR, sendDayOpener, useHandBack } from './handBack';
 import { cameFromList, useLeave } from './ordersNav';
-import { SETTINGS_PATH } from './ordersPath';
+import { ORDERS_PATH } from './ordersPath';
 import type { OrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
 import { recordSendRows } from './sendFlow';
@@ -36,7 +36,7 @@ type Props = {
   onOpenDay: (date: string) => void;
 };
 
-// «Past orders» (parity H1–H8), at /orders/history, one level below the settings: one section per DAY, newest first, and in it
+// «History» (parity H1–H8), at /orders/history, one level below the list: one section per DAY, newest first, and in it
 // one collapsible card per supplier. The records are the live window (the last two months) plus the older pages the person asked
 // for from the server; the days beyond `historyDays` are parked behind «Show older orders».
 //
@@ -53,7 +53,7 @@ export function HistoryScreen({ lens, hidden, onOpenEdit, onOpenDay }: Props) {
   const handBack = useHandBack();
   const snapshot = useOrders();
   const { config, older: paging } = snapshot;
-  const leave = useLeave(SETTINGS_PATH, () => { handBack.expect(HISTORY_DOOR); });
+  const leave = useLeave(ORDERS_PATH, useCallback(() => { handBack.expect(HISTORY_DOOR); }, [handBack]));
   const [send, sendDialogs] = useSendOrder(lens);
   const titleId = useId();
   const title = useRef<HTMLHeadingElement>(null);
@@ -82,7 +82,7 @@ export function HistoryScreen({ lens, hidden, onOpenEdit, onOpenDay }: Props) {
   const suppliersById = useMemo(() => indexById(snapshot.suppliers), [snapshot.suppliers]);
 
   useEffect(() => {
-    // Opened from the settings the page leaves the focus alone (FROM_LIST): it goes to this title, once.
+    // Opened from the list the page leaves the focus alone (FROM_LIST): it goes to this title, once.
     if (!hidden && cameFromList(state)) title.current?.focus();
   }, []);
 

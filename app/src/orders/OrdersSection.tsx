@@ -36,7 +36,7 @@ import {
 } from './handBack';
 import { FROM_LIST, cameFromList, replacedState } from './ordersNav';
 import {
-  CLEAR_PATH, INCOMING_PATH, LISTS_PATH, ORDERS_PATH, PLACE_ALL_PATH, REORDER_PATH, SEND_PATH, SETTINGS_PATH, historyDayPath, historyEditPath,
+  CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, LISTS_PATH, ORDERS_PATH, PLACE_ALL_PATH, REORDER_PATH, SEND_PATH, SETTINGS_PATH, historyDayPath, historyEditPath,
   incomingMissingPath, parseOrdersPath, requestPath, supplierConfirmPath, supplierItemsPath, supplierPath,
 } from './ordersPath';
 import type { OrdersView } from './ordersPath';
@@ -231,6 +231,19 @@ function OrdersLayout({ view }: { view: ShownView }) {
     else action();
   };
   const openSettings = whenLive(() => { open(SETTINGS_OPENER, SETTINGS_PATH); });
+  const openHistory = whenLive(() => {
+    // ⚠️ THE SPLIT KEEPS THIS DOOR ON SCREEN BELOW HISTORY TOO. From its editor or day screen it is one step up, like their Back: a
+    // replace would leave History twice in a row, and the next Back would seem to do nothing.
+    if ((view.kind === 'history-edit' || view.kind === 'history-day') && cameFromList(state)) {
+      handBack.expect(view.kind === 'history-edit' ? correctOpener(view.id) : sendDayOpener(view.date));
+      void navigate(-1);
+      return;
+    }
+    // ⚠️ A NEW VISIT STARTS AT THE TOP: the place written down belongs to whichever screen wrote it, Incoming or the order lists too,
+    // and Settings no longer stands in between to forget it. Today's orders would open scrolled out of sight.
+    historyPlace.current = null;
+    open(HISTORY_DOOR, HISTORY_PATH);
+  });
   // Back from Incoming and from «To re-order» gives the focus to the list's door (the debt banner opens Incoming the same way).
   const openIncoming = whenLive(() => { open(INCOMING_DOOR, INCOMING_PATH); });
   const openReorder = whenLive(() => { open(REORDER_DOOR, REORDER_PATH); });
@@ -322,9 +335,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   // list is on screen again (on a phone it was hidden behind the supplier, not unmounted).
   useLayoutEffect(() => {
     if (view.kind === 'list') handBack.deliver(pendingFallback);
-    // Back from History to the settings: the door that opened it. Back from the editor or the day screen to History: the card
-    // button or the day's «Send all». ⚠️ NOT deliver(): History opened from the settings expects the DOOR, which is not on screen.
-    else if (view.kind === 'settings') handBack.deliverIf(HISTORY_DOOR);
+    // Back from the editor or the day screen to History: the card button or the day's «Send all».
     else if (view.kind === 'history') handBack.deliverWhere(name => name.startsWith('correct:') || name.startsWith('send-day:'));
     // Back from «What arrived?» to Incoming: the row that opened it (gone when the order was answered: the title takes the focus).
     else if (view.kind === 'incoming') handBack.deliverWhere(name => name.startsWith('arrival:'));
@@ -383,6 +394,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
                 onClearAll={openClear}
                 onSend={openSend}
                 onSettings={openSettings}
+                onHistory={openHistory}
                 onIncoming={openIncoming}
                 onReorder={openReorder}
                 onLists={openLists}

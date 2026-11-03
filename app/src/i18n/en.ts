@@ -2298,12 +2298,10 @@ export const en = {
   'ord.sentCheck.notReached': 'Not sent, still to do: {names}',
   'ord.orderSent': 'Order sent',
   'ord.markAsPlaced': 'Mark as placed',
-  // Slice 3f-4: the Orders settings, «Past orders» (History) and the editor of a recorded order.
+  // Slice 3f-4: the Orders settings, History and the editor of a recorded order.
   'ord.settings.open': 'Orders settings',
   'ord.settings.title': 'Settings',
-  'ord.settings.openHistory': 'Past orders',
-  'ord.settings.historyDaysLine': { one: 'Shows the last day', other: 'Shows the last {n} days' },
-  'ord.history.title': 'Past orders',
+  'ord.history.title': 'History',
   'ord.history.sendAll': 'Send all',
   'ord.history.sendAgain': 'Send again',
   'ord.history.correct': 'Correct',

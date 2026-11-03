@@ -1,4 +1,4 @@
-/* «Past orders»: a section per day, a collapsible card per record, and the foot with «Show older orders» / «Load older orders».
+/* «History»: a section per day, a collapsible card per record, and the foot with «Show older orders» / «Load older orders».
    The screen does not clip (no `overflow`), so the bar above keeps sticking. Nothing sets sideways room: names wrap anywhere,
    so a 296px phone never scrolls sideways. */
 

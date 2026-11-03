@@ -109,7 +109,7 @@ export function useHandBackState(): HandBack {
 
 // The list's gear (step 3f-4): where Back from the Orders settings returns the focus.
 export const SETTINGS_OPENER = 'settings';
-// The settings screen's «Past orders» door: where Back from History returns the focus.
+// The list's «History» door, beside the gear (3 Nov 2026, it was in the settings): where Back from History returns the focus.
 export const HISTORY_DOOR = 'history-door';
 // A History card's «Correct» button (the record's id), and a day's «Send all» (the day): where Back from the editor and from the
 // day screen return the focus.

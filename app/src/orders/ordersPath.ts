@@ -9,8 +9,8 @@
 //   /orders/place-all/confirm       the same confirm screen for the ticked suppliers (their ids travel in the navigation state)
 //   /orders/clear                   the picker of the suppliers whose quantities to clear, one level below the list
 //   /orders/send                    the send screen (slice 3f-3): the suppliers to send to, one level below the list
-//   /orders/settings                the Orders settings (slice 3f-4), one level below the list; for now one door, «Past orders»
-//   /orders/history                 «Past orders», one level below the settings
+//   /orders/settings                the Orders settings (slice 3f-4), one level below the list
+//   /orders/history                 History, one level below the list (its door is beside the gear)
 //   /orders/history/day/<date>      sending a whole day of recorded orders again, one level below History
 //   /orders/history/<recordId>      correcting one recorded order, one level below History (`day` is not a record id)
 //   /orders/incoming                «Incoming» (slice 3f-5), one level below the list

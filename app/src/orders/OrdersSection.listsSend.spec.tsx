@@ -86,7 +86,7 @@ describe('the road to whoever runs the place', () => {
     const record = { date: inDays(-1), supplierId: 's-alp', supplierName: 'Alpine Mills', quantities: { 'i-flour': 5 }, stock: {}, names: {}, createdAt: `${inDays(-1)}T09:00:00.000Z`, updatedAt: `${inDays(-1)}T09:00:00.000Z` };
     const source = seeded({ ordersConfig: DEFAULT_ROADS, records: { [`${inDays(-1)}_s-alp`]: record } });
     const view = renderOrders('/orders/history', { source, ...STAFF });
-    const history = within(await screen.findByRole('region', { name: 'Past orders' }, LOAD));
+    const history = within(await screen.findByRole('region', { name: 'History' }, LOAD));
     await waitFor(() => { expect(screen.queryByText('Loading…')).not.toBeInTheDocument(); }, LOAD);
     await view.user.click(await history.findByRole('button', { name: /^Alpine Mills/ }));
     act(() => { history.getByRole('button', { name: 'Send again' }).click(); });

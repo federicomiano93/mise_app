@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { Check, ChevronRight, List, Search, Settings, Share } from 'lucide-react';
+import { Check, ChevronRight, History, List, Search, Settings, Share } from 'lucide-react';
 import { spellShortDate, todayISO } from '@mise/shared/day';
 import { isFutureDay, nextDeliveryAfter } from '@mise/shared/order-day';
 import { supplierLabel } from '@mise/shared/supplier-label';
@@ -14,7 +14,7 @@ import { NoticesPanel } from './NoticesPanel';
 import { TodayOrders } from './TodayOrders';
 import { useOrders } from './OrdersContext';
 import { dayTranslate, deliveryDaysText } from './dayWords';
-import { CLEAR_OPENER, PLACE_ALL_OPENER, SEND_OPENER, SETTINGS_OPENER, itemsOpener, supplierOpener, useHandBack } from './handBack';
+import { CLEAR_OPENER, HISTORY_DOOR, PLACE_ALL_OPENER, SEND_OPENER, SETTINGS_OPENER, itemsOpener, supplierOpener, useHandBack } from './handBack';
 import { orderingCount, supplierListGroups } from './ordersLens';
 import type { OrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
@@ -42,6 +42,7 @@ type Props = {
   onSend: () => void;
   // The gear at the end of the head: the Orders settings (step 3f-4).
   onSettings: () => void;
+  onHistory: () => void;
   // The debt banner and the two doors under the head (step 3f-5), drawn only while the venue checks deliveries.
   onIncoming: () => void;
   onReorder: () => void;
@@ -61,7 +62,7 @@ const HEADING_KEY = {
 // ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a component that stays mounted, and
 // only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard where the person
 // left them (the current app built the box once for the same reason).
-export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings, onIncoming, onReorder, onLists, onOpenPending }: Props) {
+export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings, onHistory, onIncoming, onReorder, onLists, onOpenPending }: Props) {
   const { t } = useT();
   const { config, draft, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
@@ -73,6 +74,7 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
   const clearNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(CLEAR_OPENER, node); }, [handBack]);
   const sendNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SEND_OPENER, node); }, [handBack]);
   const settingsNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
+  const historyNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(HISTORY_DOOR, node); }, [handBack]);
 
   // ⚠️ THE ROWS, THE FILTER COUNTS AND THEIR ORDER READ `drawn`: the copy while the live lists have not landed, the live lens
   // otherwise. The search box above is the same mounted element either way, so what was typed on the copy survives the move to
@@ -134,10 +136,23 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
               {t('ord.send.action')}
             </Button>
           ) : null}
-          {/* Always there, even with no supplier yet: the settings are not about the suppliers. */}
-          <Button ref={settingsNode} className={styles.gear} aria-label={t('ord.settings.open')} onPress={onSettings}>
-            <Settings aria-hidden="true" />
-          </Button>
+          {/* ⚠️ ITS PLACE IS KEPT WHILE IT WAITS: arriving with the live data it would push the block below onto a new row, and every
+              supplier 56px down just as a finger lands on one (the rule at OrdersSection's hold). */}
+          {ready ? null : <span aria-hidden="true" className={styles.sendPlace} />}
+          {/* ⚠️ ONE BLOCK, SO THEY WRAP TOGETHER: loose, on the tablet's list column the gear fell alone onto a row of its own and the
+              search box shrank to «Cerca u». */}
+          <div className={styles.tools}>
+            {/* ⚠️ WITH ITS WORD, NOT AN ICON ALONE, AND OUT OF THE SETTINGS (Federico, 3 Nov 2026): inside them he could not find it.
+                Always there, even with no supplier yet: past orders outlive the suppliers they went to. */}
+            <Button ref={historyNode} className={styles.history} onPress={onHistory}>
+              <History aria-hidden="true" />
+              {t('ord.history.title')}
+            </Button>
+            {/* Always there, even with no supplier yet: the settings are not about the suppliers. */}
+            <Button ref={settingsNode} className={styles.gear} aria-label={t('ord.settings.open')} onPress={onSettings}>
+              <Settings aria-hidden="true" />
+            </Button>
+          </div>
         </div>
         {showFilter ? (
           <div role="radiogroup" aria-label={t('ord.whichSuppliers')} className={styles.filter}>
