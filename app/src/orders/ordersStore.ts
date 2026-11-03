@@ -150,6 +150,9 @@ export type ReorderOutcome = 'applied' | 'skipped' | 'gone';
 // as it was and nothing was sent.
 export type ListSendOutcome = 'sent' | 'queued' | 'nothing' | 'too-many' | 'failed';
 
+// How long a screen waits for the server's answer to a list before it says «it goes when the connection comes back».
+export const LIST_ANSWER_MS = 8000;
+
 // The warning before a list is sent: everybody who would be told is away, and who they are ('' for somebody with no name: the screen
 // has the word).
 export interface AwayAnswer {
@@ -894,7 +897,16 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       }).finally(release);
       // ⚠️ OFFLINE THE WRITE WAITS FOR THE CONNECTION, and no screen may wait with it (P20): the list is in this phone's own database
       // now, the marker stays held until it lands, and the person is told it goes when the connection is back.
-      return deps.online() ? write : 'queued';
+      if (!deps.online()) return 'queued';
+      // ⚠️ AND A PHONE THAT BELIEVES IT IS CONNECTED WHILE NOTHING ANSWERS (a kitchen's bad Wi-Fi: driven, 3 Nov 2026) gets the same answer
+      // after a few seconds, rather than a screen waiting for ever. The list is just as safe, and it goes by itself.
+      return new Promise<ListSendOutcome>(resolve => {
+        const timer = deps.draft.setTimer(() => { resolve('queued'); }, LIST_ANSWER_MS);
+        void write.then(outcome => {
+          deps.draft.clearTimer(timer);
+          resolve(outcome);
+        });
+      });
     },
 
     tickRequestLine(id, ingredientId, done) {

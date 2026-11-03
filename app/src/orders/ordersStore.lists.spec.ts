@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
-import { createOrdersStore } from './ordersStore';
+import { LIST_ANSWER_MS, createOrdersStore } from './ordersStore';
 import type { OrdersDeps } from './ordersStore';
 import type { StoredDoc } from './ordersSource';
 
@@ -148,6 +148,51 @@ describe('sending a list', () => {
     release();
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(busy()).toBe(0);
+  });
+});
+
+describe('sending a list when the phone believes it is connected and nothing answers', () => {
+  it('⚠️ says «queued» after a few seconds, keeps the marker, and the write still lands', async () => {
+    const source = fakeOrdersSource({ suppliers: [MILL, DAIRY], ingredients: [FLOUR, RYE, BUTTER], draft: DRAFT });
+    let busy = 0;
+    let fire: (() => void) | null = null;
+    let wanted = 0;
+    const store = createOrdersStore(source, {
+      markBusy: () => { busy += 1; return () => { busy -= 1; }; },
+      today: () => TODAY,
+      draft: { nowIso: () => NOW, setTimer: (run, ms) => { fire = run; wanted = ms; return 1; }, clearTimer: () => { fire = null; } },
+      online: () => true,
+    });
+    store.start();
+    stops.push(() => { store.stop(); });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    const release = source.holdWrites();
+    const going = store.sendList(['mill'], 'u-1', 'No supplier');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(wanted).toBe(LIST_ANSWER_MS);
+    (fire as unknown as () => void)();
+    await expect(going).resolves.toBe('queued');
+    expect(source.requests.size).toBe(1);
+    expect(busy).toBe(1);
+    release();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(busy).toBe(0);
+  });
+
+  it('an answer in time says «sent», and takes the timer away', async () => {
+    const source = fakeOrdersSource({ suppliers: [MILL, DAIRY], ingredients: [FLOUR, RYE, BUTTER], draft: DRAFT });
+    let cleared = 0;
+    const store = createOrdersStore(source, {
+      markBusy: () => () => {},
+      today: () => TODAY,
+      draft: { nowIso: () => NOW, setTimer: () => 1, clearTimer: () => { cleared += 1; } },
+      online: () => true,
+    });
+    store.start();
+    stops.push(() => { store.stop(); });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    await expect(store.sendList(['mill'], 'u-1', 'No supplier')).resolves.toBe('sent');
+    expect(cleared).toBe(1);
   });
 });
 

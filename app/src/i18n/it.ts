@@ -2231,7 +2231,7 @@ export const it: Messages = {
   'ord.request.progress': '{done} su {total}',
   'ord.request.allOrdered': 'Tutto ordinato',
   'ord.request.none': 'Nessuno ha ancora mandato una lista d’ordine.',
-  'ord.request.noneHint': 'Scrivi un ordine, tocca la freccia Manda in alto, poi “Manda al manager”.',
+  'ord.request.noneHint': 'Scrivi un ordine, tocca la freccia Manda in alto, poi “A chi gestisce il locale”.',
   'ord.request.noneInWindow': {
     one: 'Nessuna lista nell’ultimo giorno',
     other: 'Nessuna lista negli ultimi {n} giorni',

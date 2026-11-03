@@ -2428,7 +2428,7 @@ export const en = {
   'ord.request.progress': '{done} of {total}',
   'ord.request.allOrdered': 'All ordered',
   'ord.request.none': 'Nobody has sent an order list yet.',
-  'ord.request.noneHint': 'Type an order, tap the Send arrow at the top, then “Send to the manager”.',
+  'ord.request.noneHint': 'Type an order, tap the Send arrow at the top, then “To whoever runs the place”.',
   'ord.request.noneInWindow': {
     one: 'No lists in the last day',
     other: 'No lists in the last {n} days',

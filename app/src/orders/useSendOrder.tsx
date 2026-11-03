@@ -125,6 +125,8 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
       sendList: async rows => {
         const uid = who.user?.uid ?? '';
         // ⚠️ NEVER BLOCKS, ONLY REFUSES TO BE SILENT: the list still belongs in the app. A failed read answers «go ahead» (the store).
+        // ⚠️ SAID BEFORE THE READ: on a bad connection the reads take over ten seconds, and a tap that answers nothing gets tapped again.
+        latest.current.tell(say('ord.request.sending'), LONG_MS);
         const away = await orders.whoIsAway(uid);
         if (away.nobody) {
           const names = away.names.map(name => name || say('ord.request.someone'));
