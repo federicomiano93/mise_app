@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
-import { LIST_ANSWER_MS, createOrdersStore } from './ordersStore';
+import { LIST_ANSWER_MS, LIST_READ_MS, createOrdersStore } from './ordersStore';
 import type { OrdersDeps } from './ordersStore';
 import type { StoredDoc } from './ordersSource';
 
@@ -22,6 +22,8 @@ const LIST = {
   supplierOf: { flour: 'mill', butter: 'dairy' }, supplierNames: { mill: 'Mill', dairy: 'Dairy' }, done: {}, note: '',
   createdAt: NOW, updatedAt: NOW,
 };
+
+const WANTED = () => true;
 
 let stops: Array<() => void> = [];
 afterEach(() => { stops.forEach(stop => stop()); stops = []; });
@@ -83,7 +85,7 @@ describe('sending a list', () => {
   it('freezes the ticked suppliers only, under the sender\'s uid and name, and leaves the order alone', async () => {
     const { source, store } = await started();
     source.member = { firstName: 'Marco', lastName: 'Rossi' };
-    await expect(store.sendList(['mill'], 'u-1', 'No supplier')).resolves.toBe('sent');
+    await expect(store.sendList(['mill'], 'u-1', 'No supplier', WANTED)).resolves.toBe('sent');
     const list = stored(source);
     expect(list.fromUid).toBe('u-1');
     expect(list.fromName).toBe('Marco Rossi');
@@ -100,7 +102,7 @@ describe('sending a list', () => {
   it('⚠️ somebody with no name on the roster is sent with NO name, and an address is never read onto the list', async () => {
     const { source, store } = await started();
     source.member = { email: 'marco@example.test', firstName: '', lastName: ' ' };
-    await store.sendList(['mill'], 'u-1', 'No supplier');
+    await store.sendList(['mill'], 'u-1', 'No supplier', WANTED);
     expect(stored(source).fromName).toBe('');
     expect(JSON.stringify(stored(source))).not.toContain('marco@example.test');
   });
@@ -108,14 +110,14 @@ describe('sending a list', () => {
   it('a roster read that fails can never stop the send', async () => {
     const { source, store } = await started();
     source.failRead = true;
-    await expect(store.sendList(['mill'], 'u-1', 'No supplier')).resolves.toBe('sent');
+    await expect(store.sendList(['mill'], 'u-1', 'No supplier', WANTED)).resolves.toBe('sent');
     expect(stored(source).fromName).toBe('');
   });
 
   it('nothing left to send writes nothing', async () => {
     const { source, store } = await started({ draft: { entries: { flour: { qty: 0 } }, days: {} } });
-    await expect(store.sendList(['mill'], 'u-1', 'No supplier')).resolves.toBe('nothing');
-    await expect(store.sendList(['gone'], 'u-1', 'No supplier')).resolves.toBe('nothing');
+    await expect(store.sendList(['mill'], 'u-1', 'No supplier', WANTED)).resolves.toBe('nothing');
+    await expect(store.sendList(['gone'], 'u-1', 'No supplier', WANTED)).resolves.toBe('nothing');
     expect(source.requests.size).toBe(0);
   });
 
@@ -127,14 +129,14 @@ describe('sending a list', () => {
       entries[`x${n}`] = { qty: 1 };
     }
     source.emit();
-    await expect(store.sendList(['mill'], 'u-1', 'No supplier')).resolves.toBe('too-many');
+    await expect(store.sendList(['mill'], 'u-1', 'No supplier', WANTED)).resolves.toBe('too-many');
     expect(source.requests.size).toBe(0);
   });
 
   it('a refused list says failed, and is not left behind', async () => {
     const { source, store, busy } = await started();
     source.failRequest = true;
-    await expect(store.sendList(['mill'], 'u-1', 'No supplier')).resolves.toBe('failed');
+    await expect(store.sendList(['mill'], 'u-1', 'No supplier', WANTED)).resolves.toBe('failed');
     expect(source.requests.size).toBe(0);
     expect(busy()).toBe(0);
   });
@@ -142,7 +144,7 @@ describe('sending a list', () => {
   it('⚠️ offline it answers at once and the marker stays held until the write lands (P20)', async () => {
     const { source, store, busy } = await started({ online: false });
     const release = source.holdWrites();
-    await expect(store.sendList(['mill'], 'u-1', 'No supplier')).resolves.toBe('queued');
+    await expect(store.sendList(['mill'], 'u-1', 'No supplier', WANTED)).resolves.toBe('queued');
     expect(source.requests.size).toBe(1);
     expect(busy()).toBe(1);
     release();
@@ -167,7 +169,7 @@ describe('sending a list when the phone believes it is connected and nothing ans
     stops.push(() => { store.stop(); });
     await new Promise(resolve => setTimeout(resolve, 0));
     const release = source.holdWrites();
-    const going = store.sendList(['mill'], 'u-1', 'No supplier');
+    const going = store.sendList(['mill'], 'u-1', 'No supplier', WANTED);
     await new Promise(resolve => setTimeout(resolve, 0));
     expect(wanted).toBe(LIST_ANSWER_MS);
     (fire as unknown as () => void)();
@@ -191,8 +193,94 @@ describe('sending a list when the phone believes it is connected and nothing ans
     store.start();
     stops.push(() => { store.stop(); });
     await new Promise(resolve => setTimeout(resolve, 0));
-    await expect(store.sendList(['mill'], 'u-1', 'No supplier')).resolves.toBe('sent');
-    expect(cleared).toBe(1);
+    await expect(store.sendList(['mill'], 'u-1', 'No supplier', WANTED)).resolves.toBe('sent');
+    // Two timers, both taken away: the one on the name read and the one on the server's answer.
+    expect(cleared).toBe(2);
+  });
+});
+
+// A store whose timers are fired by hand: the reads before the write have a limit, and a spec says when it is reached.
+async function timed() {
+  const source: FakeOrdersSource = fakeOrdersSource({ suppliers: [MILL, DAIRY], ingredients: [FLOUR, RYE, BUTTER], draft: DRAFT });
+  const timers: Array<{ run: () => void; ms: number; live: boolean }> = [];
+  const store = createOrdersStore(source, {
+    markBusy: () => () => {},
+    today: () => TODAY,
+    draft: {
+      nowIso: () => NOW,
+      setTimer: (run, ms) => { timers.push({ run, ms, live: true }); return timers.length - 1; },
+      clearTimer: handle => { const timer = timers[handle as number]; if (timer) timer.live = false; },
+    },
+    online: () => true,
+  });
+  store.start();
+  stops.push(() => { store.stop(); });
+  await new Promise(resolve => setTimeout(resolve, 0));
+  const limit = () => timers.find(timer => timer.ms === LIST_READ_MS && timer.live);
+  return { source, store, limit };
+}
+const never = <T>() => new Promise<T>(() => {});
+const flush = () => new Promise(resolve => setTimeout(resolve, 0));
+
+describe('the reads before the write have a limit', () => {
+  it('⚠️ reads that never answer do not hold the send: it goes with no name at the limit', async () => {
+    const { source, store, limit } = await timed();
+    source.readOwnMember = () => never();
+    const going = store.sendList(['mill'], 'u-1', 'No supplier', WANTED);
+    await flush();
+    expect(source.requests.size).toBe(0);
+    limit()?.run();
+    await expect(going).resolves.toBe('sent');
+    expect(stored(source).fromName).toBe('');
+  });
+
+  it('⚠️ the warning gives up at the limit with the silent «go ahead»', async () => {
+    const { source, store, limit } = await timed();
+    source.roster = [{ uid: 'boss', role: 'owner', firstName: 'Ada', lastName: 'Rossi' }];
+    source.awayDays = [{ id: 'boss', until: '2026-11-10' }];
+    source.getRoster = () => never();
+    const asking = store.whoIsAway('staff');
+    await flush();
+    limit()?.run();
+    await expect(asking).resolves.toStrictEqual({ nobody: false, names: [] });
+  });
+
+  it('a name read in time is used, and the timer is taken away', async () => {
+    const { source, store, limit } = await timed();
+    source.member = { firstName: 'Marco', lastName: 'Rossi' };
+    await expect(store.sendList(['mill'], 'u-1', 'No supplier', WANTED)).resolves.toBe('sent');
+    expect(stored(source).fromName).toBe('Marco Rossi');
+    expect(limit()).toBeUndefined();
+  });
+
+  it('⚠️ a name prepared when the screen opened is not read a second time by the send', async () => {
+    const { source, store } = await timed();
+    source.member = { firstName: 'Marco', lastName: 'Rossi' };
+    store.prepareSender('u-1');
+    store.prepareSender('u-1');
+    await flush();
+    await expect(store.sendList(['mill'], 'u-1', 'No supplier', WANTED)).resolves.toBe('sent');
+    expect(source.reads).toBe(1);
+    expect(stored(source).fromName).toBe('Marco Rossi');
+  });
+
+  it('a prepare that failed is forgotten, so the next call tries again', async () => {
+    const { source, store } = await timed();
+    source.failRead = true;
+    store.prepareSender('u-1');
+    await flush();
+    expect(source.reads).toBe(1);
+    source.failRead = false;
+    source.member = { firstName: 'Marco', lastName: 'Rossi' };
+    await expect(store.sendList(['mill'], 'u-1', 'No supplier', WANTED)).resolves.toBe('sent');
+    expect(source.reads).toBe(2);
+    expect(stored(source).fromName).toBe('Marco Rossi');
+  });
+
+  it('⚠️ a screen that was left during the name read writes nothing', async () => {
+    const { source, store } = await timed();
+    await expect(store.sendList(['mill'], 'u-1', 'No supplier', () => false)).resolves.toBe('nothing');
+    expect(source.requests.size).toBe(0);
   });
 });
 

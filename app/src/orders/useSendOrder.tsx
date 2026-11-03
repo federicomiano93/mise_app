@@ -83,6 +83,21 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
     };
   }, []);
 
+  // ⚠️ WHETHER THE SCREEN THAT USES THIS HOOK IS STILL THERE: the flow waits on reads before it writes, and a person who went Back
+  // meanwhile must not get a list they have left behind (sending again would make two). SET ON EVERY MOUNT: StrictMode runs the
+  // cleanup and then the effect again.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  // The sender's name is one document read: started now, it has had the time the person spends ticking suppliers by the tap.
+  const signedInUid = session.user?.uid ?? '';
+  useEffect(() => {
+    if (signedInUid !== '') store.prepareSender(signedInUid);
+  }, [store, signedInUid]);
+
   // A question to the person: `show` draws it, the dialog's `answer` settles it once, and a screen that goes away answers
   // `ifLeft` for it.
   const ask = useCallback(<A, Q extends { answer: (value: A) => void }>(
@@ -128,7 +143,14 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
         // ⚠️ SAID BEFORE THE READ: on a bad connection the reads take over ten seconds, and a tap that answers nothing gets tapped again.
         latest.current.tell(say('ord.request.sending'), LONG_MS);
         const away = await orders.whoIsAway(uid);
+        // ⚠️ LEFT DURING THE READ: nothing is written, and «Sending…» does not stay up over the screen they went to.
+        if (!mounted.current) {
+          latest.current.tell('');
+          return null;
+        }
         if (away.nobody) {
+          // ⚠️ «Sending…» MUST NOT STAY UP ABOVE THE QUESTION: the person is being asked, nothing is being sent yet.
+          latest.current.tell('');
           const names = away.names.map(name => name || say('ord.request.someone'));
           const goAhead = await latest.current.confirm({
             title: say('ord.away.nobodyTitle'),
@@ -142,7 +164,7 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
           if (!goAhead) return null;
         }
         latest.current.tell(say('ord.request.sending'), LONG_MS);
-        return orders.sendList(rows.map(row => row.id), uid, say('ord.noSupplier'));
+        return orders.sendList(rows.map(row => row.id), uid, say('ord.noSupplier'), () => mounted.current);
       },
     };
     // The same-day unit check, from the live records (a read would be an await, and a window must open inside the tap).

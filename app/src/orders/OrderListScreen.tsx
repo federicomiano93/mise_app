@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from 'react-router';
 import { Trash2 } from 'lucide-react';
 import { historyDocId, wholeNumber } from '@mise/shared/archive';
 import { dayLabel } from '@mise/shared/day';
-import { groupRequest, isRequestDone, liveDifference, remainingIds, supplierIdsOf } from '@mise/shared/order-request-model';
+import { mergeHistory } from '@mise/shared/history-window';
+import { groupRequest,isRequestDone, liveDifference, remainingIds, supplierIdsOf } from '@mise/shared/order-request-model';
 import { indexById } from '@mise/shared/order-text';
 import { entryUnit, qtyWithUnit, recordUnit, sameUnit } from '@mise/shared/order-unit';
 import { orderedToday } from '@mise/shared/untold-changes';
@@ -44,17 +45,18 @@ export function OrderListScreen({ id, lens }: { id: string; lens: OrdersLens }) 
   // ⚠️ A LIST DELETED ELSEWHERE (or an address nobody ever sent) steps back to the lists. Not when the stream died: `requestsLoaded`
   // is then true too, and «gone» would be a lie — the page's status line says the live data was lost.
   const gone = requestsLoaded && !requestsBroken && request === undefined;
+  // ⚠️ A DELETE MAKES THE LIST «GONE» AT ONCE (the database tells its own change before the server answers): `remove` has already left
+  // by then and set this, so the screen never steps back twice.
   const left = useRef(false);
-  // ⚠️ A DELETE IN THE AIR MAKES THE LIST «GONE» AT ONCE (the database tells its own change before the server answers) and puts it
-  // back if the server refuses: stepping back then would leave a list that is still there, with «not deleted» said to nobody.
-  const deleting = useRef(false);
   useEffect(() => {
-    if (!gone || left.current || deleting.current) return;
+    if (!gone || left.current) return;
     left.current = true;
     leave();
   }, [gone, leave]);
 
   if (request === undefined) {
+    // ⚠️ A SCREEN THAT HAS ALREADY LEFT (a delete) draws nothing while the navigation lands: «Loading…» for a frame would be a lie.
+    if (left.current) return null;
     return (
       <section className={styles.screen} aria-labelledby={titleId}>
         <FormBar backLabel={t('ui.back')} onBack={leave} title={t('ord.request.oneTitle')} titleId={titleId} />
@@ -62,7 +64,7 @@ export function OrderListScreen({ id, lens }: { id: string; lens: OrdersLens }) 
       </section>
     );
   }
-  return <Open request={request} lens={lens} leave={leave} left={left} deleting={deleting} titleId={titleId} />;
+  return <Open request={request} lens={lens} leave={leave} left={left} titleId={titleId} />;
 }
 
 type OpenProps = {
@@ -70,18 +72,17 @@ type OpenProps = {
   lens: OrdersLens;
   leave: () => void;
   left: { current: boolean };
-  deleting: { current: boolean };
   titleId: string;
 };
 
-function Open({ request, lens, leave, left, deleting, titleId }: OpenProps) {
+function Open({ request, lens, leave, left, titleId }: OpenProps) {
   const { t } = useT();
   const { state } = useLocation();
   const navigate = useNavigate();
   const store = useOrdersStore();
   const say = useStatusMessage();
   const { canManage } = useSession();
-  const { history, draft } = useOrders();
+  const { history, olderHistory, draft } = useOrders();
   const [confirm, confirmDialog] = useConfirm();
   const title = useRef<HTMLHeadingElement>(null);
   const requestId = request.id;
@@ -105,15 +106,19 @@ function Open({ request, lens, leave, left, deleting, titleId }: OpenProps) {
   // ⚠️ WHAT WAS BOUGHT is joined to the list by {the list's own day, supplier}, never by a stored link: the day's total, because a
   // second order to the same supplier is merged into the same record.
   const date = String(request.date ?? '');
+  //
+  // ⚠️ THE OLDER ORDERS ALREADY LOADED COUNT TOO (as in DaySendScreen): a list dated before the live window has its record only in
+  // `olderHistory`, and reading `history` alone would show «now in the list» on a line that was in fact bought.
   const { orderedById, orderedUnits } = useMemo(() => {
+    const records = mergeHistory(history, olderHistory);
     const quantities: Record<string, unknown> = {};
     const units: Record<string, unknown> = {};
     supplierIdsOf(request).forEach(supplierId => {
-      Object.assign(quantities, orderedToday(history, supplierId, date));
-      Object.assign(units, history.find(record => record.id === historyDocId(date, supplierId))?.units ?? {});
+      Object.assign(quantities, orderedToday(records, supplierId, date));
+      Object.assign(units, records.find(record => record.id === historyDocId(date, supplierId))?.units ?? {});
     });
     return { orderedById: quantities, orderedUnits: units };
-  }, [history, request, date]);
+  }, [history, olderHistory, request, date]);
   const differences = useMemo(
     () => Object.fromEntries(
       Object.entries(liveDifference(request, draft.entries, ingredientsById)).filter(([lineId]) => orderedById[lineId] === undefined),
@@ -165,23 +170,19 @@ function Open({ request, lens, leave, left, deleting, titleId }: OpenProps) {
       danger: true,
     });
     if (!yes) return;
+    // ⚠️ THE SCREEN LEAVES AT ONCE, NOT WHEN THE SERVER ANSWERS (P20): the list is already gone from this phone's own view, and a
+    // screen that waited would show «Loading…» on a bad connection, then move the person from wherever they had gone. A refused delete
+    // brings the list back by itself on the lists screen, and the sentence is said there (the status line outlives this screen).
+    left.current = true;
+    const going = store.deleteRequest(requestId);
+    leave();
     let outcome: 'saved' | 'refused' | 'failed';
-    deleting.current = true;
     try {
-      outcome = await store.deleteRequest(requestId);
+      outcome = await going;
     } catch {
       outcome = 'failed';
-    } finally {
-      deleting.current = false;
     }
-    if (outcome !== 'saved') {
-      say(t('ord.request.deleteFailed'), LONG_MS);
-      return;
-    }
-    if (!left.current) {
-      left.current = true;
-      leave();
-    }
+    if (outcome !== 'saved') say(t('ord.request.deleteFailed'), LONG_MS);
   }
 
   // ⚠️ THE HAND-OFF TO THE ROAD EVERYBODY ALREADY WALKS: recording the order is the app's own per-supplier confirm screen. A second way

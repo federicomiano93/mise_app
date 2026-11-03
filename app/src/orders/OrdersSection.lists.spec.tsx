@@ -179,6 +179,17 @@ describe('the lists', () => {
     expect(document.body.textContent).not.toContain('boss@example.test');
   });
 
+  it('⚠️ an address stored by the current app is never printed: «@» in the name reads «Someone», a real name stays', async () => {
+    await atLists(seeded({
+      'r-1': list({ fromName: 'marco@example.com', createdAt: `${TODAY}T11:00:00.000Z` }),
+      'r-2': list({ fromName: 'Marco Rossi', createdAt: `${TODAY}T09:00:00.000Z` }),
+    }));
+    const names = cardNames();
+    expect(names[0]).toMatch(/^From Someone/);
+    expect(names[1]).toMatch(/^From Marco Rossi/);
+    expect(document.body.textContent).not.toContain('marco@example.com');
+  });
+
   it('counts the ticked lines in the progress', async () => {
     await atLists(seeded({ 'r-1': list({ done: { 'i-flour': true } }) }));
     expect(cardNames()[0]).toMatch(/1 of 2/);
@@ -348,15 +359,37 @@ describe('one list', () => {
     expect(source.requests.has('r-1')).toBe(true);
   });
 
-  it('says so, and stays, when the delete is refused', async () => {
+  it('⚠️ a refused delete has already left: the list is back on the lists screen, and the sentence is said there', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const source = seeded({ 'r-1': list() });
     const view = await atOne(source, 'r-1');
     await view.user.click(one().getByRole('button', { name: 'Delete this list' }));
     source.failRequest = true;
     await view.user.click(within(await confirmation()).getByRole('button', { name: 'Delete' }));
     expect(await screen.findByText('Not deleted — the list is still here.')).toBeInTheDocument();
+    await waitFor(() => { expect(path(view)).toBe('/orders/lists'); });
     expect(source.requests.has('r-1')).toBe(true);
-    expect(path(view)).toBe('/orders/lists/r-1');
+    await screen.findByRole('region', { name: 'Order lists' }, LOAD);
+    expect(await lists().findByRole('button', { name: /^From Marco/ })).toBeInTheDocument();
+  });
+
+  it('⚠️ a delete still in the air leaves at once, with no «Loading…», and nothing moves again when it lands', async () => {
+    const source = seeded({ 'r-1': list() });
+    const view = await atOne(source, 'r-1');
+    await view.user.click(one().getByRole('button', { name: 'Delete this list' }));
+    const release = source.holdWrites();
+    await view.user.click(within(await confirmation()).getByRole('button', { name: 'Delete' }));
+    await waitFor(() => { expect(path(view)).toBe('/orders/lists'); });
+    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+    // The person goes on to the Orders list before the server answers: the answer moves nobody.
+    await screen.findByRole('region', { name: 'Order lists' }, LOAD);
+    await view.user.click(lists().getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(path(view)).toBe('/orders'); });
+    release();
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
+    expect(path(view)).toBe('/orders');
+    expect(source.requests.has('r-1')).toBe(false);
+    expect(screen.queryByText('Not deleted — the list is still here.')).not.toBeInTheDocument();
   });
 
   it('draws no Delete for a person who cannot manage the place', async () => {
@@ -414,6 +447,24 @@ describe('one list, against the order that moved on', () => {
     };
     const draft = { entries: { 'i-flour': { qty: 0 }, 'i-rye': { qty: 2 } }, days: {} };
     await atOne(seeded({ 'r-1': list() }, { draft, records: { [`${TODAY}_s-alp`]: record } }), 'r-1');
+    expect(await one().findByText('ordered: 3')).toBeInTheDocument();
+    expect(one().queryByText(/^now in the list/)).not.toBeInTheDocument();
+  });
+
+  it('⚠️ sees an order that only the older orders already loaded hold: «ordered: n», and no «now in the list» on that line', async () => {
+    const day = inDays(-90);
+    const record = {
+      date: day, supplierId: 's-alp', supplierName: 'Alpine Mills', quantities: { 'i-flour': 3 }, stock: {}, names: {},
+      createdAt: `${day}T12:00:00.000Z`, updatedAt: `${day}T12:00:00.000Z`,
+    };
+    const draft = { entries: { 'i-flour': { qty: 0 }, 'i-rye': { qty: 2 } }, days: {} };
+    const source = seeded({ 'r-1': list({ date: day, createdAt: `${day}T09:00:00.000Z` }) }, { draft, records: { [`${day}_s-alp`]: record } });
+    const view = renderOrders('/orders/history', { source });
+    const history = within(await screen.findByRole('region', { name: 'Past orders' }, LOAD));
+    await view.user.click(await history.findByRole('button', { name: 'Load older orders' }, LOAD));
+    await waitFor(() => { expect(history.queryByRole('button', { name: 'Load older orders' })).not.toBeInTheDocument(); });
+    await act(async () => { await view.router.navigate('/orders/lists/r-1'); });
+    await screen.findByRole('region', { name: 'Order list' }, LOAD);
     expect(await one().findByText('ordered: 3')).toBeInTheDocument();
     expect(one().queryByText(/^now in the list/)).not.toBeInTheDocument();
   });

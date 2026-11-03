@@ -4,6 +4,7 @@ import { Share } from 'lucide-react';
 import { MAX_LINES } from '@mise/shared/order-request-model';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
+import { announceAction } from '../telemetry/usage';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { joinList } from './orderWords';
 import type { OrdersLens } from './ordersLens';
@@ -88,6 +89,15 @@ export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onR
     });
   };
 
+  // What a list that was written (or refused) is told as, on the screen or after it was left. The statistic is counted once per list,
+  // for the two outcomes where the list is in the app (the current app announces `order-request` at the same moment).
+  const tellList = (outcome: 'sent' | 'queued' | 'failed') => {
+    if (outcome === 'sent') say(`${t('ord.request.sent')} — ${t('ord.request.sentToManagers')}`, LIST_SENT_MS);
+    else if (outcome === 'queued') say(t('ord.request.queued'), LIST_SENT_MS);
+    else say(t('ord.request.sendFailed'), LONG_MS);
+    if (outcome !== 'failed') announceAction('order-request');
+  };
+
   const press = () => {
     if (pendingRef.current || chosen.length === 0) return;
     pendingRef.current = true;
@@ -112,17 +122,25 @@ export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onR
     }
     void sending.then(result => {
       pendingRef.current = false;
-      if (!mounted.current) return;
+      if (!mounted.current) {
+        // ⚠️ A LIST THAT WAS WRITTEN AFTER THE PERSON WENT BACK IS STILL SAID (sent, queued or failed), and nobody is moved: the status
+        // line outlives this screen. A send that was stopped by leaving ('nothing', or no answer at all) says nothing, and takes its
+        // «Sending…» away.
+        if (result?.kind === 'list' && result.outcome !== 'nothing' && result.outcome !== 'too-many') {
+          tellList(result.outcome);
+        } else if (result === null || result.kind === 'list') {
+          say('');
+        }
+        return;
+      }
       setPending(false);
       if (result?.kind === 'list') {
         // ⚠️ THE ORDER IS NOT CLEARED AND NOTHING IS RECORDED: the list is a photograph, and nobody was «reached» in the sense of
         // the record-after-send question (Federico's choice, 14 Aug 2026). Sent and queued leave for the Orders list.
         const outcome = result.outcome;
-        if (outcome === 'sent') say(`${t('ord.request.sent')} — ${t('ord.request.sentToManagers')}`, LIST_SENT_MS);
-        else if (outcome === 'queued') say(t('ord.request.queued'), LIST_SENT_MS);
+        if (outcome === 'sent' || outcome === 'queued' || outcome === 'failed') tellList(outcome);
         else if (outcome === 'nothing') say(t('ord.nothingLeft'), LONG_MS);
-        else if (outcome === 'too-many') say(t('ord.request.tooMany', { n: MAX_LINES }), LONG_MS);
-        else say(t('ord.request.sendFailed'), LONG_MS);
+        else say(t('ord.request.tooMany', { n: MAX_LINES }), LONG_MS);
         if (outcome === 'sent' || outcome === 'queued') afterList.current?.();
         else restoreFocus();
         return;

@@ -22,9 +22,10 @@ type Props = {
 };
 
 // What the screens print for the person who sent a list. ⚠️ NEVER AN ADDRESS (his decision of 3 Nov 2026, P13): a list with no name
-// on it reads «Someone».
+// on it reads «Someone». Also on lists already stored: the current app, still live, writes an email into `fromName` for a person with
+// no roster name, so anything with an «@» in it is read as no name.
 export const senderOf = (request: StoredDoc, someone: string): string =>
-  typeof request.fromName === 'string' && request.fromName.trim() !== '' ? request.fromName : someone;
+  typeof request.fromName === 'string' && request.fromName.trim() !== '' && !request.fromName.includes('@') ? request.fromName : someone;
 
 // «Order lists» (parity R1–R4), at /orders/lists, one level below the list: the lists somebody sent, those still to place first.
 //

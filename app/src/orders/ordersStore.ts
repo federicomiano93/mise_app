@@ -151,7 +151,13 @@ export type ReorderOutcome = 'applied' | 'skipped' | 'gone';
 export type ListSendOutcome = 'sent' | 'queued' | 'nothing' | 'too-many' | 'failed';
 
 // How long a screen waits for the server's answer to a list before it says «it goes when the connection comes back».
-export const LIST_ANSWER_MS = 8000;
+// ⚠️ 5 s, not 8: with the two 3 s limits below the worst wait is about 11 s, and «Sending…» (8 s, told at the tap and again right
+// before the write) then stays on screen the whole time.
+export const LIST_ANSWER_MS = 5000;
+
+// How long the reads before the write may take (who is away; the sender's name). On a kitchen's bad Wi-Fi each takes over ten
+// seconds, and a tap that waits for them gets tapped again. Past the limit the send goes ahead without what they would have said.
+export const LIST_READ_MS = 3000;
 
 // The warning before a list is sent: everybody who would be told is away, and who they are ('' for somebody with no name: the screen
 // has the word).
@@ -275,9 +281,14 @@ export interface OrdersStore {
   // Would anybody hear a list sent now (parity R17)? ⚠️ NEVER REJECTS AND NEVER STOPS A SEND: an unreadable roster, a refused read or
   // a phone that is offline is no evidence that nobody is listening, and answers «go ahead».
   whoIsAway(senderUid: string): Promise<AwayAnswer>;
+  // Starts reading the sender's own roster row (their name), so the read has had time by the tap. Fire-and-forget and once per uid:
+  // a read that failed is forgotten, so the next call may try again.
+  prepareSender(senderUid: string): void;
   // Sends the ticked suppliers' part of the shared order as a list (parity R14, R15). ⚠️ THE ORDER IS NOT CLEARED (his choice, 14 Aug
-  // 2026). The sender's name is read here, and a read that fails can never stop the send: the list goes with no name.
-  sendList(supplierIds: readonly string[], senderUid: string, noSupplierName: string): Promise<ListSendOutcome>;
+  // 2026). The sender's name is read here (3 s at most), and a read that fails or is late can never stop the send: the list goes
+  // with no name. ⚠️ `stillWanted` is asked right after that read, before anything is written: a screen that was left in the
+  // meantime answers false and nothing is written ('nothing').
+  sendList(supplierIds: readonly string[], senderUid: string, noSupplierName: string, stillWanted: () => boolean): Promise<ListSendOutcome>;
   // A tick on one line (parity R19), or «Finish» on all the lines still open (R20): shown at once, taken back by Firestore when refused.
   tickRequestLine(id: string, ingredientId: string, done: boolean): Promise<DeliveryWriteOutcome>;
   finishRequest(id: string, ingredientIds: readonly string[]): Promise<DeliveryWriteOutcome>;
@@ -511,6 +522,34 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
 
   // A write of step 3f-5 (Incoming): the marker held until the server answers (offline, until the connection is back), so a
   // self-started reload never drops it; a refusal by the rules is told apart from the rest.
+  // `promise`'s answer, or `fallback` once `ms` have passed, whichever is first. The timer never rejects and is cleared as soon as the
+  // promise settles; a promise that rejects rejects here too (the caller decides what a failure means).
+  function within<T, F>(promise: Promise<T>, ms: number, fallback: F): Promise<T | F> {
+    return new Promise<T | F>((resolve, reject) => {
+      const timer = deps.draft.setTimer(() => { resolve(fallback); }, ms);
+      promise.then(
+        value => { deps.draft.clearTimer(timer); resolve(value); },
+        (err: unknown) => { deps.draft.clearTimer(timer); reject(err instanceof Error ? err : new Error(String(err))); },
+      );
+    });
+  }
+
+  // The sender's roster row, one read per uid. ⚠️ NEVER REJECTS: a failure answers null (logged) and is forgotten, so the next call
+  // tries again. Started when the send screen opens (prepareSender), so on a bad connection it has had the time the person spends
+  // ticking suppliers, and somebody with a name is not turned into «Someone» by a slow tap.
+  const senderReads = new Map<string, Promise<Record<string, unknown> | null>>();
+  function senderRead(senderUid: string): Promise<Record<string, unknown> | null> {
+    const known = senderReads.get(senderUid);
+    if (known) return known;
+    const read = Promise.resolve().then(() => source.readOwnMember(senderUid)).catch((err: unknown) => {
+      console.warn('Could not read the roster row for the sender’s name:', err);
+      senderReads.delete(senderUid);
+      return null;
+    });
+    senderReads.set(senderUid, read);
+    return read;
+  }
+
   async function deliveryWrite(label: string, write: () => Promise<void>): Promise<DeliveryWriteOutcome> {
     const release = deps.markBusy();
     try {
@@ -857,7 +896,10 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       // Offline both reads would answer from a copy that may be days old, or wait: the list goes when the connection is back.
       if (!deps.online()) return silent;
       try {
-        const [roster, days] = await Promise.all([source.getRoster(), source.getAwayDays()]);
+        // ⚠️ THE WARNING IS ADVICE: a read that is slow gives up and says «go ahead».
+        const read = await within(Promise.all([source.getRoster(), source.getAwayDays()]), LIST_READ_MS, null);
+        if (read === null) return silent;
+        const [roster, days] = read;
         const away = awayUids(days.map(day => ({ ...day, uid: typeof day.uid === 'string' && day.uid !== '' ? day.uid : day.id })) as never);
         if (!nobodyWillBeTold(roster, away, senderUid)) return silent;
         return { nobody: true, names: awayNames(roster, away, senderUid) };
@@ -867,13 +909,16 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       }
     },
 
-    async sendList(supplierIds, senderUid, noSupplierName) {
-      let member: Record<string, unknown> | null = null;
-      try {
-        member = await source.readOwnMember(senderUid);
-      } catch (err) {
-        console.warn('Could not read the roster row for the sender\u2019s name:', err);
-      }
+    prepareSender(senderUid) {
+      void senderRead(senderUid);
+    },
+
+    async sendList(supplierIds, senderUid, noSupplierName, stillWanted) {
+      // senderRead never rejects (a failure answers null), so a late read is simply \u00abno name\u00bb.
+      const member = await within(senderRead(senderUid), LIST_READ_MS, null);
+      // \u26a0\ufe0f AFTER THE WAIT, BEFORE ANYTHING IS WRITTEN: the person may have left the screen while the read was on its way, and sending
+      // again would then make two identical lists.
+      if (!stillWanted()) return 'nothing';
       // ⚠️ THE ORDER AS IT IS NOW, after the question and the read: what the person sees when the list leaves. The lines the lens files
       // under each supplier, the switched-off ones with a quantity included (decision T10), exactly as a record takes them.
       const lens = lensNow(noSupplierName);

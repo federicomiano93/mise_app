@@ -265,6 +265,127 @@ describe('«Nobody will be told»', () => {
   });
 });
 
+describe('leaving during a send, and what is said while it waits', () => {
+  type Reads<K extends 'getRoster' | 'readOwnMember'> = Awaited<ReturnType<FakeOrdersSource[K]>>;
+  const deferred = <T,>() => {
+    let resolve!: (value: T) => void;
+    const promise = new Promise<T>(done => { resolve = done; });
+    return { promise, resolve };
+  };
+  const back = () => sendScreen().getByRole('button', { name: 'Back' });
+  const settle = () => act(async () => { await new Promise(resolve => setTimeout(resolve, 50)); });
+
+  it('⚠️ Back during the away read: no list, no sentence, and sending again makes exactly one list', async () => {
+    const source = seeded();
+    const roster = deferred<Reads<'getRoster'>>();
+    source.getRoster = () => roster.promise;
+    const view = await atList(source);
+    await toSend(view, 'Alpine Mills');
+    await view.user.click(sendButton());
+    expect(await screen.findByText('Sending…')).toBeInTheDocument();
+    await view.user.click(back());
+    await waitFor(() => { expect(path(view)).toBe('/orders'); });
+    roster.resolve([]);
+    await settle();
+    expect(source.requests.size).toBe(0);
+    expect(screen.queryByText(SENT)).not.toBeInTheDocument();
+    expect(screen.queryByText('Sending…')).not.toBeInTheDocument();
+    await toSend(view, 'Alpine Mills');
+    await view.user.click(sendButton());
+    expect(await screen.findByText(SENT, undefined, LOAD)).toBeInTheDocument();
+    expect(source.requests.size).toBe(1);
+  });
+
+  it('⚠️ Back during the name read: no list, and sending again makes exactly one list', async () => {
+    const source = seeded();
+    const member = deferred<Reads<'readOwnMember'>>();
+    source.readOwnMember = () => member.promise;
+    const view = await atList(source);
+    await toSend(view, 'Alpine Mills');
+    await view.user.click(sendButton());
+    await waitFor(() => { expect(source.reads).toBeGreaterThan(1); });
+    await view.user.click(back());
+    await waitFor(() => { expect(path(view)).toBe('/orders'); });
+    member.resolve({ firstName: 'Ada', lastName: 'Rossi' });
+    await settle();
+    expect(source.requests.size).toBe(0);
+    expect(screen.queryByText(SENT)).not.toBeInTheDocument();
+    await toSend(view, 'Alpine Mills');
+    await view.user.click(sendButton());
+    expect(await screen.findByText(SENT, undefined, LOAD)).toBeInTheDocument();
+    expect(source.requests.size).toBe(1);
+    expect([...source.requests.values()][0]).toMatchObject({ fromName: 'Ada Rossi' });
+  });
+
+  it('⚠️ Back after the write began: one list, its sentence is still said, and nobody is moved', async () => {
+    const source = seeded();
+    const view = await atList(source);
+    await toSend(view, 'Alpine Mills');
+    const release = source.holdWrites();
+    await view.user.click(sendButton());
+    await waitFor(() => { expect(source.requests.size).toBe(1); });
+    await view.user.click(back());
+    await waitFor(() => { expect(path(view)).toBe('/orders'); });
+    release();
+    expect(await screen.findByText(SENT, undefined, LOAD)).toBeInTheDocument();
+    expect(path(view)).toBe('/orders');
+    expect(source.requests.size).toBe(1);
+  });
+
+  it('⚠️ «Sending…» does not stay above the question; Cancel leaves nothing said', async () => {
+    const source = seeded();
+    source.roster = [BOSS, { uid: 'u1', role: 'staff', firstName: 'Bo', lastName: '' }];
+    source.awayDays = [{ id: 'boss', uid: 'boss', until: inDays(10) }];
+    const view = await atList(source);
+    await toSend(view, 'Alpine Mills');
+    await view.user.click(sendButton());
+    const dialog = within(await confirmation());
+    expect(screen.queryByText('Sending…')).not.toBeInTheDocument();
+    await view.user.click(dialog.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    expect(screen.queryByText('Sending…')).not.toBeInTheDocument();
+    expect(source.requests.size).toBe(0);
+  });
+
+  it('⚠️ «Sending…» is told again when the person says yes', async () => {
+    const source = seeded();
+    source.roster = [BOSS, { uid: 'u1', role: 'staff', firstName: 'Bo', lastName: '' }];
+    source.awayDays = [{ id: 'boss', uid: 'boss', until: inDays(10) }];
+    const view = await atList(source);
+    await toSend(view, 'Alpine Mills');
+    await view.user.click(sendButton());
+    const dialog = within(await confirmation());
+    const release = source.holdWrites();
+    await view.user.click(dialog.getByRole('button', { name: 'Send anyway' }));
+    expect(await screen.findByText('Sending…')).toBeInTheDocument();
+    release();
+    expect(await screen.findByText(SENT, undefined, LOAD)).toBeInTheDocument();
+  });
+
+  it('announces the statistic once for a list that is in the app, and not for one that failed', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const names: string[] = [];
+    const listen = (event: Event) => { names.push(String((event as CustomEvent).detail)); };
+    window.addEventListener('mise:action', listen);
+    try {
+      const source = seeded();
+      const view = await atList(source);
+      await toSend(view, 'Alpine Mills');
+      source.failRequest = true;
+      await view.user.click(sendButton());
+      await screen.findByText('The list was NOT sent — it is still here. Check the connection and try again.', undefined, LOAD);
+      expect(names).toStrictEqual([]);
+      source.failRequest = false;
+      await view.user.click(sendButton());
+      await screen.findByText(SENT, undefined, LOAD);
+      await waitFor(() => { expect(path(view)).toBe('/orders'); });
+      expect(names).toStrictEqual(['order-request']);
+    } finally {
+      window.removeEventListener('mise:action', listen);
+    }
+  });
+});
+
 describe('«Send the list again» and what nobody was told', () => {
   // Flour was recorded today; rye was not, and 3 are typed: an addition nobody was told about.
   const record = { date: TODAY, supplierId: 's-alp', supplierName: 'Alpine Mills', quantities: { 'i-flour': 2 }, stock: {}, names: {}, createdAt: `${TODAY}T09:00:00.000Z`, updatedAt: `${TODAY}T09:00:00.000Z` };
@@ -371,6 +492,15 @@ describe('«asked» on the confirm screen', () => {
       'r-3': list({ 'i-flour': 99 }, { date: inDays(-1) }),
     });
     expect(within(row('Flour — Order')).getByText('asked: 6')).toBeInTheDocument();
+  });
+
+  it('links «asked» and «usually» to the number box, each when it is there, so a screen reader reads both', async () => {
+    await atConfirm({ 'r-1': list({ 'i-flour': 5 }) });
+    const box = screen.getByRole('spinbutton', { name: 'Flour — Order' });
+    expect(box).toHaveAccessibleDescription(/asked: 5/);
+    const ids = (box.getAttribute('aria-describedby') ?? '').split(' ').filter(id => id !== '');
+    expect(ids.length).toBeGreaterThanOrEqual(1);
+    expect(ids.every(id => document.getElementById(id) !== null)).toBe(true);
   });
 
   it('says it in Italian', async () => {

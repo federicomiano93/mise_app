@@ -476,17 +476,20 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
               {group.rows.map(row => {
                 const usual = usualOf(group.supplierId, row);
                 const usualId = `${usualIdBase}-${group.supplierId}-${row.id}`;
+                const askedId = `${usualIdBase}-asked-${group.supplierId}-${row.id}`;
+                // The box is read together with what it is compared to: «asked» and «usually», each when it is there.
+                const describedBy = [row.asked !== undefined ? askedId : '', usual !== null ? usualId : ''].filter(id => id !== '').join(' ');
                 return (
                 <li key={row.id} className={styles.row} data-unusual={usual !== null} data-noted={usual !== null || row.asked !== undefined}>
                   <span className={styles.name}>{row.name}</span>
                   {usual !== null || row.asked !== undefined ? (
                     <span className={styles.notes}>
-                      {row.asked !== undefined ? <span className={styles.asked}>{t('ord.confirm.asked', { n: row.asked })}</span> : null}
+                      {row.asked !== undefined ? <span id={askedId} className={styles.asked}>{t('ord.confirm.asked', { n: row.asked })}</span> : null}
                       {usual !== null ? <span id={usualId} className={styles.usual}>{t('ord.confirm.usually', { n: usual })}</span> : null}
                     </span>
                   ) : null}
                   <NumberBox
-                    describedBy={usual !== null ? usualId : undefined}
+                    describedBy={describedBy !== '' ? describedBy : undefined}
                     value={typed[group.supplierId]?.[row.id] ?? 0}
                     className={styles.box}
                     ariaLabel={t('ord.confirm.qtyFor', { name: row.name })}
