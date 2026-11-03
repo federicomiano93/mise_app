@@ -61,7 +61,7 @@ test('no Save sits outside a header in calculator.html', () => {
 
 test('no module builds a bottom Save any more', () => {
   const files = [
-    'js/calculator-settings.js', 'js/calculator-whatsapp-settings.js', 'js/recipes.js',
+    'js/calculator-settings.js', 'js/clients-editor.js', 'js/calculator-whatsapp-settings.js', 'js/recipes.js',
     'js/log-settings.js', 'js/log-add.js', 'js/log-edit.js', 'js/calculator-client-orders.js',
   ];
   for (const f of files) {
@@ -77,7 +77,7 @@ test('no module builds a bottom Save any more', () => {
 
 test('each header Save is wired to its handler in the module that owns the screen', () => {
   const wires = [
-    ['js/calculator-settings.js', /getElementById\('cp-save-btn'\)\.addEventListener\('click', saveClients\)/],
+    ['js/clients-editor.js', /getElementById\('cp-save-btn'\)\.addEventListener\('click', saveClients\)/],
     ['js/calculator-settings.js', /getElementById\('divisor-save-btn'\)\.addEventListener\('click', saveDivisor\)/],
     ['js/calculator-settings.js', /getElementById\('extra-save-btn'\)\.addEventListener\('click', saveExtra\)/],
     ['js/app.js', /getElementById\('recipe-save-btn'\)\.addEventListener\('click', saveRecipes\)/],

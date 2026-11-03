@@ -78,16 +78,22 @@ export const OPT_IN_IDS: readonly OptInCardId[] = Object.freeze(
 // A SECTION, which is why this is by card and not by section. The values are the ones in
 // js/sections.js, written out because this file imports nothing
 // (tests/partial-owner-roles.test.mjs compares them).
-export const ROLE_CARDS: Readonly<Record<string, readonly CardId[]>> = Object.freeze({
-  'owner-sales': Object.freeze<CardId[]>(['foodcost']),
+export const ROLE_CARDS: Readonly<Record<string, readonly (CardId | 'clients')[]>> = Object.freeze({
+  'owner-sales': Object.freeze<(CardId | 'clients')[]>(['foodcost', 'clients']),
   'owner-kitchen': Object.freeze<CardId[]>(['calculator', 'catalogue', 'orders', 'suppliers', 'pastries', 'inventory']),
 });
+
+// ⚠️ A CARD ONLY THE ROLES THAT NAME IT HAVE, the opposite way round from every card above.
+// Clients (Federico, 1 Nov 2026) is on the Home of the owner of the sales side alone: everybody
+// else manages clients from Calculator → Settings and their Home does not change. It is not in
+// STAFF_CARDS, because a venue has no switch for it, and every doubt answers «no card».
+export const ROLE_ONLY_CARDS: readonly string[] = Object.freeze(['clients']);
 
 export function roleHasCard(role: unknown, cardId: unknown): boolean {
   const cards: readonly unknown[] | null = Object.prototype.hasOwnProperty.call(ROLE_CARDS, String(role))
     ? ROLE_CARDS[String(role)] ?? null
     : null;
-  return cards === null || cards.includes(cardId);
+  return cards === null ? !ROLE_ONLY_CARDS.some(only => only === cardId) : cards.includes(cardId);
 }
 
 // The fields on locations/{lid}.

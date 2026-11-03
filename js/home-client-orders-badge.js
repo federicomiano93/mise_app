@@ -29,8 +29,8 @@ function stillWaiting(orders) {
   return orders.filter(o => o && (!isApplied(o) || orderChangedSinceApplied(o)));
 }
 
-function paintBadge(count, changed) {
-  const card = document.querySelector('.home-card[href="calculator.html"]');
+function paintBadge(count, changed, cardId) {
+  const card = document.querySelector(`.home-card[data-card="${cardId}"]`);
   if (!card) return;
   const badge = document.createElement('span');
   badge.className = `home-card-badge${changed ? ' home-card-badge--alert' : ''}`;
@@ -41,11 +41,11 @@ function paintBadge(count, changed) {
   card.appendChild(badge);
 }
 
-async function showClientOrdersHome() {
+async function showClientOrdersHome(cardId) {
   try {
     const waiting = stillWaiting(await getUpcomingOrdersOnce());
     if (!waiting.length) return;
-    paintBadge(waiting.length, waiting.filter(orderChangedSinceApplied).length);
+    paintBadge(waiting.length, waiting.filter(orderChangedSinceApplied).length, cardId);
   } catch (err) {
     // Offline, not signed in, or a location that has never used this. No signal, and
     // it never blocks the Home screen.
@@ -62,8 +62,12 @@ onSession(session => {
   if (started || session.status !== 'ready') return;
   if (!isSectionAllowed(session.location, 'calculator')) return;
   // ⚠️ THE ROLE, NOT THE CARD: an employee from whom the venue hid this card keeps the banner
-  // they have today. Only somebody with no Calculator at all has no page for it to open.
-  if (!roleHasCard(session.role, 'calculator')) return;
+  // they have today. Somebody with no Calculator gets the badge on the Clients card if
+  // their role has that one instead (the sales owner), and nobody else reads anything.
+  const cardId = roleHasCard(session.role, 'calculator') ? 'calculator'
+    : roleHasCard(session.role, 'clients') ? 'clients'
+      : null;
+  if (!cardId) return;
   started = true;
-  showClientOrdersHome();
+  showClientOrdersHome(cardId);
 });

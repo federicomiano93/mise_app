@@ -27,7 +27,7 @@ const code = p => read(p).split('\n').filter(l => !l.trim().startsWith('//')).jo
 // ── The two that reach a customer's customer ─────────────────────────────────
 
 test('the ordering-link message names no venue', () => {
-  const src = code('js/calculator-settings.js');
+  const src = code('js/clients-editor.js');
   assert.ok(!src.includes('The Italian Club'),
     'a venue name in this file is sent to somebody else’s wholesale client');
   assert.ok(src.includes('currentSession().name'),

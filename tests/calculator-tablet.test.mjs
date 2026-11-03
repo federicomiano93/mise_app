@@ -66,7 +66,8 @@ test('every tablet rule of this section is scoped to the Calculator', () => {
   assert.ok(rules.length > 0);
   for (const sel of rules) {
     for (const part of sel.split(',').map((s) => s.trim()).filter(Boolean)) {
-      assert.match(part, /^body\[data-card="calculator"\]/, `unscoped tablet selector: ${part}`);
+      // The sales owner's Clients page (clients.html) reuses the Calculator's fixed screens.
+      assert.match(part, /^body\[data-card="(calculator|clients)"\]/, `unscoped tablet selector: ${part}`);
     }
   }
 });
@@ -105,5 +106,5 @@ test('no new file: the Calculator tablet layout is CSS only (nothing to precache
 // ⚠️ a646ef4, found by driving: the side screens' HEADERS sat in the 620px column while
 // their bodies (flat 16px padding) ran the full 1180px. Pinned so deleting it goes red.
 test('the side screens\' bodies pad with the 620px gutter, the recipe sheet excepted', () => {
-  assert.match(inside, /body\[data-card="calculator"\] \.recipe-scroll > :not\(#recipe-content\)\s*\{\s*padding-inline:\s*max\(16px, var\(--app-gutter\)\);\s*\}/);
+  assert.match(inside, /body\[data-card="calculator"\] \.recipe-scroll > :not\(#recipe-content\),\s*body\[data-card="clients"\] \.recipe-scroll > :not\(#recipe-content\)\s*\{\s*padding-inline:\s*max\(16px, var\(--app-gutter\)\);\s*\}/);
 });

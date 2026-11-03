@@ -67,13 +67,19 @@ export const OPT_IN_IDS = Object.freeze(STAFF_CARDS.filter(card => card.optIn).m
 // js/sections.js, written out because this file imports nothing
 // (tests/partial-owner-roles.test.mjs compares them).
 export const ROLE_CARDS = Object.freeze({
-  'owner-sales': Object.freeze(['foodcost']),
+  'owner-sales': Object.freeze(['foodcost', 'clients']),
   'owner-kitchen': Object.freeze(['calculator', 'catalogue', 'orders', 'suppliers', 'pastries', 'inventory']),
 });
 
+// ⚠️ A CARD ONLY THE ROLES THAT NAME IT HAVE, the opposite way round from every card above.
+// Clients (Federico, 1 Nov 2026) is on the Home of the owner of the sales side alone: everybody
+// else manages clients from Calculator → Settings and their Home does not change. It is not in
+// STAFF_CARDS, because a venue has no switch for it, and every doubt answers «no card».
+export const ROLE_ONLY_CARDS = Object.freeze(['clients']);
+
 export function roleHasCard(role, cardId) {
   const cards = Object.prototype.hasOwnProperty.call(ROLE_CARDS, String(role)) ? ROLE_CARDS[role] : null;
-  return cards === null || cards.includes(cardId);
+  return cards === null ? !ROLE_ONLY_CARDS.includes(cardId) : cards.includes(cardId);
 }
 
 // The fields on locations/{lid}.
