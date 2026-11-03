@@ -27,10 +27,39 @@ that no test fully catches. Read every one your change touches:
 
 ## The stack, in one breath
 
-Plain HTML + CSS + vanilla ES modules. **No framework, no bundler, no build step, no
-TypeScript, no npm runtime dependencies.** Firebase comes from the official CDN;
+Plain HTML + CSS + vanilla ES modules. **No framework, no TypeScript, no npm runtime
+dependencies.** The one build tool is esbuild, run on this PC to make the committed `dist/`
+bundles (project CLAUDE.md «Bundles»). Firebase comes from the official CDN;
 `js/vendor/` holds the one vendored library. If a change seems to need a package, that
 is a decision to escalate, not to make.
+
+## Mise 2 (`app/`, `shared/`) is a different stack
+
+Everything above and below describes the CURRENT app. The rewrite in `app/` and `shared/` is
+React 19 + TypeScript + Vite with npm packages pinned exactly (his decision, 10 Oct 2026). Before
+touching it read **`docs/architecture.md`** in full; its «Rules for every new screen» are the
+contract. In short:
+- Commands from `app/` or `shared/`: `npx --no-install tsc --noEmit -p .`, `npx --no-install
+  vitest run`, `npm run build`. ⚠️ ALWAYS `--no-install`: a bare `npx tsc` in a folder without
+  `node_modules` downloads an unrelated package. A build for the preview path from Git Bash:
+  `MSYS_NO_PATHCONV=1 npx --no-install vite build --base=/mise2/`.
+- Specs are `*.spec.ts(x)` — NEVER `*.test.*`, never in a folder named `test/` (the root
+  `node --test` would run them). A port of a `js/` file runs its tests against BOTH files.
+- No package is added, removed or upgraded without the plan saying so (`.npmrc`:
+  `ignore-scripts`, `save-exact`; CI runs `npm audit`).
+- Text through `t()` with keys in `app/src/i18n/en.ts` and `it.ts` (a missing Italian key fails
+  the build), curly apostrophes, plural count `n`. One CSS module per component, values only as
+  `var(--token)` from `app/src/styles/tokens.css` (`css-modules.spec.ts` enforces both).
+- Firestore only through the session's backend (`backend.firestore()`), never `getFirestore()`.
+  An editor calls `markBusy()` while it holds unsaved edits. Every part sits in a `PartBoundary`.
+- Mise 2 shares the current app's origin, localStorage and IndexedDB. `KEEP_PREFIXES` (in BOTH
+  `js/local-data.js` and `shared/src/local-data.ts`) lists the keys that SURVIVE a sign-out or a
+  venue switch; every other key is wiped on purpose, so the next person on a shared phone never
+  sees the previous one's data. A key holding a person's or a venue's data must NOT start with a
+  kept prefix; only a fact about the device may, and then it is added to both lists. Never change
+  the Firebase start-up (`tests/auth-start.test.mjs`, `app/src/firestore-access.spec.ts`).
+- The Mise 2 rules above do not apply to `js/`, and `js/`'s rules (bundles, `sw-hashes`, no
+  framework) do not apply to `app/`.
 
 ## Conventions that are not negotiable
 

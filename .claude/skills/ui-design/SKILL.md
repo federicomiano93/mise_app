@@ -8,6 +8,30 @@ description: The one design system of Mise — tokens, header, bottom footer, na
 Build it right with this; measure it afterwards with the `ui-check` skill. Whether a screen reads
 well is only Federico, on a phone.
 
+## Mise 2 (`app/`) — its own design system
+
+Everything after this section is the CURRENT app's. Mise 2 has a new design, chosen in Claude
+Design (project «Mise 2 — design tablet-first», https://claude.ai/design/p/326b31df-d02f-4c27-bce6-f015fa95b820,
+file `mise2.css`: change a value there first, then in `app/src/styles/tokens.css`). Read
+`docs/architecture.md` too.
+- **Tokens:** `app/src/styles/tokens.css` only, as `var(--…)`; warm «flour» neutrals, a dark rail,
+  ONE accent (cobalt) for selection and the one primary action per screen; red, amber and green
+  only for MEANING (danger/allergen, to check, done). Geist + Geist Mono, bundled. Light only.
+- **Layout:** below 700px one pane and a bottom tab bar (four sections + «More»); from 700px the
+  dark rail (92px) and a top bar (venue, date, connection); from 1000px the TARGET is list (384px,
+  `--list-w`) + detail, built with the first sections in step 3.
+  CSS media queries only; both navigations stay in the DOM.
+- **Components:** one `Name.module.css` per component (`css-modules.spec.ts` refuses an undefined
+  class or token). Controls from React Aria Components (`ui/Button`, `ui/Dialog`); icons from
+  `lucide-react` (20px by default, 22px in the rail and tab bar, `aria-hidden`).
+- **Screens:** `shell/Page` gives each screen its one h1, the tab title and focus on navigation;
+  every part sits in a `PartBoundary` («This part didn't load» + Reload). Touch targets 48px
+  (`--hit`), steppers 56px (`--hit-lg`). Confirm before sign-out, delete, discard (P20), in a
+  `ui/Dialog`, never the browser's.
+- **Measure** at 296, 360, 768, 1024 and 1280 in EN and IT with axe-core (the drivers in the
+  session scratchpad / `algprobe/mise-drive/`): no sideways scroll, no clipped label (the longest
+  Italian words: «Impostazioni» in the rail, «Calcolatore» in the 296px tab bar).
+
 - ⚠️ **Pages load `dist/<name>.css`, the minified copy of each root stylesheet.** After editing ANY
   stylesheet run `node scripts/build-bundles.mjs` before ui-check, a screenshot or a phone preview,
   or you measure the old CSS (then `node scripts/sw-hashes.mjs`). The root `.css` is the source.
