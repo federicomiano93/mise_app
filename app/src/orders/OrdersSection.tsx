@@ -17,6 +17,8 @@ import { DaySendScreen } from './DaySendScreen';
 import { HistoryEditScreen } from './HistoryEditScreen';
 import { IncomingMissingScreen } from './IncomingMissingScreen';
 import { IncomingScreen } from './IncomingScreen';
+import { OrderListScreen } from './OrderListScreen';
+import { OrderListsScreen } from './OrderListsScreen';
 import { HistoryScreen } from './HistoryScreen';
 import { ReorderScreen } from './ReorderScreen';
 import { SendScreen } from './SendScreen';
@@ -28,14 +30,14 @@ import { SupplierPicker } from './SupplierPicker';
 import { LATCH_GRACE_MS, PendingLatchProvider, latchCanLook, pendingNow, usePendingLatch } from './pendingLatch';
 import { LONG_MS } from './useClearQuantities';
 import {
-  CLEAR_OPENER, HandBackProvider, HISTORY_DOOR, INCOMING_DOOR, ITEMS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, REORDER_DOOR, SEND_OPENER,
-  SETTINGS_OPENER, arrivalOpener, correctOpener, itemsOpener, pendingFallback, pendingOpener, sendDayOpener, supplierOpener,
+  CLEAR_OPENER, HandBackProvider, HISTORY_DOOR, INCOMING_DOOR, ITEMS_DOOR, LISTS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, REORDER_DOOR, SEND_OPENER,
+  SETTINGS_OPENER, arrivalOpener, correctOpener, itemsOpener, listOpener, pendingFallback, pendingOpener, sendDayOpener, supplierOpener,
   useHandBackState,
 } from './handBack';
 import { FROM_LIST, cameFromList, replacedState } from './ordersNav';
 import {
-  CLEAR_PATH, INCOMING_PATH, ORDERS_PATH, PLACE_ALL_PATH, REORDER_PATH, SEND_PATH, SETTINGS_PATH, historyDayPath, historyEditPath,
-  incomingMissingPath, parseOrdersPath, supplierConfirmPath, supplierItemsPath, supplierPath,
+  CLEAR_PATH, INCOMING_PATH, LISTS_PATH, ORDERS_PATH, PLACE_ALL_PATH, REORDER_PATH, SEND_PATH, SETTINGS_PATH, historyDayPath, historyEditPath,
+  incomingMissingPath, parseOrdersPath, requestPath, supplierConfirmPath, supplierItemsPath, supplierPath,
 } from './ordersPath';
 import type { OrdersView } from './ordersPath';
 import { buildOrdersLens } from './ordersLens';
@@ -92,6 +94,7 @@ function StatusLine() {
     snapshot.suppliersBroken ? t('ord.live.suppliers') : '',
     snapshot.ingredientsBroken ? t('ord.live.ingredients') : '',
     snapshot.historyBroken ? t('ord.live.history') : '',
+    snapshot.requestsBroken ? t('ord.live.lists') : '',
   ].filter(what => what !== '');
   return (
     <div role="status" className={styles.status}>
@@ -231,6 +234,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   // Back from Incoming and from «To re-order» gives the focus to the list's door (the debt banner opens Incoming the same way).
   const openIncoming = whenLive(() => { open(INCOMING_DOOR, INCOMING_PATH); });
   const openReorder = whenLive(() => { open(REORDER_DOOR, REORDER_PATH); });
+  const openLists = whenLive(() => { open(LISTS_DOOR, LISTS_PATH); });
   const openItemsWhenLive = (id: string) => { whenLive(() => { openItems(id); })(); };
 
   // ⚠️ THE HOLD: a supplier tapped on the copy (a row, an «Order today» chip, the notices panel) waits for the live data and then
@@ -287,6 +291,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const openMissing = (id: string) => { openFromHistory(arrivalOpener(id), incomingMissingPath(id)); };
   const openEdit = (id: string) => { openFromHistory(correctOpener(id), historyEditPath(id)); };
   const openDay = (date: string) => { openFromHistory(sendDayOpener(date), historyDayPath(date)); };
+  // From the order lists to one list: the same one level down, with the place in the lists written down.
+  const openRequest = (id: string) => { openFromHistory(listOpener(id), requestPath(id)); };
 
   // Where the scroll area goes at every move inside the section. Before the hand-back below, so the place is back when the row
   // takes the focus: focusing a row that is in view scrolls nothing.
@@ -305,7 +311,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
     } else if (view.kind === 'list' && listTop.current !== null) {
       area.scrollTop = listTop.current;
       listTop.current = null;
-    } else if ((view.kind === 'history' || view.kind === 'incoming') && historyPlace.current?.area != null) {
+    } else if ((view.kind === 'history' || view.kind === 'incoming' || view.kind === 'lists') && historyPlace.current?.area != null) {
       area.scrollTop = historyPlace.current.area;
     } else {
       area.scrollTop = 0;
@@ -322,6 +328,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
     else if (view.kind === 'history') handBack.deliverWhere(name => name.startsWith('correct:') || name.startsWith('send-day:'));
     // Back from «What arrived?» to Incoming: the row that opened it (gone when the order was answered: the title takes the focus).
     else if (view.kind === 'incoming') handBack.deliverWhere(name => name.startsWith('arrival:'));
+    // Back from one order list to the lists: its card (gone when the list was deleted: the title takes the focus).
+    else if (view.kind === 'lists') handBack.deliverWhere(name => name.startsWith('list:'));
     // The supplier's screen coming back from «What they sell»: only its own button is owed the focus. ⚠️ NOT deliver(): a
     // supplier opened from the list expects the list row, which must keep its focus (phone: the title takes it; split: the row).
     else if (view.kind === 'supplier') {
@@ -335,8 +343,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
   useLayoutEffect(() => {
     if (!detail.current) return;
     const inHistory = view.kind === 'history' || view.kind === 'history-edit' || view.kind === 'history-day'
-      || view.kind === 'incoming' || view.kind === 'incoming-missing';
-    detail.current.scrollTop = view.kind === 'history' || view.kind === 'incoming' ? historyPlace.current?.pane ?? 0 : 0;
+      || view.kind === 'incoming' || view.kind === 'incoming-missing' || view.kind === 'lists' || view.kind === 'request';
+    detail.current.scrollTop = view.kind === 'history' || view.kind === 'incoming' || view.kind === 'lists' ? historyPlace.current?.pane ?? 0 : 0;
     // The place is only owed to History while it is the screen in play; leaving it for good forgets it.
     if (!inHistory) historyPlace.current = null;
   }, [pathname]);
@@ -366,7 +374,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
                 lens={lens}
                 earlyLens={earlyLens}
                 ready={ready}
-                openId={'id' in view ? view.id : null}
+                openId={'id' in view && view.kind !== 'request' ? view.id : null}
                 heldId={held?.id ?? null}
                 onLookingElsewhere={dropHold}
                 onOpenSupplier={openOrHold}
@@ -377,13 +385,14 @@ function OrdersLayout({ view }: { view: ShownView }) {
                 onSettings={openSettings}
                 onIncoming={openIncoming}
                 onReorder={openReorder}
+                onLists={openLists}
                 onOpenPending={openPending}
               />
             </PartBoundary>
           </div>
           <div ref={detail} className={styles.detail}>
             <PartBoundary resetKey={pathname}>
-              <Detail view={view} lens={lens} ready={ready} onOpenEdit={openEdit} onOpenDay={openDay} onOpenMissing={openMissing} />
+              <Detail view={view} lens={lens} ready={ready} onOpenEdit={openEdit} onOpenDay={openDay} onOpenMissing={openMissing} onOpenRequest={openRequest} />
             </PartBoundary>
           </div>
         </div>
@@ -398,10 +407,11 @@ function OrdersLayout({ view }: { view: ShownView }) {
 //
 // (No `key` on the screens: the section keeps one from one supplier to the next on the split, so the focus stays on the row
 // that was pressed.)
-function Detail({ view, lens, ready, onOpenEdit, onOpenDay, onOpenMissing }: {
+function Detail({ view, lens, ready, onOpenEdit, onOpenDay, onOpenMissing, onOpenRequest }: {
   view: ShownView;
   lens: ReturnType<typeof buildOrdersLens>;
   ready: boolean;
+  onOpenRequest: (id: string) => void;
   onOpenEdit: (id: string) => void;
   onOpenDay: (date: string) => void;
   onOpenMissing: (id: string) => void;
@@ -417,6 +427,18 @@ function Detail({ view, lens, ready, onOpenEdit, onOpenDay, onOpenMissing }: {
         <p className={styles.promptTitle}>{t('ord.pane.title')}</p>
         <p>{t('ord.pane.text')}</p>
       </div>
+    );
+  }
+  // ⚠️ THE LISTS STAY MOUNTED UNDER ONE LIST (hidden, not drawn), like History under its editor: Back finds the old lists that were
+  // asked for as they were left. The lists need only their own stream; one list also reads the lens (names, units), so it waits.
+  if (view.kind === 'lists' || view.kind === 'request') {
+    return (
+      <>
+        <OrderListsScreen hidden={view.kind !== 'lists'} onOpen={onOpenRequest} />
+        {view.kind !== 'request' ? null : ready
+          ? <OrderListScreen key={view.id} id={view.id} lens={lens} />
+          : <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>}
+      </>
     );
   }
   if (!ready) {
