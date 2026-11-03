@@ -118,5 +118,9 @@ export const sendDayOpener = (date: string): string => `send-day:${date}`;
 // The list's two doors under the head (step 3f-5): where Back from Incoming and from «To re-order» returns the focus.
 export const INCOMING_DOOR = 'incoming-door';
 export const REORDER_DOOR = 'reorder-door';
+// The list's «Order lists» door (step 3f-7): where Back from the lists returns the focus. And a card of that screen (the list's id):
+// where Back from one list returns it.
+export const LISTS_DOOR = 'lists-door';
+export const listOpener = (id: string): string => `list:${id}`;
 // An Incoming row (the order's id): where Back from «What arrived?» returns the focus.
 export const arrivalOpener = (id: string): string => `arrival:${id}`;
