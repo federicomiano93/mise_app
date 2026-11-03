@@ -1,6 +1,6 @@
 ---
 name: i18n-labels
-description: The language rules of Mise — how to add or change any text a person reads, in English AND Italian, and why food words follow the venue's COUNTRY while interface words follow its LANGUAGE. Use whenever a change adds or edits a button, title, message, placeholder, dialog, notification or any on-screen text; touches js/i18n.js, js/i18n-dom.js or js/market.js; shows an allergen, a nutrient, a unit, a price, a date or a number; or touches anything printed on a label.
+description: The language rules of Mise — how to add or change any text a person reads, in English AND Italian, and why food words follow the venue's COUNTRY while interface words follow its LANGUAGE. Use whenever a change adds or edits a button, title, message, placeholder, dialog, notification or any on-screen text; touches js/i18n.js, js/i18n-dom.js, js/market.js, app/src/i18n/en.ts, app/src/i18n/it.ts or shared/src/market.ts; adds text to a Mise 2 screen through t(); shows an allergen, a nutrient, a unit, a price, a date or a number; or touches anything printed on a label.
 ---
 
 # Language rules — Mise
@@ -96,7 +96,26 @@ goes through `supplierLabel()`.
 - `order.html` is the CLIENT's page: it names the venue, never «Mise».
 - ⚠️ `install-guide.html` names buttons in the phone's OWN menus — never fold it into a
   language fix.
-- Text already written INTO stored data (old log entries) stays as written.
+- Text already written INTO stored data stays as written. The one shape the screen re-says is the
+  Dough history «when» (`logTimestamp` stores «Saturday 31 October» / «8:19 PM» in English, and Mise 2
+  reads the same logs): show it through `logStampText()` (`js/log-time.js`), which translates that exact
+  shape with Intl and leaves anything else as stored.
+
+## Mise 2 (`app/`, `shared/`) — the same rules, other files
+
+The two languages and the rule above hold unchanged (`docs/architecture.md`, «Rules for every new
+screen», 4). Only the places differ:
+- **Interface text:** `t()` from `useT()` (`app/src/i18n/useT.ts`), keys in BOTH
+  `app/src/i18n/en.ts` and `app/src/i18n/it.ts`: a missing Italian key fails the build. One phrase
+  with holes, counts through `n`, the same house style with curly apostrophes. No `data-i18n`: there
+  is no static HTML to translate.
+- **Food words:** `outputLanguage`, `allergenName`, `nutrientName`, `labelWord` from
+  `shared/src/market.ts`, read while drawing, never at module level.
+- **Money and numbers:** `formatMoney` (`shared/src/price-model.ts`), `localNumber` and
+  `typedDecimal` (`shared/src/currency.ts`).
+- **The Dough history «when»:** `localDate` / `localTime` (`app/src/calculator/logStamp.ts`).
+  `logStampText()` above is on `main` only, until `main` is merged into the stack.
+- **Check it** with the slice's driver, in Italian and English (`mise2-check` gate 5), not `ui-check`.
 
 ## Before calling it done
 

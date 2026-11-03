@@ -135,6 +135,12 @@ real data) are in the project CLAUDE.md. The working details:
 - **`.github/workflows/preview.yml`** (not a required check): per PR it deploys the PR's rules to
   the preview project and its pages to channel `pr-<n>` (14 days), then comments the link. All PRs
   share one preview database: the last PR to deploy sets its rules.
+- ⚠️ **50 preview channels per site, at most.** When a PR closes, job `delete-channel` deletes its
+  `pr-<n>` (one Hosting API call, nothing installed); the 14-day expiry is the net for a PR closed
+  with a merge conflict (no workflow runs then). If a new PR's preview fails at the deploy step,
+  the log now prints Google's answer; on `channel quota reached`, count with
+  `firebase hosting:channel:list --project mise-app-preview --json` — deleting channels by hand
+  needs his OK, never an OPEN PR's or `anteprima`.
 - A post-deploy check takes the channel down if anything internal answers
   (`tests/preview-hosting.test.mjs`). Keyless sign-in: pool `github-pool`, provider `github-oidc`,
   service account `preview-deploy@mise-app-preview` (that project only); trust pinned to the repo

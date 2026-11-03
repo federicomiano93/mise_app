@@ -527,7 +527,10 @@ lightningcss lowers oklch, nesting and media ranges; it does not lower everythin
   only read the repository and holds no credential. `deploy-functions` still waits only on `test`
   and `rules`.
 - Driving it: build with `--base=/mise2/` (from Git Bash: `MSYS_NO_PATHCONV=1`, or the path is
-  rewritten), serve with `vite preview`, and on localhost it talks to the emulator.
+  rewritten), serve with `vite preview`, and on localhost it talks to the emulator. The full
+  procedure is the local `drive-app` skill, «Mise 2».
+- **The gates before a PR are the `mise2-check` skill**, not `smoke-test` or `ui-check`, which know
+  only the current app.
 
 ## Performance (step 2c, 11 Oct 2026)
 
