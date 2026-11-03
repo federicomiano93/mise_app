@@ -18,14 +18,14 @@ import { supplierLabel } from '../supplier-label.js';
 // ingredient NAME on a row edits — and, for an owner or manager, deletes (the card's bin ends in
 // deleteIngredientAndDraftRow below, which also takes the ingredient's line out of the draft).
 import {
-  watchCollection, watchDoc, saveDoc, COLLECTIONS,
+  watchCollection, watchCollectionServerAnswer, watchDoc, saveDoc, COLLECTIONS,
   watchRecentHistory, getOlderHistory, getLegacyHistory,
   watchIngredientPrices, canManageHere, authReady, getPriceHistory,
   deleteIngredientWithPrice, mayWritePrices, currentBakery,
 } from './firebase-orders.js';
 import { withPrices } from '../price-model.js';
 import {
-  readListCopy, writeListCopy, shouldShowCopy, bothLanded, supplierToOpen, mayWriteCopy,
+  readListCopy, writeListCopy, shouldShowCopy, bothLanded, supplierToOpen, mayWriteCopy, activeLocation,
   LIST_COPY_WRITE_DELAY_MS,
 } from './list-copy.js';
 import { currentSession } from '../firebase.js';
@@ -155,6 +155,8 @@ const state = {
 
 let heldSupplierId = null;       // the supplier tapped while showing the copy; opened once live data lands
 let copyWriteTimer = null;       // the one debounced timer that saves the list copy
+let copyServerSeen = { suppliers: false, ingredients: false }; // has the SERVER answered for this list? (list-copy.js)
+let copyListFailed = false;      // a supplier or ingredient stream failed: its list can only get older
 
 let olderLoader = null;          // pages of orders older than the live window; made when that listener starts
 let quietSummaryClose = false;   // closeSupplier() closing its own summary: no screen announcement
@@ -694,6 +696,13 @@ function leaveCopyForGood() {
   showAlerts();
 }
 
+// ⚠️ IT ARMS THE WRITE ITSELF: a server answer identical to this phone's list changes no document, so
+// no list listener calls back, and a phone already up to date would never save a copy.
+function copyServerAnswered(which) {
+  copyServerSeen[which] = true;
+  scheduleCopyWrite();
+}
+
 // Debounced, one timer: stringifying ~300 documents must not sit in the first seconds of the page.
 // ⚠️ `rawIngredients`, NEVER `ingredients` (that one has the prices merged in).
 function scheduleCopyWrite() {
@@ -701,7 +710,9 @@ function scheduleCopyWrite() {
   copyWriteTimer = setTimeout(() => {
     let lid = '';
     try { lid = currentBakery(); } catch { return; }
-    if (!mayWriteCopy({ loaded: state.loaded, lid })) return;
+    if (!mayWriteCopy({
+      loaded: state.loaded, serverSeen: copyServerSeen, listFailed: copyListFailed, lid, activeLocation: activeLocation(),
+    })) return;
     writeListCopy(lid, state.suppliers, state.rawIngredients);
   }, LIST_COPY_WRITE_DELAY_MS);
 }
@@ -2937,6 +2948,15 @@ function liveDataLost(what) {
   };
 }
 
+// Around liveDataLost, for the two lists the local copy is made of: once one fails, the copy is left
+// as it is.
+function listLost(lost) {
+  return () => {
+    copyListFailed = true;
+    lost();
+  };
+}
+
 // Hide the status line, but ONLY if it still shows `text`. Same guard as the
 // auto-hide above and for the same reason: whoever set a newer message — an error,
 // or "order saved to history ✓" — must never have it wiped by a stale clear.
@@ -3151,7 +3171,8 @@ async function init() {
     // in the background, where animation frames do not run. It is cheap.
     showAlerts();
     checkPendingOnce();
-  }, liveDataLost(() => t('orders.live.suppliers')));
+  }, listLost(liveDataLost(() => t('orders.live.suppliers'))));
+  watchCollectionServerAnswer(COLLECTIONS.suppliers, () => copyServerAnswered('suppliers'));
   // ⚠️ THE PRICES ARE A SECOND COLLECTION AND ARRIVE SEPARATELY. They moved off
   // the ingredient document because Orders reads every ingredient to work at all,
   // so a rate written there is a rate everybody can read (js/price-model.js).
@@ -3176,7 +3197,8 @@ async function init() {
     scheduleRender('list', 'history', 'reminders');
     leaveCopyIfLive();
     checkPendingOnce();
-  }, liveDataLost(() => t('orders.live.ingredients')));
+  }, listLost(liveDataLost(() => t('orders.live.ingredients'))));
+  watchCollectionServerAnswer(COLLECTIONS.ingredients, () => copyServerAnswered('ingredients'));
 }
 
 // ── The kiosk rest screen (js/kiosk.js) ──────────────────────────────────────
