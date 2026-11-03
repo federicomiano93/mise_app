@@ -1,9 +1,12 @@
 ---
 name: smoke-test
-description: The gates a Mise change must pass before a PR is opened or merged — automated tests, Firestore rules checks, service-worker fingerprints, the ui-check measurements, driving the changed feature on the emulator at phone and tablet width, and a short core-flow checklist per section. Use before merging, before opening a PR, whenever Federico says "smoke test", "check before publishing" or "is it ready", and before calling any branch finished. It reports what ran and what did not; whether a screen reads well is only Federico, on a phone.
+description: The CURRENT app only (a change in app/ or shared/ goes through mise2-check instead). The gates a Mise change must pass before a PR is opened or merged — automated tests, Firestore rules checks, service-worker fingerprints, the ui-check measurements, driving the changed feature on the emulator at phone and tablet width, and a short core-flow checklist per section. Use before merging, before opening a PR, whenever Federico says "smoke test", "check before publishing" or "is it ready", and before calling any branch finished. It reports what ran and what did not; whether a screen reads well is only Federico, on a phone.
 ---
 
 # Smoke test — the gates before a PR or a merge
+
+> **Current app only.** A change in `app/` or `shared/` goes through the `mise2-check` skill. A
+> branch that changes both goes through both, each for its own half.
 
 Federico reviews the APP, not the code, so these gates are the net in front of him.
 `main` accepts only a pull request whose three required GitHub checks, `test`,

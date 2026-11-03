@@ -18,7 +18,9 @@ Open with Read the ones the diff touches, and check the change against them:
 `.claude/skills/ui-design/SKILL.md` (any screen, dialog, icon or stylesheet) ·
 `.claude/skills/i18n-labels/SKILL.md` (any on-screen text, allergens, units, prices) ·
 `.claude/skills/bump-sw/SKILL.md` (any precached file, and `sw.js` itself) ·
-`.claude/skills/firestore-write-guard/SKILL.md` (scripts that write to Firestore).
+`.claude/skills/firestore-write-guard/SKILL.md` (scripts that write to Firestore) ·
+`.claude/skills/mise2-check/SKILL.md` (anything in `app/` or `shared/`). In Mise 2 a data layer is a
+`*Store.ts` or a `*Source.ts`, and `ui-design` and `i18n-labels` each have a «Mise 2» section.
 
 ## What to read
 
@@ -100,6 +102,29 @@ interaction between the change and the lines around it, not in the diff hunk.
   never by hand). File added or renamed → also in `ASSETS`, spelled like the real file.
 - New behaviour has a test (P15). A guard that pins HOW a call is shaped is satisfied
   by DELETING the call — something must also pin that the call exists.
+
+**Mise 2 (`app/`, `shared/`, on its own branches until the switch) — read `docs/architecture.md` first, never whole:** list its headings
+with `grep -n '^## '`, read every section EXCEPT «`app/src`, folder by folder», and from that one
+only the folders the diff touches; the same for `docs/parity/<section>.md` («Already in Mise 2», the
+topic sections, the slice's Decisions). The defects found there so far:
+- **One origin with the current app.** A storage key outside `KEEP_PREFIXES` (in BOTH
+  `js/local-data.js` and `shared/src/local-data.ts`) is wiped by the other app's sign-out; a
+  different Firebase SDK version, persistence list or Firestore cache setting breaks the other
+  app's IndexedDB or signs every phone out (`tests/mise2-ci.test.mjs`, `tests/auth-start.test.mjs`).
+- **One page that never reloads.** What the current app fixes on the next page load (a different
+  person's cached data, a day rolling over, a device ping) Mise 2 must do while open: check every
+  "at boot" decision ported from `js/`.
+- **Firestore only through the backend** (`backend.firestore()`), never `getFirestore()`; an
+  editor without `markBusy()`; a part outside a `PartBoundary`; a frozen module-level list where
+  the venue or role can change it.
+- **Ports must equal their `js/` originals**, odd inputs included, and their specs must run
+  against both files; a partial port says why it is not in `parity.spec.ts`.
+- **Errors reported twice or never** (React logs caught render errors; the router's boundary
+  logs too unless `onError` is given) and telemetry queued offline (it trips «Not sent yet»).
+- **Accessibility**: one `main` and one `h1` per screen, labelled landmarks (content outside every
+  landmark), live regions present before they change, 48px targets, focus never lost to `<body>`.
+- Specs named `*.test.*`, a `{{` or `{%` in committed Markdown (Jekyll), a CSS custom property
+  invented in a component (the token guard), a package added without the plan.
 
 ## How to report
 
