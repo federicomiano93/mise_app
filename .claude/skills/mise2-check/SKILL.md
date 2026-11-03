@@ -1,0 +1,103 @@
+---
+name: mise2-check
+description: The gates a Mise 2 change (anything in app/ or shared/, a React screen, a *Store.ts or *Source.ts, a ported function) must pass before its stacked PR is opened or a slice is called done — types, specs and build in both packages, the rules checks, ports against both files, living beside the current app, driving the slice on the emulator with axe-core at 1024, 360 and 296 in Italian and English, what a script cannot see, the code review and the PR. Use INSTEAD OF smoke-test and ui-check for Mise 2, before opening a Mise 2 PR, whenever Federico asks "is it ready" about a Mise 2 slice, and before calling a slice finished. It reports what ran and what did not; whether a screen reads well is only Federico, on the tablet and the phone.
+---
+
+# Mise 2 check — the gates before a stacked PR
+
+Federico reviews the APP, not the code: he opens each section on the preview link, so these gates
+are the net in front of him. Mise 2 reaches `main` only ALL AT ONCE, at the switch, so a slice ends
+in a stacked PR, never in a merge to `main`.
+
+Run the gates in order. A change skips a gate only when it cannot affect it, and the Report says
+which were skipped and why. If `js/` changed as well, that half also goes through `smoke-test`.
+
+## Gate 1 — types, specs, build (always)
+
+Delegate to the `test-runner` agent; its table has the commands and the flaky list.
+- From `shared/`: types, specs. From `app/`: types, specs, `npm run build`. From the root: `npm test`
+  (`tests/mise2-ci.test.mjs`, `tests/mise2-isolation.test.mjs`, `tests/auth-start.test.mjs` pin the
+  two apps side by side, and the root suite does NOT run the specs).
+- A package added or upgraded (only if the plan says so): `npm audit --audit-level=high` in that
+  package, as CI does.
+- Red = STOP. Fix it, or report that the plan was wrong; never weaken a spec.
+
+## Gate 2 — Firestore rules checks (when the rules or a saved shape changed)
+
+- `npm run test:rules:emulated`, and the `firestore-rules` skill for the checklist.
+- ⚠️ New keys must be in the LIVE rules before Mise 2 goes live, and nothing on a screen says so:
+  add the line to «Owed before the switch» in memory `piano-mise-2`.
+
+## Gate 3 — ports (when `shared/src` or a `js/` original changed)
+
+- A port equals its `js/` original, odd inputs included: `shared/src/parity.spec.ts` and
+  `shared/src/odd-inputs.spec.ts`, its specs running against BOTH files. A partial port says why it
+  is not in `parity.spec.ts`.
+- ⚠️ `main` is not merged into the stack, so its newer exports are not in the ports. A fix on `main`
+  reaches the stack by taking only that fix's files.
+
+## Gate 4 — living beside the current app (always: read the diff for these)
+
+`docs/architecture.md`, «Living beside the current app», «Rules for every new screen» and «Browser
+floor». Most of them have a spec; the ones a spec cannot judge are in bold.
+- A storage key: **a person's or a venue's data must NOT start with a kept prefix**; a fact about the
+  device may, then in BOTH `js/local-data.js` and `shared/src/local-data.ts` (`KEEP_PREFIXES`).
+- The Firebase npm version, Auth's persistence list and Firestore's start-up unchanged.
+- Firestore only through `backend.firestore()` (`app/src/firestore-access.spec.ts`).
+- No service worker until step 5, so no `sw-hashes`, no `dist/` for `app/`.
+- **Chrome 101:** nothing newer without a feature check; heights through `var(--vh100)`, `:hover`
+  only inside `@media (hover: hover)`, no second declaration with `var()` as a fallback.
+- Every editor calls `markBusy()`, every part sits in a `PartBoundary`, every word goes through `t()`
+  in both dictionaries, values only as `var(--token)`. A section loads lazily and has its own scroll
+  area, and leaving with unsaved edits goes through `useBlocker` («Rules for every new screen»).
+- **A decision ported "at boot":** Mise 2 never reloads, so the day rolling over or another person
+  signing in must be handled while it stays open.
+
+## Gate 5 — drive the slice (when any behaviour or screen changed)
+
+Emulator only. Load `firestore-write-guard`, then `drive-app` («Mise 2»: the emulator, the seed, the
+`--base=/mise2/` build, `vite preview`, the traps). A helper has no Skill tool: its path is
+`C:/claude-workspace/mise_app_workspace/mise_app/.claude/skills/drive-app/SKILL.md`.
+- Each slice has its driver, `algprobe/mise-drive/drive-mise2-<slice>.mjs`, copied from the closest one
+  and extended with this change's own path. Its header states its arguments and whether it can run only
+  some passes: they differ from driver to driver.
+- Every pass proves: the Italian venue (`miano@club.test`) AND English; 1024, 360 and 296 wide, plus
+  an employee (`staff@club.test`) where a role matters, and 768 and 1280 when the shell or the layout
+  changed; axe-core with no violation; no sideways scroll; no clipped text; targets of at least 44px
+  measured (48px by design, `--hit`); one `main` and one `h1`; no console error, no `permission-denied`.
+- It puts back what it changed, and it prints a total: report it as `N/N`, by pass.
+
+## Gate 6 — what a script does not see
+
+Walk these in the driver or by hand, and say which you did not:
+- **EMPTY** (a new venue), **FULL** (the longest real Italian text), **ERROR** (a refused save),
+  **OFFLINE** (nothing typed is lost, P20).
+- Keyboard alone, with focus coming back where it was promised; reduced motion.
+- Leaving with unsaved edits by every way out: Back, the browser's Back, the rail, the gesture.
+- The real tablet (SM-T550, Chrome 101, memory `tablet-via-usb`) for touch, drag, the camera, a new
+  CSS or JS feature. Not done now = a line in «Owed before the switch» in memory `piano-mise-2`.
+
+## Gate 7 — review and PR
+
+- The `code-reviewer` agent on the diff. Fix what it finds and re-run the gates the fix touches.
+- Append the «… as built» section to `docs/parity/<section>.md`: differences from the current app,
+  and the choices made for Federico, which he must hear about.
+- No double curly brace, and no curly brace followed by a percent sign, in committed Markdown: it
+  fails the whole Pages build (`tests/mise2-isolation.test.mjs`).
+- A stacked PR on the stack's top (memory `piano-mise-2` names it), never on `main`; the checks
+  `test`, `rules` and `mise2` green; the preview link for his phone (`go-live`, appendix).
+- Then update memory `piano-mise-2` and propose the next slice as a card.
+
+## Report (always end with this)
+
+State plainly, gate by gate: ran (with the totals), or skipped (and why: «no rule changed» is a
+reason, «no time» is not). List anything that failed or was not driven. Then say: **the gates measure
+and cannot judge whether a screen reads well — that is Federico's**, and name the screens he should
+open on the preview link.
+
+## Never
+
+- Never open a PR or call a slice ready with a red Gate 1 or Gate 2.
+- Never merge a Mise 2 PR into `main`: Mise 2 ships all at once, at the switch.
+- Never drive on a non-local URL to "just check".
+- Never run `ui-check.mjs` for Mise 2 and call it measured: it visits none of Mise 2's screens.

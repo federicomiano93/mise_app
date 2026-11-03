@@ -20,5 +20,19 @@
       "Bash(git push -f:*)",
       "Bash(git push --force-with-lease:*)"
     ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "f=\"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-admin-sdk.mjs\"; [ -f \"$f\" ] || exit 0; exec node \"C:/Users/feder/.claude/run-guard.mjs\" \"$f\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
   }
 }

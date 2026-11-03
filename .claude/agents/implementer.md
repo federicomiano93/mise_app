@@ -18,19 +18,56 @@ that no test fully catches. Read every one your change touches:
 | If the change touches… | Read first |
 |---|---|
 | `firestore.rules`, a collection, a field the app saves, `locations/{lid}` or `users/{uid}`, a role | `.claude/skills/firestore-rules/SKILL.md` |
-| a Firestore query, a data layer, any saved document's shape | `.claude/skills/firestore-rules/data-model.md` (every collection and field) |
-| any text a person reads, `js/i18n.js`, `js/market.js`, allergens, units, prices, dates, labels | `.claude/skills/i18n-labels/SKILL.md` |
-| any file listed in `sw.js` `ASSETS` (HTML, CSS, JS, icons, fonts, manifest) | `.claude/skills/bump-sw/SKILL.md` |
-| driving the app, a probe or seed script, anything that could write to Firestore | `.claude/skills/firestore-write-guard/SKILL.md` (and `.claude/skills/drive-app/SKILL.md` if it exists — it is local-only) |
+| a Firestore query, a data layer (in Mise 2 a `*Store.ts`, a `*Source.ts`, `shared/src`), any saved document's shape | `.claude/skills/firestore-rules/data-model.md` (every collection and field) |
+| any text a person reads, `js/i18n.js`, `js/market.js`, `app/src/i18n/`, `shared/src/market.ts`, allergens, units, prices, dates, labels | `.claude/skills/i18n-labels/SKILL.md` |
+| any file listed in `sw.js` `ASSETS` (HTML, CSS, JS, icons, fonts, manifest) — never `app/` or `shared/`: Mise 2 has no service worker until step 5 | `.claude/skills/bump-sw/SKILL.md` |
+| driving the app, a probe or seed script, a `drive-mise2-*` driver, anything that could write to Firestore | `.claude/skills/firestore-write-guard/SKILL.md`, then `C:/claude-workspace/mise_app_workspace/mise_app/.claude/skills/drive-app/SKILL.md` (local-only, so not in a worktree: use this full path) |
 | `sw.js` itself (fetch, install, activate, the SDK cache) | `.claude/skills/bump-sw/SKILL.md` — «How the cache behaves» |
-| a screen, an overlay, a dialog, a header, an icon, a stylesheet or `tokens.css` | `.claude/skills/ui-design/SKILL.md` BEFORE building, then `.claude/skills/ui-check/SKILL.md` — say in your report that it should be run |
+| a screen, an overlay, a dialog, a header, an icon, a stylesheet or `tokens.css` of the current app | `.claude/skills/ui-design/SKILL.md` BEFORE building, then `.claude/skills/ui-check/SKILL.md` — say in your report that it should be run |
+| a Mise 2 screen: `app/src/**/*.tsx`, `*.module.css`, `app/src/styles/tokens.css` | `.claude/skills/ui-design/SKILL.md` («Mise 2» section) BEFORE building |
+| finishing anything in `app/` or `shared/` | `.claude/skills/mise2-check/SKILL.md` — run gates 1 to 4, and say in your report which of 5 to 7 are still owed |
 
 ## The stack, in one breath
 
-Plain HTML + CSS + vanilla ES modules. **No framework, no bundler, no build step, no
-TypeScript, no npm runtime dependencies.** Firebase comes from the official CDN;
+Plain HTML + CSS + vanilla ES modules. **No framework, no TypeScript, no npm runtime
+dependencies.** The one build tool is esbuild, run on this PC to make the committed `dist/`
+bundles (project CLAUDE.md «Bundles»). Firebase comes from the official CDN;
 `js/vendor/` holds the one vendored library. If a change seems to need a package, that
 is a decision to escalate, not to make.
+
+## Mise 2 (`app/`, `shared/`) is a different stack
+
+Everything above and below describes the CURRENT app. The rewrite in `app/` and `shared/` is
+React 19 + TypeScript + Vite with npm packages pinned exactly (his decision, 10 Oct 2026). Before
+touching it read **`docs/architecture.md`, never whole** (on the Mise 2 branches only, until the
+switch; 88 KB, about 22,000 tokens): list its
+headings with `grep -n '^## ' docs/architecture.md`, read every section EXCEPT «`app/src`, folder
+by folder», and from that one only the bullets of `ui/`, `data/` and the folders your slice
+touches. Its «Rules for every new screen» are the contract. The parity docs are never read whole
+either (`docs/parity/suppliers.md` is 280 KB): list the headings, read «Already in Mise 2», the
+topic sections, the Decisions and Proposed slices of your slice, and append your «… as built»
+section without reading the earlier ones. In short:
+- Commands from `app/` or `shared/`: `npx --no-install tsc --noEmit -p .`, `npx --no-install
+  vitest run`, `npm run build`. ⚠️ ALWAYS `--no-install`: a bare `npx tsc` in a folder without
+  `node_modules` downloads an unrelated package. A build for the preview path from Git Bash:
+  `MSYS_NO_PATHCONV=1 npx --no-install vite build --base=/mise2/`.
+- Specs are `*.spec.ts(x)` — NEVER `*.test.*`, never in a folder named `test/` (the root
+  `node --test` would run them). A port of a `js/` file runs its tests against BOTH files.
+- No package is added, removed or upgraded without the plan saying so (`.npmrc`:
+  `ignore-scripts`, `save-exact`; CI runs `npm audit`).
+- Text through `t()` with keys in `app/src/i18n/en.ts` and `it.ts` (a missing Italian key fails
+  the build), curly apostrophes, plural count `n`. One CSS module per component, values only as
+  `var(--token)` from `app/src/styles/tokens.css` (`css-modules.spec.ts` enforces both).
+- Firestore only through the session's backend (`backend.firestore()`), never `getFirestore()`.
+  An editor calls `markBusy()` while it holds unsaved edits. Every part sits in a `PartBoundary`.
+- Mise 2 shares the current app's origin, localStorage and IndexedDB. `KEEP_PREFIXES` (in BOTH
+  `js/local-data.js` and `shared/src/local-data.ts`) lists the keys that SURVIVE a sign-out or a
+  venue switch; every other key is wiped on purpose, so the next person on a shared phone never
+  sees the previous one's data. A key holding a person's or a venue's data must NOT start with a
+  kept prefix; only a fact about the device may, and then it is added to both lists. Never change
+  the Firebase start-up (`tests/auth-start.test.mjs`, `app/src/firestore-access.spec.ts`).
+- The Mise 2 rules above do not apply to `js/`, and `js/`'s rules (bundles, `sw-hashes`, no
+  framework) do not apply to `app/`.
 
 ## Conventions that are not negotiable
 
@@ -63,8 +100,8 @@ For each step of the plan:
 2. Make the change with Edit (or Write for a genuinely new file).
    ⚠️ **Never rewrite a file with a script that opens it for writing** — an in-place
    truncating write destroyed a gitignored file in this project. Use Edit/Write.
-3. **Delegate to `test-runner`** to run `npm test`. If a rule, a `.rules` file or a
-   collection changed, have it run the rules checks too.
+3. **Delegate to `test-runner`** to run `npm test` (for `app/` or `shared/`, its Mise 2
+   commands). If a rule, a `.rules` file or a collection changed, have it run the rules checks too.
    If you cannot delegate, run `npm test` yourself and apply test-runner's reporting
    rules — totals plus failures only, never the passing output.
    ⚠️ **The output goes through a pipe, or into the helpers folder — NEVER into the
@@ -82,7 +119,8 @@ For each step of the plan:
 
 ## Before you say you are done
 
-- `npm test` green, and the rules checks green if anything touched Firestore.
+- `npm test` green, and the rules checks green if anything touched Firestore. `app/` or `shared/`
+  touched: types, specs and build green there too (`mise2-check` gate 1).
 - **New behaviour has a test.** A change with no test is not finished (P15) — the
   owner cannot read code, so the tests are the only safety net.
 - **`js/` or any stylesheet changed** (run it before ui-check, a screenshot or a phone preview too,
@@ -105,6 +143,8 @@ For each step of the plan:
 - The change would need a Firestore rules deploy, a new dependency, a new colour, or a
   user-visible wording decision.
 - The change would touch production data.
+- A guard refuses a command (the Admin SDK guard names `firestore-write-guard`). Follow what the
+  refusal says for a test script; otherwise report it. Never rephrase a command to get past a guard.
 
 ## Never
 
