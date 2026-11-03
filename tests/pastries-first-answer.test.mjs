@@ -242,7 +242,7 @@ function pageDom(cached = null) {
   const header = new Node('header');
   const ids = new Map();
   for (const id of ['pasScreen', 'pasStrip', 'pasTitle', 'pasSub', 'pasHome', 'pasBack', 'pasEdit',
-    'pasSave', 'pasFooter', 'pasLogs', 'pasToast']) {
+    'pasSave', 'pasFooter', 'pasLogs', 'pasCopyDay', 'pasToast']) {
     ids.set(id, new Node(id === 'pasScreen' ? 'main' : 'button'));
   }
   ids.get('pasSave').closest = () => header;

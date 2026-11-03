@@ -102,6 +102,7 @@ const EXEMPT = new Map([
   ['.auth-gate', 'wraps .auth-card, capped at 360px'],
   ['.app-dialog-backdrop', 'wraps .app-dialog, capped at 480px'],
   ['.app-dialog-msg', 'inside .app-dialog, capped at 480px'],
+  ['.pas-copy-days', 'the Copy-day picker, passed to the dialog as its node: inside .app-dialog, capped at 480px'],
   ['#loaf-modal-box, #list-select-box, #day-modal-box, #send-who-box', 'capped at 480px'],
   ['#loaf-modal, #list-select-modal, #day-modal, #send-who-modal', 'backdrops; the boxes inside are capped'],
   ['.co-header', 'order.html is the CLIENT page: its body is capped at 560px'],
