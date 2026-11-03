@@ -25,9 +25,15 @@
 //
 // The key must NOT start with a KEEP_PREFIXES entry (js/local-data.js): signing out or switching
 // venue has to wipe it, it is one venue's data.
+//
+// ⚠️ ONLY THE SERVER'S ANSWER IS WORTH KEEPING, AND ONLY FOR THE VENUE STILL OPEN. See mayWriteCopy.
 
 export const LIST_COPY_KEY = 'orders-list-copy';
 export const LIST_COPY_VERSION = 1;
+
+// The session's own note of which venue this device has open. js/firebase.js owns it and cannot be
+// imported from here (it loads the SDK); tests/orders-list-copy.test.mjs compares the two.
+export const ACTIVE_LOCATION_KEY = 'active-location';
 
 // How long after the last snapshot the copy is written. Stringifying ~300 documents is real
 // work on a weak tablet and must not sit in the first seconds of the page.
@@ -108,7 +114,22 @@ export function supplierToOpen(heldId, exists) {
   return exists(heldId) ? heldId : null;
 }
 
-// Whether the copy may be written now: both lists live, and they are the live ones.
-export function mayWriteCopy({ loaded, lid }) {
-  return bothLanded(loaded) && typeof lid === 'string' && lid !== '';
+export function activeLocation(storage = defaultStorage()) {
+  if (!storage) return null;
+  try { return storage.getItem(ACTIVE_LOCATION_KEY); } catch { return null; }
+}
+
+// Whether the copy may be written now.
+//   * `serverSeen`, not only `loaded`: this phone's own database answers first and can hold a partial
+//     or old list, which must not become «the last good one». Offline nothing is written, which is
+//     fine: the copy already there stays.
+//   * `listFailed`: a stream that failed never comes back (onSnapshot does not resubscribe), so its
+//     list can only get older.
+//   * `activeLocation`: another window on this device moved to another venue or signed out. That
+//     wiped this device's data, and this page, still running, has a write waiting: it would put the
+//     old venue's names back. Equal, not «not another one»: the session writes the key before a venue
+//     counts as open, so a missing key means a sign-out or «choose a venue again» in that window.
+export function mayWriteCopy({ loaded, serverSeen, listFailed, lid, activeLocation: active }) {
+  return bothLanded(loaded) && bothLanded(serverSeen) && !listFailed
+    && typeof lid === 'string' && lid !== '' && active === lid;
 }

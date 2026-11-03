@@ -511,6 +511,24 @@ export async function watchServerAnswer(name, id, onAnswer) {
   return stop;
 }
 
+// The same for a whole collection already being watched with watchCollection: called ONCE, the first
+// time the server itself has answered for it, and no extra read for the same reason. Its docs are never
+// read, so it costs a weak tablet nothing. An error needs no second telling: the watcher reports it.
+export async function watchCollectionServerAnswer(name, onAnswer) {
+  await authReady;
+  const stop = onSnapshot(
+    collection(db, pathFor(name)),
+    { includeMetadataChanges: true },
+    snap => {
+      if (snap.metadata.fromCache) return;
+      stop();
+      onAnswer();
+    },
+    err => { console.error(`watchCollectionServerAnswer(${name}) failed:`, err); },
+  );
+  return stop;
+}
+
 // Whether this session may take things away in this location.
 //
 // ⚠️ UX ONLY (P2). The rules decide, and they read users/{uid} themselves rather
