@@ -75,12 +75,26 @@ export const MAX_QTY = 9999;
 // whitelist the moment they deploy, so it cannot be renamed casually afterwards.
 export const MAX_NOTE_LENGTH = 500;
 
+// A row's own note, beside the pastry: «9x3», three trays of nine. Plain text,
+// never parsed or multiplied. It lives INSIDE the row, so the rules above cannot
+// see it either: this limit is one more guarantee of this file. No rules change
+// was needed, and none could have checked it.
+export const MAX_ITEM_NOTE_LENGTH = 40;
+
 export function isWeekday(name) {
   return typeof name === 'string' && WEEKDAYS.includes(name);
 }
 
 function indexOfWeekday(day) {
   return WEEKDAYS.indexOf(day);
+}
+
+// The six days a day's list can be copied onto, starting from the next one and
+// wrapping: the day after is the usual target, so it comes first.
+export function otherWeekdays(day) {
+  const i = indexOfWeekday(day);
+  if (i === -1) return [...WEEKDAYS];
+  return [1, 2, 3, 4, 5, 6].map(step => WEEKDAYS[(i + step) % 7]);
 }
 
 // Both wrap. Sunday's next day is Monday — a week has no end.
@@ -144,7 +158,19 @@ function normalizeItem(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const name = typeof raw.name === 'string' ? raw.name.trim() : '';
   if (!name) return null;
-  return { name: name.slice(0, MAX_NAME_LENGTH), qty: wholeNumber(raw.qty) };
+  const item = { name: name.slice(0, MAX_NAME_LENGTH), qty: wholeNumber(raw.qty) };
+  // ⚠️ NO KEY AT ALL WHEN THERE IS NO NOTE, never `note: ''`: a row nobody wrote a
+  // note on is stored exactly as it was before notes existed.
+  const note = cleanItemNote(raw.note);
+  if (note) item.note = note;
+  return item;
+}
+
+// A row's note, made safe to store and to show. One line, unlike the day's note:
+// it sits beside a pastry's name, where a line break has nowhere to go.
+export function cleanItemNote(raw) {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/\s+/g, ' ').trim().slice(0, MAX_ITEM_NOTE_LENGTH).trim();
 }
 
 // A standing note, made safe to store and to show. Anything that is not a string
@@ -179,7 +205,9 @@ export function setQuantityAt(items, index, qty, expectedName) {
   const wanted = typeof expectedName === 'string' ? expectedName.trim().toLowerCase() : null;
   if (wanted === null || row.name.trim().toLowerCase() !== wanted) return null;
   const next = items.slice();
-  next[i] = { name: row.name, qty: wholeNumber(qty) };
+  // ⚠️ THE SPREAD KEEPS THE ROW'S NOTE. The day is written whole, so a row rebuilt
+  // from its name and number here would lose «9x3» on every corrected quantity.
+  next[i] = { ...row, qty: wholeNumber(qty) };
   return next;
 }
 

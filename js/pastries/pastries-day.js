@@ -83,6 +83,9 @@ export function renderDay({ day, items, note, locked = false, ready = true, app 
       },
     }, [
       el('span', { class: 'pas-row-name', text: item.name }),
+      // «9x3»: read-only here like the name. el() skips null, so a row with no
+      // note draws exactly what it drew before notes existed.
+      item.note ? el('span', { class: 'pas-row-note', text: item.note }) : null,
       qtyEl,
     ]);
 
