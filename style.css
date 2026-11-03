@@ -726,6 +726,13 @@ body.calc-zoom-lock .scroll-area { overflow: hidden; }
   text-decoration: none;
 }
 .recipe-footer-btn:active { background: var(--accent-light); }
+/* ⚠️ THE ICON NEVER SHRINKS: at 296px «Impostazioni» beside it squeezed the gear to a dot, and half a bar is all a button gets. There the
+   button gives up some padding and the icon a little size, so icon and word both fit. */
+.recipe-footer-btn svg { flex: none; }
+@media (max-width: 320px) {
+  .recipe-footer-btn { gap: 6px; padding-inline: 8px; }
+  .recipe-footer-btn svg { width: 16px; height: 16px; }
+}
 
 /* Settings overlays (hub + clients/products editor) */
 #settings-overlay, #cp-overlay {

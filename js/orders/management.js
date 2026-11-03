@@ -1,7 +1,7 @@
 // management.js — the Orders SETTINGS panel (the gear in the bottom bar).
 //
 // Order lists on or off, how the order screen looks, when the working week starts,
-// which roads an order may leave by, the alerts, History and Help. That is all it is now, and the word above the
+// which roads an order may leave by, the alerts, how far back History draws and Help. That is all it is now, and the word above the
 // screen finally matches what is behind it.
 //
 // ⚠️ THE SUPPLIER AND INGREDIENT RECORDS LEFT THIS FILE. They were here — two lists
@@ -120,13 +120,11 @@ export function buildManagement(data, actions) {
       config.orderLists ? buildMuteOrderRequests() : null,
     ]);
 
-    // ⚠️ HISTORY IS A DOOR AMONG SETTINGS (Federico moved it in here from the bottom
-    // bar on 24 Aug 2026), and the field that says how far back it draws belongs with
-    // it and nowhere else. HELP moved in here on 28 Sep 2026: the «?» no longer fits
-    // the phone's green bar beside the bell and the order lists.
+    // History itself is in the bottom bar, beside Settings (Federico, 3 Nov 2026); how far
+    // back it draws is a setting and stays here. HELP moved in here on 28 Sep 2026: the «?»
+    // no longer fits the phone's green bar beside the bell and the order lists.
     section('orders.section.more', null, [
-      actions.openHistory ? door('orders.settings.openHistory', null, () => actions.openHistory()) : null,
-      actions.openHistory ? buildHistoryDaysField(config, boss) : null,
+      buildHistoryDaysField(config, boss),
       door('orders.settings.help', 'orders.settings.helpSub', () => showHelp('orders')),
     ]);
   }

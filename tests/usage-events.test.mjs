@@ -29,7 +29,6 @@ for (const file of jsFiles(join(ROOT, 'js'))) {
     const literal = /^'([^']*)'$/.exec(m[2].trim());
     if (literal) found[m[1]].push({ rel, name: literal[1] });
     // The alerts panel decides between two literals.
-    else if (/^mgmt \? 'management' : ''$/.test(m[2].trim())) { found.screen.push({ rel, name: 'management' }, { rel, name: '' }); }
     else if (/^open \? 'alerts' : ''$/.test(m[2].trim())) { found.screen.push({ rel, name: 'alerts' }); found.screen.push({ rel, name: '' }); }
     else if (/^fromBar \? 'supplier' : ''$/.test(m[2].trim())) { found.screen.push({ rel, name: 'supplier' }); found.screen.push({ rel, name: '' }); }
     else if (/^name === 'log' \? 'log' : ''$/.test(m[2].trim())) {
@@ -105,6 +104,8 @@ test('orders: the management panel is announced after the alerts panel closes; a
   const src = readFileSync(join(ROOT, 'js/orders/orders-main.js'), 'utf8').replace(/\r\n/g, '\n');
   const open = src.slice(src.indexOf('function openManagement()'));
   assert.ok(open.indexOf('closeAlertsPanel()') < open.indexOf("detail: 'management'"));
+  const history = src.slice(src.indexOf('function openHistory()'));
+  assert.ok(history.indexOf('closeAlertsPanel()') > 0 && history.indexOf('closeAlertsPanel()') < history.indexOf("detail: 'history'"));
   const close = src.slice(src.indexOf('function closeSupplier()'), src.indexOf('function closeSupplier()') + 1200);
   assert.match(close, /quietSummaryClose = true;\s*try \{ if \(hadSummary\) closeSummary\(\); \} finally \{ quietSummaryClose = false; \}/);
   assert.match(src, /if \(openerId && !quietSummaryClose\)/);

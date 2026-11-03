@@ -1390,7 +1390,7 @@ function allHistory() {
   return mergeHistory(state.history, olderState().records);
 }
 
-// ⚠️ A HIDDEN SCREEN IS NOT DRAWN. History is a full-screen overlay opened from Settings; while it
+// ⚠️ A HIDDEN SCREEN IS NOT DRAWN. History is a full-screen overlay opened from the bottom bar; while it
 // is closed every snapshot (and every config change) used to rebuild one card per order in it.
 // Now a closed History is only marked out of date, and openHistory() draws it when it opens.
 let historyDirty = false;
@@ -1403,6 +1403,9 @@ function historyVisible() {
 function openHistory() {
   const overlay = document.getElementById('history-overlay');
   if (!overlay) return;
+  // ⚠️ BEFORE IT ANNOUNCES ITSELF: the bar stays reachable beside an open panel, and the panel closed by the
+  // same tap's bubble would announce «back on the list» after «history», crediting History's minutes to Orders.
+  closeAlertsPanel();           // the panel must never sit on top of a full screen
   overlay.hidden = false;
   if (historyDirty) renderHistory();
   globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'history' }));
@@ -2831,20 +2834,6 @@ function openManagement() {
     },
     {
       onClose: () => { mgmt.overlay.remove(); mgmt = null; globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' })); },
-      // ⚠️ HISTORY IS A DESTINATION, NOT A SETTING, and it is passed in rather than
-      // reached for: management.js knows nothing about this page's markup, and the
-      // overlay it opens sits at a higher z-index than the panel, so the panel stays
-      // underneath and Back returns to it.
-      //
-      // ⚠️⚠️ IT IS AN ACTION, NOT DATA, AND THE FIRST VERSION PUT IT IN THE WRONG
-      // OBJECT. buildManagement(data, actions) reads it as actions.openHistory, and
-      // the panel skips the whole section when it is missing — so History simply was
-      // not there, in silence, with every test green. Only opening the screen showed
-      // it.
-      openHistory: () => {
-        closeAlertsPanel();     // the panel must never sit on top of a full screen
-        openHistory();
-      },
       // Takes a PATCH, not one flag: config/orders now holds two settings and saveDoc
       // merges, so writing `{ showStock }` alone would leave historyDays untouched —
       // but only as long as every caller keeps passing just what it changed.
@@ -3025,16 +3014,15 @@ async function init() {
     if (isAdmin) settingsBtn.addEventListener('click', whenLive(openManagement));
     else settingsBtn.hidden = true;
   }
+  document.getElementById('history-footer-btn')?.addEventListener('click', whenLive(openHistory));
 
   // ⚠️ THE BAR IS DERIVED FROM ITS CHILDREN, never typed: no visible button, no bar.
   // The same rule, and the same three lines, as suppliers.html (registry-main.js).
-  // It matters more now than it did with three buttons — the bar is one button wide,
-  // so the day something hides it there is nothing left to look at.
   const footerEl = document.getElementById('orders-footer');
   if (footerEl) footerEl.hidden = ![...footerEl.children].some(child => !child.hidden);
 
-  // ⚠️ HISTORY OPENS FROM INSIDE SETTINGS SINCE 24 Aug 2026 (Federico), not from the
-  // bottom bar. It kept a third of a bar every day for a screen consulted rarely.
+  // ⚠️ HISTORY OPENS FROM THE BOTTOM BAR, BESIDE SETTINGS (Federico, 3 Nov 2026): from inside
+  // Settings, where it had been since 24 Aug, he could not find it.
   //
   // ⚠️ SHOWN AND HIDDEN WITH THE `hidden` ATTRIBUTE, which tokens.css forces to
   // `display: none !important`. Without that !important a class on this element
@@ -3044,8 +3032,7 @@ async function init() {
   document.getElementById('history-back-btn')?.addEventListener('click', () => {
     const overlay = document.getElementById('history-overlay');
     if (overlay) overlay.hidden = true;
-    // History opened from the management panel leaves the panel underneath.
-    globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: mgmt ? 'management' : '' }));
+    globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
   });
 
   setupOfflineIndicator();

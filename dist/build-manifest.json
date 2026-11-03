@@ -488,10 +488,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "21d28e6b90718ecd",
-      "mapSha": "f524e29c0db465d1",
+      "sha": "eb3f79f8da10cc56",
+      "mapSha": "f7d9b050799ddd68",
       "inputs": {
-        "js/i18n.js": "48fe5953f5874486"
+        "js/i18n.js": "baed72765524dd18"
       }
     },
     "dist/index.js": {
@@ -767,8 +767,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "5165e26fff8a5c37",
-      "mapSha": "1011842f8b31116e",
+      "sha": "4310c5ec58c5dacb",
+      "mapSha": "7bb7fc3d2455c385",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -836,7 +836,7 @@
         "js/orders/kiosk-lines.js": "e568172d891e9118",
         "js/orders/line-supplier.js": "28982215feb5a04c",
         "js/orders/list-copy.js": "cb07e6f2576e5198",
-        "js/orders/management.js": "cb3b52c2b456d005",
+        "js/orders/management.js": "68b031a36df7a42a",
         "js/orders/memo.js": "e03a7d234a1fc1ab",
         "js/orders/mgmt-ui.js": "4782e0bc32370518",
         "js/orders/no-supplier.js": "9d4e8a1f7fb0a420",
@@ -851,7 +851,7 @@
         "js/orders/order-summary.js": "ae2df3d8e163c852",
         "js/orders/order-text.js": "40ad3ba8ddb014c3",
         "js/orders/orders-config.js": "c968ce3171a34b1f",
-        "js/orders/orders-main.js": "56caf10b3259b71a",
+        "js/orders/orders-main.js": "b816519f4e4d89b0",
         "js/orders/place-confirm.js": "61cd2d604037e847",
         "js/orders/preview.js": "daa32cf26e8b4e87",
         "js/orders/reminder-view.js": "2d263696a18298f2",
@@ -1021,9 +1021,9 @@
       }
     },
     "dist/style.css": {
-      "sha": "905c72aa3f659aba",
+      "sha": "81746dea9637c479",
       "inputs": {
-        "style.css": "fbff73f741cde0a7"
+        "style.css": "54ba9dc550200101"
       }
     },
     "dist/suppliers.js": {
