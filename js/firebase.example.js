@@ -17,6 +17,7 @@
 //   - deleteLogFromFirestore(dough)   → js/log.js
 //   - watchCalculatorConfig(onChange) → js/calculator-config-store.js
 //   - saveCalculatorConfig(config)    → js/calculator-config-store.js
+//   - saveCalculatorClients(config)   → js/calculator-config-store.js
 //   - side-effect `import './firebase.js'` for init → js/app.js
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -911,6 +912,13 @@ export function saveCalculatorConfig(config) {
   return authReady
     .then(() => setDoc(doc(db, pathFor('config'), 'calculator'), { ...config, bakery: currentLocationId() }))
     .catch(err => { console.error('saveCalculatorConfig failed:', err); throw err; });
+}
+
+// Persist the address book ALONE, for the Clients page. See js/firebase.js.
+export function saveCalculatorClients(config) {
+  return authReady
+    .then(() => setDoc(doc(db, pathFor('config'), 'calculator'), { clients: config.clients, bakery: currentLocationId() }, { merge: true }))
+    .catch(err => { console.error('saveCalculatorClients failed:', err); throw err; });
 }
 
 // ── Orders system (js/orders/*) ──────────────────────────────────────────────

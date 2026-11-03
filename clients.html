@@ -1,0 +1,178 @@
+<!--
+  MISE — Clients (the sales owner's page)
+  The address book, the orders clients sent, and the deadline for them, for the one
+  role that runs the clients but has no Calculator: «Titolare vendita» ('owner-sales').
+  The editor and the received-orders screen are the Calculator's own (js/clients-editor.js,
+  js/calculator-client-orders.js), opened from here. All logic lives in js/clients/*.
+  ⚠️ data-section="calculator", the same name as the Calculator page: the clients live in
+  config/calculator and are gated by that section, so no new section name had to be
+  invented. Who may SEE the page is the card (data-card="clients", js/home-cards.js): the
+  sales owner only. WhatsApp is deliberately not here: its lists are a field the rules
+  refuse this role.
+-->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<!--
+  CSP bootstrap. A <meta> Content-Security-Policy cannot be loosened at runtime
+  (multiple policies combine by intersection), so to allow the LOCAL Firebase
+  emulator on localhost WITHOUT touching the live site's policy, the meta is
+  emitted here. On the live domain the string is byte-identical to the production
+  policy; on localhost only, connect-src additionally allows the Auth (9099) and
+  Firestore (8080) and Functions (5001) emulators. This inline script runs before
+  any CSP is in effect (only <meta charset> precedes it) and before any network
+  request.
+-->
+<script>
+(function () {
+  var local = ['localhost', '127.0.0.1', '::1', '[::1]'].indexOf(location.hostname) !== -1;
+  var emu = local
+    ? ' http://localhost:8080 http://localhost:9099 http://localhost:5001 http://127.0.0.1:8080 http://127.0.0.1:9099 http://127.0.0.1:5001'
+    : '';
+  document.write(
+    '<meta http-equiv="Content-Security-Policy" content="' +
+    "default-src 'self'; " +
+    "script-src 'self' https://www.gstatic.com; " +
+    "connect-src 'self' https://www.gstatic.com https://*.googleapis.com https://*.firebaseio.com https://firestore.googleapis.com https://us-central1-bakery-app-ebf90.cloudfunctions.net" + emu + "; " +
+    "frame-src 'self'; " +
+    "img-src 'self' data:; " +
+    "style-src 'self'; " +
+    "font-src 'self'; " +
+    "base-uri 'self'; " +
+    "form-action 'self'" +
+    '">'
+  );
+})();
+</script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-visual">
+<!-- Open the connections to Google now, while the page is still loading its own
+     files: otherwise each one starts only when Firebase first needs it, and on a
+     phone opening the app after a pause that is a fresh handshake per server, one
+     after the other (sign-in token, account check, database). ⚠️ crossorigin on the
+     two Auth hosts and NOT on the database, and it is measured, not a slip: Auth calls
+     without cookies and Firestore with them, and a browser keeps the two kinds of
+     connection apart — a hint of the wrong kind warms a connection nothing uses.
+     tests/preconnect.test.mjs keeps every Firebase page carrying all three, each its kind. -->
+<link rel="preconnect" href="https://securetoken.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://identitytoolkit.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<meta name="description" content="Clients — the address book, the orders clients sent and when they close.">
+<meta name="theme-color" content="#2D5016">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mise">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="preload" href="fonts/manrope-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="stylesheet" href="dist/tokens.css">
+<link rel="stylesheet" href="dist/auth.css">
+<link rel="stylesheet" href="dist/style.css">
+<link rel="stylesheet" href="dist/orders.css">
+<title data-i18n="title.clients">Clients — Mise</title>
+</head>
+<body data-section="calculator" data-card="clients">
+<!-- Sign-in cover. It is HERE, in the markup, so it is opaque from the first
+     paint: the app must never flash a location's data at whoever is holding
+     the phone. js/auth-gate.js fills it in and removes it once a location is
+     open. -->
+<div id="auth-gate" class="auth-gate"></div>
+
+<!-- Three fixed tracks (left slot · title · right slot) so the title is TRULY
+     centred. Back is a real link: this page is a top screen, one step below the Home. -->
+<header class="app-header orders-header">
+  <span class="app-header-slot">
+    <a class="app-icon-btn orders-icon-btn" id="clients-back" href="index.html" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </a>
+  </span>
+  <div class="app-header-title orders-header-title">
+    <h1 data-i18n="ui.clients">Clients</h1>
+  </div>
+  <span class="app-header-slot">
+    <span class="help-host" data-help="clients"></span>
+  </span>
+</header>
+
+<div id="cosettings-overlay">
+  <div class="recipe-overlay-header">
+    <button class="app-icon-btn overlay-back-btn cosettings-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button type="button" class="app-header-save" id="cosettings-save-btn" data-i18n="ui.save">Save</button>
+    <a class="app-icon-btn" href="index.html" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
+    </a>
+    <span class="recipe-overlay-title" data-i18n="ui.clientOrdering">Client ordering</span>
+  </div>
+  <div class="recipe-scroll">
+    <div id="cosettings-content"></div>
+  </div>
+</div>
+
+<div id="cp-overlay">
+  <div class="recipe-overlay-header">
+    <button class="app-icon-btn cp-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button type="button" class="app-header-save" id="cp-save-btn" data-i18n="ui.save">Save</button>
+    <button class="app-icon-btn" id="cp-home-btn" type="button" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
+    </button>
+    <span class="recipe-overlay-title" data-i18n="ui.clients">Clients</span>
+  </div>
+  <div class="recipe-scroll">
+    <div id="cp-content"></div>
+  </div>
+</div>
+
+<div id="clientorders-overlay">
+  <div class="recipe-overlay-header">
+    <button class="app-icon-btn overlay-back-btn clientorders-back-btn" type="button" data-i18n="ui.back" data-i18n-attr="aria-label" aria-label="Back"><svg aria-hidden="true" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <span class="recipe-overlay-title" data-i18n="ui.ordersReceived">Orders received</span>
+    <!-- The title is out of the flow and centred, and Back carries margin-right:auto,
+         so anything added here groups at the right edge without moving the title. -->
+    <span class="help-host" data-help="clients-orders"></span>
+    <a class="app-icon-btn" id="clientorders-home-btn" href="index.html" data-i18n="ui.home" data-i18n-attr="aria-label" aria-label="Home">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 9.5V21h14V9.5"/></svg>
+    </a>
+  </div>
+  <div class="recipe-scroll">
+    <div id="clientorders-content"></div>
+  </div>
+</div>
+
+<!-- No bottom bar on this page, so the Calculator's bar-pushing scroll class is not used. -->
+<div class="scroll-area">
+  <!-- The settings kit (tokens.css .set-*), the same markup as the Calculator's hub rows.
+       The first door stays disabled until the address book has been read from the
+       server (js/clients/clients-main.js): see the safety guard there. -->
+  <div class="settings-menu set-screen">
+    <section class="set-section">
+      <div class="set-head"><h3 data-i18n="settings.calc.clients">Clients and orders</h3></div>
+      <button id="open-clients-btn" class="set-row set-door" type="button" disabled>
+        <span class="set-text">
+          <span class="set-title" data-i18n="ui.clients">Clients</span>
+          <span class="set-sub" id="open-clients-sub"></span>
+        </span>
+      </button>
+      <button id="open-received-btn" class="set-row set-door" type="button">
+        <span class="set-text">
+          <span class="set-title" data-i18n="ui.ordersReceived">Orders received</span>
+          <span class="set-sub" data-i18n="clients.received.sub">What your clients asked for, to read</span>
+        </span>
+      </button>
+      <button id="open-clientorders-btn" class="set-row set-door" type="button">
+        <span class="set-text">
+          <span class="set-title" data-i18n="ui.clientOrdering">Client ordering</span>
+          <span class="set-sub" data-i18n="ui.whenOrdersSentFrom">When orders sent from a client’s own link close</span>
+        </span>
+      </button>
+    </section>
+    <section class="set-section">
+      <div class="set-head"><h3 data-i18n="clients.notifications.head">Notifications</h3><span class="set-saved" id="clients-push-saved" role="status" hidden data-i18n="settings.saved">Saved ✓</span></div>
+      <div id="clients-push-row"></div>
+    </section>
+  </div>
+</div>
+
+<script type="module" src="dist/clients.js"></script>
+</body>

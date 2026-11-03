@@ -1716,6 +1716,11 @@ body[data-card="foodcost"] .app-header.app-header--save {
 /* Inside a card with overflow: hidden an outside ring is cut off: draw it inside. */
 .set-row:focus-visible { outline: 3px solid var(--accent-2); outline-offset: -3px; }
 .set-door:active { background: var(--surface-2); }
+/* A door that cannot be opened yet (Clients, until the address book has been read). Its sub-line
+   stays at full strength: it is the sentence saying why. */
+.set-door:disabled { cursor: default; }
+.set-door:disabled .set-title, .set-door:disabled::after { opacity: .5; }
+.set-door:disabled:active { background: transparent; }
 .set-door::after {
   content: '';
   flex-shrink: 0;

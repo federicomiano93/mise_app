@@ -52,7 +52,7 @@ test('saveConfig exposes the Firestore code and takes the local copy back on a f
 });
 
 test('every caller of saveConfig goes through saveConfigOrSay', () => {
-  for (const f of ['js/recipes.js', 'js/calculator-settings.js', 'js/calculator-whatsapp-settings.js', 'js/log-settings.js']) {
+  for (const f of ['js/recipes.js', 'js/calculator-settings.js', 'js/clients-editor.js', 'js/calculator-whatsapp-settings.js', 'js/log-settings.js']) {
     const src = read(f);
     assert.doesNotMatch(src, /\bsaveConfig\(/, `${f} calls saveConfig directly`);
     assert.doesNotMatch(src, /import \{[^}]*\bsaveConfig\b[^}]*\} from/, `${f} imports saveConfig directly`);
@@ -63,9 +63,10 @@ test('every caller of saveConfig goes through saveConfigOrSay', () => {
 
 test('a screen that fails to save returns before touching its state; the switches go back', () => {
   const settings = read('js/calculator-settings.js');
-  for (const call of ['working', 'extraWorking', 'divisorWorking']) {
+  for (const call of ['extraWorking', 'divisorWorking']) {
     assert.match(settings, new RegExp(`if \\(!\\(await saveConfigOrSay\\(${call}\\)\\)\\) return;`), call);
   }
+  assert.match(read('js/clients-editor.js'), /if \(!\(await saveConfigOrSay\(working\)\)\) return;/, 'working');
   assert.match(settings, /saveConfigOrSay\(cfg, \{ onFail: \(\) => \{ cb\.checked = !wanted; \} \}\)/);
   assert.match(settings, /if \(saved && canSyncConfig\(\)\) flashOrdersButtonSaved\(\)/);
   const wa = read('js/calculator-whatsapp-settings.js');

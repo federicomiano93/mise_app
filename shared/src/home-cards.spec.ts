@@ -92,6 +92,15 @@ describe.each([
     }
   });
 
+  test('the Clients card is the sales owner\'s alone, and every doubt answers no', () => {
+    expect([...c.ROLE_ONLY_CARDS]).toEqual(['clients']);
+    expect(c.roleHasCard('owner-sales', 'clients')).toBe(true);
+    for (const role of ['owner', 'manager', 'owner-kitchen', true, undefined, 'toString', '__proto__']) {
+      expect(c.roleHasCard(role, 'clients'), `${String(role)} has no Clients card`).toBe(false);
+    }
+    expect(c.HIDEABLE_IDS as readonly string[]).not.toContain('clients');
+  });
+
   test('only a literal canManage === true passes the switch', () => {
     const doc = { [c.HIDDEN_FIELD]: { pastries: true } };
     for (const canManage of [undefined, null, 'true', 1, false]) {

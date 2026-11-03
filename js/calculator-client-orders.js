@@ -37,6 +37,7 @@ import {
 let fields = null;
 
 let orders = [];
+let ordersAnswered = false;
 let cutoff = '';
 let unsubscribe = null;
 let unsubscribeCutoff = null;
@@ -178,6 +179,12 @@ function render() {
 }
 
 function renderUpcoming(content) {
+  // The tap on a notification opens this screen before the first answer: «no orders» then
+  // would deny the very order somebody was just told about.
+  if (!orders.length && !ordersAnswered) {
+    content.appendChild(el('p', { class: 'co-none' }, t('calc.loading')));
+    return;
+  }
   if (!orders.length) {
     // ⚠️ IT SAYS WHAT IS MISSING AND WHY, because "no orders" has two very different
     // meanings here: nobody has sent one, or the ones they sent were for days that
@@ -378,10 +385,16 @@ function orderCard(order) {
   // that the numbers about to go in are new ones — "Put in the calculator", on a card
   // the owner may already have acted on this morning, reads as a button he has
   // finished with.
-  const apply = el('button', { class: 'co-apply', type: 'button' },
-    changed ? t('calc.putTheNewOrder') : (used ? t('calc.putInTheCalculator') : t('calc.putInTheCalculator2')));
-  apply.addEventListener('click', () => applyOrder(order, apply));
-  card.appendChild(apply);
+  //
+  // No fields, no button: the sales owner's Clients page starts this screen with no
+  // injected fields. They READ what clients asked for and the kitchen acts on it, and the
+  // rules refuse them writing client-orders anyway, so a button here could only fail.
+  if (fields) {
+    const apply = el('button', { class: 'co-apply', type: 'button' },
+      changed ? t('calc.putTheNewOrder') : (used ? t('calc.putInTheCalculator') : t('calc.putInTheCalculator2')));
+    apply.addEventListener('click', () => applyOrder(order, apply));
+    card.appendChild(apply);
+  }
 
   return card;
 }
@@ -518,8 +531,9 @@ function renderCutoffSettings() {
   };
 }
 
+// Called with no argument the screen is READ-ONLY (see orderCard).
 export function initClientOrders(injected) {
-  fields = injected;
+  fields = injected || null;
 
   const back = document.querySelector('.clientorders-back-btn');
   if (back) back.addEventListener('click', closeScreen);
@@ -559,15 +573,28 @@ export function initClientOrders(injected) {
     // open across midnight would otherwise keep yesterday's on screen for ever.
     const today = toISODate(Date.now());
     orders = list.filter(o => o && String(o.date) >= today);
+    ordersAnswered = true;
     paintBanner();
     if (OVERLAY() && OVERLAY().classList.contains('visible')) render();
   }, () => {
     // A refused or dropped stream must not leave a stale banner claiming orders are
     // waiting. Silence is the honest state: the Calculator itself still works.
     orders = [];
+    ordersAnswered = true;
     paintBanner();
+    if (OVERLAY() && OVERLAY().classList.contains('visible')) render();
   }).then(fn => { unsubscribe = fn; })
-    .catch(err => console.warn('Client orders not watched:', err));
+    .catch(err => {
+      console.warn('Client orders not watched:', err);
+      ordersAnswered = true;
+      if (OVERLAY() && OVERLAY().classList.contains('visible')) render();
+    });
+}
+
+// Client names come from the config, which on a page that opens it can arrive after the
+// orders: redraw the open screen (and only an open one) when it does.
+export function repaintClientOrders() {
+  if (OVERLAY() && OVERLAY().classList.contains('visible')) render();
 }
 
 export function stopClientOrders() {

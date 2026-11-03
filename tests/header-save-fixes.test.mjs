@@ -126,7 +126,8 @@ test('the guard recovers when the save throws, and to «disabled until dirty» w
 
 const GUARDED = [
   // file, header Save ids, wrapper functions that must go through the guard, Back handlers that must wait
-  ['js/calculator-settings.js', ['cp-save-btn', 'extra-save-btn', 'divisor-save-btn'], ['saveClients', 'saveExtra', 'saveDivisor'], ['closeClients', 'closeExtra', 'backDivisor']],
+  ['js/calculator-settings.js', ['extra-save-btn', 'divisor-save-btn'], ['saveExtra', 'saveDivisor'], ['closeExtra', 'backDivisor']],
+  ['js/clients-editor.js', ['cp-save-btn'], ['saveClients'], ['closeClients']],
   ['js/recipes.js', ['recipe-save-btn'], ['saveRecipes'], ['closeRecipes']],
   ['js/calculator-whatsapp-settings.js', ['wa-save-btn'], ['saveDetail'], ['backWhatsapp']],
   ['js/log-settings.js', ['logsettings-save-btn'], ['saveAll'], ['closeLogSettings']],

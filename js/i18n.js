@@ -356,6 +356,7 @@ const DICTIONARIES = Object.freeze({
     'title.pastries': 'Pastries — Mise',
     'title.suppliers': 'Ingredients & suppliers — Mise',
     'title.inventory': 'Stocktake — Mise',
+    'title.clients': 'Clients — Mise',
 
     // ── What a screen reader says, which nothing on screen shows ─────────────
     // ⚠️ INVISIBLE, AND THEREFORE THE LAST THING ANYBODY NOTICES. Every icon button
@@ -2153,6 +2154,7 @@ const DICTIONARIES = Object.freeze({
     'calc.thatIsNotA': 'That is not a time. Use the clock, or leave it empty for no deadline.',
     'calc.removeTheDeadlineClients': 'Remove the deadline? Clients will be able to order for any day, including today.',
     'calc.notSavedCheckYour': 'Not saved. Check your connection and try again.',
+    'calc.notSavedNoConfig': 'Not saved: the Calculator of this venue has to be saved once first. Ask the owner to save any Calculator setting, then try again.',
 
 
     // ⚠️ WHOLE SENTENCES, PUT BACK TOGETHER. The automatic pass gave each half of
@@ -2545,6 +2547,12 @@ const DICTIONARIES = Object.freeze({
     'ui.recipes': "Recipes",
     'ui.settings': "Settings",
     'ui.clients': "Clients",
+    'ui.clientsCardSub': "Clients, links & orders",
+    'clients.received.sub': 'What your clients asked for, to read',
+    'clients.notifications.head': 'Notifications',
+    'clients.push.title': 'Tell me when a client orders',
+    'clients.push.ask': 'On this phone, even with the app closed.',
+    'clients.noConfigYet': 'Not ready yet: ask the owner to save any Calculator setting once.',
     'ui.clientsAndTheProducts': "Clients and the products each one orders",
     'ui.addEditOrDelete': "Add, edit or delete recipes; pick which show as tabs",
     'ui.whatsapp': "WhatsApp",
@@ -2782,6 +2790,11 @@ const DICTIONARIES = Object.freeze({
     'help.continueWithoutUpdating': 'Continue without updating',
     'help.notificationsAreOnFor': 'Notifications are on for this phone.',
     'help.getToldWhenA': 'Get told when a timer finishes or a client sends an order, even with the app closed.',
+    'help.clients.book': 'Your clients, the products each one orders and the link they order from.',
+    'help.clients.received': 'Orders received shows what clients asked for. The kitchen puts them into the Calculator.',
+    'help.clients.push': 'Switch on the notification to be told on this phone when an order arrives.',
+    'help.clients.orders.kitchen': 'You can read them here. The kitchen puts them into the Calculator.',
+    'help.clients.orders.changed': 'If a client changes an order after the kitchen has used it, this screen turns red and says so.',
     'help.notificationsAreBlockedFor': 'Notifications are blocked for this app. Turn them back on in your phone settings, then reload.',
     'help.addThisAppTo': 'Add this app to your Home screen first — on iPhone, notifications only work from the installed app, not from Safari.',
     'help.notificationsAreNotSet': 'Notifications are not set up for this app yet.',
@@ -3592,6 +3605,7 @@ const DICTIONARIES = Object.freeze({
     'title.pastries': 'Paste — Mise',
     'title.suppliers': 'Ingredienti e fornitori — Mise',
     'title.inventory': 'Magazzino — Mise',
+    'title.clients': 'Clienti — Mise',
 
     'aria.mainSections': 'Sezioni principali',
     'aria.ordersSections': 'Sezioni degli ordini',
@@ -5222,6 +5236,7 @@ const DICTIONARIES = Object.freeze({
     'calc.thatIsNotA': 'Questo non è un orario. Usa l’orologio, oppure lascialo vuoto per nessuna scadenza.',
     'calc.removeTheDeadlineClients': 'Vuoi togliere la scadenza? I clienti potranno ordinare per qualsiasi giorno, oggi compreso.',
     'calc.notSavedCheckYour': 'Non salvato. Controlla la connessione e riprova.',
+    'calc.notSavedNoConfig': 'Non salvato: il Calcolatore di questo locale va salvato una prima volta. Chiedi al titolare di salvare una qualsiasi impostazione del Calcolatore, poi riprova.',
 
 
     'weekday.monday': 'Lunedì',
@@ -5526,6 +5541,12 @@ const DICTIONARIES = Object.freeze({
     'ui.recipes': "Ricette",
     'ui.settings': "Impostazioni",
     'ui.clients': "Clienti",
+    'ui.clientsCardSub': "Clienti, link e ordini",
+    'clients.received.sub': 'Cosa hanno chiesto i clienti, da leggere',
+    'clients.notifications.head': 'Notifiche',
+    'clients.push.title': 'Avvisami quando un cliente ordina',
+    'clients.push.ask': 'Su questo telefono, anche con l’app chiusa.',
+    'clients.noConfigYet': 'Non ancora pronto: chiedi al titolare di salvare una volta un’impostazione del Calcolatore.',
     'ui.clientsAndTheProducts': "I clienti e i prodotti che ciascuno ordina",
     'ui.addEditOrDelete': "Aggiungi, modifica o elimina ricette; scegli quali mostrare come linguette",
     'ui.whatsapp': "WhatsApp",
@@ -5725,6 +5746,11 @@ const DICTIONARIES = Object.freeze({
     'help.continueWithoutUpdating': 'Continua senza aggiornare',
     'help.notificationsAreOnFor': 'Le notifiche sono attive su questo telefono.',
     'help.getToldWhenA': 'Fatti avvisare quando un timer finisce o un cliente manda un ordine, anche con l’app chiusa.',
+    'help.clients.book': 'I tuoi clienti, i prodotti che ordina ciascuno e il link da cui ordinano.',
+    'help.clients.received': 'Ordini ricevuti mostra cosa hanno chiesto i clienti. Le mette nel Calcolatore la cucina.',
+    'help.clients.push': 'Attiva la notifica per sapere su questo telefono quando arriva un ordine.',
+    'help.clients.orders.kitchen': 'Qui puoi leggerli. Li mette nel Calcolatore la cucina.',
+    'help.clients.orders.changed': 'Se un cliente cambia un ordine dopo che la cucina l’ha usato, questa schermata diventa rossa e te lo dice.',
     'help.notificationsAreBlockedFor': 'Le notifiche sono bloccate per questa app. Riattivale nelle impostazioni del telefono, poi ricarica.',
     'help.addThisAppTo': 'Aggiungi prima questa app alla schermata Home — su iPhone le notifiche funzionano solo dall’app installata, non da Safari.',
     'help.notificationsAreNotSet': 'Le notifiche non sono ancora configurate per questa app.',
