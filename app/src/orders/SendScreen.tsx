@@ -47,6 +47,8 @@ export function SendScreen({ lens }: { lens: OrdersLens }) {
         emptyText={t('ord.send.empty')}
         // Record-after-send: the confirm screen takes the suppliers that were reached.
         onReached={ids => { void navigate(PLACE_ALL_CONFIRM_PATH, { state: confirmState(state, { ids, afterSend: true }) }); }}
+        // The in-app list is written: back to the Orders list, with the order as it was (nothing is recorded after a list).
+        onListSent={leave}
       />
     </section>
   );

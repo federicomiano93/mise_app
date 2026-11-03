@@ -3,6 +3,7 @@ import type { KeyboardEvent } from 'react';
 import { CalendarClock, ChevronRight, X } from 'lucide-react';
 import { dayPhrase, daySpoken, spellShortDate, todayISO } from '@mise/shared/day';
 import { nextOrderOffer } from '@mise/shared/order-day';
+import { routesFor } from '@mise/shared/send-routes';
 import type { PendingSupplier } from '@mise/shared/reminders';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { useT } from '../i18n/useT';
@@ -11,7 +12,7 @@ import { Button } from '../ui/Button';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useNotices } from './NoticesContext';
-import { useOrdersStore } from './OrdersContext';
+import { useOrders, useOrdersStore } from './OrdersContext';
 import { dayTranslate } from './dayWords';
 import { pendingOpener, useHandBack } from './handBack';
 import type { StoredDoc } from './ordersSource';
@@ -22,6 +23,8 @@ type Props = {
   onOpenSupplier: (id: string) => void;
   // «Placed yesterday»: the supplier's confirm screen, recording under that day.
   onOpenPending: (id: string, day: string) => void;
+  // «Send the list again»: the send screen.
+  onSend: () => void;
 };
 
 // What the bell opens (step 3f-6, parity R3–R11), under the list's head: NOT a dialog and not an overlay, so it pushes the list down
@@ -30,8 +33,9 @@ type Props = {
 //
 // ⚠️ ONLY THE CALENDAR NOTICES CAN BE CLOSED (Federico, 24 Aug 2026): the rest is WORK, and a closeable piece of work is one somebody
 // can close by mistake and never see again.
-export function NoticesPanel({ onOpenSupplier, onOpenPending }: Props) {
+export function NoticesPanel({ onOpenSupplier, onOpenPending, onSend }: Props) {
   const { t } = useT();
+  const { config } = useOrders();
   const { open, setOpen, panelId, bellRef, pending, untold, calendar, closed, close, reopen } = useNotices();
   const { canManage } = useSession();
   const store = useOrdersStore();
@@ -142,6 +146,12 @@ export function NoticesPanel({ onOpenSupplier, onOpenPending }: Props) {
             ) : null}
           </div>
         ))}
+
+        {/* ⚠️ ONLY WHERE THERE IS SOMEWHERE TO SEND IT: an employee whose venue closed «to the manager» has no list to send again, and
+            whoever runs the place is the person the list would go TO. It is a way out of the notice, not a notice: not counted. */}
+        {untold.length > 0 && !canManage && routesFor(config.sendSettings, { canManage }).includes('manager') ? (
+          <Button className={styles.resend} onPress={onSend}>{t('ord.untold.resend')}</Button>
+        ) : null}
 
         {calendar.map(notice => (
           <div key={notice.key} className={styles.calendar}>

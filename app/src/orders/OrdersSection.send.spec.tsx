@@ -24,8 +24,10 @@ afterEach(() => {
 });
 
 const TODAY = todayISO();
-// An employee on a venue that has not touched its send settings: «to the manager» and WhatsApp.
 const STAFF = { session: { canManage: false, role: 'staff', isOwner: false } } as const;
+// The venue lets staff use WhatsApp alone: ONE road, taken in the press. (A venue that has not touched its send settings also
+// offers «to the manager», so a chooser would open — OrdersSection.listsSend.spec.tsx covers that.)
+const WHATSAPP_ONLY = { sendRoutes: { manager: false, whatsapp: true, whatsappSupplier: false, email: false } };
 // The venue lets staff send only straight to the supplier.
 const DIRECT_ONLY = { sendRoutes: { manager: false, whatsapp: false, whatsappSupplier: true, email: false } };
 
@@ -47,7 +49,7 @@ const DRAFT = {
 };
 
 function seeded(options: { draft?: Record<string, unknown> | null; ordersConfig?: Record<string, unknown> | null } = {}): FakeOrdersSource {
-  return fakeOrdersSource({ suppliers: SUPPLIERS, ingredients: ITEMS, draft: DRAFT, ...options });
+  return fakeOrdersSource({ suppliers: SUPPLIERS, ingredients: ITEMS, draft: DRAFT, ordersConfig: WHATSAPP_ONLY, ...options });
 }
 
 async function atList(source: FakeOrdersSource, options: Parameters<typeof renderOrders>[1] = {}) {
@@ -242,9 +244,9 @@ describe('one open road', () => {
     expect(screen.queryByRole('region', { name: 'Order sent' })).not.toBeInTheDocument();
   });
 
-  it('says there is no way to send when the venue offers an employee only the in-app list', async () => {
+  it('says there is no way to send when the venue offers an employee only the in-app list and has turned order lists off', async () => {
     const open = spyOpen();
-    const source = seeded({ ordersConfig: { sendRoutes: { manager: true, whatsapp: false, whatsappSupplier: false, email: false } } });
+    const source = seeded({ ordersConfig: { orderLists: false, sendRoutes: { manager: true, whatsapp: false, whatsappSupplier: false, email: false } } });
     const view = await atList(source, STAFF);
     await toSend(view, 'Alpine Mills');
     await view.user.click(sendButton());
@@ -255,19 +257,20 @@ describe('one open road', () => {
 });
 
 describe('several roads', () => {
-  it('shows the road chooser to a manager, with three roads, and Escape closes it with nothing opened', async () => {
+  it('shows the road chooser to a manager, with every road, and Escape closes it with nothing opened', async () => {
     const open = spyOpen();
     const view = await atList(seeded());
     await toSend(view, 'Zed');
     await view.user.click(sendButton());
     const chooser = await screen.findByRole('dialog', { name: 'How should this order go?' }, LOAD);
     const roads = within(chooser).getAllByRole('button').map(button => button.textContent ?? '');
-    expect(roads).toHaveLength(4);
-    expect(roads[0]).toContain('WhatsApp — I choose the chat');
-    expect(roads[1]).toContain('WhatsApp straight to the supplier');
-    expect(roads[2]).toContain('Email to the supplier');
-    expect(roads[2]).toContain('it does not send it by itself');
-    expect(roads[3]).toBe('Cancel');
+    expect(roads).toHaveLength(5);
+    expect(roads[0]).toContain('To whoever runs the place, in the app');
+    expect(roads[1]).toContain('WhatsApp — I choose the chat');
+    expect(roads[2]).toContain('WhatsApp straight to the supplier');
+    expect(roads[3]).toContain('Email to the supplier');
+    expect(roads[3]).toContain('it does not send it by itself');
+    expect(roads[4]).toBe('Cancel');
     await escapeFrom(view, await screen.findByRole('dialog', { name: 'How should this order go?' }, LOAD));
     await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'How should this order go?' })).not.toBeInTheDocument(); });
     expect(open).not.toHaveBeenCalled();

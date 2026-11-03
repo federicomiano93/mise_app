@@ -171,7 +171,9 @@ function PlaceConfirmScreen({ ids, lens, leave, toList }: Props) {
       }
 
       // The working copy, once.
-      const groups = buildConfirmGroups({ ids, checks, lens: current, draft: store.getSnapshot().draft, today, pinnedDay: pinned });
+      const groups = buildConfirmGroups({ ids, checks, lens: current, draft: store.getSnapshot().draft, today, pinnedDay: pinned,
+        requests: store.getSnapshot().requests,
+      });
       if (groups.length === 0) {
         // Everything selected has since lost its rows — another phone placed the order, or it was cleared. Said, not ignored.
         speak(tt('ord.nothingLeft'), 5000);
@@ -475,9 +477,14 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
                 const usual = usualOf(group.supplierId, row);
                 const usualId = `${usualIdBase}-${group.supplierId}-${row.id}`;
                 return (
-                <li key={row.id} className={styles.row} data-unusual={usual !== null}>
+                <li key={row.id} className={styles.row} data-unusual={usual !== null} data-noted={usual !== null || row.asked !== undefined}>
                   <span className={styles.name}>{row.name}</span>
-                  {usual !== null ? <span id={usualId} className={styles.usual}>{t('ord.confirm.usually', { n: usual })}</span> : null}
+                  {usual !== null || row.asked !== undefined ? (
+                    <span className={styles.notes}>
+                      {row.asked !== undefined ? <span className={styles.asked}>{t('ord.confirm.asked', { n: row.asked })}</span> : null}
+                      {usual !== null ? <span id={usualId} className={styles.usual}>{t('ord.confirm.usually', { n: usual })}</span> : null}
+                    </span>
+                  ) : null}
                   <NumberBox
                     describedBy={usual !== null ? usualId : undefined}
                     value={typed[group.supplierId]?.[row.id] ?? 0}

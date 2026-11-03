@@ -164,7 +164,7 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
       </div>
 
       <PartBoundary>
-        <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} />
+        <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} onSend={onSend} />
       </PartBoundary>
 
       <PartBoundary>

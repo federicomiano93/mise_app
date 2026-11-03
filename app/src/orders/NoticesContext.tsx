@@ -83,15 +83,15 @@ export function NoticesProvider({ lens, ready, onPanelOpen, children }: {
       const pending: PendingSupplier<StoredDoc>[] = latched && ready
         ? pendingNow(lens, snapshot.draft, today).filter(row => latched.has(row.supplier.id as string))
         : [];
-      // ⚠️ `requests: []` ON PURPOSE: the order lists (what was SENT) arrive with slice 3f-7. Until then «told» is only what was
-      // recorded, so a number is flagged only against a recorded order of the day.
-      const untold: UntoldGroup[] = ready && snapshot.historyLoaded
+      // ⚠️ «TOLD» IS WHAT WAS RECORDED OR SENT AS A LIST, so the lists must have arrived too: judged before they have, a number that
+      // was sent a minute ago would be flagged as «nobody was told» and vanish a moment later.
+      const untold: UntoldGroup[] = ready && snapshot.historyLoaded && snapshot.requestsLoaded
         ? untoldChanges({
           suppliers: notForLater(lens.suppliers, snapshot.draft.days, today),
           // A switched-off line with a quantity is in the order like any other (decision T10).
           ingredients: orderable(lens.lines),
           entries: snapshot.draft.entries,
-          requests: [],
+          requests: snapshot.requests,
           history: snapshot.history,
           today,
         })
@@ -108,7 +108,7 @@ export function NoticesProvider({ lens, ready, onPanelOpen, children }: {
       console.error('The notices could not be worked out:', err);
       return { pending: [], untold: [], calendar: [] as { key: string; text: string }[], hidden: 0 };
     }
-  }, [lens, ready, latched, snapshot.draft, snapshot.history, snapshot.historyLoaded, snapshot.suppliers, snapshot.suppliersLoaded,
+  }, [lens, ready, latched, snapshot.draft, snapshot.history, snapshot.historyLoaded, snapshot.requests, snapshot.requestsLoaded, snapshot.suppliers, snapshot.suppliersLoaded,
     country, ukDates, dismissed, today, t]);
 
   const { calendar } = model;
