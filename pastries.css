@@ -178,6 +178,19 @@ body {
 .pas-row[data-open="true"] .pas-row-main { background: var(--pas-accent-light); }
 
 .pas-row-name { flex: 1; min-width: 0; font-size: 20px; overflow-wrap: anywhere; }
+/* The row's own note («9x3»), between the name and the quantity. Quieter than both
+   and allowed to shrink and wrap, so a long one never pushes the number off the
+   line. --pas-text-2 stays readable on the open row's pale tint too. */
+.pas-row-note {
+  flex: 0 1 auto;
+  max-width: 40%;
+  text-align: right;
+  font-family: var(--pas-font-mono);
+  font-size: 16px;
+  color: var(--pas-text-2);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
+}
 .pas-row-qty {
   flex: none;
   font-family: var(--pas-font-mono);
@@ -332,17 +345,25 @@ input.pas-quick:focus {
 }
 .pas-editor-count { font-size: 13px; color: var(--pas-text-3); }
 
-.pas-editrows { display: flex; flex-direction: column; gap: 10px; }
+/* 16px between rows, against the 8px inside one: on a phone a row is two lines
+   (see below), and the second must read as belonging to its own row. */
+.pas-editrows { display: flex; flex-direction: column; gap: 16px; }
 
 /* Three columns: name · quantity · bin. The bin has to be its own button (a
    button cannot nest inside a button), so it is a sibling and the row owns the
-   spacing. */
+   spacing. On a phone the row's note sits on a SECOND line under name and
+   quantity; the cells are placed explicitly so the DOM order (name, quantity,
+   note, bin) does not move the bin down. The tablet block resets all of it. */
 .pas-editrow {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 5rem 2.25rem;
   gap: 8px;
   align-items: center;
 }
+.pas-editrow input.pas-name { grid-column: 1; grid-row: 1; }
+.pas-editrow input.pas-qty { grid-column: 2; grid-row: 1; }
+.pas-editrow .pas-del-icon { grid-column: 3; grid-row: 1; }
+.pas-editrow input.pas-item-note { grid-column: 1 / 3; grid-row: 2; }
 
 /* ⚠️ EVERY CONTROL IN THE ROW DECLARES ITS HEIGHT, PADDING AND TYPE SIZE, and
    the height is a FIXED 44px rather than a min-height. On iOS a control sizes
@@ -351,7 +372,8 @@ input.pas-quick:focus {
    that is exactly what shipped in v235 and had to be fixed in v236. 44px also
    happens to be the comfortable tap target (P18). */
 input.pas-name,
-input.pas-qty {
+input.pas-qty,
+input.pas-item-note {
   height: 44px;
   padding: 0 12px;
   font-size: 16px;   /* under 16px, iOS zooms the page when the field is focused */
@@ -382,7 +404,8 @@ input.pas-qty::-webkit-outer-spin-button,
 input.pas-qty::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 
 input.pas-name:focus,
-input.pas-qty:focus {
+input.pas-qty:focus,
+input.pas-item-note:focus {
   border-color: var(--pas-accent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--pas-accent) 22%, transparent);
 }
@@ -403,6 +426,16 @@ input.pas-qty.pas-invalid {
 .pas-del-icon:hover { color: var(--pas-danger); }
 .pas-del-icon:active { transform: scale(.97); }
 .pas-del-icon:focus-visible { outline: 2px solid var(--pas-accent); outline-offset: 2px; }
+
+/* Said above the rows of an editor opened by «Copy day»: the rows are not saved yet. */
+.pas-copied {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  font-size: 14px;
+  color: var(--pas-text-2);
+  background: var(--pas-accent-light);
+  border-radius: var(--pas-radius-sm);
+}
 
 .pas-add-row {
   appearance: none;
@@ -569,6 +602,39 @@ input.pas-qty.pas-invalid {
 .pas-footer-btn:active { transform: scale(.97); }
 .pas-footer-btn:focus-visible { outline: 2px solid var(--pas-accent); outline-offset: 2px; }
 
+/* ── The «Copy day» picker, inside the shared dialog ───────────────────────
+   It shrinks and scrolls rather than pushing the dialog's buttons off a short
+   screen: .app-dialog-msg is already flex: 1 1 auto, the same trap. */
+.pas-copy-days {
+  margin: 0 0 18px;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid var(--pas-border);
+  border-radius: var(--pas-radius-sm);
+}
+.pas-copy-day {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  cursor: pointer;
+  border-top: 1px solid var(--pas-border);
+}
+.pas-copy-day:first-child { border-top: 0; }
+.pas-copy-day input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  flex: none;
+  accent-color: var(--pas-brand);
+}
+.pas-copy-day input:focus-visible { outline: 2px solid var(--pas-accent); outline-offset: 2px; }
+.pas-copy-day-name { flex: 1 1 auto; min-width: 0; font-size: 16px; color: var(--pas-text); }
+.pas-copy-day input:checked ~ .pas-copy-day-name { font-weight: 600; color: var(--pas-brand); }
+.pas-copy-day-count { flex: 0 1 auto; text-align: right; font-size: 13px; color: var(--pas-text-3); }
+
 /* ── The records ───────────────────────────────────────────────────────────*/
 .pas-logs { display: flex; flex-direction: column; gap: 12px; }
 .pas-log {
@@ -616,6 +682,16 @@ input.pas-qty.pas-invalid {
   font-variant-numeric: tabular-nums;
   font-size: 17px;
   font-weight: 500;
+}
+.pas-log-item-note {
+  flex: 0 1 auto;
+  max-width: 40%;
+  text-align: right;
+  font-family: var(--pas-font-mono);
+  font-size: 14px;
+  color: var(--pas-text-2);
+  overflow-wrap: anywhere;
+  font-variant-numeric: tabular-nums;
 }
 .pas-log-empty { padding: 12px 16px; color: var(--pas-text-3); font-size: 15px; }
 .pas-log-note {
@@ -709,6 +785,13 @@ input.pas-qty.pas-invalid {
   /* The list at kitchen size: names and numbers read from across the counter. */
   .pas-row-main { min-height: var(--tap-min); padding: 16px 20px; }
   .pas-row-name { font-size: 24px; }
+  .pas-row-note { font-size: 20px; }
+  /* The editor row: all four on one line, in DOM order (name, quantity, note, bin). */
+  .pas-editrow { grid-template-columns: minmax(0, 1fr) 5rem 11rem 2.25rem; }
+  .pas-editrow input.pas-name,
+  .pas-editrow input.pas-qty,
+  .pas-editrow input.pas-item-note,
+  .pas-editrow .pas-del-icon { grid-column: auto; grid-row: auto; }
   .pas-row-qty { font-size: calc(var(--qty-font) + 6px); }
   .pas-row[data-open="true"] .pas-row-edit { padding: 0 20px 16px; }
   input.pas-quick { height: var(--tap-min); width: 104px; font-size: var(--qty-font); }

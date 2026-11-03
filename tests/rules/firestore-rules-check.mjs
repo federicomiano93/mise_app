@@ -1746,6 +1746,14 @@ async function pastries() {
     await expectAllowed(`the weekday id ${d}`, () => wholeWrite(`${A}/pastries/${d}`, day(d)));
   }
 
+  // The row's own note («9x3»). ⚠️ THE RULES DO NOT JUDGE IT, because they cannot look inside a
+  // list: this pins that the note needs no rules change and reaches the database as it is. Its
+  // length is kept by js/pastries/pastries-model.js, like the length of a name.
+  await expectAllowed('a pastry carrying its own note, next to one without', () =>
+    wholeWrite(`${A}/pastries/Monday`, day('Monday', {
+      items: [{ name: 'Cornetti', qty: 27, note: '9x3' }, { name: 'Bomboloni', qty: 10 }],
+    })));
+
   await expectAllowed('a member reads a day', readAs(ALICE, `${A}/pastries/Monday`));
 
   // ── The standing note ──
@@ -1852,6 +1860,9 @@ async function pastryLogs() {
   await expectAllowed('…carrying the standing note it was proved under', () =>
     wholeWrite(`${A}/pastry-logs/2026-08-05_Wednesday`,
       log('2026-08-05', 'Wednesday', { note: 'Butter is low' })));
+  await expectAllowed('…with a pastry carrying its own note', () =>
+    wholeWrite(`${A}/pastry-logs/2026-08-05_Wednesday`,
+      log('2026-08-05', 'Wednesday', { items: [{ name: 'Cornetti', qty: 27, note: '9x3' }] })));
   await expectAllowed('a night with nothing proved', () =>
     wholeWrite(`${A}/pastry-logs/2026-08-06_Thursday`,
       log('2026-08-06', 'Thursday', { items: [] })));

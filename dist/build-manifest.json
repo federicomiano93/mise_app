@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "734f49abd4c9f38b",
-      "mapSha": "029ed823fc0455f2",
+      "sha": "f80e27c923ca8a2f",
+      "mapSha": "cef9a115c877598a",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -58,7 +58,7 @@
         "js/firebase.js": "a219947f621a2fb5",
         "js/guard.js": "e2d7748bfefce6fb",
         "js/help-button.js": "e3da47ba146887f1",
-        "js/help-content.js": "bc59b365b4f5259d",
+        "js/help-content.js": "3af69eae060cd3ed",
         "js/hold-to-zoom.js": "f4f0162c9aefecdd",
         "js/home-cards.js": "8f325051f97d38fb",
         "js/i18n-dom.js": "6e9d8700a6b5db94",
@@ -141,8 +141,8 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "55360f762e24e5ad",
-      "mapSha": "b9e652a861166732",
+      "sha": "bf00e153e49bda22",
+      "mapSha": "064f9f839ac61377",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -202,7 +202,7 @@
         "js/form-dirty.js": "0a9656342b7fe22a",
         "js/guard.js": "e2d7748bfefce6fb",
         "js/help-button.js": "e3da47ba146887f1",
-        "js/help-content.js": "bc59b365b4f5259d",
+        "js/help-content.js": "3af69eae060cd3ed",
         "js/hold-to-zoom.js": "f4f0162c9aefecdd",
         "js/home-cards.js": "8f325051f97d38fb",
         "js/i18n-dom.js": "6e9d8700a6b5db94",
@@ -281,8 +281,8 @@
       }
     },
     "dist/clients.js": {
-      "sha": "2e19e9c747b268a0",
-      "mapSha": "8aadf1b89ea2b0c8",
+      "sha": "04ea64ec41ba8053",
+      "mapSha": "8e8dfba5951a403b",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -315,7 +315,7 @@
         "js/firebase.js": "a219947f621a2fb5",
         "js/guard.js": "e2d7748bfefce6fb",
         "js/help-button.js": "e3da47ba146887f1",
-        "js/help-content.js": "bc59b365b4f5259d",
+        "js/help-content.js": "3af69eae060cd3ed",
         "js/hold-to-zoom.js": "f4f0162c9aefecdd",
         "js/home-cards.js": "8f325051f97d38fb",
         "js/i18n-dom.js": "6e9d8700a6b5db94",
@@ -384,8 +384,8 @@
       }
     },
     "dist/foodcost.js": {
-      "sha": "cf2f52ad21bb348a",
-      "mapSha": "e19171ba1cd55796",
+      "sha": "ad1b8e4d204ead39",
+      "mapSha": "92ba8ee2314bfaff",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -424,7 +424,7 @@
         "js/foodcost/vat-guide.js": "7167dc662d3c5cf1",
         "js/guard.js": "e2d7748bfefce6fb",
         "js/help-button.js": "e3da47ba146887f1",
-        "js/help-content.js": "bc59b365b4f5259d",
+        "js/help-content.js": "3af69eae060cd3ed",
         "js/home-cards.js": "8f325051f97d38fb",
         "js/i18n-dom.js": "6e9d8700a6b5db94",
         "js/ingredient-edit-model.js": "4aa9df389998ef05",
@@ -488,15 +488,15 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "90d2962d5ddca0a6",
-      "mapSha": "1fcfa48babc635a6",
+      "sha": "21d28e6b90718ecd",
+      "mapSha": "f524e29c0db465d1",
       "inputs": {
-        "js/i18n.js": "aa614f14517a20a3"
+        "js/i18n.js": "48fe5953f5874486"
       }
     },
     "dist/index.js": {
-      "sha": "8c3902b0ac0ca2b4",
-      "mapSha": "17446a51c7b4630b",
+      "sha": "97ca4b24ee05a100",
+      "mapSha": "58146141865d34c8",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -520,7 +520,7 @@
         "js/firebase-target.js": "974d7726c8d1dda4",
         "js/firebase.js": "a219947f621a2fb5",
         "js/help-button.js": "e3da47ba146887f1",
-        "js/help-content.js": "bc59b365b4f5259d",
+        "js/help-content.js": "3af69eae060cd3ed",
         "js/hold-to-zoom.js": "f4f0162c9aefecdd",
         "js/home-away.js": "af718c87e16d8ba2",
         "js/home-cards.js": "8f325051f97d38fb",
@@ -627,8 +627,8 @@
       }
     },
     "dist/inventory.js": {
-      "sha": "df98847d9fe063f5",
-      "mapSha": "ef5ed9150c3c6a7f",
+      "sha": "6378e63a86925727",
+      "mapSha": "1e63b75b71712584",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -647,7 +647,7 @@
         "js/firebase.js": "a219947f621a2fb5",
         "js/guard.js": "e2d7748bfefce6fb",
         "js/help-button.js": "e3da47ba146887f1",
-        "js/help-content.js": "bc59b365b4f5259d",
+        "js/help-content.js": "3af69eae060cd3ed",
         "js/home-cards.js": "8f325051f97d38fb",
         "js/i18n-dom.js": "6e9d8700a6b5db94",
         "js/ingredient-edit-model.js": "4aa9df389998ef05",
@@ -767,8 +767,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "bb6de43e7eec2941",
-      "mapSha": "62a937c3d80470ee",
+      "sha": "f658eb221a320b82",
+      "mapSha": "b238451e69693658",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -791,7 +791,7 @@
         "js/firebase.js": "a219947f621a2fb5",
         "js/form-dirty.js": "0a9656342b7fe22a",
         "js/help-button.js": "e3da47ba146887f1",
-        "js/help-content.js": "bc59b365b4f5259d",
+        "js/help-content.js": "3af69eae060cd3ed",
         "js/hold-to-zoom.js": "f4f0162c9aefecdd",
         "js/home-cards.js": "8f325051f97d38fb",
         "js/i18n-dom.js": "6e9d8700a6b5db94",
@@ -915,14 +915,14 @@
       }
     },
     "dist/pastries.css": {
-      "sha": "e11254fca7dd9eda",
+      "sha": "d405c0a7e86d9779",
       "inputs": {
-        "pastries.css": "796d88509bf4f47a"
+        "pastries.css": "3bd15dc59328d707"
       }
     },
     "dist/pastries.js": {
-      "sha": "4b0954ec9d437afc",
-      "mapSha": "5a69b932fd430596",
+      "sha": "7ac86cb48d792a8d",
+      "mapSha": "e7bf01c06466e513",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -941,7 +941,7 @@
         "js/firebase.js": "a219947f621a2fb5",
         "js/guard.js": "e2d7748bfefce6fb",
         "js/help-button.js": "e3da47ba146887f1",
-        "js/help-content.js": "bc59b365b4f5259d",
+        "js/help-content.js": "3af69eae060cd3ed",
         "js/hold-to-zoom.js": "f4f0162c9aefecdd",
         "js/home-cards.js": "8f325051f97d38fb",
         "js/i18n-dom.js": "6e9d8700a6b5db94",
@@ -975,14 +975,14 @@
         "js/pastries/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/pastries/dom.js": "247525e429f4ec4a",
         "js/pastries/firebase-pastries.js": "18a4973c36f3391f",
-        "js/pastries/pastries-day.js": "118c5d1cd60f777c",
-        "js/pastries/pastries-editor.js": "467b20344a3066e4",
+        "js/pastries/pastries-day.js": "859b0a6f9306f46e",
+        "js/pastries/pastries-editor.js": "075af66cb8f32263",
         "js/pastries/pastries-lock.js": "2a6043cb6111bb9a",
-        "js/pastries/pastries-log-model.js": "de0511e490f1eecc",
+        "js/pastries/pastries-log-model.js": "05bb7038d68db5b3",
         "js/pastries/pastries-logs-store.js": "e3555053c1b80b2a",
-        "js/pastries/pastries-logs.js": "8d7da71b5e15d624",
-        "js/pastries/pastries-main.js": "e124cb2d8f9abc37",
-        "js/pastries/pastries-model.js": "c5db9ff5ca0408a4",
+        "js/pastries/pastries-logs.js": "49b7f50bd734c85a",
+        "js/pastries/pastries-main.js": "ca2c92c3eb4ba2cc",
+        "js/pastries/pastries-model.js": "3df257f7b56db8de",
         "js/pastries/pastries-store.js": "4f7be5376f1ce0ef",
         "js/pastries/pastries-strip.js": "48b7a416a6e0f78d",
         "js/pastries/tablet.js": "464601a358a0978e",
@@ -1027,8 +1027,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "31af2fb6fe4898aa",
-      "mapSha": "4b149fdf305f0be5",
+      "sha": "b75daa3283e22e1c",
+      "mapSha": "bdb9a471df1dbb04",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -1050,7 +1050,7 @@
         "js/firebase.js": "a219947f621a2fb5",
         "js/form-dirty.js": "0a9656342b7fe22a",
         "js/help-button.js": "e3da47ba146887f1",
-        "js/help-content.js": "bc59b365b4f5259d",
+        "js/help-content.js": "3af69eae060cd3ed",
         "js/hold-to-zoom.js": "f4f0162c9aefecdd",
         "js/home-cards.js": "8f325051f97d38fb",
         "js/i18n-dom.js": "6e9d8700a6b5db94",
