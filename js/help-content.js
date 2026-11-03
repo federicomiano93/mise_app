@@ -48,6 +48,26 @@ export const HELP = {
     ],
   },
 
+  // The sales owner's Clients page (clients.html) and its read-only orders screen.
+  clients: {
+    title: 'ui.clients',
+    lines: [
+      'help.clients.book',
+      'help.clients.received',
+      'help.clients.push',
+    ],
+  },
+
+  'clients-orders': {
+    title: 'help.ordersReceived',
+    lines: [
+      'help.ordersYourClientsTyped',
+      'help.clients.orders.kitchen',
+      'help.clients.orders.changed',
+      'help.ordersForDaysAlready',
+    ],
+  },
+
   catalogue: {
     title: 'help.recipeCatalogue',
     lines: [

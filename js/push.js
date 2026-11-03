@@ -113,15 +113,18 @@ export async function enablePush() {
 
 export async function disablePush() {
   const token = storedToken();
-  try { await deleteToken(getMessaging(app)); } catch (err) { /* best-effort */ }
-  if (token) {
-    try { await deleteDoc(doc(db(), pathFor(TOKENS), token)); }
-    catch (err) { console.warn('Could not unregister this phone:', err); }
-  }
+  // ⚠️ THIS PHONE FORGETS FIRST, AND THE DELETE IS NOT WAITED FOR: a Firestore write does not
+  // settle while offline, so the switch waiting on it stays locked, and a phone that left before
+  // it did would say «on» for ever with no row on the server. The write goes out on reconnecting.
   try {
     localStorage.removeItem(TOKEN_KEY);
     localStorage.removeItem(TOKEN_UID_KEY);
   } catch (err) {}
+  if (token) {
+    deleteDoc(doc(db(), pathFor(TOKENS), token))
+      .catch(err => console.warn('Could not unregister this phone:', err));
+  }
+  try { await deleteToken(getMessaging(app)); } catch (err) { /* best-effort */ }
 }
 
 function storedToken() {
@@ -134,6 +137,16 @@ const TOKEN_UID_KEY = 'push-token-uid';
 
 function storedTokenOwner() {
   try { return localStorage.getItem(TOKEN_UID_KEY) || ''; } catch (err) { return ''; }
+}
+
+// Is this phone registered to the person holding it? Permission alone does not say: a shared
+// phone can still carry the registration of the person before, and the server tells only the
+// uid written on it. The screen with a switch asks this, so that switch never says «on» for
+// somebody else's registration; tapping it writes the row again in this person's name.
+export function pushOnForMe() {
+  const session = currentSession();
+  const uid = session && session.user ? session.user.uid : '';
+  return pushSupport().ok && !!uid && !!storedToken() && storedTokenOwner() === uid;
 }
 
 // The document id IS the token, so re-registering the same phone overwrites

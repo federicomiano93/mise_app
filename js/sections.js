@@ -177,6 +177,14 @@ export function isSectionAllowedFor(locationDoc, role, name) {
   return sectionsFor(locationDoc, role)[name] === true;
 }
 
+// Where a page sends somebody whose card it is not. Home, except for one person: a client's
+// order notifies the owner of the sales side and its tap opens calculator.html, because one
+// notification goes to everybody (js/push-model.js targetPage) and the service worker cannot
+// know a role. Home would lose the order they tapped, so they land on the orders received.
+export function pageWhenRefused(role, pageCard) {
+  return role === OWNER_SALES && pageCard === 'calculator' ? 'clients.html#orders' : 'index.html';
+}
+
 export function locationsOf(userDoc) {
   const raw = userDoc && typeof userDoc === 'object' ? userDoc.locations : null;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return [];

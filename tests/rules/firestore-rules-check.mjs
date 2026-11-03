@@ -4242,6 +4242,8 @@ async function partialOwners() {
   // ⚠️ config/calculator: THE CLIENTS, AND NEVER A RECIPE.
   await expectAllowed('⚠️ sales changes the address book, the one field', () =>
     mergeWrite(CFG, { ...stamp, configRev: 2, clients: [{ id: 'c-one', name: 'RENAMED', products: [] }] }, asAccount(SALES)));
+  await expectAllowed('⚠️ …with exactly what the Clients page sends (js/firebase.js saveCalculatorClients)', () =>
+    mergeWrite(CFG, { ...stamp, configRev: 3, configModel: 4, clients: [{ id: 'c-one', name: 'RENAMED', products: [] }] }, asAccount(SALES)));
   await expectDenied('⚠️ sales cannot change a recipe in the Calculator', () =>
     mergeWrite(CFG, { ...stamp, recipes: [] }, asAccount(SALES)));
   await expectDenied('…nor hide one in a save of the clients', () =>

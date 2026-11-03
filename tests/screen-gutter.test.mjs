@@ -34,7 +34,10 @@ const GUTTER = ['content', 'home-grid', 'install-host',
   // the box needs a MARGIN (its border has to sit inside the screen), and a
   // margin is not what this guard looks for — rightly, since a margin can be
   // collapsed away. The column carries the padding for it.
-  'orders-column'];
+  'orders-column',
+  // The settings kit's menu (clients.html puts it straight in its scroll area): its own
+  // `padding: 14px 16px` is the gutter, and this list checks the rule still pads.
+  'settings-menu'];
 
 // A direct child that legitimately has no gutter of its own, and why. ⚠️ A reason that
 // is only a sentence is worth less than one a machine can re-check, so where the reason

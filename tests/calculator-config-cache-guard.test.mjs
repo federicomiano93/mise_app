@@ -27,6 +27,10 @@ const STAND_INS = {
     export function saveCalculatorConfig(config) {
       globalThis.__calcFake.saved.push(config);
       return Promise.resolve();
+    }
+    export function saveCalculatorClients(config) {
+      globalThis.__calcFake.savedClients.push(config);
+      return Promise.resolve();
     }`,
   './confirm-dialog.js': `
     export function alertDialog(text) { globalThis.__calcFake.alerts.push(text); return Promise.resolve(); }`,
@@ -46,7 +50,7 @@ registerHooks({
 
 // A fresh store (its module state is the thing under test) wired to a fresh fake.
 async function freshStore(name) {
-  const fake = { answer: null, saved: [], alerts: [] };
+  const fake = { answer: null, saved: [], savedClients: [], alerts: [] };
   globalThis.__calcFake = fake;
   const store = await import(`${STORE}?case=${encodeURIComponent(name)}`);
   let painted = 0;
@@ -147,3 +151,17 @@ for (const file of ['js/firebase.js', 'js/firebase.example.js']) {
     assert.match(body, /snap => onChange\(snap\.exists\(\) \? snap\.data\(\) : null, snap\.metadata\.fromCache\)/);
   });
 }
+
+// ⚠️ The Clients page: the rules refuse the owner of the sales side anything but the address
+// book (js/firebase.js saveCalculatorClients), so one call of the whole save is an edit lost.
+test('a page started with onlyClients saves through the clients-only write, and never the whole one', async () => {
+  const fake = { answer: null, saved: [], savedClients: [], alerts: [] };
+  globalThis.__calcFake = fake;
+  const store = await import(`${STORE}?case=only-clients`);
+  store.initConfig(() => {}, { onlyClients: true });
+  fake.answer({ clients: [], recipes: [] }, false);
+  await store.saveConfig({ clients: [{ id: 'c-one', name: 'One', products: [] }] });
+  assert.equal(fake.saved.length, 0, 'the whole document went out');
+  assert.equal(fake.savedClients.length, 1);
+  assert.equal(fake.savedClients[0].clients[0].name, 'One');
+});

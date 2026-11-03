@@ -23,7 +23,7 @@ import { showPreviewRibbon } from './preview-ribbon.js';
 import { normalizeTyped } from './join-code.js';
 import { kindOfTyped, readJoinToken, codeShapeHint } from './join-link.js';
 import { nameProblem, passwordProblem, confirmProblem, MIN_PASSWORD_LENGTH } from './credentials.js';
-import { isSectionAllowed, isSectionAllowedFor } from './sections.js';
+import { isSectionAllowed, isSectionAllowedFor, pageWhenRefused } from './sections.js';
 import { cardVisibleTo } from './home-cards.js';
 // The device count: starts itself, reports once a day per venue and account (js/device-ping.js).
 import './device-ping.js';
@@ -910,7 +910,7 @@ function render(session) {
       // a permission (js/home-cards.js). Owners, managers and head chefs pass always.
       // ⚠️ A PARTIAL OWNER'S CARDS ARE ASKED HERE TOO, and those ARE backed by the rules.
       if (pageCard && !cardVisibleTo(session.location, session.canManage, pageCard, session.role)) {
-        location.replace(HOME);
+        location.replace(pageWhenRefused(session.role, pageCard));
         return;
       }
       clearGate();

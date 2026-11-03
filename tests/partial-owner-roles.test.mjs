@@ -14,7 +14,7 @@ import {
   OWNER_SALES, OWNER_KITCHEN, SECTIONS,
 } from '../js/sections.js';
 import { ROLES, roleOf, canManage, canManageVenue, isOwner, isValidRole } from '../js/roles.js';
-import { STAFF_CARDS } from '../js/home-cards.js';
+import { STAFF_CARDS, ROLE_ONLY_CARDS } from '../js/home-cards.js';
 import { readRecipe } from '../functions/recipe-photo-model.js';
 import { readPackText } from '../functions/pack-photo-model.js';
 
@@ -152,7 +152,7 @@ test('the three older roles see exactly what they saw', () => {
 
 test('⚠️ every card has exactly one partial owner, so nothing falls between the two', () => {
   const ids = STAFF_CARDS.map(card => card.id).sort();
-  const dealt = [...ROLE_CARDS[OWNER_SALES], ...ROLE_CARDS[OWNER_KITCHEN]].sort();
+  const dealt = [...ROLE_CARDS[OWNER_SALES], ...ROLE_CARDS[OWNER_KITCHEN]].filter(id => !ROLE_ONLY_CARDS.includes(id)).sort();
   assert.deepEqual(dealt, ids, 'a card nobody has, or a card two people have, is a decision to take with him');
   assert.equal(roleHasCard(OWNER_SALES, 'foodcost'), true);
   assert.equal(roleHasCard(OWNER_SALES, 'inventory'), false);
@@ -251,7 +251,7 @@ test('⚠️ cardVisibleTo answers by role: a partial owner gets exactly their o
   for (const role of [OWNER_SALES, OWNER_KITCHEN]) {
     for (const venue of [{}, hidesAll, showsAll, null]) {
       const seen = everything.filter(id => cardVisibleTo(venue, true, id, role));
-      assert.deepEqual(sorted(seen), sorted(ROLE_CARDS[role]), `${role} with ${JSON.stringify(venue)}`);
+      assert.deepEqual(sorted(seen), sorted(ROLE_CARDS[role].filter(id => !ROLE_ONLY_CARDS.includes(id))), `${role} with ${JSON.stringify(venue)}`);
     }
   }
   // The three older roles are exactly what they were.
@@ -400,7 +400,7 @@ test('⚠️ the kitchen merge asks the server, everybody else reads the product
 
 test('⚠️ the Home asks nothing of a side this person does not have', () => {
   const clients = text('js/home-client-orders-badge.js');
-  assert.match(clients, /if \(!roleHasCard\(session\.role, 'calculator'\)\) return;/);
+  assert.match(clients, /roleHasCard\(session\.role, 'calculator'\) \? 'calculator'\s*: roleHasCard\(session\.role, 'clients'\) \? 'clients'\s*: null;\s*if \(!cardId\) return;/);
   const lists = text('js/home-order-requests-badge.js');
   assert.match(lists, /if \(!roleHasCard\(session\.role, 'orders'\)\) return;/);
   assert.equal(roleHasCard('owner-sales', 'calculator'), false);

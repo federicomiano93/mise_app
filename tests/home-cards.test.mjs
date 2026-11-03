@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  STAFF_CARDS, HIDEABLE_IDS, OPT_IN_IDS, HIDDEN_FIELD, SHOWN_FIELD, ORDER_FIELD,
+  STAFF_CARDS, HIDEABLE_IDS, ROLE_ONLY_CARDS, OPT_IN_IDS, HIDDEN_FIELD, SHOWN_FIELD, ORDER_FIELD,
   isHiddenForStaff, cardVisibleTo, mayBeTold, cleanOrder, isValidOrder, orderedCardIds,
 } from '../js/home-cards.js';
 import { PUSH_KINDS, cardForKind, targetPage } from '../js/push-model.js';
@@ -128,7 +128,7 @@ test('every hideable card carries its id on the Home, exactly once, on the right
   // ⚠️ EVERY card, because a card without one is judged by nobody: the Home would show it
   // to everybody, the money cards included.
   const tags = home.match(/<a class="home-card"[^>]*>/g) || [];
-  assert.equal(tags.length, HIDEABLE_IDS.length, 'one card on the Home per id, and no other');
+  assert.equal(tags.length, HIDEABLE_IDS.length + ROLE_ONLY_CARDS.length, 'one card on the Home per id, and no other');
   for (const tag of tags) assert.match(tag, /\bdata-card="/, `${tag} carries no data-card`);
 });
 
@@ -202,7 +202,7 @@ test('⚠️ the page gate asks too, after the section check and before the page
   const ready = src.slice(src.indexOf("case 'ready':"), src.indexOf('clearGate();', src.indexOf("case 'ready':")));
   assert.ok(ready.length > 100, 'the slice must hold the ready case');
   assert.match(ready,
-    /if \(pageCard && !cardVisibleTo\(session\.location, session\.canManage, pageCard, session\.role\)\) \{\s*location\.replace\(HOME\);\s*return;/);
+    /if \(pageCard && !cardVisibleTo\(session\.location, session\.canManage, pageCard, session\.role\)\) \{\s*location\.replace\(pageWhenRefused\(session\.role, pageCard\)\);\s*return;/);
 });
 
 test('the screen lists only the cards the venue has, and writes only after the server agrees', () => {
