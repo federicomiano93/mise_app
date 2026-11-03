@@ -19,6 +19,7 @@
 // recipe-cost-model.spec.ts and foodcost-model.spec.ts also compare the names, constants, frozen-ness and
 // function shapes of everything they do port).
 //
+// list-copy.ts is not paired either: it leaves out the page logic of js/orders/list-copy.js (list-copy.spec.ts says which).
 // The Calculator's partial ports are not paired either, for the same reason: calculator-config.ts (it leaves
 // out the save path and `orderPrefillLabel`), log-model.ts (the legacy migration and `dayLabel`, which has
 // the pure `dayLabelParts` instead), guided-model.ts (whole, but `stepRows`, `overdueText` and `progressText` take their words / the translator as an argument) and zoom-steps.ts (the storage and DOM halves); their
@@ -71,7 +72,8 @@
 // allergen-match.ts ARE paired too (step 3e-4, the pack-list allergen reader): full ports. records.ts IS paired (T15, the Recipe
 // catalogue's create-ingredient door): a full port. pack-format.ts is NOT: its
 // `formatSummary` and `formatChanged` take the translate function and the locale as arguments; order-request-model.ts is a
-// partial port (`remainingIds`); its spec compares names and shapes. ingredient-merge.ts IS paired since step 3e-7 (the merge itself).
+// full port since step 3f-7 and not paired either: it adds `senderName` (no address on a list, his decision of 3 Nov 2026) and its
+// `groupRequest` takes its words as an argument; its spec runs the shared assertions on both files and tests those on the port. ingredient-merge.ts IS paired since step 3e-7 (the merge itself).
 // catalogue-photo-model.ts is not paired: it exports its table of sentences as well (`CATALOGUE_PHOTO_KEYS`, private in the
 // original) and leaves out the sizes the original re-exports from photo-model; its spec compares what it ports.
 // invoice-zip/reasons.ts, py-compat.ts, sha256.ts, classify.ts and pricing.ts ARE paired (step 3e-6, slice A1, the first

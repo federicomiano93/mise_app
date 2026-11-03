@@ -102,9 +102,10 @@ export function CountList({ monthId, openProductId, onOpenProduct, onCarry, onPu
       </div>
 
       {closed ? null : (
+        // Dimmed, not disabled, while the month is not ready: a tap says why (useMonthActions).
         <div className={styles.actions}>
-          {onCarry ? <Button onPress={onCarry}>{t('stock.carryShort')}</Button> : null}
-          <Button onPress={onPurchases}>{t('stock.purchasesShort')}</Button>
+          {onCarry ? <Button aria-disabled={!snapshot.ready} onPress={onCarry}>{t('stock.carryShort')}</Button> : null}
+          <Button aria-disabled={!snapshot.ready} onPress={onPurchases}>{t('stock.purchasesShort')}</Button>
         </div>
       )}
 

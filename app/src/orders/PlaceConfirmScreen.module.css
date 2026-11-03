@@ -150,13 +150,22 @@
   margin: 0;
 }
 
-.usual {
+/* The notes under the name: what a sent list asked for, and the usual amount. Their own row, as wide as the name. */
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
   grid-area: usual;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.row[data-unusual="true"] {
+.asked {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.row[data-noted="true"] {
   grid-template-areas: "name name" "usual usual" "box unit";
 }
 
@@ -166,7 +175,7 @@
 }
 
 @media (min-width: 480px) {
-  .row[data-unusual="true"] {
+  .row[data-noted="true"] {
     grid-template-areas: "name box unit" "usual box unit";
   }
 }

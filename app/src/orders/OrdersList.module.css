@@ -185,6 +185,12 @@
   background: var(--accent-tint);
 }
 
+/* A supplier tapped while the list is still drawn from the local copy: it will open as soon as the live data lands. A quiet
+   dimming, no animation, as in the current app. */
+.item[data-waiting="true"] {
+  opacity: 0.6;
+}
+
 .open {
   display: flex;
   flex: 1;

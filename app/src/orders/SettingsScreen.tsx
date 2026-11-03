@@ -16,6 +16,7 @@ import type { NoticePermission } from './calendarNotices';
 import { HISTORY_DOOR, SETTINGS_OPENER, useHandBack } from './handBack';
 import { FROM_LIST, cameFromList, useLeave } from './ordersNav';
 import { HISTORY_PATH, ORDERS_PATH } from './ordersPath';
+import { phoneMuted, phoneToken, rememberPhoneMute } from './phoneMute';
 import { LONG_MS } from './useClearQuantities';
 import styles from './SettingsScreen.module.css';
 
@@ -33,6 +34,12 @@ export function SettingsScreen() {
   const switchTitle = useId();
   const switchSub = useId();
   const switchNote = useId();
+  const muteTitle = useId();
+  const muteSub = useId();
+  const muteNote = useId();
+  // This phone's alert token (js/push.js writes it) and whether the switch is on; read once, the screen is the only writer.
+  const hasToken = phoneToken() !== '';
+  const [muted, setMuted] = useState(phoneMuted);
   const handBack = useHandBack();
   const leave = useLeave(ORDERS_PATH, () => { handBack.expect(SETTINGS_OPENER); });
   const titleId = useId();
@@ -106,6 +113,36 @@ export function SettingsScreen() {
             />
           </div>
         </div>
+
+        {/* ⚠️ A PROPERTY OF THIS PHONE, not of the person (somebody may want the alert in a pocket and not on the kitchen tablet), and it
+            SILENCES THE BUZZ, NEVER THE WORK: the line under it says so. Shown only while the venue has order lists. A DELIBERATE
+            DIFFERENCE from the current app, which pretends: a phone with no alert token has nothing to silence, so the switch is off
+            and disabled and says why. */}
+        {config.orderLists !== false ? (
+          <div className={styles.card}>
+            <div className={styles.switchRow}>
+              <span className={styles.text}>
+                <span id={muteTitle} className={styles.doorTitle}>{t('ord.mute.orderRequests')}</span>
+                <span id={muteSub} className={styles.sub}>{t('ord.mute.stillShown')}</span>
+                {hasToken ? null : <span id={muteNote} className={styles.sub}>{t('ord.mute.noPhone')}</span>}
+              </span>
+              <SettingSwitch
+                selected={hasToken && muted}
+                isDisabled={!hasToken}
+                labelledBy={muteTitle}
+                describedBy={hasToken ? muteSub : `${muteSub} ${muteNote}`}
+                onChange={next => {
+                  setMuted(next);
+                  const failed = () => { setMuted(!next); say(t('ord.incoming.couldNotSave'), LONG_MS); };
+                  void store.setPhoneMute(phoneToken(), next).then(outcome => {
+                    if (outcome === 'saved') rememberPhoneMute(next);
+                    else failed();
+                  }, failed);
+                }}
+              />
+            </div>
+          </div>
+        ) : null}
 
         {/* Notices on THIS phone (step 3f-6, parity R12): per device, no push. The explanation, then what the browser says. */}
         <section className={styles.card} aria-labelledby={noticesTitle}>

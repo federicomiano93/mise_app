@@ -21,7 +21,10 @@
 // (parity H12, and the difference E1 of 3f-4). From step 3f-5 (Incoming) it answers «did it all arrive?» on one record
 // (`confirmDelivery`, a patch that replaces `missing` whole), marks one missing line «Resolved» (`resolveMissing`, a merge that
 // ADDS to `missingResolved`), and writes the venue's goods-arrived switch into config/orders (`mergeOrdersConfig`, decision F4;
-// the rules let only an owner or a manager write that document).
+// the rules let only an owner or a manager write that document). From step 3f-7 (order lists) it watches the last 120 lists, writes a
+// new one, ticks lines (ONE merge of the keys named, so two phones ticking at once cannot undo each other), deletes one (the rules let
+// only an owner or a manager), reads the sender's roster row and the roster and who is away for the warning before a send, and writes
+// this phone's «do not buzz me about order lists» on its own token document.
 //
 // ⚠️ NO ROLE IS READ HERE, ON PURPOSE: the section gate and firestore.rules decide (P2).
 //
@@ -105,10 +108,39 @@ export interface OrdersSource {
   // Merges these keys into config/orders (decision F4: the goods-arrived switch). Same contract; a person who is not an owner or
   // a manager is refused by the rules (permission-denied).
   mergeOrdersConfig(patch: Record<string, unknown>): Promise<void>;
+  // The last REQUEST_LIMIT order lists, newest first, live. Same contract as the other watchers.
+  watchOrderRequests(onChange: (list: StoredDoc[], meta: OrdersMeta) => void, onError: (err: unknown) => void): () => void;
+  // Writes a new order list (the venue stamp is applied here). Settles when the server answers; offline it waits, and Firestore
+  // shows the list at once meanwhile; rejects when refused.
+  createOrderRequest(payload: Record<string, unknown>): Promise<void>;
+  // Ticks or unticks these lines of one list: a MERGE of the keys named and `updatedAt`. Same contract.
+  setRequestDone(id: string, done: Readonly<Record<string, boolean>>, updatedAt: string): Promise<void>;
+  // Deletes one list. Same contract; a person who is not an owner or a manager is refused by the rules.
+  deleteOrderRequest(id: string): Promise<void>;
+  // members/<uid> as stored, once (null when there is none): the name on a list. A failure rejects.
+  readOwnMember(uid: string): Promise<Record<string, unknown> | null>;
+  // The roster, once, as the warning before a send reads it. ⚠️ WITHOUT THE ADDRESS, on purpose (his decision of 3 Nov 2026): an
+  // email address is not shown to colleagues, so it never reaches the screen that names who is away. A failure rejects.
+  getRoster(): Promise<RosterRow[]>;
+  // Who is away, once: every document of `away` with its id beside its fields. A failure rejects.
+  getAwayDays(): Promise<StoredDoc[]>;
+  // «Do not buzz this phone about order lists» on this phone's token document, a merge (parity M7). Same contract.
+  setPhoneMute(token: string, mute: boolean): Promise<void>;
+}
+
+// One line of the roster as the warning reads it (see getRoster).
+export interface RosterRow {
+  readonly uid: string;
+  readonly role?: string;
+  readonly firstName?: string;
+  readonly lastName?: string;
 }
 
 // Orders older than the live window are read 100 at a time (the current app's getOlderHistory).
 export const OLDER_PAGE_SIZE = 100;
+
+// How many order lists are ever held. ⚠️ A BOUNDED LIVE READ (P14): the collection only grows until the clean-up exists.
+export const REQUEST_LIMIT = 120;
 
 const SUPPLIERS = 'suppliers';
 const INGREDIENTS = 'ingredients';
@@ -117,6 +149,10 @@ const ORDERS_DOC = 'orders';
 const DRAFTS = 'drafts';
 const DRAFT_ID = 'current';
 const HISTORY = 'orders-history';
+const REQUESTS = 'order-requests';
+const MEMBERS = 'members';
+const AWAY = 'away';
+const TOKENS = 'fcm-tokens';
 
 export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKit>, locationId: string): OrdersSource {
   // Throws on a venue id that could point a read anywhere else (@mise/shared/location-id).
@@ -125,6 +161,10 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
   const configPath = buildPath(locationId, CONFIG);
   const draftsPath = buildPath(locationId, DRAFTS);
   const historyPath = buildPath(locationId, HISTORY);
+  const requestsPath = buildPath(locationId, REQUESTS);
+  const membersPath = buildPath(locationId, MEMBERS);
+  const awayPath = buildPath(locationId, AWAY);
+  const tokensPath = buildPath(locationId, TOKENS);
 
   // A live listener whose Firestore may not be loaded yet. The returned stop works at any moment.
   function listen(subscribe: (kit: FirestoreKit) => () => void, onError: (err: unknown) => void): () => void {
@@ -309,6 +349,75 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
     async mergeOrdersConfig(patch) {
       const { fs, db } = await firestore();
       await fs.setDoc(fs.doc(db, configPath, ORDERS_DOC), { ...patch, bakery: locationId }, { merge: true });
+    },
+
+    // ⚠️ ORDERED BY THE createdAt FIELD, NEVER BY DOCUMENT ID: Firestore refuses a descending scan by key (js/orders/firebase-orders.js).
+    // includeMetadataChanges for ONE answer, as watchRecentHistory: the server's first word; a tick shows at once as a real change.
+    watchOrderRequests(onChange, onError) {
+      let told = false;
+      let toldServer = false;
+      return listen(kit => kit.fs.onSnapshot(
+        kit.fs.query(kit.fs.collection(kit.db, requestsPath), kit.fs.orderBy('createdAt', 'desc'), kit.fs.limit(REQUEST_LIMIT)),
+        { includeMetadataChanges: true },
+        snap => {
+          const fromServer = !snap.metadata.fromCache;
+          if (told && snap.docChanges().length === 0 && (toldServer || !fromServer)) return;
+          told = true;
+          toldServer = toldServer || fromServer;
+          onChange(docsOf(snap), { fromServer });
+        },
+        err => {
+          console.error('watch(order-requests) failed:', err);
+          onError(err);
+        },
+      ), onError);
+    },
+
+    // ⚠️ THE REFERENCE IS MADE FIRST AND THE WRITE AWAITED AFTER: offline the promise waits for the connection, and the list is
+    // already in this phone's own database, safe from a reload. The rules require the stamp and `fromUid` to be the person's own.
+    async createOrderRequest(payload) {
+      const { fs, db } = await firestore();
+      await fs.setDoc(fs.doc(fs.collection(db, requestsPath)), { ...payload, bakery: locationId });
+    },
+
+    // ⚠️ ONLY THE KEYS NAMED: two managers working one list cannot undo each other's ticks. ⚠️ NO VENUE STAMP: the only update the
+    // rules allow touches `done` and `updatedAt`, and a list written with another stamp would be refused for a key the tick never meant
+    // to change. An untick writes false rather than removing the key (a merge cannot), and only exactly true counts.
+    async setRequestDone(id, done, updatedAt) {
+      const { fs, db } = await firestore();
+      await fs.setDoc(fs.doc(db, requestsPath, id), { done: { ...done }, updatedAt }, { merge: true });
+    },
+
+    async deleteOrderRequest(id) {
+      const { fs, db } = await firestore();
+      await fs.deleteDoc(fs.doc(db, requestsPath, id));
+    },
+
+    async readOwnMember(uid) {
+      const { fs, db } = await firestore();
+      const snap = await fs.getDoc(fs.doc(db, membersPath, uid));
+      return snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null;
+    },
+
+    async getRoster() {
+      const { fs, db } = await firestore();
+      const snap = await fs.getDocs(fs.collection(db, membersPath) as Query);
+      const word = (value: unknown) => (typeof value === 'string' ? value : '');
+      return snap.docs.map(d => {
+        const row = d.data() as Record<string, unknown>;
+        return { uid: d.id, role: word(row.role), firstName: word(row.firstName), lastName: word(row.lastName) };
+      });
+    },
+
+    async getAwayDays() {
+      const { fs, db } = await firestore();
+      return docsOf(await fs.getDocs(fs.collection(db, awayPath) as Query));
+    },
+
+    // A merge: the same document carries who this phone is registered to, which only js/push.js writes until step 3g.
+    async setPhoneMute(token, mute) {
+      const { fs, db } = await firestore();
+      await fs.setDoc(fs.doc(db, tokensPath, token), { muteOrderRequests: mute }, { merge: true });
     },
   };
 }

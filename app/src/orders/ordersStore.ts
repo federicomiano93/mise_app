@@ -24,10 +24,19 @@
 // `orderElsewhere`). The goods-arrived switch (decision F4) is read beside config/orders (`deliveryCheck`) and written by
 // `setDeliveryCheck`. What Incoming SHOWS is derived by the screens from the records (@mise/shared/deliveries).
 //
+// ORDER LISTS (step 3f-7): a list is frozen from the shared order (`sendList`) and never clears it; the ticks are one merge each and
+// show at once through Firestore's own local view, so no screen holds a tick of its own. What a list SAYS is derived by the screens
+// (@mise/shared/order-request-model). The warning before a send (`whoIsAway`) can never stop it: any failure answers «go ahead».
+//
 // ⚠️ NO COPY OF ITS OWN IN localStorage (decision T14): the current app cached config/orders in `orders-config` so the
-// Stock column did not flash before the snapshot (parity M11); Firestore's offline database already answers from this
-// phone at once, and a key outside KEEP_PREFIXES would be one more thing a venue switch must wipe.
+// Stock column did not flash before the snapshot (parity M11); Firestore's offline database answers from this phone (not at
+// once behind 302 ingredients: parity CP6), and a key outside KEEP_PREFIXES would be one more thing a venue switch must wipe. T14 still holds for
+// config/orders and for the orders. The supplier and ingredient LIST COPY (`orders-list-copy`, shared/src/list-copy.ts) is a
+// separate thing: it lives OUTSIDE this store (useListCopy.ts), is never in the snapshot, and only draws the rows of the
+// supplier list while the live lists have not landed (a supplier tapped meanwhile is held in OrdersSection.tsx until they do).
 
+import { awayNames, awayUids, nobodyWillBeTold } from '@mise/shared/away-model';
+import { MAX_LINES, buildOrderRequest, senderName } from '@mise/shared/order-request-model';
 import { stampFor } from '@mise/shared/order-day';
 import { parseISODate, todayISO } from '@mise/shared/day';
 import { createOlderLoader, liveHistoryStart } from '@mise/shared/history-window';
@@ -76,6 +85,10 @@ export interface OrdersSnapshot {
   // config/orders through normalizeOrdersConfig (defaults while it has not arrived: the Stock box shown, parity M10).
   readonly config: OrdersConfig;
   readonly configLoaded: boolean;
+  // Any first word about config/orders, even «none» from this phone's own database, or a refusal. `configLoaded` says the document
+  // can be believed; this says only that the wait is over, which is all the list copy needs (a venue with no document has no order
+  // to reshuffle the rows).
+  readonly configAnswered: boolean;
   // The goods-arrived switch of config/orders (decision F4), read beside it: absent = on, asking about every order.
   readonly deliveryCheck: DeliveryCheck;
   // The order in progress: the server's document with this phone's unsent typing on top (draftSync.ts).
@@ -104,6 +117,12 @@ export interface OrdersSnapshot {
   // `done` once every page and the legacy record are in, `error` when the last attempt failed (the same button retries).
   readonly olderHistory: readonly StoredDoc[];
   readonly older: { readonly loading: boolean; readonly done: boolean; readonly error: boolean };
+  // The last 120 order lists, newest first, as stored (step 3f-7). Empty until they arrive.
+  readonly requests: readonly StoredDoc[];
+  // The lists have answered once (or their stream died): until then «nobody was told» and an empty screen would be guesses.
+  readonly requestsLoaded: boolean;
+  // The live stream of the lists died (no resubscribe): the page says so like the other streams (parity L5).
+  readonly requestsBroken: boolean;
 }
 
 // How a correction or a delete from History ended (step 3f-4).
@@ -124,6 +143,28 @@ export type DeliveryWriteOutcome = 'saved' | 'refused' | 'failed';
 // a quantity, typed by a person, and is never overwritten (parity V9): nothing changed; 'gone' — the ingredient, or the supplier
 // it would go to, is not there or not in use any more: nothing changed.
 export type ReorderOutcome = 'applied' | 'skipped' | 'gone';
+
+// How sending an order list ended (step 3f-7): 'sent' — the server has it; 'queued' — this phone is offline: the list is safe in its
+// own database and goes when the connection comes back; 'nothing' — no line left to send (nothing written); 'too-many' — more
+// lines than a list can hold (nothing written, said before the rules would refuse it); 'failed' — refused or failed: the order is
+// as it was and nothing was sent.
+export type ListSendOutcome = 'sent' | 'queued' | 'nothing' | 'too-many' | 'failed';
+
+// How long a screen waits for the server's answer to a list before it says «it goes when the connection comes back».
+// ⚠️ 5 s, not 8: with the two 3 s limits below the worst wait is about 11 s, and «Sending…» (8 s, told at the tap and again right
+// before the write) then stays on screen the whole time.
+export const LIST_ANSWER_MS = 5000;
+
+// How long the reads before the write may take (who is away; the sender's name). On a kitchen's bad Wi-Fi each takes over ten
+// seconds, and a tap that waits for them gets tapped again. Past the limit the send goes ahead without what they would have said.
+export const LIST_READ_MS = 3000;
+
+// The warning before a list is sent: everybody who would be told is away, and who they are ('' for somebody with no name: the screen
+// has the word).
+export interface AwayAnswer {
+  readonly nobody: boolean;
+  readonly names: readonly string[];
+}
 
 // One change to one line, as a row makes it.
 export type LineEdit =
@@ -194,7 +235,7 @@ export interface OrdersStore {
   getSnapshot(): OrdersSnapshot;
   subscribe(listener: () => void): () => void;
   onMessage(listener: (message: OrdersMessage) => void): () => void;
-  // Starts the five listeners; stop() ends them and sends a change still waiting for the autosave at once, so leaving the
+  // Starts the six listeners; stop() ends them and sends a change still waiting for the autosave at once, so leaving the
   // section within 800 ms of a keystroke loses nothing. Safe to call start → stop → start (React's development mode does).
   start(): void;
   stop(): void;
@@ -237,6 +278,24 @@ export interface OrdersStore {
   orderElsewhere(item: ReorderItem, supplierId: string): ReorderOutcome;
   // The goods-arrived switch for the whole venue (decision F4).
   setDeliveryCheck(on: boolean): Promise<DeliveryWriteOutcome>;
+  // Would anybody hear a list sent now (parity R17)? ⚠️ NEVER REJECTS AND NEVER STOPS A SEND: an unreadable roster, a refused read or
+  // a phone that is offline is no evidence that nobody is listening, and answers «go ahead».
+  whoIsAway(senderUid: string): Promise<AwayAnswer>;
+  // Starts reading the sender's own roster row (their name), so the read has had time by the tap. Fire-and-forget and once per uid:
+  // a read that failed is forgotten, so the next call may try again.
+  prepareSender(senderUid: string): void;
+  // Sends the ticked suppliers' part of the shared order as a list (parity R14, R15). ⚠️ THE ORDER IS NOT CLEARED (his choice, 14 Aug
+  // 2026). The sender's name is read here (3 s at most), and a read that fails or is late can never stop the send: the list goes
+  // with no name. ⚠️ `stillWanted` is asked right after that read, before anything is written: a screen that was left in the
+  // meantime answers false and nothing is written ('nothing').
+  sendList(supplierIds: readonly string[], senderUid: string, noSupplierName: string, stillWanted: () => boolean): Promise<ListSendOutcome>;
+  // A tick on one line (parity R19), or «Finish» on all the lines still open (R20): shown at once, taken back by Firestore when refused.
+  tickRequestLine(id: string, ingredientId: string, done: boolean): Promise<DeliveryWriteOutcome>;
+  finishRequest(id: string, ingredientIds: readonly string[]): Promise<DeliveryWriteOutcome>;
+  // Deletes one list (parity R21; the rules let only an owner or a manager).
+  deleteRequest(id: string): Promise<DeliveryWriteOutcome>;
+  // «Do not buzz this phone about order lists» (parity M7), on the token document of `token`.
+  setPhoneMute(token: string, mute: boolean): Promise<DeliveryWriteOutcome>;
 }
 
 export function browserOrdersDeps(): OrdersDeps {
@@ -263,12 +322,13 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
   let snapshot: OrdersSnapshot = {
     suppliers: [], suppliersLoaded: false, suppliersBroken: false,
     ingredients: [], ingredientsLoaded: false, ingredientsBroken: false,
-    config: normalizeOrdersConfig(null), configLoaded: false, deliveryCheck: deliveryCheckOf(null),
+    config: normalizeOrdersConfig(null), configLoaded: false, configAnswered: false, deliveryCheck: deliveryCheckOf(null),
     draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false,
     serverSeen: { suppliers: false, ingredients: false, draft: false },
     placing: [],
     history: [], historyLoaded: false, historyBroken: false, suggester: NO_SUGGESTIONS,
     olderHistory: [], older: { loading: false, done: false, error: false },
+    requests: [], requestsLoaded: false, requestsBroken: false,
   };
   const listeners = new Set<() => void>();
   const messageListeners = new Set<(message: OrdersMessage) => void>();
@@ -462,6 +522,34 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
 
   // A write of step 3f-5 (Incoming): the marker held until the server answers (offline, until the connection is back), so a
   // self-started reload never drops it; a refusal by the rules is told apart from the rest.
+  // `promise`'s answer, or `fallback` once `ms` have passed, whichever is first. The timer never rejects and is cleared as soon as the
+  // promise settles; a promise that rejects rejects here too (the caller decides what a failure means).
+  function within<T, F>(promise: Promise<T>, ms: number, fallback: F): Promise<T | F> {
+    return new Promise<T | F>((resolve, reject) => {
+      const timer = deps.draft.setTimer(() => { resolve(fallback); }, ms);
+      promise.then(
+        value => { deps.draft.clearTimer(timer); resolve(value); },
+        (err: unknown) => { deps.draft.clearTimer(timer); reject(err instanceof Error ? err : new Error(String(err))); },
+      );
+    });
+  }
+
+  // The sender's roster row, one read per uid. ⚠️ NEVER REJECTS: a failure answers null (logged) and is forgotten, so the next call
+  // tries again. Started when the send screen opens (prepareSender), so on a bad connection it has had the time the person spends
+  // ticking suppliers, and somebody with a name is not turned into «Someone» by a slow tap.
+  const senderReads = new Map<string, Promise<Record<string, unknown> | null>>();
+  function senderRead(senderUid: string): Promise<Record<string, unknown> | null> {
+    const known = senderReads.get(senderUid);
+    if (known) return known;
+    const read = Promise.resolve().then(() => source.readOwnMember(senderUid)).catch((err: unknown) => {
+      console.warn('Could not read the roster row for the sender’s name:', err);
+      senderReads.delete(senderUid);
+      return null;
+    });
+    senderReads.set(senderUid, read);
+    return read;
+  }
+
   async function deliveryWrite(label: string, write: () => Promise<void>): Promise<DeliveryWriteOutcome> {
     const release = deps.markBusy();
     try {
@@ -527,6 +615,19 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       // Fixed before the first older page is asked for; once a page is in, the window it was cut from stays.
       if (!olderLoader) windowStart = liveHistoryStart(parseISODate(deps.today()));
       stops = [
+        // ⚠️ FIRST ON PURPOSE. Firestore answers its listeners in the order they start, and the list copy waits for this one
+        // document (the supplier order and the favourites decide the rows): behind the 302 ingredients it lands a second later.
+        // ⚠️ A config missing from the browser's own database is only «none» once the server says so: until then the
+        // defaults stand (the Stock box shown — only an explicit false hides it, parity M3).
+        source.watchOrdersConfig(
+          (data, meta) => set({
+            config: normalizeOrdersConfig(data),
+            deliveryCheck: deliveryCheckOf(data),
+            configLoaded: snapshot.configLoaded || data !== null || meta.fromServer,
+            configAnswered: true,
+          }),
+          () => set({ configLoaded: true, configAnswered: true }),
+        ),
         source.watchSuppliers(
           (list, meta) => set({
             suppliers: list,
@@ -545,16 +646,6 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
           }),
           () => set({ ingredientsBroken: true, ingredientsLoaded: true }),
         ),
-        // ⚠️ A config missing from the browser's own database is only «none» once the server says so: until then the
-        // defaults stand (the Stock box shown — only an explicit false hides it, parity M3).
-        source.watchOrdersConfig(
-          (data, meta) => set({
-            config: normalizeOrdersConfig(data),
-            deliveryCheck: deliveryCheckOf(data),
-            configLoaded: snapshot.configLoaded || data !== null || meta.fromServer,
-          }),
-          () => set({ configLoaded: true }),
-        ),
         // ⚠️ A DRAFT MISSING FROM THE BROWSER'S OWN DATABASE IS NOT AN EMPTY ORDER: a phone that never opened Orders has
         // no copy of it. The lines are drawn only once the server has answered or the copy holds the document.
         source.watchDraft(
@@ -571,6 +662,10 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
           windowStart,
           (list, meta) => set({ history: list, historyLoaded: snapshot.historyLoaded || loadedBy(list, meta), historyBroken: false }),
           () => set({ historyBroken: true, historyLoaded: true }),
+        ),
+        source.watchOrderRequests(
+          (list, meta) => set({ requests: list, requestsLoaded: snapshot.requestsLoaded || loadedBy(list, meta), requestsBroken: false }),
+          () => set({ requestsBroken: true, requestsLoaded: true }),
         ),
       ];
     },
@@ -794,6 +889,88 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
 
     setDeliveryCheck(on) {
       return deliveryWrite('Saving the goods-arrived switch', () => source.mergeOrdersConfig(deliveryCheckPatch(on, deps.today(), snapshot.deliveryCheck)));
+    },
+
+    async whoIsAway(senderUid) {
+      const silent: AwayAnswer = { nobody: false, names: [] };
+      // Offline both reads would answer from a copy that may be days old, or wait: the list goes when the connection is back.
+      if (!deps.online()) return silent;
+      try {
+        // ⚠️ THE WARNING IS ADVICE: a read that is slow gives up and says «go ahead».
+        const read = await within(Promise.all([source.getRoster(), source.getAwayDays()]), LIST_READ_MS, null);
+        if (read === null) return silent;
+        const [roster, days] = read;
+        const away = awayUids(days.map(day => ({ ...day, uid: typeof day.uid === 'string' && day.uid !== '' ? day.uid : day.id })) as never);
+        if (!nobodyWillBeTold(roster, away, senderUid)) return silent;
+        return { nobody: true, names: awayNames(roster, away, senderUid) };
+      } catch (err) {
+        console.warn('Could not check who is listening; sending anyway:', err);
+        return silent;
+      }
+    },
+
+    prepareSender(senderUid) {
+      void senderRead(senderUid);
+    },
+
+    async sendList(supplierIds, senderUid, noSupplierName, stillWanted) {
+      // senderRead never rejects (a failure answers null), so a late read is simply \u00abno name\u00bb.
+      const member = await within(senderRead(senderUid), LIST_READ_MS, null);
+      // \u26a0\ufe0f AFTER THE WAIT, BEFORE ANYTHING IS WRITTEN: the person may have left the screen while the read was on its way, and sending
+      // again would then make two identical lists.
+      if (!stillWanted()) return 'nothing';
+      // ⚠️ THE ORDER AS IT IS NOW, after the question and the read: what the person sees when the list leaves. The lines the lens files
+      // under each supplier, the switched-off ones with a quantity included (decision T10), exactly as a record takes them.
+      const lens = lensNow(noSupplierName);
+      const suppliers = supplierIds.map(id => lens.supplierById(id)).filter((s): s is StoredDoc => s !== undefined);
+      const lines = suppliers.flatMap(supplier => orderable(lens.linesOf(supplier.id)));
+      const wanted = lines.filter(line => wholeNumber(snapshot.draft.entries[line.id]?.qty) > 0).length;
+      if (wanted > MAX_LINES) return 'too-many';
+      const payload = buildOrderRequest({
+        suppliers,
+        ingredients: lines,
+        entries: snapshot.draft.entries,
+        date: deps.today(),
+        from: { uid: senderUid, name: senderName(member) },
+        now: new Date(deps.draft.nowIso()),
+      });
+      if (!payload) return 'nothing';
+      const release = deps.markBusy();
+      const write = source.createOrderRequest(payload as unknown as Record<string, unknown>).then((): ListSendOutcome => 'sent', (err: unknown) => {
+        console.error('Sending the order list failed:', err);
+        return 'failed' as const;
+      }).finally(release);
+      // ⚠️ OFFLINE THE WRITE WAITS FOR THE CONNECTION, and no screen may wait with it (P20): the list is in this phone's own database
+      // now, the marker stays held until it lands, and the person is told it goes when the connection is back.
+      if (!deps.online()) return 'queued';
+      // ⚠️ AND A PHONE THAT BELIEVES IT IS CONNECTED WHILE NOTHING ANSWERS (a kitchen's bad Wi-Fi: driven, 3 Nov 2026) gets the same answer
+      // after a few seconds, rather than a screen waiting for ever. The list is just as safe, and it goes by itself.
+      return new Promise<ListSendOutcome>(resolve => {
+        const timer = deps.draft.setTimer(() => { resolve('queued'); }, LIST_ANSWER_MS);
+        void write.then(outcome => {
+          deps.draft.clearTimer(timer);
+          resolve(outcome);
+        });
+      });
+    },
+
+    tickRequestLine(id, ingredientId, done) {
+      return deliveryWrite('Saving the tick', () => source.setRequestDone(id, { [ingredientId]: done }, deps.draft.nowIso()));
+    },
+
+    // ONE write for every line still open.
+    finishRequest(id, ingredientIds) {
+      const done: Record<string, boolean> = {};
+      for (const ingredientId of ingredientIds) done[ingredientId] = true;
+      return deliveryWrite('Finishing the list', () => source.setRequestDone(id, done, deps.draft.nowIso()));
+    },
+
+    deleteRequest(id) {
+      return deliveryWrite('Deleting the list', () => source.deleteOrderRequest(id));
+    },
+
+    setPhoneMute(token, mute) {
+      return deliveryWrite('Saving the order-list alert switch', () => source.setPhoneMute(token, mute));
     },
   };
 }

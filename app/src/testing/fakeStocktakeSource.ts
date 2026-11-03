@@ -1,6 +1,6 @@
 import { vi } from 'vitest';
 import { withPrices } from '@mise/shared/price-model';
-import type { SnapshotMeta, StocktakeSource, StoredDoc } from '../stocktake/stocktakeSource';
+import type { IngredientsAnswer, SnapshotMeta, StocktakeSource, StoredDoc } from '../stocktake/stocktakeSource';
 
 // A Stocktake source for the specs of screens, in memory: the months, the ingredients, their prices
 // and the orders are plain maps; a save MERGES into the month at once (or is refused, with
@@ -8,9 +8,10 @@ import type { SnapshotMeta, StocktakeSource, StoredDoc } from '../stocktake/stoc
 // like Firestore would. The store itself is covered against its own fake in stocktakeStore.spec.ts;
 // a screen's spec only needs a database that behaves.
 type MonthListener = { monthId: string; onChange: (doc: StoredDoc | null, meta: SnapshotMeta) => void; onError: (err: unknown) => void };
-// This fake is a database that is online: every answer comes from the server.
-const FROM_SERVER: SnapshotMeta = { fromServer: true };
-type IngredientListener = { onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void };
+type IngredientListener = { onChange: (list: StoredDoc[], answer: IngredientsAnswer) => void; onError: (err: unknown) => void };
+// This fake is a database that is online: every answer comes from the server, unless `noSignal()` says otherwise.
+const ONLINE = { month: { fromServer: true, hasPendingWrites: false }, ingredients: { fromCache: false, pricesAnswered: true } };
+const NO_SIGNAL = { month: { fromServer: false, hasPendingWrites: false }, ingredients: { fromCache: true, pricesAnswered: false } };
 
 export type FakeStocktakeSource = StocktakeSource & {
   months: Map<string, StoredDoc>;
@@ -26,6 +27,10 @@ export type FakeStocktakeSource = StocktakeSource & {
   // Holds back the first answer of the month watchers until release() (Firestore still loading).
   hold(): void;
   release(): void;
+  // Every answer from here on is the phone's own copy, which holds what these maps hold. `signal()` brings the server back, and
+  // tells every watcher.
+  noSignal(): void;
+  signal(): void;
 };
 
 export function fakeStocktakeSource(seed: {
@@ -43,15 +48,16 @@ export function fakeStocktakeSource(seed: {
   const refuse = { save: false, watchMonth: false, getMonthOnce: false, orders: false };
   const saved: FakeStocktakeSource['saved'] = [];
   let held = false;
+  let answers: { month: SnapshotMeta; ingredients: IngredientsAnswer } = ONLINE;
 
   const refused = () => Object.assign(new Error('permission-denied'), { code: 'permission-denied' });
   const priced = () => withPrices([...ingredients.values()], Object.fromEntries(prices)) as StoredDoc[];
 
   function push(): void {
     if (!held) {
-      for (const w of monthWatchers) w.onChange(months.get(w.monthId) ?? null, FROM_SERVER);
+      for (const w of monthWatchers) w.onChange(months.get(w.monthId) ?? null, answers.month);
     }
-    for (const w of ingredientWatchers) w.onChange(priced());
+    for (const w of ingredientWatchers) w.onChange(priced(), answers.ingredients);
   }
 
   return {
@@ -64,6 +70,8 @@ export function fakeStocktakeSource(seed: {
     push,
     hold() { held = true; },
     release() { held = false; push(); },
+    noSignal() { answers = NO_SIGNAL; },
+    signal() { answers = ONLINE; push(); },
 
     watchMonth: vi.fn<StocktakeSource['watchMonth']>((monthId, onChange, onError) => {
       const listener: MonthListener = { monthId, onChange, onError };
@@ -75,7 +83,7 @@ export function fakeStocktakeSource(seed: {
           monthWatchers.delete(listener);
           onError(refused());
         } else if (!held) {
-          onChange(months.get(monthId) ?? null, FROM_SERVER);
+          onChange(months.get(monthId) ?? null, answers.month);
         }
       });
       return () => { monthWatchers.delete(listener); };
@@ -113,7 +121,7 @@ export function fakeStocktakeSource(seed: {
     watchIngredients: vi.fn<StocktakeSource['watchIngredients']>((onChange, onError) => {
       const listener: IngredientListener = { onChange, onError };
       ingredientWatchers.add(listener);
-      queueMicrotask(() => { if (ingredientWatchers.has(listener)) onChange(priced()); });
+      queueMicrotask(() => { if (ingredientWatchers.has(listener)) onChange(priced(), answers.ingredients); });
       return () => { ingredientWatchers.delete(listener); };
     }),
   };

@@ -53,7 +53,15 @@ export function useNotices(): Notices {
 
 // ⚠️ THE PANEL IS CLOSED WHENEVER ORDERS OPENS (the state lives here, mounted with the section). A failure
 // while working the notices out is logged and answered with «no notices» — it must never take the list down (T6).
-export function NoticesProvider({ lens, ready, children }: { lens: OrdersLens; ready: boolean; children: ReactNode }) {
+//
+// `onPanelOpen` is told when the panel is opened: looking at the notices is a sign that a supplier tapped before the live data
+// landed is no longer wanted (OrdersSection.tsx, the hold).
+export function NoticesProvider({ lens, ready, onPanelOpen, children }: {
+  lens: OrdersLens;
+  ready: boolean;
+  onPanelOpen?: () => void;
+  children: ReactNode;
+}) {
   const { t } = useT();
   const snapshot = useOrders();
   const { location } = useSession();
@@ -62,7 +70,11 @@ export function NoticesProvider({ lens, ready, children }: { lens: OrdersLens; r
   const today = todayISO();
   const { dismissed, close, reopen } = useDismissedNotices(today);
   const { latched } = usePendingLatch();
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(false);
+  const setOpen = (next: boolean) => {
+    setOpenState(next);
+    if (next) onPanelOpen?.();
+  };
   const panelId = useId();
   const bellRef = useRef<HTMLButtonElement>(null);
 
@@ -71,15 +83,15 @@ export function NoticesProvider({ lens, ready, children }: { lens: OrdersLens; r
       const pending: PendingSupplier<StoredDoc>[] = latched && ready
         ? pendingNow(lens, snapshot.draft, today).filter(row => latched.has(row.supplier.id as string))
         : [];
-      // ⚠️ `requests: []` ON PURPOSE: the order lists (what was SENT) arrive with slice 3f-7. Until then «told» is only what was
-      // recorded, so a number is flagged only against a recorded order of the day.
-      const untold: UntoldGroup[] = ready && snapshot.historyLoaded
+      // ⚠️ «TOLD» IS WHAT WAS RECORDED OR SENT AS A LIST, so the lists must have arrived too: judged before they have, a number that
+      // was sent a minute ago would be flagged as «nobody was told» and vanish a moment later.
+      const untold: UntoldGroup[] = ready && snapshot.historyLoaded && snapshot.requestsLoaded
         ? untoldChanges({
           suppliers: notForLater(lens.suppliers, snapshot.draft.days, today),
           // A switched-off line with a quantity is in the order like any other (decision T10).
           ingredients: orderable(lens.lines),
           entries: snapshot.draft.entries,
-          requests: [],
+          requests: snapshot.requests,
           history: snapshot.history,
           today,
         })
@@ -96,7 +108,7 @@ export function NoticesProvider({ lens, ready, children }: { lens: OrdersLens; r
       console.error('The notices could not be worked out:', err);
       return { pending: [], untold: [], calendar: [] as { key: string; text: string }[], hidden: 0 };
     }
-  }, [lens, ready, latched, snapshot.draft, snapshot.history, snapshot.historyLoaded, snapshot.suppliers, snapshot.suppliersLoaded,
+  }, [lens, ready, latched, snapshot.draft, snapshot.history, snapshot.historyLoaded, snapshot.requests, snapshot.requestsLoaded, snapshot.suppliers, snapshot.suppliersLoaded,
     country, ukDates, dismissed, today, t]);
 
   const { calendar } = model;

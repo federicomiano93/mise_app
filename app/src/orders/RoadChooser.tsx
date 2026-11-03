@@ -1,4 +1,4 @@
-import { Mail, MessageCircle, MessageCircleMore } from 'lucide-react';
+import { ClipboardList, Mail, MessageCircle, MessageCircleMore } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { SendOffer } from '@mise/shared/send-chooser';
 import type { Route } from '@mise/shared/send-routes';
@@ -9,16 +9,17 @@ import { Dialog } from '../ui/Dialog';
 import type { StoredDoc } from './ordersSource';
 import styles from './RoadChooser.module.css';
 
-// The in-app list for a manager has no word and no icon here: it arrives with slice 3f-7, and useSendOrder filters it out.
-const ROUTE_NAME: Partial<Record<Route, MessageKey>> = {
+const ROUTE_NAME: Record<Route, MessageKey> = {
+  manager: 'ord.send.route.manager',
   whatsapp: 'ord.send.route.whatsapp',
   whatsappSupplier: 'ord.send.route.whatsappSupplier',
   email: 'ord.send.route.email',
 };
 
 // The two WhatsApp roads share the green-bubble idea; the one straight to the supplier carries a «more» mark so they can be
-// told apart at a glance without a brand.
-const ROUTE_ICON: Partial<Record<Route, ReactNode>> = {
+// told apart at a glance without a brand. The in-app list is a clipboard: it stays inside Mise.
+const ROUTE_ICON: Record<Route, ReactNode> = {
+  manager: <ClipboardList aria-hidden="true" />,
   whatsapp: <MessageCircle aria-hidden="true" />,
   whatsappSupplier: <MessageCircleMore aria-hidden="true" />,
   email: <Mail aria-hidden="true" />,
@@ -48,7 +49,6 @@ export function RoadChooser({ offers, onPick, onCancel }: Props) {
       <div className={styles.roads}>
         {offers.map((offer, index) => {
           const name = ROUTE_NAME[offer.route];
-          if (name === undefined) return null;
           return (
           <Button
             key={offer.route}

@@ -55,7 +55,7 @@ or a clear that runs when the record failed, loses an order that was really sent
   `isValidWeekStart`, `weekStart`, `inCurrentWeek`, `beforeCurrentWeek`), `supplier-label` (full), `records`,
   `away-model` (full, incl. `whoWillBeTold`, `nobodyWillBeTold`, `awayNames`), `push-model` (full:
   `orderRequestNotification`, `targetPage('orderRequest') = './orders.html'`, `PUSH_KINDS`), `category-batches`;
-  **partial**: `order-request-model` (only `remainingIds`), `ingredient-search` (only `normalizeText`,
+  `order-request-model` (full since 3f-7, «Step 3f-7 as built»); **partial**: `ingredient-search` (only `normalizeText`,
   `filterSuppliers`); `catalogue-model`'s `linkOptions({ inactiveLast })` (`shared/src/catalogue-model.ts:238`, the
   `inactive` list at 271) for decision F6.
 - **App pieces**: `ui/` (`Button`, `Dialog`, `useConfirm`, `useAlert`, `FormBar`, `StatusMessage`, `SettingSwitch`,
@@ -594,9 +594,10 @@ dialog on screen while it decides (`send-chooser.js:86-88`); harmless today beca
   (M9) becomes the shell's help with the Orders content.
 - **F8. History «send again» uses the chooser — OPEN (F-9).** Today it is always WhatsApp. **Recommended**: the same
   chooser as the send arrow, so a venue on email re-sends by email; the record is not re-recorded.
-- **F9. How long Orders data is kept — OPEN (P13).** Today nothing is ever deleted (F-12). **Recommended**: keep order
-  records (business records, no person in them) as today; delete order lists 12 months after they were sent with a
-  scheduled clean-up — a separate S task after 3f, flagged because a scheduled function costs a little (P14).
+- **F9. How long Orders data is kept — DECIDED by him, 3 Nov 2026 (P13).** Today nothing is ever deleted (F-12). Order records
+  (business records, no person in them) stay as today; **order lists are deleted 3 months after they were sent** (the recommendation
+  was 12), with a scheduled clean-up — a separate S task after 3f, flagged because a scheduled function costs a little (P14). Not
+  built yet, so nothing is deleted until it is, and he can still change the figure.
 
 ### Technical (taken with the recommended option; listed for him at the end of each slice)
 
@@ -638,7 +639,9 @@ dialog on screen while it decides (`send-chooser.js:86-88`); harmless today beca
 - **Order lists — the sender's name and uid.** `order-requests.fromUid` + `fromName` (first + last name from the roster,
   else the email address, `senderName` `order-request-model.js:43`) on every list. Where: `locations/<lid>/order-requests`.
   Kept: for ever (deleted only by an owner or manager, by hand, R21); the screen shows 15 days, Home reads 30.
-  Finding: an email address can end up as `fromName` when a member has no name on the roster.
+  Finding: an email address can end up as `fromName` when a member has no name on the roster. **His decision, 3 Nov 2026: never an
+  address in Mise 2.** With no name on the roster it stores `fromName: ''` and the screen prints the word for «someone», in the
+  reader's language (the current app keeps the email until the switch: fixes only). Kept: 3 months once the clean-up exists (F9).
 - **The push of an order list names the sender** (and the venue) in the notification title, on the managers' phones
   (`functions/push-model.js:185-205`). Kept: on the phone, by the operating system.
 - **The roster** (`members/<uid>`: `email, firstName, lastName, joinedAt`) is READ by Orders to name the sender and to
@@ -802,7 +805,7 @@ supplier opens beside the list.
 - O2. **Leaving the section sends unsaved typing at once** (`stop()` flushes the 800 ms pause). The current app can lose the last
   keystrokes when the page is left inside the pause.
 - O3. **A box that has the focus is never rewritten by another phone**; it picks up the shared value when the finger leaves it.
-- O4. **No copy of `config/orders` in this phone's storage** (T14): Firestore's offline database already answers at once.
+- O4. **No copy of `config/orders` in this phone's storage** (T14): Firestore's offline database already answers at once. ⚠️ At this size it does not, behind 302 ingredients: see CP6 in «List copy as built», where the list copy waits for that document and its listener starts first.
 - O5. **Moved to later slices to keep this one to a session**: the flat view (L17) and the tablet summary (L19) → 3f-8; the day
   line and placing → 3f-2; the supplier name as a door to its card → 3f-8. No progress bar.
 - O6. **Back to 0 before the pause saves nothing for that line**: an empty line and 0 are the same thing (L26), so no write
@@ -1194,3 +1197,151 @@ Settings gains «Avvisi (questo telefono)» with the four states of the browser 
 
 **P13.** No new personal data: the notices are worked out on the phone; the two new phone keys hold public dates and keys of
 notices.
+
+## List copy as built
+
+The current app's PR #433 (`js/orders/list-copy.js`), ported: the supplier list is drawn at once from this phone's own copy, and
+everything else waits for the live data. `shared/src/list-copy.ts` (the copy's shape, the same in both apps), `useListCopy.ts`
+(reads it once, writes it), `OrdersSection.tsx` (`earlyLens`, the hold), `OrdersList.tsx` (draws `earlyLens ?? lens`).
+
+**The copy.** Key `orders-list-copy`, version 1, `{ v, lid, suppliers, ingredients }`, the same as the current app, so one
+person's two apps share it. Only the fields the list draws: a supplier's id, name, short name, category, delivery days, order days
+and active; an ingredient's id, name, supplier, kind and active (`shared/src/list-copy.ts` is the whitelist). No price, contact, allergen or pack list. A copy of another venue, of another
+version or that cannot be read is no copy. ⚠️ The key is NOT under `KEEP_PREFIXES`, on purpose: it holds one venue's names, so
+sign-out and a venue switch wipe it (`list-copy.spec.ts` pins this through both files' `keysToClear`). The keep-list says what
+survives; `docs/architecture.md`, «One localStorage», says why.
+
+**Behaviours that must not be lost:**
+- CP1. On the copy nothing can be typed, sent or recorded: EVERY road to a supplier's screen goes through the hold (a row, an
+  «Order today» chip, the notices panel). The address does not change, so no quantity box, items list or settings page can appear
+  from an old list. A screen opened BY ITS ADDRESS still waits behind `Detail`'s `ready` gate.
+- CP2. Shut while on the copy: the gear, the row's list icon, Incoming and To re-order. A shut door says the wait and leaves a held
+  tap alone; the last supplier tapped wins. Send, record all and clear are not even drawn until the live lists are in. ⚠️ The order
+  lists, the summary and the view switch are shut in the current app and do not exist here yet: when they arrive (3f-7 and after)
+  they go through `whenLive` too.
+- CP3. The ingredient card cannot open from the copy. The alerts and the re-order list's «put back» read nothing from it: only the
+  live lens feeds them, so a banner never comes from an old list.
+- CP4. A held tap opens the supplier by itself once everything is live. It is dropped if the person moved to another tab or a list,
+  when a stream fails, when the notices panel opens, and when the search box takes the focus or changes. A supplier gone from the
+  live list opens nothing.
+- CP5. A failed suppliers, ingredients or draft stream removes the copy from the screen at once, even while the others are on their
+  way: no live list will ever replace an old one that looks real. The status line says what happened. (A failed history or config
+  stream leaves it: neither feeds the rows.)
+- CP6. The copy waits for the FIRST WORD about `config/orders`, and that listener starts FIRST. The venue's supplier order and
+  favourites live there, not in the copy (T14, O4). Measured before this rule: the document landed about a second after the first
+  paint and the rows reordered under the finger. Measured after it, on the real tablet: no reorder in 14 of 14 runs. Any word will do
+  (`configAnswered`, not `configLoaded`): a refusal, or «none» from this phone's own database, so a venue that never set an order
+  gets the copy too, offline as well. A document created on another device since this phone last saw it can still reorder the rows
+  once; rare, and no worse than the wait.
+- CP7. A copy with only switched-off suppliers paints nothing, so «No suppliers yet» never flashes.
+- CP8. The wait («Just a moment: loading the latest data.») is the status message, over the content, not a line above the list: a
+  line appearing on the first tap pushes every row down, so a second tap lands on another supplier, and on a list scrolled down it
+  would be out of sight. It leaves the moment the live lists land, and for good on leaving the screen. Every tap says it again and
+  it stays up to a minute, so offline a door tapped later is never a dead button.
+- CP9. The copy is written only after the SERVER has answered for suppliers and ingredients, and not during a venue switch: a list
+  from this phone's own database could be old, and half a switch could write one venue's names under the other's key.
+
+**Differences from the current app, on purpose (tell him):**
+- H1. The rows wait for `config/orders` (CP6). The current app keeps `orders-config` in its storage (M11) and has no reorder to
+  fear; Mise 2 has no such copy (T14), so its list comes a little later than it could.
+- H2. The wait is said over the content (CP8). The current app's line sits above the list.
+- H3. A held tap is also dropped on touching the search box (CP4).
+- H4. Writes only after the server's answer and not during a venue switch (CP9). The current app has both weaknesses: worth its
+  own small fix there.
+
+**Measured** on the lab tablet (SM-T550, Chrome 101, 1 Nov 2026) against a separate emulator with 302 ingredients, 31 suppliers and
+the venue's own supplier order; builds interleaved, 7 rounds each, medians in ms; the person taps the third row the moment the list
+shows. 0 page errors.
+
+| | Cold reload, before | Cold reload, after | Re-entry, before | Re-entry, after |
+|---|---|---|---|---|
+| List on screen, tappable | 7435 | **2711** | 4744 | **404** |
+| Live lists landed | 7435 | 8378 | 4744 | 5361 |
+| Quantity boxes of the tapped supplier | 8249 | 8966 | 5660 | 5854 |
+
+⚠️ The price, in plain words: the list is about 4.7 s earlier from cold and 4.3 s earlier on re-entry, and the boxes about 0.7 s
+later from cold and 0.2 s later on re-entry, most likely because the list is drawn twice (five more long tasks from cold: 25 against 20; a run with nobody tapping, on the PC only, was too noisy to settle it). The
+tapped supplier opened by itself in all 14 runs. Those numbers are from just before #437 and #443 (the invoice reader, the stocktake) came in, neither of which touches Orders.
+
+**Keeping the listeners alive across sections: measured, not built, not agreed.** Documents the server sends for Orders, on the
+tablet against the emulator: a page load 363; each re-entry 361, whether away for 2, 10 or 60 s, or away during 20 draft saves by
+another device (362); staying inside during those 20 saves, 20. ⚠️ The emulator resends everything on re-entry. Firestore's own
+documents say a listener back within 30 minutes is charged only for what changed, and one away for longer as a new query, so
+361 is what a long absence costs and not a short one; this cannot be measured on the emulator. Keeping them alive would cost one
+read per change of those lists while in other sections, and would save up to 361 per return after 30 minutes. It is the only thing
+left that would bring the BOXES forward on re-entry (5.9 s today); the risk is a store that lives on outside its section (today
+started on mount, stopped on unmount, P14).
+
+**Left open (tell him):**
+- Driven on the real tablet: the seven rounds above (the tap held and opened by itself, no reorder, no page errors, the copy's fields
+  read back from storage). The tablet then dropped off USB, so the rest was driven in Edge on this PC, slowed 6×: the wait said over the content without moving a row (also at 360 and 296 px, no sideways scroll), the gear saying it and leaving the hold alone, a quantity typed after the supplier opened by itself and still there after a reload, a held tap dropped on moving to another tab and on pressing the search box, a venue with no `config/orders` getting the copy first with the real SDK, 0 page errors. Still to see on the real tablet: those same steps, by finger.
+- `list-copy.spec.ts`'s comparison with the original runs only once #433 is in this stack, since `js/orders/list-copy.js` is not on
+  this branch yet; the two were compared by hand and they match.
+- The hold has no end of its own: a device back online after a long time opens the supplier tapped long before. Offline with no
+  cached draft it waits indefinitely, no worse than «Loading…».
+- A bookmark to `/orders/incoming` on the split, where the cached `config/orders` says deliveries on and the server then says off:
+  the redirect drops a held tap silently.
+- On the split, reloading on a delivery record that is gone, with a door tapped on the copy: the wait's clearing can take away «order
+  gone» in the same instant, so the person lands on Incoming without the explanation.
+- The held row's `opacity: 0.6` copies the current app; short-lived, its contrast not measured.
+- A hand-altered copy: the field types are not validated, so an odd `deliveryDays` could throw inside the section's boundary.
+
+**P13.** No new kind of data, and nothing personal: names of suppliers and ingredients already on this phone, wiped on sign-out and
+on a venue switch.
+
+## Step 3f-7 as built — order lists
+
+**What it is.** The door «Liste d'ordine» with the count of lists still to place; the lists (waiting first, older than 15 days behind
+a button that says how many); one list with its ticks, the note, «adesso in lista: n», «ordinati: n», «Finito», «Segna come ordinato —
+fornitore» (the confirm screen, then back to this list) and Delete for an owner or a manager; the road «A chi gestisce il locale» with
+the away warning; «Rimanda la lista» for an employee in the bell's panel; «chiesti: n» on the confirm screen; «Non far suonare questo
+telefono» in Settings. Port: `order-request-model` in full. No rule changed, and no new key on any saved shape.
+
+**His decisions (3 Nov 2026, P13).**
+- H1. No name on the roster: «Qualcuno», never an email. Mise 2 stores `fromName: ''` and each reader sees the word in their language.
+  The roster read for the warning drops the address too, so no address can reach that screen. A list stored by the current app with an
+  address in `fromName` also reads «Qualcuno» (`senderOf`, anything with an @): the same decision applied to what is already there.
+- H2. Order lists are kept 3 months (F9). The clean-up is a separate S task and is not built: until it is, nothing is deleted. Up to the
+  last 120 are reachable through «Mostra le liste più vecchie».
+
+**Differences from the current app, for him to hear.**
+- H3. The mute switch is OFF and DISABLED on a phone with no alert token, with a line saying there is nothing to silence (the current
+  app shows a live switch that does nothing).
+- H4. A bad connection. «Invio…» appears at the tap; who is away and the sender's name each get 3 seconds, so neither can hold a send;
+  a list the server has not answered within 5 seconds says «Partirà quando torna la connessione» and goes back to the Orders list. Driven
+  with a phone that believes it is connected: 8 seconds, and the list arrives once when the signal is back. It was 14 seconds of silence
+  and a screen waiting for ever before review.
+- H5. Back during a send stops what has not left: nothing is written, and sending again makes one list. What has left is still said,
+  wherever the person has gone.
+- H6. Delete does not wait for the server: the screen steps back at once; a refusal is said on the lists, and the list returns there.
+- H7. The name is read when the send screen opens (`prepareSender`), one document read more for each opening (P14: negligible).
+- H8. The empty-state hint names the road the chooser really shows, «A chi gestisce il locale»; the current app says «Manda al manager».
+
+**Words written here (no original).** `ord.request.queued`, `ord.request.tooMany`, `ord.mute.noPhone`, `ord.live.lists`,
+`ord.request.ordered` (from `orders.untold.ordered`).
+
+**Taken for him, easy to change.**
+- H9. A venue with lists switched off may see the door for a moment on a cold start, before config/orders answers: the door does not wait,
+  because a door that appears late moves the whole list under the finger. Only a venue with lists off can see it.
+- H10. Coming back from the confirm screen the older lists are folded again; the choice lives while the lists screen does.
+- H11. After «Segna come ordinato» the focus lands on the list's title, not on the button that opened the confirm screen.
+
+**Known and left.**
+- A refusal arriving after «Partirà quando torna la connessione» reaches only the console (it takes a real refusal, such as access
+  removed meanwhile). The order itself stays in the shared order.
+- Somebody WITH a name, sending for the first time from a phone with no signal, goes out as «Qualcuno» for good, because the rules never
+  let a list's name change. Their next list carries the name.
+- A venue with no list at all, opening with no signal, gets the «nobody was told» blocks only once the server answers.
+- `order-sent` (the usage statistic) is still missing in Mise 2, from step 3f-3; `order-request` is in. Owed with Statistics.
+- On the split, one list open and a supplier tapped on the left, Back may land on the lists rather than on that list (suspected, the
+  same shape as History's editor).
+- For step 3g: the Home's badge (30 days) and a push tap landing on the lists. For step 3f-8: the `orderLists` switch itself.
+
+**Driven.** 279/279 on a private emulator (`algprobe/mise-drive/drive-mise2-orders-7.mjs <base> <cdp-port> <fs-port> <auth-port>`): the
+owner at 1024, 360 and 296 in Italian and in English, an employee with an empty roster row at 360, then OFFLINE and NOSIGNAL at 360. axe
+clean, targets, no sideways scroll, one main and one h1, no permission error, at every step. **Not driven:** the real tablet (touch on the
+ticks), keyboard alone end to end, and the empty and refused states, which only the specs cover.
+
+**P13.** Lists carry the sender's uid and name, or no name, never an address (H1). `fcm-tokens/<token>.muteOrderRequests` is a yes/no about
+a phone, already written by the current app. Nothing new is kept on the phone: `push-token` and `push-mute-order-requests` are the
+current app's keys, outside `KEEP_PREFIXES`.

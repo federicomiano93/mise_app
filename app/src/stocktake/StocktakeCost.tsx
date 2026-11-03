@@ -29,6 +29,9 @@ import styles from './StocktakeCost.module.css';
 //
 // An open month is valued at today's prices and a closed one only at what it froze (monthCost with
 // `closed`): never today's price, never the live pack text.
+//
+// ⚠️ A TOTAL OF ZERO IS A CLAIM. The bar's button will not open this until the month is `ready`, but an address can: reloaded with
+// no signal, this screen says the figures have not arrived instead of valuing what has not.
 export function StocktakeCost({ month: monthId }: { month: string }) {
   const { t, locale } = useT();
   const { canManage } = useSession();
@@ -39,10 +42,11 @@ export function StocktakeCost({ month: monthId }: { month: string }) {
   const titleId = useId();
   const title = useRef<HTMLHeadingElement>(null);
 
-  const { ingredients, ingredientsLoaded } = snapshot;
+  const { ingredients, ingredientsLoaded, monthLoaded } = snapshot;
   // The store answers one render late after the address changes (see StocktakeProduct).
   const month = snapshot.monthId === monthId ? snapshot.month : null;
-  const ready = canManage && month !== null && ingredientsLoaded;
+  const closed = month !== null && isClosed(month);
+  const ready = canManage && month !== null && ingredientsLoaded && (monthLoaded || closed);
 
   const onLeaving = useCallback(() => { handBack.expect(COST_OPENER); }, [handBack]);
   const leave = useLeave(monthPath(monthId), onLeaving);
@@ -52,7 +56,6 @@ export function StocktakeCost({ month: monthId }: { month: string }) {
     if (ready && cameFromList(state)) title.current?.focus();
   }, [ready]);
 
-  const closed = month !== null && isClosed(month);
   const cost = useMemo(() => {
     if (month === null) return null;
     const products = productsOfMonth<Product>(month, ingredients);
@@ -66,7 +69,7 @@ export function StocktakeCost({ month: monthId }: { month: string }) {
 
   if (!canManage) return <Navigate to={monthPath(monthId)} replace state={KEEP_FOCUS} />;
 
-  if (month === null || cost === null || !ingredientsLoaded) {
+  if (!ready || cost === null) {
     return (
       <section className={styles.cost} aria-busy="true">
         <p className={styles.loading}>{t('session.loading')}</p>
@@ -74,16 +77,31 @@ export function StocktakeCost({ month: monthId }: { month: string }) {
     );
   }
 
+  const bar = (
+    <FormBar
+      backLabel={t('ui.back')}
+      onBack={leave}
+      title={t('stock.costTitle')}
+      titleId={titleId}
+      titleRef={title}
+      sub={<p className={styles.month}>{monthName(monthId, locale)}</p>}
+    />
+  );
+
+  if (!snapshot.ready) {
+    return (
+      <section className={styles.cost} aria-labelledby={titleId}>
+        {bar}
+        <div className={styles.body}>
+          <p className={styles.empty}>{t('stock.notReady')}</p>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section className={styles.cost} aria-labelledby={titleId}>
-      <FormBar
-        backLabel={t('ui.back')}
-        onBack={leave}
-        title={t('stock.costTitle')}
-        titleId={titleId}
-        titleRef={title}
-        sub={<p className={styles.month}>{monthName(monthId, locale)}</p>}
-      />
+      {bar}
 
       <div className={styles.body}>
         <div className={styles.summary}>

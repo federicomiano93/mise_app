@@ -4,6 +4,8 @@ import { ingredientDisplayLabel, wholeNumber } from '@mise/shared/archive';
 import { entryUnit } from '@mise/shared/order-unit';
 import { isFutureDay } from '@mise/shared/order-day';
 import { supplierLabel } from '@mise/shared/supplier-label';
+import { askedToday } from '@mise/shared/untold-changes';
+import type { ToldRecord } from '@mise/shared/untold-changes';
 import type { DraftView } from './draftSync';
 import { rawDayFor, recordDateFor } from './orderDay';
 import type { OrdersLens } from './ordersLens';
@@ -15,6 +17,8 @@ export interface ConfirmRow {
   readonly name: string;
   readonly unit: string;
   readonly qty: number;
+  // What a sent order list asked for today, when that differs from `qty`. Left out when no list carried the line.
+  readonly asked?: number;
 }
 
 export interface ConfirmGroup {
@@ -31,28 +35,42 @@ export interface ConfirmGroup {
 
 // A supplier with nothing above zero, or one that is gone from the list, has no group: there is nothing to confirm for it.
 export function buildConfirmGroups(
-  { ids, checks, lens, draft, today, pinnedDay = null }:
+  { ids, checks, lens, draft, today, pinnedDay = null, requests = [] }:
   // `pinnedDay`: the day a pending banner's «Placed yesterday» pinned (PlaceConfirmScreen pendingDayIn): the order is recorded under it.
-  { ids: readonly string[]; checks: readonly RecordCheck[]; lens: OrdersLens; draft: DraftView; today: string; pinnedDay?: string | null },
+  // `requests`: the order lists sent, so a row can say what the list asked for beside what is being confirmed.
+  {
+    ids: readonly string[]; checks: readonly RecordCheck[]; lens: OrdersLens; draft: DraftView; today: string;
+    pinnedDay?: string | null; requests?: readonly ToldRecord[];
+  },
 ): ConfirmGroup[] {
   const groups: ConfirmGroup[] = [];
   for (const supplierId of ids) {
     const supplier = lens.supplierById(supplierId);
     if (!supplier) continue;
-    const rows = lens.linesOf(supplierId)
-      .map(line => ({
-        id: line.id,
-        name: ingredientDisplayLabel(line),
-        unit: entryUnit(draft.entries[line.id], line),
-        qty: wholeNumber(draft.entries[line.id]?.qty),
-      }))
+    const date = pinnedDay ?? recordDateFor(draft, supplierId, today);
+    const lines = lens.linesOf(supplierId);
+    // ⚠️ ONLY WHAT WAS ASKED IN THE UNIT THE ROW MEANS NOW: «asked 4 cartons» beside a line of bags would compare two things.
+    const asked = askedToday(requests, supplierId, date, Object.fromEntries(lines.map(line => [line.id, { ing: line, unit: entryUnit(draft.entries[line.id], line) }])));
+    const rows = lines
+      .map(line => {
+        const qty = wholeNumber(draft.entries[line.id]?.qty);
+        const row: ConfirmRow = {
+          id: line.id,
+          name: ingredientDisplayLabel(line),
+          unit: entryUnit(draft.entries[line.id], line),
+          qty,
+        };
+        // ⚠️ ABSENT MEANS «NOBODY ASKED»; 0 WOULD MEAN «THEY ASKED FOR NONE». Only a line a sent list carried AND that disagrees.
+        const wanted = asked[line.id];
+        return wanted !== undefined && wanted !== qty ? { ...row, asked: wanted } : row;
+      })
       .filter(row => row.qty > 0)
       .sort((a, b) => a.name.localeCompare(b.name));
     if (rows.length === 0) continue;
     groups.push({
       supplierId,
       name: supplierLabel(supplier),
-      date: pinnedDay ?? recordDateFor(draft, supplierId, today),
+      date,
       exists: checks.find(check => check.supplierId === supplierId)?.exists === true,
       later: pinnedDay === null && isFutureDay(rawDayFor(draft, supplierId, today), today),
       rows,

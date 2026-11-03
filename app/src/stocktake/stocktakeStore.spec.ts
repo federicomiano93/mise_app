@@ -1,9 +1,9 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { CountMap } from '@mise/shared/inventory-model';
 import type { KeyValueStorage } from '../session/backend';
-import type { Clearing, SnapshotMeta, StocktakeSource, StoredDoc } from './stocktakeSource';
+import type { Clearing, IngredientsAnswer, SnapshotMeta, StocktakeSource, StoredDoc } from './stocktakeSource';
 import {
-  SAVE_DELAY_MS, SETTLE_MS, createStocktakeStore, monthCacheKey, unsavedCacheKey,
+  SAVE_DELAY_MS, SETTLE_MS, createStocktakeStore, monthCacheKey, monthSeenKey, unsavedCacheKey,
 } from './stocktakeStore';
 import type { StocktakeDeps, StocktakeMessage } from './stocktakeStore';
 
@@ -17,7 +17,7 @@ type Watch = {
   onError: (err: unknown) => void;
   stopped: boolean;
 };
-type IngredientWatch = { onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void; stopped: boolean };
+type IngredientWatch = { onChange: (list: StoredDoc[], answer: IngredientsAnswer) => void; onError: (err: unknown) => void; stopped: boolean };
 type Save = {
   monthId: string;
   patch: Record<string, unknown>;
@@ -76,7 +76,10 @@ function fakeSource() {
     return doc;
   }
   function tell(monthId: string, doc: Doc | null, fromServer: boolean): void {
-    for (const w of liveMonth(monthId)) w.onChange(doc === null ? null : { id: monthId, ...doc }, { fromServer });
+    for (const w of liveMonth(monthId)) w.onChange(doc === null ? null : { id: monthId, ...doc }, {
+      fromServer,
+      hasPendingWrites: saves.some(save => save.monthId === monthId && !save.answered),
+    });
   }
   const source = {
     watchMonth: vi.fn((monthId: string, onChange: Watch['onChange'], onError: Watch['onError']) => {
@@ -196,12 +199,16 @@ function setup({ storage = memoryStorage() }: { storage?: ReturnType<typeof memo
   return { ...fake, store, storage, deps, messages, advance, hide };
 }
 
-// A store watching October, which has answered (empty unless said otherwise).
+// The ingredients and their prices as the server sends them.
+const FROM_SERVER: IngredientsAnswer = { fromCache: false, pricesAnswered: true };
+
+// A store watching October, which has answered (empty unless said otherwise), as have the ingredients.
 async function ready(doc: Record<string, unknown> | null = null, options: Parameters<typeof setup>[0] = {}) {
   const t = setup(options);
   t.store.start();
   t.store.openMonth('2026-10');
   t.answer('2026-10', doc);
+  t.ingredients.at(-1)!.onChange([], FROM_SERVER);
   await microtasks();
   return t;
 }
@@ -838,8 +845,9 @@ describe('what a torn-down page left behind', () => {
 
   test('⚠️ closing the month sends what it holds first, and the next month’s opening agrees with it', async () => {
     const storage = await leftBehind([['closing', 'flour', '3']]);
-    const { store, saves, answer } = openedAgain(storage);
+    const { store, saves, answer, ingredients } = openedAgain(storage);
     answer('2026-10', { month: '2026-10', opening: { flour: 4 } }, false);
+    ingredients.at(-1)!.onChange([{ id: 'flour', name: 'Flour' }], { fromCache: true, pricesAnswered: true });
     expect(store.getSnapshot().month?.closing).toEqual({ flour: 3 });
     const result = await store.closeMonth({ names: {}, unitPrice: {}, packKg: {} });
     expect(result).toEqual({ refused: false, opened: '2026-11' });
@@ -1114,7 +1122,7 @@ describe('the streams', () => {
     const t1 = setup();
     t1.store.start();
     expect(t1.store.getSnapshot().ingredientsLoaded).toBe(false);
-    t1.ingredients[0]!.onChange([{ id: 'flour', name: 'Flour' }]);
+    t1.ingredients[0]!.onChange([{ id: 'flour', name: 'Flour' }], FROM_SERVER);
     expect(t1.store.getSnapshot()).toMatchObject({ ingredientsLoaded: true, ingredients: [{ id: 'flour', name: 'Flour' }] });
     const t2 = setup();
     t2.store.start();
@@ -1133,5 +1141,271 @@ describe('the streams', () => {
     store.start();
     expect(liveMonth('2026-10')).toHaveLength(1);
     expect(source.watchIngredients).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('⚠️⚠️ whether the month may be acted on (ready)', () => {
+  const FLOUR = { id: 'flour', name: 'Flour' };
+  const OCTOBER = { month: '2026-10', opening: { flour: 5 } };
+  const FROZEN = { names: { flour: 'Flour' }, unitPrice: {}, packKg: {} };
+  const FROM_COPY: IngredientsAnswer = { fromCache: true, pricesAnswered: true };
+
+  function opened(options: Parameters<typeof setup>[0] = {}) {
+    const t = setup(options);
+    t.store.start();
+    t.store.openMonth('2026-10');
+    return {
+      ...t,
+      // What the month's listener hears, said outright: whether the SDK reports this phone's own writes in it is the point.
+      hears: (doc: Doc | null, meta: SnapshotMeta) => {
+        t.liveMonth('2026-10')[0]!.onChange(doc === null ? null : { id: '2026-10', ...doc }, meta);
+      },
+      lists: (list: StoredDoc[], answer: IngredientsAnswer) => { t.ingredients.at(-1)!.onChange(list, answer); },
+      isReady: () => t.store.getSnapshot().ready,
+    };
+  }
+  const COPY: SnapshotMeta = { fromServer: false, hasPendingWrites: false };
+  const OWN_WRITE: SnapshotMeta = { fromServer: false, hasPendingWrites: true };
+  const SERVER: SnapshotMeta = { fromServer: true, hasPendingWrites: false };
+
+  test('nothing heard: not ready, and a close writes nothing and says it was refused', async () => {
+    const t = opened();
+    expect(t.isReady()).toBe(false);
+    await expect(t.store.closeMonth(FROZEN)).resolves.toEqual({ refused: true });
+    expect(t.saves).toEqual([]);
+    expect(t.store.getSnapshot().month?.closedAt).toBe('');
+  });
+
+  test('⚠️ THE DEFECT: rows from the phone’s copy with the month never read: not ready, nothing written', async () => {
+    const t = opened();
+    t.hears(null, COPY);
+    t.lists([FLOUR], FROM_COPY);
+    // The screen has something to draw; that is not the same thing.
+    expect(t.store.getSnapshot()).toMatchObject({ monthLoaded: true, ingredientsLoaded: true, ready: false });
+    await expect(t.store.closeMonth(FROZEN)).resolves.toEqual({ refused: true });
+    expect(t.saves).toEqual([]);
+  });
+
+  test('the month from the copy but no ingredients: not ready, nothing written', async () => {
+    const t = opened();
+    t.hears(OCTOBER, COPY);
+    t.lists([], { fromCache: true, pricesAnswered: false });
+    expect(t.isReady()).toBe(false);
+    await expect(t.store.closeMonth(FROZEN)).resolves.toEqual({ refused: true });
+    expect(t.saves).toEqual([]);
+  });
+
+  test('⚠️⚠️ one count typed into a month never read here is this phone’s own write: it proves nothing', async () => {
+    const t = opened();
+    t.lists([FLOUR], FROM_COPY);
+    t.hears(null, COPY);
+    t.setMode('never');
+    expect(t.store.setCount('closing', 'flour', '3')).toBe(true);
+    await t.advance(SAVE_DELAY_MS);
+    t.hears({ month: '2026-10', closing: { flour: 3 } }, OWN_WRITE);
+    expect(t.isReady()).toBe(false);
+    await expect(t.store.closeMonth(FROZEN)).resolves.toEqual({ refused: true });
+    expect(t.saves.filter(save => 'closedAt' in save.patch)).toEqual([]);
+    expect(t.saves.filter(save => save.monthId === '2026-11')).toEqual([]);
+  });
+
+  test('that month gets its answer from the server, its own writes or not', () => {
+    const t = opened();
+    t.lists([FLOUR], FROM_COPY);
+    t.hears(OCTOBER, OWN_WRITE);
+    expect(t.isReady()).toBe(false);
+    t.hears(OCTOBER, { fromServer: true, hasPendingWrites: true });
+    expect(t.isReady()).toBe(true);
+  });
+
+  test('a missing month is an answer only from the server: no document there to close over', () => {
+    const t = opened();
+    t.lists([FLOUR], FROM_SERVER);
+    t.hears(null, COPY);
+    expect(t.isReady()).toBe(false);
+    t.hears(null, SERVER);
+    expect(t.isReady()).toBe(true);
+  });
+
+  test('⚠️ the storeroom: a month read here before, counted offline and reloaded offline, can still be closed', () => {
+    const storage = memoryStorage();
+    const first = opened({ storage });
+    first.hears(OCTOBER, COPY);
+    first.store.stop();
+    expect(monthSeenKey(LID, '2026-10')).toBe('inventory-seen-panificio-miano-2026-10');
+    expect(storage.map.get(monthSeenKey(LID, '2026-10'))).toBe('true');
+
+    const reloaded = opened({ storage });
+    reloaded.lists([FLOUR], FROM_COPY);
+    reloaded.hears({ ...OCTOBER, closing: { flour: 3 } }, OWN_WRITE);
+    expect(reloaded.isReady()).toBe(true);
+  });
+
+  test('what this phone wrote down for one month says nothing about another, and needs a document', () => {
+    const storage = memoryStorage({ [monthSeenKey(LID, '2026-09')]: 'true', [monthSeenKey('another-venue', '2026-10')]: 'true' });
+    const t = opened({ storage });
+    t.lists([FLOUR], FROM_COPY);
+    t.hears(OCTOBER, OWN_WRITE);
+    expect(t.isReady()).toBe(false);
+    storage.map.set(monthSeenKey(LID, '2026-10'), 'true');
+    t.hears(null, COPY);
+    expect(t.isReady()).toBe(false);
+  });
+
+  test('a phone’s own write does not write the mark down', () => {
+    const storage = memoryStorage();
+    const t = opened({ storage });
+    t.hears(OCTOBER, OWN_WRITE);
+    t.hears(null, COPY);
+    expect(storage.map.has(monthSeenKey(LID, '2026-10'))).toBe(false);
+  });
+
+  test('the month in the page’s own copy proves nothing', () => {
+    const storage = memoryStorage({ [monthCacheKey(LID, '2026-10')]: JSON.stringify({ month: '2026-10', closing: { flour: 2 } }) });
+    const t = opened({ storage });
+    t.lists([FLOUR], FROM_SERVER);
+    expect(t.store.getSnapshot().month?.closing).toEqual({ flour: 2 });
+    expect(t.isReady()).toBe(false);
+  });
+
+  test('the month proved says nothing about the next one opened', () => {
+    const t = opened();
+    t.lists([FLOUR], FROM_SERVER);
+    t.hears(OCTOBER, SERVER);
+    expect(t.isReady()).toBe(true);
+    t.store.openMonth('2026-11');
+    expect(t.isReady()).toBe(false);
+  });
+
+  test('both answered and the prices still out: not ready, then ready when they land, not when they are lost', () => {
+    const t = opened();
+    t.hears(OCTOBER, SERVER);
+    t.lists([FLOUR], { fromCache: false, pricesAnswered: false });
+    expect(t.isReady()).toBe(false);
+    t.lists([FLOUR], FROM_SERVER);
+    expect(t.isReady()).toBe(true);
+    t.lists([FLOUR], { fromCache: false, pricesAnswered: false });
+    expect(t.isReady()).toBe(false);
+  });
+
+  test('a venue with nothing on its list, on the server’s word, can still be closed', async () => {
+    const t = opened();
+    t.hears(OCTOBER, SERVER);
+    t.lists([], FROM_SERVER);
+    expect(t.isReady()).toBe(true);
+    await expect(t.store.closeMonth({ names: {}, unitPrice: {}, packKg: {} })).resolves.toMatchObject({ refused: false });
+  });
+
+  test('the list that has answered stays answered: the last row deleted with no signal is an empty copy too', () => {
+    const t = opened();
+    t.hears(OCTOBER, COPY);
+    t.lists([FLOUR], FROM_COPY);
+    expect(t.isReady()).toBe(true);
+    t.lists([], FROM_COPY);
+    expect(t.isReady()).toBe(true);
+  });
+
+  test('⚠️ the offline storeroom: a month and a list from the phone’s copy are ready, and it closes, the next month first', async () => {
+    const t = opened();
+    t.hears({ month: '2026-10', closing: { flour: 3 } }, COPY);
+    t.lists([FLOUR], FROM_COPY);
+    expect(t.isReady()).toBe(true);
+    t.setMode('never');
+    const closing = t.store.closeMonth(FROZEN);
+    await t.advance(SETTLE_MS);
+    await expect(closing).resolves.toEqual({ refused: false, opened: '2026-11' });
+    expect(t.saves.map(save => save.monthId)).toEqual(['2026-11', '2026-10']);
+  });
+
+  test('⚠️ a month already closed is not closed twice: today’s prices would replace the frozen ones', async () => {
+    const t = opened();
+    t.hears({ month: '2026-10', closedAt: CLOSED_AT, names: { flour: 'Flour' } }, SERVER);
+    t.lists([FLOUR], FROM_SERVER);
+    await expect(t.store.closeMonth({ ...FROZEN, names: { flour: 'New' } })).resolves.toEqual({ refused: true });
+    expect(t.saves).toEqual([]);
+  });
+
+  test('a closed month is ready on its own rows, whatever the list is doing', () => {
+    const t = opened();
+    t.hears({ month: '2026-10', closedAt: CLOSED_AT, names: { flour: 'Flour' }, closing: { flour: 3 } }, COPY);
+    expect(t.isReady()).toBe(true);
+  });
+
+  test('a stream that died can no longer say the month was closed meanwhile: not ready, whatever it said before', async () => {
+    const t = opened();
+    t.lists([FLOUR], FROM_SERVER);
+    t.hears(OCTOBER, SERVER);
+    expect(t.isReady()).toBe(true);
+    t.fail('2026-10', Object.assign(new Error('denied'), { code: 'permission-denied' }));
+    expect(t.isReady()).toBe(false);
+    await expect(t.store.closeMonth(FROZEN)).resolves.toEqual({ refused: true });
+    expect(t.saves).toEqual([]);
+  });
+
+  test('a failed ingredients read proves nothing: the list stops waiting, the month does not turn ready', () => {
+    const t = opened();
+    t.hears(OCTOBER, SERVER);
+    t.ingredients.at(-1)!.onError(new Error('x'));
+    expect(t.store.getSnapshot()).toMatchObject({ ingredientsLoaded: true, ready: false });
+  });
+
+  test('⚠️ what was frozen as nothing does not wipe the screen: the stored prices still stand', async () => {
+    const t = opened();
+    t.answer('2026-10', { month: '2026-10', unitPrice: { flour: 30 }, packKg: { flour: 25 } });
+    t.lists([FLOUR], FROM_SERVER);
+    t.setMode('never');
+    const closing = t.store.closeMonth({ names: { flour: 'Flour' }, unitPrice: {}, packKg: {} });
+    await t.advance(SETTLE_MS);
+    await closing;
+    const { month } = t.store.getSnapshot();
+    expect(month).toMatchObject({ unitPrice: { flour: 30 }, packKg: { flour: 25 }, names: { flour: 'Flour' } });
+    expect(month?.closedAt).not.toBe('');
+  });
+
+  test('⚠️ carry forward reads nothing and writes nothing into a month that is not ready', async () => {
+    const t = opened();
+    t.hears(null, COPY);
+    t.lists([FLOUR], FROM_COPY);
+    await expect(t.store.pullOpeningFromPrevious('2026-09')).resolves.toBe(0);
+    expect(t.source.getMonthOnce).not.toHaveBeenCalled();
+    await t.advance(SAVE_DELAY_MS);
+    expect(t.saves).toEqual([]);
+  });
+
+  test('carry forward that finds the month closed once its read is back carries nothing', async () => {
+    const t = opened();
+    t.hears(OCTOBER, SERVER);
+    t.lists([FLOUR], FROM_SERVER);
+    t.source.getMonthOnce.mockImplementationOnce(async () => {
+      t.hears({ ...OCTOBER, closedAt: CLOSED_AT }, SERVER);
+      return { id: '2026-09', month: '2026-09', closing: { flour: 7 } };
+    });
+    await expect(t.store.pullOpeningFromPrevious('2026-09')).resolves.toBe(0);
+    await t.advance(SAVE_DELAY_MS);
+    expect(t.saves).toEqual([]);
+  });
+
+  test('⚠️ «from the orders» does not look while the month is not ready: a failed read, never «no orders»', async () => {
+    const t = opened();
+    t.hears(OCTOBER, COPY);
+    t.lists([], { fromCache: true, pricesAnswered: false });
+    await expect(t.store.readProposedPurchases()).resolves.toMatchObject({ failed: true, orders: 0 });
+    expect(t.source.getOrdersInMonth).not.toHaveBeenCalled();
+  });
+
+  test('«from the orders» fills in nothing on a month that is not ready, whatever it was handed', async () => {
+    const t = opened();
+    t.hears(null, COPY);
+    t.lists([FLOUR], FROM_COPY);
+    expect(t.store.applyPurchases({ flour: 4 })).toBe(0);
+    await t.advance(SAVE_DELAY_MS);
+    expect(t.saves).toEqual([]);
+  });
+
+  test('a count still goes in on what this phone knows: a box needs no proof, only an answer', () => {
+    const t = opened();
+    t.hears(null, COPY);
+    expect(t.isReady()).toBe(false);
+    expect(t.store.setCount('closing', 'flour', '3')).toBe(true);
   });
 });

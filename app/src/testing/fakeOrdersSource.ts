@@ -1,5 +1,5 @@
 import type { DraftPayload } from '../orders/draftSync';
-import type { OrdersMeta, OrdersSource, StoredDoc } from '../orders/ordersSource';
+import type { OrdersMeta, OrdersSource, RosterRow, StoredDoc } from '../orders/ordersSource';
 
 // An «Orders» source for the specs, in memory, that behaves like Firestore's own local view: a draft write is in the
 // document and every watcher is told AT ONCE (Firestore shows its pending writes), and a refused write is taken back and
@@ -12,7 +12,9 @@ import type { OrdersMeta, OrdersSource, StoredDoc } from '../orders/ordersSource
 // transaction; `fail.older`, `fail.legacy` and `fail.rewrite` refuse the next one, `duringRewrite` acts in its second. From step 3f-5
 // (Incoming) it answers a delivery, resolves a missing line and merges config/orders like Firestore's local view: the change is
 // in the record (or the config) and told AT ONCE, and a refused one (`failDelivery`) is taken back and told again — then its
-// promise rejects. `holdWrites` holds these too.
+// promise rejects. `holdWrites` holds these too. From step 3f-7 (order lists) it holds `requests` (newest first, as the query asks) and
+// watches them; a list written, ticked or deleted is told AT ONCE and taken back when refused (`failRequest`). `requestsCached` answers
+// from the browser's copy; `roster`, `awayDays` and `member` feed the reads, each refused by `failRead`.
 type ListListener = { onChange: (list: StoredDoc[], meta: OrdersMeta) => void; onError: (err: unknown) => void };
 type DocListener = { onChange: (data: Record<string, unknown> | null, meta: OrdersMeta) => void; onError: (err: unknown) => void };
 
@@ -27,7 +29,7 @@ export type FakeOrdersSource = OrdersSource & {
   // The next draft writes are refused (the rules said no).
   refuseWrites: boolean;
   // The next watches fail (the rules refused them, or the stream died).
-  refuse: { suppliers: boolean; ingredients: boolean; config: boolean; draft: boolean; history: boolean };
+  refuse: { suppliers: boolean; ingredients: boolean; config: boolean; draft: boolean; history: boolean; requests: boolean };
   // Another phone writes the draft: merged like a setDoc merge, then every watcher is told.
   remoteMerge(payload: Record<string, unknown>): void;
   // Every watcher is told again (e.g. after the maps were changed by hand).
@@ -69,6 +71,23 @@ export type FakeOrdersSource = OrdersSource & {
     | { kind: 'config'; patch: Record<string, unknown> }>;
   // The NEXT write of that kind is refused (then the flag goes back to false).
   failDelivery: { confirm: boolean; resolve: boolean; config: boolean };
+  // order-requests as stored, by id.
+  requests: Map<string, Record<string, unknown>>;
+  // The watchers are told the answer comes from the browser's copy, not the server.
+  requestsCached: boolean;
+  // Every tick merge sent, in order (refused ones included), and every token mute.
+  ticks: Array<{ id: string; done: Readonly<Record<string, boolean>>; updatedAt: string }>;
+  mutes: Array<{ token: string; mute: boolean }>;
+  // The NEXT write of an order list (a new one, a tick, a delete, a mute) is refused (then the flag goes back to false).
+  failRequest: boolean;
+  // The roster, who is away, and the sender's own row; a read of any of them rejects while `failRead` is on.
+  roster: RosterRow[];
+  awayDays: StoredDoc[];
+  member: Record<string, unknown> | null;
+  failRead: boolean;
+  reads: number;
+  // Another phone writes a list, or changes one: every watcher is told.
+  emitRequests(): void;
 };
 
 // A merge like setDoc(…, { merge: true }): maps merged key by key at every depth, everything else replaced.
@@ -87,12 +106,15 @@ function deepMerge(target: Record<string, unknown>, patch: Record<string, unknow
 export function fakeOrdersSource(init: {
   suppliers?: StoredDoc[]; ingredients?: StoredDoc[]; ordersConfig?: Record<string, unknown> | null;
   draft?: Record<string, unknown> | null; records?: Record<string, Record<string, unknown>>;
+  requests?: Record<string, Record<string, unknown>>;
 } = {}): FakeOrdersSource {
   const supplierWatchers = new Set<ListListener>();
   const ingredientWatchers = new Set<ListListener>();
   const configWatchers = new Set<DocListener>();
   const draftWatchers = new Set<DocListener>();
   const historyWatchers = new Set<{ from: string; onChange: (list: StoredDoc[], meta: OrdersMeta) => void }>();
+  const requestWatchers = new Set<ListListener>();
+  let nextRequest = 1;
   let held: Array<() => void> | null = null;
   const fromServer: OrdersMeta = { fromServer: true };
 
@@ -103,7 +125,7 @@ export function fakeOrdersSource(init: {
     draft: init.draft ?? null,
     writes: [],
     refuseWrites: false,
-    refuse: { suppliers: false, ingredients: false, config: false, draft: false, history: false },
+    refuse: { suppliers: false, ingredients: false, config: false, draft: false, history: false, requests: false },
     historyFrom: null,
     historyCached: false,
 
@@ -322,6 +344,74 @@ export function fakeOrdersSource(init: {
       return settleWrite('config', () => { source.ordersConfig = before; tellConfig(); });
     },
 
+    requests: new Map(Object.entries(init.requests ?? {})),
+    requestsCached: false,
+    ticks: [],
+    mutes: [],
+    failRequest: false,
+    roster: [],
+    awayDays: [],
+    member: null,
+    failRead: false,
+    reads: 0,
+
+    watchOrderRequests(onChange, onError) {
+      const l = { onChange, onError };
+      if (source.refuse.requests) { queueMicrotask(() => onError(new Error('permission-denied'))); return () => {}; }
+      requestWatchers.add(l);
+      queueMicrotask(() => { if (requestWatchers.has(l)) onChange(requestList(), { fromServer: !source.requestsCached }); });
+      return () => { requestWatchers.delete(l); };
+    },
+
+    createOrderRequest(payload) {
+      const id = `list-${nextRequest}`;
+      nextRequest += 1;
+      source.requests.set(id, { ...structuredClone(payload), bakery: 'bakery' });
+      tellRequests();
+      return settleRequest(() => { source.requests.delete(id); tellRequests(); });
+    },
+
+    setRequestDone(id, done, updatedAt) {
+      source.ticks.push({ id, done: { ...done }, updatedAt });
+      const before = source.requests.get(id);
+      source.requests.set(id, deepMerge(before ? structuredClone(before) : {}, { done, updatedAt }));
+      tellRequests();
+      return settleRequest(() => {
+        if (before) source.requests.set(id, before); else source.requests.delete(id);
+        tellRequests();
+      });
+    },
+
+    deleteOrderRequest(id) {
+      const before = source.requests.get(id);
+      source.requests.delete(id);
+      tellRequests();
+      return settleRequest(() => {
+        if (before) source.requests.set(id, before);
+        tellRequests();
+      });
+    },
+
+    readOwnMember() {
+      source.reads += 1;
+      return source.failRead ? Promise.reject(new Error('unavailable')) : Promise.resolve(source.member);
+    },
+    getRoster() {
+      source.reads += 1;
+      return source.failRead ? Promise.reject(new Error('permission-denied')) : Promise.resolve(source.roster);
+    },
+    getAwayDays() {
+      source.reads += 1;
+      return source.failRead ? Promise.reject(new Error('permission-denied')) : Promise.resolve(source.awayDays);
+    },
+
+    setPhoneMute(token, mute) {
+      source.mutes.push({ token, mute });
+      return settleRequest(() => {});
+    },
+
+    emitRequests: () => tellRequests(),
+
     remoteMerge(payload) {
       source.draft = deepMerge(source.draft ?? {}, payload);
       tellDraft();
@@ -333,12 +423,13 @@ export function fakeOrdersSource(init: {
       tellConfig();
       tellDraft();
       tellHistory();
+      tellRequests();
     },
 
     emitHistory: () => tellHistory(),
 
     openListeners: () => supplierWatchers.size + ingredientWatchers.size + configWatchers.size + draftWatchers.size
-      + historyWatchers.size,
+      + historyWatchers.size + requestWatchers.size,
 
     holdWrites() {
       held = [];
@@ -372,6 +463,30 @@ export function fakeOrdersSource(init: {
   function settleWrite(kind: keyof FakeOrdersSource['failDelivery'], takeBack: () => void): Promise<void> {
     const refused = source.failDelivery[kind];
     source.failDelivery[kind] = false;
+    const settle = (resolve: () => void, reject: (err: unknown) => void) => {
+      if (refused) {
+        takeBack();
+        reject(new Error('permission-denied'));
+      } else resolve();
+    };
+    return new Promise<void>((resolve, reject) => {
+      if (held) held.push(() => settle(resolve, reject));
+      else queueMicrotask(() => settle(resolve, reject));
+    });
+  }
+
+  // Newest first, by `createdAt`, as the query asks.
+  function requestList(): StoredDoc[] {
+    return [...source.requests.entries()]
+      .map(([id, r]): StoredDoc => ({ ...structuredClone(r), id }))
+      .sort((a, b) => String(b.createdAt ?? '').localeCompare(String(a.createdAt ?? '')));
+  }
+  function tellRequests() {
+    for (const l of requestWatchers) l.onChange(requestList(), { fromServer: !source.requestsCached });
+  }
+  function settleRequest(takeBack: () => void): Promise<void> {
+    const refused = source.failRequest;
+    source.failRequest = false;
     const settle = (resolve: () => void, reject: (err: unknown) => void) => {
       if (refused) {
         takeBack();
