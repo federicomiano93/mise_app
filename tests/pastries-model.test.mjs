@@ -30,7 +30,7 @@ import {
   MAX_NOTE_LENGTH,
   isWeekday, nextWeekday, previousWeekday, workWeekday, provingDayFor,
   wholeNumber, normalizeDay, normalizeDays, cleanItems, findInvalidItems,
-  cleanNote, setQuantityAt, daysFromCache,
+  cleanNote, setQuantityAt, daysFromCache, cleanItemNote, otherWeekdays, MAX_ITEM_NOTE_LENGTH,
 } from '../js/pastries/pastries-model.js';
 
 const at = (y, m, d, h = 12, min = 0) => new Date(y, m, d, h, min).getTime();
@@ -473,4 +473,65 @@ test('what survives cleaning is exactly what a save would accept', () => {
   assert.equal(findInvalidItems(clean), null);
   assert.deepEqual(clean, [{ name: 'Cornetti', qty: 24 }, { name: 'Bomboloni', qty: 10 }]);
   assert.deepEqual(normalizeDay({ items: clean }, 'Monday').items, clean);
+});
+
+// ── A row's own note («9x3») ─────────────────────────────────────────────────
+
+test('a row with no note has no note key at all, so it is stored as it always was', () => {
+  for (const note of [undefined, '', '   ', null, 42, ['9x3'], { a: 1 }]) {
+    const [row] = cleanItems([{ name: 'Cornetti', qty: '27', note }]);
+    assert.deepEqual(row, { name: 'Cornetti', qty: 27 }, `note ${JSON.stringify(note)}`);
+    assert.equal('note' in row, false);
+  }
+  assert.deepEqual(Object.keys(normalizeDay({ items: [{ name: 'Cornetti', qty: 27 }] }, 'Monday').items[0]),
+    ['name', 'qty']);
+});
+
+test('a row keeps its note through cleaning, reading and the phone\'s own copy', () => {
+  const clean = cleanItems([{ name: ' Cornetti ', qty: '27', note: '  9x3 ' }]);
+  assert.deepEqual(clean, [{ name: 'Cornetti', qty: 27, note: '9x3' }]);
+  assert.deepEqual(normalizeDay({ items: clean }, 'Monday').items, clean);
+  const stored = normalizeDays([{ id: 'Monday', items: clean }]);
+  assert.deepEqual(stored.Monday.items, clean);
+  assert.deepEqual(daysFromCache(JSON.parse(JSON.stringify(stored))).Monday.items, clean);
+});
+
+test('a row\'s note is one line and is clamped, and it is never read or worked out', () => {
+  assert.equal(cleanItemNote('3 teglie\nda  9'), '3 teglie da 9');
+  assert.equal(cleanItemNote('9x3'), '9x3');
+  assert.equal(cleanItemNote('x'.repeat(MAX_ITEM_NOTE_LENGTH + 50)).length, MAX_ITEM_NOTE_LENGTH);
+  // A cut that lands on a space does not leave it on the end.
+  assert.equal(cleanItemNote(`${'x'.repeat(MAX_ITEM_NOTE_LENGTH - 1)} y`), 'x'.repeat(MAX_ITEM_NOTE_LENGTH - 1));
+  // Clamped on the way IN too: a long note written by something else still fits the screen.
+  const [row] = normalizeDay({ items: [{ name: 'A', qty: 1, note: 'y'.repeat(500) }] }, 'Monday').items;
+  assert.equal(row.note.length, MAX_ITEM_NOTE_LENGTH);
+});
+
+test('a note does not stop a save, and does not count towards anything', () => {
+  assert.equal(findInvalidItems([{ name: 'Cornetti', qty: 27, note: 'x'.repeat(500) }]), null);
+  // A row with a note and no pastry is still an unfinished row: dropped, like one with a number.
+  assert.deepEqual(cleanItems([{ name: '', qty: '', note: '9x3' }]), []);
+});
+
+test('⚠️ correcting a quantity on the day list keeps the row\'s note', () => {
+  const items = [{ name: 'Cornetti', qty: 27, note: '9x3' }, { name: 'Bomboloni', qty: 10 }];
+  const next = setQuantityAt(items, 0, 36, 'Cornetti');
+  assert.deepEqual(next[0], { name: 'Cornetti', qty: 36, note: '9x3' });
+  assert.deepEqual(next[1], { name: 'Bomboloni', qty: 10 });
+  assert.equal('note' in setQuantityAt(items, 1, 12, 'Bomboloni')[1], false);
+  assert.deepEqual(items[0], { name: 'Cornetti', qty: 27, note: '9x3' }, 'the original is not changed');
+});
+
+// ── Copying a day ────────────────────────────────────────────────────────────
+
+test('a day can be copied onto the six others, the next one first, wrapping over the week', () => {
+  assert.deepEqual(otherWeekdays('Tuesday'),
+    ['Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Monday']);
+  assert.deepEqual(otherWeekdays('Sunday'),
+    ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']);
+  for (const day of WEEKDAYS) {
+    assert.equal(otherWeekdays(day).length, 6);
+    assert.equal(otherWeekdays(day).includes(day), false);
+  }
+  assert.deepEqual(otherWeekdays('Funday'), [...WEEKDAYS]);
 });

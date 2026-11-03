@@ -5,7 +5,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  LIST_COPY_KEY, writeListCopy, readListCopy, bothLanded, shouldShowCopy, supplierToOpen, mayWriteCopy,
+  LIST_COPY_KEY, ACTIVE_LOCATION_KEY, writeListCopy, readListCopy, bothLanded, shouldShowCopy, supplierToOpen,
+  mayWriteCopy, activeLocation,
 } from '../js/orders/list-copy.js';
 import { KEEP_PREFIXES, keysToClear } from '../js/local-data.js';
 
@@ -23,6 +24,15 @@ function fakeStorage(initial = {}) {
 
 const sup = [{ id: 's1', name: 'Cielo' }];
 const ing = [{ id: 'i1', name: 'Flour' }];
+
+// Everything mayWriteCopy asks for, answered yes: each test below changes one answer.
+const canWrite = {
+  loaded: { suppliers: true, ingredients: true },
+  serverSeen: { suppliers: true, ingredients: true },
+  listFailed: false,
+  lid: 'v1',
+  activeLocation: 'v1',
+};
 
 test('a copy written is read back for the same venue', () => {
   const s = fakeStorage();
@@ -125,9 +135,88 @@ test('both lists must have landed, and a venue must be known, before the copy is
   assert.equal(bothLanded({ suppliers: true, ingredients: true }), true);
   assert.equal(bothLanded({ suppliers: true, ingredients: false }), false);
   assert.equal(bothLanded(null), false);
-  assert.equal(mayWriteCopy({ loaded: { suppliers: true, ingredients: true }, lid: 'v1' }), true);
-  assert.equal(mayWriteCopy({ loaded: { suppliers: true, ingredients: false }, lid: 'v1' }), false);
-  assert.equal(mayWriteCopy({ loaded: { suppliers: true, ingredients: true }, lid: '' }), false);
+  assert.equal(mayWriteCopy(canWrite), true);
+  assert.equal(mayWriteCopy({ ...canWrite, loaded: { suppliers: true, ingredients: false } }), false);
+  assert.equal(mayWriteCopy({ ...canWrite, lid: '' }), false);
+});
+
+// This phone's own database answers first and can hold a partial or old list: only the server's
+// answer may become «the last good one».
+test('the copy is not written until the SERVER has answered for both lists', () => {
+  assert.equal(mayWriteCopy({ ...canWrite, serverSeen: { suppliers: false, ingredients: false } }), false);
+  assert.equal(mayWriteCopy({ ...canWrite, serverSeen: { suppliers: true, ingredients: false } }), false);
+  assert.equal(mayWriteCopy({ ...canWrite, serverSeen: { suppliers: false, ingredients: true } }), false);
+  assert.equal(mayWriteCopy({ ...canWrite, serverSeen: undefined }), false);
+});
+
+test('the copy is not written once a list stream has failed', () => {
+  assert.equal(mayWriteCopy({ ...canWrite, listFailed: true }), false);
+});
+
+// Another window on this device moved to another venue or signed out: it has wiped this device's
+// data, and this page, still running, must not put the old venue's names back.
+test('the copy is written only while this device still says this venue is the open one', () => {
+  assert.equal(mayWriteCopy({ ...canWrite, activeLocation: 'v2' }), false);
+  assert.equal(mayWriteCopy({ ...canWrite, activeLocation: null }), false);
+  assert.equal(mayWriteCopy({ ...canWrite, activeLocation: '' }), false);
+});
+
+test('activeLocation reads the session\'s own key, and storage that fails is no venue', () => {
+  assert.equal(activeLocation(fakeStorage({ 'active-location': 'v1' })), 'v1');
+  assert.equal(activeLocation(fakeStorage()), null);
+  assert.equal(activeLocation(null), null);
+  assert.equal(activeLocation({ getItem() { throw new Error('blocked'); } }), null);
+});
+
+// The two files cannot share the constant (js/firebase.js loads the SDK), so they are compared. A
+// venue always has the key before a list can land: enterLocation remembers it, then publishes.
+test('the key is the session\'s, and the session writes it before a venue counts as open', () => {
+  const firebase = read('js/firebase.js');
+  assert.ok(firebase.includes(`const ACTIVE_LOCATION_KEY = '${ACTIVE_LOCATION_KEY}';`));
+  const enter = firebase.slice(firebase.indexOf('async function enterLocation'));
+  assert.ok(enter.indexOf('rememberLocation(locationId);') > 0);
+  assert.ok(enter.indexOf('rememberLocation(locationId);') < enter.indexOf('markSessionReady('),
+    'without the key the copy would never be written');
+  assert.ok(KEEP_PREFIXES.some(prefix => ACTIVE_LOCATION_KEY.startsWith(prefix)),
+    'the wipe must leave the key, or a venue switch would stop every later write');
+});
+
+test('orders-main: the write asks about the server, a failed stream and the open venue', () => {
+  const src = read('js/orders/orders-main.js');
+  const body = src.slice(src.indexOf('function scheduleCopyWrite'), src.indexOf('function showListCopy'));
+  assert.ok(body.includes('serverSeen: copyServerSeen'));
+  assert.ok(body.includes('listFailed: copyListFailed'));
+  assert.ok(body.includes('activeLocation: activeLocation()'));
+  // A bare mayWriteCopy(...) would still carry all three arguments and write regardless.
+  const asked = body.indexOf('if (!mayWriteCopy(');
+  assert.ok(asked !== -1, 'the answer must decide');
+  const refused = body.indexOf('})) return;', asked);
+  assert.ok(refused !== -1, 'a no must leave the timer');
+  assert.ok(refused < body.indexOf('writeListCopy(lid'), 'and before the write');
+});
+
+test('orders-main: both lists report the server\'s answer, and it arms the write by itself', () => {
+  const src = read('js/orders/orders-main.js');
+  // A server answer identical to this phone's list changes no document, so no list listener calls
+  // back: without this call a phone that is already up to date would never save a copy.
+  for (const which of ['suppliers', 'ingredients']) {
+    assert.ok(src.includes(`watchCollectionServerAnswer(COLLECTIONS.${which}, () => copyServerAnswered('${which}'));`), which);
+  }
+  const answered = src.slice(src.indexOf('function copyServerAnswered'), src.indexOf('function scheduleCopyWrite'));
+  assert.ok(answered.includes('copyServerSeen[which] = true;'));
+  assert.ok(answered.includes('scheduleCopyWrite();'));
+  assert.equal(src.split('copyListFailed = true').length - 1, 1);
+  assert.ok(src.includes("listLost(liveDataLost(() => t('orders.live.suppliers')))"));
+  assert.ok(src.includes("listLost(liveDataLost(() => t('orders.live.ingredients')))"));
+});
+
+test('firebase-orders: the server\'s answer is heard, once, on the collection itself', () => {
+  const src = read('js/orders/firebase-orders.js');
+  const body = src.slice(src.indexOf('export async function watchCollectionServerAnswer'));
+  assert.ok(body.slice(0, 500).includes('includeMetadataChanges: true'), 'without it an identical answer never calls back');
+  assert.ok(body.slice(0, 500).includes('if (snap.metadata.fromCache) return;'));
+  assert.ok(body.slice(0, 500).includes('stop();'));
+  assert.ok(!body.slice(0, 500).includes('console.error'), 'one failed stream must not file a second error report');
 });
 
 test('the held supplier opens only if it still exists', () => {
