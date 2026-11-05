@@ -99,10 +99,9 @@ describe('the ingredient list', () => {
     expect(rowsOf()[0]).toEqual(['Flour', '1000', 'g']);
   });
 
-  it('has no procedure or label button yet (their steps are later); Edit and Delete came with step 3d-6, the Food cost card and Import with 3d-7', async () => {
+  it('has no label button on a recipe with nothing declared; the Procedure card came with step 3d-8, Edit and Delete with 3d-6, the Food cost card and Import with 3d-7', async () => {
     await open();
     expect(main().queryByRole('button', { name: /make a label/i })).not.toBeInTheDocument();
-    expect(main().queryByRole('heading', { level: 3, name: /procedure/i })).not.toBeInTheDocument();
   });
 });
 

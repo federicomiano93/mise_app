@@ -1166,6 +1166,33 @@ SAME PR.
   `unassignedRows`, `missingRefs`, `timerState`, `remainingMs`, `formatDuration`, `formatRemaining`,
   `overdueText`/`progressText` with the translator as an argument, `isResumable`, limits); `zoom-steps.ts` is done.
 - **Size M.**
+- **Slice A as built** (the Procedure card and the steps editor): the card sits after the declaration and before Export; the
+  editor is `/recipes/<id>/steps` (usage screen `recipes-steps`, one level below the recipe, the right-hand pane on the split;
+  Back and Save return to the recipe with no second entry for it, the focus on the card's button). Anyone who sees the section
+  may write steps. Differences from the current app, all on purpose: the ids are stored only when a row had none (the store's
+  `saveProcedure`, not a rewrite of every row); the editor's accessible names are translated (`cat.stepInstruction`,
+  `cat.stepMinutes`, `cat.stepSeconds`, `cat.stepSpeed`, `cat.removeStepN`) and so are «min», «sec» and the speed's example; the
+  focus follows a moved step's arrow, a removed step lands on the next remove button; a Save for a recipe deleted meanwhile says
+  «This recipe no longer exists.» and keeps the typing. `cat.notInAnyStep` is the CARD's «Not in any step: {list}» (the current
+  dictionary defines the key twice and the run-end text wins there, so the card never shows its list); slice B's finish card
+  needs its own key. Slice B: Resume / Guided mixing / Start again on the card (the place is marked in `ProcedureCard.tsx`),
+  the run, the alarm (built, below).
+- **Slice B built** (the guided mix: the run, resume, the alarm, the wake lock): `/recipes/<id>/mix` (usage screen `recipes-run`), full
+  width at every width, one level below the recipe (Back returns to it with no second entry, the focus on the card's first mix
+  button, the scroll where it was). Items 94, 96, 97 and 98 are done; item 99 (the phone notification) is NOT: the line under the
+  controls says «Keep this screen open» (with or without a wake lock), and no push code exists. Differences from the current app, all on
+  purpose: (1) **a mix starts reload-safe**: the card's button writes the saved session (snapshot of the recipe as shown, with the batch the
+  recipe page is scaled to) and THEN opens the run, and the run always goes on from the stored session, so a reload mid-mix resumes at the
+  stored step and never restarts (the current app keeps the live run in memory and loses a fresh one on reload); a typed address with
+  no session for the recipe replaces itself with the recipe, a stale one is cleared with «That mix is no longer available — start it
+  again.»; (2) **no notification** (above); (3) the step heading takes the focus at every new step and the finish card at the end; a speed
+  change and «Time is up» are said once by always-mounted quiet live regions, never the countdown; (4) the finish card's warning has its
+  own key, `cat.notInAnyStepCheck` (the current dictionary's duplicated `cat.notInAnyStep`); (5) `cat.stepDone` is «Done» / «Fatto» as in the current dictionary (not «Step done»); (6) «Carry on» from the list pushes the recipe and then the run, so Back is the
+  recipe and then the list; (7) the countdown repaints while the timer is up too, so «Time was up N minutes ago» stays true; (8) the
+  recipe is looked for in the phone's copy first and the mix only called stale once the server has answered (or after the copy wait
+  with no signal). Shared with the current app: the session key and shape, `alarm.wav` (copied to `app/src/recipes/`), every word
+  (copied key for key). Specs: `guidedSession`, `guidedRunModel`, `guidedAlarm`, `wakeLock`, `guidedRunCss`, `RecipesSection.run` (51 cases
+  with a faked clock, Audio, vibrate and wake lock) and `RecipesSection.run.strict`.
 
 ### 3d-9 — Reading a recipe from a photograph (and its switch)
 
@@ -1348,7 +1375,7 @@ allergen state with an `if` of its own. What differs from the current app, and w
   current card. «Copied» and «Could not copy…» are a live region that exists before it speaks. `copyToClipboard` moved from
   `calculator/` to `ui/` so two features share it without importing each other.
 - **Order on the recipe screen:** ingredients · batch · allergens · declaration (since 3d-7 slice A the Food cost card sits
-  before the allergens, and Import into Calculator after Export). The procedure (3d-8) is not there yet.
+  before the allergens, and Import into Calculator after Export). Since 3d-8 slice A the Procedure card follows the declaration, before Export.
 - **The Allergen sheet is `/recipes/allergens`** and `allergens` is no longer a reserved-and-unknown word. It re-checks its
   own gate (item 60): with allergens off the address goes to `/recipes` by replacing itself, also when the switch is thrown
   while the sheet is open. The door is an «Allergen sheet» button at the FOOT of the list (only when allergens are on); Back

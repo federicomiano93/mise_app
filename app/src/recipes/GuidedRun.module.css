@@ -1,0 +1,309 @@
+/* The guided mix: the screen somebody stands in front of with their hands in dough. One instruction at a time, the amounts
+   large enough to read from a step back, a clock in big tabular digits, and the one next action as big as the screen allows.
+   It is FULL WIDTH at every width (the section draws no list beside it).
+
+   ⚠️ NOTHING ON THE SCREEN MAY CLIP (no `overflow`): the form bar sticks to the top of the scrolling area.
+   It has to hold at 296px: names wrap anywhere, the clock never wraps, the buttons stack. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.waiting {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.loading {
+  padding: var(--s6);
+  color: var(--ink-2);
+}
+
+/* The recipe's name is the title; «Guided mixing» sits under it. */
+.eyebrow {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s3) var(--s2) var(--s4);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    gap: var(--s6);
+    padding: var(--s6);
+  }
+}
+
+/* «Step 3 of 9», above the card: it says where you are, not what to do. */
+.progress {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-md);
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  min-width: 0;
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+}
+
+/* ⚠️ THE TIMER IS UP: the card turns, and says so in words (the sound is never the only signal). */
+.due {
+  border: 2px solid var(--warn);
+  background: var(--warn-tint);
+}
+
+/* The step's instruction: the one thing to read. It takes the focus when the step opens, so a screen reader reads it. */
+.text {
+  margin: 0;
+  font-size: var(--fs-2xl);
+  font-weight: 650;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.text:focus {
+  outline: none;
+}
+
+.text:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--r-sm);
+}
+
+/* The ingredients of the step: name left, amount right, large. */
+.lines {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-xl);
+}
+
+.line:last-child {
+  border-bottom: 0;
+}
+
+.name {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.amount {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: var(--s2);
+  max-width: 55%;
+  text-align: right;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.num {
+  font-size: var(--fs-2xl);
+}
+
+.unit {
+  color: var(--ink-2);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* An ingredient the recipe has lost since the procedure was written: it keeps its place and says it is gone. */
+.gone .name {
+  color: var(--ink-3);
+  font-style: italic;
+  font-weight: 500;
+}
+
+/* The mixer speed comes BEFORE the clock: it is an instruction, the countdown is something you glance at. */
+.speed {
+  display: flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: var(--s2);
+  margin: 0;
+  padding: var(--s2) var(--s4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+}
+
+/* This step runs at a different gear from the last: marked for as long as the step lasts. */
+.speedChanged {
+  border-color: var(--warn);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+/* The announcement happens once, as the badge is drawn anew with the step. */
+@keyframes flash {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(1.12); }
+  60% { transform: scale(1); }
+}
+
+.speedChanged {
+  animation: flash 700ms var(--ease) 2;
+}
+
+.clock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.time {
+  font-family: var(--mono);
+  font-size: calc(var(--fs-3xl) * 1.4);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.dueText {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  color: var(--warn-ink);
+  font-size: var(--fs-xl);
+  font-weight: 700;
+}
+
+.dueText svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* The buttons: the one next action fills the width and is as tall as a stepper. */
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.actions .go {
+  width: 100%;
+  min-height: var(--hit-lg);
+  font-size: var(--fs-lg);
+}
+
+.actions .go svg {
+  width: 24px;
+  height: 24px;
+}
+
+.actions .small {
+  flex: 1 1 140px;
+  min-height: var(--hit-lg);
+  font-size: var(--fs-md);
+}
+
+.adjust {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+
+/* The honest line under the buttons: what this phone can do about the screen going dark. */
+.note {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* The last screen. */
+.done {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin: 0;
+  color: var(--ok-ink);
+  font-size: var(--fs-2xl);
+  font-weight: 700;
+}
+
+.done svg {
+  width: 28px;
+  height: 28px;
+}
+
+.done:focus {
+  outline: none;
+}
+
+.done:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 4px;
+  border-radius: var(--r-sm);
+}
+
+.endNote {
+  margin: 0;
+  font-size: var(--fs-xl);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* What no step ever mentioned: a warning in words and in colour. */
+.missed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.missedTitle {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 700;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .speedChanged {
+    animation: none;
+  }
+}

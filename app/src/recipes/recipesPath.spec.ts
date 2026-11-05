@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALLERGENS_PATH, NEW_PATH, RECIPES_PATH, SETTINGS_PATH, editPath, labelPath, parseRecipesPath, recipePath, resolveRecipesPath } from './recipesPath';
+import { ALLERGENS_PATH, NEW_PATH, RECIPES_PATH, SETTINGS_PATH, editPath, labelPath, mixPath, parseRecipesPath, recipePath, resolveRecipesPath, stepsPath } from './recipesPath';
 
 describe('the addresses of the Recipe catalogue', () => {
   it('has the list at /recipes and a recipe at /recipes/<id>', () => {
@@ -103,5 +103,49 @@ describe('the editor addresses (step 3d-6)', () => {
     expect(parseRecipesPath('/%/edit')).toEqual({ kind: 'unknown' });
     expect(parseRecipesPath('/abc/Edit')).toEqual({ kind: 'unknown' });
     expect(parseRecipesPath('/abc/edit/x')).toEqual({ kind: 'unknown' });
+  });
+});
+
+describe('the mixing steps address (step 3d-8)', () => {
+  it('has the steps of a recipe at /recipes/<id>/steps, the id written whole and read back whole', () => {
+    expect(stepsPath('abc')).toBe('/recipes/abc/steps');
+    expect(parseRecipesPath('/abc/steps')).toEqual({ kind: 'steps', id: 'abc' });
+    expect(parseRecipesPath('/abc/steps/')).toEqual({ kind: 'steps', id: 'abc' });
+    for (const id of ['a/b c', '100%', 'é', 'x?y#z']) {
+      expect(parseRecipesPath(stepsPath(id).slice(RECIPES_PATH.length))).toEqual({ kind: 'steps', id });
+    }
+    expect(resolveRecipesPath('/abc/steps')).toEqual({ view: { kind: 'steps', id: 'abc' } });
+  });
+
+  it('keeps the reserved words and bad ids out of the steps address', () => {
+    for (const word of ['new', 'allergens', 'settings', 'photo']) {
+      expect(parseRecipesPath(`/${word}/steps`), word).toEqual({ kind: 'unknown' });
+    }
+    expect(parseRecipesPath('/%/steps')).toEqual({ kind: 'unknown' });
+    expect(parseRecipesPath('/abc/Steps')).toEqual({ kind: 'unknown' });
+    expect(parseRecipesPath('/abc/step')).toEqual({ kind: 'unknown' });
+    expect(parseRecipesPath('/abc/steps/x')).toEqual({ kind: 'unknown' });
+  });
+});
+
+describe('the guided mix address (step 3d-8, slice B)', () => {
+  it('has the run of a recipe at /recipes/<id>/mix, the id written whole and read back whole', () => {
+    expect(mixPath('abc')).toBe('/recipes/abc/mix');
+    expect(parseRecipesPath('/abc/mix')).toEqual({ kind: 'mix', id: 'abc' });
+    expect(parseRecipesPath('/abc/mix/')).toEqual({ kind: 'mix', id: 'abc' });
+    for (const id of ['a/b c', '100%', 'é', 'x?y#z']) {
+      expect(parseRecipesPath(mixPath(id).slice(RECIPES_PATH.length))).toEqual({ kind: 'mix', id });
+    }
+    expect(resolveRecipesPath('/abc/mix')).toEqual({ view: { kind: 'mix', id: 'abc' } });
+  });
+
+  it('keeps the reserved words and bad ids out of the mix address', () => {
+    for (const word of ['new', 'allergens', 'settings', 'photo']) {
+      expect(parseRecipesPath(`/${word}/mix`), word).toEqual({ kind: 'unknown' });
+    }
+    expect(parseRecipesPath('/%/mix')).toEqual({ kind: 'unknown' });
+    expect(parseRecipesPath('/abc/Mix')).toEqual({ kind: 'unknown' });
+    expect(parseRecipesPath('/abc/mixes')).toEqual({ kind: 'unknown' });
+    expect(parseRecipesPath('/abc/mix/x')).toEqual({ kind: 'unknown' });
   });
 });
