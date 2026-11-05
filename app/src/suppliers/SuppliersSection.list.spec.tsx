@@ -219,11 +219,60 @@ describe('the ingredients and packaging lists', () => {
     expect(main().getByText(/al pezzo/).textContent?.replace(/ /g, ' ')).toBe('Zed · 0,35 € al pezzo');
   });
 
-  it('tags a switched-off item with a word as well as dimming it', async () => {
-    const source = seeded({ ingredients: [item('i-a', { name: 'Anise', supplierId: 's-zed', active: false }), item('i-b', { name: 'Basil', supplierId: 's-zed' })] });
-    await loaded('/suppliers', source);
-    expect(within(main().getByText('Anise').closest('li') as HTMLElement).getByText('Switched off')).toBeInTheDocument();
-    expect(within(main().getByText('Basil').closest('li') as HTMLElement).queryByText('Switched off')).not.toBeInTheDocument();
+  describe('«Not in use»: the items switched off with «Not in use at the moment» (3e-5b)', () => {
+    const OFF = [
+      item('i-a', { name: 'Anise', supplierId: 's-zed', active: false }),
+      item('i-b', { name: 'Basil', supplierId: 's-zed' }),
+      item('i-c', { name: 'Cumin', supplierId: 's-zed', active: false }),
+    ];
+    const groupOf = () => main().getByText('Not in use (2)').closest('details') as HTMLDetailsElement;
+
+    it('puts them at the bottom, in a FOLDED group «Not in use (N)», dimmed, with no «Switched off» tag on the row', async () => {
+      await loaded('/suppliers', seeded({ ingredients: OFF }));
+      const group = groupOf();
+      expect(group.open).toBe(false);
+      expect(within(group).getAllByRole('listitem').map(row => row.textContent?.slice(0, 5))).toEqual(['Anise', 'Cumin']);
+      expect(within(group).queryByText('Switched off')).not.toBeInTheDocument();
+      expect(main().getByText('Anise').closest('button')).toHaveAttribute('data-off', 'true');
+      const rows = main().getAllByRole('listitem').map(row => row.textContent?.slice(0, 5));
+      expect(rows).toEqual(['Basil', 'Anise', 'Cumin']);
+      expect(group.previousElementSibling, 'the active rows come first').toBe(main().getByText('Basil').closest('ul'));
+    });
+
+    it('draws no group when nothing is switched off', async () => {
+      await loaded();
+      expect(main().queryByText(/^Not in use/)).not.toBeInTheDocument();
+    });
+
+    it('a search that finds a switched-off item opens the group by itself; the «no match» sentence needs NEITHER part to match', async () => {
+      const { user } = await loaded('/suppliers', seeded({ ingredients: OFF }));
+      await user.type(search(), 'anis');
+      await waitFor(() => { expect((main().getByText('Not in use (1)').closest('details') as HTMLDetailsElement).open).toBe(true); });
+      expect(main().queryByText('Basil')).not.toBeInTheDocument();
+      await user.clear(search());
+      await user.type(search(), 'zzzz');
+      await waitFor(() => { expect(main().getByText('No ingredient matches your search.')).toBeInTheDocument(); });
+      expect(main().queryByText(/^Not in use/)).not.toBeInTheDocument();
+    });
+
+    it('the group stays where the person leaves it: opened, it is not closed by a snapshot', async () => {
+      const source = seeded({ ingredients: OFF });
+      const { user } = await loaded('/suppliers', source);
+      await user.click(main().getByText('Not in use (2)'));
+      expect(groupOf().open).toBe(true);
+      act(() => { source.push(); });
+      expect(groupOf().open).toBe(true);
+    });
+
+    it('opens by itself when the item open beside the list is switched off', async () => {
+      await loaded('/suppliers/ingredient/i-a', seeded({ ingredients: OFF }));
+      expect(groupOf().open).toBe(true);
+    });
+
+    it('says it in Italian', async () => {
+      await loaded('/suppliers', seeded({ ingredients: OFF }), { lang: 'it', session: { language: 'it' } });
+      expect(main().getByText('Non in uso (2)')).toBeInTheDocument();
+    });
   });
 
   describe('the «not declared» word', () => {

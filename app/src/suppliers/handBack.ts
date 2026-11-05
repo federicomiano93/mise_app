@@ -61,6 +61,15 @@ const NOTHING: HandBack = {
   focus: () => false,
 };
 
+// ⚠️ A ROW IN A FOLDED GROUP («Not in use», 3e-5b) CANNOT TAKE THE FOCUS while its <details> is closed: it is opened first, and
+// its own toggle event tells the list, whose open state follows. Without it a just-switched-off item's Save left the focus at the
+// top of the page (found driving it at 1024/360/296).
+function reveal(node: HTMLElement): HTMLElement {
+  const group = node.closest('details');
+  if (group && !group.open) group.open = true;
+  return node;
+}
+
 const HandBackContext = createContext<HandBack>(NOTHING);
 export const HandBackProvider = HandBackContext.Provider;
 
@@ -78,10 +87,29 @@ export function useHandBackState(deletions: SupplierDeletions): HandBack {
   const wanted = useRef<string | null>(null);
   const editOf = useRef<string | null>(null);
   const onSupplier = useRef<{ supplierId: string; opener: string } | null>(null);
+  // The opener whose row went away while it held the focus, until the end of that commit.
+  const moving = useRef<string | null>(null);
   return useMemo<HandBack>(() => ({
     register(name, node) {
-      if (node) openers.current.set(name, node);
-      else openers.current.delete(name);
+      if (node) {
+        openers.current.set(name, node);
+        // ⚠️ A ROW THAT MOVES KEEPS THE FOCUS (3e-5b): an item switched off goes from the list into the «Not in use» group (and
+        // back), which is a NEW element in the same commit. Measured at 1024: Back handed the focus to the row, the store's
+        // answer then moved it, and the focus fell to the top of the page.
+        if (moving.current === name) {
+          moving.current = null;
+          reveal(node).focus();
+        }
+      } else {
+        // React lets go of the ref before it takes the element out, so the element still knows it has the focus.
+        const old = openers.current.get(name);
+        if (old !== undefined && old === document.activeElement) {
+          moving.current = name;
+          // Only a row drawn again in the SAME commit is the same row moving: anything later is a different story.
+          queueMicrotask(() => { if (moving.current === name) moving.current = null; });
+        }
+        openers.current.delete(name);
+      }
     },
     expect(name) {
       wanted.current = name;
@@ -108,7 +136,7 @@ export function useHandBackState(deletions: SupplierDeletions): HandBack {
     },
     focus(name) {
       const node = openers.current.get(name);
-      node?.focus();
+      if (node) reveal(node).focus();
       return node !== undefined;
     },
     deliver() {
@@ -118,7 +146,7 @@ export function useHandBackState(deletions: SupplierDeletions): HandBack {
       const deleted = name.startsWith(OPENER_PREFIX) && deletions.has(name.slice(OPENER_PREFIX.length));
       const row = deleted ? undefined : openers.current.get(name);
       if (row) {
-        row.focus();
+        reveal(row).focus();
         return;
       }
       // ⚠️ A SUPPLIER THAT WAS DELETED HAS NO ROW ANY MORE. If the focus fell to the page with the screen

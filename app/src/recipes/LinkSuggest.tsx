@@ -29,7 +29,7 @@ type Options = {
 };
 
 type Entry =
-  | { kind: 'item'; id: string; chosen: Chosen; name: string; meta: string; linked: boolean }
+  | { kind: 'item'; id: string; chosen: Chosen; name: string; meta: string; linked: boolean; inactive: boolean }
   | { kind: 'all'; id: 'all'; total: number }
   | { kind: 'create'; id: 'create'; name: string };
 
@@ -60,7 +60,7 @@ export function useLinkSuggest({
   const [active, setActive] = useState(-1);
 
   const found = open
-    ? suggestLinks({ ingredients, recipes, suppliers, query: value, excludeRecipeId, linked })
+    ? suggestLinks({ ingredients, recipes, suppliers, query: value, excludeRecipeId, linked, inactiveLast: true })
     : { items: [], total: 0 };
   const entries: Entry[] = found.items.map(item => ({
     kind: 'item',
@@ -70,11 +70,12 @@ export function useLinkSuggest({
     // ⚠️ NO PRICE: the catalogue shows no money.
     meta: item.kind === 'recipe' ? t('cat.recipe') : [item.weight, item.supplierName].filter(Boolean).join(LINK_SEPARATOR),
     linked: item.linked,
+    inactive: item.inactive === true,
   }));
   if (found.total > found.items.length) entries.push({ kind: 'all', id: 'all', total: found.total });
   // ⚠️ THE LAST ROW, AFTER «See all», AND IT MAY BE THE ONLY ONE: only for a name the records do not hold (the same set the chooser
-  // offers: a switched-off ingredient or packaging does not count), and only where the person may add records.
-  if (open && mayCreate && value.trim() !== '' && !nameTaken(ingredients, value)) entries.push({ kind: 'create', id: 'create', name: value.trim() });
+  // offers: a switched-off ingredient counts, a box does not), and only where the person may add records.
+  if (open && mayCreate && value.trim() !== '' && !nameTaken(ingredients, value, { inactiveLast: true })) entries.push({ kind: 'create', id: 'create', name: value.trim() });
   const shown = entries.length > 0;
   const activeEntry = active >= 0 && active < entries.length ? active : -1;
 
@@ -131,6 +132,8 @@ export function useLinkSuggest({
               <span className={styles.name}>{entry.name}</span>
               {' '}
               {entry.meta === '' ? null : <span className={styles.meta}>{entry.meta}</span>}
+              {/* 3e-5b: a switched-off ingredient is offered last and says so in a word (never by colour alone). */}
+              {entry.inactive ? <>{entry.meta === '' ? null : ' '}<span className={styles.meta}>{t('ui.notInUse')}</span></> : null}
               {entry.linked ? (
                 <span className={styles.linked}>
                   <Check aria-hidden="true" />

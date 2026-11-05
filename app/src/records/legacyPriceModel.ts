@@ -12,7 +12,7 @@ import { supplierToSave } from '@mise/shared/record-choices';
 import { vatRatesFor } from '@mise/shared/vat-rates';
 import type { MessageKey } from '../i18n/en';
 import type { MessageParams } from '../i18n/i18n';
-import { NEW_CHOICE, PACK_WORD_MAX, choiceIsBlankNew, readChoice, weightText } from './ingredientCardModel';
+import { NEW_CHOICE, PACK_WORD_MAX, activePatch, choiceIsBlankNew, readChoice, weightText } from './ingredientCardModel';
 import type { CardKind, ChoiceState, ItemLike, Working } from './ingredientCardModel';
 import { sharedTranslate } from './priceCardModel';
 
@@ -404,7 +404,7 @@ export function buildLegacySave({ working, product, item, kind, startSupplierId 
     category: readChoice(working.category) || 'Other',
     unit: readChoice(product.unit).slice(0, UNIT_MAX),
     ...(packUnit || storedPack ? { packUnit } : {}),
-    active: item.active !== false,
+    ...activePatch(working, item),
     kind,
   };
 }

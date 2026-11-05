@@ -64,6 +64,16 @@ export interface Working {
   readonly inner: ChoiceState;
   // The package word «Case» picked for itself, taken back when the person returns to «Single» having chosen nothing (C51).
   readonly innerAutoSet: boolean;
+  // «Not in use at the moment» (3e-5b): the switch is ON when the item is stored with `active: false`.
+  readonly notInUse: boolean;
+}
+
+// The `active` key Save sends. A NEW item is written active unless its switch was set. ⚠️ AN EXISTING ITEM SENDS IT ONLY WHEN THE
+// SWITCH MOVED since the card opened: the write is a merge, so a switch moved on another phone meanwhile is not undone by an old
+// copy (the same reasoning as the suppliers' Save).
+export function activePatch(working: Working, item: ItemLike | null): { active?: boolean } {
+  if (!item) return { active: !working.notInUse };
+  return working.notInUse !== (item.active === false) ? { active: !working.notInUse } : {};
 }
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -125,6 +135,7 @@ export function workingFrom(item: ItemLike | null, { supplierIds, preset, mayPri
     count: opened.count === null ? '' : String(opened.count),
     inner: { choice: opened.inner, typed: '' },
     innerAutoSet: false,
+    notInUse: item?.active === false,
   };
 }
 
@@ -168,7 +179,7 @@ function comparable(working: Working) {
   return [
     working.name, working.shortName, working.supplierId, working.brand, choice(working.category),
     working.weight.amount, working.weight.unit, working.weight.legacy,
-    working.format, working.count, choice(working.inner),
+    working.format, working.count, choice(working.inner), working.notInUse,
   ];
 }
 
@@ -266,7 +277,7 @@ export function buildSave({ working, item, kind, lang, startSupplierId, mayPrice
     // A NEW item gets an empty order unit, or — a loose item priced by the kilo, litre or piece — that word (parity C55).
     ...(item ? {} : { unit: looseWord }),
     ...formatKeys,
-    active: item ? item.active !== false : true,
+    ...activePatch(working, item),
     kind,
   };
   return { payload, unitChangedFrom: replacedUnit(item, payload, state, cartonWord, options) };

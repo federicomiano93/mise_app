@@ -23,6 +23,7 @@ import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { FormDialog } from '../ui/FormDialog';
+import { SettingSwitch } from '../ui/SettingSwitch';
 import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import {
@@ -912,6 +913,23 @@ export function IngredientCard({
             nutrientBoxes={nutrientBoxes}
             controls={allergenControls}
           />
+        ) : null}
+
+        {/* «Not in use at the moment» (3e-5b): an EXISTING item only, edited on the working copy like every other field and
+            written by Save. Switched on, the item goes to the bottom of the lists and the pickers show it last; it never hides. */}
+        {opened ? (
+          <div className={styles.switchField}>
+            <div className={styles.switchRow}>
+              <span id={id('not-in-use')} className={styles.switchName}>{t('sup.ing.notInUse')}</span>
+              <SettingSwitch
+                selected={working.notInUse}
+                onChange={notInUse => { update({ ...workingRef.current, notInUse }); }}
+                labelledBy={id('not-in-use')}
+                describedBy={id('not-in-use-hint')}
+              />
+            </div>
+            <span id={id('not-in-use-hint')} className={styles.hint}>{t('sup.ing.notInUseHint')}</span>
+          </div>
         ) : null}
 
         {/* ⚠️ THE BIN: only for an existing item and only when the screen hands the delete in (it does so to whoever runs the

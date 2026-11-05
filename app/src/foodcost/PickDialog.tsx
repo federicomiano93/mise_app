@@ -51,6 +51,20 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
   const [query, setQuery] = useState(initialQuery);
 
   const options = useMemo(() => {
+    const named = (item: (typeof ingredients)[string]): boolean => String(item.name ?? '').trim() !== '';
+    const ingredientOption = (item: (typeof ingredients)[string]): Option => ({
+      id: item.id,
+      name: ingredientDisplayName(item).trim(),
+      invoiceName: String(item.name).trim(),
+      meta: String(item.weight ?? '').trim(),
+    });
+    const packagingOption = (item: (typeof ingredients)[string]): Option => {
+      const each = item.priceUnit === 'pcs' ? Number(item.pricePerUnit) : null;
+      const meta = each ? t('fc.priceEach', { price: formatRate(each, money) })
+        : pricePerKg(item) !== null ? t('fc.pricedByWeight')
+          : t('fc.notPriced');
+      return { id: item.id, name: ingredientDisplayName(item).trim(), invoiceName: String(item.name).trim(), meta };
+    };
     const recipeOptions: Option[] = Object.values(recipes)
       .filter(recipe => String(recipe.name ?? '').trim() !== '')
       .map(recipe => ({ id: recipe.id, name: String(recipe.name).trim(), invoiceName: '', meta: '' }))
@@ -58,28 +72,27 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
 
     // Active, named, and never packaging: that has its own section.
     const ingredientOptions: Option[] = Object.values(ingredients)
-      .filter(item => item.active !== false && !isPackaging(item) && String(item.name ?? '').trim() !== '')
-      .map(item => ({
-        id: item.id,
-        name: ingredientDisplayName(item).trim(),
-        invoiceName: String(item.name).trim(),
-        meta: String(item.weight ?? '').trim(),
-      }))
+      .filter(item => item.active !== false && !isPackaging(item) && named(item))
+      .map(ingredientOption)
       .sort(byName);
 
     // Counted in pieces, so anything priced another way is shown but flagged.
     const packagingOptions: Option[] = Object.values(ingredients)
-      .filter(item => item.active !== false && isPackaging(item) && String(item.name ?? '').trim() !== '')
-      .map(item => {
-        const each = item.priceUnit === 'pcs' ? Number(item.pricePerUnit) : null;
-        const meta = each ? t('fc.priceEach', { price: formatRate(each, money) })
-          : pricePerKg(item) !== null ? t('fc.pricedByWeight')
-            : t('fc.notPriced');
-        return { id: item.id, name: ingredientDisplayName(item).trim(), invoiceName: String(item.name).trim(), meta };
-      })
+      .filter(item => item.active !== false && isPackaging(item) && named(item))
+      .map(packagingOption)
       .sort(byName);
 
-    return { recipeOptions, ingredientOptions, packagingOptions };
+    // 3e-5b: the ones switched off with «Not in use at the moment» are offered LAST, never hidden.
+    const inactiveIngredientOptions: Option[] = Object.values(ingredients)
+      .filter(item => item.active === false && !isPackaging(item) && named(item))
+      .map(ingredientOption)
+      .sort(byName);
+    const inactivePackagingOptions: Option[] = Object.values(ingredients)
+      .filter(item => item.active === false && isPackaging(item) && named(item))
+      .map(packagingOption)
+      .sort(byName);
+
+    return { recipeOptions, ingredientOptions, packagingOptions, inactiveIngredientOptions, inactivePackagingOptions };
   }, [recipes, ingredients, t, money]);
 
   const wanted = normalizeSearchText(query);
@@ -88,19 +101,29 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
     || normalizeSearchText(option.invoiceName).includes(wanted);
 
   const both = mode === 'line';
-  const sections: { heading: string; kind: Choice['kind']; items: Option[] }[] = [];
+  const sections: { key: string; heading: string; kind: Choice['kind']; items: Option[] }[] = [];
   if (mode === 'recipe' || both) {
     sections.push({
+      key: 'recipe',
       heading: both ? t('ui.recipes') : '',
       kind: 'recipe',
       items: options.recipeOptions.filter(matches).map(option => ({ ...option, meta: both ? t('fc.recipeWord') : '' })),
     });
   }
   if (mode === 'ingredient' || both) {
-    sections.push({ heading: both ? t('fc.ingredients') : '', kind: 'ingredient', items: options.ingredientOptions.filter(matches) });
+    sections.push({ key: 'ingredient', heading: both ? t('fc.ingredients') : '', kind: 'ingredient', items: options.ingredientOptions.filter(matches) });
   }
   if (mode === 'packaging') {
-    sections.push({ heading: '', kind: 'packaging', items: options.packagingOptions.filter(matches) });
+    sections.push({ key: 'packaging', heading: '', kind: 'packaging', items: options.packagingOptions.filter(matches) });
+  }
+  // The switched-off ones come after everything else, under their own heading, and are chosen like any other. Each row says it
+  // too: a keyboard or screen-reader user tabs past the heading.
+  const markedOff = (option: Option): Option => ({ ...option, meta: [option.meta, t('ui.notInUse')].filter(Boolean).join(' · ') });
+  if (mode === 'ingredient' || both) {
+    sections.push({ key: 'ingredient-off', heading: t('ui.notInUse'), kind: 'ingredient', items: options.inactiveIngredientOptions.filter(matches).map(markedOff) });
+  }
+  if (mode === 'packaging') {
+    sections.push({ key: 'packaging-off', heading: t('ui.notInUse'), kind: 'packaging', items: options.inactivePackagingOptions.filter(matches).map(markedOff) });
   }
   const shown = sections.reduce((count, section) => count + section.items.length, 0);
   const emptyText = query.trim() !== '' ? t('fc.nothingMatches')
@@ -125,7 +148,7 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
       />
       <div className={styles.list}>
         {sections.map(section => (section.items.length === 0 ? null : (
-          <section key={section.kind} className={styles.section}>
+          <section key={section.key} className={styles.section}>
             {section.heading === '' ? null : <h3 className={styles.heading}>{section.heading}</h3>}
             <ul className={styles.rows}>
               {section.items.map(option => (

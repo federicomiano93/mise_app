@@ -1,8 +1,8 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
-import { halfPricedRecipe, editorSource, recipe, unpricedRecipe } from '../testing/foodcostEditorFixtures';
-import { bareProduct, LOAD, product, renderFoodcost } from '../testing/renderFoodcost';
+import { halfPricedRecipe, editorSource, recipe, unpricedRecipe, SALT, INACTIVE } from '../testing/foodcostEditorFixtures';
+import { bareProduct, FLOUR, LOAD, product, renderFoodcost } from '../testing/renderFoodcost';
 
 // The lines of a product: the chooser, the notes under each line, the name's suggestions, packaging and
 // the weighings.
@@ -117,6 +117,19 @@ describe('the chooser', () => {
     expect(within(madeOf()).queryByRole('button', { name: 'Change: Flour' })).not.toBeInTheDocument();
   });
 
+  it('puts an ingredient switched off LAST under «Not in use», after the recipes and the others, and picks it (3e-5b)', async () => {
+    const stale = { id: 'sugar', name: 'Sugar', active: false, unit: 'kg', weight: '5 kg' };
+    const source = editorSource([product('Green')], { recipes: [recipe('Dough')], ingredients: [FLOUR, SALT, stale, INACTIVE] });
+    const { user } = await open('/food-cost/product/Green', source);
+    await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe or ingredient' }));
+    const dialog = await chooser();
+    expect(within(dialog).getAllByRole('heading', { level: 3 }).map(node => node.textContent)).toEqual(['Recipes', 'Ingredients', 'Not in use']);
+    const section = within(dialog).getByRole('heading', { level: 3, name: 'Not in use' }).closest('section') as HTMLElement;
+    expect(within(section).getAllByRole('listitem').map(item => item.textContent)).toEqual(['Sugar5 kg · Not in use']);
+    await user.click(within(section).getByRole('button', { name: /^Sugar/ }));
+    expect(within(madeOf()).getByRole('button', { name: 'Change: Sugar' })).toBeInTheDocument();
+  });
+
   it('says there are no recipes yet, and no packaging yet', async () => {
     const { user } = await open('/food-cost/new', editorSource([], { ingredients: [] }));
     await user.click(within(madeOf()).getByRole('button', { name: '+ Add recipe' }));
@@ -129,12 +142,18 @@ describe('the chooser', () => {
 });
 
 describe('packaging', () => {
-  it('offers only packaging, flags what is not priced by the piece, and leaves out what is inactive', async () => {
+  it('offers packaging, flags what is not priced by the piece, and puts what is inactive LAST under «Not in use»', async () => {
     const { user } = await open('/food-cost/product/Green', editorSource([product('Green')]));
     await user.click(within(packaging()).getByRole('button', { name: '+ Add packaging' }));
     const dialog = await chooser();
     expect(within(dialog).getByRole('heading', { level: 2, name: 'Choose packaging' })).toBeInTheDocument();
-    expect(optionNames(dialog)).toEqual(['Box£0.25 each', 'Ribbonpriced by weight', 'Tissuenot priced']);
+    expect(optionNames(dialog)).toEqual(['Box£0.25 each', 'Ribbonpriced by weight', 'Tissuenot priced', 'Old tinnot priced · Not in use']);
+    const headings = within(dialog).getAllByRole('heading', { level: 3 });
+    expect(headings.map(node => node.textContent)).toEqual(['Not in use']);
+    const section = headings[0]!.closest('section') as HTMLElement;
+    expect(within(section).getAllByRole('listitem').map(item => item.textContent)).toEqual(['Old tinnot priced · Not in use']);
+    await user.click(within(section).getByRole('button', { name: /^Old tin/ }));
+    expect(within(packaging()).getByRole('button', { name: /Old tin/ })).toBeInTheDocument();
   });
 
   it('adds a line counted in pieces per unit sold, and says what that line costs', async () => {

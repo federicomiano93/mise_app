@@ -36,6 +36,11 @@
 //     (`cat.unitText.pcs|tsp|tbsp|pinch|toTaste`), or null for a metric symbol and anything unknown, which the
 //     original hands back untouched — so the app writes `key ? t(key) : unit`.
 //
+// ADDED (Mise 2 only, slice 3e-5b «Not in use at the moment»): the option `inactiveLast` of `linkOptions`,
+// `suggestLinks` and `nameTaken`. Mise 2 never hides a switched-off (`active === false`) food ingredient: the
+// pickers show it LAST. Without the option every function answers exactly as js/ does (inactive left out, and no
+// extra key in the output), which the both-files tests still pin.
+//
 // PRIVATE, ported only because something above calls them and not exported: `normalizeIngredient(s)` (the
 // row normaliser), `fixRounding`, `matchRank`, `bestRank`, and a copy of `supplierLabel` of
 // js/supplier-label.js (pure, three lines; there is no shared port of that file yet).
@@ -216,24 +221,31 @@ export interface LinkOptionsInput {
   suppliers?: unknown;
   query?: unknown;
   excludeRecipeId?: unknown;
+  // NEW IN MISE 2 (3e-5b): also answer `inactive`, the switched-off food ingredients. Absent = as js/.
+  inactiveLast?: boolean;
 }
 
 // The things a recipe row can be linked to, filtered by what was typed. Ingredients first, because they
 // are what almost every row is. Deactivated ones are left out — they are not orderable, so building a
 // live cost on one would be building on something the kitchen has stopped buying.
 //
+// ⚠️ NEW IN MISE 2 (3e-5b): with `inactiveLast` the switched-off FOOD ingredients (never packaging) come back too,
+// in `inactive`: same mapping, same query match, same sort as `ingredients`, for the picker to draw LAST. Without
+// the option the returned object has no `inactive` key at all.
+//
 // `excludeRecipeId` keeps a recipe out of its own picker. The cost model catches a cycle anyway, but
 // offering the choice and then refusing it is a worse screen than never offering it.
-export function linkOptions({ ingredients, recipes, suppliers, query, excludeRecipeId }: LinkOptionsInput = {}): { ingredients: LinkOption[]; recipes: LinkOption[] } {
+export function linkOptions({ ingredients, recipes, suppliers, query, excludeRecipeId, inactiveLast }: LinkOptionsInput = {}): { ingredients: LinkOption[]; recipes: LinkOption[]; inactive?: LinkOption[] } {
   const q = normalizeSearchText(query);
   const matches = (...fields: unknown[]): boolean => !q || fields.some(f => normalizeSearchText(f).includes(q));
   const supplierName = (id: unknown): string => supplierLabel(suppliers && (suppliers as Record<string, unknown>)[id as string]);
 
   type Card = { id?: unknown; name?: unknown; shortName?: unknown; weight?: unknown; supplierId?: unknown; active?: unknown; kind?: unknown };
-  const ingredientList = (Object.values(ingredients || {}) as Card[])
+  const foodCards = (Object.values(ingredients || {}) as Card[])
     // ⚠️ PACKAGING IS NOT AN INGREDIENT (13 Sep 2026): a box filed under «Imballaggi» in Fornitori e
     // ingredienti has no allergens to declare and no place in a recipe.
-    .filter(ing => ing && ing.active !== false && ing.kind !== 'packaging')
+    .filter(ing => ing && ing.kind !== 'packaging');
+  const optionsOf = (cards: readonly Card[]): LinkOption[] => cards
     .map((ing): LinkOption => ({
       id: ing.id,
       // `name` stays the invoice name (what the chooser hands back, and the fallback for a row's name);
@@ -247,6 +259,7 @@ export function linkOptions({ ingredients, recipes, suppliers, query, excludeRec
     }))
     .filter(row => row.name && matches(row.name, row.shortName, row.weight, row.supplierName))
     .sort((a, b) => (a.displayName as string).localeCompare(b.displayName as string) || String(a.id).localeCompare(String(b.id)));
+  const ingredientList = optionsOf(foodCards.filter(ing => ing.active !== false));
 
   type RecipeCard = { id?: unknown; name?: unknown };
   const recipeList = ((Array.isArray(recipes) ? recipes : Object.values(recipes || {})) as RecipeCard[])
@@ -255,6 +268,7 @@ export function linkOptions({ ingredients, recipes, suppliers, query, excludeRec
     .map((r): LinkOption => ({ id: r.id, name: String(r.name).trim() }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  if (inactiveLast) return { ingredients: ingredientList, recipes: recipeList, inactive: optionsOf(foodCards.filter(ing => ing.active === false)) };
   return { ingredients: ingredientList, recipes: recipeList };
 }
 
@@ -296,6 +310,8 @@ export interface SuggestOptions {
   excludeRecipeId?: unknown;
   linked?: { kind?: unknown; refId?: unknown } | null;
   limit?: unknown;
+  // NEW IN MISE 2 (3e-5b): add the switched-off food ingredients LAST. Absent = as js/.
+  inactiveLast?: boolean;
 }
 
 export interface SuggestedLink {
@@ -306,6 +322,8 @@ export interface SuggestedLink {
   weight: string;
   supplierName: string;
   linked: boolean;
+  // NEW IN MISE 2 (3e-5b): set ONLY on a switched-off ingredient (and only with `inactiveLast`).
+  inactive?: true;
 }
 
 // ⚠️ THE NAME ONLY, never the supplier or the pack weight the full chooser also searches. This list
@@ -314,15 +332,17 @@ export interface SuggestedLink {
 // ⚠️ INGREDIENTS BEFORE RECIPES, whatever the ranking — they are what almost every row is — and nothing
 // below two characters, when a single letter matches half the catalogue. `total` counts every match, so
 // the screen can offer the rest.
+// ⚠️ NEW IN MISE 2 (3e-5b): with `inactiveLast` the order is active ingredients · recipes · switched-off ingredients
+// (each part ranked), the last ones marked `inactive: true`; `limit` and `total` count all of them.
 export function suggestLinks({
-  ingredients, recipes, suppliers, query, excludeRecipeId, linked = null, limit = SUGGEST_LIMIT,
+  ingredients, recipes, suppliers, query, excludeRecipeId, linked = null, limit = SUGGEST_LIMIT, inactiveLast,
 }: SuggestOptions = {}): { items: SuggestedLink[]; total: number } {
   const q = normalizeSearchText(query);
   if (q.length < SUGGEST_MIN_CHARS) return { items: [], total: 0 };
   const max = Number.isFinite(Number(limit)) && Number(limit) >= 1 ? Math.floor(Number(limit)) : SUGGEST_LIMIT;
 
   // The same candidates as the full chooser: active ingredients, never this recipe.
-  const all = linkOptions({ ingredients, recipes, suppliers, query: '', excludeRecipeId });
+  const all = linkOptions({ ingredients, recipes, suppliers, query: '', excludeRecipeId, inactiveLast });
   const ranked = (list: readonly LinkOption[], kind: RowKind): SuggestedLink[] => list
     .map(opt => ({ opt, rank: bestRank(opt, q) }))
     .filter(entry => entry.rank >= 0)
@@ -338,7 +358,11 @@ export function suggestLinks({
       linked: !!linked && linked.kind === kind && linked.refId === opt.id,
     }));
 
-  const every = [...ranked(all.ingredients, 'ingredient'), ...ranked(all.recipes, 'recipe')];
+  const every = [
+    ...ranked(all.ingredients, 'ingredient'),
+    ...ranked(all.recipes, 'recipe'),
+    ...ranked(all.inactive ?? [], 'ingredient').map((entry): SuggestedLink => ({ ...entry, inactive: true })),
+  ];
   return { items: every.slice(0, max), total: every.length };
 }
 
@@ -420,10 +444,12 @@ export function moveRow<T>(list: readonly T[] | null | undefined, from: unknown,
 // ⚠️ THE SAME SET linkOptions() offers. Counting a switched-off ingredient or a box here withheld the «create»
 // row while the list above offered nothing: a dead end with no reason given. `ingredients` is the store's map
 // by id, or a list.
-export function nameTaken(ingredients: unknown, name: unknown): boolean {
+// ⚠️ NEW IN MISE 2 (3e-5b): with `{ inactiveLast: true }` a switched-off food ingredient counts too, because that
+// is the set linkOptions({ inactiveLast }) offers (in `inactive`).
+export function nameTaken(ingredients: unknown, name: unknown, { inactiveLast = false }: { inactiveLast?: boolean } = {}): boolean {
   const wanted = String(name ?? '').trim().toLowerCase();
   return (Object.values(ingredients || {}) as ({ name?: unknown; shortName?: unknown; active?: unknown; kind?: unknown } | null)[])
-    .some(ing => ing && ing.active !== false && ing.kind !== 'packaging'
+    .some(ing => ing && (inactiveLast || ing.active !== false) && ing.kind !== 'packaging'
       && [ing.name, ing.shortName].some(v => String(v ?? '').trim().toLowerCase() === wanted));
 }
 
