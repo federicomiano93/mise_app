@@ -2782,6 +2782,47 @@ async function roles() {
   await expectAllowed('staff can still type quantities into the draft', () =>
     mergeWrite(`${L}/drafts/current`, { ...stamp, updatedAt: 'now' }, asAccount(SAM)));
 
+  // ── Mise 2's recipe save (step 3d-6, app/src/recipes/recipesSource.ts saveRecipeDoc) ──
+  // It writes the catalogue's hand-listed fields by MERGE — name, ingredients (rows with
+  // their links and row ids), the label's net weight — and an emptied shelf life as a
+  // REMOVAL (deleteField: the path in the mask, not in the body). It never sends the
+  // oven loss Food cost weighed, nor the mixing steps (their editor is a later step):
+  // the merge must leave all of them standing, and the whitelist must still pass with
+  // them in the stored document.
+  await seedDoc(`${L}/recipes/R3`, {
+    ...stamp, name: 'Focaccia', ingredients: [{ label: 'Flour', grams: 1000, unit: 'g', rid: 'rabc12345' }],
+    lossPct: 12, rawGrams: 1000, cookedGrams: 880,
+    steps: [{ id: 's1', text: 'Mix', rows: ['rabc12345'], seconds: 60, speed: '1' }], endNote: 'Done', shelfLifeDays: 3,
+  });
+  await expectAllowed('⚠️ Mise 2: staff save a recipe Food cost has weighed, emptying its shelf life', () =>
+    clearWrite(`${L}/recipes/R3`, {
+      ...stamp, name: 'Focaccia alta',
+      ingredients: [
+        { label: 'Flour', grams: 1000, unit: 'g', rid: 'rabc12345', kind: 'ingredient', refId: 'I1' },
+        { label: 'Salt', grams: 0, unit: 'pinch', rid: 'rdef67890' },
+      ],
+      netWeightG: 250,
+    }, ['shelfLifeDays'], asAccount(SAM)));
+  const r3 = await readDoc(`${L}/recipes/R3`);
+  check('…and the weighing, the steps and the closing message are still there, the shelf life gone',
+    r3 && r3.fields.lossPct?.integerValue === '12' && r3.fields.rawGrams?.integerValue === '1000'
+      && r3.fields.cookedGrams?.integerValue === '880' && Array.isArray(r3.fields.steps?.arrayValue?.values)
+      && r3.fields.endNote?.stringValue === 'Done' && !('shelfLifeDays' in r3.fields)
+      && r3.fields.netWeightG?.integerValue === '250' && r3.fields.name?.stringValue === 'Focaccia alta');
+  await expectAllowed('Mise 2: staff create a new recipe by the same merge', () =>
+    clearWrite(`${L}/recipes/R_NEW_M2`, {
+      ...stamp, name: 'Pane', ingredients: [{ label: 'Flour', grams: 500, unit: 'g', rid: 'rxyz00001' }],
+    }, ['netWeightG', 'shelfLifeDays'], asAccount(SAM)));
+  // The editor's box stops at 199 (maxLength counts UTF-16 units; an accented letter is one of them, and one
+  // character for the rules too), so the longest name it lets through must still land.
+  await expectAllowed('Mise 2: a name of 199 characters is accepted, the most the editor allows', () =>
+    mergeWrite(`${L}/recipes/R3`, { ...stamp, name: bigString(199), ingredients: [] }, asAccount(SAM)));
+  await expectAllowed('…and so is one of 199 accented letters', () =>
+    mergeWrite(`${L}/recipes/R3`, { ...stamp, name: 'à'.repeat(199), ingredients: [] }, asAccount(SAM)));
+  await expectDenied('Mise 2: a name of 200 characters is refused (the editor caps the box at 199)', () =>
+    mergeWrite(`${L}/recipes/R3`, { ...stamp, name: bigString(200), ingredients: [] }, asAccount(SAM)));
+  await expectDenied('…and staff still cannot delete it', () => deleteWrite(`${L}/recipes/R3`, asAccount(SAM)));
+
   // ── And the owner is still the owner ──
   await expectAllowed('the owner can delete a supplier',
     () => deleteWrite(`${L}/suppliers/S1`));

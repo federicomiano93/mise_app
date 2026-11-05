@@ -92,6 +92,7 @@ import * as legacyProductLimitsJs from '../../js/foodcost/product-limits.js';
 import * as legacyVatGuideJs from '../../js/foodcost/vat-guide.js';
 import { t as legacyT } from '../../js/i18n.js';
 import * as legacyCatalogueModelJs from '../../js/catalogue/catalogue-model.js';
+import { nameTaken as legacyNameTaken } from '../../js/catalogue/ingredient-suggest.js';
 import * as legacyRecipeCostModelJs from '../../js/catalogue/recipe-cost-model.js';
 import * as legacyFoodcostWeighingJs from '../../js/foodcost/foodcost-weighing.js';
 import * as legacyFoodcostModelJs from '../../js/foodcost/foodcost-model.js';
@@ -2177,6 +2178,50 @@ describe('catalogue-model: odd inputs', () => {
     [{ ingredients: SG_INGREDIENTS[11], recipes: [], query: 'zucchero' }], [{ ingredients: SG_INGREDIENTS[11], recipes: [], query: 'zucchero', limit: 3 }],
   ];
   agree('suggestLinks', m.suggestLinks as AnyFn, l.suggestLinks as AnyFn, suggestInputs());
+
+  // ── The recipe editor's link functions, validation and delete warning (step 3d-6) ──
+  agree('linkOptions', m.linkOptions as AnyFn, l.linkOptions as AnyFn, suggestInputs());
+
+  const CHOSEN: readonly unknown[] = [...ODD, 'x', 5, { kind: 'ingredient', refId: 'B1', name: 'Burro Occelli' }, { kind: 'recipe', refId: ' R1 ', name: 'Crema' },
+    { kind: 'ingredient', refId: 'B1' }, { kind: 'supplier', refId: 'S1' }, { kind: 'ingredient', refId: '  ' }, { kind: 'ingredient', refId: 7, name: 5 },
+    { kind: 'recipe', refId: 'R1', name: '' }, { kind: 'Recipe', refId: 'R1' }, { kind: ['recipe'], refId: 'R1' }, { kind: 'ingredient', refId: null },
+    { kind: 'ingredient', refId: { toString: () => 'obj' }, name: 'Obj' }, Object.create({ kind: 'recipe', refId: 'P', name: 'Proto' })];
+  const LINK_LABELS: readonly unknown[] = [undefined, '', '  ', 'Burro P.', 5, null, {}, 0];
+  // applyLink MUTATES its row, so each call is handed its own copy and the copy is what is compared.
+  const ROW_SPECS: readonly unknown[] = [...ODD, 'row', { label: 'burro', grams: 250, unit: 'g' }, { label: '', grams: '' }, { label: '   ' }, { grams: 1 },
+    { label: 'burro', kind: 'ingredient', refId: 'B1' }, { label: 5, kind: 'recipe', refId: 'R1', rid: 'ra' }, { label: null }, { label: 'x', kind: 'nonsense', refId: '' }];
+  const cloneSpec = (v: unknown): unknown => (Array.isArray(v) ? v.map(cloneSpec)
+    : v && typeof v === 'object' ? Object.fromEntries(Object.entries(v).map(([k, x]) => [k, cloneSpec(x)])) : v);
+  const applied = (fn: AnyFn): AnyFn => (spec: unknown, chosen: unknown, opts: unknown) => {
+    const row = cloneSpec(spec);
+    return [fn(row, chosen, opts), row];
+  };
+  agree('applyLink', applied(m.applyLink as AnyFn), applied(l.applyLink as AnyFn), [
+    ...product(ROW_SPECS, CHOSEN, [{}, ...LINK_LABELS.map(label => ({ label }))]), ...product(ROW_SPECS, CHOSEN),
+    ...product(ROW_SPECS.slice(0, 10), [null], [undefined, { label: 'Burro P.' }]), ...product(ROW_SPECS.slice(0, 5), [CHOSEN[12]], [null, 5, 'x'])]);
+  agree('linkedItemName', m.linkedItemName, l.linkedItemName, product([...CHOSEN, { kind: 'ingredient', refId: 'CR' }, { kind: 'ingredient', refId: 'NEW', name: ' Lievito ' },
+    { kind: 'recipe', refId: 'R1' }, { kind: 'recipe', refId: 'GONE', name: ' Old ' }, { kind: 'recipe', refId: 'SELF' }],
+  [...SG_INGREDIENTS.slice(0, 11)], [...SG_RECIPES]));
+  agree('isSameLink', m.isSameLink, l.isSameLink, product([...CHOSEN, { kind: 'ingredient', refId: 'B1' }, { kind: 'ingredient', refId: 7 }, { kind: 'recipe', refId: 'B1' }],
+    [...CHOSEN, { kind: 'ingredient', refId: '7' }, { kind: 'ingredient', refId: 'B1', name: 'Burro' }]));
+  const MOVE_LISTS: readonly unknown[] = [...ODD, 'abc', 5, [], [1], [{ label: 'a' }, { label: 'b' }], [{ label: 'a' }, { label: 'b' }, { label: 'c' }, { label: 'd' }], [null, undefined, 0],
+    new Array(3)];
+  const MOVE_INDEXES: readonly unknown[] = [...ODD, 2, 3, 4, -2, 1.9, '2', ' 1 ', 1e9, -0, new Date(1), { valueOf: () => 1 }];
+  agree('moveRow', m.moveRow as AnyFn, l.moveRow as AnyFn, product(MOVE_LISTS, MOVE_INDEXES, MOVE_INDEXES));
+  agree('findInvalidRecipe', m.findInvalidRecipe, l.findInvalidRecipe, product([...ODD, 'recipe', 5, RECIPE_BASE, { name: 'X' }, { name: '  ', ingredients: [{ label: 'A', grams: 1 }] },
+    { name: 'X', ingredients: [] }, { name: 'X', ingredients: 'x' }, { name: 'X', ingredients: [{ label: '  ', grams: 1 }] }, { name: 'X', ingredients: [{ label: 'F', grams: 0 }, { label: 'S', grams: 0 }] },
+    { name: 'X', ingredients: [{ label: 'F', grams: 5 }] }, { name: 'X', ingredients: [null, undefined, 5, 'x', { label: 'A', grams: '3' }] }, { name: 5, ingredients: [{ label: 5, grams: [2] }] },
+    { name: 0, ingredients: [{ label: 'A', grams: 1 }] }, { name: 'X', ingredients: [{ label: 'A', grams: -1 }] }, { name: 'X', ingredients: [{ label: 'A', grams: NaN }] },
+    { name: 'X', ingredients: [{ label: 'A', grams: 'abc' }, { label: 'B', grams: 0.1 }] }, { name: { toString: () => 'obj' }, ingredients: [{ label: 'A', grams: 1 }] }]));
+  const IMPORT_CONFIGS: readonly unknown[] = [...ODD, 'cfg', 5, { recipes: [{ id: 'brioche' }, { id: 'cat-foc', name: 'Focaccia' }] }, { recipes: [{ id: 'brioche' }, { id: 'cat-other' }] },
+    { recipes: 'x' }, { recipes: [null, 5, 'cat-foc', { id: 'cat-foc' }] }, { recipes: [{ id: 'cat-7' }, { id: 'cat-undefined' }, { id: 'cat-null' }, { id: 'cat-' }] },
+    { recipes: { 0: { id: 'cat-foc' } } }, Object.create({ recipes: [{ id: 'cat-foc' }] })];
+  agree('findCalculatorImport', m.findCalculatorImport, l.findCalculatorImport, product(IMPORT_CONFIGS, [...ODD, 'foc', 'other', 7, '7', 'brioche', ' foc', 'cat-foc', { toString: () => 'foc' }, ['foc']]));
+  // nameTaken: its original is in ingredient-suggest.js, not catalogue-model.js.
+  const NT_NAMES: readonly unknown[] = [...ODD, 'Burro', ' burro ', 'BURRO', 'Farina', 'caputo rosso 00', 'Burro salato', 'Crème F.', 'burro 7', '5', 5, { toString: () => 'burro' }];
+  agree('nameTaken', m.nameTaken, legacyNameTaken, product([...SG_INGREDIENTS, [{ name: 'Burro' }, { name: 'Strong flour' }], [{ name: 'Burro', kind: 'packaging' }],
+    { a: { name: 'Burro', active: false }, b: { name: 'Burro', kind: 'packaging' } }, { a: { name: 'Burro', active: true, kind: 'ingredient' } },
+    { f: { id: 'f', name: 'Caputo Rosso 00', shortName: 'Farina' } }, { a: { id: 'a' } }, { a: { name: 5 } }, { a: { name: ' burro ', shortName: null } }], NT_NAMES));
 
   // ── The recipe normalisers, list helpers and scaling (step 3d-1) ──
   const CAT_ROWS: readonly unknown[] = [...ROWS.slice(0, 60), { label: 'Flour', grams: '500' }, { name: 'Water', grams: -5 }, { label: 'Salt', grams: 'abc', rid: ' r1 ' },

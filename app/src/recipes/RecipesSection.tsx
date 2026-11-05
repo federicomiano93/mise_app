@@ -12,13 +12,14 @@ import { useMediaQuery } from '../ui/useMediaQuery';
 import { RecipesProvider, useRecipesStore } from './RecipesContext';
 import { RecipesDetail } from './RecipesDetail';
 import { RecipesList } from './RecipesList';
-import { ALLERGENS_OPENER, HandBackProvider, SETTINGS_OPENER, recipeOpener, useHandBackState } from './handBack';
+import { ALLERGENS_OPENER, HandBackProvider, NEW_OPENER, SETTINGS_OPENER, recipeOpener, useHandBackState } from './handBack';
 import { LabelShowsProvider } from './labelShows';
+import { createRecipeDeletions, RecipeDeletionsProvider } from './recipeDeletions';
 import { messageText } from './recipesMessages';
 import { RecipeReturnProvider } from './recipeReturn';
 import type { Place, RecipeReturn } from './recipeReturn';
 import { FROM_LIST, FROM_SHEET, cameFromList } from './recipesNav';
-import { ALLERGENS_PATH, RECIPES_PATH, SETTINGS_PATH, recipePath, resolveRecipesPath } from './recipesPath';
+import { ALLERGENS_PATH, NEW_PATH, RECIPES_PATH, SETTINGS_PATH, recipePath, resolveRecipesPath } from './recipesPath';
 import type { ShownView } from './recipesPath';
 import styles from './RecipesSection.module.css';
 
@@ -29,8 +30,9 @@ import styles from './RecipesSection.module.css';
 // Its data lives exactly as long as it is on screen: RecipesProvider starts the listener on mount and
 // stops it on unmount (P14).
 //
-// Steps 3d-1 to 3d-3 only LOOK at recipes: the list, a recipe with its allergen cards, the Allergen sheet and a recipe's
-// label (on screen, and printed through the system's own dialog). No editing yet (docs/parity/catalogue.md).
+// Steps 3d-1 to 3d-5 look at recipes: the list, a recipe with its allergen cards, the Allergen sheet, a recipe's label (on
+// screen, and printed through the system's own dialog) and the label Settings. Step 3d-6 writes them: a «New recipe» button
+// above the list, «Edit» on a recipe, and delete (docs/parity/catalogue.md).
 export default function RecipesSection() {
   return (
     <RecipesProvider>
@@ -87,6 +89,8 @@ function RecipesLayout({ view }: { view: ShownView }) {
   const { pathname, state } = useLocation();
   const split = useMediaQuery(SPLIT_QUERY);
   const handBack = useHandBackState();
+  // The recipes this phone's own screens are deleting (recipeDeletions.ts).
+  const deletions = useMemo(createRecipeDeletions, []);
 
   // ⚠️ THE CATALOGUE OWNS THE SCROLL for the moves inside itself (shell/scrollArea.tsx), because its
   // list and its recipes are separate addresses: the shell's reset to the top at every address would
@@ -100,14 +104,15 @@ function RecipesLayout({ view }: { view: ShownView }) {
   // Where a recipe was when its label opened, until the move after Back (recipeReturn.ts).
   const place = useRef<Place | null>(null);
   const recipeReturn = useMemo<RecipeReturn>(() => ({
-    remember(recipeId) {
-      place.current = { id: recipeId, area: scrollArea()?.scrollTop ?? null, detail: detail.current?.scrollTop ?? null, delivered: false };
+    remember(recipeId, origin = 'label') {
+      place.current = { id: recipeId, origin, area: scrollArea()?.scrollTop ?? null, detail: detail.current?.scrollTop ?? null, delivered: false };
     },
-    pending: recipeId => place.current !== null && place.current.id === recipeId,
+    pending: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'label',
+    pendingEdit: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'edit',
     markDelivered() { if (place.current !== null) place.current.delivered = true; },
     wasDelivered: () => place.current?.delivered === true,
   }), [scrollArea]);
-  // Set by the scroll effect below for the detail effect after it: this move is Back from a label to its recipe.
+  // Set by the scroll effect below for the detail effect after it: this move is Back from a label (or the editor) to its recipe.
   const backFromLabel = useRef<Place | null>(null);
 
   // A recipe opens one level down, so Back steps up to the list. On the split, with a recipe already
@@ -135,6 +140,18 @@ function RecipesLayout({ view }: { view: ShownView }) {
     } else {
       if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
       void navigate(ALLERGENS_PATH, { state: FROM_LIST });
+    }
+  };
+
+  // A new recipe opens the same way as the sheet: one level down, in the right-hand pane on the split.
+  const openNew = () => {
+    if (view.kind === 'new') return;
+    handBack.expect(NEW_OPENER);
+    if (split && view.kind !== 'list') {
+      void navigate(NEW_PATH, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
+    } else {
+      if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
+      void navigate(NEW_PATH, { state: FROM_LIST });
     }
   };
 
@@ -169,12 +186,12 @@ function RecipesLayout({ view }: { view: ShownView }) {
     // The same address twice is StrictMode running the effect again, not a move.
     backFromLabel.current = null;
     if (before === null || before.pathname === pathname) return;
-    // Back from a label to its recipe keeps the place written down when the label opened. Any other move forgets it
-    // (the label's own move, recipe → label, is the one that must not).
+    // Back from a label (or the editor) to its recipe keeps the place written down when it opened. Any other move forgets it
+    // (the opening move itself, recipe → label or recipe → editor, is the one that must not).
     const written = place.current;
-    const returning = before.kind === 'label' && view.kind === 'recipe' && written !== null && written.id === view.id;
+    const returning = (before.kind === 'label' || before.kind === 'edit') && view.kind === 'recipe' && written !== null && written.id === view.id;
     if (returning) backFromLabel.current = written;
-    else if (view.kind !== 'label') place.current = null;
+    else if (view.kind !== 'label' && view.kind !== 'edit') place.current = null;
     if (area === null) return;
     if (split) {
       listTop.current = null;
@@ -209,18 +226,21 @@ function RecipesLayout({ view }: { view: ShownView }) {
   return (
     <HandBackProvider value={handBack}>
       <RecipeReturnProvider value={recipeReturn}>
+      <RecipeDeletionsProvider value={deletions}>
       <Page title={t('section.recipes')}>
         <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'}>
           <div className={styles.list}>
             <PartBoundary>
               <RecipesList
-                openRecipeId={view.kind === 'recipe' || view.kind === 'label' ? view.id : null}
+                openRecipeId={view.kind === 'recipe' || view.kind === 'label' || view.kind === 'edit' ? view.id : null}
                 split={split}
                 onOpenRecipe={openRecipe}
                 sheetOpen={view.kind === 'allergens'}
                 onOpenSheet={openSheet}
                 settingsOpen={view.kind === 'settings'}
                 onOpenSettings={openSettings}
+                newOpen={view.kind === 'new'}
+                onNew={openNew}
               />
             </PartBoundary>
           </div>
@@ -231,6 +251,7 @@ function RecipesLayout({ view }: { view: ShownView }) {
           </div>
         </div>
       </Page>
+      </RecipeDeletionsProvider>
       </RecipeReturnProvider>
     </HandBackProvider>
   );

@@ -1,7 +1,8 @@
 // recipesSource.ts — the Recipe catalogue's data in Firestore, and nothing else.
 //
 // A port of js/catalogue/firebase-catalogue.js, one function at a time as the steps of 3d need them
-// (docs/parity/catalogue.md, «Proposed slices»). Steps 3d-1 to 3d-3 only READ (3d-5 writes config/labels, merge only): the recipes, the
+// (docs/parity/catalogue.md, «Proposed slices»). Steps 3d-1 to 3d-3 only READ (3d-5 writes config/labels, merge only; 3d-6 writes and
+// deletes recipes and reads the suppliers and, once before a delete, config/calculator): the recipes, the
 // ingredients and the label profile (config/labels), live, while the section is on screen. Behind an interface, so the store (recipesStore.ts) is a spec with a fake
 // source and never needs a database to be tested.
 //
@@ -63,6 +64,43 @@ export interface RecipesSource {
   // have Settings open, and a whole write would take the other one's paper size with it. The venue stamp is applied
   // here. Local-first on Firestore's side (the promise settles when the SERVER answers); REJECTS when refused.
   saveLabelConfig(patch: Readonly<Record<string, unknown>>): Promise<void>;
+  // The suppliers, live, so the link chooser can tell two similar articles apart (their names only). Same contract
+  // as watchIngredients, and as quiet when it fails (step 3d-6).
+  watchSuppliers(
+    onChange: (list: StoredDoc[], meta: RecipesMeta) => void,
+    onError: (err: unknown) => void,
+  ): () => void;
+  // Creates or merges a recipe document at a known id (made on the phone by newRecipeId). ⚠️ A MERGE of the fields
+  // handed over, never a whole write: the fields it is not sent (the oven loss Food cost weighed, the mixing steps)
+  // stay as they are. A field handed over as null (netWeightG, shelfLifeDays) is REMOVED. The venue stamp is applied
+  // here. Settles when the SERVER answers; REJECTS when refused (offline, it simply waits).
+  saveRecipeDoc(id: string, data: Readonly<Record<string, unknown>>): Promise<void>;
+  // Deletes a recipe document. Same promise contract.
+  removeRecipeDoc(id: string): Promise<void>;
+  // The Calculator's configuration (config/calculator) as stored, read ONCE, or null when there is none. Read only
+  // to warn before a delete that the recipe was imported into the Calculator.
+  getCalculatorConfig(): Promise<Record<string, unknown> | null>;
+}
+
+// The recipe fields a person can EMPTY. A merge never deletes a key it is not sent, and the rules refuse a stored null,
+// so an emptied box travels as a removal (js/catalogue/firebase-catalogue.js, CLEARABLE_RECIPE_FIELDS).
+export const CLEARABLE_RECIPE_FIELDS = ['netWeightG', 'shelfLifeDays'] as const;
+
+// A new recipe's id, made on the phone (no write), so a new recipe appears at once and offline. The same shape as the
+// id Firestore makes itself (20 letters and digits, from the browser's cryptographic random source): the current app's
+// newRecipeId() asks the SDK for exactly that, and here the SDK may not have finished loading when Save is tapped.
+const ID_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+export function newRecipeId(
+  random: (bytes: Uint8Array<ArrayBuffer>) => Uint8Array<ArrayBuffer> = bytes => crypto.getRandomValues(bytes),
+): string {
+  let id = '';
+  while (id.length < 20) {
+    // 62 × 4 = 248: a byte of 248 or more is thrown away, so every character is equally likely.
+    for (const byte of random(new Uint8Array(new ArrayBuffer(40)))) {
+      if (byte < 248 && id.length < 20) id += ID_ALPHABET.charAt(byte % 62);
+    }
+  }
+  return id;
 }
 
 const RECIPES = 'recipes';
@@ -71,6 +109,8 @@ const CONFIG = 'config';
 const LABELS_DOC = 'labels';
 const PRINT_AGENTS = 'print-agents';
 const PRINT_JOBS = 'print-jobs';
+const SUPPLIERS = 'suppliers';
+const CALCULATOR_DOC = 'calculator';
 
 // A copy of the document without any of the price keys (header).
 export function withoutPrice(doc: StoredDoc): StoredDoc {
@@ -89,6 +129,7 @@ export function createFirestoreRecipesSource(
   const configPath = buildPath(locationId, CONFIG);
   const printAgentsPath = buildPath(locationId, PRINT_AGENTS);
   const printJobsPath = buildPath(locationId, PRINT_JOBS);
+  const suppliersPath = buildPath(locationId, SUPPLIERS);
 
   // A live listener whose Firestore may not be loaded yet. The returned stop works at any moment.
   function listen(subscribe: (kit: FirestoreKit) => () => void, onError: (err: unknown) => void): () => void {
@@ -180,6 +221,44 @@ export function createFirestoreRecipesSource(
     saveLabelConfig: async patch => {
       const kit = await firestore();
       await kit.fs.setDoc(kit.fs.doc(kit.db, configPath, LABELS_DOC), { ...patch, bakery: locationId }, { merge: true });
+    },
+
+    // ⚠️ QUIET (warn), like the ingredients: a venue without Orders has no suppliers, and the chooser then simply shows
+    // no supplier beside an article.
+    watchSuppliers: (onChange, onError) => listen(kit => kit.fs.onSnapshot(
+      kit.fs.collection(kit.db, suppliersPath) as Query,
+      { includeMetadataChanges: true },
+      snap => onChange(
+        snap.docs.map(d => ({ ...d.data(), id: d.id })),
+        { fromServer: !snap.metadata.fromCache },
+      ),
+      err => {
+        console.warn('watchSuppliers failed:', err);
+        onError(err);
+      },
+    ), onError),
+
+    // The stamp goes on LAST, so a caller cannot name another venue; `id` is never a field (the rules' closed key list
+    // would refuse the whole save).
+    saveRecipeDoc: async (id, data) => {
+      const kit = await firestore();
+      const out: Record<string, unknown> = { ...data };
+      delete out.id;
+      for (const key of CLEARABLE_RECIPE_FIELDS) {
+        if (key in out && out[key] === null) out[key] = kit.fs.deleteField();
+      }
+      await kit.fs.setDoc(kit.fs.doc(kit.db, recipesPath, id), { ...out, bakery: locationId }, { merge: true });
+    },
+
+    removeRecipeDoc: async id => {
+      const kit = await firestore();
+      await kit.fs.deleteDoc(kit.fs.doc(kit.db, recipesPath, id));
+    },
+
+    getCalculatorConfig: async () => {
+      const kit = await firestore();
+      const snap = await kit.fs.getDoc(kit.fs.doc(kit.db, configPath, CALCULATOR_DOC));
+      return snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null;
     },
   };
 }

@@ -7,12 +7,14 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { AllergenSheet } from './AllergenSheet';
 import { LabelSettings } from './LabelSettings';
 import { LabelScreen } from './LabelScreen';
+import { RecipeEditorScreen } from './RecipeEditorScreen';
 import { useRecipes } from './RecipesContext';
 import { RecipeView } from './RecipeView';
 import { cameFromList, cameFromRecipe, cameFromSheet, useLeave } from './recipesNav';
 import { RECIPES_PATH, recipePath } from './recipesPath';
 import type { ShownView } from './recipesPath';
 import { ALLERGENS_OPENER, SETTINGS_OPENER, recipeOpener, sheetOpener, useHandBack } from './handBack';
+import { useRecipeDeletions } from './recipeDeletions';
 import { useRecipeReturn } from './recipeReturn';
 import styles from './RecipesDetail.module.css';
 
@@ -25,6 +27,9 @@ export function RecipesDetail({ view, onOpenFromSheet }: { view: ShownView; onOp
   if (view.kind === 'list') return <Prompt />;
   if (view.kind === 'allergens') return <SheetScreen onOpenRecipe={onOpenFromSheet} />;
   if (view.kind === 'settings') return <SettingsScreen />;
+  // The editor (step 3d-6): a new recipe, or one recipe's, one level below the list / the recipe.
+  if (view.kind === 'new') return <RecipeEditorScreen key="new" id={null} />;
+  if (view.kind === 'edit') return <RecipeEditorScreen key="edit" id={view.id} />;
   // Keyed on the KIND, so a recipe and its label are two screens (each puts the focus on its own title when it opens)
   // while another recipe picked beside an open one stays the same screen, as before.
   return <RecipeScreen key={view.kind} id={view.id} label={view.kind === 'label'} />;
@@ -97,10 +102,13 @@ function RecipeScreen({ id, label }: { id: string; label: boolean }) {
   const handBack = useHandBack();
   const recipeReturn = useRecipeReturn();
   const say = useStatusMessage();
+  const deletions = useRecipeDeletions();
   const { recipes, recipesFromServer, streamBroken } = useRecipes();
   const title = useRef<HTMLHeadingElement>(null);
 
   const recipe = recipes.find(candidate => candidate.id === id) ?? null;
+  // A recipe that is back after a delete the database refused is news again if it is deleted later (recipeDeletions.ts).
+  useEffect(() => { if (recipe !== null) deletions.unmark(id); }, [recipe, deletions, id]);
 
   // The id whose recipe has been on screen: one that leaves the list afterwards was deleted.
   const [shownFor, setShownFor] = useState<string | null>(null);
@@ -118,6 +126,9 @@ function RecipeScreen({ id, label }: { id: string; label: boolean }) {
 
   useEffect(() => {
     if (!gone) return;
+    // ⚠️ A DELETE MADE HERE (the trash on the page, or in the editor) has already said «Recipe deleted.» and is leaving by
+    // itself: saying it again, and stepping back again, would be two messages and two moves for one delete.
+    if (deletions.has(id)) return;
     say(t('cat.recipeDeleted'));
     // The row of a deleted recipe is gone: the hand-back then falls to the search box (handBack.ts).
     if (label) {

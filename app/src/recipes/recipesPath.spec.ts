@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALLERGENS_PATH, RECIPES_PATH, SETTINGS_PATH, labelPath, parseRecipesPath, recipePath, resolveRecipesPath } from './recipesPath';
+import { ALLERGENS_PATH, NEW_PATH, RECIPES_PATH, SETTINGS_PATH, editPath, labelPath, parseRecipesPath, recipePath, resolveRecipesPath } from './recipesPath';
 
 describe('the addresses of the Recipe catalogue', () => {
   it('has the list at /recipes and a recipe at /recipes/<id>', () => {
@@ -21,7 +21,6 @@ describe('the addresses of the Recipe catalogue', () => {
   it('takes an address that is not valid percent-encoding, or has more to it, for an unknown one', () => {
     expect(parseRecipesPath('/%')).toEqual({ kind: 'unknown' });
     expect(parseRecipesPath('/%E0%A4%A')).toEqual({ kind: 'unknown' });
-    expect(parseRecipesPath('/abc/edit')).toEqual({ kind: 'unknown' });
     expect(parseRecipesPath('/abc/def/ghi')).toEqual({ kind: 'unknown' });
   });
 
@@ -57,12 +56,12 @@ describe('the addresses of the Recipe catalogue', () => {
     expect(parseRecipesPath('/abc/Label')).toEqual({ kind: 'unknown' });
   });
 
-  it.each(['new', 'photo'])('keeps «%s» for a later step, never reading it as a recipe', word => {
-    expect(parseRecipesPath(`/${word}`)).toEqual({ kind: 'unknown' });
+  it('keeps «photo» for a later step, never reading it as a recipe', () => {
+    expect(parseRecipesPath('/photo')).toEqual({ kind: 'unknown' });
   });
 
   it('sends an unknown address back to the list, and draws a known one', () => {
-    expect(resolveRecipesPath('/abc/edit')).toEqual({ redirect: '/recipes' });
+    expect(resolveRecipesPath('/abc/edits')).toEqual({ redirect: '/recipes' });
     expect(resolveRecipesPath('/abc')).toEqual({ view: { kind: 'recipe', id: 'abc' } });
     expect(resolveRecipesPath('')).toEqual({ view: { kind: 'list' } });
   });
@@ -75,5 +74,34 @@ describe('the label Settings address (step 3d-5)', () => {
     expect(parseRecipesPath('/settings/')).toEqual({ kind: 'settings' });
     expect(parseRecipesPath('/settings/x')).toEqual({ kind: 'unknown' });
     expect(resolveRecipesPath('/settings')).toEqual({ view: { kind: 'settings' } });
+  });
+});
+
+describe('the editor addresses (step 3d-6)', () => {
+  it('has a new recipe at /recipes/new, and nothing more under it', () => {
+    expect(NEW_PATH).toBe('/recipes/new');
+    expect(parseRecipesPath('/new')).toEqual({ kind: 'new' });
+    expect(parseRecipesPath('/new/')).toEqual({ kind: 'new' });
+    expect(parseRecipesPath('/new/x')).toEqual({ kind: 'unknown' });
+    expect(resolveRecipesPath('/new')).toEqual({ view: { kind: 'new' } });
+  });
+
+  it('has the editor of a recipe at /recipes/<id>/edit, the id written whole and read back whole', () => {
+    expect(editPath('abc')).toBe('/recipes/abc/edit');
+    expect(parseRecipesPath('/abc/edit')).toEqual({ kind: 'edit', id: 'abc' });
+    expect(parseRecipesPath('/abc/edit/')).toEqual({ kind: 'edit', id: 'abc' });
+    for (const id of ['a/b c', '100%', 'é', 'x?y#z']) {
+      expect(parseRecipesPath(editPath(id).slice(RECIPES_PATH.length))).toEqual({ kind: 'edit', id });
+    }
+    expect(resolveRecipesPath('/abc/edit')).toEqual({ view: { kind: 'edit', id: 'abc' } });
+  });
+
+  it('keeps the reserved words and bad ids out of the editor address', () => {
+    for (const word of ['new', 'allergens', 'settings', 'photo']) {
+      expect(parseRecipesPath(`/${word}/edit`), word).toEqual({ kind: 'unknown' });
+    }
+    expect(parseRecipesPath('/%/edit')).toEqual({ kind: 'unknown' });
+    expect(parseRecipesPath('/abc/Edit')).toEqual({ kind: 'unknown' });
+    expect(parseRecipesPath('/abc/edit/x')).toEqual({ kind: 'unknown' });
   });
 });

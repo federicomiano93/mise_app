@@ -45,7 +45,7 @@ describe('the list of recipes', () => {
     expect(rowOf('Pane')).toBeInTheDocument();
   });
 
-  it('is one h1, «Recipes», with the Allergen sheet and then Settings at its foot and no Add yet (it arrives in a later step)', async () => {
+  it('is one h1, «Recipes», with the Allergen sheet and then Settings at its foot, and «New recipe» above the rows', async () => {
     await loaded();
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('heading', { level: 1, name: 'Recipes' })).toBeInTheDocument();
@@ -53,9 +53,10 @@ describe('the list of recipes', () => {
     expect(door.compareDocumentPosition(main().getByRole('button', { name: 'Settings' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     const lastRow = main().getAllByRole('listitem').at(-1) as HTMLElement;
     expect(lastRow.compareDocumentPosition(door) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    for (const name of [/add/i, /new/i]) {
-      expect(main().queryByRole('button', { name })).not.toBeInTheDocument();
-    }
+    // The button that makes a recipe stands above the rows, after the search box.
+    const add = main().getByRole('button', { name: 'New recipe' });
+    expect(main().getByRole('searchbox').compareDocumentPosition(add) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(add.compareDocumentPosition(main().getAllByRole('listitem')[0] as HTMLElement) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('says «Loading…» until the recipes have answered', async () => {
@@ -69,12 +70,12 @@ describe('the list of recipes', () => {
     expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
   });
 
-  it('says there are no recipes yet, without a button to add one', async () => {
+  it('says there are no recipes yet, with the «New recipe» button above it', async () => {
     renderRecipes('/recipes', { source: sourceWith([]) });
     expect(await screen.findByText('No recipes yet', undefined, LOAD)).toBeInTheDocument();
     expect(screen.getByText('Add your first recipe: its ingredients and their amounts.')).toBeInTheDocument();
-    // The only buttons are the two doors: the Allergen sheet, then Settings (the default session runs the place).
-    expect(main().getAllByRole('button').map(button => button.textContent)).toEqual(['Allergen sheet', 'Settings']);
+    // The buttons: the one that makes a recipe, then the two doors — the Allergen sheet and Settings (the default session runs the place).
+    expect(main().getAllByRole('button').map(button => button.textContent)).toEqual(['New recipe', 'Allergen sheet', 'Settings']);
   });
 
   it('says it in Italian', async () => {
