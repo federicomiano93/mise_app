@@ -1370,3 +1370,77 @@ current app keeps it inside Settings («Ordini passati»). The current app was n
 
 **Driven:** `algprobe/mise-drive/drive-mise2-history-door.mjs` (owner IT 1280/1024/768/360/296, owner EN 1024/360/296, employee 360).
 Not driven on the real tablet: no new CSS or JS feature is involved.
+
+## Step 3f-8a — Settings and the kiosk lines (5 Nov 2026, plan agreed by him)
+
+Slice 3f-8 as listed above is L, so it is split: **3f-8a** (this one) is Orders → Settings in full and the kiosk feed; **3f-8b**
+(next) is the flat view and its swap (L17), the summary (L19), the tablet money (L20), the sticky head (L21), the supplier name as a
+door to its card and the add / edit ingredient doors (L30).
+
+**Items:** M1–M8, M10 (writes), M14 (the feed), F5. Port: `kiosk-lines` (full, paired). Data: `ordersStore.saveSetting` (one merge into
+`config/orders` per change, decided by `orders/settingsPatch.ts`) and `ordersStore.kioskSections()` (`orders/kioskFeed.ts`). **No rule
+changed**: every key is already whitelisted and typed under `config/orders` (`canManage`).
+
+**Settings, top to bottom** (the current app's order; the two cards Mise 2 already had stay):
+1. Order lists (owner/manager only): the switch; off refused while lists are an employee's only road (M6).
+2. The order screen: «Show the Stock box» for everybody, locked for employees with «Only an owner or a manager can change this.»
+   (M3, F5); the door «Supplier order» (owner/manager only) to `/orders/settings/supplier-order` (M8).
+3. The working week (owner/manager only): a select of the short weekday names (M5).
+4. How orders may be sent (owner/manager only): one switch per road, the manager road only while lists are on, the last road cannot
+   be closed (said), the line about email opening the mail app (M6).
+5. Check deliveries (3f-5, unchanged).
+6. Alerts (this phone): notices and «Do not buzz this phone about order lists» (M7, 3f-6/3f-7, unchanged).
+7. History: «Days of past orders shown in History», 1–365, saved on leaving the box, locked for employees (M4, F5).
+
+**His choices (5 Nov 2026), taken with the recommendation:**
+- A. The supplier order is saved at each move, like every other control on this screen and like the current app (no Save button).
+- B. An employee does not see the sections for whoever runs the place (lists, week, roads, supplier order), as in the current app;
+  the Stock box and the days of History are shown locked.
+- C. No «Help» door in Settings (M9): the «?» help is the shell's, for every screen (F7), its own step.
+
+**Differences from the current app:**
+- S1. An empty or out-of-range «Days of past orders» is refused AND said; the current app puts the stored number back in silence.
+- S2. The kiosk's «arriving» line honours the goods-arrived switch (F4 (c)): off, none; back on, only the orders recorded from that
+  day (`askedAbout`), the same records Incoming reads. «To order today» reads every record, as today.
+- S3. No Help door (choice C).
+
+## Step 3f-8a as built
+
+**What it is.** Orders → Settings in the agreed order (above), every control off until `config/orders` has arrived, saving on the
+tap with «Salvato ✓» beside itself, following the data (a refusal leaves it as stored); the screen «Ordine dei fornitori» at
+`/orders/settings/supplier-order` (`SupplierSequenceScreen.tsx`: React Aria drag by touch, mouse or keyboard, ArrowUp/ArrowDown on a
+grip, each move saved at once, «Salvataggio…» then «Salvato ✓»); the kiosk feed (`ordersStore.kioskSections()`, `kioskFeed.ts`). Port:
+`kiosk-lines` in full, paired. No rule changed and no new key.
+
+**Taken for him, easy to change.**
+- S4. «Accese: …» under the lists switch says «il pulsante «Liste d’ordine» è in cima a Ordini»: the current app's «nella fascia verde»
+  names a bar Mise 2 does not have.
+- S5. The section titles are h3 under the bar's h2 («Impostazioni»), the notices block an h4, as in the Suppliers and Calculator settings.
+- S6. «Controlla la merce arrivata» also shows «Salvato ✓» now, like every other control of the screen.
+- S7. Back from «Ordine dei fornitori» gives the focus back to its door; the title of Settings is focused only when opened from the list.
+- S8. An employee who types the supplier-order address is sent back to Settings.
+
+**Fixed after the review.**
+- A failed supplier-order save puts the list back and says so on the status line, not in a dialog: a modal opened over the grid being
+  re-ordered looped for ever in the specs (React Aria hiding the page behind it), and the status line also outlives Back.
+- The suppliers not on the list (switched off) keep their place in the stored order: a move writes the shown ones first, then the others.
+- A move that changes nothing writes nothing; one supplier alone has no grip; «Nessun fornitore» waits for the suppliers to arrive.
+- Two switches tapped before the first write has come back are judged one on top of the other (`withPatch`), so two quick road closes
+  cannot shut the last road between them.
+- The days box shows the stored number again after any write that was not kept (refused, offline, by the rules) and on leaving it untouched.
+- `kioskSections()` answers null until the suppliers, the records and `config/orders` have all arrived, so the kiosk never draws «nothing
+  today» from a half-loaded store.
+
+**Known and left.**
+- Offline, a setting is laid over the screen at once by Firestore and «Salvato ✓» waits for the server, as the goods-arrived switch.
+- The kiosk that draws the lines is step 3g; `kioskSections()` has no caller yet.
+- Not driven: the real tablet (drag by a finger), OFFLINE.
+
+**Driven.** 107/107 on a private emulator (`algprobe/mise-drive/drive-mise2-orders-8.mjs <base> <cdp-port> <fs-port> <auth-port>`,
+ONLY=IT1024,…,STAFF): the owner in Italian and English at 1024, 360 and 296 (writes at IT 360 and EN 1024: Stock, week, a road, the days
+of History good and refused, lists as the only road, the last road, lists off and on, a supplier moved by the keyboard), the employee at
+360 (locked rows described, no boss sections, the address refused). axe clean, targets, nothing clipped, no sideways scroll, one main,
+one h1, no console error, at every screen; config/orders put back at the end. Again 107/107 after the review fixes, plus 14/14 for a
+REFUSED move (`drive-mise2-orders-8-refused.mjs`, same arguments): the owner opens «Ordine dei fornitori», becomes an employee in the
+database while the screen still thinks owner, moves a supplier by the keyboard; the status line says it, no dialog, the list goes back,
+nothing written, the page answers, Back works, in Italian at 360 and English at 1024; the role put back.

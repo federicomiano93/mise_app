@@ -368,7 +368,8 @@ describe.each([['on the split', true], ['on a phone', false]] as const)('a suppl
     await view.live.release();
     await screen.findByRole('region', { name: 'Settings' }, LOAD);
     expect(view.router.state.location.pathname).toBe('/orders/settings');
-    expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
+    // (Settings has a number box of its own, the days of History: it is a supplier's boxes that must not be here.)
+    expect(screen.queryByRole('spinbutton', { name: /quantity to order/ })).not.toBeInTheDocument();
   });
 
   it.each([

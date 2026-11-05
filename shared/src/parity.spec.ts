@@ -59,6 +59,7 @@
 // reminders.ts, untold-changes.ts, alert-dismissal.ts and holidays-it.ts ARE paired (step 3f-6, Reminders and the bell): full ports of
 // js/orders/reminders.js, untold-changes.js (completed in 3f-6: `askedToday`, `orderedToday` and `untoldChanges` joined
 // `confirmedEntries`), alert-dismissal.js and holidays-it.js.
+// kiosk-lines.ts IS paired (step 3f-8, the kiosk's Orders lines): a full port of js/orders/kiosk-lines.js.
 // holidays.ts and notifications.ts are NOT paired (step 3f-6, adapted on purpose): holidays.ts has no module state, no localStorage and no
 // fetch — the UK list is an argument (with a built-in default that now runs to 2028, finding F-8) and the download and its cache move to
 // Mise 2's data layer — and adds `ukDatesFromFeed`, `HOLIDAY_COUNTRIES` and the exported constants, leaving out `refreshHolidays`;
@@ -168,6 +169,7 @@ import * as reminders from './reminders';
 import * as untoldChanges from './untold-changes';
 import * as alertDismissal from './alert-dismissal';
 import * as holidaysIt from './holidays-it';
+import * as kioskLines from './kiosk-lines';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -242,6 +244,7 @@ import * as legacyReminders from '../../js/orders/reminders.js';
 import * as legacyUntoldChanges from '../../js/orders/untold-changes.js';
 import * as legacyAlertDismissal from '../../js/orders/alert-dismissal.js';
 import * as legacyHolidaysIt from '../../js/orders/holidays-it.js';
+import * as legacyKioskLines from '../../js/orders/kiosk-lines.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -318,6 +321,7 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['untold-changes', untoldChanges, legacyUntoldChanges],
   ['alert-dismissal', alertDismissal, legacyAlertDismissal],
   ['holidays-it', holidaysIt, legacyHolidaysIt],
+  ['kiosk-lines', kioskLines, legacyKioskLines],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -379,7 +383,7 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all seventy-four models are compared', () => {
+test('all seventy-five models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
@@ -390,5 +394,5 @@ test('all seventy-four models are compared', () => {
       'allergen-terms', 'allergen-match', 'records', 'invoice-zip/reasons', 'invoice-zip/py-compat', 'invoice-zip/sha256',
       'invoice-zip/classify', 'invoice-zip/pricing', 'invoice-zip/fatturapa', 'invoice-zip/products', 'invoice-zip/selection',
       'work-week', 'price-changes-model', 'invoice-import-model', 'invoice-import-plan', 'ingredient-merge', 'send-routes', 'supplier-order', 'orders-config', 'line-supplier', 'order-text', 'ingredient-search', 'order-day', 'sent-check', 'suggestions',
-      'history-window', 'deliveries', 'reminders', 'untold-changes', 'alert-dismissal', 'holidays-it']);
+      'history-window', 'deliveries', 'reminders', 'untold-changes', 'alert-dismissal', 'holidays-it', 'kiosk-lines']);
 });

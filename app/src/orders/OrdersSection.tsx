@@ -23,6 +23,7 @@ import { HistoryScreen } from './HistoryScreen';
 import { ReorderScreen } from './ReorderScreen';
 import { SendScreen } from './SendScreen';
 import { SettingsScreen } from './SettingsScreen';
+import { SupplierSequenceScreen } from './SupplierSequenceScreen';
 import { PlaceAllConfirmScreen, SupplierConfirmScreen } from './PlaceConfirmScreen';
 import { SupplierItemsScreen } from './SupplierItemsScreen';
 import { SupplierOrderScreen } from './SupplierOrderScreen';
@@ -31,12 +32,12 @@ import { LATCH_GRACE_MS, PendingLatchProvider, latchCanLook, pendingNow, usePend
 import { LONG_MS } from './useClearQuantities';
 import {
   CLEAR_OPENER, HandBackProvider, HISTORY_DOOR, INCOMING_DOOR, ITEMS_DOOR, LISTS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, REORDER_DOOR, SEND_OPENER,
-  SETTINGS_OPENER, arrivalOpener, correctOpener, itemsOpener, listOpener, pendingFallback, pendingOpener, sendDayOpener, supplierOpener,
+  SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, arrivalOpener, correctOpener, itemsOpener, listOpener, pendingFallback, pendingOpener, sendDayOpener, supplierOpener,
   useHandBackState,
 } from './handBack';
 import { FROM_LIST, cameFromList, replacedState } from './ordersNav';
 import {
-  CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, LISTS_PATH, ORDERS_PATH, PLACE_ALL_PATH, REORDER_PATH, SEND_PATH, SETTINGS_PATH, historyDayPath, historyEditPath,
+  CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, LISTS_PATH, ORDERS_PATH, PLACE_ALL_PATH, REORDER_PATH, SEND_PATH, SETTINGS_PATH, SUPPLIER_ORDER_PATH, historyDayPath, historyEditPath,
   incomingMissingPath, parseOrdersPath, requestPath, supplierConfirmPath, supplierItemsPath, supplierPath,
 } from './ordersPath';
 import type { OrdersView } from './ordersPath';
@@ -231,6 +232,11 @@ function OrdersLayout({ view }: { view: ShownView }) {
     else action();
   };
   const openSettings = whenLive(() => { open(SETTINGS_OPENER, SETTINGS_PATH); });
+  // Settings' «Supplier order» door: one level down, so Back is the browser's Back and the door takes the focus again.
+  const openSupplierOrder = () => {
+    handBack.expect(SUPPLIER_ORDER_DOOR);
+    void navigate(SUPPLIER_ORDER_PATH, { state: FROM_LIST });
+  };
   const openHistory = whenLive(() => {
     // ⚠️ THE SPLIT KEEPS THIS DOOR ON SCREEN BELOW HISTORY TOO. From its editor or day screen it is one step up, like their Back: a
     // replace would leave History twice in a row, and the next Back would seem to do nothing.
@@ -341,6 +347,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
     else if (view.kind === 'incoming') handBack.deliverWhere(name => name.startsWith('arrival:'));
     // Back from one order list to the lists: its card (gone when the list was deleted: the title takes the focus).
     else if (view.kind === 'lists') handBack.deliverWhere(name => name.startsWith('list:'));
+    // Back from the supplier order to the settings: the door that opened it.
+    else if (view.kind === 'settings') handBack.deliverIf(SUPPLIER_ORDER_DOOR);
     // The supplier's screen coming back from «What they sell»: only its own button is owed the focus. ⚠️ NOT deliver(): a
     // supplier opened from the list expects the list row, which must keep its focus (phone: the title takes it; split: the row).
     else if (view.kind === 'supplier') {
@@ -404,7 +412,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
           </div>
           <div ref={detail} className={styles.detail}>
             <PartBoundary resetKey={pathname}>
-              <Detail view={view} lens={lens} ready={ready} onOpenEdit={openEdit} onOpenDay={openDay} onOpenMissing={openMissing} onOpenRequest={openRequest} />
+              <Detail view={view} lens={lens} ready={ready} onOpenSupplierOrder={openSupplierOrder} onOpenEdit={openEdit} onOpenDay={openDay} onOpenMissing={openMissing} onOpenRequest={openRequest} />
             </PartBoundary>
           </div>
         </div>
@@ -419,10 +427,11 @@ function OrdersLayout({ view }: { view: ShownView }) {
 //
 // (No `key` on the screens: the section keeps one from one supplier to the next on the split, so the focus stays on the row
 // that was pressed.)
-function Detail({ view, lens, ready, onOpenEdit, onOpenDay, onOpenMissing, onOpenRequest }: {
+function Detail({ view, lens, ready, onOpenSupplierOrder, onOpenEdit, onOpenDay, onOpenMissing, onOpenRequest }: {
   view: ShownView;
   lens: ReturnType<typeof buildOrdersLens>;
   ready: boolean;
+  onOpenSupplierOrder: () => void;
   onOpenRequest: (id: string) => void;
   onOpenEdit: (id: string) => void;
   onOpenDay: (date: string) => void;
@@ -462,7 +471,8 @@ function Detail({ view, lens, ready, onOpenEdit, onOpenDay, onOpenMissing, onOpe
   if (view.kind === 'place-all-confirm') return <PlaceAllConfirmScreen lens={lens} />;
   if (view.kind === 'clear') return <SupplierPicker mode="clear" lens={lens} />;
   if (view.kind === 'send') return <SendScreen lens={lens} />;
-  if (view.kind === 'settings') return <SettingsScreen />;
+  if (view.kind === 'settings') return <SettingsScreen onOpenSupplierOrder={onOpenSupplierOrder} />;
+  if (view.kind === 'supplier-order') return <SupplierSequenceScreen />;
   // The three delivery screens wait for config/orders: it holds the switch that decides whether they exist at all.
   if ((view.kind === 'incoming' || view.kind === 'incoming-missing' || view.kind === 'reorder') && !configLoaded) {
     return <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>;

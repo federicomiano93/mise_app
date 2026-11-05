@@ -40,6 +40,141 @@
   overflow-wrap: break-word;
 }
 
+/* The rows of a card are told apart by a line; the title under which they stand has none. */
+.card > * + * {
+  border-top: 1px solid var(--line);
+}
+
+.card > .head + * {
+  border-top: 0;
+}
+
+.card > :last-child {
+  border-radius: 0 0 var(--r-md) var(--r-md);
+}
+
+/* The card's title and the line under it. */
+.head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s3) var(--s4) 0;
+}
+
+.head > h3,
+.head > p {
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+/* A line that closes a card, under its rows. */
+.footnote {
+  margin: 0;
+  padding: var(--s3) var(--s4);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+/* A row that opens another screen: the words, then a chevron. As tall as a thumb's target. */
+.door {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s3) var(--s4);
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.door[data-hovered] {
+  background: var(--bg);
+}
+
+.door[data-pressed] {
+  background: var(--sunken);
+}
+
+.door[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.door > svg {
+  flex: none;
+  color: var(--ink-3);
+}
+
+/* «Saved ✓»: a quiet tag, there (empty) before it speaks so a screen reader announces it. */
+.saved {
+  flex: none;
+  color: var(--ok-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.quiet:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+}
+
+/* The week's select: the look of the unit menus, with the 48px target. */
+.select {
+  box-sizing: border-box;
+  max-width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-md);
+}
+
+.select:focus-visible,
+.number:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.select:disabled,
+.number:disabled {
+  opacity: 0.6;
+}
+
+/* The days box, the word after it and its «Saved ✓» on one line. */
+.inline {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.number {
+  box-sizing: border-box;
+  width: 96px;
+  min-height: var(--hit);
+  padding: 0 var(--s2);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+}
+
 /* A switch and the words it answers to: the row is as tall as a thumb's target, and the words wrap before the switch shrinks. */
 .switchRow {
   display: flex;
@@ -62,7 +197,7 @@
   padding: var(--s3) var(--s4);
 }
 
-.block > h2,
+.block > h4,
 .block > p {
   margin: 0;
   overflow-wrap: break-word;

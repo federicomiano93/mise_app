@@ -61,6 +61,10 @@ import { createSuggester, NO_SUGGESTIONS } from './suggester';
 import type { Suggester } from './suggester';
 import type { LensIngredient, OrdersLens } from './ordersLens';
 import type { OrdersMeta, OrdersSource, StoredDoc } from './ordersSource';
+import { settingPatch, withPatch } from './settingsPatch';
+import type { SettingChange, SettingRefusal } from './settingsPatch';
+import { kioskSectionsFor } from './kioskFeed';
+import type { KioskSection } from '@mise/shared/kiosk-lines';
 
 export type OrdersConfig = ReturnType<typeof normalizeOrdersConfig>;
 
@@ -137,6 +141,9 @@ export type RecordWriteOutcome = 'saved' | 'deleted' | 'changed' | 'gone' | 'emp
 // Firestore shows the change on this phone at once and sends it when the connection comes back (local-first), so a screen never
 // waits for it before moving on.
 export type DeliveryWriteOutcome = 'saved' | 'refused' | 'failed';
+
+// How a change on Orders → Settings ended (step 3f-8): written, refused by the rules, failed, or one of settingsPatch.ts's refusals.
+export type SettingOutcome = DeliveryWriteOutcome | SettingRefusal;
 
 // How «Put back» / «Another supplier» ended: 'applied' — the line is in the order (sent at once; a refusal is said like any
 // typing, 'draft-not-saved', and the line stays on this phone to go again with the next change); 'skipped' — the row already has
@@ -278,6 +285,14 @@ export interface OrdersStore {
   orderElsewhere(item: ReorderItem, supplierId: string): ReorderOutcome;
   // The goods-arrived switch for the whole venue (decision F4).
   setDeliveryCheck(on: boolean): Promise<DeliveryWriteOutcome>;
+  // One change on Orders → Settings (step 3f-8, parity M3–M8): the Stock box, order lists, a road, the week start, the days of
+  // History, the supplier order. Decided by settingsPatch.ts — a refusal ('only-road', 'last-road', 'invalid', 'unchanged') writes
+  // nothing — then ONE merge into config/orders, which the rules let only an owner or a manager write ('refused' otherwise).
+  saveSetting(change: SettingChange): Promise<SettingOutcome>;
+  // The kiosk rest screen's Orders lines from what is held now (parity M14, decision T13), the goods-arrived switch honoured
+  // (kioskFeed.ts). No read. null while the suppliers, the records or config/orders have not arrived: «nothing to show» and «not
+  // known yet» are told apart. The kiosk that draws them is step 3g.
+  kioskSections(): KioskSection[] | null;
   // Would anybody hear a list sent now (parity R17)? ⚠️ NEVER REJECTS AND NEVER STOPS A SEND: an unreadable roster, a refused read or
   // a phone that is offline is no evidence that nobody is listening, and answers «go ahead».
   whoIsAway(senderUid: string): Promise<AwayAnswer>;
@@ -549,6 +564,9 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     senderReads.set(senderUid, read);
     return read;
   }
+
+  // The Orders settings' patches still on their way to the server, oldest first (saveSetting): the next change is judged on them too.
+  let settingWrites: Readonly<Record<string, unknown>>[] = [];
 
   async function deliveryWrite(label: string, write: () => Promise<void>): Promise<DeliveryWriteOutcome> {
     const release = deps.markBusy();
@@ -889,6 +907,31 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
 
     setDeliveryCheck(on) {
       return deliveryWrite('Saving the goods-arrived switch', () => source.mergeOrdersConfig(deliveryCheckPatch(on, deps.today(), snapshot.deliveryCheck)));
+    },
+
+    saveSetting(change) {
+      // ⚠️ JUDGED ON THE CONFIG AS IT WILL BE: the snapshot with every setting write still on its way laid over it (settingsPatch.ts
+      // withPatch), so a road closed a moment ago already counts even before Firestore's own copy shows it.
+      const decided = settingPatch(change, settingWrites.reduce(withPatch, snapshot.config));
+      if ('refused' in decided) return Promise.resolve(decided.refused);
+      const patch = decided.patch;
+      settingWrites.push(patch);
+      const settled = () => { settingWrites = settingWrites.filter(p => p !== patch); };
+      return deliveryWrite(`Saving the Orders setting ${change.kind}`, () => source.mergeOrdersConfig(patch))
+        .then(outcome => { settled(); return outcome; });
+    },
+
+    kioskSections() {
+      // ⚠️ NOTHING UNTIL THE DATA IS HERE (review of 3f-8a; the current app answers only once suppliers and records are loaded): with
+      // the records missing every order day reads «to order», and with config/orders missing the switch reads ON.
+      if (!snapshot.suppliersLoaded || !snapshot.historyLoaded || !snapshot.configLoaded) return null;
+      return kioskSectionsFor({
+        suppliers: snapshot.suppliers,
+        history: snapshot.history,
+        today: deps.today(),
+        weekStartsOn: snapshot.config.weekStartsOn,
+        deliveryCheck: snapshot.deliveryCheck,
+      });
     },
 
     async whoIsAway(senderUid) {
