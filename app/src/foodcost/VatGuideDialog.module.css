@@ -5,8 +5,7 @@
   display: flex;
   flex-direction: column;
   gap: var(--s4);
-  max-height: 60vh;
-  max-height: 60dvh;
+  max-height: calc(var(--vh100) * 0.6);
   overflow-y: auto;
 }
 

@@ -26,7 +26,7 @@ type Props = {
 // the day badge and the rest of the card are its description, so a screen reader hears «Focaccia» and then who, when and what, and
 // two logs of the same dough are told apart.
 export function LogCard({ log, open, onOpen }: Props) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const handBack = useHandBack();
   const base = useId();
   const detailId = `${base}-detail`;
@@ -54,7 +54,7 @@ export function LogCard({ log, open, onOpen }: Props) {
         <DayBadge log={log} id={badgeId} />
       </div>
       <div id={detailId} className={styles.detail}>
-        <p className={styles.stamp}><CalendarDays aria-hidden="true" />{stamp(version)}</p>
+        <p className={styles.stamp}><CalendarDays aria-hidden="true" />{stamp(version, lang)}</p>
         {by ? <p className={styles.by}>{t('calc.byName', { name: by })}</p> : null}
         {versionsOf(log).length > 1 ? <p className={styles.count}>{t('calc.logVersionCount', { n: versionsOf(log).length })}</p> : null}
         <LogOrder version={version} />

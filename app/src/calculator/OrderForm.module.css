@@ -18,7 +18,7 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-height: calc(100dvh - var(--s6));
+  max-height: calc(var(--vh100) - var(--s6));
   border-radius: var(--r-lg) var(--r-lg) 0 0;
   background: var(--surface);
   box-shadow: var(--shadow-3);
@@ -141,7 +141,7 @@
 
   .modal {
     max-width: 640px;
-    max-height: calc(100dvh - var(--s6) * 2);
+    max-height: calc(var(--vh100) - var(--s6) * 2);
     border-radius: var(--r-lg);
   }
 }

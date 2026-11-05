@@ -1,0 +1,9 @@
+/* The page a label prints on, for a browser that does not lay the sheet on its named @page (label-print.css).
+
+   ⚠️⚠️ SWITCHED ON ONLY WHILE A LABEL PRINTS. printHost.tsx links this file with media="not all" when the label screen
+   first loads (so it is already downloaded when Print is pressed) and sets media="print" for exactly as long as the
+   print host lives. Driven on the lab tablet (Chrome 101, 14 Oct 2026): that Chrome ignores named pages, so the label
+   went onto the default page with the browser's margins — off its corner and onto a second, blank page, a wasted label
+   on a label printer. The current app has this rule in its catalogue page's own CSS; this single-page app cannot keep
+   it in a stylesheet that is always on, or every other print it ever makes would lose its margins. */
+@page { size: auto; margin: 0; }

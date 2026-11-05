@@ -34,7 +34,7 @@ function useVersionTitle() {
 
 // A log's versions, newest first. Every edit is a version and nothing is ever lost: a restore adds a copy on top.
 export function LogHistory({ id }: { id: string }) {
-  const { t } = useT();
+  const { t, lang } = useT();
   const title = useVersionTitle();
   const lookup = useLog(id);
   if (lookup.status !== 'found') return <LogMissing lookup={lookup} />;
@@ -49,7 +49,7 @@ export function LogHistory({ id }: { id: string }) {
       <Rows>
         {versions.map((version, index) => ({ version, index })).reverse().map(({ version, index }) => {
           const by = version?.calculatedBy ? String(version.calculatedBy) : '';
-          const when = version?.at?.date ? stamp(version) : '';
+          const when = version?.at?.date ? stamp(version, lang) : '';
           return (
             <Door
               key={index}

@@ -50,8 +50,10 @@
   cursor: pointer;
 }
 
-.switchButton:hover {
-  background: var(--sunken);
+@media (hover: hover) {
+  .switchButton:hover {
+    background: var(--sunken);
+  }
 }
 
 .switchOn,
@@ -232,8 +234,10 @@
   cursor: pointer;
 }
 
-.button:hover:not(:disabled) {
-  background: var(--sunken);
+@media (hover: hover) {
+  .button:hover:not(:disabled) {
+    background: var(--sunken);
+  }
 }
 
 .button:disabled {

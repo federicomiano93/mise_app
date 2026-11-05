@@ -198,11 +198,9 @@ describe('the split of the frame', () => {
     // lines, which are under the screen's edge at scroll 0.
     expect(declaration(detail, 'overscroll-behavior')).toBeUndefined();
     // Never taller than the scroll area: the screen less the top bar and the gap above and below.
-    // Two declarations, `vh` first: Chrome 107 (the lab tablet's floor) has no `dvh`.
     const heights = [...detail.matchAll(/max-height:\s*([^;]+);/g)].map(([, value = '']) => value.trim());
     expect(heights).toEqual([
-      'calc(100vh - var(--topbar-h) - 2 * var(--s4))',
-      'calc(100dvh - var(--topbar-h) - 2 * var(--s4))',
+      'calc(var(--vh100) - var(--topbar-h) - 2 * var(--s4))',
     ]);
   });
 
@@ -230,7 +228,8 @@ describe('the split of the frame', () => {
 
 describe('the month\'s bottom bar', () => {
   const css = withoutComments(monthActionsCss);
-  const at = css.indexOf('@media (min-width: 1000px)');
+  // ⚠️ AND HEIGHT: on the lab tablet the keyboard leaves ~330px, and a stuck bar covered the box being typed into.
+  const at = css.indexOf('@media (min-width: 1000px) and (min-height: 560px)');
   const bar = rule(css.slice(0, at), '.bar');
 
   // ⚠️ Stuck to the bottom of a 296×668 phone it took a fifth of the screen, and the first screen

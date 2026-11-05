@@ -184,10 +184,12 @@
   cursor: pointer;
 }
 
-.fullScreen:hover,
-.send:hover,
-.copy:hover {
-  background: var(--sunken);
+@media (hover: hover) {
+  .fullScreen:hover,
+  .send:hover,
+  .copy:hover {
+    background: var(--sunken);
+  }
 }
 
 /* The heading takes the focus from script after a Confirm. A person who tapped does not need a ring around it; one

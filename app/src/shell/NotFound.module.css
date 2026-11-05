@@ -20,7 +20,9 @@
   text-decoration: none;
 }
 
-.action:hover {
-  background: var(--bg);
-  color: var(--ink);
+@media (hover: hover) {
+  .action:hover {
+    background: var(--bg);
+    color: var(--ink);
+  }
 }
