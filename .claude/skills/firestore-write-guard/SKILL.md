@@ -1,6 +1,6 @@
 ---
 name: firestore-write-guard
-description: Keep test writes off the real Mise database. Use BEFORE any action that could save to Firestore outside the unit tests — driving the app in a browser, a probe or driver script, seeding, a node script with firebase-admin, testing from a phone on the LAN, or fixing a real document — whether it saves a dough, a log, a supplier, an ingredient, a price, an order, a draft, a stocktake, settings or a product. Explains which database a write reaches and what to do when the task really is production data.
+description: Keep test writes off the real Mise database. Use BEFORE any action that could save to Firestore outside the unit tests — driving the app in a browser (the current app, or Mise 2 under vite preview), a probe or driver script (drive-*, drive-mise2-*), seeding, a node script with firebase-admin, a refusal from the Admin SDK guard, testing from a phone on the LAN, or fixing a real document — whether it saves a dough, a log, a supplier, an ingredient, a price, an order, a draft, a stocktake, settings or a product. Explains which database a write reaches and what to do when the task really is production data.
 ---
 
 # Firestore write guard — Mise
@@ -21,6 +21,11 @@ orders, real prices). Which database a write reaches is decided by the **hostnam
 There is no fallback and no check that the emulator is up. Confirm it: the console prints
 "LOCAL EMULATOR mode", and the emulator UI answers on http://127.0.0.1:4000.
 
+**Mise 2 decides the same way:** `app/src/session/firebaseBackend.ts` with
+`shared/src/firebase-target.ts`, the same allowlist, the same console line, served by `vite preview`
+on `127.0.0.1`. Its `drive-mise2-*` drivers refuse a non-local URL and seed over REST on the emulator
+(`127.0.0.1:8080`, or the ports the driver's header names).
+
 ## The safe path (default for every test)
 
 1. `firebase emulators:start --only auth,firestore --project bakery-app-ebf90`
@@ -40,6 +45,13 @@ There is no fallback and no check that the emulator is up. Confirm it: the conso
   127.0.0.1:9099`) set in the SAME command, an Admin SDK script writes to production with
   full power. Put the variables on the command line itself, and prefer the REST emulator
   calls `seed-emulator.mjs` uses.
+- **A hook now enforces this** (`.claude/hooks/guard-admin-sdk.mjs`, since 2 Nov 2026): it refuses the
+  Admin SDK unless the emulator is set for that very program (on its own part of the command, or by an
+  earlier `export` / `$env:`), and it refuses firebase's `firestore:` writes and `gcloud firestore`
+  even then, because those tools may ignore the variable. A seatbelt, not a lock: it sees only what the
+  command runs directly (`npm run …` is not covered, nor is a script that only reaches firebase-admin
+  two imports away), so this skill still applies. Its header lists the limits. To empty the emulator,
+  restart it.
 - A LAN IP or tunnel to test on a phone is not a local test (production before PR #244, the
   preview project after). To try a change on a real phone, use the PR's **preview link**
   (fake data); to drive it from the PC, the phone-preview window (`drive-app`).
@@ -47,13 +59,18 @@ There is no fallback and no check that the emulator is up. Confirm it: the conso
 ## When the task really IS production data
 
 ⚠️ **Only the main conversation may do this — a helper agent (`implementer`, any
-sub-agent) NEVER writes to production: it stops and reports.** For the main conversation it
-is allowed without stopping (global P10) — the protection is not a question to Federico:
+sub-agent) NEVER writes to production: it stops and reports**, and the hook refuses what it can see
+(a seatbelt, see above). For the
+main conversation it is allowed without stopping (global P10) — the protection is not a question to
+Federico:
 1. **Copy first**: read the exact document(s) and save them as JSON in the session
    scratchpad, so the change can be put back by hand.
 2. Write the smallest change, through the app where possible (it obeys the rules), and
    write a document the rules ACCEPT — every collection has a closed key whitelist, so an
-   invented probe document gets `permission-denied` (that is the rules working).
+   invented probe document gets `permission-denied` (that is the rules working). An Admin SDK
+   script or `firebase firestore:delete` for this task has `MISE_REAL_DATA=1` set for that program
+   (`MISE_REAL_DATA=1 node x.mjs`; PowerShell: `$env:MISE_REAL_DATA = 1; node x.mjs`), the hook's only
+   way through: it says «this one is real, on purpose».
 3. Read it back.
 4. Put it in the end-of-work list: which venue, which document, before → after.
 ⚠️ Some collections refuse deletes (`drafts/current`, `config/*`, `daily-logs`, `inventory`):
@@ -70,4 +87,5 @@ a bad write there can only be repaired by overwriting it. Never delete productio
 
 - Call a write "safe" because the URL says localhost — the emulator must be confirmed up.
 - Run a firebase-admin script without the emulator variables on the same command line.
+- Add `MISE_REAL_DATA=1` to get past a refusal: a test script gets the emulator variables instead.
 - Test writes from a LAN IP or tunnel and call it local.

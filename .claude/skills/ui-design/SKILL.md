@@ -1,19 +1,20 @@
 ---
 name: ui-design
-description: The one design system of Mise — tokens, header, bottom footer, navigation, confirmation dialogs, icons, icon-and-text alignment, rows with a delete icon, the settings-screen kit, buttons, motion and alerts. Use BEFORE building or changing any screen, overlay, sheet, dialog, header, button, icon or stylesheet (tokens.css, style.css, orders.css, any *.css), so the new part matches every other screen. Measuring the result afterwards is the ui-check skill.
+description: The one design system of Mise — tokens, header, bottom footer, navigation, confirmation dialogs, icons, icon-and-text alignment, rows with a delete icon, the settings-screen kit, buttons, motion and alerts. Use BEFORE building or changing any screen, overlay, sheet, dialog, header, button, icon or stylesheet (tokens.css, style.css, orders.css, any *.css; in Mise 2 any app/src/**/*.tsx, *.module.css, app/src/styles/tokens.css, ui/Button or ui/Dialog), so the new part matches every other screen. Measuring the result afterwards is the ui-check skill (for Mise 2, mise2-check).
 ---
 
 # UI design — one design system
 
-Build it right with this; measure it afterwards with the `ui-check` skill. Whether a screen reads
-well is only Federico, on a phone.
+Build it right with this; measure it afterwards with the `ui-check` skill (Mise 2: `mise2-check`).
+Whether a screen reads well is only Federico, on a phone.
 
 ## Mise 2 (`app/`) — its own design system
 
 Everything after this section is the CURRENT app's. Mise 2 has a new design, chosen in Claude
 Design (project «Mise 2 — design tablet-first», https://claude.ai/design/p/326b31df-d02f-4c27-bce6-f015fa95b820,
 file `mise2.css`: change a value there first, then in `app/src/styles/tokens.css`). Read
-`docs/architecture.md` too.
+`docs/architecture.md` too, never whole (its headings, then every section except «`app/src`, folder
+by folder», and from that one only the folders you touch).
 - **Tokens:** `app/src/styles/tokens.css` only, as `var(--…)`; warm «flour» neutrals, a dark rail,
   ONE accent (cobalt) for selection and the one primary action per screen; red, amber and green
   only for MEANING (danger/allergen, to check, done). Geist + Geist Mono, bundled. Light only.
@@ -28,9 +29,9 @@ file `mise2.css`: change a value there first, then in `app/src/styles/tokens.css
   every part sits in a `PartBoundary` («This part didn't load» + Reload). Touch targets 48px
   (`--hit`), steppers 56px (`--hit-lg`). Confirm before sign-out, delete, discard (P20), in a
   `ui/Dialog`, never the browser's.
-- **Measure** at 296, 360, 768, 1024 and 1280 in EN and IT with axe-core (the drivers in the
-  session scratchpad / `algprobe/mise-drive/`): no sideways scroll, no clipped label (the longest
-  Italian words: «Impostazioni» in the rail, «Calcolatore» in the 296px tab bar).
+- **Measure** with the `mise2-check` skill: axe-core in EN and IT, at 1024, 360 and 296 for a slice,
+  and at 768 and 1280 too when the shell or the layout changed: no sideways scroll, no clipped label
+  (the longest Italian words: «Impostazioni» in the rail, «Calcolatore» in the 296px tab bar).
 
 - ⚠️ **Pages load `dist/<name>.css`, the minified copy of each root stylesheet.** After editing ANY
   stylesheet run `node scripts/build-bundles.mjs` before ui-check, a screenshot or a phone preview,

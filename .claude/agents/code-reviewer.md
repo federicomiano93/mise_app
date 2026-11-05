@@ -18,7 +18,9 @@ Open with Read the ones the diff touches, and check the change against them:
 `.claude/skills/ui-design/SKILL.md` (any screen, dialog, icon or stylesheet) ·
 `.claude/skills/i18n-labels/SKILL.md` (any on-screen text, allergens, units, prices) ·
 `.claude/skills/bump-sw/SKILL.md` (any precached file, and `sw.js` itself) ·
-`.claude/skills/firestore-write-guard/SKILL.md` (scripts that write to Firestore).
+`.claude/skills/firestore-write-guard/SKILL.md` (scripts that write to Firestore) ·
+`.claude/skills/mise2-check/SKILL.md` (anything in `app/` or `shared/`). In Mise 2 a data layer is a
+`*Store.ts` or a `*Source.ts`, and `ui-design` and `i18n-labels` each have a «Mise 2» section.
 
 ## What to read
 
@@ -101,7 +103,10 @@ interaction between the change and the lines around it, not in the diff hunk.
 - New behaviour has a test (P15). A guard that pins HOW a call is shaped is satisfied
   by DELETING the call — something must also pin that the call exists.
 
-**Mise 2 (`app/`, `shared/`) — read `docs/architecture.md` first.** The defects found there so far:
+**Mise 2 (`app/`, `shared/`, on its own branches until the switch) — read `docs/architecture.md` first, never whole:** list its headings
+with `grep -n '^## '`, read every section EXCEPT «`app/src`, folder by folder», and from that one
+only the folders the diff touches; the same for `docs/parity/<section>.md` («Already in Mise 2», the
+topic sections, the slice's Decisions). The defects found there so far:
 - **One origin with the current app.** A storage key outside `KEEP_PREFIXES` (in BOTH
   `js/local-data.js` and `shared/src/local-data.ts`) is wiped by the other app's sign-out; a
   different Firebase SDK version, persistence list or Firestore cache setting breaks the other

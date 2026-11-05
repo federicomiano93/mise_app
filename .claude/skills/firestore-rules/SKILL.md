@@ -1,6 +1,6 @@
 ---
 name: firestore-rules
-description: How to change Firestore security rules or the data shape they guard in Mise, plus the full data model (every collection and field). Use BEFORE editing firestore.rules, adding a Firestore collection, adding/renaming/retiring a field the app saves, adding a key to a locations/{lid} or users/{uid} document, adding a membership role, or changing who may read or delete something; also before writing a Firestore query or a feature's data layer. Covers the venue boundary, roles, the read budget, the retired-field trap, the tests, and the rules-first deploy with read-back.
+description: How to change Firestore security rules or the data shape they guard in Mise, plus the full data model (every collection and field). Use BEFORE editing firestore.rules, adding a Firestore collection, adding/renaming/retiring a field the app saves, adding a key to a locations/{lid} or users/{uid} document, adding a membership role, or changing who may read or delete something; also before writing a Firestore query or a feature's data layer (in Mise 2 a *Store.ts, a *Source.ts, shared/src, anything using backend.firestore()). Covers the venue boundary, roles, the read budget, the retired-field trap, the tests, and the rules-first deploy with read-back.
 ---
 
 # Firestore rules — Mise
@@ -11,6 +11,8 @@ them record a bug that already happened once.
 
 The full data model — every collection and field, with the reason behind each odd one — is
 `data-model.md` beside this file. Read it before changing a collection, a saved field or a query.
+Mise 2 has the same rules and data, with no migration: its data layers (`*Store.ts`, `*Source.ts`)
+reach Firestore only through `backend.firestore()` (`app/src/session/firebaseBackend.ts`).
 
 ## The shape — three separate questions
 
