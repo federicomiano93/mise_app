@@ -105,6 +105,17 @@ describe('a real PDF', () => {
     expect(pdf).toMatch(/\/Title \(Pizza di prova\)/);
   });
 
+  it('draws a line under a row that has a divider, and none without one', async () => {
+    const divided: ExportModel = { ...SIX, rows: SIX.rows.map((row, i) => (i === 1 ? { ...row, dividerAfter: true } : row)) };
+    const pdf = await pdfText(divided);
+    expect(pageCount(pdf)).toBe(1);
+    expect(pdf.match(/\sl\s+S/g) ?? []).toHaveLength(1);
+    expect(await pdfText(SIX)).not.toMatch(/\sl\s+S/);
+    // The last row never has one: nothing under it to divide.
+    const trailing: ExportModel = { ...SIX, rows: SIX.rows.map((row, i) => (i === 5 ? { ...row, dividerAfter: true } : row)) };
+    expect(await pdfText(trailing)).not.toMatch(/\sl\s+S/);
+  });
+
   it('of 60 rows is still one page', async () => {
     const pdf = await pdfText(SIXTY);
     expect(pageCount(pdf)).toBe(1);

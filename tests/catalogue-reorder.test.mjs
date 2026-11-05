@@ -45,7 +45,7 @@ test('⚠️ the editor reorders in a MODE, by drag (held on a phone) or by arro
   assert.match(editor, /working\.ingredients = moveRow\(working\.ingredients, from, to\);\s*markDirty\(\);/,
     'a move is an edit: nothing is saved until Save, and leaving asks first');
   assert.match(editor, /event\.key !== 'ArrowUp' && event\.key !== 'ArrowDown'/, 'the keyboard can do it too (P18)');
-  assert.match(editor, /reorderBtn\.hidden = working\.ingredients\.length < 2;/, 'nothing to reorder with one row');
+  assert.match(editor, /reorderBtn\.hidden = working\.ingredients\.length < 2 \|\| dividing;/, 'nothing to reorder with one row, nor while placing divider lines');
 });
 
 test('the words exist in both languages', () => {
@@ -62,6 +62,6 @@ test('⚠️ Save with a row to fix leaves reorder mode first, so that row can b
   // refused in that mode redrew rows with nothing to highlight.
   const editor = codeOf(read('js/catalogue/catalogue-editor.js'));
   const save = editor.slice(editor.indexOf('async function onSave()'), editor.indexOf('async function onDelete()'));
-  assert.match(save, /if \(problem\) \{\s*showErrors = true;\s*if \(reordering\) setReordering\(false\);\s*renderIngredientRows\(\);/);
+  assert.match(save, /if \(problem\) \{\s*showErrors = true;\s*if \(reordering\) setReordering\(false\);\s*if \(dividing\) setDividing\(false\);\s*renderIngredientRows\(\);/);
   assert.match(editor, /onclick: \(\) => setReordering\(!reordering\),/, 'the button and the save share one way out');
 });

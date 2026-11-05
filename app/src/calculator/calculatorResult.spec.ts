@@ -139,6 +139,28 @@ describe('a recipe taken from the catalogue', () => {
       .toMatchObject({ kind: 'problem', problem: 'unweighable', row: 'Pinch of salt' });
   });
 
+  it('⚠️ marks the result row under which the catalogue has a line, and only that one — never the saved recipe', () => {
+    const rows = [
+      { rid: 'r-flour', label: 'Flour', grams: 600, unit: 'g', dividerAfter: true },
+      { rid: 'r-yeast', label: 'Yeast', grams: 300, unit: 'g' },
+      { rid: 'r-salt', label: 'Salt', grams: 100, unit: 'g', dividerAfter: true },
+    ];
+    const result = calculateTab(config, linked(), { 'cat-1': doc(rows) }, numbers({ totalG: 1000 }));
+    if (result.kind !== 'ready') throw new Error('not ready');
+    expect(result.rows.map(row => 'dividerAfter' in row)).toEqual([true, false, true]);
+    // The rows the Dough history is built from carry no flag.
+    expect(result.resolved.ingredients.some(row => 'dividerAfter' in row)).toBe(false);
+    expect(JSON.stringify(result.source)).not.toContain('dividerAfter');
+  });
+
+  it('gives an unlinked tab no flag at all', () => {
+    const own = { ...recipe('brioche'), ingredients: recipe('brioche').ingredients.map(row => ({ ...row, dividerAfter: true })) };
+    const result = calculateTab(config, own, {}, numbers({ totalG: 1000 }));
+    if (result.kind !== 'ready') throw new Error('not ready');
+    expect(result.rows.some(row => 'dividerAfter' in row)).toBe(false);
+  });
+
+
   it('calculates the leavening from the catalogue\'s own row, matched by its rid', () => {
     const both = linked({ logic: 'both', leaveningRid: 'r-yeast', leaveningDefaultPct: 40, baselinePct: 40, showLeavening: true });
     const { source } = sourceRecipe(both, { 'cat-1': doc(GOOD) });

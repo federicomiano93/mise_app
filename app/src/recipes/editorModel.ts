@@ -7,8 +7,8 @@
 // editor owns (label, grams, unit) are rewritten.
 
 import {
-  applyLink, isSameLink, isWeighableUnit, linkOf, linkedItemName, moveRow, normalizeShelfLifeDays, normalizeWeight, unitOf,
-  weighableTotalGrams,
+  applyLink, isSameLink, isWeighableUnit, keepRows, linkOf, linkedItemName, moveRow, normalizeShelfLifeDays, normalizeWeight,
+  unitOf, weighableTotalGrams, withoutTrailingDivider,
 } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import { categoryOf } from '@mise/shared/recipe-shelf';
@@ -247,18 +247,71 @@ export function linkRowTo(
 export const addRow = (working: Working): Working => ({ ...working, rows: [...working.rows, newRow()] });
 
 // ⚠️ THE LAST ROW IS EMPTIED, NOT REMOVED: a recipe always has a row to type into.
+// ⚠️ THE DIVIDER LINE STAYS BETWEEN THE ROWS (shared removeRow): the row above takes the removed row's line, and a line
+// left under the new last row is taken off (hidden there, it would come back with the next row added).
 export function removeRow(working: Working, key: number): Working {
-  const rows = working.rows.filter(item => item.key !== key);
+  const index = working.rows.findIndex(item => item.key === key);
+  if (index < 0) return working;
+  const kept = working.rows.filter(item => item.key !== key);
+  let rows = kept;
+  if (hasLine(working.rows[index])) {
+    const above = working.rows[index - 1];
+    if (above) rows = rows.map(item => (item === above ? withLine(item, true) : item));
+  }
+  rows = withoutTrailingLine(rows);
   return { ...working, rows: rows.length > 0 ? rows : [newRow()] };
+}
+
+// ── Divider lines (5 Nov 2026) ───────────────────────────────────────────────────────────────────────────────────
+// A row may carry `dividerAfter: true`: a line under it on the recipe screen and in the PDF. The line lives on the ROW
+// (what is saved), not on the EditRow, and a changed row is a NEW row object under the SAME key, so React keeps the
+// row standing and the rest of the row (its link, its `rid`) goes through untouched.
+const hasLine = (item: EditRow | undefined): boolean => item?.row.dividerAfter === true;
+
+function withLine(item: EditRow, on: boolean): EditRow {
+  if (hasLine(item) === on && (on || !('dividerAfter' in item.row))) return item;
+  const { dividerAfter: _dropped, ...rest } = item.row;
+  return { key: item.key, row: on ? { ...rest, dividerAfter: true } : rest };
+}
+
+// Never a line under the last row: nothing to divide it from.
+function withoutTrailingLine(rows: readonly EditRow[]): EditRow[] {
+  const last = rows[rows.length - 1];
+  return last && hasLine(last) ? [...rows.slice(0, -1), withLine(last, false)] : [...rows];
+}
+
+// Is a line drawn under this row? Never under the last one.
+export const rowHasDivider = (working: Working, index: number): boolean =>
+  index < working.rows.length - 1 && hasLine(working.rows[index]);
+
+// The line under the row with this key, on or off. The last row has none to toggle: the working copy comes back as it was.
+export function toggleDivider(working: Working, key: number): Working {
+  const index = working.rows.findIndex(item => item.key === key);
+  if (index < 0 || index === working.rows.length - 1) return working;
+  const item = working.rows[index]!;
+  const rows = working.rows.slice();
+  rows[index] = withLine(item, !hasLine(item));
+  return { ...working, rows };
 }
 
 // ── Reordering ───────────────────────────────────────────────────────────────────────────────────────────────────
 // ⚠️ THE SAME EditRow OBJECTS MOVE (shared moveRow reorders the list, it copies nothing), so a row keeps its `row` — its
 // link and its `rid` — and a guided mixing step that points at a row by `rid` is never unhooked by a reorder.
 // A move that changes nothing (out of range, the same place) gives back the very `working` it was given.
+// ⚠️ A DIVIDER LINE STAYS WHERE IT IS BETWEEN THE ROWS, as shared moveRow does for plain rows: the moved row leaves its line
+// behind, the row just above its old place takes it (or it goes, when nothing is above), and a line that would end up under
+// the last row is taken off. Here the line lives on `row`, which shared moveRow cannot see on an EditRow, so it is done here.
 export function moveWorkingRow(working: Working, from: number, to: number): Working {
-  const rows = moveRow(working.rows, from, to);
-  return rows.every((item, index) => item === working.rows[index]) ? working : { ...working, rows };
+  const moved = moveRow(working.rows, from, to);
+  if (moved.every((item, index) => item === working.rows[index])) return working;
+  const a = Math.trunc(Number(from));
+  const leaving = working.rows[a];
+  let rows = moved;
+  if (leaving && hasLine(leaving)) {
+    const above = working.rows[a - 1];
+    rows = rows.map(item => (item === leaving ? withLine(item, false) : item === above ? withLine(item, true) : item));
+  }
+  return { ...working, rows: withoutTrailingLine(rows) };
 }
 
 // One place up (-1) or down (1) for the row with this key: the arrow keys on a grip.
@@ -283,18 +336,25 @@ export function dropWorkingRow(working: Working, movedKey: number, targetKey: nu
 
 // Trim the names, make the amounts non-negative numbers, drop the rows with no name — and give back everything else the
 // recipe carries. Spread first (see above); only the fields this editor owns are rewritten.
+// ⚠️ A DROPPED NAMELESS ROW HANDS ITS DIVIDER LINE TO THE ROW ABOVE (keepRows), and a line after the last row is never
+// saved (withoutTrailingDivider) — as the current app's Save does. A line is strictly `true`; anything else is no key.
 export function cleanWorking(working: Working): RecipeToSave {
   const out: Record<string, unknown> = {
     ...working.rest,
     name: working.name.trim(),
-    ingredients: working.rows
-      .map(({ row }) => ({
-        ...row,
-        label: String(row.label ?? '').trim(),
-        grams: Math.max(0, Number(row.grams) || 0),
-        unit: unitOf(row),
-      }))
-      .filter(row => row.label),
+    ingredients: withoutTrailingDivider(keepRows(
+      working.rows.map(({ row }) => {
+        const { dividerAfter, ...rest } = row;
+        return {
+          ...rest,
+          label: String(row.label ?? '').trim(),
+          grams: Math.max(0, Number(row.grams) || 0),
+          unit: unitOf(row),
+          ...(dividerAfter === true ? { dividerAfter: true as const } : {}),
+        };
+      }),
+      row => row.label,
+    )),
   };
   // A box that was typed in replaces the stored value: 0 for an emptied net weight (the store turns it into a removal),
   // no key at all for an emptied shelf life.

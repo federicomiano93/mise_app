@@ -18,7 +18,8 @@
 // scaling (`scaleCatalogue`, `baseAmounts`, `MAX_SANE_BATCH_G`, `MAX_SANE_MULTIPLE`, `formatWeight`) and the
 // persisted-batch freshness (`SCALED_TTL_MS`, `isScaledEntryFresh`) and, since step 3d-6, what the recipe
 // editor needs: the chooser (`linkOptions`, with the types `LinkOption` and `LinkOptionsInput`), writing a row's
-// link (`linkedItemName`, `isSameLink`, `applyLink`), `moveRow`, the Save validation (`findInvalidRecipe`, with
+// link (`linkedItemName`, `isSameLink`, `applyLink`), `moveRow` (and, since the dividers of 5 Nov 2026,
+// `hasDividerAfter`, `keepRows`, `removeRow`, `withoutTrailingDivider`), the Save validation (`findInvalidRecipe`, with
 // the type `InvalidRecipeProblem`) and `findCalculatorImport` (the delete warning) and, since step 3d-7, the rest
 // of the Calculator import (`toCalculatorRecipe`, `nonWeighableLabels`, `mergeImportedRecipe`,
 // `importFailureKey`).
@@ -424,6 +425,9 @@ export function applyLink<R>(row: R, chosen: unknown, { label }: { label?: unkno
 // The rows in a new order: the one at `from` moved to `to`. Returns a NEW list holding the SAME row objects — a
 // row keeps its link and, above all, its `rid`, which is what a guided mixing step points at. An index outside
 // the list, or a move to where it already is, gives the list back as it was (still a new array).
+// ⚠️ A DIVIDER LINE STAYS WHERE IT IS BETWEEN THE ROWS: a row that moves leaves its line behind, so the row just
+// above its old place takes it (or it goes, when nothing is above). Like the original this MUTATES the moved row
+// and that one neighbour, so a caller hands it rows that are its own working copies (the editor clones first).
 export function moveRow<T>(list: readonly T[] | null | undefined, from: unknown, to: unknown): T[] {
   const rows = Array.isArray(list) ? list.slice() : [];
   const a = Math.trunc(Number(from));
@@ -431,8 +435,50 @@ export function moveRow<T>(list: readonly T[] | null | undefined, from: unknown,
   if (!Number.isInteger(a) || !Number.isInteger(b) || a === b
     || a < 0 || b < 0 || a >= rows.length || b >= rows.length) return rows;
   const [row] = rows.splice(a, 1);
+  const moved = row as unknown as { dividerAfter?: unknown } | null | undefined;
+  if (moved?.dividerAfter === true) {
+    delete moved.dividerAfter;
+    const above = rows[a - 1] as unknown as { dividerAfter?: unknown } | null | undefined;
+    if (above && typeof above === 'object') above.dividerAfter = true;
+  }
   rows.splice(b, 0, row as T);
+  // A line the move left under the LAST row is taken off now: hidden there, it would come back with the next row
+  // added or moved below it.
+  const last = rows[rows.length - 1] as unknown as { dividerAfter?: unknown } | null | undefined;
+  if (last && typeof last === 'object' && last.dividerAfter === true) delete last.dividerAfter;
   return rows;
+}
+
+type MaybeDivided = { dividerAfter?: unknown } | null | undefined;
+
+// Is a line drawn under row i? Never under the last row: nothing to divide it from.
+export const hasDividerAfter = (rows: unknown, i: number): boolean =>
+  Array.isArray(rows) && i < rows.length - 1 && (rows[i] as MaybeDivided)?.dividerAfter === true;
+
+// The rows `keep` accepts. A dropped row's line goes to the kept row above it (copied, never mutated: the caller's
+// rows may be the store's), or goes with it when there is none.
+export function keepRows<T>(rows: readonly T[] | null | undefined, keep: (row: T) => unknown): T[] {
+  const kept: T[] = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (keep(row)) { kept.push(row); continue; }
+    if ((row as MaybeDivided)?.dividerAfter === true && kept.length) {
+      kept[kept.length - 1] = { ...kept[kept.length - 1], dividerAfter: true } as T;
+    }
+  }
+  return kept;
+}
+
+// Deleting the last row leaves no hidden line under the new last one (it would reappear with the next row).
+export const removeRow = <T>(rows: readonly T[] | null | undefined, index: number): T[] =>
+  withoutTrailingDivider(keepRows(rows, row => row !== (rows as readonly T[])[index]));
+
+// What is saved: a line after the last row is taken off.
+export function withoutTrailingDivider<T>(rows: readonly T[] | null | undefined): T[] {
+  const list = Array.isArray(rows) ? rows as T[] : [];
+  const last = list[list.length - 1] as MaybeDivided;
+  if (last?.dividerAfter !== true) return list;
+  const { dividerAfter: _dropped, ...rest } = last as Record<string, unknown>;
+  return [...list.slice(0, -1), rest as T];
 }
 
 // Is there already an ingredient called exactly this (ignoring case and spaces at the ends) among the ones a
@@ -642,6 +688,8 @@ export interface CatalogueRow {
   kind?: RowKind;
   refId?: string;
   rid?: string;
+  // A line under this row on the recipe screen and in the PDF (5 Nov 2026). Strictly `true`, absent otherwise.
+  dividerAfter?: true;
 }
 
 // A catalogue recipe from arbitrary input. `steps` and `endNote` are carried through as stored and SHAPED by
@@ -668,7 +716,8 @@ export const MAX_SHELF_LIFE_DAYS = 3650;
 // coerce to 0 so the scaling math never sees NaN; an unknown or missing unit falls back to grams.
 //
 // ⚠️ THE LINK AND THE `rid` HAVE TO BE CARRIED THROUGH HERE. This function rebuilds every row from scratch,
-// so a field it does not mention is DROPPED — silently, on the way in from Firestore. Both are absent rather
+// so a field it does not mention is DROPPED — silently, on the way in from Firestore (and `dividerAfter` too, since
+// 5 Nov 2026). Both are absent rather
 // than null when there is none (rows written today stay byte-identical), and `rid` is carried, never MINTED:
 // an id invented on read would be a different one on every load and would match nothing.
 function normalizeIngredient(input: unknown): CatalogueRow | null {
@@ -685,6 +734,10 @@ function normalizeIngredient(input: unknown): CatalogueRow | null {
 
   const rid = raw.rid != null ? String(raw.rid).trim() : '';
   if (rid) row.rid = rid;
+
+  // ⚠️ SAME TRAP A THIRD TIME: the divider line the owner put under this row. Strictly `true` (a stored 'true', 1
+  // or false is no line), absent otherwise, so every recipe written before dividers existed stays byte-identical.
+  if (raw.dividerAfter === true) row.dividerAfter = true;
   return row;
 }
 

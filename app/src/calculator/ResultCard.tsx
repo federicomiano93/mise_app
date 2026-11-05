@@ -151,7 +151,7 @@ export function ResultCard({ recipe, result, config, products, qty, divisorN, on
             className={styles.export}
             onClick={() => {
               openExport({
-                model: { name, trays: exportTrays, totalG: ready.totalG, rows: ready.rows.map(row => ({ name: row.name, grams: row.grams })) },
+                model: { name, trays: exportTrays, totalG: ready.totalG, rows: ready.rows.map(row => ({ name: row.name, grams: row.grams, ...(row.dividerAfter ? { dividerAfter: true } : {}) })) },
                 totalLabel: t('calc.totalDough'),
               });
             }}

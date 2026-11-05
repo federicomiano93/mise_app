@@ -20,6 +20,7 @@
 // was left with no weights at all, for everybody.
 
 import { ridOf } from './guided-model';
+import { keepRows } from './catalogue-model';
 
 // ── What can go wrong, named ─────────────────────────────────────────────────
 //
@@ -46,6 +47,8 @@ export interface ResolvedRecipe {
   name: string;
   ingredients: SourceIngredient[];
   leaveningKey: string | null;
+  // The indexes (into `ingredients`) of the rows with a divider line under them; absent when there is none.
+  dividersAfter?: number[];
   linked: boolean;
   problem: RecipeProblem | null;
   problemRow: string;
@@ -54,7 +57,7 @@ export interface ResolvedRecipe {
 const num = (v: unknown): number => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
 
 // Loose views of the inputs: every field is read defensively, as in the original.
-type Row = { unit?: unknown; grams?: unknown; label?: unknown } | null | undefined;
+type Row = { unit?: unknown; grams?: unknown; label?: unknown; dividerAfter?: unknown } | null | undefined;
 type Tab = { catalogueId?: unknown; name?: unknown; ingredients?: unknown; leaveningKey?: unknown; leaveningRid?: unknown } | null | undefined;
 
 // Is this row something the Calculator can scale? The Calculator works in grams and multiplies everything
@@ -120,7 +123,8 @@ export function resolveRecipe(recipe: unknown, catalogueById?: unknown): Resolve
   }
 
   const rows = (Array.isArray(source.ingredients) ? source.ingredients : []) as Row[];
-  const usable = rows.filter(r => r && String(r.label || '').trim());
+  // keepRows, not filter: a blank row that carried a divider line hands it to the row above.
+  const usable = keepRows(rows, r => r && String(r.label || '').trim());
   if (!usable.length) {
     return { ...blank(), name: (source.name || tab.name || '') as string, linked: true, problem: PROBLEMS.empty };
   }
@@ -154,10 +158,15 @@ export function resolveRecipe(recipe: unknown, catalogueById?: unknown): Resolve
   const wanted = String(tab.leaveningRid || '').trim();
   const leaveningKey = wanted && ingredients.some(i => i.key === wanted) ? wanted : null;
 
+  // ⚠️ A SEPARATE LIST, NEVER A FLAG ON `ingredients`: those rows flow into sheetRecipe() and from there into the
+  // saved Dough history, which must not learn about lines drawn on a PDF.
+  const dividersAfter = usable.flatMap((r, i) => ((r as NonNullable<Row>).dividerAfter === true ? [i] : []));
+
   return {
     name: (source.name || tab.name || '') as string,
     ingredients,
     leaveningKey,
+    ...(dividersAfter.length ? { dividersAfter } : {}),
     linked: true,
     problem: null,
     problemRow: '',

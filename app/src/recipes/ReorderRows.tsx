@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { FocusEvent, KeyboardEvent } from 'react';
 import { GripVertical } from 'lucide-react';
 import { Button, DropIndicator, GridList, GridListItem, I18nProvider, useDragAndDrop } from 'react-aria-components';
-import { unitOf } from '@mise/shared/catalogue-model';
+import { hasDividerAfter, unitOf } from '@mise/shared/catalogue-model';
 import { useT } from '../i18n/useT';
 import type { DropPosition, EditRow } from './editorModel';
 import { unitWord } from './IngredientRow';
@@ -95,11 +95,11 @@ export function ReorderRows({ rows, labelledBy, hintId, onDrop, onStep, focusGri
     return () => { cancelAnimationFrame(frame); };
   }, [focusGrip, focusNow]);
 
-  const amountOf = (item: EditRow): { number: string; unit: string } => {
+  const amountOf = (item: EditRow): { number: string; unit: string; wordOnly: boolean } => {
     const unit = unitOf(item.row);
     const grams = item.row.grams;
     const empty = grams === '' || grams === undefined || grams === null;
-    return { number: unit === 'to taste' || empty ? '' : String(grams), unit: unitWord(unit, t) };
+    return { number: unit === 'to taste' || empty ? '' : String(grams), unit: unitWord(unit, t), wordOnly: unit === 'to taste' };
   };
 
   // ⚠️ THE LIST IS DESCRIBED BY THE HINT, and not the grips: a grip described by the hint would hide React Aria's own «Press
@@ -150,16 +150,31 @@ export function ReorderRows({ rows, labelledBy, hintId, onDrop, onStep, focusGri
           ref={gridRef}
           className={styles.list}
           items={rows}
+          // ⚠️ React Aria caches each row's drawing by its item object, and a move keeps the same EditRow objects: without this
+          // a row keeps the divider classes of its OLD place (a doubled line, a missing separator) until «Fine».
+          dependencies={[rows]}
           dragAndDropHooks={dragAndDropHooks}
         >
           {item => {
             const name = nameOf(item);
             const amount = amountOf(item);
+            // A divider line under this row (never the last), and the row below it, which then draws no top border of its own.
+            const index = rows.findIndex(candidate => candidate.key === item.key);
+            const divided = hasDividerAfter(rows.map(candidate => candidate.row), index);
+            const below = index > 0 && hasDividerAfter(rows.map(candidate => candidate.row), index - 1);
+            const rowClass = [styles.row, divided ? styles.divided : '', below ? styles.belowDivided : ''].filter(Boolean).join(' ');
             return (
-              <GridListItem id={item.key} textValue={name} className={styles.row}>
+              <GridListItem
+                id={item.key}
+                textValue={name}
+                className={rowClass}
+                data-divider-after={divided ? 'true' : undefined}
+                data-below-divider={below ? 'true' : undefined}
+              >
                 <span className={styles.name}>{name}</span>
                 <span className={styles.amount}>
-                  <span className={styles.number}>{amount.number}</span>
+                  {/* «to taste» has no number: the word takes the whole cell, or «to taste» is cut to «to tas». */}
+                  {amount.wordOnly ? null : <span className={styles.number}>{amount.number}</span>}
                   <span className={styles.unit}>{amount.unit}</span>
                 </span>
                 {/* ⚠️ THE GRIP STANDS WHERE THE BIN STOOD, at the END: at the start it took 48px from the name, which broke

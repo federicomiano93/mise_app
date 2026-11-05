@@ -21,6 +21,16 @@
   border-top: 0;
 }
 
+/* A divider line under the row: 2px in the ink, in place of the 1px separator the next row would draw. Two classes, so
+   they outweigh .row whichever order the rules are in. */
+.row.divided {
+  border-bottom: 2px solid var(--ink-2);
+}
+
+.row.belowDivided {
+  border-top: 0;
+}
+
 .row[data-focus-visible] {
   outline: 3px solid var(--accent);
   outline-offset: -3px;

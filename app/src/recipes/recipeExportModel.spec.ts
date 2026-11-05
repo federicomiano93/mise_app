@@ -53,6 +53,18 @@ describe('recipeExportModel', () => {
     expect(model.rows.map(row => row.unit)).toEqual(['ml', 'kg', 'pcs', 'g', 'to taste']);
   });
 
+  it('carries a divider on the rows that have one, and no key at all on the others', () => {
+    const divided = {
+      ...RECIPE,
+      ingredients: RECIPE.ingredients.map((ingredient, index) => (index === 1 ? { ...ingredient, dividerAfter: true } : index === 2 ? { ...ingredient, dividerAfter: 'yes' } : ingredient)),
+    } as unknown as CatalogueRecipe;
+    const model = recipeExportModel(divided, recipeAmounts(divided, null, tEn, 'en-GB'));
+    expect(model.rows.map(row => 'dividerAfter' in row)).toEqual([false, true, false, false, false]);
+    expect((model.rows[1] as { dividerAfter?: unknown }).dividerAfter).toBe(true);
+    const plain = recipeExportModel(RECIPE, recipeAmounts(RECIPE, null, tEn, 'en-GB'));
+    expect(plain.rows.some(row => 'dividerAfter' in row)).toBe(false);
+  });
+
   it('says the unit in the interface’s words, as the screen does', () => {
     const model = recipeExportModel(RECIPE, recipeAmounts(RECIPE, null, tIt, 'it-IT'));
     expect(model.rows.map(row => row.unit)).toEqual(['ml', 'kg', 'pz', 'g', 'q.b.']);

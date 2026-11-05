@@ -1786,3 +1786,39 @@ is printed. ⚠️ P13: a person's first name goes on paper on the food; off by 
   its line on the row underneath, margin to margin.
 - The refusals say who can change Settings («whoever manages the venue»), and «too long» first says to shorten what was typed.
 - A HACCP print is announced as `haccp-label-printed` (the product label's stays `label-printed`).
+
+### Recipe dividers — as built (5 Nov 2026, port of the current app's PR #458)
+
+Federico, 5 Nov 2026 (his app note of 29 Oct): lines between groups of a recipe's ingredients. His choices: example B for the PDF
+(a 0.75 pt black line across the 300 pt block, 14 pt of air, the line halfway); the editor, the recipe screen and the PDF; Excel
+without lines; the Calculator's PDF draws them only for a tab linked to the Recipe book.
+
+**Data:** a row of `recipes/{id}.ingredients` may carry `dividerAfter: true`, absent otherwise. No rules change (the rules check
+`ingredients` as a list). ⚠️ `normalizeIngredient` rebuilt every row and DROPPED the field: Mise 2 would have erased every line on
+the first save. It keeps it now (strictly `true`; a stored `'true'`, 1 or `false` is no line).
+
+**The rules of a line** (shared `catalogue-model.ts`, and `editorModel.ts` on the editor's EditRow copies): the line stays BETWEEN
+the rows — a moved or deleted row leaves its line to the row above (or it goes, when nothing is above); never a line under the last
+row (stripped on a move, a delete and on Save); a nameless row dropped on Save hands its line to the row above.
+
+**The screens:** «Divisioni»/«Dividers» beside «Riordina»/«Reorder» in the editor's ingredients head; each mode hides the other's
+button. In the mode every row but the last is a toggle button (`aria-pressed`, «Linea sotto …», described by the hint), the focus
+stays on the tapped row and goes back to the mode button at «Fine». A 2px `--ink-2` line under a divider row in the edit rows, the
+reorder rows, the divider rows, on the recipe screen and in its full-screen view (as the current app's zoomed list). The Calculator card shows no line; `resolveRecipe` hands a separate
+`dividersAfter` list, never a flag on the ingredients that feed Dough history.
+
+**Differences from the current app** (tell him):
+- D1 «to taste» has no number, so in the reorder rows and the divider rows the word now takes the whole amount cell: in English
+  it was cut to «to tas» (Mise 2's reorder rows had the cut since 3d-6; measured by the dividers driver).
+- D2 Save keeps a line only when it is strictly `true` (the current app's editor spreads the row as it is; its normaliser makes it
+  `true` anyway, so the saved data is the same).
+
+**Known limits, as in the current app:** a phone on an older build drops the field when it saves that recipe; on a long recipe the
+lines make the PDF's font a little smaller (the air gives way last); moving a row across a line jumps it into the next group.
+
+Driven: `algprobe/mise-drive/drive-mise2-recipe-dividers.mjs <base> <cdp-port> <out-dir>` (FIREBASE_PROJECT_ID=bakery-app-ebf90, the
+seed, the shared emulator; ONLY=IT360,…), 168/168 at IT and EN × 1024/360/296: the PDF read back (one line, 0.75 pt, halfway, the
+rows below 14 pt lower; a recipe without dividers has none), the full-screen view, a reorder move next to a line, real taps, Save, the Calculator card and its PDF, axe on every screen.
+
+Review (opus, 5 Nov 2026): no data defect; fixed the reorder rows keeping their old place's line classes after a move (React Aria
+caches a row by its item: `dependencies={[rows]}`) and the full-screen view without lines.

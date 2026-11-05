@@ -980,6 +980,9 @@ export const it: Messages = {
   'cat.reorder': 'Riordina',
   'cat.reorderDone': 'Fine',
   'cat.reorderHint': 'Tieni premuto un ingrediente e trascinalo al suo posto. Con la tastiera usa le frecce su e giù.',
+  'cat.dividers': 'Divisioni',
+  'cat.dividersHint': 'Tocca un ingrediente per mettere una linea sotto. Tocca di nuovo per toglierla.',
+  'cat.dividerUnder': 'Linea sotto {name}',
   'cat.moveRow': 'Sposta «{name}»',
   'cat.unnamedRow': '(senza nome)',
   'cat.notWeighed': {

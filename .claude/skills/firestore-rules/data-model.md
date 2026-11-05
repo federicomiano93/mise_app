@@ -93,6 +93,8 @@ both halves.
 named (`gluten-wheat`, not `gluten`). `mayContain` is never merged into `allergens`. In nutrition,
 0 is a real value and `null` is not.
 
+**Recipe row divider (5 Nov 2026).** A row of `recipes/{id}.ingredients` may carry `dividerAfter` (optional, `true` or absent, never `false`/null; not checked by the rules because they cannot look inside a list; the shape is `normalizeIngredient`). The PDF draws the line, the spreadsheet ignores it.
+
 **Image labels (Mise 2, 25 Oct 2026, rules not yet deployed).** Recipes may carry `labelName` (string ≤200; empty =
 the recipe name in capitals) and `labelIngredientsText` (string ≤2000, the ingredients typed as printed, allergens in
 capitals); employees may edit both, like the rest of a recipe. `config/labels` gains `template` (`'standard'` |
