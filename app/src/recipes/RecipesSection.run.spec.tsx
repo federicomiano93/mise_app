@@ -632,7 +632,10 @@ describe('leaving', () => {
     await user.click(press('Back'));
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Leave' }));
     await screen.findByRole('heading', { level: 3, name: 'Ingredients' });
-    expect(isRinging()).toBe(false);
+    // ⚠️ WAITED FOR, NOT READ AT ONCE: the router moves between screens inside a transition, and React runs a transition's
+    // effect cleanups — the one that stops the alarm — a moment AFTER the recipe is drawn. Read in that moment it still rang
+    // (it failed CI at random, 5 Nov 2026). The wait is short: unstopped, the alarm would ring for a minute.
+    await waitFor(() => { expect(isRinging()).toBe(false); });
   });
 });
 
