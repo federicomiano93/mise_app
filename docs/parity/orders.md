@@ -1370,3 +1370,36 @@ current app keeps it inside Settings («Ordini passati»). The current app was n
 
 **Driven:** `algprobe/mise-drive/drive-mise2-history-door.mjs` (owner IT 1280/1024/768/360/296, owner EN 1024/360/296, employee 360).
 Not driven on the real tablet: no new CSS or JS feature is involved.
+
+## Step 3f-8a — Settings and the kiosk lines (5 Nov 2026, plan agreed by him)
+
+Slice 3f-8 as listed above is L, so it is split: **3f-8a** (this one) is Orders → Settings in full and the kiosk feed; **3f-8b**
+(next) is the flat view and its swap (L17), the summary (L19), the tablet money (L20), the sticky head (L21), the supplier name as a
+door to its card and the add / edit ingredient doors (L30).
+
+**Items:** M1–M8, M10 (writes), M14 (the feed), F5. Port: `kiosk-lines` (full, paired). Data: `ordersStore.saveSetting` (one merge into
+`config/orders` per change, decided by `orders/settingsPatch.ts`) and `ordersStore.kioskSections()` (`orders/kioskFeed.ts`). **No rule
+changed**: every key is already whitelisted and typed under `config/orders` (`canManage`).
+
+**Settings, top to bottom** (the current app's order; the two cards Mise 2 already had stay):
+1. Order lists (owner/manager only): the switch; off refused while lists are an employee's only road (M6).
+2. The order screen: «Show the Stock box» for everybody, locked for employees with «Only an owner or a manager can change this.»
+   (M3, F5); the door «Supplier order» (owner/manager only) to `/orders/settings/supplier-order` (M8).
+3. The working week (owner/manager only): a select of the short weekday names (M5).
+4. How orders may be sent (owner/manager only): one switch per road, the manager road only while lists are on, the last road cannot
+   be closed (said), the line about email opening the mail app (M6).
+5. Check deliveries (3f-5, unchanged).
+6. Alerts (this phone): notices and «Do not buzz this phone about order lists» (M7, 3f-6/3f-7, unchanged).
+7. History: «Days of past orders shown in History», 1–365, saved on leaving the box, locked for employees (M4, F5).
+
+**His choices (5 Nov 2026), taken with the recommendation:**
+- A. The supplier order is saved at each move, like every other control on this screen and like the current app (no Save button).
+- B. An employee does not see the sections for whoever runs the place (lists, week, roads, supplier order), as in the current app;
+  the Stock box and the days of History are shown locked.
+- C. No «Help» door in Settings (M9): the «?» help is the shell's, for every screen (F7), its own step.
+
+**Differences from the current app:**
+- S1. An empty or out-of-range «Days of past orders» is refused AND said; the current app puts the stored number back in silence.
+- S2. The kiosk's «arriving» line honours the goods-arrived switch (F4 (c)): off, none; back on, only the orders recorded from that
+  day (`askedAbout`), the same records Incoming reads. «To order today» reads every record, as today.
+- S3. No Help door (choice C).

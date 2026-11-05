@@ -61,6 +61,10 @@ import { createSuggester, NO_SUGGESTIONS } from './suggester';
 import type { Suggester } from './suggester';
 import type { LensIngredient, OrdersLens } from './ordersLens';
 import type { OrdersMeta, OrdersSource, StoredDoc } from './ordersSource';
+import { settingPatch } from './settingsPatch';
+import type { SettingChange, SettingRefusal } from './settingsPatch';
+import { kioskSectionsFor } from './kioskFeed';
+import type { KioskSection } from '@mise/shared/kiosk-lines';
 
 export type OrdersConfig = ReturnType<typeof normalizeOrdersConfig>;
 
@@ -137,6 +141,9 @@ export type RecordWriteOutcome = 'saved' | 'deleted' | 'changed' | 'gone' | 'emp
 // Firestore shows the change on this phone at once and sends it when the connection comes back (local-first), so a screen never
 // waits for it before moving on.
 export type DeliveryWriteOutcome = 'saved' | 'refused' | 'failed';
+
+// How a change on Orders → Settings ended (step 3f-8): written, refused by the rules, failed, or one of settingsPatch.ts's refusals.
+export type SettingOutcome = DeliveryWriteOutcome | SettingRefusal;
 
 // How «Put back» / «Another supplier» ended: 'applied' — the line is in the order (sent at once; a refusal is said like any
 // typing, 'draft-not-saved', and the line stays on this phone to go again with the next change); 'skipped' — the row already has
@@ -278,6 +285,13 @@ export interface OrdersStore {
   orderElsewhere(item: ReorderItem, supplierId: string): ReorderOutcome;
   // The goods-arrived switch for the whole venue (decision F4).
   setDeliveryCheck(on: boolean): Promise<DeliveryWriteOutcome>;
+  // One change on Orders → Settings (step 3f-8, parity M3–M8): the Stock box, order lists, a road, the week start, the days of
+  // History, the supplier order. Decided by settingsPatch.ts — a refusal ('only-road', 'last-road', 'invalid', 'unchanged') writes
+  // nothing — then ONE merge into config/orders, which the rules let only an owner or a manager write ('refused' otherwise).
+  saveSetting(change: SettingChange): Promise<SettingOutcome>;
+  // The kiosk rest screen's Orders lines from what is held now (parity M14, decision T13), the goods-arrived switch honoured
+  // (kioskFeed.ts). No read. The kiosk that draws them is step 3g.
+  kioskSections(): KioskSection[];
   // Would anybody hear a list sent now (parity R17)? ⚠️ NEVER REJECTS AND NEVER STOPS A SEND: an unreadable roster, a refused read or
   // a phone that is offline is no evidence that nobody is listening, and answers «go ahead».
   whoIsAway(senderUid: string): Promise<AwayAnswer>;
@@ -889,6 +903,24 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
 
     setDeliveryCheck(on) {
       return deliveryWrite('Saving the goods-arrived switch', () => source.mergeOrdersConfig(deliveryCheckPatch(on, deps.today(), snapshot.deliveryCheck)));
+    },
+
+    saveSetting(change) {
+      // ⚠️ JUDGED ON THE CONFIG AS IT IS NOW: a road closed a moment ago (its write still on the way) already counts, because
+      // Firestore lays a pending write over the snapshot at once.
+      const decided = settingPatch(change, snapshot.config);
+      if ('refused' in decided) return Promise.resolve(decided.refused);
+      return deliveryWrite(`Saving the Orders setting ${change.kind}`, () => source.mergeOrdersConfig(decided.patch));
+    },
+
+    kioskSections() {
+      return kioskSectionsFor({
+        suppliers: snapshot.suppliers,
+        history: snapshot.history,
+        today: deps.today(),
+        weekStartsOn: snapshot.config.weekStartsOn,
+        deliveryCheck: snapshot.deliveryCheck,
+      });
     },
 
     async whoIsAway(senderUid) {
