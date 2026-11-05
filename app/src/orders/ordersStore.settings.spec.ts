@@ -82,6 +82,22 @@ describe('saveSetting', () => {
     expect(await s.store.saveSetting({ kind: 'route', route: 'whatsapp', on: false })).toBe('last-road');
   });
 
+  it('two road closes tapped together: the second is judged on the first, still on its way', async () => {
+    const s = await started({ orderLists: false, sendRoutes: { manager: true, whatsapp: true, whatsappSupplier: false, email: true } });
+    // Real Firestore shows a write to the listener only after a moment (the local database, then the listener); the fake shows it at
+    // once, so here the first write reaches the fake only when `land()` runs.
+    const waiting: Array<() => void> = [];
+    const original = s.source.mergeOrdersConfig.bind(s.source);
+    s.source.mergeOrdersConfig = patch => new Promise<void>((resolve, reject) => {
+      waiting.push(() => { original(patch).then(resolve, reject); });
+    });
+    const first = s.store.saveSetting({ kind: 'route', route: 'email', on: false });
+    const second = s.store.saveSetting({ kind: 'route', route: 'whatsapp', on: false });
+    waiting.forEach(land => { land(); });
+    expect([await first, await second]).toStrictEqual(['saved', 'last-road']);
+    expect(s.store.getSnapshot().config.sendSettings.routes.whatsapp).toBe(true);
+  });
+
   it('a refusal by the rules is said apart', async () => {
     const s = await started();
     s.source.failDelivery.config = true;
@@ -91,6 +107,11 @@ describe('saveSetting', () => {
 });
 
 describe('kioskSections', () => {
+  it('answers null until the suppliers, the records and config/orders have arrived', () => {
+    const s = setup();
+    expect(s.store.kioskSections()).toBe(null);
+  });
+
   it('to order today and arriving today, from what is held', async () => {
     const s = await started();
     expect(s.store.kioskSections()).toStrictEqual([

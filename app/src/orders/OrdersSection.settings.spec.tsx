@@ -280,8 +280,24 @@ describe('the supplier order', () => {
     view.source.failDelivery.config = true;
     act(() => { grip('Alpine Mills').focus(); });
     await view.user.keyboard('{ArrowDown}');
-    expect(await alertText(view)).toMatch(/Could not save the order\./);
+    // Said by the section's status line, not a dialog (review of 3f-8a): no modal over a grid being re-ordered.
+    expect(await screen.findByText('Could not save the order. Check the connection and try again.', undefined, LOAD)).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     await waitFor(() => { expect(names()).toEqual(['Alpine Mills', 'Bee Farm', 'Zed Dairy Ltd']); });
+  });
+
+  it('keeps a switched-off supplier’s place at the end of what it writes', async () => {
+    const view = await atOrder({ supplierOrder: ['s-alp', 's-off', 's-bee', 's-zed'] });
+    act(() => { grip('Alpine Mills').focus(); });
+    await view.user.keyboard('{ArrowDown}');
+    await waitFor(() => { expect(writes(view.source)).toEqual([{ supplierOrder: ['s-bee', 's-alp', 's-zed', 's-off'] }]); });
+  });
+
+  it('draws no grip and no drag with a single supplier', async () => {
+    const source = fakeOrdersSource({ suppliers: [supplier('s-alp', { name: 'Alpine Mills', active: true })] });
+    renderOrders('/orders/settings/supplier-order', { source });
+    await screen.findByRole('row', undefined, LOAD);
+    expect(screen.queryByRole('button', { name: /Move / })).not.toBeInTheDocument();
   });
 
   it('says there are no suppliers when none is active', async () => {

@@ -1,7 +1,7 @@
 // What Orders → Settings writes into config/orders, and when it refuses (step 3f-8, parity M3–M8).
 import { describe, expect, test } from 'vitest';
 import { normalizeOrdersConfig } from '@mise/shared/orders-config';
-import { historyDaysOf, settingPatch } from './settingsPatch';
+import { historyDaysOf, settingPatch, withPatch } from './settingsPatch';
 
 const config = (doc: Record<string, unknown> = {}) => normalizeOrdersConfig(doc);
 
@@ -68,5 +68,30 @@ describe('historyDaysOf', () => {
     expect(historyDaysOf(1)).toBe(1);
     expect(historyDaysOf(365)).toBe(365);
     expect(historyDaysOf('0.5')).toBe(null);
+  });
+});
+
+describe('withPatch', () => {
+  test('two road closes judged one after the other cannot shut the last road, before either has landed', () => {
+    const start = config({ orderLists: false, sendRoutes: { manager: true, whatsapp: true, whatsappSupplier: false, email: true } });
+    const first = settingPatch({ kind: 'route', route: 'email', on: false }, start);
+    expect('patch' in first).toBe(true);
+    if (!('patch' in first)) return;
+    expect(settingPatch({ kind: 'route', route: 'whatsapp', on: false }, withPatch(start, first.patch))).toStrictEqual({ refused: 'last-road' });
+  });
+
+  test('order lists off counts for the roads judged next', () => {
+    const start = config({ sendRoutes: { manager: true, whatsapp: true, whatsappSupplier: false, email: false } });
+    const off = withPatch(start, { orderLists: false });
+    expect(off.orderLists).toBe(false);
+    expect(off.sendSettings.orderLists).toBe(false);
+    expect(settingPatch({ kind: 'route', route: 'whatsapp', on: false }, off)).toStrictEqual({ refused: 'last-road' });
+  });
+
+  test('a patch the config already carries changes nothing, and the other fields are kept', () => {
+    const start = config({ showStock: false, historyDays: 30, weekStartsOn: 'Monday', supplierOrder: ['b'] });
+    expect(withPatch(start, { showStock: false })).toStrictEqual(start);
+    expect(withPatch(start, { historyDays: 40 }).historyDays).toBe(40);
+    expect(withPatch(start, { historyDays: 40 }).weekStartsOn).toBe('Monday');
   });
 });

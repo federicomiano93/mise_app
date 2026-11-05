@@ -9,11 +9,12 @@ import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { KEEP_FOCUS } from '../shell/Page';
 import { FormBar } from '../ui/FormBar';
-import { useAlert } from '../ui/useAlert';
+import { useStatusMessage } from '../ui/StatusMessage';
 import { useOrders, useOrdersStore } from './OrdersContext';
 import { SUPPLIER_ORDER_DOOR, useHandBack } from './handBack';
 import { cameFromList, useLeave } from './ordersNav';
 import { SETTINGS_PATH } from './ordersPath';
+import { LONG_MS } from './useClearQuantities';
 import styles from './SupplierSequenceScreen.module.css';
 
 // How long «Saved ✓» stays under the list.
@@ -44,9 +45,9 @@ export function SupplierSequenceScreen() {
 function Sequence() {
   const { t, lang } = useT();
   const { state } = useLocation();
-  const { suppliers, config, configLoaded } = useOrders();
+  const { suppliers, suppliersLoaded, config, configLoaded } = useOrders();
   const store = useOrdersStore();
-  const [alert, alertDialog] = useAlert();
+  const say = useStatusMessage();
   const handBack = useHandBack();
   const leave = useLeave(SETTINGS_PATH, () => { handBack.expect(SUPPLIER_ORDER_DOOR); });
   const titleId = useId();
@@ -64,6 +65,13 @@ function Sequence() {
     config.supplierOrder,
     supplierLabel,
   ).map(s => ({ id: s.id, label: supplierLabel(s) })), [suppliers, config.supplierOrder]);
+  // ⚠️ THE STORED IDS THAT ARE NOT ON SCREEN (a supplier switched off) are kept at the end of every save, so switching one back on
+  // returns it to its place, not to the bottom (the current app's `offScreen`, tests/supplier-order.test.mjs «switched-off suppliers
+  // keep their place»). Found in the review of 3f-8a.
+  const offScreen = useMemo(() => {
+    const shown = new Set(stored.map(row => row.id));
+    return config.supplierOrder.filter(id => !shown.has(id));
+  }, [stored, config.supplierOrder]);
 
   // The order after a move, shown at once while the write is on its way; null follows the data.
   const [local, setLocal] = useState<readonly string[] | null>(null);
@@ -81,6 +89,8 @@ function Sequence() {
   }, [stored, local]);
 
   const save = (ids: readonly string[]) => {
+    // A drop back where it was writes nothing (the current app's saveOrder).
+    if (ids.length === rows.length && ids.every((id, i) => id === rows[i]?.id)) return;
     request.current += 1;
     const mine = request.current;
     setLocal(ids);
@@ -95,12 +105,13 @@ function Sequence() {
         timer.current = setTimeout(() => { timer.current = null; setPhase('idle'); }, SAVED_MS);
       } else {
         setPhase('idle');
-        // ⚠️ THE LIST GOES BACK FIRST, THE NOTICE COMES AFTER IT HAS DRAWN: a modal that opens in the same render as a re-ordered grid
-        // sends React Aria's hiding of the page behind it into a loop that never ends.
-        setTimeout(() => { void alert({ message: t('ord.sequence.err'), okLabel: t('common.ok') }); }, 0);
+        // ⚠️ SAID BY THE SECTION'S STATUS LINE, NOT A DIALOG (review of 3f-8a): Firestore redraws the list back AFTER the refusal arrives,
+        // and a modal open over a grid that is being re-ordered sent React Aria's hiding of the page into a loop that never ended in
+        // the specs. The status line also outlives this screen, so a refusal that lands after Back is still said.
+        say(t('ord.sequence.err'), LONG_MS);
       }
     };
-    store.saveSetting({ kind: 'supplierOrder', ids }).then(outcome => { settle(outcome === 'saved' || outcome === 'unchanged'); }, () => { settle(false); });
+    store.saveSetting({ kind: 'supplierOrder', ids: [...ids, ...offScreen] }).then(outcome => { settle(outcome === 'saved' || outcome === 'unchanged'); }, () => { settle(false); });
   };
 
   const ids = rows.map(row => row.id);
@@ -207,8 +218,9 @@ function Sequence() {
       <FormBar backLabel={t('ui.back')} onBack={leave} title={t('ord.sequence.title')} titleId={titleId} titleRef={title} />
       <div className={styles.body}>
         <p id={hintId} className={styles.hint}>{t('ord.sequence.hint')}</p>
+        {/* «No active suppliers» only once the suppliers have arrived: before that it would be a guess said as a fact. */}
         {rows.length === 0 ? (
-          <p className={styles.empty}>{t('ord.sequence.none')}</p>
+          suppliersLoaded ? <p className={styles.empty}>{t('ord.sequence.none')}</p> : null
         ) : (
           <I18nProvider locale={lang}>
             <div onKeyDownCapture={onKey} onFocusCapture={onFocusRow}>
@@ -219,14 +231,17 @@ function Sequence() {
                 items={rows}
                 // ⚠️ React Aria caches each row's drawing by its item object: without this a row keeps what it drew at its OLD place.
                 dependencies={[rows]}
-                dragAndDropHooks={dragAndDropHooks}
+                // One supplier has nowhere to go: no drag and no grip (the current app hides the grips under two).
+                dragAndDropHooks={rows.length > 1 ? dragAndDropHooks : undefined}
               >
                 {item => (
                   <GridListItem id={item.id} textValue={item.label} className={styles.row}>
                     <span className={styles.name}>{item.label}</span>
-                    <Button slot="drag" ref={gripRef(item.id)} className={styles.grip} aria-label={t('ord.sequence.move', { name: item.label })}>
-                      <GripVertical aria-hidden="true" />
-                    </Button>
+                    {rows.length > 1 ? (
+                      <Button slot="drag" ref={gripRef(item.id)} className={styles.grip} aria-label={t('ord.sequence.move', { name: item.label })}>
+                        <GripVertical aria-hidden="true" />
+                      </Button>
+                    ) : null}
                   </GridListItem>
                 )}
               </GridList>
@@ -237,7 +252,6 @@ function Sequence() {
           {phase === 'saving' ? t('ord.sequence.saving') : phase === 'saved' ? t('settings.saved') : ''}
         </p>
       </div>
-      {alertDialog}
     </section>
   );
 }

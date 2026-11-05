@@ -15,7 +15,7 @@
 // ⚠️ WHO MAY WRITE IS NOT DECIDED HERE: the rules let only an owner or a manager write config/orders (canManage), and the screen
 // locks or hides the controls as a courtesy (P2).
 
-import { effectiveRoutes, listsAreTheOnlyRoad, toStored, validateRoutes } from '@mise/shared/send-routes';
+import { effectiveRoutes, listsAreTheOnlyRoad, normalizeSendRoutes, toStored, validateRoutes } from '@mise/shared/send-routes';
 import type { Route } from '@mise/shared/send-routes';
 import { isValidWeekStart } from '@mise/shared/work-week';
 import { normalizeSupplierOrder } from '@mise/shared/supplier-order';
@@ -75,4 +75,26 @@ export function settingPatch(change: SettingChange, config: OrdersConfig): Setti
     case 'supplierOrder':
       return { patch: { supplierOrder: normalizeSupplierOrder(change.ids) } };
   }
+}
+
+// The config as it will be once `patch` has landed: what the NEXT change is judged on while this one is still on its way (review of
+// 3f-8a). Firestore lays a write over the snapshot only after a moment (the local database, then the listener), and two road switches
+// tapped inside that moment would each have judged the old roads and could close the last one between them. Applying a patch the
+// snapshot already carries changes nothing, so it is safe to apply it until the write settles.
+export function withPatch(config: OrdersConfig, patch: Readonly<Record<string, unknown>>): OrdersConfig {
+  const next: OrdersConfig = { ...config, sendSettings: { ...config.sendSettings } };
+  if (typeof patch.showStock === 'boolean') next.showStock = patch.showStock;
+  if (typeof patch.historyDays === 'number') next.historyDays = patch.historyDays;
+  if (typeof patch.weekStartsOn === 'string') next.weekStartsOn = patch.weekStartsOn;
+  if (Array.isArray(patch.supplierOrder)) next.supplierOrder = patch.supplierOrder as string[];
+  if (typeof patch.orderLists === 'boolean') {
+    next.orderLists = patch.orderLists;
+    next.sendSettings.orderLists = patch.orderLists;
+  }
+  if ('sendRoutes' in patch) {
+    const roads = normalizeSendRoutes({ sendRoutes: patch.sendRoutes, preferredRoute: patch.preferredRoute });
+    next.sendSettings.routes = roads.routes;
+    next.sendSettings.preferred = roads.preferred;
+  }
+  return next;
 }

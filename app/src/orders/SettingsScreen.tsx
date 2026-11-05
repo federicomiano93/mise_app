@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Bell, ChevronRight } from 'lucide-react';
-import { useLocation, useNavigationType } from 'react-router';
+import { useLocation } from 'react-router';
 import { todayISO } from '@mise/shared/day';
 import { turningOnForgets } from '@mise/shared/delivery-check';
 import { HISTORY_LIVE_MONTHS } from '@mise/shared/history-window';
@@ -22,7 +22,7 @@ import { SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, useHandBack } from './handBack';
 import { cameFromList, useLeave } from './ordersNav';
 import { ORDERS_PATH } from './ordersPath';
 import { phoneMuted, phoneToken, rememberPhoneMute } from './phoneMute';
-import { MAX_HISTORY_DAYS, MIN_HISTORY_DAYS } from './settingsPatch';
+import { historyDaysOf, MAX_HISTORY_DAYS, MIN_HISTORY_DAYS } from './settingsPatch';
 import type { SettingChange } from './settingsPatch';
 import type { SettingOutcome } from './ordersStore';
 import { LONG_MS } from './useClearQuantities';
@@ -158,6 +158,8 @@ function HistoryDaysRow({ write, loaded }: { write: Write; loaded: boolean }) {
   const focused = useRef(false);
   // The text last handed to the store, so Enter followed by the blur it causes writes once.
   const handed = useRef(stored);
+  // A write on its way: until it settles the stored number may still be the old one, so it is not put back in the box.
+  const inFlight = useRef(false);
   useEffect(() => {
     // ⚠️ A BOX THAT HAS THE FOCUS IS NEVER OVERWRITTEN: another phone's change must not rewrite the digits under the finger.
     if (focused.current) return;
@@ -166,10 +168,23 @@ function HistoryDaysRow({ write, loaded }: { write: Write; loaded: boolean }) {
   }, [stored]);
 
   const commit = () => {
-    if (text === handed.current) return;
+    if (text === handed.current) {
+      // Nothing typed since the last sync: a change another phone made while the box had the focus is shown now (review of 3f-8a).
+      if (!inFlight.current && text !== stored) {
+        setText(stored);
+        handed.current = stored;
+      }
+      return;
+    }
     handed.current = text;
+    inFlight.current = true;
     void write({ kind: 'historyDays', value: text }).then(outcome => {
+      inFlight.current = false;
       if (outcome === 'saved') {
+        // The box shows the number as stored («020» or «20.7» typed, 20 kept).
+        const kept = String(historyDaysOf(text) ?? stored);
+        setText(kept);
+        handed.current = kept;
         showSaved();
       } else if (outcome === 'invalid') {
         say(t('ord.settings.historyDaysRange'), LONG_MS);
@@ -220,7 +235,6 @@ function HistoryDaysRow({ write, loaded }: { write: Write; loaded: boolean }) {
 export function SettingsScreen({ onOpenSupplierOrder }: { onOpenSupplierOrder: () => void }) {
   const { t } = useT();
   const { state } = useLocation();
-  const navigationType = useNavigationType();
   const { config, configLoaded, deliveryCheck } = useOrders();
   const [confirm, confirmDialog] = useConfirm();
   const [alert, alertDialog] = useAlert();
@@ -246,10 +260,12 @@ export function SettingsScreen({ onOpenSupplierOrder }: { onOpenSupplierOrder: (
   const doorRef = useCallback((node: HTMLButtonElement | null) => { handBack.register(SUPPLIER_ORDER_DOOR, node); }, [handBack]);
   const [deliverySaved, showDeliverySaved] = useSavedChip();
 
+  const screen = useRef<HTMLElement>(null);
   useEffect(() => {
-    // Opened from the list the page leaves the focus alone (FROM_LIST): it goes to this title, once. ⚠️ NOT ON A BACK FROM THE
-    // SUPPLIER ORDER (a POP): the door that opened it is owed the focus then.
-    if (cameFromList(state) && navigationType !== 'POP') title.current?.focus();
+    // Opened from the list the page leaves the focus alone (FROM_LIST): it goes to this title, once. ⚠️ NOT WHEN SOMETHING INSIDE THE
+    // SCREEN ALREADY HAS IT: back from the supplier order, the section has handed it to the door that opened that screen (its layout
+    // effect runs before this one). A reload or Forward still focuses the title (review of 3f-8a: a check on POP skipped those too).
+    if (cameFromList(state) && !screen.current?.contains(document.activeElement)) title.current?.focus();
   }, []);
 
   // One write for every control: says why a refusal wrote nothing, or that the connection failed.
@@ -269,7 +285,7 @@ export function SettingsScreen({ onOpenSupplierOrder }: { onOpenSupplierOrder: (
 
   const lists = config.orderLists;
   return (
-    <section className={styles.screen} aria-labelledby={titleId}>
+    <section ref={screen} className={styles.screen} aria-labelledby={titleId}>
       <FormBar backLabel={t('ui.back')} onBack={leave} title={t('ord.settings.title')} titleId={titleId} titleRef={title} />
       <div className={styles.body}>
         {canManage ? (

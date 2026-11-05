@@ -61,7 +61,7 @@ import { createSuggester, NO_SUGGESTIONS } from './suggester';
 import type { Suggester } from './suggester';
 import type { LensIngredient, OrdersLens } from './ordersLens';
 import type { OrdersMeta, OrdersSource, StoredDoc } from './ordersSource';
-import { settingPatch } from './settingsPatch';
+import { settingPatch, withPatch } from './settingsPatch';
 import type { SettingChange, SettingRefusal } from './settingsPatch';
 import { kioskSectionsFor } from './kioskFeed';
 import type { KioskSection } from '@mise/shared/kiosk-lines';
@@ -290,8 +290,9 @@ export interface OrdersStore {
   // nothing — then ONE merge into config/orders, which the rules let only an owner or a manager write ('refused' otherwise).
   saveSetting(change: SettingChange): Promise<SettingOutcome>;
   // The kiosk rest screen's Orders lines from what is held now (parity M14, decision T13), the goods-arrived switch honoured
-  // (kioskFeed.ts). No read. The kiosk that draws them is step 3g.
-  kioskSections(): KioskSection[];
+  // (kioskFeed.ts). No read. null while the suppliers, the records or config/orders have not arrived: «nothing to show» and «not
+  // known yet» are told apart. The kiosk that draws them is step 3g.
+  kioskSections(): KioskSection[] | null;
   // Would anybody hear a list sent now (parity R17)? ⚠️ NEVER REJECTS AND NEVER STOPS A SEND: an unreadable roster, a refused read or
   // a phone that is offline is no evidence that nobody is listening, and answers «go ahead».
   whoIsAway(senderUid: string): Promise<AwayAnswer>;
@@ -563,6 +564,9 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     senderReads.set(senderUid, read);
     return read;
   }
+
+  // The Orders settings' patches still on their way to the server, oldest first (saveSetting): the next change is judged on them too.
+  let settingWrites: Readonly<Record<string, unknown>>[] = [];
 
   async function deliveryWrite(label: string, write: () => Promise<void>): Promise<DeliveryWriteOutcome> {
     const release = deps.markBusy();
@@ -906,14 +910,21 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     },
 
     saveSetting(change) {
-      // ⚠️ JUDGED ON THE CONFIG AS IT IS NOW: a road closed a moment ago (its write still on the way) already counts, because
-      // Firestore lays a pending write over the snapshot at once.
-      const decided = settingPatch(change, snapshot.config);
+      // ⚠️ JUDGED ON THE CONFIG AS IT WILL BE: the snapshot with every setting write still on its way laid over it (settingsPatch.ts
+      // withPatch), so a road closed a moment ago already counts even before Firestore's own copy shows it.
+      const decided = settingPatch(change, settingWrites.reduce(withPatch, snapshot.config));
       if ('refused' in decided) return Promise.resolve(decided.refused);
-      return deliveryWrite(`Saving the Orders setting ${change.kind}`, () => source.mergeOrdersConfig(decided.patch));
+      const patch = decided.patch;
+      settingWrites.push(patch);
+      const settled = () => { settingWrites = settingWrites.filter(p => p !== patch); };
+      return deliveryWrite(`Saving the Orders setting ${change.kind}`, () => source.mergeOrdersConfig(patch))
+        .then(outcome => { settled(); return outcome; });
     },
 
     kioskSections() {
+      // ⚠️ NOTHING UNTIL THE DATA IS HERE (review of 3f-8a; the current app answers only once suppliers and records are loaded): with
+      // the records missing every order day reads «to order», and with config/orders missing the switch reads ON.
+      if (!snapshot.suppliersLoaded || !snapshot.historyLoaded || !snapshot.configLoaded) return null;
       return kioskSectionsFor({
         suppliers: snapshot.suppliers,
         history: snapshot.history,
