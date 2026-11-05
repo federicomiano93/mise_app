@@ -288,7 +288,10 @@ export function calc(id) {
   const spec = recipeSpec(sheetRecipe(recipe, source));
   if (isProRata(recipe.logic)) spec.leaveningKey = null; // pure pro-rata, no leavening adjust
   const scaled = scaleRecipe(spec, target, pct);
-  const rows = source.ingredients.map((ing, i) => ({ name: ing.label, grams: scaled[i] || 0 }));
+  const lines = source.dividersAfter || [];
+  const rows = source.ingredients.map((ing, i) => ({
+    name: ing.label, grams: scaled[i] || 0, ...(lines.includes(i) ? { dividerAfter: true } : {}),
+  }));
   renderIngredients(id + '-ingredients', rows);
   lastRecipe[id] = { rows, totalG: Math.round(target), name: source.name || recipe.name, trays: exportTrays(recipe) };
 
@@ -321,7 +324,7 @@ export function exportModelFor(id) {
     name: model.name,
     trays: model.trays || 0,
     totalG: model.totalG,
-    rows: model.rows.map(r => ({ name: r.name, grams: r.grams })),
+    rows: model.rows.map(r => ({ name: r.name, grams: r.grams, ...(r.dividerAfter ? { dividerAfter: true } : {}) })),
   };
 }
 

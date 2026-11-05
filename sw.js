@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v692';
+const CACHE_NAME = 'theitalianclub-v693';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -154,9 +154,9 @@ const ASSET_HASHES = {
   "./suppliers.html": '0f24580d8d5a1e05',
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
-  "./dist/i18n.js": 'd32db713751e2b8b',
+  "./dist/i18n.js": 'b6f733559e7c69fb',
   "./dist/index.js": '260b3eb5d851b110',
-  "./dist/calculator.js": '737c791ef778ae6b',
+  "./dist/calculator.js": 'c29537ef95107fed',
   "./dist/orders.js": '515deaac1b4e6ffe',
   "./dist/suppliers.js": '11c8947fd8447660',
   "./dist/install-guide.js": '86df880954faeae9',
@@ -167,7 +167,7 @@ const ASSET_HASHES = {
   "./js/firebase-target.js": 'b3759997e54ddbc3',
   "./js/firebase.js": '4aeddee49dce8a21',
   "./js/i18n-dom.js": '24249af4367511e5',
-  "./js/i18n.js": 'e45c5642a051a4d5',
+  "./js/i18n.js": 'bf50565958a2b03a',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/local-data.js": '91aa7f1699c897a1',
   "./js/location.js": '6aaf53615a8739d1',
@@ -182,7 +182,7 @@ const ASSET_HASHES = {
   "./js/update-gate.js": '1801738b3e6def2d',
   "./js/vendor/jspdf.esm.js": 'c59e9f48f24c403f',
   "./js/vendor/write-excel-file.esm.js": '9c9b6920e629cb74',
-  "./dist/catalogue.js": '3a35b2bc4af91554',
+  "./dist/catalogue.js": '663a0d22997639ec',
   "./dist/pastries.js": '542ddb995c74b911',
   "./dist/foodcost.js": '7c528cc0d5521d53',
   "./dist/inventory.js": 'caee82bcb52584c8',
@@ -203,7 +203,7 @@ const ASSET_HASHES = {
   "./fonts/atkinson-next-digits.woff2": '99ffa5b0e9a45a2b',
   "./js/splash-init.js": 'c68474ad53893e48',
   "./catalogue.html": 'd7e133a7e7180865',
-  "./dist/catalogue.css": '4ff8f1ca17cef028',
+  "./dist/catalogue.css": 'ce156477aa985d5a',
   "./dist/label-print.css": 'c96c56dfef069675',
   "./dist/records.css": '0285e69618b83eed',
   "./pastries.html": '7f35bf54c3ee54db',

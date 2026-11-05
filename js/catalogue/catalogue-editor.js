@@ -15,6 +15,7 @@ import { el } from './dom.js';
 import {
   findInvalidRecipe, unitOf, unitText, CATALOGUE_UNITS, isWeighableUnit, weighableTotalGrams,
   linkOf, applyLink, linkedItemName, isSameLink, normalizeWeight, normalizeShelfLifeDays, moveRow,
+  hasDividerAfter, removeRow, keepRows, withoutTrailingDivider,
 } from './catalogue-model.js';
 // Drag to reorder the rows — the library the Calculator's clients and the Home cards use,
 // vendored into the repo and precached (P19).
@@ -126,7 +127,8 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     totalNote.hidden = !skipped;
     countEl.textContent = String(working.ingredients.length);
     // Nothing to put in order with a single row.
-    reorderBtn.hidden = working.ingredients.length < 2;
+    reorderBtn.hidden = working.ingredients.length < 2 || dividing;
+    dividerBtn.hidden = working.ingredients.length < 2 || reordering;
   }
 
   // ── Reordering the rows (13 Sep 2026) ───────────────────────────────────────
@@ -143,12 +145,52 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
   let reordering = false;
   let sortable = null;
 
+  // ── Divider lines (5 Nov 2026) ──────────────────────────────────────────────
+  //
+  // Where a line goes under an ingredient on the recipe screen and in the PDF. ⚠️ A SECOND MODE
+  // BESIDE REORDERING, for the reason written above: a fifth control on every row would take its
+  // width from the name. While it is on, each row is one tap target that toggles its line.
+  // The two modes exclude each other (the other one's button is hidden meanwhile).
+  let dividing = false;
+
+  function renderDividerRows() {
+    const last = working.ingredients.length - 1;
+    working.ingredients.forEach((ing, idx) => {
+      const name = String(ing.label || '').trim() || t('cat.unnamedRow');
+      const unit = unitOf(ing);
+      const qty = ing.grams === '' || ing.grams === undefined || unit === 'to taste' ? '' : String(ing.grams);
+      const inside = [
+        el('span', { class: 'cat-reorder-name', text: name }),
+        el('span', { class: 'cat-reorder-amount', text: [qty, unit].filter(Boolean).join(' ') }),
+      ];
+      // Nothing is below the last row, so it has no line and nothing to tap.
+      if (idx === last) {
+        rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup cat-reorder-row cat-divider-row--last' }, inside));
+        return;
+      }
+      const row = el('button', {
+        type: 'button',
+        class: 'cat-ing-editgroup cat-reorder-row cat-divider-row' + (ing.dividerAfter === true ? ' cat-reorder-row--divider' : ''),
+        'aria-pressed': String(ing.dividerAfter === true),
+        'aria-label': t('cat.dividerUnder', { name }), 'aria-describedby': 'catDividersHint',
+        // Toggled in place, no redraw, so the focus stays on the row that was tapped.
+        onclick: () => {
+          if (ing.dividerAfter === true) delete ing.dividerAfter; else ing.dividerAfter = true;
+          row.classList.toggle('cat-reorder-row--divider', ing.dividerAfter === true);
+          row.setAttribute('aria-pressed', String(ing.dividerAfter === true));
+          markDirty();
+        },
+      }, inside);
+      rowsContainer.appendChild(row);
+    });
+  }
+
   function renderReorderRows() {
     working.ingredients.forEach((ing, idx) => {
       const name = String(ing.label || '').trim() || t('cat.unnamedRow');
       const unit = unitOf(ing);
       const qty = ing.grams === '' || ing.grams === undefined || unit === 'to taste' ? '' : String(ing.grams);
-      rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup cat-reorder-row' }, [
+      rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup cat-reorder-row' + (hasDividerAfter(working.ingredients, idx) ? ' cat-reorder-row--divider' : '') }, [
         el('button', {
           type: 'button', class: 'home-cards-grip cat-reorder-grip', icon: GRIP_ICON,
           'aria-label': t('cat.moveRow', { name }), 'aria-describedby': 'catReorderHint',
@@ -201,6 +243,11 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     rowsContainer.replaceChildren();
     if (reordering) {
       renderReorderRows();
+      updateTotal();
+      return;
+    }
+    if (dividing) {
+      renderDividerRows();
       updateTotal();
       return;
     }
@@ -273,7 +320,8 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
       const delIcon = el('button', {
         class: 'cat-del-icon', type: 'button', 'aria-label': t('cat.removeIngredient'), icon: TRASH_SVG,
         onclick: () => {
-          working.ingredients.splice(idx, 1);
+          // The line stays between the rows: the row above this one takes this row's line.
+          working.ingredients = removeRow(working.ingredients, idx);
           if (!working.ingredients.length) working.ingredients.push({ label: '', grams: '', unit: 'g' });
           markDirty();
           renderIngredientRows();
@@ -284,7 +332,7 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
       // At 296px the row already holds a name, an amount, a unit and a bin; a fifth
       // target takes its width from the ingredient NAME, which is the one thing that
       // has to stay readable. Under it there is room to say what it points at.
-      rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup' }, [
+      rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup' + (hasDividerAfter(working.ingredients, idx) ? ' cat-ing-editgroup--divider' : '') }, [
         // ⚠️ TWO FRAMES, ONE ROW, and the width to do it was BOUGHT, not found.
         // Federico, 23 Aug: «lo spazio dove scrivere la quantità e la tipologia devono
         // essere ben distinte» — answered then with a single frame divided down the
@@ -432,9 +480,12 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     return {
       ...working,
       name: String(working.name || '').trim(),
-      ingredients: working.ingredients
-        .map(i => ({ ...i, label: String(i.label || '').trim(), grams: Math.max(0, Number(i.grams) || 0), unit: unitOf(i) }))
-        .filter(i => i.label),
+      // keepRows hands a nameless row's line to the row above; a line after the last row is dropped.
+      ingredients: withoutTrailingDivider(keepRows(
+        working.ingredients
+          .map(i => ({ ...i, label: String(i.label || '').trim(), grams: Math.max(0, Number(i.grams) || 0), unit: unitOf(i) })),
+        i => i.label,
+      )),
     };
   }
 
@@ -447,6 +498,7 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
       // ⚠️ OUT OF REORDER MODE FIRST: its rows have no name or amount box, so the one to fix
       // could be neither highlighted nor reached.
       if (reordering) setReordering(false);
+      if (dividing) setDividing(false);
       renderIngredientRows();
       validateUI();
       revealProblem(problem);
@@ -556,10 +608,30 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     reorderBtn.setAttribute('aria-pressed', String(reordering));
     reorderHint.hidden = !reordering;
     // No new row while reordering: it would be a row with nothing to drag by its name.
-    addRowBtn.hidden = reordering;
+    addRowBtn.hidden = reordering || dividing;
     renderIngredientRows();
     if (showErrors && !reordering) validateUI();
     const first = rowsContainer.querySelector(reordering ? '.cat-reorder-grip' : '.cat-lbl');
+    try { first?.focus({ preventScroll: true }); } catch (e) { /* focus is best-effort */ }
+  }
+
+  const dividersHint = el('p', { class: 'cat-reorder-hint', id: 'catDividersHint', text: t('cat.dividersHint') });
+  dividersHint.hidden = true;
+  const dividerBtn = el('button', {
+    class: 'cat-reorder-btn', type: 'button', text: t('cat.dividers'), 'aria-pressed': 'false',
+    onclick: () => setDividing(!dividing),
+  });
+
+  function setDividing(on) {
+    dividing = on;
+    dividerBtn.textContent = dividing ? t('cat.reorderDone') : t('cat.dividers');
+    dividerBtn.setAttribute('aria-pressed', String(dividing));
+    dividersHint.hidden = !dividing;
+    // No new row while placing lines: the list is a fixed set of tap targets.
+    addRowBtn.hidden = dividing;
+    renderIngredientRows();
+    if (showErrors && !dividing) validateUI();
+    const first = rowsContainer.querySelector(dividing ? '.cat-divider-row' : '.cat-lbl');
     try { first?.focus({ preventScroll: true }); } catch (e) { /* focus is best-effort */ }
   }
 
@@ -621,9 +693,10 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     el('div', { class: 'cat-ing-head' }, [
       el('label', { class: 'cat-ing-head-label', text: t('cat.ingredients') }),
       countEl,
-      reorderBtn,
+      el('span', { class: 'cat-ing-head-actions' }, [dividerBtn, reorderBtn]),
     ]),
     reorderHint,
+    dividersHint,
     rowsContainer,
     totalNote,
     addRowBtn,

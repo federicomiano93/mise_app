@@ -2252,6 +2252,9 @@ const DICTIONARIES = Object.freeze({
     // ── Reordering a recipe's ingredients (13 Sep 2026) ──
     'cat.reorder': 'Reorder',
     'cat.reorderDone': 'Done',
+    'cat.dividers': 'Dividers',
+    'cat.dividersHint': 'Tap an ingredient to put a line under it. Tap again to take it away.',
+    'cat.dividerUnder': 'Line under {name}',
     'cat.reorderHint': 'Hold an ingredient and drag it to its place. With a keyboard, use the up and down arrows.',
     'cat.moveRow': 'Move «{name}»',
     'cat.unnamedRow': '(no name)',
@@ -5194,6 +5197,9 @@ const DICTIONARIES = Object.freeze({
     // ── Riordinare gli ingredienti di una ricetta (13 set 2026) ──
     'cat.reorder': 'Riordina',
     'cat.reorderDone': 'Fine',
+    'cat.dividers': 'Divisioni',
+    'cat.dividersHint': 'Tocca un ingrediente per mettere una linea sotto. Tocca di nuovo per toglierla.',
+    'cat.dividerUnder': 'Linea sotto {name}',
     'cat.reorderHint': 'Tieni premuto un ingrediente e trascinalo al suo posto. Con la tastiera usa le frecce su e giù.',
     'cat.moveRow': 'Sposta «{name}»',
     'cat.unnamedRow': '(senza nome)',

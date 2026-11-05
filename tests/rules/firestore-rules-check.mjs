@@ -984,6 +984,12 @@ async function neighbours() {
   await expectAllowed('recipes still accepts a recipe', () =>
     wholeWrite('locations/main/recipes/r1', { bakery: 'main', name: 'Focaccia', ingredients: [] }));
 
+  // A divider line under a row is a field INSIDE the ingredients list: rules cannot look in there.
+  await expectAllowed('recipes accepts a row carrying dividerAfter', () =>
+    wholeWrite('locations/main/recipes/r1', {
+      bakery: 'main', name: 'Focaccia', ingredients: [{ label: 'Flour', grams: 100, unit: 'g', dividerAfter: true }],
+    }));
+
   // ── A recipe that knows what it costs ──
   // The link a row carries (kind/refId) is NOT checked here and cannot be: rules
   // cannot look inside a list. Only the recipe's own new field is.
