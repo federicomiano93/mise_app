@@ -192,6 +192,16 @@ describe('the days of History', () => {
     expect(box()).toHaveValue(15);
   });
 
+  it('puts the stored number back when the rules refuse the write', async () => {
+    const view = await opened();
+    view.source.failDelivery.config = true;
+    await view.user.clear(box());
+    await view.user.type(box(), '45');
+    await view.user.tab();
+    expect(await screen.findByText('Only an owner or a manager can change this.', { selector: '[role=status] *, [role=status]' }, LOAD)).toBeInTheDocument();
+    await waitFor(() => { expect(box()).toHaveValue(15); });
+  });
+
   it('says nothing and writes nothing when the number is the stored one', async () => {
     const view = await opened();
     await view.user.click(box());

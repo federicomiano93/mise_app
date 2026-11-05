@@ -175,7 +175,8 @@ function HistoryDaysRow({ write, loaded }: { write: Write; loaded: boolean }) {
         say(t('ord.settings.historyDaysRange'), LONG_MS);
         setText(stored);
         handed.current = stored;
-      } else if (outcome === 'unchanged') {
+      } else {
+        // 'unchanged', or refused / failed (said by `write`): the box shows what is STORED again, never a number that was not kept.
         setText(stored);
         handed.current = stored;
       }
