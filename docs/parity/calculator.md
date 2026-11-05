@@ -684,3 +684,26 @@ on purpose: the legacy log migration (stays in the current app), the empty state
 - A tablet left on the Calculator across 4 am does not sweep (never while on screen), so Edit → Confirm next
   morning updates yesterday's log — same as the current app; left as is.
 - **Who may delete a log**: unchanged (rules not touched).
+
+## Step 3c-2 as built (12 Oct 2026) — differences from the current app, on purpose
+
+- **Editors and Save wait for the SERVER's answer**, not for any answer: the current app counts the browser's own
+  database as the answer (`serverAnswered`), which Mise 2's addressable editors would turn into «save yesterday's
+  copy». Offline an editor stays on «Loading…» (a configuration save is a transaction and needs the server anyway);
+  the hub's two switches are disabled until then.
+- **While a configuration save is in the air** the stream's older document is held, not shown, and a successful save
+  gives the copy the revision it was written as (the current app hears no metadata changes, so it never needed it).
+- **The row-id stamp** reads the Catalogue recipe as the server holds it, in a transaction, and writes only when a
+  row lacked an id; the current app writes back the list read when its picker opened (fix for the current app
+  proposed separately). The picker reads the Catalogue from the server only.
+- **Save is disabled until something changed** (the current app's Clients and Recipes Save is always pressable);
+  after a successful save every editor returns to the level above (P20).
+- **Deleting a product asks first** (the current app removes it at once); every delete icon names what it deletes.
+- **The browser's Back / the rail while a save is in the air** are refused silently until it settles (no «unsaved
+  changes» false alarm).
+- **Leavening on a linked recipe** is chosen among the Catalogue's rows (`leaveningRid`); the current app looked it up
+  among the recipe's own leftover rows, so the choice did nothing.
+- **The pieces-per-crate box** has a visible label instead of the hardcoded «pz».
+- **Dough history settings** name a product ordered by two clients once.
+- **Not built yet, needed before the switch:** the ordering link on a client (75) and republishing the clients'
+  ordering menus on save (69) — both with 3c-4b; the WhatsApp and Client ordering rows of the hub (3c-4).

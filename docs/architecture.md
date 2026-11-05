@@ -164,8 +164,30 @@ Aria does not support Preact. The numbers are below.
   full-screen view (`RecipeFullScreen`: a native `<dialog>`, six text sizes in `mise.calcZoomStep`), Copy
   (`clipboard.ts`, raced against 2 s) and Send (`ui/SendSheet.tsx`, the shared «which road» sheet: WhatsApp
   with no recipient, or the mail app). jsdom has no modal `<dialog>`: `testing/setup.ts` gives it
-  `showModal`/`close`. Not yet: the doors to Settings and the empty states' buttons (3c-2), the Log (3c-3),
-  orders (3c-4). Its parity list is `docs/parity/calculator.md`.
+  `showModal`/`close`. Step 3c-2 adds Settings, one level below the work view: a Settings button at the top of the
+  work view and of the empty states (none while «Loading…»; «Add a recipe» and «Choose which to show» beside it),
+  and the addresses `/calculator/settings` (the hub, `CalculatorSettings`, with the two switches that save on the
+  tap and show «Saved ✓»), `/extra`, `/divisor[/<recipeId>]`, `/log`, `/clients[/<id>]` and
+  `/recipes[/<id>|/new]`; `settings` as the first segment always means Settings. The usage record names every
+  address under Settings `settings` (`calculatorScreenName` in `shell/sections.ts`). Extra, Divisor and Log are each
+  a `SettingsEditor` (a working copy, Save disabled until it differs, the question, the discard question through
+  `useBlocker`, `markBusy` while dirty, a second tap ignored while a save is in the air); Clients
+  (`ClientsEditor` › `ClientList` with a React Aria `GridList` drag-and-drop reorder, `ClientScreen`,
+  `ProductCard`) and Recipes (`RecipesEditor` › `RecipeList`, an accordion, and `RecipeScreen` with `SourceBox`,
+  `LeaveningBox` and the `CataloguePicker`) hold ONE working copy ABOVE their list and detail, so moving between
+  them keeps the edits, and ONE blocker each (a router supports one) asking both «leave without saving?» and
+  «discard this new …?». All of them save through ONE path, `useSaveConfig` (a port of `saveConfigOrSay`), and
+  write over the LATEST configuration only what they own. ⚠️ They open only once the SERVER has answered
+  (`configFromServer` in the store, `SettingsScreens`): the browser's own database answers at once with whatever
+  this phone last saw, and a tablet reopening straight onto an editor would otherwise save yesterday's address book
+  over today's; the store also sends nothing before that answer. Linking a recipe to the Catalogue stamps row ids in
+  a transaction on the recipe AS THE SERVER HOLDS IT (`stampRowIds`), never on the picker's copy. Back hands the
+  focus to the button that opened the screen (`handBack.ts`, a stack, because each level is a fresh screen). The
+  browser's Back cannot be stopped from leaving an editor when the history entry was made by typing an address
+  (React Router can only block entries it created) — in-app moves always ask. Not yet: the ordering link on a
+  client and the republishing of the clients' ordering menus on save (3c-4b, both needed before the switch), the
+  Log (3c-3), orders and the WhatsApp and Client ordering rows of the hub (3c-4). Its parity list is
+  `docs/parity/calculator.md`.
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the

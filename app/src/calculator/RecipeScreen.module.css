@@ -1,0 +1,180 @@
+/* One recipe: the name and its delete icon, where the ingredients come from, the ingredients as cards (or the
+   Catalogue's rows, read-only), and the Leavening box. Fields are 48px tall and 18px type (a field under 16px makes
+   iOS zoom the page in when it is focused). */
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.label {
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.input {
+  flex: 1 1 auto;
+  width: 100%;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--font);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.invalid,
+.invalid:focus {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+}
+
+/* Low-key: no frame, the muted colour; the target is still a thumb's. */
+.del {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.del[data-hovered] {
+  color: var(--danger-ink);
+}
+
+.hint {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.problem {
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.withUnit {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.unit {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.unitLabel {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.switchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: var(--hit);
+}
+
+.switchName {
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.add {
+  align-self: flex-start;
+}
+
+/* The Catalogue's rows, read-only: a name and its grams, no box to type in. */
+.readonly {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.readonlyRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s2) var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.readonlyRow:first-child {
+  border-top: 0;
+}
+
+.readonlyName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.readonlyGrams {
+  flex: none;
+  color: var(--ink-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.linkedRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.linkedName {
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

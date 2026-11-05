@@ -1,4 +1,5 @@
-import { useEffect, useId } from 'react';
+import { useEffect, useId, useLayoutEffect } from 'react';
+import { Settings } from 'lucide-react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { calculatorEmptyReason, getVisibleRecipes } from '@mise/shared/calculator-config';
 import type { EmptyReason } from '@mise/shared/calculator-config';
@@ -8,15 +9,22 @@ import { useT } from '../i18n/useT';
 import { KEEP_FOCUS, Page } from '../shell/Page';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { CalculatorProvider, useCalculator, useCalculatorStore } from './CalculatorContext';
-import { CALCULATOR_PATH, recipePath, resolveCalculatorPath } from './calculatorPath';
+import {
+  CALCULATOR_PATH, SETTINGS_PATH, newRecipePath, recipePath, recipesPath, resolveCalculatorPath,
+} from './calculatorPath';
 import { messageText } from './calculatorMessages';
+import {
+  ADD_RECIPE_OPENER, CHOOSE_RECIPES_OPENER, HandBackProvider, SETTINGS_OPENER, useHandBack, useHandBackState,
+} from './handBack';
+import { OpenButton } from './OpenButton';
 import { RecipePanel } from './RecipePanel';
 import { RecipeTabs } from './RecipeTabs';
+import { SettingsScreens } from './SettingsScreens';
 import { TabStateProvider } from './TabStateContext';
 import styles from './CalculatorSection.module.css';
 
-// The Calculator, work view: the recipes as tabs, and under the chosen one its entries and the scaled recipe
-// (beside them from 1000px). Loaded only when somebody opens it (shell/sectionScreens.ts), and only for a
+// The Calculator: the work view (the recipes as tabs, and under the chosen one its entries and the scaled recipe,
+// beside them from 1000px) and, one level down, its Settings. Loaded only when somebody opens it (shell/sectionScreens.ts), and only for a
 // person the venue shows it to (SectionRoute).
 //
 // Its data lives exactly as long as it is on screen: CalculatorProvider starts the listeners on mount and
@@ -51,6 +59,7 @@ function CalculatorScreen() {
   const { pathname, state } = useLocation();
   const navigationType = useNavigationType();
   const { config } = useCalculator();
+  const handBack = useHandBackState();
   const recipes = getVisibleRecipes(config);
   // The address as it is written, not React Router's «*»: a recipe id is split before it is decoded.
   const resolved = resolveCalculatorPath(pathname.slice(CALCULATOR_PATH.length), recipes.map(recipe => recipe.id));
@@ -62,11 +71,19 @@ function CalculatorScreen() {
   }
 
   return (
-    <Page title={t('section.calculator')}>
-      <PartBoundary resetKey={resolved.active ?? ''}>
-        <WorkView active={resolved.active} />
-      </PartBoundary>
-    </Page>
+    <HandBackProvider value={handBack}>
+      <Page title={t('section.calculator')}>
+        {'settings' in resolved ? (
+          <PartBoundary resetKey={pathname}>
+            <SettingsScreens view={resolved.settings} />
+          </PartBoundary>
+        ) : (
+          <PartBoundary resetKey={resolved.active ?? ''}>
+            <WorkView active={resolved.active} />
+          </PartBoundary>
+        )}
+      </Page>
+    </HandBackProvider>
   );
 }
 
@@ -84,22 +101,41 @@ const FAILED_TEXT: EmptyCopy = { title: 'calc.couldNotLoad' };
 function WorkView({ active }: { active: string | null }) {
   const { t } = useT();
   const navigate = useNavigate();
+  const handBack = useHandBack();
   const { config, configAnswered, configFailed } = useCalculator();
   const base = useId();
   const recipes = getVisibleRecipes(config);
   const current = recipes.find(recipe => recipe.id === active);
 
+  // Back from Settings (or the phone's back gesture) lands here: the button that opened it takes the focus. The
+  // work view is the bottom of the stack, so whatever else was expected is forgotten.
+  useLayoutEffect(() => { handBack.deliver(true); }, [handBack]);
+
   if (!current) {
     // Nothing to draw: the three states of an empty Calculator, three sentences. ⚠️ NEUTRAL, NOT AN ALARM — a
-    // venue that has just been bought is not broken — and NO BUTTON in «loading» (offering «add a recipe» while
-    // the answer is on its way invites somebody to write one they already have). The doors to the recipes
-    // arrive with Settings (step 3c-2).
+    // venue that has just been bought is not broken.
+    //
+    // ⚠️ «LOADING» HAS NO BUTTON AT ALL, not even Settings. Offering «Add a recipe» while the answer is on its way
+    // invites somebody to write one they already have, and a door to Settings would be a promise it cannot keep
+    // yet (a stream that failed with nothing on this phone to show is the same state). The other two states have
+    // the Settings door, and a button to the screen that fixes THEM.
     const reason = calculatorEmptyReason(config, configAnswered) ?? 'loading';
     const copy = configFailed && reason === 'loading' ? FAILED_TEXT : EMPTY_TEXT[reason];
     return (
-      <div className={styles.empty}>
-        <p className={styles.emptyTitle}>{t(copy.title)}</p>
-        {copy.sub ? <p className={styles.emptySub}>{t(copy.sub)}</p> : null}
+      <div className={styles.view}>
+        {reason === 'loading' ? null : <SettingsDoor />}
+        <div className={styles.empty}>
+          <p className={styles.emptyTitle}>{t(copy.title)}</p>
+          {copy.sub ? <p className={styles.emptySub}>{t(copy.sub)}</p> : null}
+          {reason === 'no-recipes' ? (
+            <OpenButton variant="primary" opener={ADD_RECIPE_OPENER} to={newRecipePath}>{t('calc.addARecipe')}</OpenButton>
+          ) : null}
+          {reason === 'hidden-recipes' ? (
+            <OpenButton variant="primary" opener={CHOOSE_RECIPES_OPENER} to={recipesPath}>
+              {t('calc.chooseWhichToShow')}
+            </OpenButton>
+          ) : null}
+        </div>
       </div>
     );
   }
@@ -110,6 +146,7 @@ function WorkView({ active }: { active: string | null }) {
 
   return (
     <div className={styles.view}>
+      <SettingsDoor />
       <RecipeTabs
         recipes={recipes}
         active={current.id}
@@ -125,6 +162,19 @@ function WorkView({ active }: { active: string | null }) {
         recipe={current}
         panelProps={tabs ? { role: 'tabpanel', id: panelId, 'aria-labelledby': tabId(current.id) } : {}}
       />
+    </div>
+  );
+}
+
+// The door to Settings, at the top of the work view and of every empty state but «loading».
+function SettingsDoor() {
+  const { t } = useT();
+  return (
+    <div className={styles.top}>
+      <OpenButton opener={SETTINGS_OPENER} to={SETTINGS_PATH}>
+        <Settings aria-hidden="true" />
+        {t('ui.settings')}
+      </OpenButton>
     </div>
   );
 }

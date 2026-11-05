@@ -56,3 +56,21 @@ describe('under StrictMode: the Calculator', () => {
     expect(window.localStorage.getItem('total-brioche')).toBeNull();
   });
 });
+
+describe('under StrictMode: Settings', () => {
+  it('saves a switch once, and an editing screen once, with the question asked once', async () => {
+    const source = fakeCalculatorSource({ config: configOf() });
+    const { user, router } = renderCalculator('/calculator/settings', { source });
+    await user.click(await main().findByRole('switch', { name: 'Ask which day the dough is for' }, LOAD));
+    await vi.waitFor(() => { expect(source.savedConfigs).toHaveLength(1); });
+
+    await user.click(main().getByRole('button', { name: /^Extra dough/ }));
+    await user.click(await main().findByRole('switch', { name: 'Brioche' }, LOAD));
+    await user.click(main().getByRole('button', { name: 'Save' }));
+    const dialog = await screen.findByRole('alertdialog', { name: 'Save these changes?' }, LOAD);
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => { expect(router.state.location.pathname).toBe('/calculator/settings'); });
+    expect(source.savedConfigs).toHaveLength(2);
+    expect(source.savedConfigs[1]).toMatchObject({ askDoughDay: false, extraDough: { brioche: false } });
+  });
+});

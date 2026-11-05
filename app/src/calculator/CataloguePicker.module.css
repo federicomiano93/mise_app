@@ -1,0 +1,76 @@
+/* The Catalogue picker: a search box over a list of recipes, inside the app's dialog. The list scrolls on its own so
+   the Back button is never pushed out of reach. */
+
+.search {
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  /* 18px on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
+  font: 450 var(--fs-lg) var(--font);
+}
+
+.search::placeholder {
+  color: var(--ink-3);
+}
+
+.search:focus {
+  border-color: var(--accent);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  max-height: 50vh;
+  max-height: 50dvh;
+  overflow-y: auto;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.row:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.row:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .row:hover:not(:disabled) {
+    background: var(--sunken);
+  }
+}
+
+.note {
+  padding: var(--s3);
+  color: var(--ink-2);
+}

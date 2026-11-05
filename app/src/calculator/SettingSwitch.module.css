@@ -1,0 +1,51 @@
+/* An on/off switch. Selected is the accent frame's colour (the one accent of the design); the focus ring is the
+   app's own. The switch is as tall as a thumb's target, the track inside it is the drawn part. */
+
+.switch {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-width: var(--hit);
+  min-height: var(--hit);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.track {
+  display: flex;
+  align-items: center;
+  width: 44px;
+  height: 26px;
+  padding: 2px;
+  border-radius: var(--r-pill);
+  background: var(--ink-3);
+}
+
+.thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-pill);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+  transition: transform 120ms var(--ease);
+}
+
+.switch[data-selected] .track {
+  background: var(--accent);
+}
+
+.switch[data-selected] .thumb {
+  transform: translateX(18px);
+}
+
+.switch[data-focus-visible] .track {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumb {
+    transition: none;
+  }
+}

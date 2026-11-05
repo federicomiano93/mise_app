@@ -1,9 +1,9 @@
 // calculatorStore.ts — the Calculator's configuration, the catalogue recipes its tabs are linked to, and the
-// recent dough logs. One venue. Step 3c-1: the work view READS the configuration and WRITES logs (Confirm);
-// writing the configuration comes with the Settings (3c-2).
+// recent dough logs. One venue. The work view READS the configuration and WRITES logs (Confirm); the Settings
+// WRITE the configuration (`saveConfig`, step 3c-2).
 //
-// A port of js/calculator-config-store.js (the read half), js/calculator-catalogue-link.js and the create /
-// append half of js/log-store.js, as plain TypeScript with no React and no Firebase in it: the source
+// A port of js/calculator-config-store.js, js/calculator-catalogue-link.js and the create / append half of
+// js/log-store.js, as plain TypeScript with no React and no Firebase in it: the source
 // (calculatorSource.ts) and the browser (deps) are injected, so every trap below is a spec with fakes
 // (calculatorStore.spec.ts). Screens read it through CalculatorContext.tsx.
 //
@@ -24,6 +24,12 @@
 //     console. Local-first stays: nothing is taken back by hand, the live stream shows what the server holds.
 //   • a log already at the rules' 100-version cap is not written again (every further write would be
 //     refused): `log-full` says so, and Reset starts a new log.
+//   • while a configuration save is in the air, and until the stream shows the revision it wrote, the stream's
+//     older document is HELD, not shown: Mise 2 listens with includeMetadataChanges, so a connection blip
+//     re-delivers the document as it was before the save, and the screen would jump back to the old settings
+//     (the current app does not hear metadata changes). A held document is still an answer.
+//   • the store says nothing about a save kept local («the server has not answered»): it returns the reason,
+//     and the screen says it in the person's language.
 
 import { normalizeConfig, cloneConfig, DEFAULT_CONFIG, getRecipes } from '@mise/shared/calculator-config';
 import type { CalculatorConfig } from '@mise/shared/calculator-config';
@@ -51,6 +57,16 @@ export type CalculatorMessage =
   // The logs' live stream died.
   | { readonly kind: 'logs-stream-broken' };
 
+// What a configuration save came to (js/calculator-config-store.js `saveConfig`). `saveFailureKey` of
+// @mise/shared/calculator-config turns it into the sentence to say, or null when there is nothing to say.
+export type ConfigSaveResult =
+  | { readonly synced: true }
+  // Kept on this device only: the database has not answered once, and sending the empty default (or a stale
+  // copy) would overwrite the venue's real address book. The screen says so (`calc.savedLocallyOnly`).
+  | { readonly synced: false; readonly reason: 'no-server-answer' }
+  // Refused or unreachable: the change has been TAKEN BACK here, and the screen keeps its edits to try again.
+  | { readonly synced: false; readonly reason: 'write-failed'; readonly code: string | null };
+
 export interface CalculatorSnapshot {
   // The configuration in effect: the local copy (or the empty default) until the database answers.
   readonly config: CalculatorConfig;
@@ -61,6 +77,12 @@ export interface CalculatorSnapshot {
   readonly configAnswered: boolean;
   // The configuration's stream failed: the screen says it could not be loaded instead of «Loading…».
   readonly configFailed: boolean;
+  // The SERVER has answered at least once (a document or «there is no document»), not only the browser's own
+  // database. ⚠️ AN EDITOR COPIES THE CONFIGURATION ONLY AFTER THIS, and nothing is sent before it: the browser's
+  // database answers in milliseconds with whatever this phone last saw — yesterday's clients on a tablet that
+  // reopens straight onto the Clients editor — and a Save from that copy would write it over what other phones
+  // added since. The work view may paint from it; a writer may not.
+  readonly configFromServer: boolean;
   // id → the linked catalogue recipe, or null when it is gone or cannot be read. A MISSING KEY means «not
   // answered yet» — a different sentence from «gone» (js/calculator-catalogue-link.js).
   readonly linked: Readonly<Record<string, StoredDoc | null>>;
@@ -69,7 +91,8 @@ export interface CalculatorSnapshot {
   // The logs can be trusted for «does this tab's log still exist»: a local copy existed, or a believable
   // answer came, or the stream failed.
   readonly logsLoaded: boolean;
-  // Log writes handed over and not yet answered. While true the section holds the session's busy marker.
+  // Log writes or a configuration save handed over and not yet answered. While true the section holds the
+  // session's busy marker.
   readonly unsent: boolean;
 }
 
@@ -114,6 +137,15 @@ export interface CalculatorStore {
   // Saves a confirmed dough LOCAL-FIRST: a new log, or a new version of the tab's log when it still exists.
   // null when nothing was written (the log is full: a `log-full` message says so).
   confirmDough(input: DoughConfirm): ConfirmResult | null;
+  // Saves the whole configuration LOCAL-FIRST: memory, the local copy and the screen change at once; then it is
+  // sent, unless the database has never answered (see ConfigSaveResult). A refused or failed write is taken back
+  // here if nothing newer replaced it. Never rejects.
+  saveConfig(next: CalculatorConfig): Promise<ConfigSaveResult>;
+  // Every catalogue recipe, read once from the server (the link picker). Rejects when it cannot be read.
+  listCatalogueRecipes(): Promise<StoredDoc[]>;
+  // Gives every row of catalogue recipe `id`, as the server holds it now, a stable id and resolves with those
+  // rows (calculatorSource `stampRowIds`). Rejects when refused, unreachable or gone: the caller links nothing.
+  stampRowIds(id: string): Promise<unknown[]>;
 }
 
 export function genLogId(randomUUID?: () => string, now: number = Date.now(), random: () => number = Math.random): string {
@@ -171,6 +203,7 @@ export function createCalculatorStore(
   let config: CalculatorConfig = bootConfig ? normalize(bootConfig) : cloneConfig(DEFAULT_CONFIG);
   let configAnswered = false;
   let configFailed = false;
+  let configFromServer = false;
   let linked: Readonly<Record<string, StoredDoc | null>> = {};
   // What the stream last said, and the logs written here that the stream may not show yet.
   let streamLogs: readonly Log[] = Array.isArray(bootLogs) ? bootLogs.filter(isLog) : [];
@@ -180,6 +213,11 @@ export function createCalculatorStore(
   let logsFromServer = false;
   let inFlight = 0;
   let seq = 0;
+  // Configuration saves in the air; the revision this phone last wrote; and the stream's latest document while
+  // it may not be shown (older than that revision, or a save is in the air).
+  let configSaving = 0;
+  let writtenRev = 0;
+  let heldConfig: Record<string, unknown> | null = null;
 
   const listeners = new Set<() => void>();
   const messageListeners = new Set<(message: CalculatorMessage) => void>();
@@ -190,7 +228,10 @@ export function createCalculatorStore(
   let snapshot: CalculatorSnapshot = build();
 
   function build(): CalculatorSnapshot {
-    return { config, configAnswered, configFailed, linked, logs, logsLoaded, unsent: inFlight > 0 };
+    return {
+      config, configAnswered, configFailed, configFromServer, linked, logs, logsLoaded,
+      unsent: inFlight > 0 || configSaving > 0,
+    };
   }
 
   // ⚠️ A LISTENER THAT THROWS NEVER STOPS THE DATA (store-notify-guarded): the data is stored before anybody
@@ -266,17 +307,54 @@ export function createCalculatorStore(
     if (dropped) changed();
   }
 
+  const revOf = (data: Record<string, unknown>) => Number(data.configRev) || 0;
+
   function onConfig(data: Record<string, unknown> | null, fromServer: boolean): void {
+    // The first answer from the server is news even when nothing else changes (an editor is waiting for it).
+    const firstFromServer = fromServer && !configFromServer;
+    if (fromServer) configFromServer = true;
+    readConfig(data, fromServer);
+    if (firstFromServer) changed();
+  }
+
+  function readConfig(data: Record<string, unknown> | null, fromServer: boolean): void {
     if (!data) {
       // «No document» from the browser's own database proves nothing; from the server it is the answer a
       // brand-new venue gets, and the empty screen must hear it (js/calculator-config-store.js).
       if (!fromServer) return;
+      // The document is gone: no revision of ours can be waited for any more.
+      writtenRev = 0;
+      heldConfig = null;
       if (configAnswered) return; // a later null: the document was deleted; keep what is on screen
       configAnswered = true;
       configFailed = false;
       changed();
       return;
     }
+    // ⚠️ HELD, NOT SHOWN, while it may be the document as it was BEFORE this phone's own save (see the header). It
+    // still counts as the answer.
+    if (configSaving > 0 || revOf(data) < writtenRev) {
+      heldConfig = data;
+      if (!configAnswered || configFailed) {
+        configAnswered = true;
+        configFailed = false;
+        changed();
+      }
+      return;
+    }
+    heldConfig = null;
+    applyConfig(data);
+  }
+
+  // A held document is shown once nothing of ours is in the air and it is not older than what we wrote.
+  function releaseHeld(): void {
+    if (configSaving > 0 || !heldConfig || revOf(heldConfig) < writtenRev) return;
+    const data = heldConfig;
+    heldConfig = null;
+    applyConfig(data);
+  }
+
+  function applyConfig(data: Record<string, unknown>): void {
     // ⚠️ THE SAME CONFIGURATION KEEPS THE SAME OBJECT. The listener also fires when only the metadata changes
     // (the connection drops or comes back, the server confirms the phone's copy), and a new object would read as
     // «the configuration changed» to every screen — the full-screen recipe closes on exactly that.
@@ -404,5 +482,64 @@ export function createCalculatorStore(
       write(log);
       return { logId: log.id, target: 'create' };
     },
+
+    saveConfig(next) {
+      const previous = config;
+      const mine = normalize(next);
+      config = mine;
+      writeJson(CONFIG_KEY, config);
+      syncLinked();
+      // ⚠️ NOTHING LEAVES THE DEVICE BEFORE THE SERVER HAS ANSWERED ONCE (js/calculator-config-store.js
+      // `serverAnswered`): until then the configuration on screen may be the empty default or a stale copy, and
+      // the first Save would write it over the venue's real clients, products and recipes. «There is no
+      // document» from the server IS an answer, so a brand-new venue can save its first client.
+      // ⚠️ STRICTER THAN THE CURRENT APP: an answer from the browser's own database does not count here (see
+      // `configFromServer`) — a whole configuration built on yesterday's copy must not be sent.
+      if (!configFromServer) {
+        changed();
+        deps.warn('Calculator config kept local only: the server has not answered yet.');
+        return Promise.resolve({ synced: false, reason: 'no-server-answer' } as const);
+      }
+      configSaving += 1;
+      changed();
+      return source.saveConfig(mine).then(
+        (rev): ConfigSaveResult => {
+          configSaving -= 1;
+          writtenRev = Math.max(writtenRev, Number(rev) || 0);
+          // ⚠️ THE COPY ON SCREEN TAKES THE REVISION IT WAS WRITTEN AS: with the old one, every next save would read
+          // as a concurrent write to reconcileConfigWrite and put back each `cat-*` recipe deleted since — for good
+          // when the stream is dead and no echo ever brings the new revision.
+          if (config === mine && Number(rev) > 0) {
+            config = { ...config, configRev: Number(rev) };
+            writeJson(CONFIG_KEY, config);
+          }
+          releaseHeld();
+          changed();
+          return { synced: true };
+        },
+        (err: unknown): ConfigSaveResult => {
+          deps.warn('Calculator config not saved to Firestore:', err);
+          configSaving -= 1;
+          // ⚠️ A REFUSED WRITE IS TAKEN BACK HERE TOO: nothing sends it again, and the next load would replace it
+          // with the server's copy — so keeping it would show the change as saved until then, and then lose it.
+          // The screen keeps ITS working copy with the edits. Only if nothing newer replaced it meanwhile.
+          if (config === mine) {
+            config = previous;
+            writeJson(CONFIG_KEY, config);
+            syncLinked();
+          }
+          releaseHeld();
+          changed();
+          const code = err && typeof err === 'object' && typeof (err as { code?: unknown }).code === 'string'
+            ? (err as { code: string }).code
+            : null;
+          return { synced: false, reason: 'write-failed', code };
+        },
+      );
+    },
+
+    listCatalogueRecipes: () => source.listCatalogueRecipes(),
+
+    stampRowIds: id => source.stampRowIds(id),
   };
 }

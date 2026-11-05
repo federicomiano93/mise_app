@@ -2579,7 +2579,14 @@ describe('zoom-steps: odd inputs', () => {
 });
 
 describe('guided-model: odd inputs', () => {
-  // A partial port: only `ridOf` is compared.
+  // A partial port: only the row-id functions are compared (`makeRowId` with a fixed random source; `withRowIds`
+  // with a fixed generator, so the minted ids are the same in both).
+  agree('makeRowId', () => guidedModel.makeRowId(() => 0.5), () => legacyGuidedModel.makeRowId(() => 0.5), [[]]);
+  {
+    const fixed = () => { let n = 0; return () => 'r' + (++n); };
+    agree('withRowIds', (rows: unknown) => guidedModel.withRowIds(rows, fixed()), (rows: unknown) => legacyGuidedModel.withRowIds(rows, fixed()),
+      product([...ODD, [null, 5, 'x', {}], [{ rid: 'a' }, { rid: 'a' }, { rid: ' a ' }, { label: 'L' }], [{ rid: '' }, { rid: null }, []], [{ rid: 'r1' }, {}]]));
+  }
   agree('ridOf', guidedModel.ridOf, legacyGuidedModel.ridOf, product([...ODD, { rid: 'a' }, { rid: ' a ' }, { rid: 5 }, { rid: null }, { rid: '' }, { rid: [] }, { rid: { toString: () => 'o' } },
     Object.create({ rid: 'p' }), { get rid(): unknown { throw new Error('boom'); } }]));
 });
