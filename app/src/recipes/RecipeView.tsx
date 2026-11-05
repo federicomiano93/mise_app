@@ -1,8 +1,8 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { ChartPie, Download, Import, Maximize2, Pencil, Trash2 } from 'lucide-react';
-import { importFailureKey, nonWeighableLabels, weighableTotalGrams } from '@mise/shared/catalogue-model';
+import { ChartPie, Copy, Download, Import, Maximize2, Pencil, Trash2 } from 'lucide-react';
+import { calculatorRefusal, importFailureKey, weighableTotalGrams } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import { FROM_RECIPE_LINK, foodCostForRecipePath, mayOpenFoodCost } from '@mise/shared/recipe-link';
 import { isSectionAllowed } from '@mise/shared/sections';
@@ -24,8 +24,10 @@ import { useRecipes, useRecipesStore } from './RecipesContext';
 import { amountText, recipeAmounts } from './recipeAmounts';
 import { recipeExportModel } from './recipeExportModel';
 import { useRecipeReturn } from './recipeReturn';
+import { duplicateWorking } from './editorModel';
+import { FROM_DUPLICATE, carryOwner, handOver } from './photoCarry';
 import { FROM_RECIPE, cameFromList, cameFromSheet } from './recipesNav';
-import { editPath } from './recipesPath';
+import { NEW_PATH, editPath } from './recipesPath';
 import { useDeleteRecipe } from './useDeleteRecipe';
 import styles from './RecipeView.module.css';
 
@@ -38,7 +40,7 @@ type Props = {
 // One recipe: the bar with Back and its name, then the cards in this order (his decisions, 14-15 Oct 2026): the
 // ingredient list, the batch, «Food cost» (a door, only for whoever may open Food cost), the allergens and the
 // declaration, the mixing procedure (3d-8), then Export, then «Import into Calculator» with its hint (a write, only where
-// the venue uses the Calculator), and last the small Delete icon.
+// the venue uses the Calculator), then «Duplicate» with its hint (whoever may start a recipe), and last the small Delete icon.
 //
 // «Edit» is the bar's one action, for everybody who sees the section (employees write recipes too). Delete is a small
 // icon at the very end of the page, for whoever runs the place only.
@@ -107,7 +109,11 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         <ExportAction recipe={recipe} target={target} />
         {/* A WRITE, NOT A DOOR: judged by the venue's section only (the Calculator card being hidden from staff does not matter). */}
         {isSectionAllowed(location, 'calculator') ? <ImportAction recipe={recipe} /> : null}
-        {/* ⚠️ THE VERY END OF THE PAGE, after Export and Import: small, low-key, icon only. Absent — not disabled — for an employee. */}
+        {/* «Duplicate» opens the new-recipe editor filled in from this one. Absent — not disabled — for whoever may not start a
+            recipe (the gate of «New recipe» in the list: canManage). */}
+        {canManage ? <DuplicateAction recipe={recipe} /> : null}
+        {/* ⚠️ THE VERY END OF THE PAGE, after Export, Import and Duplicate: small, low-key, icon only. Absent — not disabled —
+            for an employee. */}
         {canManage ? (
           <button
             type="button"
@@ -125,9 +131,9 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
   );
 }
 
-// «Export» as PDF or Excel: ⚠️ THE LAST THING ON THE PAGE, by Federico's choice (14 Oct 2026, «non è un'azione che si
-// fa tutti i giorni»). Under the ingredient table it pushed the batch box — what this screen is opened for — further
-// down. The file is made by recipeAmounts() from the same recipe, batch target and locale the table is drawn with, so
+// «Export» as PDF or Excel: ⚠️ AT THE END OF THE PAGE (then Import, Duplicate and the Delete icon, which is the very last),
+// by Federico's choice (14 Oct 2026, «non è un'azione che si fa tutti i giorni»). Under the ingredient table it pushed the
+// batch box — what this screen is opened for — further down. The file is made by recipeAmounts() from the same recipe, batch target and locale the table is drawn with, so
 // it holds the very amounts on screen. Nothing to export without ingredients.
 function ExportAction({ recipe, target }: { recipe: CatalogueRecipe; target: number | null }) {
   const { t, locale } = useT();
@@ -201,9 +207,15 @@ function FoodCostCard({ recipe }: { recipe: CatalogueRecipe }) {
   );
 }
 
-// «Import into Calculator» (a port of importRecipe of js/catalogue/catalogue-main.js): nothing to do for a recipe with
-// no weighable row, otherwise one question that names the rows the grams-only Calculator cannot take, then the
-// transaction of the store. The answer is said in the section's status message.
+// «Import into Calculator» (from importRecipe of js/catalogue/catalogue-main.js, which COPIES; owner's decision, 18 Oct 2026:
+// here it LINKS, so the Calculator follows the recipe): nothing to do for a recipe with no rows, a refusal that names the
+// row for one the grams-only Calculator cannot follow, otherwise one question, then the transaction of the store. The
+// answer is said in the section's status message.
+//
+// ⚠️ THE REFUSAL ASKS THE VERY FUNCTION THE CALCULATOR WILL ASK (`resolveRecipe` on a tab linked to this recipe): a linked
+// tab with ANY row that is not in grams (pieces, spoons, «to taste», or 0 g) calculates nothing — decided 1 Aug 2026,
+// because a dough quietly light by one ingredient is the one direction a recipe must not be wrong in. So the link is not
+// made at all, rather than made into a tab that only says «cannot calculate».
 //
 // ⚠️ A SECOND TAP DURING THE QUESTION OR THE WRITE IS IGNORED, and markBusy is held until the store's promise has settled
 // — NOT until this component goes away: the person can leave the recipe while the transaction is in the air, and a reload
@@ -216,22 +228,20 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
   const [confirm, confirmDialog] = useConfirm();
   const running = useRef(false);
   const [writing, setWriting] = useState(false);
+  const hintId = useId();
 
   async function run() {
     if (running.current) return;
-    if (weighableTotalGrams(recipe) <= 0) {
-      say(t('cat.nothingToImport'));
+    const refusal = calculatorRefusal(recipe);
+    if (refusal !== null) {
+      say(refusal.kind === 'empty' ? t('cat.nothingToImport') : t(refusal.kind === 'noAmount' ? 'cat.rowNoAmount' : 'cat.rowNotByWeight', { row: refusal.row }));
       return;
     }
     running.current = true;
     try {
-      const skipped = nonWeighableLabels(recipe);
       const ok = await confirm({
         title: t('cat.importIntoCalculator2'),
-        message: [
-          t('cat.copyIntoCalculator', { name: recipe.name }),
-          ...(skipped.length > 0 ? [t('cat.nonScalableNote', { n: skipped.length, list: skipped.join(', ') })] : []),
-        ],
+        message: t('cat.linkIntoCalculator', { name: recipe.name }),
         okLabel: t('ui.import'),
         cancelLabel: t('common.cancel'),
       });
@@ -240,7 +250,7 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
       const release = markBusy();
       try {
         const action = await store.importIntoCalculator(recipe, t('calc.marketOrderTitle'));
-        say(t(action === 'updated' ? 'cat.updatedInCalculator' : 'cat.addedToCalculator', { name: recipe.name }));
+        say(t(action === 'already' ? 'cat.alreadyLinkedToCalculator' : action === 'updated' ? 'cat.nowFollowedByCalculator' : 'cat.linkedToCalculator', { name: recipe.name }));
       } catch (err) {
         console.error('Import into Calculator failed:', err);
         say(t(importFailureKey(err)));
@@ -258,6 +268,7 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
       <button
         type="button"
         className={styles.importAction}
+        aria-describedby={hintId}
         aria-busy={writing || undefined}
         aria-disabled={writing || undefined}
         onClick={() => { void run(); }}
@@ -265,8 +276,52 @@ function ImportAction({ recipe }: { recipe: CatalogueRecipe }) {
         <Import aria-hidden="true" />
         {t('cat.importIntoCalculator')}
       </button>
-      <p className={styles.note}>{t('cat.makesACopyYou')}</p>
+      <p id={hintId} className={styles.note}>{t('cat.linksToCalculator')}</p>
       {confirmDialog}
+    </div>
+  );
+}
+
+// «Duplicate»: a copy of this recipe becomes the working copy of the NEW-recipe editor, which opens at once, DIRTY. Nothing is
+// saved here — the person names it, changes what they want and saves, as for any new recipe. The copy travels in the hand-over
+// the photo reader uses (photoCarry.ts), stamped for this person and venue and marked as a duplicate. ⚠️ What a copy takes
+// and what it must never take (the original's id above all) is duplicateWorking's whitelist in editorModel.ts.
+function DuplicateAction({ recipe }: { recipe: CatalogueRecipe }) {
+  const { t } = useT();
+  const navigate = useNavigate();
+  const { user, locationId } = useSession();
+  const recipeReturn = useRecipeReturn();
+  const hintId = useId();
+  const button = useRef<HTMLButtonElement>(null);
+  // A second tap before the editor has opened must not push a second /recipes/new entry.
+  const opening = useRef(false);
+
+  // ⚠️ BACK FROM THE COPY'S EDITOR the focus is on this button, where the person left (recipeReturn.ts).
+  useLayoutEffect(() => {
+    if (!recipeReturn.pendingDuplicate(recipe.id) || button.current === null) return;
+    button.current.focus({ preventScroll: true });
+    recipeReturn.markDelivered();
+  }, []);
+
+  return (
+    <div className={styles.importBlock}>
+      <button
+        ref={button}
+        type="button"
+        className={styles.importAction}
+        aria-describedby={hintId}
+        onClick={() => {
+          if (opening.current) return;
+          opening.current = true;
+          recipeReturn.remember(recipe.id, 'duplicate');
+          handOver(duplicateWorking(recipe, name => t('cat.copyOf', { name })), carryOwner(user?.uid, locationId), undefined, 'duplicate');
+          void navigate(NEW_PATH, { state: FROM_DUPLICATE });
+        }}
+      >
+        <Copy aria-hidden="true" />
+        {t('cat.duplicate')}
+      </button>
+      <p id={hintId} className={styles.note}>{t('cat.duplicateHint')}</p>
     </div>
   );
 }

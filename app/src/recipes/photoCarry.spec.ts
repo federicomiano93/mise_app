@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { workingFrom } from './editorModel';
 import {
-  FROM_EDITOR, HANDOVER_TTL_MS, cameFromEditor, carryOwner, forgetHandover, handOver, hasHandover, hasTypedCopy, peekHandover, typedCopyOf,
+  FROM_EDITOR, HANDOVER_TTL_MS, cameFromEditor, carryOwner, forgetHandover, handOver, hasHandover, hasTypedCopy, peekHandedOver, peekHandover, typedCopyOf,
   withTypedCopy, withoutTypedCopy,
 } from './photoCarry';
 import { FROM_LIST } from './recipesNav';
@@ -76,6 +76,19 @@ describe('the read draft', () => {
     expect(peekHandover(ME, 1000 + HANDOVER_TTL_MS)).toBe(draft);
     expect(peekHandover(ME, 1001 + HANDOVER_TTL_MS)).toBeNull();
     expect(peekHandover(ME, 999)).toBeNull();
+  });
+});
+
+describe('who handed it over', () => {
+  it('is a photo read unless said otherwise, and a duplicate when the recipe page says so — the same stamps and time limit', () => {
+    const draft = workingFrom(null);
+    handOver(draft, ME, 1000);
+    expect(peekHandedOver(ME, 1000)).toEqual({ working: draft, by: 'photo' });
+    handOver(draft, ME, 1000, 'duplicate');
+    expect(peekHandedOver(ME, 1000)).toEqual({ working: draft, by: 'duplicate' });
+    expect(peekHandover(ME, 1000)).toBe(draft);
+    expect(peekHandedOver(carryOwner('bob', 'bakery'), 1000)).toBeNull();
+    expect(peekHandedOver(ME, 1001 + HANDOVER_TTL_MS)).toBeNull();
   });
 });
 

@@ -32,6 +32,11 @@ export interface Working {
   readonly shelfLife: string | null;
 }
 
+// The most a recipe's name may hold: the rules refuse a name of 200 characters or more (firestore.rules, `recipes`), and a
+// save that is refused AFTER the screen has left (the save is local-first) would throw the typing away.
+// ⚠️ NEW IN MISE 2: the current app has no such cap, and a name that long fails there at the database.
+export const NAME_MAX_LENGTH = 199;
+
 let counter = 0;
 const nextKey = (): number => ++counter;
 
@@ -47,6 +52,37 @@ export function workingFrom(recipe: CatalogueRecipe | null): Working {
   return {
     name,
     rows: ingredients.map(row => ({ key: nextKey(), row: { ...row, unit: unitOf(row) } })),
+    rest,
+    netWeight: null,
+    shelfLife: null,
+  };
+}
+
+// A DUPLICATE of a recipe, as the working copy of a NEW recipe (the recipe page's «Duplicate»). Nothing is saved by this: it
+// is only what the new-recipe editor starts from, and it starts dirty.
+//
+// ⚠️ `rest` IS A WHITELIST, NEVER `workingFrom`'s «everything else»: that carries the original's `id` (and `bakery`), and
+// cleanWorking spreads `rest` into what is saved, so a copy that kept the id would OVERWRITE THE ORIGINAL. What a copy
+// takes: the pack weight, the shelf life and the mixing procedure. What it leaves: the id, the venue, the oven loss and the two
+// weighings (`lossPct`, `rawGrams`, `cookedGrams` are Food cost's, measured on the ORIGINAL's products).
+// ⚠️ EVERY ROW COMES AS IT IS, `rid` included: a rid is only unique within one recipe, and keeping it keeps the procedure's
+// step → row references valid (and a link to an ingredient or a recipe stays a link).
+// ⚠️ THE NAME IS `copyName(original)` MADE TO FIT THE NAME BOX: when the whole is too long, the ORIGINAL's name loses its
+// end, so the «(copy)» is never the part that is cut.
+export function duplicateWorking(recipe: CatalogueRecipe, copyName: (name: string) => string): Working {
+  let name = copyName(recipe.name);
+  if (name.length > NAME_MAX_LENGTH) {
+    const kept = recipe.name.slice(0, Math.max(0, recipe.name.length - (name.length - NAME_MAX_LENGTH))).trimEnd();
+    name = copyName(kept);
+  }
+  const from = recipe as unknown as Readonly<Record<string, unknown>>;
+  const rest: Record<string, unknown> = {};
+  for (const key of ['netWeightG', 'shelfLifeDays', 'steps', 'endNote'] as const) {
+    if (from[key] !== undefined) rest[key] = JSON.parse(JSON.stringify(from[key])) as unknown;
+  }
+  return {
+    name,
+    rows: recipe.ingredients.map(row => ({ key: nextKey(), row: { ...row, unit: unitOf(row) } })),
     rest,
     netWeight: null,
     shelfLife: null,

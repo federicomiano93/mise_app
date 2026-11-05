@@ -19,6 +19,15 @@ const TYPED = 'typedCopy';
 // onto the editor's entry.
 export const FROM_EDITOR = { ...KEEP_FOCUS, fromEditor: true } as const;
 
+// The state of the new-recipe editor «Duplicate» opens: Back and Discard step back ONE entry, to the recipe it was copied
+// from (a Save still goes to the list, like any new recipe). It carries KEEP_FOCUS and `fromRecipe` like the other trips
+// out of a recipe page.
+export const FROM_DUPLICATE = { ...KEEP_FOCUS, fromRecipe: true, fromDuplicate: true } as const;
+
+export function cameFromDuplicate(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'fromDuplicate' in state;
+}
+
 export function cameFromEditor(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromEditor' in state;
 }
@@ -59,17 +68,27 @@ export function hasTypedCopy(state: unknown): boolean {
 // a read that lands while the person's own Back is still being processed could leave it behind, and the next «New recipe»
 // minutes later must not open pre-filled.
 export const HANDOVER_TTL_MS = 30_000;
-let handedOver: { working: Working; owner: string; at: number } | null = null;
 
-export function handOver(working: Working, owner: string, now = Date.now()): void {
-  handedOver = { working, owner, at: now };
+// Who made what is handed over: a recipe read from a photograph, or a DUPLICATE of a recipe (the recipe page's «Duplicate»,
+// which opens the same new-recipe editor pre-filled). The editor asks, because the two are not the same story (a read has
+// just been paid for; a duplicate is a copy of something saved).
+export type HandOverBy = 'photo' | 'duplicate';
+
+let handedOver: { working: Working; owner: string; at: number; by: HandOverBy } | null = null;
+
+export function handOver(working: Working, owner: string, now = Date.now(), by: HandOverBy = 'photo'): void {
+  handedOver = { working, owner, at: now, by };
 }
 
 // Looked at while drawing (it changes nothing, so a render run twice is harmless); taken away in an effect.
-export function peekHandover(owner: string, now = Date.now()): Working | null {
+export function peekHandedOver(owner: string, now = Date.now()): { working: Working; by: HandOverBy } | null {
   if (handedOver === null || handedOver.owner !== owner) return null;
   const age = now - handedOver.at;
-  return age >= 0 && age <= HANDOVER_TTL_MS ? handedOver.working : null;
+  return age >= 0 && age <= HANDOVER_TTL_MS ? { working: handedOver.working, by: handedOver.by } : null;
+}
+
+export function peekHandover(owner: string, now = Date.now()): Working | null {
+  return peekHandedOver(owner, now)?.working ?? null;
 }
 
 // Whether anything is waiting at all (for specs).

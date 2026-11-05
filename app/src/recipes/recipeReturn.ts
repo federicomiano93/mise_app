@@ -22,6 +22,8 @@ export interface RecipeReturn {
   pending(recipeId: string): boolean;
   // Is this recipe being returned to from its editor? Read while drawing; it changes nothing.
   pendingEdit(recipeId: string): boolean;
+  // Is this recipe being returned to from the new-recipe editor its «Duplicate» opened? Read while drawing; it changes nothing.
+  pendingDuplicate(recipeId: string): boolean;
   // Is this recipe being returned to from its mixing steps editor (step 3d-8)? Read while drawing; it changes nothing.
   pendingSteps(recipeId: string): boolean;
   // Is this recipe being returned to from its guided mix (step 3d-8, slice B)? Read while drawing; it changes nothing.
@@ -37,12 +39,13 @@ export interface RecipeReturn {
 }
 
 // What the person pressed to leave the recipe.
-export type Origin = 'label' | 'edit' | 'steps' | 'mix' | 'cost';
+export type Origin = 'label' | 'edit' | 'steps' | 'mix' | 'cost' | 'duplicate';
 
 const NOTHING: RecipeReturn = {
   remember() { /* no section around: nothing to come back to */ },
   pending: () => false,
   pendingEdit: () => false,
+  pendingDuplicate: () => false,
   pendingSteps: () => false,
   pendingMix: () => false,
   pendingCost: () => false,

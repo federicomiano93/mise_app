@@ -17,7 +17,7 @@ import { useConfirm } from '../ui/useConfirm';
 import { KEEP_FOCUS } from '../shell/Page';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import {
-  addRow, cleanWorking, dropWorkingRow, linkRowTo, netWeightText, notWeighedCount, removeRow, setName, setRowFields, shelfLifeText,
+  NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, linkRowTo, netWeightText, notWeighedCount, removeRow, setName, setRowFields, shelfLifeText,
   stepWorkingRow, totalText, workingFrom,
 } from './editorModel';
 import type { Chosen, DropPosition, Row, Working } from './editorModel';
@@ -25,7 +25,7 @@ import { IngredientRow } from './IngredientRow';
 import { LinkDialog } from './LinkDialog';
 import { ReorderRows } from './ReorderRows';
 import { NEW_OPENER, recipeOpener, useHandBack } from './handBack';
-import { FROM_EDITOR, carryOwner, forgetHandover, hasTypedCopy, peekHandover, typedCopyOf, withTypedCopy, withoutTypedCopy } from './photoCarry';
+import { FROM_EDITOR, cameFromDuplicate, carryOwner, forgetHandover, hasTypedCopy, peekHandedOver, typedCopyOf, withTypedCopy, withoutTypedCopy } from './photoCarry';
 import { recipePhotoOn } from './photoGate';
 import { cameFromList, cameFromRecipe, recipeCameFromList, useLeave } from './recipesNav';
 import { PHOTO_PATH, RECIPES_PATH, recipePath } from './recipesPath';
@@ -41,11 +41,6 @@ type Props = {
   // Told when something is typed, so the screen knows a newer copy from the server must not replace the form.
   onTyped?: () => void;
 };
-
-// The most a recipe's name may hold: the rules refuse a name of 200 characters or more (firestore.rules, `recipes`), and a
-// save that is refused AFTER the screen has left (the save is local-first) would throw the typing away.
-// ⚠️ NEW IN MISE 2: the current app has no such cap, and a name that long fails there at the database.
-export const NAME_MAX_LENGTH = 199;
 
 // A recipe's own screen for writing: a new one, or an existing one's editor. A port of js/catalogue/catalogue-editor.js,
 // decision for decision, except what docs/parity/catalogue.md («Step 3d-6 as built») lists.
@@ -81,10 +76,11 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   // ⚠️ A NEW RECIPE MAY START FROM SOMETHING CARRIED (photoCarry.ts), and then it starts DIRTY — it is unsaved work, typed or
   // already paid for: the recipe just read from a photograph, else the copy kept while the photo screen was open. Looked at
   // while drawing (nothing is taken yet, so a render run twice is harmless); taken off in the effect below.
-  const [carried] = useState<{ working: Working; by: 'photo' | 'typed' } | null>(() => {
+  // `by`: 'photo' (just read), 'duplicate' (a copy of a saved recipe) or 'typed' (kept while the photo screen was open).
+  const [carried] = useState<{ working: Working; by: 'photo' | 'duplicate' | 'typed' } | null>(() => {
     if (id !== null) return null;
-    const read = peekHandover(owner);
-    if (read !== null) return { working: read, by: 'photo' };
+    const handed = peekHandedOver(owner);
+    if (handed !== null) return handed;
     const typedCopy = typedCopyOf(state, owner);
     return typedCopy === null ? null : { working: typedCopy, by: 'typed' };
   });
@@ -120,6 +116,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     forgetHandover();
     if (hasTypedCopy(state)) void navigate(pathname, { replace: true, state: withoutTypedCopy(state) });
     if (carried?.by === 'typed') fillButton.current?.focus();
+    // A read and a duplicate both open on the title: the first thing to do with either is to look at what it says.
     else if (carried !== null && typeof titleRef === 'object' && titleRef !== null) titleRef.current?.focus();
   }, []);
   // Set once the edits are saved or the recipe deleted, so leaving asks nothing.
@@ -193,8 +190,14 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
       }
     }
     leavingClean.current = true;
-    leave();
+    leaveBack();
   }
+
+  // ⚠️ A COPY OPENED BY «DUPLICATE» STEPS BACK ONE LEVEL, to the recipe it was copied from (Back, and Discard in the question
+  // the blocker asks); the recipe page gives the focus back to its Duplicate button (recipeReturn). A Save still goes to the
+  // list, like any new recipe (P20). An editor opened any other way leaves as before.
+  const fromDuplicate = id === null && cameFromDuplicate(state);
+  const leaveBack = () => { if (fromDuplicate) void navigate(-1); else leave(); };
 
   // ── What is wrong, and where ─────────────────────────────────────────────────────────────────────────────────
   const [showErrors, setShowErrors] = useState(false);

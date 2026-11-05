@@ -28,9 +28,9 @@
 // in the console — and the wait ends, so a screen never waits for them for ever.
 
 import {
-  findCalculatorImport, isScaledEntryFresh, labelFieldsOf, normalizeCatalogueRecipe, normalizeCatalogueRecipes,
+  calculatorImportKind, isScaledEntryFresh, labelFieldsOf, normalizeCatalogueRecipe, normalizeCatalogueRecipes,
 } from '@mise/shared/catalogue-model';
-import type { CatalogueRecipe, ImportAction } from '@mise/shared/catalogue-model';
+import type { CalculatorImportKind, CatalogueRecipe, ImportAction } from '@mise/shared/catalogue-model';
 import { normalizeEndNote, normalizeSteps, ridOf, withRowIds } from '@mise/shared/guided-model';
 import type { KeyValueStorage } from '../session/backend';
 import { newRecipeId, withoutPrice } from './recipesSource';
@@ -73,6 +73,11 @@ export interface RecipeToSave {
   readonly ingredients: readonly Readonly<Record<string, unknown>>[];
   readonly netWeightG?: unknown;
   readonly shelfLifeDays?: unknown;
+  // The mixing procedure and its closing message, as the working copy carries them. ⚠️ SENT ONLY WHEN THE RECIPE IS NEW
+  // (no copy of it is held): a DUPLICATE starts with its original's procedure. For an existing recipe they are ignored here
+  // and stay as stored (KEPT_FIELDS), whatever the working copy holds: their editor is the steps editor.
+  readonly steps?: unknown;
+  readonly endNote?: unknown;
 }
 
 // What the steps editor saves (step 3d-8): the procedure and its closing message, as typed (the store normalises
@@ -188,10 +193,11 @@ export interface RecipesStore {
   // as empty, which deletes it. A refusal puts the version before it back and says `recipe-not-saved`. Returns false,
   // and writes nothing, when the recipe is not held (deleted meanwhile).
   saveProcedure(procedure: ProcedureToSave): boolean;
-  // Whether the recipe was imported into the Calculator (a copy there that stays): config/calculator read once,
-  // raced against IMPORT_CHECK_MS. Never rejects: a slow, offline or refused read answers false.
-  calculatorImportOf(id: string): Promise<boolean>;
-  // Copies a recipe into the Calculator (a transaction on the server: NOT local-first). Resolves with what was done and
+  // How the Calculator stands to the recipe: 'linked' (a tab follows it live), 'copy' (an old import that stays on its
+  // own) or null (neither): config/calculator read once, raced against IMPORT_CHECK_MS. Never rejects: a slow, offline
+  // or refused read answers null.
+  calculatorImportOf(id: string): Promise<CalculatorImportKind | null>;
+  // Links a recipe to the Calculator (a transaction on the server: NOT local-first). Resolves with what was done and
   // counts the recipe as used (the current app does: opening a recipe and importing it are both use); REJECTS when the
   // write cannot be made, and counts nothing.
   importIntoCalculator(recipe: CatalogueRecipe, marketOrderTitle: string): Promise<ImportAction>;
@@ -644,6 +650,14 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       };
       const id = recipe.id || newRecipeId();
       const prev = recipes.find(candidate => candidate.id === id) ?? null;
+      // ⚠️ A NEW RECIPE MAY ARRIVE WITH A PROCEDURE (a duplicate): shaped exactly as saveProcedure shapes it, and a step
+      // names only rows that exist in what is saved (the rows were just given their ids, a row the person deleted from the
+      // copy takes its mention out of the steps). Never for an existing recipe: the merge would overwrite its procedure.
+      if (!prev && (recipe.steps !== undefined || recipe.endNote !== undefined)) {
+        const saved = new Set(rows.map(ridOf));
+        data.steps = normalizeSteps(normalizeSteps(recipe.steps).map(step => ({ ...step, rows: step.rows.filter(rid => saved.has(rid)) })));
+        data.endNote = normalizeEndNote(recipe.endNote);
+      }
       const kept: Record<string, unknown> = {};
       if (prev) {
         const held = prev as unknown as Record<string, unknown>;
@@ -754,12 +768,12 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
 
     calculatorImportOf(id) {
       let timer: ReturnType<typeof setTimeout> | undefined;
-      const late = new Promise<boolean>(resolve => { timer = setTimeout(() => resolve(false), IMPORT_CHECK_MS); });
-      let read: Promise<boolean>;
+      const late = new Promise<CalculatorImportKind | null>(resolve => { timer = setTimeout(() => resolve(null), IMPORT_CHECK_MS); });
+      let read: Promise<CalculatorImportKind | null>;
       try {
-        read = source.getCalculatorConfig().then(config => findCalculatorImport(config, id) !== null, () => false);
+        read = source.getCalculatorConfig().then(config => calculatorImportKind(config, id), () => null);
       } catch {
-        read = Promise.resolve(false);
+        read = Promise.resolve(null);
       }
       return Promise.race([read, late]).finally(() => clearTimeout(timer));
     },

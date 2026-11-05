@@ -17,6 +17,35 @@ const legacy = legacyJs as unknown as typeof ported;
 
 type Loose = any;
 
+// ── A row in kilos (Mise 2 only: the live app reads «1 kg» as 1 g until its own fix lands) ───────────────────────────────
+
+describe('a linked row in kilos is worth its grams (Mise 2 only)', () => {
+  const MIXED = {
+    'cat-1': { name: 'Pane', ingredients: [
+      { rid: 'r1', label: 'Flour', grams: 1, unit: 'kg' },
+      { rid: 'r2', label: 'Salt', grams: 20, unit: 'g' },
+      { rid: 'r3', label: 'Water', grams: 0.5, unit: 'kg' },
+    ] },
+  };
+  const TAB = { id: 't', name: 'Pane', catalogueId: 'cat-1', ingredients: [{ key: 'old', label: 'Old', grams: 5 }] };
+
+  test('1 kg is 1000, 20 g stays 20, 0.5 kg is 500', () => {
+    const r = ported.resolveRecipe(TAB, MIXED);
+    expect(r.problem).toBe(null);
+    expect(r.ingredients.map(i => [i.label, i.grams])).toStrictEqual([['Flour', 1000], ['Salt', 20], ['Water', 500]]);
+  });
+
+  test('the saved dough (sheetRecipe) is built from the same grams', () => {
+    const sheet = ported.sheetRecipe(TAB, ported.resolveRecipe(TAB, MIXED));
+    expect(sheet.ingredients.map(i => i.grams)).toStrictEqual([1000, 20, 500]);
+  });
+
+  test('a row in grams is exactly as the original reads it', () => {
+    const grams = { 'cat-1': { name: 'P', ingredients: [{ rid: 'r1', label: 'Flour', grams: 995, unit: 'g' }, { rid: 'r2', label: 'Y', grams: 5 }] } };
+    expect(ported.resolveRecipe(TAB, grams)).toStrictEqual(legacy.resolveRecipe(TAB, grams));
+  });
+});
+
 describe.each([
   ['shared/ (TypeScript)', ported],
   ['js/ (current app)', legacy],

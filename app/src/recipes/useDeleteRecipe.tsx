@@ -7,7 +7,8 @@ import { useRecipesStore } from './RecipesContext';
 import { useRecipeDeletions } from './recipeDeletions';
 
 // Deleting a recipe, ONE function for the recipe page and the editor (a port of confirmAndDelete of
-// js/catalogue/catalogue-main.js): the question, with the Calculator warning when the recipe was imported there, then the
+// js/catalogue/catalogue-main.js): the question, with the Calculator warning when the Calculator uses the recipe (a linked
+// tab, or an old copy), then the
 // delete, «Recipe deleted.» exactly once, and the caller's `after` (leave the screen).
 //
 // ⚠️ THE CALCULATOR CHECK NEVER BLOCKS THE QUESTION FOR MORE THAN 2.5 s (the store races it): a slow or offline read
@@ -30,11 +31,13 @@ export function useDeleteRecipe(): readonly [(recipe: Target, after: () => void)
     if (asking.current) return false;
     asking.current = true;
     try {
-      const linked = await store.calculatorImportOf(recipe.id);
+      const calculator = await store.calculatorImportOf(recipe.id);
       const base = t('cat.deleteRecipeQ', { name: recipe.name || t('cat.thisRecipe') });
+      // A LINKED tab stops calculating once its recipe is gone; an old copy of the recipe simply stays (see the two sentences).
+      const warning = calculator === 'linked' ? t('cat.itIsLinkedToCalculator') : calculator === 'copy' ? t('cat.itWasImportedInto') : '';
       const ok = await confirm({
         title: t('cat.deleteRecipe2'),
-        message: linked ? base + t('cat.itWasImportedInto') : base,
+        message: base + warning,
         okLabel: t('ui.delete'),
         cancelLabel: t('common.cancel'),
         danger: true,

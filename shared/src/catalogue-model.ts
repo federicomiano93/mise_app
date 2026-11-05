@@ -1,7 +1,10 @@
 // catalogue-model.ts — the part of the recipe catalogue's model that Food cost reads.
 //
 // TypeScript PARTIAL port of js/catalogue/catalogue-model.js for Mise 2. Behaviour is identical, input
-// for input, for everything ported: catalogue-model.spec.ts runs every test against BOTH files and
+// for input, for everything ported EXCEPT the Calculator import, which LINKS the tab instead of copying it
+// (owner's decision, 18 Oct 2026: `toCalculatorRecipe`, `mergeImportedRecipe`, `findCalculatorImport` and
+// the Mise-2-only `calculatorImportKind` / `calculatorRefusal`, each marked where it differs).
+// catalogue-model.spec.ts runs every test against BOTH files and
 // compares each ported export with the js/ file itself; odd-inputs.spec.ts feeds both the same strange
 // values. It is NOT paired in parity.spec.ts, because the original holds much more than Food cost needs.
 //
@@ -45,6 +48,8 @@
 // approximation). Pieces / spoons / pinch / to-taste are NOT weighable, so they stay out of the weight
 // total. Legacy rows with no unit are treated as grams.
 
+import { isWeighable as isWeighableRow, resolveRecipe } from './calculator-recipe-source';
+import { ridOf } from './guided-model';
 import { ingredientDisplayName } from './ingredient-name';
 
 export type CatalogueUnit = 'g' | 'kg' | 'mg' | 'ml' | 'cl' | 'dl' | 'l' | 'pcs' | 'tsp' | 'tbsp' | 'pinch' | 'to taste';
@@ -441,14 +446,30 @@ export function findInvalidRecipe(recipe: unknown): InvalidRecipeProblem | null 
   return null;
 }
 
-// Find the Calculator copy of a catalogue recipe (imported as 'cat-<id>'), or null. Pure — used to WARN before
-// deleting a catalogue recipe that was imported into the Calculator (the two are independent copies; deleting
-// here never touches the Calculator).
+// The Calculator tab that stands for a catalogue recipe, or null: the first tab LINKED to it (`catalogueId`, however it got
+// linked — by this import or by hand in the Calculator's settings), else the old copy imported as 'cat-<id>' — but only if
+// that copy is still UNLINKED (a tab with that id linked to ANOTHER recipe is somebody else's). Pure — used to find the tab
+// an import should refresh, and to WARN before deleting a catalogue recipe the Calculator uses.
+//
+// ⚠️ NEW IN MISE 2 (owner's decision, 18 Oct 2026): an import LINKS the tab to the recipe instead of copying it, so
+// this no longer agrees with js/catalogue/catalogue-model.js, which only knows the 'cat-<id>' copies.
 export function findCalculatorImport(config: unknown, catalogueId: unknown): Record<string, unknown> | null {
   const c = config as { recipes?: unknown } | null | undefined;
   const recipes = (c && Array.isArray(c.recipes)) ? c.recipes as (Record<string, unknown> | null)[] : [];
+  const wanted = String(catalogueId ?? '').trim();
   const importId = 'cat-' + (catalogueId as string);
-  return recipes.find(r => r && r.id === importId) || null;
+  const linked = wanted === '' ? undefined : recipes.find(r => r && String(r.catalogueId ?? '').trim() === wanted);
+  return linked || recipes.find(r => r && r.id === importId && String(r.catalogueId ?? '').trim() === '') || null;
+}
+
+// Which kind of Calculator tab stands for a catalogue recipe: 'linked' (a tab reads the recipe live — ANY tab, wherever it
+// is in the list), 'copy' (an old unlinked import 'cat-<id>' that carries its own rows), or null (none).
+export type CalculatorImportKind = 'linked' | 'copy';
+
+export function calculatorImportKind(config: unknown, catalogueId: unknown): CalculatorImportKind | null {
+  const tab = findCalculatorImport(config, catalogueId);
+  if (tab === null) return null;
+  return String(tab.catalogueId ?? '').trim() === '' ? 'copy' : 'linked';
 }
 
 // ── Import into the Calculator (the single coupling; still pure here) ────────
@@ -458,25 +479,34 @@ export interface CalculatorImportRecipe {
   id: string;
   name: unknown;
   logic: 'total';
+  // The link: the tab reads the catalogue recipe live (calculator-recipe-source.ts). NEW IN MISE 2.
+  catalogueId: string;
   ingredients: { label: unknown; grams: number }[];
   visible: false;
 }
 
-export type ImportAction = 'added' | 'updated';
+// 'already': the tab was linked to this recipe before, so nothing is written.
+export type ImportAction = 'added' | 'updated' | 'already';
 
 type ImportableRecipe = { id: unknown; name: unknown; ingredients?: unknown };
 
 // Map a catalogue recipe to the raw Calculator-recipe shape the Calculator's normalizeRecipe accepts.
-// 'cat-' + the opaque Firestore id is a stable, unique provenance id; logic 'total' = plain pro-rata;
+// 'cat-' + the opaque Firestore id is a stable, unique id; logic 'total' = plain pro-rata;
 // visible:false keeps it out of the max-4 tab bar until the owner opts it in from Calculator Settings.
-// The Calculator is grams-only: weighable rows become grams, non-weighable ones (pieces / spoons / pinch /
-// to-taste) are left out; the UI warns first when anything is left out — see nonWeighableLabels.
+//
+// ⚠️ NEW IN MISE 2 (owner's decision, 18 Oct 2026): THE TAB IS LINKED, NOT COPIED — `catalogueId` makes the Calculator
+// read the recipe live (rows read-only), so a change made in the catalogue changes the doughs. The weighable rows are
+// still written as `ingredients`: that is the leftover copy the tab shows if someone later picks «own» in the
+// Calculator's source box (unlinking leaves the rows as they were). The Calculator is grams-only: weighable rows become
+// grams, the others are left out of that leftover; a LINKED tab with any other row calculates nothing, which is why the
+// screen refuses before it writes (resolveRecipe, problem `unweighable`).
 export function toCalculatorRecipe(recipe: ImportableRecipe): CalculatorImportRecipe {
   const rows = (recipe.ingredients || []) as ({ label?: unknown } | null)[];
   return {
     id: 'cat-' + (recipe.id as string),
     name: recipe.name,
     logic: 'total',
+    catalogueId: recipe.id as string,
     ingredients: rows
       .filter(i => isWeighableUnit(unitOf(i)))
       .map(i => ({ label: (i as { label?: unknown }).label, grams: Math.round(ingGrams(i)) })),
@@ -494,32 +524,79 @@ export function nonWeighableLabels(recipe: unknown): unknown[] {
     .map(i => i.label);
 }
 
-// Add or update an imported recipe inside a config's recipes[]. A recipe with the same id is replaced in place,
-// keeping its tab order and visibility and how it calculates (logic, trayWeight): a re-import never duplicates and
-// never hijacks the tab bar; otherwise it is appended. Pure: returns a new config plus the action taken.
-export function mergeImportedRecipe<C extends object>(config: C, recipe: object & { id: unknown }): { config: C; action: ImportAction } {
-  const current = (config as { recipes?: unknown }).recipes;
-  const recipes = Array.isArray(current) ? current.slice() as (Record<string, unknown> | null)[] : [];
-  const idx = recipes.findIndex(r => r && r.id === recipe.id);
-  let action: ImportAction;
-  if (idx >= 0) {
-    const prev = recipes[idx] as Record<string, unknown>;
-    // The owner chose how this tab calculates (logic, tray weight); an import refreshes the ingredients, never
-    // that (a fresh import always says logic: 'total').
-    recipes[idx] = {
-      ...recipe, order: prev.order, visible: prev.visible,
-      ...(prev.logic !== undefined ? { logic: prev.logic } : {}),
-      ...(prev.trayWeight !== undefined ? { trayWeight: prev.trayWeight } : {}),
-    };
-    action = 'updated';
-  } else {
-    recipes.push(recipe);
-    action = 'added';
-  }
-  return { config: { ...config, recipes }, action };
+// Why the Calculator could not follow a recipe, asked of the Calculator's OWN check (`resolveRecipe` on a tab linked to the
+// recipe) so the two can never disagree: null (it can), 'empty' (no rows), or the first row it cannot follow — 'notByWeight'
+// (pieces, spoons, «to taste», millilitres, litres…) or 'noAmount' (a row in grams or kilos with nothing in it). NEW IN MISE 2.
+export type CalculatorRefusal = { kind: 'empty' } | { kind: 'notByWeight' | 'noAmount'; row: string };
+
+export function calculatorRefusal(recipe: unknown): CalculatorRefusal | null {
+  const resolved = resolveRecipe({ catalogueId: 'x' }, { x: recipe });
+  if (resolved.problem === null) return null;
+  if (resolved.problem !== 'unweighable') return { kind: 'empty' };
+  const rows = ((recipe as { ingredients?: unknown } | null)?.ingredients ?? []) as ({ label?: unknown; unit?: unknown } | null)[];
+  const blocker = rows.find(r => r && String(r.label || '').trim() && !isWeighableRow(r));
+  const unit = String(blocker?.unit || '').trim().toLowerCase();
+  return { kind: unit === '' || unit === 'g' || unit === 'gr' || unit === 'kg' ? 'noAmount' : 'notByWeight', row: resolved.problemRow };
 }
 
-export type ImportFailureKey = 'calc.notSavedOutOfDate' | 'cat.importFailedCheckYour';
+// Add or update an imported recipe inside a config's recipes[]. The tab that already stands for the recipe is, in order: the
+// first one LINKED to it (`catalogueId`, however it got linked), else the old copy 'cat-<id>' if it is still UNLINKED; else
+// the recipe is appended. Pure: returns a new config plus the action taken.
+//
+// ⚠️ NEW IN MISE 2 (owner's decision, 18 Oct 2026): the result is LINKED (`catalogueId`, from toCalculatorRecipe), and a tab
+// that is reused LOSES NOTHING: it is kept whole (its id, name, order, visibility, logic, tray weight, leavening and every
+// percentage) and only `catalogueId` and the leftover `ingredients` change. A tab already linked to this recipe is not
+// touched at all ('already'), so no write follows. A tab linked to ANOTHER recipe is never hijacked, even under the id
+// 'cat-<id>': the new tab then takes the next free id ('cat-<id>-2', '-3'…), never a duplicate one.
+//
+// ⚠️ THE YEAST KNOB SURVIVES THE LINK. An unlinked copy names its leavening by its OWN row key (`leaveningKey`), but a linked
+// tab reads it only from `leaveningRid`, the catalogue row's id (calculator-recipe-source). Kept as it was, the old key would
+// sit in the document doing nothing: the % control gone, the yeast scaling at the recipe's own ratio, nobody told. So the
+// copy's leavening row is found again in the recipe BY LABEL (the copy was made from these rows) and its rid is written as
+// `leaveningRid`; the copy's percentages then still apply. `sourceRows` = the catalogue recipe's rows; no match = no rid.
+export function mergeImportedRecipe<C extends object>(config: C, recipe: object & { id: unknown }, sourceRows?: unknown): { config: C; action: ImportAction } {
+  const current = (config as { recipes?: unknown }).recipes;
+  const recipes = Array.isArray(current) ? current.slice() as (Record<string, unknown> | null)[] : [];
+  const incoming = (recipe ?? {}) as { id?: unknown; catalogueId?: unknown; ingredients?: unknown };
+  const catalogueId = String(incoming.catalogueId ?? '').trim();
+  const linkOf = (r: Record<string, unknown> | null): string => String(r?.catalogueId ?? '').trim();
+  let idx = catalogueId === '' ? -1 : recipes.findIndex(r => r && linkOf(r) === catalogueId);
+  if (idx < 0) idx = recipes.findIndex(r => r && r.id === incoming.id && linkOf(r) === '');
+  if (idx >= 0) {
+    const prev = recipes[idx] as Record<string, unknown>;
+    if (catalogueId !== '' && linkOf(prev) === catalogueId) return { config, action: 'already' };
+    const leaveningRid = catalogueId !== '' && linkOf(prev) === '' && !String(prev.leaveningRid ?? '').trim()
+      ? leaveningRidFor(prev, sourceRows) : '';
+    recipes[idx] = {
+      ...prev,
+      ...(catalogueId !== '' ? { catalogueId } : {}),
+      ...(leaveningRid !== '' ? { leaveningRid } : {}),
+      ...(incoming.ingredients !== undefined ? { ingredients: incoming.ingredients } : {}),
+    };
+    return { config: { ...config, recipes }, action: 'updated' };
+  }
+  let id = incoming.id;
+  const taken = new Set(recipes.map(r => r?.id));
+  for (let n = 2; taken.has(id); n++) id = `${String(incoming.id)}-${n}`;
+  recipes.push({ ...recipe, id });
+  return { config: { ...config, recipes }, action: 'added' };
+}
+
+// The catalogue row an unlinked copy's leavening came from, as the key a linked tab reads (`ridOf(row) || label`, the same
+// key resolveRecipe builds), or '' when the copy has no leavening or its label is no longer in the recipe.
+function leaveningRidFor(tab: Record<string, unknown>, sourceRows: unknown): string {
+  const key = String(tab.leaveningKey ?? '').trim();
+  if (key === '' || !Array.isArray(sourceRows)) return '';
+  const own = Array.isArray(tab.ingredients) ? tab.ingredients as ({ key?: unknown; label?: unknown } | null)[] : [];
+  const norm = (v: unknown) => String(v ?? '').trim().toLowerCase();
+  const row = own.find(r => r && String(r.key ?? '').trim() === key);
+  const label = norm(row ? row.label : key);
+  if (label === '') return '';
+  const source = (sourceRows as ({ label?: unknown } | null)[]).find(r => r && norm(r.label) === label && isWeighableRow(r));
+  return source ? (ridOf(source) || String(source.label ?? '').trim()) : '';
+}
+
+export type ImportFailureKey ='calc.notSavedOutOfDate' | 'cat.importFailedCheckYour';
 
 // Which sentence explains a refused import. permission-denied = the server REFUSED: this app is older than the
 // data (configModel), which a connection check would never fix, so it says «out of date» (the Calculator's own key,
