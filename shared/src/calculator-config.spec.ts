@@ -1006,10 +1006,10 @@ describe.each([
     expect(saveFailureKey(null)).toBeNull();
   });
 
-  // ── The trays an exported recipe's title names (tests/recipe-export-wiring.test.mjs) ──
+  // ── The trays an exported recipe's file name carries (tests/recipe-export-wiring.test.mjs) ──
 
-  test('the export title names trays only when the dough IS the trays', () => {
-    // [logic, trays, typed total, trays named in the title]
+  test('the file name carries trays only when the dough IS the trays', () => {
+    // [logic, trays, typed total, trays named in the file name]
     const cases: [string, unknown, unknown, number][] = [
       ['orders', 3, 0, 0], ['total', 3, 0, 0], ['both', 3, 500, 0], ['both', 3, 0, 0],
       ['trays', 3, 0, 3], ['trays', 3, 500, 3], ['trays', 0, 0, 0], ['trays', 2.9, 0, 2],

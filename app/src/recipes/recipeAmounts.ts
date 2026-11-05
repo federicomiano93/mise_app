@@ -28,7 +28,7 @@ export type AmountRow = {
 export type RecipeAmounts = {
   readonly rows: readonly AmountRow[];
   readonly total: { readonly num: string; readonly unit: string };
-  // What the rows were drawn FROM, for the export (it must say what the screen says): each row's amount in its own
+  // What the rows were drawn FROM, for the export (it starts from what the screen says): each row's amount in its own
   // unit, unrounded (null = «to taste»), and the Total's grams, unrounded.
   readonly values: readonly (number | null)[];
   readonly totalGrams: number;

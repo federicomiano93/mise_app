@@ -136,3 +136,56 @@ test('a browser that cannot share files shows no Share button', async () => {
   assert.ok(!texts().includes(t('export.share')));
   press('Escape');
 });
+
+// The switch is executed, not read as text: what it says is what the PDF prints, and the next opening
+// starts ON again. The weights are read from the file jsPDF really made (uncompressed text operators).
+const ROWS = [{ name: 'Farina di prova', grams: 293 }, { name: 'Sale di prova', grams: 14 }];
+const theSwitch = () => find(n => n.attributes.role === 'switch');
+
+async function pdfFromDialog() {
+  let blob = null;
+  const counting = URL.createObjectURL;
+  URL.createObjectURL = (b) => { blob = b; return counting.call(URL, b); };
+  routes()[0].fire('click');
+  await until(() => find(n => n.tagName === 'A'));
+  URL.createObjectURL = counting;
+  press('Escape');
+  return Buffer.from(await blob.arrayBuffer()).toString('latin1');
+}
+
+test('the switch starts ON and the PDF prints the rounded weights', async () => {
+  await open({ rows: ROWS });
+  assert.equal(theSwitch().checked, true);
+  const pdf = await pdfFromDialog();
+  assert.ok(pdf.includes('(290 g) Tj') && pdf.includes('(15 g) Tj'));
+  assert.ok(!pdf.includes('(293 g) Tj') && !pdf.includes('(14 g) Tj'));
+});
+
+test('turned off, the PDF prints the screen\'s weights; the next opening is ON again', async () => {
+  await open({ rows: ROWS });
+  theSwitch().checked = false;
+  theSwitch().fire('change');
+  const pdf = await pdfFromDialog();
+  assert.ok(pdf.includes('(293 g) Tj') && pdf.includes('(14 g) Tj'));
+  assert.ok(!pdf.includes('(290 g) Tj') && !pdf.includes('(15 g) Tj'));
+  await open({ rows: ROWS });
+  assert.equal(theSwitch().checked, true);
+  press('Escape');
+});
+
+test('the switch is named by its words alone and described by its note', async () => {
+  await open({ rows: ROWS });
+  const sw = theSwitch();
+  const name = find(n => n.id === sw.attributes['aria-labelledby']);
+  const note = find(n => n.id === sw.attributes['aria-describedby']);
+  assert.equal(name.textContent, t('export.roundWeights'));
+  assert.equal(note.textContent, t('export.roundNote'));
+  press('Escape');
+});
+
+test('a recipe with nothing in grams shows no switch', async () => {
+  await open({ rows: [{ name: 'Uova di prova', value: 3, unit: 'pz', factor: 0 }] });
+  assert.equal(theSwitch(), undefined);
+  assert.equal(routes().length, 2);
+  press('Escape');
+});

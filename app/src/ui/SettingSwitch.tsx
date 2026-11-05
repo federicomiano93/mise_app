@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { Switch } from 'react-aria-components';
 import styles from './SettingSwitch.module.css';
 
@@ -8,11 +9,14 @@ type Props = {
   labelledBy: string;
   describedBy?: string;
   isDisabled?: boolean;
+  // A row that IS the switch: its words go inside, so a tap on them flips it too, and `className` lays the row out.
+  children?: ReactNode;
+  className?: string;
 };
 
 // An on/off switch (`role="switch"`, React Aria brings the keyboard and the state). The row that holds it draws
 // the words and gives their ids: the whole row is 48px tall so a thumb finds it.
-export function SettingSwitch({ selected, onChange, labelledBy, describedBy, isDisabled }: Props) {
+export function SettingSwitch({ selected, onChange, labelledBy, describedBy, isDisabled, children, className }: Props) {
   return (
     <Switch
       isSelected={selected}
@@ -20,8 +24,9 @@ export function SettingSwitch({ selected, onChange, labelledBy, describedBy, isD
       isDisabled={isDisabled}
       aria-labelledby={labelledBy}
       aria-describedby={describedBy}
-      className={styles.switch}
+      className={className === undefined ? styles.switch : `${styles.switch} ${className}`}
     >
+      {children}
       <span className={styles.track} aria-hidden="true">
         <span className={styles.thumb} />
       </span>

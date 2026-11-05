@@ -801,6 +801,8 @@ export const en = {
   'export.pdfNote': 'To print or share',
   'export.excel': 'Excel',
   'export.excelNote': 'Saved to this device',
+  'export.roundWeights': 'Round the weights in the PDF',
+  'export.roundNote': 'Under 10 g to the gram, under 100 g to 5 g, above to 10 g',
   'export.preparing': 'Preparing the file…',
   'export.ready': 'File ready',
   'export.download': 'Download',

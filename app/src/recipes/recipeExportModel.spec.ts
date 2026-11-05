@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
-import { exportFileName, rowTextOf, xlsxSheet } from '@mise/shared/recipe-export';
+import { exportFileName, hasRoundableRows, rowTextOf, xlsxSheet } from '@mise/shared/recipe-export';
 import { en } from '../i18n/en';
 import { it as italian } from '../i18n/it';
 import { format } from '../i18n/i18n';
@@ -8,7 +8,8 @@ import { recipeAmounts } from './recipeAmounts';
 import { recipeExportModel } from './recipeExportModel';
 
 // The recipe screen's rows as the export reads them (port of tests/catalogue-export-model.test.mjs). The model is
-// built from the amounts the card DREW, so the file can only say what the screen says. Fake recipes only.
+// built from the amounts the card DREW, so the file starts from what the screen says; only the PDF's own switch prints a
+// gram row differently. Fake recipes only.
 
 const tEn = (key: keyof typeof en, params?: Record<string, string | number>) => format('en', en[key], params);
 const tIt = (key: keyof typeof italian, params?: Record<string, string | number>) => format('it', italian[key], params);
@@ -55,7 +56,14 @@ describe('recipeExportModel', () => {
   it('says the unit in the interface’s words, as the screen does', () => {
     const model = recipeExportModel(RECIPE, recipeAmounts(RECIPE, null, tIt, 'it-IT'));
     expect(model.rows.map(row => row.unit)).toEqual(['ml', 'kg', 'pz', 'g', 'q.b.']);
-    expect(model.rows.map(rowTextOf)).toEqual(['500 ml', '2 kg', '3 pz', '250 g', 'q.b.']);
+    expect(model.rows.map(row => rowTextOf(row))).toEqual(['500 ml', '2 kg', '3 pz', '250 g', 'q.b.']);
+  });
+
+  it('reaches the lab rounding in Italian: the gram rows only, from the number on screen', () => {
+    const recipe = { ...RECIPE, ingredients: [...RECIPE.ingredients, { rid: 'odd', label: 'Lievito di prova', grams: 293, unit: 'g' }] } as CatalogueRecipe;
+    const model = recipeExportModel(recipe, recipeAmounts(recipe, null, tIt, 'it-IT'));
+    expect(hasRoundableRows(model)).toBe(true);
+    expect(model.rows.map(row => rowTextOf(row, { rounded: true }))).toEqual(['500 ml', '2 kg', '3 pz', '250 g', 'q.b.', '290 g']);
   });
 
   it('takes the amounts as drawn (scaled) and the total rounded', () => {
@@ -69,7 +77,7 @@ describe('recipeExportModel', () => {
     const amounts = recipeAmounts(DECIMALS, 3000, tIt, 'it-IT');
     const model = recipeExportModel(DECIMALS, amounts);
     expect(model.rows.map(row => (row as { decimals: number }).decimals)).toEqual([3, 3, 0]);
-    expect(model.rows.map(rowTextOf)).toEqual(['0,727 kg', '2,273 l', '4 pz']);
+    expect(model.rows.map(row => rowTextOf(row))).toEqual(['0,727 kg', '2,273 l', '4 pz']);
     expect(amounts.rows.map(row => row.num)).toEqual(['0,727', '2,273', '4']);
   });
 

@@ -29,7 +29,8 @@ type Props = {
   // The divisor's number of crates, kept by the panel because Confirm saves it with the dough.
   divisorN: number;
   onDivisorN: (n: number) => void;
-  // The trays the exported title may name («Pizza x 3»): only when the dough IS the trays (exportTraysFor), else 0.
+  // The trays the exported FILE NAME may carry («Pizza_x3.pdf»): only when the dough IS the trays (exportTraysFor), else 0.
+  // The title on the page is the recipe's name only.
   exportTrays: number;
   // The heading takes the focus after a Confirm (RecipePanel): it is the recipe's own title.
   headingRef?: Ref<HTMLHeadingElement>;
@@ -144,7 +145,7 @@ export function ResultCard({ recipe, result, config, products, qty, divisorN, on
           </div>
           {/* Its own full-width line under Copy and Send: a third square in that row made «Copia la ricetta» wrap
               at 296px in Italian. The file is made from the SAME rows the card draws (the unrounded grams, never
-              recomputed), titled with the same name as the text above. */}
+              recomputed), titled with the same name as the text above; only the PDF's own switch rounds them. */}
           <button
             type="button"
             className={styles.export}

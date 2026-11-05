@@ -6,6 +6,7 @@ import type { ExportModel } from '@mise/shared/recipe-export';
 import { I18nProvider } from '../i18n/I18nProvider';
 import { it as italian } from '../i18n/it';
 import { useExportSheet } from './ExportSheet';
+import dialogCss from './Dialog.module.css?raw';
 
 // The export dialog: the choice, «Preparing the file…», «File ready» with a real Download link (and Share for the
 // PDF only), the errors, and the focus handed back. The two builders are replaced: the files themselves are
@@ -105,13 +106,109 @@ describe('the choice', () => {
   });
 });
 
+const SWITCH = 'Round the weights in the PDF';
+
+describe('the round-the-weights switch', () => {
+  it('flips on a tap on its words too, as the whole row is the switch', async () => {
+    const { user } = draw();
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+    const box = within(await sheet());
+    await user.click(box.getByText('Under 10 g to the gram, under 100 g to 5 g, above to 10 g'));
+    expect(box.getByRole('switch', { name: SWITCH })).not.toBeChecked();
+    await user.click(box.getByText(SWITCH));
+    expect(box.getByRole('switch', { name: SWITCH })).toBeChecked();
+  });
+
+  it('starts ON, named by its words and described by its note', async () => {
+    const { user } = draw();
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+    const toggle = within(await sheet()).getByRole('switch', { name: SWITCH });
+    expect(toggle).toBeChecked();
+    expect(toggle).toHaveAccessibleDescription('Under 10 g to the gram, under 100 g to 5 g, above to 10 g');
+  });
+
+  it('turned off, the PDF is built without the rounding', async () => {
+    allowShare(false);
+    const { user } = draw();
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+    const box = within(await sheet());
+    await user.click(box.getByRole('switch', { name: SWITCH }));
+    expect(box.getByRole('switch', { name: SWITCH })).not.toBeChecked();
+    await user.click(box.getByRole('button', { name: /^PDF/ }));
+    await ready();
+    expect(builders.buildPdfBlob).toHaveBeenCalledWith(MODEL, { rounded: false });
+  });
+
+  it('is ON again at the next opening: it is not remembered', async () => {
+    const { user } = draw();
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+    const box = within(await sheet());
+    await user.click(box.getByRole('switch', { name: SWITCH }));
+    await user.click(box.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+    expect(within(await sheet()).getByRole('switch', { name: SWITCH })).toBeChecked();
+  });
+
+  it('never changes Excel: the spreadsheet is built the same with the switch off', async () => {
+    const { user } = draw();
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+    const box = within(await sheet());
+    await user.click(box.getByRole('switch', { name: SWITCH }));
+    await user.click(box.getByRole('button', { name: /^Excel/ }));
+    await ready();
+    expect(builders.buildXlsxBlob).toHaveBeenCalledWith(MODEL, 'Total', 'Recipe');
+    expect(builders.buildPdfBlob).not.toHaveBeenCalled();
+  });
+
+  it('is not drawn when no row is in grams', async () => {
+    const { user } = draw({
+      ...MODEL,
+      rows: [
+        { name: 'Uova di prova', value: 3, unit: 'pz', factor: 0 },
+        { name: 'Latte di prova', value: 5, unit: 'ml', factor: 1 },
+        { name: 'Sale di prova', value: null, unit: 'g', factor: 1 },
+      ],
+    });
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+    const box = within(await sheet());
+    expect(box.queryByRole('switch')).not.toBeInTheDocument();
+    expect(box.getAllByRole('button').map(b => b.textContent)).toEqual(['PDFTo print or share', 'ExcelSaved to this device', 'Cancel']);
+  });
+
+  it('comes in the Tab order after PDF and Excel, before Cancel', async () => {
+    const { user } = draw();
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+    const box = within(await sheet());
+    await waitFor(() => { expect(box.getByRole('button', { name: /^PDF/ })).toHaveFocus(); });
+    await user.tab();
+    expect(box.getByRole('button', { name: /^Excel/ })).toHaveFocus();
+    await user.tab();
+    expect(box.getByRole('switch', { name: SWITCH })).toHaveFocus();
+    await user.tab();
+    expect(box.getByRole('button', { name: 'Cancel' })).toHaveFocus();
+  });
+});
+
+// ⚠️ The export dialog is taller now (the switch row). On a short phone held sideways the dialog must scroll
+// inside its overlay, or Cancel falls below the screen. jsdom lays nothing out, so the two rules that make it
+// scroll in ui/Dialog.module.css are read from the CSS: do not remove them.
+describe('the dialog around it', () => {
+  const block = (selector: string) => new RegExp(`\\${selector}\\s*\\{([^}]*)\\}`).exec(dialogCss.replace(/\/\*[\s\S]*?\*\//g, ''))?.[1] ?? '';
+
+  it('scrolls inside its overlay and centres with an auto margin, so Cancel stays reachable on a short screen', () => {
+    expect(block('.overlay')).toMatch(/overflow-y:\s*auto/);
+    expect(block('.modal')).toMatch(/margin:\s*auto/);
+  });
+});
+
 describe('a PDF', () => {
   it('is built from the model the screen handed over, then offered as a real Download link', async () => {
     allowShare(false);
     const { user } = draw();
     await choose(user, 'PDF');
     const box = within(await ready());
-    expect(builders.buildPdfBlob).toHaveBeenCalledWith(MODEL);
+    expect(builders.buildPdfBlob).toHaveBeenCalledWith(MODEL, { rounded: true });
     expect(builders.buildXlsxBlob).not.toHaveBeenCalled();
     const link = box.getByRole('link', { name: 'Download' });
     expect(link).toHaveAttribute('href', 'blob:test/1');
@@ -318,6 +415,7 @@ describe('in Italian', () => {
     await user.click(screen.getByRole('button', { name: 'Export' }));
     const box = await screen.findByRole('dialog', { name: 'Esporta come' });
     expect(within(box).getByRole('button', { name: /^Excel/ })).toHaveTextContent('Si salva sul dispositivo');
+    expect(within(box).getByRole('switch', { name: 'Arrotonda i pesi nel PDF' })).toBeChecked();
     await user.click(within(box).getByRole('button', { name: /^PDF/ }));
     const done = await screen.findByRole('dialog', { name: 'File pronto' });
     expect(within(done).getByRole('link', { name: 'Scarica' })).toHaveAttribute('download', 'ricetta.pdf');

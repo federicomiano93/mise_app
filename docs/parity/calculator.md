@@ -396,8 +396,8 @@ steps is at the end.
 85a. **Export (PDF / Excel)** (`js/recipe-export.js`, `js/export-sheet.js`; Mise 2: `ui/recipeExport.ts`,
     `ui/ExportSheet.tsx`): a full-width secondary button on its own line UNDER Copy and Send (a third square in
     that row made «Copia la ricetta» wrap at 296px in Italian). The file is made from the SAME rows the card draws
-    (the unrounded grams, never recomputed), titled with the name the card's text uses; the title names trays
-    («Pizza x 3») only when the dough IS the trays (`exportTraysFor`), else the grams. The dialog: choose PDF or
+    (the unrounded grams, never recomputed), titled with the recipe's name alone (since #456); the FILE name carries trays
+    («Pizza_x3.pdf») only when the dough IS the trays (`exportTraysFor`), else the grams. The dialog: choose PDF or
     Excel, «Preparing the file…», then «File ready» with a real Download LINK (the tap that built the file may have
     lost its user activation) and Share for the PDF only, when `navigator.canShare({files})` allows it. Errors say
     «needs a connection» only for a library that did not load while OFFLINE. The libraries load on the tap only.
@@ -965,3 +965,24 @@ The deadline editor, the hub's Client ordering row and the ordering link on a cl
   box, «No deadline has been saved yet: until you save one, clients can order for any day, today included.» (new key
   `calc.cutoff.notSaved`, warning tone), and Save is enabled WITHOUT a change so the 16:00 shown can be saved as it is (the usual
   question follows). The current app showed 16:00 as if it were in force.
+
+## The recipe PDF in the lab's format, as built (5 Nov 2026, port of PR #456, live in the current app as v1.136.0)
+
+Applies to the export from the Calculator's card and from the Recipe book's page (`docs/parity/catalogue.md`, 35a), one code path.
+
+- **Same as the current app, input for input** (`shared/src/recipe-export.spec.ts` runs against both files): title 28 pt at baseline 70,
+  rows 20 pt, first row 48 below, 30 apart, a 300 pt block centred on the page (147.64 to 447.64); the title is the recipe's name alone in the
+  PDF and in Excel, the file name unchanged (`_x18`, `_24000g`); `roundLabWeight` (to the gram under 10 g, to 5 g under 100 g, else to 10 g, half
+  up), applied to rows in grams only and from the number on screen; `hasRoundableRows`; the switch «Arrotonda i pesi nel PDF» with his words, ON
+  at every opening, never remembered; Excel always exact.
+- **How the two files stay honest.** `main` is not merged into this stack, so #456's files (`js/`, `tokens.css`, `tests/`) were taken as they
+  are, the bundles and the cache list regenerated: the spec compares the port with the new behaviour. `js/recipe-export.js`, `js/export-sheet.js` and the
+  three export tests are byte-equal to `main`'s; the other files carry the same changed lines over this stack's older text.
+- **A tap on the words flips the switch**, as in the current app: the row looks like PDF and Excel above it, so it must answer anywhere. It is the one
+  switch row in Mise 2 that does, through `SettingSwitch`'s `children`; the others draw their words beside it, and were left alone.
+- **The one difference: the dialog's scroll is the shared one.** The current app needed a new `overflow-y` on its export dialog so Cancel stays reachable on a
+  short screen. `ui/Dialog.module.css` already scrolls its layer, for every dialog, so nothing changed there; `ExportSheet.spec.tsx` pins it, and the
+  driver taps Cancel for real at 568×320.
+- **Driven** 216/216 (`algprobe/mise-drive/drive-mise2-recipe-pdf.mjs <base> <cdp-port> <out-dir>`): IT and EN at 1024, 360, 296, PDF text and measures read
+  back from the file, the .xlsx unzipped. Not driven, because nothing in them changed: an employee (the export has no role), offline and a failed library
+  (paths untouched, covered by the specs). Owed: the real tablet (SM-T550) and a printed sheet.
