@@ -254,6 +254,8 @@ describe('the question and the payload', () => {
       data: {
         name: 'Salt', shortName: '', supplierId: 'no-supplier', brand: '', weight: '', category: 'Other', unit: '', active: true, kind: 'ingredient',
         ...drained,
+        allergens: [], mayContain: [], allergensCheckedAt: '', packIngredients: '',
+        nutrition: { kj: null, kcal: null, fat: null, saturates: null, carbs: null, sugars: null, protein: null, salt: null },
       },
       price: null,
     });

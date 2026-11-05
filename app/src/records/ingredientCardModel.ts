@@ -13,8 +13,8 @@ import {
 // The ingredient card's working copy, the rules of its Save and the exact payload it sends (parity C36–C57, C80–C81,
 // C84–C87): the pure half of IngredientCard.tsx. The price's own working copy is priceCardModel.ts (step 3e-3); what the price
 // changes HERE is the format it opens with, the refusals of a carton being written and a new item's order unit. The price keys
-// themselves are never in this payload (the store writes the money apart); the allergens and the nutrition come with 3e-4 and
-// until then NONE of their keys is ever in a payload, so a merge write leaves them exactly as they are stored.
+// themselves are never in this payload (the store writes the money apart), nor are the allergen and nutrition keys: the card
+// adds those from allergenCardModel.ts `allergenPayload`, only the groups that changed.
 //
 // ⚠️ THE FOOD WORDS HERE (the carton word, the package words, the categories) FOLLOW THE VENUE'S COUNTRY: every function that
 // writes or offers one takes `lang`, the venue's OUTPUT language (shared/market.ts outputLanguage), never the screen's.

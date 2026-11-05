@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ReactNode, Ref } from 'react';
 import { Check, Trash2 } from 'lucide-react';
+import { flushSync } from 'react-dom';
 import { useBlocker } from 'react-router';
 import type { BlockerFunction } from 'react-router';
+import type { NutrientKey } from '@mise/shared/allergen-model';
 import { FALLBACK_MONEY } from '@mise/shared/currency';
+import { allergensOn, nutritionOn } from '@mise/shared/venue-features';
 import type { Money } from '@mise/shared/currency';
 import { formatSummary, usesLegacyCard } from '@mise/shared/pack-format';
 import type { PackTranslate } from '@mise/shared/pack-format';
@@ -16,6 +19,7 @@ import { supplierLabel } from '@mise/shared/supplier-label';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
+import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { FormDialog } from '../ui/FormDialog';
@@ -26,6 +30,10 @@ import {
   buildSave, firstRefusal, formState, isDirty, labelOf, weightText, withFormat, withInner, workingFrom,
 } from './ingredientCardModel';
 import type { CardKind, ChoiceState, ItemLike, RefusedField, Working } from './ingredientCardModel';
+import { AllergenSections } from './AllergenSections';
+import type { AllergenControls, NutrientBoxes } from './AllergenSections';
+import { allergenDirty, allergenPayload, allergenWorkingFrom, nutritionRefusal } from './allergenCardModel';
+import type { AllergenWorking, NutritionRefusal } from './allergenCardModel';
 import { PriceHistory } from './PriceHistory';
 import { PriceSection } from './PriceSection';
 import type { PriceBox } from './PriceSection';
@@ -104,6 +112,7 @@ export function IngredientCard({
   mayPrice = false, country, money = FALLBACK_MONEY, readHistory,
 }: Props) {
   const { t, locale } = useT();
+  const { location } = useSession();
   const [confirm, confirmDialog] = useConfirm();
   const [alert, alertDialog] = useAlert();
   const ids = useId();
@@ -135,12 +144,22 @@ export function IngredientCard({
     ? priceStateFrom(opened, kind === 'packaging' && !opened ? 'pcs' : null, ctxOf(baseline, null))
     : null));
   const priceRef = useRef(price);
-  const dirtyOf = (current: Working, state: PriceState | null) =>
-    isDirty(current, baseline, state ? isPriceEdited(state, ctxOf(current, state)) : false);
+
+  // ── The pack list, allergens and nutrition's working copy (step 3e-4) ──
+  // ⚠️ MADE ONCE, WHEN THE CARD OPENS, like the rest: the model's header says what a save writes from it.
+  const [allergenBaseline] = useState<AllergenWorking>(() => allergenWorkingFrom(opened, money));
+  const [allergenWork, setAllergenWork] = useState<AllergenWorking>(allergenBaseline);
+  const allergenRef = useRef(allergenWork);
+  const nutrientBoxes: NutrientBoxes = useRef({});
+  const allergenControls = useRef<AllergenControls | null>(null);
+  const [refusedNutrient, setRefusedNutrient] = useState<NutritionRefusal | null>(null);
+  const dirtyOf = (current: Working, state: PriceState | null, allergenCopy: AllergenWorking = allergenRef.current) =>
+    isDirty(current, baseline, state ? isPriceEdited(state, ctxOf(current, state)) : false)
+    || allergenDirty(allergenCopy, allergenBaseline);
 
   // ⚠️ DIRTY IS «DIFFERENT FROM THE COPY TAKEN AT OPEN», also kept in a ref: the router's blocker reads it at the moment of a
   // navigation, and a state value read there could be one render behind.
-  const dirty = dirtyOf(working, price);
+  const dirty = dirtyOf(working, price, allergenWork);
   const dirtyRef = useRef(false);
   // ⚠️ THE SUPPLIER FORM OPEN ABOVE HAS TYPING: the router asks only its LAST blocker, so this card's is the only one (the
   // supplier form registers none in a dialog) and it counts that typing too — one question, for both.
@@ -170,6 +189,14 @@ export function IngredientCard({
     setPrice(next);
     dirtyRef.current = dirtyOf(current, next);
     if (clears && refused === clears) setRefused(null);
+  }
+  function changeAllergen(next: AllergenWorking) {
+    const previous = allergenRef.current;
+    allergenRef.current = next;
+    dirtyRef.current = dirtyOf(workingRef.current, priceRef.current, next);
+    setAllergenWork(next);
+    // Typing in the refused nutrition box clears its sentence.
+    if (refusedNutrient !== null && next.nutrition[refusedNutrient.key] !== previous.nutrition[refusedNutrient.key]) setRefusedNutrient(null);
   }
   // Unsaved edits: a reload the app starts by itself waits (session/busy.ts).
   useEffect(() => (dirty ? markBusy() : undefined), [dirty]);
@@ -262,8 +289,24 @@ export function IngredientCard({
     if (typeof target?.scrollIntoView === 'function') target.scrollIntoView({ block: 'center' });
   }
 
+  // A nutrition box the Save refused: the fold opens (the box is hidden while it is shut), the box is marked, said and takes the
+  // focus, and is scrolled into view — Save is at the top.
+  function showNutrient(refusal: NutritionRefusal) {
+    const key: NutrientKey = refusal.key;
+    flushSync(() => {
+      setRefusedNutrient(refusal);
+      allergenControls.current?.openNutrition();
+    });
+    const target = nutrientBoxes.current[key];
+    target?.focus();
+    if (typeof target?.scrollIntoView === 'function') target.scrollIntoView({ block: 'center' });
+  }
+
   async function save() {
     if (deleting || busy.current || askingLeave.current || leavingClean.current) return;
+    // ⚠️ FIRST OF ALL, a proposal still waiting on the pack text (the pause has not ended) is run now, so that what is checked and
+    // written below is what the screen shows. The card's copy is updated synchronously by changeAllergen.
+    allergenControls.current?.flushProposal();
     const current = workingRef.current;
     // The right to write prices is read NOW: Food cost switched off on another phone while this card is open must not send a
     // price the rules refuse, taking the whole ingredient save down with it.
@@ -281,11 +324,23 @@ export function IngredientCard({
       show(wrongPrice === 'weight' ? 'priceWeight' : wrongPrice);
       return;
     }
+    // Then the nutrition's: text that is not a number, or a negative one (a new rule of Mise 2, the model's header says why). Only
+    // the boxes somebody changed, and only while the venue shows the nutrition (read now, like the sections do).
+    const allergenCopy = allergenRef.current;
+    const wrongNutrient = kind === 'ingredient' && nutritionOn(location) ? nutritionRefusal(allergenCopy, allergenBaseline) : null;
+    if (wrongNutrient) {
+      showNutrient(wrongNutrient);
+      return;
+    }
     const patch = state && ctx ? pricePatchOf(readPrice(state, ctx), new Date().toISOString(), weightText(current)) : null;
     const built = buildSave({
       working: current, item: opened, kind, lang: language, startSupplierId: baseline.supplierId,
       mayPrice: priceActive, priceDirty, pricePatch: patch,
     });
+    // ⚠️ ONLY THE GROUPS THAT CHANGED are added, and `now` is taken once, here (the model's header).
+    const payload = { ...built.payload, ...allergenPayload(
+      allergenCopy, opened, kind, new Date().toISOString(), { allergens: allergensOn(location), nutrition: nutritionOn(location) },
+    ) };
     busy.current = true;
     let ok = false;
     try {
@@ -302,7 +357,7 @@ export function IngredientCard({
     // Saved: nothing is unsaved any more, so leaving asks nothing. Local-first: the list changes at once and the database
     // follows; a refused write is taken back and said by the store.
     leavingClean.current = true;
-    onSave(built.payload, { unitChangedFrom: built.unitChangedFrom, ...(patch ? { price: { before: opened, patch } } : {}) });
+    onSave(payload, { unitChangedFrom: built.unitChangedFrom, ...(patch ? { price: { before: opened, patch } } : {}) });
     onLeave();
   }
 
@@ -711,6 +766,19 @@ export function IngredientCard({
             {opened.vatRate == null ? null : <p className={styles.readonly}>{t('sup.price.legacy.vat', { rate: String(opened.vatRate) })}</p>}
             <p className={styles.hint}>{t('sup.price.legacy.note')}</p>
           </div>
+        ) : null}
+
+        {/* Packaging has none of it (parity C80). Each panel is read live from the venue's switches inside. */}
+        {kind === 'ingredient' ? (
+          <AllergenSections
+            working={allergenWork}
+            opened={opened}
+            now={new Date().toISOString()}
+            onChange={changeAllergen}
+            refusedNutrient={refusedNutrient}
+            nutrientBoxes={nutrientBoxes}
+            controls={allergenControls}
+          />
         ) : null}
 
         {/* ⚠️ THE BIN: only for an existing item and only when the screen hands the delete in (it does so to whoever runs the

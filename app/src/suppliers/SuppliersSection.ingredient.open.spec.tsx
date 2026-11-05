@@ -237,12 +237,11 @@ describe('the fields open from what is stored', () => {
     const { region } = await open('i-box', 'Edit packaging');
     expect(region.queryByText('Name on the invoice')).not.toBeInTheDocument();
   });
-
-  it('no allergen or nutrition field in this step, and no price for somebody who may not write prices', async () => {
+  it('no price for somebody who may not write prices, but the allergens and nutrition stay for everybody', async () => {
     const { region } = await open('i-flour', 'Edit ingredient', { session: { canManage: false, role: 'employee' } });
     expect(region.queryByText(/price/i)).not.toBeInTheDocument();
-    expect(region.queryByText(/allergen/i)).not.toBeInTheDocument();
-    expect(region.queryByText(/nutrition/i)).not.toBeInTheDocument();
+    expect(region.getByRole('button', { name: /^Allergens/ })).toBeInTheDocument();
+    expect(region.getByRole('button', { name: /^Nutrition/ })).toBeInTheDocument();
   });
 
   it('⚠️ a weight the boxes cannot show is «Currently: …» with a Remove button, and a deleted supplier falls to «No supplier»', async () => {

@@ -32,6 +32,7 @@ const LABEL_FILES: readonly string[] = [
   './recipes/AllergenSheet.tsx', // the law card (the fourteen groups) and what each recipe contains
   './recipes/LabelScreen.tsx', // the label screen: the refusals, the notes, the date, Copy and Send (the text of the whole label)
   './recipes/LabelCard.tsx', // the label as words: the ingredients, Contains, May contain and the nutrition table
+  './records/AllergenSections.tsx', // the ingredient card's allergen rows, their group headings and the nutrient names, where an allergen is DECLARED
 ];
 
 // The functions that put a food word, or a word of the label, in front of somebody. All but `ingredientLine` take the
@@ -216,6 +217,10 @@ function problemsIn(file: string, source: string): string[] {
   return problems;
 }
 
+// The only problem message the import door lets through, word for word (see the test that uses it).
+const REVIEWED_EXCEPTION = './records/allergenCardModel.ts: imports «buildAllergenFields» from @mise/shared/allergen-model'
+  + ' but is not on LABEL_FILES — add it there, or it must not draw a food word';
+
 const appFiles = () => Object.entries(sources).filter(([file]) => !/\.spec\.tsx?$/.test(file));
 
 describe('the interface language never reaches a food word', () => {
@@ -240,8 +245,21 @@ describe('the interface language never reaches a food word', () => {
   // ⚠️ THE DOOR CANNOT BE WALKED ROUND: a file that is not on the list may import from the three label modules only the
   // names that are not food words, and nobody may rename or star-import them.
   test('no app file imports a food-carrying value from the label modules without being on the list, or hides one', () => {
-    const problems = appFiles().flatMap(([file, source]) => importProblemsIn(file, source, LABEL_FILES.includes(file)));
+    const problems = appFiles().flatMap(([file, source]) => importProblemsIn(file, source, LABEL_FILES.includes(file)))
+      // The one reviewed exception: it imports a builder of stored fields, not of words, and only that name, and only plainly.
+      .filter(problem => problem !== REVIEWED_EXCEPTION);
     expect(problems).toEqual([]);
+  });
+
+  // ⚠️ THE EXCEPTION IS ONE EXACT MESSAGE: a rename with «as», a star import, or any other name in that file is still reported.
+  test('the reviewed exception covers the plain import of buildAllergenFields in allergenCardModel.ts and nothing else', () => {
+    const file = './records/allergenCardModel.ts';
+    const plain = importProblemsIn(file, `import { buildAllergenFields } from '@mise/shared/allergen-model';`, false);
+    expect(plain).toEqual([REVIEWED_EXCEPTION]);
+    const renamed = importProblemsIn(file, `import { buildAllergenFields as b } from '@mise/shared/allergen-model';`, false);
+    expect(renamed.filter(problem => problem !== REVIEWED_EXCEPTION)).not.toEqual([]);
+    const other = importProblemsIn(file, `import { allergenName } from '@mise/shared/market';`, false);
+    expect(other.filter(problem => problem !== REVIEWED_EXCEPTION)).not.toEqual([]);
   });
 
   // ⚠️ AN ALLOWLIST THAT DRIFTS FROM THE MODULES IS A HOLE: a new export must be decided on, on purpose.

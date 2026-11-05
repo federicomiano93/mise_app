@@ -1479,8 +1479,7 @@ export const en = {
   'sup.editPackaging': 'Edit packaging',
   'sup.addIngredient': 'Add ingredient',
   'sup.pane.ingredients.title': 'Choose an ingredient',
-  // NEW: the current app's sentence adds «with the allergens and the price», which this card does not have yet (3e-3, 3e-4).
-  'sup.pane.ingredients.text': 'Tap an ingredient on the left: its card opens here.',
+  'sup.pane.ingredients.text': 'Tap an ingredient on the left: its card opens here, with the allergens and the price.',
   'sup.pane.packaging.title': 'Choose packaging',
   'sup.pane.packaging.text': 'Tap a packaging item on the left: its card opens here without leaving the list.',
   'sup.ing.invoiceName': 'Name on the invoice',
@@ -1613,6 +1612,81 @@ export const en = {
   // NEW (decision T4): an old price shape is shown, never edited.
   'sup.price.legacy.note': 'This price was saved in an older format. It is shown here only: saving this card keeps it exactly as it is.',
   'sup.price.legacy.vat': 'VAT: {rate}%',
+  // Step 3e-4: the card's pack list, allergens and nutrition. The words of the current app (orders.pack.*, orders.allergen.*,
+  // orders.section.*), with the «{note}» tail it trims left out. The FOOD words (allergens, groups, nutrients) are not here:
+  // they come from the venue's country (shared/market.ts).
+  // orders.section.packList
+  'sup.alg.pack.title': 'Ingredient list',
+  // orders.pack.toFillIn
+  'sup.alg.pack.toFillIn': 'to fill in',
+  // orders.pack.filledIn
+  'sup.alg.pack.filledIn': 'filled in',
+  // orders.pack.label
+  'sup.alg.pack.label': 'The ingredient list printed on the pack',
+  // orders.pack.placeholder
+  'sup.alg.pack.placeholder': 'e.g. Wheat flour, water, butter (milk), salt, malted barley flour. May contain traces of nuts.',
+  // orders.pack.recognisedNothing
+  'sup.alg.pack.recognisedNothing': 'It recognised no allergen words in this text. That does NOT mean there are none — read the pack yourself and tick what it says.',
+  // orders.pack.questionWhich
+  'sup.alg.pack.questionWhich': '“{word}” could be {options} — the pack does not say which. Tick it yourself if you know.',
+  // orders.pack.questionVague
+  'sup.alg.pack.questionVague': '“{word}” could hide an allergen. Ask the supplier what is in it.',
+  // orders.pack.questionCategory
+  'sup.alg.pack.questionCategory': 'The pack says “{word}” — a whole family. The law needs the exact one (which nut? which cereal?), so nothing was ticked. Ask the supplier which.',
+  // orders.pack.stillYours: drawn inline because Mise 2 has no «?» sheets yet (his decision, 22 Oct 2026).
+  'sup.alg.pack.stillYours': 'This only ticks boxes. Nothing is declared until you tick “I have checked the supplier’s specification” and save.',
+  // orders.section.allergens
+  'sup.alg.title': 'Allergens',
+  // orders.notDeclaredShort
+  'sup.alg.notDeclared': 'not declared',
+  // orders.declaredShort
+  'sup.alg.declared': 'declared',
+  // orders.allergen.notCheckedYet (without the «{note}» tail)
+  'sup.alg.notChecked': 'Not checked yet — this ingredient blocks any label it is used in.',
+  // orders.allergen.checkedOn
+  'sup.alg.checkedOn': 'Checked {date} — {what}.',
+  // orders.allergen.checkedNoDate
+  'sup.alg.checkedNoDate': 'Checked — {what}.',
+  // orders.allergen.containsNone
+  'sup.alg.containsNone': 'contains none of the 14',
+  // orders.allergen.has
+  'sup.alg.has': 'has',
+  // orders.allergen.traces
+  'sup.alg.traces': 'traces',
+  // orders.allergen.containsTip
+  'sup.alg.containsTip': 'Contains {name}',
+  // orders.allergen.tracesTip
+  'sup.alg.tracesTip': 'May contain traces of {name}',
+  // orders.theRest
+  'sup.alg.theRest': 'The rest',
+  // orders.iHaveCheckedThe
+  'sup.alg.iHaveChecked': 'I have checked the supplier’s specification',
+  // orders.pack.proposedTicks
+  'sup.alg.proposedTicks': {
+    one: 'The app has ticked {n} box from the ingredient list. Open Allergens and check it.',
+    other: 'The app has ticked {n} boxes from the ingredient list. Open Allergens and check them.',
+  },
+  // orders.pack.proposedAfterCheck
+  'sup.alg.proposedAfterCheck': {
+    one: 'The verification has lapsed: the app changed {n} box from the ingredient list. Check the allergens and tick «I have checked…» again.',
+    other: 'The verification has lapsed: the app changed {n} boxes from the ingredient list. Check the allergens and tick «I have checked…» again.',
+  },
+  // orders.pack.checkVoided
+  'sup.alg.checkVoided': 'The verification has lapsed: the app changed the boxes from the ingredient list. Check the allergens and tick «I have checked…» again.',
+  // orders.section.nutrition
+  'sup.nut.title': 'Nutrition',
+  // orders.noNutritionYet
+  'sup.nut.noneYet': 'Nothing yet',
+  // orders.nutritionStillEmpty
+  'sup.nut.stillEmpty': '{n} of {total} empty',
+  // orders.nutritionComplete
+  'sup.nut.complete': 'Complete',
+  // orders.per100G
+  'sup.nut.per100g': 'Per 100 g',
+  // NEW: the current app's number boxes drop text that is not a number; these text boxes refuse it instead (T11).
+  'sup.nut.invalid': 'Write a number, 0 or more — e.g. 12.5.',
+  // NEW: «1,550» in an energy box would be read as 1.55; it is refused instead of guessed at.
+  'sup.nut.noThousands': 'Write it without the thousands separator — e.g. 1550.',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;
