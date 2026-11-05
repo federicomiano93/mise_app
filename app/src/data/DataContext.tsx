@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import type { FirestoreKit } from '../session/firebaseBackend';
 import { createFirestoreCalculatorSource } from '../calculator/calculatorSource';
 import type { CalculatorSource } from '../calculator/calculatorSource';
+import { browserRandomBytes, createFirestoreClientOrdersSource } from '../calculator/clientOrdersSource';
+import type { ClientOrdersSource } from '../calculator/clientOrdersSource';
 import { createFirestoreFoodcostSource } from '../foodcost/foodcostSource';
 import type { FoodcostSource } from '../foodcost/foodcostSource';
 import { createFirestorePastriesSource } from '../pastries/pastriesSource';
@@ -21,14 +23,27 @@ export interface DataServices {
   stocktake(locationId: string): StocktakeSource;
   foodcost(locationId: string): FoodcostSource;
   calculator(locationId: string): CalculatorSource;
+  // The clients' own orders, the deadline, the menus and the ordering links (hosted by the Calculator).
+  clientOrders(locationId: string): ClientOrdersSource;
 }
 
-export function createDataServices(firestore: () => Promise<FirestoreKit>): DataServices {
+// What the data layers need from the backend besides Firestore: the account behind a client's ordering link is
+// created on a second Firebase app (session/firebaseBackend.ts `createLinkAccount`).
+export interface AuthServices {
+  createLinkAccount(email: string, password: string): Promise<string>;
+}
+
+export function createDataServices(firestore: () => Promise<FirestoreKit>, auth: AuthServices): DataServices {
   return {
     pastries: locationId => createFirestorePastriesSource(firestore, locationId),
     stocktake: locationId => createFirestoreStocktakeSource(firestore, locationId),
     foodcost: locationId => createFirestoreFoodcostSource(firestore, locationId),
     calculator: locationId => createFirestoreCalculatorSource(firestore, locationId),
+    clientOrders: locationId => createFirestoreClientOrdersSource(firestore, locationId, {
+      createLinkAccount: (email, password) => auth.createLinkAccount(email, password),
+      nowIso: () => new Date().toISOString(),
+      randomBytes: browserRandomBytes,
+    }),
   };
 }
 

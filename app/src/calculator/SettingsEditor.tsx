@@ -21,6 +21,9 @@ type Common = {
   fallback: string;
   // Whether the working copy differs from what it was opened with. Save is disabled until it does.
   dirty: boolean;
+  // Save is pressable although nothing differs (a value shown but never stored, which saving as it is would store). It
+  // asks the usual question; it does not make the screen «unsaved», so leaving still asks nothing.
+  saveAnyway?: boolean;
   // «Save these changes?»
   saveQuestion: string;
   // A screen with nothing to edit (a recipe without products) has no Save.
@@ -52,7 +55,7 @@ type Props = Common & (
 //
 // ⚠️ A SAVE IN FLIGHT IS PENDING, NOT GONE: Save ignores a second tap (port of createSaveGuard) and Back waits.
 // A refused save leaves the screen exactly as it was — dirty, with its edits — and Save is given back.
-export function SettingsEditor({ title, fallback, dirty, build, commit, saveQuestion, showSave = true, beforeSave, children }: Props) {
+export function SettingsEditor({ title, fallback, dirty, saveAnyway = false, build, commit, saveQuestion, showSave = true, beforeSave, children }: Props) {
   const { t } = useT();
   const store = useCalculatorStore();
   const { state } = useLocation();
@@ -206,7 +209,7 @@ export function SettingsEditor({ title, fallback, dirty, build, commit, saveQues
           action={showSave ? (
             <Button
               variant="primary"
-              isDisabled={!dirty}
+              isDisabled={!dirty && !saveAnyway}
               isPending={saving}
               onPress={() => { void save(); }}
             >

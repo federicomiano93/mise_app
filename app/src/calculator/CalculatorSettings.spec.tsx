@@ -24,13 +24,14 @@ async function hub(source = fakeCalculatorSource({ config: configOf() }), lang: 
 }
 
 describe('the hub', () => {
-  it('has a door for Clients, WhatsApp, Recipes, Extra dough, Divisor and Dough history, each with what it is for', async () => {
+  it('has a door for Clients, WhatsApp, Client ordering, Recipes, Extra dough, Divisor and Dough history, each with what it is for', async () => {
     await hub();
     const doors = main().getAllByRole('button').map(button => button.getAttribute('aria-label') ?? button.textContent);
     expect(doors).toEqual([
       'Back',
       'ClientsClients and the products each one orders',
       'WhatsAppBuild order lists: pick clients and the products to send',
+      'Client orderingWhen orders sent from a client’s own link close',
       'RecipesAdd, edit or delete recipes; pick which show as tabs',
       'Extra doughShow or hide the extra-dough box in each recipe',
       'DivisorChoose which products the divisor box splits, per recipe',
@@ -38,10 +39,10 @@ describe('the hub', () => {
     ]);
   });
 
-  it('leaves out the Client ordering row (it comes with step 3c-4b)', async () => {
-    await hub();
-    expect(main().getByText('WhatsApp')).toBeInTheDocument();
-    expect(main().queryByText('Client ordering')).not.toBeInTheDocument();
+  it('has the Client ordering row, which opens the deadline editor', async () => {
+    const { user, router } = await hub();
+    await user.click(main().getByRole('button', { name: /^Client ordering/ }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/calculator/settings/ordering'); });
   });
 
   it('groups the rows under three headings', async () => {

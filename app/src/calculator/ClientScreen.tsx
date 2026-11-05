@@ -7,8 +7,10 @@ import { Button } from '../ui/Button';
 import { ClientsSaveButton } from './ClientsSaveButton';
 import { useClientsEditor } from './clientsEditorContext';
 import { isBlank, isEmptyClient } from './clientsModel';
+import { PartBoundary } from '../errors/PartBoundary';
 import { clientsPath } from './calculatorPath';
 import { ADD_CLIENT_OPENER, clientOpener, useHandBack } from './handBack';
+import { OrderingLink } from './OrderingLink';
 import { ProductCard } from './ProductCard';
 import { SettingsPage } from './SettingsPage';
 import styles from './ClientScreen.module.css';
@@ -124,7 +126,10 @@ export function ClientScreen({ clientId }: { clientId: string }) {
           </Button>
         </section>
 
-        {/* ⚠️ The client's ordering link (parity 75) belongs here: it arrives with step 3c-4b, with the client-ordering accounts. Nothing writes client-accounts or client-menus yet. */}
+        {/* ⚠️ A throw in the link (a grant it cannot read) must not take the client's screen, and its unsaved edits, down. */}
+        <PartBoundary>
+          <OrderingLink client={client} dirty={editor.dirty} />
+        </PartBoundary>
       </div>
     </SettingsPage>
   );

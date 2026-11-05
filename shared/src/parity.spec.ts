@@ -27,7 +27,10 @@
 // zoom-steps.spec.ts) compare what they do port. calculator-tab-keys.ts is new in Mise 2 and has no original.
 // calculator-order-prefill.ts is not paired: `prefillNote` takes the translate function as a third argument (the
 // original reads the interface dictionary), so its arity differs by design; its spec compares names, constant and
-// shapes itself. calculator-recipe-text.ts is paired although it differs from the original in ONE input (the line called
+// shapes itself. client-order-model.ts and client-order-history.ts are not paired either: `orderRows` takes the word for a
+// deleted product as a third argument, and `linesLabel` / `emptyWords` take the translate function as their last (the
+// originals read the interface dictionary), so those arities differ by design; their specs compare names, constants and
+// shapes themselves. calculator-recipe-text.ts is paired although it differs from the original in ONE input (the line called
 // `Flour uniqua blue`, one venue's data): the exports are the same, and its spec says where the text differs.
 //
 // ⚠️ IT IS WHAT CATCHES A FIX MADE TO js/ AND FORGOTTEN HERE. A constant changed in one file

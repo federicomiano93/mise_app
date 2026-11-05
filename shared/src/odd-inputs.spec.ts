@@ -49,6 +49,8 @@ import * as calculatorRecipeSource from './calculator-recipe-source';
 import * as calculatorRecipeText from './calculator-recipe-text';
 import * as calculatorOrderText from './calculator-order-text';
 import * as calculatorOrderPrefill from './calculator-order-prefill';
+import * as clientOrderModel from './client-order-model';
+import * as clientOrderHistory from './client-order-history';
 import * as confirmFlow from './confirm-flow';
 import * as guidedModel from './guided-model';
 import * as logModel from './log-model';
@@ -94,6 +96,8 @@ import * as legacyCalculatorRecipeSourceJs from '../../js/calculator-recipe-sour
 import * as legacyCalculatorRecipeTextJs from '../../js/calculator-recipe-text.js';
 import * as legacyCalculatorOrderTextJs from '../../js/calculator-order-text.js';
 import * as legacyCalculatorOrderPrefillJs from '../../js/calculator-order-prefill.js';
+import * as legacyClientOrderModelJs from '../../js/client-order-model.js';
+import * as legacyClientOrderHistoryJs from '../../js/client-order-history.js';
 import * as legacyConfirmFlowJs from '../../js/confirm-flow.js';
 import * as legacyGuidedModelJs from '../../js/catalogue/guided-model.js';
 import * as legacyLogModelJs from '../../js/log-model.js';
@@ -143,6 +147,8 @@ const legacyCalculatorRecipeSource = legacyCalculatorRecipeSourceJs as unknown a
 const legacyCalculatorRecipeText = legacyCalculatorRecipeTextJs as unknown as typeof calculatorRecipeText;
 const legacyCalculatorOrderText = legacyCalculatorOrderTextJs as unknown as typeof calculatorOrderText;
 const legacyCalculatorOrderPrefill = legacyCalculatorOrderPrefillJs as unknown as typeof calculatorOrderPrefill;
+const legacyClientOrderModel = legacyClientOrderModelJs as unknown as typeof clientOrderModel;
+const legacyClientOrderHistory = legacyClientOrderHistoryJs as unknown as typeof clientOrderHistory;
 const legacyConfirmFlow = legacyConfirmFlowJs as unknown as typeof confirmFlow;
 const legacyGuidedModel = legacyGuidedModelJs as unknown as typeof guidedModel;
 const legacyLogModel = legacyLogModelJs as unknown as typeof logModel;
@@ -2569,6 +2575,89 @@ describe('calculator-order-prefill: odd inputs', () => {
     { nowMs: NOW, window: 'nope' }, { nowMs: NOW, window: 7 }, { nowMs: 0 }, { nowMs: NaN }, { nowMs: '5' }, { nowMs: LATE, window: 'yesterday' }];
   agree('prefillFromLogs', m.prefillFromLogs as AnyFn, l.prefillFromLogs as AnyFn,
     product(ENTRIES, LOGS, [logModel.latestVersion, undefined, null, () => null, () => ({ items: [{ clientName: 'A', id: 'p1', qty: 9 }] })], OPTS));
+});
+
+describe('client-order-model: odd inputs', () => {
+  const m = clientOrderModel;
+  const l = legacyClientOrderModel;
+  const DATES: readonly unknown[] = [...ODD, '2026-08-11', '2026-08-10', '2026-02-31', '2026-13-01', '2026-8-1', '2026-03-29', '2026-10-25', ' 2026-08-11'];
+  const CUTOFFS: readonly unknown[] = [...ODD, '16:00', ' 16:00 ', '00:00', '23:59', '24:00', '16:60', 'sixteen', 1600];
+  const MS: readonly unknown[] = [...ODD, ...NOWS, '9e12', new Date(NOW)];
+  const HORIZONS: readonly unknown[] = [undefined, 0, 1, 3, 14, -1, NaN, '2', null];
+  const MENU_PRODUCTS = [{ id: 'p1', name: 'Buns', kind: 'kg' }, { id: 'p2', name: 'Loaf', kind: 'number' }];
+  const CLIENTS: readonly unknown[] = [...ODD, { name: 'A', products: [{ id: 'p1', name: 'Buns' }, null, { id: 'p2', name: 5, kind: 'kg', active: false }, { name: 'no id' }, { id: 7, kind: 0 }] },
+    { name: 5, products: 'x' }, { products: [{ id: 'p1', active: false }, { id: 'p2', active: 0 }] }];
+  const ORDERS: readonly unknown[] = [...ODD, { date: '2026-08-11', updatedAt: new Date(MON_AT(9)).toISOString() }, { date: '2026-08-11', updatedAt: new Date(MON_AT(17)).toISOString() },
+    { date: '2026-08-11', updatedAt: 'nonsense' }, { date: '2026-08-11', updatedAt: 5 }, { date: 'x', updatedAt: new Date(NOW).toISOString() }, { updatedAt: new Date(NOW).toISOString() },
+    { appliedAt: 'A', appliedFor: 'U', updatedAt: 'U' }, { appliedAt: 'A', appliedFor: 'X', updatedAt: 'U' }, { appliedAt: 'A', updatedAt: 'U' }, { appliedAt: 'A' }, { updatedAt: 'U' },
+    { clientId: 'c-one', quantities: { p1: 3, p2: 0, p3: 'x', p4: '2' }, names: { p1: 'Buns', p3: 'Old' } }, { clientId: 5, quantities: { p1: 1 } }, { quantities: 'lots', names: 'x' }, { quantities: [1, 2] }];
+  function MON_AT(h: number): number { return new Date(2026, 7, 10, h, 0).getTime(); }
+
+  agree('isISODate', m.isISODate as AnyFn, l.isISODate as AnyFn, product(DATES));
+  agree('toISODate', m.toISODate as AnyFn, l.toISODate as AnyFn, product(MS));
+  agree('startOfDayMs', m.startOfDayMs as AnyFn, l.startOfDayMs as AnyFn, product(DATES));
+  agree('normalizeCutoff', m.normalizeCutoff as AnyFn, l.normalizeCutoff as AnyFn, product(CUTOFFS));
+  agree('cutoffMinutes', m.cutoffMinutes as AnyFn, l.cutoffMinutes as AnyFn, product(CUTOFFS));
+  agree('closesAtMs', m.closesAtMs as AnyFn, l.closesAtMs as AnyFn, product(DATES, CUTOFFS));
+  agree('isDateOpen', m.isDateOpen as AnyFn, l.isDateOpen as AnyFn, product(DATES, MS, CUTOFFS));
+  agree('arrivedLate', m.arrivedLate as AnyFn, l.arrivedLate as AnyFn, product(ORDERS, CUTOFFS));
+  agree('orderableDates', m.orderableDates as AnyFn, l.orderableDates as AnyFn, product(MS, CUTOFFS, HORIZONS));
+  agree('defaultOrderDate', m.defaultOrderDate as AnyFn, l.defaultOrderDate as AnyFn, product(MS, CUTOFFS, HORIZONS));
+  agree('isValidOrderClientId', m.isValidOrderClientId as AnyFn, l.isValidOrderClientId as AnyFn, product([...ODD, 'c-one', 'c_one', '-x', 'a'.repeat(64), 'a'.repeat(65), 'é']));
+  agree('orderDocId', m.orderDocId as AnyFn, l.orderDocId as AnyFn, product(DATES, [...ODD, 'c-one', 'c_one']));
+  agree('linkEmailFor', m.linkEmailFor as AnyFn, l.linkEmailFor as AnyFn, product([...ODD, 'AbC-123_xY', '9x', 'İ']));
+  agree('menuFor', m.menuFor as AnyFn, l.menuFor as AnyFn, product(CLIENTS, [...ODD, '  The Bakery ', 'x'.repeat(300)], [...ODD, 'GB', 'IT', 'XX', 'it']));
+  const MENUS: readonly unknown[] = [...ODD, { clientName: 'A', products: MENU_PRODUCTS }, { clientName: 'B', products: MENU_PRODUCTS }, { clientName: 'A', products: [MENU_PRODUCTS[0]] },
+    { clientName: 'A', products: [MENU_PRODUCTS[1], MENU_PRODUCTS[0]] }, { clientName: 'A', products: [{ ...MENU_PRODUCTS[0], name: 'Baps' }, MENU_PRODUCTS[1]] },
+    { clientName: 'A', products: MENU_PRODUCTS, bakeryName: 'X', country: 'IT' }, { clientName: 'A', products: MENU_PRODUCTS, country: 'GB' }, { products: 'x' }, { products: [null, null] }];
+  agree('menuChanged', m.menuChanged as AnyFn, l.menuChanged as AnyFn, product(MENUS, MENUS));
+  agree('normalizeQuantities', m.normalizeQuantities as AnyFn, l.normalizeQuantities as AnyFn, product([...ODD, { a: 5, b: 0, c: -3, d: 'x', e: null, f: '7' }, { a: 9e9 }, { a: NaN, b: Infinity },
+    { '': 3 }, Object.fromEntries(Array.from({ length: 250 }, (_, i) => ['k' + i, i + 1])), 'nope', [4, 0, 2]]));
+  const MENU = { clientName: 'A', products: [{ id: 'p1', name: 'Buns' }, null, { id: 'p2', name: 5 }, { id: 'p3' }] };
+  const INPUTS: readonly unknown[] = [undefined, {}, { date: '2026-08-11', clientId: 'c-one', clientName: 'A', quantities: { p1: 4, p2: 2, p9: 1 }, note: 'hi', menu: MENU, nowIso: 'N' },
+    { date: 5, clientId: null, clientName: 7, quantities: 'x', note: 'x'.repeat(900), menu: 'x', nowIso: undefined },
+    { date: '2026-08-11', clientId: 'c-one', quantities: { p1: 1 }, menu: MENU, nowIso: 'N2', existing: { createdAt: 'C', appliedAt: 'A', appliedFor: 'F' } },
+    { date: '2026-08-11', clientId: 'c-one', quantities: { p1: 1 }, menu: MENU, nowIso: 'N2', existing: { appliedAt: 5 } }, { quantities: { p1: 1 }, menu: { products: 'x' }, existing: 'e' }, null];
+  agree('buildOrder', m.buildOrder as AnyFn, l.buildOrder as AnyFn, product(INPUTS));
+  agree('orderChangedSinceApplied', m.orderChangedSinceApplied as AnyFn, l.orderChangedSinceApplied as AnyFn, product(ORDERS));
+  agree('isApplied', m.isApplied as AnyFn, l.isApplied as AnyFn, product(ORDERS));
+  agree('orderTotalLines', m.orderTotalLines as AnyFn, l.orderTotalLines as AnyFn, product(ORDERS));
+  // The port takes the word for a deleted product; the original looks it up, and answers in English.
+  const LIVE: readonly unknown[] = [...ODD, (id: string) => ({ p1: 'Burger buns', p2: '' }[id] ?? ''), () => 'Same', () => ''];
+  agree('orderRows', (order: unknown, live: unknown) => m.orderRows(order, live, 'Deleted product'), l.orderRows as AnyFn, product(ORDERS, LIVE));
+  agree('calculatorPatch', m.calculatorPatch as AnyFn, l.calculatorPatch as AnyFn, product(ORDERS, [...ODD, [{ id: 'p1' }, { id: 'p2', active: false }, null, { id: 'p3' }, { id: 7 }, {}], [{ id: 'p1', active: 0 }]]));
+});
+
+describe('client-order-history: odd inputs', () => {
+  const m = clientOrderHistory;
+  const l = legacyClientOrderHistory;
+  const MS: readonly unknown[] = [...ODD, ...NOWS, '9e12'];
+  const DAYS: readonly unknown[] = [...ODD, '2026-08-12', '2026-08-11', '2026-02-31', 'x'];
+  const LISTS: readonly unknown[] = [...ODD, [{ id: 1, date: '2026-08-10', clientName: 'B', updatedAt: 'T2', quantities: { p: 1 } }, { id: 2, date: '2026-08-11', clientName: 'A', updatedAt: 'T1' },
+    { id: 3, date: '2026-08-11', clientName: 'A', updatedAt: 'T1' }, { id: 4, date: '2026-08-11', clientName: 'Z', updatedAt: 'T1' }, { id: 5, date: 'whenever' }, null, 5, 'x', { id: 6 }, { id: 7, date: '2026-08-11' }]];
+  const ORDERS: readonly unknown[] = [...ODD, { quantities: { a: 2, b: 0, c: 5 } }, { quantities: { a: '3', b: '0', c: 'x' } }, { quantities: {} }, { quantities: 'lots' }, { quantities: [1, 0, 2] }, { date: '2026-08-11' }];
+  agree('pastWindow', m.pastWindow as AnyFn, l.pastWindow as AnyFn, product(MS, [undefined, ...ODD, 2, 3, 2.7, '2']));
+  agree('isPast', m.isPast as AnyFn, l.isPast as AnyFn, product([...ODD, ...DAYS.map(date => ({ date }))], DAYS));
+  agree('groupByDay', m.groupByDay as AnyFn, l.groupByDay as AnyFn, product(LISTS));
+  agree('lineCount', m.lineCount as AnyFn, l.lineCount as AnyFn, product(ORDERS));
+  // The translate function comes in as an argument for the port and is looked up by the original: a fake that
+  // echoes the key and the params stands in for both, so the choice of key and of params is what is compared.
+  const echo = (key: string, params?: Readonly<Record<string, string | number>>): string =>
+    params ? `${key}(${Object.entries(params).map(([k, v]) => `${k}=${String(v)}`).join(',')})` : key;
+  test('linesLabel and emptyWords ask for the same words as the original, never throwing on odd input', () => {
+    for (const order of ORDERS) {
+      const n = m.lineCount(order);
+      const expected = n === 0 ? 'calc.nothingOrdered' : `calc.linesOrdered(n=${n})`;
+      expect(m.linesLabel(order, echo), show(order)).toBe(expected);
+    }
+    for (const days of DAYS) {
+      expect(m.emptyWords(days, true, echo), show(days)).toBe(`help.noOrdersInLastDays(n=${String(days)})`);
+      expect(m.emptyWords(days, false, echo), show(days)).toBe('help.noClientHasSent');
+    }
+    for (const flag of ODD) {
+      expect(m.emptyWords(15, flag, echo), show(flag)).toBe(flag ? 'help.noOrdersInLastDays(n=15)' : 'help.noClientHasSent');
+    }
+  });
 });
 
 describe('confirm-flow: odd inputs', () => {

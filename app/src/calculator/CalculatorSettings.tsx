@@ -6,9 +6,9 @@ import { useT } from '../i18n/useT';
 import { useCalculator, useCalculatorStore } from './CalculatorContext';
 import { Door } from './Door';
 import {
-  CALCULATOR_PATH, clientsPath, divisorPath, extraPath, logSettingsPath, recipesPath, whatsappPath,
+  CALCULATOR_PATH, clientsPath, divisorPath, extraPath, logSettingsPath, orderingPath, recipesPath, whatsappPath,
 } from './calculatorPath';
-import { CLIENTS_OPENER, DIVISOR_OPENER, EXTRA_OPENER, LOG_OPENER, RECIPES_OPENER, WHATSAPP_OPENER } from './handBack';
+import { CLIENTS_OPENER, DIVISOR_OPENER, EXTRA_OPENER, LOG_OPENER, ORDERING_OPENER, RECIPES_OPENER, WHATSAPP_OPENER } from './handBack';
 import { SettingSwitch } from './SettingSwitch';
 import { SettingsPage } from './SettingsPage';
 import { useSaveConfig } from './useSaveConfig';
@@ -20,9 +20,8 @@ export const SAVED_TAG_MS = 2000;
 // The Calculator's Settings: a hub of doors, one card per subject, and the two switches that apply to the whole
 // venue (a port of the hub in calculator.html and of js/calculator-settings.js).
 //
-// ⚠️ NOT HERE YET, on purpose: the Client ordering row (client orders arrive with step 3c-4b, together with the
-// bottom bar's Orders button the first switch governs). The switch is still saved: it is venue data the current app
-// reads. The WhatsApp door (the market order lists) is step 3c-4a.
+// The Client ordering door (the deadline of the orders clients send from their own link, step 3c-4b) sits beside the
+// WhatsApp door (the market order lists, 3c-4a); the first switch governs the Calculator's door to the received orders.
 //
 // ⚠️ THE TWO SWITCHES WAIT FOR THE SERVER'S ANSWER (`configFromServer`): a tap before it would be built on a copy the
 // browser's own database answered, and the store sends nothing before the server has spoken.
@@ -111,6 +110,7 @@ function VenueSwitches() {
     >
       <Door opener={CLIENTS_OPENER} to={clientsPath} title={t('ui.clients')} sub={t('ui.clientsAndTheProducts')} />
       <Door opener={WHATSAPP_OPENER} to={whatsappPath} title={t('ui.whatsapp')} sub={t('ui.buildOrderListsPick')} />
+      <Door opener={ORDERING_OPENER} to={orderingPath} title={t('ui.clientOrdering')} sub={t('ui.whenOrdersSentFrom')} />
       <SwitchRow
         title={t('settings.calc.ordersButton')}
         sub={t('settings.calc.ordersButton.sub')}

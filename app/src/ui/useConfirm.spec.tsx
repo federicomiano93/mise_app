@@ -101,6 +101,17 @@ describe('useConfirm', () => {
     expect(within(dialog).getByRole('button', { name: 'Confirm' }).className).toContain('primary');
   });
 
+  it('draws a body under the message: a list of what is about to change', async () => {
+    const { user } = draw({ body: <ul><li>Focaccia tray: 3 → 5</li></ul> });
+    await user.click(ask());
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByRole('list')).toBeInTheDocument();
+    expect(within(dialog).getByRole('listitem')).toHaveTextContent('Focaccia tray: 3 → 5');
+    // The message stays above it, and the buttons stay below.
+    expect(within(dialog).getByText('Keep this list?')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Confirm' })).toBeInTheDocument();
+  });
+
   it('answers no to a question that is still open when a second one is asked', async () => {
     const first = vi.fn<(answer: boolean) => void>();
     const second = vi.fn<(answer: boolean) => void>();
