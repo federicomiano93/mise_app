@@ -67,9 +67,12 @@ function handSource() {
   const removeRecipeDoc = vi.fn<RecipesSource['removeRecipeDoc']>(() => Promise.resolve());
   const getCalculatorConfig = vi.fn<RecipesSource['getCalculatorConfig']>(() => Promise.resolve(null));
   const importIntoCalculator = vi.fn<RecipesSource['importIntoCalculator']>(() => Promise.resolve('added'));
+  const watchLabelLogo = vi.fn<RecipesSource['watchLabelLogo']>(() => () => undefined);
+  const saveLabelLogo = vi.fn<RecipesSource['saveLabelLogo']>(() => Promise.resolve());
+  const removeLabelLogo = vi.fn<RecipesSource['removeLabelLogo']>(() => Promise.resolve());
   const source: RecipesSource = {
     watchRecipes, watchIngredients, watchLabelConfig, watchPrintAgents, queuePrintJob, saveLabelConfig, watchSuppliers,
-    saveRecipeDoc, removeRecipeDoc, getCalculatorConfig, importIntoCalculator,
+    saveRecipeDoc, removeRecipeDoc, getCalculatorConfig, importIntoCalculator, watchLabelLogo, saveLabelLogo, removeLabelLogo,
   };
   return {
     source,
@@ -1027,6 +1030,80 @@ describe('the Recipe catalogue store', () => {
       } finally {
         vi.useRealTimers();
       }
+    });
+  });
+
+  describe('the image label’s two texts (labelName, labelIngredientsText — Mise 2 only)', () => {
+    const TORTA: StoredDoc = {
+      id: 'R1', name: 'Torta', ingredients: [{ label: 'Farina', grams: 500, unit: 'g', rid: 'rfarina01' }],
+      labelName: 'TORTA DI|PROVA', labelIngredientsText: 'INGREDIENTI: farina di GRANO, BURRO.',
+    };
+
+    test('⚠️ the store keeps them (the shared normaliser drops them), in the list and in the phone’s copy', () => {
+      const { store, server, data } = makeStore();
+      store.start();
+      server([TORTA, { id: 'R2', name: 'Pane', ingredients: [], labelName: '   ', labelIngredientsText: 7 }]);
+      const held = store.getSnapshot().recipes as unknown as Array<Record<string, unknown>>;
+      expect(held[0]!.labelName).toBe('TORTA DI|PROVA');
+      expect(held[0]!.labelIngredientsText).toBe('INGREDIENTI: farina di GRANO, BURRO.');
+      // Blank or not a string: no field.
+      expect('labelName' in held[1]!).toBe(false);
+      expect('labelIngredientsText' in held[1]!).toBe(false);
+      expect(JSON.parse(data.get(RECIPES_KEY)!)[0].labelName).toBe('TORTA DI|PROVA');
+    });
+
+    test('a save sends them trimmed when handed over, and an emptied one as null (the source removes it)', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([TORTA]);
+      store.saveRecipe({ id: 'R1', name: 'Torta', ingredients: TORTA.ingredients as Array<Record<string, unknown>>, labelName: '  TORTA  ', labelIngredientsText: '   ' });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect(doc.labelName).toBe('TORTA');
+      expect(doc.labelIngredientsText).toBeNull();
+      const held = store.getSnapshot().recipes.find(r => r.id === 'R1') as unknown as Record<string, unknown>;
+      expect(held.labelName).toBe('TORTA');
+      expect('labelIngredientsText' in held).toBe(false);
+    });
+
+    test('⚠️ a save that does not hand them over sends neither, and the phone’s copy keeps them', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([TORTA]);
+      store.saveRecipe({ id: 'R1', name: 'Torta alta', ingredients: TORTA.ingredients as Array<Record<string, unknown>> });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect('labelName' in doc).toBe(false);
+      expect('labelIngredientsText' in doc).toBe(false);
+      const held = store.getSnapshot().recipes.find(r => r.id === 'R1') as unknown as Record<string, unknown>;
+      expect(held.name).toBe('Torta alta');
+      expect(held.labelName).toBe('TORTA DI|PROVA');
+      expect(held.labelIngredientsText).toBe('INGREDIENTI: farina di GRANO, BURRO.');
+    });
+
+    test('the texts are cut to the rules’ bounds, so a save is never refused for their length', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([]);
+      store.saveRecipe({ name: 'Pane', ingredients: [], labelName: 'A'.repeat(250), labelIngredientsText: 'b'.repeat(2500) });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect((doc.labelName as string).length).toBe(200);
+      expect((doc.labelIngredientsText as string).length).toBe(2000);
+    });
+
+    test('the logo goes straight through to the source, and nothing of it is kept in the snapshot or in storage', async () => {
+      const { store, source, data } = makeStore();
+      const stop = vi.fn();
+      vi.mocked(source.watchLabelLogo).mockImplementation(() => stop);
+      const onChange = vi.fn();
+      const onError = vi.fn();
+      store.watchLabelLogo(onChange, onError)();
+      expect(source.watchLabelLogo).toHaveBeenCalledWith(onChange, onError);
+      expect(stop).toHaveBeenCalledTimes(1);
+      await store.saveLabelLogo({ png: 'data:image/png;base64,AAAA', width: 1320, height: 300 });
+      expect(source.saveLabelLogo).toHaveBeenCalledWith({ png: 'data:image/png;base64,AAAA', width: 1320, height: 300 });
+      await store.removeLabelLogo();
+      expect(source.removeLabelLogo).toHaveBeenCalledTimes(1);
+      expect(Object.keys(store.getSnapshot())).not.toContain('logo');
+      expect([...data.keys()].filter(key => /logo/i.test(key))).toEqual([]);
     });
   });
 

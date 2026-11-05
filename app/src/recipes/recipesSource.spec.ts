@@ -266,6 +266,61 @@ describe('the Recipe catalogue source', () => {
     );
   });
 
+  test('⚠️ the image label’s texts emptied in the editor (null) are removals too, never a stored null', async () => {
+    const { kit, fs } = fakeKit();
+    const removal = { removal: true };
+    (fs as unknown as { deleteField: () => unknown }).deleteField = vi.fn(() => removal);
+    const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery');
+    await source.saveRecipeDoc('R1', { name: 'Torta', ingredients: [], labelName: null, labelIngredientsText: 'INGREDIENTI: farina.' });
+    expect(fs.setDoc).toHaveBeenCalledWith(
+      { kind: 'doc', path: 'locations/bakery/recipes/R1' },
+      { name: 'Torta', ingredients: [], labelName: removal, labelIngredientsText: 'INGREDIENTI: farina.', bakery: 'bakery' },
+      { merge: true },
+    );
+  });
+
+  test('the logo is ONE document, label-assets/logo, watched with metadata changes; missing = null', async () => {
+    const { kit, listeners } = fakeKit();
+    const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery');
+    const onChange = vi.fn();
+    source.watchLabelLogo(onChange, vi.fn());
+    await settle();
+    expect(listeners).toHaveLength(1);
+    expect(listeners[0]!.target).toEqual({ kind: 'doc', path: 'locations/bakery/label-assets/logo' });
+    expect(listeners[0]!.options).toEqual({ includeMetadataChanges: true });
+    listeners[0]!.next({ exists: () => true, data: () => ({ png: 'data:image/png;base64,AA==', width: 1320, height: 9 }), metadata: { fromCache: true } });
+    listeners[0]!.next({ exists: () => false, data: () => undefined, metadata: { fromCache: false } });
+    expect(onChange.mock.calls).toEqual([
+      [{ png: 'data:image/png;base64,AA==', width: 1320, height: 9 }, { fromServer: false }],
+      [null, { fromServer: true }],
+    ]);
+  });
+
+  test('⚠️ a logo is written WHOLE with exactly the keys the rules take, stamped with the venue and the time', async () => {
+    const { kit, fs } = fakeKit();
+    const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'panificio-miano');
+    const forged = { png: 'data:image/png;base64,AA==', width: 1320, height: 9, bakery: 'someone-else', extra: 1 };
+    await source.saveLabelLogo(forged);
+    expect(fs.setDoc).toHaveBeenCalledTimes(1);
+    const [target, data, options] = fs.setDoc.mock.calls[0]!;
+    expect(target).toEqual({ kind: 'doc', path: 'locations/panificio-miano/label-assets/logo' });
+    expect(options).toBeUndefined();
+    expect(Object.keys(data as object).sort()).toEqual(['bakery', 'height', 'png', 'updatedAt', 'width']);
+    expect(data).toMatchObject({ png: 'data:image/png;base64,AA==', width: 1320, height: 9, bakery: 'panificio-miano' });
+    expect(String((data as { updatedAt: unknown }).updatedAt)).toMatch(/^\d{4}-\d\d-\d\dT/);
+  });
+
+  test('taking the logo away deletes that document; a refused logo write rejects', async () => {
+    const { kit, fs } = fakeKit();
+    const deleteDoc = vi.fn(async () => undefined);
+    Object.assign(fs, { deleteDoc });
+    const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery');
+    await source.removeLabelLogo();
+    expect(deleteDoc).toHaveBeenCalledWith({ kind: 'doc', path: 'locations/bakery/label-assets/logo' });
+    fs.setDoc.mockRejectedValueOnce(new Error('permission-denied'));
+    await expect(source.saveLabelLogo({ png: 'data:image/png;base64,AA==', width: 1320, height: 9 })).rejects.toThrow('permission-denied');
+  });
+
   test('a recipe delete removes that document; the Calculator configuration is read once, or null', async () => {
     const { kit, fs } = fakeKit();
     const deleteDoc = vi.fn(async () => undefined);

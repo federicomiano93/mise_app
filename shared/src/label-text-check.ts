@@ -18,7 +18,9 @@
 //       in the text; the bare one may be soy. Now each one must be followed by its own «di …».
 // Text pasted with separate accent marks (NFD) is composed first, so it reads as typed.
 // One addition the script has no equivalent for, because it knows nothing of the recipe: when Mise holds the recipe's
-// allergens fully declared, each one must appear in CAPITALS in the text (`declared`), else ERRORE.
+// allergens fully declared, each one must appear in CAPITALS in the text (`declared`), and so must each allergen the
+// recipe may contain as a trace (`mayContain`), else ERRORE. A trace is held to the same words as an allergen: a
+// generic «FRUTTA A GUSCIO» does not name the almond the supplier declared.
 //
 // ⚠️ WORD BOUNDARIES ARE PYTHON'S, NOT JAVASCRIPT'S. JS `\b` only knows ASCII letters: «farina di grano» would match
 // but «più» would split in two, and «già» next to a word would look like a boundary. Python 3's `\b` is Unicode-aware
@@ -111,6 +113,8 @@ export type CheckIssue =
   | { readonly kind: 'lecithin' }
   // ERRORE: Mise holds this allergen declared for the recipe and the text never says it in capitals.
   | { readonly kind: 'declared-missing'; readonly code: AllergenCode }
+  // ERRORE: Mise holds this allergen as a possible TRACE of the recipe and the text never says it in capitals.
+  | { readonly kind: 'trace-missing'; readonly code: AllergenCode }
   // DA VERIFICARE: wine, vermouth, vinegar, raisins… (possible SULPHITES); chocolate; margarine.
   | { readonly kind: 'sulphites' }
   | { readonly kind: 'chocolate' }
@@ -128,6 +132,8 @@ export interface CheckOptions {
   readonly lang: string | null;
   // The recipe's allergens when Mise holds them FULLY declared, else null (no cross-check).
   readonly declared?: readonly AllergenCode[] | null;
+  // The allergens the recipe may contain as traces, under the same condition (null: no cross-check).
+  readonly mayContain?: readonly AllergenCode[] | null;
 }
 
 // Lower case that keeps every index where it was (a character whose lower case is longer stays as it is), so a match
@@ -229,11 +235,16 @@ export function checkLabelText(typed: string, options: CheckOptions): CheckResul
     if (v.re.test(lower) && (v.unless === null || !text.includes(v.unless))) warnings.push({ kind: v.kind });
   }
 
-  for (const code of options.declared ?? []) {
-    // A code this list does not know (older stored data) is not a word the check can look for: skipped.
+  // A code this list does not know (older stored data) is not a word the check can look for: skipped.
+  const named = (code: AllergenCode): boolean | null => {
     const words = (DECLARED_WORDS as Readonly<Record<string, readonly string[] | undefined>>)[code];
-    if (words === undefined) continue;
-    if (!words.some(w => new RegExp(word(w), 'u').test(text))) errors.push({ kind: 'declared-missing', code });
+    return words === undefined ? null : words.some(w => new RegExp(word(w), 'u').test(text));
+  };
+  for (const code of options.declared ?? []) {
+    if (named(code) === false) errors.push({ kind: 'declared-missing', code });
+  }
+  for (const code of options.mayContain ?? []) {
+    if (named(code) === false) errors.push({ kind: 'trace-missing', code });
   }
 
   return { available: true, errors, warnings };

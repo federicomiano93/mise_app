@@ -30,12 +30,19 @@ export interface Working {
   // of 12.5 g is not rounded to 13 by opening and saving a recipe whose box is not even shown).
   readonly netWeight: string | null;
   readonly shelfLife: string | null;
+  // The image label's two boxes (labelTexts.ts) as typed, with the same rule: null = never touched, the stored text goes
+  // through as it is (in `rest`).
+  readonly labelName: string | null;
+  readonly labelText: string | null;
 }
 
 // The most a recipe's name may hold: the rules refuse a name of 200 characters or more (firestore.rules, `recipes`), and a
 // save that is refused AFTER the screen has left (the save is local-first) would throw the typing away.
 // ⚠️ NEW IN MISE 2: the current app has no such cap, and a name that long fails there at the database.
 export const NAME_MAX_LENGTH = 199;
+
+// The four boxes nobody has typed in.
+const UNTOUCHED = { netWeight: null, shelfLife: null, labelName: null, labelText: null } as const;
 
 let counter = 0;
 const nextKey = (): number => ++counter;
@@ -47,14 +54,13 @@ const newRow = (): EditRow => ({ key: nextKey(), row: emptyRow() });
 
 // null = a new recipe: empty, with one empty row and the placeholders showing (P20).
 export function workingFrom(recipe: CatalogueRecipe | null): Working {
-  if (recipe === null) return { name: '', rows: [newRow()], rest: {}, netWeight: null, shelfLife: null };
+  if (recipe === null) return { name: '', rows: [newRow()], rest: {}, ...UNTOUCHED };
   const { name, ingredients, ...rest } = recipe;
   return {
     name,
     rows: ingredients.map(row => ({ key: nextKey(), row: { ...row, unit: unitOf(row) } })),
     rest,
-    netWeight: null,
-    shelfLife: null,
+    ...UNTOUCHED,
   };
 }
 
@@ -63,7 +69,7 @@ export function workingFrom(recipe: CatalogueRecipe | null): Working {
 //
 // ⚠️ `rest` IS A WHITELIST, NEVER `workingFrom`'s «everything else»: that carries the original's `id` (and `bakery`), and
 // cleanWorking spreads `rest` into what is saved, so a copy that kept the id would OVERWRITE THE ORIGINAL. What a copy
-// takes: the pack weight, the shelf life and the mixing procedure. What it leaves: the id, the venue, the oven loss and the two
+// takes: the pack weight, the shelf life, the mixing procedure and the image label's ingredients text. What it leaves: the id, the venue, the oven loss and the two
 // weighings (`lossPct`, `rawGrams`, `cookedGrams` are Food cost's, measured on the ORIGINAL's products).
 // ⚠️ EVERY ROW COMES AS IT IS, `rid` included: a rid is only unique within one recipe, and keeping it keeps the procedure's
 // step → row references valid (and a link to an ingredient or a recipe stays a link).
@@ -77,15 +83,16 @@ export function duplicateWorking(recipe: CatalogueRecipe, copyName: (name: strin
   }
   const from = recipe as unknown as Readonly<Record<string, unknown>>;
   const rest: Record<string, unknown> = {};
-  for (const key of ['netWeightG', 'shelfLifeDays', 'steps', 'endNote'] as const) {
+  // ⚠️ NOT the image label's title (`labelName`): it names the ORIGINAL, and a copy printed with it would carry the other
+  // product's name. Left out, the copy's label shows its own name in capitals until somebody types one.
+  for (const key of ['netWeightG', 'shelfLifeDays', 'steps', 'endNote', 'labelIngredientsText'] as const) {
     if (from[key] !== undefined) rest[key] = JSON.parse(JSON.stringify(from[key])) as unknown;
   }
   return {
     name,
     rows: recipe.ingredients.map(row => ({ key: nextKey(), row: { ...row, unit: unitOf(row) } })),
     rest,
-    netWeight: null,
-    shelfLife: null,
+    ...UNTOUCHED,
   };
 }
 
@@ -125,8 +132,7 @@ export function workingFromDraft(draft: unknown): Working {
       return { key: nextKey(), row: { ...row, unit: unitOf(row) } };
     }),
     rest: { ...(grams > 0 ? { netWeightG: grams } : {}), ...(days !== null ? { shelfLifeDays: days } : {}) },
-    netWeight: null,
-    shelfLife: null,
+    ...UNTOUCHED,
   };
 }
 
@@ -152,8 +158,16 @@ export function restoreWorking(value: unknown): Working | null {
     rest,
     netWeight: typeof held.netWeight === 'string' ? held.netWeight : null,
     shelfLife: typeof held.shelfLife === 'string' ? held.shelfLife : null,
+    labelName: typeof held.labelName === 'string' ? held.labelName : null,
+    labelText: typeof held.labelText === 'string' ? held.labelText : null,
   };
 }
+
+// What the image label's two boxes show: what was typed, else the stored text.
+export const labelNameText = (working: Working): string =>
+  working.labelName ?? (typeof working.rest.labelName === 'string' ? working.rest.labelName : '');
+export const labelIngredientsBoxText = (working: Working): string =>
+  working.labelText ?? (typeof working.rest.labelIngredientsText === 'string' ? working.rest.labelIngredientsText : '');
 
 export const setName = (working: Working, name: string): Working => ({ ...working, name });
 
@@ -253,6 +267,9 @@ export function cleanWorking(working: Working): RecipeToSave {
     if (days === null) delete out.shelfLifeDays;
     else out.shelfLifeDays = days;
   }
+  // The image label's boxes, typed: handed over as typed (the store trims them, and an empty one takes the field away).
+  if (working.labelName !== null) out.labelName = working.labelName;
+  if (working.labelText !== null) out.labelIngredientsText = working.labelText;
   return out as unknown as RecipeToSave;
 }
 

@@ -20,11 +20,13 @@ import { CreateIngredientOverlay } from '../suppliers/CreateIngredientOverlay';
 import { KEEP_FOCUS } from '../shell/Page';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import {
-  NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, linkRowTo, netWeightText, notWeighedCount, removeRow, setName, setRowFields, shelfLifeText,
+  NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, labelIngredientsBoxText, labelNameText, linkRowTo, netWeightText, notWeighedCount, removeRow, setName, setRowFields, shelfLifeText,
   stepWorkingRow, totalText, workingFrom,
 } from './editorModel';
 import type { Chosen, DropPosition, Row, Working } from './editorModel';
+import { imageLabelChoice } from './imageLabelData';
 import { IngredientRow } from './IngredientRow';
+import { LABEL_NAME_MAX, LABEL_TEXT_MAX } from './labelTexts';
 import { LinkDialog } from './LinkDialog';
 import { CardBoundary } from './CardBoundary';
 import { ReorderRows } from './ReorderRows';
@@ -75,6 +77,9 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   const headingId = `${ids}-ingredients`;
   const netId = `${ids}-net`;
   const shelfId = `${ids}-shelf`;
+  const logoHeadId = `${ids}-logo`;
+  const labelTitleId = `${ids}-labelTitle`;
+  const labelTextId = `${ids}-labelText`;
   const hintId = `${ids}-reorder-hint`;
 
   // ⚠️ A NEW RECIPE MAY START FROM SOMETHING CARRIED (photoCarry.ts), and then it starts DIRTY — it is unsaved work, typed or
@@ -439,6 +444,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
 
   // ── What is drawn ────────────────────────────────────────────────────────────────────────────────────────────
   const profile = normalizeLabelProfile(labelConfig);
+  const logoModel = imageLabelChoice(labelConfig).template === 'logo';
   // ⚠️ SHOWN ONLY WHEN THE VENUE PRINTS THEM: two boxes nobody can explain on a screen everybody uses are clutter, and a
   // control that changes nothing is one somebody sets wrongly and then trusts.
   const wantsWeight = profile.showWeight === true;
@@ -594,6 +600,43 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
             </div>
             <p className={styles.note}>{t('cat.labelFieldsNote')}</p>
           </div>
+        ) : null}
+
+        {/* ⚠️ THE TWO TEXTS OF THE «WITH LOGO» LABEL, shown only for the venue that prints that model: boxes nobody can use
+            elsewhere are clutter. They go through edit() like every other box, so the editor turns dirty, holds the app
+            busy and asks before it is left without any code of their own. */}
+        {logoModel ? (
+          <section className={styles.logoLabel} aria-labelledby={logoHeadId}>
+            <h3 id={logoHeadId} className={styles.headLabel}>{t('cat.logoLabel')}</h3>
+            <div className={styles.cell}>
+              <label htmlFor={labelTitleId} className={styles.label}>{t('cat.labelTitle')}</label>
+              <input
+                id={labelTitleId}
+                type="text"
+                autoComplete="off"
+                className={styles.nameBox}
+                maxLength={LABEL_NAME_MAX}
+                placeholder={working.name.trim().toUpperCase()}
+                aria-describedby={`${labelTitleId}-note`}
+                value={labelNameText(working)}
+                onChange={event => { edit(current => ({ ...current, labelName: event.target.value })); }}
+              />
+              <p id={`${labelTitleId}-note`} className={styles.note}>{t('cat.labelTitleNote')}</p>
+            </div>
+            <div className={styles.cell}>
+              <label htmlFor={labelTextId} className={styles.label}>{t('cat.labelIngredients')}</label>
+              <textarea
+                id={labelTextId}
+                className={styles.textArea}
+                rows={6}
+                maxLength={LABEL_TEXT_MAX}
+                aria-describedby={`${labelTextId}-note`}
+                value={labelIngredientsBoxText(working)}
+                onChange={event => { edit(current => ({ ...current, labelText: event.target.value })); }}
+              />
+              <p id={`${labelTextId}-note`} className={styles.note}>{t('cat.labelIngredientsNote')}</p>
+            </div>
+          </section>
         ) : null}
 
         {/* ⚠️ DELETE: whoever runs the place only (the same as the recipe page), absent — not disabled — for everybody else and
