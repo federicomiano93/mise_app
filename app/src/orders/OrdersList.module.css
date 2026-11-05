@@ -263,3 +263,11 @@
   width: 20px;
   height: 20px;
 }
+
+/* «Order placed…» and «Clear quantities…» under the suppliers. */
+.bulk {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s2);
+}

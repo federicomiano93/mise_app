@@ -1,6 +1,7 @@
 import { useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { KEEP_FOCUS } from '../shell/Page';
+import { ORDERS_PATH } from './ordersPath';
 
 // What the list puts in the navigation `state` when it opens a screen one level down: «you came from the list, so Back is
 // the browser's Back». KEEP_FOCUS comes with it: the page then leaves the focus alone, and the screen that opens puts it on
@@ -48,7 +49,8 @@ export function fromSupplierState(supplierState: unknown) {
 export function replacedState(state: unknown) {
   if (!cameFromList(state)) return KEEP_FOCUS;
   const behind = numberIn(state, 'behindSteps');
-  const steps = cameFromSupplier(state) && behind !== undefined ? behind + 1 : stepsUpOf(state);
+  // A confirm screen knows how far the list is (confirmState).
+  const steps = numberIn(state, 'toList') ?? (cameFromSupplier(state) && behind !== undefined ? behind + 1 : stepsUpOf(state));
   return steps > 1 ? { ...FROM_LIST, stepsUp: steps } : FROM_LIST;
 }
 
@@ -73,4 +75,26 @@ export function useLeave(fallback: string, onLeaving: () => void, cameFrom: (sta
     if (came) void navigate(-steps);
     else void navigate(fallback, { replace: true, state: KEEP_FOCUS });
   }, [navigate, came, steps, fallback, onLeaving]);
+}
+
+// The state a confirm screen is opened with (one supplier's «Order placed…», or the ticked suppliers of the picker). It is
+// FROM_LIST (Back is the browser's Back, the screen puts the focus on its own title) plus `toList`: how many history entries
+// lie between it and the list, when the list is in the history behind it. A recorded order goes back to the LIST, not to the
+// screen it was opened from (P20: after a save, back to the list), and the number says how far that is.
+export function confirmState(openerState: unknown, extra: Readonly<Record<string, unknown>> = {}) {
+  const toList = cameFromList(openerState) ? stepsUpOf(openerState) + 1 : undefined;
+  return { ...FROM_LIST, ...(toList === undefined ? {} : { toList }), ...extra };
+}
+
+// Steps up to the list again after an order was recorded: the history is walked back when the list is in it, else the
+// screen replaces itself with the list. `onLeaving` runs first (the focus owed to the control that opened the screen).
+export function useLeaveToList(onLeaving: () => void): () => void {
+  const navigate = useNavigate();
+  const { state } = useLocation();
+  const toList = numberIn(state, 'toList');
+  return useCallback(() => {
+    onLeaving();
+    if (toList !== undefined) void navigate(-toList);
+    else void navigate(ORDERS_PATH, { replace: true, state: KEEP_FOCUS });
+  }, [navigate, toList, onLeaving]);
 }

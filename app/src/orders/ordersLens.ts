@@ -66,6 +66,10 @@ export interface OrdersLens {
   rowsFor(supplierId: string): SupplierRows;
   // How many lines of a supplier's order have a quantity (the count on its row, «Order placed…» enabled — parity L14).
   filledFor(supplierId: string): number;
+  // Every line IN this supplier's order now (its own, less those sent elsewhere this time, plus those sent here), switched-off
+  // ones included: what placing records and clears, and what «Clear quantities» clears (js/orders/orders-main.js
+  // ingredientsOf(…, orderIngredients(), { activeOnly: false })).
+  linesOf(supplierId: string): readonly LensIngredient[];
 }
 
 const isActive = (item: object) => (item as { readonly active?: unknown }).active !== false;
@@ -122,6 +126,8 @@ export function buildOrdersLens(input: LensInput): OrdersLens {
     // ⚠️ COUNTED ON THE LENS, where a line is in ONE order: a line sent elsewhere counts for the supplier it is ordered
     // from, never for both. A switched-off line with a quantity counts too: it is in the order (decision T10).
     filledFor: supplierId => (lensBySupplier.get(supplierId) ?? []).filter(i => qtyOf(i.id) > 0).length,
+
+    linesOf: supplierId => lensBySupplier.get(supplierId) ?? [],
   };
 }
 

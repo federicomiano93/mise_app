@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
@@ -6,13 +6,17 @@ import { KEEP_FOCUS, Page } from '../shell/Page';
 import { useOwnScrollArea } from '../shell/scrollArea';
 import { SPLIT_QUERY } from '../ui/split';
 import { useMediaQuery } from '../ui/useMediaQuery';
-import { OrdersProvider, useOrders } from './OrdersContext';
+import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
+import { OrdersProvider, useOrders, useOrdersStore } from './OrdersContext';
 import { OrdersList } from './OrdersList';
+import { PlaceAllConfirmScreen, SupplierConfirmScreen } from './PlaceConfirmScreen';
 import { SupplierItemsScreen } from './SupplierItemsScreen';
 import { SupplierOrderScreen } from './SupplierOrderScreen';
-import { HandBackProvider, ITEMS_DOOR, itemsOpener, supplierOpener, useHandBackState } from './handBack';
+import { SupplierPicker } from './SupplierPicker';
+import { LONG_MS } from './useClearQuantities';
+import { CLEAR_OPENER, HandBackProvider, ITEMS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, itemsOpener, supplierOpener, useHandBackState } from './handBack';
 import { FROM_LIST, replacedState } from './ordersNav';
-import { ORDERS_PATH, parseOrdersPath, supplierItemsPath, supplierPath } from './ordersPath';
+import { CLEAR_PATH, ORDERS_PATH, PLACE_ALL_PATH, parseOrdersPath, supplierItemsPath, supplierPath } from './ordersPath';
 import type { OrdersView } from './ordersPath';
 import { buildOrdersLens } from './ordersLens';
 import styles from './OrdersSection.module.css';
@@ -24,11 +28,14 @@ import styles from './OrdersSection.module.css';
 // unmount (P14), sending a change still waiting for the autosave at once.
 //
 // Step 3f-1: the list and the shared order in progress (docs/parity/orders.md). Nothing in it is role-gated: every member
-// with the section types quantities (L2).
+// with the section types quantities (L2). Step 3f-2 adds the day line, recording an order and clearing quantities; their short
+// sentences ("Quantities cleared ✓") come through the StatusMessageProvider above, which outlives the screen that spoke.
 export default function OrdersSection() {
   return (
     <OrdersProvider>
-      <OrdersScreen />
+      <StatusMessageProvider>
+        <OrdersScreen />
+      </StatusMessageProvider>
     </OrdersProvider>
   );
 }
@@ -74,6 +81,14 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const handBack = useHandBackState();
   const snapshot = useOrders();
   const noSupplierName = t('ord.noSupplier');
+  const store = useOrdersStore();
+  const say = useStatusMessage();
+
+  // The day chosen on a supplier's day line was refused: the line is back on the stored day, and the person is told. Here, not
+  // in the line, so it is said even when the screen was left meanwhile.
+  useEffect(() => store.onMessage(message => {
+    if (message.kind === 'day-not-saved') say(t('ord.day.notSaved'), LONG_MS);
+  }), [store, say, t]);
 
   // ⚠️ THE LENS IS THE ONE PLACE THAT DECIDES AN INGREDIENT'S SUPPLIER (ordersLens.ts): the list, a supplier's screen and
   // «What they sell» all read this one, so they can never disagree.
@@ -109,6 +124,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
   };
   const openSupplier = (id: string) => { open(supplierOpener(id), supplierPath(id)); };
   const openItems = (id: string) => { open(itemsOpener(id), supplierItemsPath(id)); };
+  const openPlaceAll = () => { open(PLACE_ALL_OPENER, PLACE_ALL_PATH); };
+  const openClear = () => { open(CLEAR_OPENER, CLEAR_PATH); };
 
   // Where the scroll area goes at every move inside the section. Before the hand-back below, so the place is back when the row
   // takes the focus: focusing a row that is in view scrolls nothing.
@@ -138,7 +155,10 @@ function OrdersLayout({ view }: { view: ShownView }) {
     if (view.kind === 'list') handBack.deliver();
     // The supplier's screen coming back from «What they sell»: only its own button is owed the focus. ⚠️ NOT deliver(): a
     // supplier opened from the list expects the list row, which must keep its focus (phone: the title takes it; split: the row).
-    else if (view.kind === 'supplier') handBack.deliverIf(ITEMS_DOOR);
+    else if (view.kind === 'supplier') {
+      handBack.deliverIf(ITEMS_DOOR);
+      handBack.deliverIf(PLACE_DOOR);
+    }
   }, [view.kind, handBack]);
 
   // On the split the right-hand side scrolls on its own and stays mounted from one supplier to the next: another supplier
@@ -157,9 +177,11 @@ function OrdersLayout({ view }: { view: ShownView }) {
               <OrdersList
                 lens={lens}
                 ready={ready}
-                openId={view.kind === 'list' ? null : view.id}
+                openId={'id' in view ? view.id : null}
                 onOpenSupplier={openSupplier}
                 onOpenItems={openItems}
+                onPlaceAll={openPlaceAll}
+                onClearAll={openClear}
               />
             </PartBoundary>
           </div>
@@ -196,5 +218,9 @@ function Detail({ view, lens, ready }: { view: ShownView; lens: ReturnType<typeo
     return <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>;
   }
   if (view.kind === 'items') return <SupplierItemsScreen id={view.id} lens={lens} />;
+  if (view.kind === 'confirm') return <SupplierConfirmScreen id={view.id} lens={lens} />;
+  if (view.kind === 'place-all') return <SupplierPicker mode="place-all" lens={lens} />;
+  if (view.kind === 'place-all-confirm') return <PlaceAllConfirmScreen lens={lens} />;
+  if (view.kind === 'clear') return <SupplierPicker mode="clear" lens={lens} />;
   return <SupplierOrderScreen id={view.id} lens={lens} />;
 }

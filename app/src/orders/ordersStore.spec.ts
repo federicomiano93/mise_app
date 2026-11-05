@@ -23,6 +23,7 @@ function setup(init: Parameters<typeof fakeOrdersSource>[0] = {}) {
       setTimer: run => { timer = run; return 1; },
       clearTimer: () => { timer = null; },
     },
+    online: () => true,
   };
   const store = createOrdersStore(source, deps);
   const messages: OrdersMessage[] = [];

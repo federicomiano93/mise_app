@@ -1,16 +1,19 @@
-import { useCallback, useEffect, useId, useRef } from 'react';
-import { List } from 'lucide-react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Check, List } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { FormBar } from '../ui/FormBar';
+import { useStatusMessage } from '../ui/StatusMessage';
+import { DayLine } from './DayLine';
 import { OrderLine } from './OrderLine';
 import { useOrders, useOrdersStore } from './OrdersContext';
-import { ITEMS_DOOR, supplierOpener, useHandBack } from './handBack';
-import { ORDERS_PATH, supplierItemsPath } from './ordersPath';
-import { cameFromList, fromSupplierState, useLeave } from './ordersNav';
+import { ITEMS_DOOR, PLACE_DOOR, supplierOpener, useHandBack } from './handBack';
+import { ORDERS_PATH, supplierConfirmPath, supplierItemsPath } from './ordersPath';
+import { cameFromList, confirmState, fromSupplierState, useLeave } from './ordersNav';
+import { LONG_MS, useClearQuantities } from './useClearQuantities';
 import type { OrderRow, OrdersLens } from './ordersLens';
 import styles from './SupplierOrderScreen.module.css';
 
@@ -27,9 +30,13 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   const titleId = useId();
   const title = useRef<HTMLHeadingElement>(null);
   const leave = useLeave(ORDERS_PATH, () => { handBack.expect(supplierOpener(id)); });
+  const say = useStatusMessage();
+  const [clearQuantities, clearDialog] = useClearQuantities(lens);
 
   // «What they sell» one level down: Back from it hands the focus back to this button.
   const itemsNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(ITEMS_DOOR, node); }, [handBack]);
+  // «Order placed…» one level down: Back from the confirm screen hands the focus back to this button.
+  const placeNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(PLACE_DOOR, node); }, [handBack]);
 
   const supplier = lens.supplierById(id);
   const rows = lens.rowsFor(id);
@@ -48,6 +55,9 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   useEffect(() => {
     if (shown && cameFromList(state) && !screen.current?.contains(document.activeElement)) title.current?.focus();
   }, [shown]);
+
+  // The column names stick right under the bar, whose height changes with the title's lines and the width.
+  const barHeight = useHeight();
 
   if (supplier === undefined) {
     return (
@@ -70,11 +80,24 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
     />
   );
   const empty = rows.active.length === 0 && rows.inactive.length === 0;
+  // What is typed for this supplier: «Order placed…» needs some, «Clear quantities…» is offered only when there is some.
+  const filled = lens.filledFor(id);
+  const placing = snapshot.placing.includes(id);
+  const place = () => {
+    // Refused offline: the record and the clear would land at two different moments of connectivity (parity X3).
+    if (navigator.onLine === false) {
+      say(t('ord.offline.place'), LONG_MS);
+      return;
+    }
+    handBack.expect(PLACE_DOOR);
+    void navigate(supplierConfirmPath(id), { state: confirmState(state) });
+  };
 
   return (
     <section ref={screen} className={styles.screen} aria-labelledby={titleId}>
-      {/* The bar and the column names stick together: the names stay over the boxes while the rows scroll. */}
-      <div className={styles.sticky}>
+      {/* The bar and the column names stick, the names over the boxes while the rows scroll. The day line between them
+          scrolls away: stuck too, on a phone it took half the screen from the rows. */}
+      <div ref={barHeight.ref} className={styles.sticky}>
         <FormBar
           backLabel={t('ui.back')}
           onBack={leave}
@@ -95,14 +118,19 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
             </Button>
           )}
         />
-        {empty ? null : (
-          <div className={styles.columns} data-stock={showStock}>
-            <span />
-            <span className={styles.columnName}>{t('ord.field.order')}</span>
-            {showStock ? <span className={styles.columnName}>{t('ord.field.stock')}</span> : null}
-          </div>
-        )}
       </div>
+      <DayLine supplier={supplier} lens={lens} />
+      {empty ? null : (
+        <div
+          className={styles.columns}
+          data-stock={showStock}
+          style={{ top: barHeight.px }}
+        >
+          <span />
+          <span className={styles.columnName}>{t('ord.field.order')}</span>
+          {showStock ? <span className={styles.columnName}>{t('ord.field.stock')}</span> : null}
+        </div>
+      )}
       {empty ? (
         <p className={styles.nothing}>{t('ord.noIngredientsYet')}</p>
       ) : (
@@ -115,8 +143,39 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
               </FoldedGroup>
             </div>
           ) : null}
+          {/* After the rows and NOT stuck: a bar stuck to the bottom of a phone would take the rows' room. */}
+          <div className={styles.actions}>
+            <Button ref={placeNode} variant="primary" isDisabled={filled === 0 || placing} onPress={place}>
+              <Check aria-hidden="true" />
+              {t('ord.placeAction')}
+            </Button>
+            {filled > 0 ? (
+              <Button variant="quiet" onPress={() => { void clearQuantities([id]).then(cleared => { if (cleared) leave(); }); }}>
+                {t('ord.clearAction')}
+              </Button>
+            ) : null}
+          </div>
         </>
       )}
+      {clearDialog}
     </section>
   );
+}
+
+// A box's height in CSS pixels, kept current as it changes.
+function useHeight(): { ref: (node: HTMLElement | null) => void; px: number } {
+  const [px, setPx] = useState(0);
+  const observer = useRef<ResizeObserver | null>(null);
+  const ref = useCallback((node: HTMLElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (node === null) return;
+    const measure = () => { setPx(node.getBoundingClientRect().height); };
+    measure();
+    if (typeof ResizeObserver === 'function') {
+      observer.current = new ResizeObserver(measure);
+      observer.current.observe(node);
+    }
+  }, []);
+  return { ref, px };
 }

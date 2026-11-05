@@ -1,14 +1,15 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { ChevronRight, List, Search } from 'lucide-react';
+import { Check, ChevronRight, List, Search } from 'lucide-react';
 import { spellShortDate, todayISO } from '@mise/shared/day';
 import { isFutureDay, nextDeliveryAfter } from '@mise/shared/order-day';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
+import { Button } from '../ui/Button';
 import { useOrders } from './OrdersContext';
 import { dayTranslate, deliveryDaysText } from './dayWords';
-import { itemsOpener, supplierOpener, useHandBack } from './handBack';
+import { CLEAR_OPENER, PLACE_ALL_OPENER, itemsOpener, supplierOpener, useHandBack } from './handBack';
 import { orderingCount, supplierListGroups } from './ordersLens';
 import type { OrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
@@ -22,6 +23,9 @@ type Props = {
   openId: string | null;
   onOpenSupplier: (id: string) => void;
   onOpenItems: (id: string) => void;
+  // The two buttons under the list: the picker of the suppliers to record together, and the one to clear.
+  onPlaceAll: () => void;
+  onClearAll: () => void;
 };
 
 const HEADING_KEY = {
@@ -34,12 +38,16 @@ const HEADING_KEY = {
 // ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a component that stays mounted, and
 // only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard where the person
 // left them (the current app built the box once for the same reason).
-export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems }: Props) {
+export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll }: Props) {
   const { t } = useT();
   const { config, draft, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
   const [orderingOnly, setOrderingOnly] = useState(false);
   const radios = useRef(new Map<boolean, HTMLButtonElement>());
+  const handBack = useHandBack();
+  // Back from a picker hands the focus back to the button that opened it.
+  const placeAllNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(PLACE_ALL_OPENER, node); }, [handBack]);
+  const clearNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(CLEAR_OPENER, node); }, [handBack]);
 
   const ordering = orderingCount(lens);
   const groups = useMemo(
@@ -149,6 +157,19 @@ export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems }:
           </div>
         ))
       )}
+
+      {/* After the list (parity X13): recording is offered from two suppliers with quantities, clearing from one. */}
+      {ready && ordering > 0 ? (
+        <div className={styles.bulk}>
+          {ordering >= 2 ? (
+            <Button ref={placeAllNode} onPress={onPlaceAll}>
+              <Check aria-hidden="true" />
+              {t('ord.placeAction')}
+            </Button>
+          ) : null}
+          <Button ref={clearNode} variant="quiet" onPress={onClearAll}>{t('ord.clearAction')}</Button>
+        </div>
+      ) : null}
     </div>
   );
 }

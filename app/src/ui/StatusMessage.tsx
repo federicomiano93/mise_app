@@ -5,7 +5,8 @@ import styles from './StatusMessage.module.css';
 // How long a message stays on screen.
 export const MESSAGE_MS = 2600;
 
-type Say = (text: string) => void;
+// `ms`: how long this one stays, for a sentence too long to read in the usual time (a refusal that names what was not saved).
+type Say = (text: string, ms?: number) => void;
 
 const StatusMessageContext = createContext<Say | null>(null);
 
@@ -24,14 +25,14 @@ export function StatusMessageProvider({ children }: { children: ReactNode }) {
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const counter = useRef(0);
 
-  const say = useCallback<Say>(text => {
+  const say = useCallback<Say>((text, ms = MESSAGE_MS) => {
     if (timer.current !== null) clearTimeout(timer.current);
     counter.current += 1;
     setShown({ id: counter.current, text });
     timer.current = setTimeout(() => {
       timer.current = null;
       setShown(null);
-    }, MESSAGE_MS);
+    }, ms);
   }, []);
 
   useEffect(() => () => {

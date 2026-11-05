@@ -231,7 +231,8 @@ describe('the unit', () => {
     await opened();
     const menu = screen.getByRole('combobox', { name: 'Unit to order for Cake box' });
     expect(within(menu).getAllByRole('option').map(option => option.textContent)).toEqual(['carton', 'bag']);
-    expect(screen.getAllByRole('combobox')).toHaveLength(1);
+    // The other select on the screen is the day line («Order:»), not a unit menu.
+    expect(screen.getAllByRole('combobox', { name: /^Unit to order for/ })).toHaveLength(1);
   });
 
   it('shows the card’s unit as a caption on every other row', async () => {

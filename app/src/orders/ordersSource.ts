@@ -10,7 +10,10 @@
 //     whoever may read prices (parity L20, slice 3f-8), and an employee must not even load them.
 //   • config/orders — the venue's supplier order, favourites, Stock box switch (parity M10).
 //   • drafts/current — the order in progress, shared live by every phone of the venue (parity L31).
-// It writes ONE thing: a merge of the changed lines and days of drafts/current (draftSync.ts decides what changed).
+// It writes the draft (a merge of the changed lines and days, draftSync.ts decides what changed; and, from step 3f-2, the
+// clear of the lines an order took or a «Clear quantities» threw away) and ONE order record at a time
+// (orders-history/<day>_<supplier>, in a transaction — parity H1, H2). It reads a record once, never live: the confirm screen
+// asks whether today's record exists before it opens (the live, bounded history comes with History, slice 3f-4).
 //
 // ⚠️ NO ROLE IS READ HERE, ON PURPOSE: the section gate and firestore.rules decide (P2).
 //
@@ -54,6 +57,19 @@ export interface OrdersSource {
   // dotted paths could not. The venue stamp is applied here. Settles when the SERVER answers; REJECTS when refused
   // (offline, it simply waits, and Firestore shows the write at once in every answer meanwhile).
   mergeDraft(payload: DraftPayload): Promise<void>;
+  // Deletes these fields of drafts/current (`entries.<id>`, `entries.<id>.qty`, `days.<supplierId>`…), stamping
+  // `updatedAt` — an update, never a set: a merge cannot delete a nested key, and only the named paths go, so whatever
+  // another phone is typing elsewhere in the document survives (js/orders/firebase-orders.js clearFields).
+  clearDraft(paths: readonly string[], updatedAt: string): Promise<void>;
+  // orders-history/<id> as stored, once (null when there is none). A failure rejects.
+  readRecord(id: string): Promise<Record<string, unknown> | null>;
+  // Writes orders-history/<id> in a TRANSACTION: `merge` gets the record as stored (null when there is none) and returns the
+  // WHOLE new record, which replaces it (the venue stamp is applied here). What `merge` throws aborts the write and rejects
+  // with it (orders/unit-conflict). Resolves with what was written.
+  recordOrder(
+    id: string,
+    merge: (existing: Record<string, unknown> | null) => Record<string, unknown>,
+  ): Promise<Record<string, unknown>>;
 }
 
 const SUPPLIERS = 'suppliers';
@@ -62,6 +78,7 @@ const CONFIG = 'config';
 const ORDERS_DOC = 'orders';
 const DRAFTS = 'drafts';
 const DRAFT_ID = 'current';
+const HISTORY = 'orders-history';
 
 export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKit>, locationId: string): OrdersSource {
   // Throws on a venue id that could point a read anywhere else (@mise/shared/location-id).
@@ -69,6 +86,7 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
   const ingredientsPath = buildPath(locationId, INGREDIENTS);
   const configPath = buildPath(locationId, CONFIG);
   const draftsPath = buildPath(locationId, DRAFTS);
+  const historyPath = buildPath(locationId, HISTORY);
 
   // A live listener whose Firestore may not be loaded yet. The returned stop works at any moment.
   function listen(subscribe: (kit: FirestoreKit) => () => void, onError: (err: unknown) => void): () => void {
@@ -133,6 +151,35 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
     async mergeDraft(payload) {
       const { fs, db } = await firestore();
       await fs.setDoc(fs.doc(db, draftsPath, DRAFT_ID), { ...payload, bakery: locationId }, { merge: true });
+    },
+
+    // ⚠️ updateDoc, so the venue stamp rides along (the rules check it on every write) and a missing draft is refused
+    // rather than created empty — there is nothing to clear in a draft that does not exist.
+    async clearDraft(paths, updatedAt) {
+      const { fs, db } = await firestore();
+      const update: Record<string, unknown> = { updatedAt, bakery: locationId };
+      for (const path of paths) update[path] = fs.deleteField();
+      await fs.updateDoc(fs.doc(db, draftsPath, DRAFT_ID), update);
+    },
+
+    async readRecord(id) {
+      const { fs, db } = await firestore();
+      const snap = await fs.getDoc(fs.doc(db, historyPath, id));
+      return snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null;
+    },
+
+    // ⚠️ ONE TRANSACTION FOR THE READ AND THE WRITE: two phones placing the same supplier's order in the same second must
+    // both end up in the record (mergeArchives ADDS), never the second overwriting the first. tx.set replaces the record
+    // WHOLE: mergeArchives carries over everything a record must keep (missing, missingResolved, names, sends).
+    async recordOrder(id, merge) {
+      const { fs, db } = await firestore();
+      const ref = fs.doc(db, historyPath, id);
+      return fs.runTransaction(db, async tx => {
+        const snap = await tx.get(ref);
+        const next = { ...merge(snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null), bakery: locationId };
+        tx.set(ref, next);
+        return next;
+      });
     },
   };
 }

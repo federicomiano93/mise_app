@@ -1,9 +1,13 @@
 // The addresses of «Orders», in one place so the section, the list's rows and the screens one level down cannot disagree
-// (docs/parity/orders.md, decision T1). Slice 3f-1 draws these three; the rest of T1's table comes with its own slice.
+// (docs/parity/orders.md, decision T1). Slice 3f-1 drew the first three; slice 3f-2 adds the placing and clearing screens.
 //
 //   /orders                         the supplier list
 //   /orders/supplier/<id>           one supplier's order screen (`no-supplier` is a valid id: the pseudo-supplier)
 //   /orders/supplier/<id>/items     «What they sell», read-only, one level below that screen
+//   /orders/supplier/<id>/confirm   «This is what will be recorded» for one supplier, one level below its screen
+//   /orders/place-all               the picker of the suppliers to record together, one level below the list
+//   /orders/place-all/confirm       the same confirm screen for the ticked suppliers (their ids travel in the navigation state)
+//   /orders/clear                   the picker of the suppliers whose quantities to clear, one level below the list
 //   anything else                   unknown: the section goes back to /orders
 
 export const ORDERS_PATH = '/orders';
@@ -12,10 +16,18 @@ export type OrdersView =
   | { readonly kind: 'list' }
   | { readonly kind: 'supplier'; readonly id: string }
   | { readonly kind: 'items'; readonly id: string }
+  | { readonly kind: 'confirm'; readonly id: string }
+  | { readonly kind: 'place-all' }
+  | { readonly kind: 'place-all-confirm' }
+  | { readonly kind: 'clear' }
   | { readonly kind: 'unknown' };
 
 export const supplierPath = (id: string): string => `${ORDERS_PATH}/supplier/${encodeURIComponent(id)}`;
 export const supplierItemsPath = (id: string): string => `${supplierPath(id)}/items`;
+export const supplierConfirmPath = (id: string): string => `${supplierPath(id)}/confirm`;
+export const PLACE_ALL_PATH = `${ORDERS_PATH}/place-all`;
+export const PLACE_ALL_CONFIRM_PATH = `${PLACE_ALL_PATH}/confirm`;
+export const CLEAR_PATH = `${ORDERS_PATH}/clear`;
 
 // A segment as it was typed, back to the id it stands for; null when it is not valid percent-encoding.
 function decoded(segment: string): string | null {
@@ -32,20 +44,31 @@ export function parseOrdersPath(rest: string | undefined): OrdersView {
   const parts = (rest ?? '').split('/').filter(part => part !== '');
   if (parts.length === 0) return { kind: 'list' };
   const [first, second, third] = parts;
+  if (first === 'place-all') {
+    if (parts.length === 1) return { kind: 'place-all' };
+    return parts.length === 2 && second === 'confirm' ? { kind: 'place-all-confirm' } : { kind: 'unknown' };
+  }
+  if (first === 'clear') return parts.length === 1 ? { kind: 'clear' } : { kind: 'unknown' };
   if (first !== 'supplier' || second === undefined) return { kind: 'unknown' };
   const id = decoded(second);
   if (id === null || id === '') return { kind: 'unknown' };
   if (parts.length === 2) return { kind: 'supplier', id };
   if (parts.length === 3 && third === 'items') return { kind: 'items', id };
+  if (parts.length === 3 && third === 'confirm') return { kind: 'confirm', id };
   return { kind: 'unknown' };
 }
 
-// What the usage record calls the screen at an address (shell/sections.ts screenNameFor): `orders`, `orders-supplier`
-// and `orders-supplier-items`. ⚠️ ONLY AN ADDRESS THE SECTION DRAWS counts as its screen: an unknown one is sent back to
-// the list, and logging it as a screen would put one nobody saw in the owner's statistics.
+// What the usage record calls the screen at an address (shell/sections.ts screenNameFor): `orders`, `orders-supplier`,
+// `orders-supplier-items`, `orders-confirm`, `orders-place-all`, `orders-place-all-confirm` and `orders-clear`.
+// ⚠️ ONLY AN ADDRESS THE SECTION DRAWS counts as its screen: an unknown one is sent back to the list, and logging it as a
+// screen would put one nobody saw in the owner's statistics.
 export function ordersScreenName(rest: string): string {
   const view = parseOrdersPath(rest);
   if (view.kind === 'supplier') return 'orders-supplier';
   if (view.kind === 'items') return 'orders-supplier-items';
+  if (view.kind === 'confirm') return 'orders-confirm';
+  if (view.kind === 'place-all') return 'orders-place-all';
+  if (view.kind === 'place-all-confirm') return 'orders-place-all-confirm';
+  if (view.kind === 'clear') return 'orders-clear';
   return 'orders';
 }
