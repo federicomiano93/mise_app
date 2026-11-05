@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
+import { isPackaging } from '@mise/shared/ingredient-kind';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
@@ -8,15 +9,19 @@ import { useOwnScrollArea } from '../shell/scrollArea';
 import { SPLIT_QUERY } from '../ui/split';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { useMediaQuery } from '../ui/useMediaQuery';
-import { HandBackProvider, NEW_OPENER, SETTINGS_OPENER, supplierOpener, useHandBackState } from './handBack';
+import { HandBackProvider, NEW_OPENER, SETTINGS_OPENER, itemOpener, supplierOpener, useHandBackState } from './handBack';
+import { createIngredientDeletions, IngredientDeletionsProvider } from './ingredientDeletions';
 import { createSupplierDeletions, SupplierDeletionsProvider } from './supplierDeletions';
 import { SuppliersProvider, useSuppliers, useSuppliersStore } from './SuppliersContext';
 import { SuppliersDetail } from './SuppliersDetail';
 import type { ShownView } from './SuppliersDetail';
 import { SuppliersList } from './SuppliersList';
-import { FROM_LIST, cameFromList } from './suppliersNav';
+import { FROM_LIST, cameFromList, fromListTab, supplierScreenOf, tabOfState } from './suppliersNav';
 import { messageText } from './suppliersMessages';
-import { NEW_SUPPLIER_PATH, SUPPLIERS_PATH, SUPPLIERS_SETTINGS_PATH, parseSuppliersPath, supplierPath, tabOf, tabPath } from './suppliersPath';
+import {
+  NEW_INGREDIENT_PATH, NEW_PACKAGING_PATH, NEW_SUPPLIER_PATH, SUPPLIERS_PATH, SUPPLIERS_SETTINGS_PATH,
+  ingredientPath, parseSuppliersPath, supplierPath, tabOf, tabPath,
+} from './suppliersPath';
 import type { SuppliersTab } from './suppliersPath';
 import styles from './SuppliersSection.module.css';
 
@@ -28,7 +33,8 @@ import styles from './SuppliersSection.module.css';
 // on unmount (P14).
 //
 // Step 3e-1 slice A looks: the lists and a supplier's own screen. Slice B writes suppliers (the card, a new one, switching
-// one off, deleting it) and adds Settings; 3e-2 adds the ingredient card (docs/parity/suppliers.md).
+// one off, deleting it) and adds Settings; 3e-2 adds the ingredient card, whose product data it opens from a row, from «New …»
+// and from a supplier's screen (docs/parity/suppliers.md).
 export default function SuppliersSection() {
   return (
     <SuppliersProvider>
@@ -52,11 +58,11 @@ function StoreMessages() {
 }
 
 function SuppliersScreen() {
-  const { pathname, state } = useLocation();
+  const { pathname, search, state } = useLocation();
   const navigationType = useNavigationType();
   const { canManage } = useSession();
   // The address as it is written, not React Router's «*»: a supplier id is split before it is decoded (suppliersPath.ts).
-  const view = parseSuppliersPath(pathname.slice(SUPPLIERS_PATH.length));
+  const view = parseSuppliersPath(pathname.slice(SUPPLIERS_PATH.length), search);
 
   // ⚠️ THE REDIRECT MUST KEEP THE MEANING OF THE MOVE THAT CAUSED IT: on a POP the app is arranging itself, so KEEP_FOCUS;
   // on any other move the state of the address being replaced is passed on.
@@ -80,8 +86,20 @@ function SuppliersLayout({ view }: { view: ShownView }) {
   // The suppliers this phone's own screens are deleting (supplierDeletions.ts); a mark goes when its supplier is back.
   const deletions = useMemo(createSupplierDeletions, []);
   const handBack = useHandBackState(deletions);
-  const { suppliers } = useSuppliers();
+  const { suppliers, ingredients } = useSuppliers();
   useEffect(() => { deletions.prune(suppliers.map(supplier => supplier.id)); }, [deletions, suppliers]);
+  // The same for the ingredients this phone is deleting (ingredientDeletions.ts).
+  const ingredientDeletions = useMemo(createIngredientDeletions, []);
+  useEffect(() => { ingredientDeletions.prune(ingredients.map(item => item.id)); }, [ingredientDeletions, ingredients]);
+
+  // ⚠️ THE LIST BESIDE (OR BEHIND) AN ITEM'S CARD: opened from a supplier's screen, the Suppliers tab; otherwise the tab it was
+  // opened from (carried in the navigation state), and by its address alone, the tab of its kind.
+  const supplierOrigin = view.kind === 'ingredient' || view.kind === 'ingredient-new' ? supplierScreenOf(state) : null;
+  let listTab = tabOf(view);
+  if (view.kind === 'ingredient' || view.kind === 'ingredient-new') {
+    const item = view.kind === 'ingredient' ? ingredients.find(candidate => candidate.id === view.id) : undefined;
+    listTab = supplierOrigin !== null ? 'suppliers' : (tabOfState(state) ?? (item && isPackaging(item) ? 'packaging' : listTab));
+  }
 
   // ⚠️ THIS SECTION OWNS THE SCROLL for the moves inside itself (shell/scrollArea.tsx), because its list and its suppliers
   // are separate addresses: the shell's reset to the top at every address would send the list back to the top at each
@@ -106,16 +124,31 @@ function SuppliersLayout({ view }: { view: ShownView }) {
     }
   };
 
-  // «New supplier» and Settings open the way a supplier does: one level down, in the right-hand pane on the split for the
-  // card (with a supplier already open there, picking it is lateral and replaces it), and Settings full width at every size.
-  const openNew = () => {
-    if (view.kind === 'supplier-new') return;
-    handBack.expect(NEW_OPENER);
+  // An ingredient or packaging row opens its card the same way, remembering the tab it was opened from so the same list stays
+  // beside the card (a packaging item opened from the Ingredients tab by its address would otherwise bring the other tab).
+  const openItem = (id: string) => {
+    handBack.expect(itemOpener(id));
     if (split && view.kind !== 'list') {
-      void navigate(NEW_SUPPLIER_PATH, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
+      void navigate(ingredientPath(id), { replace: true, state: cameFromList(state) ? fromListTab(listTab) : KEEP_FOCUS });
     } else {
       if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
-      void navigate(NEW_SUPPLIER_PATH, { state: FROM_LIST });
+      void navigate(ingredientPath(id), { state: fromListTab(listTab) });
+    }
+  };
+
+  // «New supplier», «New ingredient» and «New packaging» (by the tab) and Settings open the way a supplier does: one level
+  // down, in the right-hand pane on the split for the card (with something already open there, picking it is lateral and
+  // replaces it), and Settings full width at every size.
+  const newOpen = view.kind === 'supplier-new' || (view.kind === 'ingredient-new' && supplierOrigin === null);
+  const openNew = () => {
+    if (newOpen) return;
+    handBack.expect(NEW_OPENER);
+    const target = listTab === 'suppliers' ? NEW_SUPPLIER_PATH : listTab === 'packaging' ? NEW_PACKAGING_PATH : NEW_INGREDIENT_PATH;
+    if (split && view.kind !== 'list') {
+      void navigate(target, { replace: true, state: cameFromList(state) ? fromListTab(listTab) : KEEP_FOCUS });
+    } else {
+      if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
+      void navigate(target, { state: fromListTab(listTab) });
     }
   };
 
@@ -182,16 +215,19 @@ function SuppliersLayout({ view }: { view: ShownView }) {
   return (
     <HandBackProvider value={handBack}>
       <SupplierDeletionsProvider value={deletions}>
+      <IngredientDeletionsProvider value={ingredientDeletions}>
       <Page title={t('sup.title')}>
         <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : view.kind === 'settings' ? 'wide' : 'detail'}>
           <div className={styles.list}>
             <PartBoundary>
               <SuppliersList
-                tab={tabOf(view)}
-                openSupplierId={view.kind === 'supplier' || view.kind === 'supplier-edit' ? view.id : null}
+                tab={listTab}
+                openSupplierId={view.kind === 'supplier' || view.kind === 'supplier-edit' ? view.id : supplierOrigin}
                 onTab={openTab}
                 onOpenSupplier={openSupplier}
-                newOpen={view.kind === 'supplier-new'}
+                openItemId={view.kind === 'ingredient' ? view.id : null}
+                onOpenItem={openItem}
+                newOpen={newOpen}
                 onNew={openNew}
                 settingsOpen={view.kind === 'settings'}
                 onOpenSettings={openSettings}
@@ -205,6 +241,7 @@ function SuppliersLayout({ view }: { view: ShownView }) {
           </div>
         </div>
       </Page>
+      </IngredientDeletionsProvider>
       </SupplierDeletionsProvider>
     </HandBackProvider>
   );

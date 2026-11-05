@@ -15,5 +15,8 @@ export function messageText(
     case 'supplier-active-not-saved': return t('sup.notSwitched', { name: message.name });
     case 'supplier-not-deleted': return t('sup.notDeleted', { name: message.name });
     case 'category-not-deleted': return t('sup.categoryNotDeleted', { name: message.name });
+    // The supplier's sentences name what was saved or deleted, whatever it is: the same words serve an ingredient.
+    case 'ingredient-not-saved': return t('sup.notSaved', { name: message.name });
+    case 'ingredient-not-deleted': return t('sup.notDeleted', { name: message.name });
   }
 }

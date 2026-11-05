@@ -132,8 +132,8 @@ describe('the frame and the tabs', () => {
     expect(search()).toHaveAccessibleName('Cerca un ingrediente…');
   });
 
-  it('goes to the list from an address it does not draw (unknown, and the ingredient screens of the next step)', async () => {
-    for (const path of ['/suppliers/nope', '/suppliers/supplier', '/suppliers/ingredient/i-box']) {
+  it('goes to the list from an address it does not draw (unknown, and shapes it has no screen for)', async () => {
+    for (const path of ['/suppliers/nope', '/suppliers/supplier', '/suppliers/ingredient', '/suppliers/ingredient/a/b']) {
       const { router } = renderSuppliers(path, { source: seeded() });
       await waitFor(() => { expect(router.state.location.pathname).toBe('/suppliers'); });
       await screen.findAllByRole('listitem', undefined, LOAD);
@@ -154,14 +154,13 @@ describe('the ingredients and packaging lists', () => {
     expect(rowNames().map(text => text?.slice(0, 4))).toEqual(['Cake', 'Pape']);
   });
 
-  it('draws an ingredient row as plain text: no button, no link, nothing focusable', async () => {
+  it('draws an ingredient row as ONE button (its card opens from it), with no link inside', async () => {
     await loaded();
     for (const row of main().getAllByRole('listitem')) {
-      expect(within(row).queryByRole('button')).not.toBeInTheDocument();
+      expect(within(row).getAllByRole('button')).toHaveLength(1);
       expect(within(row).queryByRole('link')).not.toBeInTheDocument();
-      expect(row.querySelector('[tabindex], button, a, input')).toBeNull();
     }
-    expect(main().queryByRole('button', { name: /Flour/ })).not.toBeInTheDocument();
+    expect(main().getByRole('button', { name: /Flour/ })).toBeInTheDocument();
   });
 
   it('shows the supplier, the brand and no price when nobody has priced it', async () => {
@@ -439,9 +438,10 @@ describe('loading, a dead stream and the empty states', () => {
     renderSuppliers(path, { source: fakeSuppliersSource() });
     expect(await screen.findByText(title, undefined, LOAD)).toBeInTheDocument();
     expect(screen.getByText(sub)).toBeInTheDocument();
-    // The only buttons are the ways to make the first one: «New supplier» (on the Suppliers tab only) and the owner's Settings.
+    // The only buttons are the way to make the first one (by the tab) and the owner's Settings.
     const buttons = main().queryAllByRole('button').map(button => button.textContent);
-    expect(buttons).toEqual(path === '/suppliers/suppliers' ? ['New supplier', 'Settings'] : ['Settings']);
+    const first = path === '/suppliers/suppliers' ? 'New supplier' : path === '/suppliers/packaging' ? 'New packaging' : 'New ingredient';
+    expect(buttons).toEqual([first, 'Settings']);
   });
 
   it('says there is no packaging when there are ingredients but no packaging', async () => {

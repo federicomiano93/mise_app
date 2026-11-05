@@ -1,6 +1,6 @@
-import { useEffect, useId, useRef } from 'react';
+import { useCallback, useEffect, useId, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { Pencil, Star, Trash2 } from 'lucide-react';
+import { Pencil, Plus, Star, Trash2 } from 'lucide-react';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { useT } from '../i18n/useT';
@@ -11,11 +11,11 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useCopyWait } from './copyWait';
 import { ItemRow, ItemRows } from './ItemRow';
-import { SEARCH_OPENER, supplierOpener, useHandBack } from './handBack';
+import { ADD_INGREDIENT_OPENER, SEARCH_OPENER, supplierItemOpener, supplierOpener, useHandBack } from './handBack';
 import { DAY_KEY, isWeekday } from './supplierDays';
 import { useSupplierDeletions } from './supplierDeletions';
-import { SUPPLIERS_TAB_PATH, supplierEditPath } from './suppliersPath';
-import { FROM_SUPPLIER, cameFromList, useLeave } from './suppliersNav';
+import { SUPPLIERS_TAB_PATH, ingredientPath, newIngredientPath, supplierEditPath } from './suppliersPath';
+import { FROM_SUPPLIER, cameFromList, fromSupplierScreen, useLeave } from './suppliersNav';
 import { useSuppliers, useSuppliersStore } from './SuppliersContext';
 import { useDeleteSupplier } from './useDeleteSupplier';
 import styles from './SupplierScreen.module.css';
@@ -66,13 +66,26 @@ export function SupplierScreen({ id }: { id: string }) {
   // this supplier's card is owed to «Edit» instead, where the person left (handBack.takeEdit). Asked once per screen: a
   // second run of this effect (StrictMode) must find the answer the first one got.
   const shown = supplier !== null;
-  const owedEdit = useRef<boolean | null>(null);
+  // Back from an ingredient's card opened from here is owed to the row or to «Add ingredient» it was opened from.
+  const owed = useRef<string | null | undefined>(undefined);
+  const addButton = useCallback((node: HTMLButtonElement | null) => { handBack.register(ADD_INGREDIENT_OPENER, node); }, [handBack]);
   useEffect(() => {
     if (!shown) return;
-    owedEdit.current ??= handBack.takeEdit(id);
-    if (owedEdit.current) editButton.current?.focus();
+    owed.current ??= handBack.takeEdit(id) ? 'edit' : handBack.takeOn(id);
+    if (owed.current === 'edit') editButton.current?.focus();
+    else if (owed.current) handBack.focus(owed.current);
     else if (cameFromList(state)) title.current?.focus();
   }, [shown]);
+
+  // The card of an item, one level below this screen: Back is the browser's Back, which lands here.
+  const openItem = (itemId: string) => {
+    handBack.wantOn(id, supplierItemOpener(itemId));
+    void navigate(ingredientPath(itemId), { state: fromSupplierScreen(id) });
+  };
+  const addItem = () => {
+    handBack.wantOn(id, ADD_INGREDIENT_OPENER);
+    void navigate(newIngredientPath({ supplier: id }), { state: fromSupplierScreen(id) });
+  };
 
   if (supplier === null) {
     if (snapshot.suppliersBroken) {
@@ -190,6 +203,12 @@ export function SupplierScreen({ id }: { id: string }) {
 
       <div className={styles.sells}>
         <h3 className={styles.sellsTitle}>{t('sup.whatTheySell')}</h3>
+        {/* ⚠️ A NEW ITEM STARTS ON THIS SUPPLIER (the address carries it); an existing item never changes supplier by being opened
+            from here. */}
+        <Button ref={addButton} variant="secondary" className={styles.add} onPress={addItem}>
+          <Plus aria-hidden="true" />
+          <span>{t('sup.addIngredient')}</span>
+        </Button>
         {!snapshot.ingredientsLoaded ? (
           <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>
         ) : snapshot.ingredientsBroken ? (
@@ -199,7 +218,17 @@ export function SupplierScreen({ id }: { id: string }) {
         ) : (
           <ItemRows>
             {/* ⚠️ undefined, NOT '': on the supplier's own screen the supplier is not named again (parity S58). */}
-            {mine.map(item => <ItemRow key={item.id} item={item} supplier={undefined} />)}
+            {mine.map(item => (
+              <ItemRow
+                key={item.id}
+                item={item}
+                supplier={undefined}
+                isOpen={false}
+                onOpen={openItem}
+                opener={supplierItemOpener(item.id)}
+                register={handBack.register}
+              />
+            ))}
           </ItemRows>
         )}
 

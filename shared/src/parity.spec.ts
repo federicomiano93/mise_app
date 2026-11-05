@@ -44,6 +44,9 @@
 // supplier-label.ts, vat-number.ts, favourite-suppliers.ts, record-choices.ts and category-batches.ts ARE paired (step 3e-1,
 // the Suppliers page): full ports. ingredient-search.ts is NOT: it ports only `normalizeText` and `filterSuppliers` of
 // js/orders/ingredient-search.js (the row builders use order-text); its spec compares names and shapes itself.
+// ingredient-edit-model.ts IS paired (step 3e-2, the ingredient card's product data): a full port. pack-format.ts is NOT: its
+// `formatSummary` and `formatChanged` take the translate function and the locale as arguments; order-request-model.ts and
+// ingredient-merge.ts are partial ports (`remainingIds`; `findUsage` and the two month keys); their specs compare names and shapes.
 // catalogue-photo-model.ts is not paired: it exports its table of sentences as well (`CATALOGUE_PHOTO_KEYS`, private in the
 // original) and leaves out the sizes the original re-exports from photo-model; its spec compares what it ports.
 //
@@ -94,6 +97,7 @@ import * as vatNumber from './vat-number';
 import * as favouriteSuppliers from './favourite-suppliers';
 import * as recordChoices from './record-choices';
 import * as categoryBatches from './category-batches';
+import * as ingredientEditModel from './ingredient-edit-model';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -136,6 +140,7 @@ import * as legacyVatNumber from '../../js/vat-number.js';
 import * as legacyFavouriteSuppliers from '../../js/orders/favourite-suppliers.js';
 import * as legacyRecordChoices from '../../js/record-choices.js';
 import * as legacyCategoryBatches from '../../js/orders/category-batches.js';
+import * as legacyIngredientEditModel from '../../js/ingredient-edit-model.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -180,6 +185,7 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['favourite-suppliers', favouriteSuppliers, legacyFavouriteSuppliers],
   ['record-choices', recordChoices, legacyRecordChoices],
   ['category-batches', categoryBatches, legacyCategoryBatches],
+  ['ingredient-edit-model', ingredientEditModel, legacyIngredientEditModel],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -241,12 +247,12 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all forty-two models are compared', () => {
+test('all forty-three models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
       'order-cost', 'inventory-model', 'inventory-outbox', 'inventory-purchases', 'vat-rates', 'ingredient-kind', 'product-limits',
       'vat-guide', 'foodcost-weighing', 'calculator-dough-math', 'calculator-recipe-source', 'calculator-recipe-text', 'calculator-order-text',
       'confirm-flow', 'log-time', 'venue-features', 'market', 'recipe-label-model', 'label-template-model', 'photo-model',
-      'supplier-label', 'vat-number', 'favourite-suppliers', 'record-choices', 'category-batches']);
+      'supplier-label', 'vat-number', 'favourite-suppliers', 'record-choices', 'category-batches', 'ingredient-edit-model']);
 });

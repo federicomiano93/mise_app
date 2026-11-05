@@ -11,6 +11,10 @@
 //   • ingredient-prices — what each costs, a separate collection that an employee is usually refused (parity S14):
 //     a refusal is «no prices», never an error (S24).
 //   • config/orders — the venue's category list and its favourite suppliers.
+// The ingredient card (step 3e-2) writes `ingredients/{id}` and, for a delete, `ingredient-prices/{id}` (only for a person who
+// may write prices — js/ingredient-edit-model.js deletePlan); it keeps the order draft (`drafts/current`, the Orders
+// section's) honest about an ingredient whose order unit it changed or that it deleted (js/orders/draft.js), and counts the
+// recipes and Food cost products that use an ingredient before a delete (his decision F5).
 // And one Cloud Function, setIngredientPanels: the allergen and nutrition switches live on locations/{lid}, which no
 // client may write (functions/onboarding.js).
 //
@@ -20,6 +24,8 @@
 // first use (src/firestore-access.spec.ts).
 
 import { categoryPatch, planBatches } from '@mise/shared/category-batches';
+import { deletePlan } from '@mise/shared/ingredient-edit-model';
+import { findUsage } from '@mise/shared/ingredient-merge';
 import { buildPath } from '@mise/shared/location-id';
 import type { Query } from 'firebase/firestore';
 import type { FirestoreKit } from '../session/firebaseBackend';
@@ -35,6 +41,13 @@ export interface SuppliersMeta {
 
 // The two switches setIngredientPanels writes (the venue's allergen and nutrition panels).
 export type PanelKey = 'showAllergens' | 'showNutrition';
+
+// How many recipes and Food cost products name an ingredient (his decision F5). null = could not be counted: the section
+// is off (the rules refuse the read), or the server did not answer. ⚠️ NEVER A 0 FOR «COULD NOT COUNT».
+export interface IngredientUsage {
+  readonly recipes: number | null;
+  readonly products: number | null;
+}
 
 export type CallFunction = (name: string, data: unknown, timeoutMs: number) => Promise<unknown>;
 
@@ -69,6 +82,27 @@ export interface SuppliersSource {
   // «Delete a category»: the venue's shortened category list, and «no category» on every ingredient in `ids`. Settles
   // when every batch has; REJECTS when one is refused.
   deleteCategory(shortenedList: readonly string[], ids: readonly string[]): Promise<void>;
+  // A new ingredient id, made on the phone with no write (the same reason as newSupplierId).
+  newIngredientId(): string;
+  // Creates or merges an ingredient at a known id. ⚠️ A MERGE, never a whole write: invoiceName, supplierCode(s), the
+  // allergen and nutrition fields and every key this card does not draw stay as they are (parity C15). `data` is the
+  // ingredient document ALREADY CUT from its price keys (the store does it). The venue stamp is applied here. Same
+  // promise contract as saveSupplier.
+  saveIngredient(id: string, data: Readonly<Record<string, unknown>>): Promise<void>;
+  // Deletes an ingredient — and its price document too when `withPrice` (deletePlan) — in ONE batch. The price history
+  // stays (the rules forbid deleting it). Same promise contract.
+  deleteIngredient(id: string, withPrice: boolean): Promise<void>;
+  // Removes an ingredient's line from the order in progress (drafts/current entries.<id>). Rejects when there is no draft
+  // or the write is refused: the caller only logs it (parity C33).
+  clearDraftEntry(id: string): Promise<void>;
+  // An ingredient's line in the order in progress, as stored (null when there is none, or no draft). Rejects on a failed
+  // read.
+  readDraftEntry(id: string): Promise<Record<string, unknown> | null>;
+  // Writes the unit of an ingredient's line in the order in progress (merge: the quantity stays). Same contract.
+  setDraftEntryUnit(id: string, unit: string): Promise<void>;
+  // Reads the recipes and the Food cost products ONCE, from the server, and counts those that name the ingredient (F5).
+  // Never rejects: what could not be read is null.
+  readUsage(id: string): Promise<IngredientUsage>;
   // Throws ONE of the venue's two panel switches (owner and manager; the server checks). Resolves when the server has
   // written it; REJECTS when refused or unreachable. The caller then reads the venue again (session.refreshLocation()).
   setIngredientPanel(key: PanelKey, on: boolean): Promise<void>;
@@ -78,6 +112,10 @@ const SUPPLIERS = 'suppliers';
 const INGREDIENTS = 'ingredients';
 const INGREDIENT_PRICES = 'ingredient-prices';
 const CONFIG = 'config';
+const DRAFTS = 'drafts';
+const DRAFT_ID = 'current';
+const RECIPES = 'recipes';
+const PRODUCTS = 'products';
 const ORDERS_DOC = 'orders';
 // The stored «no category» word (js/record-choices.js NO_CATEGORY_WORD): a category deleted leaves its ingredients on it.
 const NO_CATEGORY = 'Other';
@@ -128,6 +166,10 @@ export function createFirestoreSuppliersSource(
   const ingredientsPath = buildPath(locationId, INGREDIENTS);
   const pricesPath = buildPath(locationId, INGREDIENT_PRICES);
   const configPath = buildPath(locationId, CONFIG);
+  const draftsPath = buildPath(locationId, DRAFTS);
+  const recipesPath = buildPath(locationId, RECIPES);
+  const productsPath = buildPath(locationId, PRODUCTS);
+  const collectionPaths: Record<string, string> = { ingredients: ingredientsPath, 'ingredient-prices': pricesPath };
 
   // The venue stamp is applied HERE, LAST, never by a caller: the rules require `bakery` to name the folder written to
   // (stampedFor). `id` is never a field (the rules' closed key lists would refuse the whole write).
@@ -264,6 +306,73 @@ export function createFirestoreSuppliersSource(
         commits.push(batch.commit());
       }
       await Promise.all(commits);
+    },
+
+    newIngredientId: () => makeSupplierId(),
+
+    async saveIngredient(id, data) {
+      const { fs, db } = await firestore();
+      await fs.setDoc(fs.doc(db, ingredientsPath, checkId(id)), withBakery(data), { merge: true });
+    },
+
+    // ⚠️ ONE BATCH, AND THE PRICE DOCUMENT ONLY WHEN `withPrice` (deletePlan's header): a price delete the rules refuse
+    // would fail the whole batch, and the ingredient with it.
+    async deleteIngredient(id, withPrice) {
+      const { fs, db } = await firestore();
+      const batch = fs.writeBatch(db);
+      for (const step of deletePlan({ id: checkId(id), mayPrice: withPrice })) {
+        const path = collectionPaths[step.collection];
+        if (!path) throw new Error(`Not a collection this card deletes from: ${step.collection}`);
+        batch.delete(fs.doc(db, path, step.id));
+      }
+      await batch.commit();
+    },
+
+    // ⚠️ updateDoc, as the current app's clearFields: no draft means nothing to clear, and the write fails rather than
+    // creating a draft that holds nothing. ⚠️ A FieldPath, never the dotted string: an id is data, not a path.
+    async clearDraftEntry(id) {
+      const { fs, db } = await firestore();
+      await fs.updateDoc(
+        fs.doc(db, draftsPath, DRAFT_ID),
+        new fs.FieldPath('entries', checkId(id)), fs.deleteField(),
+        'updatedAt', new Date().toISOString(),
+        'bakery', locationId,
+      );
+    },
+
+    async readDraftEntry(id) {
+      const { fs, db } = await firestore();
+      const snap = await fs.getDoc(fs.doc(db, draftsPath, DRAFT_ID));
+      const entries = snap.exists() ? (snap.data() as Record<string, unknown>).entries : null;
+      const entry = entries && typeof entries === 'object' ? (entries as Record<string, unknown>)[checkId(id)] : null;
+      return entry && typeof entry === 'object' && !Array.isArray(entry) ? { ...(entry as Record<string, unknown>) } : null;
+    },
+
+    // A MERGE of the one line's unit (js/orders/draft.js freezeUnitInDraft): the quantity and every other line stay.
+    async setDraftEntryUnit(id, unit) {
+      const { fs, db } = await firestore();
+      await fs.setDoc(fs.doc(db, draftsPath, DRAFT_ID), withBakery({
+        updatedAt: new Date().toISOString(),
+        entries: { [checkId(id)]: { unit } },
+      }), { merge: true });
+    },
+
+    // ⚠️ FROM THE SERVER, NOT THE BROWSER'S OWN DATABASE: a copy can miss a recipe somebody wrote on another phone, and a
+    // count that is too low is the false comfort F5 exists to remove. Each collection on its own: Food cost off refuses
+    // the products and leaves the recipes countable (firestore.rules: recipes read with the Catalogue OR Food cost on).
+    async readUsage(id) {
+      const { fs, db } = await firestore();
+      const count = async (path: string, key: 'recipes' | 'products'): Promise<number | null> => {
+        try {
+          const snap = await fs.getDocsFromServer(fs.collection(db, path) as Query);
+          return findUsage(checkId(id), { [key]: docsOf(snap) }).length;
+        } catch (err) {
+          console.warn(`count(${key}) failed:`, err);
+          return null;
+        }
+      };
+      const [recipes, products] = await Promise.all([count(recipesPath, 'recipes'), count(productsPath, 'products')]);
+      return { recipes, products };
     },
 
     // ⚠️ ONE SWITCH AT A TIME, DELIBERATELY (js/orders/firebase-features.js): sending both would let a screen drawn before

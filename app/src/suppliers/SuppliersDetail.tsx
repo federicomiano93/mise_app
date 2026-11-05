@@ -1,7 +1,9 @@
 import { useEffect, useRef } from 'react';
 import { useLocation, useNavigationType } from 'react-router';
+import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { SETTINGS_OPENER, useHandBack } from './handBack';
+import { IngredientCardScreen } from './IngredientCardScreen';
 import { SupplierCardScreen } from './SupplierCardScreen';
 import { SupplierScreen } from './SupplierScreen';
 import { useSuppliers } from './SuppliersContext';
@@ -25,6 +27,11 @@ export function SuppliersDetail({ view }: { view: ShownView }) {
   if (view.kind === 'list') return <Prompt tab={view.tab} />;
   if (view.kind === 'supplier-new') return <SupplierCardScreen key="new" id={null} />;
   if (view.kind === 'supplier-edit') return <SupplierCardScreen key="edit" id={view.id} />;
+  // Keyed on what the card is, so a card opened for another item starts afresh (it copies its item once).
+  if (view.kind === 'ingredient') return <IngredientCardScreen key={`ingredient-${view.id}`} id={view.id} packaging={false} preset={null} />;
+  if (view.kind === 'ingredient-new') {
+    return <IngredientCardScreen key="ingredient-new" id={null} packaging={view.packaging} preset={view.supplier} />;
+  }
   if (view.kind === 'settings') return <SettingsScreen />;
   return <SupplierScreen id={view.id} />;
 }
@@ -46,20 +53,32 @@ function SettingsScreen() {
   return <SuppliersSettings titleRef={title} onBack={leave} />;
 }
 
+const PANE_TITLE = {
+  ingredients: 'sup.pane.ingredients.title',
+  suppliers: 'sup.pane.suppliers.title',
+  packaging: 'sup.pane.packaging.title',
+} as const satisfies Record<SuppliersTab, MessageKey>;
+
+const PANE_TEXT = {
+  ingredients: 'sup.pane.ingredients.text',
+  suppliers: 'sup.pane.suppliers.text',
+  packaging: 'sup.pane.packaging.text',
+} as const satisfies Record<SuppliersTab, MessageKey>;
+
 // Only the split draws this (a phone hides the right-hand side while the list is the screen).
 //
-// ⚠️ ONLY BESIDE THE SUPPLIERS TAB: an ingredient has no card to open yet (step 3e-2), so a prompt to «tap an ingredient»
-// would promise what is not there.
 function Prompt({ tab }: { tab: SuppliersTab }) {
   const { t } = useT();
   const { suppliers } = useSuppliers();
-  // ⚠️ NOT BESIDE «NO SUPPLIERS YET»: a prompt to tap a supplier, next to a list that says there are none, would send
-  // somebody looking for what is not there.
-  if (tab !== 'suppliers' || suppliers.length === 0) return null;
+  const { ingredients } = useSuppliers();
+  // ⚠️ NOT BESIDE «NO … YET»: a prompt to tap a row, next to a list that says there are none, would send somebody looking for
+  // what is not there.
+  const wanted = tab === 'suppliers' ? suppliers.length : ingredients.filter(item => (item.kind === 'packaging') === (tab === 'packaging')).length;
+  if (wanted === 0) return null;
   return (
     <div className={styles.prompt}>
-      <p className={styles.promptTitle}>{t('sup.pane.suppliers.title')}</p>
-      <p>{t('sup.pane.suppliers.text')}</p>
+      <p className={styles.promptTitle}>{t(PANE_TITLE[tab])}</p>
+      <p>{t(PANE_TEXT[tab])}</p>
     </div>
   );
 }

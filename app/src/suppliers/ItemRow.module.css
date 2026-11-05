@@ -1,5 +1,5 @@
-/* The ingredient and packaging rows: one card, rows that are plain text (their card is step 3e-2, so nothing here is a
-   button). The card does not clip (no `overflow`), so nothing that sticks inside the section is ever cut. */
+/* The ingredient and packaging rows: one card, each row a button that opens the item's card (the whole row is the target, as
+   a supplier's is). The card does not clip (no `overflow`), so nothing that sticks inside the section is ever cut. */
 
 .rows {
   margin: 0;
@@ -11,17 +11,53 @@
 }
 
 .item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 2px;
-  min-height: var(--hit-lg);
-  padding: var(--s2) var(--s3);
   border-bottom: 1px solid var(--line);
 }
 
 .item:last-child {
   border-bottom: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit-lg);
+  padding: var(--s2) var(--s3);
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.row:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+/* The item open beside the list (the tablet's split). */
+.row[data-open="true"] {
+  background: var(--accent-tint);
+}
+
+@media (hover: hover) {
+  .row[data-open="false"]:hover {
+    background: var(--sunken);
+  }
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 
 .name {
@@ -39,7 +75,7 @@
 }
 
 /* Switched off: dimmed in the ink, never by opacity (the words keep their contrast), and told in a word as well. */
-.item[data-off="true"] .name {
+.row[data-off="true"] .name {
   color: var(--ink-2);
 }
 
@@ -69,4 +105,11 @@
   border-color: transparent;
   background: var(--warn-tint);
   color: var(--warn-ink);
+}
+
+.chevron {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
 }
