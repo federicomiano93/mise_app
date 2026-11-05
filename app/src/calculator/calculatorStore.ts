@@ -105,6 +105,9 @@ export interface CalculatorSnapshot {
   // The logs can be trusted for «does this tab's log still exist»: a local copy existed, or a believable
   // answer came, or the stream failed.
   readonly logsLoaded: boolean;
+  // The SERVER has answered the logs at least once, not only the browser's own database. Until then «what was
+  // logged» may be this phone's old copy: the order form's prefill says so instead of passing it off as today's.
+  readonly logsFromServer: boolean;
   // Log writes or a configuration save handed over and not yet answered. While true the section holds the
   // session's busy marker.
   readonly unsent: boolean;
@@ -268,7 +271,7 @@ export function createCalculatorStore(
 
   function build(): CalculatorSnapshot {
     return {
-      config, configAnswered, configFailed, configFromServer, linked, logs, logsLoaded,
+      config, configAnswered, configFailed, configFromServer, linked, logs, logsLoaded, logsFromServer,
       unsent: inFlight > 0 || configSaving > 0,
     };
   }

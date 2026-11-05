@@ -47,6 +47,8 @@ import * as calculatorConfig from './calculator-config';
 import * as calculatorDoughMath from './calculator-dough-math';
 import * as calculatorRecipeSource from './calculator-recipe-source';
 import * as calculatorRecipeText from './calculator-recipe-text';
+import * as calculatorOrderText from './calculator-order-text';
+import * as calculatorOrderPrefill from './calculator-order-prefill';
 import * as confirmFlow from './confirm-flow';
 import * as guidedModel from './guided-model';
 import * as logModel from './log-model';
@@ -90,6 +92,8 @@ import * as legacyCalculatorConfigJs from '../../js/calculator-config.js';
 import * as legacyCalculatorDoughMathJs from '../../js/calculator-dough-math.js';
 import * as legacyCalculatorRecipeSourceJs from '../../js/calculator-recipe-source.js';
 import * as legacyCalculatorRecipeTextJs from '../../js/calculator-recipe-text.js';
+import * as legacyCalculatorOrderTextJs from '../../js/calculator-order-text.js';
+import * as legacyCalculatorOrderPrefillJs from '../../js/calculator-order-prefill.js';
 import * as legacyConfirmFlowJs from '../../js/confirm-flow.js';
 import * as legacyGuidedModelJs from '../../js/catalogue/guided-model.js';
 import * as legacyLogModelJs from '../../js/log-model.js';
@@ -137,6 +141,8 @@ const legacyCalculatorConfig = legacyCalculatorConfigJs as unknown as typeof cal
 const legacyCalculatorDoughMath = legacyCalculatorDoughMathJs as unknown as typeof calculatorDoughMath;
 const legacyCalculatorRecipeSource = legacyCalculatorRecipeSourceJs as unknown as typeof calculatorRecipeSource;
 const legacyCalculatorRecipeText = legacyCalculatorRecipeTextJs as unknown as typeof calculatorRecipeText;
+const legacyCalculatorOrderText = legacyCalculatorOrderTextJs as unknown as typeof calculatorOrderText;
+const legacyCalculatorOrderPrefill = legacyCalculatorOrderPrefillJs as unknown as typeof calculatorOrderPrefill;
 const legacyConfirmFlow = legacyConfirmFlowJs as unknown as typeof confirmFlow;
 const legacyGuidedModel = legacyGuidedModelJs as unknown as typeof guidedModel;
 const legacyLogModel = legacyLogModelJs as unknown as typeof logModel;
@@ -2534,6 +2540,35 @@ describe('calculator-recipe-text: odd inputs', () => {
     [{ name: 'Flour', grams: NaN }], [{ name: '', grams: 0 }], [{ name: 5, grams: '7' }], [null], [{ grams: 3 }], [{ name: 'Water' }], [{ name: 'Water', grams: -4 }], [{ name: 'Salt', grams: 0.4 }]];
   agree('buildRecipeText', m.buildRecipeText as AnyFn, l.buildRecipeText as AnyFn,
     product([...ODD, 'Focaccia', 'a b c', 'Ünïcode Dough', 'x'.repeat(40)], ROWS, [...ODD, 2500, 1000, 999.5, 1e7, -3]));
+});
+
+describe('calculator-order-text: odd inputs', () => {
+  const m = calculatorOrderText;
+  const l = legacyCalculatorOrderText;
+  const ENTRIES: readonly unknown[] = [...ODD,
+    [{ client: { name: 'A' }, products: [{ id: 'p1', name: 'Buns' }, null, { id: 'p2', name: 'Rolls' }] }, null, { client: null }],
+    [{ client: { name: 'A' }, products: null }], [{ client: { name: 5 }, products: [{ id: 7, name: 9 }] }],
+    [{ client: {}, products: [{ name: 'No id' }] }]];
+  const QTYS: readonly unknown[] = [...ODD, () => 3, () => '4', () => -2, () => 0, (_i: number, id: unknown) => (id === 'p2' ? 5 : 0), () => 1e21];
+  agree('orderSections', m.orderSections as AnyFn, l.orderSections as AnyFn, product(ENTRIES, QTYS));
+  const SECTIONS: readonly unknown[] = [...ODD, [{ name: 'X', lines: [{ name: 'Buns', qty: 3 }] }], [{ name: 'X' }],
+    [{ name: 'X', lines: [{ name: 'A', qty: 1 }] }, { name: 'Y', lines: [{ name: 'B', qty: 2 }, { name: 'C', qty: 0.5 }] }], [null]];
+  agree('buildOrderMessage', m.buildOrderMessage as AnyFn, l.buildOrderMessage as AnyFn, product([...ODD, 'Morning list'], SECTIONS, [true, false, undefined, 1]));
+  agree('whatsappUrl', m.whatsappUrl as AnyFn, l.whatsappUrl as AnyFn, product([...ODD, '*T*\n\n- Buns: 30 & 100%', 'è']));
+});
+
+describe('calculator-order-prefill: odd inputs', () => {
+  const m = calculatorOrderPrefill;
+  const l = legacyCalculatorOrderPrefill;
+  const ENTRIES: readonly unknown[] = [...ODD, [{ client: { name: 'A' }, products: [{ id: 'p1' }, null, { id: 'p2' }] }, null, { client: null }],
+    [{ client: { name: 5 }, products: [{ id: 7 }] }], [{ client: {}, products: [{}] }]];
+  const logs = (qty: unknown, at: number) => [{ createdAtMs: at, versions: [{ items: [{ clientName: 'A', id: 'p1', qty }, null, { clientName: 5, id: 7, qty: 2 }, { id: 'p2', qty: 4 }] }] }];
+  const LOGS: readonly unknown[] = [...ODD, logs(3, NOW), logs(0, NOW), logs('x', NOW), logs(3, 0), logs(3, NOW - 86_400_000), logs(3, NOW - 5 * 86_400_000),
+    [null, {}, { createdAtMs: NOW }, ...logs(2, NOW)]];
+  const OPTS: readonly unknown[] = [undefined, {}, { nowMs: NOW }, { nowMs: NOW, window: 'today' }, { nowMs: NOW, window: 'yesterday' }, { nowMs: NOW, window: 'both' },
+    { nowMs: NOW, window: 'nope' }, { nowMs: NOW, window: 7 }, { nowMs: 0 }, { nowMs: NaN }, { nowMs: '5' }, { nowMs: LATE, window: 'yesterday' }];
+  agree('prefillFromLogs', m.prefillFromLogs as AnyFn, l.prefillFromLogs as AnyFn,
+    product(ENTRIES, LOGS, [logModel.latestVersion, undefined, null, () => null, () => ({ items: [{ clientName: 'A', id: 'p1', qty: 9 }] })], OPTS));
 });
 
 describe('confirm-flow: odd inputs', () => {

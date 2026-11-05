@@ -171,3 +171,13 @@ describe('Confirm, Edit and Reset', () => {
     expect(declaration(rule(resultCss, '.copy'), 'min-height')).toBe('var(--hit)');
   });
 });
+
+describe('the doors at the top of the work view on a phone', () => {
+  const text = withoutComments(sectionCss);
+  it('share one row of equal columns below the tablet rail (700px), not three stacked rows', () => {
+    expect(text).toMatch(/@media \(max-width: 699\.98px\)\s*\{\s*\.top\s*\{[^}]*grid-auto-flow: column;[^}]*grid-auto-columns: minmax\(0, 1fr\);/);
+  });
+  it('fall back to two columns on the narrowest phones, where a third is too narrow for «Impostazioni»', () => {
+    expect(text).toMatch(/@media \(max-width: 339\.98px\)\s*\{\s*\.top\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
+  });
+});

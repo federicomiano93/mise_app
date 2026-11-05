@@ -205,6 +205,17 @@ describe('the logs', () => {
     expect(store.getSnapshot().logsLoaded).toBe(true);
   });
 
+  test('the local copy and the browser database are not «from the server»; the server\'s answer is', () => {
+    const { store, source } = setup({ logs: [old] }, { [LOGS_KEY]: JSON.stringify([old]) });
+    source.hold();
+    store.start();
+    expect(store.getSnapshot().logsFromServer).toBe(false);
+    source.push({ fromServer: false });
+    expect(store.getSnapshot().logsFromServer).toBe(false);
+    source.push({ fromServer: true });
+    expect(store.getSnapshot().logsFromServer).toBe(true);
+  });
+
   test('a dead logs stream keeps the local copy as the best guess, and is said', () => {
     const { store, source, messages } = setup({}, { [LOGS_KEY]: JSON.stringify([old]) });
     source.refuse.logs = true;

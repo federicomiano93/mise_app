@@ -10,7 +10,8 @@
 // editor while dirty, in Settings while dirty, and while a save is in the air (foodcost/ProductForm.tsx,
 // FoodcostSettings.tsx, FoodcostContext.tsx). The Calculator holds it while a confirmed dough has not been
 // answered by the database (calculator/CalculatorContext.tsx, BusyWhileUnsent), and its Settings editors hold it while dirty
-// (calculator/SettingsEditor.tsx). Each new editor adds itself here.
+// (calculator/SettingsEditor.tsx), and so does the market order form while quantities were changed by hand
+// (calculator/OrderForm.tsx). Each new editor adds itself here.
 
 const holders = new Set<symbol>();
 

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CALCULATOR_PATH, SETTINGS_PATH, clientPath, clientsPath, divisorPath, divisorRecipePath, extraPath, inRecipesEditor, logSettingsPath,
-  LOG_PATH, logEditPath, logHistoryPath, logVersionPath, logViewPath, newClientPath, newLogPath, newRecipePath, parseCalculatorPath, recipePath, recipeSettingsPath, recipesPath, resolveCalculatorPath,
+  LOG_PATH, inWhatsappItem, logEditPath, newWhatsappDirectPath, newWhatsappListPath, whatsappDirectAddPath, whatsappDirectPath, whatsappEntryAddPath, whatsappEntryPath, whatsappListAddPath, whatsappListPath, whatsappPath, logHistoryPath, logVersionPath, logViewPath, newClientPath, newLogPath, newRecipePath, parseCalculatorPath, recipePath, recipeSettingsPath, recipesPath, resolveCalculatorPath,
 } from './calculatorPath';
 
 describe('parseCalculatorPath', () => {
@@ -157,6 +157,73 @@ describe('resolveCalculatorPath for Settings', () => {
   it('sends any other address under Settings to the hub', () => {
     expect(resolveCalculatorPath('/settings/nonsense', visible)).toEqual({ redirect: '/calculator/settings' });
     expect(resolveCalculatorPath('/settings/extra/more', [])).toEqual({ redirect: '/calculator/settings' });
+  });
+});
+
+describe('the WhatsApp addresses', () => {
+  it.each([
+    ['/settings/whatsapp', { kind: 'top' }],
+    ['/settings/whatsapp/', { kind: 'top' }],
+    ['/settings/whatsapp/list/new', { kind: 'new', group: 'list' }],
+    ['/settings/whatsapp/direct/new', { kind: 'new', group: 'direct' }],
+    ['/settings/whatsapp/list/wl-1', { kind: 'list', id: 'wl-1' }],
+    ['/settings/whatsapp/list/wl-1/add', { kind: 'listAdd', id: 'wl-1' }],
+    ['/settings/whatsapp/list/wl-1/client/roma', { kind: 'entry', id: 'wl-1', clientId: 'roma' }],
+    ['/settings/whatsapp/list/wl-1/client/roma/add', { kind: 'entryAdd', id: 'wl-1', clientId: 'roma' }],
+    ['/settings/whatsapp/list/wl-1/client/add', { kind: 'entry', id: 'wl-1', clientId: 'add' }],
+    ['/settings/whatsapp/direct/wc-1', { kind: 'direct', id: 'wc-1' }],
+    ['/settings/whatsapp/direct/wc-1/add', { kind: 'directAdd', id: 'wc-1' }],
+    ['/settings/whatsapp/list/a%2Fb%20c', { kind: 'list', id: 'a/b c' }],
+  ])('%s is a WhatsApp screen', (rest, target) => {
+    expect(parseCalculatorPath(rest)).toEqual({ kind: 'settings', view: { kind: 'whatsapp', target } });
+  });
+
+  it.each([
+    '/settings/whatsapp/nonsense', '/settings/whatsapp/list', '/settings/whatsapp/direct', '/settings/whatsapp/list/new/add',
+    '/settings/whatsapp/list/wl-1/x', '/settings/whatsapp/list/wl-1/add/x', '/settings/whatsapp/list/wl-1/client',
+    '/settings/whatsapp/list/wl-1/client/roma/x', '/settings/whatsapp/list/wl-1/client/roma/add/x',
+    '/settings/whatsapp/direct/wc-1/client/roma', '/settings/whatsapp/direct/new/x', '/settings/whatsapp/list/%',
+    '/settings/whatsapp/list/wl-1/client/%',
+  ])('%s is an unknown address: it goes back to Settings', rest => {
+    expect(parseCalculatorPath(rest)).toEqual({ kind: 'settings', view: { kind: 'unknown' } });
+    expect(resolveCalculatorPath(rest, ['focaccia'])).toEqual({ redirect: SETTINGS_PATH });
+  });
+
+  it('draws every WhatsApp address whatever the tabs are', () => {
+    expect(resolveCalculatorPath('/settings/whatsapp/list/new', [])).toEqual({
+      settings: { kind: 'whatsapp', target: { kind: 'new', group: 'list' } },
+    });
+  });
+
+  it('writes every address percent-encoded, and parse reads it back', () => {
+    for (const id of ['wl-1', 'a/b c', '100%', 'é']) {
+      expect(parseCalculatorPath(whatsappListPath(id).slice(CALCULATOR_PATH.length)))
+        .toEqual({ kind: 'settings', view: { kind: 'whatsapp', target: { kind: 'list', id } } });
+      expect(parseCalculatorPath(whatsappListAddPath(id).slice(CALCULATOR_PATH.length)))
+        .toEqual({ kind: 'settings', view: { kind: 'whatsapp', target: { kind: 'listAdd', id } } });
+      expect(parseCalculatorPath(whatsappEntryPath(id, id).slice(CALCULATOR_PATH.length)))
+        .toEqual({ kind: 'settings', view: { kind: 'whatsapp', target: { kind: 'entry', id, clientId: id } } });
+      expect(parseCalculatorPath(whatsappEntryAddPath(id, 'x').slice(CALCULATOR_PATH.length)))
+        .toEqual({ kind: 'settings', view: { kind: 'whatsapp', target: { kind: 'entryAdd', id, clientId: 'x' } } });
+      expect(parseCalculatorPath(whatsappDirectPath(id).slice(CALCULATOR_PATH.length)))
+        .toEqual({ kind: 'settings', view: { kind: 'whatsapp', target: { kind: 'direct', id } } });
+      expect(parseCalculatorPath(whatsappDirectAddPath(id).slice(CALCULATOR_PATH.length)))
+        .toEqual({ kind: 'settings', view: { kind: 'whatsapp', target: { kind: 'directAdd', id } } });
+    }
+    expect([whatsappPath, newWhatsappListPath, newWhatsappDirectPath]).toEqual([
+      '/calculator/settings/whatsapp', '/calculator/settings/whatsapp/list/new', '/calculator/settings/whatsapp/direct/new',
+    ]);
+  });
+
+  it('knows which addresses belong to ONE item: its own screens, never the top or another item', () => {
+    expect(inWhatsappItem(whatsappListPath('wl-1'), 'list', 'wl-1')).toBe(true);
+    expect(inWhatsappItem(whatsappListAddPath('wl-1'), 'list', 'wl-1')).toBe(true);
+    expect(inWhatsappItem(whatsappEntryAddPath('wl-1', 'roma'), 'list', 'wl-1')).toBe(true);
+    expect(inWhatsappItem(whatsappDirectAddPath('wc-1'), 'direct', 'wc-1')).toBe(true);
+    expect(inWhatsappItem(whatsappPath, 'list', 'wl-1')).toBe(false);
+    expect(inWhatsappItem(whatsappListPath('wl-10'), 'list', 'wl-1')).toBe(false);
+    expect(inWhatsappItem(whatsappListPath('wc-1'), 'direct', 'wc-1')).toBe(false);
+    expect(inWhatsappItem('/calculator/settings', 'list', 'wl-1')).toBe(false);
   });
 });
 

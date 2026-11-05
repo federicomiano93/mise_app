@@ -11,6 +11,7 @@ import { LogSettings } from './LogSettings';
 import { RecipesEditor } from './RecipesEditor';
 import { SettingsPage } from './SettingsPage';
 import { Empty } from './SettingsParts';
+import { WhatsappEditor } from './WhatsappEditor';
 
 // The screen of Settings an address names (calculatorPath.ts).
 export function SettingsScreens({ view }: { view: DrawnSettingsView }) {
@@ -21,6 +22,8 @@ export function SettingsScreens({ view }: { view: DrawnSettingsView }) {
       return <SettingsGate><ClientsEditor target={view.target} /></SettingsGate>;
     case 'recipes':
       return <SettingsGate><RecipesEditor target={view.target} /></SettingsGate>;
+    case 'whatsapp':
+      return <SettingsGate><WhatsappEditor target={view.target} /></SettingsGate>;
     case 'extra':
       return <SettingsGate><ExtraSettings /></SettingsGate>;
     case 'log':

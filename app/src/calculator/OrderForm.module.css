@@ -1,0 +1,147 @@
+/* The order form of a market order, a modal dialog. A phone: a sheet the full width, sitting on the bottom edge, never
+   taller than the screen. From 1000px: a card in the middle, wider. Inside, the title and the two buttons stay in
+   view and the sections scroll between them.
+
+   ⚠️ THE CHAIN FROM THE CARD DOWN TO THE SCROLLING BODY IS FLEX WITH min-height: 0 at every level: without it the body
+   grows with its content and pushes the footer off the screen instead of scrolling. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  background: var(--scrim);
+}
+
+.modal {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: calc(100dvh - var(--s6));
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+  background: var(--surface);
+  box-shadow: var(--shadow-3);
+}
+
+.dialog {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* The dialog itself takes the focus when it opens; it is a container, not a control. */
+.dialog:focus-visible {
+  outline: none;
+}
+
+.header,
+.footer {
+  flex: none;
+  padding: var(--s4) var(--s6);
+}
+
+.header {
+  border-bottom: 1px solid var(--line);
+}
+
+.title {
+  font-size: var(--fs-xl);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s4);
+  min-height: 0;
+  padding: var(--s4) var(--s6);
+  overflow-y: auto;
+}
+
+/* The note and the way to undo it, side by side: «Clear all» empties exactly what the note has just explained. It is
+   OUT of the footer so Cancel and Send stay a plain two-way choice. */
+.bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.notes {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+/* A caution, in the warning colours the rest of the app uses for one. */
+.stale {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.client {
+  font-size: var(--fs-md);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: var(--hit-lg);
+  border-bottom: 1px solid var(--line);
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+@media (min-width: 1000px) {
+  .overlay {
+    align-items: center;
+    justify-content: center;
+    padding: var(--s6);
+  }
+
+  .modal {
+    max-width: 640px;
+    max-height: calc(100dvh - var(--s6) * 2);
+    border-radius: var(--r-lg);
+  }
+}
