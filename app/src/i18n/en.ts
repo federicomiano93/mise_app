@@ -2491,7 +2491,7 @@ export const en = {
   'ord.settings.listsTitle': 'Order lists',
   'ord.settings.listsNote': 'Whoever writes an order can send it to you inside the app instead of on WhatsApp.',
   'ord.settings.listsSwitch': 'Use order lists',
-  'ord.settings.listsOn': 'On: the button is in the green bar.',
+  'ord.settings.listsOn': 'On: the “Order lists” button is at the top of Orders.',
   'ord.settings.listsOff': 'Off: no button, and nobody can send one. Lists already sent stay.',
   'ord.settings.listsNeedRoad': 'Right now staff can only send an order as a list. Turn on another way under “How orders may be sent” first.',
   'ord.settings.orderScreenTitle': 'The order screen',

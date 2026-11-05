@@ -2294,7 +2294,7 @@ export const it: Messages = {
   'ord.settings.listsTitle': 'Liste d’ordine',
   'ord.settings.listsNote': 'Chi scrive un ordine può mandarlo a te dentro l’app invece che su WhatsApp.',
   'ord.settings.listsSwitch': 'Usa le liste d’ordine',
-  'ord.settings.listsOn': 'Accese: il pulsante è nella fascia verde.',
+  'ord.settings.listsOn': 'Accese: il pulsante «Liste d’ordine» è in cima a Ordini.',
   'ord.settings.listsOff': 'Spente: niente pulsante, e nessuno può mandarne. Quelle già mandate restano.',
   'ord.settings.listsNeedRoad': 'Ora i dipendenti possono mandare un ordine solo come lista. Prima accendi un altro modo in «Come si possono mandare gli ordini».',
   'ord.settings.orderScreenTitle': 'La schermata dell’ordine',

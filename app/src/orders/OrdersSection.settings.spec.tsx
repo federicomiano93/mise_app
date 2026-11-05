@@ -98,7 +98,7 @@ describe('the switches', () => {
 
   it('turns order lists off and on, the sub line following the data', async () => {
     const view = await opened();
-    expect(screen.getByText('On: the button is in the green bar.')).toBeInTheDocument();
+    expect(screen.getByText('On: the “Order lists” button is at the top of Orders.')).toBeInTheDocument();
     await view.user.click(screen.getByRole('switch', { name: LISTS }));
     await waitFor(() => { expect(writes(view.source)).toEqual([{ orderLists: false }]); });
     expect(await screen.findByText(/^Off: no button/)).toBeInTheDocument();
