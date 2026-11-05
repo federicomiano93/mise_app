@@ -680,7 +680,8 @@ describe('the goods-arrived switch in the settings', () => {
     const toggle = await screen.findByRole('switch', { name: 'Check deliveries' }, LOAD);
     expect(toggle).toBeDisabled();
     expect(toggle).toHaveAccessibleDescription(/Only an owner or a manager can change this\./);
-    expect(screen.getByText('Only an owner or a manager can change this.')).toBeInTheDocument();
+    // The Stock box and the days of History say it too.
+    expect(screen.getAllByText('Only an owner or a manager can change this.')).toHaveLength(3);
     await view.user.click(toggle);
     expect(source.deliveryWrites).toEqual([]);
   });

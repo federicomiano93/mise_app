@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, LISTS_PATH, REORDER_PATH, requestPath, PLACE_ALL_CONFIRM_PATH, PLACE_ALL_PATH, SEND_PATH, SETTINGS_PATH, historyDayPath, historyEditPath, incomingMissingPath, ordersScreenName, parseOrdersPath, supplierConfirmPath,
+  CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, LISTS_PATH, REORDER_PATH, requestPath, PLACE_ALL_CONFIRM_PATH, PLACE_ALL_PATH, SEND_PATH, SETTINGS_PATH, SUPPLIER_ORDER_PATH, historyDayPath, historyEditPath, incomingMissingPath, ordersScreenName, parseOrdersPath, supplierConfirmPath,
 } from './ordersPath';
 
 describe('parseOrdersPath', () => {
@@ -87,6 +87,7 @@ describe('ordersScreenName', () => {
 describe('the settings and History addresses (slice 3f-4)', () => {
   it('reads each of them', () => {
     expect(parseOrdersPath('/settings')).toEqual({ kind: 'settings' });
+    expect(parseOrdersPath('/settings/supplier-order')).toEqual({ kind: 'supplier-order' });
     expect(parseOrdersPath('/history')).toEqual({ kind: 'history' });
     expect(parseOrdersPath('/history/day/2026-10-27')).toEqual({ kind: 'history-day', date: '2026-10-27' });
     expect(parseOrdersPath('/history/2026-10-27_mill')).toEqual({ kind: 'history-edit', id: '2026-10-27_mill' });
@@ -101,7 +102,7 @@ describe('the settings and History addresses (slice 3f-4)', () => {
 
   it('does not take «day» for a record id, and sends the rest back to the list', () => {
     for (const rest of [
-      '/history/day', '/history/day/', '/history/day/2026-10-27/x', '/history/x/y', '/history/%E0%A4%A', '/settings/x', '/history/day/%E0%A4%A',
+      '/history/day', '/history/day/', '/history/day/2026-10-27/x', '/history/x/y', '/history/%E0%A4%A', '/settings/x', '/settings/supplier-order/x', '/supplier-order', '/history/day/%E0%A4%A',
     ]) {
       expect(parseOrdersPath(rest)).toEqual({ kind: 'unknown' });
     }
@@ -109,12 +110,14 @@ describe('the settings and History addresses (slice 3f-4)', () => {
 
   it('builds the addresses it reads', () => {
     expect(parseOrdersPath(SETTINGS_PATH.slice('/orders'.length))).toEqual({ kind: 'settings' });
+    expect(parseOrdersPath(SUPPLIER_ORDER_PATH.slice('/orders'.length))).toEqual({ kind: 'supplier-order' });
     expect(parseOrdersPath(HISTORY_PATH.slice('/orders'.length))).toEqual({ kind: 'history' });
     expect(parseOrdersPath(historyDayPath('2026-10-27').slice('/orders'.length))).toEqual({ kind: 'history-day', date: '2026-10-27' });
   });
 
   it('names each as a screen', () => {
     expect(ordersScreenName('/settings')).toBe('orders-settings');
+    expect(ordersScreenName('/settings/supplier-order')).toBe('orders-settings-supplier-order');
     expect(ordersScreenName('/history')).toBe('orders-history');
     expect(ordersScreenName('/history/day/2026-10-27')).toBe('orders-history-day');
     expect(ordersScreenName('/history/2026-W28')).toBe('orders-history-edit');
