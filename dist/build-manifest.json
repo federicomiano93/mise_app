@@ -138,8 +138,8 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "f64c7683fca38693",
-      "mapSha": "168a14a751db2e5d",
+      "sha": "e48cbd7be880239a",
+      "mapSha": "0c1082598bc43bb3",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -169,7 +169,7 @@
         "js/catalogue/label-print.js": "511e744b633e96aa",
         "js/catalogue/label-template-model.js": "46492628d8e6db54",
         "js/catalogue/label-view.js": "783190df469470b2",
-        "js/catalogue/label-zpl.js": "8ff0e4e8128e5e6e",
+        "js/catalogue/label-zpl.js": "524b7bdcc6f16775",
         "js/catalogue/photo-capture.js": "9e90c39c4863a6fc",
         "js/catalogue/photo-model.js": "89876cfae4a91de4",
         "js/catalogue/print-transports.js": "2ffa9be4dbda2b30",
@@ -236,7 +236,7 @@
         "js/pick-suggest.js": "11a4974ce3429a4b",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
         "js/price-model.js": "e6aa115d5280fb75",
-        "js/print-queue-model.js": "220daf72bada9780",
+        "js/print-queue-model.js": "f441150246bbec44",
         "js/push-model.js": "13310d4d79159651",
         "js/push.js": "36bf6a273773a9a1",
         "js/recipe-export.js": "6d66a5d106e3bd9c",

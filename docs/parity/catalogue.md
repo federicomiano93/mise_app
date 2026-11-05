@@ -1672,3 +1672,52 @@ the category (its merge saves keep both fields).
 8. **The Allergen sheet keeps listing archived recipes** (health first: a customer may ask about something still on the shelf).
 
 Not in this slice: renaming a category, a category on the recipe page itself, filtering by tapping a heading.
+
+## Image labels 1b — the «with logo» label printed through the shop computer (26 Oct 2026) — NEW IN MISE 2, differences from the current app
+
+Step 1b of the image labels (memory `piano-etichette-immagine`; 1a = PR #394 engine + PR #395 screen). The «with logo» label
+(80 × 60 mm, drawn as an image, `^GFA` Z64) goes through the SAME queue (`print-jobs`) and the SAME program
+(`print-agent/agent.mjs`) as the standard Zebra label, so one tap on the tablet, a phone or the home PC prints it on the
+Zebra attached to the home PC. The current app has no image label, so everything here is new. **Size S–M, one PR.**
+
+**The agent's half** (`js/print-queue-model.js`, which the agent imports, and its port `shared/src/print-queue-model.ts`, kept
+in step by the cross-check spec):
+- `LABEL_COMMANDS` gains `GF`, `PO` and `PR`. Each is accepted only in the one shape the app writes: `^GFA,<n>,<n>,<n>,:Z64:<base64>:<crc>`
+  (never hex, never binary, never a stored graphic), `^PON` / `^POI`, `^PR` with digits only. Still no tilde anywhere.
+- The darkness (the owner's script starts with `~SD28`) belongs to the computer the printer hangs off, NEVER to a job: a new
+  optional `printer.darkness` (0–30) in the agent's own settings file; when set, the agent sends `~SD<nn>` before EVERY job. A
+  Zebra keeps the darkness until it is switched off, so text labels printed after an image label get it too — said in the README.
+  The example settings show 28. Agent version 1.1.0; a 1.0.x agent refuses an image job as «not a single label».
+
+**The queue and the rules:** no new job field (the copies are the job's `copies` AND the `^PQ` inside the payload, as for the
+standard label). The payload limit stays 20 000 characters: measured on the golden corpus, the densest printable label is far under it
+(the spec pins the margin). Rules unchanged; new rules cases: an image job is allowed, a job of exactly 20 000 characters is allowed,
+a job carrying the darkness `~SD28` is denied, a `darkness` key is denied.
+
+**The screen** (`ImageLabelBody.tsx`; the decision is `shared/src/image-label-print.ts`, new, not paired):
+1. **Which road «Stampa» takes is decided by the shop computer's heartbeat, not by the venue's printer setting** (that card is
+   hidden for the logo model, and the image label is a Zebra label by construction). A computer answering with an agent ≥ 1.1.0 →
+   «Stampa» queues the job, with «Stampante pronta» above the button. Computers that reported once but none answering now → «il
+   computer del negozio non risponde» and the button becomes «Finestra di stampa» (this device's print dialog, as in 1a). A
+   computer answering with an older agent → «il programma di stampa va aggiornato», same fallback. No computer ever reported → as
+   in 1a: «Stampa» opens the print dialog and no line is shown. The heartbeat is judged against a clock that moves every 30 s and
+   again at the tap, exactly like the standard label.
+2. **The Copies box now counts for the queued job too**, not only for the printer code; its note says so when the road is the
+   shop computer.
+3. The tap says only «sent», never «printed»; a second tap while one is on its way does nothing; a refused write says so and keeps
+   the screen. Copy ZPL stays as the fallback, unchanged.
+4. Before queueing, the app checks the job with the agent's own `isSingleLabel`: a job the agent would refuse is never queued.
+
+**As built, after the code review (26 Oct 2026):**
+
+- **One old agent answering is enough for «va aggiornato».** Every answering agent polls the same queue, so an old one would take
+  about half the jobs and refuse them in silence. «Stampante pronta» needs EVERY answering computer on 1.1.0 or later; a computer
+  that stopped answering takes nothing and does not count.
+- **The standard label now says ^PON (upright)** — a change to the CURRENT app's printer code too. A Zebra keeps the last
+  orientation it was given, and the image label prints turned round (^POI), so a standard label after it would have come out
+  upside down. The print speed (^PR2) still carries over to the next standard label: slower, never wrong, so it was left.
+- **The agent's filter is stricter:** copies split across line breaks (^PQ9⏎9) are refused, and a job carries at most one picture,
+  of a size a label can be (rows of at most 128 bytes, at most 2000 rows, the counts agreeing).
+- While a send hangs only the queue's button waits; once the heartbeat goes stale the print dialog is usable again.
+- The sentence when the computer does not answer says what happens instead: «…non risponde, quindi si stampa dalla finestra di
+  stampa di questo dispositivo».

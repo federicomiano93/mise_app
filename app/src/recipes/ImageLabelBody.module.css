@@ -125,6 +125,14 @@
   line-height: 1.45;
 }
 
+/* «Printer ready»: a quiet line, not a warning. The offline and outdated sentences use the label screen's own look. */
+.printerReady {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
 /* The screen's polite live region is always in the page, even with nothing in it. Empty, it must not add a gap of its
    own to the body's column: the negative margin takes the body's gap (--s4) back. */
 .live:empty {

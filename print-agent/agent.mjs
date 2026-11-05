@@ -41,7 +41,9 @@ import {
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = join(HERE, '..');
 
-const VERSION = '1.0.1';     // 1.0.1: labels sent as UTF-8 (14 Oct 2026)
+// 1.0.1: labels sent as UTF-8 (14 Oct 2026). 1.1.0: the image label (^GF Z64) and the darkness setting (26 Oct
+// 2026) — Mise 2 offers the queue for an image label only to an agent at 1.1.0 or later (shared/src/image-label-print.ts).
+const VERSION = '1.1.0';
 const POLL_IDLE_MS = 15000;
 const POLL_BUSY_MS = 3000;
 const BUSY_FOR_MS = 60000;      // stay quick for a minute after seeing work
@@ -79,6 +81,7 @@ function loadConfig() {
   }
   if (mode === 'share' && !cfg.printer.target) die('printer.target is missing — e.g. "\\\\\\\\THIS-PC\\\\ZEBRA".');
   if (mode === 'tcp' && !cfg.printer.host) die('printer.host is missing — the printer\'s address on the network.');
+  if (darknessOf(cfg.printer) === undefined) die('printer.darkness must be a whole number from 0 to 30, or left out.');
   return cfg;
 }
 
@@ -336,6 +339,28 @@ async function beat(app, cfg, session, agentId, printerName) {
 // reads is what the printer reads.
 const labelBytes = (text) => Buffer.from(String(text), 'utf8');
 
+// ⚠️⚠️ THE DARKNESS COMES FROM THIS COMPUTER'S SETTINGS, NEVER FROM A JOB. The owner's own
+// image-label script starts with ~SD28, but a tilde is a CONTROL command and the queue
+// refuses every one (the rules and isSingleLabel): anybody who can queue a label could
+// otherwise send any control command. So the setting lives here, in `printer.darkness`
+// (0–30, Zebra's scale), and is sent in front of EVERY job. A Zebra keeps the darkness
+// until it is switched off, so it is the printer's setting, not one label's: the text
+// labels printed after an image label come out at the same darkness — said in the README.
+// Left out, nothing is sent and the printer keeps its own.
+//
+// null = not set; undefined = set to something that is not a darkness (loadConfig stops).
+function darknessOf(printer) {
+  const value = printer ? printer.darkness : undefined;
+  if (value === undefined || value === null) return null;
+  return Number.isInteger(value) && value >= 0 && value <= 30 ? value : undefined;
+}
+
+// What goes to the printer for one job: the darkness first, when this computer sets one.
+function jobText(printer, payload) {
+  const darkness = darknessOf(printer);
+  return typeof darkness === 'number' ? `~SD${String(darkness).padStart(2, '0')}\n${payload}` : String(payload);
+}
+
 // A printer on this computer, shared so raw bytes can be written to it.
 //
 // ⚠️⚠️ RAW, WHICH IS THE WHOLE POINT — a Windows driver would RASTERISE the ZPL and
@@ -381,7 +406,8 @@ function printToTcp(host, port, text) {
   });
 }
 
-async function printJob(cfg, text) {
+async function printJob(cfg, payload) {
+  const text = jobText(cfg.printer, payload);
   if (cfg.printer.mode === 'tcp') return printToTcp(cfg.printer.host, cfg.printer.port, text);
   return printToShare(cfg.printer.target, text);
 }
@@ -410,6 +436,7 @@ async function main() {
   console.log(`  data:    ${EMULATOR ? `LOCAL EMULATOR ${EMULATOR}` : 'PRODUCTION'}`);
   console.log(`  venue:   ${cfg.locationId}`);
   console.log(`  printer: ${printerName(cfg)}`);
+  console.log(`  darkness: ${darknessOf(cfg.printer) ?? 'the printer\'s own'}`);
   console.log(`  agent:   ${agentId}`);
   console.log('  waiting for labels — leave this window open.\n');
 
@@ -469,7 +496,7 @@ async function main() {
 }
 
 // Exported for the tests; nothing else imports this file.
-export { encode, decode, toDoc, fromDoc, readAppConfig, printerName, labelBytes, printToTcp };
+export { encode, decode, toDoc, fromDoc, readAppConfig, printerName, labelBytes, printToTcp, darknessOf, jobText, VERSION };
 
 if (process.argv[1] && process.argv[1].endsWith('agent.mjs')) {
   main().catch((err) => die(err.stack || err.message));
