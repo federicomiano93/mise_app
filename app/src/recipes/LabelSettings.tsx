@@ -1,16 +1,20 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ReactNode, Ref } from 'react';
 import {
   DATE_KINDS, DPI_CHOICES, LABEL_SIZES, PRINTER_LANGUAGES, normalizeLabelProfile,
 } from '@mise/shared/label-template-model';
 import type { DateKind, PrinterLanguage } from '@mise/shared/label-template-model';
 import type { MessageKey } from '../i18n/en';
+import { useDataServices } from '../data/DataContext';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
+import { useSession, useSessionStore } from '../session/SessionContext';
 import { FormBar } from '../ui/FormBar';
 import { SettingSwitch } from '../ui/SettingSwitch';
 import { useStatusMessage } from '../ui/StatusMessage';
+import { useConfirm } from '../ui/useConfirm';
 import { useRecipes, useRecipesStore } from './RecipesContext';
+import { recipePhotoOn } from './photoGate';
 import { SegmentedChoice } from './SegmentedChoice';
 import styles from './LabelSettings.module.css';
 
@@ -113,6 +117,8 @@ function Controls() {
 
   return (
     <div className={styles.body}>
+      <PhotoCard />
+
       <Card title={t('label.settings.title')}>
         <SegmentedChoice
           label={t('label.settings.size')}
@@ -247,19 +253,107 @@ function Card({ title, intro, children }: { title: string; intro?: string; child
   );
 }
 
-function SwitchRow({ title, sub, selected, onChange }: {
-  title: string; sub?: string; selected: boolean; onChange: (selected: boolean) => void;
+// The photograph reader's switch (the first card, as in the current app): whether this venue may read a recipe from a
+// photograph. Shown for whoever runs the place only (the section decides who sees Settings at all).
+//
+// ⚠️ IT ASKS, AND IT SAYS WHAT IT COSTS. This is the only control in the app that starts something billable, so switching it
+// on is a decision somebody makes on purpose rather than a tap they can make by accident. The switch shows what the
+// venue's document says (ONLY a literal true counts, photoGate.ts) and moves when the server has done it: the tap asks,
+// the Cloud Function writes, the venue is read again, and only then does it show the new state. A refusal leaves it as it was.
+function PhotoCard() {
+  const { t } = useT();
+  const say = useStatusMessage();
+  const { location, locationId } = useSession();
+  const sessionStore = useSessionStore();
+  const services = useDataServices();
+  const [confirm, confirmDialog] = useConfirm();
+  const source = useMemo(() => services.photo(locationId as string), [services, locationId]);
+  const headId = useId();
+
+  const fromSession = recipePhotoOn(location);
+  // ⚠️ THE ANSWER IS HELD HERE UNTIL THE SESSION SHOWS IT (the current app's `overriddenPhotoOn`): the venue's document is
+  // read when the venue opens and does not follow a write made afterwards, so the session is read again, and if that read
+  // could not reach the server the switch still tells the truth about what was just done.
+  const [held, setHeld] = useState<boolean | null>(null);
+  useEffect(() => { if (held !== null && held === fromSession) setHeld(null); }, [held, fromSession]);
+  const on = held ?? fromSession;
+
+  const [busy, setBusy] = useState(false);
+  // In a ref as well: a second tap while the question is open or the call is in the air must be ignored at once.
+  const working = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  async function change(next: boolean): Promise<void> {
+    if (working.current) return;
+    working.current = true;
+    try {
+      const ok = await confirm({
+        title: t(next ? 'cat.photo.turnOnTitle' : 'cat.photo.turnOffTitle'),
+        message: t(next ? 'cat.photo.turnOnBody' : 'cat.photo.turnOffBody'),
+        okLabel: t(next ? 'cat.photo.turnOn' : 'cat.photo.turnOff'),
+        cancelLabel: t('common.cancel'),
+      });
+      if (!ok || !mounted.current) return;
+      setBusy(true);
+      // ⚠️ HELD BY THE CALL, NOT BY THE SCREEN: a reload the app starts by itself waits for the answer even if Settings is left.
+      const release = markBusy();
+      try {
+        await source.setRecipePhoto(next);
+        await sessionStore.refreshLocation();
+        if (mounted.current) setHeld(next);
+        say(t(next ? 'cat.photo.nowOn' : 'cat.photo.nowOff'));
+      } catch (error) {
+        // ⚠️ A FAILED CALL MAY STILL HAVE CHANGED THE SWITCH: a phone that stopped waiting (a timeout, the signal lost on the
+        // way back) does not stop the server. So the venue is read again from the server in every case, and the switch shows
+        // what the server holds — never «off» while staff can already spend money on reads.
+        // ⚠️ IN THE PERSON'S LANGUAGE, NOT THE SERVER'S: the function's sentences are English and the SDK's are codes
+        // («deadline-exceeded»); the current app showed them as they came.
+        await sessionStore.refreshLocation();
+        const code = String((error as { code?: unknown } | null)?.code ?? '');
+        say(t(/permission-denied$/.test(code) ? 'cat.photo.switchNotAllowed' : 'cat.photo.switchFailed'));
+      } finally {
+        release();
+        if (mounted.current) setBusy(false);
+      }
+    } finally {
+      working.current = false;
+    }
+  }
+
+  return (
+    <section className={styles.card} aria-labelledby={headId} aria-busy={busy ? true : undefined}>
+      <div className={styles.head}>
+        <h3 id={headId} className={styles.headTitle}>{t('settings.cat.photo')}</h3>
+      </div>
+      <SwitchRow
+        title={t('cat.photo.setting')}
+        sub={t('cat.photo.settingNote')}
+        selected={on}
+        onChange={next => { void change(next); }}
+        busy={busy}
+      />
+      {confirmDialog}
+    </section>
+  );
+}
+
+function SwitchRow({ title, sub, selected, onChange, busy = false }: {
+  title: string; sub?: string; selected: boolean; onChange: (selected: boolean) => void; busy?: boolean;
 }) {
   const ids = useId();
   return (
-    <div className={styles.row}>
+    <div className={styles.row} aria-busy={busy ? true : undefined}>
       <span className={styles.text}>
         <span id={`${ids}-title`} className={styles.title}>{title}</span>
         {sub === undefined ? null : <span id={`${ids}-sub`} className={styles.sub}>{sub}</span>}
       </span>
       <SettingSwitch
         selected={selected}
-        onChange={onChange}
+        onChange={next => { if (!busy) onChange(next); }}
         labelledBy={`${ids}-title`}
         describedBy={sub === undefined ? undefined : `${ids}-sub`}
       />

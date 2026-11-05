@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALLERGENS_PATH, NEW_PATH, RECIPES_PATH, SETTINGS_PATH, editPath, labelPath, mixPath, parseRecipesPath, recipePath, resolveRecipesPath, stepsPath } from './recipesPath';
+import { ALLERGENS_PATH, NEW_PATH, PHOTO_PATH, RECIPES_PATH, SETTINGS_PATH, editPath, labelPath, mixPath, parseRecipesPath, recipePath, resolveRecipesPath, stepsPath } from './recipesPath';
 
 describe('the addresses of the Recipe catalogue', () => {
   it('has the list at /recipes and a recipe at /recipes/<id>', () => {
@@ -56,8 +56,12 @@ describe('the addresses of the Recipe catalogue', () => {
     expect(parseRecipesPath('/abc/Label')).toEqual({ kind: 'unknown' });
   });
 
-  it('keeps «photo» for a later step, never reading it as a recipe', () => {
-    expect(parseRecipesPath('/photo')).toEqual({ kind: 'unknown' });
+  it('reads «photo» as the photo screen, never as a recipe', () => {
+    expect(PHOTO_PATH).toBe('/recipes/photo');
+    expect(parseRecipesPath('/photo')).toEqual({ kind: 'photo' });
+    expect(parseRecipesPath('/photo/')).toEqual({ kind: 'photo' });
+    expect(parseRecipesPath('/photo/x')).toEqual({ kind: 'unknown' });
+    expect(resolveRecipesPath('/photo')).toEqual({ view: { kind: 'photo' } });
   });
 
   it('sends an unknown address back to the list, and draws a known one', () => {

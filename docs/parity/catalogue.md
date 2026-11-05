@@ -1209,6 +1209,35 @@ SAME PR.
 - **Shared ports**: `photo-model.ts` (sizes, `fitWithin`, `base64Of`, `mediaTypeOf`, `approxBytes`,
   `payloadProblem`, `errorKey`, `answerKey`) — Orders' pack-photo reuses it later.
 - **Size S.**
+- **3d-9 as built** (items 4, 61, 81, 93, 100–103 are done). Shared: `photo-model.ts` is a FULL port (paired in `parity.spec.ts`,
+  `odd-inputs.spec.ts`), `catalogue-photo-model.ts` holds the Catalogue's table of the 19 codes (`CATALOGUE_PHOTO_KEYS`) and the two
+  lookups, named `photoErrorKey` / `noRecipeKey` like the original's (not paired: it also exports the table); `photoKeys.spec.ts` in the
+  app walks all 19 codes (16 sentences) against `en.ts` and `it.ts` and checks that only «offline» speaks of the connection.
+  Screens: (1) **the switch** is the first card of the label Settings (`PhotoCard` in `LabelSettings.tsx`, heading «Photos» /
+  «Foto» = `settings.cat.photo`, then the row `cat.photo.setting` + `cat.photo.settingNote`); it shows ONLY a literal
+  `recipePhoto === true` from the session, asks first with the cost sentence, calls `setRecipePhoto`, reads the venue again
+  (`refreshLocation`), holds the new value until the session shows it, and says «Reading from a photo is on/off.» through the
+  section's status message; a refusal says the server's own words unless they are empty or «internal», and the switch stays;
+  the row is `aria-busy` and ignores taps while the call is in the air, and `markBusy` is held by the call even if Settings is
+  left. (2) **«Fill this in from a photo»** is the last thing in the NEW-recipe editor, only for a venue with the reader on; with
+  something typed it asks («Start from a photo?»). The typed copy is written into the navigation state of the editor's own history
+  entry (replaced, same address) and taken off again as soon as the form has read it, so Back from the photo screen — the button or
+  the phone's gesture — brings it back once. (3) **The photo screen** is `/recipes/photo` (usage screen `recipes-photo`, the right-hand
+  pane on the split); a venue without the reader sends a typed address to the list (a replace). Photographs are shrunk in
+  `photoImage.ts`; thumbnails come from the data URL; offline says so and makes no call; the read holds `markBusy` until the call
+  settles, even if the screen is left. (4) **A read saves nothing**: the draft becomes the working copy of the new-recipe editor
+  (`workingFromDraft`: name, rows, `netWeightG` / `shelfLifeDays` only when present, no oven loss), which STARTS DIRTY. The photo
+  screen steps back onto the editor's entry (`navigate(-1)`), so the history holds ONE editor entry holding the draft; a move cannot
+  carry a state, so the draft is handed over in `photoCarry.ts` for the editor that mounts next (looked at while drawing, taken off in
+  an effect, so StrictMode cannot eat it). Opened by its address (no editor behind) the read replaces the photo screen with the
+  editor. Differences from the current app, on purpose: (a) «Read the recipe» is drawn disabled with no photo, not hidden; (b) the
+  picker is a real, focusable file input inside a button-looking label (the current app clicks a hidden one from a button); (c) an
+  answer that lands after the screen was left opens nothing (the current app opens the editor whatever the person is doing);
+  (d) a browser without `createImageBitmap` says «That photo could not be prepared» rather than blaming the format; (e) leaving the
+  photo screen while a read is in the air is not asked about: the read still settles and is dropped; (f) the editor takes the focus on
+  its title after a read (and on the photo button after Back); (g) `cat.photo.entry`, `cat.photo.on` and `cat.photo.off` are not
+  carried (unused in the current app's screens). Specs: `photoImage`, `photoCarry`, `photoKeys`, `editorModel` (draft and restore),
+  `RecipesSection.photoSwitch`, `RecipesSection.photo`, `RecipesSection.photo.strict`.
 
 ## Already ported / to port
 

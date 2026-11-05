@@ -28,6 +28,8 @@ import * as packSize from './pack-size';
 import * as orderUnit from './order-unit';
 import * as ingredientName from './ingredient-name';
 import * as market from './market';
+import * as photoModel from './photo-model';
+import * as cataloguePhotoModel from './catalogue-photo-model';
 import * as currency from './currency';
 import * as priceModel from './price-model';
 import * as orderCost from './order-cost';
@@ -80,6 +82,8 @@ import * as legacyPackSizeJs from '../../js/pack-size.js';
 import * as legacyOrderUnitJs from '../../js/order-unit.js';
 import * as legacyIngredientNameJs from '../../js/ingredient-name.js';
 import * as legacyMarketJs from '../../js/market.js';
+import * as legacyPhotoModelJs from '../../js/photo-model.js';
+import * as legacyCataloguePhotoModelJs from '../../js/catalogue/photo-model.js';
 import * as legacyCurrencyJs from '../../js/currency.js';
 import * as legacyPriceModelJs from '../../js/price-model.js';
 import * as legacyOrderCostJs from '../../js/order-cost.js';
@@ -134,6 +138,8 @@ const legacyPackSize = legacyPackSizeJs as unknown as typeof packSize;
 const legacyOrderUnit = legacyOrderUnitJs as unknown as typeof orderUnit;
 const legacyIngredientName = legacyIngredientNameJs as unknown as typeof ingredientName;
 const legacyMarket = legacyMarketJs as unknown as typeof market;
+const legacyPhotoModel = legacyPhotoModelJs as unknown as typeof photoModel;
+const legacyCataloguePhotoModel = legacyCataloguePhotoModelJs as unknown as typeof cataloguePhotoModel;
 const legacyPriceModel = legacyPriceModelJs as unknown as typeof priceModel;
 const legacyOrderCost = legacyOrderCostJs as unknown as typeof orderCost;
 const legacyInventoryModel = legacyInventoryModelJs as unknown as typeof inventoryModel;
@@ -3158,4 +3164,62 @@ describe('label-template-model: odd inputs', () => {
     ...product(LABELS.slice(0, ODD.length + 2), [undefined, {}], [undefined], ['en']),
     ...product(REAL_LABELS, RESOLVE_PROFILES, EXTRAS, [undefined, 'en', 'it', null, 'zz']),
   ]);
+});
+
+// ── photo-model ──────────────────────────────────────────────────────────────
+
+// Photographs and what a failed read looks like when nobody planned for it: sizes that are not numbers, data URLs of
+// every wrong shape, payloads either side of every cap, and errors that are not errors.
+describe('photo-model: odd inputs', () => {
+  const m = photoModel;
+  const l = legacyPhotoModel;
+
+  const SIZES: readonly unknown[] = [...ODD, 4032, 3024, 1568, 1569, 1567.5, 10000, 3, 0.4, '4032', ' 800 ', '1e3', -0, 1e21, new Number(900), [800], { valueOf: () => 900 }];
+  agree('fitWithin', m.fitWithin, l.fitWithin, [...product(SIZES, SIZES), ...product(SIZES.slice(0, 12), SIZES.slice(0, 12), [undefined, 1000, 1568, 0, -5, NaN, 100.5])]);
+
+  const URLS: readonly unknown[] = [...ODD, 'data:image/jpeg;base64,QUFB', 'data:image/png;base64,QUFB', 'data:image/jpeg;base64,', 'data:image/jpeg;base64',
+    'data:image/jpeg,QUFB', 'data:text/plain;base64,QUFB', 'data:;base64,QUFB', 'data:image/;base64,QUFB', 'DATA:image/jpeg;base64,QUFB', ' data:image/jpeg;base64,QUFB',
+    'data:image/jpeg;base64,QUFB;base64,QUFB', 'data:', 'data:image/jpeg', 'https://x/y.jpg', 'QUFB', 'data:image/webp;charset=utf-8;base64,QUFB',
+    new String('data:image/jpeg;base64,QUFB'), ['data:image/jpeg;base64,QUFB'], 5n, Symbol('url')];
+  agree('base64Of', m.base64Of, l.base64Of, product(URLS));
+  agree('mediaTypeOf', m.mediaTypeOf, l.mediaTypeOf, product(URLS));
+  agree('approxBytes', m.approxBytes, l.approxBytes, product([...URLS, 'AAAA', 'AAA', 'A', 'A'.repeat(1000), 'A'.repeat(8_388_608), new String('AAAA')]));
+
+  const img = (bytes: number): unknown => ({ mediaType: 'image/jpeg', data: 'A'.repeat(Math.ceil(bytes * 4 / 3)) });
+  const MB = 1024 * 1024;
+  const IMAGE_LISTS: readonly unknown[] = [...ODD, 'images', 42, [null], [undefined], [''], [0], [{}], [{ data: '' }], [{ data: 5 }], [{ data: null }], [img(1000)], [img(1000), img(1000)],
+    [img(2 * MB)], [img(2 * MB + 5000)], Array.from({ length: 5 }, () => img(1000)), Array.from({ length: 6 }, () => img(1000)),
+    Array.from({ length: 3 }, () => img(2 * MB)), Array.from({ length: 5 }, () => img(Math.floor(6 * MB / 4))),
+    Array.from({ length: 4 }, () => img(1.5 * MB)), [img(1000), { data: '' }], [img(1000), null],
+    Object.assign(Array.from({ length: 2 }, () => img(10)), { extra: 1 }), { length: 2, 0: img(10), 1: img(10) }, new Set([img(10)])];
+  agree('payloadProblem', m.payloadProblem, l.payloadProblem, product(IMAGE_LISTS));
+
+  const TABLES: readonly unknown[] = [{ 'signed-out': 'S', 'not-allowed': 'N', 'person-limit': 'P', offline: 'O', 'too-slow': 'T', 'read-failed': 'F', 'nothing-readable': 'R', refused: 'X', 'venue-limit': 'V' },
+    { 'read-failed': 'F' }, { 'read-failed': 'F', 'nothing-readable': 'R' }, { 'read-failed': '', offline: '' }, {}];
+  const ERRORS: readonly unknown[] = [...ODD, 'boom', 42, new Error('boom'), { code: 'functions/unauthenticated' }, { code: 'unauthenticated' }, { code: 'functions/permission-denied' },
+    { code: 'functions/resource-exhausted' }, { code: 'functions/resource-exhausted', details: { key: 'venue-limit' } }, { code: 'functions/unavailable' }, { code: 'unavailable' },
+    { code: 'functions/deadline-exceeded' }, { code: 'functions/weird' }, { code: 'functions/functions/unavailable' }, { code: 'FUNCTIONS/UNAVAILABLE' }, { code: 5 }, { code: null },
+    { details: null }, { details: 'x' }, { details: { key: 5 } }, { details: { key: null } }, { details: { key: '' } }, { details: { key: 'nonsense' } }, { details: { key: 'offline' } },
+    { details: { key: 'refused' } }, { details: { key: 'nothing-readable' } }, { details: { key: 'read-failed' } }, { details: { key: ['offline'] } },
+    { code: 'functions/unavailable', details: { key: 'refused' } }, { code: 'functions/unauthenticated', details: { key: 'nonsense' } },
+    { get code(): string { throw new Error('boom'); } }, { get details(): unknown { throw new Error('boom'); } }];
+  agree('errorKey', m.errorKey, l.errorKey, product(ERRORS, TABLES));
+
+  const REASONS: readonly unknown[] = [...ODD, 'nothing-readable', 'refused', 'truncated', 'no-tool', 'offline', 'who-knows', 'READ-FAILED', 'read-failed', new String('refused'), ['refused']];
+  agree('answerKey', m.answerKey, l.answerKey, product(REASONS, TABLES));
+});
+
+describe('catalogue-photo-model: odd inputs', () => {
+  const m = cataloguePhotoModel;
+  const l = legacyCataloguePhotoModel;
+
+  const ERRORS: readonly unknown[] = [...ODD, 'boom', new Error('boom'), { code: 'functions/unauthenticated' }, { code: 'functions/permission-denied' },
+    { code: 'functions/resource-exhausted' }, { code: 'functions/resource-exhausted', details: { key: 'venue-limit' } }, { code: 'functions/unavailable' },
+    { code: 'functions/deadline-exceeded' }, { code: 'functions/weird' }, { code: 5 }, { details: null }, { details: { key: 5 } }, { details: { key: '' } },
+    { details: { key: 'nonsense' } }, ...Object.keys(m.CATALOGUE_PHOTO_KEYS).map(key => ({ details: { key } })),
+    { get code(): string { throw new Error('boom'); } }];
+  agree('photoErrorKey', m.photoErrorKey, l.photoErrorKey, product(ERRORS));
+
+  const REASONS: readonly unknown[] = [...ODD, ...Object.keys(m.CATALOGUE_PHOTO_KEYS), 'who-knows', 'READ-FAILED', new String('refused'), ['refused']];
+  agree('noRecipeKey', m.noRecipeKey, l.noRecipeKey, product(REASONS));
 });

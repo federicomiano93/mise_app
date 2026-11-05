@@ -67,6 +67,58 @@ export function shelfLifeText(working: Working): string {
   return days === null ? '' : String(days);
 }
 
+// A recipe READ FROM A PHOTOGRAPH, as the working copy of a NEW recipe (js/catalogue/catalogue-editor.js, the `draft`
+// branch of renderEditor). Nothing is saved by a read: this is only what the editor starts from.
+//
+// ⚠️ NO OVEN LOSS HERE, AND THAT IS NOT AN OVERSIGHT. Since 13 Sep 2026 the dough is weighed raw and cooked on a product's
+// recipe line in Food cost, and the catalogue store no longer writes the loss at all — a value carried on a draft would be
+// thrown away on Save while looking kept.
+// ⚠️ NET WEIGHT AND SHELF LIFE ONLY WHEN THE READ HAS THEM: a recipe nobody has given a shelf life must stay without one,
+// because 0 days would print today's date as a use-by.
+// A draft with no rows still gets one empty row to type into.
+export function workingFromDraft(draft: unknown): Working {
+  const read = (typeof draft === 'object' && draft !== null ? draft : {}) as Record<string, unknown>;
+  const given: readonly unknown[] = Array.isArray(read.ingredients) ? read.ingredients as unknown[] : [];
+  const rows = given.length > 0 ? given : [emptyRow()];
+  const grams = normalizeWeight(read.netWeightG);
+  const days = normalizeShelfLifeDays(read.shelfLifeDays);
+  return {
+    name: typeof read.name === 'string' ? read.name : '',
+    rows: rows.map(item => {
+      const row = (typeof item === 'object' && item !== null ? item : {}) as Row;
+      return { key: nextKey(), row: { ...row, unit: unitOf(row) } };
+    }),
+    rest: { ...(grams > 0 ? { netWeightG: grams } : {}), ...(days !== null ? { shelfLifeDays: days } : {}) },
+    netWeight: null,
+    shelfLife: null,
+  };
+}
+
+// A working copy that travelled in the navigation state (the typed copy kept while the photo screen is open), made
+// trustworthy again: the state of a history entry can come back from a reload, so its shape is checked, and the rows
+// get FRESH keys (a reload restarts the counter, and two rows with one key would be one row to React). null when it is
+// not a working copy.
+export function restoreWorking(value: unknown): Working | null {
+  if (typeof value !== 'object' || value === null) return null;
+  const held = value as Record<string, unknown>;
+  if (typeof held.name !== 'string' || !Array.isArray(held.rows)) return null;
+  const rows: EditRow[] = [];
+  for (const item of held.rows as unknown[]) {
+    const row = typeof item === 'object' && item !== null ? (item as { row?: unknown }).row : undefined;
+    if (typeof row !== 'object' || row === null) return null;
+    rows.push({ key: nextKey(), row: row as Row });
+  }
+  if (rows.length === 0) rows.push(newRow());
+  const rest = typeof held.rest === 'object' && held.rest !== null ? held.rest as Record<string, unknown> : {};
+  return {
+    name: held.name,
+    rows,
+    rest,
+    netWeight: typeof held.netWeight === 'string' ? held.netWeight : null,
+    shelfLife: typeof held.shelfLife === 'string' ? held.shelfLife : null,
+  };
+}
+
 export const setName = (working: Working, name: string): Working => ({ ...working, name });
 
 export const setRowFields = (working: Working, key: number, fields: Row): Working => ({

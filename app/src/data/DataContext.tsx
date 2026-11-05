@@ -9,6 +9,8 @@ import { createFirestoreFoodcostSource } from '../foodcost/foodcostSource';
 import type { FoodcostSource } from '../foodcost/foodcostSource';
 import { createFirestorePastriesSource } from '../pastries/pastriesSource';
 import type { PastriesSource } from '../pastries/pastriesSource';
+import { createPhotoSource } from '../recipes/photoSource';
+import type { PhotoSource } from '../recipes/photoSource';
 import { createFirestoreRecipesSource } from '../recipes/recipesSource';
 import type { RecipesSource } from '../recipes/recipesSource';
 import { createFirestoreStocktakeSource } from '../stocktake/stocktakeSource';
@@ -29,12 +31,16 @@ export interface DataServices {
   clientOrders(locationId: string): ClientOrdersSource;
   // The Recipe catalogue («Ricettario»).
   recipes(locationId: string): RecipesSource;
+  // Reading a recipe from photographs and the venue's switch for it (step 3d-9): Cloud Functions, no Firestore.
+  photo(locationId: string): PhotoSource;
 }
 
 // What the data layers need from the backend besides Firestore: the account behind a client's ordering link is
-// created on a second Firebase app (session/firebaseBackend.ts `createLinkAccount`).
+// created on a second Firebase app (session/firebaseBackend.ts `createLinkAccount`), and the Cloud Functions are called
+// through `callFunction` (the emulator's on a local address, never the real, paid ones).
 export interface AuthServices {
   createLinkAccount(email: string, password: string): Promise<string>;
+  callFunction(name: string, data: unknown, timeoutMs: number): Promise<unknown>;
 }
 
 export function createDataServices(firestore: () => Promise<FirestoreKit>, auth: AuthServices): DataServices {
@@ -49,6 +55,7 @@ export function createDataServices(firestore: () => Promise<FirestoreKit>, auth:
       randomBytes: browserRandomBytes,
     }),
     recipes: locationId => createFirestoreRecipesSource(firestore, locationId),
+    photo: locationId => createPhotoSource((name, data, timeoutMs) => auth.callFunction(name, data, timeoutMs), locationId),
   };
 }
 
