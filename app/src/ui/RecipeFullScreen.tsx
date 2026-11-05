@@ -8,7 +8,8 @@ import styles from './RecipeFullScreen.module.css';
 type Props = {
   name: string;
   // Each row's label and its amount ALREADY WRITTEN («250 g», «3 pcs»): the caller knows its units.
-  rows: readonly { name: string; amount: string }[];
+  // `dividerAfter`: a line under the row (the Recipe book's dividers; the Calculator passes none, as its card draws none).
+  rows: readonly { name: string; amount: string; dividerAfter?: boolean }[];
   // The closing line («Total dough», «Total»).
   total: { name: string; amount: string };
   // The localStorage key the text size is remembered under (ui/zoomStorage.ts).
@@ -73,7 +74,11 @@ export function RecipeFullScreen({ name, rows, total, storageKey, onClose }: Pro
       <div className={styles.scroll}>
         <ul className={styles.rows}>
           {rows.map((row, index) => (
-            <li key={index} className={styles.row}>
+            <li
+              key={index}
+              className={row.dividerAfter === true && index < rows.length - 1 ? `${styles.row} ${styles.divided}` : styles.row}
+              data-divider-after={row.dividerAfter === true && index < rows.length - 1 ? 'true' : undefined}
+            >
               <span className={styles.rowName}>{row.name}</span>
               <span className={styles.figure}>{row.amount}</span>
             </li>

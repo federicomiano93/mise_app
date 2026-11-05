@@ -75,6 +75,11 @@
   list-style: none;
 }
 
+/* A divider line under a row (the recipe's own, as on the recipe page): 2px in the ink, in place of the 1px separator. */
+.row.divided {
+  border-bottom: 2px solid var(--ink-2);
+}
+
 .row {
   display: flex;
   align-items: baseline;

@@ -229,6 +229,35 @@ describe('the recipe screen', () => {
   });
 });
 
+describe('the reorder rows (review, 5 Nov 2026)', () => {
+  it('⚠️ after a move the line is drawn under the right row, and the row under it is the new one', async () => {
+    const { region, user } = await openEditor('/recipes/r2/edit');
+    await user.click(reorderButton(region));
+    const grid = await within(region).findByRole('grid');
+    const marks = () => within(grid).getAllByRole('row').map(row => [
+      row.getAttribute('data-divider-after') === 'true', row.getAttribute('data-below-divider') === 'true',
+    ]);
+    expect(marks()).toEqual([[true, false], [false, true], [false, false]]);
+    within(region).getByRole('button', { name: 'Move «Salt»' }).focus();
+    await (user as unknown as { keyboard: (keys: string) => Promise<void> }).keyboard('{ArrowUp}');
+    // Flour | Salt Water: the line stays under Flour, and Salt is now the row under it.
+    await waitFor(() => { expect(within(grid).getAllByRole('row').map(row => row.textContent)).toEqual([
+      expect.stringContaining('Flour'), expect.stringContaining('Salt'), expect.stringContaining('Water'),
+    ]); });
+    await waitFor(() => { expect(marks()).toEqual([[true, false], [false, true], [false, false]]); });
+  });
+});
+
+describe('the full-screen view of a recipe (review, 5 Nov 2026)', () => {
+  it('draws the line under the same row as the recipe page, never under the last', async () => {
+    const { user } = renderRecipes('/recipes/r2', { source: sourceWith([PLAIN, DIVIDED]) });
+    const open = await screen.findByRole('button', { name: en['cat.viewRecipeFullScreen'] as string }, LOAD);
+    await user.click(open);
+    const dialog = await screen.findByRole('dialog', { name: 'Brioche' });
+    expect(within(dialog).getAllByRole('listitem').map(item => item.getAttribute('data-divider-after') === 'true')).toEqual([true, false, false]);
+  });
+});
+
 describe('the words', () => {
   it('exist in English and Italian, the line’s name with a hole for the ingredient', () => {
     for (const key of ['cat.dividers', 'cat.dividersHint', 'cat.dividerUnder'] as const) {

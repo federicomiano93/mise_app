@@ -486,7 +486,7 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
       {fullScreen ? (
         <RecipeFullScreen
           name={recipe.name === '' ? t('cat.noName') : recipe.name}
-          rows={rows.map(row => ({ name: row.label, amount: amountText(row) }))}
+          rows={rows.map((row, index) => ({ name: row.label, amount: amountText(row), dividerAfter: hasDividerAfter(recipe.ingredients, index) }))}
           total={{ name: t('cat.total'), amount: amountText(total) }}
           storageKey={CATALOGUE_ZOOM_KEY}
           onClose={() => { setFullScreen(false); }}

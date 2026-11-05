@@ -150,6 +150,9 @@ export function ReorderRows({ rows, labelledBy, hintId, onDrop, onStep, focusGri
           ref={gridRef}
           className={styles.list}
           items={rows}
+          // ⚠️ React Aria caches each row's drawing by its item object, and a move keeps the same EditRow objects: without this
+          // a row keeps the divider classes of its OLD place (a doubled line, a missing separator) until «Fine».
+          dependencies={[rows]}
           dragAndDropHooks={dragAndDropHooks}
         >
           {item => {
@@ -161,7 +164,13 @@ export function ReorderRows({ rows, labelledBy, hintId, onDrop, onStep, focusGri
             const below = index > 0 && hasDividerAfter(rows.map(candidate => candidate.row), index - 1);
             const rowClass = [styles.row, divided ? styles.divided : '', below ? styles.belowDivided : ''].filter(Boolean).join(' ');
             return (
-              <GridListItem id={item.key} textValue={name} className={rowClass}>
+              <GridListItem
+                id={item.key}
+                textValue={name}
+                className={rowClass}
+                data-divider-after={divided ? 'true' : undefined}
+                data-below-divider={below ? 'true' : undefined}
+              >
                 <span className={styles.name}>{name}</span>
                 <span className={styles.amount}>
                   {/* «to taste» has no number: the word takes the whole cell, or «to taste» is cut to «to tas». */}
