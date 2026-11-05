@@ -1,8 +1,8 @@
 // recipesSource.ts — the Recipe catalogue's data in Firestore, and nothing else.
 //
 // A port of js/catalogue/firebase-catalogue.js, one function at a time as the steps of 3d need them
-// (docs/parity/catalogue.md, «Proposed slices»). Step 3d-1 only READS: the recipes, live, while the
-// section is on screen. Behind an interface, so the store (recipesStore.ts) is a spec with a fake
+// (docs/parity/catalogue.md, «Proposed slices»). Steps 3d-1 and 3d-2 only READ: the recipes and the
+// ingredients, live, while the section is on screen. Behind an interface, so the store (recipesStore.ts) is a spec with a fake
 // source and never needs a database to be tested.
 //
 // Under the open venue:
@@ -15,6 +15,7 @@
 // settings are fixed by its first use (src/firestore-access.spec.ts).
 
 import { buildPath } from '@mise/shared/location-id';
+import { PRICE_FIELDS } from '@mise/shared/price-model';
 import type { Query } from 'firebase/firestore';
 import type { FirestoreKit } from '../session/firebaseBackend';
 
@@ -35,9 +36,22 @@ export interface RecipesSource {
     onChange: (list: StoredDoc[], meta: RecipesMeta) => void,
     onError: (err: unknown) => void,
   ): () => void;
+  // The ingredients, live, with every price key removed. Same contract as watchRecipes.
+  watchIngredients(
+    onChange: (list: StoredDoc[], meta: RecipesMeta) => void,
+    onError: (err: unknown) => void,
+  ): () => void;
 }
 
 const RECIPES = 'recipes';
+const INGREDIENTS = 'ingredients';
+
+// A copy of the document without any of the price keys (header).
+export function withoutPrice(doc: StoredDoc): StoredDoc {
+  const out: Record<string, unknown> = { ...doc };
+  for (const key of PRICE_FIELDS) delete out[key];
+  return out as StoredDoc;
+}
 
 export function createFirestoreRecipesSource(
   firestore: () => Promise<FirestoreKit>,
@@ -45,6 +59,7 @@ export function createFirestoreRecipesSource(
 ): RecipesSource {
   // Throws on a venue id that could point a read anywhere else (@mise/shared/location-id).
   const recipesPath = buildPath(locationId, RECIPES);
+  const ingredientsPath = buildPath(locationId, INGREDIENTS);
 
   // A live listener whose Firestore may not be loaded yet. The returned stop works at any moment.
   function listen(subscribe: (kit: FirestoreKit) => () => void, onError: (err: unknown) => void): () => void {
@@ -75,6 +90,21 @@ export function createFirestoreRecipesSource(
       ),
       err => {
         console.error('watchRecipes failed:', err);
+        onError(err);
+      },
+    ), onError),
+
+    // ⚠️ A FAILURE HERE IS QUIET (warn, not error): a venue without Orders may have no ingredients, or no
+    // right to read them; every linked row then reads «not declared», which is the honest answer.
+    watchIngredients: (onChange, onError) => listen(kit => kit.fs.onSnapshot(
+      kit.fs.collection(kit.db, ingredientsPath) as Query,
+      { includeMetadataChanges: true },
+      snap => onChange(
+        snap.docs.map(d => withoutPrice({ ...d.data(), id: d.id })),
+        { fromServer: !snap.metadata.fromCache },
+      ),
+      err => {
+        console.warn('watchIngredients failed:', err);
         onError(err);
       },
     ), onError),

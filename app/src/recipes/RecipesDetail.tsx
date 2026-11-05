@@ -1,14 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
-import { useLocation } from 'react-router';
+import { useLocation, useNavigationType } from 'react-router';
 import { useT } from '../i18n/useT';
 import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
+import { AllergenSheet } from './AllergenSheet';
 import { useRecipes } from './RecipesContext';
 import { RecipeView } from './RecipeView';
-import { cameFromList, useLeave } from './recipesNav';
+import { cameFromList, cameFromSheet, useLeave } from './recipesNav';
 import { RECIPES_PATH } from './recipesPath';
 import type { ShownView } from './recipesPath';
-import { recipeOpener, useHandBack } from './handBack';
+import { ALLERGENS_OPENER, recipeOpener, sheetOpener, useHandBack } from './handBack';
 import styles from './RecipesDetail.module.css';
 
 // The right-hand side of the split — and, on a phone, the whole screen when a recipe is open. With
@@ -16,9 +17,28 @@ import styles from './RecipesDetail.module.css';
 //
 // (No `key` on the recipe screen here: the section keeps one screen from one recipe to the next on
 // the split, so the focus stays on the row that was pressed.)
-export function RecipesDetail({ view }: { view: ShownView }) {
+export function RecipesDetail({ view, onOpenFromSheet }: { view: ShownView; onOpenFromSheet: (id: string) => void }) {
   if (view.kind === 'list') return <Prompt />;
+  if (view.kind === 'allergens') return <SheetScreen onOpenRecipe={onOpenFromSheet} />;
   return <RecipeScreen id={view.id} />;
+}
+
+// The Allergen sheet (its gate, allergens on, is checked by the section before it gets here). Back steps up to the list
+// and hands the focus back to the door that opened it; a recipe opened from a row comes back to that row.
+function SheetScreen({ onOpenRecipe }: { onOpenRecipe: (id: string) => void }) {
+  const { state } = useLocation();
+  const navigationType = useNavigationType();
+  const handBack = useHandBack();
+  const title = useRef<HTMLHeadingElement>(null);
+  const leave = useLeave(RECIPES_PATH, () => { handBack.expect(ALLERGENS_OPENER); });
+
+  // Opened from the list the page does not move the focus (FROM_LIST): it goes to this title. Not when Back from a
+  // recipe brings the sheet again (POP): the row that opened that recipe is owed the focus.
+  useEffect(() => {
+    if (cameFromList(state) && navigationType !== 'POP') title.current?.focus();
+  }, []);
+
+  return <AllergenSheet titleRef={title} onBack={leave} onOpenRecipe={onOpenRecipe} />;
 }
 
 // Only the split draws this (a phone hides the right-hand side while the list is the screen).
@@ -65,7 +85,8 @@ function RecipeScreen({ id }: { id: string }) {
   // the Calculator read one by one), and the screen then waits on «Loading…» instead.
   const gone = recipe === null && shownFor === id && settled;
 
-  const leave = useLeave(RECIPES_PATH, () => { handBack.expect(recipeOpener(id)); });
+  // A recipe opened from the Allergen sheet gives the focus back to the sheet's row, not the list's.
+  const leave = useLeave(RECIPES_PATH, () => { handBack.expect(cameFromSheet(state) ? sheetOpener(id) : recipeOpener(id)); });
 
   useEffect(() => {
     if (!gone) return;

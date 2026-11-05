@@ -4,7 +4,8 @@
 // A port of the recipe half of js/catalogue/catalogue-store.js, decision for decision, as plain
 // TypeScript with no React and no Firebase in it: the source (recipesSource.ts) and the browser
 // (deps) are injected, so every trap below is a spec with fakes (recipesStore.spec.ts). Screens read
-// it through RecipesContext.tsx. Step 3d-1 only reads; the writes (save, delete) come with 3d-6.
+// it through RecipesContext.tsx. Steps 3d-1 and 3d-2 only read (recipes, then the ingredients the
+// allergen gate looks rows up in); the writes (save, delete) come with 3d-6.
 //
 // It says nothing in words: a failure is a RecipesMessage, and the screen puts it in the person's
 // language.
@@ -16,10 +17,18 @@
 //   • the open counts and the remembered batches are pruned only on the SERVER's word: an answer from
 //     the browser's own database can hold just the few recipes the Calculator read one by one, and
 //     pruning on it would throw away the counts of every other recipe for good.
+// The same two rules hold for the INGREDIENTS (3d-2): an empty or shrunken answer from the browser's
+// own database would turn every linked row into «not declared» or «deleted ingredient» — the safe
+// direction for a label, but a false alarm on every recipe screen.
+//
+// ⚠️ THE INGREDIENTS FAIL QUIETLY (parity item 13): a venue without Orders may have none or no right to
+// read them; every linked row then reads «not declared», the honest answer. No message, only a warning
+// in the console — and the wait ends, so a screen never waits for them for ever.
 
 import { isScaledEntryFresh, normalizeCatalogueRecipes } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import type { KeyValueStorage } from '../session/backend';
+import { withoutPrice } from './recipesSource';
 import type { RecipesMeta, RecipesSource, StoredDoc } from './recipesSource';
 
 // ⚠️ THE CURRENT APP'S KEYS, WITH THEIR MEANING (both apps share one origin): either app paints from
@@ -30,6 +39,9 @@ export const RECIPES_KEY = 'catalogue-recipes';
 export const USAGE_KEY = 'catalogue-usage';
 // { recipeId: { target: grams, ts: ms } } — a calculated batch stays shown until Clear or 12 hours.
 export const SCALED_KEY = 'catalogue-scaled';
+// The ingredient documents as a JSON ARRAY (`{ id, … }`, every price key removed), read back into an
+// id → document map, as js/catalogue/catalogue-store.js does.
+export const INGREDIENTS_KEY = 'catalogue-ingredients';
 
 export type RecipesMessage =
   // The recipes' live stream died: what is on screen may be old.
@@ -50,6 +62,16 @@ export interface RecipesSnapshot {
   readonly recipesFromServer: boolean;
   // The live stream died (no resubscribe): the screen may say that what it shows may be old.
   readonly streamBroken: boolean;
+  // The ingredients by id — what the allergen gate looks a linked row up in. NO PRICE KEYS (header).
+  readonly ingredients: Readonly<Record<string, StoredDoc>>;
+  // Whether the ingredients can be judged: the local copy existed, a believable answer came, or their
+  // stream failed (quietly). Until then no allergen verdict may be drawn — every row would read «not
+  // declared» only because nothing has arrived.
+  readonly ingredientsLoaded: boolean;
+  // The ingredients' stream failed and NOTHING was ever held (no copy, no answer): every linked row
+  // then looks «linked to an ingredient that no longer exists», which is untrue — the screens say
+  // once that the list could not be read instead. Still no answer: the verdict stays «not declared».
+  readonly ingredientsUnreadable: boolean;
   readonly usage: Readonly<Record<string, number>>;
   readonly scaled: Readonly<Record<string, ScaledEntry>>;
 }
@@ -92,6 +114,18 @@ function asUsage(value: unknown): Record<string, number> {
   return out;
 }
 
+// A stored ingredient list → id → document, the price keys dropped (a copy written by an older app).
+function asIngredients(value: unknown): Record<string, StoredDoc> {
+  const out: Record<string, StoredDoc> = {};
+  if (!Array.isArray(value)) return out;
+  for (const item of value) {
+    if (item && typeof item === 'object' && typeof (item as StoredDoc).id === 'string' && (item as StoredDoc).id) {
+      out[(item as StoredDoc).id] = withoutPrice(item as StoredDoc);
+    }
+  }
+  return out;
+}
+
 function asScaled(value: unknown): Record<string, ScaledEntry> {
   const out: Record<string, ScaledEntry> = {};
   for (const [id, entry] of Object.entries(asMap(value))) {
@@ -127,6 +161,12 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   let recipesLoaded = Array.isArray(bootRecipes);
   let recipesFromServer = false;
   let streamBroken = false;
+  const bootIngredients = readJson(INGREDIENTS_KEY);
+  const bootSaidNoIngredients = Array.isArray(bootIngredients) && bootIngredients.length === 0;
+  let ingredients: Readonly<Record<string, StoredDoc>> = asIngredients(bootIngredients);
+  let ingredientsLoaded = Array.isArray(bootIngredients);
+  let ingredientsFromServer = false;
+  let ingredientsUnreadable = false;
   // The counts are kept even when a corrupt entry is dropped: they are a nicety, not data.
   let usage: Readonly<Record<string, number>> = asUsage(readJson(USAGE_KEY));
   let scaled: Readonly<Record<string, ScaledEntry>> = asScaled(readJson(SCALED_KEY));
@@ -139,7 +179,8 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
   let snapshot: RecipesSnapshot = build();
 
   function build(): RecipesSnapshot {
-    return { recipes, recipesLoaded, recipesFromServer, streamBroken, usage, scaled };
+    return { recipes, recipesLoaded, recipesFromServer, streamBroken, ingredients, ingredientsLoaded, ingredientsUnreadable, usage,
+      scaled };
   }
 
   function changed(): void {
@@ -165,6 +206,15 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     if (list.length === 0) return bootSaidNone;
     const ids = new Set(list.map(doc => doc.id));
     return recipes.every(recipe => ids.has(recipe.id));
+  }
+
+  // The same judgement for the ingredients, against their own copy and their own server word.
+  function believableIngredients(list: readonly StoredDoc[], meta: RecipesMeta): boolean {
+    if (meta.fromServer) return true;
+    if (ingredientsFromServer) return list.length > 0 || bootSaidNoIngredients;
+    if (list.length === 0) return bootSaidNoIngredients;
+    const ids = new Set(list.map(doc => doc.id));
+    return Object.keys(ingredients).every(id => ids.has(id));
   }
 
   // Drops the counts and the batches of recipes that no longer exist, and the batches older than
@@ -221,6 +271,28 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
           recipesLoaded = true;
           changed();
           say({ kind: 'recipes-stream-broken' });
+        },
+      ));
+      stops.push(source.watchIngredients(
+        (remote, meta) => {
+          if (meta.fromServer) ingredientsFromServer = true;
+          if (!believableIngredients(remote, meta)) return;
+          // The source already removed the prices; removed again so no path can store one.
+          const clean = remote.filter(doc => doc && typeof doc.id === 'string' && doc.id).map(withoutPrice);
+          ingredients = asIngredients(clean);
+          ingredientsLoaded = true;
+          ingredientsUnreadable = false;
+          writeJson(INGREDIENTS_KEY, clean);
+          changed();
+        },
+        err => {
+          deps.warn('Ingredients unavailable:', err);
+          // Only when nothing was ever held: a copy or an earlier answer stays on screen as the data.
+          if (!ingredientsLoaded) {
+            ingredientsLoaded = true;
+            ingredientsUnreadable = true;
+            changed();
+          }
         },
       ));
     },

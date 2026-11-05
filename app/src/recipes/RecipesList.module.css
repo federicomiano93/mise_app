@@ -140,3 +140,15 @@
 .emptySub {
   color: var(--ink-2);
 }
+
+/* The door to the Allergen sheet: the whole width of the column. The button already centres its icon and its
+   words on one line (ui/Button). */
+.door {
+  width: 100%;
+}
+
+.door svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}

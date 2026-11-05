@@ -9,6 +9,14 @@ import { KEEP_FOCUS } from '../shell/Page';
 // (A copy of foodcost/foodcostNav.ts: a feature never imports from another feature's folder.)
 export const FROM_LIST = { ...KEEP_FOCUS, fromList: true } as const;
 
+// The same, from the Allergen sheet: Back from the recipe returns to the sheet, and the focus is owed to the
+// sheet's row rather than the list's.
+export const FROM_SHEET = { ...FROM_LIST, fromSheet: true } as const;
+
+export function cameFromSheet(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'fromSheet' in state;
+}
+
 export function cameFromList(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromList' in state;
 }

@@ -1,7 +1,9 @@
 import { useEffect, useLayoutEffect, useRef } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
+import { allergensOn } from '@mise/shared/venue-features';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
 import { KEEP_FOCUS, Page } from '../shell/Page';
 import { useOwnScrollArea } from '../shell/scrollArea';
 import { SPLIT_QUERY } from '../ui/split';
@@ -10,10 +12,10 @@ import { useMediaQuery } from '../ui/useMediaQuery';
 import { RecipesProvider, useRecipesStore } from './RecipesContext';
 import { RecipesDetail } from './RecipesDetail';
 import { RecipesList } from './RecipesList';
-import { HandBackProvider, recipeOpener, useHandBackState } from './handBack';
+import { ALLERGENS_OPENER, HandBackProvider, recipeOpener, useHandBackState } from './handBack';
 import { messageText } from './recipesMessages';
-import { FROM_LIST, cameFromList } from './recipesNav';
-import { RECIPES_PATH, recipePath, resolveRecipesPath } from './recipesPath';
+import { FROM_LIST, FROM_SHEET, cameFromList } from './recipesNav';
+import { ALLERGENS_PATH, RECIPES_PATH, recipePath, resolveRecipesPath } from './recipesPath';
 import type { ShownView } from './recipesPath';
 import styles from './RecipesSection.module.css';
 
@@ -24,7 +26,8 @@ import styles from './RecipesSection.module.css';
 // Its data lives exactly as long as it is on screen: RecipesProvider starts the listener on mount and
 // stops it on unmount (P14).
 //
-// Step 3d-1 only LOOKS at recipes: no editing, no allergens, no labels yet (docs/parity/catalogue.md).
+// Steps 3d-1 and 3d-2 only LOOK at recipes: the list, a recipe with its allergen cards, and the Allergen sheet. No
+// editing and no labels yet (docs/parity/catalogue.md).
 export default function RecipesSection() {
   return (
     <RecipesProvider>
@@ -48,6 +51,7 @@ function StoreMessages() {
 function RecipesScreen() {
   const { pathname, state } = useLocation();
   const navigationType = useNavigationType();
+  const { location } = useSession();
   // The address as it is written, not React Router's «*»: a recipe id is split before it is decoded
   // (recipesPath.ts).
   const resolved = resolveRecipesPath(pathname.slice(RECIPES_PATH.length));
@@ -56,6 +60,13 @@ function RecipesScreen() {
   // itself, so KEEP_FOCUS; on any other move the state of the address being replaced is passed on.
   if ('redirect' in resolved) {
     return <Navigate to={resolved.redirect} replace state={navigationType === 'POP' ? KEEP_FOCUS : state} />;
+  }
+  // ⚠️ THE SHEET RE-CHECKS ITS OWN GATE: a venue that has switched allergens off has no sheet, whatever address is in
+  // the bar (a bookmark, a link, Back; a switch thrown on another phone is seen after a reload, because the venue document is
+  // read once when the venue opens and is not live in Mise 2). A gate on a door is a
+  // gate on everything later put behind it.
+  if (resolved.view.kind === 'allergens' && !allergensOn(location)) {
+    return <Navigate to={RECIPES_PATH} replace state={KEEP_FOCUS} />;
   }
   return <RecipesLayout view={resolved.view} />;
 }
@@ -90,6 +101,24 @@ function RecipesLayout({ view }: { view: ShownView }) {
     }
   };
 
+  // The Allergen sheet opens one level down, from the door at the foot of the list. On the split it takes the right-hand
+  // pane (the list stays beside it); with a recipe already open there, picking it is lateral and replaces the recipe.
+  const openSheet = () => {
+    if (view.kind === 'allergens') return;
+    handBack.expect(ALLERGENS_OPENER);
+    if (split && view.kind !== 'list') {
+      void navigate(ALLERGENS_PATH, { replace: true, state: cameFromList(state) ? FROM_LIST : KEEP_FOCUS });
+    } else {
+      if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
+      void navigate(ALLERGENS_PATH, { state: FROM_LIST });
+    }
+  };
+
+  // A row of the sheet opens its recipe one level down, ALWAYS as a new entry, so Back returns to the sheet.
+  const openFromSheet = (id: string) => {
+    void navigate(recipePath(id), { state: FROM_SHEET });
+  };
+
   // Where the scroll area goes at every move inside the section. Before the hand-back below, so the
   // place is back when the row takes the focus: focusing a row that is in view scrolls nothing.
   //  - On the split the list keeps its place (the right-hand side starts at its own top, below).
@@ -116,8 +145,12 @@ function RecipesLayout({ view }: { view: ShownView }) {
   // Back out of a recipe (its own Back, or the phone's back gesture): the row that opened it takes
   // the focus, once the list is on screen again (on a phone it was hidden behind the recipe, not
   // unmounted).
+  // The same from a recipe that was opened from a row of the Allergen sheet: the sheet comes back, and its row is owed it.
+  const lastKind = useRef(view.kind);
   useLayoutEffect(() => {
-    if (view.kind === 'list') handBack.deliver();
+    const before = lastKind.current;
+    lastKind.current = view.kind;
+    if (view.kind === 'list' || (view.kind === 'allergens' && before === 'recipe')) handBack.deliver();
   }, [view.kind, handBack]);
 
   // On the split the right-hand side scrolls on its own (RecipesSection.module.css), and it stays
@@ -138,12 +171,14 @@ function RecipesLayout({ view }: { view: ShownView }) {
                 openRecipeId={view.kind === 'recipe' ? view.id : null}
                 split={split}
                 onOpenRecipe={openRecipe}
+                sheetOpen={view.kind === 'allergens'}
+                onOpenSheet={openSheet}
               />
             </PartBoundary>
           </div>
           <div ref={detail} className={styles.detail}>
             <PartBoundary resetKey={pathname}>
-              <RecipesDetail view={view} />
+              <RecipesDetail view={view} onOpenFromSheet={openFromSheet} />
             </PartBoundary>
           </div>
         </div>

@@ -3,6 +3,7 @@
 //
 //   /recipes          the list of recipes
 //   /recipes/<id>     one recipe (the id percent-encoded)
+//   /recipes/allergens  the Allergen sheet (step 3d-2)
 //   anything else     unknown: the section goes back to /recipes
 //
 // ⚠️ THE WORDS A LATER STEP WILL TAKE AS ITS OWN ARE NEVER A RECIPE'S ID (`new`, `allergens`,
@@ -10,12 +11,14 @@
 // address that happens to be one of them must not be taken for a recipe that does not exist.
 // recipesPath.spec.ts pins the list.
 export const RECIPES_PATH = '/recipes';
+export const ALLERGENS_PATH = '/recipes/allergens';
 
 const RESERVED = ['new', 'allergens', 'settings', 'photo'] as const;
 
 export type RecipesView =
   | { readonly kind: 'list' }
   | { readonly kind: 'recipe'; readonly id: string }
+  | { readonly kind: 'allergens' }
   | { readonly kind: 'unknown' };
 
 export const recipePath = (id: string): string => `${RECIPES_PATH}/${encodeURIComponent(id)}`;
@@ -39,6 +42,8 @@ export function parseRecipesPath(rest: string | undefined): RecipesView {
   const [first] = parts;
   if (parts.length === 1 && first !== undefined) {
     const id = decoded(first);
+    // The Allergen sheet (step 3d-2) is one of the reserved words: never a recipe whose id is «allergens».
+    if (id === 'allergens') return { kind: 'allergens' };
     // An empty id is not a recipe (and not a Firestore document id either).
     if (id !== null && id !== '' && !(RESERVED as readonly string[]).includes(id)) return { kind: 'recipe', id };
   }

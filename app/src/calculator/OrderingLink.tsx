@@ -11,7 +11,7 @@ import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import { useClientOrders, useClientOrdersStore } from './CalculatorContext';
 import { orderingLinkFor } from './clientOrdersSource';
-import { copyToClipboard } from './clipboard';
+import { copyToClipboard } from '../ui/clipboard';
 import styles from './ClientOrdering.module.css';
 
 // A client's ordering link, on the client's screen (a port of `orderingLinkField` in js/calculator-settings.js): one

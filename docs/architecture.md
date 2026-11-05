@@ -257,9 +257,14 @@ Aria does not support Preact. The numbers are below.
   until the server has answered, then not found; deleted elsewhere goes back to the list and says so),
   `RecipeView` (the bar and the ingredient list as a table, tapped for the full screen) and `BatchCard` (grams, the
   confirm that spells the amount both ways and raises its voice for an absurd batch, Clear, 12 h). Addresses, in
-  `recipesPath.ts`: `/recipes` and `/recipes/<id>`; `new`, `allergens`, `settings` and `photo` are reserved for later
-  steps. The usage record names two screens, `recipes` and `recipes-detail`. `recipesNav.ts` and `handBack.ts` are
-  this section's copies of Food cost's. `ui/RecipeFullScreen` and `ui/zoomStorage` are shared with the Calculator
+  `recipesPath.ts`: `/recipes`, `/recipes/<id>` and (3d-2) `/recipes/allergens`; `new`, `settings` and `photo` are reserved for
+  later steps. The usage record names three screens, `recipes`, `recipes-detail` and `recipes-allergens`. `recipesNav.ts` and
+  `handBack.ts` are this section's copies of Food cost's. Step 3d-2 adds the allergen screens: `AllergenCard` and
+  `DeclarationCard` on the recipe screen (a verdict only once the store's `ingredientsLoaded`, a neutral «checking» line before
+  it; Copy through `ui/clipboard` and Send through `ui/SendSheet`), `AllergenSheet` at `/recipes/allergens` (gated again by
+  `allergensOn` in `RecipesSection`, door at the foot of the list, drawn in the right-hand pane on the split) and
+  `allergenTables.ts` / `allergenText.ts`. Every allergen verdict is the shared model's; `label-separation.spec.ts` (in `app/src`)
+  pins that a screen that prints a food word asks the venue's country and never the interface language. `ui/RecipeFullScreen` and `ui/zoomStorage` are shared with the Calculator
   and take a storage key (`mise.calcZoomStep` / `mise.catZoomStep`).
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
@@ -276,7 +281,7 @@ Pure logic only, no DOM types. Each module is a PORT of a `js/` file, and its sp
 against BOTH files (`describe.each` over the TypeScript port and the `js/` original), so the two
 apps cannot drift apart while both are live. `parity.spec.ts` compares the full ports export by
 export (names, constants, frozen-ness, function names and arity); a partial port (`membership`,
-`location-id`, `pastries-model`, `market`, `price-model`, `inventory-value`, `catalogue-model`, `recipe-cost-model`, `foodcost-model`) is not paired and its spec says why, and
+`location-id`, `pastries-model`, `recipe-allergen-model`, `price-model`, `inventory-value`, `catalogue-model`, `recipe-cost-model`, `foodcost-model`) is not paired and its spec says why, and
 compares what it does port with the `js/` file itself. `currency` is an ADAPTED port, also not paired:
 the original keeps the venue's money in a module variable (`setCurrency`), and Mise 2 never keeps a
 venue fact in a module variable, so the port is stateless (`moneyOf(symbol, layout)` returns the
@@ -287,7 +292,7 @@ the two. A quirk of the original that no real input can reach is
 copied, not tidied, and marked where it sits: fixing it is a bug fix to BOTH files at once, and
 `odd-inputs.spec.ts` fails until they agree. Today: join-code, push-model, home-cards, away-model,
 allergen-model, sections, firebase-target, local-data, same-data, error-model, device-model,
-usage-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock, pack-size,
+usage-model, venue-features, market, recipe-label-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock, pack-size,
 order-unit, ingredient-name, order-cost, inventory-model, inventory-outbox, inventory-purchases,
 vat-rates, ingredient-kind, product-limits, vat-guide, foodcost-weighing,
 calculator-dough-math, calculator-recipe-source, calculator-order-text, calculator-order-prefill (adapted: `prefillNote` takes the translate function as an argument, so it is not paired), client-order-model (adapted: `orderRows` takes the deleted-product word as an argument, so it is not paired), client-order-history (adapted: `linesLabel` and `emptyWords` take the translate function as an argument, so it is not paired), calculator-recipe-text (one documented difference: the line
@@ -299,8 +304,7 @@ write half, `workDayIndex` and `typedTotalOf`; leaves out the list and edit half
 arithmetic; leaves out the storage and DOM halves), calculator-tab-keys (new in Mise 2, no original: the
 `localStorage` keys of a Calculator tab and the stale-tab and lock decisions, pinned against the current app's
 source),
-market (partial: the country and the money, not the label
-vocabulary), price-model (partial: the reading half, not the writing half or the dictionary lookups),
+recipe-allergen-model (partial: everything but `incompleteText`, which uses the dictionary — the app says it from `result.gaps.length`; `blockingIngredients` takes the word for an unknown ingredient as a third argument), price-model (partial: the reading half, not the writing half or the dictionary lookups),
 inventory-value (partial: everything but `formatTotal`, which reads the money from a module variable;
 the app writes money with `formatMoney(value, money)` of `price-model`), currency (adapted, stateless),
 catalogue-model (partial: only what Food cost reads — the unit table, the row link, the oven loss and the link
@@ -309,6 +313,8 @@ suggestions; it leaves out the recipe normalisers, the kg scaling, the Calculato
 out `costReasonLabel` and `partialCostText`, which use the dictionary — the app resolves `COST_REASON_TEXT`
 through its own typed i18n), foodcost-model (partial: everything but `blockerText`, which uses the dictionary —
 the app resolves `BLOCKER_TEXT` likewise). A partial port keeps, in its header, the list of what it leaves out.
+
+`fixtures/label-corpus.ts` is the fixture corpus of the whole label chain (33 recipes, four venues, four values of the label's switch), run through the `js/` originals and the ports by `label-corpus.spec.ts` and compared with the committed `fixtures/label-golden.json`, written once from `js/` by `fixtures/make-label-golden.mjs` (plain node) so the ports stay pinned after `js/` is deleted; a later step (labels, ZPL) adds a field to the chain and regenerates the file. `label-separation.spec.ts` reads the source of `market`, `recipe-label-model` and `recipe-allergen-model` and fails if one imports the dictionary or `app/`, or names the interface language.
 
 ## The session
 

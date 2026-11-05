@@ -29,17 +29,11 @@ import * as legacyJs from '../../js/inventory/inventory-outbox.js';
 
 const legacy = legacyJs as unknown as typeof ported;
 
-// ⚠️ THE FIX OF 11 OCT 2026 (several writes in the air; counts handed over and not yet seen back; held
-// counts that wait for the server's word) was made to the current app in PR #343, and this branch can
-// be older than that. Until js/inventory/inventory-outbox.js in THIS checkout has it (it exports
-// `answered`), the tests of the fix run against the TypeScript port alone; the day it has it they run
-// against both, with no edit — the check below stops being false by itself, and a port that drifted
-// from the file in the meantime turns this red.
-const legacyHasTheFix = typeof (legacyJs as unknown as { answered?: unknown }).answered === 'function';
+// The fix of 11 Oct 2026 (PR #343) is in both files: every test below, the fix's included, runs against
+// the port AND js/inventory/inventory-outbox.js, with no condition.
 
 type Implementation = readonly [string, typeof ported];
 const BOTH: readonly Implementation[] = [['shared/ (TypeScript)', ported], ['js/ (current app)', legacy]];
-const WITH_THE_FIX: readonly Implementation[] = legacyHasTheFix ? BOTH : BOTH.slice(0, 1);
 
 const MAPS = ['opening', 'purchased', 'closing', 'packKg'];
 
@@ -296,9 +290,9 @@ describe.each(BOTH)('%s', (_name, m) => {
 
 // ── The fix of 11 Oct 2026 ────────────────────────────────────────────────────
 // Everything below changes how an outbox is shaped or settled, so it is compared against the current
-// app's file only once that file has the fix too (see legacyHasTheFix at the top).
+// app's file too, unconditionally (PR #343 is on main).
 
-describe.each(WITH_THE_FIX)('%s — several writes in the air, counts held for the server', (_name, m) => {
+describe.each(BOTH)('%s — several writes in the air, counts held for the server', (_name, m) => {
   test('nothing is mutated: the outbox before a change is still itself afterwards', () => {
     const before = m.stage(m.EMPTY_OUTBOX, 'closing', 'flour', 1);
     const snapshot = JSON.stringify(before);
@@ -616,17 +610,3 @@ describe.each(WITH_THE_FIX)('%s — several writes in the air, counts held for t
     expect(seen.writes).toBe(1);
   });
 });
-
-// ⚠️ WHILE THE TESTS ABOVE RUN AGAINST THE PORT ALONE, THIS PINS WHAT THEY ARE NOT COMPARED WITH: the
-// exact file before the fix. Any other shape of js/inventory/inventory-outbox.js — half of the fix, a
-// different fix — turns this red, instead of the comparison being skipped in silence.
-// TO DELETE once PR #343 is on main and merged into this branch: this test, and the `legacyHasTheFix`
-// conditionals of this file, of parity.spec.ts (`legacyOutboxHasTheFix`) and of odd-inputs.spec.ts.
-if (!legacyHasTheFix) {
-  test('js/ (current app) is exactly the file before the fix of 11 Oct 2026 (PR #343)', () => {
-    expect(Object.keys(legacyJs).sort()).toStrictEqual(
-      ['EMPTY_OUTBOX', 'applyOver', 'confirm', 'hasWork', 'isSending', 'restore', 'stage', 'stageMany', 'take'],
-    );
-    expect(Object.keys(legacy.EMPTY_OUTBOX).sort()).toStrictEqual(['cleared', 'inFlight', 'pending']);
-  });
-}

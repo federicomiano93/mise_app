@@ -99,12 +99,12 @@ describe('the ingredient list', () => {
     expect(rowsOf()[0]).toEqual(['Flour', '1000', 'g']);
   });
 
-  it('is the only recipe screen: no allergen, declaration, Food cost, procedure, Edit, Import or Delete yet', async () => {
+  it('has no Food cost, procedure, Edit, Import, Delete or label button yet (their steps are later)', async () => {
     await open();
-    for (const name of [/edit/i, /import/i, /delete/i, /food cost/i, /allergen/i, /label/i]) {
+    for (const name of [/edit/i, /import/i, /delete/i, /food cost/i, /make a label/i]) {
       expect(main().queryByRole('button', { name })).not.toBeInTheDocument();
     }
-    expect(main().queryByRole('heading', { level: 3, name: /allergen|procedure|declaration/i })).not.toBeInTheDocument();
+    expect(main().queryByRole('heading', { level: 3, name: /procedure|food cost/i })).not.toBeInTheDocument();
   });
 });
 
