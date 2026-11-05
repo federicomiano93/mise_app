@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SCREEN_RE } from '@mise/shared/usage-model';
 import { routes } from '../routes';
 import { en } from '../i18n/en';
+import { hasScreen } from './sectionScreens';
 import {
   MORE,
   SECTIONS,
@@ -48,7 +49,10 @@ describe('the section list', () => {
   it('has a route for every section, for «More», and a catch-all', () => {
     const root = routes[0];
     const paths = (root?.children ?? []).map(route => route.path);
-    for (const section of SECTIONS) expect(paths).toContain(section.path);
+    // A built section owns every address under its path, so its route ends in /*.
+    for (const section of SECTIONS) {
+      expect(paths).toContain(hasScreen(section.id) ? `${section.path}/*` : section.path);
+    }
     expect(paths).toContain(MORE.path);
     expect(paths[paths.length - 1]).toBe('*');
   });
@@ -134,10 +138,30 @@ describe('screenNameFor', () => {
     for (const section of SECTIONS) expect(screenNameFor(section.path)).toBe(section.id);
   });
 
+  // Pastries is three screens in one section; picking another day is not a new screen.
+  it.each([
+    ['/pastries', 'pastries'],
+    ['/pastries/', 'pastries'],
+    ['/pastries/Tuesday', 'pastries'],
+    ['/pastries/Sunday', 'pastries'],
+    ['/pastries/records', 'pastries-records'],
+    ['/pastries/records/', 'pastries-records'],
+    ['/pastries/Tuesday/edit', 'pastries-editor'],
+    ['/pastries/Sunday/edit/', 'pastries-editor'],
+    ['/pastries/Funday/edit', 'pastries'],
+    ['/pastries/Tuesday/edit/more', 'pastries'],
+    ['/pastries/records/edit', 'pastries'],
+    ['/pastries-archive', 'not-found'],
+  ])('%s → %s', (pathname, expected) => {
+    expect(screenNameFor(pathname)).toBe(expected);
+  });
+
   // The usage record silently drops a name it does not accept: a new section whose id broke the
   // rule would simply never be counted.
   it('only ever gives a name the usage record accepts, «m2:» included', () => {
-    const names = [...SECTIONS.map(section => section.id), 'more', 'not-found'];
+    const names = [
+      ...SECTIONS.map(section => section.id), 'pastries-records', 'pastries-editor', 'more', 'not-found',
+    ];
     for (const name of names) expect(`m2:${name}`).toMatch(SCREEN_RE);
   });
 });

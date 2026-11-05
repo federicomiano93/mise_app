@@ -86,7 +86,23 @@ Aria does not support Preact. The numbers are below.
   `js/error-report.js`, `js/device-ping.js`, `js/usage.js`, writing through `sinks.ts` exactly the
   shapes `firestore.rules` accepts. Screens are named `m2:<section>` and the build is stamped
   `m2-<7-char commit>`, so the owner's statistics tell the two apps apart.
-- `ui/` — the few shared controls (`Button`, `Dialog`).
+- `data/` — where every section gets its data from (`DataContext`): one source factory per
+  section, built once in `main.tsx` on the session's backend (`createDataServices`), so a screen
+  never reaches for Firestore itself. A spec passes fakes instead (`testing/renderApp.tsx`, with
+  `testing/fakePastriesSource.ts`), so no screen needs a database to be tested. A section's own
+  `*Source.ts` is the only file that knows its collections' paths and shapes.
+- `pastries/` — the first real section, and the pattern for the next: a source (`pastriesSource.ts`,
+  the Firestore half, a port of `js/pastries/firebase-pastries.js`), a store (`pastriesStore.ts`,
+  plain TypeScript with no React: the seven days, tonight's confirmations and the lock, the
+  records), a context that starts it when the section opens and stops it when it closes
+  (`PastriesContext.tsx`), and the screens: `PastriesSection` (the frame and the address),
+  `DaysNav`, `DayPanel`, `Editor`, `Records`. `shell/sectionScreens.ts` lists it, so its code is
+  fetched only when somebody opens it. Its parity list is `docs/parity/pastries.md`.
+- `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
+  answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
+  live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the
+  top of an editor), `useMediaQuery` (only for attributes that must agree with a stylesheet's
+  media query; layout is always CSS).
 - `settings/` — the Settings page (today: the Account card).
 - `styles/` — `tokens.css` (every colour, size, radius, shadow) and `base.css`.
 - `testing/` — `renderApp`, the fake session store and other spec helpers.
@@ -97,10 +113,12 @@ Pure logic only, no DOM types. Each module is a PORT of a `js/` file, and its sp
 against BOTH files (`describe.each` over the TypeScript port and the `js/` original), so the two
 apps cannot drift apart while both are live. `parity.spec.ts` compares the full ports export by
 export (names, constants, frozen-ness, function names and arity); a partial port (`membership`,
-`location-id`) is not paired and its spec says why. `odd-inputs.spec.ts` feeds every export odd
-inputs and compares the two. Today: join-code, push-model, home-cards, away-model, allergen-model,
-sections, firebase-target, local-data, same-data, error-model, device-model, usage-model,
-membership, location-id.
+`location-id`, `pastries-model`) is not paired and its spec says why. `odd-inputs.spec.ts` feeds every
+export odd inputs and compares the two. A quirk of the original that no real input can reach is
+copied, not tidied, and marked where it sits: fixing it is a bug fix to BOTH files at once, and
+`odd-inputs.spec.ts` fails until they agree. Today: join-code, push-model, home-cards, away-model,
+allergen-model, sections, firebase-target, local-data, same-data, error-model, device-model,
+usage-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock.
 
 ## The session
 
@@ -138,7 +156,8 @@ and where each comes from:
    48px targets, a visible focus ring, errors announced, live regions present before they change.
 7. **Specs are `*.spec.ts(x)`, never `*.test.*`, never in a folder named `test/`**: the root
    `node --test` would run them and fail. A port runs its tests against both apps.
-8. **Load sections lazily** once they are real, so the first screen stays light.
+8. **Load sections lazily** once they are real, so the first screen stays light: a built section is
+   listed in `shell/sectionScreens.ts`, which loads it on first use, behind `SectionRoute`'s gate.
 
 ## Testing and CI
 
@@ -201,6 +220,19 @@ is the compiled-code cache the current app gets from its service worker, which M
 step 5. Verdict of step 2c: no change of framework; go on with the sections.
 
 ## Traps already paid for
+
+- A tab's accessible name comes from its content, never from an `aria-label` that differs from the
+  words drawn (axe `label-content-name-mismatch`). Text that is only for assistive technology uses
+  the one `.visually-hidden` recipe in `base.css`, never `display: none`, which would take it out of
+  the name.
+- A sticky bar sticks only if nothing between it and the scroll area (the shell's `main`) has an
+  `overflow`; `pastries/pastriesCss.spec.ts` reads the stylesheets and pins it.
+- The status message sits 65px above the phone's tab bar, a copy of the bar's height;
+  `ui/statusOffset.spec.ts` adds the bar up from its own stylesheet and fails when the two drift.
+- An editor that copies its data when it opens must wait for the data: opened by its address, the
+  store may still hold only an empty local copy (`daysLoaded` in the Pastries store).
+- A screen that blocks leaving (unsaved edits) uses the router's `useBlocker`, which covers every
+  way out (Back, the browser's Back, the rail, a day picked in a list), not the Back button alone.
 
 - Vitest empties CSS, even `?raw`, unless told otherwise.
 - Git Bash rewrites `--base=/mise2/` into a Windows path.

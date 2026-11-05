@@ -21,6 +21,9 @@ import * as localData from './local-data';
 import * as errorModel from './error-model';
 import * as deviceModel from './device-model';
 import * as usageModel from './usage-model';
+import * as pastriesModel from './pastries-model';
+import * as pastriesLogModel from './pastries-log-model';
+import * as pastriesLock from './pastries-lock';
 import * as legacyJoinCodeJs from '../../js/join-code.js';
 import * as legacyPushModelJs from '../../js/push-model.js';
 import * as legacyHomeCardsJs from '../../js/home-cards.js';
@@ -32,6 +35,9 @@ import * as legacyLocalDataJs from '../../js/local-data.js';
 import * as legacyErrorModelJs from '../../js/error-model.js';
 import * as legacyDeviceModelJs from '../../js/device-model.js';
 import * as legacyUsageModelJs from '../../js/usage-model.js';
+import * as legacyPastriesModelJs from '../../js/pastries/pastries-model.js';
+import * as legacyPastriesLogModelJs from '../../js/pastries/pastries-log-model.js';
+import * as legacyPastriesLockJs from '../../js/pastries/pastries-lock.js';
 
 const legacyJoinCode = legacyJoinCodeJs as unknown as typeof joinCode;
 const legacyPushModel = legacyPushModelJs as unknown as typeof pushModel;
@@ -44,6 +50,9 @@ const legacyLocalData = legacyLocalDataJs as unknown as typeof localData;
 const legacyErrorModel = legacyErrorModelJs as unknown as typeof errorModel;
 const legacyDeviceModel = legacyDeviceModelJs as unknown as typeof deviceModel;
 const legacyUsageModel = legacyUsageModelJs as unknown as typeof usageModel;
+const legacyPastriesModel = legacyPastriesModelJs as unknown as typeof pastriesModel;
+const legacyPastriesLogModel = legacyPastriesLogModelJs as unknown as typeof pastriesLogModel;
+const legacyPastriesLock = legacyPastriesLockJs as unknown as typeof pastriesLock;
 
 // ── The machinery ────────────────────────────────────────────────────────────
 
@@ -904,4 +913,221 @@ describe('usage-model: odd inputs', () => {
       .flatMap(who => [[GOOD_EXTRA, who], [emptyAcc(), who]]),
     ...ACC_VALUES.map(acc => [acc, WHO]),
   ]);
+});
+
+// ── Shared by the three Pastries models below ────────────────────────────────
+
+const localMs = (y: number, month: number, day: number, hour = 12, minute = 0): number =>
+  new Date(y, month, day, hour, minute).getTime();
+
+// Moments nobody planned for: the 4am edge on both sides, both clock-change Sundays (the work day is
+// the thing that goes wrong there), the first and last instants a Date can hold and the ones just
+// outside them, and values that are not a number but read as one.
+const PASTRY_MOMENTS: readonly unknown[] = [...ODD, ...NOWS,
+  localMs(2026, 7, 4, 0, 30), localMs(2026, 7, 4, 3, 59), localMs(2026, 7, 4, 4, 0), localMs(2026, 7, 4, 23, 30),
+  localMs(2026, 7, 9, 22), localMs(2026, 7, 10, 1), localMs(2026, 9, 25, 3, 30), localMs(2026, 9, 25, 4, 30),
+  localMs(2026, 2, 29, 3, 30), localMs(2026, 2, 29, 4, 30), localMs(2026, 11, 31, 23, 59), localMs(2024, 1, 29, 3, 59),
+  1, 86_399_999, 8.64e15 - 3_600_000, 8.64e15, 8.64e15 + 1, -8.64e15, -8.64e15 - 1, -1, NOW + 0.5,
+  '1700000000000', ' 1700000000000 ', '1e12', '0x10', 'yesterday', new Date(NOW), new Date(NaN), [NOW], [NOW, NOW],
+  new Number(NOW), { valueOf: () => NOW }, 5n, Symbol('now')];
+
+const PASTRY_DAY_NAMES: readonly unknown[] = [...ODD, ...pastriesModel.WEEKDAYS, ...pastriesModel.WEEKDAY_SHORT, 'monday',
+  'MONDAY', 'Monday ', ' Monday', 'Funday', '2026-08-05', 'toString', '__proto__', 'constructor', 'length', 0, 6, 7,
+  new String('Monday'), ['Monday'], { toString: () => 'Monday' }];
+
+const PASTRY_NOTES: readonly unknown[] = [...ODD, 'slow proof', '  spaced  ', 'a\nb', '  a\n  b  \n', '\n\n', 'x'.repeat(499),
+  'x'.repeat(500), 'x'.repeat(501), 'x'.repeat(900), ` ${'x'.repeat(500)}`, 42, new String('x'), { toString: () => 'x' }, ['x']];
+
+// Lists of rows nobody planned for: rows that are not rows, blank and padded names, quantities of every
+// kind, names at and past the limit, the caps either side, a frozen list, a list with a hole in it.
+const PASTRY_NUMBERS = (count: number): { name: string; qty: number }[] =>
+  Array.from({ length: count }, (_, i) => ({ name: `P${i}`, qty: 1 }));
+const PASTRY_QUANTITIES: readonly unknown[] = [0, '', null, undefined, 'abc', -3, 1e999, -1e999, NaN, 0.4, 0.5, 1.5, 24, '24',
+  ' 24 ', '1e2', '0x10', '1,5', 9999, 10000, 50000, '9999', '1e4', [5], [5, 6], {}, true, false, new Date(5), 5n,
+  new Number(7), { valueOf: () => 7 }];
+const PASTRY_ROW_LISTS: readonly unknown[] = [...ODD, 'Cornetti', 42,
+  [{ name: 'Cornetti', qty: 24 }, { name: 'Bomboloni', qty: 10 }],
+  [{ name: '  Cornetti  ', qty: '24' }, { name: '', qty: '' }, { name: ' cornetti ', qty: 3 }],
+  [{ name: 'Cornetti', qty: 12 }, { name: 'Cornetti integrali', qty: 6 }, { name: 'CORNETTI', qty: 1 }],
+  [{ name: 'Cornetti', qty: 24 }, { name: '', qty: '' }, { name: '   ', qty: '' }],
+  [1, 'Cornetti', null, undefined, [], { name: 'Bomboloni', qty: 10 }, { qty: 5 }, {}, true, 7n],
+  ...PASTRY_QUANTITIES.map(qty => [{ name: 'Cornetti', qty }]),
+  ...[5, null, undefined, '', ' ', 'x'.repeat(79), 'x'.repeat(80), 'x'.repeat(81), 'x'.repeat(300), ` ${'x'.repeat(80)} `,
+    ['a'], new String('a'), { toString: () => 'a' }, 'ünï', 'Pain au chocolat'].map(name => [{ name, qty: 1 }]),
+  [function named() { return 1; }], [new String('a')], [new Date(5)], [[{ name: 'nested', qty: 1 }]],
+  [{ name: 'Cornetti', qty: 24, extra: true, id: 'x' }], PASTRY_NUMBERS(99), PASTRY_NUMBERS(100), PASTRY_NUMBERS(101),
+  PASTRY_NUMBERS(300), Object.freeze([{ name: 'Cornetti', qty: 24 }]),
+  [{ name: 'Cornetti', qty: 24 }, , { name: 'Bomboloni', qty: 10 }],
+  { length: 1, 0: { name: 'Cornetti', qty: 24 } }, new Set([{ name: 'Cornetti', qty: 24 }])];
+
+const PASTRY_DAY_DOCS: readonly unknown[] = [...ODD, 'doc', 42,
+  ...PASTRY_ROW_LISTS.map(items => ({ items })), ...PASTRY_NOTES.map(note => ({ note })),
+  { items: [{ name: 'Cornetti', qty: 24 }], note: 'slow proof' }, { day: 'Friday' }, { day: 'friday' }, { day: 5 },
+  { day: 'Friday', items: [{ name: 'Cornetti', qty: 24 }] }, { id: 'Monday', day: 'Friday', items: [{ name: 'a', qty: 1 }] },
+  Object.create({ items: [{ name: 'Cornetti', qty: 24 }], note: 'inherited' })];
+
+const PASTRY_ISO_DAYS: readonly unknown[] = [...ODD, 42, '2026-08-05', '2026-08-04', '2026-08-14', '2026-08-20', '2026-02-31',
+  '2026-02-29', '2028-02-29', '2026-13-01', '2026-00-10', '2026-04-31', '2026-8-5', '05-08-2026', ' 2026-08-05', '2026-08-05 ',
+  '2026-08-05\n', '0050-01-01', '0000-01-01', '0099-12-31', '0100-01-01', '1900-02-29', '2000-02-29', '9999-12-31',
+  '１２３４-０１-０１', '2026-08-05T00:00:00Z', new String('2026-08-05'), new Date(NOW)];
+
+const PASTRY_LOG_DOCS: readonly unknown[] = [...PASTRY_DAY_DOCS,
+  ...['2026-08-05T20:00:00.000Z', '', 5, null, ['x'], new String('x')].map(createdAt => ({ createdAt })),
+  { date: '2026-01-01', day: 'Friday', items: [] }, { date: 'rubbish', day: 'Nonday' }, { date: '2026-02-31', day: 'Funday' },
+  ...PASTRY_ISO_DAYS.map(date => ({ date, day: 'Monday' })), ...PASTRY_DAY_NAMES.map(day => ({ date: '2026-08-05', day })),
+  { id: '2026-08-05_Wednesday', date: '2026-01-01', day: 'Friday', items: [], note: 'n', createdAt: '2026-08-05T20:00:00.000Z' }];
+
+const PASTRY_LOG_IDS: readonly unknown[] = [undefined, null, '', ' ', '2026-08-05_Wednesday', '2026-08-05_Wednesday_extra',
+  '2026-02-31_Monday', '2026-08-05_Funday', '2026-08-05', '_Monday', 'Monday', 'rubbish', 'a_b_c', '2026-8-5_Monday',
+  ' 2026-08-05_Monday', '2026-08-05_Monday ', '2026-08-05_monday', 5, {}, ['2026-08-05_Monday'], new String('2026-08-05_Monday')];
+
+// ── pastries-model ───────────────────────────────────────────────────────────
+
+describe('pastries-model: odd inputs', () => {
+  // A partial port: only what it exports is compared (weekdayLabel and weekdayShortLabel stay in js/).
+  const m = pastriesModel;
+  const l = legacyPastriesModel;
+
+  agree('isWeekday', m.isWeekday, l.isWeekday, product(PASTRY_DAY_NAMES));
+  agree('nextWeekday', m.nextWeekday, l.nextWeekday, product(PASTRY_DAY_NAMES));
+  agree('previousWeekday', m.previousWeekday, l.previousWeekday, product(PASTRY_DAY_NAMES));
+  agree('workWeekday', m.workWeekday, l.workWeekday, product(PASTRY_MOMENTS));
+  agree('provingDayFor', m.provingDayFor, l.provingDayFor, product(PASTRY_MOMENTS));
+  agree('wholeNumber', m.wholeNumber, l.wholeNumber, product([...ODD, ...PASTRY_QUANTITIES, Symbol('amount')]));
+  agree('cleanNote', m.cleanNote, l.cleanNote, product(PASTRY_NOTES));
+  agree('cleanItems', m.cleanItems, l.cleanItems, product(PASTRY_ROW_LISTS));
+  agree('findInvalidItems', m.findInvalidItems, l.findInvalidItems, product(PASTRY_ROW_LISTS));
+  agree('normalizeDay', m.normalizeDay, l.normalizeDay, product(PASTRY_DAY_DOCS, [undefined, ...PASTRY_DAY_NAMES]));
+
+  const DOC_LISTS: readonly unknown[] = [...ODD, 'docs', 42, [],
+    ...PASTRY_DAY_NAMES.map(id => [{ id, items: [{ name: 'Cornetti', qty: 24 }], note: 'n' }]),
+    m.WEEKDAYS.map(id => ({ id, items: [{ name: id, qty: 1 }], note: id })),
+    [{ id: 'Monday', items: [{ name: 'a', qty: 1 }] }, { id: 'Monday', items: [{ name: 'b', qty: 2 }] }],
+    [{ id: 'Monday', day: 'Friday', items: [{ name: 'a', qty: 1 }] }, { day: 'Friday', items: [{ name: 'b', qty: 1 }] }],
+    [0, '', null, undefined, 'str', 42, [], {}, true],
+    [Object.create({ id: 'Monday', items: [{ name: 'a', qty: 1 }] })],
+    [{ id: 'Monday', items: PASTRY_NUMBERS(300) }],
+    ...PASTRY_DAY_DOCS.map(doc => [{ id: 'Tuesday', ...(typeof doc === 'object' && doc !== null ? doc : {}) }])];
+  agree('normalizeDays', m.normalizeDays, l.normalizeDays, product(DOC_LISTS));
+
+  const CACHES: readonly unknown[] = [...ODD, 'cache', 42, {},
+    ...PASTRY_ROW_LISTS.map(rows => ({ Monday: rows })), ...PASTRY_ROW_LISTS.map(items => ({ Monday: { items } })),
+    ...PASTRY_NOTES.map(note => ({ Monday: { items: [], note } })),
+    { Monday: 'x' }, { Monday: 7 }, { Monday: null }, { Monday: true }, { monday: [{ name: 'a', qty: 1 }] },
+    { Monday: [{ name: 'a', qty: 1 }], Tuesday: { items: [{ name: 'b', qty: 2 }], note: 'n' }, Sunday: 'x' },
+    Object.fromEntries(m.WEEKDAYS.map(day => [day, [{ name: day, qty: 1 }]])),
+    Object.fromEntries(m.WEEKDAYS.map(day => [day, { items: [{ name: day, qty: 1 }], note: day }])),
+    Object.create({ Monday: [{ name: 'inherited', qty: 1 }] })];
+  agree('daysFromCache', m.daysFromCache, l.daysFromCache, product(CACHES));
+
+  // One position at a time varies around a list that works, so every parameter meets every odd value
+  // without the product of all four growing past reason.
+  const GOOD_ROWS = [{ name: 'Cornetti', qty: 24 }, { name: 'Bomboloni', qty: 10 }, { name: '  Pain AU chocolat ', qty: 5 }];
+  const ROW_LISTS_FOR_QTY: readonly unknown[] = [...PASTRY_ROW_LISTS, [null, { name: 5 }, 'x', { name: 'Cornetti' }, 7, []]];
+  const INDEXES: readonly unknown[] = [...ODD, 2, 3, 5, '0', '1', ' 1 ', '1.0', '0x1', 1.5, 1e999, -1e999, [1], [0], 1n,
+    new Number(1), { valueOf: () => 1 }];
+  const NAMES: readonly unknown[] = [...ODD, 'Cornetti', ' cornetti ', 'CORNETTI', 'Bomboloni', 'Bomboloni ', 'pain au chocolat',
+    new String('Cornetti'), { toString: () => 'Cornetti' }, ['Cornetti'], 'ünï'];
+  agree('setQuantityAt', m.setQuantityAt as (...args: unknown[]) => unknown, l.setQuantityAt as (...args: unknown[]) => unknown, [
+    [], [undefined], [GOOD_ROWS],
+    ...ROW_LISTS_FOR_QTY.flatMap(rows => [[rows, 0, 18, 'Cornetti'], [rows, 1, 18, 'Bomboloni'], [rows, 0, 18, 'a']]),
+    ...INDEXES.flatMap(index => GOOD_ROWS.map(row => [GOOD_ROWS, index, 18, row.name])),
+    ...PASTRY_QUANTITIES.flatMap(qty => [[GOOD_ROWS, 0, qty, 'Cornetti'], [GOOD_ROWS, 2, qty, 'pain au chocolat']]),
+    ...NAMES.flatMap(name => [[GOOD_ROWS, 0, 18, name], [GOOD_ROWS, 1, 18, name], [GOOD_ROWS, 2, 18, name]]),
+    ...product(ROW_LISTS_FOR_QTY.slice(0, 12), [0, 1, 99, -1, NaN], [18, 'x'], ['Cornetti', undefined]),
+  ]);
+});
+
+// ── pastries-log-model ───────────────────────────────────────────────────────
+
+describe('pastries-log-model: odd inputs', () => {
+  const m = pastriesLogModel;
+  const l = legacyPastriesLogModel;
+
+  agree('workDate', m.workDate, l.workDate, product(PASTRY_MOMENTS));
+  agree('logIdFor', m.logIdFor as (...args: unknown[]) => unknown, l.logIdFor as (...args: unknown[]) => unknown,
+    product([...ODD, '2026-08-05', 'Wednesday', new String('x')], [...ODD, 'Wednesday', '2026-08-05', new String('x')]));
+  agree('isRealISODate', m.isRealISODate, l.isRealISODate, product(PASTRY_ISO_DAYS));
+  agree('daysBetween', m.daysBetween, l.daysBetween, product(PASTRY_ISO_DAYS, PASTRY_ISO_DAYS));
+
+  // Records around the fifteen-day edge of NOW (14 Aug 2026), a clock on either side of 4am, and
+  // windows that are not fifteen.
+  const LOGS: readonly unknown[] = [...ODD, 'log', 42, { id: 'x' }, { date: 5 }, { date: new String('2026-08-14') },
+    ...['2026-08-14', '2026-08-13', '2026-08-15', '2026-07-30', '2026-07-29', '2026-07-31', '2026-01-01', '2026-09-01',
+      '2026-02-31', 'nonsense', '', null, undefined].map(date => ({ date })),
+    ...['2026-08-14', '2026-07-30', '2026-07-29'].map(date => ({ id: `${date}_Monday`, date, day: 'Monday', items: [] }))];
+  const CLOCKS: readonly unknown[] = [NOW, MIDNIGHT, LATE, NEXT_DAY, localMs(2026, 7, 14, 3), localMs(2026, 7, 14, 4),
+    localMs(2026, 7, 29, 12), localMs(2026, 7, 30, 3, 59), localMs(2026, 7, 30, 4), 0, NaN, -1, 1, Infinity, -Infinity, 'now',
+    '1700000000000', {}, null, undefined, 8.64e15, 8.64e15 + 1, new Date(NOW), [NOW]];
+  const WINDOWS = [undefined, 15, 0, 1, -1, 14, 16, 1000, 0.5, NaN, null, '15', ' 15 ', Infinity, -Infinity, [15], {}];
+  agree('isLogVisible', m.isLogVisible, l.isLogVisible, product(LOGS, CLOCKS, WINDOWS));
+
+  agree('normalizeLog', m.normalizeLog, l.normalizeLog, product(PASTRY_LOG_DOCS, PASTRY_LOG_IDS));
+  agree('normalizeLog (one argument)', m.normalizeLog, l.normalizeLog, product(PASTRY_LOG_DOCS));
+
+  const LOG_LISTS: readonly unknown[] = [...ODD, 'logs', 42, [],
+    ...PASTRY_LOG_DOCS.map(doc => [doc]),
+    ...PASTRY_LOG_IDS.map(id => [{ id, items: [{ name: 'a', qty: 1 }] }]),
+    [{ id: '2026-08-05_Wednesday', date: '2026-08-05', day: 'Wednesday', items: [] }, { id: 'rubbish', date: 'rubbish', day: 'Nonday' },
+      { id: '2026-02-31_Monday', items: [] }, null, undefined, 0, '', 'str', 42, []],
+    [Object.create({ id: '2026-08-05_Monday' })]];
+  agree('normalizeLogs', m.normalizeLogs, l.normalizeLogs, product(LOG_LISTS));
+
+  const SORTABLE: readonly unknown[] = [...ODD, 'logs', 42, [],
+    [{ date: '2026-08-04', day: 'Wednesday' }, { date: '2026-08-05', day: 'Friday' }, { date: '2026-08-05', day: 'Tuesday' }],
+    [{ date: '2026-08-05', day: 'Sunday' }, { date: '2026-08-05', day: 'Monday' }, { date: '2026-08-05', day: 'Funday' }],
+    [{ date: '2026-08-05', day: 'Funday' }, { date: '2026-08-05', day: 'Nonday' }, { date: '2026-08-05', day: 'Monday' }],
+    [{ date: '2026-08-05', day: 'Monday', id: 'a' }, { date: '2026-08-05', day: 'Monday', id: 'b' }],
+    [{ day: 'Monday' }, { day: 'Tuesday' }], [{ date: 5, day: 'Monday' }, { date: 4, day: 'Monday' }],
+    [{ date: '2026-08-05', day: 'Monday' }], [null, null], [{ date: '2026-08-05', day: 'Monday' }, null],
+    Object.freeze([{ date: '2026-08-04', day: 'Monday' }, { date: '2026-08-05', day: 'Monday' }]),
+    { length: 2, 0: { date: 'a', day: 'Monday' }, 1: { date: 'b', day: 'Monday' } }];
+  agree('sortLogs', m.sortLogs as (...args: unknown[]) => unknown, l.sortLogs as (...args: unknown[]) => unknown, product(SORTABLE));
+
+  const BASE = { day: 'Wednesday', items: [{ name: 'Cornetti', qty: 24 }], note: 'slow proof', nowMs: NOW, existing: undefined };
+  const EXISTING: readonly unknown[] = [...ODD, 'record', 42, { createdAt: '2026-08-04T20:00:00.000Z' }, { createdAt: '' },
+    { createdAt: 5 }, { createdAt: null }, { createdAt: new String('x') }, { updatedAt: 'x' },
+    ...PASTRY_LOG_DOCS.slice(0, 12)];
+  agree('buildLog', m.buildLog as (...args: unknown[]) => unknown, l.buildLog as (...args: unknown[]) => unknown, [
+    [], [undefined], [null], [{}], [BASE], [{ ...BASE, existing: { createdAt: '2026-08-04T20:00:00.000Z' } }],
+    ...varying(BASE, {
+      day: [...PASTRY_DAY_NAMES, 'Wednesday'],
+      items: PASTRY_ROW_LISTS,
+      note: PASTRY_NOTES,
+      nowMs: PASTRY_MOMENTS,
+      existing: EXISTING,
+    }).map(input => [input]),
+  ]);
+});
+
+// ── pastries-lock ────────────────────────────────────────────────────────────
+
+describe('pastries-lock: odd inputs', () => {
+  const m = pastriesLock;
+  const l = legacyPastriesLock;
+
+  agree('grantKeyFor', m.grantKeyFor, l.grantKeyFor, product(PASTRY_DAY_NAMES));
+
+  const ACTIONS: readonly unknown[] = [...ODD, 'edit', 'confirm', 'Edit', 'CONFIRM', 'edit ', ' confirm', 'toString', '__proto__',
+    'save', new String('edit'), ['edit'], { toString: () => 'edit' }];
+  agree('grantAfter', m.grantAfter, l.grantAfter, [...product(ACTIONS), ...product(ACTIONS, PASTRY_ISO_DAYS)]);
+
+  const CONFIRMED = [true, false, undefined, null, 0, 1, '', 'yes', 'false', {}, [], NaN, new Boolean(false)];
+  const GRANTS = [null, undefined, '2026-08-05', '2026-08-04', '2026-08-06', '', 5, {}, [], true, new String('2026-08-05')];
+  agree('isDayLocked', m.isDayLocked, l.isDayLocked, [
+    [], [undefined], [null], [{}], ['text'], [5], [true], [[]],
+    ...product(CONFIRMED, GRANTS, PASTRY_ISO_DAYS).map(([confirmed, grant, workDate]) => [{ confirmed, grant, workDate }]),
+  ]);
+
+  agree('msUntilWorkDayEnd', m.msUntilWorkDayEnd, l.msUntilWorkDayEnd, product(PASTRY_MOMENTS));
+
+  const RECORDS: readonly unknown[] = [...ODD, 'record', 42,
+    ...PASTRY_LOG_IDS.map(id => ({ id, day: 'Friday' })), ...PASTRY_DAY_NAMES.map(day => ({ id: '2026-08-05_Funday', day })),
+    ...PASTRY_DAY_NAMES.map(id => ({ id })), { id: '2026-08-05_Monday' }, { id: '2026-08-05_Monday_Tuesday', day: 'Friday' },
+    { id: 5, day: 'Friday' }, { day: 'Friday' }, { day: ['Friday'] }, Object.create({ id: '2026-08-05_Monday' })];
+  const RECORD_LISTS: readonly unknown[] = [...ODD, 'records', 42, [],
+    ...RECORDS.map(record => [record]), RECORDS, RECORDS.slice(0, 5),
+    ['x', 5, null, undefined, [], {}], Object.fromEntries(RECORDS.slice(0, 3).map((record, i) => [i, record])),
+    new Set(RECORDS.slice(0, 3))];
+  agree('confirmedDaysFrom', m.confirmedDaysFrom, l.confirmedDaysFrom, product(RECORD_LISTS));
 });

@@ -1,0 +1,238 @@
+/* The seven days. ONE set of buttons in two layouts, chosen here and nowhere else: a strip of
+   chips above the day (a phone, a tablet held upright), and from 1000px a list of rows on the
+   left of it (the design's `.row`, the lab tablet held sideways). An element that exists for one
+   layout only is hidden in the other, and each `display: none` below has its `display` in the
+   other half of the file.
+
+   ⚠️ THE WORDS OF A TAB ARE ITS NAME, so an element that carries them is never `display: none`
+   (that would take it out of the name): in the strip it is `visually-hidden` (base.css), and the
+   split undoes that recipe. Only what is `aria-hidden` in the markup is `display: none`. */
+
+.list {
+  display: grid;
+  /* The seven chips SHARE the width: on a 360px phone the strip is 328px, and 7 x 40 + 6 x 4 = 304
+     fits it. Below that (a 296px phone) the strip scrolls rather than squeezing a day into a
+     sliver. pastries-css.spec.ts adds it up. */
+  grid-template-columns: repeat(7, minmax(40px, 1fr));
+  gap: var(--s1);
+  overflow-x: auto;
+}
+
+.tab {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-height: var(--hit-lg);
+  padding: var(--s2) 2px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Inside the chip: the list clips whatever sticks out of it. */
+.tab:focus-visible {
+  outline-offset: -3px;
+}
+
+.tab[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+/* A day with nothing in it is drawn quieter, so «have I done Thursday yet?» is answered from
+   here. ink-3 on the surface is above 4.5:1; on the hover ground it is not, hence the hover rule
+   below. */
+.tab[data-empty="true"]:not([aria-selected="true"]) {
+  color: var(--ink-3);
+}
+
+@media (hover: hover) {
+  .tab:hover:not([aria-selected="true"]) {
+    background: var(--sunken);
+  }
+
+  .tab[data-empty="true"]:hover:not([aria-selected="true"]) {
+    color: var(--ink-2);
+  }
+}
+
+.short {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.number {
+  font-size: var(--fs-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+/* Under the number: the opening day's dot and the confirmed tick. The height is kept even when
+   empty, so the seven chips are the same height. */
+.marks {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 14px;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--accent);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Qualified by .chip so it outranks base.css's `svg.lucide` size of 20px. */
+.chip svg {
+  width: 14px;
+  height: 14px;
+  stroke-width: 2.1;
+}
+
+/* The strip says «tomorrow» with the dot, and «confirmed» with the tick alone: the words
+   (.chipTomorrow, .chipWord) are visually-hidden here. */
+.chipOk {
+  color: var(--ok-ink);
+}
+
+@media (min-width: 1000px) {
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    overflow: hidden;
+    border: 1px solid var(--line);
+    border-radius: var(--r-lg);
+    background: var(--surface);
+  }
+
+  .tab {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    justify-items: start;
+    column-gap: var(--s3);
+    row-gap: var(--s1);
+    min-height: 72px;
+    padding: var(--s3) var(--s5);
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+    text-align: left;
+  }
+
+  .tab:first-child {
+    border-top: 0;
+  }
+
+  /* The chosen row is told by its tint, not by an accent outline. */
+  .tab[aria-selected="true"] {
+    border-color: var(--line);
+  }
+
+  .short,
+  .number {
+    display: none;
+  }
+
+  /* The words of the tab, undone from the strip's `visually-hidden`. Two classes, so base.css
+     loading before or after this file does not matter. White space is left alone on the chips:
+     they are `nowrap` themselves. */
+  .tab .full,
+  .tab .sub,
+  .tab .chipTomorrow,
+  .tab .chipWord {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    clip-path: none;
+  }
+
+  .tab .full,
+  .tab .sub {
+    white-space: normal;
+  }
+
+  /* The recipe also zeroes the padding, which would beat .chip's once base.css loads last. */
+  .tab .chipTomorrow {
+    padding: 0 10px;
+  }
+
+  .full {
+    display: block;
+    grid-row: 1;
+    grid-column: 1;
+    font-size: var(--fs-md);
+    font-weight: 600;
+  }
+
+  .sub {
+    display: block;
+    grid-row: 2;
+    grid-column: 1;
+    color: var(--ink-2);
+    font-size: var(--fs-sm);
+  }
+
+  .marks {
+    grid-row: 1 / span 2;
+    grid-column: 2;
+    justify-self: end;
+    gap: var(--s2);
+  }
+
+  .dot {
+    display: none;
+  }
+
+  .chip {
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: var(--r-pill);
+    font-size: 13px;
+    font-weight: 550;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .chipTomorrow {
+    display: inline-flex;
+    background: var(--accent-tint);
+    color: var(--accent-ink);
+  }
+
+  .chipOk {
+    background: var(--ok-tint);
+  }
+
+  .chipWord {
+    display: inline;
+  }
+
+  /* The chosen row is tinted, so the opening day's chip would vanish into it. */
+  .tab[aria-selected="true"] .chipTomorrow {
+    background: var(--surface);
+  }
+}

@@ -1,0 +1,165 @@
+/* Records: a card holding the form bar (Back · «Records» · «Last 15 days») and one card per night.
+   On the split it is the right-hand pane; below 1000px it replaces the day.
+
+   ⚠️ NOTHING ON THE CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's
+   scrolling area, and a clipping ancestor would turn it into an ordinary row. */
+
+.records {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.date {
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+/* Which list it was (the design's chip, quiet). */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: var(--r-pill);
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.items {
+  margin: 0;
+}
+
+/* A name on the left, its number on the right in same-width digits, so a column reads down. */
+.item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s2) 0;
+  border-top: 1px solid var(--line);
+}
+
+.name {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.qty {
+  flex: none;
+  margin: 0;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.nothing {
+  color: var(--ink-2);
+}
+
+/* The note as it was that night: its line breaks are the writer's own. */
+.note {
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+/* The quiet bin (the design's `.btn-quiet-danger`): grey until it is the thing under the finger. */
+.bin {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bin[data-hovered],
+.bin[data-pressed] {
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
+
+.kept {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s6) 0;
+}
+
+.emptyTitle {
+  font-weight: 600;
+}
+
+.emptyHint {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}

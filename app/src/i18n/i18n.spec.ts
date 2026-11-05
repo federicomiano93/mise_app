@@ -70,6 +70,42 @@ describe('the message catalogues', () => {
   });
 });
 
+// ⚠️ A SENTENCE WITH A WEEKDAY IN IT MUST FIT ALL SEVEN. «Domenica» is feminine, the other six days
+// are masculine, so «{day} registrato» or «{day} fatto» is right six days in seven and wrong on
+// Sunday. A weekday is the subject of no adjective or participle: the sentence is about «la lista di
+// {day}», or puts the day last («Salvato: {day}.»).
+describe('the Italian sentences that name a weekday', () => {
+  const withDay = Object.entries<Message>(italian)
+    .filter(([key]) => key.startsWith('past.'))
+    .flatMap(([key, message]) => {
+      const texts = typeof message === 'string' ? [message] : Object.values(message);
+      return texts.filter(text => text.includes('{day}')).map(text => [key, text] as const);
+    });
+
+  it('finds them (the guard below is not looking at nothing)', () => {
+    expect(withDay.length).toBeGreaterThan(10);
+    expect(withDay.map(([key]) => key)).toContain('past.daySaved');
+  });
+
+  // Words that would have to agree with the day: masculine participles and adjectives, and the
+  // pronoun «lo» that points back at it. A participle followed by a colon is a label with the day
+  // after it («Salvato: {day}.»), which agrees with nothing.
+  const MASCULINE = /\b(fatto|registrato|salvato|vuoto|pronto|confermato|modificato|cambiato|aggiornato|completato|chiuso|aperto)\b(?!:)|\b(cambiarlo|modificarlo|toglierlo|salvarlo|registrarlo)\b/i;
+
+  it.each(withDay)('%s has nothing in it that agrees with the day: %s', (_key, text) => {
+    expect(text).not.toMatch(MASCULINE);
+  });
+
+  it.each(['Lunedì', 'Giovedì', 'Domenica'])('reads right for %s', day => {
+    expect(format('it', italian['past.daySaved'], { day })).toBe(`Salvato: ${day}.`);
+    expect(format('it', italian['past.dayRecorded'], { day })).toBe(`Registrato: ${day}.`);
+    expect(format('it', italian['past.alreadyRecordedTonight'], { day }))
+      .toBe(`La lista di ${day} è già registrata per stanotte. Modificare queste quantità?`);
+    expect(format('it', italian['past.willShowAsDone'], { day }))
+      .toBe(`La lista di ${day} risulterà fatta. Puoi ancora cambiarla — te lo chiederà prima.`);
+  });
+});
+
 describe('pickLanguage', () => {
   it.each([
     ['it-IT', 'it'],

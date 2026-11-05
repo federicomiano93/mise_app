@@ -10,6 +10,7 @@ import {
   Warehouse,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { isWeekday } from '@mise/shared/pastries-model';
 import type { MessageKey } from '../i18n/en';
 
 export type SectionId =
@@ -113,7 +114,17 @@ export function screenNameFor(pathname: string): string | null {
   if (pathname === '/') return null;
   if (isUnder(pathname, MORE.path)) return 'more';
   const section = SECTIONS.find(candidate => isUnder(pathname, candidate.path));
-  return section ? section.id : 'not-found';
+  if (!section) return 'not-found';
+  return section.id === 'pastries' ? pastriesScreenName(pathname, section.path) : section.id;
+}
+
+// Pastries is three screens that share one section: the day (the list, whichever day), its editor
+// and Records. Picking another day is not a new screen, so every day is plain `pastries`.
+function pastriesScreenName(pathname: string, base: string): string {
+  const rest = pathname.slice(base.length).split('/').filter(part => part !== '');
+  if (rest.length === 1 && rest[0] === 'records') return 'pastries-records';
+  if (rest.length === 2 && isWeekday(rest[0]) && rest[1] === 'edit') return 'pastries-editor';
+  return 'pastries';
 }
 
 // «More» is the current tab on its own page AND on every section it holds: standing on
