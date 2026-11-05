@@ -15,11 +15,13 @@ function keepsFocus(state: unknown): boolean {
 type Props = {
   title: string;
   children: ReactNode;
+  // A small control on the title's own line, at the far right (Settings' «Log out»).
+  action?: ReactNode;
 };
 
 // Every screen is a Page: one h1 (the screen's name), the browser tab's title, and the
 // focus moved onto the new screen after a client-side navigation.
-export function Page({ title, children }: Props) {
+export function Page({ title, children, action }: Props) {
   const { t } = useT();
   const location = useLocation();
   const navigationType = useNavigationType();
@@ -43,8 +45,9 @@ export function Page({ title, children }: Props) {
 
   return (
     <>
-      <header className={styles.head}>
+      <header className={action ? `${styles.head} ${styles.withAction}` : styles.head}>
         <h1 ref={headingRef} tabIndex={-1} className={styles.title}>{title}</h1>
+        {action ? <div className={styles.action}>{action}</div> : null}
       </header>
       <div className={styles.body}>{children}</div>
     </>

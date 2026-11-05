@@ -61,6 +61,18 @@ describe('SettingsPage', () => {
     });
   });
 
+  describe('the way out', () => {
+    it('shares the title line with the h1, after it, and is not in the Account card', () => {
+      renderApp('/settings');
+      const h1 = screen.getByRole('heading', { level: 1, name: 'Settings' });
+      const logOut = main().getByRole('button', { name: 'Log out' });
+      expect(h1.parentElement).toBe(logOut.closest('header'));
+      expect(h1.compareDocumentPosition(logOut) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      const card = main().getByRole('heading', { level: 2, name: 'Account' }).closest('section') as HTMLElement;
+      expect(within(card).queryByRole('button', { name: 'Log out' })).not.toBeInTheDocument();
+    });
+  });
+
   describe('logging out', () => {
     it('asks first, and signs out when confirmed', async () => {
       const { store, user } = renderApp('/settings');

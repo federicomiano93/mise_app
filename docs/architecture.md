@@ -84,7 +84,7 @@ Aria does not support Preact. The numbers are below.
   `visibility.ts` decides which sections a person sees (the current app's page gate). The screens
   above a venue (sign-in, picker, no access, error) and `SessionGate` live here too.
 - `shell/` — the frame: the dark rail (700px and wider), the phone tab bar, the top bar (venue,
-  date, connection), `Page` (one h1, the tab title, focus on navigation), the placeholders, More,
+  date, connection), `Page` (one h1, the tab title, focus on navigation; an optional `action` — ONE small control on the title line, today only Settings' «Log out», whose failure message wraps under the line), the placeholders, More,
   Not found, Not available, the offline banner.
 - `errors/` — `PartBoundary` (a part that fails shows «This part didn't load / Reload», the rest
   keeps working), `RootError` and `AppBoundary` (the whole app).
