@@ -22,7 +22,7 @@ import { onSession, signIn, signUp, sendReset, chooseLocation, signOutNow,
 import { showPreviewRibbon } from './preview-ribbon.js';
 import { normalizeTyped } from './join-code.js';
 import { kindOfTyped, readJoinToken, codeShapeHint } from './join-link.js';
-import { nameProblem, passwordProblem, confirmProblem, MIN_PASSWORD_LENGTH } from './credentials.js';
+import { nameProblem, passwordProblem, confirmProblem, emailConfirmProblem, MIN_PASSWORD_LENGTH } from './credentials.js';
 import { isSectionAllowed, isSectionAllowedFor, pageWhenRefused } from './sections.js';
 import { cardVisibleTo } from './home-cards.js';
 // The device count: starts itself, reports once a day per venue and account (js/device-ping.js).
@@ -347,7 +347,38 @@ function joinScreen({ needsAccount, prefill = '' }) {
       ? (needsAccount ? 'join.sub.prefillNew' : 'join.sub.prefill')
       : (needsAccount ? 'join.sub.new' : 'join.sub.have'))));
 
+  // ⚠️⚠️ WHICH ACCOUNT THE CODE WILL JOIN, SAID BEFORE IT IS SPENT (his note of 3 Nov
+  // 2026: somebody was let in «without email and password», and the app «knew the
+  // right email»). Without an account to create, this form redeems the code for
+  // WHOEVER IS ALREADY SIGNED IN on the device — render() sends an invitation link
+  // straight here in the no-access case. On a shared phone that may be a former
+  // employee's account, or the newcomer's own from a first attempt, and nothing on
+  // screen said which. The code is single use, so a wrong account costs a new code
+  // and a correction in «Who can get in». Named here, with the way out beside it.
+  if (!needsAccount) {
+    const who = (lastSession && lastSession.user && lastSession.user.email) || lastAccount;
+    // The sentence in ordinary text and the address on its own line: .auth-account breaks
+    // anywhere (an email has no spaces), which split «account» in two inside a sentence.
+    if (who) {
+      const said = el('p', 'auth-sub', t('join.forAccount'));
+      const address = el('p', 'auth-account', who);
+      said.id = 'join-for-account';
+      address.id = 'join-for-address';
+      card.append(said, address);
+    }
+    // The class says the link sits ABOVE a form: auth.css gives it air below, so the
+    // first label does not read as part of it.
+    const other = otherAccountButton();
+    other.classList.add('auth-link--before-form');
+    card.append(other);
+  }
+
   const form = el('form', 'auth-form');
+  // Focus lands straight in «First name», past the sentence above: tied to the form, a
+  // screen reader still says which account the code is for (review, 6 Nov 2026).
+  if (!needsAccount && card.querySelector('#join-for-address')) {
+    form.setAttribute('aria-describedby', 'join-for-account join-for-address');
+  }
   form.noValidate = true;
 
   // ⚠️ THE NAME IS ASKED EVERY TIME, NOT ONLY WITH A NEW ACCOUNT. The roster is
@@ -372,7 +403,7 @@ function joinScreen({ needsAccount, prefill = '' }) {
 
   form.append(firstLabel, firstName, lastLabel, lastName);
 
-  let email = null, password = null, password2 = null;
+  let email = null, email2 = null, password = null, password2 = null;
   if (needsAccount) {
     const emailLabel = el('label', 'auth-label', t('join.email'));
     emailLabel.htmlFor = 'join-email';
@@ -380,6 +411,15 @@ function joinScreen({ needsAccount, prefill = '' }) {
     email.id = 'join-email';
     email.type = 'email';
     email.autocomplete = 'username';
+
+    // The email typed twice, like the password (his note of 3 Nov 2026). Autofill is
+    // switched off on the second box so it is really typed, not copied by the browser.
+    const email2Label = el('label', 'auth-label', t('join.repeatEmail'));
+    email2Label.htmlFor = 'join-email2';
+    email2 = el('input', 'auth-input');
+    email2.id = 'join-email2';
+    email2.type = 'email';
+    email2.autocomplete = 'off';
 
     const passLabel = el('label', 'auth-label',
       t('join.choosePassword', { n: MIN_PASSWORD_LENGTH }));
@@ -397,7 +437,7 @@ function joinScreen({ needsAccount, prefill = '' }) {
     password2.type = 'password';
     password2.autocomplete = 'new-password';
 
-    form.append(emailLabel, email, passLabel, password, pass2Label, password2);
+    form.append(emailLabel, email, email2Label, email2, passLabel, password, pass2Label, password2);
   }
 
   const codeLabel = el('label', 'auth-label', t('join.code'));
@@ -495,6 +535,8 @@ function joinScreen({ needsAccount, prefill = '' }) {
     if (last) return [last, lastName];
     if (needsAccount) {
       if (!email.value.trim()) return [t('auth.enterEmail'), email];
+      const sameEmail = emailConfirmProblem(email.value, email2.value);
+      if (sameEmail) return [sameEmail, email2];
       const pass = passwordProblem(password.value, email.value);
       if (pass) return [pass, password];
       const again = confirmProblem(password.value, password2.value);
@@ -737,6 +779,20 @@ function chooseScreen(session) {
 // message screen therefore also offers the way OUT — signing out and coming back
 // to the form — and names the account it is talking about, so "ask the owner to
 // add it" is a request someone can actually act on instead of a riddle.
+// «Sign in with a different account»: signs out, after asking about anything unsent.
+// Shared by the message screens and the code form of a signed-in account.
+function otherAccountButton() {
+  const other = el('button', 'auth-link', t('auth.otherAccount'));
+  other.type = 'button';
+  other.addEventListener('click', async () => {
+    const [{ confirmDialog }, { mayLeaveWithUnsent }] = await Promise.all([
+      import('./confirm-dialog.js'), import('./unsent-guard.js'),
+    ]);
+    if (await mayLeaveWithUnsent(confirmDialog)) signOutNow();
+  });
+  return other;
+}
+
 function messageScreen(title, body, { account = '' } = {}) {
   const card = el('div', 'auth-card');
   card.append(el('h1', 'auth-title', title));
@@ -752,15 +808,7 @@ function messageScreen(title, body, { account = '' } = {}) {
   retry.addEventListener('click', () => location.reload());
   card.append(retry);
 
-  const other = el('button', 'auth-link', t('auth.otherAccount'));
-  other.type = 'button';
-  other.addEventListener('click', async () => {
-    const [{ confirmDialog }, { mayLeaveWithUnsent }] = await Promise.all([
-      import('./confirm-dialog.js'), import('./unsent-guard.js'),
-    ]);
-    if (await mayLeaveWithUnsent(confirmDialog)) signOutNow();
-  });
-  card.append(other);
+  card.append(otherAccountButton());
 
   return card;
 }
