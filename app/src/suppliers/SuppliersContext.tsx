@@ -26,6 +26,18 @@ export function SuppliersProvider({ children, deps }: { children: ReactNode; dep
   return <SuppliersContext.Provider value={store}>{children}</SuppliersContext.Provider>;
 }
 
+// The same store for ANOTHER section that only WRITES records (T15: the Recipe catalogue's «+ Add "…" as an ingredient»):
+// created, NEVER STARTED. Its writes (saveIngredient, saveSupplier) only call the source, so it opens no listener and reads
+// nothing — above all not ingredient-prices, the money the Recipe catalogue must never load (recipesSource.spec.ts). Its
+// snapshot stays empty: whoever draws a card here hands it the suppliers and ingredients that section already watches.
+export function SuppliersWritesProvider({ children, deps }: { children: ReactNode; deps?: SuppliersDeps }) {
+  const services = useDataServices();
+  const { locationId } = useSession();
+  if (!locationId) throw new Error('Writing records needs an open venue.');
+  const [store] = useState(() => createSuppliersStore(services.suppliers(locationId), deps));
+  return <SuppliersContext.Provider value={store}>{children}</SuppliersContext.Provider>;
+}
+
 export function useSuppliersStore(): SuppliersStore {
   const store = useContext(SuppliersContext);
   if (!store) throw new Error('useSuppliersStore must be used inside a <SuppliersProvider>.');

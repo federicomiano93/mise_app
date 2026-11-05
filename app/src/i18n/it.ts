@@ -399,6 +399,7 @@ export const it: Messages = {
   'fc.labourPctLine': 'Lavoro {labour}%  ·  tutto {total}% del prezzo netto',
   'fc.packagingPerNote': 'Scatole, sacchetti, etichette — quanti per ogni pezzo, confezione o chilo che vendi. Aggiungono costo ma non peso.',
   'cat.suggest.seeAll': 'Vedi tutti ({n})',
+  'cat.createIngredient': '+ Crea «{name}» come ingrediente',
   'ui.recipes': 'Ricette',
   'ui.delete': 'Elimina',
 

@@ -43,6 +43,7 @@ import * as productLimits from './product-limits';
 import * as vatGuide from './vat-guide';
 import * as catalogueModel from './catalogue-model';
 import * as recipeLink from './recipe-link';
+import * as records from './records';
 import * as recipeCostModel from './recipe-cost-model';
 import * as foodcostWeighing from './foodcost-weighing';
 import * as foodcostModel from './foodcost-model';
@@ -109,6 +110,7 @@ import * as legacyVatGuideJs from '../../js/foodcost/vat-guide.js';
 import { t as legacyT } from '../../js/i18n.js';
 import * as legacyCatalogueModelJs from '../../js/catalogue/catalogue-model.js';
 import * as legacyRecipeLinkJs from '../../js/recipe-link.js';
+import * as legacyRecordsJs from '../../js/records.js';
 import { nameTaken as legacyNameTaken } from '../../js/catalogue/ingredient-suggest.js';
 import * as legacyRecipeCostModelJs from '../../js/catalogue/recipe-cost-model.js';
 import * as legacyFoodcostWeighingJs from '../../js/foodcost/foodcost-weighing.js';
@@ -2993,6 +2995,15 @@ describe('recipe-link: odd inputs', () => {
   const MANAGE: readonly unknown[] = [...ODD, true, 'true'];
   agree('mayOpenFoodCost', recipeLink.mayOpenFoodCost, l.mayOpenFoodCost, product(LOCS, MANAGE));
   agree('mayOpenOrders', recipeLink.mayOpenOrders, l.mayOpenOrders, product(LOCS, MANAGE));
+});
+
+describe('records: odd inputs', () => {
+  const l = legacyRecordsJs as unknown as typeof records;
+  const LOCS: readonly unknown[] = [...ODD, 'bakery', { sections: {} }, { sections: { orders: false } }, { sections: { orders: 'false' } },
+    { staffHiddenCards: { suppliers: true } }, { sections: {}, staffHiddenCards: { suppliers: 'true' } }, { sections: {}, staffHiddenCards: null },
+    { sections: null, staffHiddenCards: { orders: true } }];
+  const MANAGE: readonly unknown[] = [...ODD, true, 'true', 1];
+  agree('mayEditRecords', records.mayEditRecords, l.mayEditRecords, product(LOCS, MANAGE));
 });
 
 describe('log-model: odd inputs', () => {

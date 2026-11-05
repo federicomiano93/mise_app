@@ -47,15 +47,16 @@ describe('the suggestion list under a row’s name', () => {
     const { region, user } = await openEditor('/recipes/new', { recipes: [FARINATA], ingredients: [FLOUR, ...BUTTERS], suppliers: SUPPLIERS });
     const name = ingredientBoxes(region)[0]!;
     await user.type(name, 'f');
-    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    // Below two characters there is no matching; only the «+ Add …» door (T15, every record-writer sees it) is offered.
+    expect(optionTexts()).toEqual(['+ Add «f» as an ingredient']);
     await user.type(name, 'ari');
     expect(screen.getByRole('listbox', { name: 'Catalogue ingredients to link' })).toBeInTheDocument();
     // Ingredient first (name, pack weight and supplier — no price), then the recipe.
-    expect(optionTexts()).toEqual(['Caputo 25 kg  ·  Rossi', 'Farinata Recipe']);
+    expect(optionTexts()).toEqual(['Caputo 25 kg  ·  Rossi', 'Farinata Recipe', '+ Add «fari» as an ingredient']);
     await user.clear(name);
     await user.type(name, 'bu');
-    expect(options()).toHaveLength(6);
-    expect(optionTexts().at(-1)).toBe('See all (7)');
+    expect(options()).toHaveLength(7);
+    expect(optionTexts().at(-2)).toBe('See all (7)');
   });
 
   it('⚠️ never offers the recipe itself, a switched-off ingredient or packaging', async () => {
@@ -64,10 +65,10 @@ describe('the suggestion list under a row’s name', () => {
     const { region, user } = await openEditor('/recipes/r1/edit', { recipes: [FOCACCIA, FARINATA], ingredients: [FLOUR, off, box], suppliers: SUPPLIERS });
     await user.clear(ingredientBoxes(region)[0]!);
     await user.type(ingredientBoxes(region)[0]!, 'fa');
-    expect(optionTexts()).toEqual(['Caputo 25 kg  ·  Rossi', 'Farinata Recipe']);
+    expect(optionTexts()).toEqual(['Caputo 25 kg  ·  Rossi', 'Farinata Recipe', '+ Add «fa» as an ingredient']);
     await user.clear(ingredientBoxes(region)[0]!);
     await user.type(ingredientBoxes(region)[0]!, 'foc');
-    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    expect(optionTexts()).toEqual(['+ Add «foc» as an ingredient']);
   });
 
   it('is a combobox with a listbox, and the name box leaves the browser’s own list out', async () => {
@@ -139,7 +140,8 @@ describe('the full chooser', () => {
   it('«See all (n)» opens it already searching what was typed', async () => {
     const { region, user } = await openEditor('/recipes/new', { ingredients: BUTTERS });
     await user.type(ingredientBoxes(region)[0]!, 'bur');
-    await user.click(options().at(-1)!);
+    // «See all» is the second to last: the «+ Add …» door is the last row.
+    await user.click(options().at(-2)!);
     const dialog = await screen.findByRole('dialog', { name: 'Link to' });
     expect(within(dialog).getByRole('searchbox', { name: 'Search an ingredient' })).toHaveValue('bur');
     expect(within(dialog).getAllByRole('button', { name: /^Burro/ })).toHaveLength(7);

@@ -696,6 +696,20 @@ F6 (b).**
   sheets ported word for word (C116).
 - **T15. The Recipe catalogue's «+ Create “…” as an ingredient»** (Catalogue parity list, Question 9 — left out until
   this step) is built with the card, opening the same card over the recipe editor.
+  **T15 as built** (3e, the Recipe catalogue's side; `RecipesSection.createIngredient.spec.tsx`):
+  - O1. Back (the card's own, or the browser's / Android's) while the card is open closes ONLY the card; if something was
+    typed in the card it asks «Discard changes?» first. The editor and its unsaved recipe stay (its router blocker turns
+    any move into the card's Back while the card is open).
+  - O2. A dialog on a scrim from 700px (as «+ New supplier»), the whole screen below 700px (`FormDialog` `phoneFull`).
+  - O3. The categories are `categoryChoices({ stored: undefined, … })` like the current app: no read of `config/orders`.
+    The packs are `packChoices`.
+  - O4. A save the server refuses later is accepted (local-first): the row stays linked and the refusal is said through the
+    section's status message (`CreateIngredientProvider`).
+  - O5. The words are the current app's (`cat.createIngredient`); after a save «Ingredient saved.» is said. The row's name
+    follows the pick (the name to show), the row's amount takes the focus; on cancel the focus returns to the row's name
+    box (opened from the suggestions) or its link line (from the chooser). Nothing is written to the recipe until Save recipe.
+  - Built without money: the card saves through the write-only Suppliers store (never started: no listener, no read); the
+    price section is drawn only for whoever may write prices, and a new ingredient has no history to read.
 - **T16. `suppliers.html#packaging`** has no linker (Finding S-G): not ported; `/suppliers/packaging` exists anyway.
 - **T17. No way to switch an ingredient off the order list** exists today (Finding S-D): parity, nothing added; said to
   him as a finding.

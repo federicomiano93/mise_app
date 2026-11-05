@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { linkOptions } from '@mise/shared/catalogue-model';
+import { linkOptions, nameTaken } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
@@ -22,6 +22,9 @@ type Props = {
   // Back) — which changes NOTHING. «Cancel» must not silently clear a link.
   onChoose: (chosen: Chosen | null) => void;
   onClose: () => void;
+  // «+ Add "…" as an ingredient» under the lists, for the name searched: offered where the person may add records.
+  mayCreate: boolean;
+  onCreate: (name: string) => void;
 };
 
 // The full chooser that links a recipe row to an ingredient or another recipe: a search screen, not a menu (there are too
@@ -29,13 +32,15 @@ type Props = {
 // button that opened it — mounted only while it is open. The matching is linkOptions (tested where it lives).
 //
 // ⚠️ NO PRICE (13 Sep 2026): name · pack weight · supplier is what tells two similar-looking articles apart.
-export function LinkDialog({ ingredients, recipes, suppliers, excludeRecipeId, hasLink, initialQuery = '', onChoose, onClose }: Props) {
+export function LinkDialog({ ingredients, recipes, suppliers, excludeRecipeId, hasLink, initialQuery = '', onChoose, onClose, mayCreate, onCreate }: Props) {
   const { t } = useT();
   const [query, setQuery] = useState(initialQuery);
   const options = useMemo(
     () => linkOptions({ ingredients, recipes, suppliers, query, excludeRecipeId }),
     [ingredients, recipes, suppliers, query, excludeRecipeId],
   );
+  // Same three conditions as the suggestion list's last row.
+  const canCreate = mayCreate && query.trim() !== '' && !nameTaken(ingredients, query);
   const shown = options.ingredients.length + options.recipes.length;
 
   return (
@@ -105,6 +110,11 @@ export function LinkDialog({ ingredients, recipes, suppliers, excludeRecipeId, h
         )}
         {shown === 0 ? (
           <p className={styles.empty}>{query.trim() !== '' ? t('cat.nothingMatchesYourSearch') : t('cat.noIngredientsYetAdd')}</p>
+        ) : null}
+        {canCreate ? (
+          <button type="button" className={`${styles.row} ${styles.create}`} onClick={() => { onCreate(query.trim()); }}>
+            {t('cat.createIngredient', { name: query.trim() })}
+          </button>
         ) : null}
       </div>
     </Dialog>
