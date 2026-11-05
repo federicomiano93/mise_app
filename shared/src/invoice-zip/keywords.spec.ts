@@ -144,10 +144,10 @@ describe('the keyword patterns of keywords.ts are those of invoice-import/classi
   });
 
   test('the extraction reads every piece of a multi-line pattern, skipping comments', () => {
-    // BEVERAGE_RE is two pieces, READY_RE has a comment line between its pieces.
+    // BEVERAGE_RE is two pieces, FOOD_RE has a comment line between its pieces.
     expect(pythonPattern('BEVERAGE_RE')).toContain('coca cola|\\bacqua\\b');
     expect(pythonPattern('BEVERAGE_RE')).toContain('|prosecco|\\bvino\\b');
-    expect(pythonPattern('READY_RE')).not.toContain('Bar and shelf');
-    expect(pythonPattern('READY_RE')).toContain('cipolle fette|\\byog\\.');
+    expect(pythonPattern('FOOD_RE')).not.toContain('Ready-made food');
+    expect(pythonPattern('FOOD_RE')).toContain('mozzarella|patate');
   });
 });

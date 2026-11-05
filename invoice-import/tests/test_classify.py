@@ -22,6 +22,25 @@ class PackParsingTest(unittest.TestCase):
         self.check("SALAME 1/4 KG", 0.25, "kg")
         self.check("FARINA KG 25", 25, "kg")
 
+    def test_a_carton_weight_is_not_multiplied_by_its_piece_count(self):
+        # Mirrored word for word in tests/invoice-zip-classify.test.mjs.
+        self.check("BRIOCHE mignon 35/40gr 2Kg* 55pz", 2, "kg")
+        self.check("ESEMPIO 85gr 5Kg* 60pz", 5, "kg")
+        self.check("ESEMPIO 35/40gr 2Kg* 6pz", 2, "kg", 6)
+        self.check("PATATE 2,5kg* 4pz", 2.5, "kg", 4)
+        self.check("PASTA 85gr* 50pz", 85, "g", 50)
+
+    def test_a_bare_k_before_the_star_is_a_kilo_nowhere_else(self):
+        # Mirrored word for word in tests/invoice-zip-classify.test.mjs.
+        self.check("PATATE FETTE 4X2,5k*    4pz", 2.5, "kg", 4)
+        self.check("PANZEROTTI MIGNON2.5k*    1pz", 2.5, "kg", 1)
+        self.check("BRIOCHE mignon 35/40gr 2k* 55pz", 2, "kg")
+        self.check("SALAME 1/2k* 4pz", 0.5, "kg", 4)
+        self.check("ART123K*5 FARINA KG 25", 25, "kg")
+        self.check("PANINI 30GR 2KG*50PZ", 2, "kg", 50)
+        self.assertIsNone(parse_pack("SERIE 5KX2"))
+        self.assertIsNone(parse_pack("T65K*10 FARINA"))
+
     def test_unit_first_does_not_match_inside_a_word(self):
         self.assertIsNone(parse_pack("BUSTE ML"))
         self.assertIsNone(parse_pack("DOLCE5X3"))
@@ -90,11 +109,26 @@ class ClassifyTest(unittest.TestCase):
         self.assertEqual(self.kind("BUSTE PLASTICA")[0], "packaging")
         self.assertEqual(self.kind("CARTA FORNO")[0], "packaging")
 
-    def test_beverages_and_ready_made_are_resale(self):
+    def test_beverages_are_resale_ready_made_food_is_an_ingredient(self):
         self.assertEqual(self.kind("ACQUA NATURALE 50 CL")[0], "rivendita")
         self.assertEqual(self.kind("COCA COLA LATTINA")[0], "rivendita")
-        self.assertEqual(self.kind("CORNETTO ALLA CREMA")[0], "rivendita")
+        self.assertEqual(self.kind("CORNETTO ALLA CREMA")[0], "ingrediente")
         self.assertEqual(self.kind("FECOLA DI PATATE")[0], "ingrediente")
+
+    def test_ready_made_food_is_an_ingredient_and_a_potato_peeler_is_packaging(self):
+        # Mirrored word for word in tests/invoice-zip-classify.test.mjs.
+        for text in ("CR.VUOTO 85gr* 50pz", "PATATE FETTE 2,5kg* 4pz", "CIPOLLE FETTE 2,5kg* 4pz",
+                     "PANZEROTTO CREMA 170gr* 25pz", "PASTICCIOTTO AMARENA 110g* 30pz", "TRECCIA NOCI 98g* 60pz"):
+            self.assertEqual(self.kind(text)[0], "ingrediente", text)
+        self.assertEqual(self.kind("4 PELAPATATE ESEMPIO")[0], "packaging")
+        self.assertEqual(self.kind("LIQUIDO LAVASTOVIGLIE ESEMPIO")[0], "packaging")
+        self.assertEqual(self.kind("MICRONIZZATORE STD LT 1")[0], "packaging")
+        for text in ("AVENA MICRONIZZATA KG 25", "PATATE PADELLATE 2,5KG", "PATATE SACCHETTO 2,5KG",
+                     "CORNETTO FANTASIA 85GR* 50PZ", "TRECCIA ALLA BIRRA 98G* 60PZ"):
+            self.assertEqual(self.kind(text)[0], "ingrediente", text)
+        self.assertEqual(clean_name("BRIOCHE mignon 35/40gr 2Kg* 55pz"), "Brioche mignon")
+        self.assertEqual(clean_name("BRIOCHE mignon 35/40gr 2k* 55pz"), "Brioche mignon")
+        self.assertEqual(clean_name("PATATE FETTE 4X2,5k* 4pz"), "Patate fette")
 
     def test_bar_shelf_and_non_food_goods_are_not_ingredients(self):
         # Mirrored word for word in tests/invoice-zip-classify.test.mjs.

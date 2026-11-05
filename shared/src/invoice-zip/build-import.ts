@@ -185,6 +185,9 @@ function describeProduct(catalogue: Catalogue, product: Product): { row: Product
   const evaluation = evaluate(product, params, catalogue, problems);
   const { points } = evaluation;
   const latestLine = latestOf(product).lines[0] as InvoiceLine;
+  // ⚠️ THE VAT OF THE NEWEST PAID LINE: a free line carries 0 % because it is outside the tax base, not because the
+  // goods are zero-rated, and a VAT of 0 is a real answer. Never paid = null, «not stated».
+  const paidLine = [...product.entries].reverse().flatMap((entry) => entry.lines).find((ln) => (ln.total ?? 0) > 0);
   const name = proposeName(product);
   const packUnit = proposePackWord(product);
 
@@ -205,7 +208,7 @@ function describeProduct(catalogue: Catalogue, product: Product): { row: Product
     priceUnit: params.priceUnit,
     unitWeightKg: params.priceUnit === 'pcs' && evaluation.unitWeightKg
       ? roundHalfUp(evaluation.unitWeightKg, 6) : null,
-    vatRate: vatOf(latestLine.vatRate),
+    vatRate: vatOf(paidLine ? paidLine.vatRate : null),
     reliability: evaluation.reliability,
     note: evaluation.note,
     prices: points.map((p) => ({
@@ -236,7 +239,14 @@ function describeProduct(catalogue: Catalogue, product: Product): { row: Product
     unreadable = LEFT_OUT.PIECES_NEED_PACK_WEIGHT;
   } else if (!points.length) {
     const last = evaluation.results[evaluation.results.length - 1];
-    unreadable = last ? last.computed.note : LEFT_OUT.NO_COMPUTABLE_PRICE;
+    // A product only ever received free (every line has an amount of exactly zero) is still a product the recipes and
+    // the order lists need: it is created with no price and `priceCheck` below says why. ⚠️ THE LINES, NOT THE NOTE:
+    // the note also covers negative amounts, and a return or a credit must never be proposed as a new ingredient.
+    // Any other reason for having no price, and an empty list of results, stays unreadable.
+    const onlyFree = evaluation.results.length > 0
+      && evaluation.results.every((r) => r.computed.note === NOTE.AMOUNT_ZERO_OR_NEGATIVE)
+      && product.entries.every((entry) => entry.lines.every((ln) => ln.total === 0));
+    if (!onlyFree) unreadable = last ? last.computed.note : LEFT_OUT.NO_COMPUTABLE_PRICE;
   }
   row.canImport = unreadable === null;
   if (row.type !== IMPORTED_TYPE) row.leftOutReason = NOT_IMPORTED_REASON;

@@ -114,11 +114,50 @@ test('classify: real packaging still is packaging', () => {
   assert.equal(kind('CARTA FORNO')[0], 'packaging');
 });
 
-test('classify: beverages and ready-made are resale', () => {
+test('classify: beverages are resale, ready-made food is an ingredient', () => {
   assert.equal(kind('ACQUA NATURALE 50 CL')[0], 'rivendita');
   assert.equal(kind('COCA COLA LATTINA')[0], 'rivendita');
-  assert.equal(kind('CORNETTO ALLA CREMA')[0], 'rivendita');
+  assert.equal(kind('CORNETTO ALLA CREMA')[0], 'ingrediente');
   assert.equal(kind('FECOLA DI PATATE')[0], 'ingrediente');
+});
+
+// Mirrored word for word in invoice-import/tests/test_classify.py.
+test('classify: ready-made food is proposed as an ingredient, a potato peeler is packaging', () => {
+  for (const text of ['CR.VUOTO 85gr* 50pz', 'PATATE FETTE 2,5kg* 4pz', 'CIPOLLE FETTE 2,5kg* 4pz',
+    'PANZEROTTO CREMA 170gr* 25pz', 'PASTICCIOTTO AMARENA 110g* 30pz', 'TRECCIA NOCI 98g* 60pz']) {
+    assert.equal(kind(text)[0], 'ingrediente', text);
+  }
+  assert.equal(kind('4 PELAPATATE ESEMPIO')[0], 'packaging');
+  assert.equal(kind('LIQUIDO LAVASTOVIGLIE ESEMPIO')[0], 'packaging');
+  assert.equal(kind('MICRONIZZATORE STD LT 1')[0], 'packaging');
+  for (const text of ['AVENA MICRONIZZATA KG 25', 'PATATE PADELLATE 2,5KG', 'PATATE SACCHETTO 2,5KG',
+    'CORNETTO FANTASIA 85GR* 50PZ', 'TRECCIA ALLA BIRRA 98G* 60PZ']) {
+    assert.equal(kind(text)[0], 'ingrediente', text);
+  }
+  assert.equal(cleanName('BRIOCHE mignon 35/40gr 2Kg* 55pz'), 'Brioche mignon');
+  assert.equal(cleanName('BRIOCHE mignon 35/40gr 2k* 55pz'), 'Brioche mignon');
+  assert.equal(cleanName('PATATE FETTE 4X2,5k* 4pz'), 'Patate fette');
+});
+
+// Mirrored word for word in invoice-import/tests/test_classify.py.
+test('pack parsing: a carton weight is not multiplied by its piece count', () => {
+  checkPack('BRIOCHE mignon 35/40gr 2Kg* 55pz', 2, 'kg');
+  checkPack('ESEMPIO 85gr 5Kg* 60pz', 5, 'kg');
+  checkPack('ESEMPIO 35/40gr 2Kg* 6pz', 2, 'kg', 6);
+  checkPack('PATATE 2,5kg* 4pz', 2.5, 'kg', 4);
+  checkPack('PASTA 85gr* 50pz', 85, 'g', 50);
+});
+
+// Mirrored word for word in invoice-import/tests/test_classify.py.
+test('pack parsing: a bare K before the star is a kilo, nowhere else', () => {
+  checkPack('PATATE FETTE 4X2,5k*    4pz', 2.5, 'kg', 4);
+  checkPack('PANZEROTTI MIGNON2.5k*    1pz', 2.5, 'kg', 1);
+  checkPack('BRIOCHE mignon 35/40gr 2k* 55pz', 2, 'kg');
+  checkPack('SALAME 1/2k* 4pz', 0.5, 'kg', 4);
+  checkPack('ART123K*5 FARINA KG 25', 25, 'kg');
+  checkPack('PANINI 30GR 2KG*50PZ', 2, 'kg', 50);
+  assert.equal(parsePack('SERIE 5KX2'), null);
+  assert.equal(parsePack('T65K*10 FARINA'), null);
 });
 
 // Mirrored word for word in invoice-import/tests/test_classify.py.
