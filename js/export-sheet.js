@@ -22,7 +22,7 @@
 import { t } from './i18n.js';
 import { svgElement } from './send-icon.js';
 import { DOCUMENT_PATHS, TABLE_PATHS } from './export-icon.js';
-import { exportFileName, exportErrorKey, exportErrorCode, buildPdfBlob, buildXlsxBlob } from './recipe-export.js';
+import { exportFileName, exportErrorKey, exportErrorCode, buildPdfBlob, buildXlsxBlob, hasRoundableRows } from './recipe-export.js';
 
 let isOpen = false;   // one at a time
 let seq = 0;
@@ -42,7 +42,7 @@ export function openExportSheet({ model, totalLabel = '', opener = null } = {}) 
 
   const n = ++seq;
   const prevFocus = opener || document.activeElement;
-  const backdrop = make('div', 'app-dialog-backdrop send-chooser');
+  const backdrop = make('div', 'app-dialog-backdrop send-chooser export-sheet');
   const box = make('div', 'app-dialog');
   box.setAttribute('role', 'dialog');
   box.setAttribute('aria-modal', 'true');
@@ -53,6 +53,8 @@ export function openExportSheet({ model, totalLabel = '', opener = null } = {}) 
   let closed = false;
   let blobUrl = null;
   let focusable = [];
+  // ON at every opening, not remembered. Only the PDF reads it: the spreadsheet keeps exact numbers.
+  let rounded = true;
 
   const close = () => {
     if (closed) return;
@@ -119,11 +121,42 @@ export function openExportSheet({ model, totalLabel = '', opener = null } = {}) 
         return b;
       });
       box.appendChild(list);
+      // The rounding switch exists only when the PDF has a weight in grams to round. The label wraps
+      // the input, so the words and the switch are one control; the state lives in `rounded` above,
+      // so a repaint of this screen keeps it.
+      let roundSwitch = null;
+      if (hasRoundableRows(model)) {
+        const row = make('label', 'export-round');
+        const text = make('span', 'export-round-text');
+        const name = make('span', 'export-round-name', t('export.roundWeights'));
+        name.id = `export-round-name-${n}`;
+        text.appendChild(name);
+        const note = make('span', 'export-round-note', t('export.roundNote'));
+        note.id = `export-round-note-${n}`;
+        text.appendChild(note);
+        const sw = make('span', 'set-switch');
+        roundSwitch = make('input', '');
+        roundSwitch.type = 'checkbox';
+        roundSwitch.setAttribute('role', 'switch');
+        // Named by the words alone and described by the note, as calculator.html's switches are: with
+        // the wrapping label only, a screen reader would read the note twice.
+        roundSwitch.setAttribute('aria-labelledby', name.id);
+        roundSwitch.setAttribute('aria-describedby', note.id);
+        roundSwitch.checked = rounded;
+        roundSwitch.addEventListener('change', () => { rounded = roundSwitch.checked; });
+        sw.appendChild(roundSwitch);
+        const track = make('span', 'set-switch-track');
+        track.setAttribute('aria-hidden', 'true');
+        sw.appendChild(track);
+        row.appendChild(text);
+        row.appendChild(sw);
+        box.appendChild(row);
+      }
       const actions = make('div', 'app-dialog-actions');
       const cancel = closeButton('ui.cancel');
       actions.appendChild(cancel);
       box.appendChild(actions);
-      return [...routes, cancel];
+      return [...routes, ...(roundSwitch ? [roundSwitch] : []), cancel];
     });
     first.focus();
   };
@@ -192,7 +225,7 @@ export function openExportSheet({ model, totalLabel = '', opener = null } = {}) 
     showWorking();
     // The words for a nameless recipe are read now, in the venue's language, never at module load.
     const fileName = exportFileName(model, kind.ext, t('export.fileFallback'));
-    const made = kind.id === 'pdf' ? buildPdfBlob(model) : buildXlsxBlob(model, totalLabel, t('export.sheetFallback'));
+    const made = kind.id === 'pdf' ? buildPdfBlob(model, { rounded }) : buildXlsxBlob(model, totalLabel, t('export.sheetFallback'));
     made.then((blob) => { if (!closed) showReady(kind, blob, fileName); })
       .catch((err) => {
         // Reported through the app's error path (console.error → js/error-report.js): FIXED words

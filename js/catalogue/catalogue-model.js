@@ -96,7 +96,8 @@ export function weighableTotalGrams(recipe) {
 
 // The model js/recipe-export.js turns into a PDF or a spreadsheet. ⚠️ `amounts` is EXACTLY the
 // array the screen drew (renderRows in catalogue-detail.js), never recomputed here, so the file
-// can only say what the screen says. Each row keeps its OWN unit; `factor` is the grams in one of
+// starts from what the screen says; only the PDF's own «round the weights» switch prints a gram row
+// differently. Each row keeps its OWN unit; `factor` is the grams in one of
 // it (0 for pieces, spoons, a pinch, to taste), and `totalGrams` is the Total row's number.
 export function exportModelOf(recipe, amounts, totalGrams) {
   const ings = (recipe && Array.isArray(recipe.ingredients)) ? recipe.ingredients : [];
