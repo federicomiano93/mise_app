@@ -63,6 +63,12 @@ import * as venueFeatures from './venue-features';
 import * as recipeAllergenModel from './recipe-allergen-model';
 import * as recipeLabelModel from './recipe-label-model';
 import * as labelTemplateModel from './label-template-model';
+import * as supplierLabel from './supplier-label';
+import * as vatNumber from './vat-number';
+import * as favouriteSuppliers from './favourite-suppliers';
+import * as recordChoices from './record-choices';
+import * as categoryBatches from './category-batches';
+import * as ingredientSearch from './ingredient-search';
 import { BAKERY_CONFIG } from '../../tests/fixtures/bakery-config.mjs';
 import * as legacyJoinCodeJs from '../../js/join-code.js';
 import * as legacyPushModelJs from '../../js/push-model.js';
@@ -102,6 +108,12 @@ import { nameTaken as legacyNameTaken } from '../../js/catalogue/ingredient-sugg
 import * as legacyRecipeCostModelJs from '../../js/catalogue/recipe-cost-model.js';
 import * as legacyFoodcostWeighingJs from '../../js/foodcost/foodcost-weighing.js';
 import * as legacyFoodcostModelJs from '../../js/foodcost/foodcost-model.js';
+import * as legacySupplierLabelJs from '../../js/supplier-label.js';
+import * as legacyVatNumberJs from '../../js/vat-number.js';
+import * as legacyFavouriteSuppliersJs from '../../js/orders/favourite-suppliers.js';
+import * as legacyRecordChoicesJs from '../../js/record-choices.js';
+import * as legacyCategoryBatchesJs from '../../js/orders/category-batches.js';
+import * as legacyIngredientSearchJs from '../../js/orders/ingredient-search.js';
 import * as legacyCalculatorConfigJs from '../../js/calculator-config.js';
 import * as legacyCalculatorDoughMathJs from '../../js/calculator-dough-math.js';
 import * as legacyCalculatorRecipeSourceJs from '../../js/calculator-recipe-source.js';
@@ -171,6 +183,12 @@ const legacyVenueFeatures = legacyVenueFeaturesJs as unknown as typeof venueFeat
 const legacyRecipeAllergenModel = legacyRecipeAllergenModelJs as unknown as typeof recipeAllergenModel;
 const legacyRecipeLabelModel = legacyRecipeLabelModelJs as unknown as typeof recipeLabelModel;
 const legacyLabelTemplateModel = legacyLabelTemplateModelJs as unknown as typeof labelTemplateModel;
+const legacySupplierLabel = legacySupplierLabelJs as unknown as typeof supplierLabel;
+const legacyVatNumber = legacyVatNumberJs as unknown as typeof vatNumber;
+const legacyFavouriteSuppliers = legacyFavouriteSuppliersJs as unknown as typeof favouriteSuppliers;
+const legacyRecordChoices = legacyRecordChoicesJs as unknown as typeof recordChoices;
+const legacyCategoryBatches = legacyCategoryBatchesJs as unknown as typeof categoryBatches;
+const legacyIngredientSearch = legacyIngredientSearchJs as unknown as typeof ingredientSearch;
 
 // ── The machinery ────────────────────────────────────────────────────────────
 
@@ -3229,4 +3247,119 @@ describe('catalogue-photo-model: odd inputs', () => {
 
   const REASONS: readonly unknown[] = [...ODD, ...Object.keys(m.CATALOGUE_PHOTO_KEYS), 'who-knows', 'READ-FAILED', new String('refused'), ['refused']];
   agree('noRecipeKey', m.noRecipeKey, l.noRecipeKey, product(REASONS));
+});
+
+// ── The Suppliers page's ports (step 3e-1) ───────────────────────────────────
+
+// A supplier is a document: odd names, odd short names, getters that throw, inherited fields.
+const SUPPLIERS: readonly unknown[] = [...ODD, 'supplier', 42, 7n, { name: 'Alba' }, { name: 'Aldo Ltd', shortName: ' Aldo ' }, { shortName: '  ' },
+  { name: 'Però & Figli', category: 'Dairy' }, { name: 'Delta', category: 5 }, { name: null, shortName: null },
+  { name: 5, shortName: 6 }, { name: ['a'], shortName: ['b'] }, { name: 'x'.repeat(300), shortName: 'y' },
+  new String('S'), function named() { return 1; }, Object.create({ name: 'inherited', shortName: 'inherited short' }),
+  { id: 'a', name: 'Alba' }, { id: 7, name: 'Seven' }, { get name(): string { throw new Error('boom'); } }];
+
+// The caller's folding is theirs to choose, so odd ones are tried too (a list has its own includes).
+const supplierFold = (value: unknown): string => String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+const FOLDS: readonly unknown[] = [supplierFold, (value: unknown) => String(value ?? ''), (value: unknown) => value, () => 'alba',
+  () => ['alba'], () => 5, () => undefined, undefined, null, 'fold'];
+const SEARCHES: readonly unknown[] = ['', 'alba', 'ALBA', 'aldo', 'a', ' ', 'però', 'x'.repeat(300), undefined, null, 0, 5, true, {}, ['alba']];
+
+describe('supplier-label: odd inputs', () => {
+  const m = supplierLabel;
+  const l = legacySupplierLabel;
+  agree('supplierLabel', m.supplierLabel, l.supplierLabel, product(SUPPLIERS));
+  agree('supplierMatches', m.supplierMatches as AnyFn, l.supplierMatches as AnyFn, product(SUPPLIERS, SEARCHES, FOLDS));
+});
+
+describe('vat-number: odd inputs', () => {
+  const m = vatNumber;
+  const l = legacyVatNumber;
+  const VALUES: readonly unknown[] = [...ODD, 'IT01234567890', '01234567890', ' 012.345.678.90 ', 'it 012 345 678 90', 'DE123456789', 'fr12345678901', '123456789',
+    '0123456789012', 'NOVAT:abc', ' novat:abc', 'novat:', 'NOVAT', '1234567890a', '١٢٣٤٥٦٧٨٩٠١', '12345678901\n',
+    ' 12345678901', '1 2.3\t4\n5 6.7 8 9.0 1', new String('01234567890'), ['01234567890'], { toString: () => '01234567890' }, 1n, Symbol('vat'), 1e10, 12345678901];
+  agree('normalizeVat', m.normalizeVat, l.normalizeVat, product(VALUES));
+});
+
+describe('favourite-suppliers: odd inputs', () => {
+  const m = favouriteSuppliers;
+  const l = legacyFavouriteSuppliers;
+  const LISTS: readonly unknown[] = [...ODD, 'a', 7, ['a'], ['a', 'a', 'b'], ['', 'a', null, 3, 'b'], [[]], [{ id: 'a' }], { 0: 'a', length: 1 },
+    new Set(['a']), ['b', 'a', 'b', ''], Array.from({ length: 450 }, (_, i) => `s${i}`), Array.from({ length: 300 }, (_, i) => `s${i}`),
+    Array.from({ length: 301 }, () => 'same'), new String('a')];
+  agree('normalizeFavourites', m.normalizeFavourites, l.normalizeFavourites, product(LISTS));
+
+  const ROWS: readonly unknown[] = [...ODD, 'ab', [{ id: 'a' }, { id: 'b' }, { id: 'c' }], [{ id: 'a' }, null, undefined, 5, 'a', { id: 'b' }, {}],
+    [{ id: 7 }, { id: '7' }], [{ id: 'a', name: 'Alba' }, { id: 'gone' }], [null], [[]], Array.from({ length: 5 }, (_, i) => ({ id: `s${i}` })),
+    [{ get id(): string { throw new Error('boom'); } }]];
+  const FAVOURITES: readonly unknown[] = [...LISTS.slice(0, 20), ['s1', 's3'], ['s0', 's1', 's2', 's3', 's4'], ['gone', 'a'], ['b', 'a'], ['7']];
+  agree('splitByFavourite', m.splitByFavourite as AnyFn, l.splitByFavourite as AnyFn, product(ROWS, FAVOURITES));
+  agree('favouriteGroups', m.favouriteGroups as AnyFn, l.favouriteGroups as AnyFn, product(ROWS, FAVOURITES));
+});
+
+describe('record-choices: odd inputs', () => {
+  const m = recordChoices;
+  const l = legacyRecordChoices;
+
+  const LANGUAGES: readonly unknown[] = [...ODD, 'it', 'en', 'IT', 'fr', ' it', ['it'], new String('it')];
+  const INGREDIENTS: readonly unknown[] = [undefined, null, [], 'abc', 7, {},
+    [{ category: 'dairy' }, { category: ' Dairy ' }, { category: 'Other' }, { category: '' }, {}, null, { category: 'Eggs' }],
+    [{ unit: 'PZ' }, { unit: 'scatola' }, { unit: ' ' }, { unit: 5 }, { unit: null }, undefined],
+    [{ packUnit: 'Busta' }, { packUnit: 'stecca' }, { packUnit: ' ' }, {}, null, 7],
+    [{ category: 'farine', unit: 'kg', packUnit: 'sacco' }, { category: 'Farine', unit: 'KG', packUnit: 'Sacco' }],
+    [{ category: ['x'], unit: {}, packUnit: true }], [null, undefined, 0, '', false], [{ get category(): string { throw new Error('boom'); } }]];
+  const CURRENTS: readonly unknown[] = [...ODD, 'Other', ' other ', 'Zeta', 'farine', 'A', ' Trancio ', 'PZ', 'x'.repeat(300), new String('S'), ['a']];
+  const STORED: readonly unknown[] = [...ODD, null, ['Dairy', ' Flour '], ['A', 3, null, ''], ['Farine'], ['a'], [], 'x', ['Other'], ['a', 'A', 'b'], [['x']], { 0: 'A' }];
+
+  // The options object itself is odd too: null and a number make the destructuring throw in both.
+  const ODD_OPTIONS: readonly (readonly unknown[])[] = [[undefined], [null], [5], ['text'], [{}]];
+
+  agree('categoryChoices', m.categoryChoices as AnyFn, l.categoryChoices as AnyFn, [
+    ...ODD_OPTIONS,
+    ...product(STORED, INGREDIENTS, LANGUAGES.slice(0, 12), CURRENTS.slice(0, 14))
+      .map(([stored, ingredients, language, current]) => [{ stored, ingredients, language, current }]),
+  ]);
+  for (const [name, mine, theirs] of [['unitChoices', m.unitChoices, l.unitChoices], ['packChoices', m.packChoices, l.packChoices]] as const) {
+    agree(name, mine as AnyFn, theirs as AnyFn, [
+      ...ODD_OPTIONS,
+      ...product(INGREDIENTS, LANGUAGES, CURRENTS).map(([ingredients, language, current]) => [{ ingredients, language, current }]),
+    ]);
+  }
+
+  agree('categoryValue', m.categoryValue, l.categoryValue, product(CURRENTS));
+  agree('countInCategory', m.countInCategory as AnyFn, l.countInCategory as AnyFn, product(INGREDIENTS, CURRENTS));
+  agree('isBlankNewChoice', m.isBlankNewChoice, l.isBlankNewChoice, product([true, false, 1, 'true', ...ODD], ['', '  ', 'Tray', ...ODD]));
+  agree('supplierToSave', m.supplierToSave as AnyFn, l.supplierToSave as AnyFn, product([m.NEW_SUPPLIER_CHOICE, 'id', '', ...ODD], ['old', ...ODD]));
+  agree('cartonWordFor', m.cartonWordFor, l.cartonWordFor, product(LANGUAGES));
+  agree('pieceWordFor', m.pieceWordFor, l.pieceWordFor, product(LANGUAGES));
+  agree('defaultPackFor', m.defaultPackFor, l.defaultPackFor, product(LANGUAGES));
+  agree('looseUnitFor', m.looseUnitFor, l.looseUnitFor, product(['kg', 'l', 'pcs', 'weird', 'KG', 'constructor', 'toString', '__proto__', ...ODD], LANGUAGES));
+  agree('packWordFor', m.packWordFor, l.packWordFor, product(['busta', ' Busta ', 'sacco', 'box', 'sleeve', 'constructor', 'toString', '__proto__', ...ODD],
+    [1, '1', 2, 0, -1, 1.5, ...ODD], ['it', 'en', ...LANGUAGES.slice(0, 8)]));
+});
+
+describe('category-batches: odd inputs', () => {
+  const m = categoryBatches;
+  const l = legacyCategoryBatches;
+  const IDS: readonly unknown[] = [...ODD, 'abc', ['a', '', null, 'b'], Array.from({ length: 7 }, (_, i) => `i${i}`), Array.from({ length: 20 }, (_, i) => `i${i}`),
+    Array.from({ length: 13 }, (_, i) => `i${i}`), [0, 1, 2], [[], {}], new Set(['a'])];
+  const SIZES: readonly unknown[] = [undefined, ...ODD, 6, 1, 2, 7, 2.9, '3', '0', -3, 1e9];
+  const FLAGS: readonly unknown[] = [undefined, true, false, 0, 1, '', 'yes', null, {}];
+  agree('planBatches', m.planBatches as AnyFn, l.planBatches as AnyFn, product(IDS, SIZES, FLAGS));
+  agree('categoryPatch', m.categoryPatch, l.categoryPatch, product([...ODD, 'Other', 'Dairy', { a: 1 }, [1]]));
+});
+
+describe('ingredient-search (partial): odd inputs', () => {
+  const m = ingredientSearch;
+  const l = legacyIngredientSearch;
+  const VALUES: readonly unknown[] = [...ODD, '  Però  ', 'ÀÈÌÒÙ', 'x'.repeat(300), 'é', 'ß', 'İstanbul', 1n, Symbol('s'), new String('Sale'),
+    { toString: () => 'T' }, ['a', 'b'], function named() { return 1; }];
+  agree('normalizeText', m.normalizeText, l.normalizeText, product(VALUES));
+
+  const LISTS: readonly unknown[] = [undefined, null, [], 'abc', 7, {},
+    [{ id: 'cielo', name: 'Cielo' }, { id: 'cat', name: 'Borgo', category: 'Dry goods' }, { id: 'con', name: 'Delta wine & food ltd.', category: 'Deli' }, { id: 'alba', name: 'Alba' }],
+    [{ id: 'n' }], [null, undefined, 5, 'x', {}],
+    [{ name: 'Però & Figli', category: '' }, { name: 'Pero', category: '' }], [{ name: 'Aldo Ltd', shortName: 'Aldo', category: 'Dry' }],
+    [{ name: 5, shortName: 6, category: 7 }], [{ get name(): string { throw new Error('boom'); } }]];
+  const QUERIES: readonly unknown[] = [...SEARCHES, 'org', 'deli', 'no supp', 'pero', 'però', 'zzz', '   ', 'legacy', 'dry'];
+  agree('filterSuppliers', m.filterSuppliers as AnyFn, l.filterSuppliers as AnyFn, product(LISTS, QUERIES));
 });

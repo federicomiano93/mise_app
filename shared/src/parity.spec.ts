@@ -1,4 +1,4 @@
-// The thirty-five TypeScript models and the js/ files the live app runs today must stay the SAME
+// The forty-two TypeScript models and the js/ files the live app runs today must stay the SAME
 // thing, until the switch to Mise 2 retires the js/ ones. The behaviour specs next to each model
 // run every test against both; this file checks what a behaviour test cannot see — that the two
 // export the same names, the same constants, the same frozen-ness and the same function shapes.
@@ -41,6 +41,9 @@
 // names, constants and shapes itself. market.ts (with the label vocabulary), venue-features.ts, recipe-label-model.ts, label-template-model.ts and photo-model.ts ARE
 // paired: they are full ports. calculator-recipe-text.ts is paired although it differs from the original in ONE input (the line called
 // `Flour uniqua blue`, one venue's data): the exports are the same, and its spec says where the text differs.
+// supplier-label.ts, vat-number.ts, favourite-suppliers.ts, record-choices.ts and category-batches.ts ARE paired (step 3e-1,
+// the Suppliers page): full ports. ingredient-search.ts is NOT: it ports only `normalizeText` and `filterSuppliers` of
+// js/orders/ingredient-search.js (the row builders use order-text); its spec compares names and shapes itself.
 // catalogue-photo-model.ts is not paired: it exports its table of sentences as well (`CATALOGUE_PHOTO_KEYS`, private in the
 // original) and leaves out the sizes the original re-exports from photo-model; its spec compares what it ports.
 //
@@ -86,6 +89,11 @@ import * as market from './market';
 import * as recipeLabelModel from './recipe-label-model';
 import * as labelTemplateModel from './label-template-model';
 import * as photoModel from './photo-model';
+import * as supplierLabel from './supplier-label';
+import * as vatNumber from './vat-number';
+import * as favouriteSuppliers from './favourite-suppliers';
+import * as recordChoices from './record-choices';
+import * as categoryBatches from './category-batches';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -123,6 +131,11 @@ import * as legacyMarket from '../../js/market.js';
 import * as legacyRecipeLabelModel from '../../js/catalogue/recipe-label-model.js';
 import * as legacyLabelTemplateModel from '../../js/catalogue/label-template-model.js';
 import * as legacyPhotoModel from '../../js/photo-model.js';
+import * as legacySupplierLabel from '../../js/supplier-label.js';
+import * as legacyVatNumber from '../../js/vat-number.js';
+import * as legacyFavouriteSuppliers from '../../js/orders/favourite-suppliers.js';
+import * as legacyRecordChoices from '../../js/record-choices.js';
+import * as legacyCategoryBatches from '../../js/orders/category-batches.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -162,6 +175,11 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['recipe-label-model', recipeLabelModel, legacyRecipeLabelModel],
   ['label-template-model', labelTemplateModel, legacyLabelTemplateModel],
   ['photo-model', photoModel, legacyPhotoModel],
+  ['supplier-label', supplierLabel, legacySupplierLabel],
+  ['vat-number', vatNumber, legacyVatNumber],
+  ['favourite-suppliers', favouriteSuppliers, legacyFavouriteSuppliers],
+  ['record-choices', recordChoices, legacyRecordChoices],
+  ['category-batches', categoryBatches, legacyCategoryBatches],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -223,11 +241,12 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all thirty-seven models are compared', () => {
+test('all forty-two models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
       'order-cost', 'inventory-model', 'inventory-outbox', 'inventory-purchases', 'vat-rates', 'ingredient-kind', 'product-limits',
       'vat-guide', 'foodcost-weighing', 'calculator-dough-math', 'calculator-recipe-source', 'calculator-recipe-text', 'calculator-order-text',
-      'confirm-flow', 'log-time', 'venue-features', 'market', 'recipe-label-model', 'label-template-model', 'photo-model']);
+      'confirm-flow', 'log-time', 'venue-features', 'market', 'recipe-label-model', 'label-template-model', 'photo-model',
+      'supplier-label', 'vat-number', 'favourite-suppliers', 'record-choices', 'category-batches']);
 });

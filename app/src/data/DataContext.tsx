@@ -15,6 +15,8 @@ import { createFirestoreRecipesSource } from '../recipes/recipesSource';
 import type { RecipesSource } from '../recipes/recipesSource';
 import { createFirestoreStocktakeSource } from '../stocktake/stocktakeSource';
 import type { StocktakeSource } from '../stocktake/stocktakeSource';
+import { createFirestoreSuppliersSource } from '../suppliers/suppliersSource';
+import type { SuppliersSource } from '../suppliers/suppliersSource';
 
 // Where every section gets its data from: one factory per section, built once in main.tsx on the
 // session's backend. A screen's spec passes fakes instead (testing/renderApp.tsx), so no screen
@@ -33,6 +35,9 @@ export interface DataServices {
   recipes(locationId: string): RecipesSource;
   // Reading a recipe from photographs and the venue's switch for it (step 3d-9): Cloud Functions, no Firestore.
   photo(locationId: string): PhotoSource;
+  // «Ingredients & suppliers» (step 3e): the suppliers, the ingredients with their prices, config/orders, and the venue's
+  // allergen and nutrition switches (a Cloud Function).
+  suppliers(locationId: string): SuppliersSource;
 }
 
 // What the data layers need from the backend besides Firestore: the account behind a client's ordering link is
@@ -56,6 +61,8 @@ export function createDataServices(firestore: () => Promise<FirestoreKit>, auth:
     }),
     recipes: locationId => createFirestoreRecipesSource(firestore, locationId),
     photo: locationId => createPhotoSource((name, data, timeoutMs) => auth.callFunction(name, data, timeoutMs), locationId),
+    suppliers: locationId => createFirestoreSuppliersSource(firestore,
+      (name, data, timeoutMs) => auth.callFunction(name, data, timeoutMs), locationId),
   };
 }
 

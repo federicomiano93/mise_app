@@ -14,6 +14,7 @@ import { isMonthId } from '@mise/shared/inventory-model';
 import { isWeekday } from '@mise/shared/pastries-model';
 import type { MessageKey } from '../i18n/en';
 import { parseRecipesPath } from '../recipes/recipesPath';
+import { suppliersScreenName } from '../suppliers/suppliersPath';
 
 export type SectionId =
   | 'orders'
@@ -122,6 +123,8 @@ export function screenNameFor(pathname: string): string | null {
   if (section.id === 'foodcost') return foodcostScreenName(pathname, section.path);
   if (section.id === 'calculator') return calculatorScreenName(pathname, section.path);
   if (section.id === 'recipes') return recipesScreenName(pathname, section.path);
+  // «Ingredients & suppliers» (step 3e): the names of docs/parity/suppliers.md, decision T1.
+  if (section.id === 'suppliers') return suppliersScreenName(pathname.slice(section.path.length));
   return section.id;
 }
 
