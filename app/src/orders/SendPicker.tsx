@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { Share } from 'lucide-react';
+import { MAX_LINES } from '@mise/shared/order-request-model';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
+import { announceAction } from '../telemetry/usage';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { joinList } from './orderWords';
 import type { OrdersLens } from './ordersLens';
@@ -23,7 +25,13 @@ type Props = {
   resend?: boolean;
   // A send reached these suppliers. Called before the «not reached» line is spoken; the screen goes on from here.
   onReached: (ids: readonly string[]) => void;
+  // The in-app list was written (or is waiting for the connection): the screen leaves. Not given where the list road is never
+  // offered (History's re-send).
+  onListSent?: () => void;
 };
+
+// How long «List sent ✓ — Everybody who runs this place will be told.» stays: long enough to read who will be told.
+const LIST_SENT_MS = 6000;
 
 // The body both send screens share (the draft's «Send order» and History's «Send <day>»): the tick of every row, «Select all», how
 // the message is written and the one «Send» button. What happens AFTER a send that reached somebody is the screen's own (the
@@ -33,7 +41,7 @@ type Props = {
 //
 // ⚠️ «SEND» CALLS useSendOrder's `send` STRAIGHT FROM ITS PRESS, with nothing awaited first (a window opened later is blocked as
 // a pop-up). A second press while the first is still pending is ignored.
-export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onReached }: Props) {
+export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onReached, onListSent }: Props) {
   const { t } = useT();
   const say = useStatusMessage();
   const [send, sendDialogs] = useSendOrder(lens);
@@ -41,6 +49,8 @@ export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onR
   const mounted = useRef(true);
   const latest = useRef(onReached);
   latest.current = onReached;
+  const afterList = useRef(onListSent);
+  afterList.current = onListSent;
 
   const [ticked, setTicked] = useState<readonly string[]>([]);
   const [grouped, setGrouped] = useState(true);
@@ -69,6 +79,25 @@ export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onR
     return () => { mounted.current = false; };
   }, []);
 
+  // The button was disabled while it ran and a disabled button drops the focus on the page: it goes back to the button. A
+  // focus that is somewhere else (the person moved on) is left alone.
+  const restoreFocus = () => {
+    requestAnimationFrame(() => {
+      if (!mounted.current) return;
+      const active = document.activeElement;
+      if (active === null || active === document.body) action.current?.focus();
+    });
+  };
+
+  // What a list that was written (or refused) is told as, on the screen or after it was left. The statistic is counted once per list,
+  // for the two outcomes where the list is in the app (the current app announces `order-request` at the same moment).
+  const tellList = (outcome: 'sent' | 'queued' | 'failed') => {
+    if (outcome === 'sent') say(`${t('ord.request.sent')} — ${t('ord.request.sentToManagers')}`, LIST_SENT_MS);
+    else if (outcome === 'queued') say(t('ord.request.queued'), LIST_SENT_MS);
+    else say(t('ord.request.sendFailed'), LONG_MS);
+    if (outcome !== 'failed') announceAction('order-request');
+  };
+
   const press = () => {
     if (pendingRef.current || chosen.length === 0) return;
     pendingRef.current = true;
@@ -93,8 +122,29 @@ export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onR
     }
     void sending.then(result => {
       pendingRef.current = false;
-      if (!mounted.current) return;
+      if (!mounted.current) {
+        // ⚠️ A LIST THAT WAS WRITTEN AFTER THE PERSON WENT BACK IS STILL SAID (sent, queued or failed), and nobody is moved: the status
+        // line outlives this screen. A send that was stopped by leaving ('nothing', or no answer at all) says nothing, and takes its
+        // «Sending…» away.
+        if (result?.kind === 'list' && result.outcome !== 'nothing' && result.outcome !== 'too-many') {
+          tellList(result.outcome);
+        } else if (result === null || result.kind === 'list') {
+          say('');
+        }
+        return;
+      }
       setPending(false);
+      if (result?.kind === 'list') {
+        // ⚠️ THE ORDER IS NOT CLEARED AND NOTHING IS RECORDED: the list is a photograph, and nobody was «reached» in the sense of
+        // the record-after-send question (Federico's choice, 14 Aug 2026). Sent and queued leave for the Orders list.
+        const outcome = result.outcome;
+        if (outcome === 'sent' || outcome === 'queued' || outcome === 'failed') tellList(outcome);
+        else if (outcome === 'nothing') say(t('ord.nothingLeft'), LONG_MS);
+        else say(t('ord.request.tooMany', { n: MAX_LINES }), LONG_MS);
+        if (outcome === 'sent' || outcome === 'queued') afterList.current?.();
+        else restoreFocus();
+        return;
+      }
       // ⚠️ THE TICKED SUPPLIERS THE SEND DID NOT REACH ARE NAMED, never dropped silently (X17): a skipped or blocked window, or a
       // road that has no phone or email for one of them (an employee whose only road is «straight to the supplier» is never shown
       // the chooser's note).
@@ -109,13 +159,7 @@ export function SendPicker({ lens, rows, titleId, emptyText, resend = false, onR
       }
       if (result?.kind === 'sent' && result.blocked) say(t('ord.send.nothingOpened'), LONG_MS);
       else if (notReached !== '') say(notReached, LONG_MS);
-      // The button was disabled while it ran and a disabled button drops the focus on the page: it goes back to the button. A
-      // focus that is somewhere else (the person moved on) is left alone.
-      requestAnimationFrame(() => {
-        if (!mounted.current) return;
-        const active = document.activeElement;
-        if (active === null || active === document.body) action.current?.focus();
-      });
+      restoreFocus();
     }).catch(failed);
   };
 

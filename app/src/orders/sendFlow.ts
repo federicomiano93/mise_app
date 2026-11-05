@@ -24,7 +24,7 @@ import type { MessageParams } from '../i18n/i18n';
 import type { DraftView } from './draftSync';
 import type { OrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
-import type { PlaceItem } from './ordersStore';
+import type { ListSendOutcome, PlaceItem } from './ordersStore';
 
 // One supplier's part of a send: its id, the name a person reads, and the lines with a quantity.
 export interface SendRow {
@@ -194,6 +194,9 @@ export interface SendUi {
   confirmText(): Promise<boolean>;
   // «Open the chat for {name} (2 of 3)»: the dialog for ONE further window, whose own Open button opens it (question.open).
   askOpen(question: OpenQuestion): Promise<TextOutcome>;
+  // The in-app list for whoever runs the place: asks «nobody will be told» if that is so, then writes the list. null: backed out
+  // of at that question, nothing written. It opens no window, so it needs no tap of its own.
+  sendList(rows: readonly SendRow[]): Promise<ListSendOutcome | null>;
 }
 
 export interface RoadInput {
@@ -213,10 +216,19 @@ export type RoadResult =
   // The road was backed out of on the way (Cancel on «Photo or text?»), or there was nothing to send.
   | { readonly kind: 'cancelled' }
   // Sent: the suppliers whose window really opened or whose picture was shared. `blocked`: windows were due and NONE opened.
-  | { readonly kind: 'sent'; readonly ids: readonly string[]; readonly blocked: boolean };
+  | { readonly kind: 'sent'; readonly ids: readonly string[]; readonly blocked: boolean }
+  // The in-app list for the managers: how writing it went. ⚠️ Nothing is «reached» and nothing is recorded after it, and the order
+  // is NOT cleared (the list is a photograph of it; Federico's choice, 14 Aug 2026).
+  | { readonly kind: 'list'; readonly outcome: ListSendOutcome };
 
 // Takes one road. ⚠️ EVERYTHING UP TO THE FIRST await RUNS INSIDE THE TAP THAT CALLED IT (see the head of this file).
 export async function takeRoad({ offer, rows, settings, unitRefusal, open, t }: RoadInput, ui: SendUi): Promise<RoadResult> {
+  // ⚠️ THE IN-APP LIST OPENS NO WINDOW AND PUTS NOTHING IN A SUPPLIER'S HANDS: no unit check (it is never merged into the history),
+  // no jobs, no «did you send it?».
+  if (offer.route === 'manager') {
+    const outcome = await ui.sendList(rows);
+    return outcome === null ? { kind: 'cancelled' } : { kind: 'list', outcome };
+  }
   // ⚠️ ASKED HERE, WHERE THE ROAD IS KNOWN, AND ONLY FOR ROADS THAT REACH THE SUPPLIER (an in-app list needs no check).
   if (routeSendsToSupplier(offer.route)) {
     let refusal = '';

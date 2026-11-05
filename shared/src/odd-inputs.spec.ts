@@ -3664,6 +3664,24 @@ describe('order-request-model: odd inputs', () => {
     { quantities: 'xy', done: {} }, { quantities: ['p', 'q'], done: { 0: true } }, { quantities: { a: 1 }, done: 'a' }, { quantities: { a: 1 }, done: [true] },
     { quantities: {}, done: {} }, { quantities: { a: 1 }, done: null }, { get quantities(): object { throw new Error('boom'); } }];
   agree('remainingIds', m.remainingIds, l.remainingIds, product(REQUESTS));
+  agree('isRequestDone', m.isRequestDone, l.isRequestDone, product(REQUESTS));
+  agree('supplierIdsOf', m.supplierIdsOf, l.supplierIdsOf, product([...REQUESTS, { supplierNames: { s: 'S' } }, { supplierNames: 'xy' }, { supplierNames: null }]));
+  agree('waitingRequests', m.waitingRequests, l.waitingRequests, product([...ODD, [], [null, 7, 'x', {}], [{ createdAt: 'b', quantities: { a: 1 } }, { createdAt: 'a', quantities: { a: 1 } }, { quantities: { a: 1 }, done: { a: true } }]]));
+  const ENTRIES: readonly unknown[] = [...ODD, {}, { a: { qty: 1 } }, { a: { qty: '2', unit: 'busta' } }, { a: null }, 'x'];
+  agree('liveDifference', m.liveDifference, l.liveDifference, product(REQUESTS, ENTRIES));
+  const OLD_LISTS: readonly unknown[] = [undefined, null, [], [{ date: '2026-08-14' }, { date: '2020-01-01' }, {}, null]];
+  agree('splitRequestsByAge', (list: unknown, days: unknown) => m.splitRequestsByAge(list as never, days, new Date('2026-08-14T09:00:00Z')),
+    (list: unknown, days: unknown) => l.splitRequestsByAge(list as never, days, new Date('2026-08-14T09:00:00Z')),
+    product(OLD_LISTS, [undefined, null, 0, -1, 1, 15, 1.5, 'x', '15', Number.NaN, Number.POSITIVE_INFINITY]));
+  // A named sender is the same in both; nobody with a name is where the port differs on purpose (his decision, 3 Nov 2026).
+  agree('senderName', m.senderName, l.senderName, product([{ firstName: 'Marco', lastName: 'Rossi' }, { firstName: 'Marco' }, { lastName: 'Rossi' }, { firstName: ' M ', lastName: 7 }]));
+  // The numbers frozen on a list: the fields a clock does not touch, as both build them from the same odd lines.
+  const LINES: readonly unknown[] = [undefined, null, {}, { a: { qty: 3 } }, { a: { qty: '4.6', unit: 'busta' }, b: { qty: -1 } }, { a: { qty: 1e999 } }, { b: { qty: 2 } }, 'x'];
+  const built = (make: typeof m.buildOrderRequest) => (entries: unknown) => make({
+    suppliers: [{ id: 's', name: 'S' }, null, {}], ingredients: [{ id: 'a', name: 'A', supplierId: 's', active: true, unit: 'cartone', packUnit: 'busta' }, { id: 'b', name: 'B', supplierId: 's', active: false }],
+    entries, date: '2026-08-14', from: { uid: 'u', name: 'N' }, now: new Date('2026-08-14T09:00:00Z'),
+  });
+  agree('buildOrderRequest', built(m.buildOrderRequest), built(l.buildOrderRequest), product(LINES));
 });
 
 describe('ingredient-merge: odd inputs', () => {

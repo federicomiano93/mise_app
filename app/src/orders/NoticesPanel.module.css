@@ -50,6 +50,14 @@
   overflow-wrap: anywhere;
 }
 
+.resend {
+  align-self: flex-start;
+  max-width: 100%;
+  min-height: var(--hit);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
 .group {
   display: flex;
   flex-direction: column;

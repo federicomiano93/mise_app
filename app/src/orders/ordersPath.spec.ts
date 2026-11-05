@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, REORDER_PATH, PLACE_ALL_CONFIRM_PATH, PLACE_ALL_PATH, SEND_PATH, SETTINGS_PATH, historyDayPath, historyEditPath, incomingMissingPath, ordersScreenName, parseOrdersPath, supplierConfirmPath,
+  CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, LISTS_PATH, REORDER_PATH, requestPath, PLACE_ALL_CONFIRM_PATH, PLACE_ALL_PATH, SEND_PATH, SETTINGS_PATH, historyDayPath, historyEditPath, incomingMissingPath, ordersScreenName, parseOrdersPath, supplierConfirmPath,
 } from './ordersPath';
 
 describe('parseOrdersPath', () => {
@@ -33,6 +33,26 @@ describe('parseOrdersPath', () => {
     expect(parseOrdersPath('/reorder')).toEqual({ kind: 'reorder' });
     expect(parseOrdersPath(INCOMING_PATH.slice('/orders'.length))).toEqual({ kind: 'incoming' });
     expect(parseOrdersPath(REORDER_PATH.slice('/orders'.length))).toEqual({ kind: 'reorder' });
+  });
+
+  it('reads the order lists and one list, whole through the encoding', () => {
+    expect(parseOrdersPath('/lists')).toEqual({ kind: 'lists' });
+    expect(parseOrdersPath('/lists/abc')).toEqual({ kind: 'request', id: 'abc' });
+    expect(parseOrdersPath('/lists/a%2Fb')).toEqual({ kind: 'request', id: 'a/b' });
+    expect(parseOrdersPath(requestPath('a b/c%').slice('/orders'.length))).toEqual({ kind: 'request', id: 'a b/c%' });
+    expect(parseOrdersPath(LISTS_PATH.slice('/orders'.length))).toEqual({ kind: 'lists' });
+  });
+
+  it('refuses junk after the order lists', () => {
+    for (const rest of ['/lists/a/b', '/lists/%E0%A4%A', '/lists//x/y']) {
+      expect(parseOrdersPath(rest)).toEqual({ kind: 'unknown' });
+    }
+  });
+
+  it('names the order list screens for the usage record', () => {
+    expect(ordersScreenName('/lists')).toBe('orders-lists');
+    expect(ordersScreenName('/lists/abc')).toBe('orders-list');
+    expect(ordersScreenName('/lists/a/b')).toBe('orders');
   });
 
   it('refuses junk after Incoming and «To re-order»', () => {

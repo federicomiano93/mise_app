@@ -9,6 +9,7 @@ import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { DeliveryDoors } from './DeliveryDoors';
+import { ListsDoor } from './ListsDoor';
 import { NoticesPanel } from './NoticesPanel';
 import { TodayOrders } from './TodayOrders';
 import { useOrders } from './OrdersContext';
@@ -44,6 +45,8 @@ type Props = {
   // The debt banner and the two doors under the head (step 3f-5), drawn only while the venue checks deliveries.
   onIncoming: () => void;
   onReorder: () => void;
+  // The «Order lists» door under them (step 3f-7), independent from the delivery switch.
+  onLists: () => void;
   // «Placed yesterday» on a pending banner (step 3f-6): the supplier's confirm screen, recording under that day.
   onOpenPending: (id: string, day: string) => void;
 };
@@ -58,7 +61,7 @@ const HEADING_KEY = {
 // ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a component that stays mounted, and
 // only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard where the person
 // left them (the current app built the box once for the same reason).
-export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings, onIncoming, onReorder, onOpenPending }: Props) {
+export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings, onIncoming, onReorder, onLists, onOpenPending }: Props) {
   const { t } = useT();
   const { config, draft, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
@@ -161,7 +164,7 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
       </div>
 
       <PartBoundary>
-        <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} />
+        <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} onSend={onSend} />
       </PartBoundary>
 
       <PartBoundary>
@@ -169,6 +172,8 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
       </PartBoundary>
 
       <DeliveryDoors onIncoming={onIncoming} onReorder={onReorder} />
+
+      <ListsDoor onOpen={onLists} />
 
       {!ready && earlyLens === null ? (
         <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>

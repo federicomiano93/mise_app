@@ -36,6 +36,15 @@ describe('buildConfirmGroups', () => {
     ]);
   });
 
+  it('carries what a list sent today asked for only where it differs from the row, and never for a line no list carried', () => {
+    const { draft, lens } = setup({ 'i-rye': { qty: 2 }, 'i-flour': { qty: 5 }, 'i-box': { qty: 3, unit: 'bag' } });
+    const list = (date: string, quantities: Record<string, number>) => ({ date, quantities, supplierOf: Object.fromEntries(Object.keys(quantities).map(id => [id, 's-alp'])) });
+    const requests = [list(TODAY, { 'i-rye': 4, 'i-flour': 5 }), list(TODAY, { 'i-rye': 6 }), list('2026-10-27', { 'i-box': 9 })];
+    const [group] = buildConfirmGroups({ ids: ['s-alp'], checks: [], lens, draft, today: TODAY, requests });
+    // Rye: the highest of the day's lists (6). Flour: asked 5 = typed 5, nothing to say. Box: only an earlier day's list.
+    expect(group?.rows.map(row => [row.id, row.asked])).toEqual([['i-box', undefined], ['i-flour', undefined], ['i-rye', 6]]);
+  });
+
   it('keeps the suppliers in the order given and uses the short name', () => {
     const { draft, lens } = setup({ 'i-rye': { qty: 1 }, 'i-milk': { qty: 1 } });
     const groups = buildConfirmGroups({ ids: ['s-zed', 's-alp'], checks: [], lens, draft, today: TODAY });

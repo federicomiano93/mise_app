@@ -55,7 +55,7 @@ or a clear that runs when the record failed, loses an order that was really sent
   `isValidWeekStart`, `weekStart`, `inCurrentWeek`, `beforeCurrentWeek`), `supplier-label` (full), `records`,
   `away-model` (full, incl. `whoWillBeTold`, `nobodyWillBeTold`, `awayNames`), `push-model` (full:
   `orderRequestNotification`, `targetPage('orderRequest') = './orders.html'`, `PUSH_KINDS`), `category-batches`;
-  **partial**: `order-request-model` (only `remainingIds`), `ingredient-search` (only `normalizeText`,
+  `order-request-model` (full since 3f-7, «Step 3f-7 as built»); **partial**: `ingredient-search` (only `normalizeText`,
   `filterSuppliers`); `catalogue-model`'s `linkOptions({ inactiveLast })` (`shared/src/catalogue-model.ts:238`, the
   `inactive` list at 271) for decision F6.
 - **App pieces**: `ui/` (`Button`, `Dialog`, `useConfirm`, `useAlert`, `FormBar`, `StatusMessage`, `SettingSwitch`,
@@ -594,9 +594,10 @@ dialog on screen while it decides (`send-chooser.js:86-88`); harmless today beca
   (M9) becomes the shell's help with the Orders content.
 - **F8. History «send again» uses the chooser — OPEN (F-9).** Today it is always WhatsApp. **Recommended**: the same
   chooser as the send arrow, so a venue on email re-sends by email; the record is not re-recorded.
-- **F9. How long Orders data is kept — OPEN (P13).** Today nothing is ever deleted (F-12). **Recommended**: keep order
-  records (business records, no person in them) as today; delete order lists 12 months after they were sent with a
-  scheduled clean-up — a separate S task after 3f, flagged because a scheduled function costs a little (P14).
+- **F9. How long Orders data is kept — DECIDED by him, 3 Nov 2026 (P13).** Today nothing is ever deleted (F-12). Order records
+  (business records, no person in them) stay as today; **order lists are deleted 3 months after they were sent** (the recommendation
+  was 12), with a scheduled clean-up — a separate S task after 3f, flagged because a scheduled function costs a little (P14). Not
+  built yet, so nothing is deleted until it is, and he can still change the figure.
 
 ### Technical (taken with the recommended option; listed for him at the end of each slice)
 
@@ -638,7 +639,9 @@ dialog on screen while it decides (`send-chooser.js:86-88`); harmless today beca
 - **Order lists — the sender's name and uid.** `order-requests.fromUid` + `fromName` (first + last name from the roster,
   else the email address, `senderName` `order-request-model.js:43`) on every list. Where: `locations/<lid>/order-requests`.
   Kept: for ever (deleted only by an owner or manager, by hand, R21); the screen shows 15 days, Home reads 30.
-  Finding: an email address can end up as `fromName` when a member has no name on the roster.
+  Finding: an email address can end up as `fromName` when a member has no name on the roster. **His decision, 3 Nov 2026: never an
+  address in Mise 2.** With no name on the roster it stores `fromName: ''` and the screen prints the word for «someone», in the
+  reader's language (the current app keeps the email until the switch: fixes only). Kept: 3 months once the clean-up exists (F9).
 - **The push of an order list names the sender** (and the venue) in the notification title, on the managers' phones
   (`functions/push-model.js:185-205`). Kept: on the phone, by the operating system.
 - **The roster** (`members/<uid>`: `email, firstName, lastName, joinedAt`) is READ by Orders to name the sender and to
@@ -1285,3 +1288,60 @@ started on mount, stopped on unmount, P14).
 
 **P13.** No new kind of data, and nothing personal: names of suppliers and ingredients already on this phone, wiped on sign-out and
 on a venue switch.
+
+## Step 3f-7 as built — order lists
+
+**What it is.** The door «Liste d'ordine» with the count of lists still to place; the lists (waiting first, older than 15 days behind
+a button that says how many); one list with its ticks, the note, «adesso in lista: n», «ordinati: n», «Finito», «Segna come ordinato —
+fornitore» (the confirm screen, then back to this list) and Delete for an owner or a manager; the road «A chi gestisce il locale» with
+the away warning; «Rimanda la lista» for an employee in the bell's panel; «chiesti: n» on the confirm screen; «Non far suonare questo
+telefono» in Settings. Port: `order-request-model` in full. No rule changed, and no new key on any saved shape.
+
+**His decisions (3 Nov 2026, P13).**
+- H1. No name on the roster: «Qualcuno», never an email. Mise 2 stores `fromName: ''` and each reader sees the word in their language.
+  The roster read for the warning drops the address too, so no address can reach that screen. A list stored by the current app with an
+  address in `fromName` also reads «Qualcuno» (`senderOf`, anything with an @): the same decision applied to what is already there.
+- H2. Order lists are kept 3 months (F9). The clean-up is a separate S task and is not built: until it is, nothing is deleted. Up to the
+  last 120 are reachable through «Mostra le liste più vecchie».
+
+**Differences from the current app, for him to hear.**
+- H3. The mute switch is OFF and DISABLED on a phone with no alert token, with a line saying there is nothing to silence (the current
+  app shows a live switch that does nothing).
+- H4. A bad connection. «Invio…» appears at the tap; who is away and the sender's name each get 3 seconds, so neither can hold a send;
+  a list the server has not answered within 5 seconds says «Partirà quando torna la connessione» and goes back to the Orders list. Driven
+  with a phone that believes it is connected: 8 seconds, and the list arrives once when the signal is back. It was 14 seconds of silence
+  and a screen waiting for ever before review.
+- H5. Back during a send stops what has not left: nothing is written, and sending again makes one list. What has left is still said,
+  wherever the person has gone.
+- H6. Delete does not wait for the server: the screen steps back at once; a refusal is said on the lists, and the list returns there.
+- H7. The name is read when the send screen opens (`prepareSender`), one document read more for each opening (P14: negligible).
+- H8. The empty-state hint names the road the chooser really shows, «A chi gestisce il locale»; the current app says «Manda al manager».
+
+**Words written here (no original).** `ord.request.queued`, `ord.request.tooMany`, `ord.mute.noPhone`, `ord.live.lists`,
+`ord.request.ordered` (from `orders.untold.ordered`).
+
+**Taken for him, easy to change.**
+- H9. A venue with lists switched off may see the door for a moment on a cold start, before config/orders answers: the door does not wait,
+  because a door that appears late moves the whole list under the finger. Only a venue with lists off can see it.
+- H10. Coming back from the confirm screen the older lists are folded again; the choice lives while the lists screen does.
+- H11. After «Segna come ordinato» the focus lands on the list's title, not on the button that opened the confirm screen.
+
+**Known and left.**
+- A refusal arriving after «Partirà quando torna la connessione» reaches only the console (it takes a real refusal, such as access
+  removed meanwhile). The order itself stays in the shared order.
+- Somebody WITH a name, sending for the first time from a phone with no signal, goes out as «Qualcuno» for good, because the rules never
+  let a list's name change. Their next list carries the name.
+- A venue with no list at all, opening with no signal, gets the «nobody was told» blocks only once the server answers.
+- `order-sent` (the usage statistic) is still missing in Mise 2, from step 3f-3; `order-request` is in. Owed with Statistics.
+- On the split, one list open and a supplier tapped on the left, Back may land on the lists rather than on that list (suspected, the
+  same shape as History's editor).
+- For step 3g: the Home's badge (30 days) and a push tap landing on the lists. For step 3f-8: the `orderLists` switch itself.
+
+**Driven.** 279/279 on a private emulator (`algprobe/mise-drive/drive-mise2-orders-7.mjs <base> <cdp-port> <fs-port> <auth-port>`): the
+owner at 1024, 360 and 296 in Italian and in English, an employee with an empty roster row at 360, then OFFLINE and NOSIGNAL at 360. axe
+clean, targets, no sideways scroll, one main and one h1, no permission error, at every step. **Not driven:** the real tablet (touch on the
+ticks), keyboard alone end to end, and the empty and refused states, which only the specs cover.
+
+**P13.** Lists carry the sender's uid and name, or no name, never an address (H1). `fcm-tokens/<token>.muteOrderRequests` is a yes/no about
+a phone, already written by the current app. Nothing new is kept on the phone: `push-token` and `push-mute-order-requests` are the
+current app's keys, outside `KEEP_PREFIXES`.

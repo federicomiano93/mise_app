@@ -7,6 +7,7 @@ import type { PhotoOutcome, SendJob, SendOffer } from '@mise/shared/send-chooser
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
+import { useStatusMessage } from '../ui/StatusMessage';
 import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import { useOrders, useOrdersStore } from './OrdersContext';
@@ -19,6 +20,7 @@ import type { StoredDoc } from './ordersSource';
 import { openWindow, sendTranslate, takeRoad } from './sendFlow';
 import type { OpenQuestion, RoadResult, SendRow, SendUi, TextOutcome } from './sendFlow';
 import { unitConflictText } from './unitConflictText';
+import { LONG_MS } from './useClearQuantities';
 
 export interface SendRequest {
   // The suppliers to send to and their lines (draftSendRows, or confirmedSendRows for «Send it now»).
@@ -50,8 +52,10 @@ type PhotoQuestion = { job: SendJob; file: File | undefined; i: number; n: numbe
 // road in the same tick; with several it draws the chooser, and the road's own button takes the road in ITS press. Either way
 // takeRoad opens its text windows before its first await (sendFlow.ts): a window opened later is a blocked pop-up.
 //
-// ⚠️ THE IN-APP «TO THE MANAGER» LIST IS NOT OFFERED YET (decision B of 3f-3): the order list arrives with slice 3f-7, and a
-// road that does nothing is worse than none. When it is built, drop the filter below.
+// ⚠️ THE IN-APP «TO THE MANAGER» LIST IS A ROAD LIKE THE OTHERS (step 3f-7) EXCEPT IN TWO PLACES. «Send it now» never offers it (sendOffers:
+// it puts the order in a SUPPLIER's hands), and a recorded order sent again from History never offers it either: the list is a
+// photograph of the SHARED ORDER, and a past day is not that. It opens no window, so it needs no tap of its own, and it is asked
+// «nobody will be told?» first.
 export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest) => Promise<RoadResult | null>, ReactNode] {
   const { t } = useT();
   const session = useSession();
@@ -67,8 +71,9 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
   const waiting = useRef(new Set<() => void>());
 
   // The latest of everything `send` reads: it is called from a press and must never close over an old render.
-  const latest = useRef({ t, session, store, config, draft, lens, alert, confirm });
-  latest.current = { t, session, store, config, draft, lens, alert, confirm };
+  const tell = useStatusMessage();
+  const latest = useRef({ t, session, store, config, draft, lens, alert, confirm, tell });
+  latest.current = { t, session, store, config, draft, lens, alert, confirm, tell };
 
   useEffect(() => {
     const pending = waiting.current;
@@ -77,6 +82,21 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
       pending.clear();
     };
   }, []);
+
+  // ⚠️ WHETHER THE SCREEN THAT USES THIS HOOK IS STILL THERE: the flow waits on reads before it writes, and a person who went Back
+  // meanwhile must not get a list they have left behind (sending again would make two). SET ON EVERY MOUNT: StrictMode runs the
+  // cleanup and then the effect again.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  // The sender's name is one document read: started now, it has had the time the person spends ticking suppliers by the tap.
+  const signedInUid = session.user?.uid ?? '';
+  useEffect(() => {
+    if (signedInUid !== '') store.prepareSender(signedInUid);
+  }, [store, signedInUid]);
 
   // A question to the person: `show` draws it, the dialog's `answer` settles it once, and a screen that goes away answers
   // `ifLeft` for it.
@@ -98,7 +118,7 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
     const suppliers = request.rows.map(row => view.supplierById(row.id)).filter((s): s is StoredDoc => s !== undefined);
     const offers = sendOffers({
       settings: cfg.sendSettings, canManage: who.canManage, suppliers, supplierRoadsOnly: request.supplierRoadsOnly, t: words,
-    }).filter(offer => offer.route !== 'manager');
+    }).filter(offer => !(request.resend && offer.route === 'manager'));
 
     if (offers.length === 0) {
       return latest.current.alert({ message: say('ord.send.noRouteAvailable'), okLabel: say('common.ok') }).then(() => null);
@@ -117,6 +137,35 @@ export function useSendOrder(lens: OrdersLens): readonly [(request: SendRequest)
         okLabel: latest.current.t('common.ok'),
         cancelLabel: latest.current.t('common.cancel'),
       }),
+      sendList: async rows => {
+        const uid = who.user?.uid ?? '';
+        // ⚠️ NEVER BLOCKS, ONLY REFUSES TO BE SILENT: the list still belongs in the app. A failed read answers «go ahead» (the store).
+        // ⚠️ SAID BEFORE THE READ: on a bad connection the reads take over ten seconds, and a tap that answers nothing gets tapped again.
+        latest.current.tell(say('ord.request.sending'), LONG_MS);
+        const away = await orders.whoIsAway(uid);
+        // ⚠️ LEFT DURING THE READ: nothing is written, and «Sending…» does not stay up over the screen they went to.
+        if (!mounted.current) {
+          latest.current.tell('');
+          return null;
+        }
+        if (away.nobody) {
+          // ⚠️ «Sending…» MUST NOT STAY UP ABOVE THE QUESTION: the person is being asked, nothing is being sent yet.
+          latest.current.tell('');
+          const names = away.names.map(name => name || say('ord.request.someone'));
+          const goAhead = await latest.current.confirm({
+            title: say('ord.away.nobodyTitle'),
+            // ⚠️ `n` IS THE COUNT, so the verb agrees.
+            message: names.length > 0
+              ? say('ord.away.nobodyMessage', { names: names.join(', '), n: names.length })
+              : say('ord.away.nobodyMessagePlain'),
+            okLabel: say('ord.away.sendAnyway'),
+            cancelLabel: say('common.cancel'),
+          });
+          if (!goAhead) return null;
+        }
+        latest.current.tell(say('ord.request.sending'), LONG_MS);
+        return orders.sendList(rows.map(row => row.id), uid, say('ord.noSupplier'), () => mounted.current);
+      },
     };
     // The same-day unit check, from the live records (a read would be an await, and a window must open inside the tap).
     const unitRefusal = (rows: readonly SendRow[]): string => {

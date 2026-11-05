@@ -64,6 +64,7 @@ function ui(over: Partial<SendUi> = {}): SendUi & { said: string[]; asked: strin
     askPhoto: async () => 'shared',
     confirmText: async () => true,
     askOpen: async question => (question.open() ? 'opened' : 'blocked'),
+    sendList: async () => 'sent',
     ...over,
   };
 }
@@ -196,8 +197,20 @@ describe('taking a road', () => {
     error.mockRestore();
   });
 
-  it('the in-app list is not a road of this slice: it opens nothing', async () => {
-    expect(await takeRoad(input({ offer: offer('manager', [mill]) }), ui())).toStrictEqual({ kind: 'cancelled' });
+  it('the in-app list opens no window, skips the unit check and answers how the list went', async () => {
+    const open = vi.fn(() => true);
+    const unitRefusal = vi.fn(() => 'clash');
+    const screen = ui({ sendList: async rows => { screen.asked.push(rows.map(row => row.id).join()); return 'queued'; } });
+    const result = await takeRoad(input({ offer: offer('manager', [mill]), open, unitRefusal }), screen);
+    expect(result).toStrictEqual({ kind: 'list', outcome: 'queued' });
+    expect(screen.asked).toStrictEqual(['mill']);
+    expect(open).not.toHaveBeenCalled();
+    expect(unitRefusal).not.toHaveBeenCalled();
+    expect(screen.said).toStrictEqual([]);
+  });
+
+  it('backing out of the «nobody will be told» question is a cancelled road', async () => {
+    expect(await takeRoad(input({ offer: offer('manager', [mill]) }), ui({ sendList: async () => null }))).toStrictEqual({ kind: 'cancelled' });
   });
 });
 
