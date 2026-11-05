@@ -245,6 +245,22 @@ Aria does not support Preact. The numbers are below.
   for everybody, Create/Replace/Turn off only for `canManage`, no Create when the read failed); both share
   `ClientOrdering.module.css`. `applied-not-recorded` is an alert dialog (`clientOrdersMessageDelivery`), `cutoff-not-saved` a
   status message; the work view's door is «Client orders». Its parity list is `docs/parity/calculator.md` (the section for slice C1).
+- `recipes/` — the Recipe catalogue (section id `recipes`, step 3d, built in slices; its parity list is
+  `docs/parity/catalogue.md`). The data layer: `recipesSource.ts` (the Firestore half, read-only so far: the
+  recipes, live, while the section is open), `recipesStore.ts` (plain TypeScript: the recipes stored NORMALISED
+  under the current app's `catalogue-recipes`, the open counts `catalogue-usage` and the remembered batches
+  `catalogue-scaled`, an empty answer from the browser's own database not believed, counts pruned only on the
+  server's word) and `RecipesContext.tsx`. Step 3d-1 adds the screens: `RecipesSection` (the frame, the split from
+  1000px, the scroll it owns and the hand-back of the focus, as Food cost), `RecipesList` (the search box, mounted
+  once and never redrawn by a snapshot, over the recipes most opened first; the counts that decide the ORDER are
+  frozen while a recipe is open beside the list), `RecipesDetail` (the prompt, or a recipe followed live: «Loading…»
+  until the server has answered, then not found; deleted elsewhere goes back to the list and says so),
+  `RecipeView` (the bar and the ingredient list as a table, tapped for the full screen) and `BatchCard` (grams, the
+  confirm that spells the amount both ways and raises its voice for an absurd batch, Clear, 12 h). Addresses, in
+  `recipesPath.ts`: `/recipes` and `/recipes/<id>`; `new`, `allergens`, `settings` and `photo` are reserved for later
+  steps. The usage record names two screens, `recipes` and `recipes-detail`. `recipesNav.ts` and `handBack.ts` are
+  this section's copies of Food cost's. `ui/RecipeFullScreen` and `ui/zoomStorage` are shared with the Calculator
+  and take a storage key (`mise.calcZoomStep` / `mise.catZoomStep`).
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the

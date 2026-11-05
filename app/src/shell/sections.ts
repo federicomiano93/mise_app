@@ -13,6 +13,7 @@ import type { LucideIcon } from 'lucide-react';
 import { isMonthId } from '@mise/shared/inventory-model';
 import { isWeekday } from '@mise/shared/pastries-model';
 import type { MessageKey } from '../i18n/en';
+import { parseRecipesPath } from '../recipes/recipesPath';
 
 export type SectionId =
   | 'orders'
@@ -120,7 +121,16 @@ export function screenNameFor(pathname: string): string | null {
   if (section.id === 'stocktake') return stocktakeScreenName(pathname, section.path);
   if (section.id === 'foodcost') return foodcostScreenName(pathname, section.path);
   if (section.id === 'calculator') return calculatorScreenName(pathname, section.path);
+  if (section.id === 'recipes') return recipesScreenName(pathname, section.path);
   return section.id;
+}
+
+// The Recipe catalogue is two screens so far that share one section: the list and one recipe (the
+// current app's `''` and `detail`). A recipe opened beside the list is the same screen as on its own.
+// ⚠️ ONLY AN ADDRESS THE SECTION DRAWS AS A RECIPE counts as one: a reserved word or junk is sent back to
+// the list, and logging it as a recipe screen would put a screen nobody saw in the owner's statistics.
+function recipesScreenName(pathname: string, base: string): string {
+  return parseRecipesPath(pathname.slice(base.length)).kind === 'recipe' ? 'recipes-detail' : 'recipes';
 }
 
 // The Stocktake is three screens that share one section: the month's counting list (whichever

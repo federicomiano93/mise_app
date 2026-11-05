@@ -9,6 +9,8 @@ import { createFirestoreFoodcostSource } from '../foodcost/foodcostSource';
 import type { FoodcostSource } from '../foodcost/foodcostSource';
 import { createFirestorePastriesSource } from '../pastries/pastriesSource';
 import type { PastriesSource } from '../pastries/pastriesSource';
+import { createFirestoreRecipesSource } from '../recipes/recipesSource';
+import type { RecipesSource } from '../recipes/recipesSource';
 import { createFirestoreStocktakeSource } from '../stocktake/stocktakeSource';
 import type { StocktakeSource } from '../stocktake/stocktakeSource';
 
@@ -25,6 +27,8 @@ export interface DataServices {
   calculator(locationId: string): CalculatorSource;
   // The clients' own orders, the deadline, the menus and the ordering links (hosted by the Calculator).
   clientOrders(locationId: string): ClientOrdersSource;
+  // The Recipe catalogue («Ricettario»).
+  recipes(locationId: string): RecipesSource;
 }
 
 // What the data layers need from the backend besides Firestore: the account behind a client's ordering link is
@@ -44,6 +48,7 @@ export function createDataServices(firestore: () => Promise<FirestoreKit>, auth:
       nowIso: () => new Date().toISOString(),
       randomBytes: browserRandomBytes,
     }),
+    recipes: locationId => createFirestoreRecipesSource(firestore, locationId),
   };
 }
 

@@ -7,23 +7,32 @@
 //
 // PORTED: the unit table (`CATALOGUE_UNITS`, `DEFAULT_UNIT`, `unitOf`, `isWeighableUnit`,
 // `ingredientGrams`, `weighableTotalGrams`), the row link (`ROW_KINDS`, `linkOf`), the oven loss
-// (`MAX_LOSS_PCT`, `normalizeLossPct`, `MAX_WEIGHT_G`, `normalizeWeight`, `weightLoss`) and the link
+// (`MAX_LOSS_PCT`, `normalizeLossPct`, `MAX_WEIGHT_G`, `normalizeWeight`, `weightLoss`), the link
 // suggestions Food cost draws under a product's name (`normalizeSearchText`, `SUGGEST_MIN_CHARS`,
-// `SUGGEST_LIMIT`, `suggestLinks`).
+// `SUGGEST_LIMIT`, `suggestLinks`) and, since step 3d-1, the recipe itself: the normalisers
+// (`normalizeCatalogueRecipe(s)`, `labelFieldsOf`, `normalizeShelfLifeDays`, `MAX_SHELF_LIFE_DAYS`, with the
+// types `CatalogueRecipe` and `CatalogueRow`), the list helpers (`sortByUsage`, `filterByName`), the kg
+// scaling (`scaleCatalogue`, `baseAmounts`, `MAX_SANE_BATCH_G`, `MAX_SANE_MULTIPLE`, `formatWeight`) and the
+// persisted-batch freshness (`SCALED_TTL_MS`, `isScaledEntryFresh`).
 //
-// PRIVATE, ported only because `suggestLinks` calls them and not exported: `linkOptions` (whole, as the
-// original, though `suggestLinks` only ever calls it with an empty query), `matchRank`, `bestRank`, and
-// a copy of `supplierLabel` of js/supplier-label.js (pure, three lines; there is no shared port of that
-// file yet). `ingredientDisplayName` is imported from ingredient-name.ts, never copied.
+// ADAPTED (the two functions that look a word up in the interface dictionary, which in Mise 2 belongs to
+// the app; same results given the same words):
+//   • `batchWarning(target, base, t)` takes the translator as its third argument and returns the same
+//     sentences (keys `cat.batchWarning` / `cat.batchWarningVsRecipe`, whole sentences with {weight},
+//     {times}, {base} holes). Its arity therefore differs from the original, by design.
+//   • `unitText(unit)` is NOT exported; `unitTextKey(unit)` answers the dictionary key
+//     (`cat.unitText.pcs|tsp|tbsp|pinch|toTaste`), or null for a metric symbol and anything unknown, which the
+//     original hands back untouched — so the app writes `key ? t(key) : unit`.
 //
-// LEFT OUT, because Food cost does not read it: the recipe normalisers (`normalizeCatalogueRecipe(s)`,
-// `labelFieldsOf`, `normalizeShelfLifeDays`, `MAX_SHELF_LIFE_DAYS`), the list helpers (`sortByUsage`,
-// `filterByName`), `linkOptions` as an export, `linkedItemName`, `isSameLink`, `applyLink`, `moveRow`,
-// the kg scaling (`scaleCatalogue`, `baseAmounts`, `MAX_SANE_*`, `formatWeight`, `batchWarning`), the
-// persisted-batch freshness (`SCALED_TTL_MS`, `isScaledEntryFresh`), `findInvalidRecipe`, the Calculator
-// import (`toCalculatorRecipe`, `nonWeighableLabels`, `mergeImportedRecipe`, `importFailureKey`,
-// `findCalculatorImport`), and the two functions that look a word up in the interface dictionary
-// (`unitText`, and `batchWarning`, which the dictionary also feeds).
+// PRIVATE, ported only because something above calls them and not exported: `normalizeIngredient(s)` (the
+// row normaliser), `fixRounding`, `linkOptions` (whole, as the original, though `suggestLinks` only ever
+// calls it with an empty query), `matchRank`, `bestRank`, and a copy of `supplierLabel` of
+// js/supplier-label.js (pure, three lines; there is no shared port of that file yet).
+// `ingredientDisplayName` is imported from ingredient-name.ts, never copied.
+//
+// LEFT OUT: `linkOptions` as an export, `linkedItemName`, `isSameLink`, `applyLink`, `moveRow`,
+// `findInvalidRecipe` (step 3d-6) and the Calculator import (`toCalculatorRecipe`, `nonWeighableLabels`,
+// `mergeImportedRecipe`, `importFailureKey`, `findCalculatorImport`; step 3d-7).
 //
 // Weight and volume are "weighable": they convert to grams (volume at 1 ml = 1 g, the standard bakery
 // approximation). Pieces / spoons / pinch / to-taste are NOT weighable, so they stay out of the weight
@@ -319,4 +328,296 @@ export function suggestLinks({
 
   const every = [...ranked(all.ingredients, 'ingredient'), ...ranked(all.recipes, 'recipe')];
   return { items: every.slice(0, max), total: every.length };
+}
+
+// ── The recipe, normalised ───────────────────────────────────────────────────
+
+// One ingredient row as the catalogue keeps it. `kind` + `refId` (the link) and `rid` (the stable id a guided
+// mixing step points at) are ABSENT, not empty, on a row without them.
+export interface CatalogueRow {
+  label: string;
+  grams: number;
+  unit: CatalogueUnit;
+  kind?: RowKind;
+  refId?: string;
+  rid?: string;
+}
+
+// A catalogue recipe from arbitrary input. `steps` and `endNote` are carried through as stored and SHAPED by
+// guided-model (the original keeps this file free of that import, and so does the port: `steps` stays
+// `unknown[]`). Every optional field is absent, never 0 or empty, on a recipe that has none.
+export interface CatalogueRecipe {
+  id: string;
+  name: string;
+  ingredients: CatalogueRow[];
+  lossPct: number;
+  steps?: unknown[];
+  endNote?: string;
+  rawGrams?: number;
+  cookedGrams?: number;
+  netWeightG?: number;
+  shelfLifeDays?: number;
+}
+
+// Ten years. Long enough for anything a bakery sells, and short enough that a mistyped phone number cannot
+// become a shelf life.
+export const MAX_SHELF_LIFE_DAYS = 3650;
+
+// One ingredient row: a display label, a non-negative amount, and a unit. Non-numeric or negative amounts
+// coerce to 0 so the scaling math never sees NaN; an unknown or missing unit falls back to grams.
+//
+// ⚠️ THE LINK AND THE `rid` HAVE TO BE CARRIED THROUGH HERE. This function rebuilds every row from scratch,
+// so a field it does not mention is DROPPED — silently, on the way in from Firestore. Both are absent rather
+// than null when there is none (rows written today stay byte-identical), and `rid` is carried, never MINTED:
+// an id invented on read would be a different one on every load and would match nothing.
+function normalizeIngredient(input: unknown): CatalogueRow | null {
+  if (!input || typeof input !== 'object') return null;
+  const raw = input as Record<string, unknown>;
+  const label = String(raw.label != null ? raw.label : (raw.name || '')).trim();
+  const grams = Number(raw.grams);
+  const unit: CatalogueUnit = (typeof raw.unit === 'string' && (CATALOGUE_UNITS as readonly string[]).includes(raw.unit))
+    ? raw.unit as CatalogueUnit : DEFAULT_UNIT;
+  const row: CatalogueRow = { label, grams: Number.isFinite(grams) && grams >= 0 ? grams : 0, unit };
+
+  const link = linkOf(raw);
+  if (link) { row.kind = link.kind; row.refId = link.refId; }
+
+  const rid = raw.rid != null ? String(raw.rid).trim() : '';
+  if (rid) row.rid = rid;
+  return row;
+}
+
+function normalizeIngredients(list: unknown): CatalogueRow[] {
+  if (!Array.isArray(list)) return [];
+  return list.map(normalizeIngredient).filter((row): row is CatalogueRow => Boolean(row));
+}
+
+// How many days the finished food keeps. `null` means nobody has said — which is NOT the same as 0, and the
+// difference is a date printed on somebody's food.
+//
+// ⚠️ A BOOLEAN IS NOT A NUMBER OF DAYS. Number(true) is 1, which would turn a corrupt flag into «keeps for
+// one day» on a product that keeps for a year.
+export function normalizeShelfLifeDays(raw: unknown): number | null {
+  if (typeof raw !== 'number' && typeof raw !== 'string') return null;
+  if (typeof raw === 'string' && !raw.trim()) return null;
+  const n = Math.floor(Number(raw));
+  if (!Number.isFinite(n) || n < 0 || n > MAX_SHELF_LIFE_DAYS) return null;
+  return n;
+}
+
+// A catalogue recipe from arbitrary (e.g. Firestore) input. Returns null only for non-object input; an empty
+// name is kept (the editor's validation blocks saving it).
+export function normalizeCatalogueRecipe(input: unknown): CatalogueRecipe | null {
+  if (!input || typeof input !== 'object') return null;
+  const raw = input as Record<string, unknown>;
+  const out: CatalogueRecipe = {
+    id: raw.id != null ? String(raw.id) : '',
+    name: String(raw.name != null ? raw.name : '').trim(),
+    ingredients: normalizeIngredients(raw.ingredients),
+    lossPct: normalizeLossPct(raw.lossPct),
+  };
+  // The guided mixing procedure and its closing message: carried through as stored, absent rather than empty.
+  if (Array.isArray(raw.steps) && raw.steps.length) out.steps = raw.steps;
+  if (typeof raw.endNote === 'string' && raw.endNote.trim()) out.endNote = raw.endNote;
+  // The two weighings the loss is worked out FROM: absent rather than 0, so every recipe written before they
+  // existed stays byte-identical until somebody actually puts a scale under the dough.
+  const rawG = normalizeWeight(raw.rawGrams);
+  const cookedG = normalizeWeight(raw.cookedGrams);
+  if (rawG > 0) out.rawGrams = rawG;
+  if (cookedG > 0) out.cookedGrams = cookedG;
+  // What a full label needs and a PPDS one does not.
+  // ⚠️ AND ABSENT IS NOT ZERO HERE EITHER: a shelf life of 0 means «today», and printing today's date as a USE
+  // BY on food that keeps for a week is a safety statement nobody made.
+  const netG = normalizeWeight(raw.netWeightG);
+  if (netG > 0) out.netWeightG = netG;
+  const shelf = normalizeShelfLifeDays(raw.shelfLifeDays);
+  if (shelf !== null) out.shelfLifeDays = shelf;
+  return out;
+}
+
+// A list of catalogue recipes, dropping junk entries.
+export function normalizeCatalogueRecipes(list: unknown): CatalogueRecipe[] {
+  if (!Array.isArray(list)) return [];
+  return list.map(normalizeCatalogueRecipe).filter((r): r is CatalogueRecipe => Boolean(r));
+}
+
+// The two label fields exactly as the catalogue store WRITES them: a real number, or `null` for «nobody has
+// said» — which the data layer turns into a removal, because the rules refuse a stored null and a merge that
+// leaves a key out keeps the old one.
+export function labelFieldsOf(recipe: unknown): { netWeightG: number | null; shelfLifeDays: number | null } {
+  const r = recipe as { netWeightG?: unknown; shelfLifeDays?: unknown } | null | undefined;
+  const netG = normalizeWeight(r && r.netWeightG);
+  return {
+    netWeightG: netG > 0 ? netG : null,
+    shelfLifeDays: normalizeShelfLifeDays(r && r.shelfLifeDays),
+  };
+}
+
+// ── List helpers (used by the catalogue list) ────────────────────────────────
+
+// Most-used first: sort by open-count (from the local usage map) descending, then by name ascending as a
+// stable tie-break. Never mutates the input array.
+export function sortByUsage<T extends { id?: unknown; name?: unknown }>(recipes: readonly T[], usageMap: Readonly<Record<string, number>> = {}): T[] {
+  return recipes.slice().sort((a, b) => {
+    const ua = usageMap[a.id as string] || 0;
+    const ub = usageMap[b.id as string] || 0;
+    if (ub !== ua) return ub - ua;
+    return String(a.name).localeCompare(String(b.name));
+  });
+}
+
+// Case-insensitive substring filter by recipe name. Empty query returns all (the very same array).
+export function filterByName<T extends { name?: unknown }>(recipes: readonly T[], query: unknown): readonly T[] {
+  const q = String(query || '').trim().toLowerCase();
+  if (!q) return recipes;
+  return recipes.filter(r => String(r.name).toLowerCase().includes(q));
+}
+
+// ── kg scaling (pure pro-rata "total") ───────────────────────────────────────
+
+// Round an array of gram values so the displayed integers sum EXACTLY to Math.round(total). Any ±rounding
+// residual is assigned to the largest ingredient.
+function fixRounding(amounts: readonly number[], total: number): number[] {
+  const rounded = amounts.map(a => Math.round(a));
+  if (!rounded.length) return rounded;
+  const diff = Math.round(total) - rounded.reduce((a, b) => a + b, 0);
+  if (diff !== 0) {
+    let maxIdx = 0;
+    for (let i = 1; i < rounded.length; i++) {
+      if (rounded[i]! > rounded[maxIdx]!) maxIdx = i;
+    }
+    rounded[maxIdx]! += diff;
+  }
+  return rounded;
+}
+
+// A null or undefined row THROWS a TypeError here, as in the original (`.grams` read off nothing).
+const gramsOfRow = (row: unknown): number => Number((row as { grams?: unknown }).grams) || 0;
+const rowsOf = (recipe: unknown): readonly unknown[] => {
+  const r = recipe as { ingredients?: unknown } | null | undefined;
+  return (r && Array.isArray(r.ingredients)) ? r.ingredients : [];
+};
+
+// ⚠️ THE BIG UNITS KEEP THEIR DECIMALS, DOWN TO ONE GRAM OR ONE MILLILITRE. Every amount used to be rounded
+// to a whole number in its own unit, so 1.84 kg of flour read «2 kg» and 0.4 kg read «0 kg» (Federico,
+// 14 Oct 2026: «correggi i decimali di kg e litri»; the current app's fix is PR #361). A unit not listed is whole.
+const UNIT_DECIMALS: Readonly<Record<string, number>> = { kg: 3, l: 3, dl: 2, cl: 1 };
+export function unitDecimals(unit: string): number {
+  return UNIT_DECIMALS[unit] ?? 0;
+}
+
+// An amount rounded to what its unit can show: 1.8375 kg -> 1.838, 2.4 g -> 2.
+export function roundInUnit(value: unknown, unit: string): number {
+  const f = 10 ** unitDecimals(unit);
+  return Math.round((Number(value) || 0) * f) / f;
+}
+
+// Scale a recipe to a target TOTAL weight in grams: every ingredient in proportion to the weighable total.
+// Returns an array aligned with recipe.ingredients — a number in EACH ingredient's own unit, rounded by
+// roundInUnit (whole, but kg / l to the gram or millilitre), or null for a 'to taste' row (no quantity). Empty recipe / non-positive target / no weighable mass → zeros (no NaN).
+export function scaleCatalogue(recipe: unknown, targetGrams: unknown): (number | null)[] {
+  const ings = rowsOf(recipe);
+  const target = Number(targetGrams);
+  const weighTotal = weighableTotalGrams(recipe);
+  if (!Number.isFinite(target) || target <= 0 || weighTotal <= 0) {
+    return ings.map(i => unitOf(i) === 'to taste' ? null : 0);
+  }
+  const factor = target / weighTotal;
+  // Common case — every ingredient in grams: exact-sum to the target.
+  if (ings.every(i => unitOf(i) === 'g')) {
+    return fixRounding(ings.map(i => gramsOfRow(i) * factor), target);
+  }
+  // Mixed units: proportional, each rounded in its own unit (roundInUnit); to-taste has no number.
+  return ings.map(i => unitOf(i) === 'to taste' ? null : roundInUnit(gramsOfRow(i) * factor, unitOf(i)));
+}
+
+// The base (unscaled) amounts, aligned with recipe.ingredients — rounded in each ingredient's own unit by
+// roundInUnit (null for 'to taste'). For an all-grams recipe the integer rows sum exactly to the rounded total.
+export function baseAmounts(recipe: unknown): (number | null)[] {
+  const ings = rowsOf(recipe);
+  if (ings.every(i => unitOf(i) === 'g')) {
+    const raw = ings.map(gramsOfRow);
+    return fixRounding(raw, raw.reduce((a, b) => a + b, 0));
+  }
+  return ings.map(i => unitOf(i) === 'to taste' ? null : roundInUnit(gramsOfRow(i), unitOf(i)));
+}
+
+// ── Batch size: a readable weight, and a guard against a mistyped total ──────
+// The "Total dough weight" field takes GRAMS. Grams remove the kilograms trap (typing 17500 and getting a
+// 17.5-tonne batch) but not the fat-finger one, so a total far outside any real batch is FLAGGED before it is
+// applied — a loud confirm, never a silent scale, and never a hard block.
+
+// Beyond any bakery mixer, and far out of proportion to the recipe as written.
+export const MAX_SANE_BATCH_G = 100000; // 100 kg
+export const MAX_SANE_MULTIPLE = 50;    // 50x the base recipe
+
+const gnum = (v: unknown): number => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+// Drop a trailing '.0' so 17.5 kg stays "17.5 kg" but 18.0 kg reads "18 kg".
+const trim = (n: number): string => String(Math.round(n * 100) / 100);
+
+// A weight named the way a person would say it, so a wrong order of magnitude is obvious at a glance:
+// 17500 g → "17.5 kg"; 17500000 g → "17.5 tonnes". The unit words are English literals in the original too
+// (not dictionary words), copied as they are.
+export function formatWeight(grams: unknown): string {
+  const g = gnum(grams);
+  if (g >= 1000000) return trim(g / 1000000) + ' tonnes';
+  if (g >= 1000) return trim(g / 1000) + ' kg';
+  return trim(g) + ' g';
+}
+
+export type BatchWarningKey = 'cat.batchWarning' | 'cat.batchWarningVsRecipe';
+
+// The translate function batchWarning needs: Mise 2's `t` (whose keys are a wider union) fits.
+export type BatchWarningTranslate = (key: BatchWarningKey, params: Readonly<Record<string, string | number>>) => string;
+
+// null when the batch is plausible; otherwise a plain-language warning naming the weight and how it compares to
+// the recipe as written. ADAPTED: the original calls the interface dictionary; here the translator is the third
+// argument. ⚠️ ONE KEY PER WHOLE SENTENCE (the original's rule): never three fragments glued together.
+export function batchWarning(targetGrams: unknown, baseGrams: unknown, t: BatchWarningTranslate): string | null {
+  const target = gnum(targetGrams);
+  const base = gnum(baseGrams);
+  if (!target) return null;
+
+  const tooHeavy = target > MAX_SANE_BATCH_G;
+  const tooBig = base > 0 && target / base > MAX_SANE_MULTIPLE;
+  if (!tooHeavy && !tooBig) return null;
+
+  return base > 0
+    ? t('cat.batchWarningVsRecipe', {
+      weight: formatWeight(target), times: trim(target / base), base: formatWeight(base),
+    })
+    : t('cat.batchWarning', { weight: formatWeight(target) });
+}
+
+// ── Persisted "scaled batch" freshness ───────────────────────────────────────
+
+export const SCALED_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours
+
+// True if a stored { target, ts } entry is still valid: a positive gram target calculated less than
+// SCALED_TTL_MS ago (relative to nowMs).
+export function isScaledEntryFresh(entry: unknown, nowMs: unknown): boolean {
+  const e = entry as { target?: unknown; ts?: unknown } | null | undefined;
+  return !!e
+    && Number.isFinite(e.target) && (e.target as number) > 0
+    && Number.isFinite(e.ts) && ((nowMs as number) - (e.ts as number)) < SCALED_TTL_MS;
+}
+
+// ── What a person reads for a unit ───────────────────────────────────────────
+
+// ⚠️ THE STORED UNIT IS AN IDENTIFIER; WHAT A PERSON READS IS THE DICTIONARY'S. ADAPTED: the original's
+// `unitText(unit)` looks the word up itself. Here `unitTextKey(unit)` answers the dictionary KEY, so the app
+// translates with its own typed i18n, or null for a metric symbol (g, kg, mg, ml, cl, dl, l — the same in
+// every language, shown as they are) and for anything unknown, which the original also hands back untouched.
+export type UnitTextKey =
+  | 'cat.unitText.pcs' | 'cat.unitText.tsp' | 'cat.unitText.tbsp' | 'cat.unitText.pinch' | 'cat.unitText.toTaste';
+
+export function unitTextKey(unit: unknown): UnitTextKey | null {
+  switch (unit) {
+    case 'pcs': return 'cat.unitText.pcs';
+    case 'tsp': return 'cat.unitText.tsp';
+    case 'tbsp': return 'cat.unitText.tbsp';
+    case 'pinch': return 'cat.unitText.pinch';
+    case 'to taste': return 'cat.unitText.toTaste';
+    default: return null;
+  }
 }

@@ -1,6 +1,5 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { Minus, Plus, X } from 'lucide-react';
-import { formatGrams } from '@mise/shared/calculator-config';
 import { canStep, scaleOf, stepBy } from '@mise/shared/zoom-steps';
 import { useT } from '../i18n/useT';
 import { readZoomStep, saveZoomStep } from './zoomStorage';
@@ -8,13 +7,17 @@ import styles from './RecipeFullScreen.module.css';
 
 type Props = {
   name: string;
-  rows: readonly { name: string; grams: number }[];
-  totalG: number;
+  // Each row's label and its amount ALREADY WRITTEN («250 g», «3 pcs»): the caller knows its units.
+  rows: readonly { name: string; amount: string }[];
+  // The closing line («Total dough», «Total»).
+  total: { name: string; amount: string };
+  // The localStorage key the text size is remembered under (ui/zoomStorage.ts).
+  storageKey: string;
   // Closing hands the focus back to whatever opened the view (it may have been replaced meanwhile).
   onClose: () => void;
 };
 
-// A confirmed recipe, full screen: only the scaled rows and the total, large, for a tablet propped up in the
+// A recipe, full screen (the Calculator's confirmed dough, the catalogue's recipe): only the rows and the total, large, for a tablet propped up in the
 // kitchen. A native modal <dialog> (the Fullscreen API is refused by iOS for anything but video): the page
 // behind is inert, Tab stays inside, and it is named by the recipe.
 //
@@ -25,11 +28,11 @@ type Props = {
 // The text size is six steps (shared/src/zoom-steps.ts), remembered on this device. The pair of buttons use
 // `aria-disabled`, never `disabled`: a disabled button drops out of the Tab order, and the focus would be lost
 // at the end of the range.
-export function RecipeFullScreen({ name, rows, totalG, onClose }: Props) {
-  const { t, locale } = useT();
+export function RecipeFullScreen({ name, rows, total, storageKey, onClose }: Props) {
+  const { t } = useT();
   const dialog = useRef<HTMLDialogElement>(null);
   const titleId = useId();
-  const [step, setStep] = useState(readZoomStep);
+  const [step, setStep] = useState(() => readZoomStep(storageKey));
 
   useEffect(() => {
     const node = dialog.current;
@@ -48,9 +51,8 @@ export function RecipeFullScreen({ name, rows, totalG, onClose }: Props) {
     if (!canStep(step, delta)) return;
     const next = stepBy(step, delta);
     setStep(next);
-    saveZoomStep(next);
+    saveZoomStep(storageKey, next);
   };
-  const grams = (n: number) => formatGrams(n, locale);
 
   return (
     <dialog
@@ -73,13 +75,13 @@ export function RecipeFullScreen({ name, rows, totalG, onClose }: Props) {
           {rows.map((row, index) => (
             <li key={index} className={styles.row}>
               <span className={styles.rowName}>{row.name}</span>
-              <span className={styles.figure}>{`${grams(row.grams)} g`}</span>
+              <span className={styles.figure}>{row.amount}</span>
             </li>
           ))}
         </ul>
         <div className={`${styles.row} ${styles.total}`}>
-          <span className={styles.rowName}>{t('calc.totalDough')}</span>
-          <span className={styles.figure}>{`${grams(totalG)} g`}</span>
+          <span className={styles.rowName}>{total.name}</span>
+          <span className={styles.figure}>{total.amount}</span>
         </div>
       </div>
       <div role="group" aria-label={t('calc.textSize')} className={styles.zoom}>

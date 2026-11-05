@@ -12,7 +12,8 @@ import { useSendSheet } from '../ui/SendSheet';
 import { problemSentence } from './calculatorMessages';
 import type { TabResult } from './calculatorResult';
 import { copyToClipboard } from './clipboard';
-import { RecipeFullScreen } from './RecipeFullScreen';
+import { RecipeFullScreen } from '../ui/RecipeFullScreen';
+import { CALCULATOR_ZOOM_KEY } from '../ui/zoomStorage';
 import boxes from './Boxes.module.css';
 import styles from './ResultCard.module.css';
 
@@ -142,7 +143,13 @@ export function ResultCard({ recipe, result, config, products, qty, divisorN, on
       ) : null}
 
       {ready && fullScreen ? (
-        <RecipeFullScreen name={name} rows={ready.rows} totalG={ready.totalG} onClose={closeFullScreen} />
+        <RecipeFullScreen
+          name={name}
+          rows={ready.rows.map(row => ({ name: row.name, amount: `${grams(row.grams)} g` }))}
+          total={{ name: t('calc.totalDough'), amount: `${grams(ready.totalG)} g` }}
+          storageKey={CALCULATOR_ZOOM_KEY}
+          onClose={closeFullScreen}
+        />
       ) : null}
       {sendSheet}
     </section>

@@ -139,6 +139,21 @@ describe('screenNameFor', () => {
     for (const section of SECTIONS) expect(screenNameFor(section.path)).toBe(section.id);
   });
 
+  // The Recipe catalogue is two screens in one section: the list and one recipe.
+  it.each([
+    ['/recipes', 'recipes'],
+    ['/recipes/', 'recipes'],
+    ['/recipes/abc123', 'recipes-detail'],
+    ['/recipes/a%2Fb', 'recipes-detail'],
+    // A reserved word or junk is sent back to the list: never a recipe screen in the statistics.
+    ['/recipes/new', 'recipes'],
+    ['/recipes/settings', 'recipes'],
+    ['/recipes/%', 'recipes'],
+    ['/recipes/abc/edit', 'recipes'],
+  ])('%s → %s', (pathname, expected) => {
+    expect(screenNameFor(pathname)).toBe(expected);
+  });
+
   // Pastries is three screens in one section; picking another day is not a new screen.
   it.each([
     ['/pastries', 'pastries'],
