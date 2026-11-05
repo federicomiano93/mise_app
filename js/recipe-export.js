@@ -6,8 +6,8 @@
 // Recipe catalogue's recipe screen — and a calculation shared by features is not copied (CLAUDE.md).
 //
 // The model: { name, trays, totalG, rows } (trays and totalG name the FILE only). A row is EITHER the Calculator's { name, grams } (the
-// UNROUNDED grams it holds: the PDF shows them as the card does, Math.round + « g», the spreadsheet
-// keeps them exact so a formula over them is right) OR the Recipe catalogue's
+// UNROUNDED grams it holds: the PDF shows them as the card does, Math.round + « g», unless the person
+// asked for the lab rounding; the spreadsheet keeps them exact so a formula over them is right) OR the Recipe catalogue's
 // { name, value, unit, factor }: `value` in the row's OWN unit (null = «to taste»), `unit` the text
 // the screen prints after the number, `factor` the grams in one unit (0 = not weighable: pieces,
 // spoons, a pinch). exportRow() turns both into the second shape, so every builder reads one.
@@ -86,7 +86,9 @@ export function hasRoundableRows(m) {
 export function rowTextOf(row, { rounded = false } = {}) {
   const r = exportRow(row);
   if (r.value === null) return r.unit;
-  if (rounded && isRoundable(r)) return `${roundLabWeight(r.value)} g`;
+  // ⚠️ THE RULE ROUNDS THE NUMBER THE SCREEN SHOWS, so the Calculator's unrounded 104.6 g (card: 105 g)
+  // prints 110 g, like the same row from the Recipe book, and never disagrees with its own card.
+  if (rounded && isRoundable(r)) return `${roundLabWeight(Math.round(r.value))} g`;
   // The screen's own number when the caller has it («1,846» in Italian): kg and l keep decimals.
   return `${r.text ?? Math.round(r.value)} ${r.unit}`;
 }

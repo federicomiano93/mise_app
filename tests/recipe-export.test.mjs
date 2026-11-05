@@ -353,10 +353,18 @@ test('rowTextOf rounded: grams only; ml, kg, pcs, spoons and «to taste» print 
   assert.equal(rowTextOf(g, {}), '293 g');
 });
 
-test('a Calculator row with fractional grams: 14404.9 -> 14400 g rounded, 14405 g as the card shows it', () => {
+test('the rounding starts from the number the card shows: 14404.9 reads 14405 and prints 14410', () => {
   const row = { name: 'Farina di prova', grams: 14404.9 };
-  assert.equal(rowTextOf(row, { rounded: true }), '14400 g');
   assert.equal(rowTextOf(row), '14405 g');
+  assert.equal(rowTextOf(row, { rounded: true }), '14410 g');
+});
+
+test('the Calculator and the Recipe book print the same weight for the same row', () => {
+  const calculator = { name: 'Farina di prova', grams: 104.6 };
+  const book = { name: 'Farina di prova', value: 105, unit: 'g', factor: 1, text: '105' };
+  assert.equal(rowTextOf(calculator), '105 g');
+  assert.equal(rowTextOf(calculator, { rounded: true }), '110 g');
+  assert.equal(rowTextOf(book, { rounded: true }), '110 g');
 });
 
 test('hasRoundableRows: true only with a row in grams that has a value', () => {
@@ -373,7 +381,7 @@ test('a real PDF: rounded text with {rounded:true}, the screen text without; the
   const plain = Buffer.from(await (await buildPdfBlob(model)).arrayBuffer()).toString('latin1');
   assert.ok(plain.includes('(14405 g)') && plain.includes('(293 g)'));
   const round = Buffer.from(await (await buildPdfBlob(model, { rounded: true })).arrayBuffer()).toString('latin1');
-  assert.ok(round.includes('(14400 g)') && round.includes('(290 g)'));
+  assert.ok(round.includes('(14410 g)') && round.includes('(290 g)'));
   assert.ok(!round.includes('(14405 g)') && !round.includes('(293 g)'));
   const files = unzipSync(new Uint8Array(await (await buildXlsxBlob(model, 'Totale')).arrayBuffer()));
   const sheet = strFromU8(files['xl/worksheets/sheet1.xml']);

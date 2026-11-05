@@ -42,7 +42,7 @@ export function openExportSheet({ model, totalLabel = '', opener = null } = {}) 
 
   const n = ++seq;
   const prevFocus = opener || document.activeElement;
-  const backdrop = make('div', 'app-dialog-backdrop send-chooser');
+  const backdrop = make('div', 'app-dialog-backdrop send-chooser export-sheet');
   const box = make('div', 'app-dialog');
   box.setAttribute('role', 'dialog');
   box.setAttribute('aria-modal', 'true');
@@ -128,7 +128,9 @@ export function openExportSheet({ model, totalLabel = '', opener = null } = {}) 
       if (hasRoundableRows(model)) {
         const row = make('label', 'export-round');
         const text = make('span', 'export-round-text');
-        text.appendChild(make('span', 'export-round-name', t('export.roundWeights')));
+        const name = make('span', 'export-round-name', t('export.roundWeights'));
+        name.id = `export-round-name-${n}`;
+        text.appendChild(name);
         const note = make('span', 'export-round-note', t('export.roundNote'));
         note.id = `export-round-note-${n}`;
         text.appendChild(note);
@@ -136,11 +138,16 @@ export function openExportSheet({ model, totalLabel = '', opener = null } = {}) 
         roundSwitch = make('input', '');
         roundSwitch.type = 'checkbox';
         roundSwitch.setAttribute('role', 'switch');
+        // Named by the words alone and described by the note, as calculator.html's switches are: with
+        // the wrapping label only, a screen reader would read the note twice.
+        roundSwitch.setAttribute('aria-labelledby', name.id);
         roundSwitch.setAttribute('aria-describedby', note.id);
         roundSwitch.checked = rounded;
         roundSwitch.addEventListener('change', () => { rounded = roundSwitch.checked; });
         sw.appendChild(roundSwitch);
-        sw.appendChild(make('span', 'set-switch-track'));
+        const track = make('span', 'set-switch-track');
+        track.setAttribute('aria-hidden', 'true');
+        sw.appendChild(track);
         row.appendChild(text);
         row.appendChild(sw);
         box.appendChild(row);
