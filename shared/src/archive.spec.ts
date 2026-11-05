@@ -2,10 +2,9 @@
 // the TypeScript port in shared/ and js/orders/archive.js, which the live app uses today. Ported from
 // tests/orders-archive.test.mjs and tests/same-day-sends.test.mjs.
 //
-// archive.ts is a PARTIAL port, so parity.spec.ts does not pair it: it ports everything except recordedName,
-// withCorrection, recordSends, sendSections, splitHistoryByAge, countRecords and groupHistoryByDay (slice 3f-4,
-// History). The last describe compares what IS ported with the js/ file itself (names, arity), the way
-// ingredient-search used to.
+// archive.ts is ADAPTED, so parity.spec.ts does not pair it: everything is ported, and recordedName takes the word for
+// a deleted ingredient as a fourth argument (the original reads the dictionary). The last describe compares the two
+// files' names and arity itself, and runs recordedName against the original with the original's English word.
 //
 // PORTED: 39 of 52 tests of tests/orders-archive.test.mjs (an earlier version of this header said 23: it
 // counted one too many) — the wholeNumber ones (2), the changedEntries ones (8), changedDays, historyDocId,
@@ -16,10 +15,12 @@
 // unitConflicts, sendIdFor, capSends and MAX_SENDS. Where they read the sends through recordSends, the spec
 // sorts the record's `sends` by key instead (the ids sort by time).
 //
-// NOT PORTED from tests/orders-archive.test.mjs (13): groupHistoryByDay (2), the legacy id ordering (1, a bare
-// string comparison), splitHistoryByAge / countRecords (9), recordedName (1).
-// NOT PORTED from tests/same-day-sends.test.mjs (9): inPackages (order-unit.spec.ts covers it), recordSends,
-// sendSections (2), withCorrection, and the four that only read source text.
+// PORTED with slice 3f-4 (History): groupHistoryByDay (2), splitHistoryByAge / countRecords (9) and recordedName (1)
+// of tests/orders-archive.test.mjs; recordSends (2), sendSections (2) and withCorrection (1) of
+// tests/same-day-sends.test.mjs.
+// NOT PORTED from tests/orders-archive.test.mjs (1): the legacy id ordering (a bare string comparison).
+// NOT PORTED from tests/same-day-sends.test.mjs (5): inPackages (order-unit.spec.ts covers it), and the four that only
+// read source text.
 // tests/draft-override.test.mjs (7) is not ported either: every one of its tests drives draft.js through a
 // recording stub of the data layer, which is not shared logic. The per-line override cases that do call only
 // archive and line-supplier functions are ported in line-supplier.spec.ts.
@@ -47,7 +48,8 @@ describe.each([
   const {
     wholeNumber, changedEntries, changedDays, historyDocId, ingredientsOf, supplierHasItems, ingredientLabel,
     ingredientDisplayLabel, compareByLabel, sortByLabel, quantityPathsFor, isLegacyRecord, recordDate, buildSupplierArchive,
-    mergeArchives, sendIdFor, capSends, MAX_SENDS, unitConflicts, unitConflictList,
+    mergeArchives, sendIdFor, capSends, MAX_SENDS, unitConflicts, unitConflictList, withCorrection, recordSends,
+    sendSections, splitHistoryByAge, countRecords, groupHistoryByDay,
   } = m;
 
   test('a typed quantity is whole, never negative, never NaN', () => {
@@ -414,7 +416,7 @@ describe.each([
   const archive = (entries: unknown, now: Date) => buildSupplierArchive({
     supplier: SD_SUPPLIER, ingredients: SD_INGREDIENTS, entries, date: '2026-10-03', now,
   })!;
-  // The sends of a record, oldest first (the port of recordSends comes with History).
+  // The sends of a record as stored, oldest first (the ids sort by time); recordSends is tested on its own below.
   const sendList = (record: { sends: Record<string, { at: string; quantities: Record<string, number>; units?: Record<string, string> }> }) =>
     Object.keys(record.sends).sort().map(k => record.sends[k]!);
 
@@ -528,33 +530,153 @@ describe.each([
     expect('s000' in kept && 's059' in kept && !('s001' in kept)).toBe(true);
     expect(capSends({ a: 1 }).a).toBe(1);
   });
+
+  // ── What History draws (tests/same-day-sends.test.mjs) ──
+
+  test('recordSends: the sends oldest first, a record from before sends is one send at its creation time', () => {
+    const merged = mergeArchives(OLD, archive({ salt: { qty: 1, stock: 0 } }, AFTERNOON), { cardOf });
+    const sends = recordSends(merged);
+    expect(sends.length).toBe(2);
+    expect(sends[0]).toStrictEqual({ at: '2026-10-03T06:00:00.000Z', kind: 'order', quantities: { salt: 2 }, units: {} });
+  });
+
+  test('…but with NO time when it was rewritten after it was created, and History says «earlier»', () => {
+    const touched = { ...OLD, updatedAt: '2026-10-03T10:00:00.000Z' };
+    const merged = mergeArchives(touched, archive({ salt: { qty: 1, stock: 0 } }, AFTERNOON), { cardOf });
+    expect(recordSends(merged)[0]!.at).toBe('');
+    expect(sendSections(merged).sections[0]!.heading).toBe('earlier');
+  });
+
+  test('recordSends skips malformed entries and reads a record with no sends as none', () => {
+    expect(recordSends({})).toStrictEqual([]);
+    expect(recordSends(null)).toStrictEqual([]);
+    const rec = { sends: { a: null, b: 'x', c: { at: 5 }, d: { at: '2026-10-03T07:00:00.000Z', quantities: { salt: 1 } } } };
+    expect(recordSends(rec)).toStrictEqual([{ at: '2026-10-03T07:00:00.000Z', kind: 'order', quantities: { salt: 1 }, units: {} }]);
+  });
+
+  test('History: no sends → the card as it always was; one timed send → its heading only', () => {
+    expect(sendSections(OLD)).toStrictEqual({ sections: [], total: false });
+    const one = archive({ salt: { qty: 2, stock: 0 } }, MORNING);
+    expect(sendSections(one)).toStrictEqual({
+      sections: [{ heading: 'first', time: MORNING.toISOString(), quantities: null, units: null }], total: false,
+    });
+    expect(sendSections({ sends: { s0: { at: '', quantities: { salt: 1 } } } })).toStrictEqual({ sections: [], total: false });
+  });
+
+  test('History: two or more sends → one section each (first, later, correction), then the day total', () => {
+    const merged = mergeArchives(archive({ salt: { qty: 2, stock: 0 } }, MORNING),
+      archive({ salt: { qty: 1, stock: 0 } }, AFTERNOON), { cardOf });
+    const corrected = { ...merged, sends: withCorrection(merged, { salt: 2 }, {}, '2026-10-03T15:00:00.000Z') };
+    const out = sendSections(corrected);
+    expect(out.total).toBe(true);
+    expect(out.sections.map(s => s.heading)).toStrictEqual(['first', 'later', 'edit']);
+    expect(out.sections.map(s => s.quantities!.salt)).toStrictEqual([2, 1, 2]);
+  });
+
+  test('a correction is added only to a record that already keeps sends', () => {
+    expect(withCorrection(OLD, { salt: 1 }, {}, '2026-10-03T15:00:00.000Z')).toBe(null);
+    const one = archive({ salt: { qty: 2, stock: 0 } }, MORNING);
+    const sends = withCorrection(one, { salt: 1 }, { salt: 'kg' }, '2026-10-03T15:00:00.000Z')!;
+    expect(Object.keys(sends).length).toBe(2);
+    expect(sends[sendIdFor('2026-10-03T15:00:00.000Z')]).toStrictEqual(
+      { at: '2026-10-03T15:00:00.000Z', kind: 'edit', quantities: { salt: 1 }, units: { salt: 'kg' } });
+  });
+
+  // ── The History window (tests/orders-archive.test.mjs) ──
+
+  const LEGACY_REC = { id: '2026-W28', weekStart: '2026-07-06', quantities: { flour: 2 } };
+
+  test('history groups by day, newest day first, suppliers by name inside a day', () => {
+    const groups = groupHistoryByDay([
+      { id: '2026-07-13_etna', date: '2026-07-13', supplierId: 'etna', supplierName: 'Etna', quantities: { nutella: 1 } },
+      LEGACY_REC,
+      { id: '2026-07-13_alba', date: '2026-07-13', supplierId: 'alba', supplierName: 'Alba', quantities: { flour: 1 } },
+    ]);
+    expect(groups.map(g => g.date)).toStrictEqual(['2026-07-13', '2026-07-06']);
+    expect(groups[0]!.records.map(r => (r as { supplierName?: string }).supplierName)).toStrictEqual(['Alba', 'Etna']);
+    expect(isLegacyRecord(groups[1]!.records[0])).toBe(true);
+  });
+
+  test('a record with no date at all is dropped rather than grouped under ""', () => {
+    expect(groupHistoryByDay([{ id: 'junk', quantities: { flour: 1 } }])).toStrictEqual([]);
+    expect(groupHistoryByDay(null)).toStrictEqual([]);
+  });
+
+  const WINDOW_DAYS = [
+    { date: '2026-07-31', records: [{ supplierId: 'alba' }] },
+    { date: '2026-07-17', records: [{ supplierId: 'etna' }] },
+    { date: '2026-07-16', records: [{ supplierId: 'alba' }, { supplierId: 'etna' }] },
+    { date: '2026-07-09', records: [{ weekStart: '2026-07-09' }] },
+  ];
+  const WINDOW_NOW = new Date('2026-07-31T09:00:00');
+
+  test('a 15-day window keeps today and the 14 days before it; the boundary day is inside', () => {
+    const { recent, older } = splitHistoryByAge(WINDOW_DAYS, 15, WINDOW_NOW);
+    expect(recent.map(d => d.date)).toStrictEqual(['2026-07-31', '2026-07-17']);
+    expect(older.map(d => d.date)).toStrictEqual(['2026-07-16', '2026-07-09']);
+  });
+
+  test('a one-day window is today only', () => {
+    const { recent, older } = splitHistoryByAge(WINDOW_DAYS, 1, WINDOW_NOW);
+    expect(recent.map(d => d.date)).toStrictEqual(['2026-07-31']);
+    expect(older.length).toBe(3);
+  });
+
+  test('an unusable window hides NOTHING', () => {
+    [0, -5, NaN, undefined, null, 'abc'].forEach(bad => {
+      const { recent, older } = splitHistoryByAge(WINDOW_DAYS, bad, WINDOW_NOW);
+      expect(recent.length, `window ${String(bad)}`).toBe(WINDOW_DAYS.length);
+      expect(older.length).toBe(0);
+    });
+  });
+
+  test('nothing recent: everything is older, and nothing is lost', () => {
+    const { recent, older } = splitHistoryByAge(WINDOW_DAYS, 15, new Date('2026-09-01T09:00:00'));
+    expect(recent.length).toBe(0);
+    expect(older.length).toBe(WINDOW_DAYS.length);
+  });
+
+  test('the window is counted in calendar days, not 24-hour blocks (DST)', () => {
+    const days = [{ date: '2026-10-26', records: [1] }, { date: '2026-10-25', records: [1] }];
+    const { recent, older } = splitHistoryByAge(days, 7, new Date('2026-11-01T12:00:00'));
+    expect(recent.map(d => d.date)).toStrictEqual(['2026-10-26']);
+    expect(older.map(d => d.date)).toStrictEqual(['2026-10-25']);
+  });
+
+  test('empty input is handled without throwing', () => {
+    expect(splitHistoryByAge(null, 15, WINDOW_NOW)).toStrictEqual({ recent: [], older: [] });
+    expect(splitHistoryByAge([], 15, WINDOW_NOW)).toStrictEqual({ recent: [], older: [] });
+  });
+
+  test('the button counts ORDERS, not days', () => {
+    const { older } = splitHistoryByAge(WINDOW_DAYS, 15, WINDOW_NOW);
+    expect(countRecords(older)).toBe(3);
+    expect(countRecords([])).toBe(0);
+    expect(countRecords(null)).toBe(0);
+    expect(countRecords([{ date: '2026-07-01' } as { records?: unknown[] }])).toBe(0);
+  });
 });
 
 // ── What pairing would have checked ──────────────────────────────────────────
 
 describe('the port against the original', () => {
-  // The functions this port leaves out. The original still exports them.
-  const LEFT_OUT = ['recordedName', 'withCorrection', 'recordSends', 'sendSections', 'splitHistoryByAge', 'countRecords',
-    'groupHistoryByDay'];
+  // The one function whose arguments differ: the deleted-ingredient word is handed in.
+  const ADAPTED = ['recordedName'];
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;
   const shared = ['wholeNumber', 'historyDocId', 'isLegacyRecord', 'recordDate', 'ingredientsOf', 'supplierHasItems',
     'buildSupplierArchive', 'ingredientLabel', 'ingredientDisplayLabel', 'compareByLabel', 'sortByLabel', 'quantityPathsFor',
-    'changedEntries', 'changedDays', 'mergeArchives', 'sendIdFor', 'MAX_SENDS', 'capSends', 'unitConflicts', 'unitConflictList'];
+    'changedEntries', 'changedDays', 'mergeArchives', 'sendIdFor', 'MAX_SENDS', 'capSends', 'unitConflicts', 'unitConflictList',
+    'withCorrection', 'recordSends', 'sendSections', 'splitHistoryByAge', 'countRecords', 'groupHistoryByDay'];
   // What the port adds: the type guard for the error mergeArchives throws.
   const ADDED = ['isUnitConflict'];
 
-  test('the original still exports everything this port leaves out', () => {
-    // If it did not, the exclusion above would be hiding a rename instead of a decision.
-    for (const name of LEFT_OUT) expect(name in original, name).toBe(true);
-  });
-
-  test('the port and the original together export exactly the ported names and the left-out ones', () => {
-    expect(Object.keys(original).sort()).toStrictEqual([...shared, ...LEFT_OUT].sort());
+  test('the original exports exactly the ported names and the adapted one', () => {
+    expect(Object.keys(original).sort()).toStrictEqual([...shared, ...ADAPTED].sort());
   });
 
   test('exports exactly the functions it ports, and the original has them', () => {
-    expect(Object.keys(port).sort()).toStrictEqual([...shared, ...ADDED].sort());
+    expect(Object.keys(port).sort()).toStrictEqual([...shared, ...ADAPTED, ...ADDED].sort());
     for (const name of shared) expect(typeof original[name], name).toBe(typeof port[name]);
   });
 
@@ -566,6 +688,20 @@ describe('the port against the original', () => {
       expect(mine.name, name).toBe(theirs.name);
       expect(mine.length, `${name}: arity`).toBe(theirs.length);
     }
+  });
+
+  test('recordedName: the live ingredient wins, then the frozen name, then the word handed in — as the original', () => {
+    const byId = { flour: { id: 'flour', name: 'Flour uniqua blue', weight: '25kg' } };
+    const theirs = original.recordedName as (id: string, byId: unknown, names: unknown) => string;
+    const cases: [string, unknown][] = [
+      ['flour', { flour: 'Old label' }], ['gone', { gone: 'Ricotta 1.5kg' }], ['gone', {}], ['gone', undefined],
+      ['gone', { gone: '   ' }], ['gone', { gone: 42 }],
+    ];
+    for (const [id, names] of cases) {
+      expect(ported.recordedName(id, byId, names, 'Deleted ingredient')).toBe(theirs(id, byId, names));
+    }
+    expect(ported.recordedName('gone', byId, {}, 'Ingrediente eliminato')).toBe('Ingrediente eliminato');
+    expect(ported.recordedName('flour', byId, {}, 'x')).toBe('Flour uniqua blue 25kg');
   });
 
   test('isUnitConflict recognises the error mergeArchives throws, and nothing else', () => {

@@ -4007,7 +4007,7 @@ describe('no-supplier: odd inputs', () => {
   }
 });
 
-describe('archive (partial): odd inputs', () => {
+describe('archive: odd inputs', () => {
   const m = archive;
   const l = legacyArchive;
   const QUANTITIES: readonly unknown[] = [...ODD, '7', 2.6, '-4', '1e999', ' 3 ', '3abc', 1e21, -0.4, [5], { valueOf: () => 4 }];
@@ -4042,4 +4042,23 @@ describe('archive (partial): odd inputs', () => {
   agree('changedEntries', m.changedEntries, l.changedEntries, product(NEXT_ENTRIES, KNOWN_ENTRIES));
   const DAY_STAMPS: readonly unknown[] = [undefined, null, {}, 'abc', { alba: '2026-08-05', etna: '2026-07-20' }, { etna: '2026-07-20' }, { alba: undefined }, { alba: null }, { alba: 5 }];
   agree('changedDays', m.changedDays, l.changedDays, product(DAY_STAMPS, DAY_STAMPS));
+
+  // History (slice 3f-4).
+  const SENDS_RECORDS: readonly unknown[] = [undefined, null, {}, 'abc', 5, { sends: null }, { sends: 'x' }, { sends: {} },
+    { sends: { a: null, b: 'x', c: { at: 5 }, d: { at: '2026-10-03T07:00:00.000Z', quantities: { salt: 1 } } } },
+    { sends: { s1: { at: '2026-10-03T09:00:00.000Z', quantities: { a: 1 }, kind: 'edit', units: { a: 'kg' } }, s0: { at: '', quantities: { a: 2 } } } },
+    { sends: { s1: { at: '2026-10-03T09:00:00.000Z', quantities: { a: 1 } } } }, { sends: { s1: { at: '', quantities: { a: 1 } } } },
+    { sends: { x: { at: '2026-10-03T09:00:00.000Z', quantities: [], units: 'kg', kind: 'EDIT' } } }, { quantities: { a: 1 } }];
+  agree('recordSends', m.recordSends, l.recordSends, product(SENDS_RECORDS));
+  agree('sendSections', m.sendSections, l.sendSections, product(SENDS_RECORDS));
+  agree('withCorrection', m.withCorrection as AnyFn, l.withCorrection as AnyFn, product(SENDS_RECORDS, [{ a: 2 }, {}],
+    [undefined, null, {}, { a: 'kg' }], ['2026-10-03T15:00:00.000Z', '']));
+  const DAY_LISTS: readonly unknown[] = [undefined, null, [], [{ date: '2026-07-31', records: [1] }, { date: '2026-07-01', records: [1, 2] }],
+    [{ date: '', records: [] }, { date: '2026-07-31' }], [{ date: 'abc', records: [1] }]];
+  agree('splitHistoryByAge', m.splitHistoryByAge as AnyFn, l.splitHistoryByAge as AnyFn,
+    product(DAY_LISTS, [undefined, null, 0, 1, 15, '7', 2.9, -3, NaN, Infinity, 'abc'], [new Date('2026-07-31T09:00:00')]));
+  agree('countRecords', m.countRecords as AnyFn, l.countRecords as AnyFn, product(DAY_LISTS));
+  agree('groupHistoryByDay', m.groupHistoryByDay as AnyFn, l.groupHistoryByDay as AnyFn, product([undefined, null, [], 'abc',
+    [{ date: '2026-07-13', supplierName: 'Etna' }, { weekStart: '2026-07-06' }, { date: '2026-07-13', supplierName: 'Alba' }, { quantities: {} }, null],
+    [{ date: '2026-07-13', supplierName: 5 }, { date: '2026-07-13' }, { date: '2026-07-14', supplierName: 'b' }, { date: '2026-07-14', supplierName: 'B' }]]));
 });

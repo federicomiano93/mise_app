@@ -1,18 +1,16 @@
 // archive.ts — turning a draft into history records, the pure half that the Orders list and the draft
 // writer need. No Firestore here.
 //
-// TypeScript PARTIAL port of js/orders/archive.js for Mise 2. PORTED, identical input for input:
-// wholeNumber, historyDocId, isLegacyRecord, recordDate, ingredientsOf, supplierHasItems,
-// buildSupplierArchive, ingredientLabel, ingredientDisplayLabel, compareByLabel, sortByLabel,
-// quantityPathsFor, changedEntries, changedDays, mergeArchives (with its private carriedMissing and
-// sendsBefore), sendIdFor, MAX_SENDS, capSends, unitConflicts and unitConflictList. None of them reads
-// the dictionary. archive.spec.ts compares them with the js/ file's own exports and runs the matching
-// tests; odd-inputs.spec.ts feeds both the same strange values.
+// TypeScript port of js/orders/archive.js for Mise 2. PORTED, identical input for input: wholeNumber, historyDocId,
+// isLegacyRecord, recordDate, ingredientsOf, supplierHasItems, buildSupplierArchive, ingredientLabel,
+// ingredientDisplayLabel, compareByLabel, sortByLabel, quantityPathsFor, changedEntries, changedDays, mergeArchives
+// (with its private carriedMissing and sendsBefore), sendIdFor, MAX_SENDS, capSends, unitConflicts, unitConflictList
+// and — since slice 3f-4, History — withCorrection, recordSends, sendSections, splitHistoryByAge, countRecords and
+// groupHistoryByDay. archive.spec.ts compares them with the js/ file's own exports and runs the matching tests;
+// odd-inputs.spec.ts feeds both the same strange values.
 //
-// ⚠️ A PARTIAL PORT, SO parity.spec.ts DOES NOT PAIR IT. NOT PORTED (slice 3f-4 of the Orders section,
-// History): recordedName (it uses the dictionary for the deleted-ingredient word), withCorrection,
-// recordSends, sendSections, splitHistoryByAge, countRecords and groupHistoryByDay. They come with the
-// screen that uses them.
+// ⚠️ ADAPTED, SO parity.spec.ts DOES NOT PAIR IT: recordedName takes the word for a deleted ingredient as a fourth
+// argument (the original reads it from the dictionary, and shared/ never imports the dictionary).
 //
 // ONE ADDITION with no original: isUnitConflict, the type guard for the error mergeArchives throws
 // (the original's callers read `err.code` on an untyped catch).
@@ -34,6 +32,7 @@ import {
   cleanUnit, sameUnit, lineUnit, entryUnit, recordUnit, inPackages, addableInPackages, hasUnitChoice,
 } from './order-unit';
 import { overrideOf, cleanSupplierId } from './line-supplier';
+import { toISODate, addDays, isBefore } from './day';
 
 // A quantity, made safe: whole, never negative, never NaN — and never Infinity.
 //
@@ -501,4 +500,136 @@ export function unitConflicts(
 // joined with commas (no singular/plural agreement to get wrong in either language).
 export function unitConflictList(conflicts?: readonly { name: string; unit: string }[] | null): string {
   return (conflicts || []).map(c => `${c.name} — ${c.unit}`).join(', ');
+}
+
+// ── History (slice 3f-4) ─────────────────────────────────────────────────────
+
+// What a PAST order calls one of its items, in order of preference:
+//   1. the ingredient as it is called NOW — a rename must show through everywhere;
+//   2. the name frozen into the record when the order was placed;
+//   3. an honest placeholder.
+// Never the raw document id: an order reading "Fdx92kQ1: 4" tells nobody what was bought.
+//
+// ADAPTED: the original reads the placeholder from the dictionary (`orders.deletedIngredient`); here the caller hands
+// the word in as the fourth argument, so shared/ never imports the dictionary.
+export function recordedName(id: string, ingredientsById: Record<string, unknown> | null | undefined,
+  names: unknown, deletedWord: string): string {
+  const live = ingredientDisplayLabel(ingredientsById?.[id]);
+  if (live) return live;
+  const stored = (names as Record<string, unknown> | null | undefined)?.[id];
+  return typeof stored === 'string' && stored.trim() ? stored.trim() : deletedWord;
+}
+
+// A correction made in History, kept as its own entry with its time, so the list of sends never contradicts the
+// corrected total: «Corretto · ore 16:20» shows what the order became. Only for a record that already has sends — an
+// old record keeps its old look.
+export function withCorrection(record: ArchiveRecord | null | undefined, quantities: Record<string, number>,
+  units: Record<string, string> | null | undefined, at: string): Record<string, SupplierSend> | null {
+  if (!record || !record.sends || typeof record.sends !== 'object') return null;
+  return capSends({
+    ...record.sends,
+    [sendIdFor(at)]: {
+      at, kind: 'edit',
+      quantities: { ...quantities },
+      ...(units && Object.keys(units).length ? { units: { ...units } } : {}),
+    },
+  });
+}
+
+export interface RecordSend { at: string; kind: 'edit' | 'order'; quantities: Record<string, number>; units: Record<string, string> }
+
+// The sends of a record, oldest first. A send with no time (see sendsBefore) comes first. Anything malformed (a
+// phone's bug, a hand edit) is skipped rather than drawn as nonsense.
+export function recordSends(record?: unknown): RecordSend[] {
+  const r = record as { sends?: unknown } | null | undefined;
+  const sends = r && typeof r.sends === 'object' && r.sends ? r.sends as Record<string, unknown> : {};
+  return Object.values(sends)
+    .filter((s): s is { at?: unknown; kind?: unknown; quantities: Record<string, number>; units?: unknown } =>
+      Boolean(s) && typeof s === 'object'
+      && Boolean((s as { quantities?: unknown }).quantities) && typeof (s as { quantities?: unknown }).quantities === 'object')
+    .map(s => ({
+      at: typeof s.at === 'string' ? s.at : '',
+      kind: s.kind === 'edit' ? 'edit' as const : 'order' as const,
+      quantities: s.quantities,
+      units: s.units && typeof s.units === 'object' ? s.units as Record<string, string> : {},
+    }))
+    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+}
+
+export interface SendSection {
+  heading: 'first' | 'later' | 'edit' | 'earlier';
+  time: string;
+  quantities: Record<string, number> | null;
+  units: Record<string, string> | null;
+}
+
+// What History draws for one record. Two or more sends: one section each, then the day's total. One send with a
+// time: just its heading above the total. Otherwise (a record from before sends, or one untimed send): nothing extra.
+export function sendSections(record?: unknown): { sections: SendSection[]; total: boolean } {
+  const sends = recordSends(record);
+  const only = sends[0];
+  if (sends.length === 1 && only && only.at) {
+    return { sections: [{ heading: 'first', time: only.at, quantities: null, units: null }], total: false };
+  }
+  if (sends.length < 2) return { sections: [], total: false };
+  return {
+    sections: sends.map((send, i) => ({
+      heading: !send.at ? 'earlier' : send.kind === 'edit' ? 'edit' : i === 0 ? 'first' : 'later',
+      time: send.at,
+      quantities: send.quantities,
+      units: send.units,
+    })),
+    total: true,
+  };
+}
+
+export interface HistoryDay<R> { date: string; records: R[] }
+
+// Split day sections (the output of groupHistoryByDay) into the ones History shows straight away and the ones parked
+// behind «Show older orders». This HIDES, it never deletes: `older` is returned, not dropped, and the suggestion
+// engine reads the raw records, so narrowing the window can never change a suggested quantity.
+//
+// The window INCLUDES today: 15 days means today and the 14 before it, counted in calendar days (DST-safe). An
+// unusable window shows EVERYTHING: the safe failure is a long list, never an empty one.
+export function splitHistoryByAge<D extends { date: string }>(days: readonly D[] | null | undefined, historyDays: unknown,
+  now: Date = new Date()): { recent: D[]; older: D[] } {
+  const list = (days || []) as D[];
+  const window = Math.floor(Number(historyDays));
+  if (!Number.isFinite(window) || window < 1) return { recent: list, older: [] };
+
+  const cutoff = toISODate(addDays(now, -(window - 1)));
+  return {
+    recent: list.filter(d => !isBefore(d.date, cutoff)),
+    older: list.filter(d => isBefore(d.date, cutoff)),
+  };
+}
+
+// How many ORDERS sit in a set of day sections — what «Show older orders (N)» counts.
+export function countRecords(days?: readonly { records?: readonly unknown[] }[] | null): number {
+  return (days || []).reduce((total, d) => total + (d.records?.length || 0), 0);
+}
+
+// Group history records into day sections, most recent day first, and within a day by supplier name. Legacy weekly
+// records land under their weekStart; a record with no date at all is dropped.
+//
+// ⚠️ KEPT AS THE ORIGINAL: both sorts use localeCompare (the days are ISO strings, where it agrees with a plain
+// comparison; the supplier names follow the phone's collation).
+export function groupHistoryByDay<R>(history?: readonly R[] | null): HistoryDay<R>[] {
+  const byDay = new Map<string, R[]>();
+
+  (history || []).forEach(record => {
+    const date = recordDate(record);
+    if (!date) return;
+    const list = byDay.get(date);
+    if (list) list.push(record); else byDay.set(date, [record]);
+  });
+
+  return [...byDay.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([date, records]) => ({
+      date,
+      records: records.slice().sort((a, b) =>
+        String((a as { supplierName?: unknown }).supplierName || '')
+          .localeCompare(String((b as { supplierName?: unknown }).supplierName || ''))),
+    }));
 }

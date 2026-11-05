@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
-import { Check, ChevronRight, List, Search, Share } from 'lucide-react';
+import { Check, ChevronRight, List, Search, Settings, Share } from 'lucide-react';
 import { spellShortDate, todayISO } from '@mise/shared/day';
 import { isFutureDay, nextDeliveryAfter } from '@mise/shared/order-day';
 import { supplierLabel } from '@mise/shared/supplier-label';
@@ -9,7 +9,7 @@ import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { useOrders } from './OrdersContext';
 import { dayTranslate, deliveryDaysText } from './dayWords';
-import { CLEAR_OPENER, PLACE_ALL_OPENER, SEND_OPENER, itemsOpener, supplierOpener, useHandBack } from './handBack';
+import { CLEAR_OPENER, PLACE_ALL_OPENER, SEND_OPENER, SETTINGS_OPENER, itemsOpener, supplierOpener, useHandBack } from './handBack';
 import { orderingCount, supplierListGroups } from './ordersLens';
 import type { OrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
@@ -28,6 +28,8 @@ type Props = {
   onClearAll: () => void;
   // The arrow beside the search box: the send screen.
   onSend: () => void;
+  // The gear at the end of the head: the Orders settings (step 3f-4).
+  onSettings: () => void;
 };
 
 const HEADING_KEY = {
@@ -40,7 +42,7 @@ const HEADING_KEY = {
 // ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a component that stays mounted, and
 // only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard where the person
 // left them (the current app built the box once for the same reason).
-export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend }: Props) {
+export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings }: Props) {
   const { t } = useT();
   const { config, draft, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
@@ -51,6 +53,7 @@ export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, o
   const placeAllNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(PLACE_ALL_OPENER, node); }, [handBack]);
   const clearNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(CLEAR_OPENER, node); }, [handBack]);
   const sendNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SEND_OPENER, node); }, [handBack]);
+  const settingsNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
 
   const ordering = orderingCount(lens);
   const groups = useMemo(
@@ -101,6 +104,10 @@ export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, o
               {t('ord.send.action')}
             </Button>
           ) : null}
+          {/* Always there, even with no supplier yet: the settings are not about the suppliers. */}
+          <Button ref={settingsNode} className={styles.gear} aria-label={t('ord.settings.open')} onPress={onSettings}>
+            <Settings aria-hidden="true" />
+          </Button>
         </div>
         {showFilter ? (
           <div role="radiogroup" aria-label={t('ord.whichSuppliers')} className={styles.filter}>

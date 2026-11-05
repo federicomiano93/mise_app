@@ -1,0 +1,194 @@
+/* «Past orders»: a section per day, a collapsible card per record, and the foot with «Show older orders» / «Load older orders».
+   The screen does not clip (no `overflow`), so the bar above keeps sticking. Nothing sets sideways room: names wrap anywhere,
+   so a 296px phone never scrolls sideways. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s3);
+}
+
+.body:focus {
+  outline: none;
+}
+
+.loading,
+.empty {
+  padding: var(--s3);
+  color: var(--ink-2);
+}
+
+.problem {
+  margin: 0 0 var(--s2);
+  padding: var(--s3);
+  border: 1px solid var(--danger);
+  border-radius: var(--r-md);
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+/* The day and, at its end, «Send all»: they wrap rather than squeeze on a narrow phone. */
+.dayHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.dayTitle {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+/* The whole head is the button: a 48px target with the supplier, the number of items and the chevron at the end. */
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.head:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.head:active {
+  background: var(--sunken);
+}
+
+@media (hover: hover) {
+  .head:hover {
+    background: var(--bg);
+  }
+}
+
+.headText {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.name {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.meta {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.chevron {
+  flex: none;
+  color: var(--ink-3);
+}
+
+.head[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+.cardBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3) var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.cardBody[hidden] {
+  display: none;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.groupTitle {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.lines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s1) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.line:last-child {
+  border-bottom: 0;
+}
+
+.lineName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.lineQty {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
+}
+
+/* Send again · Correct: quiet buttons at the foot of the card, wrapping on a narrow phone. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.foot {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s2);
+}

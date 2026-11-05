@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { CLEAR_PATH, PLACE_ALL_CONFIRM_PATH, PLACE_ALL_PATH, SEND_PATH, ordersScreenName, parseOrdersPath, supplierConfirmPath } from './ordersPath';
+import {
+  CLEAR_PATH, HISTORY_PATH, PLACE_ALL_CONFIRM_PATH, PLACE_ALL_PATH, SEND_PATH, SETTINGS_PATH, historyDayPath, historyEditPath, ordersScreenName, parseOrdersPath, supplierConfirmPath,
+} from './ordersPath';
 
 describe('parseOrdersPath', () => {
   it('reads the placing and clearing screens', () => {
@@ -42,5 +44,43 @@ describe('ordersScreenName', () => {
     expect(ordersScreenName('/supplier/s/items')).toBe('orders-supplier-items');
     expect(ordersScreenName('/clear/x')).toBe('orders');
     expect(ordersScreenName('')).toBe('orders');
+  });
+});
+
+describe('the settings and History addresses (slice 3f-4)', () => {
+  it('reads each of them', () => {
+    expect(parseOrdersPath('/settings')).toEqual({ kind: 'settings' });
+    expect(parseOrdersPath('/history')).toEqual({ kind: 'history' });
+    expect(parseOrdersPath('/history/day/2026-10-27')).toEqual({ kind: 'history-day', date: '2026-10-27' });
+    expect(parseOrdersPath('/history/2026-10-27_mill')).toEqual({ kind: 'history-edit', id: '2026-10-27_mill' });
+    expect(parseOrdersPath('/history/2026-W28')).toEqual({ kind: 'history-edit', id: '2026-W28' });
+  });
+
+  it('splits before it decodes, so an id with a slash comes back whole', () => {
+    expect(parseOrdersPath('/history/2026-10-27_a%2Fb')).toEqual({ kind: 'history-edit', id: '2026-10-27_a/b' });
+    expect(parseOrdersPath(historyEditPath('2026-10-27_a b/c%').slice('/orders'.length)))
+      .toEqual({ kind: 'history-edit', id: '2026-10-27_a b/c%' });
+  });
+
+  it('does not take «day» for a record id, and sends the rest back to the list', () => {
+    for (const rest of [
+      '/history/day', '/history/day/', '/history/day/2026-10-27/x', '/history/x/y', '/history/%E0%A4%A', '/settings/x', '/history/day/%E0%A4%A',
+    ]) {
+      expect(parseOrdersPath(rest)).toEqual({ kind: 'unknown' });
+    }
+  });
+
+  it('builds the addresses it reads', () => {
+    expect(parseOrdersPath(SETTINGS_PATH.slice('/orders'.length))).toEqual({ kind: 'settings' });
+    expect(parseOrdersPath(HISTORY_PATH.slice('/orders'.length))).toEqual({ kind: 'history' });
+    expect(parseOrdersPath(historyDayPath('2026-10-27').slice('/orders'.length))).toEqual({ kind: 'history-day', date: '2026-10-27' });
+  });
+
+  it('names each as a screen', () => {
+    expect(ordersScreenName('/settings')).toBe('orders-settings');
+    expect(ordersScreenName('/history')).toBe('orders-history');
+    expect(ordersScreenName('/history/day/2026-10-27')).toBe('orders-history-day');
+    expect(ordersScreenName('/history/2026-W28')).toBe('orders-history-edit');
+    expect(ordersScreenName('/history/day')).toBe('orders');
   });
 });
