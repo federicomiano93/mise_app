@@ -425,7 +425,9 @@ describe('the label and Print', () => {
     expect(Array.isArray(elements)).toBe(true);
     expect([width, height]).toEqual([496 * 4, 232 * 4]);
     expect(logo).toBeNull();
-    expect(canvas.paint).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ width: 480 }));
+    // ⚠️ WAITED FOR: the paint runs in an effect, which React may run a moment AFTER the preview is in the page (read at
+    // once, it failed CI at random, 5 Nov 2026).
+    await waitFor(() => { expect(canvas.paint).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ width: 480 })); });
     expect(main().getByText('Prints through this device’s print window, on a 62 × 29 mm label.')).toBeInTheDocument();
   });
 
