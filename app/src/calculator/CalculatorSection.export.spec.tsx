@@ -1,3 +1,4 @@
+import { exportTitle } from '@mise/shared/recipe-export';
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { fakeCalculatorSource } from '../testing/fakeCalculatorSource';
@@ -98,8 +99,9 @@ describe('the Export button', () => {
     await user.click(main().getByRole('button', { name: 'Export' }));
     await user.click(within(await screen.findByRole('dialog', { name: 'Export as' })).getByRole('button', { name: /^PDF/ }));
     await screen.findByRole('dialog', { name: 'File ready' });
-    const model = builders.buildPdfBlob.mock.calls[0]?.[0] as { trays: number; totalG: number };
+    const model = builders.buildPdfBlob.mock.calls[0]?.[0] as { name: string; trays: number; totalG: number; rows: [] };
     expect([model.trays, model.totalG]).toEqual([3, 3600]);
+    expect(exportTitle(model)).toBe('Sourdough');
     expect(within(screen.getByRole('dialog')).getByRole('link', { name: 'Download' })).toHaveAttribute('download', 'Sourdough_x3.pdf');
   });
 
@@ -113,6 +115,7 @@ describe('the Export button', () => {
     await screen.findByRole('dialog', { name: 'File ready' });
     const model = builders.buildPdfBlob.mock.calls[0]?.[0] as { trays: number; totalG: number };
     expect([model.trays, model.totalG]).toEqual([0, 4100]);
+    expect(within(screen.getByRole('dialog')).getByRole('link', { name: 'Download' })).toHaveAttribute('download', 'Sourdough_4100g.pdf');
   });
 
   it('speaks Italian: «Esporta», and the Italian total word in the sheet', async () => {

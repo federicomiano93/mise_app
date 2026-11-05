@@ -137,13 +137,14 @@ function ExportSheet({ request, onClose }: { request: Request; onClose: () => vo
           </span>
         </Button>
         {hasRoundableRows(request.model) ? (
-          <div className={styles.round}>
+          // The whole row is the switch, as in the current app: it looks like the two kinds above it, so a tap on its
+          // words must answer. Named by the words alone and described by the note, or the note would be read twice.
+          <SettingSwitch selected={rounded} onChange={setRounded} labelledBy={nameId} describedBy={noteId} className={styles.round}>
             <span className={styles.text}>
               <span id={nameId} className={styles.name}>{t('export.roundWeights')}</span>
               <span id={noteId} className={styles.note}>{t('export.roundNote')}</span>
             </span>
-            <SettingSwitch selected={rounded} onChange={setRounded} labelledBy={nameId} describedBy={noteId} />
-          </div>
+          </SettingSwitch>
         ) : null}
       </div>
     );

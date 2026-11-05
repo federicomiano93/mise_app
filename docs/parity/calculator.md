@@ -976,13 +976,13 @@ Applies to the export from the Calculator's card and from the Recipe book's page
   up), applied to rows in grams only and from the number on screen; `hasRoundableRows`; the switch «Arrotonda i pesi nel PDF» with his words, ON
   at every opening, never remembered; Excel always exact.
 - **How the two files stay honest.** `main` is not merged into this stack, so #456's files (`js/`, `tokens.css`, `tests/`) were taken as they
-  are, the bundles and the cache list regenerated: the spec compares the port with the new behaviour. They are byte-equal to `main`'s.
-- **Difference 1: only the switch is the target, not its words.** In the current app the whole row is a label, so a tap on the words flips it. Here
-  the row uses `ui/SettingSwitch`, like every switch in Mise 2: a tap on the words does nothing. A person who taps the words sees nothing happen; the
-  switch itself is a 48 px target.
-- **Difference 2: the dialog's scroll is the shared one.** The current app needed a new `overflow-y` on its export dialog so Cancel stays reachable on a
+  are, the bundles and the cache list regenerated: the spec compares the port with the new behaviour. `js/recipe-export.js`, `js/export-sheet.js` and the
+  three export tests are byte-equal to `main`'s; the other files carry the same changed lines over this stack's older text.
+- **A tap on the words flips the switch**, as in the current app: the row looks like PDF and Excel above it, so it must answer anywhere. It is the one
+  switch row in Mise 2 that does, through `SettingSwitch`'s `children`; the others draw their words beside it, and were left alone.
+- **The one difference: the dialog's scroll is the shared one.** The current app needed a new `overflow-y` on its export dialog so Cancel stays reachable on a
   short screen. `ui/Dialog.module.css` already scrolls its layer, for every dialog, so nothing changed there; `ExportSheet.spec.tsx` pins it, and the
   driver taps Cancel for real at 568×320.
-- **Driven** 204/204 (`algprobe/mise-drive/drive-mise2-recipe-pdf.mjs <base> <cdp-port> <out-dir>`): IT and EN at 1024, 360, 296, PDF text and measures read
+- **Driven** 216/216 (`algprobe/mise-drive/drive-mise2-recipe-pdf.mjs <base> <cdp-port> <out-dir>`): IT and EN at 1024, 360, 296, PDF text and measures read
   back from the file, the .xlsx unzipped. Not driven, because nothing in them changed: an employee (the export has no role), offline and a failed library
   (paths untouched, covered by the specs). Owed: the real tablet (SM-T550) and a printed sheet.

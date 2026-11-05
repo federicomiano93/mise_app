@@ -305,7 +305,8 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   The recipe export (PDF / Excel) is two files here: `recipeExport.ts` (`buildPdfBlob`, `buildXlsxBlob`, the
   impure half of `js/recipe-export.js`; the pure half is `@mise/shared/recipe-export`) and `ExportSheet.tsx`
   (`useExportSheet()`, the dialog: choose, preparing, «File ready» with a real Download link, Share for the PDF
-  only, the errors). The Calculator's `ResultCard` and the Recipe catalogue's `IngredientsCard` each build their
+  only, the errors; the choice holds the switch «Round the weights in the PDF», ON at every opening, drawn only when
+  `hasRoundableRows` says a row is in grams, the whole row being the switch through `SettingSwitch`'s `children`). The Calculator's `ResultCard` and the Recipe catalogue's `IngredientsCard` each build their
   model from the very rows they draw (`recipes/recipeExportModel.ts` for the catalogue). ⚠️ `jspdf` and
   `write-excel-file` are npm dependencies loaded ONLY by `import()` inside the two builders, so each is a chunk of
   its own that no page preloads; `recipeExport.spec.ts` fails on a static import anywhere in `app/src`. ⚠️ There is

@@ -24,9 +24,11 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* The «round the weights» row: the same box as a kind, with the switch at its end instead of an icon. */
-.round {
+/* The «round the weights» row: the same box as a kind, with the switch at its end instead of an icon. The whole row is
+   the switch. `.kinds .round` outranks SettingSwitch's own `.switch`, whichever stylesheet comes first. */
+.kinds .round {
   display: flex;
+  width: 100%;
   align-items: center;
   justify-content: space-between;
   gap: var(--s3);
@@ -39,7 +41,7 @@
 }
 
 /* The words take the room the switch leaves and wrap (Italian at 296px). */
-.round > .text {
+.kinds .round > .text {
   flex: 1;
 }
 

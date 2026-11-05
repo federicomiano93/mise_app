@@ -109,6 +109,16 @@ describe('the choice', () => {
 const SWITCH = 'Round the weights in the PDF';
 
 describe('the round-the-weights switch', () => {
+  it('flips on a tap on its words too, as the whole row is the switch', async () => {
+    const { user } = draw();
+    await user.click(screen.getByRole('button', { name: 'Export' }));
+    const box = within(await sheet());
+    await user.click(box.getByText('Under 10 g to the gram, under 100 g to 5 g, above to 10 g'));
+    expect(box.getByRole('switch', { name: SWITCH })).not.toBeChecked();
+    await user.click(box.getByText(SWITCH));
+    expect(box.getByRole('switch', { name: SWITCH })).toBeChecked();
+  });
+
   it('starts ON, named by its words and described by its note', async () => {
     const { user } = draw();
     await user.click(screen.getByRole('button', { name: 'Export' }));

@@ -13,7 +13,7 @@
 // the empty-state reason, the targets by logic (`computeTarget`, `computeRecipeTarget`), trays, extra dough,
 // the divisor, the crate boxes, the free lines, the log-display settings, the order-prefill window, and the
 // save path (`reconcileConfigWrite`, `saveFailureKey` — step 3c-2), and `exportTraysFor` (the trays an exported
-// recipe's title may name).
+// recipe's file name may carry).
 //
 // LEFT OUT, for 3c-4 (market orders): `orderPrefillLabel` (it looks a word up in the interface dictionary,
 // `t()`, which in Mise 2 belongs to the app; `ORDER_PREFILL_LABELS` — the dictionary KEYS — is ported, the app

@@ -19,6 +19,7 @@
 
 .track {
   display: flex;
+  flex: none;
   align-items: center;
   width: 44px;
   height: 26px;
