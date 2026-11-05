@@ -229,19 +229,138 @@ describe('the price must be known before the card opens (C28)', () => {
   });
 });
 
-describe('an old price shape (T4)', () => {
-  it('opens read-only for a price writer, with the sentence, and Save sends no price', async () => {
-    const source = seeded();
-    source.prices.set('i-old', priced({ priceUnit: 'kg', pricePerUnit: 3, vatRate: 10 }));
-    const view = await open('/suppliers/ingredient/i-old', source);
-    expect(view.region.queryByRole('combobox', { name: 'How it is bought' })).not.toBeInTheDocument();
-    expect(view.region.getByText(/This price was saved in an older format/)).toBeInTheDocument();
-    expect(view.region.getByText('VAT: 10%')).toBeInTheDocument();
-    await view.user.type(view.region.getByRole('textbox', { name: 'Brand' }), 'X');
+describe('the card of before (3e-5)', () => {
+  // Two old shapes: a rate on a multiplier weight ordered by «sacco», and a case by an explicit size.
+  const BAG = item('i-bag', { name: 'Bag', supplierId: 's-alp', weight: '6x1kg', unit: 'sacco', category: 'Bakery' });
+  const KGCASE = item('i-kgcase', { name: 'Kg case', supplierId: 's-alp', weight: '2.5kg', unit: 'cartone', category: 'Bakery' });
+  const PACKCASE = item('i-packcase', { name: 'Pack case', supplierId: 's-alp', weight: '2.5kg', unit: 'sacco', packUnit: 'busta', category: 'Bakery' });
+  const legacySource = (): FakeSuppliersSource => fakeSuppliersSource({
+    suppliers: SUPPLIERS,
+    ingredients: [BAG, KGCASE, PACKCASE],
+    prices: {
+      'i-bag': { priceUnit: 'kg', pricePerUnit: 2, vatRate: 4, priceUpdatedAt: THEN },
+      'i-kgcase': {
+        priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'kg', priceUpdatedAt: THEN,
+      },
+      'i-packcase': {
+        priceUnit: 'kg', pricePerUnit: 2, casePrice: 20, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'pack', vatRate: 4, priceUpdatedAt: THEN,
+      },
+    },
+  });
+  const howBought = (region: Region) => region.getByRole('combobox', { name: 'How it is bought' });
+  const orderUnit = (region: Region) => region.getByRole('combobox', { name: 'Order unit' });
+  const saved = async (view: Awaited<ReturnType<typeof open>>) => {
     await saveAndConfirm(view);
-    await waitFor(() => { expect(source.writes.some(w => w.op === 'ingredient-save')).toBe(true); });
-    expect(lastSave(source).price).toBeNull();
-    expect(lastSave(source).data.brand).toBe('X');
+    await waitFor(() => { expect(view.source.writes.some(w => w.op === 'ingredient-save')).toBe(true); });
+    return lastSave(view.source);
+  };
+
+  it('opens with «Order unit» and «How it is bought» offering «By the case», and no Single / Case buttons', async () => {
+    const bag = await open('/suppliers/ingredient/i-bag', legacySource());
+    expect(orderUnit(bag.region)).toHaveValue('sacco');
+    expect(howBought(bag.region)).toHaveValue('kg');
+    expect(within(howBought(bag.region)).getByRole('option', { name: 'By the case' })).toBeInTheDocument();
+    expect(rate(bag.region)).toHaveValue('2');
+    expect(bag.region.queryByRole('button', { name: 'Single' })).not.toBeInTheDocument();
+    expect(bag.region.queryByRole('button', { name: 'Case' })).not.toBeInTheDocument();
+    expect(bag.region.getByRole('combobox', { name: 'Package' })).toBeInTheDocument();
+  });
+
+  it('a case by an explicit size reopens in case mode with its values as stored', async () => {
+    const kgCase = await open('/suppliers/ingredient/i-kgcase', legacySource());
+    expect(within(howBought(kgCase.region)).getByRole('option', { name: 'By the case', selected: true })).toBeInTheDocument();
+    expect(kgCase.region.getByRole('textbox', { name: /^Case price/ })).toHaveValue('20');
+    expect(kgCase.region.getByRole('textbox', { name: 'How many in the case' })).toHaveValue('4');
+    expect(kgCase.region.getByRole('textbox', { name: 'Size of each one' })).toHaveValue('2.5');
+    expect(kgCase.region.getByRole('combobox', { name: 'Unit of each one' })).toHaveValue('kg');
+    expect(kgCase.region.queryByRole('button', { name: 'Single' })).not.toBeInTheDocument();
+  });
+
+  it('⚠️ an untouched Save writes the ingredient and NO price document and no history', async () => {
+    const view = await open('/suppliers/ingredient/i-kgcase', legacySource());
+    const write = await saved(view);
+    expect(write.price).toBeNull();
+    expect(write.data).toMatchObject({ unit: 'cartone', weight: '2.5 kg' });
+    expect(write.data).not.toHaveProperty('packCount');
+    expect(write.data).not.toHaveProperty('packUnit');
+    expect(view.source.prices.get('i-kgcase')?.priceUpdatedAt).toBe(THEN);
+    expect(view.source.history.get('i-kgcase') ?? []).toHaveLength(0);
+  });
+
+  it('choosing «By the case» and typing the case writes the case, the derived rate and one history entry', async () => {
+    const view = await open('/suppliers/ingredient/i-bag', legacySource());
+    await view.user.selectOptions(howBought(view.region), 'By the case');
+    await view.user.type(view.region.getByRole('textbox', { name: /^Case price/ }), '22');
+    await view.user.type(view.region.getByRole('textbox', { name: 'How many in the case' }), '4');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Unit of each one' }), 'kg');
+    await view.user.type(view.region.getByRole('textbox', { name: 'Size of each one' }), '2.5');
+    expect(view.region.getByText(/= .*2\.20 \/ kg · .*22\.00 per case/)).toBeInTheDocument();
+    const write = await saved(view);
+    expect(write.price?.doc).toMatchObject({ priceUnit: 'kg', pricePerUnit: 2.2, casePrice: 22, caseCount: 4, caseItemSize: 2.5, caseItemUnit: 'kg' });
+    expect(view.source.history.get('i-bag')).toHaveLength(1);
+    expect(write.price?.history).toMatchObject({ pricePerUnit: 2.2 });
+  });
+
+  it('a VAT-only change writes only the VAT on the price document, with no history', async () => {
+    const view = await open('/suppliers/ingredient/i-bag', legacySource());
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'VAT' }), '5');
+    const write = await saved(view);
+    expect(write.price?.doc).toMatchObject({ vatRate: 5 });
+    expect(write.price?.doc).not.toHaveProperty('pricePerUnit');
+    expect(write.price?.history).toBeNull();
+    expect(view.source.history.get('i-bag') ?? []).toHaveLength(0);
+  });
+
+  it('⚠️ a «pack» case whose weight is emptied is refused on the weight box, and nothing is written', async () => {
+    const view = await open('/suppliers/ingredient/i-packcase', legacySource());
+    const weight = view.region.getByRole('textbox', { name: 'Weight amount' });
+    await view.user.clear(weight);
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    expect(weight).toHaveAttribute('aria-invalid', 'true');
+    expect(weight).toHaveFocus();
+    expect(view.region.getByText('The package weight is needed for the case price')).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(view.source.writes).toEqual([]);
+    await view.user.type(weight, '3');
+    expect(weight).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('«+ New unit…» left blank is refused on its box; a typed word is saved as the order unit', async () => {
+    const view = await open('/suppliers/ingredient/i-bag', legacySource());
+    await view.user.selectOptions(orderUnit(view.region), '+ New unit…');
+    await view.user.click(view.region.getByRole('button', { name: 'Save' }));
+    const box = view.region.getByRole('textbox', { name: 'New order unit' });
+    expect(box).toHaveAttribute('aria-invalid', 'true');
+    expect(box).toHaveFocus();
+    expect(view.region.getByText('Write the new unit’s name')).toBeInTheDocument();
+    expect(view.source.writes).toEqual([]);
+    await view.user.type(box, 'tray');
+    expect(box).not.toHaveAttribute('aria-invalid');
+    const write = await saved(view);
+    expect(write.data.unit).toBe('tray');
+    expect(write.price).toBeNull();
+  });
+
+  it('changing the order unit and pressing Back asks «Discard changes?»', async () => {
+    const view = await open('/suppliers/ingredient/i-bag', legacySource());
+    await view.user.selectOptions(orderUnit(view.region), 'kg');
+    await view.user.click(view.region.getByRole('button', { name: 'Back' }));
+    expect(await dialogOf('Discard changes?')).toBeInTheDocument();
+    expect(view.source.writes).toEqual([]);
+  });
+
+  it('⚠️ a Package word is not sent when there is none and none is stored', async () => {
+    const view = await open('/suppliers/ingredient/i-bag', legacySource());
+    const write = await saved(view);
+    expect(write.data).not.toHaveProperty('packUnit');
+    expect(write.data.unit).toBe('sacco');
+  });
+
+  it('an employee opening the same old shape gets the new card with no price section', async () => {
+    const view = await open('/suppliers/ingredient/i-kgcase', legacySource(), { session: { canManage: false, role: 'employee' } });
+    expect(view.region.queryByRole('combobox', { name: 'How it is bought' })).not.toBeInTheDocument();
+    expect(view.region.queryByRole('combobox', { name: 'Order unit' })).not.toBeInTheDocument();
+    expect(view.region.getByRole('button', { name: 'Single' })).toBeInTheDocument();
   });
 });
 

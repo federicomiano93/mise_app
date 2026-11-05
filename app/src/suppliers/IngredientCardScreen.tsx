@@ -3,7 +3,7 @@ import { useLocation, useNavigate, useNavigationType } from 'react-router';
 import { itemWithPrice } from '@mise/shared/ingredient-edit-model';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { outputLanguage } from '@mise/shared/market';
-import { packChoices } from '@mise/shared/record-choices';
+import { packChoices, unitChoices } from '@mise/shared/record-choices';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { IngredientCard } from '../records/IngredientCard';
@@ -144,6 +144,11 @@ export function IngredientCardScreen({ id, packaging, preset }: Props) {
     () => packChoices({ ingredients: snapshot.ingredients, language, current: item?.packUnit }),
     [snapshot.ingredients, language, item],
   );
+  // The card of before's «Order unit» menu: the venue's order units, and the one this item holds.
+  const orderUnits = useMemo(
+    () => unitChoices({ ingredients: snapshot.ingredients, language, current: item?.unit }),
+    [snapshot.ingredients, language, item],
+  );
 
   if (broken) {
     return (
@@ -179,6 +184,7 @@ export function IngredientCardScreen({ id, packaging, preset }: Props) {
         suppliers={snapshot.suppliers}
         categories={store.categories(language)}
         packs={packs}
+        orderUnits={orderUnits}
         language={language}
         mayPrice={mayPrice}
         country={location?.country}

@@ -214,6 +214,18 @@
   gap: var(--s2);
 }
 
+/* The card of before's «Contains [4] × [2.5] [kg ▾]»: three controls and a ×. On a narrow phone the unit menu drops to a line of
+   its own instead of being squeezed to a sliver (measured 26px wide at 296px, step 3e-5 review). After .inner on purpose: the
+   same specificity, so the later rule wins. */
+.caseRowWrap {
+  flex-wrap: wrap;
+}
+
+.caseItem {
+  flex: 1 1 9em;
+  min-width: 9em;
+}
+
 /* Delete, the very end of the card: a small icon on the right, as low-key as it can be and still a 48px target. */
 .deleteIcon {
   display: flex;

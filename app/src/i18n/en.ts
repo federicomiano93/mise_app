@@ -1611,8 +1611,22 @@ export const en = {
   // orders.failed.load: the alert when the price history could not be read.
   'sup.price.history.failed': 'Could not load the price history for “{name}”. Check your network and try again.',
   // NEW (decision T4): an old price shape is shown, never edited.
-  'sup.price.legacy.note': 'This price was saved in an older format. It is shown here only: saving this card keeps it exactly as it is.',
-  'sup.price.legacy.vat': 'VAT: {rate}%',
+  'sup.legacy.byCase': 'By the case',
+  'sup.legacy.case.count': 'How many in the case',
+  'sup.legacy.case.size': 'Size of each one',
+  'sup.legacy.case.unit': 'Unit of each one',
+  'sup.legacy.case.pcs': 'pcs',
+  'sup.legacy.case.packWord': 'pack',
+  'sup.legacy.case.packOf': '{pack} of {size}',
+  'sup.legacy.packChanged': 'The package weight has changed: the price updates when you save',
+  'sup.legacy.packNeeded': 'The package weight is needed for the case price',
+  'sup.legacy.summaryUnit': '= {rate} / {unit} · {price} per case',
+  'sup.legacy.summaryPiece': '= {rate} each · {price} per case',
+  'sup.legacy.orderUnit': 'Order unit',
+  'sup.legacy.newUnit': '+ New unit…',
+  'sup.legacy.unitPlaceholder': 'New unit, e.g. tray',
+  'sup.legacy.unitBlank': 'Write the new unit’s name',
+  'sup.legacy.unitAria': 'New order unit',
   // Step 3e-4: the card's pack list, allergens and nutrition. The words of the current app (orders.pack.*, orders.allergen.*,
   // orders.section.*), with the «{note}» tail it trims left out. The FOOD words (allergens, groups, nutrients) are not here:
   // they come from the venue's country (shared/market.ts).
