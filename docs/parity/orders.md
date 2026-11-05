@@ -1403,3 +1403,32 @@ changed**: every key is already whitelisted and typed under `config/orders` (`ca
 - S2. The kiosk's «arriving» line honours the goods-arrived switch (F4 (c)): off, none; back on, only the orders recorded from that
   day (`askedAbout`), the same records Incoming reads. «To order today» reads every record, as today.
 - S3. No Help door (choice C).
+
+## Step 3f-8a as built
+
+**What it is.** Orders → Settings in the agreed order (above), every control off until `config/orders` has arrived, saving on the
+tap with «Salvato ✓» beside itself, following the data (a refusal leaves it as stored); the screen «Ordine dei fornitori» at
+`/orders/settings/supplier-order` (`SupplierSequenceScreen.tsx`: React Aria drag by touch, mouse or keyboard, ArrowUp/ArrowDown on a
+grip, each move saved at once, «Salvataggio…» then «Salvato ✓»); the kiosk feed (`ordersStore.kioskSections()`, `kioskFeed.ts`). Port:
+`kiosk-lines` in full, paired. No rule changed and no new key.
+
+**Taken for him, easy to change.**
+- S4. «Accese: …» under the lists switch says «il pulsante «Liste d’ordine» è in cima a Ordini»: the current app's «nella fascia verde»
+  names a bar Mise 2 does not have.
+- S5. The section titles are h3 under the bar's h2 («Impostazioni»), the notices block an h4, as in the Suppliers and Calculator settings.
+- S6. «Controlla la merce arrivata» also shows «Salvato ✓» now, like every other control of the screen.
+- S7. Back from «Ordine dei fornitori» gives the focus back to its door; the title of Settings is focused only when opened from the list.
+- S8. An employee who types the supplier-order address is sent back to Settings.
+
+**Known and left.**
+- A failed supplier-order save puts the list back first and opens its notice one tick later: opened in the same render as the moved
+  grid, React Aria's hiding of the page behind the dialog looped for ever in the specs. Not seen on a real device; owed on the tablet.
+- Offline, a setting is laid over the screen at once by Firestore and «Salvato ✓» waits for the server, as the goods-arrived switch.
+- The kiosk that draws the lines is step 3g; `kioskSections()` has no caller yet.
+- Not driven: the real tablet (drag by a finger), OFFLINE, a refused save on screen (specs only).
+
+**Driven.** 107/107 on a private emulator (`algprobe/mise-drive/drive-mise2-orders-8.mjs <base> <cdp-port> <fs-port> <auth-port>`,
+ONLY=IT1024,…,STAFF): the owner in Italian and English at 1024, 360 and 296 (writes at IT 360 and EN 1024: Stock, week, a road, the days
+of History good and refused, lists as the only road, the last road, lists off and on, a supplier moved by the keyboard), the employee at
+360 (locked rows described, no boss sections, the address refused). axe clean, targets, nothing clipped, no sideways scroll, one main,
+one h1, no console error, at every screen; config/orders put back at the end.
