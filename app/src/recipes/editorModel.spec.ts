@@ -3,6 +3,7 @@ import { normalizeCatalogueRecipe } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import {
   NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, duplicateWorking, haccpStorageText, linkRowTo, moveWorkingRow, netWeightText, notWeighedCount, removeRow, setRowFields, shelfLifeText, stepWorkingRow, totalText, workingFrom, workingFromDraft, restoreWorking, setCategory,
+  rowHasDivider, toggleDivider,
 } from './editorModel';
 
 // The editor's working copy and the rules that turn it into what is saved (the pure half of catalogue-editor.js).
@@ -453,5 +454,84 @@ describe('the category choice (slice «recipe categories + archive»)', () => {
     const back = restoreWorking(JSON.parse(JSON.stringify(working)));
     expect(back?.category).toBe('Christmas');
     expect(back?.categoryStart).toBe('Easter');
+  });
+});
+
+describe('divider lines (5 Nov 2026, port of #458)', () => {
+  // «A B| C» = three rows, a line under B.
+  const divided = (spec: string) => workingFrom(recipe({
+    ingredients: spec.split(' ').map((s, i) => ({
+      label: s.replace('|', ''), grams: 10, unit: 'g', rid: 'rid-' + i, ...(s.endsWith('|') ? { dividerAfter: true } : {}),
+    })),
+  }));
+  const show = (working: ReturnType<typeof workingFrom>) =>
+    working.rows.map(item => String(item.row.label) + (item.row.dividerAfter === true ? '|' : '')).join(' ');
+
+  it('⚠️ a stored line survives the reading, the working copy, and the cleaning — and a recipe without lines has no key', () => {
+    const working = divided('A B| C');
+    expect(show(working)).toBe('A B| C');
+    expect(cleanWorking(working).ingredients.map(row => (row as Record<string, unknown>).dividerAfter)).toEqual([undefined, true, undefined]);
+    for (const row of cleanWorking(workingFrom(recipe())).ingredients) expect(row).not.toHaveProperty('dividerAfter');
+  });
+
+  it('toggles a line under a row by its key, keeping the rest of the row; the last row has none to toggle', () => {
+    const working = divided('A B C');
+    const on = toggleDivider(working, working.rows[0]!.key);
+    expect(show(on)).toBe('A| B C');
+    expect(on.rows[0]!.key).toBe(working.rows[0]!.key);
+    expect(on.rows[0]!.row).toMatchObject({ rid: 'rid-0', label: 'A' });
+    expect(on.rows[1]).toBe(working.rows[1]);
+    expect(show(toggleDivider(on, on.rows[0]!.key))).toBe('A B C');
+    expect('dividerAfter' in toggleDivider(on, on.rows[0]!.key).rows[0]!.row).toBe(false);
+    expect(toggleDivider(working, working.rows[2]!.key)).toBe(working);
+    expect(toggleDivider(working, 999_999)).toBe(working);
+  });
+
+  it('rowHasDivider: never under the last row', () => {
+    const working = divided('A| B C|');
+    expect([0, 1, 2].map(i => rowHasDivider(working, i))).toEqual([true, false, false]);
+  });
+
+  it('moving: the line stays between the rows, the moved row leaves it behind', () => {
+    expect(show(moveWorkingRow(divided('A B C| D'), 2, 3))).toBe('A B| D C');
+    expect(show(moveWorkingRow(divided('A B| C D'), 2, 0))).toBe('C A B| D');
+    expect(show(moveWorkingRow(divided('A B| C D'), 3, 0))).toBe('D A B| C');
+    expect(show(moveWorkingRow(divided('A| B C'), 0, 2))).toBe('B C A');
+    expect(show(moveWorkingRow(divided('A B| C'), 2, 0)), 'never a hidden line under the last row').toBe('C A B');
+  });
+
+  it('moving keeps every row its key and its row id, and leaves the working copy it was given untouched', () => {
+    const working = divided('A B C| D');
+    const moved = moveWorkingRow(working, 2, 3);
+    expect(moved.rows.map(item => item.key).sort()).toEqual(working.rows.map(item => item.key).sort());
+    expect(moved.rows.map(item => item.row.rid)).toEqual(['rid-0', 'rid-1', 'rid-3', 'rid-2']);
+    expect(show(working)).toBe('A B C| D');
+  });
+
+  it('removing: the row above takes the line, or it goes with the first row; no line left under the new last row', () => {
+    const remove = (spec: string, at: number) => { const w = divided(spec); return show(removeRow(w, w.rows[at]!.key)); };
+    expect(remove('A B| C', 1)).toBe('A| C');
+    expect(remove('A| B', 0)).toBe('B');
+    expect(remove('A B| C', 2)).toBe('A B');
+    const working = divided('A B| C');
+    removeRow(working, working.rows[1]!.key);
+    expect(show(working), 'the working copy it was given is untouched').toBe('A B| C');
+  });
+
+  it('saving: a nameless row hands its line to the row above; a line after the last row is never saved; only true is a line', () => {
+    const working = divided('A B| C');
+    const blanked = setRowFields(working, working.rows[1]!.key, { label: '  ' });
+    expect(cleanWorking(blanked).ingredients.map(row => [row.label, (row as Record<string, unknown>).dividerAfter])).toEqual([
+      ['A', true], ['C', undefined],
+    ]);
+    const lastBlank = setRowFields(working, working.rows[2]!.key, { label: '' });
+    expect(cleanWorking(lastBlank).ingredients.map(row => (row as Record<string, unknown>).dividerAfter)).toEqual([undefined, undefined]);
+    const odd = setRowFields(working, working.rows[0]!.key, { dividerAfter: 'true' });
+    expect(cleanWorking(odd).ingredients[0]).not.toHaveProperty('dividerAfter');
+  });
+
+  it('a duplicate keeps the lines', () => {
+    const copy = duplicateWorking(recipe({ ingredients: [{ label: 'A', grams: 1, dividerAfter: true }, { label: 'B', grams: 1 }] }), name => 'copy of ' + name);
+    expect(show(copy)).toBe('A| B');
   });
 });
