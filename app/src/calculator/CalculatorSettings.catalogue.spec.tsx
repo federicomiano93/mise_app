@@ -102,6 +102,29 @@ describe('the picker', () => {
     expect(await dialog.findByText('The Recipe catalogue has no recipes yet.', undefined, LOAD)).toBeInTheDocument();
   });
 
+  it('⚠️ leaves an archived recipe out of the list (a NEW link), and says the Catalogue is empty when every recipe is archived', async () => {
+    const { user } = await open(`${LIST}/focaccia`, { recipes: [CAT_1, { ...CAT_2, archived: true }] });
+    const dialog = await openPicker(user);
+    await dialog.findByRole('button', { name: 'Catalogue focaccia' }, LOAD);
+    expect(dialog.queryByRole('button', { name: 'Another loaf' })).not.toBeInTheDocument();
+    await user.click(dialog.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog')).not.toBeInTheDocument(); });
+  });
+
+  it('⚠️ every recipe archived: the picker says so (and not «no recipes yet»), in both languages', async () => {
+    const { user } = await open(`${LIST}/focaccia`, { recipes: [{ ...CAT_1, archived: true }, { ...CAT_2, archived: true }] });
+    const dialog = await openPicker(user);
+    expect(await dialog.findByText('Every recipe is archived — restore one in the Recipe catalogue to choose it.', undefined, LOAD)).toBeInTheDocument();
+    expect(dialog.queryByText('The Recipe catalogue has no recipes yet.')).not.toBeInTheDocument();
+  });
+
+  it('every recipe archived, in Italian', async () => {
+    const { user } = await open(`${LIST}/focaccia`, { recipes: [{ ...CAT_1, archived: true }], lang: 'it' });
+    await user.selectOptions(main().getByRole('combobox', { name: /ingredienti/i }), 'catalogue');
+    const dialog = within(await screen.findByRole('dialog', undefined, LOAD));
+    expect(await dialog.findByText('Tutte le ricette sono archiviate — ripristinane una nel Ricettario per sceglierla.', undefined, LOAD)).toBeInTheDocument();
+  });
+
   it('a read that fails says so in the picker and links nothing; the next opening tries again', async () => {
     const { user, source } = await open(`${LIST}/focaccia`);
     source.refuse.catalogue = true;

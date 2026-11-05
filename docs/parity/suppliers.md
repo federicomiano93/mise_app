@@ -714,7 +714,7 @@ It closes Finding S-D and replaces T17 for Mise 2.
   sends `item.active !== false` on every save. The write is a merge, so a switch moved on another phone is not undone by an old
   copy (the suppliers' S82 reasoning). A new item still sends `active: true`.
 - **Lists** (Ingredients and Packaging tabs, a supplier's own screen): the switched-off items sit under the others in ONE folded
-  `<details>` group «Non in uso (N)» (`suppliers/NotInUseGroup.tsx`), dimmed, without the per-row «Disattivato» tag (the heading
+  `<details>` group «Non in uso (N)» (`ui/FoldedGroup.tsx`, once `suppliers/NotInUseGroup.tsx`), dimmed, without the per-row «Disattivato» tag (the heading
   says it). The group opens by itself when the item open beside the list is in it or a search finds one of its items, and stays
   open until closed; each tab starts folded (the list is keyed by the tab). The «no match» sentence shows only when neither part
   matches. ⚠️ A row inside a closed `<details>` cannot take the focus: `handBack.ts` opens the group before it focuses one of its

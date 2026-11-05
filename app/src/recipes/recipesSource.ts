@@ -105,9 +105,12 @@ export interface RecipesSource {
 
 // The recipe fields a person can EMPTY. A merge never deletes a key it is not sent, and the rules refuse a stored null,
 // so an emptied box travels as a removal (js/catalogue/firebase-catalogue.js, CLEARABLE_RECIPE_FIELDS).
-// ⚠️ THE LAST TWO ARE MISE 2'S (the image label's texts, labelTexts.ts): an emptied box removes the field, so «nothing
-// typed» is never a stored empty string.
-export const CLEARABLE_RECIPE_FIELDS = ['netWeightG', 'shelfLifeDays', 'labelName', 'labelIngredientsText'] as const;
+// ⚠️ THE LAST FOUR ARE MISE 2'S: the image label's texts (labelTexts.ts) — an emptied box removes the field, so «nothing
+// typed» is never a stored empty string — and the shelf's two (@mise/shared/recipe-shelf): «no category» and «not
+// archived» are NO FIELD, so a cleared category and a restore travel as removals too.
+export const CLEARABLE_RECIPE_FIELDS = [
+  'netWeightG', 'shelfLifeDays', 'labelName', 'labelIngredientsText', 'category', 'archived',
+] as const;
 
 // A new recipe's id, made on the phone (no write), so a new recipe appears at once and offline. The same shape as the
 // id Firestore makes itself (20 letters and digits, from the browser's cryptographic random source): the current app's

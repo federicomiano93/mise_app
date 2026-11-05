@@ -41,6 +41,15 @@ const NOTHING: HandBack = {
   deliver() { /* ditto */ },
 };
 
+// ⚠️ A ROW IN THE FOLDED «Archived» GROUP CANNOT TAKE THE FOCUS while its <details> is closed: it is opened first, and its own
+// toggle event tells the list, whose open state follows. (The idea of suppliers/handBack.ts, copied: a feature never imports
+// another feature's folder.)
+function reveal(node: HTMLElement): HTMLElement {
+  const group = node.closest('details');
+  if (group && !group.open) group.open = true;
+  return node;
+}
+
 const HandBackContext = createContext<HandBack>(NOTHING);
 export const HandBackProvider = HandBackContext.Provider;
 
@@ -70,7 +79,7 @@ export function useHandBackState(): HandBack {
       wanted.current = null;
       const row = openers.current.get(name);
       if (row) {
-        row.focus();
+        reveal(row).focus();
         return;
       }
       // ⚠️ A RECIPE THAT WAS DELETED HAS NO ROW ANY MORE. If the focus fell to the page with the screen

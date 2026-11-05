@@ -1624,3 +1624,51 @@ Two changes to the recipe page, both asked for after the owner tried the tablet.
   - New wording (EN / IT) for the question, the hint under the button and the two done messages (linked / was already there and now
     follows); the old «copy» keys are gone. `shared/catalogue-model`'s import functions now differ from `js/catalogue/catalogue-model.js`
     on purpose, so their new tests run against the port only (the tests that still hold for both stay in the paired block).
+
+## Recipe categories and the archive (slice «3d-9 categories», 25 Oct 2026) — NEW IN MISE 2, differences from the current app
+
+Federico's request (23 Oct 2026): «dividere per categorie le ricette, tipo ricette stagionali; finita la stagione le voglio poter
+archiviare per snellire la lista». Decided 24 Oct 2026 (memory `piano-mise-2`, «✅ DECIDED»): ONE category per recipe from a fixed
+list per venue, edited in the Catalogue Settings like ingredient categories; archive and restore by owner + manager; «Archiviate (N)»
+folded at the foot of the list; an archived recipe stays linked everywhere (Calculator, labels, Food cost keep working) but is left out
+of the pickers for NEW links. **Size M, one PR.** The current app has neither: it shows archived recipes in its normal list and ignores
+the category (its merge saves keep both fields).
+
+**Data** (`firestore.rules`, rules check cases «recipe shelf»; the logic is `shared/src/recipe-shelf.ts`, new, not paired):
+- `recipes/{id}.category` — the word, 1–100 characters; «no category» is NO field (a removal). A word taken off the list reads as
+  «no category» and comes back if the word is put back — so deleting a category writes no recipe.
+- `recipes/{id}.archived` — only `true` is stored; a restore removes it. The rules ask `canManage(catalogue)` only when the state
+  MOVES, so an employee still saves an archived recipe. A save never sends the flag (the store keeps it); archiving is its own
+  merge of the flag alone (`store.setArchived`), local-first with rollback (`recipe-not-archived`).
+- `config/labels.recipeCategories` — the venue's list (≤ 100 words, ≤ 40 characters each in the box), written whole through the
+  label profile's local-first write (`store.saveRecipeCategories`); no extra read: every recipe screen already watches the document.
+- The store keeps both recipe fields beside the shared normaliser's shape (`labelTexts.normalizeStoredRecipe`), and they reach the
+  `catalogue-recipes` copy; the current app's normaliser drops them from its copy, which is harmless (the database keeps them).
+
+**What changes on screen — the choices taken for him (each the recommended option; listed first in the PR):**
+1. **The list is grouped under the category headings**, alphabetical in the interface language, «Senza categoria» last; inside a
+   group the order stays «most used first». With no category in use the list looks exactly as before (no headings). A search runs
+   over every group; a heading with no match disappears.
+2. **«Archiviate (N)»** is a folded group after the groups, before the Allergen sheet and Settings doors, for EVERYBODY (an employee may
+   open an archived recipe to print its label). It opens by itself when a search finds a recipe inside it or the recipe open beside
+   the list is archived, and stays as the person left it otherwise.
+3. **The category is chosen in the recipe editor**, a menu under the name («Nessuna categoria» first, then the list), drawn only when
+   the venue has at least one category; whoever may edit a recipe may choose. The editor sends the category only when the choice
+   MOVED, so a recipe whose word left the list is not stripped of it by an unrelated save. «Duplica» copies the category, never the
+   archive.
+4. **The list of categories lives in the Catalogue Settings** (owner + manager), a card «Categorie delle ricette»: a box + «Aggiungi»
+   (refused: empty, over 40 characters, already there whatever the case, 100 words), and each word with a small low-key bin that asks
+   first, saying how many recipes go back to «Senza categoria» (and that they come back if the word is added again). No rename, no
+   manual order (alphabetical).
+5. **«Archivia»** is a button at the end of the recipe page, after «Duplica» and before the Delete icon, owner + manager only, with a
+   one-line hint; it asks first («Archiviare “{name}”?», the consequence in one sentence). After it the page STAYS open with the
+   archived banner (one tap to undo), and says «Ricetta archiviata.».
+6. **An archived recipe's page** starts with a banner «Archiviata» and one sentence (out of the list and of the choices for new links;
+   Calculator, labels and Food cost keep working); owner + manager get «Ripristina» in it, which does not ask (nothing is lost) and
+   says «Ricetta ripristinata.». Everything else on the page works, except **«Importa nel Calcolatore», hidden** (it makes a NEW link).
+7. **The pickers for NEW links leave archived recipes out**: the recipe editor's suggestions and chooser (a sub-recipe), the
+   Calculator's «link to a Catalogue recipe» chooser, Food cost's recipe chooser. What already points at an archived recipe keeps
+   naming it and working (it is read by id).
+8. **The Allergen sheet keeps listing archived recipes** (health first: a customer may ask about something still on the shelf).
+
+Not in this slice: renaming a category, a category on the recipe page itself, filtering by tapping a heading.

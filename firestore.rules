@@ -1439,7 +1439,13 @@ service cloud.firestore {
                // Zebra — and whether that picture is printed turned round (^POI,
                // what his printer driver does). The current app never sends them
                // and its merge writes keep them.
-               'template', 'rotate180'
+               'template', 'rotate180',
+               // Mise 2's recipe categories (25 Oct 2026): the venue's own list of
+               // words a recipe can be filed under, edited in the Catalogue's
+               // Settings like everything else here (canManage). Kept on this
+               // document because it is the Catalogue's only settings document and
+               // every recipe screen already watches it: no extra read.
+               'recipeCategories'
              ])
           // ⚠️ THE BOUNDS ARE THE APP'S OWN, REPEATED HERE ON PURPOSE. A 0 mm label
           // is drawn as an empty rectangle with no error anywhere, and the app that
@@ -1495,7 +1501,13 @@ service cloud.firestore {
           && (!('template' in request.resource.data)
               || request.resource.data.template in ['standard', 'logo'])
           && (!('rotate180' in request.resource.data)
-              || request.resource.data.rotate180 is bool);
+              || request.resource.data.rotate180 is bool)
+          // A list of words, capped so it cannot be used as free storage. The words
+          // themselves cannot be judged (rules cannot look inside a list); the app
+          // keeps each one short and never offers the same word twice.
+          && (!('recipeCategories' in request.resource.data)
+              || (request.resource.data.recipeCategories is list
+                  && request.resource.data.recipeCategories.size() <= 100));
 
         // Nothing deletes a settings document. Turning a setting off is a write.
         allow delete: if false;
@@ -2172,7 +2184,13 @@ service cloud.firestore {
                                                    // ingredients typed as the owner writes them, allergens
                                                    // in capitals. Optional both ways; the current app saves
                                                    // recipes with merge, so it keeps them.
-                                                   'labelName', 'labelIngredientsText'])
+                                                   'labelName', 'labelIngredientsText',
+                                                   // Mise 2's recipe shelf (25 Oct 2026): the one category
+                                                   // the recipe is filed under (a word from the venue's
+                                                   // list in config/labels) and whether it is archived —
+                                                   // kept, out of the list, still linked everywhere.
+                                                   // Optional both ways; the current app's merge keeps them.
+                                                   'category', 'archived'])
           && stampedFor(lid)
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
@@ -2244,7 +2262,25 @@ service cloud.firestore {
                   && request.resource.data.labelName.size() <= 200))
           && (!('labelIngredientsText' in request.resource.data)
               || (request.resource.data.labelIngredientsText is string
-                  && request.resource.data.labelIngredientsText.size() <= 2000));
+                  && request.resource.data.labelIngredientsText.size() <= 2000))
+          // Bounded, not judged: whether the word is on the venue's list is the app's
+          // business (a word taken off the list reads as «no category», and comes back
+          // if the word is put back). «No category» is NO FIELD, never an empty one.
+          && (!('category' in request.resource.data)
+              || (request.resource.data.category is string
+                  && request.resource.data.category.size() > 0
+                  && request.resource.data.category.size() <= 100))
+          && (!('archived' in request.resource.data)
+              || request.resource.data.archived is bool)
+          // ⚠️ ARCHIVING AND RESTORING ARE FOR WHOEVER RUNS THE PLACE (Federico, 24 Oct
+          // 2026), but the rest of a recipe is everybody's work. So the role is asked only
+          // when the archived state MOVES — a recipe created archived, archived, or
+          // restored — and an employee's save of an archived recipe, which leaves the flag
+          // as it is, still passes. Absent reads as «not archived» both sides. The
+          // short-circuit keeps canManage's reads off every ordinary save.
+          && (request.resource.data.get('archived', false)
+                == (resource == null ? false : resource.data.get('archived', false))
+              || canManage(lid, 'catalogue'));
         // OWNER ONLY. A recipe is the business. It also carries the guided
         // procedure, the allergen links and whatever Food Cost products point
         // at it, none of which say so from the delete button.

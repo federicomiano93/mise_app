@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizeCatalogueRecipe } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import {
-  NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, duplicateWorking, linkRowTo, moveWorkingRow, netWeightText, notWeighedCount, removeRow, setRowFields, shelfLifeText, stepWorkingRow, totalText, workingFrom, workingFromDraft, restoreWorking,
+  NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, duplicateWorking, linkRowTo, moveWorkingRow, netWeightText, notWeighedCount, removeRow, setRowFields, shelfLifeText, stepWorkingRow, totalText, workingFrom, workingFromDraft, restoreWorking, setCategory,
 } from './editorModel';
 
 // The editor's working copy and the rules that turn it into what is saved (the pure half of catalogue-editor.js).
@@ -386,5 +386,63 @@ describe('a duplicate (the recipe page’s «Duplicate»)', () => {
     expect(working.name).toHaveLength(NAME_MAX_LENGTH);
     expect(working.name.endsWith(' (copy)')).toBe(true);
     expect(duplicateWorking(recipe({ name: 'A'.repeat(NAME_MAX_LENGTH - 7) }), copyOf).name).toHaveLength(NAME_MAX_LENGTH);
+  });
+});
+
+describe('the category choice (slice «recipe categories + archive»)', () => {
+  const LIST = ['Christmas', 'Easter'];
+  // The store keeps `category` and `archived` beside the shared normaliser's shape; the editor receives them on the recipe.
+  const filed = (fields: Record<string, unknown>): CatalogueRecipe => ({ ...recipe(), ...fields } as CatalogueRecipe);
+  const sent = (working: ReturnType<typeof workingFrom>) => cleanWorking(working) as unknown as Record<string, unknown>;
+
+  it('starts from the word as the list spells it, and keeps the stored word and the archive flag out of `rest`', () => {
+    const working = workingFrom(filed({ category: ' easter ', archived: true }), LIST);
+    expect(working.category).toBe('Easter');
+    expect(working.categoryStart).toBe('Easter');
+    expect(working.rest).not.toHaveProperty('category');
+    expect(working.rest).not.toHaveProperty('archived');
+  });
+
+  it('starts from «no category» for a recipe with none, for a word that has left the list, and for a new recipe', () => {
+    expect(workingFrom(filed({}), LIST).category).toBe('');
+    expect(workingFrom(filed({ category: 'Gone' }), LIST).category).toBe('');
+    expect(workingFrom(null, LIST).category).toBe('');
+  });
+
+  it('⚠️ hands the category over only when the choice moved', () => {
+    const untouched = workingFrom(filed({ category: 'Gone' }), LIST);
+    expect(sent(untouched)).not.toHaveProperty('category');
+    expect(sent(setCategory(untouched, 'Easter')).category).toBe('Easter');
+    const filedUnder = workingFrom(filed({ category: 'Easter' }), LIST);
+    expect(sent(setCategory(filedUnder, '')).category).toBe('');
+    // Back to where it started: nothing to send.
+    expect(sent(setCategory(setCategory(filedUnder, 'Christmas'), 'Easter'))).not.toHaveProperty('category');
+  });
+
+  it('hands a new recipe’s category over when one was chosen, and nothing otherwise', () => {
+    expect(sent(workingFrom(null, LIST))).not.toHaveProperty('category');
+    expect(sent(setCategory(workingFrom(null, LIST), 'Christmas')).category).toBe('Christmas');
+  });
+
+  it('⚠️ a duplicate copies the category as a chosen one — and never the archive', () => {
+    const copy = duplicateWorking(filed({ category: 'easter', archived: true }), name => `${name} (copy)`, LIST);
+    expect(copy.category).toBe('Easter');
+    expect(copy.categoryStart).toBe('');
+    expect(sent(copy).category).toBe('Easter');
+    expect(sent(copy)).not.toHaveProperty('archived');
+    expect(duplicateWorking(filed({ category: 'Gone' }), name => name, LIST).category).toBe('');
+  });
+
+  it('a photo-read draft starts with no category', () => {
+    const working = workingFromDraft({ name: 'A', ingredients: [{ label: 'x', grams: 1 }], category: 'Easter' });
+    expect(working.category).toBe('');
+    expect(sent(working)).not.toHaveProperty('category');
+  });
+
+  it('a copy that travelled in the navigation state keeps both the choice and where it started', () => {
+    const working = setCategory(workingFrom(filed({ category: 'Easter' }), LIST), 'Christmas');
+    const back = restoreWorking(JSON.parse(JSON.stringify(working)));
+    expect(back?.category).toBe('Christmas');
+    expect(back?.categoryStart).toBe('Easter');
   });
 });

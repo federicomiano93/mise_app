@@ -77,6 +77,56 @@
   overflow-wrap: break-word;
 }
 
+/* The recipe categories: the words, each with a small low-key bin; the box and its button side by side. */
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bin {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-3);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bin[aria-disabled='true'] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.bin:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.bin svg {
+  width: 18px;
+  height: 18px;
+}
+
+@media (hover: hover) {
+  .bin:hover:not([aria-disabled='true']) {
+    background: var(--danger-tint);
+    color: var(--danger-ink);
+  }
+}
+
+.addRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
 /* A choice with its words above it and its note below. */
 .block {
   display: flex;

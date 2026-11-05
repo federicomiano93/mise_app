@@ -348,7 +348,7 @@ describe('What else goes on the label', () => {
 
   it('⚠️ shows the storage box only when its switch is on, and the business boxes and note only for «Who made it»', async () => {
     const { user } = await openSettings();
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('textbox').filter(node => node.getAttribute('placeholder') !== 'e.g. Christmas')).toEqual([]);
     expect(settings().queryByText(/A name with no address identifies nobody/)).not.toBeInTheDocument();
 
     await user.click(toggle('How to keep it'));
@@ -364,7 +364,7 @@ describe('What else goes on the label', () => {
 
     await user.click(toggle('How to keep it'));
     await user.click(toggle('Who made it'));
-    expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('textbox').filter(node => node.getAttribute('placeholder') !== 'e.g. Christmas')).toEqual([]);
   });
 
   it('⚠️ says when a switch has nothing behind it, and stops saying it once there is something', async () => {
@@ -435,7 +435,7 @@ describe('What else goes on the label', () => {
 describe('a refused save', () => {
   it('⚠️ says so in a live region that was there before, and shows the value put back', async () => {
     const { source, user } = await openSettings();
-    const live = settings().getAllByRole('status').find(node => node.textContent === '') as HTMLElement;
+    const live = settings().getAllByRole('status').filter(node => node.textContent === '').at(-1) as HTMLElement;
     expect(live).toBeInTheDocument();
     source.refuse.labelSave = true;
     await user.click(toggle('Net weight'));

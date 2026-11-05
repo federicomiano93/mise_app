@@ -11,6 +11,7 @@ import {
   weighableTotalGrams,
 } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
+import { categoryOf } from '@mise/shared/recipe-shelf';
 import type { RecipeToSave } from './recipesStore';
 
 export type Row = Readonly<Record<string, unknown>>;
@@ -34,6 +35,11 @@ export interface Working {
   // through as it is (in `rest`).
   readonly labelName: string | null;
   readonly labelText: string | null;
+  // The recipe's category as the menu shows it now ('' = none), and what it showed when the editor opened. ⚠️ THE CATEGORY GOES
+  // TO THE STORE ONLY WHEN THE TWO DIFFER (cleanWorking): a recipe filed under a word that has since left the list shows «no
+  // category» here, and an unrelated save must not strip the word from it. The stored word is NOT in `rest` for that reason.
+  readonly category: string;
+  readonly categoryStart: string;
 }
 
 // The most a recipe's name may hold: the rules refuse a name of 200 characters or more (firestore.rules, `recipes`), and a
@@ -43,6 +49,8 @@ export const NAME_MAX_LENGTH = 199;
 
 // The four boxes nobody has typed in.
 const UNTOUCHED = { netWeight: null, shelfLife: null, labelName: null, labelText: null } as const;
+// No category chosen, and none to start from.
+const NO_CATEGORY = { category: '', categoryStart: '' } as const;
 
 let counter = 0;
 const nextKey = (): number => ++counter;
@@ -53,14 +61,23 @@ export const emptyRow = (): Row => ({ label: '', grams: '', unit: 'g' });
 const newRow = (): EditRow => ({ key: nextKey(), row: emptyRow() });
 
 // null = a new recipe: empty, with one empty row and the placeholders showing (P20).
-export function workingFrom(recipe: CatalogueRecipe | null): Working {
-  if (recipe === null) return { name: '', rows: [newRow()], rest: {}, ...UNTOUCHED };
-  const { name, ingredients, ...rest } = recipe;
+// `categories` is the venue's list: the starting choice is the recipe's word SPELLED AS THE LIST SPELLS IT, '' for none or a word
+// that has left the list. ⚠️ `category` and `archived` stay OUT of `rest`: the category travels only when moved (see Working), and
+// a save never sends the archive flag (the store keeps it).
+export function workingFrom(recipe: CatalogueRecipe | null, categories: readonly string[] = []): Working {
+  if (recipe === null) return { name: '', rows: [newRow()], rest: {}, ...UNTOUCHED, ...NO_CATEGORY };
+  const { name, ingredients, ...others } = recipe;
+  const rest: Record<string, unknown> = { ...others };
+  delete rest.category;
+  delete rest.archived;
+  const start = categoryOf(recipe, categories);
   return {
     name,
     rows: ingredients.map(row => ({ key: nextKey(), row: { ...row, unit: unitOf(row) } })),
     rest,
     ...UNTOUCHED,
+    category: start,
+    categoryStart: start,
   };
 }
 
@@ -69,13 +86,19 @@ export function workingFrom(recipe: CatalogueRecipe | null): Working {
 //
 // ⚠️ `rest` IS A WHITELIST, NEVER `workingFrom`'s «everything else»: that carries the original's `id` (and `bakery`), and
 // cleanWorking spreads `rest` into what is saved, so a copy that kept the id would OVERWRITE THE ORIGINAL. What a copy
-// takes: the pack weight, the shelf life, the mixing procedure and the image label's ingredients text. What it leaves: the id, the venue, the oven loss and the two
+// takes: the pack weight, the shelf life, the mixing procedure, the image label's ingredients text and the category. What it leaves: the archive flag, the id, the venue, the oven loss and the two
 // weighings (`lossPct`, `rawGrams`, `cookedGrams` are Food cost's, measured on the ORIGINAL's products).
 // ⚠️ EVERY ROW COMES AS IT IS, `rid` included: a rid is only unique within one recipe, and keeping it keeps the procedure's
 // step → row references valid (and a link to an ingredient or a recipe stays a link).
 // ⚠️ THE NAME IS `copyName(original)` MADE TO FIT THE NAME BOX: when the whole is too long, the ORIGINAL's name loses its
 // end, so the «(copy)» is never the part that is cut.
-export function duplicateWorking(recipe: CatalogueRecipe, copyName: (name: string) => string): Working {
+// ⚠️ THE CATEGORY IS COPIED (as the list spells it) AND COUNTS AS CHOSEN — the copy starts from «no category», so it is saved
+// with the original's. THE ARCHIVE NEVER IS: a copy is a recipe on the shelf, not in the fold.
+export function duplicateWorking(
+  recipe: CatalogueRecipe,
+  copyName: (name: string) => string,
+  categories: readonly string[] = [],
+): Working {
   let name = copyName(recipe.name);
   if (name.length > NAME_MAX_LENGTH) {
     const kept = recipe.name.slice(0, Math.max(0, recipe.name.length - (name.length - NAME_MAX_LENGTH))).trimEnd();
@@ -93,6 +116,8 @@ export function duplicateWorking(recipe: CatalogueRecipe, copyName: (name: strin
     rows: recipe.ingredients.map(row => ({ key: nextKey(), row: { ...row, unit: unitOf(row) } })),
     rest,
     ...UNTOUCHED,
+    category: categoryOf(recipe, categories),
+    categoryStart: '',
   };
 }
 
@@ -133,6 +158,7 @@ export function workingFromDraft(draft: unknown): Working {
     }),
     rest: { ...(grams > 0 ? { netWeightG: grams } : {}), ...(days !== null ? { shelfLifeDays: days } : {}) },
     ...UNTOUCHED,
+    ...NO_CATEGORY,
   };
 }
 
@@ -160,6 +186,8 @@ export function restoreWorking(value: unknown): Working | null {
     shelfLife: typeof held.shelfLife === 'string' ? held.shelfLife : null,
     labelName: typeof held.labelName === 'string' ? held.labelName : null,
     labelText: typeof held.labelText === 'string' ? held.labelText : null,
+    category: typeof held.category === 'string' ? held.category : '',
+    categoryStart: typeof held.categoryStart === 'string' ? held.categoryStart : '',
   };
 }
 
@@ -170,6 +198,8 @@ export const labelIngredientsBoxText = (working: Working): string =>
   working.labelText ?? (typeof working.rest.labelIngredientsText === 'string' ? working.rest.labelIngredientsText : '');
 
 export const setName = (working: Working, name: string): Working => ({ ...working, name });
+
+export const setCategory = (working: Working, category: string): Working => ({ ...working, category });
 
 export const setRowFields = (working: Working, key: number, fields: Row): Working => ({
   ...working,
@@ -270,6 +300,8 @@ export function cleanWorking(working: Working): RecipeToSave {
   // The image label's boxes, typed: handed over as typed (the store trims them, and an empty one takes the field away).
   if (working.labelName !== null) out.labelName = working.labelName;
   if (working.labelText !== null) out.labelIngredientsText = working.labelText;
+  // The category only when the choice MOVED from where the editor started ('' = «no category», a removal).
+  if (working.category !== working.categoryStart) out.category = working.category;
   return out as unknown as RecipeToSave;
 }
 

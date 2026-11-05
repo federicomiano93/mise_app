@@ -3,6 +3,7 @@ import { normalizeSearchText } from '@mise/shared/catalogue-model';
 import { isPackaging } from '@mise/shared/ingredient-kind';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { formatRate, pricePerKg } from '@mise/shared/price-model';
+import { withoutArchived } from '@mise/shared/recipe-shelf';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
@@ -65,7 +66,8 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
           : t('fc.notPriced');
       return { id: item.id, name: ingredientDisplayName(item).trim(), invoiceName: String(item.name).trim(), meta };
     };
-    const recipeOptions: Option[] = Object.values(recipes)
+    // ⚠️ AN ARCHIVED RECIPE IS NOT OFFERED (a NEW line); a line already made of one keeps costing and naming it elsewhere.
+    const recipeOptions: Option[] = withoutArchived(Object.values(recipes))
       .filter(recipe => String(recipe.name ?? '').trim() !== '')
       .map(recipe => ({ id: recipe.id, name: String(recipe.name).trim(), invoiceName: '', meta: '' }))
       .sort(byName);
@@ -92,7 +94,8 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
       .map(packagingOption)
       .sort(byName);
 
-    return { recipeOptions, ingredientOptions, packagingOptions, inactiveIngredientOptions, inactivePackagingOptions };
+    const everyRecipeArchived = Object.keys(recipes).length > 0 && withoutArchived(Object.values(recipes)).length === 0;
+    return { everyRecipeArchived, recipeOptions, ingredientOptions, packagingOptions, inactiveIngredientOptions, inactivePackagingOptions };
   }, [recipes, ingredients, t, money]);
 
   const wanted = normalizeSearchText(query);
@@ -127,7 +130,10 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
   }
   const shown = sections.reduce((count, section) => count + section.items.length, 0);
   const emptyText = query.trim() !== '' ? t('fc.nothingMatches')
-    : mode === 'packaging' ? t('fc.noPackagingYet') : t('fc.noRecipesYet');
+    : mode === 'packaging' ? t('fc.noPackagingYet')
+      // Recipes exist but all are archived: say that, rather than «no recipes yet».
+      : (mode === 'recipe' || both) && options.everyRecipeArchived ? t('cat.shelf.allArchived')
+        : t('fc.noRecipesYet');
 
   return (
     <Dialog

@@ -1,6 +1,7 @@
 import { useId, useState } from 'react';
 import type { Ref } from 'react';
 import { suggestLinks } from '@mise/shared/catalogue-model';
+import { withoutArchived } from '@mise/shared/recipe-shelf';
 import { useT } from '../i18n/useT';
 import type { StoredDoc } from './foodcostSource';
 import styles from './NameSuggest.module.css';
@@ -42,7 +43,7 @@ export function NameSuggest({ id, value, invalid, enabled, recipes, inputRef, on
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
 
-  const found = enabled && open ? suggestLinks({ ingredients: {}, recipes, query: value }) : { items: [], total: 0 };
+  const found = enabled && open ? suggestLinks({ ingredients: {}, recipes: withoutArchived(Object.values(recipes)), query: value }) : { items: [], total: 0 };
   const entries: Entry[] = found.items.map(item => ({ kind: 'recipe', id: String(item.refId), name: item.name }));
   if (found.total > found.items.length) entries.push({ kind: 'all', total: found.total });
   const shown = entries.length > 0;

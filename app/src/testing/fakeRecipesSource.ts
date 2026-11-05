@@ -36,7 +36,9 @@ export type FakeRecipesSource = RecipesSource & {
   release(): void;
   // Holds back ONLY the label profile's answer (the paper is not known yet) until releaseLabelConfig().
   holdLabelConfig(): void;
-  releaseLabelConfig(): void;
+  // `releaseLabelConfig(false)` answers from the phone's own copy (the server has not spoken yet); calling it again with no
+  // argument is the server's word.
+  releaseLabelConfig(fromServer?: boolean): void;
   // Every label-profile patch the screen sent, in the order it was sent (refused ones are not here). A merge write:
   // each is folded into `labelConfig`, and the watchers are told.
   labelSaves: Record<string, unknown>[];
@@ -188,9 +190,9 @@ export function fakeRecipesSource(
     hold() { held = true; },
     release() { held = false; fake.push(); },
     holdLabelConfig() { labelHeld = true; },
-    releaseLabelConfig() {
+    releaseLabelConfig(fromServer = true) {
       labelHeld = false;
-      if (!held) for (const w of labelWatchers) w.onChange(fake.labelConfig, FROM_SERVER);
+      if (!held) for (const w of labelWatchers) w.onChange(fake.labelConfig, fromServer ? FROM_SERVER : { fromServer: false });
     },
 
     watchRecipes: vi.fn<RecipesSource['watchRecipes']>(
