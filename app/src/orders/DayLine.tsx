@@ -83,7 +83,7 @@ export function DayLine({ supplier, lens }: { supplier: StoredDoc; lens: OrdersL
             const choice = choices.find(option => option.value === event.target.value);
             // Choosing «From …» is choosing what is already stored: nothing is written.
             if (!choice || choice.kind === 'past') return;
-            store.setDay(supplier, choice.day);
+            void store.setDay(supplier, choice.day);
             setSaid(before => ({ id: before.id + 1, text: announce(choice) }));
           }}
         >

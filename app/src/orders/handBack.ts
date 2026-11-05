@@ -23,6 +23,10 @@ export const PLACE_ALL_OPENER = 'place-all';
 export const CLEAR_OPENER = 'clear';
 // The list's send arrow, beside the search box: where Back from the send screen returns the focus.
 export const SEND_OPENER = 'send';
+// A pending banner's «Placed …» (the supplier's id), in the notices under the bell: where Back from its confirm screen returns the
+// focus. Gone once the order was recorded: then the supplier's row takes it (pendingFallback).
+export const pendingOpener = (id: string): string => `pending:${id}`;
+export const pendingFallback = (name: string): string | null => (name.startsWith('pending:') ? supplierOpener(name.slice('pending:'.length)) : null);
 
 export interface HandBack {
   // A control that opens a screen. null when it goes away.
@@ -31,8 +35,8 @@ export interface HandBack {
   expect(name: string): void;
   // The screen above comes back by a move that is not a step back: nobody is owed the focus.
   forget(): void;
-  // Gives the focus to the opener that was expected, if it is still there, and forgets it.
-  deliver(): void;
+  // Gives the focus to the opener that was expected, if it is still there, and forgets it. Gone, `instead` may name another.
+  deliver(instead?: (name: string) => string | null): void;
   // Like deliver(), but only when the opener that is expected is this one: a screen that must not take the focus from
   // another opener's hand-back (a supplier opened FROM the list) asks for its own door only.
   deliverIf(name: string): void;
@@ -92,11 +96,12 @@ export function useHandBackState(): HandBack {
     deliverIf(name) {
       if (wanted.current === name) this.deliver();
     },
-    deliver() {
+    deliver(instead) {
       const name = wanted.current;
       if (name === null) return;
       wanted.current = null;
-      const row = openers.current.get(name);
+      const fallback = instead?.(name);
+      const row = openers.current.get(name) ?? (fallback ? openers.current.get(fallback) : undefined);
       if (row) reveal(row).focus();
     },
   }), []);

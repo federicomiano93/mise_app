@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useId, useRef } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { Bell, ChevronRight } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { todayISO } from '@mise/shared/day';
 import { turningOnForgets } from '@mise/shared/delivery-check';
@@ -11,6 +11,8 @@ import { SettingSwitch } from '../ui/SettingSwitch';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useOrders, useOrdersStore } from './OrdersContext';
+import { askNoticePermission, noticePermission } from './calendarNotices';
+import type { NoticePermission } from './calendarNotices';
 import { HISTORY_DOOR, SETTINGS_OPENER, useHandBack } from './handBack';
 import { FROM_LIST, cameFromList, useLeave } from './ordersNav';
 import { HISTORY_PATH, ORDERS_PATH } from './ordersPath';
@@ -34,6 +36,9 @@ export function SettingsScreen() {
   const handBack = useHandBack();
   const leave = useLeave(ORDERS_PATH, () => { handBack.expect(SETTINGS_OPENER); });
   const titleId = useId();
+  const noticesTitle = useId();
+  // What this phone's browser says about notifications; the button asks, and the answer redraws.
+  const [permission, setPermission] = useState<NoticePermission>(noticePermission);
   const title = useRef<HTMLHeadingElement>(null);
   const screen = useRef<HTMLElement>(null);
   const door = useCallback((node: HTMLButtonElement | null) => { handBack.register(HISTORY_DOOR, node); }, [handBack]);
@@ -101,6 +106,31 @@ export function SettingsScreen() {
             />
           </div>
         </div>
+
+        {/* Notices on THIS phone (step 3f-6, parity R12): per device, no push. The explanation, then what the browser says. */}
+        <section className={styles.card} aria-labelledby={noticesTitle}>
+          <div className={styles.block}>
+            <h2 id={noticesTitle} className={styles.doorTitle}>{t('ord.settings.noticesTitle')}</h2>
+            <p className={styles.sub}>{t('ord.settings.noticesAbout')}</p>
+            {permission === 'unsupported' ? <p>{t('ord.settings.noticesUnsupported')}</p> : null}
+            {permission === 'granted' ? (
+              <p className={styles.status}>
+                <Bell aria-hidden="true" />
+                <span>{t('ord.settings.noticesOn')}</span>
+              </p>
+            ) : null}
+            {permission === 'denied' ? <p>{t('ord.settings.noticesBlocked')}</p> : null}
+            {permission === 'default' ? (
+              <Button
+                className={styles.enable}
+                onPress={() => { void askNoticePermission().then(setPermission); }}
+              >
+                <Bell aria-hidden="true" />
+                {t('ord.settings.noticesEnable')}
+              </Button>
+            ) : null}
+          </div>
+        </section>
       </div>
       {confirmDialog}
     </section>

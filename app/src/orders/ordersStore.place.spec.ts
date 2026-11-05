@@ -363,9 +363,10 @@ describe('ordersStore — the day line (parity D7)', () => {
   it('writes the chosen day at once, without the pause', async () => {
     const h = await started({ draft: { entries: { flour: { qty: 4, stock: 0 } }, days: { mill: TODAY } } });
 
-    h.store.setDay(mill, '2026-10-29');
+    const saved = h.store.setDay(mill, '2026-10-29');
     await h.settle();
 
+    await expect(saved).resolves.toBe(true);
     expect(h.source.writes.at(-1)).toStrictEqual({ updatedAt: NOW, days: { mill: '2026-10-29' } });
     expect(h.store.getSnapshot().draft.days.mill).toBe('2026-10-29');
     expect(h.busy()).toBe(0);
@@ -375,11 +376,20 @@ describe('ordersStore — the day line (parity D7)', () => {
     const h = await started({ draft: { entries: { flour: { qty: 4, stock: 0 } }, days: { mill: TODAY } } });
     h.source.refuseWrites = true;
 
-    h.store.setDay(mill, '2026-10-29');
+    const saved = h.store.setDay(mill, '2026-10-29');
     await h.settle();
 
+    await expect(saved).resolves.toBe(false);
     expect(h.store.getSnapshot().draft.days.mill).toBe(TODAY);
     expect(h.messages).toContainEqual({ kind: 'day-not-saved' });
+  });
+
+  it('the day already stored answers saved at once and writes nothing (step 3f-6)', async () => {
+    const h = await started({ draft: { entries: { flour: { qty: 4, stock: 0 } }, days: { mill: TODAY } } });
+    const before = h.source.writes.length;
+
+    await expect(h.store.setDay(mill, TODAY)).resolves.toBe(true);
+    expect(h.source.writes.length).toBe(before);
   });
 });
 

@@ -5,9 +5,12 @@ import { spellShortDate, todayISO } from '@mise/shared/day';
 import { isFutureDay, nextDeliveryAfter } from '@mise/shared/order-day';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import type { MessageKey } from '../i18n/en';
+import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { DeliveryDoors } from './DeliveryDoors';
+import { NoticesPanel } from './NoticesPanel';
+import { TodayOrders } from './TodayOrders';
 import { useOrders } from './OrdersContext';
 import { dayTranslate, deliveryDaysText } from './dayWords';
 import { CLEAR_OPENER, PLACE_ALL_OPENER, SEND_OPENER, SETTINGS_OPENER, itemsOpener, supplierOpener, useHandBack } from './handBack';
@@ -34,6 +37,8 @@ type Props = {
   // The debt banner and the two doors under the head (step 3f-5), drawn only while the venue checks deliveries.
   onIncoming: () => void;
   onReorder: () => void;
+  // «Placed yesterday» on a pending banner (step 3f-6): the supplier's confirm screen, recording under that day.
+  onOpenPending: (id: string, day: string) => void;
 };
 
 const HEADING_KEY = {
@@ -46,7 +51,7 @@ const HEADING_KEY = {
 // ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a component that stays mounted, and
 // only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard where the person
 // left them (the current app built the box once for the same reason).
-export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings, onIncoming, onReorder }: Props) {
+export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings, onIncoming, onReorder, onOpenPending }: Props) {
   const { t } = useT();
   const { config, draft, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
@@ -136,6 +141,14 @@ export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, o
           </div>
         ) : null}
       </div>
+
+      <PartBoundary>
+        <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} />
+      </PartBoundary>
+
+      <PartBoundary>
+        <TodayOrders onOpenSupplier={onOpenSupplier} />
+      </PartBoundary>
 
       <DeliveryDoors onIncoming={onIncoming} onReorder={onReorder} />
 
