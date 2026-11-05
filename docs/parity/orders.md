@@ -559,6 +559,22 @@ of the offline copy: it waits for the first snapshot with `fromCache` false, and
 reads as it did when typed, or it would put back quantities of an order a colleague has placed. The twin's reviewed specs
 should gain the cases of `tests/draft-journal.test.mjs`.
 
+F-16. **A correction typed while the write it corrects is in the air (found 1 Nov 2026 on the current app; Mise 2 read, NOT
+run).** Type 5, the write is sent, correct to 0 before a snapshot has shown the 5 (about 5 s on the lab tablet on a freshly
+opened page): the 0 matches `known`, so nothing carried it, the 5 landed, and it came back on screen and on the server. Measured
+on the current app's emulator, before and after. `differences` in `app/src/orders/draftSync.ts` (line 208) measures against
+`known` alone, so reading it the same should happen in Mise 2. And changing one's mind twice: 5, 0, 5 again, with the first 5
+answered inside the last pause, released the claim on the last 5 (the landing path, lines 297 and 302, has no `inAir` guard) and
+ended with the phone showing 5, the server at 0 and the other phone empty. The refusal path (line 317) can also hand a refused 5
+back over a 0 already in the air. The current app's fix, PR #444, to port before the switch, all in `js/orders/draft.js`:
+`differences` also claims a field or a day a write in the air says differently, only for lines and days the page still holds;
+the landing path releases nothing a later write in the air carries; the refusal path treats such a field as typed over. ⚠️ When
+the F-15 note is ported, it needs this too: a correction matching `known` is still noted, with what the write in the air said
+(`air`, `saveJournal`), because on the next open that write may have landed from Firestore's queue, and both readings count as
+still ours (`stillOurs`); a correction that needed nothing does not count against a line's day stamp, unless an order names that
+line (`settleRestored`). The twin's reviewed specs should gain the d1–d19 cases of `tests/draft-claims.test.mjs` and the
+«correction in the air» block of `tests/draft-journal.test.mjs`.
+
 ## Decisions
 
 ### For Federico (they change what a screen shows or does)
