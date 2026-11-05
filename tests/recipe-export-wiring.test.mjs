@@ -56,7 +56,7 @@ test('both libraries are precached, so Export works offline', () => {
 
 test('every export word exists in English and Italian, and an Italian one differs where it should', () => {
   const keys = ['button', 'title', 'pdf', 'pdfNote', 'excel', 'excelNote', 'preparing', 'ready', 'download', 'share', 'close',
-    'needsConnection', 'failed', 'fileFallback', 'sheetFallback'].map(k => `export.${k}`);
+    'needsConnection', 'failed', 'fileFallback', 'sheetFallback', 'roundWeights', 'roundNote'].map(k => `export.${k}`);
   const d = _dictionaries();
   for (const key of keys) {
     for (const lang of ['en', 'it']) {
@@ -85,8 +85,8 @@ test('the code that goes into the error report is one of two fixed words', () =>
   assert.equal(exportErrorCode(undefined), 'build');
 });
 
-test('the title names trays only when the dough IS the trays', () => {
-  // [logic, trays, typed total, trays named in the title]
+test('the file name carries trays only when the dough IS the trays', () => {
+  // [logic, trays, typed total, trays named in the file name]
   const cases = [
     ['orders', 3, 0, 0], ['total', 3, 0, 0], ['both', 3, 500, 0], ['both', 3, 0, 0],
     ['trays', 3, 0, 3], ['trays', 3, 500, 3], ['trays', 0, 0, 0], ['trays', 2.9, 0, 2],
@@ -111,6 +111,22 @@ test('the dialog: Download is a real link, Share is for the PDF only and asks ca
   assert.match(src, /e\.key !== 'Tab'/);
   // Words are read when the dialog draws, never when the module loads.
   assert.doesNotMatch(src, /^(?:const|let|var) \w+ = t\(/m);
+});
+
+test('the dialog: the rounding switch is ON at each opening, goes to the PDF only, and sits in the Tab order', () => {
+  const src = read('js/export-sheet.js');
+  assert.match(src, /let rounded = true;/);
+  assert.match(src, /buildPdfBlob\(model, \{ rounded \}\)/);
+  assert.match(src, /buildXlsxBlob\(model, totalLabel, t\('export\.sheetFallback'\)\)/);
+  assert.doesNotMatch(src, /buildXlsxBlob\([^)]*rounded/);
+  assert.match(src, /hasRoundableRows\(model\)/);
+  assert.match(src, /setAttribute\('role', 'switch'\)/);
+  assert.match(src, /return \[\.\.\.routes, \.\.\.\(roundSwitch \? \[roundSwitch\] : \[\]\), cancel\];/);
+  assert.match(src, /make\('label', 'export-round'\)/);
+  assert.match(read('tokens.css'), /\.export-round \{[^}]*min-height: 56px/);
+  const d = _dictionaries();
+  assert.equal(translate(d, 'en', 'export.roundWeights'), 'Round the weights in the PDF');
+  assert.equal(translate(d, 'it', 'export.roundWeights'), 'Arrotonda i pesi nel PDF');
 });
 
 test('the Calculator exports the model the card renders, with the trays only when the dough IS the trays', () => {

@@ -323,14 +323,15 @@ export function calc(id) {
   if (revealed[id]) showResult(resultId); else hideResult(resultId);
 }
 
-// The trays the exported title may name: only when the dough IS the trays (a trays recipe, or a
-// trays-plus-total one with nothing typed in the total), otherwise 0 and the title says the grams.
+// The trays the exported FILE NAME may carry («Pizza_x3.pdf»): only when the dough IS the trays (a
+// trays recipe, or a trays-plus-total one with nothing typed in the total), otherwise 0 and the
+// file name says the grams. The title on the page is the recipe's name only.
 function exportTrays(recipe) {
   return exportTraysFor(recipe.logic, traysFor(recipe.id), totalInputFor(recipe.id));
 }
 
 // What the PDF / Excel export is made from: the SAME rows the result card shows (never recomputed),
-// unrounded, plus the trays the title may name. null when nothing is calculated.
+// unrounded, plus the trays the file name may carry. null when nothing is calculated.
 export function exportModelFor(id) {
   const model = lastRecipe[id];
   if (!model) return null;
