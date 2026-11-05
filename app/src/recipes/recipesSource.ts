@@ -50,12 +50,23 @@ export interface RecipesSource {
     onChange: (data: Record<string, unknown> | null, meta: RecipesMeta) => void,
     onError: (err: unknown) => void,
   ): () => void;
+  // The shop computers that report in (print-agents), live: each document carries a `lastSeenAt` heartbeat.
+  // No metadata: a heartbeat is a statement about RIGHT NOW, so the answer is believed whichever way it arrived.
+  watchPrintAgents(
+    onChange: (list: StoredDoc[]) => void,
+    onError: (err: unknown) => void,
+  ): () => void;
+  // Puts a label job in the queue (print-jobs) for the shop computer to take. The job is built by
+  // @mise/shared/print-queue-model; the venue stamp is applied here. REJECTS when the write cannot be made.
+  queuePrintJob(job: Readonly<Record<string, unknown>>): Promise<void>;
 }
 
 const RECIPES = 'recipes';
 const INGREDIENTS = 'ingredients';
 const CONFIG = 'config';
 const LABELS_DOC = 'labels';
+const PRINT_AGENTS = 'print-agents';
+const PRINT_JOBS = 'print-jobs';
 
 // A copy of the document without any of the price keys (header).
 export function withoutPrice(doc: StoredDoc): StoredDoc {
@@ -72,6 +83,8 @@ export function createFirestoreRecipesSource(
   const recipesPath = buildPath(locationId, RECIPES);
   const ingredientsPath = buildPath(locationId, INGREDIENTS);
   const configPath = buildPath(locationId, CONFIG);
+  const printAgentsPath = buildPath(locationId, PRINT_AGENTS);
+  const printJobsPath = buildPath(locationId, PRINT_JOBS);
 
   // A live listener whose Firestore may not be loaded yet. The returned stop works at any moment.
   function listen(subscribe: (kit: FirestoreKit) => () => void, onError: (err: unknown) => void): () => void {
@@ -135,5 +148,27 @@ export function createFirestoreRecipesSource(
         onError(err);
       },
     ), onError),
+
+    // ⚠️ QUIET (warn): a venue that has never run an agent has no documents here, and «nothing is listening» is
+    // the right answer for it rather than an error. One document per shop computer, so the cost is a single read
+    // at a time (P14), attached only while the section is open.
+    watchPrintAgents: (onChange, onError) => listen(kit => kit.fs.onSnapshot(
+      kit.fs.collection(kit.db, printAgentsPath) as Query,
+      snap => onChange(snap.docs.map(d => ({ ...d.data(), id: d.id }))),
+      err => {
+        console.warn('watchPrintAgents failed:', err);
+        onError(err);
+      },
+    ), onError),
+
+    // ⚠️ NOT LOCAL-FIRST, THE ONE WRITE THAT MUST NOT BE (the current app's rule, catalogue-store.js). Everything
+    // else belongs to the venue and can wait for the network; a print job is a request to a machine in another
+    // room, and pretending it was queued when it was not leaves somebody standing at a printer that will never
+    // move. So it is awaited and it rejects, and the screen says so. The venue stamp is applied here, never by a
+    // caller: the rules check `bakery` against the folder the document lands in.
+    queuePrintJob: async job => {
+      const kit = await firestore();
+      await kit.fs.addDoc(kit.fs.collection(kit.db, printJobsPath), { ...job, bakery: locationId });
+    },
   };
 }

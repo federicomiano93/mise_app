@@ -43,9 +43,23 @@ function handSource() {
     onLabelError = error;
     return stopLabel;
   });
-  const source: RecipesSource = { watchRecipes, watchIngredients, watchLabelConfig };
+  let onAgents: ((list: StoredDoc[]) => void) | null = null;
+  let onAgentsError: ((err: unknown) => void) | null = null;
+  const stopAgents = vi.fn();
+  const watchPrintAgents = vi.fn<RecipesSource['watchPrintAgents']>((change, error) => {
+    onAgents = change;
+    onAgentsError = error;
+    return stopAgents;
+  });
+  const queuePrintJob = vi.fn<RecipesSource['queuePrintJob']>(() => Promise.resolve());
+  const source: RecipesSource = { watchRecipes, watchIngredients, watchLabelConfig, watchPrintAgents, queuePrintJob };
   return {
     source,
+    watchPrintAgents,
+    queuePrintJob,
+    stopAgents,
+    agents: (list: StoredDoc[]) => onAgents!(list),
+    agentsFail: () => onAgentsError!(new Error('permission-denied')),
     watchRecipes,
     watchIngredients,
     watchLabelConfig,
@@ -168,6 +182,44 @@ describe('the Recipe catalogue store', () => {
     expect(said).toHaveBeenCalledTimes(1);
     expect(said).toHaveBeenCalledWith({ kind: 'recipes-stream-broken' });
     expect(warn).toHaveBeenCalled();
+  });
+
+  test('the shop computers are watched while the store runs and let go of when it stops', () => {
+    const { store, watchPrintAgents, stopAgents, agents } = makeStore();
+    expect(store.getSnapshot().printAgents).toEqual([]);
+    store.start();
+    expect(watchPrintAgents).toHaveBeenCalledTimes(1);
+    agents([{ id: 'pc', lastSeenAt: '2026-10-13T09:00:00.000Z' }]);
+    expect(store.getSnapshot().printAgents).toEqual([{ id: 'pc', lastSeenAt: '2026-10-13T09:00:00.000Z' }]);
+    store.stop();
+    expect(stopAgents).toHaveBeenCalledTimes(1);
+  });
+
+  test('⚠️ the heartbeats are NEVER written to storage, and a stored one is never read back', () => {
+    const { store, data, agents } = makeStore({ 'catalogue-print-agents': JSON.stringify([{ id: 'old', lastSeenAt: '2026-10-13T09:00:00.000Z' }]) });
+    expect(store.getSnapshot().printAgents).toEqual([]);
+    const before = new Map(data);
+    store.start();
+    agents([{ id: 'pc', lastSeenAt: '2026-10-13T09:00:00.000Z' }]);
+    expect(new Map(data)).toEqual(before);
+    expect([...data.values()].filter(value => value.includes('"pc"'))).toEqual([]);
+  });
+
+  test('a failed agents watch leaves «nobody is listening» and says so only in a warning', () => {
+    const { store, agents, agentsFail, warn } = makeStore();
+    store.start();
+    agents([{ id: 'pc', lastSeenAt: '2026-10-13T09:00:00.000Z' }]);
+    agentsFail();
+    expect(store.getSnapshot().printAgents).toEqual([]);
+    expect(warn).toHaveBeenCalled();
+  });
+
+  test('a job goes to the source as it is, and a refusal reaches the caller (it is not local-first)', async () => {
+    const { store, queuePrintJob } = makeStore();
+    await store.queuePrintJob({ payload: '^XA^XZ' });
+    expect(queuePrintJob).toHaveBeenCalledWith({ payload: '^XA^XZ' });
+    queuePrintJob.mockRejectedValueOnce(new Error('offline'));
+    await expect(store.queuePrintJob({ payload: '^XA^XZ' })).rejects.toThrow('offline');
   });
 
   test('opening counts one more, written to the shared key', () => {
