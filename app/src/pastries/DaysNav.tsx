@@ -4,9 +4,9 @@ import { Check } from 'lucide-react';
 import { WEEKDAYS } from '@mise/shared/pastries-model';
 import type { Weekday } from '@mise/shared/pastries-model';
 import { useT } from '../i18n/useT';
+import { SPLIT_QUERY } from '../ui/split';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { usePastries } from './PastriesContext';
-import { SPLIT_QUERY } from './split';
 import { tabId, weekdayLabel, weekdayShortLabel } from './weekdays';
 import styles from './DaysNav.module.css';
 

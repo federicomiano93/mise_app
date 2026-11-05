@@ -31,6 +31,29 @@ describe('Dialog', () => {
     expect(dialog).toHaveAccessibleDescription(/First sentence\.\s+Second sentence\./);
   });
 
+  // A one-sentence notice has no title (the current app's alert): the sentence is the dialog's name,
+  // or a screen reader announces just «dialog».
+  it('is named by its message, and draws no heading, when it has no title', () => {
+    draw({ title: undefined, role: 'alertdialog', message: 'Flour: not counted here.' });
+    const dialog = screen.getByRole('alertdialog', { name: 'Flour: not counted here.' });
+    expect(within(dialog).queryByRole('heading')).not.toBeInTheDocument();
+  });
+
+  // ⚠️ The same paragraph as both the name and the description is read out twice.
+  it('names a titled dialog by its title and describes it by its message', () => {
+    draw({ role: 'alertdialog', message: 'You will lose it.' });
+    const dialog = screen.getByRole('alertdialog', { name: 'Discard?' });
+    expect(dialog).toHaveAccessibleDescription('You will lose it.');
+    expect(within(dialog).getByRole('heading', { name: 'Discard?' })).toBeInTheDocument();
+  });
+
+  it('names an untitled dialog by its message and gives it no description of its own', () => {
+    draw({ title: undefined, role: 'alertdialog', message: 'Flour: not counted here.' });
+    const dialog = screen.getByRole('alertdialog', { name: 'Flour: not counted here.' });
+    expect(dialog).not.toHaveAttribute('aria-describedby');
+    expect(dialog).not.toHaveAccessibleDescription();
+  });
+
   it('is not described by anything when it has no message', () => {
     draw({ role: 'alertdialog' });
     expect(screen.getByRole('alertdialog')).not.toHaveAttribute('aria-describedby');

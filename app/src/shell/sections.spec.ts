@@ -6,6 +6,7 @@ import { hasScreen } from './sectionScreens';
 import {
   MORE,
   SECTIONS,
+  STOCKTAKE_UNAVAILABLE_SCREEN,
   arrangeSections,
   moreIsCurrent,
   screenNameFor,
@@ -156,11 +157,34 @@ describe('screenNameFor', () => {
     expect(screenNameFor(pathname)).toBe(expected);
   });
 
+  // The Stocktake is three screens in one section: the month's list (whichever month), one product,
+  // and «What it cost». Changing month is not a new screen.
+  it.each([
+    ['/stocktake', 'stocktake'],
+    ['/stocktake/', 'stocktake'],
+    ['/stocktake/2026-10', 'stocktake'],
+    ['/stocktake/2019-02/', 'stocktake'],
+    ['/stocktake/2026-10/product/flour', 'stocktake-product'],
+    ['/stocktake/2026-10/product/flour/', 'stocktake-product'],
+    ['/stocktake/2026-10/product/a%2Fb%20c', 'stocktake-product'],
+    ['/stocktake/2026-10/cost', 'stocktake-cost'],
+    ['/stocktake/2026-10/cost/', 'stocktake-cost'],
+    ['/stocktake/2026-13/cost', 'stocktake'],
+    ['/stocktake/nonsense/product/flour', 'stocktake'],
+    ['/stocktake/2026-10/product', 'stocktake'],
+    ['/stocktake/2026-10/product/a/b', 'stocktake'],
+    ['/stocktake/2026-10/cost/more', 'stocktake'],
+    ['/stocktake-archive', 'not-found'],
+  ])('%s → %s', (pathname, expected) => {
+    expect(screenNameFor(pathname)).toBe(expected);
+  });
+
   // The usage record silently drops a name it does not accept: a new section whose id broke the
   // rule would simply never be counted.
   it('only ever gives a name the usage record accepts, «m2:» included', () => {
     const names = [
       ...SECTIONS.map(section => section.id), 'pastries-records', 'pastries-editor', 'more', 'not-found',
+      'stocktake-product', 'stocktake-cost', STOCKTAKE_UNAVAILABLE_SCREEN,
     ];
     for (const name of names) expect(`m2:${name}`).toMatch(SCREEN_RE);
   });

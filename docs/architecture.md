@@ -37,7 +37,10 @@ both, and the switch keeps the address) and it has consequences that every chang
   `active-location`, `offline-cache-uid`, `device-id`, `device-ping-*`, `error-reports`, `usage-*`.
   Either app's sign-out or venue switch runs the same keep-list (`KEEP_PREFIXES`, in
   `js/local-data.js` and `shared/src/local-data.ts`) over the other's keys: a key Mise 2 must keep
-  across a venue switch starts with one of those prefixes, in both files.
+  across a venue switch starts with one of those prefixes, in both files. The Stocktake's two copies
+  are NOT kept: `inventory-<lid>-<YYYY-MM>` (the month as last seen) and
+  `inventory-unsaved-<lid>-<YYYY-MM>` (counts typed here that the browser's own database has not
+  shown back yet); the venue is in the key, so a switch wipes them and they cannot cross venues.
 - **One service worker scope.** The current `sw.js` controls `/mise2/` too. Mise 2 registers no
   service worker until step 5, when it takes over at the same path and name.
 - **No App Check, no reCAPTCHA** (his decision, PR #212) — in either app.
@@ -98,6 +101,16 @@ Aria does not support Preact. The numbers are below.
   (`PastriesContext.tsx`), and the screens: `PastriesSection` (the frame and the address),
   `DaysNav`, `DayPanel`, `Editor`, `Records`. `shell/sectionScreens.ts` lists it, so its code is
   fetched only when somebody opens it. Its parity list is `docs/parity/pastries.md`.
+- `stocktake/` — the Stocktake («Magazzino»), the second section, built the same way: a source
+  (`stocktakeSource.ts`, a port of `js/inventory/firebase-inventory.js`: one month's document, the
+  ingredients, their prices, a month's orders read once), a store (`stocktakeStore.ts`: ONE month at
+  a time — `openMonth()` follows the month in the address — with the outbox of `inventory-outbox`,
+  local-first and never rolled back, a closed month refusing every change, and nothing typed into
+  a box until the month has answered once), a context (`StocktakeContext.tsx`), and the screens:
+  `StocktakeSection` (the frame, the address `/stocktake/<YYYY-MM>[/product/<id>|/cost]`, the
+  split from 1000px), `MonthBar`, `CountList` with `ProductRow` and `CountBox`, `StocktakeProduct`,
+  `StocktakeCost`, `MonthActions`. The money comes from the venue's country through
+  `session/useMoney.ts`. Its parity list is `docs/parity/stocktake.md`.
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the
@@ -113,12 +126,23 @@ Pure logic only, no DOM types. Each module is a PORT of a `js/` file, and its sp
 against BOTH files (`describe.each` over the TypeScript port and the `js/` original), so the two
 apps cannot drift apart while both are live. `parity.spec.ts` compares the full ports export by
 export (names, constants, frozen-ness, function names and arity); a partial port (`membership`,
-`location-id`, `pastries-model`) is not paired and its spec says why. `odd-inputs.spec.ts` feeds every
-export odd inputs and compares the two. A quirk of the original that no real input can reach is
+`location-id`, `pastries-model`, `market`, `price-model`, `inventory-value`) is not paired and its spec says why, and
+compares what it does port with the `js/` file itself. `currency` is an ADAPTED port, also not paired:
+the original keeps the venue's money in a module variable (`setCurrency`), and Mise 2 never keeps a
+venue fact in a module variable, so the port is stateless (`moneyOf(symbol, layout)` returns the
+`Money` that the formatting functions are handed, as `formatMoney` and `formatRate` of `price-model`
+are); its spec runs each case against the `js/` module after `setCurrency` and against the port with
+`moneyOf`, and demands the same text. `odd-inputs.spec.ts` feeds every export odd inputs and compares
+the two. A quirk of the original that no real input can reach is
 copied, not tidied, and marked where it sits: fixing it is a bug fix to BOTH files at once, and
 `odd-inputs.spec.ts` fails until they agree. Today: join-code, push-model, home-cards, away-model,
 allergen-model, sections, firebase-target, local-data, same-data, error-model, device-model,
-usage-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock.
+usage-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock, pack-size,
+order-unit, ingredient-name, order-cost, inventory-model, inventory-outbox, inventory-purchases,
+market (partial: the country and the money, not the label
+vocabulary), price-model (partial: the reading half, not the writing half or the dictionary lookups),
+inventory-value (partial: everything but `formatTotal`, which reads the money from a module variable;
+the app writes money with `formatMoney(value, money)` of `price-model`), currency (adapted, stateless).
 
 ## The session
 
@@ -158,6 +182,16 @@ and where each comes from:
    `node --test` would run them and fail. A port runs its tests against both apps.
 8. **Load sections lazily** once they are real, so the first screen stays light: a built section is
    listed in `shell/sectionScreens.ts`, which loads it on first use, behind `SectionRoute`'s gate.
+9. **The shell has ONE scroll area (its `main`) and resets it to the top at every address.** That
+   is right between sections and wrong inside one whose list and detail are separate addresses
+   (the Stocktake: a product opened from a long list). Such a section owns the scroll with
+   `useOwnScrollArea()` (`shell/scrollArea.tsx`): the shell then resets only when the SECTION
+   changes (leaving an owner for another section resets as ever), and the section must handle EVERY
+   move inside itself. On a phone, where the detail replaces the list: write the list's place down
+   before opening the detail, restore it on Back, and put every other new screen at the top. On the
+   split, where both are on screen: leave the list alone. A section that does not own the scroll
+   needs nothing. Specs plant the position on the `main` element (jsdom does not scroll):
+   `StocktakeSection.scroll.spec.tsx`.
 
 ## Testing and CI
 
@@ -233,6 +267,15 @@ step 5. Verdict of step 2c: no change of framework; go on with the sections.
   store may still hold only an empty local copy (`daysLoaded` in the Pastries store).
 - A screen that blocks leaving (unsaved edits) uses the router's `useBlocker`, which covers every
   way out (Back, the browser's Back, the rail, a day picked in a list), not the Back button alone.
+- On a split, the right-hand side sticks to the top of the scroll area and scrolls on its own
+  (never taller than the screen less `--topbar-h`): otherwise a detail opened from far down a long
+  list opens out of sight (`stocktake/StocktakeSection.module.css`).
+- The focus owed to the button that opened a detail is promised when the detail OPENS, not when
+  its own Back is pressed: a phone's back gesture is the browser's Back and runs no code of the
+  screen it leaves (`stocktake/handBack.ts`).
+- A bar stuck to the bottom of a phone takes the rows' room: at 296×668 the Stocktake's month bar
+  hid every product of the first screen. Stick a bar on a phone only for the screen's primary
+  action (Pastries' Confirm); secondary actions go after the list.
 
 - Vitest empties CSS, even `?raw`, unless told otherwise.
 - Git Bash rewrites `--base=/mise2/` into a Windows path.

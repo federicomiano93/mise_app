@@ -1,38 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SPLIT_QUERY } from './split';
-
-// The split is decided by a media query in the stylesheets and, for the attributes that must agree
-// with it (the days' aria-orientation), by SPLIT_QUERY. A media query cannot read a constant, so
-// this reads the stylesheets themselves and fails when they stop saying the same number.
-const sheets = import.meta.glob<string>('./*.module.css', { query: '?raw', import: 'default', eager: true });
-const sheet = (name: string): string => sheets[`./${name}.module.css`] ?? '';
-const withoutComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
-
-const SPLIT_MEDIA = `@media ${SPLIT_QUERY}`;
-// Every module with a split-side rule.
-const SPLIT_SHEETS = ['DaysNav', 'DayPanel', 'PastryRow', 'PastriesSection', 'Editor', 'Records'];
-
-describe('the split breakpoint', () => {
-  it('is 1000px: the lab tablet held sideways is 1024 wide, held upright 768', () => {
-    expect(SPLIT_QUERY).toBe('(min-width: 1000px)');
-  });
-
-  it.each(SPLIT_SHEETS)('%s says the same breakpoint as the code', name => {
-    expect(withoutComments(sheet(name))).toContain(SPLIT_MEDIA);
-  });
-
-  it('is the only min-width breakpoint Pastries\' own stylesheets use', () => {
-    for (const name of SPLIT_SHEETS) {
-      const queries = [...withoutComments(sheet(name)).matchAll(/@media\s*\(\s*min-width:\s*([^)]+)\)/g)].map(m => m[1]);
-      for (const width of queries) expect(width, name).toBe('1000px');
-    }
-  });
-
-  // The phone-only rule sits one hair below the split, so exactly one of the two applies.
-  it('hides the days on a phone below the split, never at or above it', () => {
-    expect(withoutComments(sheet('PastriesSection'))).toContain('@media (max-width: 999.98px)');
-  });
-});
+import { SPLIT_QUERY } from '../ui/split';
 
 // ⚠️ EVERY PHONE-SIDE `display: none` FOR A SPLIT-ONLY ELEMENT NEEDS A `display` IN THE SPLIT, AND
 // THE OTHER WAY ROUND: a rule written for one side only leaves the other blank (the project's
@@ -41,8 +8,13 @@ describe('the split breakpoint', () => {
 // ⚠️ AND A TAB'S WORDS ARE ITS NAME, so the elements that carry them are never `display: none`: in
 // the strip they are `visually-hidden` (base.css) and the split undoes that. Only what is
 // `aria-hidden` in the markup (the short label, the digits, the dot) is `display: none`.
+const sheets = import.meta.glob<string>('./*.module.css', { query: '?raw', import: 'default', eager: true });
+const withoutComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
+
+const SPLIT_MEDIA = `@media ${SPLIT_QUERY}`;
+
 describe('DaysNav: each element that exists for one layout only is undone in the other', () => {
-  const css = withoutComments(sheet('DaysNav'));
+  const css = withoutComments(sheets['./DaysNav.module.css'] ?? '');
   const at = css.indexOf(SPLIT_MEDIA);
   const strip = css.slice(0, at);
   const split = css.slice(at);

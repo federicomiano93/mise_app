@@ -14,6 +14,7 @@ import { routes as appRoutes } from '../routes';
 import { SessionProvider } from '../session/SessionContext';
 import type { Session } from '../session/session';
 import { fakePastriesSource } from './fakePastriesSource';
+import { fakeStocktakeSource } from './fakeStocktakeSource';
 import { fakeStore } from './fakeSession';
 
 type Options = {
@@ -37,7 +38,7 @@ export function renderApp(path: string, { lang = 'en', routes = appRoutes, sessi
   const user = userEvent.setup();
   const messages = lang === 'it' ? italian : en;
   const store = fakeStore(session);
-  const services: DataServices = { pastries: () => fakePastriesSource(), ...data };
+  const services: DataServices = { pastries: () => fakePastriesSource(), stocktake: () => fakeStocktakeSource(), ...data };
 
   render(
     <I18nProvider initialLanguage={lang} initialMessages={messages}>

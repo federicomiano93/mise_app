@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { MockInstance } from 'vitest';
-import { act, fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { RouteObject } from 'react-router';
 import { Navigate } from 'react-router';
 import { RootError } from '../errors/RootError';
@@ -56,7 +56,8 @@ describe('AppShell: navigation', () => {
     await user.click(tabs().getByRole('link', { name: 'Stocktake' }));
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Stocktake' })).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe('/stocktake');
+    // The Stocktake is a real section: once its code has arrived, `/stocktake` lands on the month.
+    await waitFor(() => { expect(router.state.location.pathname).toMatch(/^\/stocktake(\/\d{4}-\d{2})?$/); });
     expect(tabs().getByRole('link', { name: 'Stocktake' })).toHaveAttribute('aria-current', 'page');
   });
 

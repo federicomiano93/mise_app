@@ -1,0 +1,154 @@
+/* The month's counting list: the summary card, the two fill-in actions, the search with «Still to
+   count», and the products by category. The same column on a phone and, from 1000px, in the
+   384px list of the split (its width is the section's, not this file's).
+
+   ⚠️ NOTHING HERE CLIPS A BAR THAT MUST STICK: the list is not an ancestor of the month's bottom
+   actions, and stocktakeCss.spec.ts pins that the frame has no `overflow` either. The one
+   `overflow: hidden` below belongs to a card of rows. */
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.summaryLabel {
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.summaryValue {
+  font-size: var(--fs-2xl);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.summaryNote {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* 16px type on purpose: a smaller size makes iOS zoom the page in when the field is focused. */
+.search {
+  flex: 1 1 160px;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+.search::placeholder {
+  color: var(--ink-3);
+}
+
+.search:focus {
+  border-color: var(--accent);
+}
+
+/* «Still to count»: a toggle, pressed or not. React Aria writes the state as data attributes. */
+.filter {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 var(--fs-md)/1 var(--font);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.filter[data-hovered] {
+  background: var(--bg);
+}
+
+.filter[data-pressed] {
+  background: var(--sunken);
+}
+
+.filter[data-selected] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.groupName {
+  padding: 0 var(--s1);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  list-style: none;
+}
+
+.loading,
+.nothing {
+  padding: var(--s6) 0;
+  color: var(--ink-2);
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s6) 0;
+}
+
+.emptyTitle {
+  font-weight: 600;
+}
+
+.emptySub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}

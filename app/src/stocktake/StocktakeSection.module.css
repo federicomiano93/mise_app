@@ -1,0 +1,63 @@
+/* The frame of the Stocktake. A phone, or a tablet held upright: the month's list is the screen, and
+   a product (or «What it cost») replaces it. From 1000px (the lab tablet held sideways is 1024
+   wide): the design's split, the list on the left (`--list-w`) and the chosen product or cost on
+   the right, with a line saying what to do while nothing is chosen.
+
+   ⚠️ NOTHING IN THE CHAIN FROM THE SCROLL AREA DOWN TO THE LIST CLIPS (no `overflow` on .layout or
+   .list): on the split the month's bottom actions stick to the bottom of the screen, and a
+   clipping ancestor would turn them into an ordinary row at the end of a long list. On a phone .detail does not clip
+   either (the form bar of a product sticks to the top of the screen); on the split it is its own
+   scroll area, on purpose (below). stocktakeCss.spec.ts pins both. */
+
+.layout {
+  display: grid;
+  gap: var(--s4);
+}
+
+.list,
+.detail {
+  min-width: 0;
+}
+
+/* One pane at a time on a phone: with the list on screen the right-hand side (only a prompt) is
+   not drawn, and with a product or the cost open the list is not drawn behind it. The list stays
+   mounted, so what was typed in a box is still there when Back returns to it. */
+@media (max-width: 999.98px) {
+  .layout[data-view="list"] .detail {
+    display: none;
+  }
+
+  .layout[data-view="product"] .list,
+  .layout[data-view="cost"] .list {
+    display: none;
+  }
+}
+
+@media (min-width: 1000px) {
+  .layout {
+    grid-template-columns: var(--list-w) minmax(0, 1fr);
+    gap: var(--s6);
+    align-items: start;
+  }
+
+  /* ⚠️ THE RIGHT-HAND SIDE STAYS ON SCREEN WHILE THE LIST SCROLLS. A real storeroom has eighty
+     products: without this, a product tapped far down the list opened at the top of the page, and
+     its title taking the focus scrolled the whole page back up, so the place in the list was lost
+     at every product. Stuck to the top of the scroll area, it is always in view and the focus
+     moves nothing. It is never taller than the scroll area (the screen less the top bar, which is
+     always drawn from 700px), so it scrolls on its own, and the form bar of a product sticks to
+     ITS top.
+
+     ⚠️ NO `overscroll-behavior: contain`: a scroll that reaches the pane's end goes on to the page,
+     which brings the pane's last lines up. At scroll 0 the pane starts BELOW the page title, so its
+     bottom ~45px are under the screen's edge, and with `contain` a swipe on the pane could never
+     scroll the page to show them. */
+  .detail {
+    position: sticky;
+    top: var(--s4);
+    /* Two declarations: Chrome 107 (the lab tablet's floor) has no dvh and keeps the first. */
+    max-height: calc(100vh - var(--topbar-h) - 2 * var(--s4));
+    max-height: calc(100dvh - var(--topbar-h) - 2 * var(--s4));
+    overflow-y: auto;
+  }
+}
