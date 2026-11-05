@@ -146,13 +146,16 @@ function foodcostScreenName(pathname: string, base: string): string {
   return 'foodcost';
 }
 
-// The Calculator is two screens that share one section: the work view (whichever recipe's tab) and Settings
-// (the hub and every screen under it, which is how the current app's usage record has always named them).
-// Changing tab is not a new screen. ⚠️ `settings` is also the name of the Settings section's own page, so
+// The Calculator is three screens that share one section: the work view (whichever recipe's tab), Settings
+// (the hub and every screen under it, which is how the current app's usage record has always named them) and the
+// Dough history (`log`, and `log-history` for a log's versions and one version: the current app's own names). Add and
+// Edit are `log` for now. Changing tab is not a new screen. ⚠️ `settings` is also the name of the Settings section's own page, so
 // the owner's statistics count the two together (the decision for the night run of 12 Oct 2026).
 function calculatorScreenName(pathname: string, base: string): string {
-  const [first] = pathname.slice(base.length).split('/').filter(part => part !== '');
-  return first === 'settings' ? 'settings' : 'calculator';
+  const [first, , third] = pathname.slice(base.length).split('/').filter(part => part !== '');
+  if (first === 'settings') return 'settings';
+  if (first === 'log') return third === 'history' ? 'log-history' : 'log';
+  return 'calculator';
 }
 
 // What the usage record calls the sentence an employee gets in place of a month the rules refuse

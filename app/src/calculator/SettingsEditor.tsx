@@ -15,21 +15,36 @@ import { cameFromParent, useLeave } from './calculatorNav';
 import { SettingsScreen } from './SettingsScreen';
 import { useSaveConfig } from './useSaveConfig';
 
-type Props = {
+type Common = {
   title: string;
   // Where Back goes when nothing is behind this screen (it was opened by its address).
   fallback: string;
   // Whether the working copy differs from what it was opened with. Save is disabled until it does.
   dirty: boolean;
-  // The configuration to save, built from the LATEST one the store holds (never from the copy this screen
-  // opened with): another phone's change to a part this screen does not edit must not be undone by saving.
-  build: (latest: CalculatorConfig) => CalculatorConfig;
   // «Save these changes?»
   saveQuestion: string;
   // A screen with nothing to edit (a recipe without products) has no Save.
   showSave?: boolean;
+  // Runs when Save is pressed, BEFORE the question: false stops the save (the screen has said why, e.g. «Choose Today
+  // or Tomorrow first»).
+  beforeSave?: () => boolean;
   children: ReactNode;
 };
+
+type Props = Common & (
+  | {
+    // The configuration to save, built from the LATEST one the store holds (never from the copy this screen
+    // opened with): another phone's change to a part this screen does not edit must not be undone by saving.
+    build: (latest: CalculatorConfig) => CalculatorConfig;
+    commit?: never;
+  }
+  | {
+    // Not the configuration: the Dough history's editors write a log. Runs after the question; true when the
+    // change is stored (the screen then leaves), false when it is not (the screen stays, dirty, with its edits).
+    commit: () => boolean | Promise<boolean>;
+    build?: never;
+  }
+);
 
 // The form every editing screen of Settings is (Extra dough, a recipe's Divisor, Dough history): a working copy
 // in the caller, a FormBar with Back and the one primary action, Save asking its question and then going
@@ -37,7 +52,7 @@ type Props = {
 //
 // ⚠️ A SAVE IN FLIGHT IS PENDING, NOT GONE: Save ignores a second tap (port of createSaveGuard) and Back waits.
 // A refused save leaves the screen exactly as it was — dirty, with its edits — and Save is given back.
-export function SettingsEditor({ title, fallback, dirty, build, saveQuestion, showSave = true, children }: Props) {
+export function SettingsEditor({ title, fallback, dirty, build, commit, saveQuestion, showSave = true, beforeSave, children }: Props) {
   const { t } = useT();
   const store = useCalculatorStore();
   const { state } = useLocation();
@@ -149,6 +164,7 @@ export function SettingsEditor({ title, fallback, dirty, build, saveQuestion, sh
 
   async function save() {
     if (busy.current || askingLeave.current) return;
+    if (beforeSave && !beforeSave()) return;
     busy.current = true;
     setSaving(true);
     try {
@@ -158,11 +174,12 @@ export function SettingsEditor({ title, fallback, dirty, build, saveQuestion, sh
         cancelLabel: t('common.cancel'),
       });
       if (!ok || !mounted.current) return;
-      const latest = cloneConfig(store.getSnapshot().config);
       sending.current = true;
       let stored: boolean;
       try {
-        stored = await saveConfig(build(latest));
+        if (commit) stored = await commit();
+        else if (build) stored = await saveConfig(build(cloneConfig(store.getSnapshot().config)));
+        else stored = false;
       } finally {
         sending.current = false;
       }

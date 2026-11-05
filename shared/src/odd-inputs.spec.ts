@@ -2624,6 +2624,26 @@ describe('log-model: odd inputs', () => {
     { linkedId: '', linkedExists: true }, { linkedId: 'a' }, { linkedExists: 1 }, { linkedId: 0, linkedExists: 'yes' }]));
   agree('workDayIndex', m.workDayIndex as AnyFn, l.workDayIndex as AnyFn, product([...ODD, ...NOWS, new Date(2026, 2, 29, 1, 30).getTime(), new Date(2026, 9, 25, 1, 30).getTime(),
     new Date(2026, 9, 25, 3, 59).getTime(), new Date(2026, 9, 25, 4, 0).getTime(), -86400000, 8.64e15, '1700000000000']));
+  const SHEETS: readonly unknown[] = [...ODD, { trays: 4, trayWeight_g: 900, total_g: 3700 }, { trays: '3', total_g: 'x' }, { trayWeight_g: 20, trays: -2 }, { trays: 2, total_g: 1600 }];
+  agree('traysEditState', m.traysEditState as AnyFn, l.traysEditState as AnyFn, product(SHEETS, [...CALC_RECIPES, ...ODD, { logic: 'traysTotal', trayWeight: 1200 }, { logic: 'trays' }]));
+  agree('traysSheetRecipe', m.traysSheetRecipe as AnyFn, l.traysSheetRecipe as AnyFn, product([...CALC_RECIPES, ...ODD, { logic: 'traysTotal' }, { logic: 'trays', trayWeight: 5 }], [900, 'x', undefined, NaN, 0]));
+  const SAVED: readonly unknown[] = [...ODD, [{ id: 'a', name: 'Loaf', clientName: 'C', qty: 3, weightG: 500, kind: 'number' }, null, { id: 'a', clientName: 'C', qty: 9 }],
+    [{ id: 'b', qty: 'abc', weightG: 'x', crate: { show: true, perBox: 5 } }, { id: 'b' }, { name: 5 }]];
+  agree('editRows', m.editRows as AnyFn, l.editRows as AnyFn, product(SAVED, [...SAVED, [{ id: 'a', clientName: 'C', name: 'New' }, { id: 'z', qty: 4 }, { id: 'a', clientName: 'D' }]]));
+  const logWith = (n: number): unknown => ({ id: 'l', versions: Array.from({ length: n }, (_, i) => ({ kind: 'create', text: 'v' + i, calculatedBy: 'A', at: { date: 'd', time: 't' } })) });
+  agree('restoreVersion', m.restoreVersion as AnyFn, l.restoreVersion as AnyFn, [
+    ...product([...LOGS, logWith(3), logWith(1)], [0, 1, 2, 5, -1, NaN, 'x', undefined, 0.5], [{ calculatedBy: 'R', at: { date: 'x', time: 'y' } }, { calculatedBy: null }, {}, { calculatedBy: 5, at: null }]),
+    ...product([logWith(2)], [0, 1], [undefined, null]),
+  ]);
+  const DOUGH_LOGS: readonly unknown[] = [...ODD, [{ id: 'a', recipeId: 'focaccia', dough: 'F', createdAtMs: NOW, forDay: 'today' }, { id: 'b', dough: 'Brioche', createdAtMs: NOW - 86400000 * 2, forDay: 'tomorrow' },
+    null, { id: 'c', createdAtMs: 0 }, { id: 'd', recipeId: 'x', createdAtMs: 'x', forDay: 'nope' }, 5]];
+  agree('filterVisibleLogs', m.filterVisibleLogs as AnyFn, l.filterVisibleLogs as AnyFn, [
+    ...product(DOUGH_LOGS, [{ visibility: { focaccia: false }, retentionHours: 24, nowMs: NOW }, { visibility: {}, retentionHours: { focaccia: 48, brioche: 0 }, nowMs: NEXT_DAY }, { retentionHours: 'x', nowMs: NaN },
+      { retentionHours: 0 }, { visibility: { brioche: false, x: false }, retentionHours: -5, nowMs: LATE }, {}, undefined]),
+    ...product([[{ id: 'a' }]], [{ visibility: null }, null]),
+  ]);
+  agree('sortLogs', m.sortLogs as AnyFn, l.sortLogs as AnyFn, product([...ODD, [{ id: 'a', createdAtMs: 1 }, { id: 'b', createdAtMs: 3 }, { id: 'c', createdAtMs: 3 }, { id: 'd', createdAtMs: 'x' }, { id: 5 }],
+    [{ id: 'b', createdAtMs: 1 }, { id: 'a', createdAtMs: 1 }], [null]]));
   test('the day constants agree', () => {
     expect(m.DAY_START_HOUR).toBe(l.DAY_START_HOUR);
     expect(m.FOR_DAYS).toStrictEqual(l.FOR_DAYS);

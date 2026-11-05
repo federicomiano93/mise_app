@@ -12,7 +12,8 @@
 //   • recipes/{id} — a catalogue recipe a tab is LINKED to, read live one by one. The whole collection is read
 //     ONCE, only when the link picker opens; the one write is the row-id stamp (a merge of `ingredients`) at
 //     the moment a recipe is linked.
-//   • logs/{id} — one confirmed dough each, WHOLE, with its append-only version chain inside.
+//   • logs/{id} — one confirmed dough each, WHOLE, with its append-only version chain inside; deleted one at a
+//     time from the Dough history (step 3c-3).
 //
 // ⚠️ NO ROLE IS READ HERE, ON PURPOSE: the section gate and firestore.rules decide (P2).
 //
@@ -61,6 +62,13 @@ export interface CalculatorSource {
   // One log document, WHOLE (create or overwrite), with the open venue stamped. Resolves when the server has
   // it (offline: never); rejects when it is refused.
   saveLog(log: Readonly<Record<string, unknown>> & { readonly id: string }): Promise<void>;
+  // Appends ONE version to an existing log (a re-Confirm, an edit, a restore), and moves it to `forDay` when
+  // given. Resolves when the server has it (offline: never); rejects when it is refused — a log deleted
+  // meanwhile included: it is never recreated.
+  appendLogVersion(id: string, version: Readonly<Record<string, unknown>>, forDay: string | null): Promise<void>;
+  // Deletes one log document (the Dough history's trash icon). Resolves when the server has done it (offline:
+  // never); rejects when it is refused.
+  deleteLog(id: string): Promise<void>;
   // config/calculator, WHOLE, inside a transaction (see the function). Resolves with the revision written when
   // the server has it; rejects when it is refused or cannot be reached (a transaction needs the server: offline
   // it fails, it never queues).
@@ -182,6 +190,31 @@ export function createFirestoreCalculatorSource(
     async saveLog(log) {
       const { fs, db } = await firestore();
       await fs.setDoc(fs.doc(db, logsPath, checkId(log.id)), { ...log, bakery: locationId });
+    },
+
+    // ⚠️ A NEW VERSION IS ADDED TO THE SERVER'S CHAIN, NEVER WRITTEN OVER IT (a difference from js/firebase.js
+    // `saveLogDoc`, which every Edit of the current app uses): a whole-document write built from this phone's copy
+    // dropped a version another phone had added meanwhile, and recreated a log another phone had deleted. arrayUnion
+    // keeps both phones' versions; updateDoc is refused on a document that no longer exists. Two versions that are
+    // identical to the last byte (the same content saved twice in the same minute) are kept once, which loses
+    // nothing. The rules see the merged document: the 100-version cap and the closed key list still hold.
+    // The venue is stamped here too, as in saveLog.
+    async appendLogVersion(id, version, forDay) {
+      const safeId = checkId(id);
+      const { fs, db } = await firestore();
+      await fs.updateDoc(fs.doc(db, logsPath, safeId), {
+        versions: fs.arrayUnion(version),
+        ...(forDay ? { forDay } : {}),
+        bakery: locationId,
+      });
+    },
+
+    // ⚠️ THE ID IS CHECKED BEFORE FIRESTORE IS EVEN LOADED: an id with a slash would delete a document of another
+    // path (js/firebase.js `deleteLogDoc`).
+    async deleteLog(id) {
+      const safeId = checkId(id);
+      const { fs, db } = await firestore();
+      await fs.deleteDoc(fs.doc(db, logsPath, safeId));
     },
 
     // ⚠️ AN OPTIMISTIC-CONCURRENCY WRITE, IN A TRANSACTION (js/firebase.js `saveCalculatorConfig`): it always

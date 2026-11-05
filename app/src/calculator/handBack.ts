@@ -22,6 +22,19 @@ export const DIVISOR_OPENER = 'divisor';
 export const LOG_OPENER = 'log';
 export const ADD_CLIENT_OPENER = 'add-client';
 export const ADD_RECIPE_ROW_OPENER = 'add-recipe-row';
+// The Dough history: the work view's door, the Add button, the History button of one log, and the titles that take
+// the focus when a screen is left by a move that has no button to go back to (a log deleted, a version restored).
+export const DOUGH_HISTORY_OPENER = 'dough-history';
+export const ADD_LOG_OPENER = 'add-log';
+export const LOG_HISTORY_OPENER = 'log-history';
+export const EDIT_LOG_OPENER = 'edit-log';
+export const LOG_LIST_TITLE = 'log-list-title';
+export const LOG_HISTORY_TITLE = 'log-history-title';
+export const logOpener = (id: string): string => `log:${id}`;
+export const versionOpener = (n: number): string => `version:${n}`;
+// The openers that belong to the Dough history's LIST (its cards, its Add button, its title), which stays mounted
+// beside the log that is open.
+export const isListOpener = (name: string): boolean => name === ADD_LOG_OPENER || name === LOG_LIST_TITLE || name.startsWith('log:');
 export const clientOpener = (id: string): string => `client:${id}`;
 export const recipeOpener = (id: string): string => `recipe:${id}`;
 export const divisorRecipeOpener = (id: string): string => `divisor:${id}`;
@@ -33,15 +46,22 @@ export interface HandBack {
   expect(name: string): void;
   // The parent comes back by a move that is not a step back: nobody is owed the focus.
   forget(): void;
+  // The screen on top of the stack is being left by a move of its own (it deleted what it showed, it restored a
+  // version): the opener it was owed is replaced by `name`, usually the title of the screen it lands on.
+  replaceTop(name: string): void;
   // A screen has just appeared: if the opener on top of the stack is one of its own buttons, it takes the
   // focus. The root screen (the work view) is the bottom of the stack, so it also clears whatever is left.
-  deliver(root?: boolean): void;
+  // `accepts` narrows «its own» by name, for a screen that appears BESIDE another one that is still mounted (the
+  // Dough history's list and the log open next to it): a button of the screen that stays must not be handed the
+  // focus by the one that has just arrived.
+  deliver(root?: boolean, accepts?: (name: string) => boolean): void;
 }
 
 const NOTHING: HandBack = {
   register() { /* no section around: nothing to hand back to */ },
   expect() { /* ditto */ },
   forget() { /* ditto */ },
+  replaceTop() { /* ditto */ },
   deliver() { /* ditto */ },
 };
 
@@ -70,9 +90,12 @@ export function useHandBackState(): HandBack {
     forget() {
       wanted.current = [];
     },
-    deliver(root = false) {
+    replaceTop(name) {
+      wanted.current = [...wanted.current.slice(0, -1).filter(known => known !== name), name].slice(-DEPTH);
+    },
+    deliver(root = false, accepts) {
       const name = wanted.current[wanted.current.length - 1];
-      const node = name === undefined ? undefined : openers.current.get(name);
+      const node = name === undefined || (accepts && !accepts(name)) ? undefined : openers.current.get(name);
       if (node) {
         wanted.current = wanted.current.slice(0, -1);
         node.focus();

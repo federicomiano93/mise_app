@@ -215,6 +215,14 @@ describe('screenNameFor', () => {
     ['/calculator/settings/clients/new', 'settings'],
     ['/calculator/settings/nonsense', 'settings'],
     ['/calculator/settingsX', 'calculator'],
+    // The Dough history: the current app's `log` and `log-history`.
+    ['/calculator/log', 'log'],
+    ['/calculator/log/new', 'log'],
+    ['/calculator/log/l-1', 'log'],
+    ['/calculator/log/l-1/edit', 'log'],
+    ['/calculator/log/l-1/history', 'log-history'],
+    ['/calculator/log/l-1/history/2', 'log-history'],
+    ['/calculator/logX', 'calculator'],
   ])('%s → %s', (pathname, expected) => {
     expect(screenNameFor(pathname)).toBe(expected);
   });

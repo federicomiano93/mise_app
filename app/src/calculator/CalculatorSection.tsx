@@ -1,5 +1,5 @@
 import { useEffect, useId, useLayoutEffect } from 'react';
-import { Settings } from 'lucide-react';
+import { ClipboardList, Settings } from 'lucide-react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { calculatorEmptyReason, getVisibleRecipes } from '@mise/shared/calculator-config';
 import type { EmptyReason } from '@mise/shared/calculator-config';
@@ -10,12 +10,14 @@ import { KEEP_FOCUS, Page } from '../shell/Page';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { CalculatorProvider, useCalculator, useCalculatorStore } from './CalculatorContext';
 import {
-  CALCULATOR_PATH, SETTINGS_PATH, newRecipePath, recipePath, recipesPath, resolveCalculatorPath,
+  CALCULATOR_PATH, LOG_PATH, SETTINGS_PATH, newRecipePath, recipePath, recipesPath, resolveCalculatorPath,
 } from './calculatorPath';
 import { messageText } from './calculatorMessages';
 import {
-  ADD_RECIPE_OPENER, CHOOSE_RECIPES_OPENER, HandBackProvider, SETTINGS_OPENER, useHandBack, useHandBackState,
+  ADD_RECIPE_OPENER, CHOOSE_RECIPES_OPENER, DOUGH_HISTORY_OPENER, HandBackProvider, SETTINGS_OPENER, useHandBack,
+  useHandBackState,
 } from './handBack';
+import { DoughHistory } from './DoughHistory';
 import { OpenButton } from './OpenButton';
 import { RecipePanel } from './RecipePanel';
 import { RecipeTabs } from './RecipeTabs';
@@ -24,7 +26,7 @@ import { TabStateProvider } from './TabStateContext';
 import styles from './CalculatorSection.module.css';
 
 // The Calculator: the work view (the recipes as tabs, and under the chosen one its entries and the scaled recipe,
-// beside them from 1000px) and, one level down, its Settings. Loaded only when somebody opens it (shell/sectionScreens.ts), and only for a
+// beside them from 1000px) and, one level down, its Dough history and its Settings. Loaded only when somebody opens it (shell/sectionScreens.ts), and only for a
 // person the venue shows it to (SectionRoute).
 //
 // Its data lives exactly as long as it is on screen: CalculatorProvider starts the listeners on mount and
@@ -77,6 +79,10 @@ function CalculatorScreen() {
           <PartBoundary resetKey={pathname}>
             <SettingsScreens view={resolved.settings} />
           </PartBoundary>
+        ) : 'log' in resolved ? (
+          <PartBoundary resetKey={pathname}>
+            <DoughHistory view={resolved.log} />
+          </PartBoundary>
         ) : (
           <PartBoundary resetKey={resolved.active ?? ''}>
             <WorkView active={resolved.active} />
@@ -123,7 +129,7 @@ function WorkView({ active }: { active: string | null }) {
     const copy = configFailed && reason === 'loading' ? FAILED_TEXT : EMPTY_TEXT[reason];
     return (
       <div className={styles.view}>
-        {reason === 'loading' ? null : <SettingsDoor />}
+        {reason === 'loading' ? null : <Doors />}
         <div className={styles.empty}>
           <p className={styles.emptyTitle}>{t(copy.title)}</p>
           {copy.sub ? <p className={styles.emptySub}>{t(copy.sub)}</p> : null}
@@ -146,7 +152,7 @@ function WorkView({ active }: { active: string | null }) {
 
   return (
     <div className={styles.view}>
-      <SettingsDoor />
+      <Doors />
       <RecipeTabs
         recipes={recipes}
         active={current.id}
@@ -166,11 +172,16 @@ function WorkView({ active }: { active: string | null }) {
   );
 }
 
-// The door to Settings, at the top of the work view and of every empty state but «loading».
-function SettingsDoor() {
+// The doors to the Dough history and to Settings, at the top of the work view and of every empty state but
+// «loading».
+function Doors() {
   const { t } = useT();
   return (
     <div className={styles.top}>
+      <OpenButton opener={DOUGH_HISTORY_OPENER} to={LOG_PATH}>
+        <ClipboardList aria-hidden="true" />
+        {t('ui.log')}
+      </OpenButton>
       <OpenButton opener={SETTINGS_OPENER} to={SETTINGS_PATH}>
         <Settings aria-hidden="true" />
         {t('ui.settings')}

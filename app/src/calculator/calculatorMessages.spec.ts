@@ -4,7 +4,7 @@ import { it as italian } from '../i18n/it';
 import { format } from '../i18n/i18n';
 import type { MessageKey } from '../i18n/en';
 import type { MessageParams } from '../i18n/i18n';
-import { messageText, problemSentence } from './calculatorMessages';
+import { messageText, problemSentence, recipeProblemSentence } from './calculatorMessages';
 import type { TabResult } from './calculatorResult';
 
 const say = (lang: 'en' | 'it') => (key: MessageKey, params?: MessageParams) => format(lang, (lang === 'it' ? italian : en)[key], params);
@@ -22,6 +22,21 @@ describe('messageText', () => {
       .toBe('Focaccia’s log is full. Reset the fields to start a new one.');
     expect(messageText(say('it'), { kind: 'log-full', dough: 'Focaccia' }))
       .toBe('Il registro di Focaccia è pieno. Azzera i campi per iniziarne uno nuovo.');
+  });
+
+  it('the Dough history speaks of its own screen, never of Confirm or Reset (step 3c-3)', () => {
+    expect(messageText(say('en'), { kind: 'log-history-not-saved', dough: 'Focaccia' }))
+      .toBe('Focaccia was not saved to the Dough history. Check the connection and try again.');
+    expect(messageText(say('it'), { kind: 'log-history-not-saved', dough: 'Focaccia' }))
+      .toBe('Focaccia non è stato salvato nello storico impasti. Controlla la connessione e riprova.');
+    expect(messageText(say('en'), { kind: 'log-history-full', dough: 'Focaccia' }))
+      .toBe('Focaccia’s log is full: no more changes can be saved to it.');
+    expect(messageText(say('it'), { kind: 'log-history-full', dough: 'Focaccia' }))
+      .toBe('Il registro di Focaccia è pieno: non si possono salvare altre modifiche.');
+    expect(messageText(say('en'), { kind: 'log-not-deleted', dough: 'Focaccia' }))
+      .toBe('Focaccia could not be deleted. It is back in the Dough history.');
+    expect(messageText(say('it'), { kind: 'log-not-deleted', dough: 'Focaccia' }))
+      .toBe('Non è stato possibile eliminare Focaccia. È di nuovo nello storico impasti.');
   });
 
   it('says nothing out loud for a stream that died: the empty state and the offline banner speak', () => {
@@ -47,5 +62,14 @@ describe('problemSentence', () => {
     ];
     expect(new Set(sentences).size).toBe(4);
     expect(sentences[3]).toContain('“Pinch of salt”');
+  });
+
+  it('is the sentence «Add dough» refuses a recipe with (one source for the four)', () => {
+    const t = say('it');
+    expect(recipeProblemSentence(t, { problem: 'loading' })).toBe(problemSentence(t, { kind: 'loading', target: 1 }));
+    for (const problem of ['missing', 'empty', 'unweighable'] as const) {
+      expect(recipeProblemSentence(t, { problem, row: 'Sale' }))
+        .toBe(problemSentence(t, { kind: 'problem', target: 1, problem, row: 'Sale' }));
+    }
   });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   CALCULATOR_PATH, SETTINGS_PATH, clientPath, clientsPath, divisorPath, divisorRecipePath, extraPath, inRecipesEditor, logSettingsPath,
-  newClientPath, newRecipePath, parseCalculatorPath, recipePath, recipeSettingsPath, recipesPath, resolveCalculatorPath,
+  LOG_PATH, logEditPath, logHistoryPath, logVersionPath, logViewPath, newClientPath, newLogPath, newRecipePath, parseCalculatorPath, recipePath, recipeSettingsPath, recipesPath, resolveCalculatorPath,
 } from './calculatorPath';
 
 describe('parseCalculatorPath', () => {
@@ -157,5 +157,50 @@ describe('resolveCalculatorPath for Settings', () => {
   it('sends any other address under Settings to the hub', () => {
     expect(resolveCalculatorPath('/settings/nonsense', visible)).toEqual({ redirect: '/calculator/settings' });
     expect(resolveCalculatorPath('/settings/extra/more', [])).toEqual({ redirect: '/calculator/settings' });
+  });
+});
+
+describe('the Dough history addresses', () => {
+  it.each([
+    ['/log', { kind: 'list' }],
+    ['/log/', { kind: 'list' }],
+    ['/log/new', { kind: 'new' }],
+    ['/log/l-1', { kind: 'one', id: 'l-1' }],
+    ['/log/l-1/edit', { kind: 'edit', id: 'l-1' }],
+    ['/log/l-1/history', { kind: 'history', id: 'l-1' }],
+    ['/log/l-1/history/3', { kind: 'version', id: 'l-1', n: 3 }],
+    ['/log/a%2Fb%20c/history/12', { kind: 'version', id: 'a/b c', n: 12 }],
+  ])('%s is a Dough history screen', (rest, view) => {
+    expect(parseCalculatorPath(rest)).toEqual({ kind: 'log', view });
+  });
+
+  it.each([
+    '/log/l-1/more', '/log/l-1/edit/x', '/log/l-1/history/0', '/log/l-1/history/-1', '/log/l-1/history/1.5',
+    '/log/l-1/history/abc', '/log/l-1/history/1/x', '/log/new/edit', '/log/%', '/log/a/b/c/d',
+  ])('%s is an unknown Dough history address', rest => {
+    expect(parseCalculatorPath(rest)).toEqual({ kind: 'log', view: { kind: 'unknown' } });
+  });
+
+  it('reads «log» as the first segment as the Dough history, never as a recipe called log', () => {
+    expect(parseCalculatorPath('/log')).toEqual({ kind: 'log', view: { kind: 'list' } });
+  });
+
+  it('writes every address percent-encoded, and parse reads it back', () => {
+    for (const id of ['l-1', 'a/b c', '100%', 'é']) {
+      expect(logViewPath(id)).toMatch(new RegExp(`^${LOG_PATH}/[^/]+$`));
+      const back = (path: string) => parseCalculatorPath(path.slice(CALCULATOR_PATH.length));
+      expect(back(logViewPath(id))).toEqual({ kind: 'log', view: { kind: 'one', id } });
+      expect(back(logEditPath(id))).toEqual({ kind: 'log', view: { kind: 'edit', id } });
+      expect(back(logHistoryPath(id))).toEqual({ kind: 'log', view: { kind: 'history', id } });
+      expect(back(logVersionPath(id, 2))).toEqual({ kind: 'log', view: { kind: 'version', id, n: 2 } });
+    }
+    expect([LOG_PATH, newLogPath]).toEqual(['/calculator/log', '/calculator/log/new']);
+  });
+
+  it('is drawn whatever the tabs are, and sends anything unknown to the list', () => {
+    expect(resolveCalculatorPath('/log/l-1', [])).toEqual({ log: { kind: 'one', id: 'l-1' } });
+    expect(resolveCalculatorPath('/log/new', ['focaccia'])).toEqual({ log: { kind: 'new' } });
+    expect(resolveCalculatorPath('/log/l-1/history/zero', ['focaccia'])).toEqual({ redirect: '/calculator/log' });
+    expect(resolveCalculatorPath('/log/a/b/c/d', [])).toEqual({ redirect: '/calculator/log' });
   });
 });

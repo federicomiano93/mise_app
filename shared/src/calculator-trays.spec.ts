@@ -8,15 +8,15 @@
 //   • a saved dough keeps the trays and the weight it was made with (sheet.trays / trayWeight_g);
 //   • configModel is at least 3, so an app that does not know trays cannot overwrite a trays recipe.
 //
-// PORTED from tests/calculator-trays.test.mjs: 19 of its 29 tests (the pure ones: the target maths, the tray
-// weight, the config, the saved sheet and snapshot, formatGrams, the 50 g floor, the trays box text).
+// PORTED from tests/calculator-trays.test.mjs: 20 of its 29 tests (the pure ones: the target maths, the tray
+// weight, the config, the saved sheet and snapshot, formatGrams, the 50 g floor, the trays box text, and the edit
+// of a trays log, which needs `traysEditState` and `traysSheetRecipe`).
 //
 // NOT PORTED: the dictionary tests ('both dictionaries carry every tray string', '«5 trays × 1,000 g»…',
 // the words inside 'a tray weight under 50 g…') — the dictionary stays in js/i18n.js until Mise 2 has its own;
 // the source-text tests of the screens ('the Calculator tab: trays field…', 'the Recipes row…', 'manual add
 // and edit…', 'Add and Edit show the «= N g» line…', 'the tray count is grouped…') — they read js/ files as
-// text and describe the old pages; the Log half ('editing a trays log keeps the weight…' needs
-// `traysEditState`, step 3c-3); and the two Catalogue import tests ('re-importing from the Catalogue…', 'a
+// text and describe the old pages; and the two Catalogue import tests ('re-importing from the Catalogue…', 'a
 // refused Catalogue import…'), which belong to step 3d.
 
 import { describe, expect, test } from 'vitest';
@@ -40,7 +40,7 @@ describe.each([
     usesOrders, usesTrays, usesTypedTotal, isProRata,
   } = w.config as unknown as Record<string, Loose>;
   const normalizeConfig = (raw: unknown): Loose => w.config.normalizeConfig(raw);
-  const { buildSheet, recipeSnapshot } = w.log as unknown as Record<string, Loose>;
+  const { buildSheet, recipeSnapshot, traysEditState, traysSheetRecipe } = w.log as unknown as Record<string, Loose>;
 
 
 
@@ -208,6 +208,27 @@ describe.each([
     // The frozen recipe rebuilds the same sheet.
     const frozen = recipeSnapshot(recipe({ logic: 'traysTotal', trayWeight: 900 }));
     expect(buildSheet({ recipe: frozen, items: [], trays: 4, totalInput: 100 }).total_g).toBe(3700);
+  });
+
+  test('editing a trays log keeps the weight and the typed part it was made with', () => {
+    const sheet = { trays: 4, trayWeight_g: 900, total_g: 3700 };
+    const frozen = recipe({ logic: 'traysTotal', trayWeight: 1200 });
+    const st = traysEditState(sheet, frozen);
+    expect(st).toStrictEqual({ trays: 4, trayWeight: 900, typedTotal: 100 });
+    const rebuild = (trays: number): Loose => buildSheet({
+      recipe: traysSheetRecipe(frozen, st.trayWeight), items: [], totalInput: st.typedTotal, trays, leaveningPct: 0,
+    });
+    const same = rebuild(st.trays);
+    expect(same.total_g).toBe(3700);
+    expect(same.trayWeight_g).toBe(900);
+    const more = rebuild(5);
+    expect(more.total_g).toBe(4600);
+    expect(more.trays).toBe(5);
+    expect(more.trayWeight_g).toBe(900);
+    // A plain «trays» log has no typed part; another logic's recipe is passed through untouched.
+    expect(traysEditState({ trays: 2, trayWeight_g: 800, total_g: 1600 }, recipe({ logic: 'trays' })).typedTotal).toBe(0);
+    const orders = recipe({ logic: 'orders' });
+    expect(traysSheetRecipe(orders, 900)).toBe(orders);
   });
 
   // ── Words ───────────────────────────────────────────────────────────────────────────
