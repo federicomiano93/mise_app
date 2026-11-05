@@ -546,6 +546,18 @@ F-13. **Deliveries and suggestions see only 2 months**: an order older than that
 design but unsaid on screen.
 F-14. **The road chooser counts on `overlay.remove()` before `take()`**, so a slow `beforeSend` refusal leaves no
 dialog on screen while it decides (`send-chooser.js:86-88`); harmless today because the check is synchronous.
+F-15. **A quantity typed on Orders can be lost if the page goes away too soon: found in the current app, not yet handled
+here.** Measured on the lab tablet in the current app on 1 Nov 2026 (302 ingredients): on a freshly opened page a write
+reaches Firestore's queue in IndexedDB 4.5–5.5 s after the keystroke (0.8 s pause + a busy SDK queue; +0.95 s on a settled
+page), and a reload before that lost the number for good, on the server too. `app/src/orders/draftSync.ts` has the same 0.8 s
+pause, keeps its claims in memory only and has no `visibilitychange` flush in `app/src/orders/` (read, NOT measured: Mise 2 is
+one page, so a section switch does not lose it, but a reload, a closed Chrome or the tablet going off should). The current
+app's fix, branch `fix/orders-typed-quantity-lost`, to port before the switch: `js/orders/draft-journal.js` (a localStorage
+note written in the keystroke, key `orders-draft-claims`, one venue's, deliberately NOT under `KEEP_PREFIXES`, dropped after
+24 h) and `js/orders/draft.js` (`saveJournal`, `settleRestored`, `flushDraftWhenHidden`). ⚠️ The note is never sent on the word
+of the offline copy: it waits for the first snapshot with `fromCache` false, and a claim goes out only where the server still
+reads as it did when typed, or it would put back quantities of an order a colleague has placed. The twin's reviewed specs
+should gain the cases of `tests/draft-journal.test.mjs`.
 
 ## Decisions
 
