@@ -378,14 +378,14 @@
       }
     },
     "dist/foodcost.css": {
-      "sha": "d9cc4cb03579875f",
+      "sha": "370b23284104b7fb",
       "inputs": {
-        "foodcost.css": "5f9ca8691b6e4691"
+        "foodcost.css": "b9b734d781998274"
       }
     },
     "dist/foodcost.js": {
-      "sha": "cf197965390953d8",
-      "mapSha": "f760212ca34596b1",
+      "sha": "b484bfb78439ac7f",
+      "mapSha": "13d34d55604e4c9e",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4ef897a205fdec91",
@@ -408,16 +408,17 @@
         "js/foodcost/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/foodcost/crossing-route.js": "ab3dc4743da26c00",
         "js/foodcost/dom.js": "02aea52bb04819e8",
-        "js/foodcost/firebase-foodcost.js": "426417c49fba032d",
-        "js/foodcost/foodcost-editor.js": "7459d663730cdac8",
+        "js/foodcost/firebase-foodcost.js": "385802cc24237b22",
+        "js/foodcost/foodcost-editor.js": "c87b3befbaeb4b34",
         "js/foodcost/foodcost-list.js": "e69c25f6bd6cedcc",
         "js/foodcost/foodcost-main.js": "d3a720d5e9954828",
-        "js/foodcost/foodcost-model.js": "3a1f4c889fc46b14",
+        "js/foodcost/foodcost-model.js": "f170bfe5084786d7",
         "js/foodcost/foodcost-settings.js": "515cc9a266758252",
-        "js/foodcost/foodcost-store.js": "f06d1619b5197f8a",
-        "js/foodcost/foodcost-weighing.js": "df1da92b51cbcc92",
+        "js/foodcost/foodcost-store.js": "cac52d213db0143f",
+        "js/foodcost/foodcost-weighing.js": "464e8d54f042a4a9",
         "js/foodcost/from-recipes-view.js": "f80e6af01f5b52d9",
         "js/foodcost/from-recipes.js": "248ca57401afd438",
+        "js/foodcost/line-quantity.js": "507b62946dae2409",
         "js/foodcost/product-limits.js": "ed45299d01a6997b",
         "js/foodcost/tablet.js": "39ca59d6515191ad",
         "js/foodcost/vat-guide-view.js": "1b7355c4f514ca80",
@@ -488,10 +489,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "eb3f79f8da10cc56",
-      "mapSha": "f7d9b050799ddd68",
+      "sha": "36d76885eb3c9e7e",
+      "mapSha": "0cd12839d19ca2ee",
       "inputs": {
-        "js/i18n.js": "baed72765524dd18"
+        "js/i18n.js": "5df13375503da001"
       }
     },
     "dist/index.js": {

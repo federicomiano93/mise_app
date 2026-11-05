@@ -34,8 +34,9 @@ import { attachSuggestions } from '../pick-suggest.js';
 import { openPickScreen } from '../pick-screen.js';
 import {
   startWeighing, typeRaw, typeCooked, readWeighing, withWeighings, weighingPatches,
-  otherProductsUsing,
+  weighingsChangeCost, otherProductsUsing,
 } from './foodcost-weighing.js';
+import { KILO_LINE_UNITS, kilosFromTyped, typedFromKilos } from './line-quantity.js';
 
 const TRASH_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>';
@@ -76,7 +77,7 @@ export function renderEditor({ product, draft = null, app }) {
       : {
         id: null, name: '', components: [], packaging: [],
         sellingMode: null, piecesPerBatch: null, packSize: null, packUnit: null, sellingPrice: null,
-        vatRate: null, foodCostTarget: null,
+        vatRate: null, foodCostTarget: null, noWeightLoss: false,
       };
 
   let dirty = false;
@@ -105,6 +106,9 @@ export function renderEditor({ product, draft = null, app }) {
   const weighings = {};
   let weighViews = [];
   let lineNotes = [];
+  // The unit each RECIPE line's amount is typed in — memory only, never saved. Keyed by the
+  // line's own object, which survives every rebuild of the rows, and gone with the line.
+  const lineUnits = new WeakMap();
 
   function weighingOf(recipeId) {
     // An untouched line is read again from the recipe every time, so a weighing saved
@@ -116,7 +120,10 @@ export function renderEditor({ product, draft = null, app }) {
   }
 
   // What Save would write onto the recipes, right now.
+  // ⚠️ NONE FOR A FINISHED PRODUCT: its boxes are not drawn, and a weighing typed before the
+  // switch was turned on must not reach the recipe, nor the figures on this screen.
   function currentPatches() {
+    if (working.noWeightLoss) return {};
     return weighingPatches(app.tables().recipes, weighings, recipeIdsOn(working.components));
   }
 
@@ -133,15 +140,18 @@ export function renderEditor({ product, draft = null, app }) {
     // ⚠️ NO BOXES WHERE THEIR SAVE WOULD BE REFUSED: a venue with the catalogue switched
     // off can read its recipes here but not write them (canWriteRecipes() says why).
     if (!id || !app.tables().recipes[id] || !app.canWeigh()) return null;
+    // A finished product loses nothing in the oven: nothing to weigh.
+    if (working.noWeightLoss) return null;
     const box = (label, onType) => el('input', {
       class: 'fc-input fc-number', type: 'number', min: '0', step: 'any',
-      inputmode: 'decimal', placeholder: '—', 'aria-label': label,
+      inputmode: 'decimal', placeholder: '0', 'aria-label': label,
       oninput: e => { weighings[id] = onType(weighingOf(id), e.target.value); markDirty(); refreshLive(); },
     });
     const rawInput = box(t('fc.rawDough'), typeRaw);
     const cookedInput = box(t('fc.cookedDough'), typeCooked);
     const out = el('p', { class: 'fc-weigh-out' });
-    const warn = el('p', { class: 'fc-weigh-warn' });
+    // A live region, hidden while empty: the sentence is heard the moment it appears.
+    const warn = el('p', { class: 'fc-weigh-warn', 'aria-live': 'polite' });
     const shared = el('p', { class: 'fc-note fc-weigh-shared' });
     weighViews.push({ id, rawInput, cookedInput, out, warn, shared });
 
@@ -169,22 +179,38 @@ export function renderEditor({ product, draft = null, app }) {
       const shown = readWeighing(recipe, state);
       // ⚠️ NEVER REWRITE THE BOX UNDER THE FINGER: «12.» is a number half-typed, and
       // putting the parsed 12 back would eat the decimal point.
-      if (focused !== view.rawInput) {
-        view.rawInput.value = state.rawTyped ? (state.raw > 0 ? String(state.raw) : '') : shown.rawShown;
-      }
-      if (focused !== view.cookedInput) {
-        view.cookedInput.value = state.weighed && state.cooked > 0 ? String(state.cooked) : '';
-      }
+      if (focused !== view.rawInput) view.rawInput.value = state.raw > 0 ? String(state.raw) : '';
+      if (focused !== view.cookedInput) view.cookedInput.value = state.cooked > 0 ? String(state.cooked) : '';
       view.out.textContent = t(shown.message.key, shown.message.params);
       view.warn.textContent = shown.warning ? t(shown.warning.key, shown.warning.params) : '';
       view.warn.hidden = !shown.warning;
+      // ⚠️ THE COOKED BOX STAYS RED FOR AS LONG AS ITS WARNING STANDS (Federico, Nov 2026:
+      // «deve restare rosso»): the sentence alone, under the pair, was easy to miss.
+      view.cookedInput.classList.toggle('fc-invalid', !!shown.warning);
+      // Said to a screen reader too: the red frame alone is only for the eyes.
+      if (shown.warning) view.cookedInput.setAttribute('aria-invalid', 'true');
+      else view.cookedInput.removeAttribute('aria-invalid');
       // ⚠️ SAID THE MOMENT IT BECOMES TRUE: the loss belongs to the recipe, so a
       // weighing typed on this product changes every other product built on it, and
       // nobody opening those would know why their cost moved.
-      const others = shown.patch ? otherProductsUsing(app.products(), view.id, working.id) : 0;
+      // (Not for a kept wrong pair: the loss stays what it was, so nobody else's cost moves.)
+      const others = shown.patch && !shown.keepsOnly ? otherProductsUsing(app.products(), view.id, working.id) : 0;
       view.shared.textContent = others ? t('fc.lossSharedWith', { n: others }) : '';
       view.shared.hidden = !others;
     }
+  }
+
+  // The weighings on screen whose boxes carry a warning, with the box to point at. Both
+  // warnings (cooked heavier than raw, a loss past the cap) are about the cooked weight.
+  function weighWarnings() {
+    const out = [];
+    for (const view of weighViews) {
+      const recipe = app.tables().recipes[view.id];
+      if (!recipe) continue;
+      const { warning } = readWeighing(recipe, weighingOf(view.id));
+      if (warning) out.push({ box: view.cookedInput, name: String(recipe.name || '').trim(), warning });
+    }
+    return out;
   }
 
   // After a keystroke in a weighing: every figure that depends on it, and nothing that
@@ -358,6 +384,34 @@ export function renderEditor({ product, draft = null, app }) {
   // there are too many ingredients for a <select> on a phone.
   const componentRows = el('div', { class: 'fc-rows' });
   const weighRows = el('div', { class: 'fc-weighs' });
+
+  // «Finished product, no weight loss» (Federico, Nov 2026): a product that is bought in, or
+  // finished some other way, loses nothing in the oven, so the loss of its recipes is laid
+  // aside for THIS product's cost only. The same switch as every settings screen (tokens.css
+  // .set-switch), drawn first in the weighings' container so it sits at the end of the card
+  // and governs the boxes under it. It is part of the product: it edits the working copy and
+  // Save commits it. Shown only while the product has a recipe line — an ingredient has no
+  // oven loss to set aside.
+  const noLossInput = el('input', {
+    type: 'checkbox', role: 'switch', 'aria-label': t('fc.noWeightLoss'), 'aria-describedby': 'fcNoWeightLossHint',
+  });
+  noLossInput.checked = working.noWeightLoss === true;
+  noLossInput.addEventListener('change', () => {
+    working.noWeightLoss = noLossInput.checked;
+    markDirty();
+    repaint();
+    // ⚠️ THE REPAINT TAKES THE SWITCH'S ROW OUT OF THE PAGE AND PUTS IT BACK, and the focus
+    // falls to the body with it: a keyboard or screen-reader user toggling with Space would
+    // lose their place (P18). Put it back on the switch.
+    try { noLossInput.focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
+  });
+  const noLossRow = el('div', { class: 'set-row fc-noloss' }, [
+    el('span', { class: 'set-text' }, [
+      el('span', { class: 'set-title', text: t('fc.noWeightLoss') }),
+      el('span', { class: 'set-sub', id: 'fcNoWeightLossHint', text: t('fc.noWeightLossHint') }),
+    ]),
+    el('label', { class: 'set-switch' }, [noLossInput, el('span', { class: 'set-switch-track', 'aria-hidden': 'true' })]),
+  ]);
   const addLineBtn = el('button', { class: 'fc-add-row', type: 'button', onclick: () => addLine() });
   const madeOf = el('div', { class: 'fc-madeof' }, [componentRows, addLineBtn, weighRows]);
 
@@ -465,25 +519,30 @@ export function renderEditor({ product, draft = null, app }) {
     }, [el('span', { text: name.text })]);
 
     const qtyKey = kind === 'recipe' ? 'qtyKg' : kind === 'ingredient' ? 'qty' : 'qtyPcs';
+    // ⚠️ A RECIPE LINE IS STORED IN KILOS, WHATEVER THE BOX SHOWS. The unit chosen below only
+    // changes how the number is typed and read back; it starts on «kg» every time the
+    // product is opened, so an existing card looks as it always did.
+    const shownUnit = () => (kind === 'recipe' ? lineUnits.get(entry) || 'kg' : null);
     const qty = el('input', {
       class: 'fc-input fc-qty', type: 'number', min: '0', step: 'any',
-      inputmode: 'decimal', placeholder: '0', value: entry[qtyKey] || '',
-      'aria-label': kind === 'recipe' ? t('fc.aria.kilos') : kind === 'ingredient' ? t('fc.aria.quantity') : t('fc.aria.pieces'),
+      inputmode: 'decimal', placeholder: '0',
+      value: kind === 'recipe' ? typedFromKilos(entry.qtyKg, shownUnit()) : entry[qtyKey] || '',
+      'aria-label': kind === 'ingredient' || kind === 'recipe' ? t('fc.aria.quantity') : t('fc.aria.pieces'),
       // ⚠️ NOT repaint(). That rebuilds every row — THIS BOX INCLUDED — so the finger lost
       // the box after one digit and «1.7» could not be typed at all. Found driving the
       // screen on 13 Sep 2026. A quantity changes two things, and only those are
       // refreshed: this line's note and the answer at the top. (`note` is declared below;
       // the handler only ever runs after it exists.)
       oninput: e => {
-        entry[qtyKey] = Number(e.target.value) || 0;
+        entry[qtyKey] = kind === 'recipe' ? kilosFromTyped(e.target.value, shownUnit()) : Number(e.target.value) || 0;
         markDirty();
         note.textContent = lineNote(entry, kind);
         paintAnswer();
       },
     });
 
-    // An ingredient is added in grams, kilos or pieces; a recipe is always kilos, and
-    // packaging always pieces per unit sold.
+    // An ingredient is added in grams, kilos or pieces, and a recipe in grams or kilos;
+    // packaging is always pieces per unit sold.
     let unit;
     if (kind === 'ingredient') {
       unit = el('select', {
@@ -492,8 +551,19 @@ export function renderEditor({ product, draft = null, app }) {
         onchange: e => { entry.unit = e.target.value; markDirty(); note.textContent = lineNote(entry, kind); paintAnswer(); },
       }, LINE_UNITS.map(u => el('option', { value: u }, u === 'pcs' ? t('fc.unit.pieces') : u)));
       unit.value = entry.unit;
+    } else if (kind === 'recipe') {
+      unit = el('select', {
+        class: 'fc-input fc-select fc-line-unit-select', 'aria-label': t('fc.aria.unit'),
+        // ⚠️ Not repaint() either. Switching the unit changes NOTHING that is stored: the same
+        // kilos are shown again in the new unit, so no note, no answer and no dirty mark.
+        onchange: e => {
+          lineUnits.set(entry, e.target.value);
+          qty.value = typedFromKilos(entry.qtyKg, shownUnit());
+        },
+      }, KILO_LINE_UNITS.map(u => el('option', { value: u }, u)));
+      unit.value = shownUnit();
     } else {
-      unit = el('span', { class: 'fc-line-unit', text: kind === 'recipe' ? 'kg' : t('fc.unit.pieces') });
+      unit = el('span', { class: 'fc-line-unit', text: t('fc.unit.pieces') });
     }
 
     const remove = el('button', {
@@ -546,7 +616,10 @@ export function renderEditor({ product, draft = null, app }) {
       lineRow({ list: working.components, index, entry, kind: entry.kind === 'ingredient' ? 'ingredient' : 'recipe' })));
     // One pair of weighings per RECIPE, however many lines carry it.
     const recipeIds = [...new Set(recipeIdsOn(working.components))];
-    weighRows.replaceChildren(...recipeIds.map(id => weighBlock(id, recipeIds.length > 1)).filter(Boolean));
+    weighRows.replaceChildren(
+      ...(recipeIds.length ? [noLossRow] : []),
+      ...recipeIds.map(id => weighBlock(id, recipeIds.length > 1)).filter(Boolean),
+    );
     packagingRows.replaceChildren(...working.packaging.map((entry, index) =>
       lineRow({ list: working.packaging, index, entry, kind: 'packaging' })));
     paintWeighViews();
@@ -809,15 +882,33 @@ export function renderEditor({ product, draft = null, app }) {
       return;
     }
 
+    // ⚠️ A WRONG WEIGHING NEVER BLOCKS THE SAVE (Federico, Nov 2026: «in ogni caso posso salvare
+    // lo stesso»). It is pointed at — scrolled to, framed in red, named — and then the usual
+    // confirmation says so in its own words, so one tap on OK saves the numbers as typed.
+    const weighIssues = weighWarnings();
+    if (weighIssues.length) {
+      weighIssues[0].box.classList.add('fc-invalid');
+      revealField(weighIssues[0].box);
+      app.toast(t('fc.checkWeighing', { name: weighIssues[0].name }));
+    }
+    const message = weighIssues.length
+      ? t('fc.saveWithWeightWarnings', {
+        lines: weighIssues.map(issue => t('fc.weightWarningLine', {
+          name: issue.name, warning: t(issue.warning.key, issue.warning.params),
+        })).join('\n'),
+      })
+      : t('fc.saveTheseChanges');
+
     busy = true;
-    const ok = await app.confirm({ title: t('fc.saveProduct'), message: t('fc.saveTheseChanges'), okLabel: t('ui.save'), cancelLabel: t('ui.cancel') });
+    const ok = await app.confirm({ title: t('fc.saveProduct'), message, okLabel: t('ui.save'), cancelLabel: t('ui.cancel') });
     if (!ok) { busy = false; return; }
 
     const clean = { ...working, name: String(working.name).trim() };
     // The weighings typed on this product's recipe lines, which Save writes onto the
     // RECIPES — and the tables the answer is worked out from, with them in.
-    const patches = weighingPatches(app.tables().recipes, weighings,
-      clean.components.filter(c => c.recipeId).map(c => c.recipeId));
+    // ⚠️ NONE FOR A FINISHED PRODUCT, whatever was typed before the switch went on.
+    const weighedIds = clean.noWeightLoss ? [] : clean.components.filter(c => c.recipeId).map(c => c.recipeId);
+    const patches = weighingPatches(app.tables().recipes, weighings, weighedIds);
     const live = withWeighings(app.tables(), patches);
     // A margin is recorded only when the PRICE or the COMPOSITION changed, and only
     // when there is a real answer to record. Renaming a product records nothing —
@@ -826,8 +917,12 @@ export function renderEditor({ product, draft = null, app }) {
     // and it moves what this product costs. The OTHER products using the same recipe
     // record no point — the same gap as an ingredient price drifting, and written down
     // in foodcost-model.js for the same reason.
+    // ⚠️ …BUT NOT A KEPT WRONG PAIR: it writes two numbers and leaves the loss alone, so
+    // nothing the product costs moved. And switching «no weight loss» DOES move the cost.
     const result = costProduct(clean, live);
-    const worthRecording = snapshotWorthTaking(product, clean) || Object.keys(patches).length > 0;
+    const worthRecording = snapshotWorthTaking(product, clean)
+      || weighingsChangeCost(app.tables().recipes, weighings, weighedIds)
+      || (!!product && !!product.noWeightLoss !== !!clean.noWeightLoss);
     const snapshot = result.foodCostPct !== null && worthRecording
       ? productSnapshot(clean, result, new Date().toISOString(), live)
       : null;
