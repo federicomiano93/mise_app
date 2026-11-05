@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { WEEKDAYS } from '@mise/shared/pastries-model';
 import { fakePastriesSource } from '../testing/fakePastriesSource';
 import { dayDoc, freezeClock, logDoc, renderPastries } from '../testing/renderPastries';
@@ -155,11 +155,14 @@ describe('Pastries: which day opens', () => {
         await screen.findByRole('heading', { level: 1, name: 'Orders' });
         const without = live();
         await user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Pastries' }));
+        // ⚠️ WAITED FOR, NOT READ AT ONCE: the router moves between screens inside a transition, and React runs a
+        // transition's effects — the listener added on the way in, taken away on the way out — a moment AFTER the new
+        // screen is drawn. Read in that moment, the count is one behind (it failed CI at random, 5 Nov 2026).
         await days();
-        expect(live()).toBeGreaterThan(without);
+        await waitFor(() => { expect(live()).toBeGreaterThan(without); });
         await user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Orders' }));
         await screen.findByRole('heading', { level: 1, name: 'Orders' });
-        expect(live()).toBe(without);
+        await waitFor(() => { expect(live()).toBe(without); });
       } finally {
         added.mockRestore();
         removed.mockRestore();
