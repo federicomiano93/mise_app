@@ -1804,7 +1804,7 @@ row (stripped on a move, a delete and on Save); a nameless row dropped on Save h
 **The screens:** «Divisioni»/«Dividers» beside «Riordina»/«Reorder» in the editor's ingredients head; each mode hides the other's
 button. In the mode every row but the last is a toggle button (`aria-pressed`, «Linea sotto …», described by the hint), the focus
 stays on the tapped row and goes back to the mode button at «Fine». A 2px `--ink-2` line under a divider row in the edit rows, the
-reorder rows, the divider rows and on the recipe screen. The Calculator card shows no line; `resolveRecipe` hands a separate
+reorder rows, the divider rows, on the recipe screen and in its full-screen view (as the current app's zoomed list). The Calculator card shows no line; `resolveRecipe` hands a separate
 `dividersAfter` list, never a flag on the ingredients that feed Dough history.
 
 **Differences from the current app** (tell him):
@@ -1817,5 +1817,8 @@ reorder rows, the divider rows and on the recipe screen. The Calculator card sho
 lines make the PDF's font a little smaller (the air gives way last); moving a row across a line jumps it into the next group.
 
 Driven: `algprobe/mise-drive/drive-mise2-recipe-dividers.mjs <base> <cdp-port> <out-dir>` (FIREBASE_PROJECT_ID=bakery-app-ebf90, the
-seed, the shared emulator; ONLY=IT360,…), 150/150 at IT and EN × 1024/360/296: the PDF read back (one line, 0.75 pt, halfway, the
-rows below 14 pt lower; a recipe without dividers has none), real taps, Save, the Calculator card and its PDF, axe on every screen.
+seed, the shared emulator; ONLY=IT360,…), 168/168 at IT and EN × 1024/360/296: the PDF read back (one line, 0.75 pt, halfway, the
+rows below 14 pt lower; a recipe without dividers has none), the full-screen view, a reorder move next to a line, real taps, Save, the Calculator card and its PDF, axe on every screen.
+
+Review (opus, 5 Nov 2026): no data defect; fixed the reorder rows keeping their old place's line classes after a move (React Aria
+caches a row by its item: `dependencies={[rows]}`) and the full-screen view without lines.
