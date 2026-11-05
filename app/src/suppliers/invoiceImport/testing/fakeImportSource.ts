@@ -15,6 +15,7 @@ import { planBatchWrites, pointsOfDocs } from '@mise/shared/invoice-import-plan'
 import type { DocWrite } from '@mise/shared/invoice-import-plan';
 import type { DecisionChanges } from '@mise/shared/invoice-zip/selection';
 import type { InvoiceImportSource, StoredPoints, StoredPriceChange } from '../importSource';
+import type { ImportRecordData } from '../importLog';
 import type { StoredDoc } from '../../suppliersSource';
 
 export type ImportMethod = keyof InvoiceImportSource;
@@ -24,13 +25,16 @@ export type ImportWrite =
   | { readonly kind: 'linkSupplierVat'; readonly supplierId: string; readonly vatNumber: string }
   | { readonly kind: 'decisions'; readonly changes: DecisionChanges }
   // The DocWrites of one row's batches, as planBatchWrites made them (the ids already minted).
-  | { readonly kind: 'batches'; readonly batches: readonly (readonly DocWrite[])[] };
+  | { readonly kind: 'batches'; readonly batches: readonly (readonly DocWrite[])[] }
+  | { readonly kind: 'importLog'; readonly id: string; readonly record: ImportRecordData };
 
 export interface FakeImportSource extends InvoiceImportSource {
   // «The server»: what the next fresh read returns. A spec edits these to play another phone.
   suppliers: StoredDoc[];
   ingredients: StoredDoc[];
   decisions: StoredDoc[];
+  // The import log's records (invoice-imports): what loadImportLog() returns; saveImportLog() adds to it.
+  importLog: StoredDoc[];
   // The invoice points already stored, by ingredient id (none = nothing recorded yet): what step 3 reads to tell a price that is in.
   // The points the run writes are added to these on the next read.
   points: Map<string, StoredPoints>;
@@ -52,12 +56,16 @@ export interface FakeImportSource extends InvoiceImportSource {
 }
 
 export function fakeImportSource(
-  initial: { suppliers?: StoredDoc[]; ingredients?: StoredDoc[]; decisions?: StoredDoc[]; prices?: Record<string, Record<string, unknown>> } = {},
+  initial: {
+    suppliers?: StoredDoc[]; ingredients?: StoredDoc[]; decisions?: StoredDoc[]; importLog?: StoredDoc[];
+    prices?: Record<string, Record<string, unknown>>;
+  } = {},
 ): FakeImportSource {
   const failures = new Map<ImportMethod, { code: string; after: number }>();
   const holds = new Map<ImportMethod, Promise<void>>();
   let minted = 0;
   let mintedIngredients = 0;
+  let mintedRecords = 0;
   // The history points the run wrote, by ingredient id then point id.
   const pointDocs = new Map<string, Map<string, Record<string, unknown>>>();
 
@@ -65,6 +73,7 @@ export function fakeImportSource(
     suppliers: [...(initial.suppliers ?? [])],
     ingredients: [...(initial.ingredients ?? [])],
     decisions: [...(initial.decisions ?? [])],
+    importLog: [...(initial.importLog ?? [])],
     points: new Map<string, StoredPoints>(),
     prices: new Map(Object.entries(initial.prices ?? {})),
     priceChanges: new Map<string, Record<string, unknown>>(),
@@ -133,6 +142,14 @@ export function fakeImportSource(
           { id: change.id, decision: change.decision, label: change.label }];
       }
       return changes.set.length + changes.remove.length;
+    }),
+    loadImportLog: () => run('loadImportLog', [], () => self.importLog.map(record => ({ ...record }))),
+    saveImportLog: record => run('saveImportLog', [record], () => {
+      mintedRecords += 1;
+      const id = `imp-${mintedRecords}`;
+      self.importLog.push({ ...record, id });
+      self.writes.push({ kind: 'importLog', id, record });
+      return id;
     }),
   };
 

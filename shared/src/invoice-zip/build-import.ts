@@ -12,6 +12,10 @@
 // file exports `buildImportFromRead(read, options)` — the original's body from the line after `readInvoiceArchives(...)`
 // on: it receives the reader's result. Because of that the file is NOT in parity.spec.ts's PAIRS; the specs run every
 // test against both files instead (tests that open zips are in app/src/suppliers/invoiceImport/buildImport.spec.ts).
+// ⚠️ ONE MISE-2-ONLY OPTION, `alreadyImported` (the import log, 25 Oct 2026): the ids of the invoices the venue imported
+// before. Those invoices are set aside right after they are read — before any product, price or supplier is made of them —
+// and returned as `alreadyImported`, so the screen can say «A new, B already imported» and the run never sees them. Without
+// the option the result is the original's, key for key (the result carries no `alreadyImported` at all).
 
 import { formatPackSize, invoiceNameOf } from './classify';
 import type { LineType } from './classify';
@@ -136,6 +140,13 @@ export interface ImportDocument {
   lines: number;
 }
 
+// An invoice of the files that the venue had imported before (the option `alreadyImported`): set aside, never read further.
+export interface AlreadyImportedDocument {
+  docId: string;
+  sdiId: string;
+  date: string;
+}
+
 export interface ImportResult {
   importFile: ImportFile;
   products: ProductRow[];
@@ -147,6 +158,8 @@ export interface ImportResult {
   documents: ImportDocument[];
   duplicates: number;
   otherXml: number;
+  // Only when the option `alreadyImported` was given (Mise 2): the invoices it set aside, in the order they were read.
+  alreadyImported?: AlreadyImportedDocument[];
 }
 
 // options: { parseXml (required: text -> tree), now (Date | ms | ISO text), salt, noVatKey(taxCode, name),
@@ -154,6 +167,8 @@ export interface ImportResult {
 // `now` is `unknown` on purpose: a Date, a number, a text or nothing (anything else gives '').
 export interface BuildOptions extends LoadOptions, ConfigOptions {
   now?: unknown;
+  // Mise 2 only: the ids (`docId`: the SDI id, else the file-name id) of the invoices imported before.
+  alreadyImported?: ReadonlySet<string>;
 }
 
 // What one product looks like in the result and, when it can be imported, in the file.
@@ -277,7 +292,12 @@ const rowOrder = (_catalogue: Catalogue) => (a: ProductRow, b: ProductRow): numb
 //            eggWeightG (default 50), excludedSuppliers }
 // -> { importFile, products, excluded, skippedFiles, p7mCount, documents, duplicates, otherXml }
 export function buildImportFromRead(read: InvoiceRead, options: BuildOptions = {}): ImportResult {
-  const load = loadInvoices(read, options);
+  const loaded = loadInvoices(read, options);
+  // ⚠️ SET ASIDE AFTER loadInvoices, never before: it is what drops the duplicates and the owner's own sales invoices, and an
+  // invoice imported before must still count as a duplicate of its twin in the same file.
+  const skip = options.alreadyImported;
+  const setAside = skip ? loaded.documents.filter((doc) => skip.has(doc.docId)) : [];
+  const load = skip ? { ...loaded, documents: loaded.documents.filter((doc) => !skip.has(doc.docId)) } : loaded;
   const catalogue = buildCatalogue(load, makeConfig(options));
 
   const described = [...catalogue.products.values()].map((product) => describeProduct(catalogue, product));
@@ -328,5 +348,6 @@ export function buildImportFromRead(read: InvoiceRead, options: BuildOptions = {
     documents,
     duplicates: load.duplicates,
     otherXml: load.otherXml,
+    ...(skip ? { alreadyImported: setAside.map((doc) => ({ docId: doc.docId, sdiId: doc.sdiId, date: doc.date })) } : {}),
   };
 }

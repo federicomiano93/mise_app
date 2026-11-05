@@ -18,13 +18,44 @@ const totals = (over: Partial<RunTotals> = {}): RunTotals => ({
   codesFull: 0, failed: [], stopped: null, notRun: 0, retryable: 0, notFixableByRetry: 0, ...over,
 });
 
-function draw(summary: RunTotals, extra: { decisionsWritten?: number; decisionsFailed?: boolean } = {}, lang: 'en' | 'it' = 'en') {
+const NO_LOG = { saved: false, failed: false, recorded: 0, newCount: 0 };
+
+function draw(
+  summary: RunTotals, extra: { decisionsWritten?: number; decisionsFailed?: boolean; log?: typeof NO_LOG } = {}, lang: 'en' | 'it' = 'en',
+) {
   render(
     <I18nProvider initialLanguage={lang} initialMessages={lang === 'en' ? en : italian}>
-      <SummaryStep headingRef={null} summary={summary} decisionsWritten={extra.decisionsWritten ?? 0} decisionsFailed={extra.decisionsFailed ?? false} />
+      <SummaryStep headingRef={null} summary={summary} decisionsWritten={extra.decisionsWritten ?? 0} decisionsFailed={extra.decisionsFailed ?? false} log={extra.log ?? NO_LOG} />
     </I18nProvider>,
   );
 }
+
+describe('the summary and the import log', () => {
+  it('says the file is in the list when every new invoice was recorded', () => {
+    draw(totals(), { log: { saved: true, failed: false, recorded: 2, newCount: 2 } });
+    expect(screen.getByText('This file is now in the list of imports.')).toBeInTheDocument();
+  });
+
+  it('says how many invoices stay out when only some were recorded', () => {
+    draw(totals(), { log: { saved: true, failed: false, recorded: 1, newCount: 3 } });
+    expect(screen.getByText(/^2 invoices were not completed and stay out of the list/)).toBeInTheDocument();
+  });
+
+  it('says no invoice was completed when nothing could be recorded', () => {
+    draw(totals(), { log: { saved: false, failed: false, recorded: 0, newCount: 2 } });
+    expect(screen.getByText(/^No invoice of this file was completed/)).toBeInTheDocument();
+  });
+
+  it('raises an alert when the record could not be written', () => {
+    draw(totals(), { log: { saved: false, failed: true, recorded: 0, newCount: 2 } });
+    expect(screen.getByRole('alert')).toHaveTextContent('This file could not be added to the list of imports');
+  });
+
+  it('says nothing about the log when the file held no new invoice', () => {
+    draw(totals());
+    expect(screen.queryByText(/list of imports/)).not.toBeInTheDocument();
+  });
+});
 
 const lines = () => within(screen.getByRole('list')).getAllByRole('listitem').map(item => item.textContent);
 

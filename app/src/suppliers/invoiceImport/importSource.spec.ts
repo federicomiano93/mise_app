@@ -244,6 +244,39 @@ describe('remembered decisions', () => {
   });
 });
 
+describe('the import log (Mise 2 only)', () => {
+  const record = {
+    fileName: 'fatture-settembre.zip', importedAt: '2026-10-25T10:00:00.000Z', firstDate: '2026-09-01', lastDate: '2026-09-30',
+    months: ['2026-09'], invoiceIds: ['18000000001', '18000000002'],
+  };
+
+  test('read from the SERVER, the whole folder', async () => {
+    const { source, served, fs } = make();
+    served[at('invoice-imports')] = [{ id: 'r1', data: () => ({ ...record }) }];
+    expect(await source.loadImportLog()).toEqual([{ ...record, id: 'r1' }]);
+    expect(fs.getDocsFromServer).toHaveBeenCalledTimes(1);
+    expect(fs.getDocs).not.toHaveBeenCalled();
+  });
+
+  test('⚠️ a record is written WHOLE (create-only), under a new id, with exactly the keys the rules list — no «who»', async () => {
+    const { source, fs } = make();
+    const id = await source.saveImportLog({ ...record, importedBy: 'someone', id: 'forged' } as typeof record);
+    expect(id).toMatch(/^[A-Za-z0-9]{20}$/);
+    const [ref, data, options] = fs.setDoc.mock.calls[0]!;
+    expect(ref.path).toBe(at(`invoice-imports/${id}`));
+    expect(data).toEqual({ bakery: VENUE, ...record });
+    expect(Object.keys(data).sort()).toEqual(['bakery', 'fileName', 'firstDate', 'importedAt', 'invoiceIds', 'lastDate', 'months']);
+    expect(options).toBeUndefined();
+  });
+
+  test('two records never share an id', async () => {
+    const { source } = make();
+    const a = await source.saveImportLog(record);
+    const b = await source.saveImportLog(record);
+    expect(a).not.toBe(b);
+  });
+});
+
 describe('⚠️ the import needs the network (parity I8, I9)', () => {
   test('offline, every call is refused with code «offline» before Firestore is touched', async () => {
     const { source, goOffline, fs } = make();
@@ -252,7 +285,8 @@ describe('⚠️ the import needs the network (parity I8, I9)', () => {
       source.createSupplier({ name: 'x' }), source.linkSupplierVat('s1', 'IT1'), source.freshSuppliers(),
       source.freshIngredientsForSupplier('s1'), source.invoicePoints('i1'), source.storedPriceChanges('i1'), source.freshPrice('i1'),
       source.runImportBatches([[{ type: 'patch-ingredient', ingredientId: 'i1', data: {} }]]), source.loadDecisions(),
-      source.writeDecisions({ set: [], remove: ['a'.repeat(64)] }),
+      source.writeDecisions({ set: [], remove: ['a'.repeat(64)] }), source.loadImportLog(),
+      source.saveImportLog({ fileName: 'x.zip', importedAt: '2026-10-25T10:00:00.000Z', firstDate: '2026-09-01', lastDate: '2026-09-01', months: ['2026-09'], invoiceIds: ['1'] }),
     ];
     for (const call of calls) await expect(call).rejects.toMatchObject({ code: 'offline' });
     expect(fs.setDoc).not.toHaveBeenCalled();

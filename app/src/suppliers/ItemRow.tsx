@@ -8,6 +8,7 @@ import { allergensOn } from '@mise/shared/venue-features';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
+import { fromInvoice } from './invoiceTag';
 import { pricePerUnitText } from './priceText';
 import type { StoredDoc } from './suppliersSource';
 import styles from './ItemRow.module.css';
@@ -55,6 +56,8 @@ export function ItemRow({ item, supplier, onOpen, isOpen, opener, register, inNo
   const off = item.active === false;
   const offTag = off && !inNotInUse;
   const node = useCallback((button: HTMLButtonElement | null) => { register(opener, button); }, [register, opener]);
+  const packTag = supplier === undefined && packaging;
+  const invoiceTag = fromInvoice(item);
   const undeclared = !packaging && allergensOn(location) && allergenState(item) === 'unknown';
 
   return (
@@ -71,9 +74,10 @@ export function ItemRow({ item, supplier, onOpen, isOpen, opener, register, inNo
         <span className={styles.main}>
           <span className={styles.name}>{ingredientDisplayName(item)}</span>
           {meta !== '' ? <span className={styles.meta}>{meta}</span> : null}
-          {(supplier === undefined && packaging) || offTag || undeclared ? (
+          {packTag || invoiceTag || offTag || undeclared ? (
             <span className={styles.tags}>
-              {supplier === undefined && packaging ? <span className={styles.tag}>{t('sup.packagingTag')}</span> : null}
+              {packTag ? <span className={styles.tag}>{t('sup.packagingTag')}</span> : null}
+              {invoiceTag ? <span className={styles.tag}>{t('sup.fromInvoice')}</span> : null}
               {offTag ? <span className={styles.tag}>{t('sup.switchedOff')}</span> : null}
               {undeclared ? <span className={styles.tag} data-tone="todo">{t('sup.notDeclared')}</span> : null}
             </span>

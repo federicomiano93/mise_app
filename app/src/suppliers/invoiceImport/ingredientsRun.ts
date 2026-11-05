@@ -165,6 +165,9 @@ export interface RunOutcome {
   // How many remembered decisions were written or deleted, and whether that write failed (the summary says either).
   readonly decisionsWritten: number;
   readonly decisionsFailed: boolean;
+  // The rows NOT seen through (importLog.ts): failed, never reached because the run stopped, or with price changes or a chosen
+  // name that did not land. The invoices they hold a price of stay out of the import log, so the same file offers them again.
+  readonly unfinishedKeys: ReadonlySet<string>;
 }
 
 type Read = ReplanInput['read'];
@@ -256,8 +259,12 @@ export async function runIngredientImport(input: RunInput): Promise<RunOutcome> 
     }
   }
 
+  // Rows whose price waits for a look («Lascia per ora», or a reason only the fresh read found): their invoices are NOT done, so
+  // the import log leaves them out and the next load offers that price again.
+  const held = new Set<string>();
   // Everything that is not written is accounted for first: nothing is dropped silently.
   entries.forEach(({ planned, row }) => {
+    if (row.status === 'skipped' && row.held === true) held.add(planned.key);
     if (row.status === 'skipped') results.push({ key: planned.key, name: planned.name, outcome: 'skipped' });
     else if (row.status === 'error') {
       results.push({ key: planned.key, name: planned.name, outcome: 'failed', reason: words.reason(row.reason), retry: isRetryableReason(row.reason) });
@@ -278,6 +285,7 @@ export async function runIngredientImport(input: RunInput): Promise<RunOutcome> 
         results.push({ key: planned.key, name: planned.name, outcome: 'failed', reason: words.changed(), retry: true });
       } else if (!wrow) {
         // The fresh read found a price that needs a look which the screen did not show: nobody confirmed it.
+        held.add(planned.key);
         results.push({ key: planned.key, name: planned.name, outcome: 'skipped' });
       } else if (wrow.status === 'unchanged') {
         // Every price is in already, but the file may carry a pack code (or a chosen name) the ingredient has not learnt yet.
@@ -288,6 +296,7 @@ export async function runIngredientImport(input: RunInput): Promise<RunOutcome> 
           storedPoints: fresh.storedPoints as StoredPointList, newPoints: [],
           priceUnit: fileIngredient.priceUnit, isNew: false, ingredient: fresh.ingredient ?? null,
         });
+        if (wrow.held) held.add(planned.key);
         results.push({
           // A row held for its price whose name was saved is a held row, not an unchanged one.
           key: planned.key, name: planned.name, outcome: wrow.held ? 'skipped' : 'unchanged', changesAdded: recorded.added,
@@ -384,5 +393,28 @@ export async function runIngredientImport(input: RunInput): Promise<RunOutcome> 
     results.push({ key: planned.key, name: planned.name, outcome: 'unchanged', changesAdded: recorded.added, changesFailed: recorded.failed, codesFull });
   }
 
-  return { summary: summarizeRun(results, { stopped, notRun }), decisionsWritten, decisionsFailed };
+  return {
+    summary: summarizeRun(results, { stopped, notRun }), decisionsWritten, decisionsFailed,
+    unfinishedKeys: unfinishedOf(entries, results, stopped ? quiet : [], held),
+  };
+}
+
+// Every row of the run that was not seen through: no result at all (the run stopped before it), a failed one, price changes or a
+// chosen name that did not land, or a row already in Mise that the stop passed over (`passedOver`: its result says «unchanged»,
+// but its price changes were never looked at), or a row whose price was held for a look (`held`: its result says «skipped», but
+// the price waits — «Lascia per ora» is a promise to come back, not a choice to leave the invoice out).
+export function unfinishedOf(
+  entries: readonly PlanEntry[], results: readonly RunResult[], passedOver: readonly PlanEntry[], held: ReadonlySet<string> = new Set(),
+): Set<string> {
+  const done = new Set<string>();
+  results.forEach(result => {
+    if (result.outcome !== 'failed' && !(Number(result.changesFailed) > 0) && !result.namesLost) done.add(result.key);
+  });
+  passedOver.forEach(entry => { done.delete(entry.planned.key); });
+  held.forEach(key => { done.delete(key); });
+  // A row with two results (never today) is done only if every one of them is.
+  results.forEach(result => {
+    if (result.outcome === 'failed' || Number(result.changesFailed) > 0 || result.namesLost) done.delete(result.key);
+  });
+  return new Set(entries.map(entry => entry.planned.key).filter(key => !done.has(key)));
 }

@@ -3073,6 +3073,74 @@ async function roles() {
   await expectAllowed('a manager undoes one',
     () => deleteWrite(`${L}/invoice-decisions/${DEC}`, asAccount(MAYA)));
 
+  // ── Which invoices were imported, and from which file (25 Oct 2026, Mise 2) ──
+  // One record per import run, written once (whole) and never edited; no person named in it.
+  const IMP = `${L}/invoice-imports`;
+  const imported = {
+    ...stamp, fileName: 'fatture-settembre.zip', importedAt: '2026-10-25T10:00:00.000Z',
+    firstDate: '2026-09-01', lastDate: '2026-09-30', months: ['2026-09'],
+    invoiceIds: ['18000000001', '18000000002'],
+  };
+  await expectAllowed('a manager records an import',
+    () => wholeWrite(`${IMP}/imp1`, imported, asAccount(MAYA)));
+  await expectAllowed('the owner records one too',
+    () => wholeWrite(`${IMP}/imp2`, imported, asAccount(ALICE)));
+  await expectAllowed('a manager reads the record',
+    readAs(MAYA, `${IMP}/imp1`));
+  // The screen reads the whole list (a collection query), not one record.
+  await expectAllowed('a manager LISTS the records (what the import screen reads)',
+    () => fetch(`${FS}/${IMP}`, { headers: asAccount(MAYA) }));
+  await expectDenied('an employee cannot list them',
+    () => fetch(`${FS}/${IMP}`, { headers: asAccount(SAM) }));
+  await expectDenied('a member of ANOTHER venue cannot list them',
+    () => fetch(`${FS}/${IMP}`, { headers: asAccount(BOB) }));
+  await expectDenied('an employee cannot read it',
+    readAs(SAM, `${IMP}/imp1`));
+  await expectDenied('a member of ANOTHER venue cannot read it',
+    readAs(BOB, `${IMP}/imp1`));
+  await expectDenied('a signed-out device cannot read it',
+    () => fetch(`${FS}/${IMP}/imp1`, { headers: noAuth() }));
+  await expectDenied('an employee cannot write one',
+    () => wholeWrite(`${IMP}/imp3`, imported, asAccount(SAM)));
+  await expectDenied('a member of ANOTHER venue cannot write one here',
+    () => wholeWrite(`${IMP}/imp3`, imported, asAccount(BOB)));
+  await expectDenied('a signed-out device cannot write one',
+    () => wholeWrite(`${IMP}/imp3`, imported, noAuth()));
+  await expectDenied('a record is never edited',
+    () => mergeWrite(`${IMP}/imp1`, { ...imported, fileName: 'other.zip' }, asAccount(MAYA)));
+  await expectDenied('…not even by the owner',
+    () => mergeWrite(`${IMP}/imp1`, { ...imported, invoiceIds: ['1'] }, asAccount(ALICE)));
+  await expectDenied('no «who imported» or any other key',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, importedBy: 'maya@example.com' }, asAccount(MAYA)));
+  await expectDenied('stamped with another venue',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, bakery: 'trattoria-x' }, asAccount(MAYA)));
+  await expectDenied('a record without invoices',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, invoiceIds: [] }, asAccount(MAYA)));
+  await expectDenied('more than 5000 invoice ids',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, invoiceIds: Array.from({ length: 5001 }, (_, i) => String(i)) }, asAccount(MAYA)));
+  await expectAllowed('…5000 are fine',
+    () => wholeWrite(`${IMP}/imp5000`, { ...imported, invoiceIds: Array.from({ length: 5000 }, (_, i) => String(i)) }, asAccount(MAYA)));
+  await expectDenied('the invoice ids must be a list',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, invoiceIds: '18000000001' }, asAccount(MAYA)));
+  await expectDenied('a record without months',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, months: [] }, asAccount(MAYA)));
+  await expectDenied('a date that is not YYYY-MM-DD',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, firstDate: '01/09/2026' }, asAccount(MAYA)));
+  await expectDenied('the first date after the last',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, firstDate: '2026-10-01' }, asAccount(MAYA)));
+  await expectDenied('a missing last date',
+    () => wholeWrite(`${IMP}/imp4`, (({ lastDate, ...rest }) => rest)(imported), asAccount(MAYA)));
+  await expectDenied('an import date that is not a moment',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, importedAt: 'yesterday' }, asAccount(MAYA)));
+  await expectDenied('an empty file name',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, fileName: '' }, asAccount(MAYA)));
+  await expectDenied('a file name longer than 500',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, fileName: bigString(501) }, asAccount(MAYA)));
+  await expectDenied('an employee cannot delete one',
+    () => deleteWrite(`${IMP}/imp2`, asAccount(SAM)));
+  await expectAllowed('a manager may delete one',
+    () => deleteWrite(`${IMP}/imp2`, asAccount(MAYA)));
+
   // ── How a price moved from one invoice to the next (5 Oct 2026) ──
   const change = {
     ...stamp, ingredientId: 'I3', supplierId: 'S1', name: 'Farina 00', priceUnit: 'kg',

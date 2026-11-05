@@ -329,7 +329,7 @@ describe('the search', () => {
   it('folds accents on suppliers, and finds them by name or short name but NOT by category', async () => {
     const { user } = await loaded('/suppliers/suppliers');
     await user.type(search(), 'cafe');
-    await waitFor(() => { expect(rowNames()).toEqual(['Café Bar SrlDrinks · 1 product']); });
+    await waitFor(() => { expect(rowNames()).toEqual(['Café Bar SrlDrinks · 1 productFrom invoice']); });
     await user.clear(search());
     await user.type(search(), 'zed dairy');
     await waitFor(() => { expect(main().getByText('Zed')).toBeInTheDocument(); });
@@ -372,7 +372,7 @@ describe('the suppliers list', () => {
     await loaded('/suppliers/suppliers');
     expect(rowNames()).toEqual([
       'Alpine MillsFlour · 3 products',
-      'Café Bar SrlDrinks · 1 product',
+      'Café Bar SrlDrinks · 1 productFrom invoice',
       'Zed Dairy · 1 product'.replace('Zed Dairy', 'ZedDairy'),
     ]);
   });

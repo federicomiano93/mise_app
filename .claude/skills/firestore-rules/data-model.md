@@ -72,6 +72,14 @@ both halves.
   decided in the data layer — a batch is all-or-nothing.
 - `ingredients/{id}/prices/{autoId}` — append-only history, create-only. A subcollection inherits
   nothing from the rules above it.
+- `invoice-imports/{autoId}` (Mise 2, 25 Oct 2026, rules not yet deployed) — the import log, one record per import run,
+  written ONCE (create only, never edited) at the end of a run: `{ bakery, fileName (≤500, the picked files' names,
+  a personal tax code blanked), importedAt (ISO), firstDate, lastDate (YYYY-MM-DD, the invoices' own Data, first ≤
+  last), months[] (YYYY-MM, 1–600), invoiceIds[] (the reader's docId = the SDI id; 1–5000) }`. NO «who imported»
+  (P13). Read, written, deleted by `canManage(lid,'foodcost')` like `invoice-decisions`. The reader sets aside every
+  invoice whose id is here (`alreadyImported` of build-import), so a re-loaded file offers only its new invoices; an
+  invoice is recorded only when every ingredient row holding a price of it was seen through
+  (`app/src/suppliers/invoiceImport/importLog.ts`). The current app neither reads nor writes it.
 - `drafts/current` — the order in progress; `days` is the memory that makes the day model work.
 - `orders-history/{YYYY-MM-DD}_{supplierId}` — one record per day per supplier; `names` freezes each
   item's label; `deliveredAt`/`missing` optional. Since `v1.109.1` Orders reads only the last 2 months live (`date >=`,

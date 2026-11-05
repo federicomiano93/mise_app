@@ -85,7 +85,8 @@ describe('the first step', () => {
     expect(screen.getByRole('checkbox', { name: 'Import as an ingredient' })).not.toBeChecked();
     expect(screen.queryByText(/Left out by you/)).not.toBeInTheDocument();
     expect(importing.writes).toEqual([]);
-    expect(importing.calls.map(call => call[0])).toEqual(['loadDecisions']);
+    // The log is read when the screen opens, and again — fresh — before the file is read; then the remembered decisions.
+    expect(importing.calls.map(call => call[0])).toEqual(['loadImportLog', 'loadImportLog', 'loadDecisions']);
     expect(screen.getByRole('button', { name: 'Next' })).toBeInTheDocument();
   });
 
@@ -249,7 +250,7 @@ describe('what is refused, in words', () => {
     await chooseFiles(user, unreadable);
     expect(screen.getByRole('alert')).toHaveTextContent('The invoices could not be read. Choose the zip you downloaded from the Agenzia delle Entrate.');
     expect(screen.queryByRole('button', { name: 'Next' })).not.toBeInTheDocument();
-    expect(importing.calls).toEqual([]);
+    expect(importing.calls.map(call => call[0])).toEqual(['loadImportLog', 'loadImportLog']);
   });
 
   it.each([

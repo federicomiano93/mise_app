@@ -12,6 +12,7 @@ import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { ItemRow, ItemRows } from './ItemRow';
 import { NotInUseGroup, useNotInUseOpen } from './NotInUseGroup';
+import { suppliersFromInvoices } from './invoiceTag';
 import { useMayImport } from './invoiceImport/useMayImport';
 import { IMPORT_OPENER, NEW_OPENER, SEARCH_OPENER, SETTINGS_OPENER, itemOpener, supplierOpener, useHandBack } from './handBack';
 import type { SuppliersTab } from './suppliersPath';
@@ -318,6 +319,7 @@ function SupplierRows({ suppliers, items, countsReady, favourites, query, broken
     }
     return out;
   }, [items]);
+  const fromInvoices = useMemo(() => suppliersFromInvoices(items), [items]);
 
   if (suppliers.length === 0) return broken ? null : <EmptyState tab="suppliers" />;
   if (visible.length === 0) return <p className={styles.nothing}>{t(NO_MATCH_KEY.suppliers)}</p>;
@@ -347,6 +349,7 @@ function SupplierRows({ suppliers, items, countsReady, favourites, query, broken
                   name={supplierLabel(supplier)}
                   meta={meta}
                   off={supplier.active === false}
+                  fromInvoice={fromInvoices.has(supplier.id)}
                   isOpen={supplier.id === openSupplierId}
                   // The supplier that is already open stays as it is: nothing to open.
                   onPress={opened => { if (opened !== openSupplierId) onOpenSupplier(opened); }}
@@ -429,13 +432,14 @@ type RowProps = {
   name: string;
   meta: string;
   off: boolean;
+  fromInvoice: boolean;
   isOpen: boolean;
   onPress: (id: string) => void;
   register: (name: string, node: HTMLElement | null) => void;
 };
 
 // One supplier: its name, a line under it and a chevron. The whole row is the button.
-function SupplierRow({ id, name, meta, off, isOpen, onPress, register }: RowProps) {
+function SupplierRow({ id, name, meta, off, fromInvoice, isOpen, onPress, register }: RowProps) {
   const { t } = useT();
   // Back from this supplier's screen hands the focus back to this button.
   const opener = useCallback((node: HTMLButtonElement | null) => { register(supplierOpener(id), node); }, [register, id]);
@@ -453,7 +457,12 @@ function SupplierRow({ id, name, meta, off, isOpen, onPress, register }: RowProp
         <span className={styles.main}>
           <span className={styles.name}>{name}</span>
           {meta !== '' ? <span className={styles.meta}>{meta}</span> : null}
-          {off ? <span className={styles.tag}>{t('sup.switchedOff')}</span> : null}
+          {fromInvoice || off ? (
+            <span className={styles.tags}>
+              {fromInvoice ? <span className={styles.tag}>{t('sup.fromInvoice')}</span> : null}
+              {off ? <span className={styles.tag}>{t('sup.switchedOff')}</span> : null}
+            </span>
+          ) : null}
         </span>
         <ChevronRight aria-hidden="true" className={styles.chevron} />
       </button>

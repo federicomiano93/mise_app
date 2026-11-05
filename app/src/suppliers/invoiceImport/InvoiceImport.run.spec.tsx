@@ -140,6 +140,9 @@ describe('a file goes through every step', () => {
     await importAll(first.user, 'Import 2 ingredients');
     const importing = first.importing;
     cleanup();
+    // ⚠️ The import log is emptied on purpose: these specs pin the SECOND guard (create-only price points) for a file the log does not
+    // know — a record that failed to save. With the log in place the same file is stopped earlier (InvoiceImport.log.spec.tsx).
+    importing.importLog = [];
     const written = importing.writes.length;
 
     const venue = { ingredients: [...importing.ingredients], prices: Object.fromEntries(importing.prices), suppliers: [SUPPLIER] };
@@ -151,7 +154,8 @@ describe('a file goes through every step', () => {
     await second.user.click(button('Done'));
     await waitFor(() => { expect(second.router.state.location.pathname).toBe('/suppliers'); });
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-    expect(importing.writes).toHaveLength(written);
+    // «Done» adds the file to the log (the log was emptied above); no ingredient, price or decision is written.
+    expect(importing.writes.slice(written).map(write => write.kind)).toEqual(['importLog']);
     expect(importing.ingredients).toHaveLength(2);
   });
 });
@@ -340,6 +344,9 @@ describe('price changes', () => {
     expect(summaryText()).toContain('Price changes recorded: 1');
     expect(importing.priceChanges.size).toBe(1);
     cleanup();
+    // ⚠️ The import log is emptied on purpose: these specs pin the SECOND guard (create-only price points) for a file the log does not
+    // know — a record that failed to save. With the log in place the same file is stopped earlier (InvoiceImport.log.spec.tsx).
+    importing.importLog = [];
 
     const written = importing.writes.length;
     const second = await open({ ingredients: [...importing.ingredients], prices: Object.fromEntries(importing.prices), suppliers: [SUPPLIER] }, importing);
@@ -359,6 +366,9 @@ describe('price changes', () => {
     await importAll(first.user, 'Import 1 ingredient');
     const importing = first.importing;
     cleanup();
+    // ⚠️ The import log is emptied on purpose: these specs pin the SECOND guard (create-only price points) for a file the log does not
+    // know — a record that failed to save. With the log in place the same file is stopped earlier (InvoiceImport.log.spec.tsx).
+    importing.importLog = [];
     const second = await open({ ingredients: [...importing.ingredients], prices: Object.fromEntries(importing.prices), suppliers: [SUPPLIER] }, importing);
     await toIngredients(second.user, invoiceZip([FLOUR]));
     const written = importing.writes.length;

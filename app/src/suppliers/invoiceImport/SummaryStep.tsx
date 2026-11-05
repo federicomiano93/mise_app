@@ -4,17 +4,22 @@ import type { MessageKey } from '../../i18n/en';
 import { useT } from '../../i18n/useT';
 import styles from './InvoiceImportScreen.module.css';
 
+// `saved`: the record is in the log; `failed`: writing it failed; `recorded`: its invoices; `newCount`: the new invoices the file held.
+export type SummaryLog = { readonly saved: boolean; readonly failed: boolean; readonly recorded: number; readonly newCount: number };
+
 type Props = {
   headingRef: Ref<HTMLHeadingElement>;
   summary: RunTotals;
   // How many remembered decisions the run wrote or deleted, and whether that write failed.
   decisionsWritten: number;
   decisionsFailed: boolean;
+  // How the import log took this file: written or not, how many invoices it holds, how many of the file's new ones there were.
+  log: SummaryLog;
 };
 
 // The end of the import: what was done, in plain counts. Part of the current app's summary that belongs to the .json file path
 // (the workbook advice, the «remember with unisci con» hints) is not here: an invoice zip has no workbook (decision F6).
-export function SummaryStep({ headingRef, summary, decisionsWritten, decisionsFailed }: Props) {
+export function SummaryStep({ headingRef, summary, decisionsWritten, decisionsFailed, log }: Props) {
   const { t } = useT();
   const lines: [MessageKey, number][] = [
     ['sup.imp.summary.created', summary.created],
@@ -62,6 +67,10 @@ export function SummaryStep({ headingRef, summary, decisionsWritten, decisionsFa
           </ul>
         </>
       ) : null}
+      {log.failed ? <p role="alert" className={`${styles.status} ${styles.error}`}>{t('sup.imp.log.notSaved')}</p> : null}
+      {log.saved && log.recorded < log.newCount ? <p className={styles.note}>{t('sup.imp.log.partial', { n: log.newCount - log.recorded })}</p> : null}
+      {log.saved && log.recorded >= log.newCount ? <p className={styles.note}>{t('sup.imp.log.saved')}</p> : null}
+      {!log.saved && !log.failed && log.newCount > 0 ? <p className={styles.note}>{t('sup.imp.log.noneDone')}</p> : null}
       {/* ⚠️ «LOAD THE SAME FILE AGAIN» ONLY WHEN A SECOND LOAD CAN HELP: a write that failed, a timeout, a catalogue that changed.
           An entry that is invalid in the file stays invalid however often it is loaded. */}
       {summary.retryable > 0 || summary.stopped ? <p className={styles.note}>{t('sup.imp.summary.again')}</p> : null}

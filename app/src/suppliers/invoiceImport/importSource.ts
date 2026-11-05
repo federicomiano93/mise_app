@@ -29,6 +29,7 @@ import type { Query } from 'firebase/firestore';
 import type { FirestoreKit } from '../../session/firebaseBackend';
 import { makeSupplierId } from '../suppliersSource';
 import type { StoredDoc } from '../suppliersSource';
+import type { ImportRecordData } from './importLog';
 
 const SUPPLIERS = 'suppliers';
 const INGREDIENTS = 'ingredients';
@@ -36,6 +37,7 @@ const INGREDIENT_PRICES = 'ingredient-prices';
 const PRICES = 'prices';
 const PRICE_CHANGES = 'price-changes';
 const DECISIONS = 'invoice-decisions';
+const IMPORT_LOG = 'invoice-imports';
 
 // The only folders a planned write may name (the first segment of a DocWrite path). Anything else is a bug, and is refused
 // before it reaches Firestore.
@@ -95,6 +97,10 @@ export interface InvoiceImportSource {
   loadDecisions(): Promise<StoredDoc[]>;
   // The selection's decisionChanges → how many documents were written or deleted (batches of at most 20, parity I24).
   writeDecisions(changes: DecisionChanges): Promise<number>;
+  // The venue's import log (Mise 2 only, importLog.ts), from the server NOW: what the reader sets aside and what the screen lists.
+  loadImportLog(): Promise<StoredDoc[]>;
+  // One run's record, written ONCE under a new id (the rules refuse an edit) → its id.
+  saveImportLog(record: ImportRecordData): Promise<string>;
 }
 
 // ⚠️ An id that could name a different path never reaches Firestore.
@@ -264,5 +270,18 @@ export function createFirestoreImportSource(
       }
       return count;
     },
+
+    loadImportLog: () => guarded(async ({ fs, db }) =>
+      docsOf(await fs.getDocsFromServer(fs.collection(db, pathOf(IMPORT_LOG)) as Query))),
+
+    // ⚠️ THE RECORD IS EXACTLY THE SIX KEYS THE RULES LIST, stamped with the venue; never a spread of anything else (no «who»).
+    saveImportLog: record => guarded(async ({ fs, db }) => {
+      const id = makeSupplierId();
+      const { fileName, importedAt, firstDate, lastDate, months, invoiceIds } = record;
+      await fs.setDoc(fs.doc(db, pathOf(IMPORT_LOG), id), {
+        bakery: locationId, fileName, importedAt, firstDate, lastDate, months: [...months], invoiceIds: [...invoiceIds],
+      });
+      return id;
+    }),
   };
 }

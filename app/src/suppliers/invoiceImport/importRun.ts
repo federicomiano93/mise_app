@@ -68,10 +68,17 @@ export const browserParseXml: ParseXml = text => domToTree(new DOMParser().parse
 // The files the person picked → what the invoices hold. Everything — unzip, XML parse, classify, price — runs in memory on the
 // main thread; nothing is written. ⚠️ THE SALT OF A SUPPLIER WITHOUT A VAT NUMBER IS THE VENUE'S ID (parity I31): its key is a
 // hash of the salt and the tax code, and the default salt is the empty one, which would make every venue's keys alike.
-export async function readInvoiceFiles(files: readonly File[], venueId: string, parseXml: ParseXml = browserParseXml): Promise<ImportResult> {
+// `alreadyImported` (the import log's invoice ids, importLog.ts): those invoices are set aside as soon as they are read and come
+// back as the result's `alreadyImported`; nothing else of the import ever sees them. Without it the reader sets nothing aside.
+export async function readInvoiceFiles(
+  files: readonly File[],
+  venueId: string,
+  parseXml: ParseXml = browserParseXml,
+  alreadyImported?: ReadonlySet<string>,
+): Promise<ImportResult> {
   const inputs: { name: string; bytes: Uint8Array }[] = [];
   for (const file of files) inputs.push({ name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) });
-  return buildImportFromInvoices(inputs, { parseXml, now: new Date(), salt: venueId });
+  return buildImportFromInvoices(inputs, { parseXml, now: new Date(), salt: venueId, ...(alreadyImported ? { alreadyImported } : {}) });
 }
 
 // Which sentence tells a person why a call failed: a refusal and a lost connection (a timeout counts as one) have their own;
