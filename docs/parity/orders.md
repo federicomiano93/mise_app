@@ -1420,15 +1420,27 @@ grip, each move saved at once, «Salvataggio…» then «Salvato ✓»); the kio
 - S7. Back from «Ordine dei fornitori» gives the focus back to its door; the title of Settings is focused only when opened from the list.
 - S8. An employee who types the supplier-order address is sent back to Settings.
 
+**Fixed after the review.**
+- A failed supplier-order save puts the list back and says so on the status line, not in a dialog: a modal opened over the grid being
+  re-ordered looped for ever in the specs (React Aria hiding the page behind it), and the status line also outlives Back.
+- The suppliers not on the list (switched off) keep their place in the stored order: a move writes the shown ones first, then the others.
+- A move that changes nothing writes nothing; one supplier alone has no grip; «Nessun fornitore» waits for the suppliers to arrive.
+- Two switches tapped before the first write has come back are judged one on top of the other (`withPatch`), so two quick road closes
+  cannot shut the last road between them.
+- The days box shows the stored number again after any write that was not kept (refused, offline, by the rules) and on leaving it untouched.
+- `kioskSections()` answers null until the suppliers, the records and `config/orders` have all arrived, so the kiosk never draws «nothing
+  today» from a half-loaded store.
+
 **Known and left.**
-- A failed supplier-order save puts the list back first and opens its notice one tick later: opened in the same render as the moved
-  grid, React Aria's hiding of the page behind the dialog looped for ever in the specs. Not seen on a real device; owed on the tablet.
 - Offline, a setting is laid over the screen at once by Firestore and «Salvato ✓» waits for the server, as the goods-arrived switch.
 - The kiosk that draws the lines is step 3g; `kioskSections()` has no caller yet.
-- Not driven: the real tablet (drag by a finger), OFFLINE, a refused save on screen (specs only).
+- Not driven: the real tablet (drag by a finger), OFFLINE.
 
 **Driven.** 107/107 on a private emulator (`algprobe/mise-drive/drive-mise2-orders-8.mjs <base> <cdp-port> <fs-port> <auth-port>`,
 ONLY=IT1024,…,STAFF): the owner in Italian and English at 1024, 360 and 296 (writes at IT 360 and EN 1024: Stock, week, a road, the days
 of History good and refused, lists as the only road, the last road, lists off and on, a supplier moved by the keyboard), the employee at
 360 (locked rows described, no boss sections, the address refused). axe clean, targets, nothing clipped, no sideways scroll, one main,
-one h1, no console error, at every screen; config/orders put back at the end.
+one h1, no console error, at every screen; config/orders put back at the end. Again 107/107 after the review fixes, plus 14/14 for a
+REFUSED move (`drive-mise2-orders-8-refused.mjs`, same arguments): the owner opens «Ordine dei fornitori», becomes an employee in the
+database while the screen still thinks owner, moves a supplier by the keyboard; the status line says it, no dialog, the list goes back,
+nothing written, the page answers, Back works, in Italian at 360 and English at 1024; the role put back.
