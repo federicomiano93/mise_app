@@ -35,6 +35,8 @@ export interface Working {
   // through as it is (in `rest`).
   readonly labelName: string | null;
   readonly labelText: string | null;
+  // The HACCP label's storage text (labelTexts.ts), with the same rule.
+  readonly haccpStorage: string | null;
   // The recipe's category as the menu shows it now ('' = none), and what it showed when the editor opened. ⚠️ THE CATEGORY GOES
   // TO THE STORE ONLY WHEN THE TWO DIFFER (cleanWorking): a recipe filed under a word that has since left the list shows «no
   // category» here, and an unrelated save must not strip the word from it. The stored word is NOT in `rest` for that reason.
@@ -48,7 +50,7 @@ export interface Working {
 export const NAME_MAX_LENGTH = 199;
 
 // The four boxes nobody has typed in.
-const UNTOUCHED = { netWeight: null, shelfLife: null, labelName: null, labelText: null } as const;
+const UNTOUCHED = { netWeight: null, shelfLife: null, labelName: null, labelText: null, haccpStorage: null } as const;
 // No category chosen, and none to start from.
 const NO_CATEGORY = { category: '', categoryStart: '' } as const;
 
@@ -108,7 +110,7 @@ export function duplicateWorking(
   const rest: Record<string, unknown> = {};
   // ⚠️ NOT the image label's title (`labelName`): it names the ORIGINAL, and a copy printed with it would carry the other
   // product's name. Left out, the copy's label shows its own name in capitals until somebody types one.
-  for (const key of ['netWeightG', 'shelfLifeDays', 'steps', 'endNote', 'labelIngredientsText'] as const) {
+  for (const key of ['netWeightG', 'shelfLifeDays', 'steps', 'endNote', 'labelIngredientsText', 'haccpStorage'] as const) {
     if (from[key] !== undefined) rest[key] = JSON.parse(JSON.stringify(from[key])) as unknown;
   }
   return {
@@ -186,6 +188,7 @@ export function restoreWorking(value: unknown): Working | null {
     shelfLife: typeof held.shelfLife === 'string' ? held.shelfLife : null,
     labelName: typeof held.labelName === 'string' ? held.labelName : null,
     labelText: typeof held.labelText === 'string' ? held.labelText : null,
+    haccpStorage: typeof held.haccpStorage === 'string' ? held.haccpStorage : null,
     category: typeof held.category === 'string' ? held.category : '',
     categoryStart: typeof held.categoryStart === 'string' ? held.categoryStart : '',
   };
@@ -196,6 +199,10 @@ export const labelNameText = (working: Working): string =>
   working.labelName ?? (typeof working.rest.labelName === 'string' ? working.rest.labelName : '');
 export const labelIngredientsBoxText = (working: Working): string =>
   working.labelText ?? (typeof working.rest.labelIngredientsText === 'string' ? working.rest.labelIngredientsText : '');
+
+// The HACCP storage box: what was typed, else the stored text.
+export const haccpStorageText = (working: Working): string =>
+  working.haccpStorage ?? (typeof working.rest.haccpStorage === 'string' ? working.rest.haccpStorage : '');
 
 export const setName = (working: Working, name: string): Working => ({ ...working, name });
 
@@ -300,6 +307,7 @@ export function cleanWorking(working: Working): RecipeToSave {
   // The image label's boxes, typed: handed over as typed (the store trims them, and an empty one takes the field away).
   if (working.labelName !== null) out.labelName = working.labelName;
   if (working.labelText !== null) out.labelIngredientsText = working.labelText;
+  if (working.haccpStorage !== null) out.haccpStorage = working.haccpStorage;
   // The category only when the choice MOVED from where the editor started ('' = «no category», a removal).
   if (working.category !== working.categoryStart) out.category = working.category;
   return out as unknown as RecipeToSave;

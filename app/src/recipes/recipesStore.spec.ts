@@ -70,9 +70,11 @@ function handSource() {
   const watchLabelLogo = vi.fn<RecipesSource['watchLabelLogo']>(() => () => undefined);
   const saveLabelLogo = vi.fn<RecipesSource['saveLabelLogo']>(() => Promise.resolve());
   const removeLabelLogo = vi.fn<RecipesSource['removeLabelLogo']>(() => Promise.resolve());
+  const readMember = vi.fn<RecipesSource['readMember']>(() => Promise.resolve(null));
   const source: RecipesSource = {
     watchRecipes, watchIngredients, watchLabelConfig, watchPrintAgents, queuePrintJob, saveLabelConfig, watchSuppliers,
     saveRecipeDoc, removeRecipeDoc, getCalculatorConfig, importIntoCalculator, watchLabelLogo, saveLabelLogo, removeLabelLogo,
+    readMember,
   };
   return {
     source,

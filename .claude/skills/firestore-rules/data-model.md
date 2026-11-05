@@ -108,6 +108,15 @@ Catalogue Settings, canManage like the rest of that document). An archived recip
 (Calculator tabs, Food cost lines, sub-recipe rows, labels); only the list and the pickers for NEW links leave it out
 (`shared/src/recipe-shelf.ts`). The current app neither reads nor writes them; its merge saves keep them.
 
+**HACCP label (Mise 2, 26 Oct 2026, rules not yet deployed).** Recipes may carry `haccpStorage` (string ≤200, how the
+semi-finished good is kept; employees may edit it). `config/labels` gains `haccpFields` (a FLAT map, keys from the eleven
+field ids of `shared/src/haccp-label.ts`, values `'off'` | `'print'` | `'blank'`; a missing id = that field's default),
+`haccpSize` (one of `'40x30'`, `'50x30'`, `'60x40'`, `'62x29'`, `'80x60'` — each is a static page file in the app) and
+`haccpCategory` (string 1–100, the one category the HACCP list shows; none = every recipe; a word not on the venue's list
+= every recipe). canManage like the rest of that document. The prepared-by name is READ from
+`locations/{lid}/members/{uid}.firstName` (a label, never an identity) only when that field is printed; ⚠️ P13: it puts a
+first name on paper, off by default.
+
 ⚠️ **The language rule, for every screen:** a word that names a FOOD follows the venue's COUNTRY
 (`allergenName` / `allergenGroupName` / `nutrientName`, passed the output language); a word that
 tells somebody what to tap follows `t()`. A file that does the first is a label file and may never

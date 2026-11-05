@@ -5,6 +5,8 @@ import { useT } from '../i18n/useT';
 import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { AllergenSheet } from './AllergenSheet';
+import { HaccpLabelScreen } from './HaccpLabelScreen';
+import { HaccpList } from './HaccpList';
 import { LabelSettings } from './LabelSettings';
 import { LabelScreen } from './LabelScreen';
 import { PhotoScreen } from './PhotoScreen';
@@ -16,7 +18,7 @@ import { RecipeView } from './RecipeView';
 import { cameFromList, cameFromRecipe, cameFromSheet, useLeave } from './recipesNav';
 import { RECIPES_PATH, recipePath } from './recipesPath';
 import type { ShownView } from './recipesPath';
-import { ALLERGENS_OPENER, SETTINGS_OPENER, recipeOpener, sheetOpener, useHandBack } from './handBack';
+import { ALLERGENS_OPENER, HACCP_OPENER, SETTINGS_OPENER, recipeOpener, sheetOpener, useHandBack } from './handBack';
 import { useRecipeDeletions } from './recipeDeletions';
 import { useRecipeReturn } from './recipeReturn';
 import styles from './RecipesDetail.module.css';
@@ -26,10 +28,17 @@ import styles from './RecipesDetail.module.css';
 //
 // (No `key` on the recipe screen here: the section keeps one screen from one recipe to the next on
 // the split, so the focus stays on the row that was pressed.)
-export function RecipesDetail({ view, onOpenFromSheet }: { view: ShownView; onOpenFromSheet: (id: string) => void }) {
+export function RecipesDetail({ view, onOpenFromSheet, onOpenFromHaccp }: {
+  view: ShownView;
+  onOpenFromSheet: (id: string) => void;
+  onOpenFromHaccp: (id: string) => void;
+}) {
   if (view.kind === 'list') return <Prompt />;
   if (view.kind === 'allergens') return <SheetScreen onOpenRecipe={onOpenFromSheet} />;
   if (view.kind === 'settings') return <SettingsScreen />;
+  // The HACCP list and a recipe's HACCP label (image labels step 2): open to everybody the section is open to.
+  if (view.kind === 'haccp') return <HaccpScreen onOpenRecipe={onOpenFromHaccp} />;
+  if (view.kind === 'haccpLabel') return <HaccpLabelScreen key={`haccp:${view.id}`} id={view.id} />;
   // The editor (step 3d-6): a new recipe, or one recipe's, one level below the list / the recipe.
   if (view.kind === 'new') return <RecipeEditorScreen key="new" id={null} />;
   if (view.kind === 'edit') return <RecipeEditorScreen key="edit" id={view.id} />;
@@ -60,6 +69,24 @@ function SheetScreen({ onOpenRecipe }: { onOpenRecipe: (id: string) => void }) {
   }, []);
 
   return <AllergenSheet titleRef={title} onBack={leave} onOpenRecipe={onOpenRecipe} />;
+}
+
+// The HACCP list. Back steps up to the recipe list and hands the focus back to the door that opened it; a label opened from a
+// row comes back to that row.
+function HaccpScreen({ onOpenRecipe }: { onOpenRecipe: (id: string) => void }) {
+  const { state } = useLocation();
+  const navigationType = useNavigationType();
+  const handBack = useHandBack();
+  const title = useRef<HTMLHeadingElement>(null);
+  const leave = useLeave(RECIPES_PATH, () => { handBack.expect(HACCP_OPENER); });
+
+  // Opened from the list the page does not move the focus (FROM_LIST): it goes to this title. Not when Back from a label
+  // brings the list again (POP): the row that opened that label is owed the focus.
+  useEffect(() => {
+    if (cameFromList(state) && navigationType !== 'POP') title.current?.focus();
+  }, []);
+
+  return <HaccpList titleRef={title} onBack={leave} onOpenRecipe={onOpenRecipe} />;
 }
 
 // The label Settings (its gate, whoever runs the place, is checked by the section before it gets here). Back steps up to

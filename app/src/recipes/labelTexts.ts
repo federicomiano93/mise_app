@@ -17,19 +17,25 @@ import { normalizeCatalogueRecipe } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import { shelfFieldsOf } from '@mise/shared/recipe-shelf';
 
-export const LABEL_TEXT_FIELDS = ['labelName', 'labelIngredientsText'] as const;
+// `haccpStorage` (26 Oct 2026) is the HACCP label's: how the semi-finished good is kept, printed when the venue prints
+// that field. Same life as the other two: stored as typed, an emptied box is a removal.
+export const LABEL_TEXT_FIELDS = ['labelName', 'labelIngredientsText', 'haccpStorage'] as const;
 export type LabelTextField = (typeof LABEL_TEXT_FIELDS)[number];
 
 // The rules' bounds (firestore.rules, `recipes`), repeated so a box never holds what the database would refuse.
 export const LABEL_NAME_MAX = 200;
 export const LABEL_TEXT_MAX = 2000;
-const MAX: Readonly<Record<LabelTextField, number>> = { labelName: LABEL_NAME_MAX, labelIngredientsText: LABEL_TEXT_MAX };
+export const HACCP_STORAGE_MAX = 200;
+const MAX: Readonly<Record<LabelTextField, number>> = {
+  labelName: LABEL_NAME_MAX, labelIngredientsText: LABEL_TEXT_MAX, haccpStorage: HACCP_STORAGE_MAX,
+};
 
 // A recipe as the store holds it: the shared shape, plus the two texts when they were stored, plus the shelf's two fields
 // (a category word, `archived: true`) when they were.
 export type LabelledRecipe = CatalogueRecipe & {
   readonly labelName?: string;
   readonly labelIngredientsText?: string;
+  readonly haccpStorage?: string;
   readonly category?: string;
   readonly archived?: true;
 };
@@ -60,7 +66,9 @@ export function normalizeStoredRecipes(list: unknown): LabelledRecipe[] {
 // What a recipe holds, '' for nothing.
 export function labelTextsOf(recipe: unknown): Record<LabelTextField, string> {
   const texts = storedTexts(recipe);
-  return { labelName: texts.labelName ?? '', labelIngredientsText: texts.labelIngredientsText ?? '' };
+  return {
+    labelName: texts.labelName ?? '', labelIngredientsText: texts.labelIngredientsText ?? '', haccpStorage: texts.haccpStorage ?? '',
+  };
 }
 
 // The title the label prints: the typed one, else the recipe's name in capitals (the owner's decision, 25 Oct 2026).

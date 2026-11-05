@@ -1,0 +1,138 @@
+/* The HACCP label screen's own pieces: the boxes for this print, the preview of the dots and the print note. The rest (the
+   body, the refusal box, the caveat, the buttons) is LabelScreen.module.css, shared on purpose.
+
+   ⚠️ NOTHING ON THE SCREEN MAY CLIP (no `overflow`), as in LabelScreen.module.css. */
+
+/* The boxes of this print. */
+.boxes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.boxesTitle {
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+}
+
+.boxesNote {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+.cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.label {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* 18px type on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
+.input {
+  width: 100%;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--font);
+}
+
+.input:focus-visible {
+  border-color: var(--accent);
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* The use-by date: shown, not a box. */
+.fixed {
+  margin: 0;
+  min-height: var(--hit);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--s3);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+  font-size: var(--fs-lg);
+  font-variant-numeric: tabular-nums;
+}
+
+.note {
+  margin: 0;
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}
+
+/* The screen's polite live region is always in the page, even with nothing in it. Empty, it must not add a gap of its
+   own to the body's column: the negative margin takes the body's gap (--s4) back. */
+.live:empty {
+  margin-bottom: calc(var(--s4) * -1);
+}
+
+/* The label as the printer will draw it, at its real size when the screen is wide enough. The frame is a box-shadow, not a
+   border, so the picture is exactly as wide as the label and the measurement in the screen is exact. Every dot stays a
+   square (`pixelated`): a smoothed preview would show grey the printer does not print. One rule per size, STATIC: the width
+   of a size cannot be built at run time (the page CSP). */
+.preview {
+  display: block;
+  align-self: center;
+  max-width: 100%;
+  height: auto;
+  box-shadow: 0 0 0 1px var(--line-2);
+  image-rendering: pixelated;
+}
+
+.preview[data-size='40x30'] {
+  width: 40mm;
+  aspect-ratio: 40 / 30;
+}
+
+.preview[data-size='50x30'] {
+  width: 50mm;
+  aspect-ratio: 50 / 30;
+}
+
+.preview[data-size='60x40'] {
+  width: 60mm;
+  aspect-ratio: 60 / 40;
+}
+
+.preview[data-size='62x29'] {
+  width: 62mm;
+  aspect-ratio: 62 / 29;
+}
+
+.preview[data-size='80x60'] {
+  width: 80mm;
+  aspect-ratio: 80 / 60;
+}
+
+.previewNote {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  text-align: center;
+}
+
+.printNote {
+  margin: 0;
+  flex: 1 1 100%;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  line-height: 1.45;
+}

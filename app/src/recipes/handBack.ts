@@ -20,6 +20,10 @@ export const sheetOpener = (id: string): string => `sheet:${id}`;
 export const SEARCH_OPENER = 'search';
 // The door to the label Settings, at the foot of the list (after the Allergen sheet's): Back from Settings returns the focus to it.
 export const SETTINGS_OPENER = 'settings-door';
+// The door to the HACCP list, at the foot of the list (after the Allergen sheet's, before Settings): Back from the list returns the focus to it.
+export const HACCP_OPENER = 'haccp-door';
+// A row of the HACCP list: Back from that recipe's HACCP label returns the focus to its row.
+export const haccpRowOpener = (id: string): string => `haccp:${id}`;
 // The «New recipe» button at the top of the list: Back from a new recipe's editor returns the focus to it.
 export const NEW_OPENER = 'new-door';
 

@@ -2,10 +2,16 @@ import type { ReactNode } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
 import type { Root } from 'react-dom/client';
+import labelPageHaccp40x30Href from './label-page-haccp-40x30.css?url';
+import labelPageHaccp50x30Href from './label-page-haccp-50x30.css?url';
+import labelPageHaccp60x40Href from './label-page-haccp-60x40.css?url';
+import labelPageHaccp62x29Href from './label-page-haccp-62x29.css?url';
+import labelPageHaccp80x60Href from './label-page-haccp-80x60.css?url';
 import labelPageImageHref from './label-page-image.css?url';
 import labelPageHref from './label-page.css?url';
 import { LabelSheet } from './LabelSheet';
 import type { SheetSource } from './LabelSheet';
+import type { HaccpSize } from '@mise/shared/haccp-label';
 
 // The host the printer receives: built when Print is pressed, removed once the person is back in the app.
 //
@@ -52,6 +58,18 @@ export const LABEL_PAGE_ID = 'labelPage';
 // switched the same way, and only one of the two is ever on.
 export const LABEL_PAGE_IMAGE_ID = 'labelPageImage';
 
+// The HACCP label's pages, one file per size (label-page-haccp-<size>.css): linked and switched like the image label's, and
+// only one of ALL the page files is ever on. The map is closed over the five sizes the settings offer.
+export const LABEL_PAGE_HACCP_PREFIX = 'labelPageHaccp';
+const HACCP_PAGES: Readonly<Record<HaccpSize, string>> = {
+  '40x30': labelPageHaccp40x30Href,
+  '50x30': labelPageHaccp50x30Href,
+  '60x40': labelPageHaccp60x40Href,
+  '62x29': labelPageHaccp62x29Href,
+  '80x60': labelPageHaccp80x60Href,
+};
+const haccpPageId = (size: HaccpSize): string => `${LABEL_PAGE_HACCP_PREFIX}${size}`;
+
 function pageLink(id: string, href: string): HTMLLinkElement {
   const existing = document.getElementById(id);
   if (existing instanceof HTMLLinkElement) return existing;
@@ -67,8 +85,12 @@ function pageLink(id: string, href: string): HTMLLinkElement {
 const labelPageLink = (): HTMLLinkElement => pageLink(LABEL_PAGE_ID, labelPageHref);
 const imagePageLink = (): HTMLLinkElement => pageLink(LABEL_PAGE_IMAGE_ID, labelPageImageHref);
 
+const haccpPageLink = (size: HaccpSize): HTMLLinkElement => pageLink(haccpPageId(size), HACCP_PAGES[size]);
+const HACCP_SIZE_LIST = Object.keys(HACCP_PAGES) as HaccpSize[];
+
 labelPageLink();
 imagePageLink();
+for (const size of HACCP_SIZE_LIST) haccpPageLink(size);
 
 // The signs that the person is back in the page.
 const BACK_IN_PAGE = ['pointerdown', 'keydown'] as const;
@@ -86,6 +108,7 @@ export function closePrintHost(): void {
   document.documentElement.classList.remove(PRINTING_CLASS);
   labelPageLink().media = LABEL_PAGE_OFF;
   imagePageLink().media = LABEL_PAGE_OFF;
+  for (const size of HACCP_SIZE_LIST) haccpPageLink(size).media = LABEL_PAGE_OFF;
 }
 
 // ⚠️ ONE LIFETIME FOR EVERY KIND OF LABEL. The paper sheet and the image label (a PNG of the very dots that go to the
@@ -123,4 +146,10 @@ export function openPrintHost(resolved: SheetSource, fontMm: number, sizeId: str
 // image has no alt text on purpose: it is a picture of a label, and nobody reads the print host.
 export function openImagePrintHost(png: string): void {
   openHost('lab-print lab-print--p80x60', <img className="lab-print-image" src={png} alt="" />, imagePageLink);
+}
+
+// The HACCP label: its dots as a PNG on a page of exactly its size (label-print.css, `.lab-print--haccp-<size>`), through the
+// same host as the others. The size is one of the closed set, so the class and the page file always exist.
+export function openHaccpPrintHost(png: string, size: HaccpSize): void {
+  openHost(`lab-print lab-print--haccp-${size}`, <img className="lab-print-image" src={png} alt="" />, () => haccpPageLink(size));
 }

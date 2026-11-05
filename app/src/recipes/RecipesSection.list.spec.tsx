@@ -74,8 +74,8 @@ describe('the list of recipes', () => {
     renderRecipes('/recipes', { source: sourceWith([]) });
     expect(await screen.findByText('No recipes yet', undefined, LOAD)).toBeInTheDocument();
     expect(screen.getByText('Add your first recipe: its ingredients and their amounts.')).toBeInTheDocument();
-    // The buttons: the one that makes a recipe, then the two doors — the Allergen sheet and Settings (the default session runs the place).
-    expect(main().getAllByRole('button').map(button => button.textContent)).toEqual(['New recipe', 'Allergen sheet', 'Settings']);
+    // The buttons: the one that makes a recipe, then the three doors — the Allergen sheet, the HACCP labels and Settings (the default session runs the place).
+    expect(main().getAllByRole('button').map(button => button.textContent)).toEqual(['New recipe', 'Allergen sheet', 'HACCP labels', 'Settings']);
   });
 
   it('says it in Italian', async () => {

@@ -7,6 +7,7 @@ import { findInvalidRecipe, linkOf } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe, InvalidRecipeProblem } from '@mise/shared/catalogue-model';
 import { normalizeLabelProfile } from '@mise/shared/label-template-model';
 import { mayEditRecords } from '@mise/shared/records';
+import { haccpSettingsOf } from '@mise/shared/haccp-label';
 import { categoryOf, sortedCategories } from '@mise/shared/recipe-shelf';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
@@ -21,13 +22,13 @@ import { CreateIngredientOverlay } from '../suppliers/CreateIngredientOverlay';
 import { KEEP_FOCUS } from '../shell/Page';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import {
-  NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, labelIngredientsBoxText, labelNameText, linkRowTo, netWeightText, notWeighedCount, removeRow, setCategory, setName, setRowFields, shelfLifeText,
+  NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, haccpStorageText, labelIngredientsBoxText, labelNameText, linkRowTo, netWeightText, notWeighedCount, removeRow, setCategory, setName, setRowFields, shelfLifeText,
   stepWorkingRow, totalText, workingFrom,
 } from './editorModel';
 import type { Chosen, DropPosition, Row, Working } from './editorModel';
 import { imageLabelChoice } from './imageLabelData';
 import { IngredientRow } from './IngredientRow';
-import { LABEL_NAME_MAX, LABEL_TEXT_MAX } from './labelTexts';
+import { HACCP_STORAGE_MAX, LABEL_NAME_MAX, LABEL_TEXT_MAX } from './labelTexts';
 import { LinkDialog } from './LinkDialog';
 import { CardBoundary } from './CardBoundary';
 import { ReorderRows } from './ReorderRows';
@@ -82,6 +83,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   const logoHeadId = `${ids}-logo`;
   const labelTitleId = `${ids}-labelTitle`;
   const labelTextId = `${ids}-labelText`;
+  const haccpStorageId = `${ids}-haccpStorage`;
   const hintId = `${ids}-reorder-hint`;
 
   // ⚠️ A NEW RECIPE MAY START FROM SOMETHING CARRIED (photoCarry.ts), and then it starts DIRTY — it is unsaved work, typed or
@@ -462,6 +464,9 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   // ── What is drawn ────────────────────────────────────────────────────────────────────────────────────────────
   const profile = normalizeLabelProfile(labelConfig);
   const logoModel = imageLabelChoice(labelConfig).template === 'logo';
+  // ⚠️ THE HACCP STORAGE BOX IS DRAWN ONLY WHEN THE VENUE PRINTS THAT FIELD (Settings → HACCP label → Storage → Printed): a box
+  // whose text no label would carry is clutter. A recipe's stored text is kept either way (cleanWorking passes it through).
+  const haccpStorageOn = haccpSettingsOf(labelConfig).fields.storage === 'print';
   // ⚠️ SHOWN ONLY WHEN THE VENUE PRINTS THEM: two boxes nobody can explain on a screen everybody uses are clutter, and a
   // control that changes nothing is one somebody sets wrongly and then trusts.
   const wantsWeight = profile.showWeight === true;
@@ -675,6 +680,25 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
               <p id={`${labelTextId}-note`} className={styles.note}>{t('cat.labelIngredientsNote')}</p>
             </div>
           </section>
+        ) : null}
+
+        {/* ⚠️ THE HACCP LABEL'S STORAGE TEXT: a single line, through edit() like every other box (dirty, busy, leave guard), the
+            same working-copy rule as the logo label's two texts (nothing typed = the stored text goes through; emptied = removal). */}
+        {haccpStorageOn ? (
+          <div className={styles.cell}>
+            <label htmlFor={haccpStorageId} className={styles.label}>{t('cat.haccpStorage')}</label>
+            <input
+              id={haccpStorageId}
+              type="text"
+              autoComplete="off"
+              className={styles.nameBox}
+              maxLength={HACCP_STORAGE_MAX}
+              aria-describedby={`${haccpStorageId}-note`}
+              value={haccpStorageText(working)}
+              onChange={event => { edit(current => ({ ...current, haccpStorage: event.target.value })); }}
+            />
+            <p id={`${haccpStorageId}-note`} className={styles.note}>{t('cat.haccpStorageNote')}</p>
+          </div>
         ) : null}
 
         {/* ⚠️ DELETE: whoever runs the place only (the same as the recipe page), absent — not disabled — for everybody else and

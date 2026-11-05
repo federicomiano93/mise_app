@@ -3,7 +3,7 @@ import { CANVAS_H, CANVAS_W, layoutLogoLabel } from '@mise/shared/label-image-la
 import { ascentOf, measureLikePillow } from '@mise/shared/label-image-fonts';
 import { labelMetrics } from '@mise/shared/label-image-metrics';
 import { dotIsBlack, greyFromRgba, toBitmap } from '@mise/shared/label-image-raster';
-import { bitmapPng, drawLogoLabel, greyOfCanvas, paintBitmap } from './labelCanvas';
+import { bitmapPng, drawElements, drawLogoLabel, greyOfCanvas, paintBitmap, renderLayoutBitmap } from './labelCanvas';
 import type { LabelCanvasContext } from './labelCanvas';
 
 // The drawing half, against a recording fake context (jsdom has no canvas 2d context).
@@ -126,5 +126,48 @@ describe('paintBitmap', () => {
     } finally {
       document.createElement = real;
     }
+  });
+});
+
+// ── The same drawing for the HACCP label (any size) ─────────────────────────
+
+describe('renderLayoutBitmap', () => {
+  it('draws on a canvas S times the label and reduces it to the label’s own dots (60x40 mm = 480 × 320)', () => {
+    const real = document.createElement.bind(document);
+    const made: { width: number; height: number; fills: number[][] }[] = [];
+    const rgba = (w: number, h: number) => new Uint8ClampedArray(w * h * 4).fill(255);
+    document.createElement = ((tag: string) => {
+      if (tag !== 'canvas') return real(tag);
+      const canvas = {
+        width: 0, height: 0, fills: [] as number[][],
+        getContext: () => ({
+          fillStyle: '', font: '', textBaseline: '', textAlign: '',
+          fillRect: (...args: number[]) => { canvas.fills.push(args); },
+          fillText: () => undefined,
+          drawImage: () => undefined,
+          getImageData: (_x: number, _y: number, w: number, h: number) => ({ data: rgba(w, h) }),
+        }),
+      };
+      made.push(canvas);
+      return canvas as unknown as HTMLCanvasElement;
+    }) as typeof document.createElement;
+    try {
+      const bitmap = renderLayoutBitmap([], 480 * 4, 320 * 4, metrics, null);
+      expect([bitmap.width, bitmap.height]).toEqual([480, 320]);
+      expect(made[0]?.fills[0]).toEqual([0, 0, 1920, 1280]);
+    } finally {
+      document.createElement = real;
+    }
+  });
+
+  it('draws a rectangle and skips an image when there is no picture', () => {
+    const { ops, ctx } = recorder();
+    drawElements(ctx, [
+      { kind: 'rect', x0: 4, y0: 8, x1: 9, y1: 9 },
+      { kind: 'image', x: 0, y: 0, w: 10, h: 10 },
+    ], metrics, null, 100, 80);
+    expect(ops.map(o => o.op)).toEqual(['fillRect', 'fillRect']);
+    expect(ops[0]?.args).toEqual([0, 0, 100, 80]);
+    expect(ops[1]?.args).toEqual([4, 8, 6, 2]);
   });
 });

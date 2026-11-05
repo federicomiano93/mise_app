@@ -1,8 +1,8 @@
-import { CANVAS_H, CANVAS_W } from '@mise/shared/label-image-layout';
-import type { LogoLabelLayout } from '@mise/shared/label-image-layout';
+import { CANVAS_H, CANVAS_W, S } from '@mise/shared/label-image-layout';
+import type { LayoutElement, LogoLabelLayout } from '@mise/shared/label-image-layout';
 import { ascentOf, measureLikePillow } from '@mise/shared/label-image-fonts';
 import type { LabelMetrics } from '@mise/shared/label-image-fonts';
-import { LABEL_H, LABEL_W, dotIsBlack, greyFromRgba, resizeLanczos, toBitmap } from '@mise/shared/label-image-raster';
+import { dotIsBlack, greyFromRgba, resizeLanczos, toBitmap } from '@mise/shared/label-image-raster';
 import type { Bitmap, GreyImage } from '@mise/shared/label-image-raster';
 import { LABEL_FONT_CSS } from './labelFonts';
 
@@ -16,17 +16,22 @@ export type LabelCanvasContext = Pick<
   'fillStyle' | 'font' | 'textBaseline' | 'textAlign' | 'fillRect' | 'fillText' | 'drawImage'
 >;
 
-export function drawLogoLabel(
-  ctx: LabelCanvasContext, layout: LogoLabelLayout, metrics: LabelMetrics, logo: CanvasImageSource,
+// ⚠️ ONE DRAWING FOR EVERY IMAGE LABEL. The «with logo» product label (640 × 480 dots) and the HACCP label (any of its sizes)
+// are the same kind of thing — elements on a white canvas S times the label — so the loop below takes the canvas size as
+// an argument and the product label's functions are thin wrappers that pass its own. `logo` is null for a label with no
+// picture; an `image` element on such a label draws nothing (the HACCP layout has none).
+export function drawElements(
+  ctx: LabelCanvasContext, elements: readonly LayoutElement[], metrics: LabelMetrics, logo: CanvasImageSource | null,
+  widthPx: number, heightPx: number,
 ): void {
   ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  ctx.fillRect(0, 0, widthPx, heightPx);
   ctx.fillStyle = '#000000';
   ctx.textBaseline = 'alphabetic';
   ctx.textAlign = 'left';
-  for (const el of layout.elements) {
+  for (const el of elements) {
     if (el.kind === 'image') {
-      ctx.drawImage(logo, el.x, el.y, el.w, el.h);
+      if (logo !== null) ctx.drawImage(logo, el.x, el.y, el.w, el.h);
     } else if (el.kind === 'rect') {
       // Pillow's rectangle includes both corners.
       ctx.fillRect(el.x0, el.y0, el.x1 - el.x0 + 1, el.y1 - el.y0 + 1);
@@ -48,25 +53,39 @@ export function drawLogoLabel(
   }
 }
 
+export function drawLogoLabel(
+  ctx: LabelCanvasContext, layout: LogoLabelLayout, metrics: LabelMetrics, logo: CanvasImageSource,
+): void {
+  drawElements(ctx, layout.elements, metrics, logo, CANVAS_W, CANVAS_H);
+}
+
 export function greyOfCanvas(ctx: Pick<CanvasRenderingContext2D, 'getImageData'>, width: number, height: number): GreyImage {
   return greyFromRgba(ctx.getImageData(0, 0, width, height).data, width, height);
 }
 
-export function renderLogoLabelBitmap(layout: LogoLabelLayout, metrics: LabelMetrics, logo: CanvasImageSource): Bitmap {
+// The elements of any image label as its dots: drawn on a canvas widthPx × heightPx (S times the label), read back as grey,
+// reduced to widthPx / S × heightPx / S dots by Pillow's own Lanczos and cut to black and white.
+export function renderLayoutBitmap(
+  elements: readonly LayoutElement[], widthPx: number, heightPx: number, metrics: LabelMetrics, logo: CanvasImageSource | null,
+): Bitmap {
   const canvas = document.createElement('canvas');
-  canvas.width = CANVAS_W;
-  canvas.height = CANVAS_H;
+  canvas.width = widthPx;
+  canvas.height = heightPx;
   try {
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
     if (ctx === null) throw new Error('no-canvas');
-    drawLogoLabel(ctx, layout, metrics, logo);
-    const grey = greyOfCanvas(ctx, CANVAS_W, CANVAS_H);
-    return toBitmap(resizeLanczos(grey, LABEL_W, LABEL_H));
+    drawElements(ctx, elements, metrics, logo, widthPx, heightPx);
+    const grey = greyOfCanvas(ctx, widthPx, heightPx);
+    return toBitmap(resizeLanczos(grey, widthPx / S, heightPx / S));
   } finally {
     // The big canvas is ~20 MB of pixels: let it go now, not when the garbage collector gets round to it.
     canvas.width = 0;
     canvas.height = 0;
   }
+}
+
+export function renderLogoLabelBitmap(layout: LogoLabelLayout, metrics: LabelMetrics, logo: CanvasImageSource): Bitmap {
+  return renderLayoutBitmap(layout.elements, CANVAS_W, CANVAS_H, metrics, logo);
 }
 
 // The dots on a canvas: black where the printer prints, white elsewhere. ⚠️ The preview AND the print both use this, so

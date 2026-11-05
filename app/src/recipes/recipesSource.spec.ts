@@ -249,6 +249,35 @@ describe('the Recipe catalogue source', () => {
     await expect(createFirestoreRecipesSource(() => Promise.reject(new Error('chunk')), 'bakery').saveLabelConfig({})).rejects.toThrow('chunk');
   });
 
+  test('the HACCP list\'s category set to «every recipe» (null) travels as a removal; other keys are sent as they are', async () => {
+    const { kit, fs } = fakeKit();
+    const removal = { removal: true };
+    (fs as unknown as { deleteField: () => unknown }).deleteField = vi.fn(() => removal);
+    const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery');
+    await source.saveLabelConfig({ haccpCategory: null, haccpSize: '50x30' });
+    await source.saveLabelConfig({ haccpCategory: 'Semilavorati' });
+    expect(fs.setDoc).toHaveBeenNthCalledWith(1, { kind: 'doc', path: 'locations/bakery/config/labels' },
+      { haccpCategory: removal, haccpSize: '50x30', bakery: 'bakery' }, { merge: true });
+    expect(fs.setDoc).toHaveBeenNthCalledWith(2, { kind: 'doc', path: 'locations/bakery/config/labels' },
+      { haccpCategory: 'Semilavorati', bakery: 'bakery' }, { merge: true });
+  });
+
+  test('a roster line is read once from the open venue\'s members; none, and a read that fails, are null', async () => {
+    const { kit, fs } = fakeKit();
+    let stored: Record<string, unknown> | null = { firstName: 'Anna', lastName: 'Rossi' };
+    const getDoc = vi.fn(async () => ({ exists: () => stored !== null, data: () => stored }));
+    Object.assign(fs, { getDoc });
+    const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery');
+    expect(await source.readMember('U1')).toEqual({ firstName: 'Anna', lastName: 'Rossi' });
+    expect(getDoc).toHaveBeenCalledWith({ kind: 'doc', path: 'locations/bakery/members/U1' });
+    stored = null;
+    expect(await source.readMember('U1')).toBeNull();
+    getDoc.mockRejectedValueOnce(new Error('unavailable'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(await source.readMember('U1')).toBeNull();
+    warn.mockRestore();
+  });
+
   // ── Writing recipes (step 3d-6) ──
 
   test('⚠️ a recipe save is a MERGE at its id, stamped with the venue last, never sending `id`; a null box is a removal', async () => {

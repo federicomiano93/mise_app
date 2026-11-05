@@ -29,10 +29,11 @@ describe('the recipe’s two label texts', () => {
 
   test('blank or not a string is no text at all', () => {
     for (const odd of ['', '   ', 7, null, ['A'], { a: 1 }]) {
-      const held = normalizeStoredRecipe({ ...STORED, labelName: odd, labelIngredientsText: odd }) as unknown as Record<string, unknown>;
+      const held = normalizeStoredRecipe({ ...STORED, labelName: odd, labelIngredientsText: odd, haccpStorage: odd }) as unknown as Record<string, unknown>;
       expect('labelName' in held).toBe(false);
       expect('labelIngredientsText' in held).toBe(false);
-      expect(labelTextsOf(held)).toEqual({ labelName: '', labelIngredientsText: '' });
+      expect('haccpStorage' in held).toBe(false);
+      expect(labelTextsOf(held)).toEqual({ labelName: '', labelIngredientsText: '', haccpStorage: '' });
     }
   });
 
@@ -120,5 +121,15 @@ describe('the stored logo', () => {
       { ...good, width: 1000 }, { ...good, height: 0 }, { ...good, height: 1921 }, { ...good, height: 10.5 }, { ...good, height: '9' },
     ];
     for (const value of bad) expect(asLabelLogo(value)).toBeNull();
+  });
+});
+
+describe('the HACCP label’s storage text', () => {
+  test('is kept as stored, and a save sends it trimmed and cut to the rules’ 200, an emptied box as a removal', () => {
+    const held = normalizeStoredRecipe({ ...STORED, haccpStorage: 'In frigorifero a +4 °C' });
+    expect(labelTextsOf(held).haccpStorage).toBe('In frigorifero a +4 °C');
+    expect(labelTextPatchOf({ haccpStorage: `  ${'x'.repeat(250)}  ` }).haccpStorage).toHaveLength(200);
+    expect(labelTextPatchOf({ haccpStorage: '   ' })).toEqual({ haccpStorage: null });
+    expect(labelTextPatchOf({})).toEqual({});
   });
 });
