@@ -3,7 +3,7 @@ import { SCALED_TTL_MS } from '@mise/shared/catalogue-model';
 import { PRICE_FIELDS } from '@mise/shared/price-model';
 import type { KeyValueStorage } from '../session/backend';
 import type { RecipesMeta, RecipesSource, StoredDoc } from './recipesSource';
-import { INGREDIENTS_KEY, RECIPES_KEY, SCALED_KEY, USAGE_KEY, createRecipesStore } from './recipesStore';
+import { INGREDIENTS_KEY, LABEL_CONFIG_KEY, RECIPES_KEY, SCALED_KEY, USAGE_KEY, createRecipesStore } from './recipesStore';
 
 // The Recipe catalogue's store against a hand-driven source and an in-memory localStorage. The keys
 // are the CURRENT app's (one origin): what this store writes, js/catalogue/catalogue-store.js reads.
@@ -35,13 +35,26 @@ function handSource() {
     onIngredientsError = error;
     return stopIngredients;
   });
-  const source: RecipesSource = { watchRecipes, watchIngredients };
+  let onLabel: ((data: Record<string, unknown> | null, meta: RecipesMeta) => void) | null = null;
+  let onLabelError: ((err: unknown) => void) | null = null;
+  const stopLabel = vi.fn();
+  const watchLabelConfig = vi.fn<RecipesSource['watchLabelConfig']>((change, error) => {
+    onLabel = change;
+    onLabelError = error;
+    return stopLabel;
+  });
+  const source: RecipesSource = { watchRecipes, watchIngredients, watchLabelConfig };
   return {
     source,
     watchRecipes,
     watchIngredients,
+    watchLabelConfig,
     stop,
     stopIngredients,
+    stopLabel,
+    labelServer: (data: Record<string, unknown> | null) => onLabel!(data, { fromServer: true }),
+    labelCache: (data: Record<string, unknown> | null) => onLabel!(data, { fromServer: false }),
+    labelFail: () => onLabelError!(new Error('permission-denied')),
     ingServer: (list: StoredDoc[]) => onIngredients!(list, { fromServer: true }),
     ingCache: (list: StoredDoc[]) => onIngredients!(list, { fromServer: false }),
     ingFail: () => onIngredientsError!(new Error('permission-denied')),
@@ -320,6 +333,104 @@ describe('the Recipe catalogue store', () => {
     const { store } = makeStore({ [INGREDIENTS_KEY]: '{not json' });
     expect(store.getSnapshot().ingredientsLoaded).toBe(false);
     expect(store.getSnapshot().ingredients).toEqual({});
+  });
+
+  describe('the label profile (config/labels)', () => {
+    const SMALL = { labelSize: '57x32', fontMm: 2.5 };
+
+    test('is watched with the recipes, and the listener ends on stop', () => {
+      const { store, watchLabelConfig, stopLabel } = makeStore();
+      store.start();
+      store.start();
+      expect(watchLabelConfig).toHaveBeenCalledTimes(1);
+      store.stop();
+      expect(stopLabel).toHaveBeenCalledTimes(1);
+    });
+
+    test('a cold phone does not know the paper; a server answer (a document or none) is stored RAW', () => {
+      const { store, data, labelServer } = makeStore();
+      expect(store.getSnapshot().labelConfigKnown).toBe(false);
+      expect(store.getSnapshot().labelConfig).toBeNull();
+      store.start();
+      labelServer({ ...SMALL, junk: 'kept as stored' });
+      expect(store.getSnapshot().labelConfigKnown).toBe(true);
+      expect(store.getSnapshot().labelConfig).toEqual({ ...SMALL, junk: 'kept as stored' });
+      expect(JSON.parse(data.get(LABEL_CONFIG_KEY)!)).toEqual({ ...SMALL, junk: 'kept as stored' });
+      labelServer(null);
+      expect(store.getSnapshot().labelConfig).toBeNull();
+      expect(data.get(LABEL_CONFIG_KEY)).toBe('null');
+    });
+
+    test('⚠️ the copy is two answers: «null» = the venue has none (known), no key = never told', () => {
+      expect(makeStore({ [LABEL_CONFIG_KEY]: 'null' }).store.getSnapshot().labelConfigKnown).toBe(true);
+      const held = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(SMALL) }).store.getSnapshot();
+      expect(held.labelConfigKnown).toBe(true);
+      expect(held.labelConfig).toEqual(SMALL);
+      for (const junk of ['{not json', '[1,2]', '"text"', '7']) {
+        expect(makeStore({ [LABEL_CONFIG_KEY]: junk }).store.getSnapshot().labelConfigKnown, junk).toBe(false);
+      }
+    });
+
+    test('⚠️ «no document» from the browser’s own database is not believed unless the copy said so too', () => {
+      const cold = makeStore();
+      cold.store.start();
+      cold.labelCache(null);
+      expect(cold.store.getSnapshot().labelConfigKnown).toBe(false);
+      expect(cold.data.has(LABEL_CONFIG_KEY)).toBe(false);
+      // A held profile is not wiped by it either.
+      const held = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(SMALL) });
+      held.store.start();
+      held.labelCache(null);
+      expect(held.store.getSnapshot().labelConfig).toEqual(SMALL);
+      // The copy that said «none» lets it stand.
+      const none = makeStore({ [LABEL_CONFIG_KEY]: 'null' });
+      none.store.start();
+      none.labelCache(null);
+      expect(none.store.getSnapshot().labelConfigKnown).toBe(true);
+    });
+
+    test('a cached document that exists is believed (the venue’s own); after the server, cache answers count', () => {
+      const cold = makeStore();
+      cold.store.start();
+      cold.labelCache(SMALL);
+      expect(cold.store.getSnapshot().labelConfigKnown).toBe(true);
+      expect(cold.store.getSnapshot().labelConfig).toEqual(SMALL);
+      const later = makeStore();
+      later.store.start();
+      later.labelServer(SMALL);
+      later.labelCache(null);
+      expect(later.store.getSnapshot().labelConfig).toBeNull();
+    });
+
+    test('⚠️ a refused read is quiet and ends the wait (defaults), keeping a held profile', () => {
+      const cold = makeStore();
+      const said = vi.fn();
+      cold.store.onMessage(said);
+      cold.store.start();
+      cold.labelFail();
+      expect(cold.store.getSnapshot().labelConfigKnown).toBe(true);
+      expect(cold.store.getSnapshot().labelConfig).toBeNull();
+      expect(cold.warn).toHaveBeenCalledTimes(1);
+      expect(said).not.toHaveBeenCalled();
+      const held = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(SMALL) });
+      held.store.start();
+      held.labelFail();
+      expect(held.store.getSnapshot().labelConfig).toEqual(SMALL);
+    });
+
+    test('blocked storage never throws', () => {
+      const throwing = {
+        getItem: () => { throw new Error('blocked'); },
+        setItem: () => { throw new Error('blocked'); },
+        removeItem: () => { throw new Error('blocked'); },
+      } as unknown as KeyValueStorage;
+      const hand = handSource();
+      const store = createRecipesStore(hand.source, { storage: throwing, now: () => NOW, warn: vi.fn() });
+      expect(store.getSnapshot().labelConfigKnown).toBe(false);
+      store.start();
+      expect(() => hand.labelServer(SMALL)).not.toThrow();
+      expect(store.getSnapshot().labelConfig).toEqual(SMALL);
+    });
   });
 
   test('the snapshot is the SAME object until something changes', () => {

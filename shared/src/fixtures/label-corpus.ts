@@ -35,7 +35,7 @@ export interface CorpusEntry {
 export const REQUIRED_TAGS: readonly string[] = [
   'flat', 'sub-recipe', 'same-ingredient-twice', 'pinch-allergen-row', 'findings-c', 'to-taste', 'unknown-ingredient', 'cycle',
   'depth-5', 'loss-pct', 'net-weight-and-shelf-life', 'may-contain', 'may-contain-already-contained', 'full-nutrition',
-  'missing-nutrition', 'zero-nutrition', 'unlinked-row', 'deleted-link', 'empty-recipe',
+  'missing-nutrition', 'zero-nutrition', 'unlinked-row', 'deleted-link', 'empty-recipe', 'long-list',
 ];
 
 const STAMP = '2026-08-11T09:00:00.000Z';
@@ -107,6 +107,12 @@ const DEEP_5 = chain(5);
 const entry = (id: string, covers: readonly string[], note: string, subject: unknown,
   tables: { ingredients: unknown; recipes?: unknown }): CorpusEntry =>
   ({ id, note, covers, recipe: subject, tables: { ingredients: tables.ingredients, recipes: tables.recipes ?? {} } });
+
+// Forty declared ingredients, heaviest first, for the recipe that is too long for a small label.
+const LONG_INGREDIENTS: Record<string, unknown> = Object.fromEntries(Array.from({ length: 40 }, (_, i) => ['LONG' + i, {
+  name: 'Ingredient number ' + i + ' with a long descriptive name', allergens: i === 3 ? ['milk'] : i === 17 ? ['sesame'] : [], allergensCheckedAt: STAMP, nutrition: nutrition(),
+}]));
+const LONG_ROWS: unknown[] = Array.from({ length: 40 }, (_, i) => row('Long ' + i, 'LONG' + i, 400 - i * 5));
 
 const BREAD = recipe('BREAD', 'Test bread', [row('Flour', 'FLOUR', 1000), row('Water', 'WATER', 600), row('Butter', 'BUTTER', 200), row('Salt', 'SALT', 20)]);
 
@@ -239,6 +245,9 @@ function build(): CorpusEntry[] {
       'An Italian bakery’s own ingredient names: they print verbatim whatever the label’s language',
       recipe('PIZZA', 'Pizza bianca', [row('Farina', 'IT_FLOUR', 1000), row('Acqua', 'WATER', 700), row('Olio', 'IT_OIL', 50), row('Latte', 'IT_MILK', 100), row('Sale', 'SALT', 20)], { lossPct: 15 }),
       { ingredients: ingredientsOf('IT_FLOUR', 'WATER', 'IT_OIL', 'IT_MILK', 'SALT') }),
+    entry('long-ingredient-list', ['flat', 'long-list'],
+      'Forty declared ingredients with long names (two carry allergens): too much for the small ZPL paper whatever the size of the text, so the template reports «does not fit» there and keeps every word',
+      recipe('LONG', 'Long list', LONG_ROWS), { ingredients: LONG_INGREDIENTS }),
     entry('map-tables', ['flat', 'sub-recipe'],
       'The tables handed over as Maps instead of plain objects',
       recipe('CAKE', 'Cake from maps', [row('Flour', 'FLOUR', 500), subRow('Filling', 'FILLING', 500)]),
@@ -277,6 +286,27 @@ export const SHOWS_UNDER_TEST: readonly string[] = Object.freeze(['allergens', '
 // The word for an ingredient that no longer exists, as the original reads it (`cat.unknownIngredient`).
 export const UNKNOWN_INGREDIENT = 'Unknown ingredient';
 
+// ── The label template (step 3d-3) ───────────────────────────────────────────
+
+// The day every batch in the corpus is «made», in LOCAL time (the template adds days and formats in local
+// time), so the date a label prints never depends on when the suite runs.
+export const MADE_ON_PARTS: readonly [number, number, number, number] = Object.freeze([2026, 8, 3, 12] as const);   // 3 Sep 2026, noon
+
+// Three venues' label settings: the stock the app ships with; a small ZPL label at 300 dpi (capitals for the
+// allergens, a tight page); and a big label with every optional block switched on and written (best before).
+export const TEMPLATE_PROFILES: Readonly<Record<string, unknown>> = Object.freeze({
+  default: Object.freeze({}),
+  'zpl-57x32': Object.freeze({ widthMm: 57, heightMm: 32, printerLanguage: 'zpl', dpi: 300 }),
+  'full-102x76': Object.freeze({
+    widthMm: 102, heightMm: 76, showDate: true, showWeight: true, showStorage: true, showBusiness: true, dateKind: 'bestBefore',
+    storageText: 'Keep refrigerated', businessName: 'A Bakery', businessAddress: '1 High Street',
+  }),
+});
+
+// Recipes that carry no weight and no shelf life of their own are given 1200 g and 3 days, so the net-weight
+// and date blocks are exercised on almost every recipe; these two are left bare, to pin «nothing to say».
+const BARE_BATCHES: readonly string[] = Object.freeze(['map-tables', 'unnamed-ingredient']);
+
 // ── The chain ────────────────────────────────────────────────────────────────
 
 type Fn = (...args: any[]) => unknown;
@@ -299,6 +329,11 @@ export interface LabelChainApi {
   // (recipes, tables) → the work list; the port's third argument is bound by the adapter.
   readonly blockingIngredients: Fn;
   readonly unlinkedRowNames: Fn;
+  // The label template (step 3d-3): the layout, the text of each block, and the date a batch is given.
+  readonly resolveLabel: Fn;
+  readonly blockText: Fn;
+  readonly useByDate: Fn;
+  readonly dateText: Fn;
 }
 
 // What the chain produces for one recipe. ⚠️ ADDING A STEP IS ADDING A FIELD HERE (and the function it calls to
@@ -315,6 +350,8 @@ export interface ChainOutput {
   // The ingredient list and the nutrition per 100 g, whether or not the gate lets a label through.
   readonly flat: unknown;
   readonly nutrition: unknown;
+  // The label laid out on paper: per label profile and per venue. See runTemplates.
+  readonly template: Readonly<Record<string, Readonly<Record<string, TemplateOutput>>>>;
   // Per switch value: the label, and per venue the text it would print.
   readonly shows: Readonly<Record<string, {
     readonly label: unknown;
@@ -329,6 +366,41 @@ export interface ChainOutput {
       readonly declarationWithoutNutrition: unknown;
     }>>;
   }>>;
+}
+
+// One venue's label laid out under one profile. `resolved` is resolveLabel's whole answer (a refusal is a
+// refusal); `blockTexts` is what each block measures as, in the emphasis the printer uses.
+export interface TemplateOutput {
+  readonly extras: unknown;
+  readonly resolved: unknown;
+  readonly blockTexts: readonly string[];
+}
+
+// The label template for one recipe: every profile × every venue, for the label built with the switch at
+// `wants` (the layout reads the name, the ingredients and the two allergen lines, never the nutrition, so the
+// golden file holds it for 'both' only and label-corpus.spec.ts proves the other switches lay out identically).
+export function runTemplates(api: LabelChainApi, subject: CorpusEntry, wants: string = 'both'): Record<string, Record<string, TemplateOutput>> {
+  const { recipe: r, tables, id } = subject;
+  const card = r as { netWeightG?: unknown; shelfLifeDays?: unknown };
+  const bare = BARE_BATCHES.includes(id);
+  const made = new Date(...MADE_ON_PARTS);
+  const label = api.buildLabel(r, tables, { shows: wants });
+  const out: Record<string, Record<string, TemplateOutput>> = {};
+  for (const [profileName, profile] of Object.entries(TEMPLATE_PROFILES)) {
+    const venues: Record<string, TemplateOutput> = {};
+    for (const [venue, location] of Object.entries(LOCATIONS)) {
+      const lang = api.outputLanguage(location);
+      const extras = bare ? {} : {
+        netWeightG: card.netWeightG ?? 1200,
+        dateText: api.dateText(api.useByDate(card.shelfLifeDays ?? 3, made), lang),
+      };
+      const resolved = api.resolveLabel(label, profile, extras, lang) as { ok?: boolean; blocks?: unknown[]; emphasis?: unknown };
+      const blockTexts = resolved.ok ? (resolved.blocks as unknown[]).map(block => api.blockText(block, resolved.emphasis) as string) : [];
+      venues[venue] = { extras, resolved, blockTexts };
+    }
+    out[profileName] = venues;
+  }
+  return out;
 }
 
 export function runLabelChain(api: LabelChainApi, subject: CorpusEntry): ChainOutput {
@@ -360,6 +432,7 @@ export function runLabelChain(api: LabelChainApi, subject: CorpusEntry): ChainOu
     unlinked: api.unlinkedRowNames([r]),
     flat: api.flattenIngredients(r, tables),
     nutrition: api.nutritionPer100g(r, tables),
+    template: runTemplates(api, subject),
     shows,
   };
 }

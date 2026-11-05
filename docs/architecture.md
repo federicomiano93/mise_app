@@ -257,13 +257,23 @@ Aria does not support Preact. The numbers are below.
   until the server has answered, then not found; deleted elsewhere goes back to the list and says so),
   `RecipeView` (the bar and the ingredient list as a table, tapped for the full screen) and `BatchCard` (grams, the
   confirm that spells the amount both ways and raises its voice for an absurd batch, Clear, 12 h). Addresses, in
-  `recipesPath.ts`: `/recipes`, `/recipes/<id>` and (3d-2) `/recipes/allergens`; `new`, `settings` and `photo` are reserved for
-  later steps. The usage record names three screens, `recipes`, `recipes-detail` and `recipes-allergens`. `recipesNav.ts` and
+  `recipesPath.ts`: `/recipes`, `/recipes/<id>` and (3d-2) `/recipes/allergens` and (3d-3) `/recipes/<id>/label`; `new`, `settings` and `photo` are reserved for
+  later steps. The usage record names four screens, `recipes`, `recipes-detail`, `recipes-allergens` and `recipes-label`. `recipesNav.ts` and
   `handBack.ts` are this section's copies of Food cost's. Step 3d-2 adds the allergen screens: `AllergenCard` and
   `DeclarationCard` on the recipe screen (a verdict only once the store's `ingredientsLoaded`, a neutral «checking» line before
   it; Copy through `ui/clipboard` and Send through `ui/SendSheet`), `AllergenSheet` at `/recipes/allergens` (gated again by
   `allergensOn` in `RecipesSection`, door at the foot of the list, drawn in the right-hand pane on the split) and
-  `allergenTables.ts` / `allergenText.ts`. Every allergen verdict is the shared model's; `label-separation.spec.ts` (in `app/src`)
+  `allergenTables.ts` / `allergenText.ts`. Step 3d-3 adds the label: the door «Make a label» in the folded body of a COMPLETE
+`AllergenCard` (it navigates, with `FROM_RECIPE`, to `/recipes/<id>/label`, one level below the recipe: Back is the browser's
+Back, and a label opened by its address replaces itself with the recipe), `LabelScreen` (the switch, the four refusals, the
+paper preview with its notes, `LabelCard` — the label as words —, the language note, the caveat, Print · Copy · Send; the switch
+is kept for the section in `labelShows.tsx`), `LabelSheet` (the paper, drawn from the shared `sheetModel`; ⚠️ its markup is
+compared byte for byte with the current app's `buildSheet()` for the whole label corpus, and its classes are plain global ones
+in `label-print.css`, which is not a CSS module and sets the sheet in Manrope, the current app's face, so the fit and the paper are
+the same in both apps) and `useSheetFit` (the DOM half of the measurement over the shared `fitFont` / `fitWidthFactor`: an
+unmeasured sheet never fits, it is measured again on resize and when the typeface arrives). Printing through the system's dialog
+is a host built at print time in `document.body` with its own React root (`printHost.tsx`: `#labelPrint` + the `lab-printing` class on `<html>` that scopes the print rule — never `:has`, the lab tablet's Chrome 101 lacks it; removed only after `afterprint` AND the next pointer or key, because Android fires `afterprint` before its print screen has laid the page out); the zebra (ZPL), the shop computer's
+queue and the other roads arrive in 3d-4. The usage record names the screen `recipes-label` and the action `label-printed`. Every allergen verdict is the shared model's; `label-separation.spec.ts` (in `app/src`)
   pins that a screen that prints a food word asks the venue's country and never the interface language. `ui/RecipeFullScreen` and `ui/zoomStorage` are shared with the Calculator
   and take a storage key (`mise.calcZoomStep` / `mise.catZoomStep`).
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an

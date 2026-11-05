@@ -1004,6 +1004,10 @@ SAME PR.
 - **Firestore**: create `print-jobs`; watch `print-agents`.
 - **Shared ports**: `label-zpl.ts`, `print-queue-model.ts` (pinned against `js/print-queue-model.js`, which STAYS
   — the agent imports it), transports as pure `roadsFor`/`whyNoRoad` over an injected capability set.
+- **Stubs to replace (left by 3d-3)**: replace the `zplFits: () => true` stub and the `printerReady: false` stub in
+  `LabelScreen.tsx` — a spec must fail while either stub remains. The guard is already written as an `it.todo` in
+  `RecipesSection.label.spec.tsx` («3d-4: …»): turn it into a real spec in this step (it reads `LabelScreen.tsx` as text and
+  refuses both stub shapes, and a drawn screen with a fresh heartbeat must show a working agent road).
 - **Size S.**
 
 ### 3d-5 — Settings: the paper, the printer and what else goes on the label
@@ -1293,5 +1297,14 @@ allergen state with an `if` of its own. What differs from the current app, and w
   per scope from `outputLanguage(` and never assigned, destructured or taken as a parameter; and every runtime export of the
   three modules must be classified, so a new one forces a decision. Each rule has a self-test on an inline source. It was proved once by mutation (the `outputLanguage` call removed, and
   `useT().lang` handed to `allergenName`: both fail, naming the file).
-- **Left for 3d-3:** «Make a label» and the label screen; for 3d-6, the pencil that the work list's sentence about linking
+- **Built in 3d-3 (slice B):** «Make a label» (in the fold of a complete card, shown exactly when the current app shows it — the
+  country is NOT asked at the door, the label screen refuses a venue with no country by itself) and the label screen at
+  `/recipes/<id>/label`, with Print through the system's dialog. Differences from the current app, all on purpose: the ingredients
+  must have arrived before any verdict (a neutral «checking» line before it); the paper must be KNOWN (`labelConfigKnown`) before
+  anything is laid out, with one new sentence (`label.preview.paperUnknown`) and Print off until then; «actual size» is claimed only
+  after a real measurement; the sheet is NEVER measured in the fallback typeface (Print stays off until Manrope is ready, and a face that cannot load says so with `label.preview.fontMissing`); the print host is built at print time with its own React root and leaves after `afterprint` AND the person's next pointer or key (driven on the lab tablet, 13 Oct 2026: Android fires `afterprint` before its print screen lays the page out, and the CURRENT app offers a BLANK page there), never with the screen; the print CSS is scoped (`body:has(> #labelPrint)`, a named `labcustom` page) because Mise 2 loads it for the whole app; the sheet is set in Manrope (copied fonts), so
+  the fit is the same in both apps; the switch is kept for the section. Not here: ZPL, the shop computer's queue and the
+  clipboard road (3d-4) — a venue whose printer is `zpl` sees «The shop computer is not answering» until then (since 94a8777; `LabelScreen.tsx` answers
+  `zplFits: () => true`, so the port never says «too big for the printer» about a printer it cannot ask).
+- **Left for 3d-6:** the pencil that the work list's sentence about linking
   rows mentions (`cat.aRecipeRowHas` is the current app's wording and points at a screen Mise 2 does not have yet).

@@ -11,7 +11,7 @@
 //
 // ⚠️ A COMMENT SAYING "DO NOT DO THIS" IS NOT A GUARD. A rule that matters more than a behaviour is pinned by a
 // test that NAMES it when broken, because a rule that lives only in a comment comes back. This file reads the
-// SOURCE TEXT of the three pure modules that decide what a label says. It is a port of
+// SOURCE TEXT of the pure modules that decide what a label says, lays it out, draws it and sends it. It is a port of
 // tests/i18n-label-separation.test.mjs (the model half) and of the source-text checks of tests/market.test.mjs
 // ('holds words, never sentences', 'no label file uses a group heading', 'the copied text is in the same
 // language as the label on screen') and tests/recipe-declaration.test.mjs ('the INGREDIENT NAMES are the
@@ -21,6 +21,9 @@ import { describe, expect, test } from 'vitest';
 import marketSource from './market.ts?raw';
 import recipeLabelSource from './recipe-label-model.ts?raw';
 import recipeAllergenSource from './recipe-allergen-model.ts?raw';
+import labelTemplateSource from './label-template-model.ts?raw';
+import labelSheetSource from './label-sheet.ts?raw';
+import printRoadsSource from './print-roads.ts?raw';
 import { stringsIn } from '../../tests/helpers/strings-in.mjs';
 
 // The glob is typed by Vite's client types, which this package does not load (it has no DOM).
@@ -37,6 +40,11 @@ const LABEL_FILES: Readonly<Record<string, string>> = {
   'market.ts': marketSource,
   'recipe-label-model.ts': recipeLabelSource,
   'recipe-allergen-model.ts': recipeAllergenSource,
+  // Step 3d-3: the layout (it asks the country’s language for the words it ADDS: «Ingredients:», the date, the
+  // weight), the sheet the screen draws from it, and the roads a label takes to a printer.
+  'label-template-model.ts': labelTemplateSource,
+  'label-sheet.ts': labelSheetSource,
+  'print-roads.ts': printRoadsSource,
 };
 
 // The source without its comments: explaining the rule in prose is exactly where a forbidden word belongs.
@@ -46,7 +54,10 @@ describe('the label files do not know the interface exists', () => {
   test('they import nothing from app/ and nothing that is a dictionary', () => {
     for (const [file, source] of Object.entries(LABEL_FILES)) {
       const imports = [...codeOf(source).matchAll(/(?:^|\n)\s*(?:import|export)\b[^;]*?\bfrom\s+['"]([^'"]+)['"]/g)].map(match => match[1] as string);
-      expect(imports.length, `${file}: the scan must find its imports, or it guards nothing`).toBeGreaterThan(0);
+      // print-roads.ts imports nothing at all (it names keys and decisions only), which is the strongest form of
+      // this guard; every other file must show the scan its imports, or the scan guards nothing.
+      if (file === 'print-roads.ts') expect(imports, `${file} is meant to import nothing`).toStrictEqual([]);
+      else expect(imports.length, `${file}: the scan must find its imports, or it guards nothing`).toBeGreaterThan(0);
       for (const target of imports) {
         expect(target, `${file} imports ${target}`).not.toMatch(/(^|\/)app(\/|$)/);
         expect(target, `${file} imports ${target}: a label builds what it SAYS and has no reason to know what is on screen`)
@@ -133,6 +144,33 @@ describe('the label words are chosen in one place', () => {
   // The label model is handed `lang`; it never derives one. (The screens derive it from the venue's country.)
   test('the label model never works the language out for itself', () => {
     expect(codeOf(recipeLabelSource)).not.toMatch(/outputLanguage|countryOf/);
+  });
+});
+
+describe('the label template asks the country for every word it adds', () => {
+  // ⚠️ THE TEMPLATE ADDS WORDS OF ITS OWN: «Ingredients:», «Net weight:», «Use by», «Keep:». They are food-label
+  // words, so they follow the venue's COUNTRY, handed in as `lang`; the template never works the language out
+  // for itself and its number and date formats come from a table local to the file, not from the screen.
+  test('every label word is asked in the language that was handed in, and the calls exist', () => {
+    const calls = [...codeOf(labelTemplateSource).matchAll(/\b(labelWord|allergenName|nutrientName)\s*\(([^)]*)\)/g)];
+    expect(calls.length, 'the template builds label words; a deleted call would satisfy every check below').toBeGreaterThanOrEqual(4);
+    for (const call of calls) {
+      const args = (call[2] as string).split(',').map(arg => arg.trim());
+      expect(args[args.length - 1], `${call[1]}(${call[2]}) must be asked in the LABEL's language`).toBe('lang');
+    }
+  });
+
+  test('and it never derives a language, nor asks the screen’s locale', () => {
+    const code = codeOf(labelTemplateSource);
+    expect(code).not.toMatch(/outputLanguage|countryOf|navigator|document|window/);
+    expect(code, 'number and date formats come from the local table, keyed by the label’s language').toMatch(/const LOCALE\b/);
+    expect(code).not.toMatch(/localeTag/);
+  });
+
+  test('the sheet and the roads hold no food word at all', () => {
+    for (const [file, source] of [['label-sheet.ts', labelSheetSource], ['print-roads.ts', printRoadsSource]] as const) {
+      expect(codeOf(source), `${file} draws and routes; the words are the template's`).not.toMatch(/\b(labelWord|allergenName|allergenGroupName|nutrientName)\s*\(/);
+    }
   });
 });
 

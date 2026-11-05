@@ -4,6 +4,7 @@
 //   /recipes          the list of recipes
 //   /recipes/<id>     one recipe (the id percent-encoded)
 //   /recipes/allergens  the Allergen sheet (step 3d-2)
+//   /recipes/<id>/label the label of one recipe (step 3d-3), one level below the recipe
 //   anything else     unknown: the section goes back to /recipes
 //
 // ⚠️ THE WORDS A LATER STEP WILL TAKE AS ITS OWN ARE NEVER A RECIPE'S ID (`new`, `allergens`,
@@ -19,9 +20,14 @@ export type RecipesView =
   | { readonly kind: 'list' }
   | { readonly kind: 'recipe'; readonly id: string }
   | { readonly kind: 'allergens' }
+  | { readonly kind: 'label'; readonly id: string }
   | { readonly kind: 'unknown' };
 
 export const recipePath = (id: string): string => `${RECIPES_PATH}/${encodeURIComponent(id)}`;
+export const labelPath = (id: string): string => `${recipePath(id)}/label`;
+
+// Whether an id (already decoded) can be a recipe's: not empty, and not a word a step has taken for its own.
+const isRecipeId = (id: string | null): id is string => id !== null && id !== '' && !(RESERVED as readonly string[]).includes(id);
 
 // A segment as it was typed, back to the id it stands for; null when it is not valid percent-
 // encoding («%», «%E0%A4%A»).
@@ -45,7 +51,14 @@ export function parseRecipesPath(rest: string | undefined): RecipesView {
     // The Allergen sheet (step 3d-2) is one of the reserved words: never a recipe whose id is «allergens».
     if (id === 'allergens') return { kind: 'allergens' };
     // An empty id is not a recipe (and not a Firestore document id either).
-    if (id !== null && id !== '' && !(RESERVED as readonly string[]).includes(id)) return { kind: 'recipe', id };
+    if (isRecipeId(id)) return { kind: 'recipe', id };
+  }
+  // `<id>/label`: the label of that recipe. The id is read by the same rule as a recipe's own, so a reserved word
+  // before «label» (`/allergens/label`) is no recipe's label.
+  const second = parts[1];
+  if (parts.length === 2 && first !== undefined && second === 'label') {
+    const id = decoded(first);
+    if (isRecipeId(id)) return { kind: 'label', id };
   }
   return { kind: 'unknown' };
 }

@@ -59,6 +59,7 @@ import * as zoomSteps from './zoom-steps';
 import * as venueFeatures from './venue-features';
 import * as recipeAllergenModel from './recipe-allergen-model';
 import * as recipeLabelModel from './recipe-label-model';
+import * as labelTemplateModel from './label-template-model';
 import { BAKERY_CONFIG } from '../../tests/fixtures/bakery-config.mjs';
 import * as legacyJoinCodeJs from '../../js/join-code.js';
 import * as legacyPushModelJs from '../../js/push-model.js';
@@ -110,6 +111,7 @@ import * as legacyZoomStepsJs from '../../js/zoom-steps.js';
 import * as legacyVenueFeaturesJs from '../../js/venue-features.js';
 import * as legacyRecipeAllergenModelJs from '../../js/catalogue/recipe-allergen-model.js';
 import * as legacyRecipeLabelModelJs from '../../js/catalogue/recipe-label-model.js';
+import * as legacyLabelTemplateModelJs from '../../js/catalogue/label-template-model.js';
 
 const legacyJoinCode = legacyJoinCodeJs as unknown as typeof joinCode;
 const legacyPushModel = legacyPushModelJs as unknown as typeof pushModel;
@@ -159,6 +161,7 @@ const legacyZoomSteps = legacyZoomStepsJs as unknown as typeof zoomSteps;
 const legacyVenueFeatures = legacyVenueFeaturesJs as unknown as typeof venueFeatures;
 const legacyRecipeAllergenModel = legacyRecipeAllergenModelJs as unknown as typeof recipeAllergenModel;
 const legacyRecipeLabelModel = legacyRecipeLabelModelJs as unknown as typeof recipeLabelModel;
+const legacyLabelTemplateModel = legacyLabelTemplateModelJs as unknown as typeof labelTemplateModel;
 
 // ── The machinery ────────────────────────────────────────────────────────────
 
@@ -2995,4 +2998,70 @@ describe('recipe-label-model: odd inputs', () => {
     expect(m.LABEL_SHOWS).toStrictEqual(l.LABEL_SHOWS);
     expect(Object.isFrozen(m.LABEL_SHOWS)).toBe(Object.isFrozen(l.LABEL_SHOWS));
   });
+});
+
+// ── label-template-model ─────────────────────────────────────────────────────
+
+describe('label-template-model: odd inputs', () => {
+  const m = labelTemplateModel;
+  const l = legacyLabelTemplateModel;
+
+  // A day fixed in local time (the module formats and adds days in local time), so nothing depends on the clock.
+  const MADE_ON = new Date(2026, 8, 3, 12, 0, 0);
+
+  const PROFILES: readonly unknown[] = [...ODD, 'profile', 42,
+    { widthMm: 57, heightMm: 32 }, { widthMm: 102, heightMm: 76, marginMm: 0, baseFontMm: 4 }, { widthMm: 19.99 }, { widthMm: 20 }, { widthMm: 300 }, { widthMm: 300.01 },
+    { widthMm: '80', heightMm: ' 40 ' }, { widthMm: true, heightMm: false }, { widthMm: [76] }, { marginMm: 0 }, { marginMm: '' }, { marginMm: 20 }, { marginMm: 21 },
+    { baseFontMm: 0.99 }, { baseFontMm: 1 }, { baseFontMm: 20 }, { baseFontMm: '2.6' }, { dpi: 300 }, { dpi: '300' }, { dpi: 600 }, { dpi: null },
+    { printerLanguage: 'zpl' }, { printerLanguage: 'os' }, { printerLanguage: 'escpos' }, { printerLanguage: ['zpl'] },
+    { showDate: true }, { showDate: 'yes' }, { showDate: 1 }, { showWeight: true, showStorage: true, showBusiness: true, showDate: true },
+    { dateKind: 'bestBefore' }, { dateKind: 'useBy' }, { dateKind: 'whenever' }, { dateKind: ['useBy'] },
+    { storageText: '  Keep cool  ' }, { storageText: 'x'.repeat(250) }, { storageText: 5 }, { businessName: ' Bakery ', businessAddress: '1 High Street' }, { businessAddress: null },
+    { widthMm: 57, heightMm: 32, printerLanguage: 'zpl', dpi: 300, showDate: true, showWeight: true, dateKind: 'bestBefore' },
+    { widthMm: 76, heightMm: 51, constructor: 'x' }, JSON.parse('{"__proto__": {"widthMm": 99}}')];
+  agree('normalizeLabelProfile', m.normalizeLabelProfile, l.normalizeLabelProfile, product(PROFILES));
+  agree('sizeIdFor', m.sizeIdFor, l.sizeIdFor, product(PROFILES));
+  agree('minFontMm', m.minFontMm, l.minFontMm, product(PROFILES));
+  agree('emphasisFor', m.emphasisFor, l.emphasisFor, product(PROFILES));
+
+  const GRAMS: readonly unknown[] = [...ODD, 0.4, 0.5, 1, 499.5, 999, 999.5, 1000, 1049, 1050, 1200, 1250, 2500, 10_000, 123_456.7, 1e21, '1200', ' 1200 ', '1.5e3', '0x10', -0.1, 'heavy', [500], { valueOf: () => 700 }];
+  const LANGS: readonly unknown[] = [undefined, null, 'en', 'it', 'zz', 'EN', '', 5, ['it'], {}, 'constructor', '__proto__', 'toString'];
+  agree('netWeightText', m.netWeightText, l.netWeightText, product(GRAMS, LANGS));
+
+  const LIVES: readonly unknown[] = [...ODD, 0, 1, 3, 7, 365, 3650, 3651, -1, 2.9, '3', ' 3 ', '  ', 'soon', '0x3', 1e9, [3], { valueOf: () => 4 }];
+  const MADES: readonly unknown[] = [MADE_ON, MADE_ON.getTime(), '2026-09-03T08:00:00.000Z', '2026-12-31', new Date(2026, 11, 31, 12), new Date(2028, 1, 28, 12),
+    new Date(NaN), 'nonsense', null, 0, true, [], {}];
+  agree('useByDate', m.useByDate, l.useByDate, product(LIVES, MADES));
+
+  const DATES: readonly unknown[] = [...ODD, MADE_ON, new Date(2026, 0, 1, 12), new Date(2026, 11, 31, 12), new Date(NaN), new Date(0), MADE_ON.getTime(), '2026-09-03', { getTime: () => 5 }];
+  agree('dateText', m.dateText, l.dateText, product(DATES, LANGS));
+
+  const EMPHASES: readonly unknown[] = [undefined, 'bold', 'caps', 'CAPS', 'italic', null, 5, '', ['caps']];
+  const WORDS: readonly unknown[] = [...ODD, 'Farina 0', 'caffè', 'ß', 'ǆ', 'İstanbul', { toString: () => 'obj' }];
+  agree('emphasised', m.emphasised, l.emphasised, product(WORDS, EMPHASES));
+
+  // Blocks as resolveLabel makes them, and as a screen might hold them.
+  const BLOCKS: readonly unknown[] = [{ parts: null, text: 'Contains: Milk' }, { text: null, parts: null }, { text: '' }, { parts: [], prefix: 'Ingredients: ' }, { parts: [] },
+    { prefix: 'Ingredients: ', parts: [{ text: 'Flour', emphasise: true }, { text: 'Water', emphasise: false }, { text: 'Farina 0', emphasise: 1 }] },
+    { prefix: '', parts: [{ text: 5, emphasise: true }] }, { parts: [{}] }, { text: 7 }, {}];
+  agree('blockText', m.blockText as AnyFn, l.blockText as AnyFn, product(BLOCKS, EMPHASES));
+
+  const LABEL_OK = { ok: true, name: 'Focaccia', ingredients: [{ name: 'Flour', emphasise: true }, { name: 'Water', emphasise: false }, { name: 'Olive oil' }, { name: 'Salt' }],
+    allergens: ['gluten-wheat'], mayContain: ['nuts-almond', 'sesame'], nutrition: null };
+  const longList = (n: number): unknown[] => Array.from({ length: n }, (_, i) => ({ name: `Ingredient number ${i}`, emphasise: i % 7 === 0 }));
+  const LABELS: readonly unknown[] = [...ODD, 'label', 42, { ok: false }, { ok: true }, { ok: true, ingredients: [] }, LABEL_OK, { ...LABEL_OK, name: '' }, { ...LABEL_OK, name: 5 },
+    { ...LABEL_OK, mayContain: [] }, { ...LABEL_OK, allergens: [], mayContain: [] }, { ...LABEL_OK, ingredients: [{ name: 'a' }], allergens: ['milk', 'unicorn'] },
+    { ...LABEL_OK, ingredients: longList(12) }, { ...LABEL_OK, ingredients: longList(30) }, { ...LABEL_OK, ingredients: longList(80) },
+    { ok: true, name: 'Emulsionanti', ingredients: [{ name: 'Emulsionanti e addensanti non meglio specificati nel ricettario' }], allergens: [], mayContain: [] }];
+  const EXTRAS: readonly unknown[] = [undefined, null, {}, { netWeightG: 500, dateText: '12/09/2026' }, { netWeightG: 1200 }, { dateText: '12/09/2026' }, { netWeightG: 0, dateText: '' },
+    { netWeightG: 'heavy', dateText: 5 }, { netWeightG: 2500, dateText: '03/09/2026' }, 5, 'extras'];
+  const FULL = { showWeight: true, showDate: true, showStorage: true, showBusiness: true, storageText: 'Keep refrigerated', businessName: 'A Bakery', businessAddress: '1 High Street' };
+  const RESOLVE_PROFILES: readonly unknown[] = [undefined, null, {}, { printerLanguage: 'zpl' }, { widthMm: 57, heightMm: 32 }, { widthMm: 102, heightMm: 76, ...FULL },
+    { ...FULL, dateKind: 'bestBefore' }, { ...FULL, printerLanguage: 'zpl', dpi: 300 }, { widthMm: 20, heightMm: 20 }, { widthMm: 300, heightMm: 300, baseFontMm: 20 },
+    { marginMm: 20 }, { baseFontMm: 1 }, 'profile', 5];
+  const REAL_LABELS = LABELS.slice(ODD.length + 2);
+  agree('resolveLabel', m.resolveLabel as AnyFn, l.resolveLabel as AnyFn, [
+    ...product(LABELS.slice(0, ODD.length + 2), [undefined, {}], [undefined], ['en']),
+    ...product(REAL_LABELS, RESOLVE_PROFILES, EXTRAS, [undefined, 'en', 'it', null, 'zz']),
+  ]);
 });

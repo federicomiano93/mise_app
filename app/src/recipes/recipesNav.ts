@@ -13,6 +13,15 @@ export const FROM_LIST = { ...KEEP_FOCUS, fromList: true } as const;
 // sheet's row rather than the list's.
 export const FROM_SHEET = { ...FROM_LIST, fromSheet: true } as const;
 
+// The same, from a recipe to its label (step 3d-3): Back from the label is the browser's Back, and the label opens
+// beside nothing of the list's. Deliberately NOT `fromList`: picking another recipe in the list beside an open label
+// REPLACES the label's entry with the recipe, and that entry must not claim the list is one step behind it.
+export const FROM_RECIPE = { ...KEEP_FOCUS, fromRecipe: true } as const;
+
+export function cameFromRecipe(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'fromRecipe' in state;
+}
+
 export function cameFromSheet(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromSheet' in state;
 }
@@ -30,10 +39,10 @@ export function cameFromList(state: unknown): boolean {
 //
 // `onLeaving` runs first: the screen says which row opened it, so the focus can be handed back to
 // that row once the list is on screen (handBack.ts).
-export function useLeave(fallback: string, onLeaving: () => void): () => void {
+export function useLeave(fallback: string, onLeaving: () => void, cameFrom: (state: unknown) => boolean = cameFromList): () => void {
   const navigate = useNavigate();
   const { state } = useLocation();
-  const fromList = cameFromList(state);
+  const fromList = cameFrom(state);
 
   return useCallback(() => {
     onLeaving();

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { allergensOn } from '@mise/shared/venue-features';
 import { PartBoundary } from '../errors/PartBoundary';
@@ -13,7 +13,10 @@ import { RecipesProvider, useRecipesStore } from './RecipesContext';
 import { RecipesDetail } from './RecipesDetail';
 import { RecipesList } from './RecipesList';
 import { ALLERGENS_OPENER, HandBackProvider, recipeOpener, useHandBackState } from './handBack';
+import { LabelShowsProvider } from './labelShows';
 import { messageText } from './recipesMessages';
+import { RecipeReturnProvider } from './recipeReturn';
+import type { Place, RecipeReturn } from './recipeReturn';
 import { FROM_LIST, FROM_SHEET, cameFromList } from './recipesNav';
 import { ALLERGENS_PATH, RECIPES_PATH, recipePath, resolveRecipesPath } from './recipesPath';
 import type { ShownView } from './recipesPath';
@@ -26,14 +29,16 @@ import styles from './RecipesSection.module.css';
 // Its data lives exactly as long as it is on screen: RecipesProvider starts the listener on mount and
 // stops it on unmount (P14).
 //
-// Steps 3d-1 and 3d-2 only LOOK at recipes: the list, a recipe with its allergen cards, and the Allergen sheet. No
-// editing and no labels yet (docs/parity/catalogue.md).
+// Steps 3d-1 to 3d-3 only LOOK at recipes: the list, a recipe with its allergen cards, the Allergen sheet and a recipe's
+// label (on screen, and printed through the system's own dialog). No editing yet (docs/parity/catalogue.md).
 export default function RecipesSection() {
   return (
     <RecipesProvider>
       <StatusMessageProvider>
         <StoreMessages />
-        <RecipesScreen />
+        <LabelShowsProvider>
+          <RecipesScreen />
+        </LabelShowsProvider>
       </StatusMessageProvider>
     </RecipesProvider>
   );
@@ -85,6 +90,20 @@ function RecipesLayout({ view }: { view: ShownView }) {
   const scrollArea = useOwnScrollArea();
   // Where the list was scrolled to when a recipe opened over it on a phone, until Back restores it.
   const listTop = useRef<number | null>(null);
+  const detail = useRef<HTMLDivElement>(null);
+
+  // Where a recipe was when its label opened, until the move after Back (recipeReturn.ts).
+  const place = useRef<Place | null>(null);
+  const recipeReturn = useMemo<RecipeReturn>(() => ({
+    remember(recipeId) {
+      place.current = { id: recipeId, area: scrollArea()?.scrollTop ?? null, detail: detail.current?.scrollTop ?? null, delivered: false };
+    },
+    pending: recipeId => place.current !== null && place.current.id === recipeId,
+    markDelivered() { if (place.current !== null) place.current.delivered = true; },
+    wasDelivered: () => place.current?.delivered === true,
+  }), [scrollArea]);
+  // Set by the scroll effect below for the detail effect after it: this move is Back from a label to its recipe.
+  const backFromLabel = useRef<Place | null>(null);
 
   // A recipe opens one level down, so Back steps up to the list. On the split, with a recipe already
   // open beside the list, picking another is lateral and replaces it — and keeps whatever the entry it
@@ -131,9 +150,19 @@ function RecipesLayout({ view }: { view: ShownView }) {
     shown.current = { pathname, kind: view.kind };
     const area = scrollArea();
     // The same address twice is StrictMode running the effect again, not a move.
-    if (before === null || before.pathname === pathname || area === null) return;
+    backFromLabel.current = null;
+    if (before === null || before.pathname === pathname) return;
+    // Back from a label to its recipe keeps the place written down when the label opened. Any other move forgets it
+    // (the label's own move, recipe → label, is the one that must not).
+    const written = place.current;
+    const returning = before.kind === 'label' && view.kind === 'recipe' && written !== null && written.id === view.id;
+    if (returning) backFromLabel.current = written;
+    else if (view.kind !== 'label') place.current = null;
+    if (area === null) return;
     if (split) {
       listTop.current = null;
+    } else if (returning && written.area !== null) {
+      area.scrollTop = written.area;
     } else if (view.kind === 'list' && before.kind !== 'list' && listTop.current !== null) {
       area.scrollTop = listTop.current;
       listTop.current = null;
@@ -156,19 +185,19 @@ function RecipesLayout({ view }: { view: ShownView }) {
   // On the split the right-hand side scrolls on its own (RecipesSection.module.css), and it stays
   // mounted from one recipe to the next: another recipe starts at its top instead of where the last
   // one was left. On a phone it is not a scroll area and this is a no-op.
-  const detail = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    if (detail.current) detail.current.scrollTop = 0;
+    if (detail.current) detail.current.scrollTop = backFromLabel.current?.detail ?? 0;
   }, [pathname]);
 
   return (
     <HandBackProvider value={handBack}>
+      <RecipeReturnProvider value={recipeReturn}>
       <Page title={t('section.recipes')}>
         <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'}>
           <div className={styles.list}>
             <PartBoundary>
               <RecipesList
-                openRecipeId={view.kind === 'recipe' ? view.id : null}
+                openRecipeId={view.kind === 'recipe' || view.kind === 'label' ? view.id : null}
                 split={split}
                 onOpenRecipe={openRecipe}
                 sheetOpen={view.kind === 'allergens'}
@@ -183,6 +212,7 @@ function RecipesLayout({ view }: { view: ShownView }) {
           </div>
         </div>
       </Page>
+      </RecipeReturnProvider>
     </HandBackProvider>
   );
 }
