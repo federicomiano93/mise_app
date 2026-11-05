@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate, useNavigationType } from 'react-router';
 import { itemWithPrice } from '@mise/shared/ingredient-edit-model';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
@@ -15,12 +15,12 @@ import { announceAction } from '../telemetry/usage';
 import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useCopyWait } from './copyWait';
-import { ADD_INGREDIENT_OPENER, NEW_OPENER, SEARCH_OPENER, itemOpener, supplierItemOpener, useHandBack } from './handBack';
+import { ADD_INGREDIENT_OPENER, MERGE_OPENER, NEW_OPENER, SEARCH_OPENER, itemOpener, supplierItemOpener, useHandBack } from './handBack';
 import { useIngredientDeletions } from './ingredientDeletions';
 import { SupplierCard } from './SupplierCard';
 import { useSuppliers, useSuppliersStore } from './SuppliersContext';
-import { cameFromList, cameFromListOrSupplierScreen, supplierScreenOf, tabOfState, useLeave } from './suppliersNav';
-import { tabPath } from './suppliersPath';
+import { cameFromList, cameFromListOrSupplierScreen, fromCard, supplierScreenOf, tabOfState, useLeave } from './suppliersNav';
+import { ingredientMergePath, tabPath } from './suppliersPath';
 import { useDeleteIngredient } from './useDeleteIngredient';
 import { useMayWritePrices } from './useMayWritePrices';
 import styles from './SupplierCard.module.css';
@@ -140,6 +140,13 @@ export function IngredientCardScreen({ id, packaging, preset }: Props) {
     if ((cameFromList(state) || supplierOrigin !== null) && navigationType !== 'POP') title.current?.focus();
   }, [waiting, gone, broken, cannotOpen]);
 
+  // Back from the merge chooser, or a finished merge, owes the focus to the merge door (the card is drawn fresh).
+  useEffect(() => {
+    if (waiting || gone || broken || cannotOpen || id === null) return;
+    if (handBack.takeDoor(id)) handBack.focus(MERGE_OPENER);
+  }, [waiting, gone, broken, cannotOpen]);
+  const mergeDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(MERGE_OPENER, node); }, [handBack]);
+
   const packs = useMemo(
     () => packChoices({ ingredients: snapshot.ingredients, language, current: item?.packUnit }),
     [snapshot.ingredients, language, item],
@@ -201,6 +208,11 @@ export function IngredientCardScreen({ id, packaging, preset }: Props) {
         deleting={counting}
         onDelete={canManage && item !== null && id !== null
           ? markClean => runDelete({ id, name: ingredientDisplayName(item) }, () => { markClean(); leaveAfterDelete(); })
+          : undefined}
+        // ⚠️ THE MERGE DOOR IS FOR A PRICE WRITER OF AN EXISTING INGREDIENT (parity I117); the card itself draws it for an ingredient only.
+        mergeDoorRef={mergeDoor}
+        onMerge={mayPrice && item !== null && id !== null
+          ? () => { void navigate(ingredientMergePath(id), { state: fromCard(state) }); }
           : undefined}
         renderNewSupplier={host => <SupplierCard id={null} supplier={null} titleRef={noTitle} host={host} />}
         watchRefusedSupplier={listener => store.onMessage(message => {

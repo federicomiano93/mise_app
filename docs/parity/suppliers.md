@@ -777,6 +777,58 @@ re-import writes nothing thanks to the create-only `inv-<SDI>-<line>` points, I1
   on the imported item and its supplier only; axe clean, every control ≥44px, no sideways scroll, no console errors) and in English
   (the venue's language switched for the run: range, «Missing: April 2026», the past import, all old, the verdict).
 
+## Step 3e-7 as built — price changes and merging two packs
+
+Items I101–I130. Rules unchanged: the current app already reads and writes every document this step touches
+(`price-changes`, `ingredients/{id}/prices`, `ingredient-prices`, `ingredients`, the draft line), and the merge's usage check
+reads `products`, `recipes`, `drafts/current`, `order-requests` and two `inventory` months that a price writer can already read.
+
+**Shared.** `ingredient-merge` is now a FULL port, paired in `parity.spec.ts` (`mergeCandidates`, `pointIdOnA`, `mergedCodes`,
+`planMerge`, `deletionBatches` added to `findUsage` and the month keys); every planning test of `tests/ingredient-merge.test.mjs`
+runs against both files and `odd-inputs.spec.ts` feeds both the same strange values. `price-changes-model` was already full
+(3e-6).
+
+**Data.** `suppliers/priceChanges/priceChangesSource.ts` (read-only: the server first, the cache only as a flagged fallback —
+I103) and `suppliers/merge/mergeSource.ts` (the port of `ingredient-merge-data.js`, loaded lazily through `lazyMergeSource.ts`),
+both behind interfaces with fakes (`testing/fakePriceChangesSource.ts`, `testing/fakeMergeSource.ts`) and handed out by
+`DataServices.priceChanges` / `.merge`. The Suppliers store carries `weekStartsOn` (config/orders through `weekStartOf`, I107).
+
+**Screens.** `/suppliers/price-changes` (full width at every size, usage `suppliers-price-changes`, door «Price changes» after
+«Import from invoices») and `/suppliers/ingredient/<id>/merge` (one level below A's card, the list beside it on the split,
+usage `suppliers-merge`, door «Merge another pack…» on the card above «Not in use at the moment»).
+
+**Differences from the current app, on purpose (tell him):**
+- D1. **The price-changes door has the import's gate in full** — a price writer of a venue in ITALY (`useMayImport`, decision F3),
+  not every price writer: the report fills only from invoice imports, which a venue outside Italy cannot run.
+- D2. **The server read of the report is bounded** (15 s, `SERVER_READ_TIMEOUT_MS`): past it the cache answers, flagged, exactly
+  as after a refusal. The original waits for ever on a connection that says it is up and carries nothing.
+- D3. **Row dates follow the interface language**, like the period label (Finding I-K): the original mixes two sources.
+- D4. **The merge's fresh reads wait for this phone's queue first** (`waitForPendingWrites`): Mise 2 saves a card local-first, so a
+  save of A or B made a moment before must reach the server before the plan is made from the server's copy.
+- D5. **Every read and commit of the merge is bounded** (30 s, code `timeout`), as the import's are in Mise 2.
+- D6. **The chooser tags a switched-off ingredient with the lists' own word** («Switched off» / «Disattivato»), not the original's
+  «Off the order list»: the concept is «Not in use at the moment» since 3e-5b.
+- D7. **The places that block a merge are worded as phrases** («the recipe “X”», «the stocktake of October 2026», «an open order
+  list», «the order in progress»), not the original's bare «recipe “X”».
+- D8. **After a merge the chooser steps BACK onto A's card** (the entry underneath, with its own origin: Back from it goes to
+  the list or the supplier's screen it came from, never to a second card of A; a chooser opened by typed address is replaced by
+  the card instead); the focus goes to the card's merge door (`MERGE_OPENER`, also after Back from the chooser) and «Merged ✓»
+  is said through the section's status message.
+- D9. While the merge writes, a router blocker refuses every way out (rail, browser Back, Android Back), not only the Back
+  button, and the screen holds `markBusy` so the session never reloads under it; a store update that drops A mid-write does not
+  unmount the blocker or the dialogs.
+- D10. **A commit that timed out counts as landed** (`committed: true`, «stopped half way, tap Merge again»): Firestore does not
+  cancel it, so «nothing was changed» could be false. A read that timed out before any write stays «nothing was changed».
+- D11. **An empty CACHE answer to «the newest change» is not «no changes at all»**: the report shows «connection needed» with
+  Try again instead of opening on the current month with the «appear when you import invoices» words (the 15 s bound of D2
+  made that path likelier).
+- D12. Packaging is never merged: the chooser's address typed for a packaging item goes to its card.
+- Kept from the original, recorded: a retry after a merge that stopped AFTER A took B's price words the price line as «B's price
+  is not kept» (A's date now equals B's), although it is already on A. Harmless; the original says the same.
+
+**Driven** on the emulator (`algprobe/mise-drive/drive-mise2-price-changes-merge.mjs`, invented data): owner of the Italian
+venue at 1024 / 360 / 296, the same venue in English at 360, the employee at 360.
+
 ## Findings — things found while reading, not decided
 
 ### Findings — The page, the lists, suppliers

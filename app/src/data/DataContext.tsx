@@ -19,6 +19,10 @@ import { createFirestoreSuppliersSource } from '../suppliers/suppliersSource';
 import type { SuppliersSource } from '../suppliers/suppliersSource';
 import type { InvoiceImportSource } from '../suppliers/invoiceImport/importSource';
 import { createLazyImportSource } from '../suppliers/invoiceImport/lazyImportSource';
+import type { MergeSource } from '../suppliers/merge/mergeSource';
+import { createLazyMergeSource } from '../suppliers/merge/lazyMergeSource';
+import { createFirestorePriceChangesSource } from '../suppliers/priceChanges/priceChangesSource';
+import type { PriceChangesSource } from '../suppliers/priceChanges/priceChangesSource';
 
 // Where every section gets its data from: one factory per section, built once in main.tsx on the
 // session's backend. A screen's spec passes fakes instead (testing/renderApp.tsx), so no screen
@@ -42,6 +46,10 @@ export interface DataServices {
   suppliers(locationId: string): SuppliersSource;
   // «Import from invoices» (step 3e-6): network-only reads and writes (parity I8), made when the import screen opens.
   invoiceImport(locationId: string): InvoiceImportSource;
+  // «Price changes» (step 3e-7): read-only, the server first and the cache only as a flagged fallback (parity I103).
+  priceChanges(locationId: string): PriceChangesSource;
+  // «Merge another pack…» (step 3e-7): network-only reads and writes (parity I127), made when the chooser opens.
+  merge(locationId: string): MergeSource;
 }
 
 // What the data layers need from the backend besides Firestore: the account behind a client's ordering link is
@@ -68,6 +76,8 @@ export function createDataServices(firestore: () => Promise<FirestoreKit>, auth:
     suppliers: locationId => createFirestoreSuppliersSource(firestore,
       (name, data, timeoutMs) => auth.callFunction(name, data, timeoutMs), locationId),
     invoiceImport: locationId => createLazyImportSource(firestore, locationId),
+    priceChanges: locationId => createFirestorePriceChangesSource(firestore, locationId),
+    merge: locationId => createLazyMergeSource(firestore, locationId),
   };
 }
 

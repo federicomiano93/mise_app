@@ -3686,4 +3686,32 @@ describe('ingredient-merge: odd inputs', () => {
     new Date(2026, 2, 31, 12).getTime(), new Date(2026, 9, 25, 3).getTime(), new Date(2026, 9, 31, 23).getTime(), new Date(2024, 1, 29, 12).getTime()];
   agree('monthKeyOf', m.monthKeyOf as AnyFn, l.monthKeyOf as AnyFn, product(MOMENTS));
   agree('previousMonthKeyOf', m.previousMonthKeyOf as AnyFn, l.previousMonthKeyOf as AnyFn, product(MOMENTS));
+
+  // The merge itself (step 3e-7): the chooser, the ids, the codes, the plan and the deletions.
+  const ING = (over: object) => ({ id: 'a', name: 'Lievito sacco', shortName: '', supplierId: 's1', kind: 'ingredient', supplierCode: 'SACCO', weight: '5 kg', ...over });
+  const AS: readonly unknown[] = [...ODD, ING({}), ING({ id: 7 }), ING({ supplierId: undefined }), { id: 'a' }];
+  const LISTS: readonly unknown[] = [...ODD, [ING({ id: 'b', name: 'Lievito pacco' }), ING({ id: 'c', name: 'Farina', kind: 'packaging' }), null, 5,
+    ING({ id: '', name: 'X' }), ING({ id: 'd', supplierId: 's2' }), ING({ id: 'e', name: 7, shortName: null }), ING({ id: 'f', supplierId: '' }), ING({ id: 'a' })]];
+  const SEARCHES: readonly unknown[] = [...ODD, 'LIÈVITO', 'pacco  sacco', '   '];
+  agree('mergeCandidates', m.mergeCandidates as AnyFn, l.mergeCandidates as AnyFn, [...product(AS, LISTS, SEARCHES), ...product(AS, LISTS)]);
+  const POINT_IDS: readonly unknown[] = [...ODD, 'inv-18000000050-1', 'inv-1-1234567', 'inv-123456789012345678901-1', 'AutoId', 'inv-1-1 '];
+  const POINT_DATA: readonly unknown[] = [...ODD, { source: 'invoice' }, { source: 'manual' }, { source: ['invoice'] }];
+  agree('pointIdOnA', m.pointIdOnA as AnyFn, l.pointIdOnA as AnyFn, product(['b', undefined, 7], POINT_IDS, POINT_DATA));
+  const CODED: readonly unknown[] = [...ODD, ING({}), ING({ supplierCode: '  ', supplierCodes: ['X', ' x ', 5, null, 'SACCO'] }),
+    ING({ supplierCodes: Array.from({ length: 25 }, (_, i) => `C${i}`) }), ING({ supplierCode: 'pacco', supplierCodes: 'X' })];
+  agree('mergedCodes', m.mergedCodes as AnyFn, l.mergedCodes as AnyFn, product(CODED, CODED));
+  agree('deletionBatches', m.deletionBatches as AnyFn, l.deletionBatches as AnyFn,
+    product([...ODD, ['x', null, '', 5, 'y'], Array.from({ length: 11 }, (_, i) => `c${i}`)]));
+  const POINTS: readonly unknown[] = [...ODD, [null, 5, { id: 7, data: {} }, { id: 'p', data: null },
+    { id: 'inv-1-1', data: { source: 'invoice', recordedAt: '2026-09-01', priceUnit: 'kg', pricePerUnit: 6, bakery: 'x', extra: 1 } },
+    { id: 'm1', data: { recordedAt: 5, priceUnit: 'pcs', pricePerUnit: 2, unitWeightKg: 1, packLabel: '  ', packCode: ' ' } }]];
+  const PRICES: readonly unknown[] = [...ODD, { priceUnit: 'kg', pricePerUnit: 6, priceUpdatedAt: '2026-10-01T12:00:00.000Z' },
+    { priceUnit: 'pcs', pricePerUnit: 2, unitWeightKg: 1, priceUpdatedAt: '2026-09-01T12:00:00.000Z', vatRate: 0 },
+    { priceUnit: 'kg', pricePerUnit: -1, priceUpdatedAt: 'z' }, { priceUnit: 'box', pricePerUnit: 3, priceUpdatedAt: 'z' }];
+  const PLAN_INPUTS: unknown[] = [];
+  for (const bPoints of POINTS) for (const aPrice of PRICES) for (const bPrice of PRICES) {
+    PLAN_INPUTS.push({ a: ING({}), b: ING({ id: 'b', supplierCode: 'PACCO', weight: '1 kg' }), bPoints, aPointIds: ['inv-1-1'], aPrice, bPrice, changeIds: ['c'] });
+  }
+  PLAN_INPUTS.push(...ODD.map(odd => ({ a: ING({}), b: ING({ id: 'b' }), bPoints: odd, aPointIds: odd, changeIds: odd })));
+  agree('planMerge', m.planMerge as AnyFn, l.planMerge as AnyFn, [...PLAN_INPUTS.map(input => [input]), ...product(ODD)]);
 });

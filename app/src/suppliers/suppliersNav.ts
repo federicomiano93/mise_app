@@ -67,3 +67,21 @@ export function supplierScreenOf(state: unknown): string | null {
 
 // Did the card's own Back have a screen to step back to (the list, or a supplier's screen)?
 export const cameFromListOrSupplierScreen = (state: unknown): boolean => cameFromList(state) || supplierScreenOf(state) !== null;
+
+// An ingredient's card to «Merge another pack…», one level below it: Back from the chooser is the browser's Back, which lands on
+// the card. The state carries on what the card's own state said about the list beside it (its tab, the supplier's screen it came
+// from), so the same list stays beside the chooser.
+export function fromCard(cardState: unknown) {
+  const tab = tabOfState(cardState);
+  const supplier = supplierScreenOf(cardState);
+  return {
+    ...KEEP_FOCUS,
+    fromCard: true,
+    ...(tab === null ? {} : { tab }),
+    ...(supplier === null ? {} : { fromSupplierScreen: supplier }),
+  } as const;
+}
+
+export function cameFromCard(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'fromCard' in state;
+}

@@ -134,6 +134,18 @@ describe('the suppliers store: config/orders', () => {
     expect(snap.favourites).toEqual(['a', 'b']);
   });
 
+  test('the week starts on the venue’s day, read as weekStartOf does; Sunday until it arrives or when unreadable (parity I107)', async () => {
+    const source = fakeSuppliersSource({ ordersConfig: { weekStartsOn: ' monday ' } });
+    const { store } = started(source);
+    expect(store.getSnapshot().weekStartsOn).toBe('Sunday');
+    await tick();
+    expect(store.getSnapshot().weekStartsOn).toBe('Monday');
+    const odd = fakeSuppliersSource({ ordersConfig: { weekStartsOn: ['Monday'] } });
+    const second = started(odd);
+    await tick();
+    expect(second.store.getSnapshot().weekStartsOn, 'a list is not a day').toBe('Sunday');
+  });
+
   test('a refused config read leaves the defaults and no delete', async () => {
     const source = fakeSuppliersSource({ ingredients: [{ id: 'i1', name: 'x', category: 'Bakery' }] });
     source.refuse.config = true;
