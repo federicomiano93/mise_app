@@ -860,6 +860,33 @@ with a rules conflict to settle. These hunks will meet their originals unchanged
 ingredient ALREADY saved with a wrong carton keeps its price in both apps (`storedWeightFactor` trusts the stored weight, and a
 re-import offers the wrong price again as `weight-rescaled`): it has to be corrected on its card.
 
+## Invoice reader: goods counted in pieces priced per piece — TO PORT
+
+⚠️ **Not in Mise 2 yet.** The current app's fix on branch `fix/invoice-import-per-piece` (5 Nov 2026, his rule) must be ported
+to `shared/src/invoice-zip/` and `shared/src/invoice-import-model.ts` before the switch, with its specs, or Mise 2 goes back to
+pricing cornetti «per kilo of 50 bags».
+
+- **His rule:** a product counted in PIECES (cornetti, panzerotti, arancini, graffe…) carries its price per piece, with the piece
+  weight beside it (Chiaragel «85gr* 50pz» at 23.20 € a carton = 0.464 €/pz, 85 g). Goods sold BY WEIGHT stay per kilo («DR
+  CIPOLLE FETTE 2,5kg* 4pz», «KG.2.5X4» fries). Eggs unchanged.
+- **The test** (`classify.js` `piecesOf`, Python `pieces_of`): invoiced by pieces or cartons, not eggs, and the description writes
+  the count AS PIECES («50pz», «PZ.50», «X50P») next to a size in grams of at most `MAX_PIECE_G` = 500 g. «G 100X3», «gr.60X6»,
+  «2000x4g» (no «pz»), kilos, and «G 570 (X12PZ)» (too heavy) are not pieces. The carton whose pieces add up to its weight
+  («35/40gr 2Kg* 55pz») is 55 pieces of 2000/55 g rounded to 0.1 g (36.4 g), so its price per kilo does not move.
+- **What the import proposes for a piece product** (`products.js` `proposeParams`): `priceUnit 'pcs'`, pack = one piece, packCount
+  = the count, so `unitWeightKg` = the piece weight and `pricing.js` prices each piece (`piece-weight-from-description`, no
+  `fromPack`). `proposePackWord` gives '' for it, and `newIngredientData` names the inner item with the venue's word for a piece
+  (`pieceWordFor`: «pezzo» / «piece»), never the default «busta».
+- **The sugar sachets** (`parsePack`): «2000x4g» is read count FIRST — 2000 × 4 g = 8 kg — grams only, after `P_GR_X` and before
+  `P_KG`. It used to be one 4 g pack refused at 4,032 €/kg.
+- **Specs to port:** `invoice-zip-classify` («the count first, then grams each», «pieces: a count written as pieces…»),
+  `invoice-zip-build` («a product counted in pieces…», «goods sold by weight stay per kilo…», «sugar sachets…», the 55-piece
+  carton), `invoice-import-model` («a carton of pieces priced per piece is 50 × pezzo…»), and `invoice-pieces-cost` (a recipe in
+  grams costs the same before and after).
+- **Data already saved** keeps its price per kilo in both apps (the import never replaces a price kept in another unit): the
+  one-off correction is a script outside the repo, run on his yes (`algprobe/data-fixes/fix-piece-prices.mjs`). Mise 2 reads the
+  same documents, so it needs no correction of its own.
+
 ## Findings — things found while reading, not decided
 
 ### Findings — The page, the lists, suppliers
