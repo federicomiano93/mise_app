@@ -72,8 +72,8 @@ const ONLY_PIECES: ExportModel = {
   ],
 };
 
-async function pdfText(model: ExportModel): Promise<string> {
-  const blob = await buildPdfBlob(model);
+async function pdfText(model: ExportModel, options?: { rounded?: boolean }): Promise<string> {
+  const blob = await buildPdfBlob(model, options);
   expect(blob.type).toBe('application/pdf');
   return Buffer.from(await blob.arrayBuffer()).toString('latin1');
 }
@@ -95,13 +95,14 @@ describe('a real PDF', () => {
     const pdf = await pdfText(TRAYS);
     expect(pdf.startsWith('%PDF-')).toBe(true);
     expect(pageCount(pdf)).toBe(1);
-    expect(pdf).toContain('(Pizza di prova x 3)');
+    expect(pdf).toContain('(Pizza di prova)');
+    expect(pdf).not.toContain('x 3)');
     for (const row of TRAYS.rows) {
       const { name, grams } = row as { name: string; grams: number };
       expect(pdf, name).toContain(`(${name})`);
       expect(pdf, rowText(grams)).toContain(`(${rowText(grams)})`);
     }
-    expect(pdf).toMatch(/\/Title \(Pizza di prova x 3\)/);
+    expect(pdf).toMatch(/\/Title \(Pizza di prova\)/);
   });
 
   it('of 60 rows is still one page', async () => {
@@ -128,6 +129,27 @@ describe('a real PDF', () => {
     };
     expect(await pdfText(model)).toContain('(0,727 kg)');
   });
+
+  it('rounded: the lab rule in the PDF, the screen’s text without it, and the spreadsheet keeps exact numbers', async () => {
+    const model: ExportModel = {
+      name: 'Pizza di prova',
+      trays: 3,
+      totalG: 14698,
+      rows: [{ name: 'Farina di prova', grams: 14404.9 }, { name: 'Sale di prova', grams: 293 }],
+    };
+    const plain = await pdfText(model);
+    expect(plain).toContain('(14405 g)');
+    expect(plain).toContain('(293 g)');
+    const round = await pdfText(model, { rounded: true });
+    expect(round).toContain('(14410 g)');
+    expect(round).toContain('(290 g)');
+    expect(round).not.toContain('(14405 g)');
+    expect(round).not.toContain('(293 g)');
+    const { sheet } = await sheetFiles(await buildXlsxBlob(model, 'Totale'));
+    const values = [...sheet.matchAll(/<c r="B([3-4])"[^>]*><v>([^<]+)<\/v>/g)].map(m => Number(m[2]));
+    expect(values).toEqual([14404.9, 293]);
+    expect(sheet).toMatch(/<f>SUM\(B3:B4\)<\/f>/);
+  });
 });
 
 describe('a real .xlsx', () => {
@@ -138,7 +160,8 @@ describe('a real .xlsx', () => {
     expect(sheet).toMatch(/<mergeCell ref="A1:B1"/);
     expect(sheet).toMatch(/<f>SUM\(B3:B8\)<\/f>/);
     expect(sheet).toMatch(/orientation="portrait"/);
-    expect(strings).toContain('Impasto di prova — 24000 g');
+    expect(strings).toContain('Impasto di prova');
+    expect(strings).not.toContain('24000 g');
     expect(strings).toContain('Impasto totale');
     expect(styles).toMatch(/formatCode="0 &quot;g&quot;"/);
     expect(styles).toMatch(/<b\s*\/>|<b>/);

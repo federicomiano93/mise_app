@@ -35,7 +35,7 @@ describe.each([
 ] as const)('%s', (_name, m) => {
   const {
     exportTitle, exportFileName, rowText, pdfLayout, rowTextOf, exportRow, pdfSafe, pdfMeasurer, sheetNameOf, xlsxSheet,
-    exportErrorKey, exportErrorCode, PAGE_W, PAGE_H,
+    exportErrorKey, exportErrorCode, roundLabWeight, hasRoundableRows, PAGE_W, PAGE_H,
   } = m;
 
   const doc = new (jsPDF as Loose)({ unit: 'pt', format: 'a4' });
@@ -53,9 +53,12 @@ describe.each([
   }, measure);
   const EPS = 1e-6;
 
-  test('title: trays say «x N», otherwise the total in grams with an em dash', () => {
-    expect(exportTitle(TRAYS)).toBe('Pizza di prova x 3');
-    expect(exportTitle(SIX)).toBe('Impasto di prova — 24000 g');
+  test('title: the recipe\'s name only, with trays and with a total; the file name keeps both', () => {
+    expect(exportTitle(TRAYS)).toBe('Pizza di prova');
+    expect(exportTitle(SIX)).toBe('Impasto di prova');
+    expect(exportTitle({ name: undefined, trays: 2, totalG: 5, rows: [] })).toBe('');
+    expect(exportFileName(TRAYS, 'pdf')).toBe('Pizza_di_prova_x3.pdf');
+    expect(exportFileName(SIX, 'xlsx')).toBe('Impasto_di_prova_24000g.xlsx');
   });
 
   test('file name: trays or grams, unsafe characters gone, spaces become underscores', () => {
@@ -83,6 +86,9 @@ describe.each([
     expect(pdfSafe('Farina 全 ✓')).toBe('Farina ? ?');
   });
 
+  const NAME_X = (PAGE_W - 300) / 2;
+  const WEIGHT_RIGHT = NAME_X + 300;
+
   function checkGeometry(model: Loose): ported.PdfLayout {
     const lay = layoutOf(model);
     const [title, ...rest] = lay.items as [ported.PdfItem, ...ported.PdfItem[]];
@@ -92,7 +98,7 @@ describe.each([
     const gap = measure(' ', lay.fontSize, false);
     for (let i = 0; i < model.rows.length; i++) {
       const row = rest.filter(it => Math.abs(it.y - (firstRest.y + i * lay.leading)) < EPS);
-      const name = row.find(it => it.x === 147);
+      const name = row.find(it => Math.abs(it.x - NAME_X) < EPS);
       const weight = row.find(it => it.bold);
       const dots = row.find(it => /^\.+$/.test(it.text));
       if (!name || !weight || !dots) throw new Error(`row ${i} has no name, dots or weight`);
@@ -100,25 +106,38 @@ describe.each([
       const nameEnd = name.x + measure(name.text, name.size, false);
       const dotsEnd = dots.x + measure(dots.text, dots.size, false);
       const weightEnd = weight.x + measure(weight.text, weight.size, true);
-      expect(name.x >= 147 - EPS && weightEnd <= 449 + EPS, `row ${i} inside 147-449`).toBe(true);
+      expect(name.x >= NAME_X - EPS && weightEnd <= WEIGHT_RIGHT + EPS, `row ${i} inside the 300 pt block`).toBe(true);
       expect(nameEnd + gap <= dots.x + EPS, `row ${i}: name then a gap then dots`).toBe(true);
       expect(dotsEnd + gap <= weight.x + EPS, `row ${i}: dots then a gap then the weight`).toBe(true);
-      expect(Math.abs(weightEnd - 449) < 1e-6, `row ${i}: weight right-aligned at 449`).toBe(true);
+      expect(Math.abs(weightEnd - WEIGHT_RIGHT) < 1e-6, `row ${i}: weight right-aligned at the block's right edge`).toBe(true);
     }
     return lay;
   }
 
-  test('layout of a normal recipe: 19 pt rows, 36 pt apart, title at 110, first row at 170', () => {
+  test('layout of a normal recipe: 20 pt rows, 30 pt apart, title at 70, first row at 118, a 300 pt block centred', () => {
     const lay = checkGeometry(SIX);
-    expect((lay.items[0] as ported.PdfItem).y).toBe(110);
-    expect((lay.items[1] as ported.PdfItem).y).toBe(170);
-    expect(lay.fontSize <= 19 && lay.fontSize >= 9).toBe(true);
-    expect(lay.leading).toBe(36);
+    expect(Math.abs(NAME_X - 147.64) < 0.01 && Math.abs(WEIGHT_RIGHT - 447.64) < 0.01).toBe(true);
+    expect((lay.items[0] as ported.PdfItem).y).toBe(70);
+    expect((lay.items[0] as ported.PdfItem).size).toBe(28);
+    expect((lay.items[1] as ported.PdfItem).y).toBe(118);
+    expect(lay.fontSize <= 20 && lay.fontSize >= 9).toBe(true);
+    expect(lay.leading).toBe(30);
+    const names = lay.items.filter(i => !i.bold && !/^\.+$/.test(i.text));
+    expect(names.every(i => Math.abs(i.x - 147.64) < 0.01)).toBe(true);
+    const weights = lay.items.slice(1).filter(i => i.bold);
+    expect(weights.every(i => Math.abs(i.x + measure(i.text, i.size, true) - 447.64) < 0.01)).toBe(true);
+  });
+
+  test('23 rows still keep the 30 pt leading, and a long name never overflows the block', () => {
+    const rows = Array.from({ length: 23 }, (_, i) => ({ name: `Ingrediente di prova ${i + 1}`, grams: 100 + i }));
+    const lay = checkGeometry({ ...SIX, rows });
+    expect(lay.leading).toBe(30);
+    checkGeometry(LONG_ROW);
   });
 
   test('layout with a long name: the whole list shrinks to one size and every row keeps its dots', () => {
     const lay = checkGeometry(LONG_ROW);
-    expect(lay.fontSize >= 9 && lay.fontSize < 19).toBe(true);
+    expect(lay.fontSize >= 9 && lay.fontSize < 20).toBe(true);
     expect(lay.items.some(i => i.text.endsWith('…')), 'nothing is cut while it fits at 9 pt').toBe(false);
   });
 
@@ -142,7 +161,7 @@ describe.each([
     for (let i = 0; i < names.length; i++) {
       const y = firstY + i * lay.leading;
       const row = rows.filter(it => Math.abs(it.y - y) < EPS);
-      const name = row.find(it => it.x === 147);
+      const name = row.find(it => Math.abs(it.x - NAME_X) < EPS);
       const dots = row.find(it => /^\.+$/.test(it.text));
       if (!name || !dots) throw new Error(`row ${i} has no name or dots`);
       const gap = drawnWidth(' ', 9, false);
@@ -167,7 +186,7 @@ describe.each([
     const lay = checkGeometry(SIXTY);
     const lastY = Math.max(...lay.items.map(i => i.y));
     expect(lastY <= PAGE_H - 60 + EPS, `last baseline ${lastY}`).toBe(true);
-    expect(lay.fontSize >= 6 && lay.fontSize < 19).toBe(true);
+    expect(lay.fontSize >= 6 && lay.fontSize < 20).toBe(true);
     expect(lay.leading >= 1.25 * lay.fontSize - EPS).toBe(true);
     expect(new Set(lay.items.slice(1).map(i => i.size)).size).toBe(1);
   });
@@ -223,7 +242,7 @@ describe.each([
   });
 
   test('PDF row text: the number and its own unit, «to taste» is the unit word alone', () => {
-    expect((MIXED.rows as Loose[]).map(rowTextOf)).toStrictEqual(['500 ml', '2 kg', '3 pz', '250 g', 'q.b.']);
+    expect((MIXED.rows as Loose[]).map(row => rowTextOf(row))).toStrictEqual(['500 ml', '2 kg', '3 pz', '250 g', 'q.b.']);
     expect(rowTextOf({ name: 'x', grams: 14400.4 })).toBe('14400 g');
   });
 
@@ -231,7 +250,7 @@ describe.each([
     expect(exportTitle(ONLY_PIECES)).toBe('Decori di prova');
     expect(exportFileName(ONLY_PIECES, 'pdf')).toBe('Decori_di_prova.pdf');
     expect(exportFileName(ONLY_PIECES, 'xlsx')).toBe('Decori_di_prova.xlsx');
-    expect(exportTitle(MIXED)).toBe('Crema di prova — 2750 g');
+    expect(exportTitle(MIXED)).toBe('Crema di prova');
     expect(exportFileName(MIXED, 'pdf')).toBe('Crema_di_prova_2750g.pdf');
   });
 
@@ -305,7 +324,7 @@ describe.each([
   ];
 
   test('⚠️ a 1.846 kg row is «1,846 kg» in the PDF (as on the Italian screen), never «2 kg»', () => {
-    expect(DECIMAL_ROWS.map(rowTextOf)).toStrictEqual(['0,727 kg', '2,273 l', '4 pz']);
+    expect(DECIMAL_ROWS.map(row => rowTextOf(row))).toStrictEqual(['0,727 kg', '2,273 l', '4 pz']);
     expect(rowTextOf({ name: 'D', value: 1.846, unit: 'kg', factor: 1000, decimals: 3, text: '1,846' })).toBe('1,846 kg');
   });
 
@@ -323,6 +342,55 @@ describe.each([
     expect(rowTextOf({ name: 'a', grams: 14400.4 })).toBe('14400 g');
     const { data } = xlsxSheet({ title: 'T', rows: [{ name: 'a', grams: 14400.4 }], totalLabel: 'T', totalG: 14400 });
     expect(((data[2] as Loose)[1]).format).toBe('0 "g"');
+  });
+
+  // ── The lab rounding (PDF only) ──────────────────────────────────────────────────────────
+
+  test('roundLabWeight: 1 g under 10, 5 g under 100, else 10 g; half always up; never NaN', () => {
+    const cases = [[6, 6], [44, 45], [59, 60], [110, 110], [220, 220], [293, 290], [769, 770], [1979, 1980],
+      [2345, 2350], [4397, 4400], [9.6, 10], [99.9, 100], [0, 0], [2.5, 3], [12.5, 15], [97.5, 100], [105, 110], [14404.9, 14400]];
+    for (const [input, want] of cases) expect(roundLabWeight(input), String(input)).toBe(want);
+    for (const junk of [NaN, Infinity, -Infinity, -5, undefined, null, 'abc', {}]) expect(roundLabWeight(junk), String(junk)).toBe(0);
+  });
+
+  test('rowTextOf rounded: grams only; ml, kg, pcs, spoons and «to taste» print as before', () => {
+    const g = { name: 'a', value: 293, unit: 'g', factor: 1, text: '293' };
+    expect(rowTextOf(g, { rounded: true })).toBe('290 g');
+    expect(rowTextOf({ name: 'a', value: 44, unit: 'g', factor: 1 }, { rounded: true })).toBe('45 g');
+    const others = [
+      { name: 'b', value: 293, unit: 'ml', factor: 1 },
+      { name: 'c', value: 0.727, unit: 'kg', factor: 1000, decimals: 3, text: '0,727' },
+      { name: 'd', value: 3, unit: 'pz', factor: 0 },
+      { name: 'e', value: 2, unit: 'tbsp', factor: 0 },
+      { name: 'f', value: null, unit: 'q.b.', factor: 0 },
+    ];
+    expect(others.map(r => rowTextOf(r, { rounded: true }))).toStrictEqual(['293 ml', '0,727 kg', '3 pz', '2 tbsp', 'q.b.']);
+    expect(others.map(r => rowTextOf(r, { rounded: true }))).toStrictEqual(others.map(r => rowTextOf(r)));
+    expect(rowTextOf(g)).toBe('293 g');
+    expect(rowTextOf(g, {})).toBe('293 g');
+  });
+
+  test('the rounding starts from the number the card shows: 14404.9 reads 14405 and prints 14410', () => {
+    const row = { name: 'Farina di prova', grams: 14404.9 };
+    expect(rowTextOf(row)).toBe('14405 g');
+    expect(rowTextOf(row, { rounded: true })).toBe('14410 g');
+  });
+
+  test('the Calculator and the Recipe book print the same weight for the same row', () => {
+    const calculator = { name: 'Farina di prova', grams: 104.6 };
+    const book = { name: 'Farina di prova', value: 105, unit: 'g', factor: 1, text: '105' };
+    expect(rowTextOf(calculator)).toBe('105 g');
+    expect(rowTextOf(calculator, { rounded: true })).toBe('110 g');
+    expect(rowTextOf(book, { rounded: true })).toBe('110 g');
+  });
+
+  test('hasRoundableRows: true only with a row in grams that has a value', () => {
+    expect(hasRoundableRows(SIX)).toBe(true);
+    expect(hasRoundableRows(MIXED)).toBe(true);
+    expect(hasRoundableRows(ONLY_PIECES)).toBe(false);
+    expect(hasRoundableRows({ rows: [{ name: 'a', value: 5, unit: 'ml', factor: 1 }, { name: 'b', value: null, unit: 'g', factor: 1 }] })).toBe(false);
+    expect(hasRoundableRows({ rows: [] })).toBe(false);
+    expect(hasRoundableRows(null)).toBe(false);
   });
 
   // ── Library failures ─────────────────────────────────────────────────────────────────────

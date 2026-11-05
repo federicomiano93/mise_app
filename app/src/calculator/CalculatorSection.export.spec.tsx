@@ -91,7 +91,7 @@ describe('the Export button', () => {
     expect(builders.buildXlsxBlob.mock.calls[0]?.slice(1)).toEqual(['Total dough', 'Recipe']);
   });
 
-  it('names the trays in the title only when the dough IS the trays', async () => {
+  it('names the trays in the file name only when the dough IS the trays (the title is the recipe’s name)', async () => {
     window.localStorage.setItem('trays-sourdough', '3');
     window.localStorage.setItem('revealed-sourdough', '1');
     const { user } = await open('/calculator/sourdough', configOf({ recipes: [SOURDOUGH] }));
@@ -103,7 +103,7 @@ describe('the Export button', () => {
     expect(within(screen.getByRole('dialog')).getByRole('link', { name: 'Download' })).toHaveAttribute('download', 'Sourdough_x3.pdf');
   });
 
-  it('says the grams, not the trays, when a typed total is added to them (trays + total)', async () => {
+  it('names the file by the grams, not the trays, when a typed total is added to them (trays + total)', async () => {
     window.localStorage.setItem('trays-sourdough', '3');
     window.localStorage.setItem('total-sourdough', '500');
     window.localStorage.setItem('revealed-sourdough', '1');

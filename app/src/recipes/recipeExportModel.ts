@@ -4,8 +4,9 @@ import type { ExportModel } from '@mise/shared/recipe-export';
 import type { RecipeAmounts } from './recipeAmounts';
 
 // The recipe screen's rows as the export reads them (port of exportModelOf, js/catalogue/catalogue-model.js). It is
-// handed the very amounts the card drew (`recipeAmounts`), never recomputed, so a file can only say what the screen
-// says: each row keeps its OWN unit, spelled as the screen spells it; `factor` is the grams in one of it (0 for
+// handed the very amounts the card drew (`recipeAmounts`), never recomputed, so the file
+// starts from what the screen says (only the PDF's own «round the weights» switch prints a gram row differently):
+// each row keeps its OWN unit, spelled as the screen spells it; `factor` is the grams in one of it (0 for
 // pieces, spoons, a pinch, «to taste»); `decimals` and `text` keep a three-decimal kg row «0,727 kg» in Italian and
 // never «1 kg»; `totalG` is the Total row's number, 0 when it is not a positive finite number.
 //

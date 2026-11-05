@@ -1,11 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode, Ref } from 'react';
 import { FileText, Table } from 'lucide-react';
-import { exportErrorCode, exportErrorKey, exportFileName } from '@mise/shared/recipe-export';
+import { exportErrorCode, exportErrorKey, exportFileName, hasRoundableRows } from '@mise/shared/recipe-export';
 import type { ExportModel } from '@mise/shared/recipe-export';
 import { useT } from '../i18n/useT';
 import { Button } from './Button';
 import { Dialog } from './Dialog';
+import { SettingSwitch } from './SettingSwitch';
 import { buildPdfBlob, buildXlsxBlob } from './recipeExport';
 import styles from './ExportSheet.module.css';
 
@@ -30,6 +31,9 @@ type Kind = 'pdf' | 'xlsx';
 // that fetches the library the first time (there is no service worker yet, so that needs a connection).
 // ⚠️ A FAILURE IS REPORTED WITH FIXED WORDS ONLY (which file, which stage), never the recipe, its name or the
 // error's own message: console.error is what telemetry/errorReport.ts picks up.
+//
+// The choice also holds a switch, «Round the weights in the PDF», shown only when a row is in grams; the PDF
+// reads it, the spreadsheet always keeps exact numbers.
 //
 // Escape, the backdrop and Cancel / Close end it; the focus is trapped inside and goes back to what opened it
 // (React Aria's modal).
@@ -59,6 +63,11 @@ function ExportSheet({ request, onClose }: { request: Request; onClose: () => vo
   const run = useRef(0);
   const url = useRef<string | null>(null);
   const first = useRef<HTMLElement | null>(null);
+  // ON at every opening, not remembered (the component is mounted anew per opening). Only the PDF reads it:
+  // the spreadsheet keeps exact numbers.
+  const [rounded, setRounded] = useState(true);
+  const nameId = useId();
+  const noteId = useId();
 
   // The first control of each state takes the focus (the dialog itself takes it only when it opens).
   useEffect(() => { first.current?.focus(); }, [state.kind]);
@@ -90,7 +99,7 @@ function ExportSheet({ request, onClose }: { request: Request; onClose: () => vo
     // The words for a nameless recipe are read now, in the venue's language, never at module load.
     const fileName = exportFileName(request.model, kind, t('export.fileFallback'));
     const made = kind === 'pdf'
-      ? buildPdfBlob(request.model)
+      ? buildPdfBlob(request.model, { rounded })
       : buildXlsxBlob(request.model, request.totalLabel, t('export.sheetFallback'));
     made.then(blob => {
       if (run.current !== mine) return;
@@ -127,6 +136,15 @@ function ExportSheet({ request, onClose }: { request: Request; onClose: () => vo
             <span className={styles.note}>{t('export.excelNote')}</span>
           </span>
         </Button>
+        {hasRoundableRows(request.model) ? (
+          <div className={styles.round}>
+            <span className={styles.text}>
+              <span id={nameId} className={styles.name}>{t('export.roundWeights')}</span>
+              <span id={noteId} className={styles.note}>{t('export.roundNote')}</span>
+            </span>
+            <SettingSwitch selected={rounded} onChange={setRounded} labelledBy={nameId} describedBy={noteId} />
+          </div>
+        ) : null}
       </div>
     );
     actions = cancel();

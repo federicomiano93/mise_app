@@ -55,7 +55,7 @@ describe('recipeExportModel', () => {
   it('says the unit in the interface’s words, as the screen does', () => {
     const model = recipeExportModel(RECIPE, recipeAmounts(RECIPE, null, tIt, 'it-IT'));
     expect(model.rows.map(row => row.unit)).toEqual(['ml', 'kg', 'pz', 'g', 'q.b.']);
-    expect(model.rows.map(rowTextOf)).toEqual(['500 ml', '2 kg', '3 pz', '250 g', 'q.b.']);
+    expect(model.rows.map(row => rowTextOf(row))).toEqual(['500 ml', '2 kg', '3 pz', '250 g', 'q.b.']);
   });
 
   it('takes the amounts as drawn (scaled) and the total rounded', () => {
@@ -69,7 +69,7 @@ describe('recipeExportModel', () => {
     const amounts = recipeAmounts(DECIMALS, 3000, tIt, 'it-IT');
     const model = recipeExportModel(DECIMALS, amounts);
     expect(model.rows.map(row => (row as { decimals: number }).decimals)).toEqual([3, 3, 0]);
-    expect(model.rows.map(rowTextOf)).toEqual(['0,727 kg', '2,273 l', '4 pz']);
+    expect(model.rows.map(row => rowTextOf(row))).toEqual(['0,727 kg', '2,273 l', '4 pz']);
     expect(amounts.rows.map(row => row.num)).toEqual(['0,727', '2,273', '4']);
   });
 
