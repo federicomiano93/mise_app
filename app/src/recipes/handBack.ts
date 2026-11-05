@@ -18,6 +18,8 @@ export const ALLERGENS_OPENER = 'allergens-door';
 export const sheetOpener = (id: string): string => `sheet:${id}`;
 // The list's search box: where the focus goes when the row it is owed no longer exists.
 export const SEARCH_OPENER = 'search';
+// The door to the label Settings, at the foot of the list (after the Allergen sheet's): Back from Settings returns the focus to it.
+export const SETTINGS_OPENER = 'settings-door';
 
 export interface HandBack {
   // A row that opens a recipe. null when it goes away.

@@ -17,7 +17,7 @@ import { logicOf } from './recipesModel';
 import type { EditableRecipe } from './recipesModel';
 import { RecipesSaveButton } from './RecipesSaveButton';
 import { SettingsPage } from './SettingsPage';
-import { SettingSwitch } from './SettingSwitch';
+import { SettingSwitch } from '../ui/SettingSwitch';
 import { Help } from './SettingsParts';
 import styles from './RecipeList.module.css';
 

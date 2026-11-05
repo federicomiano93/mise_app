@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronRight, Search, Wheat } from 'lucide-react';
+import { ChevronRight, Search, Settings, Wheat } from 'lucide-react';
 import { filterByName, sortByUsage } from '@mise/shared/catalogue-model';
 import { allergensOn } from '@mise/shared/venue-features';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { useRecipes, useRecipesStore } from './RecipesContext';
-import { ALLERGENS_OPENER, SEARCH_OPENER, recipeOpener, useHandBack } from './handBack';
+import { ALLERGENS_OPENER, SEARCH_OPENER, SETTINGS_OPENER, recipeOpener, useHandBack } from './handBack';
 import styles from './RecipesList.module.css';
 
 // The current app's debounce: the box tells the list what is typed on every keystroke, and the cards
@@ -23,6 +23,9 @@ type Props = {
   sheetOpen: boolean;
   // The door to the Allergen sheet, at the foot of the list.
   onOpenSheet: () => void;
+  // The label Settings are the screen shown, and the door to them at the foot of the list.
+  settingsOpen: boolean;
+  onOpenSettings: () => void;
 };
 
 // The left column: a search box over the recipes, name only, most opened first.
@@ -36,12 +39,13 @@ type Props = {
 // another is the worst moment for it. The counts that were current when the recipe opened (or when
 // the split began) stay in charge of the order until the list is shown alone again or the split is
 // left; the fresh ones apply then.
-export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOpenSheet }: Props) {
+export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOpenSheet, settingsOpen, onOpenSettings }: Props) {
   const { t } = useT();
-  const { location } = useSession();
+  const { location, canManage } = useSession();
   const store = useRecipesStore();
   const handBack = useHandBack();
   const doorOpener = useCallback((node: HTMLButtonElement | null) => { handBack.register(ALLERGENS_OPENER, node); }, [handBack]);
+  const settingsDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
   const searchOpener = useCallback((node: HTMLInputElement | null) => { handBack.register(SEARCH_OPENER, node); }, [handBack]);
   const { recipes, recipesLoaded, usage } = useRecipes();
 
@@ -138,6 +142,22 @@ export function RecipesList({ openRecipeId, split, onOpenRecipe, sheetOpen, onOp
         >
           <Wheat aria-hidden="true" />
           <span>{t('cat.allergenSheet')}</span>
+        </Button>
+      ) : null}
+
+      {/* ⚠️ THE DOOR TO THE LABEL SETTINGS EXISTS ONLY FOR WHOEVER RUNS THE PLACE (owner or manager): a screen of switches
+          that an employee could not save would be worse than no screen. The address is checked again by the section, and
+          the rules are the real guard. */}
+      {canManage ? (
+        <Button
+          ref={settingsDoor}
+          variant="secondary"
+          className={styles.door}
+          aria-current={settingsOpen ? 'true' : undefined}
+          onPress={onOpenSettings}
+        >
+          <Settings aria-hidden="true" />
+          <span>{t('ui.settings')}</span>
         </Button>
       ) : null}
     </div>

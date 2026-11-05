@@ -5,6 +5,7 @@
 //   /recipes/<id>     one recipe (the id percent-encoded)
 //   /recipes/allergens  the Allergen sheet (step 3d-2)
 //   /recipes/<id>/label the label of one recipe (step 3d-3), one level below the recipe
+//   /recipes/settings   the label Settings (step 3d-5), for whoever runs the place
 //   anything else     unknown: the section goes back to /recipes
 //
 // ⚠️ THE WORDS A LATER STEP WILL TAKE AS ITS OWN ARE NEVER A RECIPE'S ID (`new`, `allergens`,
@@ -13,6 +14,7 @@
 // recipesPath.spec.ts pins the list.
 export const RECIPES_PATH = '/recipes';
 export const ALLERGENS_PATH = '/recipes/allergens';
+export const SETTINGS_PATH = '/recipes/settings';
 
 const RESERVED = ['new', 'allergens', 'settings', 'photo'] as const;
 
@@ -20,6 +22,7 @@ export type RecipesView =
   | { readonly kind: 'list' }
   | { readonly kind: 'recipe'; readonly id: string }
   | { readonly kind: 'allergens' }
+  | { readonly kind: 'settings' }
   | { readonly kind: 'label'; readonly id: string }
   | { readonly kind: 'unknown' };
 
@@ -50,6 +53,8 @@ export function parseRecipesPath(rest: string | undefined): RecipesView {
     const id = decoded(first);
     // The Allergen sheet (step 3d-2) is one of the reserved words: never a recipe whose id is «allergens».
     if (id === 'allergens') return { kind: 'allergens' };
+    // The label Settings (step 3d-5) likewise: whether the person may see it is the section's question, not the address's.
+    if (id === 'settings') return { kind: 'settings' };
     // An empty id is not a recipe (and not a Firestore document id either).
     if (isRecipeId(id)) return { kind: 'recipe', id };
   }

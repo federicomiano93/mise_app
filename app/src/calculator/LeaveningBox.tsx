@@ -5,7 +5,7 @@ import { DecimalBox } from './DecimalBox';
 import { useRecipesEditor } from './recipesEditorContext';
 import { leaveningRows, leaveningValue } from './recipesModel';
 import type { EditableRecipe } from './recipesModel';
-import { SettingSwitch } from './SettingSwitch';
+import { SettingSwitch } from '../ui/SettingSwitch';
 import styles from './RecipeScreen.module.css';
 
 // The Leavening box (a port of `leaveningBox` in js/recipes.js): ONE bounded block holding the three things that

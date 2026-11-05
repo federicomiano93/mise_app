@@ -4,7 +4,7 @@ import doorCss from './Door.module.css?raw';
 import hubCss from './CalculatorSettings.module.css?raw';
 import partsCss from './SettingsParts.module.css?raw';
 import screenCss from './SettingsScreen.module.css?raw';
-import switchCss from './SettingSwitch.module.css?raw';
+import switchCss from '../ui/SettingSwitch.module.css?raw';
 import logCss from './LogSettings.module.css?raw';
 import divisorCss from './DivisorSettings.module.css?raw';
 

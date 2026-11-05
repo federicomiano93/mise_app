@@ -8,7 +8,7 @@ import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { useClientsEditor } from './clientsEditorContext';
 import { isBlank } from './clientsModel';
-import { SettingSwitch } from './SettingSwitch';
+import { SettingSwitch } from '../ui/SettingSwitch';
 import styles from './ProductCard.module.css';
 
 type Props = {

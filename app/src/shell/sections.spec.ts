@@ -144,13 +144,13 @@ describe('screenNameFor', () => {
     ['/recipes', 'recipes'],
     ['/recipes/', 'recipes'],
     ['/recipes/allergens', 'recipes-allergens'],
+    ['/recipes/settings', 'recipes-settings'],
     ['/recipes/abc123', 'recipes-detail'],
     ['/recipes/abc123/label', 'recipes-label'],
     ['/recipes/allergens/label', 'recipes'],
     ['/recipes/a%2Fb', 'recipes-detail'],
     // A reserved word or junk is sent back to the list: never a recipe screen in the statistics.
     ['/recipes/new', 'recipes'],
-    ['/recipes/settings', 'recipes'],
     ['/recipes/%', 'recipes'],
     ['/recipes/abc/edit', 'recipes'],
   ])('%s → %s', (pathname, expected) => {

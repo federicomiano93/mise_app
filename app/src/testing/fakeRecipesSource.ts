@@ -16,7 +16,7 @@ export type FakeRecipesSource = RecipesSource & {
   // The label profile (config/labels) as stored; null = the venue has none (the defaults).
   labelConfig: Record<string, unknown> | null;
   // The next watch fails (the rules refused it, or the stream died).
-  refuse: { recipes: boolean; ingredients: boolean; labelConfig: boolean; printAgents: boolean; queue: boolean };
+  refuse: { recipes: boolean; ingredients: boolean; labelConfig: boolean; printAgents: boolean; queue: boolean; labelSave: boolean };
   // The shop computers' heartbeats (print-agents) as the watch reports them.
   printAgents: StoredDoc[];
   // Replaces the agents and tells every watcher at once, as a new heartbeat would. Does NOT go through push():
@@ -36,6 +36,11 @@ export type FakeRecipesSource = RecipesSource & {
   // Holds back ONLY the label profile's answer (the paper is not known yet) until releaseLabelConfig().
   holdLabelConfig(): void;
   releaseLabelConfig(): void;
+  // Every label-profile patch the screen sent, in the order it was sent (refused ones are not here). A merge write:
+  // each is folded into `labelConfig`, and the watchers are told.
+  labelSaves: Record<string, unknown>[];
+  // The next label saves wait until the returned function is called (a slow network); the patch is merged then.
+  holdLabelSaves(): () => void;
 };
 
 export function fakeRecipesSource(
@@ -53,8 +58,9 @@ export function fakeRecipesSource(
   };
   const labelWatchers = new Set<LabelListener>();
   const agentWatchers = new Set<{ onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void }>();
-  const refuse = { recipes: false, ingredients: false, labelConfig: false, printAgents: false, queue: false };
+  const refuse = { recipes: false, ingredients: false, labelConfig: false, printAgents: false, queue: false, labelSave: false };
   let queueHold: Promise<void> | null = null;
+  let labelSaveHold: Promise<void> | null = null;
   let held = false;
   let labelHeld = false;
   const refused = () => Object.assign(new Error('permission-denied'), { code: 'permission-denied' });
@@ -82,6 +88,12 @@ export function fakeRecipesSource(
     labelConfig: seed.labelConfig ?? null,
     printAgents: seed.printAgents ?? [],
     jobs: [],
+    labelSaves: [],
+    holdLabelSaves() {
+      let release: () => void = () => undefined;
+      labelSaveHold = new Promise<void>(resolve => { release = resolve; });
+      return () => { labelSaveHold = null; release(); };
+    },
     setPrintAgents(list) {
       fake.printAgents = list;
       for (const w of agentWatchers) w.onChange(list);
@@ -149,6 +161,13 @@ export function fakeRecipesSource(
       if (queueHold) await queueHold;
       if (refuse.queue) throw refused();
       fake.jobs.push({ ...job });
+    }),
+    saveLabelConfig: vi.fn<RecipesSource['saveLabelConfig']>(async patch => {
+      if (labelSaveHold) await labelSaveHold;
+      if (refuse.labelSave) throw refused();
+      fake.labelSaves.push({ ...patch });
+      fake.labelConfig = { ...(fake.labelConfig ?? {}), ...patch };
+      fake.push();
     }),
   };
   return fake;

@@ -15,6 +15,7 @@ function fakeKit() {
   const added: { target: Ref; data: unknown }[] = [];
   const fs = {
     addDoc: vi.fn(async (target: Ref, data: unknown) => { added.push({ target, data }); return { id: 'new' }; }),
+    setDoc: vi.fn(async (_target: Ref, _data: unknown, _options: unknown) => undefined),
     collection:(_db: unknown, ...segments: string[]): Ref => ({ kind: 'collection', path: segments.join('/') }),
     doc: (_db: unknown, ...segments: string[]): Ref => ({ kind: 'doc', path: segments.join('/') }),
     onSnapshot: vi.fn((target: Ref, ...rest: unknown[]) => {
@@ -225,6 +226,25 @@ describe('the Recipe catalogue source', () => {
     fs.addDoc.mockRejectedValueOnce(new Error('permission-denied'));
     await expect(createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery').queuePrintJob({})).rejects.toThrow('permission-denied');
     await expect(createFirestoreRecipesSource(() => Promise.reject(new Error('chunk')), 'bakery').queuePrintJob({})).rejects.toThrow('chunk');
+  });
+
+  test('⚠️ a label setting is MERGED into the open venue’s config/labels, stamped with that venue, whatever the caller said', async () => {
+    const { kit, fs } = fakeKit();
+    const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'panificio-miano');
+    await source.saveLabelConfig({ dpi: 300, bakery: 'someone-else' });
+    expect(fs.setDoc).toHaveBeenCalledTimes(1);
+    expect(fs.setDoc).toHaveBeenCalledWith(
+      { kind: 'doc', path: 'locations/panificio-miano/config/labels' },
+      { dpi: 300, bakery: 'panificio-miano' },
+      { merge: true },
+    );
+  });
+
+  test('⚠️ a label setting rejects when the write is refused or Firestore cannot load', async () => {
+    const { kit, fs } = fakeKit();
+    fs.setDoc.mockRejectedValueOnce(new Error('permission-denied'));
+    await expect(createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery').saveLabelConfig({ dpi: 300 })).rejects.toThrow('permission-denied');
+    await expect(createFirestoreRecipesSource(() => Promise.reject(new Error('chunk')), 'bakery').saveLabelConfig({})).rejects.toThrow('chunk');
   });
 
   test('⚠️ a venue id that could name another path is refused before anything is read', () => {

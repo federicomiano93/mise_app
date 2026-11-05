@@ -125,8 +125,8 @@ export function screenNameFor(pathname: string): string | null {
   return section.id;
 }
 
-// The Recipe catalogue is four screens so far that share one section: the list, one recipe (the current
-// app's `''` and `detail`), the Allergen sheet (`recipes-allergens`) and a recipe's label (`recipes-label`, the current app's `label`). A recipe opened beside the list is
+// The Recipe catalogue is five screens so far that share one section: the list, one recipe (the current
+// app's `''` and `detail`), the Allergen sheet (`recipes-allergens`), the label Settings (`recipes-settings`) and a recipe's label (`recipes-label`, the current app's `label`). A recipe opened beside the list is
 // the same screen as on its own.
 // ⚠️ ONLY AN ADDRESS THE SECTION DRAWS AS A RECIPE counts as one: a reserved word or junk is sent back to
 // the list, and logging it as a recipe screen would put a screen nobody saw in the owner's statistics.
@@ -134,6 +134,7 @@ function recipesScreenName(pathname: string, base: string): string {
   const { kind } = parseRecipesPath(pathname.slice(base.length));
   if (kind === 'recipe') return 'recipes-detail';
   if (kind === 'allergens') return 'recipes-allergens';
+  if (kind === 'settings') return 'recipes-settings';
   return kind === 'label' ? 'recipes-label' : 'recipes';
 }
 

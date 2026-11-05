@@ -5,13 +5,14 @@ import { useT } from '../i18n/useT';
 import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { AllergenSheet } from './AllergenSheet';
+import { LabelSettings } from './LabelSettings';
 import { LabelScreen } from './LabelScreen';
 import { useRecipes } from './RecipesContext';
 import { RecipeView } from './RecipeView';
 import { cameFromList, cameFromRecipe, cameFromSheet, useLeave } from './recipesNav';
 import { RECIPES_PATH, recipePath } from './recipesPath';
 import type { ShownView } from './recipesPath';
-import { ALLERGENS_OPENER, recipeOpener, sheetOpener, useHandBack } from './handBack';
+import { ALLERGENS_OPENER, SETTINGS_OPENER, recipeOpener, sheetOpener, useHandBack } from './handBack';
 import { useRecipeReturn } from './recipeReturn';
 import styles from './RecipesDetail.module.css';
 
@@ -23,6 +24,7 @@ import styles from './RecipesDetail.module.css';
 export function RecipesDetail({ view, onOpenFromSheet }: { view: ShownView; onOpenFromSheet: (id: string) => void }) {
   if (view.kind === 'list') return <Prompt />;
   if (view.kind === 'allergens') return <SheetScreen onOpenRecipe={onOpenFromSheet} />;
+  if (view.kind === 'settings') return <SettingsScreen />;
   // Keyed on the KIND, so a recipe and its label are two screens (each puts the focus on its own title when it opens)
   // while another recipe picked beside an open one stays the same screen, as before.
   return <RecipeScreen key={view.kind} id={view.id} label={view.kind === 'label'} />;
@@ -44,6 +46,23 @@ function SheetScreen({ onOpenRecipe }: { onOpenRecipe: (id: string) => void }) {
   }, []);
 
   return <AllergenSheet titleRef={title} onBack={leave} onOpenRecipe={onOpenRecipe} />;
+}
+
+// The label Settings (its gate, whoever runs the place, is checked by the section before it gets here). Back steps up to
+// the list and hands the focus back to the door that opened it.
+function SettingsScreen() {
+  const { state } = useLocation();
+  const navigationType = useNavigationType();
+  const handBack = useHandBack();
+  const title = useRef<HTMLHeadingElement>(null);
+  const leave = useLeave(RECIPES_PATH, () => { handBack.expect(SETTINGS_OPENER); });
+
+  // Opened from the list the page does not move the focus (FROM_LIST): it goes to this title.
+  useEffect(() => {
+    if (cameFromList(state) && navigationType !== 'POP') title.current?.focus();
+  }, []);
+
+  return <LabelSettings titleRef={title} onBack={leave} />;
 }
 
 // Only the split draws this (a phone hides the right-hand side while the list is the screen).

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALLERGENS_PATH, RECIPES_PATH, labelPath, parseRecipesPath, recipePath, resolveRecipesPath } from './recipesPath';
+import { ALLERGENS_PATH, RECIPES_PATH, SETTINGS_PATH, labelPath, parseRecipesPath, recipePath, resolveRecipesPath } from './recipesPath';
 
 describe('the addresses of the Recipe catalogue', () => {
   it('has the list at /recipes and a recipe at /recipes/<id>', () => {
@@ -57,7 +57,7 @@ describe('the addresses of the Recipe catalogue', () => {
     expect(parseRecipesPath('/abc/Label')).toEqual({ kind: 'unknown' });
   });
 
-  it.each(['new', 'settings', 'photo'])('keeps «%s» for a later step, never reading it as a recipe', word => {
+  it.each(['new', 'photo'])('keeps «%s» for a later step, never reading it as a recipe', word => {
     expect(parseRecipesPath(`/${word}`)).toEqual({ kind: 'unknown' });
   });
 
@@ -65,5 +65,15 @@ describe('the addresses of the Recipe catalogue', () => {
     expect(resolveRecipesPath('/abc/edit')).toEqual({ redirect: '/recipes' });
     expect(resolveRecipesPath('/abc')).toEqual({ view: { kind: 'recipe', id: 'abc' } });
     expect(resolveRecipesPath('')).toEqual({ view: { kind: 'list' } });
+  });
+});
+
+describe('the label Settings address (step 3d-5)', () => {
+  it('is /recipes/settings, and nothing more under it', () => {
+    expect(SETTINGS_PATH).toBe('/recipes/settings');
+    expect(parseRecipesPath('/settings')).toEqual({ kind: 'settings' });
+    expect(parseRecipesPath('/settings/')).toEqual({ kind: 'settings' });
+    expect(parseRecipesPath('/settings/x')).toEqual({ kind: 'unknown' });
+    expect(resolveRecipesPath('/settings')).toEqual({ view: { kind: 'settings' } });
   });
 });
