@@ -8,6 +8,7 @@
 //   /orders/place-all               the picker of the suppliers to record together, one level below the list
 //   /orders/place-all/confirm       the same confirm screen for the ticked suppliers (their ids travel in the navigation state)
 //   /orders/clear                   the picker of the suppliers whose quantities to clear, one level below the list
+//   /orders/send                    the send screen (slice 3f-3): the suppliers to send to, one level below the list
 //   anything else                   unknown: the section goes back to /orders
 
 export const ORDERS_PATH = '/orders';
@@ -20,6 +21,7 @@ export type OrdersView =
   | { readonly kind: 'place-all' }
   | { readonly kind: 'place-all-confirm' }
   | { readonly kind: 'clear' }
+  | { readonly kind: 'send' }
   | { readonly kind: 'unknown' };
 
 export const supplierPath = (id: string): string => `${ORDERS_PATH}/supplier/${encodeURIComponent(id)}`;
@@ -28,6 +30,7 @@ export const supplierConfirmPath = (id: string): string => `${supplierPath(id)}/
 export const PLACE_ALL_PATH = `${ORDERS_PATH}/place-all`;
 export const PLACE_ALL_CONFIRM_PATH = `${PLACE_ALL_PATH}/confirm`;
 export const CLEAR_PATH = `${ORDERS_PATH}/clear`;
+export const SEND_PATH = `${ORDERS_PATH}/send`;
 
 // A segment as it was typed, back to the id it stands for; null when it is not valid percent-encoding.
 function decoded(segment: string): string | null {
@@ -49,6 +52,7 @@ export function parseOrdersPath(rest: string | undefined): OrdersView {
     return parts.length === 2 && second === 'confirm' ? { kind: 'place-all-confirm' } : { kind: 'unknown' };
   }
   if (first === 'clear') return parts.length === 1 ? { kind: 'clear' } : { kind: 'unknown' };
+  if (first === 'send') return parts.length === 1 ? { kind: 'send' } : { kind: 'unknown' };
   if (first !== 'supplier' || second === undefined) return { kind: 'unknown' };
   const id = decoded(second);
   if (id === null || id === '') return { kind: 'unknown' };
@@ -59,7 +63,7 @@ export function parseOrdersPath(rest: string | undefined): OrdersView {
 }
 
 // What the usage record calls the screen at an address (shell/sections.ts screenNameFor): `orders`, `orders-supplier`,
-// `orders-supplier-items`, `orders-confirm`, `orders-place-all`, `orders-place-all-confirm` and `orders-clear`.
+// `orders-supplier-items`, `orders-confirm`, `orders-place-all`, `orders-place-all-confirm`, `orders-clear` and `orders-send`.
 // ⚠️ ONLY AN ADDRESS THE SECTION DRAWS counts as its screen: an unknown one is sent back to the list, and logging it as a
 // screen would put one nobody saw in the owner's statistics.
 export function ordersScreenName(rest: string): string {
@@ -70,5 +74,6 @@ export function ordersScreenName(rest: string): string {
   if (view.kind === 'place-all') return 'orders-place-all';
   if (view.kind === 'place-all-confirm') return 'orders-place-all-confirm';
   if (view.kind === 'clear') return 'orders-clear';
+  if (view.kind === 'send') return 'orders-send';
   return 'orders';
 }

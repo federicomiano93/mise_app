@@ -176,9 +176,11 @@ function flatLines(groups: readonly OrderGroup[]): string[] {
     totals.set(key, { label, name: item.name, weight: item.weight, unit: seen ? seen.unit : unit, qty: (seen?.qty || 0) + num(item.qty) });
   }));
 
+  // ⚠️ NUMERIC, like every other list of labels (finding F-5, fixed here only, decision T7): the current app sorts this one
+  // with a plain localeCompare and puts «Flour 25kg» before «Flour 5kg». order-text.spec.ts shows where the two differ.
   const sorted = [...totals.values()]
     .filter(line => line.qty > 0)
-    .sort((a, b) => a.label.localeCompare(b.label) || a.unit.localeCompare(b.unit));
+    .sort((a, b) => compareLabels(a.label, b.label) || a.unit.localeCompare(b.unit));
   const labels = messageLabels(sorted);
   return sorted.map(({ unit, qty }, i) => `- ${labels[i]}: ${qtyWithUnit(qty, unit)}`);
 }

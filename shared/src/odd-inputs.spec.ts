@@ -3849,7 +3849,22 @@ describe('order-text: odd inputs', () => {
     [{ supplierName: 'A', items: ITEMS[9] }, { supplierName: 'B', items: ITEMS[9] }], [{ supplierName: 'A', items: ITEMS[11] }, { supplierName: 'B', items: ITEMS[11] }]];
   const OPTIONS: readonly unknown[] = [undefined, {}, { grouped: false }, { grouped: true }, { locationName: 'The Italian Club' }, { locationName: 'Panificio', language: 'it' },
     { grouped: false, locationName: 'Panificio', language: 'it' }, { language: 'en' }, { grouped: 0 }, { locationName: null, language: 'xx' }, null];
-  agree('buildOrderMessage', m.buildOrderMessage as AnyFn, l.buildOrderMessage as AnyFn, product(GROUPS, OPTIONS));
+  // The flat list's ORDER is the one intended difference (finding F-5: the port sorts numerically, order-text.spec.ts pins it):
+  // each run of «- » lines is put in one order on both sides, so the lines and their quantities must still agree exactly.
+  const sameOrder = (fn: AnyFn): AnyFn => (...args) => {
+    const text = fn(...args);
+    if (typeof text !== 'string') return text;
+    const out: string[] = [];
+    let run: string[] = [];
+    const flush = () => { out.push(...run.sort()); run = []; };
+    for (const line of text.split('\n')) {
+      if (line.startsWith('- ')) run.push(line);
+      else { flush(); out.push(line); }
+    }
+    flush();
+    return out.join('\n');
+  };
+  agree('buildOrderMessage', sameOrder(m.buildOrderMessage as AnyFn), sameOrder(l.buildOrderMessage as AnyFn), product(GROUPS, OPTIONS));
 
   const INGREDIENTS: readonly unknown[] = [undefined, null, [], 'abc', [{ id: 'f', name: 'Flour', weight: '2.5kg', unit: 'cartone', packUnit: 'busta' }, { id: 'b', name: 'Bacon', weight: '2.27kg', unit: 'casse' }, { id: 'n' }],
     [{ id: 'f', name: 'Flour', unit: 'cartone', packUnit: 'busta' }, null]];

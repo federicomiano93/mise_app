@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CLEAR_PATH, PLACE_ALL_CONFIRM_PATH, PLACE_ALL_PATH, ordersScreenName, parseOrdersPath, supplierConfirmPath } from './ordersPath';
+import { CLEAR_PATH, PLACE_ALL_CONFIRM_PATH, PLACE_ALL_PATH, SEND_PATH, ordersScreenName, parseOrdersPath, supplierConfirmPath } from './ordersPath';
 
 describe('parseOrdersPath', () => {
   it('reads the placing and clearing screens', () => {
@@ -7,6 +7,7 @@ describe('parseOrdersPath', () => {
     expect(parseOrdersPath('/place-all')).toEqual({ kind: 'place-all' });
     expect(parseOrdersPath('/place-all/confirm')).toEqual({ kind: 'place-all-confirm' });
     expect(parseOrdersPath('/clear')).toEqual({ kind: 'clear' });
+    expect(parseOrdersPath('/send')).toEqual({ kind: 'send' });
   });
 
   it('keeps reading the first three addresses', () => {
@@ -16,7 +17,7 @@ describe('parseOrdersPath', () => {
   });
 
   it('sends anything deeper or unknown back to the list', () => {
-    for (const rest of ['/place-all/other', '/place-all/confirm/x', '/clear/x', '/supplier/s/confirm/x', '/supplier/s/other', '/nope']) {
+    for (const rest of ['/place-all/other', '/place-all/confirm/x', '/clear/x', '/send/x', '/supplier/s/confirm/x', '/supplier/s/other', '/nope']) {
       expect(parseOrdersPath(rest)).toEqual({ kind: 'unknown' });
     }
   });
@@ -26,6 +27,7 @@ describe('parseOrdersPath', () => {
     expect(parseOrdersPath(PLACE_ALL_PATH.slice('/orders'.length))).toEqual({ kind: 'place-all' });
     expect(parseOrdersPath(PLACE_ALL_CONFIRM_PATH.slice('/orders'.length))).toEqual({ kind: 'place-all-confirm' });
     expect(parseOrdersPath(CLEAR_PATH.slice('/orders'.length))).toEqual({ kind: 'clear' });
+    expect(parseOrdersPath(SEND_PATH.slice('/orders'.length))).toEqual({ kind: 'send' });
   });
 });
 
@@ -35,6 +37,7 @@ describe('ordersScreenName', () => {
     expect(ordersScreenName('/place-all')).toBe('orders-place-all');
     expect(ordersScreenName('/place-all/confirm')).toBe('orders-place-all-confirm');
     expect(ordersScreenName('/clear')).toBe('orders-clear');
+    expect(ordersScreenName('/send')).toBe('orders-send');
     expect(ordersScreenName('/supplier/s')).toBe('orders-supplier');
     expect(ordersScreenName('/supplier/s/items')).toBe('orders-supplier-items');
     expect(ordersScreenName('/clear/x')).toBe('orders');

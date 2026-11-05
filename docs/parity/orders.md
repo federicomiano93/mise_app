@@ -915,3 +915,69 @@ region present from the start); all recomputed on every keystroke.
 seldom has 4 orders in the two-month window, so it seldom gets a suggestion (his trade-off of 4 Oct 2026).
 
 **P13.** No personal data: the records hold suppliers, ingredients, quantities and dates.
+
+## Step 3f-3 as built — sending an order
+
+Items X4 («Send it now») and X15–X25: the send arrow, the road chooser, the message as text or picture, WhatsApp to the chat
+I choose or straight to each supplier, email, the unit check at send time, and «Order sent» (record-after-send). Rules
+unchanged: sending writes nothing; recording uses 3f-2's `orders-history` write.
+
+**Shared.** `send-chooser` (partial: leaves out `chooseAndSend`, the screen) and `order-image` (partial: the layout, the colours
+and the file name; leaves out the canvas, the font and the share sheet). Neither is paired in `parity.spec.ts`; each spec runs
+every test against both files and compares the ported names, constants and arity with the original. `order-text` stays paired,
+with one difference on purpose (F-5, below); `odd-inputs.spec.ts` compares its message with the flat list's order set aside.
+
+**Logic.** `orders/sendFlow.ts`: the rows of a send (the list's order, a switched-off line with a quantity included — T10), the
+windows of each road (matched by supplier ID, never by name), `openWindow` (answers whether a window REALLY opened), and
+`takeRoad`. ⚠️ Every window opens inside a tap: the first before `takeRoad`'s first await, each further one inside the press of
+its own dialog, a picture's share inside its own «Share». `ordersStore.conflictsNow`: the unit check at send time, synchronous,
+from the live window of `orders-history`, never fatal. `orders/orderImage.ts`: the canvas and the share sheet.
+
+**Screens.** The arrow «Manda» beside the search box → «Manda l'ordine» (nothing ticked at first, «Seleziona tutti i fornitori»,
+«Per fornitore» / «Lista unica») → the road chooser on the shared `Dialog` (only when more than one road is open) → «Come lo
+mandi?» (photo first, where the browser can share a picture) → «Ordine mandato», the confirm screen in after-send mode, whose
+Back goes to the list and records nothing. The confirm screen's «Did you send it?» has a third answer, «Invialo ora».
+
+**Decisions of this slice (his, 28 Oct 2026):**
+- A. The arrow is a button with the icon and the word «Manda» / «Send».
+- B. The in-app list road («manager») stays hidden until 3f-7; an employee whose only open road is that one is told no road is
+  available.
+- C. (F-3) An email counts as sent only when its window really opened. To check on a real phone: some mail apps open without
+  the browser reporting a window.
+- D. (F-4) The chooser is built on the shared `Dialog`: role, Escape, focus trap.
+- E. (F-5) «Lista unica» sorts numerically («Farina 5kg» before «Farina 25kg»), fixed in the port only; `order-text.spec.ts`
+  shows the one place the two files differ.
+- F. The picture is drawn in Geist, Mise 2's one bundled font (the current app draws in Manrope).
+
+**Differences from the current app, on purpose (tell him):**
+- D1. **One window per tap.** A browser lets one tap open ONE window, so the current app's «email each supplier» and «WhatsApp
+  straight to each supplier» reach only the first supplier on a real phone (found in the review). Mise 2 opens the first in the
+  tap, then asks «Apri la chat per B (2 di 3)» for each further one, whose own «Apri» opens it; «Salta» and «Annulla» name what
+  was not sent — the same pattern as the pictures. When the browser refused every window, only «Non si è aperto niente» is
+  said (no second notice naming them).
+- D2. **A ticked supplier the send did not reach is named** («Non inviato, ancora da fare: …»), on the send screen as after
+  «Invialo ora»; the current app drops it silently.
+- D3. **Nothing opened → «Non si è aperto niente»** and no record is offered (the current app offers to record a send that
+  never left).
+- D4. «Invialo ora» runs in a microtask after the dialog's press, as the current app: still inside the tap.
+
+**Found in the review and fixed:** a save ending after the confirm screen had gone stepped back through the history from
+wherever the person was (found driving; the screen now moves nobody once it has gone); the send screen's button locked after
+a failure; focus pulled off a correctly focused button (it now goes back to «Manda» only when it was dropped on the page); a road could be taken twice by a double press; the «not reached»
+sentence lost after a unit clash; tests pinning every window to its tap, the share sheet's answers, and Escape on «Did you
+send it?».
+
+**Left open (tell him):**
+- «Invialo ora» is still offered on «Ordine mandato», right after a send: a second tap sends the supplier a second copy. Hiding
+  it there changes what the screen offers — his call.
+- The photo road to a supplier: the share sheet does not choose the chat; two suppliers with the same name get the same dialog
+  title. Showing the saved number in the dialog would tell them apart.
+- The send-time unit check passes in silence before the past orders have loaded once; the confirm screen's server read still
+  refuses a real clash.
+- To try on the tablet and an iPhone: the real share sheet, the picture, email from a real mail app, «Invialo ora» on Safari.
+
+**Tests.** New flaky-under-load files seen in the full app run (each passes alone): Calculator logEditors, Foodcost editor,
+Pastries editor.
+
+**P13.** No new personal data: a supplier's phone and email travel only in the `wa.me` / `mailto:` link the person taps; the
+picture and the logs carry no contact.
