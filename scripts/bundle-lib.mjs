@@ -47,6 +47,11 @@ export const BUILD_CONFIG = Object.freeze({
   externalUrlPattern: '^https?://',   // the Firebase SDK stays an import from gstatic
   i18nSource: 'js/i18n.js',           // one instance per page, written once as dist/i18n.js
   i18nExternalPath: './i18n.js',
+  // Libraries only the recipe export needs (js/recipe-export.js reaches them with import()).
+  // With splitting off, esbuild would INLINE a dynamic import, putting ~500 KB into every
+  // Calculator open. They stay files of their own, loaded on the tap: the bundle keeps the
+  // import() with a path relative to dist/.
+  lazyVendorFiles: ['js/vendor/jspdf.esm.js', 'js/vendor/write-excel-file.esm.js'],
   // Stylesheets: the same floor as the scripts (Chrome 80 / Safari 13.1, see sw.js), written for
   // CSS. esbuild's CSS minifier merges and shortens rules; it never drops a selector as unused.
   cssTarget: ['chrome80', 'safari13.1'],

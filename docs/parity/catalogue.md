@@ -225,6 +225,13 @@ millimetres and the ZPL characters (items 62–80 and «What proves byte-identit
     (a button that disables under the finger drops focus). The step is re-read from storage each time the view
     opens. **spec** (`calculator-work-view.test.mjs` S5 for the arithmetic, `copie-allineate.test.mjs` pins that
     `js/zoom-steps.js` and `js/catalogue/zoom-steps.js` are byte copies)
+35a. **Export (PDF / Excel)** on the recipe screen (`js/catalogue/catalogue-detail.js`, `exportModelOf`; Mise 2:
+    `recipes/recipeExportModel.ts`): a full-width secondary button in the Ingredients card UNDER the table (never
+    inside it — the table is tapped as a whole), hidden when the recipe has no ingredients. The model is the very
+    amounts the table drew (base or scaled): each row in its own unit as the screen spells it, `factor` the grams
+    in one unit (0 for pieces, spoons, a pinch, «to taste»), kg and l keeping their decimals in the file exactly as
+    the screen writes them («0,727 kg» in Italian), the total the rounded Total of the card or 0. Same dialog as
+    the Calculator's (item 85a of its list). **spec** (`catalogue-export-model.test.mjs`)
 36. **An open recipe follows the data** (`followOpenRecipe`, `catalogue-main.js:328`): deleted elsewhere → back to
     the list with «Recipe deleted.»; changed elsewhere → redrawn in place with the same scroll and **the focus
     left where it is** (`quietFocus`) — a person typing in the search box beside it must not lose the keyboard.

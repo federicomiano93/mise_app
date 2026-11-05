@@ -735,10 +735,13 @@ describe('kg and litre decimals', () => {
 describe('the port against the original', () => {
   // The rest of the original: the editor's link functions, the validation and the Calculator import (steps 3d-6,
   // 3d-7), `unitText`, which the port replaces by `unitTextKey`, and `formatAmount`, which needs the interface
-  // language and so lives in the app (app/src/recipes/recipeAmounts.ts `amountNumber`).
+  // language and so lives in the app (app/src/recipes/recipeAmounts.ts `amountNumber`), and `exportModelOf`, which
+  // reads both of those (the unit word and the screen's number): the app builds the export model from its own
+  // typed i18n, in the export slice.
   const LEFT_OUT = [
     'unitText', 'formatAmount', 'linkOptions', 'linkedItemName', 'isSameLink', 'applyLink', 'moveRow', 'findInvalidRecipe',
     'toCalculatorRecipe', 'nonWeighableLabels', 'mergeImportedRecipe', 'importFailureKey', 'findCalculatorImport',
+    'exportModelOf',
   ];
   const ADDED = ['unitTextKey'];
   // Same name, same results, but the translator is one more parameter.

@@ -788,6 +788,23 @@ export const en = {
   'send.email': 'Email',
   'send.emailOpensApp': 'It opens your mail app with the text ready — it does not send it.',
 
+  // The recipe export (PDF / Excel): the current app's own keys with its own text (js/i18n.js).
+  'export.button': 'Export',
+  'export.title': 'Export as',
+  'export.pdf': 'PDF',
+  'export.pdfNote': 'To print or share',
+  'export.excel': 'Excel',
+  'export.excelNote': 'Saved to this device',
+  'export.preparing': 'Preparing the file…',
+  'export.ready': 'File ready',
+  'export.download': 'Download',
+  'export.share': 'Share',
+  'export.close': 'Close',
+  'export.needsConnection': 'Export needs a connection the first time. Connect and try again.',
+  'export.failed': 'The file could not be made. Try again.',
+  'export.fileFallback': 'recipe',
+  'export.sheetFallback': 'Recipe',
+
   // The market order (step 3c-4a): the «Send order» door, its picker, the order form and the «Send to» dialog. Every
   // key but the last four is the current app's own key with the current app's own text (js/i18n.js).
   'calc.sendOrder': 'Send order',

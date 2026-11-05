@@ -1,7 +1,7 @@
 import './firebase.js';
 import { t } from './i18n.js';
 import {
-  calc, copyRecipe, sendRecipe, buildDivisorBox, recipeModelFor,
+  calc, copyRecipe, sendRecipe, buildDivisorBox, recipeModelFor, exportModelFor,
   restoreRevealed, clearRevealed, restoreLock, clearLock, getLock,
 } from './calc.js';
 import { saveDay, editTab, renderLog } from './log.js';
@@ -19,6 +19,7 @@ import {
 } from './calculator-config.js';
 import { workDayIndex } from './log-model.js';
 import { confirmDialog } from './confirm-dialog.js';
+import { openExportSheet } from './export-sheet.js';
 import { initClientOrders } from './calculator-client-orders.js';
 import { runConfirm } from './confirm-flow.js';
 import { openRecipeFullScreen, closeRecipeFullScreen } from './calc-fullscreen.js';
@@ -338,6 +339,11 @@ function wireRecipe(recipe) {
   if (totalRow) totalRow.addEventListener('click', openFullScreen);
   const waBtn = document.getElementById(id + '-wa-recipe-btn');
   if (waBtn) waBtn.addEventListener('click', () => sendRecipe(id));
+  const exportBtn = document.getElementById(id + '-export-btn');
+  if (exportBtn) exportBtn.addEventListener('click', () => {
+    const model = exportModelFor(id);
+    if (model) openExportSheet({ model, totalLabel: t('calc.totalDough'), opener: exportBtn });
+  });
   const resetBtn = document.querySelector('#tab-' + id + ' .reset-btn');
   if (resetBtn) resetBtn.addEventListener('click', () => resetTab(id));
 }

@@ -2,8 +2,8 @@ import { useContext, useEffect, useId, useLayoutEffect, useRef, useState } from 
 import type { HTMLAttributes } from 'react';
 import { Pencil } from 'lucide-react';
 import {
-  doughExtraGrams, formatGrams, getTabProducts, isExtraDoughEnabled, settledTraysText,
-  traysGrams, usesOrders, usesTrays, usesTypedTotal,
+  doughExtraGrams, exportTraysFor, formatGrams, getTabProducts, isExtraDoughEnabled, settledTraysText,
+  normalizeTrays, traysGrams, usesOrders, usesTrays, usesTypedTotal,
 } from '@mise/shared/calculator-config';
 import type { Recipe } from '@mise/shared/calculator-config';
 import { runConfirm } from '@mise/shared/confirm-flow';
@@ -375,6 +375,7 @@ export function RecipePanel({ recipe, panelProps }: Props) {
           qty={qty}
           divisorN={divisorN}
           onDivisorN={setDivisorN}
+          exportTrays={exportTraysFor(recipe.logic, hasTrays ? normalizeTrays(traysText) : 0, hasTotal ? numberOf(totalText) : 0)}
         />
       ) : null}
     </div>

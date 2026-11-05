@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { Ref } from 'react';
-import { Maximize2, Send } from 'lucide-react';
+import { Download, Maximize2, Send } from 'lucide-react';
 import {
   crateCount, DIVISOR_MAX, divisorTotal, formatGrams, getCratePerBox, getDivisorProducts, isCrateEnabled,
   splitDough,
@@ -8,6 +8,7 @@ import {
 import type { CalculatorConfig, Recipe, TabProduct } from '@mise/shared/calculator-config';
 import { buildRecipeText } from '@mise/shared/calculator-recipe-text';
 import { useT } from '../i18n/useT';
+import { useExportSheet } from '../ui/ExportSheet';
 import { useSendSheet } from '../ui/SendSheet';
 import { problemSentence } from './calculatorMessages';
 import type { TabResult } from './calculatorResult';
@@ -28,6 +29,8 @@ type Props = {
   // The divisor's number of crates, kept by the panel because Confirm saves it with the dough.
   divisorN: number;
   onDivisorN: (n: number) => void;
+  // The trays the exported title may name («Pizza x 3»): only when the dough IS the trays (exportTraysFor), else 0.
+  exportTrays: number;
   // The heading takes the focus after a Confirm (RecipePanel): it is the recipe's own title.
   headingRef?: Ref<HTMLHeadingElement>;
 };
@@ -40,13 +43,14 @@ const COPY_NOTE_MS = 2000;
 //
 // ⚠️ A TAB THAT CANNOT BE CALCULATED SHOWS NO NUMBER AT ALL, and says why: an answer that looks complete and is
 // not is worse than none. «Still loading» and «gone» are different sentences.
-export function ResultCard({ recipe, result, config, products, qty, divisorN, onDivisorN, headingRef }: Props) {
+export function ResultCard({ recipe, result, config, products, qty, divisorN, onDivisorN, exportTrays, headingRef }: Props) {
   const { t, locale } = useT();
   const titleId = useId();
   const grams = (n: number) => formatGrams(n, locale);
   const [fullScreen, setFullScreen] = useState(false);
   const [copy, setCopy] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [send, sendSheet] = useSendSheet();
+  const [openExport, exportSheet, closeExport] = useExportSheet();
   const opener = useRef<HTMLButtonElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ready = result.kind === 'ready' ? result : null;
@@ -58,7 +62,9 @@ export function ResultCard({ recipe, result, config, products, qty, divisorN, on
 
   // ⚠️ A CONFIGURATION THAT CHANGES UNDER THE FULL-SCREEN VIEW CLOSES IT: it is a copy of the old grams.
   // The config object changes only when the configuration itself does.
-  useEffect(() => { setFullScreen(false); }, [config]);
+  // ⚠️ The export sheet is the same kind of copy (the model captured when Export was tapped): it closes the same way.
+  // React Aria hands the focus back only to an opener that is still attached.
+  useEffect(() => { setFullScreen(false); closeExport(); }, [config, closeExport]);
   useEffect(() => () => { if (timer.current !== null) clearTimeout(timer.current); }, []);
 
   const openFullScreen = () => { setFullScreen(true); };
@@ -136,6 +142,22 @@ export function ResultCard({ recipe, result, config, products, qty, divisorN, on
               <Send aria-hidden="true" />
             </button>
           </div>
+          {/* Its own full-width line under Copy and Send: a third square in that row made «Copia la ricetta» wrap
+              at 296px in Italian. The file is made from the SAME rows the card draws (the unrounded grams, never
+              recomputed), titled with the same name as the text above. */}
+          <button
+            type="button"
+            className={styles.export}
+            onClick={() => {
+              openExport({
+                model: { name, trays: exportTrays, totalG: ready.totalG, rows: ready.rows.map(row => ({ name: row.name, grams: row.grams })) },
+                totalLabel: t('calc.totalDough'),
+              });
+            }}
+          >
+            <Download aria-hidden="true" />
+            {t('export.button')}
+          </button>
 
           <Divisor config={config} recipe={recipe} qty={qty} grams={grams} n={divisorN} onChange={onDivisorN} />
           <Crates products={products} qty={qty} />
@@ -152,6 +174,7 @@ export function ResultCard({ recipe, result, config, products, qty, divisorN, on
         />
       ) : null}
       {sendSheet}
+      {exportSheet}
     </section>
   );
 }

@@ -385,6 +385,15 @@ steps is at the end.
 85. **Text size − / +** in the full-screen view: six steps (×0.8, 1, 1.2, 1.45, 1.75, 2.1), default step 1,
     `aria-disabled` (never `disabled`) at the ends, clamped, remembered per device; taps and keys on the pair
     never reach the view behind; works with a throwing storage. **spec** (`calculator-work-view.test.mjs` S5)
+85a. **Export (PDF / Excel)** (`js/recipe-export.js`, `js/export-sheet.js`; Mise 2: `ui/recipeExport.ts`,
+    `ui/ExportSheet.tsx`): a full-width secondary button on its own line UNDER Copy and Send (a third square in
+    that row made «Copia la ricetta» wrap at 296px in Italian). The file is made from the SAME rows the card draws
+    (the unrounded grams, never recomputed), titled with the name the card's text uses; the title names trays
+    («Pizza x 3») only when the dough IS the trays (`exportTraysFor`), else the grams. The dialog: choose PDF or
+    Excel, «Preparing the file…», then «File ready» with a real Download LINK (the tap that built the file may have
+    lost its user activation) and Share for the PDF only, when `navigator.canShare({files})` allows it. Errors say
+    «needs a connection» only for a library that did not load while OFFLINE. The libraries load on the tap only.
+    **spec** (`recipe-export.test.mjs`, `recipe-export-wiring.test.mjs`, `export-sheet-dialog.test.mjs`)
 
 ## Market orders (WhatsApp) and client orders
 
