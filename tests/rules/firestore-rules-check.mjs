@@ -1577,6 +1577,85 @@ async function configAndLogs() {
       bakery: 'main', name: 'Pane', ingredients: [], netWeightG: 0,
     }));
 
+  // ── Mise 2's image label («with logo», 25 Oct 2026) ──────────────────────
+  //
+  // The two recipe texts it prints, the model and the rotation in the label
+  // profile, and the logo in a collection of its own.
+  await expectAllowed('recipes: the title and the ingredients text of the image label', () =>
+    wholeWrite(`${A}/recipes/R_LOGO`, {
+      bakery: 'main', name: 'Biscotti', ingredients: [],
+      labelName: 'BISCOTTI|AL CACAO', labelIngredientsText: 'INGREDIENTI: farina di GRANO tenero, BURRO.',
+    }));
+  // ⚠️ AN EMPLOYEE TOO: the recipe is canUse, and typing a recipe's label text is work
+  // the people at the bench do.
+  await expectAllowed('recipes: an employee can save the label texts', () =>
+    mergeWrite(`${A}/recipes/R_LOGO`, { bakery: 'main', name: 'Biscotti', ingredients: [], labelName: '' },
+      asAccount(SAM)));
+  await expectDenied('recipes: a label title longer than any label',
+    () => wholeWrite(`${A}/recipes/R_BAD`, {
+      bakery: 'main', name: 'Pane', ingredients: [], labelName: 'x'.repeat(201),
+    }));
+  await expectDenied('recipes: an ingredients text of a whole page',
+    () => wholeWrite(`${A}/recipes/R_BAD`, {
+      bakery: 'main', name: 'Pane', ingredients: [], labelIngredientsText: 'x'.repeat(2001),
+    }));
+  await expectDenied('recipes: an ingredients text sent as a list',
+    () => wholeWrite(`${A}/recipes/R_BAD`, {
+      bakery: 'main', name: 'Pane', ingredients: [], labelIngredientsText: ['farina'],
+    }));
+
+  await expectAllowed('labels: the model and the rotation of the image label', () =>
+    mergeWrite(`${A}/config/labels`, { bakery: 'main', template: 'logo', rotate180: true }));
+  await expectDenied('labels: a model the app has never heard of',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', template: 'fancy' }));
+  await expectDenied('labels: a rotation sent as a word',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', rotate180: 'yes' }));
+  await expectDenied('labels: an employee cannot switch the model',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', template: 'standard' }, asAccount(SAM)));
+
+  const logo = (over = {}) => ({
+    bakery: 'main', png: 'data:image/png;base64,iVBORw0KGgo=', width: 1320, height: 364,
+    updatedAt: '2026-10-25T10:00:00.000Z', ...over,
+  });
+  await expectAllowed('logo: whoever runs the place uploads it',
+    () => wholeWrite(`${A}/label-assets/logo`, logo()));
+  await expectAllowed('logo: the manager too',
+    () => wholeWrite(`${A}/label-assets/logo`, logo(), asAccount(MAYA)));
+  await expectDenied('logo: an employee cannot change it',
+    () => wholeWrite(`${A}/label-assets/logo`, logo(), asAccount(SAM)));
+  await expectAllowed('logo: …but can read it, or no label could be printed',
+    readAs(SAM, `${A}/label-assets/logo`));
+  await expectDenied('logo: any other document in that collection',
+    () => wholeWrite(`${A}/label-assets/banner`, logo()));
+  await expectDenied('logo: another venue\'s member reads nothing here',
+    readAs(BOB, `${A}/label-assets/logo`));
+  await seedDoc('locations/trattoria-x/label-assets/logo', logo({ bakery: 'trattoria-x' }));
+  await expectDenied('logo: a venue with the catalogue off shows it to nobody',
+    readAs(BOB, 'locations/trattoria-x/label-assets/logo'));
+  const big = 'data:image/png;base64,' + 'A'.repeat(400000 - 'data:image/png;base64,'.length);
+  await expectAllowed('logo: a picture exactly at the ceiling',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ png: big })));
+  await expectDenied('logo: a picture bigger than the ceiling',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ png: big + 'A' })));
+  await expectDenied('logo: an address elsewhere instead of the picture itself',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ png: 'https://example.test/logo.png' })));
+  await expectDenied('logo: a picture that is not a PNG',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ png: 'data:image/svg+xml;base64,PHN2Zz4=' })));
+  await expectDenied('logo: drawn at a width the label does not use',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ width: 2400 })));
+  await expectDenied('logo: taller than the label',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ height: 5000 })));
+  await expectDenied('logo: a key nobody put in the whitelist',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ url: 'http://example.test/x.png' })));
+  await expectDenied('logo: stamped with another venue',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ bakery: 'trattoria-x' })));
+  await expectDenied('logo: an employee cannot take it away',
+    () => deleteWrite(`${A}/label-assets/logo`, asAccount(SAM)));
+  await expectAllowed('logo: whoever runs the place can',
+    () => deleteWrite(`${A}/label-assets/logo`));
+  await expectDenied('logo: not readable by a signed-out visitor',
+    () => fetch(`${FS}/${A}/label-assets/logo`, { headers: noAuth() }));
+
   // ── The print queue ───────────────────────────────────────────────────────
   //
   // ⚠️ THE TRANSITIONS ARE THE POINT. Two agents running at once both see a queued

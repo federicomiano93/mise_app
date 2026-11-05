@@ -1,0 +1,4038 @@
+{
+ "note": "Recorded from the owner's genera_etichetta.py by algprobe/label-golden/harness.py on a FAKE corpus. Do not edit by hand.",
+ "header": [
+  "di MARIA ROSSI FINTA",
+  "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)"
+ ],
+ "logo": {
+  "width": 1320,
+  "height": 331
+ },
+ "products": [
+  {
+   "id": "short",
+   "title": "TORTA DI PROVA",
+   "ingredients": "INGREDIENTI: farina di GRANO tenero tipo 00, zucchero, BURRO, UOVA, sale.",
+   "defects": [],
+   "check": {
+    "errors": [],
+    "warnings": []
+   },
+   "layout": {
+    "lines": 2,
+    "endY": 339.5,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 733.1953125,
+      "y": 902.0,
+      "text": "TORTA DI PROVA",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 100,
+      "y": 1158.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1158.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 860.0,
+      "y": 1158.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 949.0,
+      "y": 1158.0,
+      "text": "GRANO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1268.0,
+      "y": 1158.0,
+      "text": "tenero",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1530.96875,
+      "y": 1158.0,
+      "text": "tipo",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1693.96875,
+      "y": 1158.0,
+      "text": "00,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1831.96875,
+      "y": 1158.0,
+      "text": "zucchero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1258.0,
+      "text": "BURRO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 389.0,
+      "y": 1258.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 435.0,
+      "y": 1258.0,
+      "text": "UOVA",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 669.890625,
+      "y": 1258.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 715.890625,
+      "y": 1258.0,
+      "text": "sale.",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|TORTA DI PROVA": 1093.609375,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|farina": 212.0,
+    "regular|73|di": 66.0,
+    "bold|73|GRANO": 296.0,
+    "regular|73|tenero": 239.96875,
+    "regular|73|tipo": 140.0,
+    "regular|73|00,": 115.0,
+    "regular|73|zucchero,": 352.96875,
+    "bold|73|BURRO": 289.0,
+    "regular|73|,": 23.0,
+    "bold|73|UOVA": 234.890625,
+    "regular|73|sale.": 171.0
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "two-line-title",
+   "title": "BISCOTTI|AL LIMONE E ZENZERO FINTO",
+   "ingredients": "INGREDIENTI: farina di GRANO tenero tipo 00, zucchero di canna, BURRO, UOVA, scorza di limone, zenzero, agenti lievitanti: sodio bicarbonato(E500), sale.",
+   "defects": [],
+   "check": {
+    "errors": [],
+    "warnings": []
+   },
+   "layout": {
+    "lines": 3,
+    "endY": 368.75,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 981.5,
+      "y": 785.0,
+      "text": "BISCOTTI",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 334.53125,
+      "y": 921.0,
+      "text": "AL LIMONE E ZENZERO FINTO",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 100,
+      "y": 1175.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1175.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 860.0,
+      "y": 1175.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 949.0,
+      "y": 1175.0,
+      "text": "GRANO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1268.0,
+      "y": 1175.0,
+      "text": "tenero",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1530.96875,
+      "y": 1175.0,
+      "text": "tipo",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1693.96875,
+      "y": 1175.0,
+      "text": "00,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1831.96875,
+      "y": 1175.0,
+      "text": "zucchero",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2184.9375,
+      "y": 1175.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1275.0,
+      "text": "canna,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 368.0,
+      "y": 1275.0,
+      "text": "BURRO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 657.0,
+      "y": 1275.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 703.0,
+      "y": 1275.0,
+      "text": "UOVA",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 937.890625,
+      "y": 1275.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 983.890625,
+      "y": 1275.0,
+      "text": "scorza",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1242.890625,
+      "y": 1275.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1331.890625,
+      "y": 1275.0,
+      "text": "limone,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1624.890625,
+      "y": 1275.0,
+      "text": "zenzero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1957.859375,
+      "y": 1275.0,
+      "text": "agenti",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1375.0,
+      "text": "lievitanti:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 465.0,
+      "y": 1375.0,
+      "text": "sodio",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 682.0,
+      "y": 1375.0,
+      "text": "bicarbonato(E500),",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1405.0,
+      "y": 1375.0,
+      "text": "sale.",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|BISCOTTI": 597.0,
+    "title|128|AL LIMONE E ZENZERO FINTO": 1890.9375,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|farina": 212.0,
+    "regular|73|di": 66.0,
+    "bold|73|GRANO": 296.0,
+    "regular|73|tenero": 239.96875,
+    "regular|73|tipo": 140.0,
+    "regular|73|00,": 115.0,
+    "regular|73|zucchero": 329.96875,
+    "regular|73|canna,": 245.0,
+    "bold|73|BURRO": 289.0,
+    "regular|73|,": 23.0,
+    "bold|73|UOVA": 234.890625,
+    "regular|73|scorza": 236.0,
+    "regular|73|limone,": 270.0,
+    "regular|73|zenzero,": 309.96875,
+    "regular|73|agenti": 231.0,
+    "regular|73|lievitanti:": 342.0,
+    "regular|73|sodio": 194.0,
+    "regular|73|bicarbonato(E500),": 700.0,
+    "regular|73|sale.": 171.0
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "long-title",
+   "title": "BISCOTTI INTEGRALI CON FARINA DI FARRO E GOCCE DI CIOCCOLATO",
+   "ingredients": "INGREDIENTI: farina integrale di FARRO, zucchero, BURRO, gocce di cioccolato fondente (zucchero, pasta di cacao, burro di cacao, emulsionante: lecitina di SOIA), UOVA, sale.",
+   "defects": [],
+   "check": {
+    "errors": [],
+    "warnings": [
+     {
+      "kind": "chocolate"
+     }
+    ]
+   },
+   "layout": {
+    "lines": 3,
+    "endY": 352.0,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": -125.859375,
+      "y": 852.0,
+      "text": "BISCOTTI INTEGRALI CON FARINA DI FARRO E GOCCE DI CIOCCOLATO",
+      "font": "title",
+      "px": 80
+     },
+     {
+      "x": 100,
+      "y": 1108.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1108.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 860.0,
+      "y": 1108.0,
+      "text": "integrale",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1209.0,
+      "y": 1108.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1298.0,
+      "y": 1108.0,
+      "text": "FARRO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1578.875,
+      "y": 1108.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1624.875,
+      "y": 1108.0,
+      "text": "zucchero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2000.84375,
+      "y": 1108.0,
+      "text": "BURRO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 2289.84375,
+      "y": 1108.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1208.0,
+      "text": "gocce",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 339.0,
+      "y": 1208.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 428.0,
+      "y": 1208.0,
+      "text": "cioccolato",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 820.0,
+      "y": 1208.0,
+      "text": "fondente",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1171.0,
+      "y": 1208.0,
+      "text": "(zucchero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1574.96875,
+      "y": 1208.0,
+      "text": "pasta",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1800.96875,
+      "y": 1208.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1889.96875,
+      "y": 1208.0,
+      "text": "cacao,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2150.96875,
+      "y": 1208.0,
+      "text": "burro",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2370.921875,
+      "y": 1208.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1308.0,
+      "text": "cacao,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 361.0,
+      "y": 1308.0,
+      "text": "emulsionante:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 905.0,
+      "y": 1308.0,
+      "text": "lecitina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1193.0,
+      "y": 1308.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1282.0,
+      "y": 1308.0,
+      "text": "SOIA",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1481.0,
+      "y": 1308.0,
+      "text": "),",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1555.0,
+      "y": 1308.0,
+      "text": "UOVA",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1789.890625,
+      "y": 1308.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1835.890625,
+      "y": 1308.0,
+      "text": "sale.",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|BISCOTTI INTEGRALI CON FARINA DI FARRO E GOCCE DI CIOCCOLATO": 4499.53125,
+    "title|124|BISCOTTI INTEGRALI CON FARINA DI FARRO E GOCCE DI CIOCCOLATO": 4361.53125,
+    "title|120|BISCOTTI INTEGRALI CON FARINA DI FARRO E GOCCE DI CIOCCOLATO": 4215.546875,
+    "title|116|BISCOTTI INTEGRALI CON FARINA DI FARRO E GOCCE DI CIOCCOLATO": 4077.578125,
+    "title|112|BISCOTTI INTEGRALI CON FARINA DI FARRO E GOCCE DI CIOCCOLATO": 3935.59375,
+    "title|108|BISCOTTI INTEGRALI CON FARINA DI FARRO E GOCCE DI CIOCCOLATO": 3797.59375,
+    "title|104|BISCOTTI INTEGRALI CON FARINA DI FARRO E GOCCE DI CIOCCOLATO": 3659.59375,
+    "title|100|BISCOTTI INTEGRALI CON FARINA DI FARRO E GOCCE DI CIOCCOLATO": 3517.609375,
+    "title|96|BISCOTTI INTEGRALI CON FARINA DI FARRO E GOCCE DI CIOCCOLATO": 3379.640625,
+    "title|92|BISCOTTI INTEGRALI CON FARINA DI FARRO E GOCCE DI CIOCCOLATO": 3233.65625,
+    "title|88|BISCOTTI INTEGRALI CON FARINA DI FARRO E GOCCE DI CIOCCOLATO": 3095.65625,
+    "title|84|BISCOTTI INTEGRALI CON FARINA DI FARRO E GOCCE DI CIOCCOLATO": 2949.671875,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|farina": 212.0,
+    "regular|73|integrale": 326.0,
+    "regular|73|di": 66.0,
+    "bold|73|FARRO": 280.875,
+    "regular|73|,": 23.0,
+    "regular|73|zucchero,": 352.96875,
+    "bold|73|BURRO": 289.0,
+    "regular|73|gocce": 216.0,
+    "regular|73|cioccolato": 369.0,
+    "regular|73|fondente": 328.0,
+    "regular|73|(zucchero,": 380.96875,
+    "regular|73|pasta": 203.0,
+    "regular|73|cacao,": 238.0,
+    "regular|73|burro": 196.953125,
+    "regular|73|emulsionante:": 521.0,
+    "regular|73|lecitina": 265.0,
+    "bold|73|SOIA": 199.0,
+    "regular|73|),": 51.0,
+    "bold|73|UOVA": 234.890625,
+    "regular|73|sale.": 171.0,
+    "title|80|BISCOTTI INTEGRALI CON FARINA DI FARRO E GOCCE DI CIOCCOLATO": 2811.71875
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "very-long-title",
+   "title": "FROLLINI ARTIGIANALI ALLA FARINA DI SEGALE CON MIELE DI CASTAGNO E NOCCIOLE TOSTATE",
+   "ingredients": "INGREDIENTI: farina di SEGALE, BURRO, miele di castagno, NOCCIOLE tostate, UOVA.",
+   "defects": [],
+   "check": {
+    "errors": [],
+    "warnings": []
+   },
+   "layout": {
+    "lines": 2,
+    "endY": 339.5,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": -660.7265625,
+      "y": 902.0,
+      "text": "FROLLINI ARTIGIANALI ALLA FARINA DI SEGALE CON MIELE DI CASTAGNO E NOCCIOLE TOSTATE",
+      "font": "title",
+      "px": 80
+     },
+     {
+      "x": 100,
+      "y": 1158.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1158.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 860.0,
+      "y": 1158.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 949.0,
+      "y": 1158.0,
+      "text": "SEGALE",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1266.0,
+      "y": 1158.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1312.0,
+      "y": 1158.0,
+      "text": "BURRO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1601.0,
+      "y": 1158.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1647.0,
+      "y": 1158.0,
+      "text": "miele",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1871.0,
+      "y": 1158.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1960.0,
+      "y": 1158.0,
+      "text": "castagno,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1258.0,
+      "text": "NOCCIOLE",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 540.0,
+      "y": 1258.0,
+      "text": "tostate,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 846.0,
+      "y": 1258.0,
+      "text": "UOVA",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1080.890625,
+      "y": 1258.0,
+      "text": ".",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|FROLLINI ARTIGIANALI ALLA FARINA DI SEGALE CON MIELE DI CASTAGNO E NOCCIOLE TOSTATE": 6210.125,
+    "title|124|FROLLINI ARTIGIANALI ALLA FARINA DI SEGALE CON MIELE DI CASTAGNO E NOCCIOLE TOSTATE": 6024.125,
+    "title|120|FROLLINI ARTIGIANALI ALLA FARINA DI SEGALE CON MIELE DI CASTAGNO E NOCCIOLE TOSTATE": 5819.1875,
+    "title|116|FROLLINI ARTIGIANALI ALLA FARINA DI SEGALE CON MIELE DI CASTAGNO E NOCCIOLE TOSTATE": 5629.203125,
+    "title|112|FROLLINI ARTIGIANALI ALLA FARINA DI SEGALE CON MIELE DI CASTAGNO E NOCCIOLE TOSTATE": 5433.25,
+    "title|108|FROLLINI ARTIGIANALI ALLA FARINA DI SEGALE CON MIELE DI CASTAGNO E NOCCIOLE TOSTATE": 5243.25,
+    "title|104|FROLLINI ARTIGIANALI ALLA FARINA DI SEGALE CON MIELE DI CASTAGNO E NOCCIOLE TOSTATE": 5053.25,
+    "title|100|FROLLINI ARTIGIANALI ALLA FARINA DI SEGALE CON MIELE DI CASTAGNO E NOCCIOLE TOSTATE": 4857.296875,
+    "title|96|FROLLINI ARTIGIANALI ALLA FARINA DI SEGALE CON MIELE DI CASTAGNO E NOCCIOLE TOSTATE": 4667.3125,
+    "title|92|FROLLINI ARTIGIANALI ALLA FARINA DI SEGALE CON MIELE DI CASTAGNO E NOCCIOLE TOSTATE": 4462.375,
+    "title|88|FROLLINI ARTIGIANALI ALLA FARINA DI SEGALE CON MIELE DI CASTAGNO E NOCCIOLE TOSTATE": 4276.375,
+    "title|84|FROLLINI ARTIGIANALI ALLA FARINA DI SEGALE CON MIELE DI CASTAGNO E NOCCIOLE TOSTATE": 4071.421875,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|farina": 212.0,
+    "regular|73|di": 66.0,
+    "bold|73|SEGALE": 317.0,
+    "regular|73|,": 23.0,
+    "bold|73|BURRO": 289.0,
+    "regular|73|miele": 201.0,
+    "regular|73|castagno,": 357.0,
+    "bold|73|NOCCIOLE": 417.0,
+    "regular|73|tostate,": 283.0,
+    "bold|73|UOVA": 234.890625,
+    "regular|73|.": 23.0,
+    "title|80|FROLLINI ARTIGIANALI ALLA FARINA DI SEGALE CON MIELE DI CASTAGNO E NOCCIOLE TOSTATE": 3881.453125
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "seven-lines",
+   "title": "BISCOTTI AI SEMI FINTI",
+   "ingredients": "INGREDIENTI: farina di GRANO tenero varietà finta, zucchero di canna, BURRO, farina di GRANO duro, UOVA, farina di FARRO, farina di SEGALE, farina di grano saraceno, agenti lievitanti: sodio pirofosfato(E450), sodio bicarbonato(E500), sale, vanillina, fiocchi d’AVENA, semi di SESAMO, semi di girasole, semi di lino, semi di papavero.",
+   "defects": [],
+   "check": {
+    "errors": [],
+    "warnings": []
+   },
+   "layout": {
+    "lines": 6,
+    "endY": 384.125,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 547.0390625,
+      "y": 723.5,
+      "text": "BISCOTTI AI SEMI FINTI",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 100,
+      "y": 936.5,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 936.5,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 860.0,
+      "y": 936.5,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 949.0,
+      "y": 936.5,
+      "text": "GRANO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1268.0,
+      "y": 936.5,
+      "text": "tenero",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1530.96875,
+      "y": 936.5,
+      "text": "varietà",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1810.96875,
+      "y": 936.5,
+      "text": "finta,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2022.96875,
+      "y": 936.5,
+      "text": "zucchero",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2375.9375,
+      "y": 936.5,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1036.5,
+      "text": "canna,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 368.0,
+      "y": 1036.5,
+      "text": "BURRO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 657.0,
+      "y": 1036.5,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 703.0,
+      "y": 1036.5,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 938.0,
+      "y": 1036.5,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1027.0,
+      "y": 1036.5,
+      "text": "GRANO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1346.0,
+      "y": 1036.5,
+      "text": "duro,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1558.96875,
+      "y": 1036.5,
+      "text": "UOVA",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1793.859375,
+      "y": 1036.5,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1839.859375,
+      "y": 1036.5,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2074.859375,
+      "y": 1036.5,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1136.5,
+      "text": "FARRO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 380.875,
+      "y": 1136.5,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 426.875,
+      "y": 1136.5,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 661.875,
+      "y": 1136.5,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 750.875,
+      "y": 1136.5,
+      "text": "SEGALE",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1067.875,
+      "y": 1136.5,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1113.875,
+      "y": 1136.5,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1348.875,
+      "y": 1136.5,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1437.875,
+      "y": 1136.5,
+      "text": "grano",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1672.875,
+      "y": 1136.5,
+      "text": "saraceno,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2052.875,
+      "y": 1136.5,
+      "text": "agenti",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1236.5,
+      "text": "lievitanti:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 465.0,
+      "y": 1236.5,
+      "text": "sodio",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 682.0,
+      "y": 1236.5,
+      "text": "pirofosfato(E450),",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1362.96875,
+      "y": 1236.5,
+      "text": "sodio",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1579.96875,
+      "y": 1236.5,
+      "text": "bicarbonato(E500),",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1336.5,
+      "text": "sale,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 294.0,
+      "y": 1336.5,
+      "text": "vanillina,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 645.0,
+      "y": 1336.5,
+      "text": "fiocchi",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 905.0,
+      "y": 1336.5,
+      "text": "d’",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 974.0,
+      "y": 1336.5,
+      "text": "AVENA",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1255.921875,
+      "y": 1336.5,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1301.921875,
+      "y": 1336.5,
+      "text": "semi",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1498.921875,
+      "y": 1336.5,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1587.921875,
+      "y": 1336.5,
+      "text": "SESAMO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1935.921875,
+      "y": 1336.5,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1981.921875,
+      "y": 1336.5,
+      "text": "semi",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2178.921875,
+      "y": 1336.5,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1436.5,
+      "text": "girasole,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 435.0,
+      "y": 1436.5,
+      "text": "semi",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 632.0,
+      "y": 1436.5,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 721.0,
+      "y": 1436.5,
+      "text": "lino,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 898.0,
+      "y": 1436.5,
+      "text": "semi",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1095.0,
+      "y": 1436.5,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1184.0,
+      "y": 1436.5,
+      "text": "papavero.",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|BISCOTTI AI SEMI FINTI": 1465.921875,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|farina": 212.0,
+    "regular|73|di": 66.0,
+    "bold|73|GRANO": 296.0,
+    "regular|73|tenero": 239.96875,
+    "regular|73|varietà": 257.0,
+    "regular|73|finta,": 189.0,
+    "regular|73|zucchero": 329.96875,
+    "regular|73|canna,": 245.0,
+    "bold|73|BURRO": 289.0,
+    "regular|73|,": 23.0,
+    "regular|73|duro,": 189.96875,
+    "bold|73|UOVA": 234.890625,
+    "bold|73|FARRO": 280.875,
+    "bold|73|SEGALE": 317.0,
+    "regular|73|grano": 212.0,
+    "regular|73|saraceno,": 357.0,
+    "regular|73|agenti": 231.0,
+    "regular|73|lievitanti:": 342.0,
+    "regular|73|sodio": 194.0,
+    "regular|73|pirofosfato(E450),": 657.96875,
+    "regular|73|bicarbonato(E500),": 700.0,
+    "regular|73|sale,": 171.0,
+    "regular|73|vanillina,": 328.0,
+    "regular|73|fiocchi": 237.0,
+    "regular|73|d’": 69.0,
+    "bold|73|AVENA": 281.921875,
+    "regular|73|semi": 174.0,
+    "bold|73|SESAMO": 348.0,
+    "regular|73|girasole,": 312.0,
+    "regular|73|lino,": 154.0,
+    "regular|73|papavero.": 367.953125
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "too-long",
+   "title": "BISCOTTI|TROPPO LUNGHI DI PROVA",
+   "ingredients": "INGREDIENTI: farina di GRANO tenero tipo 00, farina di GRANO duro rimacinata, zucchero di canna integrale, BURRO di centrifuga, UOVA fresche, LATTE intero, PANNA fresca, MANDORLE pelate, NOCCIOLE tostate, PISTACCHI, farina di FARRO, farina di SEGALE, fiocchi d’AVENA, semi di SESAMO, semi di girasole, semi di lino, semi di papavero, semi di zucca, uvetta sultanina, scorza d’arancia candita, miele millefiori, cannella, vaniglia, sale marino integrale, agenti lievitanti: sodio pirofosfato(E450), sodio bicarbonato(E500).",
+   "defects": [],
+   "check": {
+    "errors": [],
+    "warnings": [
+     {
+      "kind": "sulphites"
+     }
+    ]
+   },
+   "layout": {
+    "lines": 9,
+    "endY": 470.0,
+    "tooLong": true,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 981.5,
+      "y": 668.0,
+      "text": "BISCOTTI",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 420.0703125,
+      "y": 804.0,
+      "text": "TROPPO LUNGHI DI PROVA",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 100,
+      "y": 980.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 980.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 860.0,
+      "y": 980.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 949.0,
+      "y": 980.0,
+      "text": "GRANO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1268.0,
+      "y": 980.0,
+      "text": "tenero",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1530.96875,
+      "y": 980.0,
+      "text": "tipo",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1693.96875,
+      "y": 980.0,
+      "text": "00,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1831.96875,
+      "y": 980.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2066.96875,
+      "y": 980.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2155.96875,
+      "y": 980.0,
+      "text": "GRANO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1080.0,
+      "text": "duro",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 289.96875,
+      "y": 1080.0,
+      "text": "rimacinata,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 726.96875,
+      "y": 1080.0,
+      "text": "zucchero",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1079.9375,
+      "y": 1080.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1168.9375,
+      "y": 1080.0,
+      "text": "canna",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1413.9375,
+      "y": 1080.0,
+      "text": "integrale,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1785.9375,
+      "y": 1080.0,
+      "text": "BURRO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 2097.9375,
+      "y": 1080.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1180.0,
+      "text": "centrifuga,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 519.0,
+      "y": 1180.0,
+      "text": "UOVA",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 776.890625,
+      "y": 1180.0,
+      "text": "fresche,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1092.859375,
+      "y": 1180.0,
+      "text": "LATTE",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1369.796875,
+      "y": 1180.0,
+      "text": "intero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1630.765625,
+      "y": 1180.0,
+      "text": "PANNA",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1943.65625,
+      "y": 1180.0,
+      "text": "fresca,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1280.0,
+      "text": "MANDORLE",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 590.0,
+      "y": 1280.0,
+      "text": "pelate,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 866.0,
+      "y": 1280.0,
+      "text": "NOCCIOLE",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1306.0,
+      "y": 1280.0,
+      "text": "tostate,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1612.0,
+      "y": 1280.0,
+      "text": "PISTACCHI",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 2048.90625,
+      "y": 1280.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2094.90625,
+      "y": 1280.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2329.90625,
+      "y": 1280.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1380.0,
+      "text": "FARRO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 380.875,
+      "y": 1380.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 426.875,
+      "y": 1380.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 661.875,
+      "y": 1380.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 750.875,
+      "y": 1380.0,
+      "text": "SEGALE",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1067.875,
+      "y": 1380.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1113.875,
+      "y": 1380.0,
+      "text": "fiocchi",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1373.875,
+      "y": 1380.0,
+      "text": "d’",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1442.875,
+      "y": 1380.0,
+      "text": "AVENA",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1724.796875,
+      "y": 1380.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1770.796875,
+      "y": 1380.0,
+      "text": "semi",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1967.796875,
+      "y": 1380.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2056.796875,
+      "y": 1380.0,
+      "text": "SESAMO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 2404.796875,
+      "y": 1380.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1480.0,
+      "text": "semi",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 297.0,
+      "y": 1480.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 386.0,
+      "y": 1480.0,
+      "text": "girasole,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 721.0,
+      "y": 1480.0,
+      "text": "semi",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 918.0,
+      "y": 1480.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1007.0,
+      "y": 1480.0,
+      "text": "lino,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1184.0,
+      "y": 1480.0,
+      "text": "semi",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1381.0,
+      "y": 1480.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1470.0,
+      "y": 1480.0,
+      "text": "papavero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1860.96875,
+      "y": 1480.0,
+      "text": "semi",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2057.96875,
+      "y": 1480.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2146.96875,
+      "y": 1480.0,
+      "text": "zucca,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1580.0,
+      "text": "uvetta",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 360.0,
+      "y": 1580.0,
+      "text": "sultanina,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 741.0,
+      "y": 1580.0,
+      "text": "scorza",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1000.0,
+      "y": 1580.0,
+      "text": "d’arancia",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1363.0,
+      "y": 1580.0,
+      "text": "candita,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1680.0,
+      "y": 1580.0,
+      "text": "miele",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1904.0,
+      "y": 1580.0,
+      "text": "millefiori,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1680.0,
+      "text": "cannella,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 453.0,
+      "y": 1680.0,
+      "text": "vaniglia,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 784.0,
+      "y": 1680.0,
+      "text": "sale",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 955.0,
+      "y": 1680.0,
+      "text": "marino",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1235.0,
+      "y": 1680.0,
+      "text": "integrale,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1607.0,
+      "y": 1680.0,
+      "text": "agenti",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1861.0,
+      "y": 1680.0,
+      "text": "lievitanti:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2226.0,
+      "y": 1680.0,
+      "text": "sodio",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1780.0,
+      "text": "pirofosfato(E450),",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 780.96875,
+      "y": 1780.0,
+      "text": "sodio",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 997.96875,
+      "y": 1780.0,
+      "text": "bicarbonato(E500).",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|BISCOTTI": 597.0,
+    "title|128|TROPPO LUNGHI DI PROVA": 1719.859375,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|farina": 212.0,
+    "regular|73|di": 66.0,
+    "bold|73|GRANO": 296.0,
+    "regular|73|tenero": 239.96875,
+    "regular|73|tipo": 140.0,
+    "regular|73|00,": 115.0,
+    "regular|73|duro": 166.96875,
+    "regular|73|rimacinata,": 414.0,
+    "regular|73|zucchero": 329.96875,
+    "regular|73|canna": 222.0,
+    "regular|73|integrale,": 349.0,
+    "bold|73|BURRO": 289.0,
+    "regular|73|centrifuga,": 396.0,
+    "bold|73|UOVA": 234.890625,
+    "regular|73|fresche,": 292.96875,
+    "bold|73|LATTE": 253.9375,
+    "regular|73|intero,": 237.96875,
+    "bold|73|PANNA": 289.890625,
+    "regular|73|fresca,": 246.96875,
+    "bold|73|MANDORLE": 467.0,
+    "regular|73|pelate,": 253.0,
+    "bold|73|NOCCIOLE": 417.0,
+    "regular|73|tostate,": 283.0,
+    "bold|73|PISTACCHI": 436.90625,
+    "regular|73|,": 23.0,
+    "bold|73|FARRO": 280.875,
+    "bold|73|SEGALE": 317.0,
+    "regular|73|fiocchi": 237.0,
+    "regular|73|d’": 69.0,
+    "bold|73|AVENA": 281.921875,
+    "regular|73|semi": 174.0,
+    "bold|73|SESAMO": 348.0,
+    "regular|73|girasole,": 312.0,
+    "regular|73|lino,": 154.0,
+    "regular|73|papavero,": 367.96875,
+    "regular|73|zucca,": 232.0,
+    "regular|73|uvetta": 237.0,
+    "regular|73|sultanina,": 358.0,
+    "regular|73|scorza": 236.0,
+    "regular|73|d’arancia": 340.0,
+    "regular|73|candita,": 294.0,
+    "regular|73|miele": 201.0,
+    "regular|73|millefiori,": 340.0,
+    "regular|73|cannella,": 330.0,
+    "regular|73|vaniglia,": 308.0,
+    "regular|73|sale": 148.0,
+    "regular|73|marino": 257.0,
+    "regular|73|agenti": 231.0,
+    "regular|73|lievitanti:": 342.0,
+    "regular|73|sodio": 194.0,
+    "regular|73|pirofosfato(E450),": 657.96875,
+    "regular|73|bicarbonato(E500).": 700.0
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "lowercase",
+   "title": "DOLCE CON ERRORI",
+   "ingredients": "INGREDIENTI: farina di grano, burro, Latte intero, uova, burro di cacao, latte di cocco, farina di grano saraceno, noce moscata, noci di cocco rapè, caffèlatte, pannacotta.",
+   "defects": [],
+   "check": {
+    "errors": [
+     {
+      "kind": "lowercase",
+      "word": "grano"
+     },
+     {
+      "kind": "lowercase",
+      "word": "uova"
+     },
+     {
+      "kind": "lowercase",
+      "word": "Latte"
+     },
+     {
+      "kind": "lowercase",
+      "word": "burro"
+     }
+    ],
+    "warnings": []
+   },
+   "layout": {
+    "lines": 3,
+    "endY": 352.0,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 630.0,
+      "y": 852.0,
+      "text": "DOLCE CON ERRORI",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 100,
+      "y": 1108.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1108.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 860.0,
+      "y": 1108.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 949.0,
+      "y": 1108.0,
+      "text": "grano,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1207.0,
+      "y": 1108.0,
+      "text": "burro,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1449.953125,
+      "y": 1108.0,
+      "text": "Latte",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1661.953125,
+      "y": 1108.0,
+      "text": "intero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1922.921875,
+      "y": 1108.0,
+      "text": "uova,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2147.921875,
+      "y": 1108.0,
+      "text": "burro",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2367.875,
+      "y": 1108.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1208.0,
+      "text": "cacao,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 361.0,
+      "y": 1208.0,
+      "text": "latte",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 552.0,
+      "y": 1208.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 641.0,
+      "y": 1208.0,
+      "text": "cocco,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 897.0,
+      "y": 1208.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1132.0,
+      "y": 1208.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1221.0,
+      "y": 1208.0,
+      "text": "grano",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1456.0,
+      "y": 1208.0,
+      "text": "saraceno,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1836.0,
+      "y": 1208.0,
+      "text": "noce",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2035.0,
+      "y": 1208.0,
+      "text": "moscata,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1308.0,
+      "text": "noci",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 274.0,
+      "y": 1308.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 363.0,
+      "y": 1308.0,
+      "text": "cocco",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 596.0,
+      "y": 1308.0,
+      "text": "rapè,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 808.0,
+      "y": 1308.0,
+      "text": "caffèlatte,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1204.0,
+      "y": 1308.0,
+      "text": "pannacotta.",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|DOLCE CON ERRORI": 1300.0,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|farina": 212.0,
+    "regular|73|di": 66.0,
+    "regular|73|grano,": 235.0,
+    "regular|73|burro,": 219.953125,
+    "regular|73|Latte": 189.0,
+    "regular|73|intero,": 237.96875,
+    "regular|73|uova,": 202.0,
+    "regular|73|burro": 196.953125,
+    "regular|73|cacao,": 238.0,
+    "regular|73|latte": 168.0,
+    "regular|73|cocco,": 233.0,
+    "regular|73|grano": 212.0,
+    "regular|73|saraceno,": 357.0,
+    "regular|73|noce": 176.0,
+    "regular|73|moscata,": 336.0,
+    "regular|73|noci": 151.0,
+    "regular|73|cocco": 210.0,
+    "regular|73|rapè,": 189.0,
+    "regular|73|caffèlatte,": 373.0,
+    "regular|73|pannacotta.": 439.0
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "beer-ok",
+   "title": "TORCETTI FINTI",
+   "ingredients": "INGREDIENTI: farina di GRANO tenero tipo 00, BURRO, zucchero, birra (contiene ORZO, alcol 5°), sale, lievito di birra.",
+   "defects": [],
+   "check": {
+    "errors": [],
+    "warnings": []
+   },
+   "layout": {
+    "lines": 2,
+    "endY": 339.5,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 782.515625,
+      "y": 902.0,
+      "text": "TORCETTI FINTI",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 100,
+      "y": 1158.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1158.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 860.0,
+      "y": 1158.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 949.0,
+      "y": 1158.0,
+      "text": "GRANO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1268.0,
+      "y": 1158.0,
+      "text": "tenero",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1530.96875,
+      "y": 1158.0,
+      "text": "tipo",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1693.96875,
+      "y": 1158.0,
+      "text": "00,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1831.96875,
+      "y": 1158.0,
+      "text": "BURRO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 2120.96875,
+      "y": 1158.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1258.0,
+      "text": "zucchero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 475.96875,
+      "y": 1258.0,
+      "text": "birra",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 669.953125,
+      "y": 1258.0,
+      "text": "(contiene",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1036.953125,
+      "y": 1258.0,
+      "text": "ORZO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1269.953125,
+      "y": 1258.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1315.953125,
+      "y": 1258.0,
+      "text": "alcol",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1508.953125,
+      "y": 1258.0,
+      "text": "5°),",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1665.953125,
+      "y": 1258.0,
+      "text": "sale,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1859.953125,
+      "y": 1258.0,
+      "text": "lievito",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2104.953125,
+      "y": 1258.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2193.953125,
+      "y": 1258.0,
+      "text": "birra.",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|TORCETTI FINTI": 994.96875,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|farina": 212.0,
+    "regular|73|di": 66.0,
+    "bold|73|GRANO": 296.0,
+    "regular|73|tenero": 239.96875,
+    "regular|73|tipo": 140.0,
+    "regular|73|00,": 115.0,
+    "bold|73|BURRO": 289.0,
+    "regular|73|,": 23.0,
+    "regular|73|zucchero,": 352.96875,
+    "regular|73|birra": 170.984375,
+    "regular|73|(contiene": 344.0,
+    "bold|73|ORZO": 233.0,
+    "regular|73|alcol": 170.0,
+    "regular|73|5°),": 134.0,
+    "regular|73|sale,": 171.0,
+    "regular|73|lievito": 222.0,
+    "regular|73|birra.": 193.984375
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "beer-orzo-elsewhere",
+   "title": "TORCETTI CON ORZO ALTROVE",
+   "ingredients": "INGREDIENTI: farina di GRANO tenero, birra chiara, fiocchi di ORZO, sale.",
+   "defects": [
+    "c"
+   ],
+   "check": {
+    "errors": [],
+    "warnings": []
+   },
+   "layout": {
+    "lines": 2,
+    "endY": 339.5,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 274.625,
+      "y": 902.0,
+      "text": "TORCETTI CON ORZO ALTROVE",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 100,
+      "y": 1158.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1158.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 860.0,
+      "y": 1158.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 949.0,
+      "y": 1158.0,
+      "text": "GRANO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1268.0,
+      "y": 1158.0,
+      "text": "tenero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1553.96875,
+      "y": 1158.0,
+      "text": "birra",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1747.953125,
+      "y": 1158.0,
+      "text": "chiara,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2019.953125,
+      "y": 1158.0,
+      "text": "fiocchi",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2279.953125,
+      "y": 1158.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1258.0,
+      "text": "ORZO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 333.0,
+      "y": 1258.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 379.0,
+      "y": 1258.0,
+      "text": "sale.",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|TORCETTI CON ORZO ALTROVE": 2010.75,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|farina": 212.0,
+    "regular|73|di": 66.0,
+    "bold|73|GRANO": 296.0,
+    "regular|73|tenero,": 262.96875,
+    "regular|73|birra": 170.984375,
+    "regular|73|chiara,": 249.0,
+    "regular|73|fiocchi": 237.0,
+    "bold|73|ORZO": 233.0,
+    "regular|73|,": 23.0,
+    "regular|73|sale.": 171.0
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "malto-sugars",
+   "title": "CARAMELLE DI PROVA",
+   "ingredients": "INGREDIENTI: zucchero, maltodestrina, maltitolo, aroma naturale.",
+   "defects": [
+    "b"
+   ],
+   "check": {
+    "errors": [
+     {
+      "kind": "hidden",
+      "word": "malto"
+     }
+    ],
+    "warnings": []
+   },
+   "layout": {
+    "lines": 2,
+    "endY": 339.5,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 552.5703125,
+      "y": 902.0,
+      "text": "CARAMELLE DI PROVA",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 100,
+      "y": 1158.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1158.0,
+      "text": "zucchero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1000.96875,
+      "y": 1158.0,
+      "text": "maltodestrina,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1555.96875,
+      "y": 1158.0,
+      "text": "maltitolo,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1925.96875,
+      "y": 1158.0,
+      "text": "aroma",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1258.0,
+      "text": "naturale.",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|CARAMELLE DI PROVA": 1454.859375,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|zucchero,": 352.96875,
+    "regular|73|maltodestrina,": 532.0,
+    "regular|73|maltitolo,": 347.0,
+    "regular|73|aroma": 235.96875,
+    "regular|73|naturale.": 329.0
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "malto-ok",
+   "title": "PANE AL MALTO FINTO",
+   "ingredients": "INGREDIENTI: farina di GRANO tenero, acqua, estratto di malto d'ORZO, sale, lievito di birra.",
+   "defects": [],
+   "check": {
+    "errors": [],
+    "warnings": []
+   },
+   "layout": {
+    "lines": 2,
+    "endY": 339.5,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 544.7265625,
+      "y": 902.0,
+      "text": "PANE AL MALTO FINTO",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 100,
+      "y": 1158.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1158.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 860.0,
+      "y": 1158.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 949.0,
+      "y": 1158.0,
+      "text": "GRANO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1268.0,
+      "y": 1158.0,
+      "text": "tenero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1553.96875,
+      "y": 1158.0,
+      "text": "acqua,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1821.96875,
+      "y": 1158.0,
+      "text": "estratto",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2134.96875,
+      "y": 1158.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2223.96875,
+      "y": 1158.0,
+      "text": "malto",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1258.0,
+      "text": "d'",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 166.0,
+      "y": 1258.0,
+      "text": "ORZO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 399.0,
+      "y": 1258.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 445.0,
+      "y": 1258.0,
+      "text": "sale,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 639.0,
+      "y": 1258.0,
+      "text": "lievito",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 884.0,
+      "y": 1258.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 973.0,
+      "y": 1258.0,
+      "text": "birra.",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|PANE AL MALTO FINTO": 1470.546875,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|farina": 212.0,
+    "regular|73|di": 66.0,
+    "bold|73|GRANO": 296.0,
+    "regular|73|tenero,": 262.96875,
+    "regular|73|acqua,": 245.0,
+    "regular|73|estratto": 290.0,
+    "regular|73|malto": 210.0,
+    "regular|73|d'": 66.0,
+    "bold|73|ORZO": 233.0,
+    "regular|73|,": 23.0,
+    "regular|73|sale,": 171.0,
+    "regular|73|lievito": 222.0,
+    "regular|73|birra.": 193.984375
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "lecithin",
+   "title": "CREMA DI PROVA",
+   "ingredients": "INGREDIENTI: zucchero, olio di girasole, cacao, emulsionante: lecitina, aroma.",
+   "defects": [],
+   "check": {
+    "errors": [
+     {
+      "kind": "lecithin"
+     }
+    ],
+    "warnings": []
+   },
+   "layout": {
+    "lines": 2,
+    "endY": 339.5,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 719.109375,
+      "y": 902.0,
+      "text": "CREMA DI PROVA",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 100,
+      "y": 1158.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1158.0,
+      "text": "zucchero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1000.96875,
+      "y": 1158.0,
+      "text": "olio",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1153.96875,
+      "y": 1158.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1242.96875,
+      "y": 1158.0,
+      "text": "girasole,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1577.96875,
+      "y": 1158.0,
+      "text": "cacao,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1838.96875,
+      "y": 1158.0,
+      "text": "emulsionante:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1258.0,
+      "text": "lecitina,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 411.0,
+      "y": 1258.0,
+      "text": "aroma.",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|CREMA DI PROVA": 1121.78125,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|zucchero,": 352.96875,
+    "regular|73|olio": 130.0,
+    "regular|73|di": 66.0,
+    "regular|73|girasole,": 312.0,
+    "regular|73|cacao,": 238.0,
+    "regular|73|emulsionante:": 521.0,
+    "regular|73|lecitina,": 288.0,
+    "regular|73|aroma.": 258.96875
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "lecithin-origin",
+   "title": "CREMA DI PROVA DUE",
+   "ingredients": "INGREDIENTI: zucchero, cacao, emulsionanti: lecitina di SOIA, lecitina di girasole.",
+   "defects": [],
+   "check": {
+    "errors": [],
+    "warnings": []
+   },
+   "layout": {
+    "lines": 2,
+    "endY": 339.5,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 566.6484375,
+      "y": 902.0,
+      "text": "CREMA DI PROVA DUE",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 100,
+      "y": 1158.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1158.0,
+      "text": "zucchero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1000.96875,
+      "y": 1158.0,
+      "text": "cacao,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1261.96875,
+      "y": 1158.0,
+      "text": "emulsionanti:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1780.96875,
+      "y": 1158.0,
+      "text": "lecitina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2068.96875,
+      "y": 1158.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2157.96875,
+      "y": 1158.0,
+      "text": "SOIA",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 2356.96875,
+      "y": 1158.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1258.0,
+      "text": "lecitina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 388.0,
+      "y": 1258.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 477.0,
+      "y": 1258.0,
+      "text": "girasole.",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|CREMA DI PROVA DUE": 1426.703125,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|zucchero,": 352.96875,
+    "regular|73|cacao,": 238.0,
+    "regular|73|emulsionanti:": 496.0,
+    "regular|73|lecitina": 265.0,
+    "regular|73|di": 66.0,
+    "bold|73|SOIA": 199.0,
+    "regular|73|,": 23.0,
+    "regular|73|girasole.": 312.0
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "to-verify",
+   "title": "TORTA AL VINO FINTA",
+   "ingredients": "INGREDIENTI: farina di GRANO tenero, vino bianco, aceto di vino, uvetta, cioccolato al LATTE, margarina vegetale (oli vegetali, acqua, sale).",
+   "defects": [],
+   "check": {
+    "errors": [],
+    "warnings": [
+     {
+      "kind": "sulphites"
+     },
+     {
+      "kind": "chocolate"
+     },
+     {
+      "kind": "margarine"
+     }
+    ]
+   },
+   "layout": {
+    "lines": 3,
+    "endY": 352.0,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 576.75,
+      "y": 852.0,
+      "text": "TORTA AL VINO FINTA",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 100,
+      "y": 1108.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1108.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 860.0,
+      "y": 1108.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 949.0,
+      "y": 1108.0,
+      "text": "GRANO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1268.0,
+      "y": 1108.0,
+      "text": "tenero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1553.96875,
+      "y": 1108.0,
+      "text": "vino",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1730.96875,
+      "y": 1108.0,
+      "text": "bianco,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2018.96875,
+      "y": 1108.0,
+      "text": "aceto",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2245.96875,
+      "y": 1108.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1208.0,
+      "text": "vino,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 300.0,
+      "y": 1208.0,
+      "text": "uvetta,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 583.0,
+      "y": 1208.0,
+      "text": "cioccolato",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 975.0,
+      "y": 1208.0,
+      "text": "al",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1063.0,
+      "y": 1208.0,
+      "text": "LATTE",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1316.9375,
+      "y": 1208.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1362.9375,
+      "y": 1208.0,
+      "text": "margarina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1763.921875,
+      "y": 1208.0,
+      "text": "vegetale",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2104.921875,
+      "y": 1208.0,
+      "text": "(oli",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1308.0,
+      "text": "vegetali,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 439.0,
+      "y": 1308.0,
+      "text": "acqua,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 707.0,
+      "y": 1308.0,
+      "text": "sale).",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|TORTA AL VINO FINTA": 1406.5,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|farina": 212.0,
+    "regular|73|di": 66.0,
+    "bold|73|GRANO": 296.0,
+    "regular|73|tenero,": 262.96875,
+    "regular|73|vino": 154.0,
+    "regular|73|bianco,": 265.0,
+    "regular|73|aceto": 204.0,
+    "regular|73|vino,": 177.0,
+    "regular|73|uvetta,": 260.0,
+    "regular|73|cioccolato": 369.0,
+    "regular|73|al": 65.0,
+    "bold|73|LATTE": 253.9375,
+    "regular|73|,": 23.0,
+    "regular|73|margarina": 377.984375,
+    "regular|73|vegetale": 318.0,
+    "regular|73|(oli": 113.0,
+    "regular|73|vegetali,": 316.0,
+    "regular|73|acqua,": 245.0,
+    "regular|73|sale).": 199.0
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "sulphites-declared",
+   "title": "TORTA AL MARSALA FINTA",
+   "ingredients": "INGREDIENTI: farina di GRANO tenero, marsala (contiene SOLFITI), zucchero, UOVA.",
+   "defects": [],
+   "check": {
+    "errors": [],
+    "warnings": []
+   },
+   "layout": {
+    "lines": 2,
+    "endY": 339.5,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 414.2890625,
+      "y": 902.0,
+      "text": "TORTA AL MARSALA FINTA",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 100,
+      "y": 1158.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1158.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 860.0,
+      "y": 1158.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 949.0,
+      "y": 1158.0,
+      "text": "GRANO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1268.0,
+      "y": 1158.0,
+      "text": "tenero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1553.96875,
+      "y": 1158.0,
+      "text": "marsala",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1870.96875,
+      "y": 1158.0,
+      "text": "(contiene",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1258.0,
+      "text": "SOLFITI",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 416.0,
+      "y": 1258.0,
+      "text": "),",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 490.0,
+      "y": 1258.0,
+      "text": "zucchero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 865.96875,
+      "y": 1258.0,
+      "text": "UOVA",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1100.859375,
+      "y": 1258.0,
+      "text": ".",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|TORTA AL MARSALA FINTA": 1731.421875,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|farina": 212.0,
+    "regular|73|di": 66.0,
+    "bold|73|GRANO": 296.0,
+    "regular|73|tenero,": 262.96875,
+    "regular|73|marsala": 294.0,
+    "regular|73|(contiene": 344.0,
+    "bold|73|SOLFITI": 316.0,
+    "regular|73|),": 51.0,
+    "regular|73|zucchero,": 352.96875,
+    "bold|73|UOVA": 234.890625,
+    "regular|73|.": 23.0
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "bold-defect",
+   "title": "DOLCE CON PAROLE NON IN GRASSETTO",
+   "ingredients": "INGREDIENTI: farina di SPELTA, ALBUME, TUORLO, SIERO di LATTE, CASEINA, YOGURT, MANDORLA, NOCCIOLA, PISTACCHIO, zucchero.",
+   "defects": [
+    "a"
+   ],
+   "check": {
+    "errors": [],
+    "warnings": []
+   },
+   "layout": {
+    "lines": 3,
+    "endY": 352.0,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 119.578125,
+      "y": 852.0,
+      "text": "DOLCE CON PAROLE NON IN GRASSETTO",
+      "font": "title",
+      "px": 112
+     },
+     {
+      "x": 100,
+      "y": 1108.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1108.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 860.0,
+      "y": 1108.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 949.0,
+      "y": 1108.0,
+      "text": "SPELTA,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1266.75,
+      "y": 1108.0,
+      "text": "ALBUME,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1615.75,
+      "y": 1108.0,
+      "text": "TUORLO,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1965.703125,
+      "y": 1108.0,
+      "text": "SIERO",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2210.703125,
+      "y": 1108.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1208.0,
+      "text": "LATTE",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 353.9375,
+      "y": 1208.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 399.9375,
+      "y": 1208.0,
+      "text": "CASEINA,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 765.9375,
+      "y": 1208.0,
+      "text": "YOGURT,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1119.796875,
+      "y": 1208.0,
+      "text": "MANDORLA,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1588.828125,
+      "y": 1208.0,
+      "text": "NOCCIOLA,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1308.0,
+      "text": "PISTACCHI",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 536.90625,
+      "y": 1308.0,
+      "text": "O,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 639.90625,
+      "y": 1308.0,
+      "text": "zucchero.",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|DOLCE CON PAROLE NON IN GRASSETTO": 2649.828125,
+    "title|124|DOLCE CON PAROLE NON IN GRASSETTO": 2571.828125,
+    "title|120|DOLCE CON PAROLE NON IN GRASSETTO": 2484.828125,
+    "title|116|DOLCE CON PAROLE NON IN GRASSETTO": 2401.828125,
+    "title|112|DOLCE CON PAROLE NON IN GRASSETTO": 2320.84375,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|farina": 212.0,
+    "regular|73|di": 66.0,
+    "regular|73|SPELTA,": 294.75,
+    "regular|73|ALBUME,": 326.0,
+    "regular|73|TUORLO,": 326.953125,
+    "regular|73|SIERO": 222.0,
+    "bold|73|LATTE": 253.9375,
+    "regular|73|,": 23.0,
+    "regular|73|CASEINA,": 343.0,
+    "regular|73|YOGURT,": 330.859375,
+    "regular|73|MANDORLA,": 446.03125,
+    "regular|73|NOCCIOLA,": 407.03125,
+    "bold|73|PISTACCHI": 436.90625,
+    "regular|73|O,": 80.0,
+    "regular|73|zucchero.": 352.953125
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "accents",
+   "title": "'NZUDDI FINTI",
+   "ingredients": "INGREDIENTI: farina di GRANO tenero tipo 00, zucchero, LATTE, MANDORLE, BURRO, pasta d'arancia, miele, più NOCI, già tostate.",
+   "defects": [],
+   "check": {
+    "errors": [],
+    "warnings": []
+   },
+   "layout": {
+    "lines": 3,
+    "endY": 352.0,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 846.0,
+      "y": 852.0,
+      "text": "'NZUDDI FINTI",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 100,
+      "y": 1108.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1108.0,
+      "text": "farina",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 860.0,
+      "y": 1108.0,
+      "text": "di",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 949.0,
+      "y": 1108.0,
+      "text": "GRANO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1268.0,
+      "y": 1108.0,
+      "text": "tenero",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1530.96875,
+      "y": 1108.0,
+      "text": "tipo",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1693.96875,
+      "y": 1108.0,
+      "text": "00,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1831.96875,
+      "y": 1108.0,
+      "text": "zucchero,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1208.0,
+      "text": "LATTE",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 353.9375,
+      "y": 1208.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 399.9375,
+      "y": 1208.0,
+      "text": "MANDORLE",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 866.9375,
+      "y": 1208.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 912.9375,
+      "y": 1208.0,
+      "text": "BURRO",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 1201.9375,
+      "y": 1208.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1247.9375,
+      "y": 1208.0,
+      "text": "pasta",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1473.9375,
+      "y": 1208.0,
+      "text": "d'arancia,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1856.9375,
+      "y": 1208.0,
+      "text": "miele,",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 2103.9375,
+      "y": 1208.0,
+      "text": "più",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 100,
+      "y": 1308.0,
+      "text": "NOCI",
+      "font": "bold",
+      "px": 73
+     },
+     {
+      "x": 304.0,
+      "y": 1308.0,
+      "text": ",",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 350.0,
+      "y": 1308.0,
+      "text": "già",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 484.0,
+      "y": 1308.0,
+      "text": "tostate.",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|'NZUDDI FINTI": 868.0,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|farina": 212.0,
+    "regular|73|di": 66.0,
+    "bold|73|GRANO": 296.0,
+    "regular|73|tenero": 239.96875,
+    "regular|73|tipo": 140.0,
+    "regular|73|00,": 115.0,
+    "regular|73|zucchero,": 352.96875,
+    "bold|73|LATTE": 253.9375,
+    "regular|73|,": 23.0,
+    "bold|73|MANDORLE": 467.0,
+    "bold|73|BURRO": 289.0,
+    "regular|73|pasta": 203.0,
+    "regular|73|d'arancia,": 360.0,
+    "regular|73|miele,": 224.0,
+    "regular|73|più": 112.0,
+    "bold|73|NOCI": 204.0,
+    "regular|73|già": 111.0,
+    "regular|73|tostate.": 283.0
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  },
+  {
+   "id": "minimal",
+   "title": "ACQUA",
+   "ingredients": "INGREDIENTI: acqua.",
+   "defects": [],
+   "check": {
+    "errors": [],
+    "warnings": []
+   },
+   "layout": {
+    "lines": 1,
+    "endY": 327.0,
+    "tooLong": false,
+    "texts": [
+     {
+      "x": 876.546875,
+      "y": 392,
+      "text": "di MARIA ROSSI FINTA",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 419.0078125,
+      "y": 480,
+      "text": "VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 1046.0,
+      "y": 952.0,
+      "text": "ACQUA",
+      "font": "title",
+      "px": 128
+     },
+     {
+      "x": 100,
+      "y": 1208.0,
+      "text": "INGREDIENTI:",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 625.0,
+      "y": 1208.0,
+      "text": "acqua.",
+      "font": "regular",
+      "px": 73
+     },
+     {
+      "x": 108,
+      "y": 1720,
+      "text": "PRODOTTO IL:",
+      "font": "bold",
+      "px": 56
+     }
+    ]
+   },
+   "widths": {
+    "regular|73|di MARIA ROSSI FINTA": 806.90625,
+    "regular|73|VIA DELLE PROVE, 12 - 00000 - FINTOPOLI (XX)": 1721.984375,
+    "title|128|ACQUA": 468.0,
+    "regular|73| ": 23.0,
+    "regular|73|INGREDIENTI:": 502.0,
+    "regular|73|acqua.": 245.0
+   },
+   "zplHead": "~SD28\n^XA\n^PW640\n^LL480\n^LH0,0\n^POI\n^PR2\n^PQ1\n"
+  }
+ ]
+}
