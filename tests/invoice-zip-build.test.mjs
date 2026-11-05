@@ -105,12 +105,75 @@ test('eggs are pieces with the egg weight; a tray of 30 is a carton of 30 eggs',
   assert.equal(ingredient(c.build({ eggWeightG: 52 }), 'uova').unitWeightKg, 0.052);
 });
 
-test('a carton of 55 pieces weighing 2 kg is priced per kg of the carton, not of 55 cartons', () => {
+test('a carton of 55 pieces weighing 2 kg is 55 pieces of 36.4 g, priced per piece, not 55 cartons', () => {
   const c = newCase();
   c.add([{ desc: 'BRIOCHE MIGNON 35/40gr 2Kg* 55pz', code: 'BR1', qty: 1, unit: 'CT', total: 14.5 }]);
   const brioche = ingredient(c.build(), 'BR1');
-  assert.equal(brioche.priceUnit, 'kg');
-  assert.equal(brioche.prices[0].pricePerUnit, 7.25);
+  assert.deepEqual([brioche.priceUnit, brioche.weight, brioche.packCount, brioche.unitWeightKg], ['pcs', '36.4 g', 55, 0.0364]);
+  assert.equal(brioche.prices[0].pricePerUnit, 0.2636); // 14.5 / 55
+  // Per kilo it is still the carton's price per kilo (14.5 / 2 kg = 7.25), to within the rounding of a piece.
+  assert.ok(Math.abs(brioche.prices[0].pricePerUnit / brioche.unitWeightKg - 7.25) < 0.02);
+});
+
+// ⚠️ HIS RULE (5 Nov 2026): goods counted in pieces are priced per piece with the piece weight beside it; goods sold
+// by weight stay per kilo. Invented invoices shaped like the real ones.
+test('a product counted in pieces is priced per piece, with the piece weight and no «busta»', () => {
+  const c = newCase();
+  c.add([
+    { desc: 'SG.CR.1980 PF VUOTO 85gr* 50pz', code: 'CR1', qty: 1, unit: 'CT', total: 23.2 },
+    { desc: 'CORNETTO ESEMPIO PZ.50 GR.85', code: 'CR2', qty: 2, unit: 'CT', total: 57 },
+    { desc: 'CORNETTO CEREALI GR.85X50P', code: 'CR3', qty: 1, unit: 'CT', total: 35 },
+    { desc: 'PANZEROTTI CREMA PZ.25 GR.170', code: 'PZ1', qty: 1, unit: 'PZ', total: 24.5 },
+  ]);
+  const result = c.build();
+  const cornetti = ingredient(result, 'CR1');
+  assert.deepEqual(
+    [cornetti.priceUnit, cornetti.unitWeightKg, cornetti.weight, cornetti.packCount, cornetti.packUnit],
+    ['pcs', 0.085, '85 g', 50, ''],
+    'the app names the piece with the venue\'s own word (invoice-import-model.js), never the default «busta»',
+  );
+  assert.deepEqual([cornetti.prices[0].pricePerUnit, cornetti.prices[0].qty], [0.464, 50]);
+  assert.equal(cornetti.prices[0].fromPack, undefined, 'a price per piece is never re-read with a stored pack weight');
+  assert.equal(product(result, 'CR1').reliability, 'media');
+  assert.deepEqual([ingredient(result, 'CR2').priceUnit, ingredient(result, 'CR2').prices[0].pricePerUnit], ['pcs', 0.57]);
+  assert.deepEqual([ingredient(result, 'CR3').priceUnit, ingredient(result, 'CR3').unitWeightKg], ['pcs', 0.085]);
+  assert.deepEqual([ingredient(result, 'PZ1').priceUnit, ingredient(result, 'PZ1').prices[0].pricePerUnit], ['pcs', 0.98]);
+  // The file the app reads accepts them: a price per piece always carries its piece weight.
+  const parsed = parseImportFile(JSON.stringify(result.importFile));
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.file.ingredients.filter((i) => i.invalid), []);
+});
+
+test('goods sold by weight stay per kilo, even in a carton counted in «pz»', () => {
+  const c = newCase();
+  c.add([
+    { desc: 'DR CIPOLLE FETTE 2,5kg* 4pz', code: 'CI', qty: 1, unit: 'CT', total: 22.8 },
+    { desc: 'PATATE DIPPING KG.2.5X4', code: 'PA', qty: 1, unit: 'CT', total: 40.5 },
+    { desc: 'MOZZARELLA TRIS G 100X3', code: 'MO', qty: 2, unit: 'PZ', total: 5.58 },
+    { desc: 'DETERGENTE POLVERE G 570 (X12PZ)', code: 'DE', qty: 1, unit: 'CT', total: 9.74 },
+  ]);
+  const result = c.build();
+  const onion = ingredient(result, 'CI');
+  assert.deepEqual([onion.priceUnit, onion.weight, onion.packCount, onion.unitWeightKg], ['kg', '2.5 kg', 4, null]);
+  assert.equal(onion.prices[0].pricePerUnit, 2.28);
+  assert.deepEqual([ingredient(result, 'PA').priceUnit, ingredient(result, 'PA').prices[0].pricePerUnit], ['kg', 4.05]);
+  assert.deepEqual([ingredient(result, 'MO').priceUnit, ingredient(result, 'MO').prices[0].pricePerUnit], ['kg', 9.3]);
+  assert.equal(ingredient(result, 'DE').priceUnit, 'kg', 'a 570 g box is not a piece of pastry');
+});
+
+test('sugar sachets «2000x4g» are 8 kg, «1000x4g» 4 kg — not one 4 g pack at 4,032 €/kg', () => {
+  const c = newCase();
+  c.add([
+    { desc: '9014 Vergn zucchero bianco bustina 2000x4g', code: '9014', qty: 1, unit: 'PZ', total: 16.13 },
+    { desc: '9164 Vergn zucchero grezzo bustina 1000x4g', code: '9164', qty: 1, unit: 'PZ', total: 14.34 },
+  ]);
+  const result = c.build();
+  const white = ingredient(result, '9014');
+  assert.deepEqual([white.priceUnit, white.weight, white.packCount], ['kg', '4 g', 2000]);
+  assert.deepEqual([white.prices[0].pricePerUnit, white.prices[0].qty], [2.0163, 8]);
+  assert.equal(product(result, '9014').reliability, 'media');
+  const raw = ingredient(result, '9164');
+  assert.deepEqual([raw.packCount, raw.prices[0].pricePerUnit, raw.prices[0].qty], [1000, 3.585, 4]);
 });
 
 test('six trays of ten eggs is a pack count of sixty', () => {
