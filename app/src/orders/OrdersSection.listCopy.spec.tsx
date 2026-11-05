@@ -366,7 +366,7 @@ describe.each([['on the split', true], ['on a phone', false]] as const)('a suppl
     await act(async () => { await view.router.navigate('/orders/settings'); });
     expect(busy()).toBeNull();
     await view.live.release();
-    await screen.findByText('Past orders', undefined, LOAD);
+    await screen.findByRole('region', { name: 'Settings' }, LOAD);
     expect(view.router.state.location.pathname).toBe('/orders/settings');
     expect(screen.queryByRole('spinbutton')).not.toBeInTheDocument();
   });
@@ -472,6 +472,7 @@ describe('the doors that open anything else, shut on the copy', () => {
   const DOORS: Array<[string, () => HTMLElement]> = [
     ['the row’s list icon', () => screen.getByRole('button', { name: 'Ingredients from Alpine Mills' })],
     ['the settings gear', () => screen.getByRole('button', { name: 'Orders settings' })],
+    ['History', () => screen.getByRole('button', { name: 'History' })],
     ['Incoming', () => screen.getByRole('button', { name: 'Incoming' })],
     ['To re-order', () => screen.getByRole('button', { name: 'To re-order' })],
   ];

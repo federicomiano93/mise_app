@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Bell, ChevronRight } from 'lucide-react';
-import { useLocation, useNavigate } from 'react-router';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Bell } from 'lucide-react';
+import { useLocation } from 'react-router';
 import { todayISO } from '@mise/shared/day';
 import { turningOnForgets } from '@mise/shared/delivery-check';
 import { useT } from '../i18n/useT';
@@ -13,19 +13,18 @@ import { useConfirm } from '../ui/useConfirm';
 import { useOrders, useOrdersStore } from './OrdersContext';
 import { askNoticePermission, noticePermission } from './calendarNotices';
 import type { NoticePermission } from './calendarNotices';
-import { HISTORY_DOOR, SETTINGS_OPENER, useHandBack } from './handBack';
-import { FROM_LIST, cameFromList, useLeave } from './ordersNav';
-import { HISTORY_PATH, ORDERS_PATH } from './ordersPath';
+import { SETTINGS_OPENER, useHandBack } from './handBack';
+import { cameFromList, useLeave } from './ordersNav';
+import { ORDERS_PATH } from './ordersPath';
 import { phoneMuted, phoneToken, rememberPhoneMute } from './phoneMute';
 import { LONG_MS } from './useClearQuantities';
 import styles from './SettingsScreen.module.css';
 
-// «Settings» of Orders, at /orders/settings (step 3f-4), one level below the list. For now it holds ONE door, «Past orders»
-// (History) and the goods-arrived switch (step 3f-5); the rest of the Orders settings arrive with slice 3f-8. Back is Back (P20).
+// «Settings» of Orders, at /orders/settings (step 3f-4), one level below the list. For now it holds the goods-arrived switch
+// (step 3f-5) and this phone's alerts; the rest of the Orders settings arrive with slice 3f-8. Back is Back (P20).
 export function SettingsScreen() {
   const { t } = useT();
   const { state } = useLocation();
-  const navigate = useNavigate();
   const { config, configLoaded, deliveryCheck } = useOrders();
   const [confirm, confirmDialog] = useConfirm();
   const store = useOrdersStore();
@@ -47,36 +46,16 @@ export function SettingsScreen() {
   // What this phone's browser says about notifications; the button asks, and the answer redraws.
   const [permission, setPermission] = useState<NoticePermission>(noticePermission);
   const title = useRef<HTMLHeadingElement>(null);
-  const screen = useRef<HTMLElement>(null);
-  const door = useCallback((node: HTMLButtonElement | null) => { handBack.register(HISTORY_DOOR, node); }, [handBack]);
 
   useEffect(() => {
-    // Opened from the list the page leaves the focus alone (FROM_LIST): it goes to this title, once. ⚠️ NOT when Back from History
-    // has just given it to the door: the hand-back runs before this effect.
-    if (cameFromList(state) && !screen.current?.contains(document.activeElement)) title.current?.focus();
+    // Opened from the list the page leaves the focus alone (FROM_LIST): it goes to this title, once.
+    if (cameFromList(state)) title.current?.focus();
   }, []);
 
   return (
-    <section ref={screen} className={styles.screen} aria-labelledby={titleId}>
+    <section className={styles.screen} aria-labelledby={titleId}>
       <FormBar backLabel={t('ui.back')} onBack={leave} title={t('ord.settings.title')} titleId={titleId} titleRef={title} />
       <div className={styles.body}>
-        <div className={styles.card}>
-          <Button
-            ref={door}
-            variant="bare"
-            className={styles.door}
-            onPress={() => {
-              handBack.expect(HISTORY_DOOR);
-              void navigate(HISTORY_PATH, { state: FROM_LIST });
-            }}
-          >
-            <span className={styles.text}>
-              <span className={styles.doorTitle}>{t('ord.settings.openHistory')}</span>
-              <span className={styles.sub}>{t('ord.settings.historyDaysLine', { n: config.historyDays })}</span>
-            </span>
-            <ChevronRight aria-hidden="true" />
-          </Button>
-        </div>
         {/* ⚠️ ONE SWITCH FOR THE WHOLE VENUE (decision F4): every phone must agree about what is owed. Only an owner or a manager
             flips it (the rules' canManage on config/orders), so a person without that sees it OFF-limits and told why, rather
             than a switch that answers «refused» after the tap. */}

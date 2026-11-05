@@ -3,9 +3,9 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import { addDays, parseISODate, todayISO, toISODate } from '@mise/shared/day';
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
-import { LOAD, ingredient, renderOrders, supplier } from '../testing/renderOrders';
+import { LOAD, ingredient, renderOrders, split, supplier } from '../testing/renderOrders';
 
-// «Orders», step 3f-4: the settings, «Past orders» (History) with its cards, the older orders on demand, «Send again» and «Send all»,
+// «Orders», step 3f-4: the settings, History with its cards, the older orders on demand, «Send again» and «Send all»,
 // and the editor that corrects or deletes a recorded order.
 
 beforeAll(async () => { await import('./OrdersSection'); }, 60_000);
@@ -58,13 +58,13 @@ function fortnight(): Record<string, Record<string, unknown>> {
 
 async function atHistory(source: FakeOrdersSource, options: Parameters<typeof renderOrders>[1] = {}) {
   const view = renderOrders('/orders/history', { source, ...options });
-  await screen.findByRole('region', { name: /^(Past orders|Ordini passati)$/ }, LOAD);
+  await screen.findByRole('region', { name: /^(History|Storico)$/ }, LOAD);
   await waitFor(() => { expect(screen.queryByText('Loading…')).not.toBeInTheDocument(); }, LOAD);
   return view;
 }
 type View = Awaited<ReturnType<typeof atHistory>>;
 
-const history = () => within(screen.getByRole('region', { name: 'Past orders' }));
+const history = () => within(screen.getByRole('region', { name: 'History' }));
 const card = (name: string, index = 0) => history().getAllByRole('button', { name: new RegExp(`^${name}`) })[index] as HTMLElement;
 const editor = () => within(screen.getByRole('region', { name: 'Correct order' }));
 const dialog = () => screen.findByRole('alertdialog', undefined, LOAD);
@@ -88,7 +88,7 @@ async function openCard(view: View, name: string, index = 0) {
 }
 
 describe('the settings and the way to History', () => {
-  it('opens the settings from the gear, History from its door, and Back steps up ONE level handing the focus back each time', async () => {
+  it('opens the settings from the gear, without History among them, and Back steps up ONE level handing the focus back', async () => {
     const source = seeded(fortnight(), { ordersConfig: { historyDays: 30 } });
     const view = renderOrders('/orders', { source });
     await screen.findAllByRole('listitem', undefined, LOAD);
@@ -96,33 +96,55 @@ describe('the settings and the way to History', () => {
     await view.user.click(gear);
     const settings = within(await screen.findByRole('region', { name: 'Settings' }));
     expect(path(view)).toBe('/orders/settings');
-    expect(settings.getByText('Shows the last 30 days')).toBeInTheDocument();
+    // ⚠️ History left the settings (Federico, 3 Nov 2026): it is beside the gear, and nowhere else.
+    expect(settings.queryByRole('button', { name: /History|Past orders/ })).not.toBeInTheDocument();
 
-    await view.user.click(settings.getByRole('button', { name: /^Past orders/ }));
-    await screen.findByRole('region', { name: 'Past orders' });
-    expect(path(view)).toBe('/orders/history');
-
-    await view.user.click(history().getByRole('button', { name: 'Back' }));
-    await waitFor(() => { expect(path(view)).toBe('/orders/settings'); });
-    // The settings are drawn again, and the door that opened History has the focus.
-    const again = within(await screen.findByRole('region', { name: 'Settings' }));
-    await waitFor(() => { expect(again.getByRole('button', { name: /^Past orders/ })).toHaveFocus(); });
-
-    await view.user.click(again.getByRole('button', { name: 'Back' }));
+    await view.user.click(settings.getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(path(view)).toBe('/orders'); });
     await waitFor(() => { expect(gear).toHaveFocus(); });
   });
 
-  it('says «the last day» for a window of one', async () => {
-    renderOrders('/orders/settings', { source: seeded({}, { ordersConfig: { historyDays: 1 } }) });
-    expect(await screen.findByText('Shows the last day', undefined, LOAD)).toBeInTheDocument();
+  it('opens History from the door beside the gear, and Back returns to the list with the focus on that door', async () => {
+    const view = renderOrders('/orders', { source: seeded() });
+    await view.user.click(await screen.findByRole('button', { name: 'History' }, LOAD));
+    await screen.findByRole('region', { name: 'History' }, LOAD);
+    expect(path(view)).toBe('/orders/history');
+    await waitFor(() => { expect(history().getByRole('heading', { name: 'History' })).toHaveFocus(); });
+
+    await view.user.click(history().getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(path(view)).toBe('/orders'); });
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'History' })).toHaveFocus(); });
+  });
+
+  it('keeps the door with no supplier yet: past orders outlive the suppliers they went to', async () => {
+    const view = renderOrders('/orders', { source: fakeOrdersSource({ records: fortnight() }) });
+    await view.user.click(await screen.findByRole('button', { name: 'History' }, LOAD));
+    await screen.findByRole('region', { name: 'History' }, LOAD);
+  });
+
+  it('on the split, the door tapped from the editor is one step up: the next Back reaches the list at once', async () => {
+    split();
+    const view = renderOrders('/orders', { source: seeded(fortnight()) });
+    const door = await screen.findByRole('button', { name: 'History' }, LOAD);
+    await view.user.click(door);
+    await screen.findByRole('region', { name: 'History' }, LOAD);
+    await openCard(view, 'Alpine Mills');
+    await view.user.click(history().getAllByRole('button', { name: 'Correct' })[0] as HTMLElement);
+    await screen.findByRole('region', { name: 'Correct order' });
+
+    await view.user.click(door);
+    await waitFor(() => { expect(path(view)).toBe('/orders/history'); });
+    await screen.findByRole('region', { name: 'History' });
+    await view.user.click(history().getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(path(view)).toBe('/orders'); });
+    await waitFor(() => { expect(door).toHaveFocus(); });
   });
 
   it('opened by its address, Back replaces it with the level above instead of piling up entries', async () => {
     const view = renderOrders('/orders/history', { source: seeded() });
-    await screen.findByRole('region', { name: 'Past orders' }, LOAD);
+    await screen.findByRole('region', { name: 'History' }, LOAD);
     await view.user.click(history().getByRole('button', { name: 'Back' }));
-    await waitFor(() => { expect(path(view)).toBe('/orders/settings'); });
+    await waitFor(() => { expect(path(view)).toBe('/orders'); });
     expect(view.router.state.historyAction).toBe('REPLACE');
   });
 
@@ -574,10 +596,10 @@ describe('the editor', () => {
     await waitFor(() => { expect(path(view)).toBe('/orders/history'); });
     expect(source.records.has(ID)).toBe(false);
     expect(await screen.findByText('Order deleted')).toBeInTheDocument();
-    await screen.findByRole('region', { name: 'Past orders' });
+    await screen.findByRole('region', { name: 'History' });
     expect(history().queryByRole('button', { name: /^Alpine Mills3 items/ })).not.toBeInTheDocument();
     // The «Correct» that opened the editor went with the order: History's title takes the focus, never the page.
-    await waitFor(() => { expect(history().getByRole('heading', { name: 'Past orders' })).toHaveFocus(); });
+    await waitFor(() => { expect(history().getByRole('heading', { name: 'History' })).toHaveFocus(); });
   });
 
   it('writes nothing on a delete when the order changed meanwhile, says so, and goes back', async () => {
@@ -681,7 +703,7 @@ describe('the place in History on a phone', () => {
     await screen.findByRole('region', { name: 'Correct order' });
     // The editor starts at the top; History is not drawn but it is still there.
     expect(area.scrollTop).toBe(0);
-    expect(screen.queryByRole('region', { name: 'Past orders' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'History' })).not.toBeInTheDocument();
     await view.user.click(editor().getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(path(view)).toBe('/orders/history'); });
     await waitFor(() => { expect(area.scrollTop).toBe(640); });
@@ -702,10 +724,9 @@ describe('the place in History on a phone', () => {
 
 describe('in Italian', () => {
   it('speaks Italian on every new screen', async () => {
-    const view = renderOrders('/orders/settings', { source: seeded(fortnight()), lang: 'it' });
-    await screen.findByRole('region', { name: 'Impostazioni' }, LOAD);
-    await view.user.click(screen.getByRole('button', { name: /^Ordini passati/ }));
-    const list = within(await screen.findByRole('region', { name: 'Ordini passati' }));
+    const view = renderOrders('/orders', { source: seeded(fortnight()), lang: 'it' });
+    await view.user.click(await screen.findByRole('button', { name: 'Storico' }, LOAD));
+    const list = within(await screen.findByRole('region', { name: 'Storico' }, LOAD));
     expect(list.getByRole('button', { name: 'Manda tutti' })).toBeInTheDocument();
     await view.user.click(list.getAllByRole('button', { name: /^Alpine Mills/ })[0] as HTMLElement);
     expect(list.getAllByRole('button', { name: 'Manda di nuovo' }).length).toBeGreaterThan(0);

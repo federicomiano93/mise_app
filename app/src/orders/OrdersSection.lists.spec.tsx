@@ -460,7 +460,7 @@ describe('one list, against the order that moved on', () => {
     const draft = { entries: { 'i-flour': { qty: 0 }, 'i-rye': { qty: 2 } }, days: {} };
     const source = seeded({ 'r-1': list({ date: day, createdAt: `${day}T09:00:00.000Z` }) }, { draft, records: { [`${day}_s-alp`]: record } });
     const view = renderOrders('/orders/history', { source });
-    const history = within(await screen.findByRole('region', { name: 'Past orders' }, LOAD));
+    const history = within(await screen.findByRole('region', { name: 'History' }, LOAD));
     await view.user.click(await history.findByRole('button', { name: 'Load older orders' }, LOAD));
     await waitFor(() => { expect(history.queryByRole('button', { name: 'Load older orders' })).not.toBeInTheDocument(); });
     await act(async () => { await view.router.navigate('/orders/lists/r-1'); });

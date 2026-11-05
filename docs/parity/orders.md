@@ -1345,3 +1345,28 @@ ticks), keyboard alone end to end, and the empty and refused states, which only 
 **P13.** Lists carry the sender's uid and name, or no name, never an address (H1). `fcm-tokens/<token>.muteOrderRequests` is a yes/no about
 a phone, already written by the current app. Nothing new is kept on the phone: `push-token` and `push-mute-order-requests` are the
 current app's keys, outside `KEEP_PREFIXES`.
+
+## History beside the gear (3 Nov 2026, his decision) — as built
+
+Federico wrote from the tablet that he could not find the order history, and asked for it in Orders beside Settings.
+
+**A difference from the current app (H7), asked by him.** The door left the Settings and sits on the list, beside the gear: the
+current app keeps it inside Settings («Ordini passati»). The current app was not changed.
+
+**Choices made for him, to tell him.**
+- The word is «Storico» / «History», on the door and on the screen title alike: one dictionary key, so they cannot drift apart
+  again. It was «Ordini passati» / «Past orders».
+- The door has its word as well as its icon, unlike the gear: being found is its whole purpose.
+- It MOVED rather than being doubled: Settings no longer holds it, and Back from History goes to the list, the focus on the door.
+- The line «Mostra gli ultimi N giorni» under the old door is gone with it. The setting itself is not touched: `historyDays` still
+  decides the window, and its field arrives with 3f-8.
+- History and the gear are one block that wraps together. Loose, on the tablet column the gear fell alone onto a row of its own
+  and the search box shrank to «Cerca u». On that column, and on a phone, the block has its own row and «Storico» fills it.
+
+- While the list draws from the local copy, an empty place the size of «Manda» stands where it will appear (`.sendPlace`): arriving
+  with the live data it would otherwise push the block onto a new row and every supplier 56px down, just as a finger lands.
+- A visit through the door starts at the top of History. On the split, tapped from History's editor or day screen, the door is one
+  step up, like their Back, so the next Back reaches the list at once.
+
+**Driven:** `algprobe/mise-drive/drive-mise2-history-door.mjs` (owner IT 1280/1024/768/360/296, owner EN 1024/360/296, employee 360).
+Not driven on the real tablet: no new CSS or JS feature is involved.
