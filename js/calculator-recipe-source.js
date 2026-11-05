@@ -18,7 +18,7 @@ import { ridOf, withRowIds } from './catalogue/guided-model.js';
 // The Catalogue's own unit table, never a copy of it: a second table is a second
 // place for kg to drift. No new coupling either — guided-model.js above already
 // imports catalogue-model.js, so this file depended on it before this import.
-import { ingredientGrams, isWeighableUnit } from './catalogue/catalogue-model.js';
+import { ingredientGrams, isWeighableUnit, keepRows } from './catalogue/catalogue-model.js';
 
 // ── What can go wrong, named ─────────────────────────────────────────────────
 //
@@ -159,7 +159,8 @@ export function resolveRecipe(recipe, catalogueById) {
   }
 
   const rows = Array.isArray(source.ingredients) ? source.ingredients : [];
-  const usable = rows.filter(r => r && String(r.label || '').trim());
+  // keepRows, not filter: a blank row that carried a divider line hands it to the row above.
+  const usable = keepRows(rows, r => r && String(r.label || '').trim());
   if (!usable.length) {
     return { ...blank(), name: source.name || recipe.name || '', linked: true, problem: PROBLEMS.empty };
   }
@@ -191,10 +192,15 @@ export function resolveRecipe(recipe, catalogueById) {
   const wanted = String(recipe.leaveningRid || '').trim();
   const leaveningKey = wanted && ingredients.some(i => i.key === wanted) ? wanted : null;
 
+  // ⚠️ A SEPARATE LIST, NEVER A FLAG ON `ingredients`: those rows flow into sheetRecipe() and from
+  // there into the saved Dough history, which must not learn about lines drawn on a PDF.
+  const dividersAfter = usable.flatMap((r, i) => (r.dividerAfter === true ? [i] : []));
+
   return {
     name: source.name || recipe.name || '',
     ingredients,
     leaveningKey,
+    ...(dividersAfter.length ? { dividersAfter } : {}),
     linked: true,
     problem: null,
     problemRow: '',
