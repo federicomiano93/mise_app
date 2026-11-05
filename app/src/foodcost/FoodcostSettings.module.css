@@ -1,0 +1,79 @@
+/* The Food cost settings: a card holding the form bar and one card with the hourly labour cost. On
+   the split it is the right-hand pane; below 1000px it replaces the list.
+
+   ⚠️ NOTHING ON THE OUTER CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the
+   shell's scrolling area, and a clipping ancestor would turn it into an ordinary row. */
+
+.settings {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.loading {
+  padding: var(--s6);
+  color: var(--ink-2);
+}
+
+.body {
+  padding: var(--s4);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.cardTitle {
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.label {
+  font-weight: 600;
+}
+
+/* 18px type on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
+.input {
+  width: 100%;
+  max-width: 240px;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+.isError,
+.isError:focus {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}

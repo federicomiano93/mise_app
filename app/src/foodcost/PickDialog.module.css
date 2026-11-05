@@ -1,0 +1,95 @@
+/* The chooser of a recipe, an ingredient or a packaging item: a search box over a list, inside the
+   app's dialog. The list scrolls on its own so the Back button is never pushed out of reach. */
+
+.search {
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  /* 18px on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
+  font: 450 var(--fs-lg) var(--font);
+}
+
+.search::placeholder {
+  color: var(--ink-3);
+}
+
+.search:focus {
+  border-color: var(--accent);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  max-height: 50vh;
+  max-height: 50dvh;
+  overflow-y: auto;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.heading {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  border: 0;
+  border-radius: var(--r-sm);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.row:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--sunken);
+  }
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.meta {
+  flex: none;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.empty {
+  padding: var(--s3);
+  color: var(--ink-2);
+}

@@ -6,8 +6,9 @@
 // call markBusy() while it does, and release it when saved or discarded; a self-started reload
 // waits until nobody is. Today it is called by the Pastries editor (pastries/Editor.tsx, from the
 // first change until it is saved or discarded) and by the quick correction of one number on a day's
-// list (pastries/DayPanel.tsx, while a number is typed and not yet written). Each new editor adds
-// itself here.
+// list (pastries/DayPanel.tsx, while a number is typed and not yet written). Food cost holds it in the product
+// editor while dirty, in Settings while dirty, and while a save is in the air (foodcost/ProductForm.tsx,
+// FoodcostSettings.tsx, FoodcostContext.tsx). Each new editor adds itself here.
 
 const holders = new Set<symbol>();
 

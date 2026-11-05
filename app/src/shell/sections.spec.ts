@@ -179,12 +179,32 @@ describe('screenNameFor', () => {
     expect(screenNameFor(pathname)).toBe(expected);
   });
 
+  // Food cost is four screens in one section: the list, a product (new or existing), its margin
+  // history and Settings.
+  it.each([
+    ['/food-cost', 'foodcost'],
+    ['/food-cost/', 'foodcost'],
+    ['/food-cost/new', 'foodcost-product'],
+    ['/food-cost/product/abc', 'foodcost-product'],
+    ['/food-cost/product/a%2Fb%20c/', 'foodcost-product'],
+    ['/food-cost/product/abc/history', 'foodcost-history'],
+    ['/food-cost/settings', 'foodcost-settings'],
+    ['/food-cost/product', 'foodcost'],
+    ['/food-cost/product/a/b', 'foodcost'],
+    ['/food-cost/product/a/history/more', 'foodcost'],
+    ['/food-cost/settings/more', 'foodcost'],
+    ['/food-cost/nonsense', 'foodcost'],
+    ['/food-cost-archive', 'not-found'],
+  ])('%s → %s', (pathname, expected) => {
+    expect(screenNameFor(pathname)).toBe(expected);
+  });
   // The usage record silently drops a name it does not accept: a new section whose id broke the
   // rule would simply never be counted.
   it('only ever gives a name the usage record accepts, «m2:» included', () => {
     const names = [
       ...SECTIONS.map(section => section.id), 'pastries-records', 'pastries-editor', 'more', 'not-found',
       'stocktake-product', 'stocktake-cost', STOCKTAKE_UNAVAILABLE_SCREEN,
+      'foodcost-product', 'foodcost-history', 'foodcost-settings',
     ];
     for (const name of names) expect(`m2:${name}`).toMatch(SCREEN_RE);
   });
