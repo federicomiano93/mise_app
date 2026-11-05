@@ -64,6 +64,7 @@ function StatusLine() {
     snapshot.draftBroken ? t('ord.live.draft') : '',
     snapshot.suppliersBroken ? t('ord.live.suppliers') : '',
     snapshot.ingredientsBroken ? t('ord.live.ingredients') : '',
+    snapshot.historyBroken ? t('ord.live.history') : '',
   ].filter(what => what !== '');
   return (
     <div role="status" className={styles.status}>

@@ -63,7 +63,7 @@ describe('ordersStore — loading', () => {
     expect(snap.suppliersLoaded && snap.ingredientsLoaded && snap.configLoaded && snap.draftLoaded).toBe(true);
     expect(snap.config.showStock).toBe(false);
     expect(snap.draft.entries.flour).toEqual({ qty: 3, stock: 1 });
-    expect(h.source.openListeners()).toBe(4);
+    expect(h.source.openListeners()).toBe(5);
   });
 
   it('a stream that dies is said (no resubscribe) instead of showing an old order as live', async () => {

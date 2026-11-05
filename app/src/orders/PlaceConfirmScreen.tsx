@@ -166,10 +166,15 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
   const { t } = useT();
   const { state } = useLocation();
   const store = useOrdersStore();
-  const { placing } = useOrders();
+  const { placing, suggester } = useOrders();
   const say = useStatusMessage();
   const [confirm, confirmDialog] = useConfirm();
   const titleId = useId();
+  const usualIdBase = useId();
+  // ⚠️ THE «EXTRA DIGIT» LINE IS WRITTEN ONLY AFTER THE FIRST PAINT: its status region must be on the page before it speaks,
+  // or a row already unusual when the screen opens is never announced (review of 3f-2b).
+  const [speaking, setSpeaking] = useState(false);
+  useEffect(() => { setSpeaking(true); }, []);
   const title = useRef<HTMLHeadingElement>(null);
   const dt = dayTranslate(t);
   const today = todayISO();
@@ -247,6 +252,12 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
   const exists = !several && first?.exists === true;
   const heading = several ? t('ord.confirm.titleMany') : exists ? t('ord.confirm.titleAdd') : t('ord.orderPlaced');
   const action = !several && exists ? t('ord.confirm.addToIt') : t('ord.orderPlaced');
+
+  // The usual amount of each row whose typed quantity looks like a typing mistake, asked again on every keystroke of the
+  // CURRENT history (not frozen with the working copy).
+  const usualOf = (supplierId: string, row: { id: string; unit: string }): number | null =>
+    suggester.usualFor({ id: row.id }, row.unit, typed[supplierId]?.[row.id] ?? 0);
+  const anyUnusual = groups.some(group => group.rows.some(row => usualOf(group.supplierId, row) !== null));
 
   const nameOfLine = (supplierId: string, ingredientId: string): string => {
     const line = lens.linesOf(supplierId).find(candidate => candidate.id === ingredientId);
@@ -336,6 +347,11 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
       <FormBar backLabel={t('ui.back')} onBack={leave} title={heading} titleId={titleId} titleRef={title} />
       <div className={styles.body}>
         <p className={styles.lead}>{t('ord.confirm.aboutToRecord')}</p>
+        {/* ⚠️ THE CONTAINER IS THERE FROM THE START and only its text changes: a live region inserted already filled is not
+            announced. */}
+        <div role="status" aria-live="polite">
+          {speaking && anyUnusual ? <p className={styles.check}>{t('ord.checkExtraDigit')}</p> : null}
+        </div>
         {groups.map(group => (
           <div key={group.supplierId} className={styles.group}>
             <div className={styles.groupHead}>
@@ -349,10 +365,15 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
               <p className={styles.note}>{t('ord.confirm.recordedAsToday', { day: spellLongDate(today, dt) })}</p>
             ) : null}
             <ul className={styles.rows}>
-              {group.rows.map(row => (
-                <li key={row.id} className={styles.row}>
+              {group.rows.map(row => {
+                const usual = usualOf(group.supplierId, row);
+                const usualId = `${usualIdBase}-${group.supplierId}-${row.id}`;
+                return (
+                <li key={row.id} className={styles.row} data-unusual={usual !== null}>
                   <span className={styles.name}>{row.name}</span>
+                  {usual !== null ? <span id={usualId} className={styles.usual}>{t('ord.confirm.usually', { n: usual })}</span> : null}
                   <NumberBox
+                    describedBy={usual !== null ? usualId : undefined}
                     value={typed[group.supplierId]?.[row.id] ?? 0}
                     className={styles.box}
                     ariaLabel={t('ord.confirm.qtyFor', { name: row.name })}
@@ -362,7 +383,8 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
                   />
                   <span className={styles.unit}>{row.unit}</span>
                 </li>
-              ))}
+                );
+              })}
             </ul>
           </div>
         ))}

@@ -76,6 +76,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
       row={row}
       entry={entries[row.ingredient.id]}
       showStock={showStock}
+      hint={row.elsewhere ? { kind: 'none' } : snapshot.suggester.hint(row.ingredient, entries[row.ingredient.id])}
       onEdit={(edited, edit) => { store.editLine(supplier, edited.ingredient, edit); }}
     />
   );

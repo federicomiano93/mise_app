@@ -874,3 +874,44 @@ may say «not saved»: a refused clear is said as «recorded, but the lines are 
 own, which can land over a colleague's newer day in the same second.
 
 **P13.** This slice stores no personal data: an order record holds suppliers, ingredients, quantities and dates.
+
+## Step 3f-2b as built — the suggestion and the unusual quantity
+
+Items L27 (the hint itself), L28 and L29, and X2's unusual warning. Rules unchanged: the current app already reads `orders-history`
+with the same query (`date >=` the window's start), allowed by `canUse(lid, 'orders')`.
+
+**Shared.** `suggestions` (full, paired) and `history-window` (full, paired: the live window, and the paging and History foot
+that 3f-4 will use).
+
+**Data.** `ordersSource.ts`: a fifth listener, `watchRecentHistory` — the last two calendar months, as the current app.
+`orders/suggester.ts` (pure): ONE engine per snapshot of the records and the cards, kept in the store's snapshot and asked by the
+row, the Stock box and the confirm screen alike. `ordersStore.ts`: a Stock reading may fill the Order box (below); a fill stamps
+the day like typing, a reading alone never does (L28).
+
+**Screens.** The line under a row's name: «Suggerito: N» in the accent ink, or — taking its place, never both (L29) — «Molto più
+del solito (circa N)» in the danger ink; the Order box is described by it. The confirm screen: «di solito circa N» under the row,
+the box outlined, and «Controlla che non ci sia una cifra di troppo.» once above the suppliers while a row is unusual (a status
+region present from the start); all recomputed on every keystroke.
+
+**Differences from the current app, on purpose (tell him):**
+- S1. **A Stock reading never overwrites a number typed by hand** (his decision, 28 Oct 2026). It fills the Order box only when the
+  box is empty or still holds the suggestion of the previous reading — so typing a reading digit by digit follows it, and a
+  number typed by hand stays, with the new «Suggerito: N» beside it. The current app overwrites the Order box at every reading.
+- S2. **A reading that leaves the suggestion where the box already is writes no quantity and stamps no day** (the current app
+  restamps the day at every reading while a suggestion is active, even when nothing changes).
+- S3. **The confirm screen checks the unit the row SHOWS** (frozen when it opened), not the live line's unit.
+- S4. **The warnings are read by a screen reader with the box** (`aria-describedby`); the current app's are visual only.
+
+**Found in the review (tell him, low):**
+- A reading that brings the suggestion to 0 on a line SENT HERE from its usual supplier puts the line back there (the «goes back
+  at zero» rule of L23): the row leaves the screen under the finger. The current app does the same, more often.
+- «A number typed by hand is never overwritten» holds on ONE tablet: a colleague's reading typed in the second before this
+  tablet's number reaches theirs still fills their empty box, and the last write wins — as with any two people typing the same line.
+- Fixed in the review: a history stream that dies is said on the status line («past orders», L5); the «extra digit» line is
+  announced even when the screen opens with it; the read of `orders-history` is pinned as bounded (`ordersSource.history.spec.ts`,
+  as the current app's `history-bounded-read` test).
+
+**Left as in the current app:** «Suggerito: 0» shows when the shelf already holds the usual level; a supplier ordered monthly
+seldom has 4 orders in the two-month window, so it seldom gets a suggestion (his trade-off of 4 Oct 2026).
+
+**P13.** No personal data: the records hold suppliers, ingredients, quantities and dates.

@@ -5,7 +5,9 @@ import type { OrdersMeta, OrdersSource, StoredDoc } from '../orders/ordersSource
 // document and every watcher is told AT ONCE (Firestore shows its pending writes), and a refused write is taken back and
 // the watchers are told again — then its promise rejects. `holdWrites` keeps the next writes «in the air» (offline) until
 // the returned release is called. From step 3f-2 it also holds the order records (`records`), and each of the three writes of
-// placing can be made to fail once (`fail`), so every step of the sequence has a spec.
+// placing can be made to fail once (`fail`), so every step of the sequence has a spec. From step 3f-2b the records are watched
+// too (`watchRecentHistory`: those dated on or after the window's start; a recorded order is told at once), and `init.records`
+// seeds them.
 type ListListener = { onChange: (list: StoredDoc[], meta: OrdersMeta) => void; onError: (err: unknown) => void };
 type DocListener = { onChange: (data: Record<string, unknown> | null, meta: OrdersMeta) => void; onError: (err: unknown) => void };
 
@@ -20,11 +22,15 @@ export type FakeOrdersSource = OrdersSource & {
   // The next draft writes are refused (the rules said no).
   refuseWrites: boolean;
   // The next watches fail (the rules refused them, or the stream died).
-  refuse: { suppliers: boolean; ingredients: boolean; config: boolean; draft: boolean };
+  refuse: { suppliers: boolean; ingredients: boolean; config: boolean; draft: boolean; history: boolean };
   // Another phone writes the draft: merged like a setDoc merge, then every watcher is told.
   remoteMerge(payload: Record<string, unknown>): void;
   // Every watcher is told again (e.g. after the maps were changed by hand).
   emit(): void;
+  // The window's start the store asked for (null before it watched).
+  historyFrom: string | null;
+  // Every history watcher is told again (after `records` was changed by hand).
+  emitHistory(): void;
   // How many listeners are open now.
   openListeners(): number;
   // Keeps every later write waiting until the returned function is called (then they settle, in order).
@@ -56,12 +62,13 @@ function deepMerge(target: Record<string, unknown>, patch: Record<string, unknow
 
 export function fakeOrdersSource(init: {
   suppliers?: StoredDoc[]; ingredients?: StoredDoc[]; ordersConfig?: Record<string, unknown> | null;
-  draft?: Record<string, unknown> | null;
+  draft?: Record<string, unknown> | null; records?: Record<string, Record<string, unknown>>;
 } = {}): FakeOrdersSource {
   const supplierWatchers = new Set<ListListener>();
   const ingredientWatchers = new Set<ListListener>();
   const configWatchers = new Set<DocListener>();
   const draftWatchers = new Set<DocListener>();
+  const historyWatchers = new Set<{ from: string; onChange: (list: StoredDoc[]) => void }>();
   let held: Array<() => void> | null = null;
   const fromServer: OrdersMeta = { fromServer: true };
 
@@ -72,7 +79,8 @@ export function fakeOrdersSource(init: {
     draft: init.draft ?? null,
     writes: [],
     refuseWrites: false,
-    refuse: { suppliers: false, ingredients: false, config: false, draft: false },
+    refuse: { suppliers: false, ingredients: false, config: false, draft: false, history: false },
+    historyFrom: null,
 
     watchSuppliers(onChange, onError) {
       const l = { onChange, onError };
@@ -103,6 +111,15 @@ export function fakeOrdersSource(init: {
       return () => { draftWatchers.delete(l); };
     },
 
+    watchRecentHistory(fromDate, onChange, onError) {
+      source.historyFrom = fromDate;
+      if (source.refuse.history) { queueMicrotask(() => onError(new Error('permission-denied'))); return () => {}; }
+      const l = { from: fromDate, onChange };
+      historyWatchers.add(l);
+      queueMicrotask(() => { if (historyWatchers.has(l)) onChange(historyFrom(fromDate)); });
+      return () => { historyWatchers.delete(l); };
+    },
+
     mergeDraft(payload) {
       source.writes.push(payload);
       const before = source.draft;
@@ -122,7 +139,7 @@ export function fakeOrdersSource(init: {
       });
     },
 
-    records: new Map(),
+    records: new Map(Object.entries(init.records ?? {})),
     clears: [],
     recordAttempts: 0,
     fail: { read: false, record: false, clear: false },
@@ -177,6 +194,7 @@ export function fakeOrdersSource(init: {
       // What merge throws (orders/unit-conflict) aborts the write, as in a real transaction.
       const next = { ...merge(existing ? structuredClone(existing) : null), bakery: 'bakery' };
       source.records.set(id, next);
+      tellHistory();
       return next;
     },
 
@@ -190,9 +208,13 @@ export function fakeOrdersSource(init: {
       for (const l of ingredientWatchers) l.onChange([...source.ingredients.values()], fromServer);
       for (const l of configWatchers) l.onChange(source.ordersConfig, fromServer);
       tellDraft();
+      tellHistory();
     },
 
-    openListeners: () => supplierWatchers.size + ingredientWatchers.size + configWatchers.size + draftWatchers.size,
+    emitHistory: () => tellHistory(),
+
+    openListeners: () => supplierWatchers.size + ingredientWatchers.size + configWatchers.size + draftWatchers.size
+      + historyWatchers.size,
 
     holdWrites() {
       held = [];
@@ -203,6 +225,16 @@ export function fakeOrdersSource(init: {
       };
     },
   };
+
+  // `date >= from`, as the query asks: a record with no date (the legacy weekly one) is never in it.
+  function historyFrom(from: string): StoredDoc[] {
+    return [...source.records.entries()]
+      .filter(([, r]) => typeof r.date === 'string' && r.date >= from)
+      .map(([id, r]) => ({ ...structuredClone(r), id }));
+  }
+  function tellHistory() {
+    for (const l of historyWatchers) l.onChange(historyFrom(l.from));
+  }
 
   function tellDraft() {
     const doc = source.draft ? structuredClone(source.draft) : null;

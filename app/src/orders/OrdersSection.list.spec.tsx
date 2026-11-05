@@ -76,7 +76,7 @@ describe('the frame', () => {
   it('opens the four listeners and closes them when the section closes', async () => {
     const source = seeded();
     const view = await loaded('/orders', source);
-    expect(source.openListeners()).toBe(4);
+    expect(source.openListeners()).toBe(5);
     await act(async () => { await view.router.navigate('/stocktake'); });
     await waitFor(() => { expect(source.openListeners()).toBe(0); }, LOAD);
   });
