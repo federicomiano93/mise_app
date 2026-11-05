@@ -55,6 +55,8 @@ export interface FoodcostSnapshot {
   readonly recipes: Readonly<Record<string, StoredDoc>>;
   // The recipes have answered once (or failed, or a local copy was there).
   readonly recipesLoaded: boolean;
+  // The SERVER has answered about the recipes once: only then is «no such recipe» the truth.
+  readonly recipesFromServer: boolean;
   readonly ingredients: Readonly<Record<string, StoredDoc>>;
   readonly ingredientsLoaded: boolean;
   // What an hour of work costs — null until it arrives, and null for ever for anybody who does not
@@ -177,6 +179,7 @@ export function createFoodcostStore(
   let productsStreamFailed = false;
   let recipes: Readonly<Record<string, StoredDoc>> = indexById(bootRecipes);
   let recipesLoaded = Array.isArray(bootRecipes);
+  let recipesFromServer = false;
   let ingredients: Readonly<Record<string, StoredDoc>> = indexById(bootIngredients);
   let ingredientsLoaded = Array.isArray(bootIngredients);
   let labourCostPerHour: number | null = null;
@@ -200,7 +203,7 @@ export function createFoodcostStore(
       tables = { recipes, ingredients, labourCostPerHour };
     }
     return {
-      products, productsLoaded, productsFromServer, recipes, recipesLoaded, ingredients, ingredientsLoaded,
+      products, productsLoaded, productsFromServer, recipes, recipesLoaded, recipesFromServer, ingredients, ingredientsLoaded,
       labourCostPerHour, settingsLoaded, tables, unsent: inFlight > 0,
     };
   }
@@ -319,7 +322,8 @@ export function createFoodcostStore(
       // Borrowed from the catalogue and from Orders. Quiet on failure: they belong to other
       // sections, and a venue may legitimately not use them — a failure only ends the wait.
       stops.push(source.watchRecipes(
-        remote => {
+        (remote, meta) => {
+          if (meta?.fromServer) recipesFromServer = true;
           recipes = indexById(remote);
           recipesLoaded = true;
           writeJson(RECIPES_KEY, remote);

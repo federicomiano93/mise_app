@@ -40,6 +40,7 @@ import * as ingredientKind from './ingredient-kind';
 import * as productLimits from './product-limits';
 import * as vatGuide from './vat-guide';
 import * as catalogueModel from './catalogue-model';
+import * as recipeLink from './recipe-link';
 import * as recipeCostModel from './recipe-cost-model';
 import * as foodcostWeighing from './foodcost-weighing';
 import * as foodcostModel from './foodcost-model';
@@ -92,6 +93,7 @@ import * as legacyProductLimitsJs from '../../js/foodcost/product-limits.js';
 import * as legacyVatGuideJs from '../../js/foodcost/vat-guide.js';
 import { t as legacyT } from '../../js/i18n.js';
 import * as legacyCatalogueModelJs from '../../js/catalogue/catalogue-model.js';
+import * as legacyRecipeLinkJs from '../../js/recipe-link.js';
 import { nameTaken as legacyNameTaken } from '../../js/catalogue/ingredient-suggest.js';
 import * as legacyRecipeCostModelJs from '../../js/catalogue/recipe-cost-model.js';
 import * as legacyFoodcostWeighingJs from '../../js/foodcost/foodcost-weighing.js';
@@ -2217,6 +2219,18 @@ describe('catalogue-model: odd inputs', () => {
     { recipes: 'x' }, { recipes: [null, 5, 'cat-foc', { id: 'cat-foc' }] }, { recipes: [{ id: 'cat-7' }, { id: 'cat-undefined' }, { id: 'cat-null' }, { id: 'cat-' }] },
     { recipes: { 0: { id: 'cat-foc' } } }, Object.create({ recipes: [{ id: 'cat-foc' }] })];
   agree('findCalculatorImport', m.findCalculatorImport, l.findCalculatorImport, product(IMPORT_CONFIGS, [...ODD, 'foc', 'other', 7, '7', 'brioche', ' foc', 'cat-foc', { toString: () => 'foc' }, ['foc']]));
+  // The Calculator import (step 3d-7).
+  const IMPORT_RECIPES: readonly unknown[] = [...ODD, 'recipe', 5, RECIPE_BASE, { id: 'foc', name: 'F' }, { id: 7, name: 5, ingredients: [{ label: 'A', grams: 1.5 }] },
+    { id: 'r', name: 'N', ingredients: [{ label: 'A', grams: 1, unit: 'kg' }, { label: 'B', grams: 3, unit: 'pcs' }, { label: '  ', grams: 2, unit: 'pcs' }, { grams: 'x' }] },
+    { id: 'r', ingredients: 'x' }, { id: 'r', ingredients: [null] }, { id: 'r', ingredients: [{ label: 'Y', grams: 3.6, unit: 'mg' }, { label: 'Z', grams: 0.4, unit: 'l' }] },
+    { id: 'r', name: 'N', ingredients: [{ label: 5, grams: NaN, unit: 'to taste' }, { label: ['a'], unit: 'ml', grams: '7.5' }] }];
+  agree('toCalculatorRecipe', m.toCalculatorRecipe as AnyFn, l.toCalculatorRecipe as AnyFn, product(IMPORT_RECIPES));
+  agree('nonWeighableLabels', m.nonWeighableLabels, l.nonWeighableLabels, product(IMPORT_RECIPES));
+  agree('mergeImportedRecipe', m.mergeImportedRecipe as AnyFn, l.mergeImportedRecipe as AnyFn, product([...IMPORT_CONFIGS, { recipes: [{ id: 'cat-foc', order: 2, visible: true, logic: 'trays', trayWeight: 900 }] },
+    { recipes: [{ id: 'cat-foc' }] }, { recipes: [{ id: 'cat-foc', order: 0, visible: false, logic: 'traysTotal' }, null] }, { other: 1 }],
+  [...ODD, { id: 'cat-foc', name: 'N' }, { id: 'cat-foc', name: 'N', logic: 'total', visible: false, ingredients: [] }, { id: 'cat-new' }, { name: 'no id' }, { id: undefined }]));
+  agree('importFailureKey', m.importFailureKey, l.importFailureKey, product([...ODD, { code: 'permission-denied' }, { code: 'unavailable' }, { code: ['permission-denied'] },
+    new Error('x'), Object.assign(new Error('p'), { code: 'permission-denied' }), { get code(): unknown { throw new Error('boom'); } }]));
   // nameTaken: its original is in ingredient-suggest.js, not catalogue-model.js.
   const NT_NAMES: readonly unknown[] = [...ODD, 'Burro', ' burro ', 'BURRO', 'Farina', 'caputo rosso 00', 'Burro salato', 'Crème F.', 'burro 7', '5', 5, { toString: () => 'burro' }];
   agree('nameTaken', m.nameTaken, legacyNameTaken, product([...SG_INGREDIENTS, [{ name: 'Burro' }, { name: 'Strong flour' }], [{ name: 'Burro', kind: 'packaging' }],
@@ -2817,6 +2831,16 @@ describe('guided-model: odd inputs', () => {
   }
   agree('ridOf', guidedModel.ridOf, legacyGuidedModel.ridOf, product([...ODD, { rid: 'a' }, { rid: ' a ' }, { rid: 5 }, { rid: null }, { rid: '' }, { rid: [] }, { rid: { toString: () => 'o' } },
     Object.create({ rid: 'p' }), { get rid(): unknown { throw new Error('boom'); } }]));
+});
+
+describe('recipe-link: odd inputs', () => {
+  const l = legacyRecipeLinkJs as unknown as typeof recipeLink;
+  const HASHES: readonly unknown[] = [...ODD, '#recipe=abc', 'recipe=abc', '#recipe=a/b', '#recipe=%E0%A4%A', '#recipe=%20x%20', '#other=1&recipe=z', `#recipe=${'x'.repeat(201)}`, { toString: () => '#recipe=obj' }];
+  agree('recipeIdFromHash', recipeLink.recipeIdFromHash, l.recipeIdFromHash, product(HASHES));
+  const LOCS: readonly unknown[] = [...ODD, 'bakery', { sections: {} }, { sections: { foodcost: false, orders: false } }, { sections: { foodcost: true } }, { staffShownCards: { foodcost: true, orders: true } }, { sections: {}, staffShownCards: { foodcost: false } }];
+  const MANAGE: readonly unknown[] = [...ODD, true, 'true'];
+  agree('mayOpenFoodCost', recipeLink.mayOpenFoodCost, l.mayOpenFoodCost, product(LOCS, MANAGE));
+  agree('mayOpenOrders', recipeLink.mayOpenOrders, l.mayOpenOrders, product(LOCS, MANAGE));
 });
 
 describe('log-model: odd inputs', () => {

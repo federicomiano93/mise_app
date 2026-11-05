@@ -19,6 +19,8 @@
 // ⚠️ FIRESTORE COMES FROM THE SESSION'S BACKEND (`firestore()`), never from getFirestore(): its
 // settings are fixed by its first use (src/firestore-access.spec.ts).
 
+import { CONFIG_MODEL, normalizeConfig } from '@mise/shared/calculator-config';
+import { mergeImportedRecipe, toCalculatorRecipe, type CatalogueRecipe, type ImportAction } from '@mise/shared/catalogue-model';
 import { buildPath } from '@mise/shared/location-id';
 import { PRICE_FIELDS } from '@mise/shared/price-model';
 import type { Query } from 'firebase/firestore';
@@ -80,6 +82,11 @@ export interface RecipesSource {
   // The Calculator's configuration (config/calculator) as stored, read ONCE, or null when there is none. Read only
   // to warn before a delete that the recipe was imported into the Calculator.
   getCalculatorConfig(): Promise<Record<string, unknown> | null>;
+  // Copies a recipe into the Calculator's configuration (config/calculator) in ONE transaction on the document as the
+  // server holds it: added at the end, or replaced in place when a copy 'cat-<id>' is already there. NOT local-first —
+  // a transaction needs the server; offline it REJECTS and the screen says so. `marketOrderTitle` is the translated
+  // word the Calculator's normaliser gives a legacy market order (the same one the Calculator passes).
+  importIntoCalculator(recipe: CatalogueRecipe, marketOrderTitle: string): Promise<ImportAction>;
 }
 
 // The recipe fields a person can EMPTY. A merge never deletes a key it is not sent, and the rules refuse a stored null,
@@ -253,6 +260,28 @@ export function createFirestoreRecipesSource(
     removeRecipeDoc: async id => {
       const kit = await firestore();
       await kit.fs.deleteDoc(kit.fs.doc(kit.db, recipesPath, id));
+    },
+
+    // ⚠️ A TRANSACTION, NOT LOCAL-FIRST (js/catalogue/import-to-calculator.js + updateConfigInTransaction): the whole
+    // document is rewritten, so it is read AGAIN inside the transaction, where Firestore re-reads and retries on a
+    // conflict — a concurrent Calculator save is never undone, and the recipe merges into what the SERVER holds now,
+    // not into what this phone last saw (the update function runs once per attempt and keeps nothing between them).
+    // ⚠️ configRev IS BUMPED (the server's + 1) so a Calculator save that loaded the old revision notices (its
+    // reconcileConfigWrite) and keeps the cat-* recipe instead of overwriting it.
+    // ⚠️ THE KEYS ARE normalizeConfig's, the closed list the rules accept and the Calculator's own saveConfig writes;
+    // configModel and the venue stamp come LAST, after the spread, so whatever normalizeConfig carried the document
+    // leaves with this build's shape number and the folder it is written to (never a venue named by a caller).
+    importIntoCalculator: async (recipe, marketOrderTitle) => {
+      const kit = await firestore();
+      const ref = kit.fs.doc(kit.db, configPath, CALCULATOR_DOC);
+      return kit.fs.runTransaction(kit.db, async tx => {
+        const snap = await tx.get(ref);
+        const raw = snap.exists() ? (snap.data() as Record<string, unknown>) : null;
+        const merged = mergeImportedRecipe(normalizeConfig(raw, marketOrderTitle), toCalculatorRecipe(recipe));
+        const configRev = (Number(raw?.configRev) || 0) + 1;
+        tx.set(ref, { ...normalizeConfig(merged.config, marketOrderTitle), configRev, configModel: CONFIG_MODEL, bakery: locationId });
+        return merged.action;
+      });
     },
 
     getCalculatorConfig: async () => {

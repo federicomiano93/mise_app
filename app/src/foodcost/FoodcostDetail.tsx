@@ -3,7 +3,8 @@ import { useFoodcost } from './FoodcostContext';
 import { FoodcostSettings } from './FoodcostSettings';
 import { MarginHistory } from './MarginHistory';
 import { ProductEditor } from './ProductEditor';
-import type { ShownView } from './foodcostPath';
+import { RecipeEntry } from './RecipeEntry';
+import type { Origin, ShownView } from './foodcostPath';
 import styles from './FoodcostDetail.module.css';
 
 // The right-hand side of the split — and, on a phone, the whole screen when a product, a new
@@ -11,16 +12,18 @@ import styles from './FoodcostDetail.module.css';
 //
 // (No `key` on the product: the section keeps one editor from one product to the next on the
 // split, so the focus stays on the row that was pressed — see ProductEditor.)
-export function FoodcostDetail({ view }: { view: ShownView }) {
+export function FoodcostDetail({ view, origin }: { view: ShownView; origin: Origin }) {
   switch (view.kind) {
     case 'list':
       return <Prompt />;
+    case 'entry':
+      return <RecipeEntry recipeId={view.recipeId} />;
     case 'new':
-      return <ProductEditor id={null} />;
+      return <ProductEditor id={null} origin={origin} />;
     case 'product':
-      return <ProductEditor id={view.id} />;
+      return <ProductEditor id={view.id} origin={origin} />;
     case 'history':
-      return <MarginHistory id={view.id} />;
+      return <MarginHistory id={view.id} origin={origin} />;
     case 'settings':
       return <FoodcostSettings />;
   }

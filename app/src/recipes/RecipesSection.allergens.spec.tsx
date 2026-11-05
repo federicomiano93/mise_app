@@ -395,14 +395,15 @@ describe('the cards follow the live data', () => {
 });
 
 describe('the order of the cards', () => {
-  it('is the current app\'s: ingredients, batch, allergens, declaration', async () => {
+  it('is the current app\'s plus the Food cost card (3d-7): ingredients, batch, food cost, allergens, declaration', async () => {
     await open([CAKE], [FLOUR, MILK, SALT], 'cake');
     await screen.findByText('Wheat, Milk');
     const heads = main().getAllByRole('heading', { level: 3 }).map(node => node.textContent ?? '');
-    expect(heads).toHaveLength(4);
+    expect(heads).toHaveLength(5);
     expect(heads[0]).toBe('Ingredients');
     expect(heads[1]).toBe('Batch weight');
-    expect(heads[2]).toMatch(/^Allergens/);
-    expect(heads[3]).toBe('Ingredient declaration');
+    expect(heads[2]).toBe('Food cost');
+    expect(heads[3]).toMatch(/^Allergens/);
+    expect(heads[4]).toBe('Ingredient declaration');
   });
 });

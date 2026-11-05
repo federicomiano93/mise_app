@@ -1,4 +1,5 @@
 import { vi } from 'vitest';
+import type { CatalogueRecipe, ImportAction } from '@mise/shared/catalogue-model';
 import type { RecipesMeta, RecipesSource, StoredDoc } from '../recipes/recipesSource';
 
 // A Recipe catalogue source for the specs of screens, in memory: the recipes and the ingredients are
@@ -53,6 +54,13 @@ export type FakeRecipesSource = RecipesSource & {
   // config/calculator as stored (null = none), what the delete warning reads; `calculatorHold` makes the read hang.
   calculatorConfig: Record<string, unknown> | null;
   holdCalculatorRead(): () => void;
+  // Every import into the Calculator, in order, as it was handed over (refused ones are not here), and what the next
+  // ones answer. `refuseImport` makes the next imports reject with that error (null = they succeed); `holdImport`
+  // makes them wait until the returned function is called.
+  imports: Array<{ recipe: CatalogueRecipe; marketOrderTitle: string }>;
+  importResult: ImportAction;
+  refuseImport: unknown;
+  holdImport(): () => void;
 };
 
 export function fakeRecipesSource(
@@ -69,6 +77,7 @@ export function fakeRecipesSource(
   const supplierWatchers = new Set<Listener>();
   let recipeWriteHold: Promise<void> | null = null;
   let calculatorHold: Promise<void> | null = null;
+  let importHold: Promise<void> | null = null;
   type LabelListener = {
     onChange: (data: Record<string, unknown> | null, meta: RecipesMeta) => void;
     onError: (err: unknown) => void;
@@ -109,6 +118,14 @@ export function fakeRecipesSource(
     recipeWrites: [],
     refuseRecipeWrites: { save: false, remove: false },
     calculatorConfig: seed.calculatorConfig ?? null,
+    imports: [],
+    importResult: 'added',
+    refuseImport: null,
+    holdImport() {
+      let release: () => void = () => undefined;
+      importHold = new Promise<void>(resolve => { release = resolve; });
+      return () => { importHold = null; release(); };
+    },
     holdRecipeWrites() {
       let release: () => void = () => undefined;
       recipeWriteHold = new Promise<void>(resolve => { release = resolve; });
@@ -220,6 +237,12 @@ export function fakeRecipesSource(
       fake.recipeWrites.push({ id, deleted: true });
       recipes.delete(id);
       fake.push();
+    }),
+    importIntoCalculator: vi.fn<RecipesSource['importIntoCalculator']>(async (recipe, marketOrderTitle) => {
+      if (importHold) await importHold;
+      if (fake.refuseImport !== null) throw fake.refuseImport;
+      fake.imports.push({ recipe, marketOrderTitle });
+      return fake.importResult;
     }),
     getCalculatorConfig: vi.fn<RecipesSource['getCalculatorConfig']>(async () => {
       if (calculatorHold) await calculatorHold;

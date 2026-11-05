@@ -14,7 +14,7 @@ type Pending = { resolve: () => void; reject: (err: unknown) => void };
 
 function fakeSource() {
   let products: { onChange: (list: StoredDoc[], meta: ProductsMeta) => void; onError: (err: unknown) => void } | null = null;
-  let recipes: { onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void } | null = null;
+  let recipes: { onChange: (list: StoredDoc[], meta?: ProductsMeta) => void; onError: (err: unknown) => void } | null = null;
   let ingredients: { onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void } | null = null;
   let settings: ((data: Record<string, unknown> | null, meta: { fromServer: boolean }) => void) | null = null;
   const stopped: string[] = [];
@@ -41,7 +41,7 @@ function fakeSource() {
     source, writes, stopped,
     products: (list: StoredDoc[], fromServer = true) => products!.onChange(list, { fromServer }),
     productsFail: () => products!.onError(new Error('permission-denied')),
-    recipes: (list: StoredDoc[]) => recipes!.onChange(list),
+    recipes: (list: StoredDoc[], fromServer?: boolean) => recipes!.onChange(list, fromServer === undefined ? undefined : { fromServer }),
     recipesFail: () => recipes!.onError(new Error('refused')),
     ingredients: (list: StoredDoc[]) => ingredients!.onChange(list),
     settings: (data: Record<string, unknown> | null, fromServer = true) => settings!(data, { fromServer }),
@@ -210,6 +210,18 @@ describe('the Food cost store', () => {
     fake.recipesFail();
     expect(store.getSnapshot().recipesLoaded).toBe(true);
     expect(messages).toEqual([]);
+  });
+
+  test('⚠️ the recipes are «from the server» only when the server said so', () => {
+    const { fake, store } = setup();
+    store.start();
+    expect(store.getSnapshot().recipesFromServer).toBe(false);
+    fake.recipes([{ id: 'r1', name: 'Loaf' }]);
+    expect(store.getSnapshot().recipesFromServer).toBe(false);
+    fake.recipes([{ id: 'r1', name: 'Loaf' }], false);
+    expect(store.getSnapshot().recipesFromServer).toBe(false);
+    fake.recipes([{ id: 'r1', name: 'Loaf' }], true);
+    expect(store.getSnapshot().recipesFromServer).toBe(true);
   });
 
   test('the tables are the SAME object until one of their parts changes', () => {

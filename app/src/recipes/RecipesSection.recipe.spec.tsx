@@ -99,12 +99,10 @@ describe('the ingredient list', () => {
     expect(rowsOf()[0]).toEqual(['Flour', '1000', 'g']);
   });
 
-  it('has no Food cost, procedure, Import or label button yet (their steps are later); Edit and Delete came with step 3d-6', async () => {
+  it('has no procedure or label button yet (their steps are later); Edit and Delete came with step 3d-6, the Food cost card and Import with 3d-7', async () => {
     await open();
-    for (const name of [/import/i, /food cost/i, /make a label/i]) {
-      expect(main().queryByRole('button', { name })).not.toBeInTheDocument();
-    }
-    expect(main().queryByRole('heading', { level: 3, name: /procedure|food cost/i })).not.toBeInTheDocument();
+    expect(main().queryByRole('button', { name: /make a label/i })).not.toBeInTheDocument();
+    expect(main().queryByRole('heading', { level: 3, name: /procedure/i })).not.toBeInTheDocument();
   });
 });
 

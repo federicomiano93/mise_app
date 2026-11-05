@@ -53,7 +53,9 @@ export interface FoodcostSource {
     onError: (err: unknown) => void,
   ): () => void;
   // The catalogue's recipes, live. Fails quietly in the store (a venue may not use the catalogue).
-  watchRecipes(onChange: (list: StoredDoc[]) => void, onError: (err: unknown) => void): () => void;
+  // `meta.fromServer` is the products' word: only the server can say a recipe does not exist (a recipe
+  // address from Food cost's entry waits for it). Absent counts as «not from the server».
+  watchRecipes(onChange: (list: StoredDoc[], meta?: ProductsMeta) => void, onError: (err: unknown) => void): () => void;
   // The ingredients with their prices laid on (withPrices), live. Nothing is emitted until the
   // ingredients themselves have arrived; a refused price read emits them unpriced.
   watchIngredients(onChange: (list: StoredDoc[]) => void, onError: (err: unknown) => void): () => void;
@@ -167,7 +169,10 @@ export function createFirestoreFoodcostSource(
     // QUIET: the catalogue's collection; a venue may not use it.
     watchRecipes: (onChange, onError) => listen(kit => kit.fs.onSnapshot(
       kit.fs.collection(kit.db, recipesPath) as Query,
-      snap => onChange(docsOf(snap)),
+      // Same reason as the products: without it the server's answer that equals the browser's copy
+      // is never reported.
+      { includeMetadataChanges: true },
+      snap => onChange(docsOf(snap), { fromServer: !snap.metadata.fromCache }),
       err => {
         console.warn('watch(recipes) failed:', err);
         onError(err);

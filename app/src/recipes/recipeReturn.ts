@@ -9,6 +9,11 @@ import { createContext, useContext } from 'react';
 // the card reads `pending()` while drawing its first time to open its fold, and takes the focus back with
 // `delivered()` so the recipe screen does not also move the focus to its title. The section forgets the place at the
 // next move that is not the return, so a recipe opened afresh later does not reopen its fold.
+//
+// «Open in Food cost» (step 3d-7) is the same trip with one difference: Food cost is ANOTHER section, so this one is
+// unmounted while the person is away and the place written down would die with it. For that origin ('cost') the place is
+// also kept in this module, and the next recipes screen that appears by a Back (a POP) picks it up; the recipe screen
+// then puts the focus on the button and the scroll back once its page is drawn (the data arrives after the section does).
 
 export interface RecipeReturn {
   // «Make a label» (or «Edit», `origin` 'edit') of this recipe is about to open: write down where the screen is.
@@ -17,18 +22,25 @@ export interface RecipeReturn {
   pending(recipeId: string): boolean;
   // Is this recipe being returned to from its editor? Read while drawing; it changes nothing.
   pendingEdit(recipeId: string): boolean;
+  // Is this recipe being returned to from Food cost? Read while drawing; it changes nothing.
+  pendingCost(recipeId: string): boolean;
+  // Put the scroll area (and the split's right-hand side) back where `remember` found them. The recipe screen asks once its
+  // page is drawn, because a scroll box cannot be scrolled past the content that is not there yet.
+  restoreScroll(recipeId: string): void;
   // The card has put the focus back on the button: the recipe screen has nothing left to focus.
   markDelivered(): void;
   wasDelivered(): boolean;
 }
 
 // What the person pressed to leave the recipe.
-export type Origin = 'label' | 'edit';
+export type Origin = 'label' | 'edit' | 'cost';
 
 const NOTHING: RecipeReturn = {
   remember() { /* no section around: nothing to come back to */ },
   pending: () => false,
   pendingEdit: () => false,
+  pendingCost: () => false,
+  restoreScroll() { /* ditto */ },
   markDelivered() { /* ditto */ },
   wasDelivered: () => false,
 };
@@ -39,6 +51,13 @@ export const RecipeReturnProvider = RecipeReturnContext.Provider;
 export function useRecipeReturn(): RecipeReturn {
   return useContext(RecipeReturnContext);
 }
+
+// The place written down for the trip to Food cost, until the recipes section appears again. Module state on purpose: the
+// section that wrote it is gone by then.
+let carried: Place | null = null;
+export function carryPlace(place: Place): void { carried = place; }
+export function carriedPlace(): Place | null { return carried; }
+export function forgetCarriedPlace(): void { carried = null; }
 
 // The place written down: the recipe, how far the shell's scroll area and the split's right-hand side were scrolled.
 export interface Place {

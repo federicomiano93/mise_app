@@ -30,7 +30,7 @@
 import {
   findCalculatorImport, isScaledEntryFresh, labelFieldsOf, normalizeCatalogueRecipe, normalizeCatalogueRecipes,
 } from '@mise/shared/catalogue-model';
-import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
+import type { CatalogueRecipe, ImportAction } from '@mise/shared/catalogue-model';
 import { withRowIds } from '@mise/shared/guided-model';
 import type { KeyValueStorage } from '../session/backend';
 import { newRecipeId, withoutPrice } from './recipesSource';
@@ -175,6 +175,10 @@ export interface RecipesStore {
   // Whether the recipe was imported into the Calculator (a copy there that stays): config/calculator read once,
   // raced against IMPORT_CHECK_MS. Never rejects: a slow, offline or refused read answers false.
   calculatorImportOf(id: string): Promise<boolean>;
+  // Copies a recipe into the Calculator (a transaction on the server: NOT local-first). Resolves with what was done and
+  // counts the recipe as used (the current app does: opening a recipe and importing it are both use); REJECTS when the
+  // write cannot be made, and counts nothing.
+  importIntoCalculator(recipe: CatalogueRecipe, marketOrderTitle: string): Promise<ImportAction>;
 }
 
 // A row as Firestore will take it: a key holding `undefined` makes the whole write throw, so it is left out.
@@ -389,6 +393,13 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     }
   }
 
+  function bumpUsage(id: string): void {
+    if (!id) return;
+    usage = { ...usage, [id]: (usage[id] ?? 0) + 1 };
+    writeJson(USAGE_KEY, usage);
+    changed();
+  }
+
   return {
     getSnapshot: () => snapshot,
 
@@ -501,12 +512,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       stops = [];
     },
 
-    bumpUsage(id) {
-      if (!id) return;
-      usage = { ...usage, [id]: (usage[id] ?? 0) + 1 };
-      writeJson(USAGE_KEY, usage);
-      changed();
-    },
+    bumpUsage,
 
     // A pure read: an entry past its 12 hours reads as none, and is tidied away by the next prune
     // (the original tidied it on read; reading from a render must not write).
@@ -680,6 +686,12 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
         read = Promise.resolve(false);
       }
       return Promise.race([read, late]).finally(() => clearTimeout(timer));
+    },
+
+    async importIntoCalculator(recipe, marketOrderTitle) {
+      const action = await source.importIntoCalculator(recipe, marketOrderTitle);
+      bumpUsage(recipe.id);
+      return action;
     },
   };
 }
