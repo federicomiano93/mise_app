@@ -1,0 +1,111 @@
+/* The rows of a recipe in reorder mode: name, amount, grip — one line each, at least a thumb's height, down to a 296px
+   phone (the name wraps; the amount keeps its width). It sits in the editor's frame, which draws the borders. The drag
+   state comes from React Aria's data attributes. */
+
+.list {
+  display: flex;
+  flex-direction: column;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: var(--hit);
+  padding: var(--s1) 0;
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.row[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.row[data-dragging] {
+  opacity: 0.6;
+}
+
+/* The grip is a target of its own, as big as the bin it replaces and in the bin's place (the Total's spacer). */
+.grip {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-3);
+  cursor: grab;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.grip:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .grip:hover {
+    background: var(--sunken);
+  }
+}
+
+.name {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The right side is built from the SAME geometry as the Total row (RecipeEditor.module.css .totalCell / .totalSpacer): a cell
+   as wide as the editor's amount box, the number right-aligned in the same 52px, the unit word after it, then the grip, as
+   wide as the bin and the Total's spacer. So every number ends on the Total's right edge at any width. A long unit word is cut short, as in the editor. */
+.amount {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 116px;
+  padding-left: 1px;
+}
+
+.number {
+  flex: none;
+  width: 52px;
+  padding: 0 var(--s1);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.unit {
+  flex: 1;
+  min-width: 0;
+  padding-left: var(--s2);
+  overflow: hidden;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+/* Where the dragged row would land. */
+.indicator {
+  height: 0;
+}
+
+.indicator[data-drop-target] {
+  border-top: 3px solid var(--accent);
+}
+
+/* Under 340px the cell is 8px narrower, as the editor's amount box and the Total's cell are. */
+@media (max-width: 339px) {
+  .amount {
+    width: 108px;
+  }
+}

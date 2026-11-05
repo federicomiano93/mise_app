@@ -125,8 +125,9 @@ export function IngredientRow({ item, nameInvalid, amountInvalid, register, onCh
   );
 }
 
-// A symbol (g, kg, ml…) is written as it is; a word (pieces, tsp, «to taste») is the interface language's.
-function unitWord(unit: CatalogueUnit, t: ReturnType<typeof useT>['t']): string {
+// A symbol (g, kg, ml…) is written as it is; a word (pieces, tsp, «to taste») is the interface language's. Also what the
+// reorder mode (ReorderRows) writes after a row's number.
+export function unitWord(unit: CatalogueUnit, t: ReturnType<typeof useT>['t']): string {
   const key = unitTextKey(unit);
   return key === null ? unit : t(key);
 }

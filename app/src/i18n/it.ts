@@ -933,6 +933,11 @@ export const it: Messages = {
   'cat.unit': 'Unità',
   'cat.removeIngredient': 'Togli l’ingrediente',
   'cat.addIngredient': '+ Aggiungi ingrediente',
+  'cat.reorder': 'Riordina',
+  'cat.reorderDone': 'Fine',
+  'cat.reorderHint': 'Tieni premuto un ingrediente e trascinalo al suo posto. Con la tastiera usa le frecce su e giù.',
+  'cat.moveRow': 'Sposta «{name}»',
+  'cat.unnamedRow': '(senza nome)',
   'cat.notWeighed': {
     one: '{n} ingrediente non viene pesato (pezzi / q.b.) — non è nel totale',
     other: '{n} ingredienti non vengono pesati (pezzi / q.b.) — non sono nel totale',

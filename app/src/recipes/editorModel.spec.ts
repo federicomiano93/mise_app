@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizeCatalogueRecipe } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import {
-  addRow, cleanWorking, linkRowTo, netWeightText, notWeighedCount, removeRow, setRowFields, shelfLifeText, totalText, workingFrom,
+  addRow, cleanWorking, dropWorkingRow, linkRowTo, moveWorkingRow, netWeightText, notWeighedCount, removeRow, setRowFields, shelfLifeText, stepWorkingRow, totalText, workingFrom,
 } from './editorModel';
 
 // The editor's working copy and the rules that turn it into what is saved (the pure half of catalogue-editor.js).
@@ -172,5 +172,85 @@ describe('linking a row', () => {
     expect(removed).not.toHaveProperty('refId');
     expect(removed).not.toHaveProperty('kind');
     expect(removed.label).toBe('Pizza base');
+  });
+});
+
+describe('reordering the rows', () => {
+  const four = () => workingFrom(recipe({
+    ingredients: [
+      { label: 'A', grams: 1, unit: 'g', kind: 'ingredient', refId: 'ing-1', rid: 'row-a' },
+      { label: 'B', grams: 2, unit: 'g', rid: 'row-b' },
+      { label: 'C', grams: 3, unit: 'g' },
+      { label: 'D', grams: 4, unit: 'g', rid: 'row-d' },
+    ],
+  }));
+  const labels = (working: ReturnType<typeof four>) => working.rows.map(item => item.row.label);
+  const keyOf = (working: ReturnType<typeof four>, label: string) => working.rows.find(item => item.row.label === label)!.key;
+
+  it('⚠️ moves the SAME row objects: the link and the row id are the very ones the row had', () => {
+    const working = four();
+    const before = new Map(working.rows.map(item => [item.row.label, item]));
+    const moved = moveWorkingRow(working, 0, 2);
+    expect(labels(moved)).toEqual(['B', 'C', 'A', 'D']);
+    for (const item of moved.rows) expect(item).toBe(before.get(item.row.label));
+    expect(moved.rows[2]!.row).toMatchObject({ kind: 'ingredient', refId: 'ing-1', rid: 'row-a' });
+    expect(moved.rest).toBe(working.rest);
+    expect(moved.name).toBe(working.name);
+  });
+
+  it('gives back the very same working copy when nothing would move', () => {
+    const working = four();
+    expect(moveWorkingRow(working, 1, 1)).toBe(working);
+    expect(moveWorkingRow(working, -1, 2)).toBe(working);
+    expect(moveWorkingRow(working, 0, 4)).toBe(working);
+    expect(moveWorkingRow(working, 4, 0)).toBe(working);
+    expect(stepWorkingRow(working, keyOf(working, 'A'), -1)).toBe(working);
+    expect(stepWorkingRow(working, keyOf(working, 'D'), 1)).toBe(working);
+    expect(stepWorkingRow(working, 99999, 1)).toBe(working);
+  });
+
+  it('steps a row one place up or down', () => {
+    const working = four();
+    expect(labels(stepWorkingRow(working, keyOf(working, 'B'), -1))).toEqual(['B', 'A', 'C', 'D']);
+    expect(labels(stepWorkingRow(working, keyOf(working, 'C'), 1))).toEqual(['A', 'B', 'D', 'C']);
+  });
+
+  it('translates a drop BEFORE a row, at both ends and in both directions', () => {
+    const working = four();
+    const drop = (moved: string, target: string) => labels(dropWorkingRow(working, keyOf(working, moved), keyOf(working, target), 'before'));
+    expect(drop('D', 'A')).toEqual(['D', 'A', 'B', 'C']);
+    expect(drop('A', 'D')).toEqual(['B', 'C', 'A', 'D']);
+    expect(drop('D', 'B')).toEqual(['A', 'D', 'B', 'C']);
+    expect(drop('B', 'D')).toEqual(['A', 'C', 'B', 'D']);
+  });
+
+  it('translates a drop AFTER a row, at both ends and in both directions', () => {
+    const working = four();
+    const drop = (moved: string, target: string) => labels(dropWorkingRow(working, keyOf(working, moved), keyOf(working, target), 'after'));
+    expect(drop('A', 'D')).toEqual(['B', 'C', 'D', 'A']);
+    expect(drop('D', 'A')).toEqual(['A', 'D', 'B', 'C']);
+    expect(drop('A', 'B')).toEqual(['B', 'A', 'C', 'D']);
+    expect(drop('C', 'B')).toEqual(['A', 'B', 'C', 'D']);
+  });
+
+  it('does nothing for a drop on the row itself, next to its own place, «on» a row or at a row that is gone', () => {
+    const working = four();
+    const a = keyOf(working, 'A');
+    const b = keyOf(working, 'B');
+    const c = keyOf(working, 'C');
+    expect(dropWorkingRow(working, b, b, 'before')).toBe(working);
+    expect(dropWorkingRow(working, b, c, 'before')).toBe(working);
+    expect(dropWorkingRow(working, b, a, 'after')).toBe(working);
+    expect(dropWorkingRow(working, a, c, 'on')).toBe(working);
+    expect(dropWorkingRow(working, a, 99999, 'after')).toBe(working);
+    expect(dropWorkingRow(working, 99999, a, 'before')).toBe(working);
+  });
+
+  it('saves the new order, each row with its link and row id', () => {
+    const working = four();
+    const moved = dropWorkingRow(working, keyOf(working, 'D'), keyOf(working, 'A'), 'before');
+    expect(cleanWorking(moved).ingredients.map(row => [row.label, row.rid, row.refId])).toEqual([
+      ['D', 'row-d', undefined], ['A', 'row-a', 'ing-1'], ['B', 'row-b', undefined], ['C', undefined, undefined],
+    ]);
   });
 });

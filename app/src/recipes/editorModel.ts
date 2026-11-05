@@ -7,7 +7,7 @@
 // editor owns (label, grams, unit) are rewritten.
 
 import {
-  applyLink, isSameLink, isWeighableUnit, linkOf, linkedItemName, normalizeShelfLifeDays, normalizeWeight, unitOf,
+  applyLink, isSameLink, isWeighableUnit, linkOf, linkedItemName, moveRow, normalizeShelfLifeDays, normalizeWeight, unitOf,
   weighableTotalGrams,
 } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
@@ -111,6 +111,35 @@ export const addRow = (working: Working): Working => ({ ...working, rows: [...wo
 export function removeRow(working: Working, key: number): Working {
   const rows = working.rows.filter(item => item.key !== key);
   return { ...working, rows: rows.length > 0 ? rows : [newRow()] };
+}
+
+// ── Reordering ───────────────────────────────────────────────────────────────────────────────────────────────────
+// ⚠️ THE SAME EditRow OBJECTS MOVE (shared moveRow reorders the list, it copies nothing), so a row keeps its `row` — its
+// link and its `rid` — and a guided mixing step that points at a row by `rid` is never unhooked by a reorder.
+// A move that changes nothing (out of range, the same place) gives back the very `working` it was given.
+export function moveWorkingRow(working: Working, from: number, to: number): Working {
+  const rows = moveRow(working.rows, from, to);
+  return rows.every((item, index) => item === working.rows[index]) ? working : { ...working, rows };
+}
+
+// One place up (-1) or down (1) for the row with this key: the arrow keys on a grip.
+export function stepWorkingRow(working: Working, key: number, delta: -1 | 1): Working {
+  const from = working.rows.findIndex(item => item.key === key);
+  return from < 0 ? working : moveWorkingRow(working, from, from + delta);
+}
+
+export type DropPosition = 'before' | 'after' | 'on';
+
+// What React Aria's onReorder says (the row moved, the row it was dropped at, and on which side) as indices for moveRow.
+// «On» is no place for a row in a flat list: nothing moves.
+export function dropWorkingRow(working: Working, movedKey: number, targetKey: number, position: DropPosition): Working {
+  if (position === 'on' || movedKey === targetKey) return working;
+  const from = working.rows.findIndex(item => item.key === movedKey);
+  const target = working.rows.findIndex(item => item.key === targetKey);
+  if (from < 0 || target < 0) return working;
+  // The index the row takes once it has left its old place: the rows after it shift one up.
+  const slot = position === 'before' ? target : target + 1;
+  return moveWorkingRow(working, from, from < slot ? slot - 1 : slot);
 }
 
 // Trim the names, make the amounts non-negative numbers, drop the rows with no name — and give back everything else the
