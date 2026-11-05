@@ -131,7 +131,8 @@ describe('which screen a label opens', () => {
     expect(main().queryByRole('group', { name: 'What the label shows' })).not.toBeInTheDocument();
     expect(document.querySelector('canvas[data-image-label]')).not.toBeNull();
     // The preview is painted from the very dots that go to the printer.
-    expect(canvas.paint).toHaveBeenCalledWith(expect.anything(), canvas.bitmap);
+    // ⚠️ WAITED FOR: the paint runs in an effect, which React may run a moment AFTER the preview is in the page.
+    await waitFor(() => { expect(canvas.paint).toHaveBeenCalledWith(expect.anything(), canvas.bitmap); });
     expect(main().getByText('Check this before it goes on food')).toBeInTheDocument();
   });
 
