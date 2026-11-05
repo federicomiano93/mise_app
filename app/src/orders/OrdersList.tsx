@@ -7,6 +7,7 @@ import { supplierLabel } from '@mise/shared/supplier-label';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
+import { DeliveryDoors } from './DeliveryDoors';
 import { useOrders } from './OrdersContext';
 import { dayTranslate, deliveryDaysText } from './dayWords';
 import { CLEAR_OPENER, PLACE_ALL_OPENER, SEND_OPENER, SETTINGS_OPENER, itemsOpener, supplierOpener, useHandBack } from './handBack';
@@ -30,6 +31,9 @@ type Props = {
   onSend: () => void;
   // The gear at the end of the head: the Orders settings (step 3f-4).
   onSettings: () => void;
+  // The debt banner and the two doors under the head (step 3f-5), drawn only while the venue checks deliveries.
+  onIncoming: () => void;
+  onReorder: () => void;
 };
 
 const HEADING_KEY = {
@@ -42,7 +46,7 @@ const HEADING_KEY = {
 // ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a component that stays mounted, and
 // only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard where the person
 // left them (the current app built the box once for the same reason).
-export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings }: Props) {
+export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings, onIncoming, onReorder }: Props) {
   const { t } = useT();
   const { config, draft, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
@@ -132,6 +136,8 @@ export function OrdersList({ lens, ready, openId, onOpenSupplier, onOpenItems, o
           </div>
         ) : null}
       </div>
+
+      <DeliveryDoors onIncoming={onIncoming} onReorder={onReorder} />
 
       {!ready ? (
         <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>

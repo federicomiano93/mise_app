@@ -19,6 +19,11 @@
 // a delete of one record goes through ONE transaction that refuses when the record changed since the editor opened it
 // (historyEdit.ts sameOrder).
 //
+// INCOMING (step 3f-5): «did it all arrive?» is one patch of the record (`confirmDelivery`), «Resolved» one merge into it
+// (`resolveMissing`); «Put back» and «Another supplier» are changes to the shared order like typing, sent at once (`putBack`,
+// `orderElsewhere`). The goods-arrived switch (decision F4) is read beside config/orders (`deliveryCheck`) and written by
+// `setDeliveryCheck`. What Incoming SHOWS is derived by the screens from the records (@mise/shared/deliveries).
+//
 // ⚠️ NO COPY OF ITS OWN IN localStorage (decision T14): the current app cached config/orders in `orders-config` so the
 // Stock column did not flash before the snapshot (parity M11); Firestore's offline database already answers from this
 // phone at once, and a key outside KEEP_PREFIXES would be one more thing a venue switch must wipe.
@@ -27,6 +32,10 @@ import { stampFor } from '@mise/shared/order-day';
 import { parseISODate, todayISO } from '@mise/shared/day';
 import { createOlderLoader, liveHistoryStart } from '@mise/shared/history-window';
 import { normalizeOrdersConfig } from '@mise/shared/orders-config';
+import { deliveryCheckOf, deliveryCheckPatch } from '@mise/shared/delivery-check';
+import type { DeliveryCheck } from '@mise/shared/delivery-check';
+import { applyReorder } from '@mise/shared/deliveries';
+import type { ReorderItem } from '@mise/shared/deliveries';
 import { storedUnitFor } from '@mise/shared/order-unit';
 import {
   buildSupplierArchive, historyDocId, isUnitConflict, mergeArchives, quantityPathsFor, unitConflicts, wholeNumber,
@@ -67,6 +76,8 @@ export interface OrdersSnapshot {
   // config/orders through normalizeOrdersConfig (defaults while it has not arrived: the Stock box shown, parity M10).
   readonly config: OrdersConfig;
   readonly configLoaded: boolean;
+  // The goods-arrived switch of config/orders (decision F4), read beside it: absent = on, asking about every order.
+  readonly deliveryCheck: DeliveryCheck;
   // The order in progress: the server's document with this phone's unsent typing on top (draftSync.ts).
   readonly draft: DraftView;
   readonly draftLoaded: boolean;
@@ -98,6 +109,18 @@ export interface OrdersSnapshot {
 //   set to 0 (a correction cannot leave an empty order: delete it instead); 'offline' — refused before trying (a transaction
 //   needs the server); 'failed' — refused or failed: nothing written.
 export type RecordWriteOutcome = 'saved' | 'deleted' | 'changed' | 'gone' | 'empty' | 'offline' | 'failed';
+
+// How a delivery answer, a «Resolved» or the switch ended (step 3f-5): 'saved' once the server took it; 'refused' when the rules
+// said no (the switch, for a person who is not an owner or a manager); 'failed' otherwise. ⚠️ Offline the promise simply waits:
+// Firestore shows the change on this phone at once and sends it when the connection comes back (local-first), so a screen never
+// waits for it before moving on.
+export type DeliveryWriteOutcome = 'saved' | 'refused' | 'failed';
+
+// How «Put back» / «Another supplier» ended: 'applied' — the line is in the order (sent at once; a refusal is said like any
+// typing, 'draft-not-saved', and the line stays on this phone to go again with the next change); 'skipped' — the row already has
+// a quantity, typed by a person, and is never overwritten (parity V9): nothing changed; 'gone' — the ingredient, or the supplier
+// it would go to, is not there or not in use any more: nothing changed.
+export type ReorderOutcome = 'applied' | 'skipped' | 'gone';
 
 // One change to one line, as a row makes it.
 export type LineEdit =
@@ -198,6 +221,17 @@ export interface OrdersStore {
   // is still that order (historyEdit.ts sameOrder).
   correctRecord(opened: StoredDoc, edits: RecordEdits): Promise<RecordWriteOutcome>;
   deleteRecord(opened: StoredDoc): Promise<RecordWriteOutcome>;
+  // «Did it all arrive?» (parity V4, V5): `missingIds` are the lines ticked as NOT arrived ([] = all arrived); `missing` is
+  // replaced whole and `deliveredAt` stamped now.
+  confirmDelivery(record: StoredDoc, missingIds: readonly string[]): Promise<DeliveryWriteOutcome>;
+  // «Resolved» on one line of «To re-order» (parity V9, V11): bought elsewhere, it leaves the list for good.
+  resolveMissing(item: ReorderItem): Promise<DeliveryWriteOutcome>;
+  // «Put back» (parity V9): the line goes into its CURRENT supplier's order with the missed quantity, in the unit it was ordered.
+  putBack(item: ReorderItem): ReorderOutcome;
+  // «Another supplier» (parity V10, L38's writer): the line goes into `supplierId`'s order THIS TIME, with the missed quantity.
+  orderElsewhere(item: ReorderItem, supplierId: string): ReorderOutcome;
+  // The goods-arrived switch for the whole venue (decision F4).
+  setDeliveryCheck(on: boolean): Promise<DeliveryWriteOutcome>;
 }
 
 export function browserOrdersDeps(): OrdersDeps {
@@ -223,7 +257,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
   let snapshot: OrdersSnapshot = {
     suppliers: [], suppliersLoaded: false, suppliersBroken: false,
     ingredients: [], ingredientsLoaded: false, ingredientsBroken: false,
-    config: normalizeOrdersConfig(null), configLoaded: false,
+    config: normalizeOrdersConfig(null), configLoaded: false, deliveryCheck: deliveryCheckOf(null),
     draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false,
     placing: [],
     history: [], historyLoaded: false, historyBroken: false, suggester: NO_SUGGESTIONS,
@@ -419,6 +453,50 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     }
   }
 
+  // A write of step 3f-5 (Incoming): the marker held until the server answers (offline, until the connection is back), so a
+  // self-started reload never drops it; a refusal by the rules is told apart from the rest.
+  async function deliveryWrite(label: string, write: () => Promise<void>): Promise<DeliveryWriteOutcome> {
+    const release = deps.markBusy();
+    try {
+      await write();
+      return 'saved';
+    } catch (err) {
+      console.error(`${label} failed:`, err);
+      const e = err as { code?: unknown; message?: unknown } | null;
+      return /permission-denied/.test(`${String(e?.code ?? '')} ${String(e?.message ?? '')}`) ? 'refused' : 'failed';
+    } finally {
+      release();
+    }
+  }
+
+  const activeSupplier = (id: unknown): StoredDoc | null => {
+    const supplier = snapshot.suppliers.find(s => s.id === id);
+    return supplier && supplier.active !== false ? supplier : null;
+  };
+
+  // One missing line back into an order, LOCAL-FIRST like typing it (the current app's onReorder / onOtherSupplier), and sent at
+  // once (its saveDraftNow). `to` is the supplier whose order it goes into; `override` its id when that is not the line's usual
+  // supplier (parity L38), '' to clear one. The day those lines are for is stamped as typing would (order-day.js stampFor).
+  function lineBack(item: ReorderItem, to: StoredDoc, override: string): ReorderOutcome {
+    const card = snapshot.ingredients.find(i => i.id === item.id);
+    if (!card) return 'gone';
+    // ⚠️ A ROW THAT ALREADY HAS A QUANTITY IS NEVER OVERWRITTEN (deliveries.ts applyReorder): asked of the order AS IT IS NOW.
+    const line = applyReorder([item], snapshot.draft.entries).applied[0];
+    if (!line) return 'skipped';
+    const current: DraftEntry = snapshot.draft.entries[item.id] ?? {};
+    // The missed line comes back in the unit it was ordered in; the card's own unit is stored as '' (order-unit storedUnitFor).
+    const next = { ...current, qty: line.qty, unit: storedUnitFor(line.unit ?? '', card), supplierId: override };
+    const entries: DraftEntries = { ...snapshot.draft.entries, [item.id]: next };
+    let days: DraftDays = snapshot.draft.days;
+    const stamp = stampFor({ current: days[to.id], supplier: to, today: deps.today() });
+    if (stamp && stamp !== days[to.id]) days = { ...days, [to.id]: stamp };
+    set({ draft: { ...snapshot.draft, entries, days } });
+    holdBusy();
+    sync.change(entries, days);
+    sync.flush().then(dropBusyWhenSaved, () => { /* said through onResult ('draft-not-saved'), which also frees the marker */ });
+    return 'applied';
+  }
+
   // A snapshot that came from the browser's own database and holds nothing proves nothing (that database can be empty
   // because this phone never synced the collection): until the server speaks, or the copy holds something, «Loading…».
   const loadedBy = (list: readonly unknown[], meta: OrdersMeta) => meta.fromServer || list.length > 0;
@@ -463,6 +541,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         source.watchOrdersConfig(
           (data, meta) => set({
             config: normalizeOrdersConfig(data),
+            deliveryCheck: deliveryCheckOf(data),
             configLoaded: snapshot.configLoaded || data !== null || meta.fromServer,
           }),
           () => set({ configLoaded: true }),
@@ -673,6 +752,37 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
 
     deleteRecord(opened) {
       return rewrite(opened, () => null, 'deleted');
+    },
+
+    confirmDelivery(record, missingIds) {
+      const missing: Record<string, true> = {};
+      for (const id of missingIds) missing[id] = true;
+      const now = deps.draft.nowIso();
+      const id = record.id || historyDocId(record.date, record.supplierId);
+      return deliveryWrite('Confirming the delivery', () => source.confirmDelivery(id, { deliveredAt: now, missing, updatedAt: now }));
+    },
+
+    resolveMissing(item) {
+      return deliveryWrite('Resolving the missing line', () => source.resolveMissing(item.recordId, item.id, deps.draft.nowIso()));
+    },
+
+    putBack(item) {
+      // Its OWN supplier's order, never one an old override pointed at: the override is cleared in the same write. A line whose
+      // ingredient is switched off, or whose supplier is not active, has no row anybody can see (the screen offers no button).
+      const card = snapshot.ingredients.find(i => i.id === item.id);
+      const to = card && card.active !== false ? activeSupplier(card.supplierId) : null;
+      return to ? lineBack(item, to, '') : 'gone';
+    },
+
+    orderElsewhere(item, supplierId) {
+      const card = snapshot.ingredients.find(i => i.id === item.id);
+      const to = card && card.active !== false ? activeSupplier(supplierId) : null;
+      // ⚠️ NOTHING IS MARKED RESOLVED: if that order is never placed the line must come back on «To re-order».
+      return to ? lineBack(item, to, to.id === card?.supplierId ? '' : to.id) : 'gone';
+    },
+
+    setDeliveryCheck(on) {
+      return deliveryWrite('Saving the goods-arrived switch', () => source.mergeOrdersConfig(deliveryCheckPatch(on, deps.today(), snapshot.deliveryCheck)));
     },
   };
 }

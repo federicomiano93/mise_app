@@ -13,6 +13,9 @@
 //   /orders/history                 «Past orders», one level below the settings
 //   /orders/history/day/<date>      sending a whole day of recorded orders again, one level below History
 //   /orders/history/<recordId>      correcting one recorded order, one level below History (`day` is not a record id)
+//   /orders/incoming                «Incoming» (slice 3f-5), one level below the list
+//   /orders/incoming/<recordId>     «What arrived?» for one order, one level below Incoming
+//   /orders/reorder                 «To re-order», one level below the list
 //   anything else                   unknown: the section goes back to /orders
 
 export const ORDERS_PATH = '/orders';
@@ -30,6 +33,9 @@ export type OrdersView =
   | { readonly kind: 'history' }
   | { readonly kind: 'history-day'; readonly date: string }
   | { readonly kind: 'history-edit'; readonly id: string }
+  | { readonly kind: 'incoming' }
+  | { readonly kind: 'incoming-missing'; readonly id: string }
+  | { readonly kind: 'reorder' }
   | { readonly kind: 'unknown' };
 
 export const supplierPath = (id: string): string => `${ORDERS_PATH}/supplier/${encodeURIComponent(id)}`;
@@ -43,6 +49,9 @@ export const SETTINGS_PATH = `${ORDERS_PATH}/settings`;
 export const HISTORY_PATH = `${ORDERS_PATH}/history`;
 export const historyDayPath = (date: string): string => `${HISTORY_PATH}/day/${encodeURIComponent(date)}`;
 export const historyEditPath = (id: string): string => `${HISTORY_PATH}/${encodeURIComponent(id)}`;
+export const INCOMING_PATH = `${ORDERS_PATH}/incoming`;
+export const incomingMissingPath = (id: string): string => `${INCOMING_PATH}/${encodeURIComponent(id)}`;
+export const REORDER_PATH = `${ORDERS_PATH}/reorder`;
 
 // A segment as it was typed, back to the id it stands for; null when it is not valid percent-encoding.
 function decoded(segment: string): string | null {
@@ -66,6 +75,12 @@ export function parseOrdersPath(rest: string | undefined): OrdersView {
   if (first === 'clear') return parts.length === 1 ? { kind: 'clear' } : { kind: 'unknown' };
   if (first === 'send') return parts.length === 1 ? { kind: 'send' } : { kind: 'unknown' };
   if (first === 'settings') return parts.length === 1 ? { kind: 'settings' } : { kind: 'unknown' };
+  if (first === 'reorder') return parts.length === 1 ? { kind: 'reorder' } : { kind: 'unknown' };
+  if (first === 'incoming') {
+    if (parts.length === 1) return { kind: 'incoming' };
+    const id = second === undefined ? null : decoded(second);
+    return parts.length === 2 && id !== null && id !== '' ? { kind: 'incoming-missing', id } : { kind: 'unknown' };
+  }
   if (first === 'history') {
     if (parts.length === 1) return { kind: 'history' };
     if (second === undefined) return { kind: 'unknown' };
@@ -88,7 +103,7 @@ export function parseOrdersPath(rest: string | undefined): OrdersView {
 
 // What the usage record calls the screen at an address (shell/sections.ts screenNameFor): `orders`, `orders-supplier`,
 // `orders-supplier-items`, `orders-confirm`, `orders-place-all`, `orders-place-all-confirm`, `orders-clear`, `orders-send`, `orders-settings`,
-// `orders-history`, `orders-history-day` and `orders-history-edit`.
+// `orders-history`, `orders-history-day`, `orders-history-edit`, `orders-incoming`, `orders-incoming-missing` and `orders-reorder`.
 // ⚠️ ONLY AN ADDRESS THE SECTION DRAWS counts as its screen: an unknown one is sent back to the list, and logging it as a
 // screen would put one nobody saw in the owner's statistics.
 export function ordersScreenName(rest: string): string {
@@ -104,5 +119,8 @@ export function ordersScreenName(rest: string): string {
   if (view.kind === 'history') return 'orders-history';
   if (view.kind === 'history-day') return 'orders-history-day';
   if (view.kind === 'history-edit') return 'orders-history-edit';
+  if (view.kind === 'incoming') return 'orders-incoming';
+  if (view.kind === 'incoming-missing') return 'orders-incoming-missing';
+  if (view.kind === 'reorder') return 'orders-reorder';
   return 'orders';
 }

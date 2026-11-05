@@ -2824,6 +2824,29 @@ async function roles() {
   await expectDenied('order lists must be a true/false, not text',
     () => mergeWrite(`${L}/config/orders`, { ...stamp, orderLists: 'off' }, asAccount(MAYA)));
 
+  // ── The goods-arrived switch (Mise 2, decision F4, 29 Oct 2026): an owner's or a
+  // manager's switch, a boolean, and the day it was turned on as a plain YYYY-MM-DD.
+  await expectDenied('staff cannot turn the goods-arrived check off',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheck: false }, asAccount(SAM)));
+  await expectDenied('staff cannot move the day it counts from either',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheckFrom: '2026-10-29' }, asAccount(SAM)));
+  await expectAllowed('a manager can turn the goods-arrived check off',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheck: false, deliveryCheckOffOn: '2026-10-29' }, asAccount(MAYA)));
+  await expectDenied('staff cannot stamp the day it went off',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheckOffOn: '2026-10-29' }, asAccount(SAM)));
+  await expectDenied('the day it went off must be a plain day',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheckOffOn: 'yesterday' }, asAccount(MAYA)));
+  await expectAllowed('…and an owner on again, from today',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheck: true, deliveryCheckFrom: '2026-10-29' }, asAccount(ALICE)));
+  await expectDenied('the goods-arrived check must be a true/false, not text',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheck: 'off' }, asAccount(MAYA)));
+  await expectDenied('the day it counts from must be a plain day, not a time',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheckFrom: '2026-10-29T10:00:00Z' }, asAccount(MAYA)));
+  await expectDenied('…nor a number',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheckFrom: 20261029 }, asAccount(MAYA)));
+  await expectDenied('a member of another venue cannot touch it',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheck: false }, asAccount(BOB)));
+
   // ── The order of the supplier list (4 Oct 2026): a manager's setting, a capped list.
   await expectAllowed('a manager sets the supplier order',
     () => mergeWrite(`${L}/config/orders`, { ...stamp, supplierOrder: ['s2', 's1'] }, asAccount(MAYA)));

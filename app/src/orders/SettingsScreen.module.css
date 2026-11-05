@@ -84,3 +84,16 @@
   flex: none;
   color: var(--ink-3);
 }
+
+/* A switch and the words it answers to: the row is as tall as a thumb's target, and the words wrap before the switch shrinks. */
+.switchRow {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s3) var(--s4);
+}
+
+.switchRow > :last-child {
+  flex: none;
+}

@@ -47,7 +47,9 @@ flat collections used `"main"`; the rules whitelist the keys of all four and che
 (`v1.105.0`), `config/orders.supplierOrder` (`v1.106.0` — removing it would refuse EVERY
 config/orders save: stock switch, send routes, week start) and `config/orders.favouriteSuppliers`
 (`v1.116.0`, same reason), `ingredients.supplierCodes` and the price-history `packLabel` /
-`packCode` (`v1.117.0`), `ingredient-prices.priceBasis` (`v1.120.0`). A `setDoc(merge:true)` never deletes a
+`packCode` (`v1.117.0`), `ingredient-prices.priceBasis` (`v1.120.0`); and, once Mise 2 is live, the goods-arrived switch
+`config/orders.deliveryCheck` (bool, absent = on), `deliveryCheckFrom` and `deliveryCheckOffOn` (plain YYYY-MM-DD; Mise 2
+slice 3f-5, decision F4 — only owner/manager write them; the current app ignores them). A `setDoc(merge:true)` never deletes a
 field and the rules see the full merged document — remove either from the whitelist before
 deleting it from production and every affected document becomes permanently unwritable. Tests:
 `npm run test:rules` (needs the emulator; a required CI check); `npm run test:rules:emulated` starts

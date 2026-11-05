@@ -110,3 +110,8 @@ export const HISTORY_DOOR = 'history-door';
 // day screen return the focus.
 export const correctOpener = (id: string): string => `correct:${id}`;
 export const sendDayOpener = (date: string): string => `send-day:${date}`;
+// The list's two doors under the head (step 3f-5): where Back from Incoming and from «To re-order» returns the focus.
+export const INCOMING_DOOR = 'incoming-door';
+export const REORDER_DOOR = 'reorder-door';
+// An Incoming row (the order's id): where Back from «What arrived?» returns the focus.
+export const arrivalOpener = (id: string): string => `arrival:${id}`;
