@@ -1,0 +1,113 @@
+/* The recipe, full screen. The size of the text is set on the dialog (an inline font-size built from a token
+   and the step's multiplier); everything inside is in `em`, so it all grows together. The × and the size
+   buttons keep their own, fixed size. */
+
+.view {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: var(--surface);
+  color: var(--ink);
+}
+
+/* A modal dialog is display: block when open and nothing when closed; the flex column is for the open one. */
+.view[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+/* The × lives in its own strip ABOVE the scrolling rows, not floating over them: a row scrolled up never
+   slides under it and loses its «g». */
+.top {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s3) var(--s4);
+  border-bottom: 1px solid var(--line);
+}
+
+.name {
+  min-width: 0;
+  font-size: var(--fs-xl);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.close,
+.step {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit-lg);
+  height: var(--hit-lg);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.step[aria-disabled="true"] {
+  border-color: var(--line);
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* A scroll that reaches the end stays here: the page behind is not moved. */
+  overscroll-behavior: contain;
+  padding: var(--s4);
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5em;
+  padding: 0.3em 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.rowName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.figure {
+  flex: none;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.total {
+  margin-top: 0.3em;
+  border-bottom: 0;
+  border-top: 2px solid var(--line-2);
+  font-weight: 650;
+}
+
+.zoom {
+  display: flex;
+  flex: none;
+  justify-content: center;
+  gap: var(--s4);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--line);
+}

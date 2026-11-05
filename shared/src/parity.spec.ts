@@ -1,4 +1,4 @@
-// The twenty-six TypeScript models and the js/ files the live app runs today must stay the SAME
+// The thirty-one TypeScript models and the js/ files the live app runs today must stay the SAME
 // thing, until the switch to Mise 2 retires the js/ ones. The behaviour specs next to each model
 // run every test against both; this file checks what a behaviour test cannot see — that the two
 // export the same names, the same constants, the same frozen-ness and the same function shapes.
@@ -19,6 +19,14 @@
 // market.spec.ts, price-model.spec.ts, currency.spec.ts, inventory-value.spec.ts, catalogue-model.spec.ts,
 // recipe-cost-model.spec.ts and foodcost-model.spec.ts also compare the names, constants, frozen-ness and
 // function shapes of everything they do port).
+//
+// The Calculator's partial ports are not paired either, for the same reason: calculator-config.ts (it leaves
+// out the save path and `orderPrefillLabel`), log-model.ts (the list and edit half, the legacy migration and
+// `dayLabel`), guided-model.ts (everything but `ridOf`) and zoom-steps.ts (the storage and DOM halves); their
+// specs (calculator-config.spec.ts, log-model.spec.ts, guided-model via calculator-recipe-source.spec.ts,
+// zoom-steps.spec.ts) compare what they do port. calculator-tab-keys.ts is new in Mise 2 and has no original.
+// calculator-recipe-text.ts is paired although it differs from the original in ONE input (the line called
+// `Flour uniqua blue`, one venue's data): the exports are the same, and its spec says where the text differs.
 //
 // ⚠️ IT IS WHAT CATCHES A FIX MADE TO js/ AND FORGOTTEN HERE. A constant changed in one file
 // (a new allergen, a new push kind, a new card) is invisible to every behavioural test that does
@@ -51,6 +59,11 @@ import * as ingredientKind from './ingredient-kind';
 import * as productLimits from './product-limits';
 import * as vatGuide from './vat-guide';
 import * as foodcostWeighing from './foodcost-weighing';
+import * as calculatorDoughMath from './calculator-dough-math';
+import * as calculatorRecipeSource from './calculator-recipe-source';
+import * as calculatorRecipeText from './calculator-recipe-text';
+import * as confirmFlow from './confirm-flow';
+import * as logTime from './log-time';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -77,6 +90,11 @@ import * as legacyIngredientKind from '../../js/ingredient-kind.js';
 import * as legacyProductLimits from '../../js/foodcost/product-limits.js';
 import * as legacyVatGuide from '../../js/foodcost/vat-guide.js';
 import * as legacyFoodcostWeighing from '../../js/foodcost/foodcost-weighing.js';
+import * as legacyCalculatorDoughMath from '../../js/calculator-dough-math.js';
+import * as legacyCalculatorRecipeSource from '../../js/calculator-recipe-source.js';
+import * as legacyCalculatorRecipeText from '../../js/calculator-recipe-text.js';
+import * as legacyConfirmFlow from '../../js/confirm-flow.js';
+import * as legacyLogTime from '../../js/log-time.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -105,6 +123,11 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['product-limits', productLimits, legacyProductLimits],
   ['vat-guide', vatGuide, legacyVatGuide],
   ['foodcost-weighing', foodcostWeighing, legacyFoodcostWeighing],
+  ['calculator-dough-math', calculatorDoughMath, legacyCalculatorDoughMath],
+  ['calculator-recipe-source', calculatorRecipeSource, legacyCalculatorRecipeSource],
+  ['calculator-recipe-text', calculatorRecipeText, legacyCalculatorRecipeText],
+  ['confirm-flow', confirmFlow, legacyConfirmFlow],
+  ['log-time', logTime, legacyLogTime],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -191,10 +214,11 @@ if (!legacyOutboxHasTheFix) {
   });
 }
 
-test('all twenty-six models are compared', () => {
+test('all thirty-one models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
       'order-cost', 'inventory-model', 'inventory-outbox', 'inventory-purchases', 'vat-rates', 'ingredient-kind', 'product-limits',
-      'vat-guide', 'foodcost-weighing']);
+      'vat-guide', 'foodcost-weighing', 'calculator-dough-math', 'calculator-recipe-source', 'calculator-recipe-text', 'confirm-flow',
+      'log-time']);
 });

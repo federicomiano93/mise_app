@@ -43,6 +43,16 @@ import * as catalogueModel from './catalogue-model';
 import * as recipeCostModel from './recipe-cost-model';
 import * as foodcostWeighing from './foodcost-weighing';
 import * as foodcostModel from './foodcost-model';
+import * as calculatorConfig from './calculator-config';
+import * as calculatorDoughMath from './calculator-dough-math';
+import * as calculatorRecipeSource from './calculator-recipe-source';
+import * as calculatorRecipeText from './calculator-recipe-text';
+import * as confirmFlow from './confirm-flow';
+import * as guidedModel from './guided-model';
+import * as logModel from './log-model';
+import * as logTime from './log-time';
+import * as zoomSteps from './zoom-steps';
+import { BAKERY_CONFIG } from '../../tests/fixtures/bakery-config.mjs';
 import * as legacyJoinCodeJs from '../../js/join-code.js';
 import * as legacyPushModelJs from '../../js/push-model.js';
 import * as legacyHomeCardsJs from '../../js/home-cards.js';
@@ -76,6 +86,15 @@ import * as legacyCatalogueModelJs from '../../js/catalogue/catalogue-model.js';
 import * as legacyRecipeCostModelJs from '../../js/catalogue/recipe-cost-model.js';
 import * as legacyFoodcostWeighingJs from '../../js/foodcost/foodcost-weighing.js';
 import * as legacyFoodcostModelJs from '../../js/foodcost/foodcost-model.js';
+import * as legacyCalculatorConfigJs from '../../js/calculator-config.js';
+import * as legacyCalculatorDoughMathJs from '../../js/calculator-dough-math.js';
+import * as legacyCalculatorRecipeSourceJs from '../../js/calculator-recipe-source.js';
+import * as legacyCalculatorRecipeTextJs from '../../js/calculator-recipe-text.js';
+import * as legacyConfirmFlowJs from '../../js/confirm-flow.js';
+import * as legacyGuidedModelJs from '../../js/catalogue/guided-model.js';
+import * as legacyLogModelJs from '../../js/log-model.js';
+import * as legacyLogTimeJs from '../../js/log-time.js';
+import * as legacyZoomStepsJs from '../../js/zoom-steps.js';
 
 const legacyJoinCode = legacyJoinCodeJs as unknown as typeof joinCode;
 const legacyPushModel = legacyPushModelJs as unknown as typeof pushModel;
@@ -114,6 +133,15 @@ const legacyCatalogueModel = legacyCatalogueModelJs as unknown as typeof catalog
 const legacyRecipeCostModel = legacyRecipeCostModelJs as unknown as typeof recipeCostModel;
 const legacyFoodcostWeighing = legacyFoodcostWeighingJs as unknown as typeof foodcostWeighing;
 const legacyFoodcostModel = legacyFoodcostModelJs as unknown as typeof foodcostModel;
+const legacyCalculatorConfig = legacyCalculatorConfigJs as unknown as typeof calculatorConfig;
+const legacyCalculatorDoughMath = legacyCalculatorDoughMathJs as unknown as typeof calculatorDoughMath;
+const legacyCalculatorRecipeSource = legacyCalculatorRecipeSourceJs as unknown as typeof calculatorRecipeSource;
+const legacyCalculatorRecipeText = legacyCalculatorRecipeTextJs as unknown as typeof calculatorRecipeText;
+const legacyConfirmFlow = legacyConfirmFlowJs as unknown as typeof confirmFlow;
+const legacyGuidedModel = legacyGuidedModelJs as unknown as typeof guidedModel;
+const legacyLogModel = legacyLogModelJs as unknown as typeof logModel;
+const legacyLogTime = legacyLogTimeJs as unknown as typeof logTime;
+const legacyZoomSteps = legacyZoomStepsJs as unknown as typeof zoomSteps;
 
 // ── The machinery ────────────────────────────────────────────────────────────
 
@@ -2400,4 +2428,197 @@ describe('foodcost-model: odd inputs', () => {
     ...product(HAND_WRITTEN, RESULTS, STAMPS, SOME_TABLES), ...product(PRODUCTS, RESULTS.slice(0, 2), STAMPS.slice(0, 1), FEW_TABLES),
     ...product(PRODUCTS.slice(0, 30), RESULTS.slice(0, 1), STAMPS.slice(0, 1), [undefined]),
   ]);
+});
+
+// ── The Calculator (step 3c-1) ───────────────────────────────────────────────
+
+// What the Calculator's models are fed: the bakery fixture (a test fixture, never shipped), the defaults,
+// what `normalizeConfig` makes of strange documents, and a few hand-written shapes with holes.
+const CALC_CONFIGS: readonly unknown[] = [
+  ...ODD, 'config', 42, BAKERY_CONFIG, legacyCalculatorConfig.DEFAULT_CONFIG, legacyCalculatorConfig.normalizeConfig(BAKERY_CONFIG),
+  legacyCalculatorConfig.normalizeConfig({}), legacyCalculatorConfig.normalizeConfig(null),
+  { clients: [] }, { clients: [null, 5, {}, { id: 'c', products: null }, { id: 'c2', name: 'C2', products: [null, { id: 'p' }] }] },
+  { recipes: [{ id: 'r1', name: 'One', logic: 'total', ingredients: [{ key: 'flour', label: 'Flour', grams: 1000 }] }, null, { id: 'r2' }] },
+  { clients: BAKERY_CONFIG.clients, extraDoughTabs: { focaccia: true }, divisor: { focaccia: { included: ['f-pizze'], n: 2 } } },
+  { showClientOrdersButton: false, askDoughDay: false, logVisibility: { focaccia: false }, logRetentionHours: 48 },
+  { configModel: 4, recipes: 'x', clients: 'y' }, Object.freeze({ clients: Object.freeze([]) }),
+];
+const CALC_IDS: readonly unknown[] = [...ODD, 'focaccia', 'brioche', 'sourdough', 'f-pizze', 'c-bakery', 'toString', '__proto__', 'c-bakery::f-pizze'];
+const QTY_FNS: readonly unknown[] = [() => 3, () => '4', () => -1, () => NaN, () => undefined, (id: string) => (id === 'f-pizze' ? 10 : 0), 5, null];
+const CALC_RECIPES: readonly unknown[] = [
+  ...ODD, 'recipe', { logic: 'total' }, { logic: 'trays', trayWeight: 800 }, { logic: 'both', ingredients: [{ key: 'flour', label: 'Flour', grams: 1000 }] },
+  { logic: 'orders', leaveningKey: 'yeast', baselinePct: 0.5, ingredients: [{ key: 'yeast', label: 'Yeast', grams: 5 }, { key: 'flour', label: 'Flour', grams: 995 }] },
+  { logic: 'traysTotal', trayWeight: 'x' }, { trayWeight: -5 }, { trayWeight: 1e9 }, { name: 5, ingredients: 'x' }, { catalogueId: 'cat-1', leaveningRid: 'r' },
+  ...legacyCalculatorConfig.getRecipes(BAKERY_CONFIG),
+];
+
+describe('calculator-config: odd inputs', () => {
+  // A partial port: only what it exports is compared. Every exported function is tried with one odd value, a
+  // pair, and a triple (config, id, quantity reader), so a function added to the port is covered at once.
+  const m = calculatorConfig as unknown as Record<string, unknown>;
+  const l = legacyCalculatorConfig as unknown as Record<string, unknown>;
+  const names = Object.keys(m).filter(name => typeof m[name] === 'function' && !['cloneConfig', 'normalizeConfig', 'formatGrams'].includes(name));
+
+  test('every exported name is one the original has too', () => {
+    for (const name of Object.keys(m)) expect(name in l, name).toBe(true);
+  });
+
+  for (const name of names) {
+    agree(name, m[name] as AnyFn, l[name] as AnyFn, [
+      ...product([...CALC_CONFIGS, ...CALC_RECIPES, ...ODD, -3, 2.5, 'g', 'kg', 1e12]),
+      ...product(CALC_CONFIGS, CALC_IDS),
+      ...product(CALC_RECIPES, [...ODD, 3, 12, 'x', 2.5]),
+      ...product(CALC_CONFIGS.slice(0, 16), CALC_IDS.slice(0, 22), QTY_FNS),
+    ]);
+  }
+
+  agree('cloneConfig', m.cloneConfig as AnyFn, l.cloneConfig as AnyFn, product(CALC_CONFIGS));
+  agree('normalizeConfig (market title)', m.normalizeConfig as AnyFn, l.normalizeConfig as AnyFn,
+    product(CALC_CONFIGS, [undefined, 'Market order', 'Ordine mercato', '', 5]));
+  // The original reads the interface language itself (English here); the port is handed the tag (its default is
+  // the English one), so only the English tag is comparable. The Italian grouping is pinned in calculator-config.spec.ts.
+  agree('formatGrams (English)', m.formatGrams as AnyFn, l.formatGrams as AnyFn,
+    product([...ODD, 12345.6, 1234567, -9999, 0.4, 1e21], ['en-GB', undefined]));
+});
+
+describe('calculator-dough-math: odd inputs', () => {
+  const m = calculatorDoughMath;
+  const l = legacyCalculatorDoughMath;
+  const AMOUNTS: readonly unknown[] = [...ODD, { a: 1, b: 2 }, { a: 0, b: 0 }, { a: -5, b: 10 }, { a: NaN, b: 1 }, { a: '3', b: 1 }, { a: 1e9, b: 1 }, {}];
+  const TARGETS: readonly unknown[] = [...ODD, 100, 5000, 0.4, -50, 1e12, '2000'];
+  agree('recipeTotal', m.recipeTotal as AnyFn, l.recipeTotal as AnyFn, product(AMOUNTS));
+  agree('fixRounding', m.fixRounding as AnyFn, l.fixRounding as AnyFn,
+    product([...ODD, [1.4, 2.4], [0.5, 0.5, 0.5], [10, 20, 30], [NaN, 1], [-1, 5], []], TARGETS));
+  const SPECS: readonly unknown[] = [...ODD, ...AMOUNTS.map(amounts => ({ amounts, leaveningKey: null, baselinePct: null })),
+    { amounts: { flour: 1000, yeast: 5 }, leaveningKey: 'yeast', baselinePct: 0.5 }, { amounts: { flour: 1000, yeast: 5 }, leaveningKey: 'yeast', baselinePct: 0 },
+    { amounts: { flour: 1000, yeast: 5 }, leaveningKey: 'nothing', baselinePct: 1 }, { amounts: { flour: 1000, yeast: 5 }, leaveningKey: 'yeast', baselinePct: null },
+    { amounts: { flour: 1000, yeast: 0 }, leaveningKey: 'yeast', baselinePct: 1 }, { amounts: { yeast: 5 }, leaveningKey: 'yeast', baselinePct: 1 }];
+  agree('scaleRecipe', m.scaleRecipe as AnyFn, l.scaleRecipe as AnyFn, product(SPECS, TARGETS, [...ODD, 0.65, 3, 40, -2, 100]));
+  const NAMED: readonly unknown[] = [...ODD, { flourBlu: 1, flourT65: 1, malt: 1, sugar: 1, salt: 1, yeast: 1, oil: 1, water1: 1, water2: 1 },
+    { flour: 3000, yeast: 100, water: 1500 }, { flourBlu: 1, flourT65: 1, flourWhole: 1, water1: 1, starter: 1, malt: 1, salt: 1, water2: 1 }, { flourBlu: 0, flourT65: 0, yeast: 0 }];
+  for (const name of ['scaleFocaccia', 'scaleBrioche', 'scaleSourdough'] as const) {
+    agree(name, m[name] as AnyFn, l[name] as AnyFn, product(NAMED, TARGETS, [...ODD, 0.65, 4, 18, 40]));
+  }
+});
+
+describe('calculator-recipe-source: odd inputs', () => {
+  const m = calculatorRecipeSource;
+  const l = legacyCalculatorRecipeSource;
+  const ROWS: readonly unknown[] = [...ODD, { label: 'Flour', grams: 800, unit: 'g' }, { label: 'Flour', grams: 0.8, unit: 'kg' }, { label: 'Salt', unit: 'to taste' },
+    { label: 'Milk', grams: 100, unit: 'ml' }, { rid: 'r1', label: 'Yeast', grams: 5, unit: 'g' }, { rid: ' ', label: 'x', grams: NaN, unit: 'g' }, { label: 5, grams: '7', unit: 'g' }];
+  const RECIPES: readonly unknown[] = [...ODD, { name: 'Old', ingredients: [{ key: 'flour', label: 'Flour', grams: 1000 }], leaveningKey: 'flour' },
+    { name: 'Linked', catalogueId: 'cat-1', leaveningRid: 'r1' }, { name: 'Linked', catalogueId: 'gone' }, { catalogueId: '' }, { catalogueId: 5 },
+    { name: 'Both', catalogueId: 'cat-1', ingredients: [{ key: 'a', label: 'A', grams: 1 }] }];
+  const CATALOGUES: readonly unknown[] = [undefined, null, {}, 5, { 'cat-1': { name: 'F', ingredients: [{ rid: 'r1', label: 'Yeast', grams: 5, unit: 'g' }, { rid: 'r2', label: 'Flour', grams: 995, unit: 'g' }] } },
+    { 'cat-1': { name: 'Empty', ingredients: [] } }, { 'cat-1': { name: 'Bad', ingredients: [{ rid: 'r1', label: 'Milk', grams: 100, unit: 'ml' }] } },
+    { 'cat-1': null }, { 'cat-1': { ingredients: 'x' } }, new Map([['cat-1', { name: 'M' }]])];
+  agree('isWeighable', m.isWeighable as AnyFn, l.isWeighable as AnyFn, product(ROWS));
+  agree('linkedRecipeIds', m.linkedRecipeIds as AnyFn, l.linkedRecipeIds as AnyFn, product([...ODD, RECIPES, RECIPES.slice(-4), [null, RECIPES[22]]]));
+  agree('isLinked', m.isLinked as AnyFn, l.isLinked as AnyFn, product(RECIPES));
+  agree('resolveRecipe', m.resolveRecipe as AnyFn, l.resolveRecipe as AnyFn, product(RECIPES, CATALOGUES));
+  const RESOLVED = RECIPES.flatMap(recipe => CATALOGUES.map(c => outcome(() => (l.resolveRecipe as AnyFn)(recipe, c)))).flatMap(o => ('returned' in o ? [o.returned] : []));
+  agree('sheetRecipe', m.sheetRecipe as AnyFn, l.sheetRecipe as AnyFn, [...product(RECIPES, [...ODD, ...RESOLVED.slice(0, 30)]), ...product(RECIPES.slice(-3), RESOLVED)]);
+  agree('canCalculate', m.canCalculate as AnyFn, l.canCalculate as AnyFn, product([...ODD, ...RESOLVED]));
+  agree('leaveningLost', m.leaveningLost as AnyFn, l.leaveningLost as AnyFn, [...product(RECIPES, [...ODD, ...RESOLVED.slice(0, 30)]), ...product(RECIPES.slice(-3), RESOLVED)]);
+  test('PROBLEMS is the same object shape', () => {
+    expect(m.PROBLEMS).toStrictEqual(l.PROBLEMS);
+  });
+});
+
+describe('calculator-recipe-text: odd inputs', () => {
+  // ⚠️ `Flour uniqua blue` is left out on purpose: it is the one input on which the port differs from the
+  // original, by decision (calculator-recipe-text.spec.ts asserts each file's answer separately).
+  const m = calculatorRecipeText;
+  const l = legacyCalculatorRecipeText;
+  const ROWS: readonly unknown[] = [...ODD, [{ name: 'Flour', grams: 1000 }], [{ name: 'Yeast', grams: 4.5 }, { name: 'A very long ingredient name', grams: 123456 }],
+    [{ name: 'Flour', grams: NaN }], [{ name: '', grams: 0 }], [{ name: 5, grams: '7' }], [null], [{ grams: 3 }], [{ name: 'Water' }], [{ name: 'Water', grams: -4 }], [{ name: 'Salt', grams: 0.4 }]];
+  agree('buildRecipeText', m.buildRecipeText as AnyFn, l.buildRecipeText as AnyFn,
+    product([...ODD, 'Focaccia', 'a b c', 'Ünïcode Dough', 'x'.repeat(40)], ROWS, [...ODD, 2500, 1000, 999.5, 1e7, -3]));
+});
+
+describe('confirm-flow: odd inputs', () => {
+  // The two things a Confirm can do are recorded rather than performed, so the test also compares WHICH ran.
+  function run(fn: AnyFn, recipeId: unknown, flow: unknown): unknown {
+    const calls: string[] = [];
+    const f = flow && typeof flow === 'object'
+      ? { ...(flow as object), openDayPicker: (id: unknown) => calls.push('picker:' + String(id)), saveToday: (id: unknown) => calls.push('today:' + String(id)) }
+      : flow;
+    return { answer: fn(recipeId, f), calls };
+  }
+  const CONFIGS: readonly unknown[] = [...ODD, {}, { askDoughDay: false }, { askDoughDay: true }, { askDoughDay: 0 }, { askDoughDay: null }, { askDoughDay: 'false' }];
+  test('the same answer and the same call for every odd input', () => {
+    const disagreements: string[] = [];
+    const cases: [unknown, unknown][] = [
+      ...product([...ODD, 'focaccia'], CONFIGS.map(config => ({ config }))).map(([r, f]) => [r, f] as [unknown, unknown]),
+      ...[undefined, null, 5, 'x'].map(flow => ['r', flow] as [unknown, unknown]),
+    ];
+    for (const [recipeId, flow] of cases) {
+      const a = outcome(() => run(confirmFlow.runConfirm as AnyFn, recipeId, flow));
+      const b = outcome(() => run(legacyConfirmFlow.runConfirm as AnyFn, recipeId, flow));
+      try { expect(a).toStrictEqual(b); } catch { disagreements.push(`runConfirm(${show(recipeId)}, ${show(flow)}): ${show(a)} / ${show(b)}`); }
+    }
+    expect(disagreements.slice(0, 10)).toStrictEqual([]);
+  });
+});
+
+describe('log-time: odd inputs', () => {
+  const DATES: readonly unknown[] = [undefined, null, 0, NaN, 'x', {}, [], new Date(2026, 5, 8, 0, 7), new Date(2026, 5, 8, 12, 0), new Date(2026, 11, 31, 23, 59),
+    new Date(NaN), new Date(0), new Date(2026, 1, 29), { getDate: () => 3, getHours: () => 13, getMinutes: () => 5, getDay: () => 2, getMonth: () => 4 }];
+  agree('logTimestamp', logTime.logTimestamp as AnyFn, legacyLogTime.logTimestamp as AnyFn, product(DATES));
+});
+
+describe('zoom-steps: odd inputs', () => {
+  const m = zoomSteps;
+  const l = legacyZoomSteps;
+  const STEPS: readonly unknown[] = [...ODD, 0, 1, 2, 3, 4, 5, 6, 99, -9, '0', '3', ' 2 ', '5', '6', '-1', '1.5', '1e1', '٣', '0x1', 2.0000001, new String('2'), { toString: () => '3' }];
+  agree('clampStep', m.clampStep, l.clampStep, product(STEPS));
+  agree('parseStep', m.parseStep, l.parseStep, product(STEPS));
+  agree('stepBy', m.stepBy, l.stepBy, product(STEPS, [...ODD, 1, -1, 2, -6, 0.5]));
+  agree('canStep', m.canStep, l.canStep, product(STEPS, [...ODD, 1, -1, 2, -6, 0.5]));
+  agree('scaleOf', m.scaleOf, l.scaleOf, product(STEPS));
+});
+
+describe('guided-model: odd inputs', () => {
+  // A partial port: only `ridOf` is compared.
+  agree('ridOf', guidedModel.ridOf, legacyGuidedModel.ridOf, product([...ODD, { rid: 'a' }, { rid: ' a ' }, { rid: 5 }, { rid: null }, { rid: '' }, { rid: [] }, { rid: { toString: () => 'o' } },
+    Object.create({ rid: 'p' }), { get rid(): unknown { throw new Error('boom'); } }]));
+});
+
+describe('log-model: odd inputs', () => {
+  // A partial port: only what it exports is compared.
+  const m = logModel as unknown as Record<string, unknown>;
+  const l = legacyLogModel as unknown as Record<string, unknown>;
+  const ITEMS: readonly unknown[] = [...ODD, [{ id: 'a', name: 'Loaf', clientName: 'C', qty: 10, weightG: 500, kind: 'number', crate: { show: false } }],
+    [{ qty: '3', weightG: '200' }, null, { qty: NaN, weightG: 5 }], [{ id: 'k', name: 'Kg', qty: 2.5, weightG: 1000, kind: 'kg', crate: { show: true, perBox: 20 } }]];
+  agree('buildSheet', m.buildSheet as AnyFn, l.buildSheet as AnyFn, [
+    ...product([null, undefined, 5, {}]),
+    ...[...CALC_RECIPES, null].flatMap(recipe => ITEMS.flatMap(items => [0, 100, -5, 'x', NaN, undefined].flatMap(extraGrams =>
+      [{ recipe, items, extraGrams }, { recipe, items, totalInput: 3000, extraGrams, trays: 4, leaveningPct: 0.65 },
+        { recipe, items, totalInput: -1, trays: 'x', leaveningPct: NaN, divisor: { includedIds: ['a'], n: 2 } },
+        { recipe, items, divisor: { includedIds: 'a', n: 0 } }].map(arg => [arg])))),
+  ]);
+  const OCC: readonly unknown[] = [...ODD, [{ name: 'X', products: [{ name: 'Roll', qty: 4, weightG: 50, unit: 'pz' }] }], [{ name: 'Y', products: [] }, null, { name: 5 }]];
+  const WORDS: readonly unknown[] = [undefined, {}, { extra: 'Extra', unit: 'pz' }, { extra: 5 }, null];
+  agree('buildLogText', m.buildLogText as AnyFn, l.buildLogText as AnyFn, [...product(ITEMS, OCC, [0, 100, 'x', undefined, -3]), ...product(ITEMS.slice(0, 6), OCC.slice(0, 6), [100], WORDS.slice(0, 1))]);
+  agree('recipeSnapshot', m.recipeSnapshot as AnyFn, l.recipeSnapshot as AnyFn, product(CALC_RECIPES));
+  const VERSIONS: readonly unknown[] = [...ODD, { sheet: { total_g: 5000, typed_g: 3000, extra_g: 100 } }, { sheet: { total_g: 5000, extra_g: 100 }, items: [{ qty: 2, weightG: 500 }] },
+    { sheet: { total_g: 10, extra_g: 'x' }, items: [{ qty: 20, weightG: 500 }] }, { sheet: { total_g: 1000, typed_g: '' } }, { sheet: { typed_g: null, total_g: 7 } },
+    { sheet: { total_g: 1000, typed_g: 'x' }, occasional: [{ products: [{ qty: 1, weightG: 100 }] }, null] }, { sheet: {} }, { sheet: null }];
+  agree('typedTotalOf', m.typedTotalOf as AnyFn, l.typedTotalOf as AnyFn, product(CALC_RECIPES, VERSIONS));
+  const LOGS: readonly unknown[] = [...ODD, { versions: [] }, { versions: [{ kind: 'create' }] }, { versions: [{ kind: 'create' }, { kind: 'edit' }], forDay: 'today' }, { versions: 'x' },
+    { id: 'l', forDay: 'tomorrow', versions: [{ a: 1 }] }];
+  agree('latestVersion', m.latestVersion as AnyFn, l.latestVersion as AnyFn, product(LOGS));
+  agree('addVersion', m.addVersion as AnyFn, l.addVersion as AnyFn, product(LOGS, [...ODD, { kind: 'edit' }]));
+  agree('setForDay', m.setForDay as AnyFn, l.setForDay as AnyFn, product(LOGS, [...ODD, 'today', 'tomorrow', 'yesterday']));
+  agree('createLog', m.createLog as AnyFn, l.createLog as AnyFn, [...product([undefined, null, 5]),
+    ...product([{ id: 'l1', dough: 'Focaccia', recipeId: 'focaccia', forDay: 'today', version: { kind: 'create' }, createdAtMs: 5, origin: 'calculator' },
+      { id: 'l2', dough: 5, recipeId: null, forDay: 'nope', version: {}, createdAtMs: 'x', origin: 'manual' }, { id: 'l3', version: null }, { version: { items: [1] } }])]);
+  agree('confirmTarget', m.confirmTarget as AnyFn, l.confirmTarget as AnyFn, product([undefined, null, {}, 5, { linkedId: 'a', linkedExists: true }, { linkedId: 'a', linkedExists: false },
+    { linkedId: '', linkedExists: true }, { linkedId: 'a' }, { linkedExists: 1 }, { linkedId: 0, linkedExists: 'yes' }]));
+  agree('workDayIndex', m.workDayIndex as AnyFn, l.workDayIndex as AnyFn, product([...ODD, ...NOWS, new Date(2026, 2, 29, 1, 30).getTime(), new Date(2026, 9, 25, 1, 30).getTime(),
+    new Date(2026, 9, 25, 3, 59).getTime(), new Date(2026, 9, 25, 4, 0).getTime(), -86400000, 8.64e15, '1700000000000']));
+  test('the day constants agree', () => {
+    expect(m.DAY_START_HOUR).toBe(l.DAY_START_HOUR);
+    expect(m.FOR_DAYS).toStrictEqual(l.FOR_DAYS);
+  });
 });

@@ -198,6 +198,18 @@ describe('screenNameFor', () => {
   ])('%s → %s', (pathname, expected) => {
     expect(screenNameFor(pathname)).toBe(expected);
   });
+  // The Calculator's work view is one screen, whichever recipe's tab is open: changing tab is not a
+  // new screen (the Log, Orders and Settings get their names with their own steps).
+  it.each([
+    ['/calculator', 'calculator'],
+    ['/calculator/brioche', 'calculator'],
+    ['/calculator/a%2Fb%20c', 'calculator'],
+    ['/calculator/brioche/more', 'calculator'],
+    ['/calculator-archive', 'not-found'],
+  ])('%s → %s', (pathname, expected) => {
+    expect(screenNameFor(pathname)).toBe(expected);
+  });
+
   // The usage record silently drops a name it does not accept: a new section whose id broke the
   // rule would simply never be counted.
   it('only ever gives a name the usage record accepts, «m2:» included', () => {

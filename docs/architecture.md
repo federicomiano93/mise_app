@@ -133,6 +133,39 @@ Aria does not support Preact. The numbers are below.
   Stocktake's (a feature never imports from another feature's folder). The money comes from the
   venue's country (`session/useMoney.ts`), the percentages and dates from the interface language.
   Its parity list is `docs/parity/foodcost.md`.
+- `calculator/` — the Calculator, the fourth section, built the same way. Step 3c-1 is in slices; after
+  slice A it holds the data layer (`calculatorSource.ts`, a port of the Calculator's half of
+  `js/firebase.js`; `calculatorStore.ts`: the configuration, the linked catalogue recipes watched one by
+  one and the 30 days of logs, local-first, with the current app's `calculator-config` and `logs-cache`
+  copies; `CalculatorContext.tsx`) and the work view: `CalculatorSection` (the frame and the address),
+  `RecipeTabs` (a tab list for two to four recipes, a plain h2 for one), `RecipePanel` (a recipe's entries
+  by its logic — the leavening knob, trays, total, orders, extra dough — and its scaled recipe),
+  `OrderCards`, `NumberField` (the current app's number-box behaviour: a 0 empties on tap, an empty box
+  comes back as 0), `ResultCard` (rows, total, divisor, crates, and the sentence of a recipe that cannot
+  be calculated). Addresses, in `calculatorPath.ts` (ids split before they are decoded): `/calculator` and
+  `/calculator/<recipeId>`; an unknown or hidden recipe goes to the first visible one by replacing the
+  address, and picking a tab REPLACES the entry too. The usage record names one screen, `calculator`. From
+  1000px the entries are on the left and the recipe on the right, sticking to the top (`RecipePanel.module.css`).
+  What each tab remembers lives in the current app's own `localStorage` keys (`calculatorTabState.ts`,
+  spelled by `shared/src/calculator-tab-keys.ts`): both apps read each other's numbers, `touched-<rid>` is
+  written only where a number is typed or an option picked, and the new-work-day sweep (4 am) clears a stale
+  tab before it is first drawn and when the app comes back to the foreground — never while it is on screen
+  (`TabStateContext.tsx`). The maths is the shared ports (`calculateTab` in `calculatorResult.ts` only wires
+  them). Slice B adds the rest of the work view. The recipe is shown only once the dough was confirmed
+  (`revealed-<rid>`, and `lock-<rid>` `{"locked":bool,"logId":string|null}`, both the current app's keys: a
+  tab confirmed there is confirmed here), and then it is the FIRST node of the panel (moved, never reordered
+  with CSS), otherwise it sits just before «Reset all fields». Confirm (`runConfirm` of `shared/src/confirm-flow.ts`:
+  a Today/Tomorrow dialog unless `askDoughDay` is off) builds the version in `calculatorSave.ts` from the
+  recipe the screen shows (`sheetRecipe`), hands it to the store's `confirmDough`, writes `revealed` and
+  `lock`, locks every box but the divisor and tells the usage record (`dough-confirmed`); a tab that cannot be
+  calculated is refused in a dialog with the screen's own sentence; a full log leaves the tab open. Edit asks,
+  then unlocks keeping the link; Reset asks (danger) and goes through the ONE forget function. The store's
+  messages (`calculatorMessages.ts`) reach the section's `StatusMessage`. `ResultCard` also holds the
+  full-screen view (`RecipeFullScreen`: a native `<dialog>`, six text sizes in `mise.calcZoomStep`), Copy
+  (`clipboard.ts`, raced against 2 s) and Send (`ui/SendSheet.tsx`, the shared «which road» sheet: WhatsApp
+  with no recipient, or the mail app). jsdom has no modal `<dialog>`: `testing/setup.ts` gives it
+  `showModal`/`close`. Not yet: the doors to Settings and the empty states' buttons (3c-2), the Log (3c-3),
+  orders (3c-4). Its parity list is `docs/parity/calculator.md`.
 - `ui/` — the shared controls: `Button`, `Dialog` and `useConfirm` (a question that waits for an
   answer; never the browser's `confirm()`), `StatusMessage` (one short message at a time, in a
   live region that exists before it speaks), `FormBar` (Back, title, the one primary action: the
@@ -162,6 +195,15 @@ allergen-model, sections, firebase-target, local-data, same-data, error-model, d
 usage-model, membership, location-id, pastries-model, pastries-log-model, pastries-lock, pack-size,
 order-unit, ingredient-name, order-cost, inventory-model, inventory-outbox, inventory-purchases,
 vat-rates, ingredient-kind, product-limits, vat-guide, foodcost-weighing,
+calculator-dough-math, calculator-recipe-source, calculator-recipe-text (one documented difference: the line
+`Flour uniqua blue`, one venue's data, is written like every other), confirm-flow, log-time,
+calculator-config (partial: the read side; leaves out the save path `reconcileConfigWrite` / `saveFailureKey` and
+`orderPrefillLabel`; `formatGrams` and `normalizeConfig` take the language as an argument), log-model (partial: the
+write half, `workDayIndex` and `typedTotalOf`; leaves out the list and edit half, the legacy migration and `dayLabel`;
+`buildLogText` takes its two words as an argument), guided-model (partial: `ridOf` only), zoom-steps (partial: the
+arithmetic; leaves out the storage and DOM halves), calculator-tab-keys (new in Mise 2, no original: the
+`localStorage` keys of a Calculator tab and the stale-tab and lock decisions, pinned against the current app's
+source),
 market (partial: the country and the money, not the label
 vocabulary), price-model (partial: the reading half, not the writing half or the dictionary lookups),
 inventory-value (partial: everything but `formatTotal`, which reads the money from a module variable;
