@@ -49,7 +49,8 @@ export function DividerRows({ rows, labelledBy, hintId, onToggle, focusRow }: Pr
           <>
             <span className={styles.name}>{name}</span>
             <span className={styles.amount}>
-              <span className={styles.number}>{number}</span>
+              {/* «to taste» has no number: the word takes the whole cell, or «to taste» is cut to «to tas». */}
+              {unit === 'to taste' ? null : <span className={styles.number}>{number}</span>}
               <span className={styles.unit}>{unitWord(unit, t)}</span>
             </span>
           </>
