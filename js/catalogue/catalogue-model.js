@@ -114,6 +114,7 @@ export function exportModelOf(recipe, amounts, totalGrams) {
       // kg and l keep their decimals; `text` is the number exactly as the screen writes it.
       decimals: unitDecimals(unitOf(ing)),
       text: amounts[i] === null || amounts[i] === undefined ? null : formatAmount(amounts[i], unitOf(ing)),
+      ...(ing.dividerAfter === true ? { dividerAfter: true } : {}),
     })),
   };
 }
@@ -153,6 +154,11 @@ function normalizeIngredient(raw) {
   // guided-model.js withRowIds() assigns them, and only on save.
   const rid = raw.rid != null ? String(raw.rid).trim() : '';
   if (rid) row.rid = rid;
+
+  // ⚠️ SAME TRAP A THIRD TIME: the divider line the owner put under this row. Strictly `true`
+  // (a stored 'true', 1 or false is no line), absent otherwise, so every recipe written before
+  // dividers existed stays byte-identical.
+  if (raw.dividerAfter === true) row.dividerAfter = true;
   return row;
 }
 
@@ -534,6 +540,9 @@ export function applyLink(row, chosen, { label } = {}) {
 // mixing step points at, so reordering the ingredients never unhooks a step (13 Sep 2026:
 // «dammi la possibilità di spostare l'ordine degli ingredienti già compilati»).
 // An index outside the list, or a move to where it already is, gives the list back as it was.
+// ⚠️ A DIVIDER LINE STAYS WHERE IT IS BETWEEN THE ROWS: a row that moves leaves its line behind, so
+// the row just above its old place takes it (or it goes, when nothing is above). This mutates the
+// moved row and that one neighbour: the editor's rows are its own working copies.
 export function moveRow(list, from, to) {
   const rows = Array.isArray(list) ? list.slice() : [];
   const a = Math.trunc(Number(from));
@@ -541,8 +550,42 @@ export function moveRow(list, from, to) {
   if (!Number.isInteger(a) || !Number.isInteger(b) || a === b
     || a < 0 || b < 0 || a >= rows.length || b >= rows.length) return rows;
   const [row] = rows.splice(a, 1);
+  if (row?.dividerAfter === true) {
+    delete row.dividerAfter;
+    const above = rows[a - 1];
+    if (above && typeof above === 'object') above.dividerAfter = true;
+  }
   rows.splice(b, 0, row);
+  // A line the move left under the LAST row is taken off now: hidden there, it would come back with the
+  // next row added or moved below it (code review, 5 Nov 2026).
+  const last = rows[rows.length - 1];
+  if (last && typeof last === 'object' && last.dividerAfter === true) delete last.dividerAfter;
   return rows;
+}
+
+// Is a line drawn under row i? Never under the last row: nothing to divide it from.
+export const hasDividerAfter = (rows, i) => Array.isArray(rows) && i < rows.length - 1 && rows[i]?.dividerAfter === true;
+
+// The rows `keep` accepts. A dropped row's line goes to the kept row above it (copied, never mutated: the caller's rows may be the store's), or goes with it when there is none.
+export function keepRows(rows, keep) {
+  const kept = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (keep(row)) { kept.push(row); continue; }
+    if (row?.dividerAfter === true && kept.length) kept[kept.length - 1] = { ...kept[kept.length - 1], dividerAfter: true };
+  }
+  return kept;
+}
+
+// Deleting the last row leaves no hidden line under the new last one (it would reappear with the next row).
+export const removeRow = (rows, index) => withoutTrailingDivider(keepRows(rows, row => row !== rows[index]));
+
+// What is saved: a line after the last row is taken off.
+export function withoutTrailingDivider(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const last = list[list.length - 1];
+  if (last?.dividerAfter !== true) return list;
+  const { dividerAfter, ...rest } = last;
+  return [...list.slice(0, -1), rest];
 }
 
 // ── kg scaling (pure pro-rata "total" — the catalogue's only calc logic) ──────
@@ -698,7 +741,7 @@ export function toCalculatorRecipe(recipe) {
     logic: 'total',
     // The Calculator is grams-only: convert weighable rows to grams and leave out
     // non-weighable ones (pieces / spoons / pinch / to-taste). The UI warns first
-    // when anything is left out — see nonWeighableLabels.
+    // when anything is left out — see nonWeighableLabels. Divider lines are not carried over (decided).
     ingredients: (recipe.ingredients || [])
       .filter(i => isWeighableUnit(unitOf(i)))
       .map(i => ({ label: i.label, grams: Math.round(ingGrams(i)) })),
