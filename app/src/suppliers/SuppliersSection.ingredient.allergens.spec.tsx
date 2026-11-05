@@ -529,7 +529,9 @@ describe('⚠️ a tap on a tick box straight from the pack box never undoes its
     const { region, user } = await open('/suppliers/ingredient/i-plain');
     await user.click(packHead(region));
     await user.click(allergenHead(region));
-    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    // ⚠️ 'performance' TOO: the R1 window is measured on performance.now() (a steady clock). Faking only Date let the REAL time
+    // between the app's tick and the tap decide, and under the load of the full suite that passed 800 ms (failed once, 24 Oct 2026).
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] });
     fireEvent.change(packBox(region), { target: { value: 'latte' } });
     act(() => { vi.advanceTimersByTime(450); });
     expect(contains(region, 'Milk')).toBeChecked();

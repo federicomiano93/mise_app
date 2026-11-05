@@ -17,6 +17,8 @@ import { createFirestoreStocktakeSource } from '../stocktake/stocktakeSource';
 import type { StocktakeSource } from '../stocktake/stocktakeSource';
 import { createFirestoreSuppliersSource } from '../suppliers/suppliersSource';
 import type { SuppliersSource } from '../suppliers/suppliersSource';
+import type { InvoiceImportSource } from '../suppliers/invoiceImport/importSource';
+import { createLazyImportSource } from '../suppliers/invoiceImport/lazyImportSource';
 
 // Where every section gets its data from: one factory per section, built once in main.tsx on the
 // session's backend. A screen's spec passes fakes instead (testing/renderApp.tsx), so no screen
@@ -38,6 +40,8 @@ export interface DataServices {
   // «Ingredients & suppliers» (step 3e): the suppliers, the ingredients with their prices, config/orders, and the venue's
   // allergen and nutrition switches (a Cloud Function).
   suppliers(locationId: string): SuppliersSource;
+  // «Import from invoices» (step 3e-6): network-only reads and writes (parity I8), made when the import screen opens.
+  invoiceImport(locationId: string): InvoiceImportSource;
 }
 
 // What the data layers need from the backend besides Firestore: the account behind a client's ordering link is
@@ -63,6 +67,7 @@ export function createDataServices(firestore: () => Promise<FirestoreKit>, auth:
     photo: locationId => createPhotoSource((name, data, timeoutMs) => auth.callFunction(name, data, timeoutMs), locationId),
     suppliers: locationId => createFirestoreSuppliersSource(firestore,
       (name, data, timeoutMs) => auth.callFunction(name, data, timeoutMs), locationId),
+    invoiceImport: locationId => createLazyImportSource(firestore, locationId),
   };
 }
 

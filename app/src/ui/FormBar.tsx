@@ -7,6 +7,8 @@ type Props = {
   // The Back button's name («Back»): the words belong to the caller's language, not to this file.
   backLabel: string;
   onBack: () => void;
+  // Back does nothing for now (a bulk write is in the air and cannot be put back by leaving): the button is drawn off.
+  backDisabled?: boolean;
   // The screen's name, an h2: the page's own h1 is the section («Pastries»).
   title: string;
   // Lets the screen's region be named by it (aria-labelledby).
@@ -22,10 +24,10 @@ type Props = {
 // The bar at the top of a screen one level down (the design's `.form-bar`): Back · title · the one
 // primary action. It sticks to the top of the scrolling area, so Save never scrolls out of reach
 // of a long form.
-export function FormBar({ backLabel, onBack, title, titleId, titleRef, sub, action }: Props) {
+export function FormBar({ backLabel, onBack, backDisabled = false, title, titleId, titleRef, sub, action }: Props) {
   return (
     <header className={styles.bar}>
-      <Button className={styles.back} aria-label={backLabel} onPress={onBack}>
+      <Button className={styles.back} aria-label={backLabel} onPress={onBack} isDisabled={backDisabled}>
         <ChevronLeft aria-hidden="true" />
       </Button>
       <div className={styles.text}>

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { Suspense, lazy, useEffect, useRef } from 'react';
 import { useLocation, useNavigationType } from 'react-router';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
@@ -13,7 +13,9 @@ import { SUPPLIERS_PATH } from './suppliersPath';
 import type { SuppliersTab, SuppliersView } from './suppliersPath';
 import styles from './SuppliersDetail.module.css';
 
-// Every view the section draws: a list, a supplier's own screen, its card, a new supplier, or Settings. (An address that
+const InvoiceImportScreen = lazy(() => import('./invoiceImport/InvoiceImportScreen'));
+
+// Every view the section draws: a list, a supplier's own screen, its card, a new supplier, Settings or the import. (An address that
 // names none of them is sent back to the list by the section.)
 export type ShownView = Exclude<SuppliersView, { kind: 'unknown' }>;
 
@@ -33,6 +35,14 @@ export function SuppliersDetail({ view }: { view: ShownView }) {
     return <IngredientCardScreen key="ingredient-new" id={null} packaging={view.packaging} preset={view.supplier} />;
   }
   if (view.kind === 'settings') return <SettingsScreen />;
+  // Loaded when somebody opens it: the reader, the plan and the zip library are code nobody needs until then (P16).
+  if (view.kind === 'import') {
+    return (
+      <Suspense fallback={null}>
+        <InvoiceImportScreen />
+      </Suspense>
+    );
+  }
   return <SupplierScreen id={view.id} />;
 }
 

@@ -65,6 +65,10 @@ export interface SuppliersSnapshot {
   // Whether the SERVER has answered the prices once (parity C28): only then is a price missing from the list really «no
   // price». Until then a price writer's card reads its own price document before it opens (readPrice).
   readonly pricesFromServer: boolean;
+  // The price documents themselves, by ingredient id, as the live stream holds them ({} for whoever may not read prices, and
+  // until they arrive). The invoice import plans against them (parity I5: the page's `prices()` getter); every list reads the
+  // ingredients above, where they are already laid on.
+  readonly prices: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
   // The venue's saved category list (config/orders.ingredientCategories), or null when it never saved one — or it has
   // not arrived. ⚠️ AN EMPTY LIST IS AN ANSWER: the venue deleted every category (parity S27).
   readonly storedCategories: readonly string[] | null;
@@ -199,7 +203,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
 
   function build(): SuppliersSnapshot {
     return {
-      suppliers, suppliersLoaded, suppliersFromServer, suppliersBroken, ingredients, ingredientsLoaded, ingredientsFromServer, ingredientsBroken, pricesReadable, pricesFromServer,
+      suppliers, suppliersLoaded, suppliersFromServer, suppliersBroken, ingredients, ingredientsLoaded, ingredientsFromServer, ingredientsBroken, pricesReadable, pricesFromServer, prices,
       storedCategories, favourites, configLoaded,
     };
   }

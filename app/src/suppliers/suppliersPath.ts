@@ -8,6 +8,7 @@
 //   /suppliers/supplier/<id>        one supplier's own screen («What they sell»)
 //   /suppliers/supplier/<id>/edit   that supplier's card, one level below its screen
 //   /suppliers/settings             Settings of this page (owner and manager), full width at every size
+//   /suppliers/import               «Import from invoices» (price writers of an Italian venue), full width at every size
 //   /suppliers/ingredient/<id>      an ingredient's or a packaging item's card, one level below the list
 //   /suppliers/ingredient/new       a new ingredient; `?kind=packaging` makes it a new packaging item and
 //                                   `?supplier=<id>` starts it on that supplier (opened from the supplier's screen)
@@ -21,6 +22,7 @@ export const SUPPLIERS_TAB_PATH = '/suppliers/suppliers';
 export const PACKAGING_TAB_PATH = '/suppliers/packaging';
 export const NEW_SUPPLIER_PATH = '/suppliers/supplier/new';
 export const SUPPLIERS_SETTINGS_PATH = '/suppliers/settings';
+export const SUPPLIERS_IMPORT_PATH = '/suppliers/import';
 export const NEW_INGREDIENT_PATH = '/suppliers/ingredient/new';
 export const NEW_PACKAGING_PATH = `${NEW_INGREDIENT_PATH}?kind=packaging`;
 
@@ -35,6 +37,7 @@ export type SuppliersView =
   // A new ingredient or packaging item; `supplier` is the preset of a new item opened from a supplier's screen.
   | { readonly kind: 'ingredient-new'; readonly packaging: boolean; readonly supplier: string | null }
   | { readonly kind: 'settings' }
+  | { readonly kind: 'import' }
   | { readonly kind: 'unknown' };
 
 export const supplierPath = (id: string): string => `${SUPPLIERS_PATH}/supplier/${encodeURIComponent(id)}`;
@@ -88,6 +91,7 @@ export function parseSuppliersPath(rest: string | undefined, search = ''): Suppl
     if (first === 'suppliers') return { kind: 'list', tab: 'suppliers' };
     if (first === 'packaging') return { kind: 'list', tab: 'packaging' };
     if (first === 'settings') return { kind: 'settings' };
+    if (first === 'import') return { kind: 'import' };
     return { kind: 'unknown' };
   }
   if (first === 'ingredient' && second !== undefined && parts.length === 2) {
@@ -117,6 +121,7 @@ export function suppliersScreenName(rest: string): string {
   // A new supplier and an existing one's card are one screen in the statistics.
   if (view.kind === 'supplier-edit' || view.kind === 'supplier-new') return 'suppliers-supplier-edit';
   if (view.kind === 'settings') return 'suppliers-settings';
+  if (view.kind === 'import') return 'suppliers-import';
   // A new item and an existing one's card are one screen in the statistics.
   if (view.kind === 'ingredient' || view.kind === 'ingredient-new') return 'suppliers-ingredient';
   return 'suppliers';
