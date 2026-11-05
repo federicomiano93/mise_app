@@ -13,6 +13,7 @@ import type { LucideIcon } from 'lucide-react';
 import { isMonthId } from '@mise/shared/inventory-model';
 import { isWeekday } from '@mise/shared/pastries-model';
 import type { MessageKey } from '../i18n/en';
+import { ordersScreenName } from '../orders/ordersPath';
 import { parseRecipesPath } from '../recipes/recipesPath';
 import { suppliersScreenName } from '../suppliers/suppliersPath';
 
@@ -125,6 +126,8 @@ export function screenNameFor(pathname: string): string | null {
   if (section.id === 'recipes') return recipesScreenName(pathname, section.path);
   // «Ingredients & suppliers» (step 3e): the names of docs/parity/suppliers.md, decision T1.
   if (section.id === 'suppliers') return suppliersScreenName(pathname.slice(section.path.length));
+  // Orders (step 3f-1): the list, a supplier's order and its «What they sell».
+  if (section.id === 'orders') return ordersScreenName(pathname.slice(section.path.length));
   return section.id;
 }
 

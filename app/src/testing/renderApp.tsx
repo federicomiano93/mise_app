@@ -19,6 +19,7 @@ import type { Session } from '../session/session';
 import { fakeCalculatorSource } from './fakeCalculatorSource';
 import { fakeClientOrdersSource } from './fakeClientOrdersSource';
 import { fakeFoodcostSource } from './fakeFoodcostSource';
+import { fakeOrdersSource } from './fakeOrdersSource';
 import { fakeRecipesSource } from './fakeRecipesSource';
 import { fakePastriesSource } from './fakePastriesSource';
 import { fakeStocktakeSource } from './fakeStocktakeSource';
@@ -56,7 +57,8 @@ export function renderApp(path: string, { lang = 'en', routes = appRoutes, sessi
     clientOrders: () => fakeClientOrdersSource(), recipes: () => fakeRecipesSource(),
     photo: () => ({ readRecipe: () => Promise.reject(new Error('no photo reader in this spec')), setRecipePhoto: () => Promise.reject(new Error('no photo switch in this spec')) }),
     suppliers: () => fakeSuppliersSource(), invoiceImport: () => fakeImportSource(),
-    priceChanges: () => fakePriceChangesSource(), merge: () => fakeMergeSource(), ...data };
+    priceChanges: () => fakePriceChangesSource(), merge: () => fakeMergeSource(),
+    orders: () => fakeOrdersSource(), ...data };
 
   render(
     <I18nProvider initialLanguage={lang} initialMessages={messages}>

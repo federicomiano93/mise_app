@@ -1,0 +1,103 @@
+/* The frame of «Orders». A phone, or a tablet held upright: the list is the screen, and a supplier replaces it. From 1000px
+   (the lab tablet held sideways is 1024 wide): the list on the left (`--list-w`) and the chosen supplier on the right, with
+   a prompt while nothing is chosen.
+
+   ⚠️ NOTHING IN THE CHAIN FROM THE SCROLL AREA DOWN TO THE LIST CLIPS (no `overflow` on .layout or .list): the search box
+   sticks to the top of the scroll area, and one clipping ancestor would make it an ordinary row. On a phone .detail does not
+   clip either (the bar sticks to the top of the screen); on the split it is its own scroll area, on purpose (below). */
+
+.layout {
+  display: grid;
+  gap: var(--s4);
+}
+
+.list,
+.detail {
+  min-width: 0;
+}
+
+/* One pane at a time on a phone: with the list on screen the right-hand side (only a prompt) is not drawn, and with a
+   supplier open the list is not drawn behind it. The list stays mounted, so the place in it, and what is typed in its
+   search box, are still there when Back returns to it. */
+@media (max-width: 999.98px) {
+  .layout[data-view="list"] .detail {
+    display: none;
+  }
+
+  .layout[data-view="detail"] .list {
+    display: none;
+  }
+}
+
+@media (min-width: 1000px) {
+  .layout {
+    grid-template-columns: var(--list-w) minmax(0, 1fr);
+    gap: var(--s6);
+    align-items: start;
+  }
+
+  /* ⚠️ THE RIGHT-HAND SIDE STAYS ON SCREEN WHILE THE LIST SCROLLS: stuck to the top of the scroll area, it is always in view.
+     It is never taller than the scroll area (the screen less the top bar), so it scrolls on its own, and the supplier's bar
+     sticks to ITS top.
+
+     ⚠️ NO `overscroll-behavior: contain`: a scroll that reaches the pane's end goes on to the page. */
+  .detail {
+    position: sticky;
+    top: var(--s4);
+    max-height: calc(var(--vh100) - var(--topbar-h) - 2 * var(--s4));
+    overflow-y: auto;
+  }
+}
+
+/* The live region is always there; it takes no room while it is empty (never display: none: that can take it out of the
+   accessibility tree). */
+.status:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+}
+
+.status {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin-bottom: var(--s3);
+}
+
+.problem {
+  padding: var(--s3);
+  border: 1px solid var(--danger);
+  border-radius: var(--r-md);
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
+
+.loading {
+  padding: var(--s6);
+  color: var(--ink-2);
+}
+
+/* The right-hand side with nothing chosen: a quiet card that says what to do. */
+.prompt {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: 240px;
+  padding: var(--s6);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-lg);
+  color: var(--ink-2);
+  text-align: center;
+}
+
+.promptTitle {
+  color: var(--ink);
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}

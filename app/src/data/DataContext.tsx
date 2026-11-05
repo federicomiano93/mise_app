@@ -11,6 +11,8 @@ import { createFirestorePastriesSource } from '../pastries/pastriesSource';
 import type { PastriesSource } from '../pastries/pastriesSource';
 import { createPhotoSource } from '../recipes/photoSource';
 import type { PhotoSource } from '../recipes/photoSource';
+import { createFirestoreOrdersSource } from '../orders/ordersSource';
+import type { OrdersSource } from '../orders/ordersSource';
 import { createFirestoreRecipesSource } from '../recipes/recipesSource';
 import type { RecipesSource } from '../recipes/recipesSource';
 import { createFirestoreStocktakeSource } from '../stocktake/stocktakeSource';
@@ -50,6 +52,8 @@ export interface DataServices {
   priceChanges(locationId: string): PriceChangesSource;
   // «Merge another pack…» (step 3e-7): network-only reads and writes (parity I127), made when the chooser opens.
   merge(locationId: string): MergeSource;
+  // «Orders» (step 3f): the suppliers, the ingredients, config/orders and the shared order in progress (drafts/current).
+  orders(locationId: string): OrdersSource;
 }
 
 // What the data layers need from the backend besides Firestore: the account behind a client's ordering link is
@@ -78,6 +82,7 @@ export function createDataServices(firestore: () => Promise<FirestoreKit>, auth:
     invoiceImport: locationId => createLazyImportSource(firestore, locationId),
     priceChanges: locationId => createFirestorePriceChangesSource(firestore, locationId),
     merge: locationId => createLazyMergeSource(firestore, locationId),
+    orders: locationId => createFirestoreOrdersSource(firestore, locationId),
   };
 }
 
