@@ -25,8 +25,11 @@
 // `setDeliveryCheck`. What Incoming SHOWS is derived by the screens from the records (@mise/shared/deliveries).
 //
 // ⚠️ NO COPY OF ITS OWN IN localStorage (decision T14): the current app cached config/orders in `orders-config` so the
-// Stock column did not flash before the snapshot (parity M11); Firestore's offline database already answers from this
-// phone at once, and a key outside KEEP_PREFIXES would be one more thing a venue switch must wipe.
+// Stock column did not flash before the snapshot (parity M11); Firestore's offline database answers from this phone (not at
+// once behind 302 ingredients: parity CP6), and a key outside KEEP_PREFIXES would be one more thing a venue switch must wipe. T14 still holds for
+// config/orders and for the orders. The supplier and ingredient LIST COPY (`orders-list-copy`, shared/src/list-copy.ts) is a
+// separate thing: it lives OUTSIDE this store (useListCopy.ts), is never in the snapshot, and only draws the rows of the
+// supplier list while the live lists have not landed (a supplier tapped meanwhile is held in OrdersSection.tsx until they do).
 
 import { stampFor } from '@mise/shared/order-day';
 import { parseISODate, todayISO } from '@mise/shared/day';
@@ -76,6 +79,10 @@ export interface OrdersSnapshot {
   // config/orders through normalizeOrdersConfig (defaults while it has not arrived: the Stock box shown, parity M10).
   readonly config: OrdersConfig;
   readonly configLoaded: boolean;
+  // Any first word about config/orders, even «none» from this phone's own database, or a refusal. `configLoaded` says the document
+  // can be believed; this says only that the wait is over, which is all the list copy needs (a venue with no document has no order
+  // to reshuffle the rows).
+  readonly configAnswered: boolean;
   // The goods-arrived switch of config/orders (decision F4), read beside it: absent = on, asking about every order.
   readonly deliveryCheck: DeliveryCheck;
   // The order in progress: the server's document with this phone's unsent typing on top (draftSync.ts).
@@ -263,7 +270,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
   let snapshot: OrdersSnapshot = {
     suppliers: [], suppliersLoaded: false, suppliersBroken: false,
     ingredients: [], ingredientsLoaded: false, ingredientsBroken: false,
-    config: normalizeOrdersConfig(null), configLoaded: false, deliveryCheck: deliveryCheckOf(null),
+    config: normalizeOrdersConfig(null), configLoaded: false, configAnswered: false, deliveryCheck: deliveryCheckOf(null),
     draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false,
     serverSeen: { suppliers: false, ingredients: false, draft: false },
     placing: [],
@@ -527,6 +534,19 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       // Fixed before the first older page is asked for; once a page is in, the window it was cut from stays.
       if (!olderLoader) windowStart = liveHistoryStart(parseISODate(deps.today()));
       stops = [
+        // ⚠️ FIRST ON PURPOSE. Firestore answers its listeners in the order they start, and the list copy waits for this one
+        // document (the supplier order and the favourites decide the rows): behind the 302 ingredients it lands a second later.
+        // ⚠️ A config missing from the browser's own database is only «none» once the server says so: until then the
+        // defaults stand (the Stock box shown — only an explicit false hides it, parity M3).
+        source.watchOrdersConfig(
+          (data, meta) => set({
+            config: normalizeOrdersConfig(data),
+            deliveryCheck: deliveryCheckOf(data),
+            configLoaded: snapshot.configLoaded || data !== null || meta.fromServer,
+            configAnswered: true,
+          }),
+          () => set({ configLoaded: true, configAnswered: true }),
+        ),
         source.watchSuppliers(
           (list, meta) => set({
             suppliers: list,
@@ -544,16 +564,6 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
             serverSeen: meta.fromServer && !snapshot.serverSeen.ingredients ? { ...snapshot.serverSeen, ingredients: true } : snapshot.serverSeen,
           }),
           () => set({ ingredientsBroken: true, ingredientsLoaded: true }),
-        ),
-        // ⚠️ A config missing from the browser's own database is only «none» once the server says so: until then the
-        // defaults stand (the Stock box shown — only an explicit false hides it, parity M3).
-        source.watchOrdersConfig(
-          (data, meta) => set({
-            config: normalizeOrdersConfig(data),
-            deliveryCheck: deliveryCheckOf(data),
-            configLoaded: snapshot.configLoaded || data !== null || meta.fromServer,
-          }),
-          () => set({ configLoaded: true }),
         ),
         // ⚠️ A DRAFT MISSING FROM THE BROWSER'S OWN DATABASE IS NOT AN EMPTY ORDER: a phone that never opened Orders has
         // no copy of it. The lines are drawn only once the server has answered or the copy holds the document.

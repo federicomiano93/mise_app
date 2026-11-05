@@ -22,6 +22,20 @@ describe('StatusMessage', () => {
   beforeEach(() => { vi.useFakeTimers(); });
   afterEach(() => { vi.useRealTimers(); });
 
+  it('nothing to say takes the message away at once, and its timer with it', () => {
+    draw('Saved', '');
+    press('Saved');
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+    act(() => { vi.advanceTimersByTime(2000); });
+    fireEvent.click(screen.getByRole('button', { name: 'say' }));
+    expect(region()).toBeEmptyDOMElement();
+    // The first message's clock, had it been left running, would end at 2600 and take this one with it.
+    press('Saved');
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+    act(() => { vi.advanceTimersByTime(MESSAGE_MS - 1); });
+    expect(screen.getByText('Saved')).toBeInTheDocument();
+  });
+
   // A live region inserted already filled in is announced unreliably: it must be on the page,
   // empty, before there is anything to say.
   it('has its live region on the page, empty, before the first message', () => {

@@ -1995,6 +1995,7 @@ export const it: Messages = {
   'ord.live.suppliers': 'i fornitori',
   'ord.live.ingredients': 'gli ingredienti',
   'ord.live.history': 'gli ordini passati',
+  'ord.copy.wait': 'Un attimo: sto caricando i dati aggiornati.',
   'ord.field.order': 'Ordine',
   'ord.field.stock': 'Giacenza',
   'ord.line.usuallyFrom': 'di solito da {supplier}',

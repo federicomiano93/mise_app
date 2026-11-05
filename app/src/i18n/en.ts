@@ -2191,6 +2191,7 @@ export const en = {
   'ord.live.suppliers': 'suppliers',
   'ord.live.ingredients': 'ingredients',
   'ord.live.history': 'past orders',
+  'ord.copy.wait': 'Just a moment: loading the latest data.',
   'ord.field.order': 'Order',
   'ord.field.stock': 'Stock',
   'ord.line.usuallyFrom': 'usually from {supplier}',
