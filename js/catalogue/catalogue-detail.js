@@ -11,7 +11,7 @@ import { currentSession } from '../firebase.js';
 import { isSectionAllowed } from '../sections.js';
 import {
   scaleCatalogue, baseAmounts, weighableTotalGrams, unitOf, unitText, batchWarning, formatWeight, formatAmount,
-  exportModelOf,
+  exportModelOf, hasDividerAfter,
 } from './catalogue-model.js';
 import {
   getScaledTarget, setScaledTarget, clearScaledTarget, getIngredients, getRecipesById,
@@ -534,7 +534,7 @@ export function renderDetail({ recipe, app }) {
     const scaled = displayTarget > 0;
     const amounts = scaled ? scaleCatalogue(recipe, displayTarget) : baseAmounts(recipe);
     recipe.ingredients.forEach((ing, i) => {
-      ingRows.appendChild(el('div', { class: 'cat-ing-row' }, [
+      ingRows.appendChild(el('div', { class: 'cat-ing-row' + (hasDividerAfter(recipe.ingredients, i) ? ' cat-ing-row--divider' : '') }, [
         el('span', { class: 'cat-ing-name', text: ing.label }),
         amountEl(amountParts(amounts[i], unitOf(ing))),
       ]));

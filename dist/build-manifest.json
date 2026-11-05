@@ -135,14 +135,14 @@
       }
     },
     "dist/catalogue.css": {
-      "sha": "c58024e507c3c1dc",
+      "sha": "a793bb306fe7c876",
       "inputs": {
-        "catalogue.css": "3615947afc0abc85"
+        "catalogue.css": "17a98c51d88cad37"
       }
     },
     "dist/catalogue.js": {
-      "sha": "f2c67e501446a9d7",
-      "mapSha": "b0af7a31a583a974",
+      "sha": "7159e683d9b028e2",
+      "mapSha": "76ed54e9fa6b8b38",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -151,8 +151,8 @@
         "js/auth-gate.js": "7e7da9d190ffa167",
         "js/calculator-config.js": "9078e52d96eab707",
         "js/catalogue/allergen-sheet.js": "0a1ec5ee0d8c6a56",
-        "js/catalogue/catalogue-detail.js": "68478265c24cbef2",
-        "js/catalogue/catalogue-editor.js": "ffcdf80d2cdaab43",
+        "js/catalogue/catalogue-detail.js": "9695a6d263b67154",
+        "js/catalogue/catalogue-editor.js": "a41e99499c22ce93",
         "js/catalogue/catalogue-list.js": "e200fbba7ece642f",
         "js/catalogue/catalogue-main.js": "4b8dc1ebe2c93d82",
         "js/catalogue/catalogue-model.js": "83d93c1e4a10c222",
@@ -488,10 +488,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "7a2bb5e7b1aa46e6",
-      "mapSha": "a275f7309d21f83a",
+      "sha": "8fb27d8d366c8cb6",
+      "mapSha": "5987164940e962ac",
       "inputs": {
-        "js/i18n.js": "af05d7d2266f68fa"
+        "js/i18n.js": "7cee24c47af34adb"
       }
     },
     "dist/index.js": {
