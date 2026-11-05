@@ -22,8 +22,8 @@ import { CreateIngredientOverlay } from '../suppliers/CreateIngredientOverlay';
 import { KEEP_FOCUS } from '../shell/Page';
 import { useRecipes, useRecipesStore } from './RecipesContext';
 import {
-  NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, haccpStorageText, labelIngredientsBoxText, labelNameText, linkRowTo, netWeightText, notWeighedCount, removeRow, setCategory, setName, setRowFields, shelfLifeText,
-  stepWorkingRow, totalText, workingFrom,
+  NAME_MAX_LENGTH, addRow, cleanWorking, dropWorkingRow, haccpStorageText, labelIngredientsBoxText, labelNameText, linkRowTo, netWeightText, notWeighedCount, removeRow, rowHasDivider, setCategory, setName, setRowFields, shelfLifeText,
+  stepWorkingRow, toggleDivider, totalText, workingFrom,
 } from './editorModel';
 import type { Chosen, DropPosition, Row, Working } from './editorModel';
 import { imageLabelChoice } from './imageLabelData';
@@ -31,6 +31,7 @@ import { IngredientRow } from './IngredientRow';
 import { HACCP_STORAGE_MAX, LABEL_NAME_MAX, LABEL_TEXT_MAX } from './labelTexts';
 import { LinkDialog } from './LinkDialog';
 import { CardBoundary } from './CardBoundary';
+import { DividerRows } from './DividerRows';
 import { ReorderRows } from './ReorderRows';
 import { NEW_OPENER, recipeOpener, useHandBack } from './handBack';
 import { FROM_EDITOR, cameFromDuplicate, carryOwner, forgetHandover, hasTypedCopy, peekHandedOver, typedCopyOf, withTypedCopy, withoutTypedCopy } from './photoCarry';
@@ -85,6 +86,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   const labelTextId = `${ids}-labelText`;
   const haccpStorageId = `${ids}-haccpStorage`;
   const hintId = `${ids}-reorder-hint`;
+  const dividersHintId = `${ids}-dividers-hint`;
 
   // ⚠️ A NEW RECIPE MAY START FROM SOMETHING CARRIED (photoCarry.ts), and then it starts DIRTY — it is unsaved work, typed or
   // already paid for: the recipe just read from a photograph, else the copy kept while the photo screen was open. Looked at
@@ -323,6 +325,25 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     setFocusGrip({ key: movedKey });
   };
 
+  // ── Dividers ─────────────────────────────────────────────────────────────────────────────────────────────────
+  // A second MODE (PR #458 of the current app): a tap on a row puts a line under it, or takes it away. It excludes
+  // reordering (each mode's button is absent while the other is on). Turning it on or off is not an edit; a tap is (edit()).
+  const [dividing, setDividing] = useState(false);
+  const [focusDivider, setFocusDivider] = useState<{ key: number } | null>(null);
+  const dividersButton = useRef<HTMLButtonElement>(null);
+  const toggleDividers = () => {
+    if (dividing) {
+      setDividing(false);
+      setFocusDivider(null);
+      // ⚠️ The focus goes to the button for the reason given in toggleReorder: it may still be on a row that is about to go.
+      dividersButton.current?.focus();
+      return;
+    }
+    setDividing(true);
+    const first = working.rows[0];
+    if (first) setFocusDivider({ key: first.key });
+  };
+
   // ⚠️ THE ONE PLACE A ROW'S LINK IS WRITTEN (editorModel.linkRowTo → applyLink): the suggestion list and the chooser both
   // come here. `null` removes the link. Re-validation needs no call: what is wrong is derived from the copy at every render.
   const linkTo = (key: number, chosen: Chosen | null) => {
@@ -357,7 +378,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   // A problem found while reordering is shown once the mode has gone and the ordinary rows (and their boxes) are drawn.
   const pendingProblem = useRef<InvalidRecipeProblem | null>(null);
   useEffect(() => {
-    if (reordering || pendingProblem.current === null) return;
+    if (reordering || dividing || pendingProblem.current === null) return;
     const found = pendingProblem.current;
     pendingProblem.current = null;
     revealProblem(found);
@@ -371,10 +392,12 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     if (busy.current || askingLeave.current || leavingClean.current) return;
     if (problem !== null) {
       setShowErrors(true);
-      if (reordering) {
+      if (reordering || dividing) {
         pendingProblem.current = problem;
         setReordering(false);
         setFocusGrip(null);
+        setDividing(false);
+        setFocusDivider(null);
       } else {
         revealProblem(problem);
       }
@@ -534,13 +557,24 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
             <h3 id={headingId} className={styles.headLabel}>{t('cat.ingredients')}</h3>
             <span className={styles.count}>{working.rows.length}</span>
             {/* ABSENT, not disabled, with fewer than two rows: there is nothing to put in another order. */}
+            {/* The two modes exclude each other: while one is on, the other's button is absent. */}
             {working.rows.length > 1 ? (
-              <Button ref={reorderButton} variant="secondary" className={styles.reorder} aria-pressed={reordering} onPress={toggleReorder}>
-                {t(reordering ? 'cat.reorderDone' : 'cat.reorder')}
-              </Button>
+              <div className={styles.headActions}>
+                {dividing ? null : (
+                  <Button ref={reorderButton} variant="secondary" className={styles.reorder} aria-pressed={reordering} onPress={toggleReorder}>
+                    {t(reordering ? 'cat.reorderDone' : 'cat.reorder')}
+                  </Button>
+                )}
+                {reordering ? null : (
+                  <Button ref={dividersButton} variant="secondary" className={styles.reorder} aria-pressed={dividing} onPress={toggleDividers}>
+                    {t(dividing ? 'cat.reorderDone' : 'cat.dividers')}
+                  </Button>
+                )}
+              </div>
             ) : null}
           </div>
           {reordering ? <p id={hintId} className={styles.note}>{t('cat.reorderHint')}</p> : null}
+          {dividing ? <p id={dividersHintId} className={styles.note}>{t('cat.dividersHint')}</p> : null}
 
           <div className={styles.frame}>
             {reordering ? (
@@ -552,12 +586,21 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
                 onStep={stepRow}
                 focusGrip={focusGrip}
               />
+            ) : dividing ? (
+              <DividerRows
+                rows={working.rows}
+                labelledBy={headingId}
+                hintId={dividersHintId}
+                onToggle={key => { edit(current => toggleDivider(current, key)); }}
+                focusRow={focusDivider}
+              />
             ) : (
               <ul className={styles.rows}>
-                {working.rows.map(item => (
+                {working.rows.map((item, index) => (
                   <IngredientRow
                     key={item.key}
                     item={item}
+                    divider={rowHasDivider(working, index)}
                     nameInvalid={showErrors && String(item.row.label ?? '').trim() === ''}
                     amountInvalid={noAmount && String(item.row.label ?? '').trim() !== ''}
                     register={register}
@@ -592,7 +635,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
 
           {skipped > 0 ? <p className={styles.note}>{t('cat.notWeighed', { n: skipped })}</p> : null}
 
-          {reordering ? null : (
+          {reordering || dividing ? null : (
             <Button variant="secondary" className={styles.add} onPress={() => { edit(addRow); }}>
               {t('cat.addIngredient')}
             </Button>

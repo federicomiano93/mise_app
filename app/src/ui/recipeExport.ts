@@ -32,14 +32,20 @@ export async function buildPdfBlob(model: ExportModel, { rounded = false }: { ro
   const title = pdfSafe(exportTitle(model));
   doc.setProperties({ title });
   const measure = pdfMeasurer(doc);
-  const { items } = pdfLayout({
+  const { items, lines } = pdfLayout({
     title,
-    rows: model.rows.map(row => ({ name: pdfSafe(exportRow(row).name), text: pdfSafe(rowTextOf(row, { rounded })) })),
+    rows: model.rows.map(row => ({ name: pdfSafe(exportRow(row).name), text: pdfSafe(rowTextOf(row, { rounded })), dividerAfter: row.dividerAfter === true })),
   }, measure);
   for (const item of items) {
     doc.setFont('helvetica', item.bold ? 'bold' : 'normal');
     doc.setFontSize(item.size);
     doc.text(item.text, item.x, item.y);
+  }
+  // A divider line under a group of ingredients, black like the text.
+  for (const line of lines) {
+    doc.setDrawColor(0);
+    doc.setLineWidth(line.width);
+    doc.line(line.x1, line.y, line.x2, line.y);
   }
   return doc.output('blob');
 }

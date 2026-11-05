@@ -27,6 +27,8 @@ export function recipeExportModel(recipe: CatalogueRecipe, amounts: RecipeAmount
         factor: ingredientGrams({ unit, grams: 1 }),
         decimals: unitDecimals(unit),
         text: shown === undefined || shown.num === '' ? null : shown.num,
+        // A line under this row, only when the recipe has one (no key otherwise, so a model without dividers is unchanged).
+        ...(ingredient.dividerAfter === true ? { dividerAfter: true } : {}),
       };
     }),
   };

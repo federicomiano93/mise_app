@@ -2,7 +2,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { Archive, ArchiveRestore, ChartPie, Copy, Download, Import, Maximize2, Pencil, Trash2 } from 'lucide-react';
-import { calculatorRefusal, importFailureKey, weighableTotalGrams } from '@mise/shared/catalogue-model';
+import { calculatorRefusal, hasDividerAfter, importFailureKey, weighableTotalGrams } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
 import { FROM_RECIPE_LINK, foodCostForRecipePath, mayOpenFoodCost } from '@mise/shared/recipe-link';
 import { isArchivedRecipe } from '@mise/shared/recipe-shelf';
@@ -463,7 +463,11 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
       <table className={styles.table} aria-labelledby={headingId} onClick={() => { setFullScreen(true); }}>
         <tbody>
           {rows.map((row, index) => (
-            <tr key={index}>
+            <tr
+              key={index}
+              className={hasDividerAfter(recipe.ingredients, index) ? styles.divided : undefined}
+              data-divider-after={hasDividerAfter(recipe.ingredients, index) ? 'true' : undefined}
+            >
               <th scope="row" className={styles.label}>{row.label}</th>
               <td className={styles.num}>{row.num}</td>
               <td className={styles.unit}>{row.unit}</td>

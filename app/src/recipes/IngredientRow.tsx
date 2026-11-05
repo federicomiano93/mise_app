@@ -34,6 +34,8 @@ type Props = {
   register: (key: number, box: 'name' | 'amount' | 'link', node: HTMLInputElement | HTMLButtonElement | null) => void;
   onChange: (key: number, fields: Row) => void;
   onRemove: (key: number) => void;
+  // A line is drawn under this row (a divider between two groups of ingredients).
+  divider?: boolean;
   linking: Linking;
 };
 
@@ -45,7 +47,7 @@ type Props = {
 // ⚠️ «TO TASTE» IS THE ONE UNIT THAT CARRIES NO NUMBER, so its amount box is not drawn — but the number stays in the
 // editor's copy: switching back to a weight gives it back, and nothing counts it meanwhile (a non-weighable unit is 0
 // grams to every total, cost and label).
-export function IngredientRow({ item, nameInvalid, amountInvalid, register, onChange, onRemove, linking }: Props) {
+export function IngredientRow({ item, nameInvalid, amountInvalid, register, onChange, onRemove, divider = false, linking }: Props) {
   const { t } = useT();
   const { key, row } = item;
   const unit = unitOf(row);
@@ -66,7 +68,7 @@ export function IngredientRow({ item, nameInvalid, amountInvalid, register, onCh
   const grams = row.grams === '' || row.grams === undefined || row.grams === null ? '' : String(row.grams);
 
   return (
-    <li className={styles.item}>
+    <li className={divider ? `${styles.item} ${styles.divided}` : styles.item} data-divider-after={divider ? 'true' : undefined}>
       <div className={styles.line}>
         <input
           ref={node => { register(key, 'name', node); }}

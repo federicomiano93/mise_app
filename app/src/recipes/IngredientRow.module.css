@@ -8,6 +8,11 @@
   border-bottom: 1px solid var(--line);
 }
 
+/* A divider line under the row: 2px in the ink, in place of the 1px separator. */
+.item.divided {
+  border-bottom: 2px solid var(--ink-2);
+}
+
 .line {
   display: flex;
   align-items: center;

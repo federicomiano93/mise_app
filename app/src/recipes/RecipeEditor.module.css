@@ -108,8 +108,18 @@
 
 .head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
+}
+
+/* The mode buttons («Reorder», «Dividers»), pushed to the end of the head; they wrap under the title on a narrow phone. */
+.headActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  margin-left: auto;
 }
 
 .headLabel {
@@ -132,7 +142,6 @@
 /* «Reorder» / «Done» at the end of the head. Two classes, so it outweighs the button's own padding whichever stylesheet
    loads last; the target stays the full 48px tall. */
 .head .reorder {
-  margin-left: auto;
   padding: 0 var(--s4);
 }
 

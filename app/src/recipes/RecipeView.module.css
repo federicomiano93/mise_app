@@ -95,6 +95,12 @@
   border-bottom: 0;
 }
 
+/* A divider line under an ingredient: 2px in the ink, in place of the 1px separator. With border-collapse the row's own
+   border is the one drawn between its cells and the next row. Never under the last ingredient row (the model never says so). */
+.table tbody tr.divided {
+  border-bottom: 2px solid var(--ink-2);
+}
+
 .label {
   padding: var(--s2) var(--s3) var(--s2) 0;
   font-weight: 500;

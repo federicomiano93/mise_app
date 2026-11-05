@@ -26,6 +26,9 @@ export interface TabNumbers {
 export interface ResultRow {
   readonly name: string;
   readonly grams: number;
+  // A line under this row in the exported PDF (the linked recipe's divider). The card draws none, and the flag never
+  // reaches the Dough history: it lives on the result's rows only, never on `resolved.ingredients`.
+  readonly dividerAfter?: true;
 }
 
 export type TabResult =
@@ -99,6 +102,10 @@ export function calculateTab(
   // 'total' and the trays logics scale purely pro-rata.
   if (isProRata(recipe.logic)) spec.leaveningKey = null;
   const scaled = scaleRecipe(spec, target, pct);
-  const rows = resolved.ingredients.map((ingredient, i) => ({ name: ingredient.label, grams: scaled[i] ?? 0 }));
+  const rows = resolved.ingredients.map((ingredient, i): ResultRow => ({
+    name: ingredient.label,
+    grams: scaled[i] ?? 0,
+    ...(resolved.dividersAfter?.includes(i) ? { dividerAfter: true } : {}),
+  }));
   return { kind: 'ready', target, source, resolved, rows, totalG: Math.round(target), pct };
 }

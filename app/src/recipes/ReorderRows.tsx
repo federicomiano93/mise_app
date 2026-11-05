@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import type { FocusEvent, KeyboardEvent } from 'react';
 import { GripVertical } from 'lucide-react';
 import { Button, DropIndicator, GridList, GridListItem, I18nProvider, useDragAndDrop } from 'react-aria-components';
-import { unitOf } from '@mise/shared/catalogue-model';
+import { hasDividerAfter, unitOf } from '@mise/shared/catalogue-model';
 import { useT } from '../i18n/useT';
 import type { DropPosition, EditRow } from './editorModel';
 import { unitWord } from './IngredientRow';
@@ -155,8 +155,13 @@ export function ReorderRows({ rows, labelledBy, hintId, onDrop, onStep, focusGri
           {item => {
             const name = nameOf(item);
             const amount = amountOf(item);
+            // A divider line under this row (never the last), and the row below it, which then draws no top border of its own.
+            const index = rows.findIndex(candidate => candidate.key === item.key);
+            const divided = hasDividerAfter(rows.map(candidate => candidate.row), index);
+            const below = index > 0 && hasDividerAfter(rows.map(candidate => candidate.row), index - 1);
+            const rowClass = [styles.row, divided ? styles.divided : '', below ? styles.belowDivided : ''].filter(Boolean).join(' ');
             return (
-              <GridListItem id={item.key} textValue={name} className={styles.row}>
+              <GridListItem id={item.key} textValue={name} className={rowClass}>
                 <span className={styles.name}>{name}</span>
                 <span className={styles.amount}>
                   <span className={styles.number}>{amount.number}</span>

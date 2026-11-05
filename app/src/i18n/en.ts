@@ -1075,6 +1075,9 @@ export const en = {
   'cat.reorder': 'Reorder',
   'cat.reorderDone': 'Done',
   'cat.reorderHint': 'Hold an ingredient and drag it to its place. With a keyboard, use the up and down arrows.',
+  'cat.dividers': 'Dividers',
+  'cat.dividersHint': 'Tap an ingredient to put a line under it. Tap again to take it away.',
+  'cat.dividerUnder': 'Line under {name}',
   'cat.moveRow': 'Move «{name}»',
   'cat.unnamedRow': '(no name)',
   'cat.notWeighed': {
