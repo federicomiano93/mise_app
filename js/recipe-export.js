@@ -5,12 +5,14 @@
 // It lives in js/ ROOT because two features use it — the Calculator's result card and the
 // Recipe catalogue's recipe screen — and a calculation shared by features is not copied (CLAUDE.md).
 //
-// The model: { name, trays, totalG, rows }. A row is EITHER the Calculator's { name, grams } (the
-// UNROUNDED grams it holds: the PDF shows them as the card does, Math.round + « g», the spreadsheet
-// keeps them exact so a formula over them is right) OR the Recipe catalogue's
+// The model: { name, trays, totalG, rows } (trays and totalG name the FILE only). A row is EITHER the Calculator's { name, grams } (the
+// UNROUNDED grams it holds: the PDF shows them as the card does, Math.round + « g», unless the person
+// asked for the lab rounding; the spreadsheet keeps them exact so a formula over them is right) OR the Recipe catalogue's
 // { name, value, unit, factor }: `value` in the row's OWN unit (null = «to taste»), `unit` the text
 // the screen prints after the number, `factor` the grams in one unit (0 = not weighable: pieces,
 // spoons, a pinch). exportRow() turns both into the second shape, so every builder reads one.
+// A row may also carry `dividerAfter: true` (a line the owner put under it): the PDF draws it, the
+// spreadsheet ignores it, and exportRow() leaves it out on purpose.
 //
 // ⚠️ THE TWO LIBRARIES ARE LOADED ONLY INSIDE buildPdfBlob / buildXlsxBlob, WITH import().
 // jsPDF is ~400 KB and write-excel-file ~70 KB; nobody opening the Calculator should pay
@@ -40,16 +42,14 @@ export function exportRow(r) {
 
 // ── Names ─────────────────────────────────────────────────────────────────────────────────
 
-// What the page and the spreadsheet are titled: «Pizza x 3» for trays, «Pizza — 24000 g» else.
+// What the page and the spreadsheet are titled: the recipe's name exactly as the app has it.
+// The trays and the total name the FILE only (exportFileName), never the title.
 export function exportTitle(m) {
-  const name = String(m.name ?? '');
-  const trays = Number(m.trays) || 0;
-  if (trays > 0) return `${name} x ${trays}`;
-  // A recipe of only pieces or «to taste» has no weight to put in the title.
-  return Number(m.totalG) > 0 ? `${name} — ${m.totalG} g` : name;
+  return String(m.name ?? '');
 }
 
 // «Pizza_x3.pdf», «Focaccia_24000g.xlsx»: safe on Windows, Android and iOS file systems.
+// The suffix keeps two batch sizes of one recipe from overwriting each other.
 // `fallback` is the word for a recipe with no usable name; the caller reads it from t() when it asks.
 export function exportFileName(m, ext, fallback = 'recipe') {
   const base = String(m.name ?? '')
@@ -66,10 +66,31 @@ export function exportFileName(m, ext, fallback = 'recipe') {
 // The weight as the result card prints it (js/calc.js renderIngredients).
 export const rowText = grams => `${Math.round(grams)} g`;
 
+// The owner's lab rule for a weight in grams: to the gram under 10 g, to 5 g under 100 g, else to
+// 10 g; half always UP. The step is chosen on the unrounded value. Junk or negative -> 0, never NaN.
+export function roundLabWeight(grams) {
+  const g = Number(grams);
+  if (!Number.isFinite(g) || g < 0) return 0;
+  const step = g < 10 ? 1 : g < 100 ? 5 : 10;
+  return Math.floor(g / step + 0.5) * step;
+}
+
+// A row the lab rounding applies to: exactly grams (not ml, which also has factor 1) with a value.
+const isRoundable = (r) => r.unit === 'g' && r.value !== null;
+
+// True when at least one row is in grams with a value, so the «round the weights» switch means something.
+export function hasRoundableRows(m) {
+  return !!m && Array.isArray(m.rows) && m.rows.some(r => isRoundable(exportRow(r)));
+}
+
 // A row as the PDF prints it: «14400 g», «500 ml», «3 pz», or just the unit word for «to taste».
-export function rowTextOf(row) {
+// `rounded` applies the lab rule to rows in grams only; every other unit prints as ever.
+export function rowTextOf(row, { rounded = false } = {}) {
   const r = exportRow(row);
   if (r.value === null) return r.unit;
+  // ⚠️ THE RULE ROUNDS THE NUMBER THE SCREEN SHOWS, so the Calculator's unrounded 104.6 g (card: 105 g)
+  // prints 110 g, like the same row from the Recipe book, and never disagrees with its own card.
+  if (rounded && isRoundable(r)) return `${roundLabWeight(Math.round(r.value))} g`;
   // The screen's own number when the caller has it («1,846» in Italian): kg and l keep decimals.
   return `${r.text ?? Math.round(r.value)} ${r.unit}`;
 }
@@ -78,20 +99,25 @@ export function rowTextOf(row) {
 
 export const PAGE_W = 595.28;
 export const PAGE_H = 841.89;
-const TITLE_SIZE = 27;
+const TITLE_SIZE = 28;
 const TITLE_MIN = 14;
 const TITLE_MAX_W = 483;
-const TITLE_Y = 110;
-const NAME_X = 147;
-const WEIGHT_RIGHT = 449;
-const ROW_SIZE = 19;
-const ROW_LEADING = 36;
-const FIRST_ROW_GAP = 60;      // title baseline → first row baseline
+const TITLE_Y = 70;
+const BLOCK_W = 300;                        // the rows' block, centred on the page
+const NAME_X = (PAGE_W - BLOCK_W) / 2;
+const WEIGHT_RIGHT = NAME_X + BLOCK_W;
+const ROW_SIZE = 20;
+const ROW_LEADING = 30;
+const FIRST_ROW_GAP = 48;    // title baseline → first row baseline
 const BOTTOM_MARGIN = 60;
 const LEADING_RATIO = 1.25;    // never tighter than this × the font size, until the font itself shrinks
 const VERTICAL_MIN_SIZE = 6;
 const HORIZONTAL_MIN_SIZE = 9;
 const MIN_DOTS = 3;
+const DIVIDER_AIR = 14;        // extra space a divider line adds between two rows
+const DIVIDER_WIDTH = 0.75;
+const ROW_ASCENT = 0.715;      // a row's height above its baseline, as a share of its font size
+const ROW_DESCENT = 0.21;      // and below it
 const ELLIPSIS = '…';
 
 // Helvetica is drawn with WinAnsi (Windows-1252): the 0x80–0x9F block holds these.
@@ -116,7 +142,7 @@ function truncated(text, maxW, size, bold, measure) {
   return s.trimEnd() + ELLIPSIS;
 }
 
-// pdfLayout({ title, rows: [{ name, text }] }, measure) -> { items, titleSize, fontSize, leading }
+// pdfLayout({ title, rows: [{ name, text, dividerAfter? }] }, measure) -> { items, lines, titleSize, fontSize, leading }
 // `measure(text, sizePt, bold)` is the width in points. Pure: the caller decides how to measure
 // (jsPDF's getTextWidth in the app and in the tests), so the geometry can be checked without a PDF.
 export function pdfLayout({ title, rows }, measure) {
@@ -136,7 +162,15 @@ export function pdfLayout({ title, rows }, measure) {
   const firstY = TITLE_Y + FIRST_ROW_GAP;
   const n = rows.length;
   const room = PAGE_H - BOTTOM_MARGIN - firstY;
-  const perRow = n > 1 ? room / (n - 1) : ROW_LEADING;
+  // The lines that draw: one under a row that asks for it, never under the last (nothing below it).
+  const breaks = rows.filter((r, i) => i < n - 1 && r.dividerAfter).length;
+  const minLeading = LEADING_RATIO * VERTICAL_MIN_SIZE;
+  let air = breaks > 0 ? DIVIDER_AIR : 0;
+  // The air gives way only when the rows are already at their tightest, so a long recipe stays on one page.
+  if (n > 1 && breaks > 0 && (room - breaks * air) / (n - 1) < minLeading) {
+    air = Math.max(0, (room - (n - 1) * minLeading) / breaks);
+  }
+  const perRow = n > 1 ? (room - breaks * air) / (n - 1) : ROW_LEADING;
   const leading = Math.min(ROW_LEADING, perRow);
   const fontSize = leading < LEADING_RATIO * ROW_SIZE
     ? Math.max(VERTICAL_MIN_SIZE, Math.floor((leading / LEADING_RATIO) * 2) / 2)
@@ -156,8 +190,10 @@ export function pdfLayout({ title, rows }, measure) {
 
   const gap = measure(' ', size, false);
   const dot = measure('.', size, false);
+  const lines = [];
+  let breaksAbove = 0;
   rows.forEach((r, i) => {
-    const y = firstY + i * leading;
+    const y = firstY + i * leading + breaksAbove * air;
     const weightW = measure(r.text, size, true);
     const weightX = WEIGHT_RIGHT - weightW;
     // A name that still does not fit at the smallest size is cut, never allowed to push the weight.
@@ -171,9 +207,15 @@ export function pdfLayout({ title, rows }, measure) {
       items.push({ text: dotText, x: weightX - gap - measure(dotText, size, false), y, size, bold: false });
     }
     items.push({ text: r.text, x: weightX, y, size, bold: true });
+    if (i < n - 1 && r.dividerAfter) {
+      // Halfway between this row's lowest point and the next row's highest.
+      const lineY = y + (leading + air + ROW_DESCENT * size - ROW_ASCENT * size) / 2;
+      lines.push({ x1: NAME_X, x2: WEIGHT_RIGHT, y: lineY, width: DIVIDER_WIDTH });
+      breaksAbove += 1;
+    }
   });
 
-  return { items, titleSize, fontSize: size, leading };
+  return { items, lines, titleSize, fontSize: size, leading };
 }
 
 // ── The spreadsheet ───────────────────────────────────────────────────────────────────────
@@ -305,20 +347,30 @@ export function pdfMeasurer(doc) {
 }
 
 // -> Blob (application/pdf). One A4 page: the title, then «name ........ weight» per row.
-export async function buildPdfBlob(m) {
+// `rounded` rounds the printed gram weights (roundLabWeight); the model itself is never changed.
+export async function buildPdfBlob(m, { rounded = false } = {}) {
   const { jsPDF } = await loadLibrary(() => import('./vendor/jspdf.esm.js'));
   const doc = new jsPDF({ unit: 'pt', format: 'a4', compress: false });
   const title = pdfSafe(exportTitle(m));
   doc.setProperties({ title });
   const measure = pdfMeasurer(doc);
-  const { items } = pdfLayout({
+  const { items, lines } = pdfLayout({
     title,
-    rows: m.rows.map(r => ({ name: pdfSafe(exportRow(r).name), text: pdfSafe(rowTextOf(r)) })),
+    rows: m.rows.map(r => ({
+      name: pdfSafe(exportRow(r).name),
+      text: pdfSafe(rowTextOf(r, { rounded })),
+      dividerAfter: r.dividerAfter === true,
+    })),
   }, measure);
   for (const it of items) {
     doc.setFont('helvetica', it.bold ? 'bold' : 'normal');
     doc.setFontSize(it.size);
     doc.text(it.text, it.x, it.y);
+  }
+  for (const l of lines) {
+    doc.setDrawColor(0);
+    doc.setLineWidth(l.width);
+    doc.line(l.x1, l.y, l.x2, l.y);
   }
   return doc.output('blob');
 }

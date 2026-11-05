@@ -8,7 +8,7 @@ import { jsPDF } from '../js/vendor/jspdf.esm.js';
 import { unzipSync, strFromU8 } from '../js/vendor/fflate.esm.js';
 import {
   exportTitle, exportFileName, rowText, pdfLayout, rowTextOf, exportRow, pdfSafe, pdfMeasurer, sheetNameOf, xlsxSheet, buildPdfBlob, buildXlsxBlob,
-  PAGE_W, PAGE_H,
+  roundLabWeight, hasRoundableRows, PAGE_W, PAGE_H,
 } from '../js/recipe-export.js';
 import { SIX, TRAYS, LONG_ROW, SIXTY, AWKWARD_NAME, MIXED, MIXED_DRIFT, ONLY_PIECES } from './fixtures/recipe-export-fixtures.mjs';
 
@@ -24,9 +24,12 @@ const drawnWidth = (text, size, bold) => {
 const layoutOf = m => pdfLayout({ title: exportTitle(m), rows: m.rows.map(r => ({ name: r.name, text: rowText(r.grams) })) }, measure);
 const EPS = 1e-6;
 
-test('title: trays say «x N», otherwise the total in grams with an em dash', () => {
-  assert.equal(exportTitle(TRAYS), 'Pizza di prova x 3');
-  assert.equal(exportTitle(SIX), 'Impasto di prova — 24000 g');
+test('title: the recipe\'s name only, with trays and with a total; the file name keeps both', () => {
+  assert.equal(exportTitle(TRAYS), 'Pizza di prova');
+  assert.equal(exportTitle(SIX), 'Impasto di prova');
+  assert.equal(exportTitle({ name: undefined, trays: 2, totalG: 5 }), '');
+  assert.equal(exportFileName(TRAYS, 'pdf'), 'Pizza_di_prova_x3.pdf');
+  assert.equal(exportFileName(SIX, 'xlsx'), 'Impasto_di_prova_24000g.xlsx');
 });
 
 test('file name: trays or grams, unsafe characters gone, spaces become underscores', () => {
@@ -53,6 +56,9 @@ test('pdfSafe keeps Italian accents and typographic quotes, replaces what Helvet
   assert.equal(pdfSafe('Farina 全 ✓'), 'Farina ? ?');
 });
 
+const NAME_X = (PAGE_W - 300) / 2;
+const WEIGHT_RIGHT = NAME_X + 300;
+
 function checkGeometry(m) {
   const lay = layoutOf(m);
   const [title, ...rest] = lay.items;
@@ -61,7 +67,7 @@ function checkGeometry(m) {
   const gap = measure(' ', lay.fontSize, false);
   for (let i = 0; i < m.rows.length; i++) {
     const row = rest.filter(it => Math.abs(it.y - (rest[0].y + i * lay.leading)) < EPS);
-    const name = row.find(it => it.x === 147);
+    const name = row.find(it => Math.abs(it.x - NAME_X) < EPS);
     const weight = row.find(it => it.bold);
     const dots = row.find(it => /^\.+$/.test(it.text));
     assert.ok(name && weight && dots, `row ${i} has name, dots and weight`);
@@ -69,25 +75,38 @@ function checkGeometry(m) {
     const nameEnd = name.x + measure(name.text, name.size, false);
     const dotsEnd = dots.x + measure(dots.text, dots.size, false);
     const weightEnd = weight.x + measure(weight.text, weight.size, true);
-    assert.ok(name.x >= 147 - EPS && weightEnd <= 449 + EPS, `row ${i} inside 147-449`);
+    assert.ok(name.x >= NAME_X - EPS && weightEnd <= WEIGHT_RIGHT + EPS, `row ${i} inside the 300 pt block`);
     assert.ok(nameEnd + gap <= dots.x + EPS, `row ${i}: name then a gap then dots`);
     assert.ok(dotsEnd + gap <= weight.x + EPS, `row ${i}: dots then a gap then the weight`);
-    assert.ok(Math.abs(weightEnd - 449) < 1e-6, `row ${i}: weight right-aligned at 449`);
+    assert.ok(Math.abs(weightEnd - WEIGHT_RIGHT) < 1e-6, `row ${i}: weight right-aligned at the block's right edge`);
   }
   return lay;
 }
 
-test('layout of a normal recipe: 19 pt rows, 36 pt apart, title at 110, first row at 170', () => {
+test('layout of a normal recipe: 20 pt rows, 30 pt apart, title at 70, first row at 118, a 300 pt block centred', () => {
   const lay = checkGeometry(SIX);
-  assert.equal(lay.items[0].y, 110);
-  assert.equal(lay.items[1].y, 170);
-  assert.ok(lay.fontSize <= 19 && lay.fontSize >= 9);
-  assert.equal(lay.leading, 36);
+  assert.ok(Math.abs(NAME_X - 147.64) < 0.01 && Math.abs(WEIGHT_RIGHT - 447.64) < 0.01);
+  assert.equal(lay.items[0].y, 70);
+  assert.equal(lay.items[0].size, 28);
+  assert.equal(lay.items[1].y, 118);
+  assert.ok(lay.fontSize <= 20 && lay.fontSize >= 9);
+  assert.equal(lay.leading, 30);
+  const names = lay.items.filter(i => !i.bold && !/^\.+$/.test(i.text));
+  assert.ok(names.every(i => Math.abs(i.x - 147.64) < 0.01));
+  const weights = lay.items.slice(1).filter(i => i.bold);
+  assert.ok(weights.every(i => Math.abs(i.x + measure(i.text, i.size, true) - 447.64) < 0.01));
+});
+
+test('23 rows still keep the 30 pt leading, and a long name never overflows the block', () => {
+  const rows = Array.from({ length: 23 }, (_, i) => ({ name: `Ingrediente di prova ${i + 1}`, grams: 100 + i }));
+  const lay = checkGeometry({ ...SIX, rows });
+  assert.equal(lay.leading, 30);
+  checkGeometry(LONG_ROW);
 });
 
 test('layout with a long name: the whole list shrinks to one size and every row keeps its dots', () => {
   const lay = checkGeometry(LONG_ROW);
-  assert.ok(lay.fontSize >= 9 && lay.fontSize < 19);
+  assert.ok(lay.fontSize >= 9 && lay.fontSize < 20);
   assert.ok(!lay.items.some(i => i.text.endsWith('…')), 'nothing is cut while it fits at 9 pt');
 });
 
@@ -110,7 +129,7 @@ test('names that kern badly are measured as drawn, so the gap before the dots su
   for (let i = 0; i < names.length; i++) {
     const y = rows[0].y + i * lay.leading;
     const row = rows.filter(it => Math.abs(it.y - y) < EPS);
-    const name = row.find(it => it.x === 147);
+    const name = row.find(it => Math.abs(it.x - NAME_X) < EPS);
     const dots = row.find(it => /^\.+$/.test(it.text));
     const gap = drawnWidth(' ', 9, false);
     assert.ok(name.x + drawnWidth(name.text, 9, false) + gap <= dots.x + EPS, `row ${i}: drawn name + gap reaches the dots`);
@@ -134,7 +153,7 @@ test('layout of 60 rows fits one page with the bottom margin, one size for all r
   const lay = checkGeometry(SIXTY);
   const lastY = Math.max(...lay.items.map(i => i.y));
   assert.ok(lastY <= PAGE_H - 60 + EPS, `last baseline ${lastY}`);
-  assert.ok(lay.fontSize >= 6 && lay.fontSize < 19);
+  assert.ok(lay.fontSize >= 6 && lay.fontSize < 20);
   assert.ok(lay.leading >= 1.25 * lay.fontSize - EPS);
   assert.equal(new Set(lay.items.slice(1).map(i => i.size)).size, 1);
 });
@@ -157,12 +176,13 @@ test('a real PDF: exactly one page, the title and every row are in it', async ()
   const pdf = await pdfText(TRAYS);
   assert.ok(pdf.startsWith('%PDF-'));
   assert.equal((pdf.match(/\/Type \/Page(?!s)/g) || []).length, 1);
-  assert.ok(pdf.includes('(Pizza di prova x 3)'));
+  assert.ok(pdf.includes('(Pizza di prova)'));
+  assert.ok(!pdf.includes('x 3)'));
   for (const r of TRAYS.rows) {
     assert.ok(pdf.includes(`(${r.name})`), r.name);
     assert.ok(pdf.includes(`(${rowText(r.grams)})`), rowText(r.grams));
   }
-  assert.match(pdf, /\/Title \(Pizza di prova x 3\)/);
+  assert.match(pdf, /\/Title \(Pizza di prova\)/);
 });
 
 test('a real PDF of 60 rows is still one page', async () => {
@@ -196,7 +216,8 @@ test('a real .xlsx: merge A1:B1, bold title, exact numbers with the «g» format
   assert.match(sheet, /<mergeCell ref="A1:B1"/);
   assert.match(sheet, /<f>SUM\(B3:B8\)<\/f>/);
   assert.match(sheet, /orientation="portrait"/);
-  assert.ok(strings.includes('Impasto di prova — 24000 g'));
+  assert.ok(strings.includes('Impasto di prova'));
+  assert.ok(!strings.includes('24000 g'));
   assert.ok(strings.includes('Impasto totale'));
   assert.match(styles, /formatCode="0 &quot;g&quot;"/);
   assert.match(styles, /<b\s*\/>|<b>/);
@@ -230,7 +251,7 @@ test('title and file name: a recipe with no weight is just its name', () => {
   assert.equal(exportTitle(ONLY_PIECES), 'Decori di prova');
   assert.equal(exportFileName(ONLY_PIECES, 'pdf'), 'Decori_di_prova.pdf');
   assert.equal(exportFileName(ONLY_PIECES, 'xlsx'), 'Decori_di_prova.xlsx');
-  assert.equal(exportTitle(MIXED), 'Crema di prova — 2750 g');
+  assert.equal(exportTitle(MIXED), 'Crema di prova');
   assert.equal(exportFileName(MIXED, 'pdf'), 'Crema_di_prova_2750g.pdf');
 });
 
@@ -304,4 +325,67 @@ test('a real .xlsx from mixed units: unit formats, q.b. as text, the converted-t
   const driftSheet = strFromU8(unzipSync(new Uint8Array(await drift.arrayBuffer()))['xl/worksheets/sheet1.xml']);
   assert.doesNotMatch(driftSheet, /<f>/);
   assert.match(driftSheet, /<c r="B6"[^>]*><v>1841<\/v>/);
+});
+
+// ── The lab rounding (PDF only) ───────────────────────────────────────────────────────────
+
+test('roundLabWeight: 1 g under 10, 5 g under 100, else 10 g; half always up; never NaN', () => {
+  const cases = [[6, 6], [44, 45], [59, 60], [110, 110], [220, 220], [293, 290], [769, 770], [1979, 1980],
+    [2345, 2350], [4397, 4400], [9.6, 10], [99.9, 100], [0, 0], [2.5, 3], [12.5, 15], [97.5, 100], [105, 110], [14404.9, 14400]];
+  for (const [input, want] of cases) assert.equal(roundLabWeight(input), want, String(input));
+  for (const junk of [NaN, Infinity, -Infinity, -5, undefined, null, 'abc', {}]) assert.equal(roundLabWeight(junk), 0, String(junk));
+});
+
+test('rowTextOf rounded: grams only; ml, kg, pcs, spoons and «to taste» print as before', () => {
+  const g = { name: 'a', value: 293, unit: 'g', factor: 1, text: '293' };
+  assert.equal(rowTextOf(g, { rounded: true }), '290 g');
+  assert.equal(rowTextOf({ name: 'a', value: 44, unit: 'g', factor: 1 }, { rounded: true }), '45 g');
+  const others = [
+    { name: 'b', value: 293, unit: 'ml', factor: 1 },
+    { name: 'c', value: 0.727, unit: 'kg', factor: 1000, decimals: 3, text: '0,727' },
+    { name: 'd', value: 3, unit: 'pz', factor: 0 },
+    { name: 'e', value: 2, unit: 'tbsp', factor: 0 },
+    { name: 'f', value: null, unit: 'q.b.', factor: 0 },
+  ];
+  assert.deepEqual(others.map(r => rowTextOf(r, { rounded: true })), ['293 ml', '0,727 kg', '3 pz', '2 tbsp', 'q.b.']);
+  assert.deepEqual(others.map(r => rowTextOf(r, { rounded: true })), others.map(r => rowTextOf(r)));
+  assert.equal(rowTextOf(g), '293 g');
+  assert.equal(rowTextOf(g, {}), '293 g');
+});
+
+test('the rounding starts from the number the card shows: 14404.9 reads 14405 and prints 14410', () => {
+  const row = { name: 'Farina di prova', grams: 14404.9 };
+  assert.equal(rowTextOf(row), '14405 g');
+  assert.equal(rowTextOf(row, { rounded: true }), '14410 g');
+});
+
+test('the Calculator and the Recipe book print the same weight for the same row', () => {
+  const calculator = { name: 'Farina di prova', grams: 104.6 };
+  const book = { name: 'Farina di prova', value: 105, unit: 'g', factor: 1, text: '105' };
+  assert.equal(rowTextOf(calculator), '105 g');
+  assert.equal(rowTextOf(calculator, { rounded: true }), '110 g');
+  assert.equal(rowTextOf(book, { rounded: true }), '110 g');
+});
+
+test('hasRoundableRows: true only with a row in grams that has a value', () => {
+  assert.equal(hasRoundableRows(SIX), true);
+  assert.equal(hasRoundableRows(MIXED), true);
+  assert.equal(hasRoundableRows(ONLY_PIECES), false);
+  assert.equal(hasRoundableRows({ rows: [{ name: 'a', value: 5, unit: 'ml', factor: 1 }, { name: 'b', value: null, unit: 'g', factor: 1 }] }), false);
+  assert.equal(hasRoundableRows({ rows: [] }), false);
+  assert.equal(hasRoundableRows(null), false);
+});
+
+test('a real PDF: rounded text with {rounded:true}, the screen text without; the xlsx keeps exact numbers', async () => {
+  const model = { name: 'Pizza di prova', trays: 3, totalG: 14698, rows: [{ name: 'Farina di prova', grams: 14404.9 }, { name: 'Sale di prova', grams: 293 }] };
+  const plain = Buffer.from(await (await buildPdfBlob(model)).arrayBuffer()).toString('latin1');
+  assert.ok(plain.includes('(14405 g)') && plain.includes('(293 g)'));
+  const round = Buffer.from(await (await buildPdfBlob(model, { rounded: true })).arrayBuffer()).toString('latin1');
+  assert.ok(round.includes('(14410 g)') && round.includes('(290 g)'));
+  assert.ok(!round.includes('(14405 g)') && !round.includes('(293 g)'));
+  const files = unzipSync(new Uint8Array(await (await buildXlsxBlob(model, 'Totale')).arrayBuffer()));
+  const sheet = strFromU8(files['xl/worksheets/sheet1.xml']);
+  const values = [...sheet.matchAll(/<c r="B([3-4])"[^>]*><v>([^<]+)<\/v>/g)].map(m => Number(m[2]));
+  assert.deepEqual(values, [14404.9, 293]);
+  assert.match(sheet, /<f>SUM\(B3:B4\)<\/f>/);
 });

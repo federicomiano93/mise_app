@@ -93,6 +93,8 @@ both halves.
 named (`gluten-wheat`, not `gluten`). `mayContain` is never merged into `allergens`. In nutrition,
 0 is a real value and `null` is not.
 
+**Recipe row divider (5 Nov 2026).** A row of `recipes/{id}.ingredients` may carry `dividerAfter` (optional, `true` or absent, never `false`/null; not checked by the rules because they cannot look inside a list; the shape is `normalizeIngredient`). The PDF draws the line, the spreadsheet ignores it.
+
 **Recipe categories (1 Nov 2026; the same fields as Mise 2, PR #404).** `recipes/{id}.category` (string 1–100; «no
 category» is NO field — an emptied choice is a removal). A word not on the venue's list reads as «no category» and comes
 back if the word is put back, so deleting a category writes no recipe. `config/labels.recipeCategories` (list ≤ 100,

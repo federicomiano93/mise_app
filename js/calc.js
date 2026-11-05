@@ -306,7 +306,10 @@ export function calc(id) {
   const spec = recipeSpec(sheetRecipe(recipe, source));
   if (isProRata(recipe.logic)) spec.leaveningKey = null; // pure pro-rata, no leavening adjust
   const scaled = scaleRecipe(spec, target, pct);
-  const rows = source.ingredients.map((ing, i) => ({ name: ing.label, grams: scaled[i] || 0 }));
+  const lines = source.dividersAfter || [];
+  const rows = source.ingredients.map((ing, i) => ({
+    name: ing.label, grams: scaled[i] || 0, ...(lines.includes(i) ? { dividerAfter: true } : {}),
+  }));
   renderIngredients(id + '-ingredients', rows);
   lastRecipe[id] = { rows, totalG: Math.round(target), name: source.name || recipe.name, trays: exportTrays(recipe) };
 
@@ -323,14 +326,15 @@ export function calc(id) {
   if (revealed[id]) showResult(resultId); else hideResult(resultId);
 }
 
-// The trays the exported title may name: only when the dough IS the trays (a trays recipe, or a
-// trays-plus-total one with nothing typed in the total), otherwise 0 and the title says the grams.
+// The trays the exported FILE NAME may carry («Pizza_x3.pdf»): only when the dough IS the trays (a
+// trays recipe, or a trays-plus-total one with nothing typed in the total), otherwise 0 and the
+// file name says the grams. The title on the page is the recipe's name only.
 function exportTrays(recipe) {
   return exportTraysFor(recipe.logic, traysFor(recipe.id), totalInputFor(recipe.id));
 }
 
 // What the PDF / Excel export is made from: the SAME rows the result card shows (never recomputed),
-// unrounded, plus the trays the title may name. null when nothing is calculated.
+// unrounded, plus the trays the file name may carry. null when nothing is calculated.
 export function exportModelFor(id) {
   const model = lastRecipe[id];
   if (!model) return null;
@@ -338,7 +342,7 @@ export function exportModelFor(id) {
     name: model.name,
     trays: model.trays || 0,
     totalG: model.totalG,
-    rows: model.rows.map(r => ({ name: r.name, grams: r.grams })),
+    rows: model.rows.map(r => ({ name: r.name, grams: r.grams, ...(r.dividerAfter ? { dividerAfter: true } : {}) })),
   };
 }
 
