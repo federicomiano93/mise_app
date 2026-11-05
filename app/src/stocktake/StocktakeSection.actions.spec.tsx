@@ -1,5 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { en as english } from '../i18n/en';
 import { it as italian } from '../i18n/it';
 import { ACTION_EVENT } from '../telemetry/usage';
 import { fakeStocktakeSource } from '../testing/fakeStocktakeSource';
@@ -82,7 +83,7 @@ const noMessage = () => screen.getAllByRole('status')
   .every(region => region.textContent === '');
 const dialog = (name: string) => screen.findByRole('alertdialog', { name }, LOAD);
 const boxOf = (name: string) => screen.getByRole('textbox', { name: `How many of ${name} are left` });
-const ready = () => waitFor(() => { expect(button('Close the month')).toBeEnabled(); }, LOAD);
+const ready = () => waitFor(() => { expect(button('Close the month')).toHaveAttribute('aria-disabled', 'false'); }, LOAD);
 
 // A tap on a button of the page behind an open dialog, as a script or a second tap would make it
 // (the dialog is modal, so a person cannot reach it).
@@ -139,7 +140,7 @@ describe('the bottom bar', () => {
     fake.hold();
     renderStocktake('/stocktake/2026-10', { source: fake });
     await screen.findAllByRole('heading', { level: 3 }, LOAD);
-    expect(button('Close the month')).toBeDisabled();
+    expect(button('Close the month')).toHaveAttribute('aria-disabled', 'true');
     fake.release();
     await ready();
   });
@@ -532,7 +533,7 @@ describe('Close the month', () => {
   // ⚠️ Another phone closes the month while this one reads the question: the store refuses and
   // writes nothing, so this phone must not claim «Month closed.» nor put `month-closed` in the usage
   // record.
-  it('says nothing and records nothing when another phone closed the month while the question was open', async () => {
+  it('says so and records nothing when another phone closed the month while the question was open', async () => {
     const fake = source([counted()]);
     const heard: string[] = [];
     const listener = (event: Event) => { heard.push(String((event as CustomEvent).detail)); };
@@ -553,7 +554,7 @@ describe('Close the month', () => {
       await new Promise(resolve => { setTimeout(resolve, 300); });
 
       expect(screen.queryByText(/^Month closed\./)).not.toBeInTheDocument();
-      expect(noMessage()).toBe(true);
+      expect(screen.getByText('This month has just been closed on another device.')).toBeInTheDocument();
       expect(heard).toEqual([]);
       expect(fake.saved).toHaveLength(0);
       expect(button('Reopen the month')).toBeVisible();
@@ -639,7 +640,7 @@ describe('Close the month', () => {
 
   it('speaks Italian', async () => {
     const { user } = await loaded(source([counted()]), '/stocktake/2026-10', { lang: 'it' });
-    await waitFor(() => { expect(button(italian['stock.closeMonth'])).toBeEnabled(); }, LOAD);
+    await waitFor(() => { expect(button(italian['stock.closeMonth'])).toHaveAttribute('aria-disabled', 'false'); }, LOAD);
     await user.click(button(italian['stock.closeMonth']));
     expect(await dialog(italian['stock.closeTitle'])).toBeInTheDocument();
   });
@@ -711,5 +712,94 @@ describe('Reopen the month', () => {
     await waitFor(() => { expect(button(italian['stock.reopenMonth'])).toBeEnabled(); }, LOAD);
     await user.click(button(italian['stock.reopenMonth']));
     expect(await dialog(italian['stock.reopenTitle'])).toBeInTheDocument();
+  });
+});
+
+describe('⚠️⚠️ a month that has not arrived', () => {
+  const NOT_READY = 'Not yet: this month’s figures have not arrived. Check your connection and try again.';
+  const FOUR = ['Close the month', 'What it cost', 'Carry forward', 'From the orders'];
+
+  // No signal, no copy of this month: the rows are the phone's copy of the ingredients, and the month has never been read here.
+  async function neverRead() {
+    const fake = source([]);
+    fake.noSignal();
+    const view = await loaded(fake);
+    return view;
+  }
+
+  it('dims all four, leaving them where they are', async () => {
+    await neverRead();
+    for (const name of FOUR) expect(button(name)).toHaveAttribute('aria-disabled', 'true');
+  });
+
+  it.each(FOUR)('«%s»: the tap says why, asks nothing and writes nothing', async name => {
+    const { user, fake } = await neverRead();
+    await user.click(button(name));
+    expect(await screen.findByText(NOT_READY)).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(fake.saved).toEqual([]);
+    expect(fake.getOrdersInMonth).not.toHaveBeenCalled();
+    expect(fake.getMonthOnce).not.toHaveBeenCalled();
+    // Still on the list.
+    expect(button('Close the month')).toBeInTheDocument();
+  });
+
+  it('comes alive by itself when the answers land, and then the close freezes names and prices', async () => {
+    const { user, fake } = await neverRead();
+    act(() => { fake.signal(); });
+    await ready();
+    for (const name of FOUR) expect(button(name)).toHaveAttribute('aria-disabled', 'false');
+    await user.click(button('Close the month'));
+    await user.click(within(await dialog('Close the month?')).getByRole('button', { name: 'Close the month' }));
+    await screen.findByText(/^Month closed\./);
+    const closed = fake.saved.find(save => save.monthId === '2026-10');
+    expect(closed?.patch.names).toMatchObject({ flour: 'Farina 25kg' });
+    expect(closed?.patch.unitPrice).toEqual({ flour: 20, butter: 8 });
+    expect(fake.saved.map(save => save.monthId)).toEqual(['2026-11', '2026-10']);
+  });
+
+  it('⚠️ the address of «What it cost» says the figures have not arrived: no invented total', async () => {
+    const fake = source([]);
+    fake.noSignal();
+    renderStocktake('/stocktake/2026-10/cost', { source: fake });
+    expect(await screen.findByText(NOT_READY, undefined, LOAD)).toBeInTheDocument();
+    expect(screen.queryByText(/Nothing has been counted/)).not.toBeInTheDocument();
+    act(() => { fake.signal(); });
+    await waitFor(() => { expect(screen.queryByText(NOT_READY)).not.toBeInTheDocument(); }, LOAD);
+  });
+
+  it('the dialog of «Carry forward» is open and another phone closes the month: confirming writes nothing and says so', async () => {
+    const fake = source([monthDoc('2026-10'), closedMonthDoc('2026-09', { closing: { flour: 4 } })]);
+    const { user } = await loaded(fake);
+    await ready();
+    await user.click(button('Carry forward'));
+    const ask = await dialog('Carry last month’s counts forward?');
+    fake.months.set('2026-10', { ...monthDoc('2026-10'), closedAt: '2026-10-14T20:30:00.000Z' });
+    act(() => { fake.push(); });
+    await user.click(within(ask).getByRole('button', { name: 'Carry forward' }));
+    expect(await screen.findByText('This month has just been closed on another device.')).toBeInTheDocument();
+    expect(fake.getMonthOnce).not.toHaveBeenCalled();
+    expect(fake.saved).toEqual([]);
+  });
+
+  it('«From the orders» that could not read says so, and fills in nothing', async () => {
+    const fake = source();
+    fake.refuse.orders = true;
+    const { user } = await loaded(fake);
+    await ready();
+    await user.click(button('From the orders'));
+    expect(await screen.findByText(english['stock.purchasesFailed'])).toBeInTheDocument();
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(fake.saved).toEqual([]);
+  });
+
+  it('a closed month read from the copy: Reopen and its cost are alive, on its own rows', async () => {
+    const fake = source([closedMonthDoc('2026-09', { names: { flour: 'Farina 25kg' }, closing: { flour: 4 } })]);
+    fake.noSignal();
+    const { user } = await loaded(fake, '/stocktake/2026-09');
+    await waitFor(() => { expect(screen.queryByRole('button', { name: 'Reopen the month' })).toBeInTheDocument(); }, LOAD);
+    expect(button('What it cost')).toHaveAttribute('aria-disabled', 'false');
+    await user.click(button('Reopen the month'));
+    expect(await dialog('Reopen this month?')).toBeInTheDocument();
   });
 });

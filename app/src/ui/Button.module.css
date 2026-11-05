@@ -93,7 +93,10 @@
   cursor: progress;
 }
 
-.button[data-disabled] {
+/* aria-disabled: dimmed like a disabled one, but still reachable, and a tap can say why (the Stocktake's month actions). A
+   pending button carries it too, and keeps its own look. */
+.button[data-disabled],
+.button[aria-disabled='true']:not([data-pending]) {
   border-color: var(--line);
   background: var(--sunken);
   color: var(--ink-3);

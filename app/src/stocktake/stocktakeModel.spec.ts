@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { normalizeMonth } from '@mise/shared/inventory-model';
 import type { InventoryMonth } from '@mise/shared/inventory-model';
-import { frozenFor, productLabel, uncountedIn } from './stocktakeModel';
+import { frozenFor, monthReady, productLabel, uncountedIn, withoutEmptyMaps } from './stocktakeModel';
 
 // What closing a month freezes into it, worked out as the current app's handleClose() does
 // (js/inventory/inventory-main.js): the label, what ONE counted unit cost, and the pack weight.
@@ -32,5 +32,45 @@ describe('the Stocktake’s own decisions', () => {
   test('the close question counts the rows nobody counted — a zero is counted', () => {
     const m = month({ closing: { flour: 0, eggs: 12 } });
     expect(uncountedIn(m, [FLOUR, EGGS, SACK, UNPRICED])).toBe(2);
+  });
+});
+
+describe('⚠️ what may go out in a write', () => {
+  test('an empty map never does: in a merge it wipes the stored one', () => {
+    expect(withoutEmptyMaps({ month: '2026-09', opening: {}, packKg: { a: 25 }, names: {}, unitPrice: {} }))
+      .toEqual({ month: '2026-09', packKg: { a: 25 } });
+  });
+
+  test('what is not an empty map goes out untouched: an empty string reopens a month, a removal is not empty', () => {
+    class Sentinel {}
+    const removal = new Sentinel();
+    const kept = { closedAt: '', updatedAt: 'now', closing: { a: removal }, top: removal, nothing: null, zero: 0 };
+    expect(withoutEmptyMaps(kept)).toEqual(kept);
+    expect(withoutEmptyMaps(kept).top).toBe(removal);
+  });
+});
+
+describe('⚠️ what «ready» is', () => {
+  const ready = (over: Partial<Parameters<typeof monthReady>[0]> = {}) => monthReady({
+    monthAnswered: true, ingredientsAnswered: true, pricesAnswered: true, closed: false, rows: 3, ...over,
+  });
+
+  test('an open month is ready only with its own answer, the ingredients’ and the prices’', () => {
+    expect(ready()).toBe(true);
+    expect(ready({ monthAnswered: false })).toBe(false);
+    expect(ready({ ingredientsAnswered: false })).toBe(false);
+    // A close would freeze no money.
+    expect(ready({ pricesAnswered: false })).toBe(false);
+  });
+
+  test('a venue that has really answered with nothing is ready: the month can still be closed', () => {
+    expect(ready({ rows: 0 })).toBe(true);
+  });
+
+  test('a closed month is ready on its own rows, whatever the rest is doing; with none it needs the answers', () => {
+    expect(ready({ closed: true, monthAnswered: false, ingredientsAnswered: false, pricesAnswered: false })).toBe(true);
+    expect(ready({ closed: true, ingredientsAnswered: false, rows: 0 })).toBe(false);
+    expect(ready({ closed: true, monthAnswered: false, rows: 0 })).toBe(false);
+    expect(ready({ closed: true, pricesAnswered: false, rows: 0 })).toBe(true);
   });
 });

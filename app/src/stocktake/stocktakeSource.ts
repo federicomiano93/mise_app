@@ -23,6 +23,7 @@ import { isMonthId } from '@mise/shared/inventory-model';
 import { withPrices } from '@mise/shared/price-model';
 import type { DocumentReference, Query } from 'firebase/firestore';
 import type { FirestoreKit } from '../session/firebaseBackend';
+import { withoutEmptyMaps } from './stocktakeModel';
 
 // A document as the store reads it: its id beside its fields.
 export type StoredDoc = { readonly id: string } & Record<string, unknown>;
@@ -38,6 +39,20 @@ export interface SnapshotMeta {
   // true when the SERVER sent it, false when it came from the browser's own database (an old copy,
   // or this phone's own write shown back before a server has heard of it).
   readonly fromServer: boolean;
+  // ⚠️ WHETHER IT CARRIES THIS PHONE'S OWN UNSENT WRITES: a merge on a month never read here shows up as a document that
+  // exists, and it proves nothing about the month (the store's hearMonth).
+  readonly hasPendingWrites: boolean;
+}
+
+// What an answer of the ingredients says about what lies behind it (the store's `ready`).
+export interface IngredientsAnswer {
+  // The list came from the browser's own database. An EMPTY list from there proves nothing: a cold start with no signal
+  // reports one.
+  readonly fromCache: boolean;
+  // The prices have really answered. An empty copy has not, and a month closed on it would freeze no money. A REFUSED read
+  // has: that account will never get more. Any other failure has not, whatever came before: the prices are gone from the
+  // list, and a month closed then would have no money and no warning.
+  readonly pricesAnswered: boolean;
 }
 
 export interface StocktakeSource {
@@ -58,11 +73,12 @@ export interface StocktakeSource {
   // Part of a month, merged. Resolves when the server has it — which offline is NEVER (see the
   // store's settled()); rejects when it is refused.
   saveMonthFields(monthId: string, patch: Readonly<Record<string, unknown>>, clear?: Clearing): Promise<void>;
-  // Every order record dated inside [from, to), read once.
+  // Every order record dated inside [from, to), read once. Rejects when it cannot be read, and when all there is is the
+  // phone's copy: see the function.
   getOrdersInMonth(from: string, to: string): Promise<StoredDoc[]>;
   // The venue's ingredients with their prices laid on (withPrices), live. Nothing is emitted until
   // the ingredients themselves have arrived; a refused price read emits them unpriced.
-  watchIngredients(onChange: (list: StoredDoc[]) => void, onError: (err: unknown) => void): () => void;
+  watchIngredients(onChange: (list: StoredDoc[], answer: IngredientsAnswer) => void, onError: (err: unknown) => void): () => void;
 }
 
 const MONTHS = 'inventory';
@@ -124,7 +140,7 @@ export function createFirestoreStocktakeSource(
       { includeMetadataChanges: true },
       snap => onChange(
         snap.exists() ? { ...snap.data(), id: snap.id } : null,
-        { fromServer: !snap.metadata.fromCache },
+        { fromServer: !snap.metadata.fromCache, hasPendingWrites: snap.metadata.hasPendingWrites },
       ),
       err => {
         console.error(`watchMonth(${monthId}) failed:`, err);
@@ -147,6 +163,8 @@ export function createFirestoreStocktakeSource(
     // ⚠️ WHICH IS EXACTLY WHY CLEARING A BOX NEEDS deleteField(): a merge never removes a key, so an
     // emptied box would come back counted on the next load. The removals travel IN THE SAME WRITE as
     // the rest, so a count and its neighbour's deletion can never half-land.
+    //
+    // ⚠️⚠️ AND NO EMPTY MAP EVER GOES OUT: in a merge it wipes the stored one (withoutEmptyMaps).
     async saveMonthFields(monthId, patch, clear = {}) {
       const kit = await firestore();
       const ref = monthRef(kit, monthId);
@@ -158,7 +176,7 @@ export function createFirestoreStocktakeSource(
         const existing = payload[map];
         payload[map] = { ...(existing && typeof existing === 'object' ? existing : {}), ...removals };
       }
-      await kit.fs.setDoc(ref, payload, { merge: true });
+      await kit.fs.setDoc(ref, withoutEmptyMaps(payload), { merge: true });
     },
 
     // ⚠️ BOUNDED BY A RANGE ON `date`, NOT BY THE DOCUMENT ID: the ids look like `2026-09-04_alba`,
@@ -167,6 +185,9 @@ export function createFirestoreStocktakeSource(
     // belongs to no month — the right answer, not a gap.
     // ⚠️ READING IT NEEDS THE ORDERS SECTION: a venue without it is refused here, which the store
     // turns into «write in what you bought by hand».
+    // ⚠️ THE PHONE'S COPY IS NOT AN ANSWER. With no signal getDocs does not fail: it answers from whatever orders happen to be
+    // on this device, often none. That would say «no orders this month» when there were, and a part of them would replace the
+    // whole month's purchases. So it counts as a failed read.
     async getOrdersInMonth(from, to) {
       const { fs, db } = await firestore();
       const snap = await fs.getDocs(fs.query(
@@ -174,6 +195,7 @@ export function createFirestoreStocktakeSource(
         fs.where('date', '>=', from),
         fs.where('date', '<', to),
       ));
+      if (snap.metadata.fromCache) throw new Error('The orders are only on this device.');
       return snap.docs.map(d => ({ ...d.data(), id: d.id }));
     },
 
@@ -181,17 +203,28 @@ export function createFirestoreStocktakeSource(
     // emitting then would paint an empty list for a frame.
     // ⚠️ THE PRICE HALF FAILS QUIETLY: an employee may not read prices, and a venue with none still
     // counts perfectly well — it simply has no money column.
+    // ⚠️ includeMetadataChanges ON BOTH, OR THE SERVER'S «YES, EMPTY» NEVER ARRIVES: confirming an empty copy changes no
+    // document, so Firestore would stay silent. It also answers again when the server confirms a full list, so that one is
+    // dropped: an identical answer would redo the work of the screen for nothing.
     watchIngredients(onChange, onError) {
       let ingredients: StoredDoc[] | null = null;
       let prices: Record<string, Record<string, unknown>> = {};
+      let fromCache = true;
+      let emptyFromCache: boolean | null = null;
+      let pricesAnswered = false;
       const emit = () => {
-        if (ingredients) onChange(withPrices(ingredients, prices) as StoredDoc[]);
+        if (ingredients) onChange(withPrices(ingredients, prices) as StoredDoc[], { fromCache, pricesAnswered });
       };
       return listen(kit => {
         const { fs, db } = kit;
         const stopIngredients = fs.onSnapshot(
           fs.collection(db, ingredientsPath) as Query,
+          { includeMetadataChanges: true },
           snap => {
+            const nowEmptyFromCache = snap.empty && snap.metadata.fromCache;
+            if (nowEmptyFromCache === emptyFromCache && snap.docChanges().length === 0) return;
+            emptyFromCache = nowEmptyFromCache;
+            fromCache = snap.metadata.fromCache;
             ingredients = snap.docs.map(d => ({ ...d.data(), id: d.id }));
             emit();
           },
@@ -202,14 +235,19 @@ export function createFirestoreStocktakeSource(
         );
         const stopPrices = fs.onSnapshot(
           fs.collection(db, pricesPath) as Query,
+          { includeMetadataChanges: true },
           snap => {
+            const proves = !snap.empty || !snap.metadata.fromCache;
+            if ((pricesAnswered || !proves) && snap.docChanges().length === 0) return;
+            pricesAnswered = pricesAnswered || proves;
             const next: Record<string, Record<string, unknown>> = {};
             snap.forEach(d => { next[d.id] = d.data(); });
             prices = next;
             emit();
           },
-          () => {
+          err => {
             prices = {};
+            pricesAnswered = (err as { code?: unknown }).code === 'permission-denied';
             emit();
           },
         );

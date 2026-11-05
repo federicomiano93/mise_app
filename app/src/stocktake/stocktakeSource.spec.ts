@@ -19,6 +19,7 @@ function fakeKit() {
   }[] = [];
   let stored: Record<string, Record<string, unknown> | null> = {};
   let orderDocs: Snap[] = [];
+  let ordersFromCache = false;
   const fs = {
     collection: (_db: unknown, path: string): Ref => ({ kind: 'collection', path }),
     doc: (_db: unknown, path: string, id: string): Ref => ({ kind: 'doc', path: `${path}/${id}` }),
@@ -38,13 +39,14 @@ function fakeKit() {
       const data = stored[ref.path] ?? null;
       return { id: ref.path.split('/').pop(), exists: () => data !== null, data: () => data };
     }),
-    getDocs: vi.fn(async (_query: Ref) => ({ docs: orderDocs })),
+    getDocs: vi.fn(async (_query: Ref) => ({ docs: orderDocs, metadata: { fromCache: ordersFromCache } })),
   };
   const kit = { fs, db: {} } as unknown as FirestoreKit;
   const live = (path: string) => listeners.filter(l => l.target.path === path && !l.stopped);
   return {
     kit, fs, listeners, live,
     setStored: (value: typeof stored) => { stored = value; },
+    setOrdersFromCache: (value: boolean) => { ordersFromCache = value; },
     setOrders: (docs: StoredDoc[]) => {
       orderDocs = docs.map(({ id, ...data }) => ({ id, data: () => data }));
     },
@@ -54,9 +56,15 @@ function fakeKit() {
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
 
 // A collection snapshot as onSnapshot hands it over.
-function collectionSnap(docs: StoredDoc[]) {
+function collectionSnap(docs: StoredDoc[], { fromCache = false, changes = docs.length } = {}) {
   const snaps = docs.map(({ id, ...data }) => ({ id, data: () => data }));
-  return { docs: snaps, forEach: (fn: (snap: Snap) => void) => snaps.forEach(fn) };
+  return {
+    docs: snaps,
+    empty: snaps.length === 0,
+    metadata: { fromCache },
+    docChanges: () => Array.from({ length: changes }, () => ({})),
+    forEach: (fn: (snap: Snap) => void) => snaps.forEach(fn),
+  };
 }
 
 describe('the Stocktake source, as firestore.rules expect it', () => {
@@ -246,5 +254,143 @@ describe('the Stocktake source, as firestore.rules expect it', () => {
     stop();
     expect(live('locations/bakery/ingredients')).toHaveLength(0);
     expect(live('locations/bakery/ingredient-prices')).toHaveLength(0);
+  });
+});
+
+describe('⚠️ what the source says it knows, and what it never sends', () => {
+  const FLOUR = { id: 'flour', name: 'Flour' };
+  const denied = (code: string) => Object.assign(new Error(code), { code });
+
+  async function listening() {
+    const fake = fakeKit();
+    const source = createFirestoreStocktakeSource(() => Promise.resolve(fake.kit), 'bakery');
+    const told: { names: unknown[]; fromCache: boolean; pricesAnswered: boolean }[] = [];
+    const onError = vi.fn();
+    source.watchIngredients((list, answer) => told.push({ names: list.map(i => i.name), ...answer }), onError);
+    await settle();
+    return {
+      told, onError,
+      ingredients: fake.live('locations/bakery/ingredients')[0]!,
+      prices: fake.live('locations/bakery/ingredient-prices')[0]!,
+    };
+  }
+
+  test('⚠️⚠️ no empty map goes out, and it is still a merge: in a merge an empty map wipes the stored one', async () => {
+    // The very write an ordinary close makes with nothing counted: it emptied the next month's figures on the emulator.
+    const { kit, fs } = fakeKit();
+    const source = createFirestoreStocktakeSource(() => Promise.resolve(kit), 'bakery');
+    await source.saveMonthFields('2026-11', { month: '2026-11', opening: {}, packKg: {}, createdAt: 'a', updatedAt: 'b' });
+    const [, payload, options] = fs.setDoc.mock.calls[0] as [Ref, Record<string, unknown>, unknown];
+    expect(payload).toEqual({ month: '2026-11', createdAt: 'a', updatedAt: 'b', bakery: 'bakery' });
+    expect(options).toEqual({ merge: true });
+  });
+
+  test('a close stamped with nothing to freeze leaves the stored names and prices alone', async () => {
+    const { kit, fs } = fakeKit();
+    const source = createFirestoreStocktakeSource(() => Promise.resolve(kit), 'bakery');
+    await source.saveMonthFields('2026-10', { month: '2026-10', closedAt: 'x', names: {}, unitPrice: {}, packKg: { flour: 25 } });
+    const payload = fs.setDoc.mock.calls[0]![1];
+    expect(payload).not.toHaveProperty('names');
+    expect(payload).not.toHaveProperty('unitPrice');
+    expect(payload.packKg).toEqual({ flour: 25 });
+  });
+
+  test('a box is still emptied by name, and a month still reopened by an empty string', async () => {
+    const { kit, fs } = fakeKit();
+    const source = createFirestoreStocktakeSource(() => Promise.resolve(kit), 'bakery');
+    await source.saveMonthFields('2026-10', { month: '2026-10', closing: {} }, { closing: { flour: true } });
+    expect(fs.setDoc.mock.calls[0]![1].closing).toEqual({ flour: DELETE });
+    await source.saveMonthFields('2026-10', { month: '2026-10', closedAt: '' });
+    expect(fs.setDoc.mock.calls[1]![1].closedAt).toBe('');
+  });
+
+  test('⚠️ orders that are only on this device are a failed read, never «no orders», nor a part standing for the month', async () => {
+    const { kit, setOrders, setOrdersFromCache } = fakeKit();
+    const source = createFirestoreStocktakeSource(() => Promise.resolve(kit), 'bakery');
+    setOrdersFromCache(true);
+    await expect(source.getOrdersInMonth('2026-10-01', '2026-11-01')).rejects.toThrow(/only on this device/);
+    setOrders([{ id: 'o1', date: '2026-10-05' }]);
+    await expect(source.getOrdersInMonth('2026-10-01', '2026-11-01')).rejects.toThrow(/only on this device/);
+    setOrdersFromCache(false);
+    await expect(source.getOrdersInMonth('2026-10-01', '2026-11-01')).resolves.toEqual([{ id: 'o1', date: '2026-10-05' }]);
+  });
+
+  test('the month says whether the snapshot carries this phone’s own writes', async () => {
+    const { kit, live } = fakeKit();
+    const source = createFirestoreStocktakeSource(() => Promise.resolve(kit), 'bakery');
+    const seen: unknown[] = [];
+    source.watchMonth('2026-10', (_doc, meta) => seen.push(meta), () => {});
+    await settle();
+    live('locations/bakery/inventory/2026-10')[0]!.next({
+      id: '2026-10', exists: () => true, data: () => ({}), metadata: { fromCache: true, hasPendingWrites: true },
+    });
+    expect(seen).toEqual([{ fromServer: false, hasPendingWrites: true }]);
+  });
+
+  test('⚠️ both collections ask for metadata changes: the server confirming an empty copy changes no document', async () => {
+    const { ingredients, prices } = await listening();
+    expect(ingredients.options).toEqual({ includeMetadataChanges: true });
+    expect(prices.options).toEqual({ includeMetadataChanges: true });
+  });
+
+  test('⚠️ an empty copy of the ingredients says it is a copy; the server’s «none» arrives and says so', async () => {
+    const { told, ingredients } = await listening();
+    ingredients.next(collectionSnap([], { fromCache: true }));
+    expect(told.at(-1)).toMatchObject({ names: [], fromCache: true });
+    // Nothing new to tell.
+    ingredients.next(collectionSnap([], { fromCache: true }));
+    expect(told).toHaveLength(1);
+    ingredients.next(collectionSnap([]));
+    expect(told).toHaveLength(2);
+    expect(told.at(-1)).toMatchObject({ names: [], fromCache: false });
+  });
+
+  test('the server confirming a full list changes nothing and is not told again', async () => {
+    const { told, ingredients } = await listening();
+    ingredients.next(collectionSnap([FLOUR], { fromCache: true }));
+    ingredients.next(collectionSnap([FLOUR], { changes: 0 }));
+    expect(told).toHaveLength(1);
+  });
+
+  test('⚠️ an empty copy of the prices is not an answer; the server’s «none» is, and it arrives', async () => {
+    const { told, ingredients, prices } = await listening();
+    ingredients.next(collectionSnap([FLOUR]));
+    expect(told.map(a => a.pricesAnswered)).toEqual([false]);
+    prices.next(collectionSnap([], { fromCache: true }));
+    expect(told.map(a => a.pricesAnswered)).toEqual([false]);
+    prices.next(collectionSnap([]));
+    expect(told.map(a => a.pricesAnswered)).toEqual([false, true]);
+  });
+
+  test('prices from the phone’s copy are an answer, and the server confirming them is not told twice', async () => {
+    const { told, ingredients, prices } = await listening();
+    ingredients.next(collectionSnap([FLOUR]));
+    prices.next(collectionSnap([{ id: 'flour', pricePerUnit: 2 }], { fromCache: true }));
+    prices.next(collectionSnap([{ id: 'flour', pricePerUnit: 2 }], { changes: 0 }));
+    expect(told.map(a => a.pricesAnswered)).toEqual([false, true]);
+  });
+
+  test('a refused price read counts as answered: that account will never get more', async () => {
+    const { told, ingredients, prices, onError } = await listening();
+    ingredients.next(collectionSnap([FLOUR]));
+    prices.error(denied('permission-denied'));
+    expect(told.map(a => a.pricesAnswered)).toEqual([false, true]);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  test('⚠️ any other price failure does not: a month closed on it would freeze no money, with no warning', async () => {
+    const { told, ingredients, prices } = await listening();
+    ingredients.next(collectionSnap([FLOUR]));
+    prices.error(denied('resource-exhausted'));
+    expect(told.map(a => a.pricesAnswered)).toEqual([false, false]);
+  });
+
+  test('⚠️ nor does it after they had answered: the prices are gone from the list', async () => {
+    const { told, ingredients, prices } = await listening();
+    ingredients.next(collectionSnap([FLOUR]));
+    prices.next(collectionSnap([{ id: 'flour', priceUnit: 'kg', pricePerUnit: 2 }]));
+    expect(told.at(-1)!.pricesAnswered).toBe(true);
+    prices.error(denied('resource-exhausted'));
+    expect(told.at(-1)!.pricesAnswered).toBe(false);
   });
 });
