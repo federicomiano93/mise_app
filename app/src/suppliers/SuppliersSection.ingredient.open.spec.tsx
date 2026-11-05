@@ -238,8 +238,8 @@ describe('the fields open from what is stored', () => {
     expect(region.queryByText('Name on the invoice')).not.toBeInTheDocument();
   });
 
-  it('no price, allergen or nutrition field in this step', async () => {
-    const { region } = await open('i-flour');
+  it('no allergen or nutrition field in this step, and no price for somebody who may not write prices', async () => {
+    const { region } = await open('i-flour', 'Edit ingredient', { session: { canManage: false, role: 'employee' } });
     expect(region.queryByText(/price/i)).not.toBeInTheDocument();
     expect(region.queryByText(/allergen/i)).not.toBeInTheDocument();
     expect(region.queryByText(/nutrition/i)).not.toBeInTheDocument();

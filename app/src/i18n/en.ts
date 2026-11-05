@@ -1544,6 +1544,75 @@ export const en = {
   'sup.ing.delete.used': 'This cannot be undone. It is used in {recipes} and {products}: there it will appear as a missing ingredient, and the labels of those recipes stay blocked until you replace it. Past orders still show it.',
   'sup.ing.delete.recipes': { one: '{n} recipe', other: '{n} recipes' },
   'sup.ing.delete.products': { one: '{n} Food cost product', other: '{n} Food cost products' },
+
+  // Ingredients & suppliers (step 3e-3): the price on the ingredient card. The words are the current app's, copied word for word;
+  // the comment names the original key where the name differs.
+  // orders.pricePerKg / orders.pricePerLitre / orders.pricePerPiece / orders.priceGeneric
+  'sup.price.perKg': 'Price per kg ({currency})',
+  'sup.price.perLitre': 'Price per litre ({currency})',
+  'sup.price.perPiece': 'Price per piece ({currency})',
+  'sup.price.generic': 'Price ({currency})',
+  // orders.eg.ratePerKg / ratePerLitre / ratePerPiece / eg.pieceWeight: the worked example INSIDE the box. It may not be dropped.
+  'sup.price.eg.perKg': 'e.g. 7.20 (one kilo)',
+  'sup.price.eg.perLitre': 'e.g. 6.00 (one litre)',
+  'sup.price.eg.perPiece': 'e.g. 0.035 (one piece)',
+  'sup.price.eg.pieceWeight': 'e.g. 0.055',
+  // orders.noPrice2 / orders.howItIsBought
+  'sup.price.none': 'None',
+  'sup.price.howBought': 'How it is bought',
+  // price.byWeight / price.byVolume / price.byPiece (the three units of «How it is bought»)
+  'sup.price.byWeight': 'by kg',
+  'sup.price.byVolume': 'by litre',
+  'sup.price.byPiece': 'by piece',
+  // price.none / price.needPieceWeight (why an ingredient cannot be costed). «price.perEach» is sup.perEach above.
+  'sup.price.noPriceYet': 'No price yet',
+  'sup.price.needPieceWeight': 'Add the weight of one piece to use this in a recipe',
+  // orders.case.*
+  'sup.price.case.price': 'Case price ({currency})',
+  'sup.price.case.packPrice': 'Pack price ({currency})',
+  'sup.price.case.packChanged': 'The format has changed since the last price: saved {old}, with this format {new}. Check the price.',
+  'sup.price.case.recompute': 'Recalculate',
+  'sup.price.case.keepsPrice': 'The saved price stays {price} until you write the new price or tap Recalculate.',
+  'sup.price.case.keepsPriceTyped': 'The saved price stays {price} until you write a new price.',
+  'sup.price.case.sizeNeeded': 'This price was for {count} × {size}: write the weight of one item to recalculate it.',
+  'sup.price.case.summaryUnit': '= {rate} / {unit}',
+  'sup.price.case.summaryPiece': '= {rate} each',
+  'sup.price.case.perItem': '{price} per {item}',
+  // orders.format.priceAgain
+  'sup.price.priceAgain': 'This format has no price yet: type the price',
+  // orders.basis.*
+  'sup.price.basis.pack': 'per pack',
+  'sup.price.basis.case': 'per case',
+  'sup.price.basis.perKg': 'per kg',
+  'sup.price.basis.perLitre': 'per litre',
+  'sup.price.basis.packEquals': '= {price} per pack',
+  'sup.price.basis.caseEquals': '= {price} per case',
+  // orders.exVatNote: permanent, under the pair of boxes. It may not be dropped: a gross price inflates every recipe cost.
+  'sup.price.exVatNote': 'Prices are net of VAT.',
+  // orders.weightOfOnePiece / orders.neededOnlyToUse
+  'sup.price.weightOfOnePiece': 'Weight of one piece (kg)',
+  'sup.price.neededOnlyToUse': 'Needed only to use this in a recipe written in grams — one egg is about 0.055, a vanilla pod about 0.0035.',
+  // orders.vat.label / orders.vat.notStated / orders.vat.summaryLine
+  'sup.price.vat.label': 'VAT',
+  'sup.price.vat.notStated': '— not stated',
+  'sup.price.vat.summaryLine': '{net} without VAT, {gross} with VAT at {rate}%',
+  // orders.price.notANumber
+  'sup.price.notANumber': 'Write just a number above zero, like 7.20.',
+  // orders.weight.packNeeded: the refusal on the weight box when a price by weight has no weight to stand on.
+  'sup.price.weightNeeded': 'The weight of one item is needed for the case price',
+  // orders.priceHistory / orders.showThem / orders.loading / orders.noPriceRecordedYet / orders.priceFromInvoice
+  'sup.price.history': 'Price history',
+  'sup.price.history.show': 'Show them',
+  'sup.price.history.loading': 'Loading…',
+  'sup.price.history.empty': 'No price recorded yet.',
+  'sup.price.history.fromInvoice': 'invoice',
+  // orders.addIngredientFailed
+  'sup.price.openFailed': 'The ingredient card could not be opened. Please try again.',
+  // orders.failed.load: the alert when the price history could not be read.
+  'sup.price.history.failed': 'Could not load the price history for “{name}”. Check your network and try again.',
+  // NEW (decision T4): an old price shape is shown, never edited.
+  'sup.price.legacy.note': 'This price was saved in an older format. It is shown here only: saving this card keeps it exactly as it is.',
+  'sup.price.legacy.vat': 'VAT: {rate}%',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;

@@ -1,12 +1,11 @@
 import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { sectionsFor } from '@mise/shared/sections';
 import { useT } from '../i18n/useT';
-import { useSession } from '../session/SessionContext';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useIngredientDeletions } from './ingredientDeletions';
 import { useSuppliersStore } from './SuppliersContext';
+import { useMayWritePrices } from './useMayWritePrices';
 
 // Deleting an ingredient or a packaging item: count what uses it, ask, delete, say «Ingredient deleted.» exactly once, and
 // leave. A port of the delete of js/ingredient-record-form.js with his decision F5 added: the question carries the number of
@@ -30,7 +29,7 @@ export function useDeleteIngredient(): readonly [(item: Target, after: () => voi
   const store = useSuppliersStore();
   const say = useStatusMessage();
   const deletions = useIngredientDeletions();
-  const { canManage, location, role } = useSession();
+  const mayWritePrices = useMayWritePrices();
   const [confirm, dialog] = useConfirm();
   const asking = useRef(false);
   const [counting, setCounting] = useState(false);
@@ -58,7 +57,6 @@ export function useDeleteIngredient(): readonly [(item: Target, after: () => voi
         danger: true,
       });
       if (!ok) return false;
-      const mayWritePrices = canManage && sectionsFor(location, role).foodcost === true;
       deletions.mark(item.id);
       store.deleteIngredient(item.id, mayWritePrices);
       say(t('sup.ingredientDeleted'));

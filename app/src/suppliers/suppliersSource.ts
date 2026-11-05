@@ -11,7 +11,8 @@
 //   • ingredient-prices — what each costs, a separate collection that an employee is usually refused (parity S14):
 //     a refusal is «no prices», never an error (S24).
 //   • config/orders — the venue's category list and its favourite suppliers.
-// The ingredient card (step 3e-2) writes `ingredients/{id}` and, for a delete, `ingredient-prices/{id}` (only for a person who
+// The ingredient card (step 3e-2) writes `ingredients/{id}` — with, for a person who may write prices (step 3e-3), its
+// `ingredient-prices/{id}` document and one entry of its price history (`ingredients/{id}/prices`) in the same batch — and, for a delete, `ingredient-prices/{id}` (only for a person who
 // may write prices — js/ingredient-edit-model.js deletePlan); it keeps the order draft (`drafts/current`, the Orders
 // section's) honest about an ingredient whose order unit it changed or that it deleted (js/orders/draft.js), and counts the
 // recipes and Food cost products that use an ingredient before a delete (his decision F5).
@@ -49,6 +50,14 @@ export interface IngredientUsage {
   readonly products: number | null;
 }
 
+// The money half of an ingredient save (step 3e-3, parity C21): the price document as it is merged, and the one history
+// entry to append when the money moved (null when it did not). Built by priceSave.ts; never for a person who may not write
+// prices (parity C22: a refused member fails the whole batch).
+export interface IngredientPriceWrite {
+  readonly doc: Readonly<Record<string, unknown>>;
+  readonly history: Readonly<Record<string, unknown>> | null;
+}
+
 export type CallFunction = (name: string, data: unknown, timeoutMs: number) => Promise<unknown>;
 
 export interface SuppliersSource {
@@ -63,7 +72,10 @@ export interface SuppliersSource {
   // The prices by ingredient id, live, and whether they REALLY answered (parity S24): a server answer, or a cached one
   // that holds prices. A refusal or a failure answers ({}, false) — never an error: a person the rules refuse sees no
   // price, the same as for an ingredient nobody has priced.
-  watchPrices(onChange: (map: Record<string, Record<string, unknown>>, readable: boolean) => void): () => void;
+  // `meta.fromServer` says the SERVER sent this answer: only then is a missing price really «no price» (parity C28).
+  watchPrices(
+    onChange: (map: Record<string, Record<string, unknown>>, readable: boolean, meta: SuppliersMeta) => void,
+  ): () => void;
   // config/orders as stored (null when there is none), live. Same contract as watchSuppliers.
   watchOrdersConfig(
     onChange: (data: Record<string, unknown> | null, meta: SuppliersMeta) => void,
@@ -86,9 +98,17 @@ export interface SuppliersSource {
   newIngredientId(): string;
   // Creates or merges an ingredient at a known id. ⚠️ A MERGE, never a whole write: invoiceName, supplierCode(s), the
   // allergen and nutrition fields and every key this card does not draw stay as they are (parity C15). `data` is the
-  // ingredient document ALREADY CUT from its price keys (the store does it). The venue stamp is applied here. Same
-  // promise contract as saveSupplier.
-  saveIngredient(id: string, data: Readonly<Record<string, unknown>>): Promise<void>;
+  // ingredient document ALREADY CUT from its price keys (the store does it). With `price`, the price document (a merge)
+  // and its history entry go in the SAME batch: all or nothing (parity C21). The venue stamp is applied here. Same promise
+  // contract as saveSupplier.
+  saveIngredient(id: string, data: Readonly<Record<string, unknown>>, price?: IngredientPriceWrite | null): Promise<void>;
+  // One ingredient's price document (null when it has none), read ONCE before a price writer's card opens while the live
+  // prices have not come from the server (parity C28). The server first, the browser's copy offline; REJECTS when neither
+  // has it — the card then does not open, because a card opened without its price would save «no price» over it.
+  readPrice(id: string): Promise<Record<string, unknown> | null>;
+  // The last `max` entries of an ingredient's price history, newest first, read ONCE from the SERVER (parity C25: on demand,
+  // never watched). REJECTS when the server cannot answer: a copy could say «no price recorded yet» of a history that has one.
+  readPriceHistory(id: string, max: number): Promise<StoredDoc[]>;
   // Deletes an ingredient — and its price document too when `withPrice` (deletePlan) — in ONE batch. The price history
   // stays (the rules forbid deleting it). Same promise contract.
   deleteIngredient(id: string, withPrice: boolean): Promise<void>;
@@ -111,6 +131,8 @@ export interface SuppliersSource {
 const SUPPLIERS = 'suppliers';
 const INGREDIENTS = 'ingredients';
 const INGREDIENT_PRICES = 'ingredient-prices';
+// The append-only price history under each ingredient (js/orders/firebase-orders.js PRICES).
+const PRICE_HISTORY = 'prices';
 const CONFIG = 'config';
 const DRAFTS = 'drafts';
 const DRAFT_ID = 'current';
@@ -235,13 +257,13 @@ export function createFirestoreSuppliersSource(
       snap => {
         const map: Record<string, Record<string, unknown>> = {};
         snap.forEach(d => { map[d.id] = d.data(); });
-        onChange(map, !snap.metadata.fromCache || !snap.empty);
+        onChange(map, !snap.metadata.fromCache || !snap.empty, { fromServer: !snap.metadata.fromCache });
       },
       err => {
         console.warn('watch(ingredient-prices) failed:', err);
-        onChange({}, false);
+        onChange({}, false, { fromServer: false });
       },
-    ), () => onChange({}, false)),
+    ), () => onChange({}, false, { fromServer: false })),
 
     // ⚠️ includeMetadataChanges, for the same reason as the suppliers: a «missing» from the browser's own database is
     // confirmed only by a later report that the server said so (parity S28), and that report changes no document.
@@ -310,9 +332,41 @@ export function createFirestoreSuppliersSource(
 
     newIngredientId: () => makeSupplierId(),
 
-    async saveIngredient(id, data) {
+    // ⚠️ ONE BATCH WHEN THERE IS MONEY (js/record-data.js saveIngredientWithPrice): the ingredient, its price and the history
+    // entry land together or not at all — a new item's first price can never be left without its item, nor a history entry
+    // without the price it records. Both documents are MERGES: a key this card does not send stays as it is. The history
+    // entry is a new document (the rules allow create only: append-only), its id made on the phone like any other.
+    async saveIngredient(id, data, price = null) {
       const { fs, db } = await firestore();
-      await fs.setDoc(fs.doc(db, ingredientsPath, checkId(id)), withBakery(data), { merge: true });
+      const itemRef = fs.doc(db, ingredientsPath, checkId(id));
+      if (!price) {
+        await fs.setDoc(itemRef, withBakery(data), { merge: true });
+        return;
+      }
+      const batch = fs.writeBatch(db);
+      batch.set(itemRef, withBakery(data), { merge: true });
+      batch.set(fs.doc(db, pricesPath, checkId(id)), withBakery(price.doc), { merge: true });
+      if (price.history) {
+        batch.set(fs.doc(db, ingredientsPath, checkId(id), PRICE_HISTORY, makeSupplierId()), withBakery(price.history));
+      }
+      await batch.commit();
+    },
+
+    async readPrice(id) {
+      const { fs, db } = await firestore();
+      const snap = await fs.getDoc(fs.doc(db, pricesPath, checkId(id)));
+      return snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null;
+    },
+
+    // ⚠️ ORDERED BY THE recordedAt FIELD, never by document id: Firestore refuses a descending scan by key (parity C25).
+    async readPriceHistory(id, max) {
+      const { fs, db } = await firestore();
+      const snap = await fs.getDocsFromServer(fs.query(
+        fs.collection(db, ingredientsPath, checkId(id), PRICE_HISTORY),
+        fs.orderBy('recordedAt', 'desc'),
+        fs.limit(max),
+      ));
+      return docsOf(snap);
     },
 
     // ⚠️ ONE BATCH, AND THE PRICE DOCUMENT ONLY WHEN `withPrice` (deletePlan's header): a price delete the rules refuse

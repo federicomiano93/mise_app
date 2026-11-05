@@ -2,17 +2,19 @@
 // these tests are the safety net), run against BOTH implementations: the TypeScript port in shared/
 // and js/price-model.js, which the live app uses today. Ported from tests/price-model.test.mjs,
 // tests/case-price.test.mjs and tests/pack-case.test.mjs; the two must stay equal until the switch to
-// Mise 2.
+// Mise 2. The WRITING half (pricePatch and everything the ingredient card saves with) and the three
+// functions that look a word up in the dictionary are ported in price-write.spec.ts, whose header lists
+// what it ports and what it leaves out.
 //
 // What they are really guarding is a specific kind of silent wrongness: a cost that looks perfectly
 // plausible on screen and is out by a factor of a thousand, or a zero that reads as "free" when it
 // means "nobody has filled this in yet".
 //
-// price-model.ts is a PARTIAL port, so parity.spec.ts does not pair it: the original also holds the
-// WRITING half (the ingredient card's, step 3e) and three functions that look a word up in the
-// interface dictionary. The last block of this file stands in for what pairing would have checked: the
-// same names, the same constants, the same frozen-ness, the same function shapes — except that
-// formatMoney and formatRate take the venue's money as one more argument by design (see below).
+// price-model.ts is an ADAPTED port, so parity.spec.ts does not pair it. The last block of this file stands
+// in for what pairing would have checked: the same names, the same constants, the same frozen-ness, the same
+// function shapes — except that the arity differs by design where the port is handed something the original
+// reads for itself (the venue's money, the translator; see below), and that the port is one name AHEAD of
+// the original (keepPriceDate, until PR #380 reaches this stack).
 //
 // THE MONEY. The original formats with the symbol and the layout that the session set in js/currency.js
 // (setCurrency); the port is handed a Money (moneyOf). The tests that format money therefore run each
@@ -20,9 +22,10 @@
 // one with moneyOf(symbol, layout) — the same text is demanded of both. The js/ module is put back to
 // its fallback after every test.
 //
-// THE WRITER. Some reading tests need a stored price in the shape the card writes. pricePatch is the
-// writing half, which has no TypeScript copy until step 3e, so the js/ one produces those fixtures
-// for BOTH sides: what the card writes today is exactly what the TypeScript reader must read.
+// THE WRITER. Some reading tests need a stored price in the shape the card writes. pricePatch is ported
+// now (price-write.spec.ts), but these fixtures still come from the js/ one for BOTH sides, on purpose: what
+// the card writes today is exactly what the TypeScript reader must read, and a reading test must not lean
+// on the port's own writer.
 //
 // PORTED from tests/price-model.test.mjs: the 7 normalizePrice tests, the 5 pricePerKg tests, the 3
 // costState tests (without the costReasonText lines), 'money is shown to the penny…', the 3 currency
@@ -33,28 +36,6 @@
 // tests/pack-case.test.mjs: 'pack is a case unit…', 'packBaseOf reads…', '20 for 4 × a 2.5 kg
 // package…' and 'a rate typed since (old phone) makes the pack case stale'. The tests that price a
 // line (unitCost) are in order-cost.spec.ts.
-//
-// NOT PORTED — the writing half, or the dictionary, or the stocktake:
-//   * tests/price-model.test.mjs (45 of its 73 tests): 'the headline rate reads "£7.20 / kg"…'
-//     (formatPricePerUnit); the costReasonText lines of the three costState tests; the 20 tests of
-//     pricePatch (6), priceChanged (6), priceRecord (3) and splitPriceFields (5, with 'split then
-//     merge restores what the form had'); and the 24 tests from «Confezione» and the ONE price box on
-//     (priceFormOf, formatPriceInput, priceBoxStart, weightNeededForPrice, singleFromCaseInput,
-//     ownPieceWeight, storedPriceInput…), one of which, '«each» is an interface word…', needs the
-//     dictionary.
-//   * tests/case-price.test.mjs: every test of pricePatch ('a typed rate is still stored to four
-//     decimals', 'a case in the form writes the case AND the derived rate', 'a case of pieces stores
-//     no size…', 'an incomplete case is «no price»…', 'any other mode sends the four case keys as
-//     null…', 'the patch never carries a bad case value', 'the history records the derived rate…'),
-//     'splitPriceFields sends the case to the price half only', 'a legacy explicit-size case written
-//     back untouched…'; the stocktake ones ('an open month counts one case as one unit' to
-//     'casePackNote names the fix…': packPrice, valueBlocker, lineValue and casePackNote are
-//     js/inventory/).
-//   * tests/pack-case.test.mjs: the pricePatch ones ('the patch copies the package size…', 'a weight
-//     that cannot be read gives no price…', 'a size typed into the (hidden) size box…', 'packBasis
-//     makes the stored size authoritative…') and the stocktake ones ('the stocktake values one
-//     busta…', 'the stocktake ignores a weight edited afterwards…', 'a stale pack case falls back to
-//     the typed rate…').
 
 import { afterEach, describe, expect, test } from 'vitest';
 import * as ported from './price-model';
@@ -525,29 +506,33 @@ describe.each([
 // ── What pairing would have checked ──────────────────────────────────────────
 
 describe('the port against the original', () => {
-  // The three functions that look a word up in the interface dictionary, and the writing half (the
-  // ingredient card's, step 3e). The original still exports all of them.
-  const LEFT_OUT = [
-    'priceUnitLabel', 'costReasonText', 'formatPricePerUnit',
-    'CASE_MODE', 'pricePatch', 'PRICE_FORMS', 'ownPieceWeight', 'priceFormOf', 'PRICE_BASES', 'basisOptions',
-    'defaultBasis', 'basisOf', 'basisToStore', 'rateBaseOf', 'basisToStoredPrice', 'storedPriceToBasis',
-    'convertBasisPrice', 'shownPrice', 'formatPriceInput', 'storedPriceInput', 'singleFromCaseInput',
-    'priceBoxStart', 'weightNeededForPrice', 'priceChangedByRepresentation', 'priceChanged', 'priceRecord',
-    'splitPriceFields',
-  ];
-  // They take the venue's money as one more argument, by design.
-  const TAKE_THE_MONEY = ['formatMoney', 'formatRate'];
+  // The names the port exports and the original does not (yet). keepPriceDate is F4, from PR #380
+  // (fix/price-date-only-with-money), which has not reached this stack's js/ file: its tests run against the
+  // port alone (price-write.spec.ts). When main is merged into the stack the original gains it, the second
+  // test below fails, and this list is emptied (the F4 describe in price-write.spec.ts then joins the
+  // describe.each of the whole file).
+  const AHEAD = ['keepPriceDate'];
+  // The arity differs by design where the port is handed what the original reads for itself: the venue's
+  // money (the original keeps it in a module variable) and the translator (the original reads js/i18n.js).
+  const EXTRA_ARGUMENTS: Readonly<Record<string, number>> = {
+    formatMoney: 1, formatRate: 1,        // money
+    priceUnitLabel: 1, costReasonText: 1, // t
+    formatPricePerUnit: 2,                // money, t
+  };
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;
-  const shared = Object.keys(original).filter(name => !LEFT_OUT.includes(name)).sort();
+  const shared = Object.keys(original).sort();
 
-  test('the original still exports everything this port leaves out', () => {
-    // If it did not, the exclusion above would be hiding a rename instead of a decision.
-    for (const name of LEFT_OUT) expect(original[name] !== undefined, name).toBe(true);
+  test('the original has not gained the names this port is ahead with: pair them in the specs, then empty AHEAD', () => {
+    // If it had, the exclusion would be hiding a name that now has an original to be compared with.
+    for (const name of AHEAD) {
+      expect(original[name], `${name} now exists in js/price-model.js: run its tests against both (price-write.spec.ts) and remove it from AHEAD`)
+        .toBe(undefined);
+    }
   });
 
-  test('exports exactly the same names, except those', () => {
-    expect(Object.keys(port).sort()).toStrictEqual(shared);
+  test('exports exactly the same names, plus those it is ahead with', () => {
+    expect(Object.keys(port).sort()).toStrictEqual([...shared, ...AHEAD].sort());
   });
 
   test('every non-function export is strictly equal and frozen the same way', () => {
@@ -558,13 +543,13 @@ describe('the port against the original', () => {
     }
   });
 
-  test('every function has the same name and the same number of required parameters (the money is one more)', () => {
+  test('every function has the same name and the same number of required parameters (the money and the translator are extra)', () => {
     for (const name of shared) {
       const mine = port[name];
       const theirs = original[name];
       if (typeof mine !== 'function' || typeof theirs !== 'function') continue;
       expect(mine.name, name).toBe(theirs.name);
-      expect(mine.length, `${name}: arity`).toBe(theirs.length + (TAKE_THE_MONEY.includes(name) ? 1 : 0));
+      expect(mine.length, `${name}: arity`).toBe(theirs.length + (EXTRA_ARGUMENTS[name] ?? 0));
     }
   });
 });

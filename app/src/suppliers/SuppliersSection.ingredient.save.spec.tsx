@@ -174,6 +174,8 @@ describe('the question and the payload', () => {
         name: 'Flour 000', shortName: 'Flour', supplierId: 's-alp', brand: 'Caputo', weight: '25 kg', category: 'Bakery', active: true, kind: 'ingredient',
         ...drained,
       },
+      // The card of a person who may not write prices carries no money (step 3e-3: the fake records the money of the batch).
+      price: null,
     });
   });
 
@@ -253,6 +255,7 @@ describe('the question and the payload', () => {
         name: 'Salt', shortName: '', supplierId: 'no-supplier', brand: '', weight: '', category: 'Other', unit: '', active: true, kind: 'ingredient',
         ...drained,
       },
+      price: null,
     });
   });
 

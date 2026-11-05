@@ -1,11 +1,13 @@
-import type { IngredientUsage, PanelKey, StoredDoc, SuppliersMeta, SuppliersSource } from '../suppliers/suppliersSource';
+import type {
+  IngredientPriceWrite, IngredientUsage, PanelKey, StoredDoc, SuppliersMeta, SuppliersSource,
+} from '../suppliers/suppliersSource';
 
 // An «Ingredients & suppliers» source for the specs of screens, in memory, that behaves like Firestore's own local
 // view: a write is in the maps and every watcher is told AT ONCE (Firestore shows its pending writes), and a refused
 // write is taken back and the watchers are told again — then its promise rejects. The store itself is covered against
 // this fake in suppliersStore.spec.ts too.
 type Listener = { onChange: (list: StoredDoc[], meta: SuppliersMeta) => void; onError: (err: unknown) => void };
-type PriceListener = (map: Record<string, Record<string, unknown>>, readable: boolean) => void;
+type PriceListener = (map: Record<string, Record<string, unknown>>, readable: boolean, meta: SuppliersMeta) => void;
 type ConfigListener = { onChange: (data: Record<string, unknown> | null, meta: SuppliersMeta) => void; onError: (err: unknown) => void };
 
 export type SupplierWrite =
@@ -14,7 +16,11 @@ export type SupplierWrite =
   | { readonly op: 'delete'; readonly id: string }
   | { readonly op: 'favourite'; readonly id: string; readonly on: boolean }
   | { readonly op: 'category'; readonly list: readonly string[]; readonly ids: readonly string[] }
-  | { readonly op: 'ingredient-save'; readonly id: string; readonly data: Record<string, unknown> }
+  | {
+    readonly op: 'ingredient-save'; readonly id: string; readonly data: Record<string, unknown>;
+    // The money of the same batch (step 3e-3), as the store sent it; null when the save carried none.
+    readonly price: IngredientPriceWrite | null;
+  }
   | { readonly op: 'ingredient-delete'; readonly id: string; readonly withPrice: boolean }
   | { readonly op: 'draft-clear'; readonly id: string }
   | { readonly op: 'draft-unit'; readonly id: string; readonly unit: string };
@@ -26,6 +32,15 @@ export type FakeSuppliersSource = SuppliersSource & {
   // most employees.
   prices: Map<string, Record<string, unknown>>;
   refusePrices: boolean;
+  // The append-only price history by ingredient id, oldest first as written (readPriceHistory answers newest first).
+  history: Map<string, StoredDoc[]>;
+  // The next readPrice / readPriceHistory calls reject (offline, or the server did not answer); every id they were asked.
+  refusePriceRead: boolean;
+  refuseHistory: boolean;
+  priceReads: string[];
+  historyReads: string[];
+  // The next price answers say they came from the browser's own database (the store then reads the card's price first).
+  pricesFromCache: boolean;
   // config/orders as stored (null = none).
   ordersConfig: Record<string, unknown> | null;
   // The next watches fail (the rules refused them, or the stream died).
@@ -74,11 +89,13 @@ export function fakeSuppliersSource(
   seed: {
     suppliers?: StoredDoc[]; ingredients?: StoredDoc[]; prices?: Record<string, Record<string, unknown>>;
     ordersConfig?: Record<string, unknown> | null; refusePrices?: boolean;
+    history?: Record<string, StoredDoc[]>;
   } = {},
 ): FakeSuppliersSource {
   const suppliers = new Map((seed.suppliers ?? []).map(doc => [doc.id, doc] as const));
   const ingredients = new Map((seed.ingredients ?? []).map(doc => [doc.id, doc] as const));
   const prices = new Map(Object.entries(seed.prices ?? {}));
+  const history = new Map<string, StoredDoc[]>(Object.entries(seed.history ?? {}).map(([id, list]) => [id, [...list]] as const));
   const supplierWatchers = new Set<Listener>();
   const ingredientWatchers = new Set<Listener>();
   const priceWatchers = new Set<PriceListener>();
@@ -95,7 +112,8 @@ export function fakeSuppliersSource(
 
   function tellSuppliers() { for (const w of [...supplierWatchers]) w.onChange([...suppliers.values()], meta()); }
   function tellIngredients() { for (const w of [...ingredientWatchers]) w.onChange([...ingredients.values()], meta()); }
-  function tellPrices() { for (const w of [...priceWatchers]) w(fake.refusePrices ? {} : priceMap(), !fake.refusePrices); }
+  const priceMeta = (): SuppliersMeta => ({ fromServer: !fake.pricesFromCache && !fake.fromCache });
+  function tellPrices() { for (const w of [...priceWatchers]) w(fake.refusePrices ? {} : priceMap(), !fake.refusePrices, priceMeta()); }
   function tellConfig() { for (const w of [...configWatchers]) w.onChange(fake.ordersConfig ? { ...fake.ordersConfig } : null, meta()); }
   function tellAll() { tellSuppliers(); tellIngredients(); tellPrices(); tellConfig(); }
 
@@ -142,8 +160,13 @@ export function fakeSuppliersSource(
   }
 
   const fake: FakeSuppliersSource = {
-    suppliers, ingredients, prices,
+    suppliers, ingredients, prices, history,
     refusePrices: seed.refusePrices ?? false,
+    refusePriceRead: false,
+    refuseHistory: false,
+    priceReads: [],
+    historyReads: [],
+    pricesFromCache: false,
     ordersConfig: seed.ordersConfig ?? null,
     refuse: { suppliers: false, ingredients: false, config: false },
     writes: [],
@@ -171,7 +194,7 @@ export function fakeSuppliersSource(
       priceWatchers.add(onChange);
       queueMicrotask(() => {
         if (!priceWatchers.has(onChange) || held) return;
-        onChange(fake.refusePrices ? {} : priceMap(), !fake.refusePrices);
+        onChange(fake.refusePrices ? {} : priceMap(), !fake.refusePrices, priceMeta());
       });
       return () => { priceWatchers.delete(onChange); };
     },
@@ -242,12 +265,37 @@ export function fakeSuppliersSource(
 
     newIngredientId: () => `new-ingredient-${++idCounter}`,
 
-    saveIngredient(id, data) {
-      return write({ op: 'ingredient-save', id, data: { ...data } }, fake.refuseWrites.ingredientSave, () => {
-        const undo = snapshotOf(ingredients);
+    // One batch: the item, its price (merged) and the history entry land together, and a refusal takes all three back.
+    saveIngredient(id, data, price = null) {
+      return write({ op: 'ingredient-save', id, data: { ...data }, price }, fake.refuseWrites.ingredientSave, () => {
+        const undoItems = snapshotOf(ingredients);
+        const undoPrices = snapshotOf(prices);
+        const undoHistory = snapshotOf(history);
         ingredients.set(id, { ...(ingredients.get(id) ?? {}), ...data, id });
-        return undo;
+        if (price) {
+          prices.set(id, { ...(prices.get(id) ?? {}), ...price.doc });
+          if (price.history) history.set(id, [...(history.get(id) ?? []), { ...price.history, id: `h-${++idCounter}` }]);
+        }
+        return () => { undoItems(); undoPrices(); undoHistory(); };
       });
+    },
+
+    async readPrice(id) {
+      fake.priceReads.push(id);
+      await Promise.resolve();
+      if (fake.refusePriceRead) throw refused();
+      const found = prices.get(id);
+      return found ? { ...found } : null;
+    },
+
+    async readPriceHistory(id, max) {
+      fake.historyReads.push(id);
+      await Promise.resolve();
+      if (fake.refuseHistory) throw refused();
+      return [...(history.get(id) ?? [])]
+        .sort((a, b) => String(b.recordedAt).localeCompare(String(a.recordedAt)))
+        .slice(0, max)
+        .map(entry => ({ ...entry }));
     },
 
     deleteIngredient(id, withPrice) {

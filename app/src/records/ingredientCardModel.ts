@@ -1,18 +1,20 @@
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { kindOf } from '@mise/shared/ingredient-kind';
 import { cleanUnit, sameUnit } from '@mise/shared/order-unit';
-import { formatOf, formatPatch, formatTouched, isCartonWord, parseCount } from '@mise/shared/pack-format';
-import type { FormatBefore, FormatForm } from '@mise/shared/pack-format';
+import { formatOf, formatPatch, formatTouched, isCartonWord, looseUnit, parseCount } from '@mise/shared/pack-format';
+import type { FormatBefore, FormatForm, PackFormat } from '@mise/shared/pack-format';
 import { isUnusableWeight, joinWeight, splitWeight } from '@mise/shared/pack-size';
 import type { WeightUnit } from '@mise/shared/pack-size';
+import { packBaseOf, storedCaseOf } from '@mise/shared/price-model';
 import {
-  cartonWordFor, categoryValue, defaultPackFor, isBlankNewChoice, supplierToSave,
+  cartonWordFor, categoryValue, defaultPackFor, isBlankNewChoice, pieceWordFor, supplierToSave,
 } from '@mise/shared/record-choices';
 
 // The ingredient card's working copy, the rules of its Save and the exact payload it sends (parity C36–C57, C80–C81,
-// C84–C87): the pure half of IngredientCard.tsx. Product data only (step 3e-2): the price, the allergens and the nutrition
-// come with 3e-3 and 3e-4, and until then NONE of their keys is ever in a payload, so a merge write leaves them exactly as
-// they are stored.
+// C84–C87): the pure half of IngredientCard.tsx. The price's own working copy is priceCardModel.ts (step 3e-3); what the price
+// changes HERE is the format it opens with, the refusals of a carton being written and a new item's order unit. The price keys
+// themselves are never in this payload (the store writes the money apart); the allergens and the nutrition come with 3e-4 and
+// until then NONE of their keys is ever in a payload, so a merge write leaves them exactly as they are stored.
 //
 // ⚠️ THE FOOD WORDS HERE (the carton word, the package words, the categories) FOLLOW THE VENUE'S COUNTRY: every function that
 // writes or offers one takes `lang`, the venue's OUTPUT language (shared/market.ts outputLanguage), never the screen's.
@@ -77,23 +79,39 @@ export interface OpenContext {
   // A supplier to start a NEW item on (opened from that supplier's screen). ⚠️ NEVER APPLIED TO AN EXISTING ITEM: it would
   // silently re-file somebody else's product the moment its card was opened from the wrong place.
   readonly preset: string | null;
+  // Somebody who may write prices (the price section is drawn, parity C4): the format then opens from the price too.
+  readonly mayPrice?: boolean;
+  // The venue's OUTPUT language (the piece word a stored case of pieces opens with).
+  readonly lang?: unknown;
 }
 
-// The format as the card OPENS it. No price is read in this step, so a carton with no packCount shows an empty count.
-export function openedFormat(item: ItemLike | null) {
-  return formatOf(item, null);
+// What the opened format depends on besides the item.
+export interface FormatOptions {
+  readonly mayPrice?: boolean;
+  readonly lang?: unknown;
+}
+
+// The format as the card OPENS it. ⚠️ A price reader's stored case counts as well (parity C48): a carton with no packCount
+// shows the case's count; an employee sees only the product data, so the same carton opens with an EMPTY count. A stored case of
+// PIECES whose ingredient names no package opens showing the venue's «piece» word (C51) — only what the menu SHOWS: the stored
+// word stays '' until a person moves the format.
+export function openedFormat(item: ItemLike | null, { mayPrice = false, lang }: FormatOptions = {}): PackFormat {
+  const opened = formatOf(item, mayPrice ? item : null);
+  const inner = opened.inner
+    || (opened.kind === 'carton' && mayPrice && item && storedCaseOf(item)?.caseItemUnit === 'pcs' ? pieceWordFor(lang) : '');
+  return { ...opened, inner };
 }
 
 // What formatPatch compares the card with: the format as it opened, plus the stored order unit and package word.
-export function formatBeforeOf(item: ItemLike | null): FormatBefore {
-  return { ...openedFormat(item), unit: item?.unit || '', packUnit: item?.packUnit || '' };
+export function formatBeforeOf(item: ItemLike | null, options: FormatOptions = {}): FormatBefore {
+  return { ...openedFormat(item, options), unit: item?.unit || '', packUnit: item?.packUnit || '' };
 }
 
 // The copy a card is made from: the stored item, or an empty one (a new item starts empty, with placeholders).
 // ⚠️ MADE ONCE, when the card opens: an item changed on another phone afterwards never replaces it.
-export function workingFrom(item: ItemLike | null, { supplierIds, preset }: OpenContext): Working {
+export function workingFrom(item: ItemLike | null, { supplierIds, preset, mayPrice, lang }: OpenContext): Working {
   const wanted = item ? text(item.supplierId) : (preset ?? '');
-  const opened = openedFormat(item);
+  const opened = openedFormat(item, { mayPrice, lang });
   const weight = splitWeight(item?.weight);
   return {
     name: text(item?.name),
@@ -139,9 +157,10 @@ export function formState(working: Working): FormatForm {
 }
 
 // Is anything different from the copy taken at open? The rule of js/form-dirty.js: what the boxes hold, compared with what
-// they held when the card was built. A «+ New …» box counts only while it is the option chosen.
-export function isDirty(working: Working, baseline: Working): boolean {
-  return JSON.stringify(comparable(working)) !== JSON.stringify(comparable(baseline));
+// they held when the card was built. A «+ New …» box counts only while it is the option chosen. `priceEdited` is the price's
+// own answer (priceCardModel isPriceEdited — its segment taps included, parity C65): the price is part of the card.
+export function isDirty(working: Working, baseline: Working, priceEdited = false): boolean {
+  return priceEdited || JSON.stringify(comparable(working)) !== JSON.stringify(comparable(baseline));
 }
 
 function comparable(working: Working) {
@@ -159,20 +178,42 @@ export type RefusedField = 'name' | 'weight' | 'category' | 'inner' | 'count' | 
 // The first reason Save cannot go on, in the card's order (parity C84):
 //  - an empty name;
 //  - the first of weight / category / the inner word's «+ New …» box (only while «Case» is showing) that is unusable;
-//  - a Case being WRITTEN (the format moved) with a count that is not a whole 1..10000 — checked before the inner word;
+//  - a Case being WRITTEN (the format moved, or a price was typed under it) with a count that is not a whole 1..10000 — checked
+//    before the inner word;
 //  - the same with no inner word.
-// ⚠️ A CASE NOTHING MOVED IS NEVER REFUSED (C85): an old product that opens as a carton with no count saves untouched.
-export function firstRefusal(working: Working, item: ItemLike | null): RefusedField | null {
+// Then, in the card, priceCardModel's priceRefusal: the weight a price by weight needs, then the first price box that is not a
+// number (the last two steps of the same order).
+// ⚠️ A CASE NOTHING MOVED IS NEVER REFUSED (C85): an old product that opens as a carton with no count saves untouched. But typing
+// a price under a carton with an empty count IS refused (`priceDirty`): it would erase the price.
+export function firstRefusal(
+  working: Working, item: ItemLike | null, options: FormatOptions & { readonly priceDirty?: boolean } = {},
+): RefusedField | null {
   if (working.name.trim() === '') return 'name';
   if (isUnusableWeight(working.weight.amount, working.weight.unit)) return 'weight';
   if (choiceIsBlankNew(working.category)) return 'category';
   if (working.format === 'carton' && choiceIsBlankNew(working.inner)) return 'inner';
   const state = formState(working);
-  if (state.kind === 'carton' && formatTouched(formatOf(item, null), state)) {
+  if (state.kind === 'carton' && (formatTouched(openedFormat(item, options), state) || options.priceDirty === true)) {
     if (parseCount(working.count) === null) return 'count';
     if (readChoice(working.inner) === '') return 'innerEmpty';
   }
   return null;
+}
+
+// What the card would SAVE for the order unit, the package, the count and the weight, so the VAT line prices the right unit
+// (parity C78, the original's orderNow). ⚠️ A price never moves the order unit: with the format untouched `unit` is as stored.
+export function orderNow(
+  working: Working, item: ItemLike | null, options: FormatOptions & { readonly priceDirty?: boolean } = {},
+): { unit: unknown; weight: string; packUnit: unknown; packCount: unknown } {
+  const patch = formatPatch(
+    formatBeforeOf(item, options), { ...formState(working), cartonWord: cartonWordFor(options.lang) }, { force: options.priceDirty === true },
+  );
+  return {
+    unit: 'unit' in patch ? patch.unit : (item?.unit || ''),
+    weight: weightText(working),
+    packUnit: 'packUnit' in patch ? patch.packUnit : (item?.packUnit || ''),
+    packCount: 'packCount' in patch ? patch.packCount : (item?.packCount ?? null),
+  };
 }
 
 export interface SaveInput {
@@ -184,6 +225,14 @@ export interface SaveInput {
   readonly lang: unknown;
   // The supplier the card opened on: the fallback if the menu's marker were ever still showing (supplierToSave).
   readonly startSupplierId: string;
+  // Somebody who may write prices: the format opens from the price as well (see openedFormat).
+  readonly mayPrice?: boolean;
+  // The price was typed in (or «Recalculate» tapped): under a Case the FULL format is written too (parity C54) — packCount and
+  // the inner word, so the per-item case and the product data say the same thing — but never the order unit.
+  readonly priceDirty?: boolean;
+  // The price patch the card would send, only for somebody who may write prices: a NEW Single with no readable weight and a
+  // complete price gets its order unit from it (parity C55).
+  readonly pricePatch?: { readonly priceUnit: unknown; readonly pricePerUnit: unknown } | null;
 }
 
 export interface SaveBuilt {
@@ -194,12 +243,17 @@ export interface SaveBuilt {
 
 // What Save sends, EXACTLY (parity C87). No price key, no allergen key, no nutrition key, never `invoiceName` or the supplier
 // codes: the write is a merge, so everything not named here stays as stored.
-export function buildSave({ working, item, kind, lang, startSupplierId }: SaveInput): SaveBuilt {
+export function buildSave({ working, item, kind, lang, startSupplierId, mayPrice, priceDirty, pricePatch }: SaveInput): SaveBuilt {
   const state = formState(working);
   const cartonWord = cartonWordFor(lang);
-  const formatKeys = formatPatch(formatBeforeOf(item), { ...state, cartonWord });
+  const options = { mayPrice, lang };
+  const formatKeys = formatPatch(formatBeforeOf(item, options), { ...state, cartonWord }, { force: priceDirty === true });
   // ⚠️ THE RULES CAP THE PACKAGE WORD AT 40: cut it here rather than have the whole save refused.
   if (formatKeys.packUnit) formatKeys.packUnit = formatKeys.packUnit.slice(0, PACK_WORD_MAX);
+  // ⚠️ ONLY EVER FOR A NEW ITEM: an existing one keeps the order unit it has, whatever its price is edited to.
+  const looseWord = !item && pricePatch && pricePatch.pricePerUnit !== null
+    ? looseUnit({ kind: state.kind, weightReadable: packBaseOf(weightText(working)) !== null, priceUnit: pricePatch.priceUnit, lang })
+    : '';
   const payload = {
     name: working.name.trim(),
     // '' when blank, never omitted: a merge write must be able to CLEAR a display name.
@@ -209,13 +263,13 @@ export function buildSave({ working, item, kind, lang, startSupplierId }: SaveIn
     weight: weightText(working),
     // A blank category is saved as the stored «no category» word, which reads back as blank.
     category: readChoice(working.category) || 'Other',
-    // A NEW item gets an empty order unit (a price, later, may give it a loose one).
-    ...(item ? {} : { unit: '' }),
+    // A NEW item gets an empty order unit, or — a loose item priced by the kilo, litre or piece — that word (parity C55).
+    ...(item ? {} : { unit: looseWord }),
     ...formatKeys,
     active: item ? item.active !== false : true,
     kind,
   };
-  return { payload, unitChangedFrom: replacedUnit(item, payload, state, cartonWord) };
+  return { payload, unitChangedFrom: replacedUnit(item, payload, state, cartonWord, options) };
 }
 
 // The order unit a format change REPLACED, told to the store, which freezes the open order line in it (parity C35, the
@@ -230,9 +284,10 @@ function replacedUnit(
   payload: Readonly<Record<string, unknown>>,
   state: FormatForm,
   cartonWord: string,
+  options: FormatOptions,
 ): string {
   if (!item) return '';
-  const emptyMeantCase = cleanUnit(item.unit) === '' && openedFormat(item).kind === 'carton';
+  const emptyMeantCase = cleanUnit(item.unit) === '' && openedFormat(item, options).kind === 'carton';
   if (emptyMeantCase && state.kind === 'single' && 'unit' in payload) return cartonWord;
   if ('unit' in payload && !sameUnit(payload.unit, item.unit)) {
     const wasWholeCase = emptyMeantCase && isCartonWord(payload.unit);

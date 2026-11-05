@@ -251,3 +251,78 @@
     background: var(--danger-tint);
   }
 }
+
+/* The price section (step 3e-3): its blocks are spaced apart like the card's own fields. */
+.priceBlock {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+/* The format-changed sentence and its «Recalculate» link, one under the other. */
+.priceNote {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s1);
+}
+
+.summary {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+  color: var(--ink);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.summaryMuted {
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+  color: var(--ink-2);
+  overflow-wrap: anywhere;
+}
+
+/* The price history: a label, the «Show them» link and the rows. */
+.history {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s1);
+}
+
+.historyRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+  width: 100%;
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.historyTag {
+  margin-right: var(--s2);
+  padding: 0 var(--s2);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.historyPack {
+  flex-basis: 100%;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.historyList {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
