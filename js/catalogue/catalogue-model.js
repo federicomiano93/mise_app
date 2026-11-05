@@ -556,6 +556,10 @@ export function moveRow(list, from, to) {
     if (above && typeof above === 'object') above.dividerAfter = true;
   }
   rows.splice(b, 0, row);
+  // A line the move left under the LAST row is taken off now: hidden there, it would come back with the
+  // next row added or moved below it (code review, 5 Nov 2026).
+  const last = rows[rows.length - 1];
+  if (last && typeof last === 'object' && last.dividerAfter === true) delete last.dividerAfter;
   return rows;
 }
 
@@ -572,7 +576,8 @@ export function keepRows(rows, keep) {
   return kept;
 }
 
-export const removeRow = (rows, index) => keepRows(rows, row => row !== rows[index]);
+// Deleting the last row leaves no hidden line under the new last one (it would reappear with the next row).
+export const removeRow = (rows, index) => withoutTrailingDivider(keepRows(rows, row => row !== rows[index]));
 
 // What is saved: a line after the last row is taken off.
 export function withoutTrailingDivider(rows) {

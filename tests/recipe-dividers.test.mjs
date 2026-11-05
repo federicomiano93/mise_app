@@ -158,7 +158,15 @@ test('removeRow: the line goes to the row above, or goes with the first row; inp
   assert.equal(show(removeRow(ab, 1)), 'A| C');
   assert.equal(show(ab), 'A B| C', 'input not mutated');
   assert.equal(show(removeRow(mk('A| B'), 0)), 'B');
-  assert.equal(show(removeRow(mk('A B| C'), 2)), 'A B|');
+  // The line would be under the new last row: hidden there, it would come back with the next row added.
+  assert.equal(show(removeRow(mk('A B| C'), 2)), 'A B');
+});
+
+test('moveRow never leaves a hidden line under the last row', () => {
+  assert.equal(show(moveRow(mk('A B| C'), 2, 0)), 'C A B');
+  const rows = mk('A B C');
+  rows[2].dividerAfter = true;            // a line already hidden under the last row
+  assert.equal(show(moveRow(rows, 0, 2)), 'B C| A', 'C is no longer last, so its line shows');
 });
 
 test('keepRows: a blank row carrying a line hands it to the row above', () => {

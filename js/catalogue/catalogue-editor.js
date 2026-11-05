@@ -213,7 +213,7 @@ export function renderEditor({
         type: 'button',
         class: 'cat-ing-editgroup cat-reorder-row cat-divider-row' + (ing.dividerAfter === true ? ' cat-reorder-row--divider' : ''),
         'aria-pressed': String(ing.dividerAfter === true),
-        'aria-label': t('cat.dividerUnder', { name }),
+        'aria-label': t('cat.dividerUnder', { name }), 'aria-describedby': 'catDividersHint',
         // Toggled in place, no redraw, so the focus stays on the row that was tapped.
         onclick: () => {
           if (ing.dividerAfter === true) delete ing.dividerAfter; else ing.dividerAfter = true;
@@ -656,7 +656,7 @@ export function renderEditor({
     try { first?.focus({ preventScroll: true }); } catch (e) { /* focus is best-effort */ }
   }
 
-  const dividersHint = el('p', { class: 'cat-reorder-hint', text: t('cat.dividersHint') });
+  const dividersHint = el('p', { class: 'cat-reorder-hint', id: 'catDividersHint', text: t('cat.dividersHint') });
   dividersHint.hidden = true;
   const dividerBtn = el('button', {
     class: 'cat-reorder-btn', type: 'button', text: t('cat.dividers'), 'aria-pressed': 'false',
