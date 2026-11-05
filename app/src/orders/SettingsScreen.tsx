@@ -59,13 +59,13 @@ function SavedTag({ shown }: { shown: boolean }) {
   return <span role="status" className={shown ? styles.saved : styles.quiet}>{shown ? t('settings.saved') : ''}</span>;
 }
 
-// A card with a title (an h2) and, where the current app has one, a line under it.
+// A card with a title (an h3: the screen's own title, in the bar above, is the h2) and, where the current app has one, a line under it.
 function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   const titleId = useId();
   return (
     <section className={styles.card} aria-labelledby={titleId}>
       <div className={styles.head}>
-        <h2 id={titleId} className={styles.doorTitle}>{title}</h2>
+        <h3 id={titleId} className={styles.doorTitle}>{title}</h3>
         {note === undefined ? null : <p className={styles.sub}>{note}</p>}
       </div>
       {children}
@@ -374,7 +374,7 @@ export function SettingsScreen({ onOpenSupplierOrder }: { onOpenSupplierOrder: (
         <Section title={t('ord.settings.alertsTitle')} note={t('ord.settings.alertsNote')}>
           {/* Notices on THIS phone (step 3f-6, parity R12): per device, no push. The explanation, then what the browser says. */}
           <div className={styles.block} role="group" aria-labelledby={noticesTitle}>
-            <h3 id={noticesTitle} className={styles.doorTitle}>{t('ord.settings.noticesTitle')}</h3>
+            <h4 id={noticesTitle} className={styles.doorTitle}>{t('ord.settings.noticesTitle')}</h4>
             <p className={styles.sub}>{t('ord.settings.noticesAbout')}</p>
             {permission === 'unsupported' ? <p>{t('ord.settings.noticesUnsupported')}</p> : null}
             {permission === 'granted' ? (

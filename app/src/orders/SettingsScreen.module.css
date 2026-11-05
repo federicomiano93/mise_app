@@ -61,7 +61,7 @@
   padding: var(--s3) var(--s4) 0;
 }
 
-.head > h2,
+.head > h3,
 .head > p {
   margin: 0;
   overflow-wrap: break-word;
@@ -197,8 +197,7 @@
   padding: var(--s3) var(--s4);
 }
 
-.block > h2,
-.block > h3,
+.block > h4,
 .block > p {
   margin: 0;
   overflow-wrap: break-word;

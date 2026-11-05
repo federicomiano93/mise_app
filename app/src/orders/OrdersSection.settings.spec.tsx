@@ -44,8 +44,9 @@ async function alertText(view: { user: { click: (element: Element) => Promise<vo
 describe('who sees what', () => {
   it('shows a manager every section, in the current app’s order', async () => {
     await opened();
-    const headings = screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent);
-    expect(headings).toEqual(['Settings', 'Order lists', 'The order screen', 'The working week', 'How orders may be sent', 'Alerts', 'History']);
+    expect(screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent)).toEqual(['Settings']);
+    const headings = screen.getAllByRole('heading', { level: 3 }).map(h => h.textContent);
+    expect(headings).toEqual(['Order lists', 'The order screen', 'The working week', 'How orders may be sent', 'Alerts', 'History']);
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByRole('switch', { name: LISTS })).toBeEnabled();
     expect(screen.getByRole('button', { name: /Supplier order/ })).toBeInTheDocument();
@@ -221,8 +222,8 @@ describe('in Italian', () => {
     const source = fakeOrdersSource({ suppliers: SUPPLIERS });
     renderOrders('/orders/settings', { source, lang: 'it' });
     await screen.findByRole('switch', { name: /Mostra la casella Giacenza/ }, LOAD);
-    expect(screen.getAllByRole('heading', { level: 2 }).map(h => h.textContent))
-      .toEqual(['Impostazioni', 'Liste d’ordine', 'La schermata dell’ordine', 'La settimana lavorativa', 'Come si possono mandare gli ordini', 'Avvisi', 'Storico']);
+    expect(screen.getAllByRole('heading', { level: 3 }).map(h => h.textContent))
+      .toEqual(['Liste d’ordine', 'La schermata dell’ordine', 'La settimana lavorativa', 'Come si possono mandare gli ordini', 'Avvisi', 'Storico']);
     expect(screen.getByRole('combobox', { name: 'Inizia il' })).toBeInTheDocument();
   });
 });
