@@ -97,6 +97,10 @@ Aria does not support Preact. The numbers are below.
   `js/error-report.js`, `js/device-ping.js`, `js/usage.js`, writing through `sinks.ts` exactly the
   shapes `firestore.rules` accepts. Screens are named `m2:<section>` and the build is stamped
   `m2-<7-char commit>`, so the owner's statistics tell the two apps apart.
+  The usage line also carries `hours` (active seconds per local hour, `'00'`…`'23'`, each at most
+  3600; 6 Nov 2026, current app PR #472), and the day's record keeps the release it last sent, so a
+  send that cannot learn its own never wipes it: both apps write the SAME record (`usage-*`), so
+  each must keep what the other added.
 - `data/` — where every section gets its data from (`DataContext`): one source factory per
   section, built once in `main.tsx` on the session's backend (`createDataServices`), so a screen
   never reaches for Firestore itself. A spec passes fakes instead (`testing/renderApp.tsx`, with
