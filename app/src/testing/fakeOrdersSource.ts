@@ -93,6 +93,9 @@ export type FakeOrdersSource = OrdersSource & {
   // the ones open now.
   prices: Map<string, Record<string, unknown>>;
   refusePrices: boolean;
+  // The browser's copy answers first, holding prices (readable), then the server refuses: the real order for a person who lost the
+  // right to read prices while this phone still held them.
+  refusePricesAfterCopy: boolean;
   priceWatches: number;
   priceWatchersOpen(): number;
   // Another phone (or the card) changes a price: every price watcher is told.
@@ -425,6 +428,7 @@ export function fakeOrdersSource(init: {
 
     prices: new Map(Object.entries(init.prices ?? {})),
     refusePrices: false,
+    refusePricesAfterCopy: false,
     priceWatches: 0,
     priceWatchersOpen: () => priceWatchers.size,
     watchPrices(onChange) {
@@ -432,6 +436,15 @@ export function fakeOrdersSource(init: {
       if (source.refusePrices) {
         queueMicrotask(() => onChange({}, false, { fromServer: false }));
         return () => {};
+      }
+      if (source.refusePricesAfterCopy) {
+        let open = true;
+        queueMicrotask(() => {
+          if (!open) return;
+          onChange(Object.fromEntries(source.prices), true, { fromServer: false });
+          setTimeout(() => { if (open) onChange({}, false, { fromServer: false }); }, 0);
+        });
+        return () => { open = false; };
       }
       priceWatchers.add(onChange);
       queueMicrotask(() => { if (priceWatchers.has(onChange)) onChange(Object.fromEntries(source.prices), true, fromServer); });

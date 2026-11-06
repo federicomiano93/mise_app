@@ -252,7 +252,7 @@ export interface OrdersStore {
   // is started, the listener on ingredient-prices is open; off, it is closed and the prices are forgotten. An employee the venue
   // never showed Food cost is never on, so nothing about money is even loaded (step 3f-8c). Safe before start().
   setPriceReader(on: boolean): void;
-  // Starts the six listeners; stop() ends them and sends a change still waiting for the autosave at once, so leaving the
+  // Starts the six listeners (and the price listener for a price reader, setPriceReader); stop() ends them and sends a change still waiting for the autosave at once, so leaving the
   // section within 800 ms of a keystroke loses nothing. Safe to call start → stop → start (React's development mode does).
   start(): void;
   stop(): void;

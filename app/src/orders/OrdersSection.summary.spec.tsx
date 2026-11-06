@@ -211,6 +211,16 @@ describe('who sees the money', () => {
     expect(screen.queryByText(/£/)).not.toBeInTheDocument();
     expect(totals()).not.toBeInTheDocument();
   });
+
+  it('⚠️ money shown from the browser’s copy goes when the server then refuses the read', async () => {
+    const source = seeded();
+    source.refusePricesAfterCopy = true;
+    await onSummary(source);
+    await waitFor(() => { expect(totals()).not.toBeInTheDocument(); });
+    expect(screen.queryByText('no price')).not.toBeInTheDocument();
+    expect(screen.queryByText(/£/)).not.toBeInTheDocument();
+    expect(await screen.findByText('Order summary · 3 items')).toBeInTheDocument();
+  });
 });
 
 describe('on the split', () => {
@@ -241,6 +251,20 @@ describe('on the split', () => {
     await view.user.click(within(screen.getByRole('region', { name: 'Alpine Mills' })).getByRole('button', { name: 'Back' }));
     expect(path(view)).toBe('/orders');
     await waitFor(() => { expect(screen.getByRole('button', { name: 'Order summary: Alpine Mills' })).toHaveFocus(); });
+  });
+
+  it('Back gives the focus to the supplier’s row when its summary button went while the summary was open', async () => {
+    split();
+    const source = seeded();
+    const view = renderOrders('/orders', { source, session: OWNER });
+    await view.user.click(await screen.findByRole('button', { name: 'Order summary: Alpine Mills' }, LOAD));
+    expect(await screen.findByText('Order summary · 3 items')).toBeInTheDocument();
+    // Another phone placed or cleared Alpine's order: nothing is left to sum up, so the row loses its button.
+    act(() => { source.remoteMerge({ entries: { 'i-flour': { qty: 0 }, 'i-rye': { qty: 0 }, 'i-old': { qty: 0 } } }); });
+    await waitFor(() => { expect(screen.queryByRole('button', { name: 'Order summary: Alpine Mills' })).not.toBeInTheDocument(); });
+    await view.user.click(within(screen.getByRole('region', { name: 'Alpine Mills' })).getByRole('button', { name: 'Back' }));
+    expect(path(view)).toBe('/orders');
+    await waitFor(() => { expect(screen.getByRole('button', { name: /^Alpine Mills/ })).toHaveFocus(); });
   });
 
   it('has neither button nor spacer on a phone', async () => {

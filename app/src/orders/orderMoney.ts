@@ -14,7 +14,8 @@ type Translate = (key: MessageKey, params?: MessageParams) => string;
 
 // ⚠️ THE SAME SELECTION AS THE MESSAGE. The lines are the lens's linesOf (what sendFlow's draftSendRows hands to orderedItems), so the
 // summary can never show a line the supplier will not receive. Prices are laid over them ONLY when the read of ingredient-prices
-// succeeded (`readable`): otherwise every cost comes back null, and the screens must not draw it either way.
+// succeeded (`readable`); otherwise withPrices with NO prices, which also drains any old price key an ingredient document may still
+// carry (as the current app always does), so every cost comes back null. The screens must not draw it either way: two layers.
 export function summaryFor(
   lens: OrdersLens,
   supplierId: string,
@@ -23,7 +24,7 @@ export function summaryFor(
   readable: boolean,
 ): SupplierSummary {
   const lines = lens.linesOf(supplierId);
-  return supplierSummary(lens.supplierById(supplierId), readable ? withPrices(lines, prices) : lines, draft.entries);
+  return supplierSummary(lens.supplierById(supplierId), withPrices(lines, readable ? prices : {}), draft.entries);
 }
 
 // One ordered line's money, the small line under its quantity: «4 × 45,00 € = 180,00 € · VAT 4%», or what is missing instead.

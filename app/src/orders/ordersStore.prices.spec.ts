@@ -62,6 +62,21 @@ describe('the prices of Orders', () => {
     store.stop();
   });
 
+  it('held prices from the browser’s copy are dropped when the server then refuses', async () => {
+    const { source, store, settle } = setup();
+    source.refusePricesAfterCopy = true;
+    store.start();
+    store.setPriceReader(true);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(store.getSnapshot().pricesReadable).toBe(true);
+    await settle();
+    await settle();
+    expect(store.getSnapshot().pricesReadable).toBe(false);
+    expect(store.getSnapshot().prices).toStrictEqual({});
+    store.stop();
+  });
+
   it('a price changed elsewhere is told at once', async () => {
     const { source, store, settle } = setup();
     store.start();
