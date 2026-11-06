@@ -18,7 +18,7 @@
 // through a sign-out and a venue switch. Wiped, one phone would count again on every switch.
 // ⚠️ THE DAY IS STAMPED WHEN THE WRITE IS HANDED OVER, not when it is confirmed (see pingIfDue).
 
-import { askVersionOf, versionNumber } from './app-version.js';
+import { askPageVersion } from './app-version.js';
 import {
   deviceKind, newDeviceId, isValidDeviceId, dueToday, localDayKey, devicePayload, sameSession,
 } from './device-model.js';
@@ -124,8 +124,7 @@ function REAL() {
     installed: () => window.matchMedia('(display-mode: standalone)').matches
       || navigator.standalone === true,
     version: async () => {
-      const controller = navigator.serviceWorker ? navigator.serviceWorker.controller : null;
-      return versionNumber(await askVersionOf(controller, { timeoutMs: 800, attempts: 1 }));
+      return askPageVersion({ timeoutMs: 800, attempts: 1 });
     },
     send: (payload, id) => import('./firebase.js').then(m => m.pingDevice(payload, id)),
   };
