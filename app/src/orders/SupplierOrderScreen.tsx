@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Check, List, Plus } from 'lucide-react';
+import { Check, ClipboardList, List, Plus } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { fromOrdersList, fromOrdersSupplier, ingredientCardAddress, newIngredientAddress, supplierScreenAddress } from '@mise/shared/records-link';
 import { supplierLabel } from '@mise/shared/supplier-label';
@@ -8,15 +8,19 @@ import { Button } from '../ui/Button';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
+import { SPLIT_QUERY } from '../ui/split';
+import { useMediaQuery } from '../ui/useMediaQuery';
 import { tabOfLine, useCardDoors } from './CardDoors';
 import { DayLine } from './DayLine';
 import { OrderLine } from './OrderLine';
+import { OrderTotals } from './OrderTotals';
 import { useOrders, useOrdersStore } from './OrdersContext';
-import { ADD_DOOR, ITEMS_DOOR, PLACE_DOOR, SUPPLIER_DOOR, SUPPLIER_TITLE, supplierOpener, useHandBack } from './handBack';
-import { ORDERS_PATH, supplierConfirmPath, supplierItemsPath } from './ordersPath';
+import { ADD_DOOR, ITEMS_DOOR, PLACE_DOOR, SUMMARY_DOOR, SUPPLIER_DOOR, SUPPLIER_TITLE, supplierOpener, useHandBack } from './handBack';
+import { ORDERS_PATH, supplierConfirmPath, supplierItemsPath, supplierSummaryPath } from './ordersPath';
 import { cameFromList, confirmState, fromSupplierState, useLeave } from './ordersNav';
 import { LONG_MS, useClearQuantities } from './useClearQuantities';
 import { NO_SUPPLIER_ID } from './ordersLens';
+import { summaryFor } from './orderMoney';
 import type { OrderRow, OrdersLens } from './ordersLens';
 import styles from './SupplierOrderScreen.module.css';
 
@@ -40,9 +44,13 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   const leave = useLeave(ORDERS_PATH, () => { handBack.expect(supplierOpener(id)); });
   const say = useStatusMessage();
   const [clearQuantities, clearDialog] = useClearQuantities(lens);
+  // The totals box above «Order placed» is for the split only (his choice C4, 6 Nov 2026).
+  const split = useMediaQuery(SPLIT_QUERY);
 
   // «What they sell» one level down: Back from it hands the focus back to this button.
   const itemsNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(ITEMS_DOOR, node); }, [handBack]);
+  // The summary one level down: Back from it hands the focus back to this button.
+  const summaryNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SUMMARY_DOOR, node); }, [handBack]);
   // «Order placed…» one level down: Back from the confirm screen hands the focus back to this button.
   const placeNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(PLACE_DOOR, node); }, [handBack]);
   // The doors to the cards (step 3f-8b), where the person may edit records. Back from a card hands the focus back to its door.
@@ -160,6 +168,19 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
                 <List aria-hidden="true" />
                 {t('ord.whatTheySell')}
               </Button>
+              {/* Always here, also at 0: he wants to see all he has typed without going back (3 Oct 2026). In the bar, which sticks
+                  while the rows scroll, so it is always in reach (choice C1). */}
+              <Button
+                ref={summaryNode}
+                variant="secondary"
+                onPress={() => {
+                  handBack.expect(SUMMARY_DOOR);
+                  void navigate(supplierSummaryPath(id), { state: fromSupplierState(state) });
+                }}
+              >
+                <ClipboardList aria-hidden="true" />
+                {t('ord.summaryDoor', { n: filled })}
+              </Button>
             </div>
           )}
         />
@@ -190,6 +211,9 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
           ) : null}
           {/* After the rows and NOT stuck: a bar stuck to the bottom of a phone would take the rows' room. */}
           <div className={styles.actions}>
+            {/* The order's total, nothing else of the money (his words, 28 Sep 2026: «devo vedere solo il totale alla fine»): on the
+                split, for whoever may read prices — the same numbers as the summary (choice C4). */}
+            {split && snapshot.pricesReadable ? <OrderTotals totals={summaryFor(lens, id, snapshot.draft, snapshot.prices, true).totals} /> : null}
             <Button ref={placeNode} variant="primary" isDisabled={filled === 0 || placing} onPress={place}>
               <Check aria-hidden="true" />
               {t('ord.placeAction')}
