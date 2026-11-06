@@ -1223,7 +1223,7 @@ service cloud.firestore {
           && id == 'current'
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly([
-               'bakery', 'entries', 'days', 'updatedAt', 'weekId'
+               'bakery', 'entries', 'days', 'updatedAt', 'weekId', 'skipped'
              ])
           && (!('entries' in request.resource.data)
               || (request.resource.data.entries is map
@@ -1236,7 +1236,16 @@ service cloud.firestore {
                   && request.resource.data.updatedAt.size() <= 64))
           && (!('weekId' in request.resource.data)
               || (request.resource.data.weekId is string
-                  && request.resource.data.weekId.size() <= 32));
+                  && request.resource.data.weekId.size() <= 32))
+          // `skipped` (6 Nov 2026) — { supplierId: 'YYYY-MM-DD' }: a supplier whose order day
+          // it is, closed as «non ordinato» that day because nothing was needed (Federico,
+          // tablet note 3 Nov). It counts only on that day, so a stale key is harmless; one
+          // key per supplier, overwritten, never a growing list. Undoing it deletes the key.
+          // OPTIONAL in both directions, like `days`: a phone on the previous version never
+          // sends it. Once phones have saved it, it stays listed for good (retired-field trap).
+          && (!('skipped' in request.resource.data)
+              || (request.resource.data.skipped is map
+                  && request.resource.data.skipped.size() <= 200));
 
         allow delete: if false;
       }
