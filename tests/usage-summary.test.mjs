@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   usagePath, lineFrom, linesFrom, isStale, summarise, summaryLines, toJson, median, dayOf, PRUNE_DAYS,
+  USAGE_FIELDS,
 } from '../scripts/usage-summary.mjs';
 
 const DEV_A = 'AbCdEfGhIjKlMnOpQrSt';
@@ -159,6 +160,18 @@ test('load times are also split by kind of device', () => {
   const w = summarise(lines, NOW)[0].last7;
   assert.deepEqual(w.loadMedianByKind, [['orders', 'tablet', 1500], ['orders', 'phone', 400]]);
   assert.match(summaryLines(summarise(lines, NOW)[0], 'B').join('\n'), /orders\/tablet 1500/);
+});
+
+test('⚠️ every field the reader reads is one the script downloads', () => {
+  // runQuery returns only the projected fields: a field missing from USAGE_FIELDS reads as absent
+  // for ever (found in review, 6 Nov 2026: `hours` was recorded but never downloaded).
+  const src = readFileSync(new URL('../scripts/usage-summary.mjs', import.meta.url), 'utf8');
+  const body = src.slice(src.indexOf('export function lineFrom'), src.indexOf('export function linesFrom'));
+  const read = [...new Set([...body.matchAll(/\bf\.([A-Za-z]+)/g)].map(m => m[1]))].sort();
+  assert.ok(read.includes('hours') && read.includes('appVersion'), read.join());
+  assert.deepEqual(read, [...USAGE_FIELDS].sort());
+  const reader = readFileSync(new URL('../scripts/read-usage.mjs', import.meta.url), 'utf8');
+  assert.match(reader, /const FIELDS = USAGE_FIELDS;/);
 });
 
 test('the top routes are fifteen at most', () => {

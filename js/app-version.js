@@ -37,9 +37,10 @@ export async function askVersionOf(controller, { timeoutMs = 2000, attempts = 3 
 // The release THIS page runs, as a number ('741'), or null. Used by the statistics and the notes
 // (device-ping, usage, error-report, feedback), never by the Settings row, which watches the
 // controller itself. A page with no controller (the first visit, or a reload that bypassed the
-// worker, Ctrl+Shift+R on a computer) asks the registration's active worker instead: that page was
-// loaded from the network, so the active worker is its release (or, at worst, one behind while a
-// newer one waits). Before this fallback such a page reported «unknown» for the whole day.
+// worker, Ctrl+Shift+R on a computer) asks the registration's active worker instead. That is the
+// release the person last ACCEPTED (sw.js waits for the update banner), so while a newer one waits
+// it can be older than the files this page loaded from the network — still better than the
+// «unknown» such a page reported for the whole day before.
 // `nav` exists for the tests; never throws.
 export async function askPageVersion(options, nav = globalThis.navigator) {
   try {

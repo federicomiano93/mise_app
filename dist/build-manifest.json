@@ -13,11 +13,11 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "bf17b75cba69f8a5",
-      "mapSha": "92a6c62b38999505",
+      "sha": "0bdbd382fb265e7e",
+      "mapSha": "924b1bc3d0742438",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
-        "js/app-version.js": "4cc0a6dc159338c6",
+        "js/app-version.js": "41d275905d191c60",
         "js/app.js": "6c7dcc5f259fb85a",
         "js/auth-gate.js": "7e7da9d190ffa167",
         "js/calc-fullscreen.js": "c665122603b01cb6",
@@ -49,7 +49,7 @@
         "js/device-model.js": "48b46f0695999f32",
         "js/device-ping.js": "78646dee631cccb3",
         "js/error-model.js": "86ed1f0945fd9a4c",
-        "js/error-report.js": "dede0032a0798a4d",
+        "js/error-report.js": "97d54d81fe598c95",
         "js/export-icon.js": "d951d70223a41767",
         "js/export-sheet.js": "f99c587c119b0b51",
         "js/feedback-model.js": "41a324aaa741a447",
@@ -141,13 +141,13 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "a338ccdc6c2ac6da",
-      "mapSha": "f4b70b28cb6bb183",
+      "sha": "11b7cd2c9c1ad9f1",
+      "mapSha": "0572ecb69c862eea",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/allergen-terms.js": "76a36d0f822c248a",
-        "js/app-version.js": "4cc0a6dc159338c6",
+        "js/app-version.js": "41d275905d191c60",
         "js/auth-gate.js": "7e7da9d190ffa167",
         "js/calculator-config.js": "9078e52d96eab707",
         "js/catalogue/allergen-sheet.js": "0a1ec5ee0d8c6a56",
@@ -192,7 +192,7 @@
         "js/device-ping.js": "78646dee631cccb3",
         "js/dom.js": "0fe18894c47fe088",
         "js/error-model.js": "86ed1f0945fd9a4c",
-        "js/error-report.js": "dede0032a0798a4d",
+        "js/error-report.js": "97d54d81fe598c95",
         "js/export-icon.js": "d951d70223a41767",
         "js/export-sheet.js": "f99c587c119b0b51",
         "js/feedback-model.js": "41a324aaa741a447",
@@ -281,11 +281,11 @@
       }
     },
     "dist/clients.js": {
-      "sha": "529d77aa5fd7adb4",
-      "mapSha": "1e36201768e4f9ef",
+      "sha": "3c9045e07d651ba2",
+      "mapSha": "82ac0a2cb77c9900",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
-        "js/app-version.js": "4cc0a6dc159338c6",
+        "js/app-version.js": "41d275905d191c60",
         "js/auth-gate.js": "7e7da9d190ffa167",
         "js/calculator-client-orders.js": "20ad759f26b91828",
         "js/calculator-config-store.js": "a91e6d5df87b3a2a",
@@ -307,7 +307,7 @@
         "js/device-model.js": "48b46f0695999f32",
         "js/device-ping.js": "78646dee631cccb3",
         "js/error-model.js": "86ed1f0945fd9a4c",
-        "js/error-report.js": "dede0032a0798a4d",
+        "js/error-report.js": "97d54d81fe598c95",
         "js/export-icon.js": "d951d70223a41767",
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "87418bc01fbb5aa5",
@@ -384,11 +384,11 @@
       }
     },
     "dist/foodcost.js": {
-      "sha": "46cc35cb0c929074",
-      "mapSha": "0f521ce4e551da16",
+      "sha": "51c688bdf533cfed",
+      "mapSha": "01f71022c40547d1",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
-        "js/app-version.js": "4cc0a6dc159338c6",
+        "js/app-version.js": "41d275905d191c60",
         "js/auth-gate.js": "7e7da9d190ffa167",
         "js/calculator-config.js": "9078e52d96eab707",
         "js/catalogue/catalogue-model.js": "f2b080da4336cc57",
@@ -400,7 +400,7 @@
         "js/device-ping.js": "78646dee631cccb3",
         "js/dom.js": "0fe18894c47fe088",
         "js/error-model.js": "86ed1f0945fd9a4c",
-        "js/error-report.js": "dede0032a0798a4d",
+        "js/error-report.js": "97d54d81fe598c95",
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "87418bc01fbb5aa5",
         "js/firebase-target.js": "974d7726c8d1dda4",
@@ -495,11 +495,11 @@
       }
     },
     "dist/index.js": {
-      "sha": "cb3cb2c6884acb06",
-      "mapSha": "b726ff0e6eef0503",
+      "sha": "25fd362b82152f46",
+      "mapSha": "0023b7c7c6655fa9",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
-        "js/app-version.js": "4cc0a6dc159338c6",
+        "js/app-version.js": "41d275905d191c60",
         "js/auth-gate.js": "7e7da9d190ffa167",
         "js/away-model.js": "81616fd7d69f85d1",
         "js/away-reminder.js": "3c7c0bc621a73eca",
@@ -514,7 +514,7 @@
         "js/device-model.js": "48b46f0695999f32",
         "js/device-ping.js": "78646dee631cccb3",
         "js/error-model.js": "86ed1f0945fd9a4c",
-        "js/error-report.js": "dede0032a0798a4d",
+        "js/error-report.js": "97d54d81fe598c95",
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "87418bc01fbb5aa5",
         "js/firebase-target.js": "974d7726c8d1dda4",
@@ -627,11 +627,11 @@
       }
     },
     "dist/inventory.js": {
-      "sha": "4df81d108affbb1b",
-      "mapSha": "58188d0e91b811d6",
+      "sha": "47593cb17921ba71",
+      "mapSha": "cf8b4bb9c649234b",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
-        "js/app-version.js": "4cc0a6dc159338c6",
+        "js/app-version.js": "41d275905d191c60",
         "js/auth-gate.js": "7e7da9d190ffa167",
         "js/calculator-config.js": "9078e52d96eab707",
         "js/confirm-dialog.js": "83f2ab3c9c69025d",
@@ -640,7 +640,7 @@
         "js/device-model.js": "48b46f0695999f32",
         "js/device-ping.js": "78646dee631cccb3",
         "js/error-model.js": "86ed1f0945fd9a4c",
-        "js/error-report.js": "dede0032a0798a4d",
+        "js/error-report.js": "97d54d81fe598c95",
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "87418bc01fbb5aa5",
         "js/firebase-target.js": "974d7726c8d1dda4",
@@ -767,13 +767,13 @@
       }
     },
     "dist/orders.js": {
-      "sha": "0abb17e59ec30bab",
-      "mapSha": "ae148d32851a6db5",
+      "sha": "36c5f8a6c857f12f",
+      "mapSha": "cbd97c6558c8f981",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/allergen-terms.js": "76a36d0f822c248a",
-        "js/app-version.js": "4cc0a6dc159338c6",
+        "js/app-version.js": "41d275905d191c60",
         "js/auth-gate.js": "7e7da9d190ffa167",
         "js/away-model.js": "81616fd7d69f85d1",
         "js/calculator-config.js": "9078e52d96eab707",
@@ -784,7 +784,7 @@
         "js/device-ping.js": "78646dee631cccb3",
         "js/dom.js": "0fe18894c47fe088",
         "js/error-model.js": "86ed1f0945fd9a4c",
-        "js/error-report.js": "dede0032a0798a4d",
+        "js/error-report.js": "97d54d81fe598c95",
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "87418bc01fbb5aa5",
         "js/firebase-target.js": "974d7726c8d1dda4",
@@ -921,11 +921,11 @@
       }
     },
     "dist/pastries.js": {
-      "sha": "130a4c8931cb3d91",
-      "mapSha": "1c27ca026c925537",
+      "sha": "82e7b29e4b3cbd4a",
+      "mapSha": "102c0692ddc168c3",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
-        "js/app-version.js": "4cc0a6dc159338c6",
+        "js/app-version.js": "41d275905d191c60",
         "js/auth-gate.js": "7e7da9d190ffa167",
         "js/calculator-config.js": "9078e52d96eab707",
         "js/confirm-dialog.js": "83f2ab3c9c69025d",
@@ -934,7 +934,7 @@
         "js/device-model.js": "48b46f0695999f32",
         "js/device-ping.js": "78646dee631cccb3",
         "js/error-model.js": "86ed1f0945fd9a4c",
-        "js/error-report.js": "dede0032a0798a4d",
+        "js/error-report.js": "97d54d81fe598c95",
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "87418bc01fbb5aa5",
         "js/firebase-target.js": "974d7726c8d1dda4",
@@ -1027,13 +1027,13 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "6c2b0dbd5442ef18",
-      "mapSha": "6de3ec5112df86f4",
+      "sha": "658252708e077439",
+      "mapSha": "d71092df1ecca754",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/allergen-terms.js": "76a36d0f822c248a",
-        "js/app-version.js": "4cc0a6dc159338c6",
+        "js/app-version.js": "41d275905d191c60",
         "js/auth-gate.js": "7e7da9d190ffa167",
         "js/calculator-config.js": "9078e52d96eab707",
         "js/confirm-dialog.js": "83f2ab3c9c69025d",
@@ -1043,7 +1043,7 @@
         "js/device-ping.js": "78646dee631cccb3",
         "js/dom.js": "0fe18894c47fe088",
         "js/error-model.js": "86ed1f0945fd9a4c",
-        "js/error-report.js": "dede0032a0798a4d",
+        "js/error-report.js": "97d54d81fe598c95",
         "js/feedback-model.js": "41a324aaa741a447",
         "js/feedback.js": "87418bc01fbb5aa5",
         "js/firebase-target.js": "974d7726c8d1dda4",

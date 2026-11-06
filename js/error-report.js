@@ -66,7 +66,11 @@ export function createReporter(deps = {}) {
   }
 
   function version() {
-    if (!versionPromise) versionPromise = Promise.resolve().then(() => d.version()).catch(() => null);
+    if (!versionPromise) {
+      // No answer is not remembered: the next report asks again (as js/usage.js does).
+      versionPromise = Promise.resolve().then(() => d.version()).catch(() => null)
+        .then(v => { if (!(typeof v === 'string' && v)) versionPromise = null; return v; });
+    }
     return versionPromise;
   }
 

@@ -18,6 +18,10 @@ const USAGE_PATH = new RegExp(`^locations/(${LOCATION_ID})/usage/([A-Za-z0-9]{20
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const PRUNE_DAYS = 400;
 export const TOP_ROUTES = 15;
+// The fields read-usage.mjs asks Firestore for. ⚠️ EVERY field lineFrom reads must be here:
+// runQuery returns only what is listed (tests/usage-summary.test.mjs compares the two).
+export const USAGE_FIELDS = Object.freeze(['kind', 'appVersion', 'screens', 'seconds', 'taps', 'routes',
+  'actions', 'loads', 'loadMs', 'firstMinute', 'lastMinute', 'offlineSeconds', 'hours']);
 
 export { relativePath };
 
