@@ -19,6 +19,19 @@
   border-radius: var(--r-lg) var(--r-lg) 0 0;
 }
 
+/* «+» and «What they sell» side by side in the bar; the plus is an icon-only square, so both fit a 296px phone beside nothing else. */
+.barActions {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.barActions .add {
+  flex: none;
+  width: var(--hit);
+  padding: 0;
+}
+
 /* The same columns as a row (OrderLine.module.css; ordersCss.spec.ts compares them). */
 .columns {
   position: sticky;

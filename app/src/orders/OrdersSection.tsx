@@ -1,17 +1,22 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { todayISO } from '@mise/shared/day';
+import { mayEditRecords } from '@mise/shared/records';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS, Page } from '../shell/Page';
 import { useOwnScrollArea } from '../shell/scrollArea';
 import { useOnline } from '../shell/useOnline';
+import { useSession } from '../session/SessionContext';
 import { SPLIT_QUERY } from '../ui/split';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
+import { CardDoorsProvider } from './CardDoors';
+import type { CardDoor } from './CardDoors';
 import { NoticesBell } from './NoticesBell';
 import { NoticesProvider } from './NoticesContext';
 import { OrdersProvider, useOrders, useOrdersStore } from './OrdersContext';
+import { IngredientsList } from './IngredientsList';
 import { OrdersList } from './OrdersList';
 import { DaySendScreen } from './DaySendScreen';
 import { HistoryEditScreen } from './HistoryEditScreen';
@@ -30,14 +35,16 @@ import { SupplierOrderScreen } from './SupplierOrderScreen';
 import { SupplierPicker } from './SupplierPicker';
 import { LATCH_GRACE_MS, PendingLatchProvider, latchCanLook, pendingNow, usePendingLatch } from './pendingLatch';
 import { LONG_MS } from './useClearQuantities';
+import { carriedTrip, carryTrip, forgetTrip } from './cardTrip';
+import type { TripPlace } from './cardTrip';
 import {
-  CLEAR_OPENER, HandBackProvider, HISTORY_DOOR, INCOMING_DOOR, ITEMS_DOOR, LISTS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, REORDER_DOOR, SEND_OPENER,
-  SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, arrivalOpener, correctOpener, itemsOpener, listOpener, pendingFallback, pendingOpener, sendDayOpener, supplierOpener,
+  ADD_DOOR, CLEAR_OPENER, HandBackProvider, SEARCH_BOX, SUPPLIER_DOOR, SUPPLIER_TITLE, cardDoor, HISTORY_DOOR, INCOMING_DOOR, ITEMS_DOOR, LISTS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, REORDER_DOOR, SEND_OPENER,
+  SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, SWAP_OPENER, arrivalOpener, correctOpener, itemsOpener, listOpener, pendingFallback, pendingOpener, sendDayOpener, supplierOpener,
   useHandBackState,
 } from './handBack';
-import { FROM_LIST, cameFromList, replacedState } from './ordersNav';
+import { FROM_LIST, cameFromList, columnOf, columnPart, replacedState } from './ordersNav';
 import {
-  CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, LISTS_PATH, ORDERS_PATH, PLACE_ALL_PATH, REORDER_PATH, SEND_PATH, SETTINGS_PATH, SUPPLIER_ORDER_PATH, historyDayPath, historyEditPath,
+  CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, INGREDIENTS_PATH, LISTS_PATH, ORDERS_PATH, PLACE_ALL_PATH, REORDER_PATH, SEND_PATH, SETTINGS_PATH, SUPPLIER_ORDER_PATH, historyDayPath, historyEditPath,
   incomingMissingPath, parseOrdersPath, requestPath, supplierConfirmPath, supplierItemsPath, supplierPath,
 } from './ordersPath';
 import type { OrdersView } from './ordersPath';
@@ -108,9 +115,21 @@ function StatusLine() {
 function OrdersLayout({ view }: { view: ShownView }) {
   const { t } = useT();
   const navigate = useNavigate();
-  const { pathname, state } = useLocation();
+  const location = useLocation();
+  const { pathname, state } = location;
   const navigationType = useNavigationType();
   const split = useMediaQuery(SPLIT_QUERY);
+  const { canManage, location: venue } = useSession();
+  // ⚠️ WHICH LIST IS IN THE LIST COLUMN comes from the HISTORY ENTRY (ordersNav.ts `column`), not from anything this component remembers: it
+  // survives a remount (the trip to a card) and a reload. The flat view is in the column at its own address and beside/behind every screen
+  // that was opened from it (History, the send screen, the settings, a supplier from the bell), so its search text, its frozen «Ordering»
+  // set and its place are still there on Back. It takes the whole width only while nothing is open beside it.
+  const flatColumn = view.kind === 'ingredients' || columnOf(state) === 'ingredients';
+  // The column a screen opened from here belongs to: carried into the state it is pushed with.
+  const columnHere = view.kind === 'ingredients' ? 'ingredients' : columnOf(state);
+  const fromHere = columnHere === 'ingredients' ? { ...FROM_LIST, column: 'ingredients' as const } : FROM_LIST;
+  // The two views of the list's level: a screen opens one level down from either.
+  const atList = view.kind === 'list' || view.kind === 'ingredients';
   const handBack = useHandBackState();
   const snapshot = useOrders();
   const noSupplierName = t('ord.noSupplier');
@@ -190,16 +209,40 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const listTop = useRef<number | null>(null);
   const detail = useRef<HTMLDivElement>(null);
 
+  // ⚠️ THE TRIP TO A CARD (cardTrip.ts): Orders is unmounted while the person is on a card of «Ingredients & suppliers», so the place is
+  // kept in a module. Back (a POP) to the very history entry the trip started from takes it; it is forgotten on every mount, taken or not.
+  const trip = useRef<TripPlace | null>(
+    navigationType === 'POP' && carriedTrip()?.pathname === pathname && carriedTrip()?.key === location.key ? carriedTrip() : null,
+  );
+  useEffect(() => { forgetTrip(); }, []);
+  const cardDoors = {
+    // The same question as the Suppliers section's gate, asked on every render so it follows the venue's switch live — except that with no
+    // venue document it says no (the safe direction: a door that is not drawn cannot bounce).
+    may: mayEditRecords(venue, canManage),
+    open: (door: CardDoor) => {
+      carryTrip({
+        key: location.key,
+        pathname,
+        target: door.target,
+        query: door.flat?.query ?? '',
+        only: door.flat?.only ?? null,
+        area: scrollArea()?.scrollTop ?? null,
+        pane: detail.current?.scrollTop ?? null,
+      });
+      void navigate(door.address, { state: door.state });
+    },
+  };
+
   // A screen opens one level down, so Back steps up to the list. On the split, with one already open beside the list, picking
   // another is lateral and replaces it — and keeps whatever the entry it replaces knew about where Back goes.
   const open = (opener: string, path: string) => {
     handBack.expect(opener);
-    if (split && view.kind !== 'list') {
+    if (split && !atList) {
       void navigate(path, { replace: true, state: replacedState(state) });
     } else {
       // On a phone the list is hidden behind the screen: the place in it is written down now, while it is what is on screen.
-      if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
-      void navigate(path, { state: FROM_LIST });
+      if (!split && atList) listTop.current = scrollArea()?.scrollTop ?? null;
+      void navigate(path, { state: fromHere });
     }
   };
   const openSupplier = (id: string) => { open(supplierOpener(id), supplierPath(id)); };
@@ -207,19 +250,27 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const openPlaceAll = () => { open(PLACE_ALL_OPENER, PLACE_ALL_PATH); };
   const openClear = () => { open(CLEAR_OPENER, CLEAR_PATH); };
   const openSend = () => { open(SEND_OPENER, SEND_PATH); };
+  // ⚠️ THE SWAP IS A MOVE AT THE LIST'S LEVEL, NOT A STEP DOWN: it REPLACES the entry, so Back never walks through the views, and the
+  // new view starts at the top (the scroll effect below). The focus goes to the swap button of the view that arrives. The button is drawn
+  // ONLY at list level (OrdersHead `swapOpen`): with a screen open beside the list the person closes it with Back first, so there is no
+  // step back to arm, no duplicate entry to avoid and nothing left pending when a «discard changes?» question is answered Cancel.
+  const swap = () => {
+    handBack.expect(SWAP_OPENER);
+    void navigate(view.kind === 'ingredients' ? ORDERS_PATH : INGREDIENTS_PATH, { replace: true, state: KEEP_FOCUS });
+  };
   // «Placed yesterday» on a pending banner: the supplier's confirm screen, recording under the banner's day without asking whether it
   // was sent (it was: that is what the button says). The list is right behind the screen, so Back and a recorded order both go to it.
   const openPending = (id: string, day: string) => {
     handBack.expect(pendingOpener(id));
-    if (split && view.kind !== 'list') {
+    if (split && !atList) {
       // ⚠️ THE CONFIRM SCREEN WALKS BACK TO THE LIST by `toList` after recording; without it the list would be pushed again on top
       // of the one already in the history (review of step 3f-6). The screen it replaces knew how far the list is.
       const kept = replacedState(state);
       const toList = cameFromList(state) ? ('stepsUp' in kept ? kept.stepsUp : 1) : undefined;
       void navigate(supplierConfirmPath(id), { replace: true, state: { ...kept, ...(toList === undefined ? {} : { toList }), pendingDay: day } });
     } else {
-      if (!split && view.kind === 'list') listTop.current = scrollArea()?.scrollTop ?? null;
-      void navigate(supplierConfirmPath(id), { state: { ...FROM_LIST, toList: 1, pendingDay: day } });
+      if (!split && atList) listTop.current = scrollArea()?.scrollTop ?? null;
+      void navigate(supplierConfirmPath(id), { state: { ...fromHere, toList: 1, pendingDay: day } });
     }
   };
   // ⚠️ ON THE COPY THESE DOORS ARE SHUT: a tap only says the wait, and the address does not change. Nothing they open can be
@@ -235,7 +286,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   // Settings' «Supplier order» door: one level down, so Back is the browser's Back and the door takes the focus again.
   const openSupplierOrder = () => {
     handBack.expect(SUPPLIER_ORDER_DOOR);
-    void navigate(SUPPLIER_ORDER_PATH, { state: FROM_LIST });
+    void navigate(SUPPLIER_ORDER_PATH, { state: { ...FROM_LIST, ...columnPart(state) } });
   };
   const openHistory = whenLive(() => {
     // ⚠️ THE SPLIT KEEPS THIS DOOR ON SCREEN BELOW HISTORY TOO. From its editor or day screen it is one step up, like their Back: a
@@ -305,7 +356,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const openFromHistory = (opener: string, path: string) => {
     handBack.expect(opener);
     historyPlace.current = { area: scrollArea()?.scrollTop ?? null, pane: detail.current?.scrollTop ?? 0 };
-    void navigate(path, { state: FROM_LIST });
+    void navigate(path, { state: { ...FROM_LIST, ...columnPart(state) } });
   };
   const openMissing = (id: string) => { openFromHistory(arrivalOpener(id), incomingMissingPath(id)); };
   const openEdit = (id: string) => { openFromHistory(correctOpener(id), historyEditPath(id)); };
@@ -319,15 +370,20 @@ function OrdersLayout({ view }: { view: ShownView }) {
   //  - On a phone, Back to the list restores the place written down when a screen opened; any other move starts at the top.
   //  - The first render does nothing: the shell reset the area when the section was entered.
   const shown = useRef<string | null>(null);
+  const shownKind = useRef(view.kind);
   useLayoutEffect(() => {
     const before = shown.current;
+    const kindBefore = shownKind.current;
     shown.current = pathname;
+    shownKind.current = view.kind;
     const area = scrollArea();
     // The same address twice is StrictMode running the effect again, not a move.
     if (before === null || before === pathname || area === null) return;
     if (split) {
       listTop.current = null;
-    } else if (view.kind === 'list' && listTop.current !== null) {
+      // The swap between the two views is a new list, not Back to one: it starts at the top.
+      if (atList && kindBefore !== view.kind && (kindBefore === 'list' || kindBefore === 'ingredients')) area.scrollTop = 0;
+    } else if (atList && listTop.current !== null) {
       area.scrollTop = listTop.current;
       listTop.current = null;
     } else if ((view.kind === 'history' || view.kind === 'incoming' || view.kind === 'lists') && historyPlace.current?.area != null) {
@@ -340,7 +396,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   // Back out of a supplier (its own Back, or the phone's back gesture): the button that opened it takes the focus, once the
   // list is on screen again (on a phone it was hidden behind the supplier, not unmounted).
   useLayoutEffect(() => {
-    if (view.kind === 'list') handBack.deliver(pendingFallback);
+    if (atList) handBack.deliver(pendingFallback);
     // Back from the editor or the day screen to History: the card button or the day's «Send all».
     else if (view.kind === 'history') handBack.deliverWhere(name => name.startsWith('correct:') || name.startsWith('send-day:'));
     // Back from «What arrived?» to Incoming: the row that opened it (gone when the order was answered: the title takes the focus).
@@ -368,6 +424,34 @@ function OrdersLayout({ view }: { view: ShownView }) {
     if (!inHistory) historyPlace.current = null;
   }, [pathname]);
 
+  // Back from a card: once the screen is drawn (its data arrives after the section does, and a scroll box cannot be scrolled past
+  // content that is not there yet) the scroll goes back and the focus to the door that was pressed; a door that is gone (the ingredient
+  // deleted or moved, the gate now off) leaves the focus on the search box or the supplier's title.
+  const tripDone = useRef(false);
+  const tripFocus = useRef<TripPlace | null>(null);
+  useLayoutEffect(() => {
+    const place = trip.current;
+    if (place === null || tripDone.current || !ready) return;
+    tripDone.current = true;
+    trip.current = null;
+    tripFocus.current = place;
+    const area = scrollArea();
+    if (area !== null && place.area !== null) area.scrollTop = place.area;
+    if (detail.current !== null && place.pane !== null) detail.current.scrollTop = place.pane;
+  }, [ready]);
+  // ⚠️ THE FOCUS IS GIVEN IN A PASSIVE EFFECT, AFTER THE SCREEN OPEN BESIDE THE LIST HAS HAD ITS OWN: a screen opened from the list moves the
+  // focus to its title once when it first shows (History, Send, …), and on a return it would take the focus from the door in the column.
+  // The effects of the children run before this one, so this is the last word.
+  useEffect(() => {
+    const place = tripFocus.current;
+    if (place === null) return;
+    tripFocus.current = null;
+    const target = place.target;
+    const door = target.kind === 'name' ? cardDoor(target.ingredientId, target.in) : target.kind === 'add' ? ADD_DOOR : SUPPLIER_DOOR;
+    // The door is gone: the search box of the flat view it was pressed in, or the supplier screen's title.
+    if (!handBack.focus(door)) handBack.focus(target.kind === 'name' && target.in === 'flat' ? SEARCH_BOX : SUPPLIER_TITLE);
+  }, [ready]);
+
   // ⚠️ WITH THE VENUE'S SWITCH OFF the three delivery addresses do not exist (decision F4): a bookmark, or a phone that was on
   // Incoming when somebody turned it off, goes to the list. Only once config/orders has answered (before that the switch reads on).
   const deliveryAddress = view.kind === 'incoming' || view.kind === 'incoming-missing' || view.kind === 'reorder';
@@ -377,6 +461,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
 
   return (
     <HandBackProvider value={handBack}>
+      <CardDoorsProvider value={cardDoors}>
       {/* The bell and its panel share one state, kept above the page: the number and what it opens cannot disagree (step 3f-6). */}
       <NoticesProvider lens={lens} ready={ready} onPanelOpen={dropHold}>
       <Page
@@ -386,9 +471,12 @@ function OrdersLayout({ view }: { view: ShownView }) {
         action={view.kind === 'list' || split ? <PartBoundary><NoticesBell /></PartBoundary> : undefined}
       >
         <StatusLine />
-        <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'}>
+        <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : view.kind === 'ingredients' ? 'ingredients' : 'detail'}>
           <div className={styles.list}>
             <PartBoundary>
+              {flatColumn ? (
+                <IngredientsList lens={lens} ready={ready} swapOpen={atList} onSwap={swap} onSend={openSend} onSettings={openSettings} onHistory={openHistory} onOpenSupplier={openOrHold} onOpenPending={openPending} initial={trip.current === null ? undefined : { query: trip.current.query, only: trip.current.only }} />
+              ) : (
               <OrdersList
                 lens={lens}
                 earlyLens={earlyLens}
@@ -400,6 +488,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
                 onOpenItems={openItemsWhenLive}
                 onPlaceAll={openPlaceAll}
                 onClearAll={openClear}
+                swapOpen={atList}
+                onSwap={swap}
                 onSend={openSend}
                 onSettings={openSettings}
                 onHistory={openHistory}
@@ -408,6 +498,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
                 onLists={openLists}
                 onOpenPending={openPending}
               />
+              )}
             </PartBoundary>
           </div>
           <div ref={detail} className={styles.detail}>
@@ -418,6 +509,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
         </div>
       </Page>
       </NoticesProvider>
+      </CardDoorsProvider>
     </HandBackProvider>
   );
 }
@@ -439,6 +531,8 @@ function Detail({ view, lens, ready, onOpenSupplierOrder, onOpenEdit, onOpenDay,
 }) {
   const { t } = useT();
   const { configLoaded } = useOrders();
+  // The flat view takes the whole width: there is no pane beside it.
+  if (view.kind === 'ingredients') return null;
   if (view.kind === 'list') {
     // ⚠️ NOT BESIDE «NO SUPPLIERS YET»: a prompt to tap a row, next to a list that says there are none, would send somebody
     // looking for what is not there.

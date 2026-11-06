@@ -1,19 +1,22 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
-import { Check, List } from 'lucide-react';
+import { Check, List, Plus } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
+import { fromOrdersList, fromOrdersSupplier, ingredientCardAddress, newIngredientAddress, supplierScreenAddress } from '@mise/shared/records-link';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
+import { tabOfLine, useCardDoors } from './CardDoors';
 import { DayLine } from './DayLine';
 import { OrderLine } from './OrderLine';
 import { useOrders, useOrdersStore } from './OrdersContext';
-import { ITEMS_DOOR, PLACE_DOOR, supplierOpener, useHandBack } from './handBack';
+import { ADD_DOOR, ITEMS_DOOR, PLACE_DOOR, SUPPLIER_DOOR, SUPPLIER_TITLE, supplierOpener, useHandBack } from './handBack';
 import { ORDERS_PATH, supplierConfirmPath, supplierItemsPath } from './ordersPath';
 import { cameFromList, confirmState, fromSupplierState, useLeave } from './ordersNav';
 import { LONG_MS, useClearQuantities } from './useClearQuantities';
+import { NO_SUPPLIER_ID } from './ordersLens';
 import type { OrderRow, OrdersLens } from './ordersLens';
 import styles from './SupplierOrderScreen.module.css';
 
@@ -28,7 +31,12 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   const snapshot = useOrders();
   const handBack = useHandBack();
   const titleId = useId();
-  const title = useRef<HTMLHeadingElement>(null);
+  const title = useRef<HTMLHeadingElement | null>(null);
+  // The title is also where the focus falls back to when the door it was returned to is gone (cardTrip.ts).
+  const titleNode = useCallback((node: HTMLHeadingElement | null) => {
+    title.current = node;
+    handBack.register(SUPPLIER_TITLE, node);
+  }, [handBack]);
   const leave = useLeave(ORDERS_PATH, () => { handBack.expect(supplierOpener(id)); });
   const say = useStatusMessage();
   const [clearQuantities, clearDialog] = useClearQuantities(lens);
@@ -37,6 +45,13 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   const itemsNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(ITEMS_DOOR, node); }, [handBack]);
   // «Order placed…» one level down: Back from the confirm screen hands the focus back to this button.
   const placeNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(PLACE_DOOR, node); }, [handBack]);
+  // The doors to the cards (step 3f-8b), where the person may edit records. Back from a card hands the focus back to its door.
+  const doors = useCardDoors();
+  const addNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(ADD_DOOR, node); }, [handBack]);
+  const supplierDoorNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SUPPLIER_DOOR, node); }, [handBack]);
+  // ⚠️ THE PSEUDO-SUPPLIER HAS NO SCREEN OF ITS OWN IN «Ingredients & suppliers»: its lines and its «+» come from the list's side, and its
+  // name is no door.
+  const pseudo = id === NO_SUPPLIER_ID;
 
   const supplier = lens.supplierById(id);
   const rows = lens.rowsFor(id);
@@ -62,7 +77,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   if (supplier === undefined) {
     return (
       <section className={styles.screen} aria-label={t('section.orders')}>
-        <FormBar backLabel={t('ui.back')} onBack={leave} title={t('section.orders')} titleRef={title} />
+        <FormBar backLabel={t('ui.back')} onBack={leave} title={t('section.orders')} titleRef={titleNode} />
         <p className={styles.nothing}>{t('ord.supplierGone')}</p>
       </section>
     );
@@ -70,6 +85,13 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
 
   const label = supplierLabel(supplier);
   const showStock = snapshot.config.showStock;
+  const openCard = (row: OrderRow) => {
+    doors.open({
+      address: ingredientCardAddress(row.ingredient.id),
+      state: pseudo ? fromOrdersList(tabOfLine(row.ingredient)) : fromOrdersSupplier(id),
+      target: { kind: 'name', ingredientId: row.ingredient.id, in: 'supplier' },
+    });
+  };
   const lineOf = (row: OrderRow) => (
     <OrderLine
       key={row.ingredient.id}
@@ -78,6 +100,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
       showStock={showStock}
       hint={row.elsewhere ? { kind: 'none' } : snapshot.suggester.hint(row.ingredient, entries[row.ingredient.id])}
       onEdit={(edited, edit) => { store.editLine(supplier, edited.ingredient, edit); }}
+      onOpenCard={doors.may ? openCard : undefined}
     />
   );
   const empty = rows.active.length === 0 && rows.inactive.length === 0;
@@ -104,19 +127,40 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
           onBack={leave}
           title={label}
           titleId={titleId}
-          titleRef={title}
+          titleRef={titleNode}
+          titleDoorRef={supplierDoorNode}
+          onTitle={doors.may && !pseudo ? () => { doors.open({ address: supplierScreenAddress(id), state: fromOrdersList('suppliers'), target: { kind: 'supplier' } }); } : undefined}
+          titleDoorLabel={t('ord.supplierDoor', { supplier: label })}
           action={(
-            <Button
-              ref={itemsNode}
-              variant="secondary"
-              onPress={() => {
-                handBack.expect(ITEMS_DOOR);
-                void navigate(supplierItemsPath(id), { state: fromSupplierState(state) });
-              }}
-            >
-              <List aria-hidden="true" />
-              {t('ord.whatTheySell')}
-            </Button>
+            <div className={styles.barActions}>
+              {doors.may ? (
+                <Button
+                  ref={addNode}
+                  className={styles.add}
+                  aria-label={pseudo ? t('ord.addIngredientNoSupplier') : t('ord.addIngredientTo', { supplier: label })}
+                  onPress={() => {
+                    doors.open({
+                      address: newIngredientAddress(pseudo ? null : id),
+                      state: pseudo ? fromOrdersList('ingredients') : fromOrdersSupplier(id),
+                      target: { kind: 'add' },
+                    });
+                  }}
+                >
+                  <Plus aria-hidden="true" />
+                </Button>
+              ) : null}
+              <Button
+                ref={itemsNode}
+                variant="secondary"
+                onPress={() => {
+                  handBack.expect(ITEMS_DOOR);
+                  void navigate(supplierItemsPath(id), { state: fromSupplierState(state) });
+                }}
+              >
+                <List aria-hidden="true" />
+                {t('ord.whatTheySell')}
+              </Button>
+            </div>
           )}
         />
       </div>

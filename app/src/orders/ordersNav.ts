@@ -10,6 +10,18 @@ import { ORDERS_PATH } from './ordersPath';
 // (A copy of suppliers/suppliersNav.ts: a feature never imports from another feature's folder.)
 export const FROM_LIST = { ...KEEP_FOCUS, fromList: true } as const;
 
+// ⚠️ WHICH LIST IS IN THE LIST COLUMN comes from the history entry, not from anything the section remembers (a ref dies on a remount and a
+// reload): a screen opened from the flat view («by ingredient») writes `column: 'ingredients'` into its state, and every lateral replace and
+// every push one level further down carries it on, so the flat view stays beside (or behind) the screen however deep it is.
+export type ListColumn = 'suppliers' | 'ingredients';
+
+export function columnOf(state: unknown): ListColumn {
+  return typeof state === 'object' && state !== null && (state as { column?: unknown }).column === 'ingredients' ? 'ingredients' : 'suppliers';
+}
+
+// What to spread into a state that must carry the column of `from` on.
+export const columnPart = (from: unknown): { readonly column?: 'ingredients' } => (columnOf(from) === 'ingredients' ? { column: 'ingredients' } : {});
+
 export function cameFromList(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromList' in state;
 }
@@ -38,7 +50,9 @@ export function stepsUpOf(state: unknown): number {
 // list, so a lateral pick on the split can tell how far the list is from the items screen it replaces. Written only when the
 // supplier itself was opened from the list.
 export function fromSupplierState(supplierState: unknown) {
-  return cameFromList(supplierState) ? { ...FROM_SUPPLIER, behindSteps: stepsUpOf(supplierState) } : FROM_SUPPLIER;
+  return cameFromList(supplierState)
+    ? { ...FROM_SUPPLIER, behindSteps: stepsUpOf(supplierState), ...columnPart(supplierState) }
+    : { ...FROM_SUPPLIER, ...columnPart(supplierState) };
 }
 
 // The state of a screen that REPLACES the one on show (a lateral pick on the split), so it knows where Back goes.
@@ -51,7 +65,7 @@ export function replacedState(state: unknown) {
   const behind = numberIn(state, 'behindSteps');
   // A confirm screen knows how far the list is (confirmState).
   const steps = numberIn(state, 'toList') ?? (cameFromSupplier(state) && behind !== undefined ? behind + 1 : stepsUpOf(state));
-  return steps > 1 ? { ...FROM_LIST, stepsUp: steps } : FROM_LIST;
+  return steps > 1 ? { ...FROM_LIST, stepsUp: steps, ...columnPart(state) } : { ...FROM_LIST, ...columnPart(state) };
 }
 
 // How a screen steps back up one level.
@@ -83,7 +97,7 @@ export function useLeave(fallback: string, onLeaving: () => void, cameFrom: (sta
 // screen it was opened from (P20: after a save, back to the list), and the number says how far that is.
 export function confirmState(openerState: unknown, extra: Readonly<Record<string, unknown>> = {}) {
   const toList = cameFromList(openerState) ? stepsUpOf(openerState) + 1 : undefined;
-  return { ...FROM_LIST, ...(toList === undefined ? {} : { toList }), ...extra };
+  return { ...FROM_LIST, ...(toList === undefined ? {} : { toList }), ...extra, ...columnPart(openerState) };
 }
 
 // Steps up to the list again after an order was recorded: the history is walked back when the list is in it, else the

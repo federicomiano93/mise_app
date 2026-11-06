@@ -18,7 +18,7 @@ import { senderOf } from './OrderListsScreen';
 import { useOrders, useOrdersStore } from './OrdersContext';
 import { dayTranslate } from './dayWords';
 import { listOpener, useHandBack } from './handBack';
-import { FROM_LIST, cameFromList, useLeave } from './ordersNav';
+import { FROM_LIST, cameFromList, columnPart, useLeave } from './ordersNav';
 import { LISTS_PATH, supplierConfirmPath } from './ordersPath';
 import type { OrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
@@ -187,7 +187,7 @@ function Open({ request, lens, leave, left, titleId }: OpenProps) {
 
   // ⚠️ THE HAND-OFF TO THE ROAD EVERYBODY ALREADY WALKS: recording the order is the app's own per-supplier confirm screen. A second way
   // to record an order here would be a second answer to «what was ordered». `toList: 1` brings a recorded order back to THIS list.
-  const place = (supplierId: string) => { void navigate(supplierConfirmPath(supplierId), { state: { ...FROM_LIST, toList: 1 } }); };
+  const place = (supplierId: string) => { void navigate(supplierConfirmPath(supplierId), { state: { ...FROM_LIST, toList: 1, ...columnPart(state) } }); };
 
   return (
     <section className={styles.screen} aria-labelledby={titleId}>

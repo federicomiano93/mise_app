@@ -1,6 +1,5 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import type { KeyboardEvent } from 'react';
-import { Check, ChevronRight, History, List, Search, Settings, Share } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
+import { Check, ChevronRight, List } from 'lucide-react';
 import { spellShortDate, todayISO } from '@mise/shared/day';
 import { isFutureDay, nextDeliveryAfter } from '@mise/shared/order-day';
 import { supplierLabel } from '@mise/shared/supplier-label';
@@ -11,10 +10,12 @@ import { Button } from '../ui/Button';
 import { DeliveryDoors } from './DeliveryDoors';
 import { ListsDoor } from './ListsDoor';
 import { NoticesPanel } from './NoticesPanel';
+import { OrdersFilter } from './OrdersFilter';
+import { OrdersHead } from './OrdersHead';
 import { TodayOrders } from './TodayOrders';
 import { useOrders } from './OrdersContext';
 import { dayTranslate, deliveryDaysText } from './dayWords';
-import { CLEAR_OPENER, HISTORY_DOOR, PLACE_ALL_OPENER, SEND_OPENER, SETTINGS_OPENER, itemsOpener, supplierOpener, useHandBack } from './handBack';
+import { CLEAR_OPENER, PLACE_ALL_OPENER, itemsOpener, supplierOpener, useHandBack } from './handBack';
 import { orderingCount, supplierListGroups } from './ordersLens';
 import type { OrdersLens } from './ordersLens';
 import type { StoredDoc } from './ordersSource';
@@ -38,6 +39,9 @@ type Props = {
   // The two buttons under the list: the picker of the suppliers to record together, and the one to clear.
   onPlaceAll: () => void;
   onClearAll: () => void;
+  // The swap button in the head: the flat view, «by ingredient» (step 3f-8b).
+  swapOpen: boolean;
+  onSwap: () => void;
   // The arrow beside the search box: the send screen.
   onSend: () => void;
   // The gear at the end of the head: the Orders settings (step 3f-4).
@@ -57,24 +61,18 @@ const HEADING_KEY = {
   'orders.favourites.others': 'ord.favourites.others',
 } as const satisfies Record<string, MessageKey>;
 
-// The left column: the search box and the All / Ordering filter (they stay put while the rows scroll), over the suppliers.
-//
-// ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a component that stays mounted, and
-// only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard where the person
-// left them (the current app built the box once for the same reason).
-export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, onSend, onSettings, onHistory, onIncoming, onReorder, onLists, onOpenPending }: Props) {
+// The left column: the head (OrdersHead: the search box, the send arrow, the tools and the All / Ordering filter, which stay put
+// while the rows scroll), over the suppliers. The search box's text lives HERE, in a component that stays mounted, so a data
+// snapshot never remounts the box (see OrdersHead).
+export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onPlaceAll, onClearAll, swapOpen, onSwap, onSend, onSettings, onHistory, onIncoming, onReorder, onLists, onOpenPending }: Props) {
   const { t } = useT();
   const { config, draft, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
   const [orderingOnly, setOrderingOnly] = useState(false);
-  const radios = useRef(new Map<boolean, HTMLButtonElement>());
   const handBack = useHandBack();
   // Back from a picker hands the focus back to the button that opened it.
   const placeAllNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(PLACE_ALL_OPENER, node); }, [handBack]);
   const clearNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(CLEAR_OPENER, node); }, [handBack]);
-  const sendNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SEND_OPENER, node); }, [handBack]);
-  const settingsNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
-  const historyNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(HISTORY_DOOR, node); }, [handBack]);
 
   // ⚠️ THE ROWS, THE FILTER COUNTS AND THEIR ORDER READ `drawn`: the copy while the live lists have not landed, the live lens
   // otherwise. The search box above is the same mounted element either way, so what was typed on the copy survives the move to
@@ -91,92 +89,36 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
 
   // Nothing typed anywhere: there is no «just what I'm ordering» to offer — unless it is on (it must be possible to leave it).
   const showFilter = ordering > 0 || orderingOnly;
-  function chooseFilter(only: boolean) {
-    setOrderingOnly(only);
-    radios.current.get(only)?.focus();
-  }
-  function onRadioKey(event: KeyboardEvent<HTMLButtonElement>, only: boolean) {
-    if (event.altKey || event.ctrlKey || event.metaKey) return;
-    if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
-      event.preventDefault();
-      chooseFilter(!only);
-    }
-  }
 
   const today = todayISO();
   const dt = dayTranslate(t);
 
   return (
     <div className={styles.column}>
-      <div className={styles.head}>
-        <div className={styles.top}>
-          <div className={styles.search}>
-            <Search aria-hidden="true" />
-            <input
-              type="search"
-              autoComplete="off"
-              className={styles.input}
-              aria-label={t('ord.searchASupplier')}
-              placeholder={t('ord.searchASupplier')}
-              value={query}
-              // ⚠️ onFocus AND onChange, NOT document.activeElement when the supplier finally opens: on WebKit a tap does not
-              // take the focus off the search box, so a person who typed and THEN tapped a row must still get that supplier.
-              onFocus={onLookingElsewhere}
-              onChange={event => {
-                onLookingElsewhere();
-                setQuery(event.target.value);
-              }}
-            />
-          </div>
-          {/* ⚠️ AN ARROW OUT OF A TRAY, NOT A WHATSAPP MARK: the screen it opens offers several roads. Here only once the list
-              is ready and has suppliers, so it never offers to send what has not arrived. */}
-          {ready && lens.suppliers.length > 0 ? (
-            <Button ref={sendNode} className={styles.send} onPress={onSend}>
-              <Share aria-hidden="true" />
-              {t('ord.send.action')}
-            </Button>
-          ) : null}
-          {/* ⚠️ ITS PLACE IS KEPT WHILE IT WAITS: arriving with the live data it would push the block below onto a new row, and every
-              supplier 56px down just as a finger lands on one (the rule at OrdersSection's hold). */}
-          {ready ? null : <span aria-hidden="true" className={styles.sendPlace} />}
-          {/* ⚠️ ONE BLOCK, SO THEY WRAP TOGETHER: loose, on the tablet's list column the gear fell alone onto a row of its own and the
-              search box shrank to «Cerca u». */}
-          <div className={styles.tools}>
-            {/* ⚠️ WITH ITS WORD, NOT AN ICON ALONE, AND OUT OF THE SETTINGS (Federico, 3 Nov 2026): inside them he could not find it.
-                Always there, even with no supplier yet: past orders outlive the suppliers they went to. */}
-            <Button ref={historyNode} className={styles.history} onPress={onHistory}>
-              <History aria-hidden="true" />
-              {t('ord.history.title')}
-            </Button>
-            {/* Always there, even with no supplier yet: the settings are not about the suppliers. */}
-            <Button ref={settingsNode} className={styles.gear} aria-label={t('ord.settings.open')} onPress={onSettings}>
-              <Settings aria-hidden="true" />
-            </Button>
-          </div>
-        </div>
+      <OrdersHead
+        view="suppliers"
+        label={t('ord.searchASupplier')}
+        query={query}
+        onQuery={setQuery}
+        onLookingElsewhere={onLookingElsewhere}
+        ready={ready}
+        hasSuppliers={lens.suppliers.length > 0}
+        swapOpen={swapOpen}
+        onSwap={onSwap}
+        onSend={onSend}
+        onSettings={onSettings}
+        onHistory={onHistory}
+      >
         {showFilter ? (
-          <div role="radiogroup" aria-label={t('ord.whichSuppliers')} className={styles.filter}>
-            {([false, true] as const).map(only => (
-              <button
-                key={String(only)}
-                ref={node => {
-                  if (node) radios.current.set(only, node);
-                  else radios.current.delete(only);
-                }}
-                type="button"
-                role="radio"
-                aria-checked={orderingOnly === only}
-                tabIndex={orderingOnly === only ? 0 : -1}
-                className={styles.radio}
-                onClick={() => { setOrderingOnly(only); }}
-                onKeyDown={event => { onRadioKey(event, only); }}
-              >
-                {only ? t('ord.filter.ordering', { n: ordering }) : t('ord.filter.all', { n: drawn.suppliers.length })}
-              </button>
-            ))}
-          </div>
+          <OrdersFilter
+            label={t('ord.whichSuppliers')}
+            ordering={orderingOnly}
+            allText={t('ord.filter.all', { n: drawn.suppliers.length })}
+            orderingText={t('ord.filter.ordering', { n: ordering })}
+            onChoose={setOrderingOnly}
+          />
         ) : null}
-      </div>
+      </OrdersHead>
 
       <PartBoundary>
         <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} onSend={onSend} />
