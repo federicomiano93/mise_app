@@ -23,7 +23,7 @@ import { renderEditor } from './foodcost-editor.js';
 import { getProductHistory, canWriteRecipes, venueCountry, authReady, canManageHere } from './firebase-foodcost.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { el } from './dom.js';
-import { productsUsingRecipe, draftFromRecipe } from './foodcost-model.js';
+import { productsUsingRecipe, draftFromRecipe, sortByMargin } from './foodcost-model.js';
 import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
 // Food or packaging? From js/ root, where the registry that files it asks the same question.
 import { isPackaging } from '../ingredient-kind.js';
@@ -390,6 +390,26 @@ function showWaiting() {
   swap(el('div', { class: 'fc-view' }, [el('p', { class: 'fc-empty', text: t('fc.loading') })]));
 }
 
+// The product the narrowed list shows FIRST (the list sorts with sortByMargin too).
+function firstUsing(id) {
+  return sortByMargin(productsUsingRecipe(getProducts(), id), tables())[0]?.product;
+}
+
+// Several products use the recipe: narrow the list to them.
+// ⚠️ Federico, 4 Nov 2026: «forse non mostra subito la scheda food cost». Beside the list
+// the pane was left empty («Scegli un prodotto»), so on a tablet the top product opens at
+// once; the narrowed list still sits on the left to switch product. entryEditor stays
+// false: the page chose this product from the list, and Back (listFilter is set) still
+// returns to the recipe. A phone keeps the narrowed list.
+function openNarrowed(id) {
+  listFilter = id;
+  // A new product the recipe opened first (reconsiderDraft) is no longer the page's.
+  entryEditor = false;
+  const first = isTabletNow() ? firstUsing(id) : null;
+  if (first) openProduct(first);
+  else showList();
+}
+
 // ⚠️⚠️ DECIDED ONCE, AND NEVER ON A LIST THAT HAS NOT ARRIVED. On a phone that has never
 // opened this page the local copy is empty, and deciding on it would say «no product
 // uses this recipe» and offer a new one while the real product is still on its way. So
@@ -407,7 +427,7 @@ function settleRecipeLink() {
   const id = fromRecipe;
   const using = productsUsingRecipe(getProducts(), id);
   if (using.length === 1) { openProduct(using[0]); entryEditor = true; refreshChrome(); return; }
-  if (using.length > 1) { listFilter = id; showList(); return; }
+  if (using.length > 1) { openNarrowed(id); return; }
   const draft = draftFromRecipe(getRecipes()[id]);
   if (draft) { openProduct(null, draft); entryEditor = true; draftRecipeId = id; refreshChrome(); return; }
   // A recipe nobody can find — deleted, or still not here at the deadline: the plain
@@ -428,7 +448,7 @@ function reconsiderDraft() {
   const using = productsUsingRecipe(getProducts(), id);
   if (!using.length) return false;
   if (using.length === 1) { openProduct(using[0]); entryEditor = true; refreshChrome(); }
-  else { listFilter = id; showList(); }
+  else openNarrowed(id);
   return true;
 }
 
@@ -509,7 +529,7 @@ async function handleBack() {
   leaveGuard = null;
   // Beside the list the page Back is the LIST's Back (to the recipe), whatever the pane holds.
   if (splitOn && (view === 'editor' || view === 'history')) {
-    if (fromRecipe && (listFilter || entryEditor)) { window.location.replace(recipeHref(fromRecipe)); return; }
+    if (fromRecipe && (listFilter || entryEditor)) { window.location.replace(recipeHref(fromRecipe, 'foodcost')); return; }
     showList();
     return;
   }
@@ -524,7 +544,8 @@ async function handleBack() {
   if (fromRecipe && (view === 'loading' || (view === 'editor' && entryEditor) || (view === 'list' && listFilter))) {
     // ⚠️ replace(), NOT href: Back must not ADD a page to the phone's history, or the
     // system back gesture walks forward into Food cost again — two more pages per trip.
-    window.location.replace(recipeHref(fromRecipe));
+    // Back lands where the tap came from (the Food cost card), not at the top of the recipe.
+    window.location.replace(recipeHref(fromRecipe, 'foodcost'));
     return;
   }
   showList();

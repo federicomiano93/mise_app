@@ -624,6 +624,8 @@ body.cat-zoom-lock { overflow: hidden; }
    The button is .cat-import-btn, this screen's quiet button: it leads somewhere, it does
    not do the screen's job. */
 .cat-fc-note { margin: 0 0 10px; font-size: .84rem; line-height: 1.45; color: var(--cat-text-2); }
+/* The button Back from Food cost scrolls into view (catalogue-main.js openWantedRecipe). */
+.cat-fc-open { scroll-margin-block: var(--space-4); }
 
 /* The little list under a recipe row's name, and the full link chooser: their look moved
    to tokens.css (.pick-suggest*, .pick-*) on 13 Sep 2026, when Food cost needed the same
