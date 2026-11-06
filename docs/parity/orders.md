@@ -1487,14 +1487,18 @@ the history entry). Drawn only where `mayEditRecords` says yes. No rule changed,
   gear and the All / Ordering filter stick. At 296 the words take two lines. (Before this slice the gear was at the end of one line; with
   the swap added it no longer fitted a phone.)
 - B2. On the tablet, a screen opened from the flat view (History, Send, Settings) sits beside it, and the flat view keeps its search, its
-  filter and its place; the swap pressed then goes back to the list level first, so Back never walks through a duplicate.
+  filter and its place (which list is in the column is written in the history entry, `column`, so it survives a trip to a card and a
+  reload). The swap is offered only at the list level: while a screen is open beside the list its place is kept empty, and Back closes
+  the screen first. The bell works from the flat view too.
 - B3. The supplier's name in the bar shows a small arrow and is read as «Scheda di {supplier} in Ingredienti e fornitori»; on «Senza
   fornitore» there is no title door and «+» reads «Aggiungi un ingrediente senza fornitore».
 - B4. Each order row is about 8px taller: the name's tap area grew to 44px without covering the line under it.
 
 **Fixed after the review.** The head off the edge of a 296px phone (the gear and «Storico» out of sight: a sideways overflow inside the
 shell's `main`, which the driver did not measure — it does now); the flat view losing its search and place on the tablet when a screen
-opened beside it; a swap from an open screen leaving a duplicate entry; a long one-word supplier name not breaking in the title door; the
+opened beside it; a swap from an open screen leaving a duplicate entry (first fixed by stepping back, which a second review found could
+stay armed after a «discard changes?» Cancel: replaced by offering the swap only at the list level); the bell dead on the tablet with the
+flat view in the column; the words row growing 48px on a phone when the live data arrived; a long one-word supplier name not breaking in the title door; the
 supplier row and the title door having the same name on the split; a trip replayed on a later visit to the same address; «N of M in this
 order» counting lines of a stopped supplier; two layout values added as design tokens; the caption covering the bottom of the name's tap
 area.
