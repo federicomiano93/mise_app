@@ -191,6 +191,7 @@ const hooks = {
     // of quietly filing it under today. Done BEFORE the repaint below, which shows the stamp.
     // A stock-only edit never moves the day: counting stock is not ordering.
     if (!stockOnly) stampNow(supplierId, state.days[supplierId]);
+    if (!stockOnly) reopenIfTyped(supplierId);
     if (supplier) {
       refreshSupplierDerived(supplier, ingredientsBySupplier()[supplierId] || [], state.entries,
         futureDayOf(supplierId));
@@ -1039,18 +1040,27 @@ function closeSummary() {
   // Focus goes back to the button that opened this screen — never assumed
   // still there: the row it belonged to may have been repainted, or the
   // supplier deactivated, while the summary was open.
-  document.getElementById(fromBar ? `summary-bar-${openerId}` : `summary-${openerId}`)?.focus();
+  // ⚠️ The list row's summary icon is HIDDEN when the supplier has nothing written (after
+  // «Ordine fatto», or a sheet opened from a closed chip): focusing it would drop focus on <body>,
+  // so the row itself takes it then.
+  const opener = document.getElementById(fromBar ? `summary-bar-${openerId}` : `summary-${openerId}`);
+  if (opener && opener.getClientRects().length) opener.focus();
+  else if (!fromBar && openerId) document.getElementById(`open-${openerId}`)?.focus();
 }
 
 // ── Closing today's order from the summary sheet (tablet notes, 2–3 Nov 2026) ───────────
 //
 // «Ordine fatto»: exactly the supplier screen's green button — placeOrder(), with its
-// confirmation and its «did you send it?». Only the way back differs: a sheet opened from the
-// list is not closed by placeOrder (it closes the supplier screen, and a sheet over it with it),
-// so it is closed here, once the order really is in History (P20: after a save, the list).
-async function placeFromSummary(supplierId) {
-  const placed = await placeOrder(supplierId);
-  if (placed && state.summarySupplier === supplierId) closeSummary();
+// confirmation and its «did you send it?».
+// ⚠️ THE SHEET CLOSES FIRST. Over a supplier's screen it sits at z 610, above the confirmation
+// screen (600): the confirmation opened UNDER it — invisible on a phone, behind the scrim on the
+// tablet — and a second tap on a button that «did nothing» built a second confirmation, which
+// could record the same order twice. Closed first, the confirmation is the top screen, Escape
+// there cannot close a sheet underneath, and there is no button left to tap twice. Cancelling it
+// leaves the person on the supplier's screen (or the list), where the same button is.
+function placeFromSummary(supplierId) {
+  if (state.summarySupplier === supplierId) closeSummary();
+  return placeOrder(supplierId);
 }
 
 // The way back after a close: the list, where the strip now says «non ordinato». Over a
@@ -1061,60 +1071,76 @@ function backToListFrom(supplierId) {
   else closeSummary();
 }
 
+// The close as this screen holds it, changed locally at once (P20: local first). `day` null
+// removes it. The strip, the open sheet and the kiosk lines all read state.skipped.
+function setSkippedLocally(supplierId, day) {
+  const next = { ...state.skipped };
+  if (day) next[supplierId] = day; else delete next[supplierId];
+  state.skipped = next;
+  renderReminders();
+  renderSummary();
+}
+
 // «Chiudi come non ordinato» — nothing needed from this supplier today. Asked first (P20: a
-// save is confirmed), written at once and on its own (draft.js setSupplierSkipped). Firestore
-// has no offline persistence here, so offline it is refused rather than left hanging.
-let closingToday = false;
+// save is confirmed). ⚠️ NEVER AWAITED: Firestore keeps the write in this phone's cache and
+// sends it when it can (js/firebase.js persistentLocalCache), so the screen moves on at once,
+// signal or not. Only a REFUSAL comes back — then the close is undone on screen and said so.
+let askingToClose = false;
 async function closeAsNotOrdered(supplierId) {
   const supplier = findOrderSupplier(supplierId);
-  if (!supplier || closingToday) return;
-  if (!navigator.onLine) { setStatus(t('orders.youReOfflineReconnect'), 'error', 6000); return; }
+  if (!supplier || askingToClose) return;
   const name = supplierLabel(supplier);
-  const ok = await confirmDialog({
-    title: t('orders.summary.closeTitle', { supplier: name }),
-    message: t('orders.summary.closeMessage'),
-    okLabel: t('orders.summary.closeOk'),
-    cancelLabel: t('ui.cancel'),
-  });
-  if (!ok) return;
-  closingToday = true;
-  const today = todayISO();
+  askingToClose = true;
+  let ok = false;
   try {
-    await setSupplierSkipped(supplierId, today);
-    // The snapshot says the same a moment later; set here so the strip is right at once.
-    state.skipped = { ...state.skipped, [supplierId]: today };
-    backToListFrom(supplierId);
-    renderReminders();
-    setStatus(t('orders.summary.closedDone', { supplier: name }), 'ok', 4000);
-  } catch (err) {
-    console.error('Closing the supplier as not ordered failed:', err);
-    setStatus(t('orders.summary.saveFailed'), 'error', 6000);
+    ok = await confirmDialog({
+      title: t('orders.summary.closeTitle', { supplier: name }),
+      message: t('orders.summary.closeMessage'),
+      okLabel: t('orders.summary.closeOk'),
+      cancelLabel: t('ui.cancel'),
+    });
   } finally {
-    closingToday = false;
+    askingToClose = false;
   }
+  if (!ok) return;
+  const today = todayISO();
+  backToListFrom(supplierId);
+  setSkippedLocally(supplierId, today);
+  setStatus(t('orders.summary.closedDone', { supplier: name }), 'ok', 4000);
+  setSupplierSkipped(supplierId, today).catch(err => {
+    console.error('Closing the supplier as not ordered failed:', err);
+    if (state.skipped[supplierId] === today) setSkippedLocally(supplierId, null);
+    setStatus(t('orders.summary.saveFailed'), 'error', 6000);
+  });
 }
 
 // «Riapri» — the undo. No question: it only puts the supplier back among today's orders, which
 // is what the screen showed before the close. The sheet stays open, now offering the close again.
-async function reopenToday(supplierId) {
+// Not awaited either, for the same reason; a refusal puts the close back on screen.
+function reopenToday(supplierId) {
   const supplier = findOrderSupplier(supplierId);
-  if (!supplier || closingToday) return;
-  if (!navigator.onLine) { setStatus(t('orders.youReOfflineReconnect'), 'error', 6000); return; }
-  closingToday = true;
-  try {
-    await clearSupplierSkipped(supplierId);
-    const next = { ...state.skipped };
-    delete next[supplierId];
-    state.skipped = next;
-    renderReminders();
-    renderSummary();
-    setStatus(t('orders.summary.reopened', { supplier: supplierLabel(supplier) }), 'ok', 4000);
-  } catch (err) {
+  const day = state.skipped[supplierId];
+  if (!supplier || !day) return;
+  setSkippedLocally(supplierId, null);
+  setStatus(t('orders.summary.reopened', { supplier: supplierLabel(supplier) }), 'ok', 4000);
+  clearSupplierSkipped(supplierId).catch(err => {
     console.error('Reopening the supplier failed:', err);
+    if (!state.skipped[supplierId]) setSkippedLocally(supplierId, day);
     setStatus(t('orders.summary.saveFailed'), 'error', 6000);
-  } finally {
-    closingToday = false;
-  }
+  });
+}
+
+// ⚠️ A QUANTITY TYPED FOR A SUPPLIER CLOSED TODAY REOPENS IT. «Nothing needed» stopped being
+// true, and a close left standing would silence the strip, the Home badge and the kiosk for the
+// rest of the day — the very reminder that catches an order typed and then forgotten. Once per
+// supplier: the local state changes at once, so the next keystroke finds nothing to undo.
+function reopenIfTyped(supplierId) {
+  if (state.skipped[supplierId] !== todayISO()) return;
+  if (!supplierHasItems(supplierId, orderIngredients(), state.entries)) return;
+  setSkippedLocally(supplierId, null);
+  clearSupplierSkipped(supplierId).catch(err => {
+    console.error('Reopening a closed supplier after typing failed:', err);
+  });
 }
 
 function renderSummary() {

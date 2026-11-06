@@ -3413,6 +3413,7 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
   gap: 10px;
   margin-top: 16px;
 }
+.order-summary-actions[hidden] { display: none; }   /* the display above would beat the attribute */
 .order-summary-actions .btn-primary { margin-top: 0; }
 .order-summary-place {
   display: flex;

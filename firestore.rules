@@ -1239,8 +1239,10 @@ service cloud.firestore {
                   && request.resource.data.weekId.size() <= 32))
           // `skipped` (6 Nov 2026) — { supplierId: 'YYYY-MM-DD' }: a supplier whose order day
           // it is, closed as «non ordinato» that day because nothing was needed (Federico,
-          // tablet note 3 Nov). It counts only on that day, so a stale key is harmless; one
-          // key per supplier, overwritten, never a growing list. Undoing it deletes the key.
+          // tablet note 3 Nov). It counts only on that day, so a stale key is harmless: one
+          // key per supplier ever closed, overwritten each time, deleted by «Riapri» or by the
+          // first quantity typed for it. The cap only refuses a 201st supplier's close — typing
+          // an order never adds a key. Like `days`, the values are not judged.
           // OPTIONAL in both directions, like `days`: a phone on the previous version never
           // sends it. Once phones have saved it, it stays listed for good (retired-field trap).
           && (!('skipped' in request.resource.data)

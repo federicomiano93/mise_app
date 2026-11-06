@@ -27,7 +27,10 @@ export function renderTodayOrders(container, list, { onPick, onOpenSkipped } = {
   // Nothing is ordered today — say nothing at all.
   if (!list.length) return;
 
-  if (list.every(item => item.placed || item.skipped)) {
+  // ⚠️ «All placed» only when they really were all PLACED. Closed ones done too, the banner goes
+  // quiet (all-done) but keeps its chips: «tutti fatti» would be false, and the closed chip is
+  // the way to «Riapri».
+  if (list.every(item => item.placed)) {
     container.appendChild(el('div', { class: 'today-banner all-done' }, [
       el('span', { class: 'today-check', icon: CHECK_SVG, 'aria-hidden': 'true' }),
       el('span', { text: t('orders.todaySOrdersAre') }),
@@ -56,7 +59,8 @@ export function renderTodayOrders(container, list, { onPick, onOpenSkipped } = {
       onClick: () => onPick?.(supplier.id),
     }, supplierLabel(supplier))));
 
-  container.appendChild(el('div', { class: 'today-banner' }, [
+  const handled = list.every(item => item.placed || item.skipped);
+  container.appendChild(el('div', { class: `today-banner${handled ? ' all-done' : ''}` }, [
     el('span', { class: 'today-label', text: t('orders.orderToday') }),
     el('div', { class: 'today-chips' }, chips),
   ]));

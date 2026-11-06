@@ -822,8 +822,6 @@ export function clearQuantities(supplierIds, ingredients) {
   });
 }
 
-// Rewrite a history record whole (the History editor). Not a merge: the operator
-// is correcting the record, so what they see is what it becomes.
 // ── «Chiudi come non ordinato» (Federico's tablet note, 3 Nov 2026) ─────────────
 // `skipped: { supplierId: 'YYYY-MM-DD' }` — a supplier whose order day it is, closed that day
 // because nothing was needed. What it MEANS (only on that day, never over a placed order) is
@@ -833,6 +831,9 @@ export function clearQuantities(supplierIds, ingredients) {
 // on its own: the claims machinery above (`pending`, `known`, the journal) knows nothing of it and
 // is never disturbed by it. setDoc(merge) touches only `skipped.<id>` and creates the draft on a
 // venue that has never typed an order.
+// ⚠️ NOT AWAITED BY THE SCREEN: Firestore keeps it in this phone's own cache at once (the snapshot
+// shows it) and sends it when it can; a weak signal must never leave a button hanging (P20). The
+// caller only listens for a refusal.
 // ⚠️ NO `updatedAt`: the draft's own stamp is the day that stands in for rows saved before day
 // stamps existed (pendingSuppliers' fallbackDay), and closing a supplier is not typing an order.
 export function setSupplierSkipped(supplierId, day) {
@@ -846,6 +847,8 @@ export function clearSupplierSkipped(supplierId) {
   return clearFields(COLLECTIONS.drafts, DRAFT_ID, [`skipped.${supplierId}`]);
 }
 
+// Rewrite a history record whole (the History editor). Not a merge: the operator
+// is correcting the record, so what they see is what it becomes.
 export function saveHistoryRecord(id, record) {
   return replaceDoc(COLLECTIONS.history, id, record);
 }

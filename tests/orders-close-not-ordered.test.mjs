@@ -103,6 +103,30 @@ test('the rules know the key, as an optional capped map', () => {
   assert.match(block, /!\('skipped' in request\.resource\.data\)\s*\|\| \(request\.resource\.data\.skipped is map\s*&& request\.resource\.data\.skipped\.size\(\) <= 200\)/);
 });
 
+test('the Orders page wires the sheet, the snapshot and the keystroke', () => {
+  const main = read('js/orders/orders-main.js');
+  // The sheet gets all four, so no button is ever drawn dead.
+  const build = main.slice(main.indexOf('const built = buildOrderSummaryView('));
+  for (const name of ['closeOffer: () => closeOffer(', 'onPlaced: whenLive(() => placeFromSummary(', 'onSkip: whenLive(() => closeAsNotOrdered(', 'onReopen: whenLive(() => reopenToday(']) {
+    assert.ok(build.slice(0, 900).includes(name), name);
+  }
+  // The snapshot carries the closes into the screen.
+  assert.match(main, /state\.skipped = draft\.skipped \|\| \{\};/);
+  // «Ordine fatto» closes the sheet BEFORE placeOrder: the confirmation must be the top screen.
+  const place = main.slice(main.indexOf('function placeFromSummary'), main.indexOf('function backToListFrom'));
+  assert.ok(place.indexOf('closeSummary()') > 0 && place.indexOf('closeSummary()') < place.indexOf('placeOrder('));
+  // A quantity typed for a supplier closed today reopens it, on every keystroke path.
+  assert.match(main, /if \(!stockOnly\) reopenIfTyped\(supplierId\);/);
+  const reopen = main.slice(main.indexOf('function reopenIfTyped'));
+  assert.match(reopen.slice(0, 600), /supplierHasItems\(supplierId, orderIngredients\(\), state\.entries\)/);
+  assert.match(reopen.slice(0, 600), /clearSupplierSkipped\(supplierId\)/);
+  // Local first: the close and the reopen are never awaited (a weak signal must not hang them).
+  const close = main.slice(main.indexOf('async function closeAsNotOrdered'), main.indexOf('function reopenIfTyped'));
+  assert.doesNotMatch(close, /await (setSupplierSkipped|clearSupplierSkipped)/);
+  assert.match(close, /setSupplierSkipped\(supplierId, today\)\.catch\(/);
+  assert.match(close, /clearSupplierSkipped\(supplierId\)\.catch\(/);
+});
+
 test('every reader of «still to order today» is handed the closes', () => {
   // The Home badge and the kiosk's own reads fetch the draft; Orders passes its live copy.
   assert.match(read('js/home-orders-badge.js'), /suppliersStillToOrder\(suppliers, todayHistory, today, skipped\)/);
@@ -184,7 +208,7 @@ test('a closed supplier shows the state and «Reopen» — with or without quant
   });
   const [reopen] = byClass(view.overlay, 'order-summary-reopen');
   assert.ok(reopen);
-  assert.ok(byClass(view.overlay, 'order-summary-closed')[0].getAttribute('role') === 'status');
+  assert.equal(byClass(view.overlay, 'order-summary-closed')[0].getAttribute('role'), undefined, 'no live region rebuilt with its words inside');
   reopen.click();
   assert.equal(reopened, 1);
   // Typed after the close: both the state and «Order placed».
@@ -199,7 +223,20 @@ test('a closed supplier shows the state and «Reopen» — with or without quant
   // Not due today, or already ordered: no buttons at all.
   offer = '';
   view.repaint([FLOUR], {});
-  assert.equal(byClass(view.overlay, 'order-summary-actions').length, 0);
+  const [host] = byClass(view.overlay, 'order-summary-actions');
+  assert.equal(host.hidden, true);
+  assert.equal(byClass(host, 'order-summary-skip').length + byClass(host, 'order-summary-place').length, 0);
+});
+
+test('a colleague\'s keystroke repaints the lines but never replaces the buttons under a finger', async () => {
+  const { buildOrderSummaryView } = await views();
+  const view = buildOrderSummaryView(BRAVA, [FLOUR], { flour: { qty: 1 } }, { closeOffer: () => 'skip', onPlaced: () => {} });
+  const [before] = byClass(view.overlay, 'order-summary-place');
+  view.repaint([FLOUR], { flour: { qty: 2 } });
+  view.repaint([FLOUR], { flour: { qty: 5 } });
+  const [after] = byClass(view.overlay, 'order-summary-place');
+  assert.equal(after, before, 'the same button element, so a tap or a focus on it survives');
+  assert.match(view.overlay.textContent, /5/);
 });
 
 test('the «Order today» strip: a closed supplier is a dashed chip that opens its summary; all handled = all done', async () => {
@@ -222,4 +259,10 @@ test('the «Order today» strip: a closed supplier is a dashed chip that opens i
     { supplier: BRAVA, placed: false, skipped: true },
   ], {});
   assert.equal(byClass(host, 'all-done').length, 1, 'ordered + closed = nothing left to do today');
+  // …but not «all placed»: the chips stay, so the closed one still leads to «Riapri».
+  assert.equal(byClass(host, 'skipped').length, 1);
+  assert.doesNotMatch(host.textContent, /tutti fatti|all placed/i);
+
+  renderTodayOrders(host, [{ supplier: ALBA, placed: true, skipped: false }], {});
+  assert.equal(byClass(host, 'today-chip').length, 0, 'all really placed: the one-line banner');
 });

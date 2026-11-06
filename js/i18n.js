@@ -1138,8 +1138,8 @@ const DICTIONARIES = Object.freeze({
     'orders.summary.closeOk': 'Close',
     'orders.summary.closedDone': '{supplier} closed as not ordered.',
     'orders.summary.reopened': '{supplier} is back on today’s orders.',
-    'orders.summary.saveFailed': 'Not saved — check the connection and try again.',
-    'orders.today.notOrdered': '· not ordered',
+    'orders.summary.saveFailed': 'Not saved — try again in a moment.',
+    'orders.today.notOrdered': 'not ordered',
     // ── Suppliers & ingredients beside the list, on a tablet (29 Sep 2026) ────
     'orders.registry.pane.ingredients.title': 'Choose an ingredient',
     'orders.registry.pane.ingredients.text': 'Tap an ingredient on the left: its card opens here, with the allergens and the price.',
@@ -4279,8 +4279,8 @@ const DICTIONARIES = Object.freeze({
     'orders.summary.closeOk': 'Chiudi',
     'orders.summary.closedDone': '{supplier} chiuso come non ordinato.',
     'orders.summary.reopened': '{supplier} è di nuovo tra gli ordini di oggi.',
-    'orders.summary.saveFailed': 'Non salvato: controlla la connessione e riprova.',
-    'orders.today.notOrdered': '· non ordinato',
+    'orders.summary.saveFailed': 'Non salvato: riprova tra un momento.',
+    'orders.today.notOrdered': 'non ordinato',
     // ── Fornitori e ingredienti accanto alla lista, su tablet (29 Sep 2026) ───
     'orders.registry.pane.ingredients.title': 'Scegli un ingrediente',
     'orders.registry.pane.ingredients.text': 'Tocca un ingrediente a sinistra: la sua scheda si apre qui, con gli allergeni e il prezzo.',

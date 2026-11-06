@@ -49,8 +49,15 @@ const BACK_ICON =
 // tap anywhere outside the sheet the same effect as Back. The caller
 // (orders-main.js) appends and removes both together.
 export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
-  const body = el('div', { class: 'order-summary-body' });
+  // ⚠️ TWO PARTS, REBUILT APART. The lines are rebuilt on every snapshot (cheap, nothing in them
+  // holds a finger); the buttons only when what they offer changes — rebuilt on every colleague's
+  // keystroke, a tap straddling a snapshot was lost and a keyboard user's focus fell to <body>.
+  const content = el('div', {});
+  const actionsHost = el('div', { class: 'order-summary-actions' });
+  actionsHost.hidden = true;
+  const body = el('div', { class: 'order-summary-body' }, [content, actionsHost]);
   const subtitle = el('p', {});
+  let actionsKey = null;
 
   const scrim = el('div', {
     class: 'order-summary-scrim', 'aria-hidden': 'true', onClick: () => ctx.onBack?.(),
@@ -83,12 +90,12 @@ export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
   // quantities, no «no price», no total.
   function repaint(nextIngredients, nextEntries, showMoney = false) {
     const { lines, costLines, totals } = supplierSummary(supplier, nextIngredients, nextEntries);
-    body.replaceChildren();
+    content.replaceChildren();
 
     if (!lines.length) {
       subtitle.textContent = '';
-      body.appendChild(el('p', { class: 'ing-empty', text: t('orders.summary.empty') }));
-      appendActions(false);
+      content.appendChild(el('p', { class: 'ing-empty', text: t('orders.summary.empty') }));
+      paintActions(false);
       return;
     }
 
@@ -110,20 +117,29 @@ export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
         ]),
       ]));
     });
-    body.appendChild(card);
+    content.appendChild(card);
 
     const box = showMoney ? buildTotalsBox(totals) : null;
-    if (box) body.appendChild(box);
-    appendActions(true);
+    if (box) content.appendChild(box);
+    paintActions(true);
   }
 
-  // The sheet's buttons, under everything else (see the note at the top of the builder).
-  function appendActions(hasLines) {
+  // The sheet's buttons, under everything else (see the note at the top of the builder). Rebuilt
+  // only when the offer changes; when they are, a focus that was on the old buttons moves to the
+  // first new one («Riapri» → «Chiudi come non ordinato»), never to <body>.
+  function paintActions(hasLines) {
     const offer = ctx?.closeOffer ? ctx.closeOffer() : '';
-    const actions = el('div', { class: 'order-summary-actions' });
+    const key = `${hasLines}|${offer}`;
+    if (key === actionsKey) return;
+    actionsKey = key;
+    const hadFocus = Boolean(globalThis.document?.activeElement && actionsHost.contains?.(globalThis.document.activeElement));
+    const actions = actionsHost;
+    actions.replaceChildren();
 
     if (offer === 'reopen') {
-      actions.appendChild(el('div', { class: 'order-summary-closed', role: 'status' }, [
+      // Plain text, not a live region: rebuilt with its words already inside it, a live region is
+      // either never read or read again on every repaint. The status line says what just happened.
+      actions.appendChild(el('div', { class: 'order-summary-closed' }, [
         el('span', { class: 'order-summary-closed-text', text: t('orders.summary.closedToday') }),
         el('button', {
           type: 'button', class: 'btn-secondary order-summary-reopen',
@@ -149,7 +165,8 @@ export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
         onClick: () => ctx.onSkip?.(),
       }, t('orders.summary.closeNotOrdered')));
     }
-    if (actions.childElementCount) body.appendChild(actions);
+    actionsHost.hidden = actions.childElementCount === 0;
+    if (hadFocus) actionsHost.querySelector?.('button')?.focus();
   }
 
   repaint(ingredients, entries, ctx?.showMoney === true);
