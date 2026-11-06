@@ -70,6 +70,16 @@ export function OrdersHead({ view, label, query, onQuery, onLookingElsewhere, re
             }}
           />
         </div>
+        {/* Always there, even with no supplier yet: the settings are not about the suppliers. Beside the search box, so the box keeps
+            a usable width on a 296px phone and the words below it have a row of their own. */}
+        <Button ref={settingsNode} className={styles.gear} aria-label={t('ord.settings.open')} onPress={onSettings}>
+          <Settings aria-hidden="true" />
+        </Button>
+      </div>
+      {/* ⚠️ THE WORDS ARE ONE WRAPPING ROW UNDER THE SEARCH BOX, NOT BESIDE IT: with «Manda», «Ingredienti», «Storico» and the gear all on
+          the search box's row, the box shrank to «Cerca un» and the gear fell off the right edge at 296px. They share the row where
+          they fit and wrap onto a second one where they do not, each at least 48px tall. */}
+      <div className={styles.actions}>
         {/* ⚠️ AN ARROW OUT OF A TRAY, NOT A WHATSAPP MARK: the screen it opens offers several roads. Here only once the list
             is ready and has suppliers, so it never offers to send what has not arrived. */}
         {ready && hasSuppliers ? (
@@ -78,31 +88,22 @@ export function OrdersHead({ view, label, query, onQuery, onLookingElsewhere, re
             {t('ord.send.action')}
           </Button>
         ) : null}
-        {/* ⚠️ ITS PLACE IS KEPT WHILE IT WAITS: arriving with the live data it would push the block below onto a new row, and every
+        {/* ⚠️ THEIR PLACES ARE KEPT WHILE THEY WAIT: arriving with the live data they would push the row below onto another line, and every
             supplier 56px down just as a finger lands on one (the rule at OrdersSection's hold). */}
         {ready ? null : <span aria-hidden="true" className={styles.sendPlace} />}
-        {/* ⚠️ ONE BLOCK, SO THEY WRAP TOGETHER: loose, on the tablet's list column the gear fell alone onto a row of its own and the
-            search box shrank to «Cerca u». */}
-        <div className={styles.tools}>
-          {/* The other view, by its name: the same place on both views, so the finger that swapped can swap back. Its place is
-              kept while the lists wait, like the send arrow's (the block would widen when it arrives). */}
-          {ready ? (hasSuppliers ? (
-            <Button ref={swapNode} className={styles.swap} onPress={onSwap}>
-              <ArrowLeftRight aria-hidden="true" />
-              {swapText}
-            </Button>
-          ) : null) : <span aria-hidden="true" className={styles.swapPlace} />}
-          {/* ⚠️ WITH ITS WORD, NOT AN ICON ALONE, AND OUT OF THE SETTINGS (Federico, 3 Nov 2026): inside them he could not find it.
-              Always there, even with no supplier yet: past orders outlive the suppliers they went to. */}
-          <Button ref={historyNode} className={styles.history} onPress={onHistory}>
-            <History aria-hidden="true" />
-            {t('ord.history.title')}
+        {/* The other view, by its name: the same place on both views, so the finger that swapped can swap back. */}
+        {ready ? (hasSuppliers ? (
+          <Button ref={swapNode} className={styles.swap} onPress={onSwap}>
+            <ArrowLeftRight aria-hidden="true" />
+            {swapText}
           </Button>
-          {/* Always there, even with no supplier yet: the settings are not about the suppliers. */}
-          <Button ref={settingsNode} className={styles.gear} aria-label={t('ord.settings.open')} onPress={onSettings}>
-            <Settings aria-hidden="true" />
-          </Button>
-        </div>
+        ) : null) : <span aria-hidden="true" className={styles.swapPlace} />}
+        {/* ⚠️ WITH ITS WORD, NOT AN ICON ALONE, AND OUT OF THE SETTINGS (Federico, 3 Nov 2026): inside them he could not find it.
+            Always there, even with no supplier yet: past orders outlive the suppliers they went to. */}
+        <Button ref={historyNode} className={styles.history} onPress={onHistory}>
+          <History aria-hidden="true" />
+          {t('ord.history.title')}
+        </Button>
       </div>
       {children}
     </div>
