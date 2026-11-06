@@ -2955,7 +2955,7 @@ service cloud.firestore {
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly(['bakery', 'uid', 'deviceId', 'dayKey', 'kind',
                'appVersion', 'screens', 'seconds', 'taps', 'routes', 'actions', 'loads', 'loadMs',
-               'firstMinute', 'lastMinute', 'offlineSeconds', 'updatedAt'])
+               'firstMinute', 'lastMinute', 'offlineSeconds', 'hours', 'updatedAt'])
           && request.resource.data.keys().hasAll(['bakery', 'uid', 'deviceId', 'dayKey', 'updatedAt'])
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.deviceId is string
@@ -2993,7 +2993,12 @@ service cloud.firestore {
           && (!('offlineSeconds' in request.resource.data)
               || (request.resource.data.offlineSeconds is int
                   && request.resource.data.offlineSeconds >= 0
-                  && request.resource.data.offlineSeconds <= 86400));
+                  && request.resource.data.offlineSeconds <= 86400))
+          // hours{'00'…'23': active seconds in that local hour} (6 Nov 2026): the real working hours.
+          // Optional — a phone on an older release never sends it — and keyed by the hour only.
+          && (!('hours' in request.resource.data)
+              || (request.resource.data.hours is map
+                  && request.resource.data.hours.keys().hasOnly(['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23'])));
         allow read, delete: if false;
       }
     }
