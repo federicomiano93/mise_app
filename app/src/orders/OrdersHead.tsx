@@ -29,8 +29,9 @@ type Props = {
   children?: ReactNode;
 };
 
-// The head of «Orders»: the search box, the send arrow and the tools (swap, History, gear), over the supplier list AND over the
-// flat view. It sticks to the top of the scroll area while the rows scroll.
+// The head of «Orders», over the supplier list AND over the flat view: a row of words (Send, the swap, History) that scrolls away, and
+// under it the search box with the gear (and the filter), which stick to the top of the scroll area while the rows scroll. Two siblings
+// in the caller's tall column, not one wrapper: a sticky box sticks only inside its parent.
 //
 // ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a component that stays mounted, and
 // only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard where the person
@@ -49,36 +50,10 @@ export function OrdersHead({ view, label, query, onQuery, onLookingElsewhere, re
   const swapText = view === 'suppliers' ? t('ord.view.ingredients') : t('ord.view.suppliers');
 
   return (
-    <div ref={headRef} className={styles.head}>
-      <div className={styles.top}>
-        <div className={styles.search}>
-          <Search aria-hidden="true" />
-          <input
-            ref={searchNode}
-            type="search"
-            autoComplete="off"
-            className={styles.input}
-            aria-label={label}
-            placeholder={label}
-            value={query}
-            // ⚠️ onFocus AND onChange, NOT document.activeElement when the supplier finally opens: on WebKit a tap does not
-            // take the focus off the search box, so a person who typed and THEN tapped a row must still get that supplier.
-            onFocus={onLookingElsewhere}
-            onChange={event => {
-              onLookingElsewhere?.();
-              onQuery(event.target.value);
-            }}
-          />
-        </div>
-        {/* Always there, even with no supplier yet: the settings are not about the suppliers. Beside the search box, so the box keeps
-            a usable width on a 296px phone and the words below it have a row of their own. */}
-        <Button ref={settingsNode} className={styles.gear} aria-label={t('ord.settings.open')} onPress={onSettings}>
-          <Settings aria-hidden="true" />
-        </Button>
-      </div>
-      {/* ⚠️ THE WORDS ARE ONE WRAPPING ROW UNDER THE SEARCH BOX, NOT BESIDE IT: with «Manda», «Ingredienti», «Storico» and the gear all on
-          the search box's row, the box shrank to «Cerca un» and the gear fell off the right edge at 296px. They share the row where
-          they fit and wrap onto a second one where they do not, each at least 48px tall. */}
+    <>
+      {/* ⚠️ THE WORDS ARE A ROW ABOVE THE SEARCH BOX THAT SCROLLS AWAY, AND ONLY THE SEARCH BOX STICKS: with Send, the swap and History in the
+          sticky part, a 296px phone lost 440px of its 668 to the head. They are compact (48px tall, 44px wide at least), at least two share a
+          line at 296 and they wrap, never overflow. */}
       <div className={styles.actions}>
         {/* ⚠️ AN ARROW OUT OF A TRAY, NOT A WHATSAPP MARK: the screen it opens offers several roads. Here only once the list
             is ready and has suppliers, so it never offers to send what has not arrived. */}
@@ -105,7 +80,35 @@ export function OrdersHead({ view, label, query, onQuery, onLookingElsewhere, re
           {t('ord.history.title')}
         </Button>
       </div>
-      {children}
-    </div>
+      <div ref={headRef} className={styles.head}>
+        <div className={styles.top}>
+          <div className={styles.search}>
+            <Search aria-hidden="true" />
+            <input
+              ref={searchNode}
+              type="search"
+              autoComplete="off"
+              className={styles.input}
+              aria-label={label}
+              placeholder={label}
+              value={query}
+              // ⚠️ onFocus AND onChange, NOT document.activeElement when the supplier finally opens: on WebKit a tap does not
+              // take the focus off the search box, so a person who typed and THEN tapped a row must still get that supplier.
+              onFocus={onLookingElsewhere}
+              onChange={event => {
+                onLookingElsewhere?.();
+                onQuery(event.target.value);
+              }}
+            />
+          </div>
+          {/* Always there, even with no supplier yet: the settings are not about the suppliers. Beside the search box, so the box keeps
+              a usable width on a 296px phone, and the words have a row of their own above it. */}
+          <Button ref={settingsNode} className={styles.gear} aria-label={t('ord.settings.open')} onPress={onSettings}>
+            <Settings aria-hidden="true" />
+          </Button>
+        </div>
+        {children}
+      </div>
+    </>
   );
 }

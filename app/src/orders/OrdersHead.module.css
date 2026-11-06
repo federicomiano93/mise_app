@@ -27,11 +27,20 @@
   padding: 0;
 }
 
-/* Second row: «Send», the swap and «History» share it where they fit, and wrap where they do not, each growing to fill its line. */
+/* The row of words ABOVE the sticky part, not sticky itself: «Send», the swap and «History» share a line where they fit and wrap where
+   they do not, each growing to fill its line. Compact (the padding of two classes beats the button's own): 48px tall and never under 44px wide,
+   so at 296px (a 264px column) at least two share a line. */
 .actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s2);
+}
+
+.actions .send,
+.actions .swap,
+.actions .history {
+  min-width: 44px;
+  padding-inline: var(--s3);
 }
 
 .send,
