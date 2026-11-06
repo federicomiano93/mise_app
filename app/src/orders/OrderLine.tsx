@@ -83,7 +83,7 @@ export function OrderLine({ row, entry, showStock, hint, onEdit, supplierName, o
           <button ref={doorNode} type="button" className={styles.door} aria-label={t('ord.editIngredientFor', { name: label })} onClick={() => { onOpenCard(row); }}>
             <span className={styles.name}>{name}</span>
           </button>
-        ) : <span className={styles.name}>{name}</span>}
+        ) : <span className={`${styles.name} ${styles.plain}`}>{name}</span>}
         {supplierName !== undefined && supplierName !== '' ? <span className={styles.supplier}>{supplierName}</span> : null}
         {weight !== '' ? <span className={styles.weight}>{weight}</span> : null}
         {note !== '' ? <span className={styles.note}>{note}</span> : null}

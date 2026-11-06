@@ -41,13 +41,16 @@
   gap: 2px;
 }
 
-/* The name as a door to the ingredient's card: it looks exactly like the plain name (the padding and the negative margin cancel, so
-   nothing moves) and is at least as tall as a finger. */
+/* The name as a door to the ingredient's card, at least as tall as a finger, with nothing on top of it.
+   ⚠️ THE HIT AREA GROWS UPWARD (padding-top, cancelled by an equal negative margin-top: it sits in the row's own padding, where there is
+   nothing) AND DOWNWARD BY REAL BOX, never by a negative bottom margin: the caption lines under the name would then be painted over the
+   button's lower padding and swallow the taps. The plain name keeps the same bottom space (.plain), so a row does not move between a
+   button and plain text. */
 .door {
   display: block;
   min-width: 0;
-  margin: calc(-1 * var(--s3)) 0;
-  padding: var(--s3) 0;
+  margin-top: calc(-1 * var(--s4));
+  padding: var(--s4) 0 var(--s2);
   border: 0;
   background: none;
   color: inherit;
@@ -67,6 +70,12 @@
   .door:hover .name {
     text-decoration: underline;
   }
+}
+
+/* The plain name's bottom space, the same as the button's. */
+.plain {
+  display: block;
+  padding-bottom: var(--s2);
 }
 
 .name {
