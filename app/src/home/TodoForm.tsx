@@ -16,8 +16,9 @@ import styles from './TodoForm.module.css';
 
 const DAY_RE = /^[0-9]{4}-[0-9]{2}-[0-9]{2}$/;
 
-// Where the focus goes when the form closes: the row's own button after an edit, «Add» otherwise.
-export type FocusAfter = { readonly row: string } | 'add';
+// Where the focus goes when the form closes: the row's own button after an edit, «Add» otherwise. A new item (`added`)
+// gets «Add» too, unless its row landed inside a closed fold, whose title then takes the focus.
+export type FocusAfter = { readonly row: string } | { readonly added: string } | 'add';
 
 type Props = {
   // Null: a new item. Otherwise the one being edited.
@@ -41,10 +42,17 @@ export function TodoForm({ item, today, tomorrow, onClose }: Props) {
   const dayId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState(item?.text ?? '');
-  const [day, setDay] = useState(item?.day ?? today);
+  // ⚠️ A NEW ITEM'S DAY IS NOT CHOSEN UNTIL THE PERSON CHOOSES IT (Today, Tomorrow, the date field): until then it is
+  // simply today, and follows `today` when the day rolls over while the form is open (a form left open across midnight
+  // would save yesterday). An item being edited starts on its own day, which is a choice already made.
+  const [picked, setPicked] = useState<string | null>(item?.day ?? null);
+  const startDay = useRef(today);
+  const day = picked ?? today;
+  const setDay = setPicked;
   const [needsText, setNeedsText] = useState(false);
 
-  const dirty = text !== (item?.text ?? '') || day !== (item?.day ?? today);
+  // Compared with what the form started from: an untouched day is never a change, whatever `today` has become.
+  const dirty = text !== (item?.text ?? '') || (picked !== null && picked !== (item?.day ?? startDay.current));
   const dirtyRef = useRef(dirty);
   const leaving = useRef(false);
   const asking = useRef(false);
@@ -112,9 +120,10 @@ export function TodoForm({ item, today, tomorrow, onClose }: Props) {
       return;
     }
     leaving.current = true;
-    if (item === null) store.add(clean, day);
+    let landed: FocusAfter = after;
+    if (item === null) landed = { added: store.add(clean, day) ?? '' };
     else if (clean !== item.text || day !== item.day) store.edit(item.id, clean, day);
-    onClose(after);
+    onClose(landed);
   };
 
   const remove = async () => {

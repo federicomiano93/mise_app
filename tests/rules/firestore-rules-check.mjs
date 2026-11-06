@@ -3843,6 +3843,8 @@ async function todos() {
   await expectAllowed('a past day is allowed', () => create('D', { ...item, day: '2026-10-01' }, SAM));
   await expectAllowed('200 characters is fine', () => create('E', { ...item, text: 'x'.repeat(200) }, SAM));
   await expectDenied('201 characters is not', () => create('F', { ...item, text: 'x'.repeat(201) }, SAM));
+  // The app's maxLength counts UTF-16 units; the rules count characters. An accented text of 200 must pass.
+  await expectAllowed('200 accented characters is fine', () => create('G', { ...item, text: 'è'.repeat(200) }, SAM));
   await expectDenied('an empty item', () => create('F', { ...item, text: '' }, SAM));
   await expectDenied('a day that is not YYYY-MM-DD', () => create('F', { ...item, day: '6 Nov' }, SAM));
   await expectDenied('a stray key (a name on the item)', () => create('F', { ...item, who: 'Sam' }, SAM));
@@ -3861,6 +3863,10 @@ async function todos() {
     commit('A', {}, asAccount(SAM), { stamps: { expireAt: inDays(31) }, mask: ['expireAt'] }));
   await expectDenied('…nor re-stamp the tick', () =>
     commit('A', {}, asAccount(SAM), { server: ['doneAt'], mask: ['doneAt'] }));
+  // ⚠️ Two phones ticking the same item: the second tick is refused (it would re-stamp doneAt). The app stays quiet
+  // about it because its own copy already shows the item ticked (todosStore.ts).
+  await expectDenied('a second tick of an item already ticked', () => tick('A', MAYA));
+  await expectDenied('an edit that moves the item to another venue', () => edit('A', { bakery: 'trattoria-x' }, SAM));
   await expectAllowed('the manager unticks it', () => edit('A', { done: false, doneAt: null, expireAt: null }, MAYA));
   await expectDenied('an untick that keeps the deletion date', () => {
     return tick('B', SAM).then(() => edit('B', { done: false, doneAt: null }, SAM));

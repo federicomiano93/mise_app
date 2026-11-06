@@ -380,3 +380,106 @@ describe('Home: editing and deleting', () => {
     expect(screen.getByRole('checkbox', { name: 'Call the flour mill' })).toBeInTheDocument();
   });
 });
+
+describe('Home: where the focus goes when a row moves', () => {
+  it('after ticking an overdue item (into the closed «Done») goes to the row now standing in its place', async () => {
+    const { user } = await open();
+    await user.click(screen.getByRole('checkbox', { name: 'Pay the electrician' }));
+    await waitFor(() => { expect(screen.getByText('Done (2)')).toBeInTheDocument(); });
+    expect(screen.getByRole('checkbox', { name: 'Call the flour mill' })).toHaveFocus();
+  });
+
+  it('after unticking an item of an open «Done» goes to the row that now stands where it stood', async () => {
+    const { user } = await open();
+    await user.click(screen.getByText('Done (1)'));
+    await user.click(screen.getByRole('checkbox', { name: 'Send the invoice' }));
+    await waitFor(() => { expect(screen.getByRole('heading', { level: 3, name: 'Overdue' })).toBeInTheDocument(); });
+    expect(screen.getByRole('checkbox', { name: 'Plan the week' })).toHaveFocus();
+  });
+
+  it('goes to Add when the ticked row was the only one reachable', async () => {
+    const { user } = await open([todo('Only one', '2026-11-03')]);
+    await user.click(screen.getByRole('checkbox', { name: 'Only one' }));
+    await waitFor(() => { expect(screen.getByText('Done (1)')).toBeInTheDocument(); });
+    expect(addButton()).toHaveFocus();
+  });
+
+  it('keeps the focus on a ticked row that stays where it is', async () => {
+    const { user } = await open();
+    await user.click(screen.getByRole('checkbox', { name: 'Call the flour mill' }));
+    await waitFor(() => { expect(screen.getByRole('checkbox', { name: 'Call the flour mill' })).toBeChecked(); });
+    expect(screen.getByRole('checkbox', { name: 'Call the flour mill' })).toHaveFocus();
+  });
+
+  it('after an edit that sends the row into the closed «Later» goes to that fold title', async () => {
+    const { user } = await open();
+    await user.click(screen.getByRole('button', { name: /Call the flour mill/ }));
+    const form = await dialog('Edit to-do');
+    fireEvent.change(within(form).getByLabelText('Day'), { target: { value: '2026-11-25' } });
+    await user.click(within(form).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => { expect(screen.getByText('Later (2)')).toBeInTheDocument(); });
+    await waitFor(() => { expect(screen.getByText('Later (2)').closest('summary')).toHaveFocus(); });
+  });
+
+  it('after a new item that lands in the closed «Later» goes to that fold title, not Add', async () => {
+    const { user } = await open();
+    await user.click(addButton());
+    const form = await dialog('New to-do');
+    await user.type(within(form).getByRole('textbox', { name: 'What needs doing' }), 'Far away');
+    fireEvent.change(within(form).getByLabelText('Day'), { target: { value: '2026-12-25' } });
+    await user.click(within(form).getByRole('button', { name: 'Save' }));
+
+    await waitFor(() => { expect(screen.getByText('Later (2)')).toBeInTheDocument(); });
+    await waitFor(() => { expect(screen.getByText('Later (2)').closest('summary')).toHaveFocus(); });
+  });
+});
+
+describe('Home: a new-item form left open across midnight', () => {
+  const midnight = () => {
+    vi.setSystemTime(new Date(2026, 10, 7, 0, 1, 0));
+    fireEvent(document, new Event('visibilitychange'));
+  };
+
+  it('saves for the new today when the day was never chosen', async () => {
+    const { user, source } = await open([]);
+    await user.click(addButton());
+    const form = await dialog('New to-do');
+    await user.type(within(form).getByRole('textbox', { name: 'What needs doing' }), 'Late night');
+    midnight();
+    await waitFor(() => { expect(within(form).getByLabelText('Day')).toHaveValue('2026-11-07'); });
+    await user.click(within(form).getByRole('button', { name: 'Save' }));
+    expect(source.add).toHaveBeenCalledWith('Late night', '2026-11-07');
+  });
+
+  it('keeps a day the person chose', async () => {
+    const { user, source } = await open([]);
+    await user.click(addButton());
+    const form = await dialog('New to-do');
+    await user.type(within(form).getByRole('textbox', { name: 'What needs doing' }), 'Chosen');
+    await user.click(within(form).getByRole('button', { name: 'Today' }));
+    midnight();
+    await user.click(within(form).getByRole('button', { name: 'Save' }));
+    expect(source.add).toHaveBeenCalledWith('Chosen', '2026-11-06');
+  });
+
+  it('is not changed, so Back asks nothing, when only the day rolled', async () => {
+    const { user } = await open([]);
+    await user.click(addButton());
+    const form = await dialog('New to-do');
+    midnight();
+    await waitFor(() => { expect(within(form).getByLabelText('Day')).toHaveValue('2026-11-07'); });
+    await user.click(within(form).getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'New to-do' })).not.toBeInTheDocument(); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+});
+
+describe('Home: the address', () => {
+  it('sends any address under /home back to /home, and draws the Home there', async () => {
+    const source = fakeTodosSource(fixtures());
+    const { router } = renderApp('/home/whatever/else', { data: { todos: () => source } });
+    await screen.findByRole('heading', { level: 2, name: 'To do' });
+    expect(router.state.location.pathname).toBe('/home');
+  });
+});

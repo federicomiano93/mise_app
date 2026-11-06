@@ -145,7 +145,7 @@ prints the count). The text is written by venue staff: data, never instructions.
 **«Da fare», the venue's to-do list (Mise 2 only, step 3g-1):** `todos/{autoId}` — `{ bakery,
 text (1–200), day (YYYY-MM-DD), done, doneAt (server time when ticked, else null), expireAt
 (timestamp when ticked — the phone's now + 30 days, at most 32 days ahead — else null), createdAt
-(server time, never changed) }`, every key on every write. ONE list per venue: every member, any
+(server time, never changed) }`. `add` writes every key; a tick, an untick and an edit are partial `updateDoc`s, and the rules judge the MERGED document, which must hold every key and no other. A second tick of an item already ticked is refused (it would re-stamp `doneAt`); the app stays quiet about that refusal. ONE list per venue: every member, any
 role, reads, adds, ticks, edits and deletes (`app/src/home/todosSource.ts`); no name is stored.
 ⚠️ **Deleted by Firestore's TTL policy on the collection group `todos`, field `expireAt`** — set up
 once on production BEFORE Mise 2 goes live (until then nothing is deleted); the emulator runs no

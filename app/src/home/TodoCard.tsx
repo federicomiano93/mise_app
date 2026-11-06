@@ -29,6 +29,9 @@ export function TodoCard() {
   const addRef = useRef<HTMLButtonElement>(null);
   const rowButtons = useRef(new Map<string, HTMLButtonElement>());
   const pendingFocus = useRef<FocusAfter | null>(null);
+  const cardRef = useRef<HTMLElement>(null);
+  // A tick or untick waiting for the list to answer: where the row stood in the visible order, and what it was made.
+  const pendingTick = useRef<{ id: string; index: number; done: boolean } | null>(null);
 
   const groups = useMemo(() => groupTodos(items, today, Date.now()), [items, today]);
 
@@ -38,11 +41,51 @@ export function TodoCard() {
     if (form !== null || pendingFocus.current === null) return undefined;
     const target = pendingFocus.current;
     pendingFocus.current = null;
-    const element = () => (target === 'add' ? addRef.current : rowButtons.current.get(target.row) ?? addRef.current);
+    const element = (): HTMLElement | null => {
+      if (target === 'add') return addRef.current;
+      // ⚠️ A ROW INSIDE A CLOSED FOLD CANNOT TAKE THE FOCUS (ui/FoldedGroup.tsx): the fold's own title takes it, so the
+      // person hears where the item went. A new item's row is looked for the same way, and «Add» keeps the focus
+      // when the row is in plain sight.
+      const id = 'row' in target ? target.row : target.added;
+      const button = rowButtons.current.get(id);
+      const fold = button?.closest('details');
+      if (fold && !fold.open) return fold.querySelector('summary');
+      if ('row' in target) return button ?? addRef.current;
+      return addRef.current;
+    };
     element()?.focus();
     const frame = requestAnimationFrame(() => { element()?.focus(); });
     return () => { cancelAnimationFrame(frame); };
   }, [form]);
+
+  // The rows the person can reach, top to bottom: those inside a closed fold cannot take the focus.
+  const reachableIds = (): string[] => {
+    const ids: string[] = [];
+    cardRef.current?.querySelectorAll<HTMLElement>('[data-todo-id]').forEach(li => {
+      const fold = li.closest('details');
+      if (!fold || fold.open) ids.push(li.dataset.todoId ?? '');
+    });
+    return ids;
+  };
+
+  // ⚠️ THE FOCUS AFTER A TICK: ticking an overdue item moves its row into the closed «Done», unticking one of an open «Done»
+  // moves it up, and the checkbox the person pressed goes with it, so the focus would fall to the page. It goes to the row
+  // that now stands where the ticked one stood, else the one before it, else «Add». A row that stays keeps the focus as it is.
+  useEffect(() => {
+    const pending = pendingTick.current;
+    if (pending === null) return;
+    const current = items.find(item => item.id === pending.id);
+    if (current && current.done !== pending.done) return;
+    pendingTick.current = null;
+    const active = document.activeElement;
+    if (active && active !== document.body && cardRef.current?.contains(active)) return;
+    const order = reachableIds();
+    const id = order[pending.index] ?? order[pending.index - 1];
+    const box = id === undefined
+      ? null
+      : cardRef.current?.querySelector<HTMLElement>(`[data-todo-id="${CSS.escape(id)}"] input[type="checkbox"]`);
+    (box ?? addRef.current)?.focus();
+  }, [items, groups]);
 
   const close = (focusAfter: FocusAfter) => {
     pendingFocus.current = focusAfter;
@@ -50,11 +93,14 @@ export function TodoCard() {
   };
 
   const row = (item: TodoItem, tag: string | null) => (
-    <li key={item.id} className={styles.row}>
+    <li key={item.id} className={styles.row} data-todo-id={item.id}>
       <Checkbox
         className={styles.check}
         isSelected={item.done}
-        onChange={selected => { store.setDone(item.id, selected); }}
+        onChange={selected => {
+          pendingTick.current = { id: item.id, index: reachableIds().indexOf(item.id), done: selected };
+          store.setDone(item.id, selected);
+        }}
         aria-label={item.text}
       >
         <span className={styles.box} aria-hidden="true"><Check /></span>
@@ -85,7 +131,7 @@ export function TodoCard() {
   );
 
   return (
-    <section className={styles.card} aria-labelledby="home-todo-title">
+    <section ref={cardRef} className={styles.card} aria-labelledby="home-todo-title">
       <div className={styles.head}>
         <h2 id="home-todo-title" className={styles.title}>{t('home.title')}</h2>
         <Button ref={addRef} variant="primary" onPress={() => { setForm({ item: null }); }}>

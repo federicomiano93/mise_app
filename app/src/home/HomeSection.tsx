@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { Navigate, useLocation } from 'react-router';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { Page } from '../shell/Page';
@@ -15,6 +16,10 @@ import styles from './HomeSection.module.css';
 // stops it on unmount (P14).
 export default function HomeSection() {
   const { t } = useT();
+  const { pathname } = useLocation();
+  // The Home has no address below it: anything typed after /home goes back to the Home, as the other sections send a junk
+  // address back to their list (nothing is started for it).
+  if (pathname !== '/home') return <Navigate to="/home" replace />;
   return (
     <Page title={t('section.home')}>
       <TodosProvider>

@@ -75,7 +75,11 @@ export function groupTodos(items: readonly TodoItem[], today: string, nowMs: num
     } else if (item.day > lastDay) {
       later.push(item);
     } else {
-      perDay[days.indexOf(item.day)]?.push(item);
+      // A day the calendar does not have («2026-11-31»: the rules' pattern accepts it, the form never makes it) is none of
+      // the eight, so it folds under «Later» rather than vanishing.
+      const slot = perDay[days.indexOf(item.day)];
+      if (slot) slot.push(item);
+      else later.push(item);
     }
   }
 

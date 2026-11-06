@@ -59,7 +59,7 @@ scelte che mi consigli» (archived in `archivio/note-superate/piano-mise-2-stori
 | `day` | string | `YYYY-MM-DD` |
 | `done` | bool | |
 | `doneAt` | timestamp or null | the server's time when ticked, null when not |
-| `expireAt` | timestamp or null | set only when ticked: 30 days later, never more than 31 days ahead; null when not ticked |
+| `expireAt` | timestamp or null | set only when ticked: 30 days later (the phone's clock), never more than 32 days ahead; null when not ticked |
 | `createdAt` | timestamp | the server's time on create, never changed |
 
 Rules: every member of the venue (any role) may read, create, update and delete; closed key
@@ -122,3 +122,31 @@ What was decided inside the brief while building (nothing in H1–H10 changed):
   the shell and session specs that pinned the tab bar, the rail and where `/` lands were rewritten with the new lists.
 - **Still owed** (not part of this slice): the TTL policy on production, the rules deploy, and the gate 5–7 checks of
   `mise2-check` (the driver in both languages at 1024, 360 and 296, the lab tablet).
+
+### Review fixes
+
+- **A, focus after a tick or an edit** (`TodoCard.tsx`): when a tick or untick sends the pressed row out of reach, the focus goes
+  to the checkbox of the row now standing at its place in the visible order, else the previous one, else «Add»; an edit or a new
+  item landing inside a closed fold puts the focus on that fold's title. A row that stays keeps the focus. `store.add` now returns
+  the new id for this.
+- **B, two phones tick one item** (`todosStore.ts`): a refused `setDone` is judged only once the list has settled
+  (`REFUSAL_SETTLE_MS`, 2 s): if the list then shows the item in the wanted state (another phone ticked it first) or no
+  longer has it, nothing is said; if it rolled back, the refusal is said. Judged at the moment of the refusal, Firestore's
+  own pending tick would still be on screen and a genuine refusal (a phone whose clock is days off) would pass in silence.
+- **The rail** (`shell/AppShell.module.css`, `railHeight.spec.ts`): with the Home an owner sees NINE rail items, and at
+  56px an item the rail needed 696px on the lab tablet's 648px window (the 13 Oct defect again: account cut, rail
+  scrolling). Now two steps: up to 800px of height 56px an item, up to 720px 48px with tighter padding (624px needed).
+  The spec adds the rail up for every step from `SECTIONS.length`. Driven at 1024×648, 1280×760 and 1280×900.
+- **Rules checks added**: 200 accented characters accepted (the rules count characters), a second tick of an item
+  already ticked refused, an edit moving an item to another venue refused.
+- **Deploying the rules**: ONLY from a ruleset that contains main (`firestore-rules` skill). This stack's
+  `firestore.rules` lacks main's partial-owner roles: deploying it as it is would lock out every 'owner-sales' and
+  'owner-kitchen' account. Once main is merged, its `member()` admits them and they get the list too (H3).
+- **C, `todosSource.spec.ts`**: pins every write shape, the watch (estimate times, malformed documents skipped, `fromCache`,
+  stop-before-load) and `cleanTodoText`.
+- **D, an impossible day** (`todoModel.ts`): a day the calendar lacks (`2026-11-31`) goes to «Later», never nowhere.
+- **E, retry after a stream error** (`todosStore.ts`): while started, the store re-subscribes after 30 s, 60 s, ... capped at 5
+  minutes (reset by an answer), keeping the items and the error until then; `stop()` cancels it. The timer is injected.
+- **F, form across midnight** (`TodoForm.tsx`): a new item's day not yet chosen follows `today`, and an untouched day is never
+  «dirty».
+- **G, junk under /home** (`HomeSection.tsx`): any address below `/home` is replaced by `/home`.

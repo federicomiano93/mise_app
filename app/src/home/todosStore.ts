@@ -31,7 +31,8 @@ export interface TodosStore {
   // mode does exactly that).
   start(): void;
   stop(): void;
-  add(text: string, day: string): void;
+  // Returns the new item's id, or null when the source refused the call at once (the message goes out as for any write).
+  add(text: string, day: string): string | null;
   edit(id: string, text: string, day: string): void;
   setDone(id: string, done: boolean): void;
   remove(id: string): void;
@@ -44,11 +45,30 @@ function messageFor(err: unknown): TodosMessage {
     : { kind: 'not-saved' };
 }
 
-export function createTodosStore(source: TodosSource): TodosStore {
+// After a stream error the store asks again: 30 s, then 60 s, doubling, never past 5 minutes.
+export const RETRY_FIRST_MS = 30_000;
+export const RETRY_MAX_MS = 300_000;
+
+// How long a refused tick waits for the list to show the server's answer before deciding whether to say so.
+export const REFUSAL_SETTLE_MS = 2_000;
+
+// The timer is injected so a spec never waits for real time.
+export type Timers = {
+  readonly setTimeout: (run: () => void, ms: number) => unknown;
+  readonly clearTimeout: (handle: unknown) => void;
+};
+
+export function createTodosStore(
+  source: TodosSource,
+  timers: Timers = { setTimeout: (run, ms) => setTimeout(run, ms), clearTimeout: handle => { clearTimeout(handle as number); } },
+): TodosStore {
   let snapshot: TodosSnapshot = { status: 'loading', items: [] };
   const listeners = new Set<() => void>();
   const messageListeners = new Set<(message: TodosMessage) => void>();
   let stopWatching: (() => void) | null = null;
+  let started = false;
+  let retryHandle: unknown = null;
+  let retryDelay = RETRY_FIRST_MS;
 
   function set(next: TodosSnapshot): void {
     snapshot = next;
@@ -62,12 +82,56 @@ export function createTodosStore(source: TodosSource): TodosStore {
   }
 
   // Runs a write: a refusal (or a call the source itself rejects) is reported, never thrown at the screen.
-  function write(run: () => Promise<void>): void {
+  // `alreadyDone` says the list shows what the write wanted: another phone got there first, so a refusal is the rules
+  // keeping the first tick and there is nothing to tell the person.
+  //
+  // ⚠️ ASKED ONLY ONCE THE LIST HAS SETTLED (REFUSAL_SETTLE_MS), NEVER AT THE MOMENT OF THE REFUSAL: Firestore shows this
+  // phone's own tick at once, and when the server refuses it the listener may hear of the rollback AFTER the promise
+  // rejects. Asked at once, the list would still show the person's own refused tick and a genuine refusal (a phone
+  // whose clock is days off) would pass in silence. Once settled, the list holds the server's answer: ticked by the
+  // other phone → quiet; back to unticked → said.
+  function write(run: () => Promise<void>, alreadyDone: (() => boolean) | null = null): void {
+    const failed = (err: unknown) => {
+      if (alreadyDone === null) {
+        report(err);
+        return;
+      }
+      timers.setTimeout(() => {
+        if (alreadyDone()) {
+          console.error('A to-do write was refused, and the list already shows its result:', err);
+          return;
+        }
+        report(err);
+      }, REFUSAL_SETTLE_MS);
+    };
     try {
-      run().catch(report);
+      run().catch(failed);
     } catch (err) {
-      report(err);
+      failed(err);
     }
+  }
+
+  function watch(): void {
+    stopWatching = source.watch(
+      items => {
+        retryDelay = RETRY_FIRST_MS;
+        set({ status: 'ready', items });
+      },
+      err => {
+        console.error('The to-do list stream failed:', err);
+        set({ status: 'error', items: snapshot.items });
+        stopWatching?.();
+        stopWatching = null;
+        if (!started || retryHandle !== null) return;
+        const delay = retryDelay;
+        retryDelay = Math.min(retryDelay * 2, RETRY_MAX_MS);
+        // The items and the error stay shown until an answer arrives.
+        retryHandle = timers.setTimeout(() => {
+          retryHandle = null;
+          if (started) watch();
+        }, delay);
+      },
+    );
   }
 
   return {
@@ -81,31 +145,38 @@ export function createTodosStore(source: TodosSource): TodosStore {
       return () => { messageListeners.delete(listener); };
     },
     start() {
-      if (stopWatching) return;
+      if (started) return;
+      started = true;
+      retryDelay = RETRY_FIRST_MS;
       set({ status: 'loading', items: [] });
-      stopWatching = source.watch(
-        items => { set({ status: 'ready', items }); },
-        err => {
-          console.error('The to-do list stream failed:', err);
-          set({ status: 'error', items: snapshot.items });
-        },
-      );
+      watch();
     },
     stop() {
+      started = false;
+      if (retryHandle !== null) timers.clearTimeout(retryHandle);
+      retryHandle = null;
       stopWatching?.();
       stopWatching = null;
     },
     add(text, day) {
+      let id: string | null = null;
       write(() => {
-        const { written } = source.add(text, day);
-        return written;
+        const made = source.add(text, day);
+        id = made.id;
+        return made.written;
       });
+      return id as string | null;
     },
     edit(id, text, day) {
       write(() => source.edit(id, text, day));
     },
     setDone(id, done) {
-      write(() => source.setDone(id, done));
+      // A refusal is reported only when the list does not already show the item as the write wanted (ticked or
+      // unticked elsewhere), or no longer has it at all (deleted elsewhere).
+      write(() => source.setDone(id, done), () => {
+        const current = snapshot.items.find(item => item.id === id);
+        return current === undefined || current.done === done;
+      });
     },
     remove(id) {
       write(() => source.remove(id));

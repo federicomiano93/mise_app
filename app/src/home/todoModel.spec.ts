@@ -136,4 +136,12 @@ describe('groupTodos', () => {
       'day:2026-03-28', 'day:2026-03-29', 'day:2026-03-30', 'day:2026-04-04', 'later',
     ]);
   });
+
+  it('puts a day the calendar does not have, inside the eight-day window, under later instead of dropping it', () => {
+    const impossible = item('2026-11-31');
+    const real = item('2026-12-01');
+    const groups = groupTodos([impossible, real], '2026-11-28', new Date(2026, 10, 28, 9, 0, 0).getTime());
+    expect(kinds(groups)).toEqual(['day:2026-12-01', 'later']);
+    expect(ids(groups[1])).toEqual([impossible.id]);
+  });
 });
