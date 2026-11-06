@@ -166,6 +166,9 @@ export function normalizeProduct(raw) {
     // stays missing: no time said is not «no time taken».
     labourMinutes: positiveNumber(raw.labourMinutes),
     labourPeople: positiveNumber(raw.labourPeople),
+    // «Finished product, no weight loss» (Nov 2026). Only a literal true switches it on:
+    // missing, null or anything else is «the recipes' own loss applies», the old behaviour.
+    noWeightLoss: raw.noWeightLoss === true,
     model: Number.isInteger(raw.model) && raw.model > 0 ? raw.model : null,
   };
 }
@@ -261,7 +264,10 @@ export function batchTotals(product, tables = {}) {
       rows.push({ kind: 'recipe', id: component.recipeId, name: '', qty: component.qtyKg, cost: null, reason: 'missing-recipe' });
       return;
     }
-    const costed = costRecipe(recipe, tables);
+    // ⚠️ A FINISHED PRODUCT (Nov 2026, `noWeightLoss`) loses nothing in the oven, so the loss
+    // of the recipe on its line is laid aside for THIS cost only — the recipe keeps its own
+    // number, and so does every other product built on it.
+    const costed = costRecipe(p.noWeightLoss ? { ...recipe, lossPct: 0 } : recipe, tables);
     if (costed.pricePerKg === null) {
       partial = true;
       rows.push({ kind: 'recipe', id: component.recipeId, name: recipe.name, qty: component.qtyKg, cost: null, reason: 'no-recipe-cost' });

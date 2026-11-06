@@ -168,13 +168,14 @@ export async function createProductIfAbsent(id, data) {
 // a nameless document.
 // ⚠️ `bakery` TRAVELS WITH IT because the rules judge the MERGED document and ask it to
 // name this location — the same stamp the catalogue sends on every save of a recipe.
+// ⚠️ A KEPT WRONG PAIR CARRIES NO `lossPct`, and none is sent: it would be the loss as this
+// phone last saw it, and could overwrite a correct weighing another phone saved meanwhile.
+// An absent field is left OUT, never sent as undefined — updateDoc throws on undefined.
 export async function saveRecipeLoss(id, patch) {
   await authReady;
-  return updateDoc(doc(db, pathFor(RECIPES), id), withBakery({
-    lossPct: patch.lossPct,
-    rawGrams: patch.rawGrams,
-    cookedGrams: patch.cookedGrams,
-  }));
+  const fields = { rawGrams: patch.rawGrams, cookedGrams: patch.cookedGrams };
+  if (patch.lossPct !== undefined) fields.lossPct = patch.lossPct;
+  return updateDoc(doc(db, pathFor(RECIPES), id), withBakery(fields));
 }
 
 // Whether this session may write a recipe at all.
