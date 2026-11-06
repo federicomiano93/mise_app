@@ -130,14 +130,14 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
           titleRef={titleNode}
           titleDoorRef={supplierDoorNode}
           onTitle={doors.may && !pseudo ? () => { doors.open({ address: supplierScreenAddress(id), state: fromOrdersList('suppliers'), target: { kind: 'supplier' } }); } : undefined}
-          titleHint={t('ord.supplierDoorHint')}
+          titleDoorLabel={t('ord.supplierDoor', { supplier: label })}
           action={(
             <div className={styles.barActions}>
               {doors.may ? (
                 <Button
                   ref={addNode}
                   className={styles.add}
-                  aria-label={t('ord.addIngredientTo', { supplier: label })}
+                  aria-label={pseudo ? t('ord.addIngredientNoSupplier') : t('ord.addIngredientTo', { supplier: label })}
                   onPress={() => {
                     doors.open({
                       address: newIngredientAddress(pseudo ? null : id),

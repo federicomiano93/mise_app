@@ -57,9 +57,14 @@
   color: inherit;
   font: inherit;
   text-align: left;
-  overflow-wrap: break-word;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* ⚠️ WORDS BREAK AS IN THE PLAIN TITLE: a long one-word name must not widen the bar. */
+.doorText {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .door svg {

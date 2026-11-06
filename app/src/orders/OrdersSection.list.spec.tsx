@@ -315,8 +315,7 @@ describe('the tablet’s split', () => {
     await user.click(screen.getByRole('button', { name: /^Alpine Mills/ }));
     expect(await screen.findByRole('heading', { level: 2, name: 'Alpine Mills' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Zed/ })).toBeInTheDocument();
-    // (The supplier's own title is a door to its card too, so the list's row is the first of the two.)
-    expect(screen.getAllByRole('button', { name: /^Alpine Mills/ })[0]).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: /^Alpine Mills/ })).toHaveAttribute('aria-current', 'true');
     await user.click(screen.getByRole('button', { name: /^Zed/ }));
     expect(await screen.findByRole('heading', { level: 2, name: 'Zed' })).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/orders/supplier/s-zed');

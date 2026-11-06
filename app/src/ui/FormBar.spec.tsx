@@ -44,20 +44,22 @@ describe('FormBar', () => {
     expect(ref.current).toHaveFocus();
   });
 
-  it('turns the title into a door when asked: the h2 stays the focus target, the name stays the title alone, the hint only describes', async () => {
+  it('turns the title into a door when asked: the h2 stays the focus target and keeps the visible name, the button says where it goes', async () => {
     const onTitle = vi.fn();
     const ref = createRef<HTMLHeadingElement>();
-    render(<FormBar backLabel="Back" onBack={() => undefined} title="Alpine Mills" titleRef={ref} onTitle={onTitle} titleHint="Opens its card" />);
-    const door = screen.getByRole('button', { name: 'Alpine Mills' });
+    render(<FormBar backLabel="Back" onBack={() => undefined} title="Alpine Mills" titleRef={ref} titleId="t" onTitle={onTitle} titleDoorLabel="Card of Alpine Mills in Records" />);
+    const door = screen.getByRole('button', { name: 'Card of Alpine Mills in Records' });
     expect(ref.current).toContainElement(door);
     expect(screen.getByRole('heading', { level: 2, name: 'Alpine Mills' })).toBe(ref.current);
-    expect(door).toHaveAccessibleDescription('Opens its card');
+    // The label holds the visible name (label in name), and the screen's name stays the visible one.
+    expect(door.getAttribute('aria-label')).toContain('Alpine Mills');
+    expect(document.getElementById('t')).toHaveTextContent('Alpine Mills');
     await userEvent.setup().click(door);
     expect(onTitle).toHaveBeenCalledTimes(1);
   });
 
   it('draws a plain title with no button when no door is given', () => {
-    render(<FormBar backLabel="Back" onBack={() => undefined} title="Records" titleHint="unused" />);
+    render(<FormBar backLabel="Back" onBack={() => undefined} title="Records" titleDoorLabel="unused" />);
     expect(screen.queryByRole('button', { name: 'Records' })).not.toBeInTheDocument();
   });
 

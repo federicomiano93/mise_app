@@ -77,7 +77,7 @@ describe('the name of an ingredient', () => {
     expect(screen.queryByRole('button', { name: /^Edit / })).not.toBeInTheDocument();
     expect(screen.getByText('Barley', { selector: 'span' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Add an ingredient to Alpine Mills' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Alpine Mills' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Card of / })).not.toBeInTheDocument();
   });
 
   it('is a button for an employee when the venue shows them «Ingredients & suppliers»', async () => {
@@ -131,7 +131,7 @@ describe('«+» in the supplier’s bar', () => {
 
   it('opens one with no preset from the pseudo-supplier', async () => {
     const { user } = await opened('/orders/supplier/no-supplier');
-    await user.click(screen.getByRole('button', { name: 'Add an ingredient to No supplier' }));
+    await user.click(screen.getByRole('button', { name: 'Add an ingredient with no supplier' }));
     expect(pushed()).toEqual({ path: '/suppliers/ingredient/new', state: fromOrdersList('ingredients') });
   });
 
@@ -146,14 +146,14 @@ describe('the supplier’s name in the bar', () => {
     const { user } = await opened('/orders/supplier/s-alp');
     expect(screen.getByRole('region', { name: 'Alpine Mills' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Alpine Mills' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Alpine Mills' }));
+    await user.click(screen.getByRole('button', { name: 'Card of Alpine Mills in Ingredients & suppliers' }));
     expect(pushed()).toEqual({ path: '/suppliers/supplier/s-alp', state: fromOrdersList('suppliers') });
   });
 
   it('is plain for the pseudo-supplier', async () => {
     await opened('/orders/supplier/no-supplier');
     expect(screen.getByRole('heading', { level: 2, name: 'No supplier' })).toBeInTheDocument();
-    expect(within(screen.getByRole('region', { name: 'No supplier' })).queryByRole('button', { name: 'No supplier' })).not.toBeInTheDocument();
+    expect(within(screen.getByRole('region', { name: 'No supplier' })).queryByRole('button', { name: /^Card of / })).not.toBeInTheDocument();
   });
 });
 
@@ -173,10 +173,10 @@ describe('Back from the card', () => {
     await act(async () => { await view.router.navigate(-1); });
     await screen.findAllByRole('spinbutton', undefined, LOAD);
     await waitFor(() => { expect(screen.getByRole('button', { name: 'Add an ingredient to Alpine Mills' })).toHaveFocus(); });
-    await view.user.click(screen.getByRole('button', { name: 'Alpine Mills' }));
+    await view.user.click(screen.getByRole('button', { name: /^Card of Alpine Mills/ }));
     await act(async () => { await view.router.navigate(-1); });
     await screen.findAllByRole('spinbutton', undefined, LOAD);
-    await waitFor(() => { expect(screen.getByRole('button', { name: 'Alpine Mills' })).toHaveFocus(); });
+    await waitFor(() => { expect(screen.getByRole('button', { name: /^Card of Alpine Mills/ })).toHaveFocus(); });
   });
 
   it('opens «Not in use» to give the focus to a name inside it', async () => {
