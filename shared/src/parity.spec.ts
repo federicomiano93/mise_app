@@ -100,6 +100,7 @@ import * as joinCode from './join-code';
 import * as pushModel from './push-model';
 import * as homeCards from './home-cards';
 import * as awayModel from './away-model';
+import * as awayReminder from './away-reminder';
 import * as allergenModel from './allergen-model';
 import * as sections from './sections';
 import * as firebaseTarget from './firebase-target';
@@ -176,6 +177,7 @@ import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
 import * as legacyAwayModel from '../../js/away-model.js';
+import * as legacyAwayReminder from '../../js/away-reminder.js';
 import * as legacyAllergenModel from '../../js/allergen-model.js';
 import * as legacySections from '../../js/sections.js';
 import * as legacyFirebaseTarget from '../../js/firebase-target.js';
@@ -254,6 +256,7 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['push-model', pushModel, legacyPushModel],
   ['home-cards', homeCards, legacyHomeCards],
   ['away-model', awayModel, legacyAwayModel],
+  ['away-reminder', awayReminder, legacyAwayReminder],
   ['allergen-model', allergenModel, legacyAllergenModel],
   ['sections', sections, legacySections],
   ['firebase-target', firebaseTarget, legacyFirebaseTarget],
@@ -387,9 +390,9 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all seventy-six models are compared', () => {
+test('all seventy-seven models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
-    ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
+    ['join-code', 'push-model', 'home-cards', 'away-model', 'away-reminder', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
       'order-cost', 'inventory-model', 'inventory-outbox', 'inventory-purchases', 'vat-rates', 'ingredient-kind', 'product-limits',
       'vat-guide', 'foodcost-weighing', 'calculator-dough-math', 'calculator-recipe-source', 'calculator-recipe-text', 'calculator-order-text',
