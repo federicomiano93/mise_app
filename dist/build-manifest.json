@@ -135,14 +135,14 @@
       }
     },
     "dist/catalogue.css": {
-      "sha": "f2eb059f13bcd72b",
+      "sha": "35c4eab673be8b74",
       "inputs": {
-        "catalogue.css": "d716962cc87c22a8"
+        "catalogue.css": "1f7fbc40c8234ec5"
       }
     },
     "dist/catalogue.js": {
-      "sha": "11b7cd2c9c1ad9f1",
-      "mapSha": "0572ecb69c862eea",
+      "sha": "e8162b8489f60ff2",
+      "mapSha": "dd15dfb6b5565f21",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -151,10 +151,10 @@
         "js/auth-gate.js": "7e7da9d190ffa167",
         "js/calculator-config.js": "9078e52d96eab707",
         "js/catalogue/allergen-sheet.js": "0a1ec5ee0d8c6a56",
-        "js/catalogue/catalogue-detail.js": "9695a6d263b67154",
+        "js/catalogue/catalogue-detail.js": "621f913dd56bdd14",
         "js/catalogue/catalogue-editor.js": "149e0477ebe3d3a3",
         "js/catalogue/catalogue-list.js": "e200fbba7ece642f",
-        "js/catalogue/catalogue-main.js": "4b8dc1ebe2c93d82",
+        "js/catalogue/catalogue-main.js": "536abe958fddd819",
         "js/catalogue/catalogue-model.js": "f2b080da4336cc57",
         "js/catalogue/catalogue-settings.js": "82db4b0e1b10235a",
         "js/catalogue/catalogue-store.js": "51431723feac1e2e",
@@ -247,7 +247,7 @@
         "js/push-model.js": "13310d4d79159651",
         "js/push.js": "88ab52dc3c3260d2",
         "js/recipe-export.js": "0ec872b9669f22b1",
-        "js/recipe-link.js": "c2d98cbc084971a6",
+        "js/recipe-link.js": "70ed3d204c5443f2",
         "js/record-choices.js": "80f538ee4cdcb4f6",
         "js/record-data.js": "b40483aebf617123",
         "js/record-ui.js": "4829a98298d9ddd9",
@@ -384,8 +384,8 @@
       }
     },
     "dist/foodcost.js": {
-      "sha": "6006be56c3519100",
-      "mapSha": "e9cc89fbfeb3b24c",
+      "sha": "c709c93ec370d4fa",
+      "mapSha": "d8e8c0eed0160497",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "41d275905d191c60",
@@ -411,7 +411,7 @@
         "js/foodcost/firebase-foodcost.js": "385802cc24237b22",
         "js/foodcost/foodcost-editor.js": "3354562daf948958",
         "js/foodcost/foodcost-list.js": "e69c25f6bd6cedcc",
-        "js/foodcost/foodcost-main.js": "d3a720d5e9954828",
+        "js/foodcost/foodcost-main.js": "a9b4da50c2e406a6",
         "js/foodcost/foodcost-model.js": "f170bfe5084786d7",
         "js/foodcost/foodcost-settings.js": "515cc9a266758252",
         "js/foodcost/foodcost-store.js": "cac52d213db0143f",
@@ -461,7 +461,7 @@
         "js/pick-suggest.js": "11a4974ce3429a4b",
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
         "js/price-model.js": "367144e6e2c89a39",
-        "js/recipe-link.js": "c2d98cbc084971a6",
+        "js/recipe-link.js": "70ed3d204c5443f2",
         "js/record-data.js": "b40483aebf617123",
         "js/records.js": "a93e14cfe95ebbe4",
         "js/reveal-field.js": "5994569152b139a9",
@@ -769,8 +769,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "36c5f8a6c857f12f",
-      "mapSha": "cbd97c6558c8f981",
+      "sha": "e2af80568c5a98b6",
+      "mapSha": "22133145f9e8c871",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -884,7 +884,7 @@
         "js/price-model.js": "367144e6e2c89a39",
         "js/push-model.js": "13310d4d79159651",
         "js/push.js": "88ab52dc3c3260d2",
-        "js/recipe-link.js": "c2d98cbc084971a6",
+        "js/recipe-link.js": "70ed3d204c5443f2",
         "js/record-choices.js": "80f538ee4cdcb4f6",
         "js/record-data.js": "b40483aebf617123",
         "js/record-ui.js": "4829a98298d9ddd9",
