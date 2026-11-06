@@ -73,6 +73,10 @@
      below switches it to 100dvh where that exists. Where it does not (Chrome < 108, the lab tablet),
      shell/viewportHeight.ts sets it inline on <html> to the real window height (96px less than 100vh); inline wins. */
   --vh100: 100vh;
+  /* The heights of the flat view's head and of its column names in Orders: 0 here, measured and set inline on that view's root by
+     orders/IngredientsList.tsx so the column names and the letter dividers stick right under what is above them. */
+  --flat-head-h: 0px;
+  --flat-cols-h: 0px;
 
   --shadow-1: 0 1px 2px oklch(0.2 0.01 60 / 0.06), 0 1px 1px oklch(0.2 0.01 60 / 0.04);
   --shadow-2: 0 8px 24px oklch(0.2 0.01 60 / 0.10), 0 2px 6px oklch(0.2 0.01 60 / 0.06);

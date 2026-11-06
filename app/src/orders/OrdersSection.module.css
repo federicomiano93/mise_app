@@ -20,7 +20,8 @@
    supplier open the list is not drawn behind it. The list stays mounted, so the place in it, and what is typed in its
    search box, are still there when Back returns to it. */
 @media (max-width: 999.98px) {
-  .layout[data-view="list"] .detail {
+  .layout[data-view="list"] .detail,
+  .layout[data-view="ingredients"] .detail {
     display: none;
   }
 
@@ -34,6 +35,15 @@
     grid-template-columns: var(--list-w) minmax(0, 1fr);
     gap: var(--s6);
     align-items: start;
+  }
+
+  /* ⚠️ THE FLAT VIEW («by ingredient») TAKES THE WHOLE WIDTH, with no pane beside it: its rows need the room for their boxes. */
+  .layout[data-view="ingredients"] {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .layout[data-view="ingredients"] .detail {
+    display: none;
   }
 
   /* ⚠️ THE RIGHT-HAND SIDE STAYS ON SCREEN WHILE THE LIST SCROLLS: stuck to the top of the scroll area, it is always in view.

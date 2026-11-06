@@ -1,9 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, LISTS_PATH, REORDER_PATH, requestPath, PLACE_ALL_CONFIRM_PATH, PLACE_ALL_PATH, SEND_PATH, SETTINGS_PATH, SUPPLIER_ORDER_PATH, historyDayPath, historyEditPath, incomingMissingPath, ordersScreenName, parseOrdersPath, supplierConfirmPath,
+  CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, INGREDIENTS_PATH, LISTS_PATH, REORDER_PATH, requestPath, PLACE_ALL_CONFIRM_PATH, PLACE_ALL_PATH, SEND_PATH, SETTINGS_PATH, SUPPLIER_ORDER_PATH, historyDayPath, historyEditPath, incomingMissingPath, ordersScreenName, parseOrdersPath, supplierConfirmPath,
 } from './ordersPath';
 
 describe('parseOrdersPath', () => {
+  it('reads the flat view, and nothing below it', () => {
+    expect(parseOrdersPath('/ingredients')).toEqual({ kind: 'ingredients' });
+    expect(parseOrdersPath(INGREDIENTS_PATH.slice('/orders'.length))).toEqual({ kind: 'ingredients' });
+    expect(parseOrdersPath('/ingredients/x')).toEqual({ kind: 'unknown' });
+    expect(ordersScreenName('/ingredients')).toBe('orders-ingredients');
+    expect(ordersScreenName('/ingredients/x')).toBe('orders');
+  });
+
   it('reads the placing and clearing screens', () => {
     expect(parseOrdersPath('/supplier/s-alp/confirm')).toEqual({ kind: 'confirm', id: 's-alp' });
     expect(parseOrdersPath('/place-all')).toEqual({ kind: 'place-all' });

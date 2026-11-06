@@ -23,6 +23,8 @@ export const PLACE_ALL_OPENER = 'place-all';
 export const CLEAR_OPENER = 'clear';
 // The list's send arrow, beside the search box: where Back from the send screen returns the focus.
 export const SEND_OPENER = 'send';
+// The swap button of the list's head (step 3f-8b): where the focus lands once the view («by supplier» / «by ingredient») changed.
+export const SWAP_OPENER = 'swap';
 // A pending banner's «Placed …» (the supplier's id), in the notices under the bell: where Back from its confirm screen returns the
 // focus. Gone once the order was recorded: then the supplier's row takes it (pendingFallback).
 export const pendingOpener = (id: string): string => `pending:${id}`;

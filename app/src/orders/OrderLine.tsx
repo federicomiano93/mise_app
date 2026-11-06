@@ -22,6 +22,8 @@ type Props = {
   hint: RowHint;
   // Changes this line, local-first (the store stamps the day, claims the line and saves after its pause).
   onEdit: (row: OrderRow, edit: LineEdit) => void;
+  // The flat view («by ingredient»): the name of the supplier the line is ordered from, on a small line under the name.
+  supplierName?: string;
 };
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -30,7 +32,7 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
 //
 // ⚠️ A ROW MARKED `elsewhere` SHOWS AN EMPTY ORDER BOX whatever the draft says: that number belongs to the other supplier's
 // order. Typing there (or + ) takes the line back — the store does it in the same write (ordersStore.ts editLine).
-export function OrderLine({ row, entry, showStock, hint, onEdit }: Props) {
+export function OrderLine({ row, entry, showStock, hint, onEdit, supplierName }: Props) {
   const { t } = useT();
   const { ingredient } = row;
   const orderBox = useRef<BoxHandle>(null);
@@ -68,6 +70,7 @@ export function OrderLine({ row, entry, showStock, hint, onEdit }: Props) {
     <li className={styles.line} data-filled={qty > 0} data-elsewhere={row.elsewhere} data-stock={showStock}>
       <div className={styles.main}>
         <span className={styles.name}>{name}</span>
+        {supplierName !== undefined && supplierName !== '' ? <span className={styles.supplier}>{supplierName}</span> : null}
         {weight !== '' ? <span className={styles.weight}>{weight}</span> : null}
         {note !== '' ? <span className={styles.note}>{note}</span> : null}
         {hintText !== '' ? <span id={hintId} className={styles.hint} data-unusual={hint.kind === 'unusual'}>{hintText}</span> : null}

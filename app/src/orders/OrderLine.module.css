@@ -48,8 +48,10 @@
   font-weight: 600;
 }
 
-/* The pack weight on a small line of its own: beside the name it pushed a long name onto four lines on a 296px phone. */
+/* The pack weight on a small line of its own: beside the name it pushed a long name onto four lines on a 296px phone. The flat
+   view's supplier name is the same kind of line. */
 .weight,
+.supplier,
 .note {
   min-width: 0;
   overflow-wrap: anywhere;

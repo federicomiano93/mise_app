@@ -2,6 +2,7 @@
 // (docs/parity/orders.md, decision T1). Slice 3f-1 drew the first three; slice 3f-2 adds the placing and clearing screens.
 //
 //   /orders                         the supplier list
+//   /orders/ingredients             the flat view, «by ingredient» (slice 3f-8b), at the list's level: every ingredient A→Z
 //   /orders/supplier/<id>           one supplier's order screen (`no-supplier` is a valid id: the pseudo-supplier)
 //   /orders/supplier/<id>/items     «What they sell», read-only, one level below that screen
 //   /orders/supplier/<id>/confirm   «This is what will be recorded» for one supplier, one level below its screen
@@ -25,6 +26,7 @@ export const ORDERS_PATH = '/orders';
 
 export type OrdersView =
   | { readonly kind: 'list' }
+  | { readonly kind: 'ingredients' }
   | { readonly kind: 'supplier'; readonly id: string }
   | { readonly kind: 'items'; readonly id: string }
   | { readonly kind: 'confirm'; readonly id: string }
@@ -44,6 +46,7 @@ export type OrdersView =
   | { readonly kind: 'request'; readonly id: string }
   | { readonly kind: 'unknown' };
 
+export const INGREDIENTS_PATH = `${ORDERS_PATH}/ingredients`;
 export const supplierPath = (id: string): string => `${ORDERS_PATH}/supplier/${encodeURIComponent(id)}`;
 export const supplierItemsPath = (id: string): string => `${supplierPath(id)}/items`;
 export const supplierConfirmPath = (id: string): string => `${supplierPath(id)}/confirm`;
@@ -81,6 +84,7 @@ export function parseOrdersPath(rest: string | undefined): OrdersView {
     if (parts.length === 1) return { kind: 'place-all' };
     return parts.length === 2 && second === 'confirm' ? { kind: 'place-all-confirm' } : { kind: 'unknown' };
   }
+  if (first === 'ingredients') return parts.length === 1 ? { kind: 'ingredients' } : { kind: 'unknown' };
   if (first === 'clear') return parts.length === 1 ? { kind: 'clear' } : { kind: 'unknown' };
   if (first === 'send') return parts.length === 1 ? { kind: 'send' } : { kind: 'unknown' };
   if (first === 'settings') {
@@ -118,13 +122,14 @@ export function parseOrdersPath(rest: string | undefined): OrdersView {
   return { kind: 'unknown' };
 }
 
-// What the usage record calls the screen at an address (shell/sections.ts screenNameFor): `orders`, `orders-supplier`,
+// What the usage record calls the screen at an address (shell/sections.ts screenNameFor): `orders`, `orders-ingredients`, `orders-supplier`,
 // `orders-supplier-items`, `orders-confirm`, `orders-place-all`, `orders-place-all-confirm`, `orders-clear`, `orders-send`, `orders-settings`, `orders-settings-supplier-order`,
 // `orders-history`, `orders-history-day`, `orders-history-edit`, `orders-incoming`, `orders-incoming-missing`, `orders-reorder`, `orders-lists` and `orders-list`.
 // ⚠️ ONLY AN ADDRESS THE SECTION DRAWS counts as its screen: an unknown one is sent back to the list, and logging it as a
 // screen would put one nobody saw in the owner's statistics.
 export function ordersScreenName(rest: string): string {
   const view = parseOrdersPath(rest);
+  if (view.kind === 'ingredients') return 'orders-ingredients';
   if (view.kind === 'supplier') return 'orders-supplier';
   if (view.kind === 'items') return 'orders-supplier-items';
   if (view.kind === 'confirm') return 'orders-confirm';
