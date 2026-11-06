@@ -150,3 +150,29 @@ What was decided inside the brief while building (nothing in H1–H10 changed):
 - **F, form across midnight** (`TodoForm.tsx`): a new item's day not yet chosen follows `today`, and an untouched day is never
   «dirty».
 - **G, junk under /home** (`HomeSection.tsx`): any address below `/home` is replaced by `/home`.
+
+## Step 3g-2 — parity list (Settings: holiday, app language, sections for employees)
+
+What the current app's Home settings hold (`js/home-settings.js`), and where each goes in Mise 2:
+
+| Current app | Who | Mise 2 |
+|---|---|---|
+| Four cards by WHO a row is about: You / The venue / Your account / This device | — | `settings/SettingsPage.tsx` takes the same four cards (today it has account + venue + switch only) |
+| «Sono in ferie» row (`js/away-screen.js`): one native date field, from today up to `maxAwayDate`, the sentence of what it does and does NOT do, «Torno prima» asked once and never red; read ONCE (not a listener, P14); written to `away/{uid}` (`buildAwayDoc`, rules already live) | everyone | this slice — row in «You» |
+| The Home's holiday band (`js/home-away.js`), a BUTTON that asks «back already?» | everyone | this slice — on the Home above «Da fare» |
+| The once-a-day reminder on the first section opened each day, main button «Sono tornato», marked BEFORE asking | everyone | this slice — in the shell, on the first section change of the day |
+| «Lingua dell'app» (`js/staff/language.js`): each language named in itself, the label sentence naming the country, a reload after the change, `setLocationLanguage` (server refuses non-managers) | owner, manager | this slice — row in «The venue» |
+| «Schede della Home» (`js/staff/home-cards-screen.js`): one switch per section the venue has (money ones included), «you still see everything», asks before hiding any (and says it silences employee notifications) and before showing a money card, a failed save puts the switch back, focus kept, `setStaffCard` | owner, manager | this slice — row in «The venue»; the screen is named «Sezioni per i dipendenti» (Mise 2 has sections, not cards) |
+| The ORDER of the cards (drag + keyboard, `setHomeCardOrder`) | owner, manager | DECISION for him (D1 below) |
+| «Chi può entrare» (People) | owner | 3g-3 Staff |
+| «Cambia locale» | several venues | already in Mise 2 |
+| App version row | everyone | step 5 (Mise 2 has no service worker until then) |
+| Kiosk rows | everyone | the kiosk slice |
+| Log out, quiet, last, asks first | everyone | already in Mise 2 |
+
+Decisions to take with him:
+- D1. **The order of the sections.** Mise 2's rail and phone tabs have ONE fixed order (Home first, Settings last, the
+  five phone tabs of H2). (a) keep it fixed, the venue's `homeCardOrder` is left in the data for the current app only;
+  (b) the rail follows the venue's order and the order is set on the same screen. Recommended (a): the same place for
+  every section on every tablet, and the five phone tabs stay what H2 decided.
+- D2. The holiday reminder and band work as in the current app (his choices of 13 Sep 2026), no change.
