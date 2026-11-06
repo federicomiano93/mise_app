@@ -102,7 +102,7 @@
         "js/preview-ribbon.js": "6c0264eb5d075e5b",
         "js/price-model.js": "367144e6e2c89a39",
         "js/recipe-export.js": "0ec872b9669f22b1",
-        "js/recipes.js": "71da5fd1ad6ed989",
+        "js/recipes.js": "8d4b2ea0e8ba0bcb",
         "js/record-data.js": "b40483aebf617123",
         "js/records.js": "a93e14cfe95ebbe4",
         "js/result-place.js": "932c2ccc0482be0c",
@@ -135,9 +135,9 @@
       }
     },
     "dist/catalogue.css": {
-      "sha": "2e32b1ea1c16f965",
+      "sha": "967262a29fdc000b",
       "inputs": {
-        "catalogue.css": "587d9f6e9ff9e84b"
+        "catalogue.css": "d70e7fa4f80623dc"
       }
     },
     "dist/catalogue.js": {
@@ -152,7 +152,7 @@
         "js/calculator-config.js": "9078e52d96eab707",
         "js/catalogue/allergen-sheet.js": "0a1ec5ee0d8c6a56",
         "js/catalogue/catalogue-detail.js": "9695a6d263b67154",
-        "js/catalogue/catalogue-editor.js": "e728d58e2a2628ca",
+        "js/catalogue/catalogue-editor.js": "565672b104643975",
         "js/catalogue/catalogue-list.js": "e200fbba7ece642f",
         "js/catalogue/catalogue-main.js": "4b8dc1ebe2c93d82",
         "js/catalogue/catalogue-model.js": "f2b080da4336cc57",
@@ -488,15 +488,15 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "8fb27d8d366c8cb6",
-      "mapSha": "5987164940e962ac",
+      "sha": "f0eda1f2dbb0370d",
+      "mapSha": "41801fb678cd4d8a",
       "inputs": {
-        "js/i18n.js": "7cee24c47af34adb"
+        "js/i18n.js": "5f455367248bd20e"
       }
     },
     "dist/index.js": {
-      "sha": "25fd362b82152f46",
-      "mapSha": "0023b7c7c6655fa9",
+      "sha": "37e7b3a032539358",
+      "mapSha": "a8eff126aade710a",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "41d275905d191c60",
@@ -591,7 +591,7 @@
         "js/staff/home-cards-screen.js": "3acfcd54551f4b43",
         "js/staff/language.js": "dbb785955ec6ff62",
         "js/staff/new-customer.js": "2165d226991491f3",
-        "js/staff/people.js": "a5de29ddd24c9580",
+        "js/staff/people.js": "1a33673c50bbbe40",
         "js/supplier-label.js": "06277b76d92b5273",
         "js/sw-update.js": "ebb6ff2d277ba05b",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
@@ -1161,9 +1161,9 @@
       }
     },
     "dist/tokens.css": {
-      "sha": "a0aa498ad1140cd6",
+      "sha": "c08b7ef7a4f2df7c",
       "inputs": {
-        "tokens.css": "3e244b14cf87852e"
+        "tokens.css": "5dc176ac50c2dfee"
       }
     }
   }
