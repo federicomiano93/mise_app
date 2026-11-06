@@ -153,13 +153,15 @@ export function openPeople(session) {
   // confirmation below has to say so out loud, or four options read as four levels.
   // ⚠️ NATIVE, so the phone draws its own picker and the keyboard works untouched.
   // One <option> per ROLE_CHOICES entry, the single list the whole app shares.
-  // `placeholder` is for the INVITE select only: a first, disabled, empty option that
-  // is shown until a role is picked. The roster selects always hold a real role.
+  // `placeholder` is for the INVITE select only: a first, empty option that is shown
+  // until a role is picked. The roster selects always hold a real role.
+  // ⚠️ NOT `disabled`. iOS's picker wheel cannot rest on a disabled option: it jumps to
+  // the first enabled one — Owner, the most power — and «Done» commits it. An enabled
+  // empty option can be picked back, and mint() refuses it like no choice at all.
   function roleSelect(currentKey, extra, placeholder) {
     const select = el('select', { class: 'set-select', ...extra });
     if (placeholder) {
       const empty = el('option', { value: '' }, placeholder);
-      empty.disabled = true;
       empty.selected = !currentKey;
       select.appendChild(empty);
     }
@@ -397,19 +399,25 @@ export function openPeople(session) {
       });
       const roleField = roleSelect(newChoice ? newChoice.key : null,
         { id: selectId, 'aria-describedby': noteId }, t('people.role.choose'));
+      // ⚠️ THE SAME KEYBOARD GUARD AS THE ROSTER. On Windows an arrow key on a closed
+      // select is already a choice, and the first option after «Choose a role…» is
+      // Owner: one stray ArrowDown would have chosen the most power.
+      roleField.addEventListener('keydown', pickFromOpenList);
       roleField.addEventListener('change', () => {
-        newChoice = ROLE_CHOICES.find(c => c.key === roleField.value) || newChoice;
-        // A role is chosen: whatever «choose a role» error was showing is over.
+        // The empty option picked back means «no role» again, never the last one.
+        newChoice = ROLE_CHOICES.find(c => c.key === roleField.value) || null;
         roleField.removeAttribute('aria-invalid');
         roleNote.classList.remove('people-note--error');
-        roleNote.textContent = t(ROLE_MEANS[newChoice.key]);
+        roleNote.textContent = newChoice ? t(ROLE_MEANS[newChoice.key]) : t('people.role.choosePrompt');
       });
       // mint() uses these when it is tapped with no role (P20: block, jump to, highlight).
+      // Focus FIRST, then the new text: the select reads its description on focus and
+      // the live note then announces the change once, rather than the same words twice.
       missingRole = () => {
         roleField.setAttribute('aria-invalid', 'true');
+        roleField.focus();
         roleNote.classList.add('people-note--error');
         roleNote.textContent = t('people.role.missing');
-        roleField.focus();
       };
       codeBox.appendChild(el('label', { class: 'set-label', for: selectId, text: t('people.roleGroup') }));
       codeBox.appendChild(roleField);
@@ -545,6 +553,10 @@ export function openPeople(session) {
       pending = null;
       newChoice = null;
       paintCode();
+      // The Done button has just been removed: put the keyboard on the next choice,
+      // not back at the top of the page.
+      const next = codeBox.querySelector('select');
+      if (next) next.focus();
     });
     return done;
   }

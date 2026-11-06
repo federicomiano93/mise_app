@@ -39,7 +39,7 @@ test('changing the invite role rewrites the sentence and does not rebuild the se
   assert.notEqual(at, -1);
   const handler = SCREEN.slice(at, SCREEN.indexOf('});', at));
   assert.match(handler, /newChoice = /);
-  assert.match(handler, /roleNote\.textContent = t\(ROLE_MEANS\[newChoice\.key\]\)/);
+  assert.match(handler, /roleNote\.textContent = newChoice \? t\(ROLE_MEANS\[newChoice\.key\]\)/);
   assert.doesNotMatch(handler, /paintCode\(\)/, 'a repaint would drop the keyboard focus');
 });
 
@@ -122,13 +122,13 @@ test('the invite role starts empty', () => {
 
 test('only the invite select gets the placeholder; roster selects do not', () => {
   assert.match(SCREEN, /roleSelect\(newChoice \? newChoice\.key : null,\s*\{ id: selectId, 'aria-describedby': noteId \}, t\('people\.role\.choose'\)\)/);
-  assert.match(SCREEN, /const select = roleSelect\(currentKey, \{\s*'aria-label'/);
+  // The roster call closes after its one options object: no third argument, no placeholder.
+  assert.match(SCREEN, /const select = roleSelect\(currentKey, \{\s*'aria-label': t\('people\.roleOf', \{[^}]*\}\),\s*\}\);/);
   const at = SCREEN.indexOf('function roleSelect');
   const fn = SCREEN.slice(at, SCREEN.indexOf('\n  }', at));
   assert.match(fn, /roleSelect\(currentKey, extra, placeholder\)/);
   assert.match(fn, /if \(placeholder\)/);
   assert.match(fn, /el\('option', \{ value: '' \}, placeholder\)/);
-  assert.match(fn, /empty\.disabled = true;/);
   assert.match(fn, /empty\.selected = !currentKey;/);
   assert.match(fn, /select\.value = currentKey \|\| '';/);
 });
@@ -162,6 +162,31 @@ test('choosing a role clears the error', () => {
   const handler = SCREEN.slice(at, SCREEN.indexOf('});', at));
   assert.match(handler, /roleField\.removeAttribute\('aria-invalid'\)/);
   assert.match(handler, /roleNote\.classList\.remove\('people-note--error'\)/);
+});
+
+// ⚠️ The first option after the placeholder is Owner. Each of these was a way to land
+// on it without choosing it (code review, 6 Nov 2026).
+test('the placeholder is NOT disabled (iOS would jump to Owner)', () => {
+  const at = SCREEN.indexOf('function roleSelect');
+  const fn = SCREEN.slice(at, SCREEN.indexOf('\n  }', at));
+  assert.doesNotMatch(fn, /\.disabled = true/);
+});
+
+test('picking the placeholder back means no role, never the previous one', () => {
+  const at = SCREEN.indexOf("roleField.addEventListener('change'");
+  const handler = SCREEN.slice(at, SCREEN.indexOf('});', at));
+  assert.match(handler, /newChoice = ROLE_CHOICES\.find\(c => c\.key === roleField\.value\) \|\| null;/);
+  assert.match(handler, /newChoice \? t\(ROLE_MEANS\[newChoice\.key\]\) : t\('people\.role\.choosePrompt'\)/);
+});
+
+test('the invite select carries the same keyboard guard as the roster', () => {
+  assert.match(SCREEN, /roleField\.addEventListener\('keydown', pickFromOpenList\)/);
+});
+
+test('after Done the keyboard lands on the new role menu', () => {
+  const at = SCREEN.indexOf('function doneButton');
+  const fn = SCREEN.slice(at, SCREEN.indexOf('return done;', at));
+  assert.match(fn, /paintCode\(\);\s*[\s\S]*codeBox\.querySelector\('select'\)[\s\S]*\.focus\(\)/);
 });
 
 test('with no role, both buttons show and the Employee-only note is hidden', () => {

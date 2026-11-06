@@ -495,8 +495,8 @@
       }
     },
     "dist/index.js": {
-      "sha": "f864508f3f5eb9c8",
-      "mapSha": "6c50655b2862344b",
+      "sha": "37e7b3a032539358",
+      "mapSha": "a8eff126aade710a",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "41d275905d191c60",
@@ -591,7 +591,7 @@
         "js/staff/home-cards-screen.js": "3acfcd54551f4b43",
         "js/staff/language.js": "dbb785955ec6ff62",
         "js/staff/new-customer.js": "2165d226991491f3",
-        "js/staff/people.js": "80110f957ec933cc",
+        "js/staff/people.js": "1a33673c50bbbe40",
         "js/supplier-label.js": "06277b76d92b5273",
         "js/sw-update.js": "ebb6ff2d277ba05b",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
