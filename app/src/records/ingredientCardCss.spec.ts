@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import cardCss from './IngredientCard.module.css?raw';
+import foldCss from './AllergenSections.module.css?raw';
 
 // What a stylesheet decides and jsdom cannot see (jsdom applies no layout): the card must not clip, every target is a
 // thumb-sized one, the pairs stack on a narrow phone, and an empty sentence under a box keeps its live region.
@@ -56,5 +57,27 @@ describe('an empty sentence under a box is collapsed, never display: none', () =
     expect(declaration(body, 'display')).toBeUndefined();
     expect(declaration(body, 'position')).toBe('absolute');
     expect(declaration(body, 'clip-path')).toBe('inset(50%)');
+  });
+});
+
+// Measured on 6 Nov 2026 at 296px: the fold head was 204px wide, and the title, the state and the chevron on one unwrapping row
+// pushed the chevron 11–25px past the card's edge (all three heads in Italian, «Allergens» in English).
+describe('a fold head never pushes its chevron off the card', () => {
+  it('the title and the state wrap together, as a group that may shrink', () => {
+    const words = rule(foldCss, '.words');
+    expect(declaration(words, 'display')).toBe('flex');
+    expect(declaration(words, 'flex-wrap')).toBe('wrap');
+    expect(declaration(words, 'flex')).toBe('1 1 auto');
+    expect(declaration(words, 'min-width')).toBe('0');
+    expect(declaration(words, 'gap')).toBe('var(--s1) var(--s3)');
+  });
+
+  it('the head itself stays one row, and the chevron never shrinks', () => {
+    expect(declaration(rule(foldCss, '.toggle'), 'flex-wrap')).toBeUndefined();
+    expect(declaration(rule(foldCss, '.chevron'), 'flex')).toBe('none');
+  });
+
+  it('nothing in the folds clips (the card’s form bar sticks)', () => {
+    expect(withoutComments(foldCss)).not.toMatch(/overflow(-[xy])?:\s*(hidden|auto|scroll|clip)/);
   });
 });
