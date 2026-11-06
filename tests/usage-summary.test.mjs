@@ -125,6 +125,42 @@ test('a device counts with the release of its NEWEST line that names one', () =>
   assert.deepEqual(summarise(unknown, NOW)[0].last7.versions, [['unknown', 1]]);
 });
 
+test('real hours count only the hours worked; older lines fall back to the first/last-minute span', () => {
+  const lines = linesFrom([
+    // Looked in at 7, worked again at 22: with real hours that is two hours, not sixteen.
+    row('bakery', DEV_A, '20261009', 'u1', {
+      firstMinute: { integerValue: '420' }, lastMinute: { integerValue: '1330' },
+      hours: ints({ '07': 600, 22: 1200, 24: 99, x: 5 }),
+    }),
+    row('bakery', DEV_B, '20261009', 'u2', { firstMinute: { integerValue: '540' }, lastMinute: { integerValue: '660' } }),
+  ]);
+  assert.deepEqual(lines[0].hours, { '07': 600, 22: 1200 });
+  const w = summarise(lines, NOW)[0].last7;
+  assert.equal(w.hours[7], 1);
+  assert.equal(w.hours[8], 0, 'nobody worked at 8 on the exact line, and the old line starts at 9');
+  assert.equal(w.hours[9], 1);
+  assert.equal(w.hours[11], 1);
+  assert.equal(w.hours[15], 0, 'the span 7→22 is no longer counted');
+  assert.equal(w.hours[22], 1);
+  assert.equal(w.hoursEstimated, 1);
+  assert.equal(w.minutesByHour[7], 10);
+  assert.equal(w.minutesByHour[22], 20);
+  assert.equal(w.minutesByHour[9], 0, 'estimated lines add no minutes');
+  const text = summaryLines(summarise(lines, NOW)[0], 'B').join('\n');
+  assert.match(text, /1 of 2 lines estimated/);
+  assert.match(text, /minutes worked per hour .*07 10/);
+});
+
+test('load times are also split by kind of device', () => {
+  const lines = linesFrom([
+    row('bakery', DEV_A, '20261009', 'u1', { kind: { stringValue: 'tablet' }, loads: ints({ orders: 1 }), loadMs: ints({ orders: 1500 }) }),
+    row('bakery', DEV_B, '20261009', 'u2', { loads: ints({ orders: 2 }), loadMs: ints({ orders: 800 }) }),
+  ]);
+  const w = summarise(lines, NOW)[0].last7;
+  assert.deepEqual(w.loadMedianByKind, [['orders', 'tablet', 1500], ['orders', 'phone', 400]]);
+  assert.match(summaryLines(summarise(lines, NOW)[0], 'B').join('\n'), /orders\/tablet 1500/);
+});
+
 test('the top routes are fifteen at most', () => {
   const routes = {};
   for (let i = 0; i < 40; i += 1) routes[`a${i}>b${i}`] = i + 1;

@@ -177,6 +177,25 @@ test('active seconds count only while visible and after a recent input', () => {
   clock.t += 15000;
   tracker.tick();
   assert.equal(tracker.pending().seconds.orders, 30);
+  assert.deepEqual(tracker.pending().hours, { 10: 30 }, 'the same active seconds, filed under the local hour');
+});
+
+test('the hours follow the clock: idle and hidden time is not work', () => {
+  const { tracker, clock, state } = setup();
+  tracker.begin('orders');
+  clock.t = new Date(2026, 9, 9, 10, 59, 50).getTime();
+  tracker.input();
+  clock.t += 15000;
+  tracker.tick();
+  clock.t += IDLE_MS + 1000;
+  tracker.tick();
+  state.visible = false;
+  tracker.input();
+  clock.t += 15000;
+  tracker.tick();
+  // The first tick after the jump is capped at 30 seconds, like the screen time.
+  assert.deepEqual(tracker.pending().hours, { 11: 30 }, 'only the active tick, in the hour it ended');
+  assert.equal(tracker.pending().seconds.orders, 30);
 });
 
 test('offline seconds count while the page is visible and the network is down', () => {

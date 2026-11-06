@@ -13,8 +13,8 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "3c7134f2e388915c",
-      "mapSha": "03d6a918d2400b10",
+      "sha": "bf17b75cba69f8a5",
+      "mapSha": "92a6c62b38999505",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4cc0a6dc159338c6",
@@ -123,8 +123,8 @@
         "js/sw-update.js": "ebb6ff2d277ba05b",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "6e22f2191ce371e8",
-        "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "76c75209558de324",
+        "js/usage-model.js": "ce0cd46b0e3e78ce",
+        "js/usage.js": "a95c4bc683bed17c",
         "js/vendor/sortable.esm.js": "6c9b20f666b97a0d",
         "js/venue-features.js": "d1dd442e6767bba8",
         "js/viewport-height.js": "79ebea16da39a8ea",
@@ -141,8 +141,8 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "4719b40a2b60797a",
-      "mapSha": "6b91b591c465a522",
+      "sha": "a338ccdc6c2ac6da",
+      "mapSha": "f4b70b28cb6bb183",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -269,8 +269,8 @@
         "js/sw-update.js": "ebb6ff2d277ba05b",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "6e22f2191ce371e8",
-        "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "76c75209558de324",
+        "js/usage-model.js": "ce0cd46b0e3e78ce",
+        "js/usage.js": "a95c4bc683bed17c",
         "js/vat-number.js": "7dda6577bbf5aedf",
         "js/vat-rates.js": "1c08624a241026df",
         "js/vendor/sortable.esm.js": "6c9b20f666b97a0d",
@@ -281,8 +281,8 @@
       }
     },
     "dist/clients.js": {
-      "sha": "3ec1a5b773c68c0a",
-      "mapSha": "d8aaab49fe9ee7f0",
+      "sha": "529d77aa5fd7adb4",
+      "mapSha": "1e36201768e4f9ef",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4cc0a6dc159338c6",
@@ -368,8 +368,8 @@
         "js/sw-update.js": "ebb6ff2d277ba05b",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "6e22f2191ce371e8",
-        "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "76c75209558de324",
+        "js/usage-model.js": "ce0cd46b0e3e78ce",
+        "js/usage.js": "a95c4bc683bed17c",
         "js/vendor/sortable.esm.js": "6c9b20f666b97a0d",
         "js/venue-features.js": "d1dd442e6767bba8",
         "js/viewport-height.js": "79ebea16da39a8ea",
@@ -384,8 +384,8 @@
       }
     },
     "dist/foodcost.js": {
-      "sha": "973b638839caaf44",
-      "mapSha": "8133e30887af2f71",
+      "sha": "46cc35cb0c929074",
+      "mapSha": "0f521ce4e551da16",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4cc0a6dc159338c6",
@@ -478,8 +478,8 @@
         "js/sw-update.js": "ebb6ff2d277ba05b",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "6e22f2191ce371e8",
-        "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "76c75209558de324",
+        "js/usage-model.js": "ce0cd46b0e3e78ce",
+        "js/usage.js": "a95c4bc683bed17c",
         "js/vat-rates.js": "1c08624a241026df",
         "js/venue-features.js": "d1dd442e6767bba8",
         "js/viewport-height.js": "79ebea16da39a8ea",
@@ -495,8 +495,8 @@
       }
     },
     "dist/index.js": {
-      "sha": "84665fd426cf9f49",
-      "mapSha": "25bd321cff81a475",
+      "sha": "cb3cb2c6884acb06",
+      "mapSha": "b726ff0e6eef0503",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4cc0a6dc159338c6",
@@ -596,8 +596,8 @@
         "js/sw-update.js": "ebb6ff2d277ba05b",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "6e22f2191ce371e8",
-        "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "76c75209558de324",
+        "js/usage-model.js": "ce0cd46b0e3e78ce",
+        "js/usage.js": "a95c4bc683bed17c",
         "js/vendor/sortable.esm.js": "6c9b20f666b97a0d",
         "js/venue-features.js": "d1dd442e6767bba8",
         "js/viewport-height.js": "79ebea16da39a8ea",
@@ -627,8 +627,8 @@
       }
     },
     "dist/inventory.js": {
-      "sha": "48c87889be8c49b1",
-      "mapSha": "1ad0341a3ea5b626",
+      "sha": "4df81d108affbb1b",
+      "mapSha": "58188d0e91b811d6",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4cc0a6dc159338c6",
@@ -709,8 +709,8 @@
         "js/sw-update.js": "ebb6ff2d277ba05b",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "6e22f2191ce371e8",
-        "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "76c75209558de324",
+        "js/usage-model.js": "ce0cd46b0e3e78ce",
+        "js/usage.js": "a95c4bc683bed17c",
         "js/venue-features.js": "d1dd442e6767bba8",
         "js/viewport-height.js": "79ebea16da39a8ea",
         "js/wake-lock.js": "c6b69350b8771fa8",
@@ -767,8 +767,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "1c3a448241109d18",
-      "mapSha": "f63aef5b14e1983e",
+      "sha": "0abb17e59ec30bab",
+      "mapSha": "ae148d32851a6db5",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -903,8 +903,8 @@
         "js/sw-update.js": "ebb6ff2d277ba05b",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "6e22f2191ce371e8",
-        "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "76c75209558de324",
+        "js/usage-model.js": "ce0cd46b0e3e78ce",
+        "js/usage.js": "a95c4bc683bed17c",
         "js/vat-number.js": "7dda6577bbf5aedf",
         "js/vat-rates.js": "1c08624a241026df",
         "js/vendor/sortable.esm.js": "6c9b20f666b97a0d",
@@ -921,8 +921,8 @@
       }
     },
     "dist/pastries.js": {
-      "sha": "ff8d9311a3d23cc1",
-      "mapSha": "cbc56be629bbb2a2",
+      "sha": "130a4c8931cb3d91",
+      "mapSha": "1c27ca026c925537",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "4cc0a6dc159338c6",
@@ -1006,8 +1006,8 @@
         "js/sw-update.js": "ebb6ff2d277ba05b",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "6e22f2191ce371e8",
-        "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "76c75209558de324",
+        "js/usage-model.js": "ce0cd46b0e3e78ce",
+        "js/usage.js": "a95c4bc683bed17c",
         "js/venue-features.js": "d1dd442e6767bba8",
         "js/viewport-height.js": "79ebea16da39a8ea",
         "js/wake-lock.js": "c6b69350b8771fa8",
@@ -1027,8 +1027,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "e499e63d1748f033",
-      "mapSha": "c75060e783cf2d3a",
+      "sha": "6c2b0dbd5442ef18",
+      "mapSha": "6de3ec5112df86f4",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -1149,8 +1149,8 @@
         "js/sw-update.js": "ebb6ff2d277ba05b",
         "js/unsent-guard.js": "3fd97838bf0b8e7f",
         "js/update-gate.js": "6e22f2191ce371e8",
-        "js/usage-model.js": "d6703bc466f26817",
-        "js/usage.js": "76c75209558de324",
+        "js/usage-model.js": "ce0cd46b0e3e78ce",
+        "js/usage.js": "a95c4bc683bed17c",
         "js/vat-number.js": "7dda6577bbf5aedf",
         "js/vat-rates.js": "1c08624a241026df",
         "js/vendor/fflate.esm.js": "71c4d7d689b851e5",

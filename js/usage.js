@@ -46,7 +46,7 @@ import { deviceKind, sameSession } from './device-model.js';
 import { deviceIdFrom } from './device-ping.js';
 import {
   newAcc, mergeAcc, cleanAcc, isEmptyAcc, addScreen, addRoute, addSeconds, addTap, addAction,
-  addLoad, addOffline, touchMinute, dayKeyOf, docId, payloadOf, SCREEN_RE, ACTION_RE,
+  addLoad, addOffline, addHour, touchMinute, dayKeyOf, docId, payloadOf, SCREEN_RE, ACTION_RE,
 } from './usage-model.js';
 
 export const STORE_PREFIX = 'usage-';
@@ -230,6 +230,7 @@ export function createTracker(deps = {}) {
     if (!d.online()) addOffline(mem, elapsed);
     if (current && nowMs - lastInputAt <= IDLE_MS) {
       addSeconds(mem, current, elapsed);
+      addHour(mem, d.now(), elapsed);
       touchMinute(mem, d.now());
       remember(current);
     }
