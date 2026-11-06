@@ -80,3 +80,9 @@ test('⚠️ the grip sits on the RIGHT of each reorder row, after the name and 
   assert.match(css, /\.cat-reorder-row \{[^}]*padding: 2px 2px 2px 12px;/, 'room before the name, the grip against the right edge');
   assert.match(css, /\.cat-reorder-grip \{ margin-left: 0; \}/, 'the Home grip’s pull to the left is cancelled');
 });
+
+test('⚠️ «Divisioni» rows keep 8px on the right: they also carry .cat-reorder-row, whose right padding is 2px (code review, 6 Nov 2026)', () => {
+  const css = codeOf(read('catalogue.css'));
+  assert.match(css, /\.cat-divider-row,\s*\.cat-divider-row--last \{[^}]*padding-left: 12px;[^}]*padding-right: 8px;/,
+    'the amount must not touch the list frame in divider mode');
+});

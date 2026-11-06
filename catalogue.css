@@ -683,7 +683,9 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-ing-row--divider + .cat-ing-row,
 .cat-ing-editgroup--divider + .cat-ing-editgroup { border-top: 0; }
 .cat-divider-row,
-.cat-divider-row--last { min-height: 44px; padding-left: 12px; }
+/* The right side is set here too: these rows also carry .cat-reorder-row, whose right padding is
+   only 2px since its grip moved there (6 Nov 2026), and the amount must not touch the frame. */
+.cat-divider-row--last { min-height: 44px; padding-left: 12px; padding-right: 8px; }
 /* The row above already draws the edge between them (the buttons keep only a bottom border). */
 .cat-divider-row--last { border-top: 0; }
 .cat-divider-row { width: 100%; border-width: 0 0 1px; border-style: solid; border-color: var(--cat-border); text-align: left; font: inherit; cursor: pointer; }

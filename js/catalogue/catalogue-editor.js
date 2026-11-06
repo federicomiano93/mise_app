@@ -178,7 +178,7 @@ export function renderEditor({
   // ingredienti già compilati».
   // ⚠️ A MODE, NOT A GRIP ON EVERY ROW. At 296px a row already holds a name, an amount, a
   // unit and a bin; a fifth control would take its width from the NAME. While reordering,
-  // each row is its grip, its name and its amount — nothing to type into, nothing to hit
+  // each row is its name, its amount and its grip — nothing to type into, nothing to hit
   // by accident while a finger is dragging.
   // ⚠️ THE SAME ROW OBJECTS MOVE (moveRow), so a guided mixing step, which points at a row
   // by its `rid`, still points at the right ingredient afterwards.

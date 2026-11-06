@@ -647,8 +647,8 @@ function renderRecipeDetail(ri) {
 //
 // Federico: «inserisci la funzione di ordinare gli ingredienti nella scheda calcolatore
 // come è fatta nella scheda ricette».
-// ⚠️ A MODE, NOT A GRIP ON EVERY ROW: while reordering each row is its grip, its name and
-// its amount — nothing to type into while a finger is dragging.
+// ⚠️ A MODE, NOT A GRIP ON EVERY ROW: while reordering each row is its name, its amount and
+// its grip — nothing to type into while a finger is dragging.
 // ⚠️ THE SAME ROW OBJECTS MOVE (moveIngredient) and only their order changes: keys, grams,
 // leaveningKey, leaveningDefaultPct and baselinePct are untouched, so the leavening (found
 // by `key`) still points at the right ingredient and the dough does not change.
