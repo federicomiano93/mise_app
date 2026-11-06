@@ -159,6 +159,8 @@ test('load times are also split by kind of device', () => {
   ]);
   const w = summarise(lines, NOW)[0].last7;
   assert.deepEqual(w.loadMedianByKind, [['orders', 'tablet', 1500], ['orders', 'phone', 400]]);
+  const odd = linesFrom([row('bakery', DEV_A, '20261009', 'u1', { loads: ints({ index: 3 }), loadMs: ints({ index: 1000 }) })]);
+  assert.deepEqual(summarise(odd, NOW)[0].last7.loadMedianByKind, [['index', 'phone', 333]], 'whole milliseconds');
   assert.match(summaryLines(summarise(lines, NOW)[0], 'B').join('\n'), /orders\/tablet 1500/);
 });
 

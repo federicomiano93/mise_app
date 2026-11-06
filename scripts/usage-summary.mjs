@@ -212,7 +212,7 @@ export function summariseWindow(lines, now, days) {
     loadMedianMs: [...loadAverages.entries()].map(([page, list]) => [page, median(list)])
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
     // [page, kind, median ms]: the lab tablet and a phone load the same page very differently.
-    loadMedianByKind: [...loadByKind.entries()].map(([k, list]) => [...k.split('|'), median(list)])
+    loadMedianByKind: [...loadByKind.entries()].map(([k, list]) => [...k.split('|'), Math.round(median(list))])
       .sort((a, b) => a[0].localeCompare(b[0]) || b[2] - a[2]),
     offlineMinutes: Math.round(offlineSeconds / 60),
     versions: [...versions.entries()].sort((a, b) => versionOrder(a[0], b[0])),
