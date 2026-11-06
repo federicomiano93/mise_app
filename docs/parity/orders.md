@@ -1444,3 +1444,29 @@ one h1, no console error, at every screen; config/orders put back at the end. Ag
 REFUSED move (`drive-mise2-orders-8-refused.mjs`, same arguments): the owner opens «Ordine dei fornitori», becomes an employee in the
 database while the screen still thinks owner, moves a supplier by the keyboard; the status line says it, no dialog, the list goes back,
 nothing written, the page answers, Back works, in Italian at 360 and English at 1024; the role put back.
+
+## Step 3f-8b — the flat view and the doors to the cards (6 Nov 2026, plan agreed by him)
+
+The rest of slice 3f-8 is split again: **3f-8b** (this one) is the flat view and the doors; **3f-8c** (next, its own plan) is the
+summary (L19) and the money (L20), the slice where Orders starts reading prices, only for whoever may.
+
+**Items:** L17 (the flat view and its swap), L18 (its «only what I am ordering», frozen), L21 (the sticky head over it), L30 (add / edit /
+delete an ingredient from Orders) and N1, new in Mise 2: the supplier's name on its order screen is a door to its screen in «Ingredients &
+suppliers». **No rule changed, no new read.**
+
+**His choice (6 Nov 2026): doors «A».** Every door opens the REAL screen of «Ingredients & suppliers» (`/suppliers/ingredient/<id>`,
+`/suppliers/ingredient/new?supplier=<id>`, `/suppliers/supplier/<id>`), as the recipe's door to Food cost does; Back, a Save or a delete
+there is the browser's Back, which lands on the same Orders screen with the focus on the door that was pressed and the scroll where it
+was. Typing in the order is safe: leaving the section sends it at once (O2). The card already cleans the order's line of an ingredient it
+deletes and freezes the unit of a typed line whose order unit it changes (`suppliersStore.ts`). The doors are drawn only where
+`mayEditRecords` says yes, which is the very gate of the Suppliers section (`session/visibility.ts`), so a door never bounces.
+
+**Taken for him (6 Nov 2026, told in the plan):**
+- F-1. On the split the flat view takes the whole width (no detail pane): the rows need the room for their boxes.
+- F-2. «Not in use» lines are in the flat view too, in a folded group at the foot that opens by itself when one of them has a quantity,
+  as on a supplier's screen (O1). The current app leaves them out.
+- F-3. The flat view is its own address, `/orders/ingredients`, at the list's level (the swap REPLACES the entry, so Back does not walk
+  through views), so it survives a trip to a card and back. Opening Orders still lands on «by supplier» (the view is not remembered, L17).
+- F-4. The flat view shows the head and the rows only: the notices panel, «Order today», the debt doors and «Order lists» stay on the
+  supplier view, one tap away.
+- F-5. The letter dividers stick under the head and the column names while their letter's rows scroll.
