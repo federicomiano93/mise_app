@@ -1140,6 +1140,7 @@ const DICTIONARIES = Object.freeze({
     'orders.summary.reopened': '{supplier} is back on today’s orders.',
     'orders.summary.saveFailed': 'Not saved — try again in a moment.',
     'orders.today.notOrdered': 'not ordered',
+    'orders.list.dueToday': 'To order today',
     // ── Suppliers & ingredients beside the list, on a tablet (29 Sep 2026) ────
     'orders.registry.pane.ingredients.title': 'Choose an ingredient',
     'orders.registry.pane.ingredients.text': 'Tap an ingredient on the left: its card opens here, with the allergens and the price.',
@@ -4281,6 +4282,7 @@ const DICTIONARIES = Object.freeze({
     'orders.summary.reopened': '{supplier} è di nuovo tra gli ordini di oggi.',
     'orders.summary.saveFailed': 'Non salvato: riprova tra un momento.',
     'orders.today.notOrdered': 'non ordinato',
+    'orders.list.dueToday': 'Da ordinare oggi',
     // ── Fornitori e ingredienti accanto alla lista, su tablet (29 Sep 2026) ───
     'orders.registry.pane.ingredients.title': 'Scegli un ingrediente',
     'orders.registry.pane.ingredients.text': 'Tocca un ingrediente a sinistra: la sua scheda si apre qui, con gli allergeni e il prezzo.',

@@ -1,5 +1,6 @@
 // reminders.js — the two things the Orders screen must tell you the moment it
-// opens. Pure: no Firestore, no DOM.
+// opens. Pure: no Firestore, no DOM. (Also: dueTodayIds, the still-open subset of 1, which
+// highlights the supplier lists.)
 //
 //   1. todayOrders      — which suppliers are ordered TODAY, and which of them
 //                         you have already placed (the record {today}_{supplier}
@@ -70,6 +71,18 @@ export function todayOrders({ suppliers, history, today, skipped = null }) {
       const isPlaced = placed.has(supplier.id);
       return { supplier, placed: isPlaced, skipped: !isPlaced && closed.has(supplier.id) };
     });
+}
+
+// The ids of the suppliers STILL to order today: order day today, active, nothing recorded, not
+// closed. ONE definition on purpose — the «Ordina oggi» strip's open chips and the highlight in
+// both supplier lists (Orders, Fornitori) must agree, or a supplier would be lit in one place and
+// ticked off in another.
+export function dueTodayIds({ suppliers, history, today, skipped = null }) {
+  return new Set(
+    todayOrders({ suppliers, history, today, skipped })
+      .filter(r => !r.placed && !r.skipped)
+      .map(r => r.supplier.id),
+  );
 }
 
 // What the order summary sheet may offer about TODAY for one supplier, with nothing typed for it:

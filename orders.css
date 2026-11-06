@@ -344,6 +344,32 @@
   transition: transform 0.06s ease;
 }
 .supplier-row-open:active { transform: scale(0.99); }
+/* ── «To order today» (both supplier lists) ─────────────────────────────────────
+   The warm crust family, deliberately NOT the green accent: on the tablet a green tint
+   plus bar already means «the row open in the pane» (.app-split-list [aria-current],
+   .reg-row-picked). The WORD in the tag is the signal; the colour only supports it
+   (P18: never colour alone). Borders stay 1px, so nothing shifts. [hidden] is hidden by
+   tokens.css' global rule. */
+.supplier-due-tag {
+  display: block;
+  width: fit-content;
+  margin-top: 4px;
+  padding: 2px 8px;
+  /* --radius-sm, not the pill: on one line it rounds fully anyway; at 296px the Orders row's name
+     column is ~100px and the words wrap, where a pill turned into a lumpy capsule (measured). */
+  border-radius: var(--radius-sm);
+  line-height: 1.3;
+  background: var(--crust-bg);
+  border: 1px solid var(--crust);
+  color: var(--crust-ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+.supplier-row.supplier-row--due {
+  border-color: var(--crust);
+  background: var(--crust-bg);
+}
 /* Tapped while the list is still the local copy: the supplier opens by itself once the live lists
    land (orders-main.js holdSupplier). A quiet dimming, no animation. */
 .supplier-row--waiting { opacity: 0.6; }
@@ -1587,6 +1613,12 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   cursor: pointer;
 }
 .reg-drill:active { transform: scale(0.97); }
+/* Still to order today (colour reasoning: see .supplier-due-tag). The row open in the
+   tablet's pane keeps its own tint, which must win. */
+.mgmt-item.reg-due:not([aria-current="true"]) {
+  border-color: var(--crust);
+  background: var(--crust-bg);
+}
 .reg-chevron {
   flex-shrink: 0;
   color: var(--text3);
@@ -3247,6 +3279,16 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 14px;
+  }
+  /* «To order today» on the tablet: the card look sits on .supplier-row-open, the row stays
+     transparent, so the phone rule above is undone here and the tint goes on the card. */
+  body[data-section="orders"] .supplier-row.supplier-row--due {
+    background: transparent;
+    border: none;
+  }
+  body[data-section="orders"] .supplier-row.supplier-row--due > .supplier-row-open {
+    border-color: var(--crust);
+    background: var(--crust-bg);
   }
   body[data-section="orders"] .supplier-row-view {
     width: var(--tap-min);

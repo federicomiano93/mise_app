@@ -81,7 +81,8 @@ export function listStatus({ venueOpen, loaded, failed, emptyCopy, stalled, onli
   return stalled || (emptyCopy && online === false) ? LIST_STATUS.unreachable : LIST_STATUS.waiting;
 }
 
-// data:    { suppliers(): [], favouriteSuppliers(): [supplierId], ingredients(): [], categories(current): [], orderUnits(current): [],
+// data:    { suppliers(): [], favouriteSuppliers(): [supplierId], dueToday?(): Set<supplierId> (optional: the
+//            suppliers still to order today, highlighted in the list; absent = none), ingredients(): [], categories(current): [], orderUnits(current): [],
 //            packs(current): [], categoriesLoaded(): boolean, pricesLoaded(): boolean,
 //            listStatus('ingredients' | 'suppliers'): one of LIST_STATUS,
 //            readPrice(id): Promise<price doc | null> } — live getters; categories,
@@ -319,16 +320,26 @@ export function buildRegistry(data, actions, hooks = {}) {
     // point of this screen existing: one level at a time, so what a supplier SELLS
     // is reachable without going through its address details first.
     const counts = countBySupplier();
-    const supplierRow = (s) => drillRow(
-      supplierLabel(s),
-      // ⚠️ THE PLURAL IS IN THE DICTIONARY, never an `if` here: Italian and English
-      // do not agree about when one form becomes the other, and a ternary in code
-      // is a plural rule that only speaks English.
-      [s.category, t('orders.productsCount', { n: counts[s.id] || 0 })].filter(Boolean).join(' · '),
-      s.active !== false,
-      () => openFromList(() => openSupplier(s.id), `supplier:${s.id}`),
-      `supplier:${s.id}`,
-    );
+    // Asked ONCE per paint: the suppliers still to order today (absent getter = nobody lit).
+    const due = data.dueToday?.() || new Set();
+    const supplierRow = (s) => {
+      const row = drillRow(
+        supplierLabel(s),
+        // ⚠️ THE PLURAL IS IN THE DICTIONARY, never an `if` here: Italian and English
+        // do not agree about when one form becomes the other, and a ternary in code
+        // is a plural rule that only speaks English.
+        [s.category, t('orders.productsCount', { n: counts[s.id] || 0 })].filter(Boolean).join(' · '),
+        s.active !== false,
+        () => openFromList(() => openSupplier(s.id), `supplier:${s.id}`),
+        `supplier:${s.id}`,
+      );
+      if (due.has(s.id)) {
+        row.classList.add('reg-due');
+        row.querySelector('.mgmt-item-main')?.appendChild(
+          el('span', { class: 'supplier-due-tag', text: t('orders.list.dueToday') }));
+      }
+      return row;
+    };
     const listOf = (suppliers) => {
       const list = el('div', { class: 'mgmt-list' });
       suppliers.forEach(s => list.appendChild(supplierRow(s)));

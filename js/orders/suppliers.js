@@ -120,12 +120,21 @@ export function refreshSupplierDerived(supplier, ingredients, entries, forDay = 
   if (barText) barText.textContent = summaryBarLabel(filled);
 }
 
+// The «still to order today» highlight on one row, toggled IN PLACE (never a rebuild, so a row
+// keeps its focus): a class on the row and the visibility of its tag.
+export function paintDue(row, due) {
+  row.classList.toggle('supplier-row--due', due);
+  const tag = row.querySelector('.supplier-due-tag');
+  if (tag) tag.hidden = !due;
+}
+
 // container: #suppliers-list.
 // ctx: { query, filterActive, onQuery(text), onFilter(active), onOpen(supplierId),
 //        onView(supplierId), onPainted() }
-// -> { repaint({ suppliers, ingredientsBySupplier, entries }) }
+// -> { repaint({ suppliers, ingredientsBySupplier, entries, forDay?, dueToday?: Set<supplierId> }),
+//      updateCounts(), markDue(Set<supplierId>) — re-marks the rows on screen without rebuilding }
 export function mountSupplierList(container, ctx) {
-  let data = { suppliers: [], ingredientsBySupplier: {}, entries: {} };
+  let data = { suppliers: [], ingredientsBySupplier: {}, entries: {}, dueToday: new Set() };
   let query = ctx.query || '';
   let filtering = Boolean(ctx.filterActive);
 
@@ -225,6 +234,12 @@ export function mountSupplierList(container, ctx) {
       orderingBtn.textContent = t('orders.filter.ordering', { n: ordering });
       filterSwitch.hidden = ordering === 0 && !filtering;
     },
+    markDue(ids) {
+      data.dueToday = ids || new Set();
+      list.querySelectorAll('.supplier-row').forEach(row => {
+        paintDue(row, data.dueToday.has(row.dataset.supplier));
+      });
+    },
   };
 }
 
@@ -246,6 +261,13 @@ function buildSupplierRow(supplier, data, ctx) {
   const forDay = el('span', { class: 'supplier-for-day', id: `for-${supplier.id}` });
   paintForDay(forDay, filled ? data.forDay?.(supplier.id) || '' : '', supplier);
 
+  // Always in the DOM, shown or hidden, so markDue can flip it in place. The WORD is the signal.
+  const due = Boolean(data.dueToday?.has(supplier.id));
+  const dueTag = el('span', {
+    class: 'supplier-due-tag', id: `due-${supplier.id}`, text: t('orders.list.dueToday'),
+  });
+  dueTag.hidden = !due;
+
   const open = el('button', {
     type: 'button',
     class: 'supplier-row-open',
@@ -257,6 +279,7 @@ function buildSupplierRow(supplier, data, ctx) {
       el('span', { class: 'supplier-name', text: supplierLabel(supplier) }),
       el('span', { class: 'supplier-meta', text: [supplier.category, days].filter(Boolean).join(' · ') }),
       forDay,
+      dueTag,
     ]),
     count,
     el('span', { class: 'supplier-row-chevron', icon: CHEVRON_SVG, 'aria-hidden': 'true' }),
@@ -293,7 +316,7 @@ function buildSupplierRow(supplier, data, ctx) {
   spacer.hidden = filled > 0;
 
   return el('div', {
-    class: 'supplier-row',
+    class: due ? 'supplier-row supplier-row--due' : 'supplier-row',
     dataset: { supplier: supplier.id },
   }, [view, open, summaryBtn, spacer]);
 }
