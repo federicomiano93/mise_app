@@ -647,8 +647,8 @@ function renderRecipeDetail(ri) {
 //
 // Federico: «inserisci la funzione di ordinare gli ingredienti nella scheda calcolatore
 // come è fatta nella scheda ricette».
-// ⚠️ A MODE, NOT A GRIP ON EVERY ROW: while reordering each row is its grip, its name and
-// its amount — nothing to type into while a finger is dragging.
+// ⚠️ A MODE, NOT A GRIP ON EVERY ROW: while reordering each row is its name, its amount and
+// its grip — nothing to type into while a finger is dragging.
 // ⚠️ THE SAME ROW OBJECTS MOVE (moveIngredient) and only their order changes: keys, grams,
 // leaveningKey, leaveningDefaultPct and baselinePct are untouched, so the leavening (found
 // by `key`) still points at the right ingredient and the dough does not change.
@@ -670,10 +670,11 @@ function reorderList(r) {
       if (to < 0 || to >= r.ingredients.length) return;
       moveTo(r, idx, to, true);
     });
+    // The grip on the RIGHT, as in the Recipe book's editor (Federico, 3 Nov 2026).
     list.appendChild(el('div', { class: 'cp-reorder-row' }, [
-      grip,
       el('span', { class: 'cp-reorder-name' }, name),
       el('span', { class: 'cp-reorder-amount' }, `${String(ing.grams)} g`),
+      grip,
     ]));
   });
   // ⚠️ HOLD TO DRAG ON A PHONE (200ms), so scrolling with a thumb never moves a row.
