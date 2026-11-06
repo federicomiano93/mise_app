@@ -25,7 +25,8 @@ import { firstInvalidNumber } from './product-limits.js';
 // ⚠️ READ WHERE THE FIELD IS DRAWN, never at module load: the venue — and therefore
 // its country, and therefore its currency — arrives with the session, after every
 // module has been evaluated. See js/currency.js.
-import { currentCurrency } from '../currency.js';
+import { currentCurrency, localNumber } from '../currency.js';
+import { costPerKg } from './per-kg-model.js';
 import { costRecipe } from '../catalogue/recipe-cost-model.js';
 // Pure models only, like recipe-cost-model.js above: what a typed name matches, and how
 // search text is compared. The screens that SHOW the choices are shared, in js/ root.
@@ -55,6 +56,35 @@ const LINE_REASON_TEXT = {
   'no-piece-weight': 'fc.ingredientNoPieceWeight',
   'no-piece-price': 'fc.ingredientNoPiecePrice',
 };
+
+// Why a «Cost per 1 kg» row is shown but not counted — keys, resolved at draw time.
+const PER_KG_REASON_TEXT = {
+  'no-price': 'fc.perKg.noPrice',
+  'not-weighed': 'fc.perKg.notWeighed',
+  'no-recipe': 'fc.perKg.noRecipe',
+  'no-piece-weight': 'fc.perKg.noPieceWeight',
+  'no-piece-price': 'fc.perKg.noPiecePrice',
+};
+
+const CHEVRON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
+
+// A weight for the «Cost per 1 kg» list: under 1 kg in whole grams (one decimal under
+// 10 g), from 1 kg in kilos with up to 3 decimals. localNumber() because the figure sits
+// on the same line as a price.
+// Decided on the ROUNDED grams, so 999.6 g reads «1 kg», never «1000 g».
+function perKgWeightText(kg) {
+  const g = kg * 1000;
+  const shown = g < 10 ? Number(g.toFixed(1)) : Math.round(g);
+  if (shown < 1000) return `${localNumber(String(shown))} g`;
+  return `${localNumber(String(Number(kg.toFixed(3))))} kg`;
+}
+
+// A count of pieces in one kilo: one decimal, two under one piece (a box shared by many
+// kilos), so a counted cost never sits beside «0 pz».
+function perKgPiecesText(pcs) {
+  return localNumber(String(pcs < 1 ? Number(pcs.toFixed(2)) : Number(pcs.toFixed(1))));
+}
 
 // The unit word for a selling mode's figures: «per piece», «per kg», «per pack».
 function unitWord(mode) {
@@ -268,6 +298,66 @@ export function renderEditor({ product, draft = null, app }) {
     if (cost.partial) prodCost.appendChild(el('p', { class: 'fc-answer-partial', text: t('fc.costPartial') }));
   }
 
+  // ── Cost of one kilo of the finished product, line by line ─────────────────
+  // ⚠️ Its own box, never inside «Composto da»: no money there (13 Sep 2026). The
+  // element is created ONCE so it keeps open/closed through every repaint; only its
+  // inner content is replaced.
+  // ⚠️ THE SUMMARY IS BUILT ONCE TOO, and only its figure is rewritten: a tapped summary
+  // holds the focus, and the data listeners repaint this box at any moment (refreshData).
+  const perKgNum = el('span', { class: 'fc-perkg-num' });
+  const perKgBody = el('div', { class: 'fc-perkg-body' });
+  const perKg = el('details', { class: 'fc-perkg' }, [
+    el('summary', { class: 'fc-perkg-summary' }, [
+      el('span', { text: t('fc.perKg.title') }),
+      el('span', { class: 'fc-perkg-sum' }, [
+        perKgNum,
+        el('span', { class: 'fc-perkg-chevron', icon: CHEVRON_SVG }),
+      ]),
+    ]),
+    perKgBody,
+  ]);
+
+  function paintPerKg(tables) {
+    // ⚠️ A FAULT HERE MUST NOT TAKE THE CARD DOWN (P17): the box is a reading aid, and the
+    // food cost answer and the editor are painted after it.
+    let res;
+    try { res = costPerKg(working, tables); } catch (e) { res = { total: null }; }
+    perKg.hidden = res.total === null;
+    perKgBody.replaceChildren();
+    if (res.total === null) return;
+    perKgNum.textContent = formatRate(res.total);
+
+    const list = el('ul', { class: 'fc-perkg-list' });
+    res.rows.forEach(row => {
+      const parts = [];
+      const hasKg = row.kg !== null && row.kg !== undefined;
+      const hasPcs = row.pcs !== null && row.pcs !== undefined;
+      if (hasKg && !(row.kind === 'piece' && hasPcs)) parts.push(perKgWeightText(row.kg));
+      else if (hasPcs) parts.push(t('fc.perKg.pieces', { n: perKgPiecesText(row.pcs) }));
+      if (row.reason) parts.push(t(PER_KG_REASON_TEXT[row.reason]));
+      else if (row.pricePerKg !== null && row.pricePerKg !== undefined) parts.push(`${formatRate(row.pricePerKg)} / kg`);
+      else if (row.priceEach !== null && row.priceEach !== undefined) parts.push(t('price.perEach', { rate: formatRate(row.priceEach) }));
+      list.appendChild(el('li', { class: 'fc-perkg-row' }, [
+        el('span', { class: 'fc-perkg-name', text: row.name }),
+        // ⚠️ formatRate, LIKE THE TOTAL: rows in cents beside a total in tenths of a cent
+        // visibly fail to add up, and the box would look wrong when it is not.
+        row.reason ? null : el('span', { class: 'fc-perkg-cost', text: formatRate(row.cost) }),
+        el('span', { class: 'fc-perkg-detail', text: parts.join(' · ') }),
+      ]));
+    });
+
+    perKgBody.appendChild(list);
+    perKgBody.appendChild(el('div', { class: 'fc-perkg-total' }, [
+      el('span', { text: t('fc.perKg.total') }),
+      el('span', { class: 'fc-perkg-num', text: formatRate(res.total) }),
+    ]));
+    // ⚠️ NEUTRAL, NOT «IT COSTS MORE»: a row with no price adds neither cost nor weight in
+    // the cost model, so the figure can be too high (water not linked) as well as too low.
+    if (res.partial) perKgBody.appendChild(el('p', { class: 'fc-answer-partial', text: t('fc.perKg.partial') }));
+    if (res.packagingLeftOut) perKgBody.appendChild(el('p', { class: 'fc-note', text: t('fc.perKg.packagingLeftOut') }));
+    if (res.lossy) perKgBody.appendChild(el('p', { class: 'fc-note', text: t('fc.perKg.lossNote') }));
+  }
+
   // ── The answer, live ───────────────────────────────────────────────────────
   const answer = el('div', { class: 'fc-answer' });
 
@@ -275,6 +365,7 @@ export function renderEditor({ product, draft = null, app }) {
     const tables = liveTables();
     paintProductionCost();
     paintSuggestion(tables);
+    paintPerKg(tables);
     // Minutes typed but no rate to turn them into money: say where the rate is set — and
     // only to somebody who can set it; an employee is simply shown no labour money.
     labourNote.textContent = working.labourMinutes > 0 && app.mayManage() && !(Number(tables.labourCostPerHour) > 0)
@@ -969,6 +1060,7 @@ export function renderEditor({ product, draft = null, app }) {
   const root = el('div', { class: 'fc-view fc-editor' }, [
     prodCost,
     answer,
+    perKg,
 
     el('div', { class: 'fc-field' }, [
       el('label', { class: 'fc-label', for: 'fcName', text: t('fc.name') }),
