@@ -139,8 +139,10 @@ export function summariseWindow(lines, now, days) {
   const hours = new Array(24).fill(0);
   const loadAverages = new Map();
   const people = new Map();
-  const versions = new Map();
-  const seenDevices = new Set();
+  // Per device: the release of its NEWEST line that names one. (The lines arrive ordered by
+  // document name = device then day, oldest first; counting the first line seen reported the
+  // OLDEST release of the window, e.g. v716 for a device already on v741.)
+  const deviceVersion = new Map();
   let offlineSeconds = 0;
   for (const line of inWindow) {
     const day = perDay.get(line.dayKey) || { people: new Set(), devices: new Set() };
@@ -162,11 +164,14 @@ export function summariseWindow(lines, now, days) {
     }
     add(people, line.uid, 1);
     offlineSeconds += line.offlineSeconds;
-    if (!seenDevices.has(line.deviceId)) {
-      seenDevices.add(line.deviceId);
-      add(versions, line.appVersion ?? 'unknown', 1);
+    const known = deviceVersion.get(line.deviceId);
+    if (!known) deviceVersion.set(line.deviceId, { dayKey: line.dayKey, version: line.appVersion });
+    else if (line.appVersion && (!known.version || line.dayKey >= known.dayKey)) {
+      deviceVersion.set(line.deviceId, { dayKey: line.dayKey, version: line.appVersion });
     }
   }
+  const versions = new Map();
+  for (const { version } of deviceVersion.values()) add(versions, version ?? 'unknown', 1);
   return {
     days,
     lines: inWindow.length,

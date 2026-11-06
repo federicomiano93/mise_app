@@ -112,6 +112,19 @@ test('per venue: the last 7 and 30 days, people and devices per day, screens, ro
   assert.deepEqual(b.last7.versions, [['649', 2]]);
 });
 
+test('a device counts with the release of its NEWEST line that names one', () => {
+  const lines = linesFrom([
+    row('bakery', DEV_A, '20261005', 'u1', { appVersion: { stringValue: '716' } }),
+    row('bakery', DEV_A, '20261008', 'u1', { appVersion: { stringValue: '741' } }),
+    row('bakery', DEV_A, '20261009', 'u1', { appVersion: { nullValue: null } }),
+    row('bakery', DEV_B, '20261003', 'u2', { appVersion: { nullValue: null } }),
+    row('bakery', DEV_B, '20261004', 'u2', { appVersion: { stringValue: '700' } }),
+  ]);
+  assert.deepEqual(summarise(lines, NOW)[0].last30.versions, [['741', 1], ['700', 1]]);
+  const unknown = linesFrom([row('bakery', DEV_A, '20261009', 'u1', { appVersion: { nullValue: null } })]);
+  assert.deepEqual(summarise(unknown, NOW)[0].last7.versions, [['unknown', 1]]);
+});
+
 test('the top routes are fifteen at most', () => {
   const routes = {};
   for (let i = 0; i < 40; i += 1) routes[`a${i}>b${i}`] = i + 1;

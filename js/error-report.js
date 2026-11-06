@@ -24,7 +24,7 @@
 // ⚠️ THE THROTTLE KEY IS "error-reports": js/local-data.js keeps it through a sign-out, or
 // signing out and in again would be a way round the daily cap.
 
-import { askVersionOf, versionNumber } from './app-version.js';
+import { askPageVersion } from './app-version.js';
 import { deviceKind, isValidDeviceId, localDayKey } from './device-model.js';
 import {
   recordFromError, recordFromRejection, recordFromConsole, isNoise, signature, shouldSend,
@@ -184,8 +184,7 @@ function REAL() {
     }),
     online: () => navigator.onLine === true,
     version: async () => {
-      const controller = navigator.serviceWorker ? navigator.serviceWorker.controller : null;
-      return versionNumber(await askVersionOf(controller, { timeoutMs: 800, attempts: 1 }));
+      return askPageVersion({ timeoutMs: 800, attempts: 1 });
     },
     send: payload => import('./firebase.js').then(m => m.reportError(payload)),
   };

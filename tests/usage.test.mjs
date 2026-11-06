@@ -247,6 +247,45 @@ test('a flush before ten minutes sends nothing; at ten minutes it sends the whol
   assert.ok(!('uid' in sent[0].payload) && !('bakery' in sent[0].payload), 'the data layer adds those');
 });
 
+test('no answer about the release is not remembered: the next send asks again', async () => {
+  let answer = null;
+  let asks = 0;
+  const { tracker, clock, sent } = setup({ deps: { version: async () => { asks += 1; return answer; } } });
+  tracker.setSession(READY);
+  tracker.begin('orders');
+  tracker.setSession(READY);
+  clock.t += SEND_EVERY_MS + 1000;
+  assert.equal(await tracker.flush('timer'), 'sent');
+  assert.equal(sent[0].payload.appVersion, null);
+  answer = '741';
+  tracker.action('order-sent');
+  clock.t += SEND_EVERY_MS + 1000;
+  assert.equal(await tracker.flush('timer'), 'sent');
+  assert.equal(sent[1].payload.appVersion, '741');
+  assert.ok(asks >= 2, 'asked again after the first null');
+});
+
+test('⚠️ a later send that cannot learn the release keeps the one already sent that day', async () => {
+  const storage = memoryStorage();
+  const first = setup({ storage });
+  first.tracker.setSession(READY);
+  first.tracker.begin('orders');
+  first.tracker.setSession(READY);
+  first.clock.t += SEND_EVERY_MS + 1000;
+  assert.equal(await first.tracker.flush('timer'), 'sent');
+  assert.equal(first.sent[0].payload.appVersion, '649');
+  // The next page of the same day: its worker does not answer.
+  const next = setup({ storage, deps: { version: async () => null } });
+  next.clock.t = first.clock.t;
+  next.tracker.setSession(READY);
+  next.tracker.begin('catalogue');
+  next.tracker.setSession(READY);
+  next.clock.t += SEND_EVERY_MS + 1000;
+  assert.equal(await next.tracker.flush('timer'), 'sent');
+  assert.equal(next.sent[0].payload.appVersion, '649', 'the whole-line write must not wipe it');
+  assert.equal(next.sent[0].payload.screens.catalogue, 1);
+});
+
 test('a clean day is not sent again; a change makes it due once ten more minutes pass', async () => {
   const { tracker, clock, sent } = setup();
   tracker.setSession(READY);

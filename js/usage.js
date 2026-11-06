@@ -41,7 +41,7 @@
 // ⚠️ NOTHING TO RECORD, NOTHING WRITTEN: no target of a tap, no text, no value is ever read —
 // only the name of the screen the tap happened on.
 
-import { askVersionOf, versionNumber } from './app-version.js';
+import { askPageVersion } from './app-version.js';
 import { deviceKind, sameSession } from './device-model.js';
 import { deviceIdFrom } from './device-ping.js';
 import {
@@ -134,7 +134,13 @@ export function createTracker(deps = {}) {
   function version() {
     if (!versionPromise) {
       versionPromise = Promise.resolve().then(() => d.version()).catch(() => null)
-        .then(v => { cachedVersion = v; return v; });
+        .then(v => {
+          // No answer is not remembered: the next send asks again (a worker that was still
+          // starting answers later). Kept, a null would stand for the whole page.
+          if (typeof v === 'string' && v) cachedVersion = v;
+          else versionPromise = null;
+          return v;
+        });
     }
     return versionPromise;
   }
@@ -245,6 +251,8 @@ export function createTracker(deps = {}) {
         lastSentAt: stored && Number.isFinite(stored.lastSentAt) ? stored.lastSentAt : d.now().getTime(),
         rev: (stored && Number.isFinite(stored.rev) ? stored.rev : 0) + 1,
       };
+      // The release last sent for this day (see flush) survives every commit.
+      if (stored && typeof stored.appVersion === 'string' && stored.appVersion) rec.appVersion = stored.appVersion;
       mergeAcc(rec.acc, mem);
       if (writeJson(d.storage, key, rec)) { mem = newAcc(); memDay = null; }
     } catch (err) {
@@ -321,11 +329,15 @@ export function createTracker(deps = {}) {
           : (since >= SEND_EVERY_MS || (hidden && since >= SEND_ON_HIDE_MS));
         if (!due) continue;
         const id = docId(deviceId, p.dayKey, p.uid);
-        const payload = payloadOf(rec.acc, { deviceId, dayKey: p.dayKey, kind: d.kind(), appVersion });
+        // ⚠️ The line is written WHOLE, so a send with no version would wipe the one an earlier
+        // send of the same day carried: the release last sent for this day is kept in the record
+        // and used when this page could not learn its own.
+        const dayVersion = appVersion || (typeof rec.appVersion === 'string' && rec.appVersion ? rec.appVersion : null);
+        const payload = payloadOf(rec.acc, { deviceId, dayKey: p.dayKey, kind: d.kind(), appVersion: dayVersion });
         if (!id || !payload) continue;
         const sentRev = Number.isFinite(rec.rev) ? rec.rev : 0;
         // The attempt is stamped BEFORE the write: a page that dies mid-write still bounds the retries.
-        if (!writeJson(d.storage, key, { ...rec, lastSentAt: nowMs })) continue;
+        if (!writeJson(d.storage, key, { ...rec, lastSentAt: nowMs, appVersion: payload.appVersion })) continue;
         let sending;
         try { sending = Promise.resolve(d.send(payload, id)); } catch (err) { sending = Promise.reject(err); }
         sent += 1;
@@ -389,8 +401,7 @@ function REAL() {
       coarse: window.matchMedia('(pointer: coarse)').matches,
     }),
     version: async () => {
-      const controller = navigator.serviceWorker ? navigator.serviceWorker.controller : null;
-      return versionNumber(await askVersionOf(controller, { timeoutMs: 800, attempts: 1 }));
+      return askPageVersion({ timeoutMs: 800, attempts: 1 });
     },
     currentSession: () => null,
     send: (payload, id) => import('./firebase.js').then(m => m.saveUsage(payload, id)),
