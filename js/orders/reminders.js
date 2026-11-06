@@ -31,26 +31,58 @@ export function placedOn(history, today) {
   );
 }
 
-// The suppliers still waiting for an order today: everything except what has already
-// been recorded. Left deliberately unfiltered by weekday — the caller decides whether
-// it cares about order days (computeAlerts does).
-export function suppliersStillToOrder(suppliers, history, today) {
-  const placed = placedOn(history, today);
-  return (suppliers || []).filter(s => !placed.has(s.id));
+// The suppliers closed as «non ordinato» on `today` (drafts/current.skipped, Federico's tablet
+// note of 3 Nov 2026: «fammi chiudere un fornitore come non ordinato quando non mi serve niente»).
+// `skipped` is { supplierId: 'YYYY-MM-DD' }; a key for any OTHER day means nothing, so last
+// week's close never hides this week's order and no clean-up is ever needed. One definition, for
+// the same reason as placedOn: the Orders strip, the Home badge and the kiosk must agree.
+export function skippedOn(skipped, today) {
+  const ids = new Set();
+  if (!today || !skipped || typeof skipped !== 'object') return ids;
+  Object.entries(skipped).forEach(([id, day]) => { if (day === today) ids.add(id); });
+  return ids;
 }
 
-// Suppliers whose ORDER day is today → [{ supplier, placed }], sorted by name.
-// `placed` is true once an order for that supplier exists under today's date.
-export function todayOrders({ suppliers, history, today }) {
+// The suppliers still waiting for an order today: everything except what has already
+// been recorded, or closed as not ordered. Left deliberately unfiltered by weekday — the
+// caller decides whether it cares about order days (computeAlerts does).
+export function suppliersStillToOrder(suppliers, history, today, skipped = null) {
+  const placed = placedOn(history, today);
+  const closed = skippedOn(skipped, today);
+  return (suppliers || []).filter(s => !placed.has(s.id) && !closed.has(s.id));
+}
+
+// Suppliers whose ORDER day is today → [{ supplier, placed, skipped }], sorted by name.
+// `placed` is true once an order for that supplier exists under today's date; `skipped` once
+// it was closed as not ordered today — and ⚠️ NEVER BOTH: a real order recorded after the
+// close is what happened, so `placed` wins.
+export function todayOrders({ suppliers, history, today, skipped = null }) {
   if (!today) return [];
   const weekday = weekdayOf(today);
 
   const placed = placedOn(history, today);
+  const closed = skippedOn(skipped, today);
 
   return (suppliers || [])
     .filter(s => s.active !== false && (s.orderDays || []).includes(weekday))
     .sort(byName)
-    .map(supplier => ({ supplier, placed: placed.has(supplier.id) }));
+    .map(supplier => {
+      const isPlaced = placed.has(supplier.id);
+      return { supplier, placed: isPlaced, skipped: !isPlaced && closed.has(supplier.id) };
+    });
+}
+
+// What the order summary sheet may offer about TODAY for one supplier, with nothing typed for it:
+//   'skip'   — its order day is today, nothing recorded or closed yet: «Chiudi come non ordinato»;
+//   'reopen' — closed as not ordered today: «Riapri»;
+//   ''       — nothing to offer (not due today, already ordered, or inactive).
+// With quantities typed the sheet offers «Ordine fatto» instead; a supplier closed and THEN
+// given quantities still shows 'reopen', so the close is never invisible.
+export function closeOffer({ supplier, history, today, skipped = null }) {
+  if (!supplier || !today) return '';
+  const row = todayOrders({ suppliers: [supplier], history, today, skipped })[0];
+  if (!row || row.placed) return '';
+  return row.skipped ? 'reopen' : 'skip';
 }
 
 // Suppliers carrying quantities typed on an EARLIER day and never placed →

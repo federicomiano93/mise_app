@@ -1977,6 +1977,17 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   font-weight: 500;
   cursor: default;
 }
+/* Closed as «non ordinato» today (drafts/current.skipped): as quiet as a placed one, but still a
+   button — it opens the supplier's summary, where «Riapri» undoes it. The dashed edge is what
+   tells it from a placed one besides the words. */
+.today-chip.skipped {
+  border-style: dashed;
+  border-color: var(--text-3);
+  background: transparent;
+  color: var(--text-3);
+  font-weight: 500;
+}
+.today-chip-note { font-weight: 400; }
 /* The SVG's wrapper span is an inline box: without flex the tick sits on the text
    baseline, ~2px low. Same trap as .notif-status above. */
 .today-check { display: flex; align-items: center; }
@@ -3392,6 +3403,45 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
    Not tablet-only: the summary sheet is a phone screen too. */
 .order-summary-cost { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-3); }
 .order-summary-cost--warn { color: var(--warn); font-weight: 600; }
+
+/* The sheet's buttons about TODAY's order (js/orders/order-summary-view.js appendActions):
+   «Ordine fatto» (the same green button as the supplier's screen), «Chiudi come non ordinato»
+   and, while closed, the status line with «Riapri». One column, full width, 48px targets. */
+.order-summary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+.order-summary-actions[hidden] { display: none; }   /* the display above would beat the attribute */
+.order-summary-actions .btn-primary { margin-top: 0; }
+.order-summary-place {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+}
+.order-summary-place-icon { display: flex; align-items: center; }
+.order-summary-skip,
+.order-summary-reopen {
+  width: 100%;
+  min-height: 48px;
+  transition: transform .06s ease;
+}
+.order-summary-skip:active,
+.order-summary-reopen:active { transform: scale(.97); }
+.order-summary-hint { margin: 0; font-size: 14px; color: var(--text-2); line-height: 1.4; }
+.order-summary-closed {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px dashed var(--text-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+}
+.order-summary-closed-text { font-size: 15px; font-weight: 600; color: var(--text); }
 
 /* ⚠️ PHONE LAYOUT OF THE SUMMARY. The sheet was a tablet screen until the bar on the supplier's
    screen opened it on phones too. With prices readable the cost line («10 × 12,50 € = 125,00 € ·
