@@ -96,10 +96,14 @@ function Fold({ title, state, tone, open, onToggle, above, children }: {
     <div className={styles.fold}>
       <h3 id={headId} className={styles.heading}>
         <button type="button" className={styles.toggle} aria-expanded={open} aria-controls={bodyId} onClick={onToggle}>
-          <span className={styles.title}>{title}</span>
-          {/* A space between the two, or the accessible name reads «Allergensnot declared». */}
-          {' '}
-          <span className={`${styles.state} ${tone === 'warn' ? styles.warn : tone === 'ok' ? styles.ok : styles.neutral}`}>{state}</span>
+          {/* The words wrap as one group, so on a narrow phone the state drops whole under the title and the chevron keeps its
+              place on the right (at 296px the three pieces did not fit on one row and the chevron was pushed past the edge). */}
+          <span className={styles.words}>
+            <span className={styles.title}>{title}</span>
+            {/* A space between the two, or the accessible name reads «Allergensnot declared». */}
+            {' '}
+            <span className={`${styles.state} ${tone === 'warn' ? styles.warn : tone === 'ok' ? styles.ok : styles.neutral}`}>{state}</span>
+          </span>
           <ChevronDown aria-hidden="true" className={styles.chevron} />
         </button>
       </h3>
