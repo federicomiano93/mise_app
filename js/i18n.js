@@ -1128,6 +1128,18 @@ const DICTIONARIES = Object.freeze({
     // ── The tablet order-summary sheet (Slice D, 28 Sep 2026) ─────────────────
     'orders.summary.itemCount': { one: 'Order summary · {n} item', other: 'Order summary · {n} items' },
     'orders.summary.empty': 'No quantities typed',
+    // ── Closing today's order from the summary sheet (tablet notes, 2–3 Nov 2026) ──
+    'orders.summary.closeNotOrdered': 'Close as not ordered',
+    'orders.summary.closeHint': 'Nothing needed today? Close it and it leaves “Order today”.',
+    'orders.summary.closedToday': 'Closed as not ordered today',
+    'orders.summary.reopen': 'Reopen',
+    'orders.summary.closeTitle': 'Close {supplier} as not ordered?',
+    'orders.summary.closeMessage': 'Nothing is ordered from them today. They leave “Order today” on every device, and you can reopen them from this summary.',
+    'orders.summary.closeOk': 'Close',
+    'orders.summary.closedDone': '{supplier} closed as not ordered.',
+    'orders.summary.reopened': '{supplier} is back on today’s orders.',
+    'orders.summary.saveFailed': 'Not saved — check the connection and try again.',
+    'orders.today.notOrdered': '· not ordered',
     // ── Suppliers & ingredients beside the list, on a tablet (29 Sep 2026) ────
     'orders.registry.pane.ingredients.title': 'Choose an ingredient',
     'orders.registry.pane.ingredients.text': 'Tap an ingredient on the left: its card opens here, with the allergens and the price.',
@@ -4257,6 +4269,18 @@ const DICTIONARIES = Object.freeze({
     // ── Il riepilogo ordine del tablet (Slice D, 28 Sep 2026) ─────────────────
     'orders.summary.itemCount': { one: 'Riepilogo ordine · {n} articolo', other: 'Riepilogo ordine · {n} articoli' },
     'orders.summary.empty': 'Nessuna quantità scritta',
+    // ── Chiudere l'ordine di oggi dal riepilogo (note dal tablet, 2–3 nov 2026) ──
+    'orders.summary.closeNotOrdered': 'Chiudi come non ordinato',
+    'orders.summary.closeHint': 'Oggi non serve niente? Chiudilo e sparisce da “Ordina oggi”.',
+    'orders.summary.closedToday': 'Chiuso come non ordinato oggi',
+    'orders.summary.reopen': 'Riapri',
+    'orders.summary.closeTitle': 'Vuoi chiudere {supplier} come non ordinato?',
+    'orders.summary.closeMessage': 'Oggi non si ordina niente. Sparisce da “Ordina oggi” su tutti i dispositivi, e puoi riaprirlo da questo riepilogo.',
+    'orders.summary.closeOk': 'Chiudi',
+    'orders.summary.closedDone': '{supplier} chiuso come non ordinato.',
+    'orders.summary.reopened': '{supplier} è di nuovo tra gli ordini di oggi.',
+    'orders.summary.saveFailed': 'Non salvato: controlla la connessione e riprova.',
+    'orders.today.notOrdered': '· non ordinato',
     // ── Fornitori e ingredienti accanto alla lista, su tablet (29 Sep 2026) ───
     'orders.registry.pane.ingredients.title': 'Scegli un ingrediente',
     'orders.registry.pane.ingredients.text': 'Tocca un ingrediente a sinistra: la sua scheda si apre qui, con gli allergeni e il prezzo.',

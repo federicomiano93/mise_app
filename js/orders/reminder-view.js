@@ -17,15 +17,17 @@ import { daySpoken, dayPhrase, spellShortDate } from './day.js';
 const CHECK_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
 
-// list: [{ supplier, placed }] from reminders.todayOrders
-export function renderTodayOrders(container, list, { onPick } = {}) {
+// list: [{ supplier, placed, skipped }] from reminders.todayOrders
+// A supplier closed as «non ordinato» today (`skipped`) is done too: nothing was needed. Its chip
+// stays a button, but it opens the supplier's summary (`onOpenSkipped`), where «Riapri» lives.
+export function renderTodayOrders(container, list, { onPick, onOpenSkipped } = {}) {
   if (!container) return;
   container.textContent = '';
 
   // Nothing is ordered today — say nothing at all.
   if (!list.length) return;
 
-  if (list.every(item => item.placed)) {
+  if (list.every(item => item.placed || item.skipped)) {
     container.appendChild(el('div', { class: 'today-banner all-done' }, [
       el('span', { class: 'today-check', icon: CHECK_SVG, 'aria-hidden': 'true' }),
       el('span', { text: t('orders.todaySOrdersAre') }),
@@ -33,10 +35,20 @@ export function renderTodayOrders(container, list, { onPick } = {}) {
     return;
   }
 
-  const chips = list.map(({ supplier, placed }) => (placed
+  const chips = list.map(({ supplier, placed, skipped }) => (placed
     ? el('span', { class: 'today-chip placed' }, [
       el('span', { class: 'today-check', icon: CHECK_SVG, 'aria-hidden': 'true' }),
       el('span', { text: supplierLabel(supplier) }),
+    ])
+    : skipped ? el('button', {
+      type: 'button',
+      class: 'today-chip skipped',
+      onClick: () => onOpenSkipped?.(supplier.id),
+    }, [
+      el('span', { text: supplierLabel(supplier) }),
+      // The visible words ARE the button's name («Brava Fresh · non ordinato»): no aria-label
+      // that a screen reader would read differently from what is on screen.
+      el('span', { class: 'today-chip-note', text: t('orders.today.notOrdered') }),
     ])
     : el('button', {
       type: 'button',

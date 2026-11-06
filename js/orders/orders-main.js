@@ -41,6 +41,7 @@ import {
   scheduleDraftSave, saveDraftNow, flushDraftSave, flushDraftWhenHidden, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
   confirmDelivery, resolveMissing, dropDeletedIngredientFromDraft, freezeUnitInDraft,
+  setSupplierSkipped, clearSupplierSkipped,
 } from './draft.js';
 import { buildSendScreen } from './preview.js';
 import { buildSupplierPicker } from './supplier-picker.js';
@@ -81,7 +82,7 @@ import {
   unitConflicts, unitConflictList,
 } from './archive.js';
 import { storedUnitFor, entryUnit, isDefaultUnit } from '../order-unit.js';
-import { todayOrders, pendingSuppliers } from './reminders.js';
+import { todayOrders, pendingSuppliers, closeOffer } from './reminders.js';
 import { kioskSectionsFromData } from './kiosk-lines.js';
 import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
@@ -135,6 +136,7 @@ const state = {
   entries: {},                  // { ingredientId: { qty, stock } } — shared object, mutated in place
   days: {},                     // { supplierId: 'YYYY-MM-DD' } — the day those rows are FOR (may be a future order day)
   draftUpdatedAt: '',           // fallback day for a draft written before `days` existed
+  skipped: {},                  // { supplierId: 'YYYY-MM-DD' } — closed as «non ordinato» that day (reminders.js skippedOn)
   pending: [],                  // orders typed on an earlier day and never placed
   openSupplier: null,           // the supplier whose own screen is open, or null
   viewingSupplier: null,        // the supplier whose read-only product list is open
@@ -1040,6 +1042,81 @@ function closeSummary() {
   document.getElementById(fromBar ? `summary-bar-${openerId}` : `summary-${openerId}`)?.focus();
 }
 
+// ── Closing today's order from the summary sheet (tablet notes, 2–3 Nov 2026) ───────────
+//
+// «Ordine fatto»: exactly the supplier screen's green button — placeOrder(), with its
+// confirmation and its «did you send it?». Only the way back differs: a sheet opened from the
+// list is not closed by placeOrder (it closes the supplier screen, and a sheet over it with it),
+// so it is closed here, once the order really is in History (P20: after a save, the list).
+async function placeFromSummary(supplierId) {
+  const placed = await placeOrder(supplierId);
+  if (placed && state.summarySupplier === supplierId) closeSummary();
+}
+
+// The way back after a close: the list, where the strip now says «non ordinato». Over a
+// supplier screen both go (closeSupplier closes its own sheet); from the list, the sheet.
+function backToListFrom(supplierId) {
+  if (state.summarySupplier !== supplierId) return;
+  if (state.summaryOverSupplier && state.openSupplier === supplierId) closeSupplier();
+  else closeSummary();
+}
+
+// «Chiudi come non ordinato» — nothing needed from this supplier today. Asked first (P20: a
+// save is confirmed), written at once and on its own (draft.js setSupplierSkipped). Firestore
+// has no offline persistence here, so offline it is refused rather than left hanging.
+let closingToday = false;
+async function closeAsNotOrdered(supplierId) {
+  const supplier = findOrderSupplier(supplierId);
+  if (!supplier || closingToday) return;
+  if (!navigator.onLine) { setStatus(t('orders.youReOfflineReconnect'), 'error', 6000); return; }
+  const name = supplierLabel(supplier);
+  const ok = await confirmDialog({
+    title: t('orders.summary.closeTitle', { supplier: name }),
+    message: t('orders.summary.closeMessage'),
+    okLabel: t('orders.summary.closeOk'),
+    cancelLabel: t('ui.cancel'),
+  });
+  if (!ok) return;
+  closingToday = true;
+  const today = todayISO();
+  try {
+    await setSupplierSkipped(supplierId, today);
+    // The snapshot says the same a moment later; set here so the strip is right at once.
+    state.skipped = { ...state.skipped, [supplierId]: today };
+    backToListFrom(supplierId);
+    renderReminders();
+    setStatus(t('orders.summary.closedDone', { supplier: name }), 'ok', 4000);
+  } catch (err) {
+    console.error('Closing the supplier as not ordered failed:', err);
+    setStatus(t('orders.summary.saveFailed'), 'error', 6000);
+  } finally {
+    closingToday = false;
+  }
+}
+
+// «Riapri» — the undo. No question: it only puts the supplier back among today's orders, which
+// is what the screen showed before the close. The sheet stays open, now offering the close again.
+async function reopenToday(supplierId) {
+  const supplier = findOrderSupplier(supplierId);
+  if (!supplier || closingToday) return;
+  if (!navigator.onLine) { setStatus(t('orders.youReOfflineReconnect'), 'error', 6000); return; }
+  closingToday = true;
+  try {
+    await clearSupplierSkipped(supplierId);
+    const next = { ...state.skipped };
+    delete next[supplierId];
+    state.skipped = next;
+    renderReminders();
+    renderSummary();
+    setStatus(t('orders.summary.reopened', { supplier: supplierLabel(supplier) }), 'ok', 4000);
+  } catch (err) {
+    console.error('Reopening the supplier failed:', err);
+    setStatus(t('orders.summary.saveFailed'), 'error', 6000);
+  } finally {
+    closingToday = false;
+  }
+}
+
 function renderSummary() {
   if (!state.summarySupplier) return;
 
@@ -1059,6 +1136,14 @@ function renderSummary() {
   summaryView?.scrim.remove();
   const built = buildOrderSummaryView(supplier, ingredients, state.entries, {
     onBack: closeSummary, showMoney: state.pricesReadable === true,
+    // Today's order, closed from the sheet (Federico's tablet notes, 2–3 Nov 2026). Asked on
+    // every repaint, so a record or a close made on another phone shows here at once.
+    closeOffer: () => closeOffer({
+      supplier, history: state.history, today: todayISO(), skipped: state.skipped,
+    }),
+    onPlaced: whenLive(() => placeFromSummary(supplier.id)),
+    onSkip: whenLive(() => closeAsNotOrdered(supplier.id)),
+    onReopen: whenLive(() => reopenToday(supplier.id)),
   });
   summaryView = { ...built, id: supplier.id };
   // Above the supplier screen it sits over (orders.css .order-summary--over-supplier): both
@@ -2638,8 +2723,8 @@ function renderReminders() {
 
   renderTodayOrders(
     document.getElementById('orders-today'),
-    todayOrders({ suppliers: state.suppliers, history: state.history, today: todayISO() }),
-    { onPick: expandSupplier },
+    todayOrders({ suppliers: state.suppliers, history: state.history, today: todayISO(), skipped: state.skipped }),
+    { onPick: expandSupplier, onOpenSkipped: whenLive(openSummary) },
   );
 
   renderPending(document.getElementById('orders-pending'), state.pending, {
@@ -3082,6 +3167,7 @@ async function init() {
     const heldBefore = noteHeld(state.ingredients, state.entries, heldNotInUse);
     setEntries(draft.entries);
     state.days = draft.days || {};
+    state.skipped = draft.skipped || {};
     state.draftUpdatedAt = draft.updatedAt;
     state.loaded.draft = true;
     // ⚠️ A line a page left behind has just come back, maybe with last night's day stamp, and the
@@ -3203,7 +3289,7 @@ window.addEventListener('kiosk-rest-info', event => {
     if (!state.loaded.suppliers || !state.loaded.history) return;
     event.detail.sections.push(...kioskSectionsFromData({
       suppliers: state.suppliers, history: state.history, today: todayISO(),
-      weekStartsOn: ordersConfig.weekStartsOn,
+      weekStartsOn: ordersConfig.weekStartsOn, skipped: state.skipped,
     }));
   } catch (err) {
     console.warn('The kiosk lines are not available:', err);

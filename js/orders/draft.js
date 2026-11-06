@@ -560,12 +560,15 @@ export function flushDraftWhenHidden(doc = globalThis.document, win = globalThis
   });
 }
 
-// Real-time subscription. onChange receives { entries, days, updatedAt, exists }.
+// Real-time subscription. onChange receives { entries, days, skipped, updatedAt, exists }.
 // onError is passed straight through: losing this stream means the order stops
 // syncing between phones, which nothing on screen would otherwise reveal.
 export function watchDraft(onChange, onError) {
   let updatedAt = '';
   let exists = false;
+  // The suppliers closed as «non ordinato» (`skipped`), as the server last said. Kept here so a
+  // repaint from the restored note (which carries only rows and days) never blanks them.
+  let skipped = {};
   const show = (doc, cameBack = false) => {
     // …but anything typed here and not yet written goes back ON TOP, field by
     // field, or the snapshot would erase it mid-keystroke. See `pending`.
@@ -577,6 +580,7 @@ export function watchDraft(onChange, onError) {
     onChange({
       entries,
       days: { ...(doc?.days || {}), ...pending.days },
+      skipped,
       updatedAt,
       exists,
       cameBack,
@@ -607,6 +611,7 @@ export function watchDraft(onChange, onError) {
     // here" and never gets re-asserted at this phone's stale value…
     known = { entries: detach(doc?.entries), days: { ...(doc?.days || {}) } };
     releaseConfirmed();
+    skipped = { ...(doc?.skipped || {}) };
     updatedAt = doc?.updatedAt || '';
     exists = Boolean(doc);
     saveJournal();
@@ -819,6 +824,28 @@ export function clearQuantities(supplierIds, ingredients) {
 
 // Rewrite a history record whole (the History editor). Not a merge: the operator
 // is correcting the record, so what they see is what it becomes.
+// ── «Chiudi come non ordinato» (Federico's tablet note, 3 Nov 2026) ─────────────
+// `skipped: { supplierId: 'YYYY-MM-DD' }` — a supplier whose order day it is, closed that day
+// because nothing was needed. What it MEANS (only on that day, never over a placed order) is
+// reminders.js skippedOn(); this only writes it.
+//
+// ⚠️ NOT THROUGH THE AUTOSAVE. It is one deliberate tap, not typing, so it goes out at once and
+// on its own: the claims machinery above (`pending`, `known`, the journal) knows nothing of it and
+// is never disturbed by it. setDoc(merge) touches only `skipped.<id>` and creates the draft on a
+// venue that has never typed an order.
+// ⚠️ NO `updatedAt`: the draft's own stamp is the day that stands in for rows saved before day
+// stamps existed (pendingSuppliers' fallbackDay), and closing a supplier is not typing an order.
+export function setSupplierSkipped(supplierId, day) {
+  return saveDoc(COLLECTIONS.drafts, DRAFT_ID, { skipped: { [supplierId]: day } });
+}
+
+// Undo: only that supplier's key goes, whatever another phone closed meanwhile survives. A draft
+// that does not exist has nothing to reopen (updateDoc refuses a missing document): the caller
+// only offers «Riapri» over a key it has seen, so the document is there.
+export function clearSupplierSkipped(supplierId) {
+  return clearFields(COLLECTIONS.drafts, DRAFT_ID, [`skipped.${supplierId}`]);
+}
+
 export function saveHistoryRecord(id, record) {
   return replaceDoc(COLLECTIONS.history, id, record);
 }

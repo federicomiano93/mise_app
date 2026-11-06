@@ -1,8 +1,9 @@
-// order-summary-view.js — a read-only look at one supplier's CURRENT order:
-// exactly what buildSendScreen (preview.js) and the WhatsApp message would
-// show, without opening either. Writes nothing, anywhere — same promise as
+// order-summary-view.js — a look at one supplier's CURRENT order: exactly what
+// buildSendScreen (preview.js) and the WhatsApp message would show, without
+// opening either. Opening it writes nothing, anywhere — same promise as
 // supplier-items.js, and the same reason: it can be opened mid-order without
-// a second thought.
+// a second thought. Since 6 Nov 2026 it carries the buttons that close TODAY's
+// order (see buildOrderSummaryView); each writes only behind its own tap.
 //
 // Same shape as supplier-items.js on purpose: opened from the list, repainted
 // on every snapshot (orders-main.js renderSummary), and closed by itself if
@@ -20,13 +21,26 @@ import { supplierSummary } from './order-summary.js';
 import { qtyWithUnit } from '../order-unit.js';
 import { lineCostText, buildTotalsBox } from './order-cost-view.js';
 
+const CHECK_ICON =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>';
+
 const BACK_ICON =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
 
 // supplier: { id, name }; ingredients: that supplier's products (already
 // lensed — the same list the order screen and supplier-items.js use);
-// entries: state.entries. ctx: { onBack }
+// entries: state.entries. ctx: { onBack, onPlaced, onSkip, onReopen, closeOffer }
 // -> { overlay, scrim, repaint(ingredients, entries) }
+//
+// ⚠️ THE ONLY BUTTONS ON THIS SHEET ACT ON TODAY'S ORDER (Federico's tablet notes, 2–3 Nov 2026):
+//   • «Ordine fatto» — with something written: the SAME placeOrder() the supplier's own green
+//     button runs (its confirmation, the «did you send it?», the record in History). Nothing new.
+//   • «Chiudi come non ordinato» — nothing written and its order day is today: nothing needed, so
+//     it leaves «Ordina oggi», the Home badge and the kiosk (drafts/current.skipped).
+//   • «Riapri» — the undo of the line above, shown while it is closed.
+// `closeOffer()` is asked on every repaint ('skip' | 'reopen' | '', reminders.js closeOffer), so
+// a close made on another phone shows here at once. Writing still happens only behind a tap.
+
 //
 // ⚠️ `scrim` IS A SEPARATE ELEMENT, NEVER PART OF `overlay`. On a phone the
 // screen already covers everything, so the scrim is invisible CSS-wise and
@@ -74,6 +88,7 @@ export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
     if (!lines.length) {
       subtitle.textContent = '';
       body.appendChild(el('p', { class: 'ing-empty', text: t('orders.summary.empty') }));
+      appendActions(false);
       return;
     }
 
@@ -99,6 +114,42 @@ export function buildOrderSummaryView(supplier, ingredients, entries, ctx) {
 
     const box = showMoney ? buildTotalsBox(totals) : null;
     if (box) body.appendChild(box);
+    appendActions(true);
+  }
+
+  // The sheet's buttons, under everything else (see the note at the top of the builder).
+  function appendActions(hasLines) {
+    const offer = ctx?.closeOffer ? ctx.closeOffer() : '';
+    const actions = el('div', { class: 'order-summary-actions' });
+
+    if (offer === 'reopen') {
+      actions.appendChild(el('div', { class: 'order-summary-closed', role: 'status' }, [
+        el('span', { class: 'order-summary-closed-text', text: t('orders.summary.closedToday') }),
+        el('button', {
+          type: 'button', class: 'btn-secondary order-summary-reopen',
+          onClick: () => ctx.onReopen?.(),
+        }, t('orders.summary.reopen')),
+      ]));
+    }
+    if (hasLines && ctx?.onPlaced) {
+      actions.appendChild(el('button', {
+        type: 'button', class: 'btn-primary order-summary-place',
+        onClick: () => ctx.onPlaced(),
+      }, [
+        el('span', { class: 'order-summary-place-icon', icon: CHECK_ICON, 'aria-hidden': 'true' }),
+        el('span', { text: t('orders.orderPlaced') }),
+      ]));
+    }
+    // ⚠️ ONLY WITH NOTHING WRITTEN: «non mi serve niente». With quantities on the sheet the
+    // honest choices are «Ordine fatto» or clearing them on the supplier's screen first.
+    if (!hasLines && offer === 'skip') {
+      actions.appendChild(el('p', { class: 'order-summary-hint', text: t('orders.summary.closeHint') }));
+      actions.appendChild(el('button', {
+        type: 'button', class: 'btn-secondary order-summary-skip',
+        onClick: () => ctx.onSkip?.(),
+      }, t('orders.summary.closeNotOrdered')));
+    }
+    if (actions.childElementCount) body.appendChild(actions);
   }
 
   repaint(ingredients, entries, ctx?.showMoney === true);
