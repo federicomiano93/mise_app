@@ -1548,3 +1548,45 @@ there (`cardAccess(lid, 'prices', 'prices')`): until then a kitchen owner would 
   will not receive.
 - One listener on `ingredient-prices` for the whole Orders screen tree while the section is on screen (T4), opened only for a price
   reader. Cost (P14): a price reader's opening of Orders reads each priced ingredient once (the offline cache spares the repeats).
+
+## Step 3f-8c as built
+
+**What it is.** The read-only summary of ONE supplier's current order at `/orders/supplier/<id>/summary` (`SupplierSummaryScreen.tsx`),
+its lines built by the port `order-summary` (full, paired) over the very lines the message uses (`lens.linesOf` + the draft, as
+`sendFlow.draftSendRows`): each line its quantity and unit; for whoever may read prices, the cost line under it and the totals box
+(`OrderTotals.tsx`: Net, one line per VAT rate, Order total, the warnings; «nothing priced» instead of a zero). Doors: «Riepilogo (N)» with a
+clipboard icon in the supplier screen's sticky bar, always shown (C1); on the split, a clipboard button at the end of each supplier row
+while it has quantities, an invisible spacer otherwise (C2). On the split the supplier screen shows the totals box alone above «Ordine
+fatto…» (C4). The prices: `ordersSource.watchPrices` (ingredient-prices), opened by `ordersStore.setPriceReader` only while the section is
+on screen AND `OrdersProvider` finds Food cost visible to this person; `pricesReadable` is the one gate of every amount (`orderMoney.ts`).
+No rule changed, no new key, no new write.
+
+**Taken for him, easy to change.**
+- P1. ⚠️ On a phone the supplier screen's sticky bar now takes THREE lines (Back + name; «+» and «Cosa vendono»; «Riepilogo (N)»), about
+  180px at 296 and 360 instead of about 125px: the three buttons do not fit beside each other below about 420px. Measured: nothing clipped,
+  no sideways scroll, targets 48px. If it takes too much room on his phone, the alternatives are the door at the foot beside «Ordine
+  fatto…» (choice C1's alternative) or icons without words on a phone.
+- P2. The total on the supplier screen (C4) is the summary's own total (the message's lines), not a sum of the rows on screen as in the
+  current app: the two can only differ for odd stored data, and this way the screen and the summary never disagree.
+- P3. The summary opened from a row on the split marks that row as the open one, as a supplier screen does.
+
+**Fixed after the review.** Back to the list owed to a row's summary button that went while the summary was open (another phone placed
+or cleared the order, or the window narrowed below the split) now gives the focus to the supplier's row, not the page; a non-reader's lines
+go through `withPrices` with no prices, which drains any old price key left on an ingredient (two layers, as the current app); specs for
+the browser's copy answering with prices and the server then refusing (the money goes).
+
+**Known and left.**
+- The count on the door rounds the quantity (`filledFor`) while the summary lists any quantity above 0: a stored 0.4, which Mise 2 cannot
+  type, would say «Riepilogo (0)» over one line (as before this slice on the rows).
+- Offline, a person who lost Food cost keeps the money held in the browser's copy until the server refuses (as the Suppliers section and
+  the current app).
+- ⚠️ When main (the partial owners, the `prices` pseudo-card) is merged into the stack, the gate in `OrdersContext.tsx` must follow the
+  rule there; until then a kitchen owner only misses the money.
+- Not driven: the real tablet (finger taps on the row button), OFFLINE, EMPTY venue.
+
+**Driven.** `algprobe/mise-drive/drive-mise2-orders-8c.mjs <base> <cdp-port> <fs-port> <auth-port>` on a private emulator (ONLY=IT1024,…,
+STAFF360,STAFF1024): the owner of the Italian venue in Italian and English at 1024, 360 and 296 (three lines priced, unpriced and with no
+VAT rate; row button and pane on the split, none on a phone; the door sticking while the rows scroll; the total above «Ordine fatto…» only on
+the split; the summary from both doors, lines, money and totals; Back to the door; a price changed elsewhere moving the open total; the
+summary writing nothing), the employee of «bakery» at 360 and 1024 (not shown Food cost: lines, no money, no price asked for; shown it: the
+money appears). axe clean, targets, nothing clipped, no sideways scroll, one main, one h1, no console error, at every screen; all put back.
