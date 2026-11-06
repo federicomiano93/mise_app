@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   newAcc, mergeAcc, cleanAcc, isEmptyAcc, addScreen, addRoute, addSeconds, addTap, addAction,
-  addLoad, addOffline, touchMinute, dayKeyOf, docId, payloadOf, CAPS, OTHER,
+  addLoad, addOffline, addHour, touchMinute, dayKeyOf, docId, payloadOf, CAPS, OTHER, HOUR_RE,
 } from '../js/usage-model.js';
 
 const DEVICE = 'AbCdEfGhIjKlMnOpQrSt';
@@ -163,7 +163,7 @@ test('the line has only keys the rules allow, whole numbers, and none of the dat
   touchMinute(acc, new Date(2026, 9, 9, 9, 30));
   const p = payloadOf(acc, WHO);
   const allowed = ['bakery', 'uid', 'deviceId', 'dayKey', 'kind', 'appVersion', 'screens', 'seconds', 'taps',
-    'routes', 'actions', 'loads', 'loadMs', 'firstMinute', 'lastMinute', 'offlineSeconds', 'updatedAt'];
+    'routes', 'actions', 'loads', 'loadMs', 'firstMinute', 'lastMinute', 'offlineSeconds', 'hours', 'updatedAt'];
   for (const key of Object.keys(p)) assert.ok(allowed.includes(key), `${key} is not in the rules' whitelist`);
   for (const key of ['bakery', 'uid', 'updatedAt']) assert.ok(!(key in p), `${key} is the data layer's`);
   for (const key of ['deviceId', 'dayKey', 'kind']) assert.ok(key in p);
@@ -172,6 +172,49 @@ test('the line has only keys the rules allow, whole numbers, and none of the dat
   assert.equal(p.offlineSeconds, 0);
   assert.equal(p.appVersion, '649');
   assert.equal(Number.isInteger(p.loadMs.orders), true);
+});
+
+test('active seconds are filed under the local hour, two digits, whole and never negative', () => {
+  const acc = newAcc();
+  addHour(acc, new Date(2026, 9, 9, 7, 59), 30);
+  addHour(acc, new Date(2026, 9, 9, 7, 5), 14.6);
+  addHour(acc, new Date(2026, 9, 9, 23, 0), 15);
+  addHour(acc, new Date(2026, 9, 9, 0, 1), 15);
+  addHour(acc, new Date(2026, 9, 9, 13, 0), -5);
+  addHour(acc, new Date(2026, 9, 9, 13, 0), Number.NaN);
+  addHour(acc, new Date('nonsense'), 15);
+  addHour(acc, 'today', 15);
+  assert.deepEqual(acc.hours, { '07': 45, 23: 15, '00': 15 });
+  assert.equal(isEmptyAcc(newAcc()), true);
+  const onlyHours = newAcc();
+  addHour(onlyHours, new Date(2026, 9, 9, 9, 0), 15);
+  assert.equal(isEmptyAcc(onlyHours), false, 'an hour worked is something to send');
+});
+
+test('the line carries the hours, each at most one hour long; storage cannot slip in a bad hour', () => {
+  const acc = newAcc();
+  for (let i = 0; i < 300; i += 1) addHour(acc, new Date(2026, 9, 9, 8, 0), 30);
+  addHour(acc, new Date(2026, 9, 9, 9, 0), 20);
+  assert.deepEqual(payloadOf(acc, WHO).hours, { '08': 3600, '09': 20 });
+  const merged = mergeAcc(newAcc(), { hours: { '10': 60, 24: 5, 7: 5, other: 9, '11': 'x', '12': -3 } });
+  assert.deepEqual(merged.hours, { 10: 60 });
+  assert.deepEqual(payloadOf(newAcc(), WHO).hours, {});
+});
+
+test('the 24 hours fit without ever reaching «other», and match the rules’ list', () => {
+  const acc = newAcc();
+  for (let h = 0; h < 24; h += 1) addHour(acc, new Date(2026, 9, 9, h, 0), 60);
+  assert.equal(Object.keys(acc.hours).length, 24);
+  assert.ok(!(OTHER in acc.hours));
+  assert.ok(CAPS.hours > 24);
+  const rules = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8');
+  const block = rules.slice(rules.indexOf('match /usage/{id}'));
+  const listed = /hours\.keys\(\)\.hasOnly\(\[([^\]]*)\]\)/.exec(block);
+  assert.ok(listed, 'the rules name the hours');
+  const keys = listed[1].split(',').map(k => k.trim().replace(/'/g, ''));
+  assert.deepEqual(keys, Object.keys(acc.hours).sort());
+  for (const k of keys) assert.match(k, HOUR_RE);
+  assert.match(block.slice(0, block.indexOf('allow read')), /'offlineSeconds', 'hours', 'updatedAt'\]/);
 });
 
 test('an empty day still makes a valid line, with no minutes', () => {
