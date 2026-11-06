@@ -36,7 +36,7 @@ function source(months = [monthDoc('2026-10')]) {
 }
 
 const openButton = (name: string) => screen.getByRole('button', { name: `Open ${name}` });
-const tabs = () => within(screen.getByRole('navigation', { name: 'Main sections' }));
+const rail = () => within(screen.getByRole('navigation', { name: 'All sections' }));
 
 async function loaded(path = '/stocktake/2026-10', fake = source()) {
   const view = renderStocktake(path, { source: fake });
@@ -122,13 +122,13 @@ describe('the Stocktake\'s scroll on a phone', () => {
     expect(main.scrollTop).toBe(0);
   });
 
-  // The tab bar sends /stocktake, which the section replaces with the month's list: nothing owns the
+  // The rail sends /stocktake, which the section replaces with the month's list: nothing owns the
   // scroll while that redirect is drawn, so the shell puts the area back at the top.
-  it('starts at the top when the Stocktake is opened again from the tab bar', async () => {
+  it('starts at the top when the Stocktake is opened again from the rail', async () => {
     const { user } = await loaded('/stocktake/2026-10/product/butter');
     const main = scrolledTo(400);
 
-    await user.click(tabs().getByRole('link', { name: 'Stocktake' }));
+    await user.click(rail().getByRole('link', { name: 'Stocktake' }));
 
     expect(await screen.findByRole('heading', { level: 3, name: 'Frigo' }, LOAD)).toBeInTheDocument();
     expect(main.scrollTop).toBe(0);

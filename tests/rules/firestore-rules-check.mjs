@@ -3807,6 +3807,99 @@ async function feedbackNotes() {
 }
 
 
+// ── «Da fare», the venue's to-do list (Mise 2, app/src/home/todosSource.ts) ─────
+// Every member, any role; the server's clock on createdAt and doneAt; expireAt only on a
+// ticked item, at most 32 days ahead (Firestore's TTL deletes by it).
+async function todos() {
+  await wipe();
+  await seedAccess();
+  const T = 'locations/main/todos';
+  const item = { bakery: 'main', text: 'Call the flour mill', day: '2026-11-06', done: false, doneAt: null, expireAt: null };
+  const inDays = n => new Date(Date.now() + n * 86400000).toISOString();
+  // The writes the app makes, as the SDK sends them: addDoc / setDoc with serverTimestamp()
+  // (a REQUEST_TIME transform), updateDoc (an update mask).
+  const commit = (id, data, headers, { server = [], stamps = {}, mask = null, exists } = {}) => fetch(
+    `${FS.replace(/\/documents$/, '')}/documents:commit`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ writes: [{
+        update: {
+          name: `projects/${PROJECT}/databases/(default)/documents/${T}/${id}`,
+          fields: { ...toFields(data), ...Object.fromEntries(Object.entries(stamps).map(([k, v]) => [k, { timestampValue: v }])) },
+        },
+        ...(mask ? { updateMask: { fieldPaths: mask } } : {}),
+        ...(exists === undefined ? {} : { currentDocument: { exists } }),
+        ...(server.length ? { updateTransforms: server.map(f => ({ fieldPath: f, setToServerValue: 'REQUEST_TIME' })) } : {}),
+      }] }),
+    });
+  const create = (id, data, who, opts = {}) => commit(id, data, asAccount(who), { server: ['createdAt'], exists: false, ...opts });
+  const tick = (id, who, expireAt = inDays(30), opts = {}) =>
+    commit(id, { done: true }, asAccount(who), { server: ['doneAt'], stamps: { expireAt }, mask: ['done', 'doneAt', 'expireAt'], ...opts });
+  const edit = (id, patch, who, opts = {}) => commit(id, patch, asAccount(who), { mask: Object.keys(patch), ...opts });
+
+  // ── Adding ──
+  await expectAllowed('an employee adds an item', () => create('A', item, SAM));
+  await expectAllowed('…so does the manager', () => create('B', item, MAYA));
+  await expectAllowed('…and the owner', () => create('C', item, ALICE));
+  await expectAllowed('a past day is allowed', () => create('D', { ...item, day: '2026-10-01' }, SAM));
+  await expectAllowed('200 characters is fine', () => create('E', { ...item, text: 'x'.repeat(200) }, SAM));
+  await expectDenied('201 characters is not', () => create('F', { ...item, text: 'x'.repeat(201) }, SAM));
+  // The app's maxLength counts UTF-16 units; the rules count characters. An accented text of 200 must pass.
+  await expectAllowed('200 accented characters is fine', () => create('G', { ...item, text: 'è'.repeat(200) }, SAM));
+  await expectDenied('an empty item', () => create('F', { ...item, text: '' }, SAM));
+  await expectDenied('a day that is not YYYY-MM-DD', () => create('F', { ...item, day: '6 Nov' }, SAM));
+  await expectDenied('a stray key (a name on the item)', () => create('F', { ...item, who: 'Sam' }, SAM));
+  const { expireAt: _e, ...noExpire } = item;
+  await expectDenied('a key missing', () => create('F', noExpire, SAM));
+  await expectDenied('stamped for another venue', () => create('F', { ...item, bakery: 'trattoria-x' }, SAM));
+  await expectDenied('born ticked', () => create('F', { ...item, done: true }, SAM, { server: ['createdAt', 'doneAt'], stamps: { expireAt: inDays(30) } }));
+  await expectDenied('dated by the phone, not the server', () => create('F', item, SAM, { server: [], stamps: { createdAt: new Date().toISOString() } }));
+  await expectDenied('done that is not a yes/no', () => create('F', { ...item, done: 'no' }, SAM));
+  await expectDenied('a deletion date on an item not ticked', () => create('F', item, SAM, { stamps: { expireAt: inDays(30) } }));
+
+  // ── Ticking, editing, unticking ──
+  await expectAllowed('an employee ticks an item', () => tick('A', SAM));
+  await expectAllowed('…and edits its words once ticked', () => edit('A', { text: 'Called the mill' }, SAM));
+  await expectDenied('…but cannot push its deletion further away', () =>
+    commit('A', {}, asAccount(SAM), { stamps: { expireAt: inDays(31) }, mask: ['expireAt'] }));
+  await expectDenied('…nor re-stamp the tick', () =>
+    commit('A', {}, asAccount(SAM), { server: ['doneAt'], mask: ['doneAt'] }));
+  // ⚠️ Two phones ticking the same item: the second tick is refused (it would re-stamp doneAt). The app stays quiet
+  // about it because its own copy already shows the item ticked (todosStore.ts).
+  await expectDenied('a second tick of an item already ticked', () => tick('A', MAYA));
+  await expectDenied('an edit that moves the item to another venue', () => edit('A', { bakery: 'trattoria-x' }, SAM));
+  await expectAllowed('the manager unticks it', () => edit('A', { done: false, doneAt: null, expireAt: null }, MAYA));
+  await expectDenied('an untick that keeps the deletion date', () => {
+    return tick('B', SAM).then(() => edit('B', { done: false, doneAt: null }, SAM));
+  });
+  await expectDenied('a tick dated by the phone', () =>
+    commit('C', { done: true }, asAccount(SAM), { stamps: { doneAt: new Date().toISOString(), expireAt: inDays(30) }, mask: ['done', 'doneAt', 'expireAt'] }));
+  await expectDenied('a tick with no deletion date', () =>
+    commit('C', { done: true, expireAt: null }, asAccount(SAM), { server: ['doneAt'], mask: ['done', 'doneAt', 'expireAt'] }));
+  await expectDenied('a tick kept for 60 days', () => tick('C', SAM, inDays(60)));
+  await expectAllowed('a tick kept 31 days (a phone a day fast)', () => tick('C', SAM, inDays(31)));
+  await expectAllowed('an item moved to another day', () => edit('D', { day: '2026-11-20' }, SAM));
+  await expectDenied('an edit that rewrites when it was added', () => edit('D', {}, SAM, { server: ['createdAt'], mask: ['createdAt'] }));
+  await expectDenied('an edit that empties the words', () => edit('D', { text: '' }, SAM));
+  await expectDenied('an edit that adds a stray key', () => edit('D', { who: 'Sam' }, SAM));
+
+  // ── Reading and deleting ──
+  await expectAllowed('an employee reads an item', () => fetch(`${FS}/${T}/D`, { headers: asAccount(SAM) }));
+  await expectAllowed('…and lists them', () => fetch(`${FS}/${T}`, { headers: asAccount(SAM) }));
+  await expectAllowed('an employee deletes an item', () => deleteWrite(`${T}/E`, asAccount(SAM)));
+
+  // ── Nobody outside the venue ──
+  await expectDenied('another venue\'s employee reads nothing here', () => fetch(`${FS}/${T}/D`, { headers: asAccount(BOB) }));
+  await expectDenied('…lists nothing', () => fetch(`${FS}/${T}`, { headers: asAccount(BOB) }));
+  await expectDenied('…adds nothing', () => create('G', item, BOB));
+  await expectDenied('…ticks nothing', () => tick('D', BOB));
+  await expectDenied('…deletes nothing', () => deleteWrite(`${T}/D`, asAccount(BOB)));
+  await seedDoc(`locations/main/client-accounts/${CLIENT_A.uid}`,
+    { bakery: 'main', clientId: 'c-one', clientName: 'CLIENT A', createdAt: '2026-08-10T09:00:00.000Z' });
+  await expectDenied('a client ordering account reads nothing', () => fetch(`${FS}/${T}/D`, { headers: asAccount(CLIENT_A) }));
+  await expectDenied('an account with no access adds nothing', () => create('G', item, NOBODY));
+  await expectDenied('signed out, nothing', () => fetch(`${FS}/${T}/D`, { headers: noAuth() }));
+}
+
 // ── The device count (js/device-ping.js) ─────────────────────────────────────
 // Write-only, any member, at most the six keys; the uid is always the writer's own.
 async function deviceCount() {
@@ -4311,7 +4404,7 @@ async function staffCards() {
 for (const scenario of [suppliers, ingredients, ingredientPrices, drafts, history, neighbours,
                         locationTree, isolation, configAndLogs, pastries, pastryLogs,
                         products, stocktake, staffCards, clientOrders, orderRequests, awayDays,
-                        pushNotifications, feedbackNotes, deviceCount, errorReports, usageStats,
+                        pushNotifications, feedbackNotes, todos, deviceCount, errorReports, usageStats,
                         roles, onboardingCollections]) {
   await scenario();
 }

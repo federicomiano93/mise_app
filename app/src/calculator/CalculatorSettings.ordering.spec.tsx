@@ -252,10 +252,10 @@ describe('leaving', () => {
   it('the rail asks too: every way out goes through the router\'s blocker', async () => {
     const { user, ...view } = await openEditor();
     fireEvent.change(timeBox(), { target: { value: '19:30' } });
-    await user.click(within(screen.getByRole('navigation', { name: 'Main sections' })).getByRole('link', { name: 'Stocktake' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Stocktake' }));
     await user.click(within(await question(LEAVE)).getByRole('button', { name: 'Cancel' }));
     expect(pathOf(view)).toBe(EDITOR);
-    await user.click(within(screen.getByRole('navigation', { name: 'Main sections' })).getByRole('link', { name: 'Stocktake' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Stocktake' }));
     await user.click(within(await question(LEAVE)).getByRole('button', { name: 'Discard' }));
     await waitFor(() => { expect(pathOf(view)).toBe('/stocktake'); });
   });

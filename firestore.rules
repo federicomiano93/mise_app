@@ -3051,6 +3051,68 @@ service cloud.firestore {
                   && request.resource.data.offlineSeconds <= 86400));
         allow read, delete: if false;
       }
+
+      // ── «Da fare»: the venue's to-do list (Mise 2, step 3g-1) ─────────────
+      // ONE list per venue — the bakery's whiteboard — so EVERY member, whatever the role,
+      // reads, adds, ticks, edits and deletes (his note of 23 Oct 2026, the decision of
+      // 24 Oct: docs/parity/home.md H3). Not behind a section: the Home is everybody's.
+      // Nobody's name is stored on an item.
+      //
+      // ⚠️ DELETED BY FIRESTORE ITSELF, NOT BY THE APP: a TTL policy on the collection group
+      // `todos`, field `expireAt` (P13; set up once on production before Mise 2 goes live).
+      // So `expireAt` exists only on a TICKED item, and never more than 32 days ahead: without
+      // the bound a phone could keep an item for ever by writing a far date. Unticking sets it
+      // back to null — an item never ticked is never deleted by itself (H7).
+      //
+      // The clocks: `createdAt` and `doneAt` are the SERVER's (serverTimestamp(), which holds
+      // for a tick queued offline too, since it resolves when the write arrives). `expireAt` is
+      // the phone's (now + 30 days: the server cannot add to a sentinel), hence a bound with a
+      // margin for a wrong clock rather than an equality.
+      //
+      // Whole shape on every write (hasAll): the app writes every key on create and Firestore
+      // judges an update on the MERGED document, so a partial update still passes it.
+      // One read: users/{uid} in member().
+      match /todos/{id} {
+        function todoShapeOk() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['bakery', 'text', 'day', 'done', 'doneAt', 'expireAt', 'createdAt'])
+            && d.keys().hasAll(['bakery', 'text', 'day', 'done', 'doneAt', 'expireAt', 'createdAt'])
+            && d.text is string && d.text.size() > 0 && d.text.size() <= 200
+            && d.day is string && d.day.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+            && d.done is bool
+            && (d.done
+                  ? (d.doneAt is timestamp
+                     && d.expireAt is timestamp
+                     && d.expireAt <= request.time + duration.value(32, 'd'))
+                  : (d.doneAt == null && d.expireAt == null));
+        }
+
+        allow read: if member(lid);
+
+        // Born not ticked, dated by the server.
+        allow create: if member(lid)
+          && stampedFor(lid)
+          && todoShapeOk()
+          && request.resource.data.done == false
+          && request.resource.data.createdAt == request.time;
+
+        // A tick is stamped by the server at the moment it arrives. An item already ticked keeps
+        // its stamp and its deletion date while its words or its day are edited, so an edit can
+        // never push its deletion further away.
+        allow update: if member(lid)
+          && stampedFor(lid)
+          && todoShapeOk()
+          && request.resource.data.createdAt == resource.data.createdAt
+          && (request.resource.data.done == false
+              || (resource.data.done == false
+                  && request.resource.data.doneAt == request.time)
+              || (resource.data.done == true
+                  && request.resource.data.doneAt == resource.data.doneAt
+                  && request.resource.data.expireAt == resource.data.expireAt));
+
+        // A whiteboard: anybody may wipe a line. The app asks first (P20).
+        allow delete: if member(lid);
+      }
     }
 
     // The OLD FLAT COLLECTIONS (suppliers/…, ingredients/…, config/…) are gone

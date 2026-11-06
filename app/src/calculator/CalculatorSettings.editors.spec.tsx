@@ -178,11 +178,11 @@ describe('leaving with unsaved edits', () => {
   it('the rail asks too: every way out goes through the router\'s blocker', async () => {
     const { user, ...view } = await open('/calculator/settings/extra');
     await user.click(main().getByRole('switch', { name: 'Brioche' }));
-    await user.click(within(screen.getByRole('navigation', { name: 'Main sections' })).getByRole('link', { name: 'Stocktake' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Stocktake' }));
     await user.click(within(await leaveQuestion()).getByRole('button', { name: 'Cancel' }));
     expect(pathOf(view)).toBe('/calculator/settings/extra');
 
-    await user.click(within(screen.getByRole('navigation', { name: 'Main sections' })).getByRole('link', { name: 'Stocktake' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Stocktake' }));
     await user.click(within(await leaveQuestion()).getByRole('button', { name: 'Discard' }));
     await waitFor(() => { expect(pathOf(view)).toBe('/stocktake'); });
   });

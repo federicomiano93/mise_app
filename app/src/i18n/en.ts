@@ -35,6 +35,7 @@ export const en = {
   'section.foodcost': 'Food cost',
   'section.settings': 'Settings',
   'section.more': 'More',
+  'section.home': 'Home',
 
   'common.cancel': 'Cancel',
   // new: the one button of a message dialog (the current app's alert), such as the Stocktake's
@@ -2554,6 +2555,25 @@ export const en = {
   'ord.sequence.saving': 'Saving…',
   'ord.sequence.none': 'No active suppliers.',
   'ord.sequence.err': 'Could not save the order. Check the connection and try again.',
+  'home.title': 'To do',
+  'home.add': 'Add',
+  'home.overdue': 'Overdue',
+  'home.overdueDay': 'overdue · {day}',
+  'home.later': 'Later ({n})',
+  'home.done': 'Done ({n})',
+  'home.empty': 'Nothing to do for now.',
+  'home.form.new': 'New to-do',
+  'home.form.edit': 'Edit to-do',
+  'home.form.text': 'What needs doing',
+  'home.form.placeholder': 'E.g. call the flour mill',
+  'home.form.counter': '{used} / {max}',
+  'home.form.day': 'Day',
+  'home.form.needText': 'Write what needs doing.',
+  'home.form.discard': 'Discard changes?',
+  'home.delete.title': 'Delete “{text}”?',
+  'home.err.notSaved': 'Not saved. Try again.',
+  'home.err.noAccess': 'Not saved: you have no access to this list.',
+  'home.err.load': 'The list does not load. Check the connection.',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;
