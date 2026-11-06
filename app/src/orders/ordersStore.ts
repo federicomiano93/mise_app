@@ -127,6 +127,12 @@ export interface OrdersSnapshot {
   readonly requestsLoaded: boolean;
   // The live stream of the lists died (no resubscribe): the page says so like the other streams (parity L5).
   readonly requestsBroken: boolean;
+  // ingredient-prices by ingredient id (step 3f-8c), held ONLY while this person may read prices (setPriceReader); else {}.
+  readonly prices: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+  // ⚠️ THE ONE GATE OF EVERY AMOUNT ON SCREEN (parity L20): true only once the read of ingredient-prices has SUCCEEDED. An
+  // empty map alone is not enough — a refused read gives one too, and it would draw «no price» and a total in front of an
+  // employee (js/orders/order-cost-view.js).
+  readonly pricesReadable: boolean;
 }
 
 // How a correction or a delete from History ended (step 3f-4).
@@ -242,7 +248,11 @@ export interface OrdersStore {
   getSnapshot(): OrdersSnapshot;
   subscribe(listener: () => void): () => void;
   onMessage(listener: (message: OrdersMessage) => void): () => void;
-  // Starts the six listeners; stop() ends them and sends a change still waiting for the autosave at once, so leaving the
+  // Whether this person may read prices (the session's word, UX only — firestore.rules decide, P2): on, and while the section
+  // is started, the listener on ingredient-prices is open; off, it is closed and the prices are forgotten. An employee the venue
+  // never showed Food cost is never on, so nothing about money is even loaded (step 3f-8c). Safe before start().
+  setPriceReader(on: boolean): void;
+  // Starts the six listeners (and the price listener for a price reader, setPriceReader); stop() ends them and sends a change still waiting for the autosave at once, so leaving the
   // section within 800 ms of a keystroke loses nothing. Safe to call start → stop → start (React's development mode does).
   start(): void;
   stop(): void;
@@ -344,6 +354,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     history: [], historyLoaded: false, historyBroken: false, suggester: NO_SUGGESTIONS,
     olderHistory: [], older: { loading: false, done: false, error: false },
     requests: [], requestsLoaded: false, requestsBroken: false,
+    prices: {}, pricesReadable: false,
   };
   const listeners = new Set<() => void>();
   const messageListeners = new Set<(message: OrdersMessage) => void>();
@@ -354,6 +365,9 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
   // The first day of the live window, fixed when the listeners start: the older pages are fetched from BEFORE it, so the two
   // never overlap and never leave a gap.
   let windowStart = liveHistoryStart(parseISODate(deps.today()));
+  // The price listener (step 3f-8c): open only while the section is started AND this person may read prices.
+  let priceReader = false;
+  let stopPrices: (() => void) | null = null;
   type OlderLoader = ReturnType<typeof createOlderLoader<StoredDoc>>;
   let olderLoader: OlderLoader | null = null;
 
@@ -362,6 +376,16 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     // A new engine only when what it reads changed: a keystroke keeps the one the rows already asked.
     if (patch.history || patch.ingredients) snapshot = { ...snapshot, suggester: createSuggester(snapshot.history, snapshot.ingredients) };
     for (const listener of listeners) listener();
+  }
+
+  function openPrices() {
+    if (stopPrices || !priceReader || !stops.length) return;
+    stopPrices = source.watchPrices((map, readable) => set({ prices: map, pricesReadable: readable }));
+  }
+  function closePrices() {
+    stopPrices?.();
+    stopPrices = null;
+    if (snapshot.pricesReadable || Object.keys(snapshot.prices).length > 0) set({ prices: {}, pricesReadable: false });
   }
 
   function say(message: OrdersMessage) {
@@ -686,9 +710,17 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
           () => set({ requestsBroken: true, requestsLoaded: true }),
         ),
       ];
+      openPrices();
+    },
+
+    setPriceReader(on) {
+      priceReader = on;
+      if (on) openPrices();
+      else closePrices();
     },
 
     stop() {
+      closePrices();
       for (const stop of stops) stop();
       stops = [];
       // The write is handed to Firestore now; it carries on without the listeners and lands when it can.

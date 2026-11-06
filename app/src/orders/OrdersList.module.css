@@ -181,6 +181,12 @@
   height: 20px;
 }
 
+/* Where the summary button would be, for a supplier with nothing typed: the rows keep their columns. */
+.spacer {
+  flex: none;
+  width: var(--hit-lg);
+}
+
 /* «Order placed…» and «Clear quantities…» under the suppliers. */
 .bulk {
   display: flex;

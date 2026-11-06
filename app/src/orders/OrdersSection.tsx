@@ -31,6 +31,7 @@ import { SettingsScreen } from './SettingsScreen';
 import { SupplierSequenceScreen } from './SupplierSequenceScreen';
 import { PlaceAllConfirmScreen, SupplierConfirmScreen } from './PlaceConfirmScreen';
 import { SupplierItemsScreen } from './SupplierItemsScreen';
+import { SupplierSummaryScreen } from './SupplierSummaryScreen';
 import { SupplierOrderScreen } from './SupplierOrderScreen';
 import { SupplierPicker } from './SupplierPicker';
 import { LATCH_GRACE_MS, PendingLatchProvider, latchCanLook, pendingNow, usePendingLatch } from './pendingLatch';
@@ -38,14 +39,14 @@ import { LONG_MS } from './useClearQuantities';
 import { carriedTrip, carryTrip, forgetTrip } from './cardTrip';
 import type { TripPlace } from './cardTrip';
 import {
-  ADD_DOOR, CLEAR_OPENER, HandBackProvider, SEARCH_BOX, SUPPLIER_DOOR, SUPPLIER_TITLE, cardDoor, HISTORY_DOOR, INCOMING_DOOR, ITEMS_DOOR, LISTS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, REORDER_DOOR, SEND_OPENER,
-  SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, SWAP_OPENER, arrivalOpener, correctOpener, itemsOpener, listOpener, pendingFallback, pendingOpener, sendDayOpener, supplierOpener,
+  ADD_DOOR, CLEAR_OPENER, HandBackProvider, SEARCH_BOX, SUPPLIER_DOOR, SUPPLIER_TITLE, cardDoor, HISTORY_DOOR, INCOMING_DOOR, ITEMS_DOOR, LISTS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, REORDER_DOOR, SEND_OPENER, SUMMARY_DOOR,
+  SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, SWAP_OPENER, arrivalOpener, correctOpener, itemsOpener, listOpener, pendingFallback, pendingOpener, sendDayOpener, summaryOpener, supplierOpener,
   useHandBackState,
 } from './handBack';
 import { FROM_LIST, cameFromList, columnOf, columnPart, replacedState } from './ordersNav';
 import {
   CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, INGREDIENTS_PATH, LISTS_PATH, ORDERS_PATH, PLACE_ALL_PATH, REORDER_PATH, SEND_PATH, SETTINGS_PATH, SUPPLIER_ORDER_PATH, historyDayPath, historyEditPath,
-  incomingMissingPath, parseOrdersPath, requestPath, supplierConfirmPath, supplierItemsPath, supplierPath,
+  incomingMissingPath, parseOrdersPath, requestPath, supplierConfirmPath, supplierItemsPath, supplierPath, supplierSummaryPath,
 } from './ordersPath';
 import type { OrdersView } from './ordersPath';
 import { buildOrdersLens } from './ordersLens';
@@ -247,6 +248,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   };
   const openSupplier = (id: string) => { open(supplierOpener(id), supplierPath(id)); };
   const openItems = (id: string) => { open(itemsOpener(id), supplierItemsPath(id)); };
+  const openSummary = (id: string) => { open(summaryOpener(id), supplierSummaryPath(id)); };
   const openPlaceAll = () => { open(PLACE_ALL_OPENER, PLACE_ALL_PATH); };
   const openClear = () => { open(CLEAR_OPENER, CLEAR_PATH); };
   const openSend = () => { open(SEND_OPENER, SEND_PATH); };
@@ -306,6 +308,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const openReorder = whenLive(() => { open(REORDER_DOOR, REORDER_PATH); });
   const openLists = whenLive(() => { open(LISTS_DOOR, LISTS_PATH); });
   const openItemsWhenLive = (id: string) => { whenLive(() => { openItems(id); })(); };
+  const openSummaryWhenLive = (id: string) => { whenLive(() => { openSummary(id); })(); };
 
   // ⚠️ THE HOLD: a supplier tapped on the copy (a row, an «Order today» chip, the notices panel) waits for the live data and then
   // opens by itself. The path is where the tap happened: if the person moves anywhere else the tap is dropped, and the last supplier
@@ -405,10 +408,11 @@ function OrdersLayout({ view }: { view: ShownView }) {
     else if (view.kind === 'lists') handBack.deliverWhere(name => name.startsWith('list:'));
     // Back from the supplier order to the settings: the door that opened it.
     else if (view.kind === 'settings') handBack.deliverIf(SUPPLIER_ORDER_DOOR);
-    // The supplier's screen coming back from «What they sell»: only its own button is owed the focus. ⚠️ NOT deliver(): a
+    // The supplier's screen coming back from «What they sell» or the summary: only its own button is owed the focus. ⚠️ NOT deliver(): a
     // supplier opened from the list expects the list row, which must keep its focus (phone: the title takes it; split: the row).
     else if (view.kind === 'supplier') {
       handBack.deliverIf(ITEMS_DOOR);
+      handBack.deliverIf(SUMMARY_DOOR);
       handBack.deliverIf(PLACE_DOOR);
     }
   }, [view.kind, handBack]);
@@ -486,6 +490,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
                 onLookingElsewhere={dropHold}
                 onOpenSupplier={openOrHold}
                 onOpenItems={openItemsWhenLive}
+                onOpenSummary={openSummaryWhenLive}
                 onPlaceAll={openPlaceAll}
                 onClearAll={openClear}
                 swapOpen={atList}
@@ -560,6 +565,7 @@ function Detail({ view, lens, ready, onOpenSupplierOrder, onOpenEdit, onOpenDay,
     return <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>;
   }
   if (view.kind === 'items') return <SupplierItemsScreen id={view.id} lens={lens} />;
+  if (view.kind === 'summary') return <SupplierSummaryScreen id={view.id} lens={lens} />;
   if (view.kind === 'confirm') return <SupplierConfirmScreen id={view.id} lens={lens} />;
   if (view.kind === 'place-all') return <SupplierPicker mode="place-all" lens={lens} />;
   if (view.kind === 'place-all-confirm') return <PlaceAllConfirmScreen lens={lens} />;

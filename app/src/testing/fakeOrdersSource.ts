@@ -88,6 +88,18 @@ export type FakeOrdersSource = OrdersSource & {
   reads: number;
   // Another phone writes a list, or changes one: every watcher is told.
   emitRequests(): void;
+  // ingredient-prices as stored, by ingredient id (step 3f-8c). `refusePrices` makes the rules refuse the read: the watcher is
+  // told ({}, false), as the real one is. `priceWatches` counts every listener ever opened on the collection, `priceWatchersOpen`
+  // the ones open now.
+  prices: Map<string, Record<string, unknown>>;
+  refusePrices: boolean;
+  // The browser's copy answers first, holding prices (readable), then the server refuses: the real order for a person who lost the
+  // right to read prices while this phone still held them.
+  refusePricesAfterCopy: boolean;
+  priceWatches: number;
+  priceWatchersOpen(): number;
+  // Another phone (or the card) changes a price: every price watcher is told.
+  emitPrices(): void;
 };
 
 // A merge like setDoc(…, { merge: true }): maps merged key by key at every depth, everything else replaced.
@@ -107,6 +119,7 @@ export function fakeOrdersSource(init: {
   suppliers?: StoredDoc[]; ingredients?: StoredDoc[]; ordersConfig?: Record<string, unknown> | null;
   draft?: Record<string, unknown> | null; records?: Record<string, Record<string, unknown>>;
   requests?: Record<string, Record<string, unknown>>;
+  prices?: Record<string, Record<string, unknown>>;
 } = {}): FakeOrdersSource {
   const supplierWatchers = new Set<ListListener>();
   const ingredientWatchers = new Set<ListListener>();
@@ -114,6 +127,7 @@ export function fakeOrdersSource(init: {
   const draftWatchers = new Set<DocListener>();
   const historyWatchers = new Set<{ from: string; onChange: (list: StoredDoc[], meta: OrdersMeta) => void }>();
   const requestWatchers = new Set<ListListener>();
+  const priceWatchers = new Set<(map: Record<string, Record<string, unknown>>, readable: boolean, meta: OrdersMeta) => void>();
   let nextRequest = 1;
   let held: Array<() => void> | null = null;
   const fromServer: OrdersMeta = { fromServer: true };
@@ -412,6 +426,34 @@ export function fakeOrdersSource(init: {
 
     emitRequests: () => tellRequests(),
 
+    prices: new Map(Object.entries(init.prices ?? {})),
+    refusePrices: false,
+    refusePricesAfterCopy: false,
+    priceWatches: 0,
+    priceWatchersOpen: () => priceWatchers.size,
+    watchPrices(onChange) {
+      source.priceWatches += 1;
+      if (source.refusePrices) {
+        queueMicrotask(() => onChange({}, false, { fromServer: false }));
+        return () => {};
+      }
+      if (source.refusePricesAfterCopy) {
+        let open = true;
+        queueMicrotask(() => {
+          if (!open) return;
+          onChange(Object.fromEntries(source.prices), true, { fromServer: false });
+          setTimeout(() => { if (open) onChange({}, false, { fromServer: false }); }, 0);
+        });
+        return () => { open = false; };
+      }
+      priceWatchers.add(onChange);
+      queueMicrotask(() => { if (priceWatchers.has(onChange)) onChange(Object.fromEntries(source.prices), true, fromServer); });
+      return () => { priceWatchers.delete(onChange); };
+    },
+    emitPrices() {
+      for (const l of priceWatchers) l(Object.fromEntries(source.prices), true, fromServer);
+    },
+
     remoteMerge(payload) {
       source.draft = deepMerge(source.draft ?? {}, payload);
       tellDraft();
@@ -429,7 +471,7 @@ export function fakeOrdersSource(init: {
     emitHistory: () => tellHistory(),
 
     openListeners: () => supplierWatchers.size + ingredientWatchers.size + configWatchers.size + draftWatchers.size
-      + historyWatchers.size + requestWatchers.size,
+      + historyWatchers.size + requestWatchers.size + priceWatchers.size,
 
     holdWrites() {
       held = [];

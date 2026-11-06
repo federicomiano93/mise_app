@@ -19,10 +19,13 @@
   border-radius: var(--r-lg) var(--r-lg) 0 0;
 }
 
-/* «+» and «What they sell» side by side in the bar; the plus is an icon-only square, so both fit a 296px phone beside nothing else. */
+/* «+», «What they sell» and «Summary (N)» in the bar. They do not all fit beside the title on a 296px phone: the row wraps (the
+   bar gives it at most its own width, FormBar.module.css .action), right-aligned, every target still the full hit height. */
 .barActions {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: var(--s2);
 }
 

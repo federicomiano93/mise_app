@@ -1509,3 +1509,84 @@ area.
 - Found while driving, NOT this slice: on the ingredient card at 296px the fold headers «Elenco ingredienti da compilare», «Allergeni
   dichiarato», «Valori nutrizionali Completi» are cut (step 3e code, unchanged here).
 - Not driven: the real tablet (finger taps on the doors), OFFLINE (a door opened offline: the card's own offline behaviour), EMPTY venue.
+
+## Step 3f-8c — the summary and the money (6 Nov 2026, plan agreed by him)
+
+The last part of slice 3f-8: **L19** (the summary) and **L20** (the order's money). The first slice where Orders reads prices.
+
+**What the current app does, read again** (L19 as written above says «every filled line grouped by supplier»; the code is per supplier):
+the summary is ONE supplier's current order, read-only (`order-summary.js` `supplierSummary`, drawn by `order-summary-view.js`), with
+exactly the lines of the message the supplier receives (`orderedItems` + `summaryLines` of `order-text.js`). Two doors: the bar at the
+foot of the supplier's screen, on every width, always shown, also with 0 items («N articoli nell’ordine · Riepilogo», his words of 3 Oct
+2026: «così posso vedere tutto quello che ho selezionato senza tornare indietro»), and on a tablet a clipboard button on each supplier
+row of the list, only while that supplier has quantities. The money, only for whoever may read prices (the read of `ingredient-prices`
+SUCCEEDED, never from an empty map): in the summary, on every width, a cost line under each line («4 × 45,00 € = 180,00 € · IVA 4%»,
+«nessun prezzo», «IVA non indicata») and the totals box (Net, one line per VAT rate, Order total, the warnings when a price or a rate is
+missing; «nothing priced» instead of a zero); on the supplier's screen, tablet only, the totals box alone above «Order placed» (his
+words of 28 Sep 2026: «devo vedere solo il totale alla fine»). The flat view and History show no money.
+
+**Who reads prices.** `firestore.rules` `ingredient-prices`: `allow read: if cardAccess(lid, 'foodcost', 'foodcost') != 'none'` — an owner
+or a manager, an employee only where the venue showed them Food cost. Mise 2 asks the same question on the phone (UX only, P2):
+`visibleSectionIds(location, canManage).has('foodcost')`. Only then does Orders open a listener on `ingredient-prices`; for anybody else
+NOTHING is read, and no money, no «no price», is drawn. A refused or failed read is «not readable» and draws no money either. No rule
+changed. ⚠️ When main (with the partial owners and the `prices` pseudo-card) is merged into the stack, this gate must follow the rule
+there (`cardAccess(lid, 'prices', 'prices')`): until then a kitchen owner would only miss the money, never see money they may not.
+
+**His choices (6 Nov 2026), all four with the recommendation:**
+- C1. On the supplier's screen the door «Riepilogo (N)» sits in the bar at the top, which sticks while the rows scroll, so it is always
+  in reach (Mise 2 has no bar stuck at the foot of a phone: it took the rows' room). Shown also with 0 items.
+- C2. On the split, each supplier row of the list has the summary button while that supplier has quantities, as today; the summary opens
+  in the right-hand pane beside the list. Not on a phone's rows (as today).
+- C3. The money in the summary is shown on every width to whoever may read prices, as today.
+- C4. On the supplier's screen only the totals box, above «Order placed», only on the split (from 1000px), only for whoever may read
+  prices, as today. No money in the flat view.
+
+**Technical (taken with the recommendation).**
+- The summary is its own address one level down: `/orders/supplier/<id>/summary`. Back steps up to where it was opened from (the
+  supplier's screen, or the list on the split); nothing typed is lost (the draft lives in the store). Read-only: it writes nothing.
+- Port `order-summary` (full, paired) — the same selection and lines as the message, so the summary can never say what the supplier
+  will not receive.
+- One listener on `ingredient-prices` for the whole Orders screen tree while the section is on screen (T4), opened only for a price
+  reader. Cost (P14): a price reader's opening of Orders reads each priced ingredient once (the offline cache spares the repeats).
+
+## Step 3f-8c as built
+
+**What it is.** The read-only summary of ONE supplier's current order at `/orders/supplier/<id>/summary` (`SupplierSummaryScreen.tsx`),
+its lines built by the port `order-summary` (full, paired) over the very lines the message uses (`lens.linesOf` + the draft, as
+`sendFlow.draftSendRows`): each line its quantity and unit; for whoever may read prices, the cost line under it and the totals box
+(`OrderTotals.tsx`: Net, one line per VAT rate, Order total, the warnings; «nothing priced» instead of a zero). Doors: «Riepilogo (N)» with a
+clipboard icon in the supplier screen's sticky bar, always shown (C1); on the split, a clipboard button at the end of each supplier row
+while it has quantities, an invisible spacer otherwise (C2). On the split the supplier screen shows the totals box alone above «Ordine
+fatto…» (C4). The prices: `ordersSource.watchPrices` (ingredient-prices), opened by `ordersStore.setPriceReader` only while the section is
+on screen AND `OrdersProvider` finds Food cost visible to this person; `pricesReadable` is the one gate of every amount (`orderMoney.ts`).
+No rule changed, no new key, no new write.
+
+**Taken for him, easy to change.**
+- P1. ⚠️ On a phone the supplier screen's sticky bar now takes THREE lines (Back + name; «+» and «Cosa vendono»; «Riepilogo (N)»), about
+  180px at 296 and 360 instead of about 125px: the three buttons do not fit beside each other below about 420px. Measured: nothing clipped,
+  no sideways scroll, targets 48px. If it takes too much room on his phone, the alternatives are the door at the foot beside «Ordine
+  fatto…» (choice C1's alternative) or icons without words on a phone.
+- P2. The total on the supplier screen (C4) is the summary's own total (the message's lines), not a sum of the rows on screen as in the
+  current app: the two can only differ for odd stored data, and this way the screen and the summary never disagree.
+- P3. The summary opened from a row on the split marks that row as the open one, as a supplier screen does.
+
+**Fixed after the review.** Back to the list owed to a row's summary button that went while the summary was open (another phone placed
+or cleared the order, or the window narrowed below the split) now gives the focus to the supplier's row, not the page; a non-reader's lines
+go through `withPrices` with no prices, which drains any old price key left on an ingredient (two layers, as the current app); specs for
+the browser's copy answering with prices and the server then refusing (the money goes).
+
+**Known and left.**
+- The count on the door rounds the quantity (`filledFor`) while the summary lists any quantity above 0: a stored 0.4, which Mise 2 cannot
+  type, would say «Riepilogo (0)» over one line (as before this slice on the rows).
+- Offline, a person who lost Food cost keeps the money held in the browser's copy until the server refuses (as the Suppliers section and
+  the current app).
+- ⚠️ When main (the partial owners, the `prices` pseudo-card) is merged into the stack, the gate in `OrdersContext.tsx` must follow the
+  rule there; until then a kitchen owner only misses the money.
+- Not driven: the real tablet (finger taps on the row button), OFFLINE, EMPTY venue.
+
+**Driven.** `algprobe/mise-drive/drive-mise2-orders-8c.mjs <base> <cdp-port> <fs-port> <auth-port>` on a private emulator (ONLY=IT1024,…,
+STAFF360,STAFF1024): the owner of the Italian venue in Italian and English at 1024, 360 and 296 (three lines priced, unpriced and with no
+VAT rate; row button and pane on the split, none on a phone; the door sticking while the rows scroll; the total above «Ordine fatto…» only on
+the split; the summary from both doors, lines, money and totals; Back to the door; a price changed elsewhere moving the open total; the
+summary writing nothing), the employee of «bakery» at 360 and 1024 (not shown Food cost: lines, no money, no price asked for; shown it: the
+money appears). axe clean, targets, nothing clipped, no sideways scroll, one main, one h1, no console error, at every screen; all put back.

@@ -6,8 +6,10 @@
 //
 // Under the open venue, watched only while the section is on screen (P14):
 //   • suppliers — every supplier (the list shows the active ones; a switched-off one still names an override).
-//   • ingredients — every ingredient, as stored. ⚠️ NO PRICES in this slice: the order's money is a tablet-only line for
-//     whoever may read prices (parity L20, slice 3f-8), and an employee must not even load them.
+//   • ingredients — every ingredient, as stored, WITHOUT prices (they live in ingredient-prices since 12 Aug 2026).
+//   • ingredient-prices — from step 3f-8c, and ONLY for whoever may read prices (the store opens it on the session's word,
+//     ordersStore.setPriceReader): the summary's money and the tablet's order total (parity L19, L20). An employee the venue
+//     never showed Food cost does not even load them.
 //   • config/orders — the venue's supplier order, favourites, Stock box switch (parity M10).
 //   • drafts/current — the order in progress, shared live by every phone of the venue (parity L31).
 // It writes the draft (a merge of the changed lines and days, draftSync.ts decides what changed; and, from step 3f-2, the
@@ -108,6 +110,12 @@ export interface OrdersSource {
   // Merges these keys into config/orders (decision F4: the goods-arrived switch). Same contract; a person who is not an owner or
   // a manager is refused by the rules (permission-denied).
   mergeOrdersConfig(patch: Record<string, unknown>): Promise<void>;
+  // Every ingredient-prices document by ingredient id, live, and whether the rules let this account read them (step 3f-8c).
+  // ⚠️ `readable` is true only when the SERVER answered, or the browser's copy holds prices: an empty answer from the copy
+  // proves nothing (the server's refusal may still be on its way). A refusal or a failure answers ({}, false), never an error:
+  // a person the rules refuse sees no money at all, never «no price». Same contract as js/orders/firebase-orders.js
+  // watchIngredientPrices and app/src/suppliers/suppliersSource.ts watchPrices.
+  watchPrices(onChange: (map: Record<string, Record<string, unknown>>, readable: boolean, meta: OrdersMeta) => void): () => void;
   // The last REQUEST_LIMIT order lists, newest first, live. Same contract as the other watchers.
   watchOrderRequests(onChange: (list: StoredDoc[], meta: OrdersMeta) => void, onError: (err: unknown) => void): () => void;
   // Writes a new order list (the venue stamp is applied here). Settles when the server answers; offline it waits, and Firestore
@@ -144,6 +152,7 @@ export const REQUEST_LIMIT = 120;
 
 const SUPPLIERS = 'suppliers';
 const INGREDIENTS = 'ingredients';
+const PRICES = 'ingredient-prices';
 const CONFIG = 'config';
 const ORDERS_DOC = 'orders';
 const DRAFTS = 'drafts';
@@ -158,6 +167,7 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
   // Throws on a venue id that could point a read anywhere else (@mise/shared/location-id).
   const suppliersPath = buildPath(locationId, SUPPLIERS);
   const ingredientsPath = buildPath(locationId, INGREDIENTS);
+  const pricesPath = buildPath(locationId, PRICES);
   const configPath = buildPath(locationId, CONFIG);
   const draftsPath = buildPath(locationId, DRAFTS);
   const historyPath = buildPath(locationId, HISTORY);
@@ -223,6 +233,22 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
     watchIngredients: watchCollection(ingredientsPath, INGREDIENTS),
     watchOrdersConfig: watchDocument(configPath, ORDERS_DOC, 'config/orders'),
     watchDraft: watchDocument(draftsPath, DRAFT_ID, 'drafts/current'),
+
+    // ⚠️ includeMetadataChanges: the server's confirmation of an empty cached answer changes no document and would never be
+    // reported, so `readable` would stay false for a venue with no price yet. ⚠️ QUIET (warn): a refusal is the rules working.
+    watchPrices: onChange => listen(kit => kit.fs.onSnapshot(
+      kit.fs.collection(kit.db, pricesPath) as Query,
+      { includeMetadataChanges: true },
+      snap => {
+        const map: Record<string, Record<string, unknown>> = {};
+        snap.forEach(d => { map[d.id] = d.data(); });
+        onChange(map, !snap.metadata.fromCache || !snap.empty, { fromServer: !snap.metadata.fromCache });
+      },
+      err => {
+        console.warn('watch(ingredient-prices) failed:', err);
+        onChange({}, false, { fromServer: false });
+      },
+    ), () => onChange({}, false, { fromServer: false })),
 
     // includeMetadataChanges for ONE answer: the server's first word, which may be identical to the browser's copy (History's
     // «Loading…» and an editor opened by its address wait for it, step 3f-4). Every other metadata-only answer is dropped, so the

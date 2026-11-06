@@ -11,11 +11,15 @@ import { createContext, useContext, useMemo, useRef } from 'react';
 // (A copy of suppliers/handBack.ts, cut down to what the order list needs: a feature never imports from another feature's
 // folder.)
 
-// The row that opens a supplier's order, and the list icon of that row that opens «What they sell».
+// The row that opens a supplier's order, the list icon of that row that opens «What they sell», and (on the split) its clipboard
+// icon that opens the order summary.
 export const supplierOpener = (id: string): string => `supplier:${id}`;
 export const itemsOpener = (id: string): string => `items:${id}`;
+export const summaryOpener = (id: string): string => `summary:${id}`;
 // A supplier's screen: its «What they sell» button, where Back from the items list returns the focus.
 export const ITEMS_DOOR = 'items-door';
+// A supplier's screen: its «Summary (N)» button, where Back from the summary returns the focus.
+export const SUMMARY_DOOR = 'summary-door';
 // A supplier's screen: its «Order placed…» button, where Back from the confirm screen returns the focus.
 export const PLACE_DOOR = 'place-door';
 // The list's two buttons under the suppliers: «Order placed…» (the picker of the suppliers to record) and «Clear quantities…».
@@ -38,7 +42,14 @@ export const SEARCH_BOX = 'search-box';
 // A pending banner's «Placed …» (the supplier's id), in the notices under the bell: where Back from its confirm screen returns the
 // focus. Gone once the order was recorded: then the supplier's row takes it (pendingFallback).
 export const pendingOpener = (id: string): string => `pending:${id}`;
-export const pendingFallback = (name: string): string | null => (name.startsWith('pending:') ? supplierOpener(name.slice('pending:'.length)) : null);
+// Back to the list owed to a button that is gone: the supplier's row takes the focus instead. A pending banner goes once the order is
+// recorded; a row's summary button goes once the supplier has no quantity left (another phone placed or cleared it while the summary
+// was open), or when the window narrows below the split — without this the focus fell to the page (review of 3f-8c).
+export const pendingFallback = (name: string): string | null => {
+  if (name.startsWith('pending:')) return supplierOpener(name.slice('pending:'.length));
+  if (name.startsWith('summary:')) return supplierOpener(name.slice('summary:'.length));
+  return null;
+};
 
 export interface HandBack {
   // A control that opens a screen. null when it goes away.

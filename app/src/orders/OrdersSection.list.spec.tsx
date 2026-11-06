@@ -73,10 +73,11 @@ describe('the frame', () => {
     expect(screen.getByText(/Add your suppliers and ingredients in Ingredients & suppliers/)).toBeInTheDocument();
   });
 
-  it('opens the four listeners and closes them when the section closes', async () => {
+  it('opens the listeners (the owner’s also reads the prices) and closes them when the section closes', async () => {
     const source = seeded();
     const view = await loaded('/orders', source);
-    expect(source.openListeners()).toBe(6);
+    // Six for everybody, plus ingredient-prices for whoever may read prices (the default session is the owner).
+    expect(source.openListeners()).toBe(7);
     await act(async () => { await view.router.navigate('/stocktake'); });
     await waitFor(() => { expect(source.openListeners()).toBe(0); }, LOAD);
   });

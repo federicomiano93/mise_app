@@ -40,6 +40,7 @@
 
 .action {
   flex: none;
+  max-width: 100%;
   margin-left: auto;
 }
 
