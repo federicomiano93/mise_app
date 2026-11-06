@@ -394,31 +394,42 @@ describe('the swap and the history entries', () => {
     expect(path(view)).toBe('/more');
   });
 
-  it('pressed with History open on the split steps back and lands on the other view with NO duplicate entry', async () => {
+  it('is drawn only at list level: with History open beside the list its place is kept, empty, and Back brings it back', async () => {
     split();
     const view = renderOrders('/', { source: seeded(), entries: ['/more', '/orders/ingredients'] });
     await screen.findAllByRole('spinbutton', undefined, LOAD);
+    const words = screen.getByRole('button', { name: 'History' }).parentElement as HTMLElement;
+    const before = words.children.length;
+    expect(screen.getByRole('button', { name: 'Suppliers' })).toBeInTheDocument();
     await view.user.click(screen.getByRole('button', { name: 'History' }));
     await screen.findByRole('region', { name: 'History' }, LOAD);
-    expect(path(view)).toBe('/orders/history');
-    await view.user.click(screen.getByRole('button', { name: 'Suppliers' }));
-    await waitFor(() => { expect(path(view)).toBe('/orders'); });
-    expect(view.router.state.historyAction).toBe('REPLACE');
-    await waitFor(() => { expect(screen.getByRole('button', { name: 'Ingredients' })).toHaveFocus(); });
-    await act(async () => { await view.router.navigate(-1); });
-    expect(path(view)).toBe('/more');
+    expect(screen.queryByRole('button', { name: 'Suppliers' })).not.toBeInTheDocument();
+    // The row did not move: the same children, the swap's one an empty place of its size.
+    expect(words.children.length).toBe(before);
+    await view.user.click(within(screen.getByRole('region', { name: 'History' })).getByRole('button', { name: 'Back' }));
+    expect(path(view)).toBe('/orders/ingredients');
+    expect(await screen.findByRole('button', { name: 'Suppliers' })).toBeInTheDocument();
+    expect(words.children.length).toBe(before);
   });
+});
 
-  it('does the same from the supplier list with a screen open, going to the flat view', async () => {
+describe('the bell with the flat view in the column', () => {
+  it('opens its panel there, and «Placed yesterday» opens BESIDE the flat view, with Back returning to it', async () => {
     split();
-    const view = renderOrders('/', { source: seeded(), entries: ['/more', '/orders'] });
-    await screen.findAllByRole('button', { name: 'History' }, LOAD);
-    await view.user.click(screen.getByRole('button', { name: 'History' }));
-    await screen.findByRole('region', { name: 'History' }, LOAD);
-    await view.user.click(screen.getByRole('button', { name: 'Ingredients' }));
-    await waitFor(() => { expect(path(view)).toBe('/orders/ingredients'); });
+    const yesterday = new Date(Date.now() - 86_400_000);
+    const day = yesterday.getFullYear() + '-' + String(yesterday.getMonth() + 1).padStart(2, '0') + '-' + String(yesterday.getDate()).padStart(2, '0');
+    const source = seeded({ draft: { entries: { 'i-flour': { qty: 2 } }, days: { 's-alp': day } } });
+    const view = await flat(source);
+    await view.user.type(screen.getByRole('searchbox'), 'fl');
+    await view.user.click(await screen.findByRole('button', { name: /^Notices/ }, LOAD));
+    const panel = within(screen.getByRole('region', { name: 'Notices' }));
+    await view.user.click(await panel.findByRole('button', { name: 'Placed yesterday' }));
+    await waitFor(() => { expect(path(view)).toBe('/orders/supplier/s-alp/confirm'); });
+    // The flat view stays in the column beside the screen, with its search.
+    expect(screen.getByRole('searchbox', { name: 'Search an ingredient…' })).toHaveValue('fl');
     await act(async () => { await view.router.navigate(-1); });
-    expect(path(view)).toBe('/more');
+    expect(path(view)).toBe('/orders/ingredients');
+    expect(screen.getByRole('searchbox')).toHaveValue('fl');
   });
 });
 

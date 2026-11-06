@@ -19,6 +19,8 @@ type Props = {
   // button are drawn.
   ready: boolean;
   hasSuppliers: boolean;
+  // The swap is drawn only at list level; with a screen open beside the list its place is kept by a placeholder of its size.
+  swapOpen: boolean;
   onSwap: () => void;
   onSend: () => void;
   onSettings: () => void;
@@ -36,7 +38,7 @@ type Props = {
 // ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a component that stays mounted, and
 // only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard where the person
 // left them (the current app built the box once for the same reason). Its text lives in the view that owns the rows.
-export function OrdersHead({ view, label, query, onQuery, onLookingElsewhere, ready, hasSuppliers, onSwap, onSend, onSettings, onHistory, headRef, children }: Props) {
+export function OrdersHead({ view, label, query, onQuery, onLookingElsewhere, ready, hasSuppliers, swapOpen, onSwap, onSend, onSettings, onHistory, headRef, children }: Props) {
   const { t } = useT();
   const handBack = useHandBack();
   // Back from a screen hands the focus back to the button that opened it; the swap button gets it after the view changed.
@@ -67,12 +69,12 @@ export function OrdersHead({ view, label, query, onQuery, onLookingElsewhere, re
             supplier 56px down just as a finger lands on one (the rule at OrdersSection's hold). */}
         {ready ? null : <span aria-hidden="true" className={styles.sendPlace} />}
         {/* The other view, by its name: the same place on both views, so the finger that swapped can swap back. */}
-        {ready ? (hasSuppliers ? (
+        {ready && swapOpen ? (hasSuppliers ? (
           <Button ref={swapNode} className={styles.swap} onPress={onSwap}>
             <ArrowLeftRight aria-hidden="true" />
             {swapText}
           </Button>
-        ) : null) : <span aria-hidden="true" className={styles.swapPlace} />}
+        ) : null) : (!ready || hasSuppliers) ? <span aria-hidden="true" className={styles.swapPlace} /> : null}
         {/* ⚠️ WITH ITS WORD, NOT AN ICON ALONE, AND OUT OF THE SETTINGS (Federico, 3 Nov 2026): inside them he could not find it.
             Always there, even with no supplier yet: past orders outlive the suppliers they went to. */}
         <Button ref={historyNode} className={styles.history} onPress={onHistory}>

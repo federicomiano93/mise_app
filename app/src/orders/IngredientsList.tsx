@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { wholeNumber } from '@mise/shared/archive';
 import { fromOrdersList, ingredientCardAddress } from '@mise/shared/records-link';
+import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { tabOfLine, useCardDoors } from './CardDoors';
+import { NoticesPanel } from './NoticesPanel';
 import { OrderLine } from './OrderLine';
 import { OrdersFilter } from './OrdersFilter';
 import { OrdersHead } from './OrdersHead';
@@ -17,10 +19,15 @@ type Props = {
   // The LIVE lens: this view has no copy of the lists to draw from, so before `ready` it only says it is loading.
   lens: OrdersLens;
   ready: boolean;
+  // Drawn only at list level: with a screen open beside the list the swap's place is kept, empty.
+  swapOpen: boolean;
   onSwap: () => void;
   onSend: () => void;
   onSettings: () => void;
   onHistory: () => void;
+  // The bell's panel (it shows only when the bell opens it) acts from here exactly as from the supplier list.
+  onOpenSupplier: (id: string) => void;
+  onOpenPending: (id: string, day: string) => void;
   // What the view starts with when Back brings the person from a card (cardTrip.ts): the search text and the frozen «Ordering» set.
   initial?: { readonly query: string; readonly only: readonly string[] | null };
 };
@@ -31,7 +38,7 @@ type Props = {
 //
 // ⚠️ ITS SEARCH TEXT AND ITS FILTER ARE ITS OWN, not the supplier list's, and NOT REMEMBERED: leaving the view (or the section)
 // ends them. The box is a controlled input in a component that stays mounted (OrdersHead), so a snapshot never remounts it.
-export function IngredientsList({ lens, ready, onSwap, onSend, onSettings, onHistory, initial }: Props) {
+export function IngredientsList({ lens, ready, swapOpen, onSwap, onSend, onSettings, onHistory, onOpenSupplier, onOpenPending, initial }: Props) {
   const { t } = useT();
   const store = useOrdersStore();
   const snapshot = useOrders();
@@ -78,11 +85,12 @@ export function IngredientsList({ lens, ready, onSwap, onSend, onSettings, onHis
       showStock={showStock}
       hint={snapshot.suggester.hint(line.row.ingredient, entries[line.row.ingredient.id])}
       supplierName={line.supplierName}
+      doorIn="flat"
       onOpenCard={doors.may ? row => {
         doors.open({
           address: ingredientCardAddress(row.ingredient.id),
           state: fromOrdersList(tabOfLine(row.ingredient)),
-          target: { kind: 'name', ingredientId: row.ingredient.id },
+          target: { kind: 'name', ingredientId: row.ingredient.id, in: 'flat' },
           flat: { query, only: frozen === null ? null : [...frozen] },
         });
       } : undefined}
@@ -115,6 +123,7 @@ export function IngredientsList({ lens, ready, onSwap, onSend, onSettings, onHis
         onQuery={setQuery}
         ready={ready}
         hasSuppliers={lens.suppliers.length > 0}
+        swapOpen={swapOpen}
         onSwap={onSwap}
         onSend={onSend}
         onSettings={onSettings}
@@ -131,6 +140,12 @@ export function IngredientsList({ lens, ready, onSwap, onSend, onSettings, onHis
           />
         ) : null}
       </OrdersHead>
+
+      {/* The bell is in the page's bar on the split whatever the list column holds, so its panel must be here too. Only the always-on blocks
+          (today's orders, the debt doors, the order lists) stay on the supplier view (F-4). */}
+      <PartBoundary>
+        <NoticesPanel onOpenSupplier={onOpenSupplier} onOpenPending={onOpenPending} onSend={onSend} />
+      </PartBoundary>
 
       {!ready ? (
         <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>

@@ -89,7 +89,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
     doors.open({
       address: ingredientCardAddress(row.ingredient.id),
       state: pseudo ? fromOrdersList(tabOfLine(row.ingredient)) : fromOrdersSupplier(id),
-      target: { kind: 'name', ingredientId: row.ingredient.id },
+      target: { kind: 'name', ingredientId: row.ingredient.id, in: 'supplier' },
     });
   };
   const lineOf = (row: OrderRow) => (

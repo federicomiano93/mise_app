@@ -8,7 +8,7 @@
 
 // What was pressed: an ingredient's name (its card), the «+» of a supplier's screen, or the supplier's name in that screen's bar.
 export type TripTarget =
-  | { readonly kind: 'name'; readonly ingredientId: string }
+  | { readonly kind: 'name'; readonly ingredientId: string; readonly in: 'flat' | 'supplier' }
   | { readonly kind: 'add' }
   | { readonly kind: 'supplier' };
 

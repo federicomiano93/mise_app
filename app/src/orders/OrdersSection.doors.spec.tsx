@@ -257,6 +257,52 @@ describe('Back from the card', () => {
   });
 });
 
+describe('the flat view in the column beside a screen', () => {
+  it('comes back from a card door pressed in the flat view while History is open beside it: search, filter, focus, in the flat view', async () => {
+    split();
+    const draft = { entries: { 'i-butter': { qty: 2 }, 'i-flour': { qty: 1 } }, days: {} };
+    const view = await opened('/orders/ingredients', seeded({ draft }));
+    await view.user.click(screen.getByRole('radio', { name: 'Ordering (2)' }));
+    await view.user.type(screen.getByRole('searchbox'), 'but');
+    await view.user.click(screen.getByRole('button', { name: 'History' }));
+    await screen.findByRole('region', { name: 'History' }, LOAD);
+    expect(view.router.state.location.pathname).toBe('/orders/history');
+    await view.user.click(edit('Butter'));
+    expect(pushed().path).toBe('/suppliers/ingredient/i-butter');
+    await act(async () => { await view.router.navigate(-1); });
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    expect(view.router.state.location.pathname).toBe('/orders/history');
+    expect(screen.getByRole('searchbox', { name: 'Search an ingredient…' })).toHaveValue('but');
+    expect(screen.getByRole('radio', { name: /^Ordering/ })).toHaveAttribute('aria-checked', 'true');
+    await waitFor(() => { expect(edit('Butter')).toHaveFocus(); });
+  });
+
+  it('is in the column for a screen mounted fresh with the column in its state (a reload)', async () => {
+    split();
+    renderOrders('/', {
+      source: seeded(), routes,
+      entries: [{ pathname: '/orders/history', state: { keepFocus: true, fromList: true, column: 'ingredients' } }],
+    });
+    await screen.findByRole('region', { name: 'History' }, LOAD);
+    expect(await screen.findByRole('searchbox', { name: 'Search an ingredient…' })).toBeInTheDocument();
+  });
+
+  it('gives the focus back to the door in the SUPPLIER screen when the same ingredient is also in the flat view beside it', async () => {
+    split();
+    const view = renderOrders('/', {
+      source: seeded(), routes,
+      entries: [{ pathname: '/orders/supplier/s-alp', state: { keepFocus: true, fromList: true, column: 'ingredients' } }],
+    });
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    const inSupplier = () => within(screen.getByRole('region', { name: 'Alpine Mills' })).getByRole('button', { name: 'Edit Barley' });
+    expect(screen.getAllByRole('button', { name: 'Edit Barley' })).toHaveLength(2);
+    await view.user.click(inSupplier());
+    await act(async () => { await view.router.navigate(-1); });
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    await waitFor(() => { expect(inSupplier()).toHaveFocus(); });
+  });
+});
+
 describe('what was typed just before pressing a door', () => {
   it('is sent when the section is left', async () => {
     const source = seeded();

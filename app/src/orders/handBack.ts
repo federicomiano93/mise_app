@@ -26,8 +26,10 @@ export const SEND_OPENER = 'send';
 // The swap button of the list's head (step 3f-8b): where the focus lands once the view («by supplier» / «by ingredient») changed.
 export const SWAP_OPENER = 'swap';
 // The doors to the cards of «Ingredients & suppliers» (step 3f-8b): where the focus returns after the trip (cardTrip.ts). A name's
-// button is registered under its ingredient's id; the others have one place each on the screen.
-export const cardDoor = (id: string): string => `card:${id}`;
+// button is registered under its ingredient's id and where it is; the others have one place each on the screen.
+// ⚠️ THE NAME SAYS WHERE THE DOOR IS: on the split the flat view and a supplier's screen are mounted together, with the same ingredient
+// in both, and one's unmounting must not delete the other's registration.
+export const cardDoor = (id: string, where: 'flat' | 'supplier'): string => `card:${where}:${id}`;
 export const ADD_DOOR = 'add-door';
 export const SUPPLIER_DOOR = 'supplier-door';
 // What the focus falls back to when the door is gone: the supplier screen's title, the lists' search box.

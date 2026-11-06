@@ -49,15 +49,18 @@
   flex: 1 1 auto;
 }
 
-/* The places kept while «Send» and the swap wait, about as wide as the buttons, so the row wraps the same before and after they arrive. */
+/* The places kept while «Send» and the swap wait (or the swap's, with a screen open beside the list), about as wide AND as tall as the
+   buttons (a line holding only placeholders is not 0px tall), so the row wraps and measures the same before and after. */
 .sendPlace {
   flex: 1 1 auto;
   width: 6.5rem;
+  min-height: var(--hit);
 }
 
 .swapPlace {
   flex: 1 1 auto;
   width: 8.5rem;
+  min-height: var(--hit);
 }
 
 /* The icon and the box on one line: an SVG in a flex container is centred on the box, not left on the text baseline. */

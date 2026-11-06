@@ -28,6 +28,8 @@ type Props = {
   // The name becomes a button that opens the ingredient's card in «Ingredients & suppliers» (step 3f-8b). Given only where the person may
   // edit records; everybody else keeps plain text. Not given on History's editor or the confirm screen.
   onOpenCard?: (row: OrderRow) => void;
+  // Where the line is drawn, which names its door for the hand-back (the flat view, or a supplier's screen).
+  doorIn?: 'flat' | 'supplier';
 };
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -36,12 +38,12 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
 //
 // ⚠️ A ROW MARKED `elsewhere` SHOWS AN EMPTY ORDER BOX whatever the draft says: that number belongs to the other supplier's
 // order. Typing there (or + ) takes the line back — the store does it in the same write (ordersStore.ts editLine).
-export function OrderLine({ row, entry, showStock, hint, onEdit, supplierName, onOpenCard }: Props) {
+export function OrderLine({ row, entry, showStock, hint, onEdit, supplierName, onOpenCard, doorIn = 'supplier' }: Props) {
   const { t } = useT();
   const handBack = useHandBack();
   const id = row.ingredient.id;
   // Back from the card hands the focus back to this button (cardTrip.ts).
-  const doorNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(cardDoor(id), node); }, [handBack, id]);
+  const doorNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(cardDoor(id, doorIn), node); }, [handBack, id, doorIn]);
   const { ingredient } = row;
   const orderBox = useRef<BoxHandle>(null);
   const hintId = useId();
