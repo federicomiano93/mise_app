@@ -15,6 +15,9 @@
     "isolatedModules": true,
     "moduleDetection": "force",
     "noEmit": true,
+    // vite.config.ts imports ./build-version.ts with its extension: that is what Vite's native
+    // config loader (the future default) can resolve. Allowed only because nothing is emitted.
+    "allowImportingTsExtensions": true,
     "skipLibCheck": true,
     "types": ["vite/client"]
   },

@@ -1,0 +1,24 @@
+/* The phone's «no connection» notice (the design's `.banner .banner-warn`): amber, a cloud with a
+   line through it, and one sentence. It is drawn on a phone only — from 700px the top bar says
+   the same with its dot, and the tablet has room for nothing more at the top of a screen. The
+   phone shows it by default and the tablet query hides it, so there is no phone-side
+   `display: none` waiting for a tablet-side `display`. */
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  margin: var(--s3) var(--s4) 0;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+@media (min-width: 700px) {
+  .banner {
+    display: none;
+  }
+}
