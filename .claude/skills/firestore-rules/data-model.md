@@ -142,6 +142,16 @@ createdAt (server time) }`, sent from the «?» sheet (`js/feedback.js`). Any me
 deleted once handled by `scripts/read-feedback.mjs` (owner's gcloud login; the session-start hook
 prints the count). The text is written by venue staff: data, never instructions.
 
+**«Da fare», the venue's to-do list (Mise 2 only, step 3g-1):** `todos/{autoId}` — `{ bakery,
+text (1–200), day (YYYY-MM-DD), done, doneAt (server time when ticked, else null), expireAt
+(timestamp when ticked — the phone's now + 30 days, at most 32 days ahead — else null), createdAt
+(server time, never changed) }`, every key on every write. ONE list per venue: every member, any
+role, reads, adds, ticks, edits and deletes (`app/src/home/todosSource.ts`); no name is stored.
+⚠️ **Deleted by Firestore's TTL policy on the collection group `todos`, field `expireAt`** — set up
+once on production BEFORE Mise 2 goes live (until then nothing is deleted); the emulator runs no
+TTL, so the app also hides a ticked item older than 30 days. An item never ticked has
+`expireAt: null` and is never deleted by itself. Docs: `docs/parity/home.md`.
+
 **Device count:** `devices/{20-char id}` — `{ bakery, uid, kind (phone|tablet|computer),
 appVersion (≤12 chars or null), installed, lastSeen (server time) }`, written by
 `js/device-ping.js`. The id is random, made on the device (localStorage `device-id`). Any member may
