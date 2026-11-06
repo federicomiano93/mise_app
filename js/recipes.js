@@ -670,10 +670,11 @@ function reorderList(r) {
       if (to < 0 || to >= r.ingredients.length) return;
       moveTo(r, idx, to, true);
     });
+    // The grip on the RIGHT, as in the Recipe book's editor (Federico, 3 Nov 2026).
     list.appendChild(el('div', { class: 'cp-reorder-row' }, [
-      grip,
       el('span', { class: 'cp-reorder-name' }, name),
       el('span', { class: 'cp-reorder-amount' }, `${String(ing.grams)} g`),
+      grip,
     ]));
   });
   // ⚠️ HOLD TO DRAG ON A PHONE (200ms), so scrolling with a thumb never moves a row.

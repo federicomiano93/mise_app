@@ -231,14 +231,17 @@ export function renderEditor({
       const name = String(ing.label || '').trim() || t('cat.unnamedRow');
       const unit = unitOf(ing);
       const qty = ing.grams === '' || ing.grams === undefined || unit === 'to taste' ? '' : String(ing.grams);
+      // ⚠️ THE GRIP IS THE LAST THING IN THE ROW, on the right (Federico, 3 Nov 2026: «Metti a
+      // destra i punti per trascinare gli ingredienti per riordinare») — under the right thumb
+      // on the lab tablet, and the name now starts where it starts in every other mode.
       rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup cat-reorder-row' + (hasDividerAfter(working.ingredients, idx) ? ' cat-reorder-row--divider' : '') }, [
+        el('span', { class: 'cat-reorder-name', text: name }),
+        el('span', { class: 'cat-reorder-amount', text: [qty, unit].filter(Boolean).join(' ') }),
         el('button', {
           type: 'button', class: 'home-cards-grip cat-reorder-grip', icon: GRIP_ICON,
           'aria-label': t('cat.moveRow', { name }), 'aria-describedby': 'catReorderHint',
           onkeydown: (event) => moveWithKeys(idx, event),
         }),
-        el('span', { class: 'cat-reorder-name', text: name }),
-        el('span', { class: 'cat-reorder-amount', text: [qty, unit].filter(Boolean).join(' ') }),
       ]));
     });
     // ⚠️ HOLD TO DRAG ON A PHONE (200ms), so scrolling the recipe with a thumb never moves
