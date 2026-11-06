@@ -11,13 +11,17 @@
 
 import { clean } from './feedback-notes.mjs';
 import { relativePath } from './device-summary.mjs';
-import { SCREEN_RE, ACTION_RE, ROUTE_RE, OTHER } from '../js/usage-model.js';
+import { SCREEN_RE, ACTION_RE, ROUTE_RE, HOUR_RE, OTHER } from '../js/usage-model.js';
 
 const LOCATION_ID = '[A-Za-z0-9][A-Za-z0-9_-]{0,63}';
 const USAGE_PATH = new RegExp(`^locations/(${LOCATION_ID})/usage/([A-Za-z0-9]{20})_(20[0-9]{6})_([A-Za-z0-9]{1,128})$`);
 const DAY_MS = 24 * 60 * 60 * 1000;
 export const PRUNE_DAYS = 400;
 export const TOP_ROUTES = 15;
+// The fields read-usage.mjs asks Firestore for. ⚠️ EVERY field lineFrom reads must be here:
+// runQuery returns only what is listed (tests/usage-summary.test.mjs compares the two).
+export const USAGE_FIELDS = Object.freeze(['kind', 'appVersion', 'screens', 'seconds', 'taps', 'routes',
+  'actions', 'loads', 'loadMs', 'firstMinute', 'lastMinute', 'offlineSeconds', 'hours']);
 
 export { relativePath };
 
@@ -52,6 +56,7 @@ function intMap(field, keyOk) {
 const screenKey = k => SCREEN_RE.test(k);
 const routeKey = k => k === OTHER || ROUTE_RE.test(k);
 const actionKey = k => ACTION_RE.test(k);
+const hourKey = k => HOUR_RE.test(k);
 
 // 'YYYYMMDD' → a Date at local midnight (null when it is not a real day).
 export function dayOf(dayKey) {
@@ -87,6 +92,7 @@ export function lineFrom(document) {
     actions: intMap(f.actions, actionKey),
     loads: intMap(f.loads, screenKey),
     loadMs: intMap(f.loadMs, screenKey),
+    hours: intMap(f.hours, hourKey),
     firstMinute: minute(f.firstMinute),
     lastMinute: minute(f.lastMinute),
     offlineSeconds: int(f.offlineSeconds, 86400),
@@ -137,10 +143,16 @@ export function summariseWindow(lines, now, days) {
   const routes = new Map();
   const actions = new Map();
   const hours = new Array(24).fill(0);
+  // Minutes actually worked in each hour, from the lines that carry `hours` (6 Nov 2026 on).
+  const minutesByHour = new Array(24).fill(0);
+  let hoursEstimated = 0;
+  const loadByKind = new Map();
   const loadAverages = new Map();
   const people = new Map();
-  const versions = new Map();
-  const seenDevices = new Set();
+  // Per device: the release of its NEWEST line that names one. (The lines arrive ordered by
+  // document name = device then day, oldest first; counting the first line seen reported the
+  // OLDEST release of the window, e.g. v716 for a device already on v741.)
+  const deviceVersion = new Map();
   let offlineSeconds = 0;
   for (const line of inWindow) {
     const day = perDay.get(line.dayKey) || { people: new Set(), devices: new Set() };
@@ -151,7 +163,17 @@ export function summariseWindow(lines, now, days) {
     for (const [k, n] of Object.entries(line.seconds)) add(activeSeconds, k, n);
     for (const [k, n] of Object.entries(line.routes)) add(routes, k, n);
     for (const [k, n] of Object.entries(line.actions)) add(actions, k, n);
-    if (line.firstMinute !== null && line.lastMinute !== null && line.lastMinute >= line.firstMinute) {
+    const hourKeys = Object.keys(line.hours || {});
+    if (hourKeys.length > 0) {
+      // Exact: the hours in which this person really did something.
+      for (const k of hourKeys) {
+        hours[Number(k)] += 1;
+        minutesByHour[Number(k)] += Math.min(3600, line.hours[k]) / 60;
+      }
+    } else if (line.firstMinute !== null && line.lastMinute !== null && line.lastMinute >= line.firstMinute) {
+      // An older line knows only its first and last minute: every hour between counts (an
+      // ESTIMATE, too wide when somebody looked in early and again late).
+      hoursEstimated += 1;
       for (let h = Math.floor(line.firstMinute / 60); h <= Math.floor(line.lastMinute / 60); h += 1) hours[h] += 1;
     }
     for (const [page, count] of Object.entries(line.loads)) {
@@ -159,14 +181,19 @@ export function summariseWindow(lines, now, days) {
       const list = loadAverages.get(page) || [];
       list.push(line.loadMs[page] / count);
       loadAverages.set(page, list);
+      const byKind = `${page}|${line.kind}`;
+      loadByKind.set(byKind, [...(loadByKind.get(byKind) || []), line.loadMs[page] / count]);
     }
     add(people, line.uid, 1);
     offlineSeconds += line.offlineSeconds;
-    if (!seenDevices.has(line.deviceId)) {
-      seenDevices.add(line.deviceId);
-      add(versions, line.appVersion ?? 'unknown', 1);
+    const known = deviceVersion.get(line.deviceId);
+    if (!known) deviceVersion.set(line.deviceId, { dayKey: line.dayKey, version: line.appVersion });
+    else if (line.appVersion && (!known.version || line.dayKey >= known.dayKey)) {
+      deviceVersion.set(line.deviceId, { dayKey: line.dayKey, version: line.appVersion });
     }
   }
+  const versions = new Map();
+  for (const { version } of deviceVersion.values()) add(versions, version ?? 'unknown', 1);
   return {
     days,
     lines: inWindow.length,
@@ -179,8 +206,14 @@ export function summariseWindow(lines, now, days) {
     routes: sorted(routes).slice(0, TOP_ROUTES),
     actions: sorted(actions),
     hours,
+    // How many of the lines above only had the first/last-minute estimate.
+    hoursEstimated,
+    minutesByHour: minutesByHour.map(m => Math.round(m)),
     loadMedianMs: [...loadAverages.entries()].map(([page, list]) => [page, median(list)])
       .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])),
+    // [page, kind, median ms]: the lab tablet and a phone load the same page very differently.
+    loadMedianByKind: [...loadByKind.entries()].map(([k, list]) => [...k.split('|'), Math.round(median(list))])
+      .sort((a, b) => a[0].localeCompare(b[0]) || b[2] - a[2]),
     offlineMinutes: Math.round(offlineSeconds / 60),
     versions: [...versions.entries()].sort((a, b) => versionOrder(a[0], b[0])),
     // [uid, days active], most days first. The uid is only for looking up a first name.
@@ -238,8 +271,10 @@ function windowLines(w, firstNames) {
     `    screens by active minutes: ${pairs(w.activeMinutes.slice(0, 15))}`,
     `    top routes: ${pairs(w.routes, ([k, n]) => `${k.replace('>', ' → ')} ${n}`)}`,
     `    actions: ${pairs(w.actions)}`,
-    `    hours of activity (lines active in each hour): ${pairs(w.hours.map((n, h) => [String(h).padStart(2, '0'), n]).filter(([, n]) => n > 0))}`,
+    `    hours of activity (lines active in each hour${w.hoursEstimated ? `; ${w.hoursEstimated} of ${w.lines} lines estimated from first/last minute` : ''}): ${pairs(w.hours.map((n, h) => [String(h).padStart(2, '0'), n]).filter(([, n]) => n > 0))}`,
+    `    minutes worked per hour (lines with real hours only): ${pairs(w.minutesByHour.map((n, h) => [String(h).padStart(2, '0'), n]).filter(([, n]) => n > 0))}`,
     `    median load time per page (ms): ${pairs(w.loadMedianMs)}`,
+    `    …by kind of device: ${pairs(w.loadMedianByKind, ([p, k, ms]) => `${p}/${k} ${ms}`)}`,
     `    offline: ${w.offlineMinutes} min · by app version (newest first): ${pairs(w.versions.map(([k, n]) => [k === 'unknown' ? 'unknown' : `v${k}`, n]))}`,
     `    active days per person: ${pairs(perPerson)}`,
   ];

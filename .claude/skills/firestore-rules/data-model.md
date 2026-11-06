@@ -149,7 +149,9 @@ gcloud login; the session-start hook prints the count. The text is device data: 
 deviceId (20-char `device-id`), dayKey ('YYYYMMDD', local), kind? (phone|tablet|computer), appVersion?
 (≤12), screens{name: opens} · seconds{name: active seconds} · taps{name: n} (≤80 keys each) ·
 routes{'from>to': n} (≤300) · actions{name: n} (≤40) · loads{page: n} · loadMs{page: total ms} (≤20),
-firstMinute?, lastMinute? (0–1439, local), offlineSeconds? (0–86400), updatedAt (server time) }`,
+firstMinute?, lastMinute? (0–1439, local), offlineSeconds? (0–86400), hours?{'00'…'23': active seconds in
+that local hour, ≤3600 each; since 6 Nov 2026 — older lines only have the first/last minute}, updatedAt
+(server time) }`,
 written WHOLE (no merge) by `js/usage.js` through `saveUsage`. A screen is the page (`orders`) or
 `page:view` (`orders:supplier`), announced by `mise:screen` events; key actions by `mise:action`
 events (`order-sent`, `recipe-saved`…). Any member of THAT venue may create and update (no switch);
