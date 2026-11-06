@@ -1,7 +1,11 @@
-// The five TypeScript models and the js/ files the live app runs today must stay the SAME
+// The nine TypeScript models and the js/ files the live app runs today must stay the SAME
 // thing, until the switch to Mise 2 retires the js/ ones. The behaviour specs next to each model
 // run every test against both; this file checks what a behaviour test cannot see — that the two
 // export the same names, the same constants, the same frozen-ness and the same function shapes.
+//
+// membership.ts and location-id.ts are NOT paired here: they are partial ports (the pure half of
+// js/roles.js and js/location.js), so the js/ files export more by design; their specs run every
+// test against both files instead.
 //
 // ⚠️ IT IS WHAT CATCHES A FIX MADE TO js/ AND FORGOTTEN HERE. A constant changed in one file
 // (a new allergen, a new push kind, a new card) is invisible to every behavioural test that does
@@ -13,11 +17,19 @@ import * as pushModel from './push-model';
 import * as homeCards from './home-cards';
 import * as awayModel from './away-model';
 import * as allergenModel from './allergen-model';
+import * as sections from './sections';
+import * as firebaseTarget from './firebase-target';
+import * as localData from './local-data';
+import * as sameData from './same-data';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
 import * as legacyAwayModel from '../../js/away-model.js';
 import * as legacyAllergenModel from '../../js/allergen-model.js';
+import * as legacySections from '../../js/sections.js';
+import * as legacyFirebaseTarget from '../../js/firebase-target.js';
+import * as legacyLocalData from '../../js/local-data.js';
+import * as legacySameData from '../../js/same-data.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -25,6 +37,10 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['home-cards', homeCards, legacyHomeCards],
   ['away-model', awayModel, legacyAwayModel],
   ['allergen-model', allergenModel, legacyAllergenModel],
+  ['sections', sections, legacySections],
+  ['firebase-target', firebaseTarget, legacyFirebaseTarget],
+  ['local-data', localData, legacyLocalData],
+  ['same-data', sameData, legacySameData],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -83,7 +99,7 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all five models are compared', () => {
+test('all nine models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
-    ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model']);
+    ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data']);
 });
