@@ -114,8 +114,7 @@ body {
 
 /* Detail — the ingredient list is the focus of the screen (no title above it;
    the recipe name already sits in the green header). */
-.cat-ing-list { position: relative; background: var(--cat-surface); border: 1px solid var(--cat-border); border-radius: var(--cat-radius); overflow: hidden; cursor: zoom-in; }
-.cat-ing-list:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
+.cat-ing-list { position: relative; background: var(--cat-surface); border: 1px solid var(--cat-border); border-radius: var(--cat-radius); overflow: hidden; }
 
 /* Close (×) button, shown only while zoomed (fixed to the screen corner). */
 .cat-zoom-close { display: none; }
@@ -129,7 +128,7 @@ body {
    screen — so long recipes still scroll from the top. */
 /* The hold-to-magnify view. Its clamp() already widens the gutter with the screen,
    but only to 56px — on a 1366 tablet that still leaves a 1254px line. */
-.cat-ing-list--zoom { position: fixed; inset: 0; z-index: 50; margin: 0; border: 0; border-radius: 0; overflow-y: auto; cursor: zoom-out; display: flex; flex-direction: column; padding: 20px clamp(16px, 6vw, 56px); padding-inline: max(clamp(16px, 6vw, 56px), var(--app-gutter)); }
+.cat-ing-list--zoom { position: fixed; inset: 0; z-index: 50; margin: 0; border: 0; border-radius: 0; overflow-y: auto; display: flex; flex-direction: column; padding: 20px clamp(16px, 6vw, 56px); padding-inline: max(clamp(16px, 6vw, 56px), var(--app-gutter)); }
 .cat-ing-list--zoom .cat-ing-rows { margin: auto 0; width: 100%; }
 .cat-ing-list--zoom .cat-ing-row { padding: clamp(14px, calc(var(--vh100) * 0.032), 30px) 6px; }
 /* The − / + text size (js/catalogue/zoom-steps.js): each step multiplies the base size above.
@@ -138,7 +137,8 @@ body {
    never covers the last row. */
 .cat-ing-list--zoom { padding-bottom: var(--zoom-steps-room); }
 .cat-ing-list--zoom .cat-ing-name,
-.cat-ing-list--zoom .cat-ing-amt { font-size: calc(clamp(1.4rem, 6.4vw, 2.2rem) * var(--zoom-scale, 1)); }
+.cat-ing-list--zoom .cat-ing-amt,
+.cat-ing-list--zoom .cat-ing-split { font-size: calc(clamp(1.4rem, 6.4vw, 2.2rem) * var(--zoom-scale, 1)); }
 .cat-ing-list--zoom .cat-ing-row { flex-wrap: wrap; row-gap: 2px; }
 .cat-ing-list--zoom .cat-ing-amt { margin-left: auto; }
 .cat-ing-list:not(.cat-ing-list--zoom) .zoom-steps { display: none; }
@@ -149,6 +149,14 @@ body.cat-zoom-lock { overflow: hidden; }
    figures so it fills the view rather than sitting as a small card at the top. */
 .cat-ing-row { display: flex; align-items: baseline; gap: 12px; padding: 17px 18px; border-top: 1px solid var(--cat-border); }
 .cat-ing-row:first-child { border-top: 0; }
+/* A tap on an ingredient row opens its menu (Split into 2 parts / Order), so the row is a button.
+   Placed right after .cat-ing-row so the :first-child and divider rules below and further down still
+   win over the border reset. */
+.cat-ing-row-btn { width: 100%; margin: 0; font: inherit; color: inherit; text-align: left; background: transparent; border-width: 1px 0 0; border-style: solid; border-color: var(--cat-border); border-radius: 0; cursor: pointer; min-height: 44px; }
+.cat-ing-row-btn:first-child { border-top-width: 0; }
+.cat-ing-row-btn:hover { background: var(--cat-surface-2); }
+.cat-ing-row-btn:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: -2px; }
+.cat-ing-row-btn[aria-expanded="true"] { background: var(--cat-surface-2); }
 /* Name takes the left space and WRAPS when long (min-width:0 lets it shrink instead
    of pushing the amount off-screen); the amount is pinned right so the grams are
    always visible. */
@@ -162,6 +170,10 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-ing-total .cat-ing-name { font-weight: 700; }
 .cat-ing-total .cat-ing-amt { font-weight: 700; color: var(--cat-brand-2); }
 @media (prefers-color-scheme: dark) { .cat-ing-total .cat-ing-amt { color: var(--cat-accent); } }
+/* A row split in two parts (display only): the parts sit on their own line under the amount. */
+.cat-ing-row--split { flex-wrap: wrap; row-gap: 2px; }
+.cat-ing-split { flex-basis: 100%; display: flex; justify-content: flex-end; align-items: baseline; gap: 5px; font-family: var(--cat-font-mono); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 1.12rem; color: var(--cat-brand-2); }
+@media (prefers-color-scheme: dark) { .cat-ing-split { color: var(--cat-accent); } }
 
 /* Total-weight panel — deliberately COMPACT and quiet (secondary to the recipe):
    small input, tight padding, no shadow. Sits right below the recipe, visible on open. */
@@ -617,6 +629,27 @@ body.cat-zoom-lock { overflow: hidden; }
 /* ⚠ THE BLOCKS INSIDE KEEP THEIR OWN SPACING EXCEPT THE FIRST MARGIN, which would
    otherwise push every card's content away from its own heading. */
 .cat-sec-body > :first-child { margin-top: 0; }
+/* A card head with a button at its top right (the Ingredients card's full-screen button). */
+.cat-sec-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cat-sec-top .cat-sec-head { flex: 1; min-width: 0; }
+/* 44px hit area (the ui-check driver flags smaller); the negative margin keeps the head's height
+   close to the other cards'. */
+.cat-zoom-open { flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: -6px -6px -6px 0; padding: 0; border: 1px solid var(--cat-border); border-radius: 50%; background: var(--cat-surface); color: var(--cat-text-2); cursor: pointer; transition: transform .06s ease; }
+.cat-zoom-open:hover { color: var(--cat-text); }
+.cat-zoom-open:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
+.cat-zoom-open:active { transform: scale(.97); }
+
+/* A row's menu (Split into 2 parts / Order). Fixed, positioned from the script through the CSSOM;
+   inside the full-screen view it sits in that view's stacking context, above the × (z 2) and the
+   − / + pair (z 3). Its text does NOT follow the zoom scale: a menu is not part of the recipe. */
+.cat-row-menu { position: fixed; z-index: 5; min-width: 220px; max-width: calc(100vw - 32px); padding: 4px; background: var(--cat-surface); border: 1px solid var(--cat-border); border-radius: 12px; box-shadow: var(--cat-shadow); font-size: 1rem; font-family: var(--cat-font); color: var(--cat-text); }
+.cat-row-menu-item { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; width: 100%; min-height: 44px; padding: 8px 14px; border: 0; border-radius: 8px; background: transparent; color: var(--cat-text); font: inherit; text-align: left; cursor: pointer; }
+.cat-row-menu-item:hover,
+.cat-row-menu-item:focus { background: var(--cat-surface-2); }
+.cat-row-menu-item:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: -2px; }
+.cat-row-menu-item[aria-disabled="true"] { color: var(--cat-text-2); cursor: default; }
+.cat-row-menu-label { font-weight: 500; }
+.cat-row-menu-why { font-size: .82rem; color: var(--cat-text-2); }
 .cat-sec-body .cat-guided-panel { margin-top: 0; }
 .cat-sec-body .cat-weight-panel { margin-top: 0; }
 

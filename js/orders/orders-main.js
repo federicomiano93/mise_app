@@ -29,7 +29,7 @@ import {
   LIST_COPY_WRITE_DELAY_MS,
 } from './list-copy.js';
 import { currentSession } from '../firebase.js';
-import { catalogueOriginFromHash } from '../recipe-link.js';
+import { catalogueOriginFromHash, orderIngredientFromHash } from '../recipe-link.js';
 import { el, groupBy } from './dom.js';
 import { mountSupplierList, refreshSupplierDerived, supplierStats } from './suppliers.js';
 import { buildSupplierDetail } from './supplier-detail.js';
@@ -153,6 +153,9 @@ const state = {
   showingCopy: false,
 };
 
+let wantedIngredientId = null;   // the ingredient a recipe row asked for (#...&order=); taken once live data is in
+let recipeOriginHref = null;     // the recipe the person came from, for Back on the supplier screen opened for it
+let openedFromRecipe = null;     // the supplier whose screen was opened for that ingredient, while it is open
 let heldSupplierId = null;       // the supplier tapped while showing the copy; opened once live data lands
 let copyWriteTimer = null;       // the one debounced timer that saves the list copy
 let copyServerSeen = { suppliers: false, ingredients: false }; // has the SERVER answered for this list? (list-copy.js)
@@ -239,6 +242,10 @@ function readCachedConfig() {
 function setupCatalogueBack() {
   const origin = catalogueOriginFromHash(window.location.hash);
   if (!origin) return;
+  // A recipe row's «Order» item adds `&order=<ingredient id>`: remembered here, acted on once the
+  // lists are live (openWantedIngredient). The hash itself is never cleared.
+  recipeOriginHref = origin.href;
+  wantedIngredientId = orderIngredientFromHash(window.location.hash);
   // Two forms of ONE control, same address: the round button in the green bar, and a row under
   // it. Both are shown here; orders.css leaves exactly one visible by width (440px).
   for (const id of ['orders-to-catalogue', 'orders-to-catalogue-row']) {
@@ -560,6 +567,7 @@ function flushRender(parts) {
   if (parts.has('list')) drawPart('list', render);
   // A supplier tapped while the copy was showing opens only now: live data is in and drawn.
   if (heldSupplierId !== null) drawPart('held supplier', openHeldSupplier);
+  if (wantedIngredientId !== null) drawPart('wanted ingredient', openWantedIngredient);
   const incomingDrawn = incomingDrawCount !== incomingBefore;
   if (parts.has('sync')) drawPart('sync', syncInputsFromState);
   else if (parts.has('money')) drawPart('money', paintMoney);
@@ -668,6 +676,32 @@ function openHeldSupplier() {
   if (id) openSupplier(id);
 }
 
+// The ingredient a recipe row asked for: its supplier's screen opens with the quantity box focused,
+// nothing prefilled. Taken ONCE, and only on live data (never the copy).
+function openWantedIngredient() {
+  if (wantedIngredientId === null || state.showingCopy) return;
+  if (!(state.loaded.suppliers && state.loaded.ingredients && state.loaded.draft)) return;
+  const id = wantedIngredientId;
+  wantedIngredientId = null;
+  // They moved on already: a supplier screen must not jump over what they are reading now.
+  const movedOn = document.body.dataset.ordersTab !== 'order'
+    || document.getElementById('orders-alerts-btn')?.getAttribute('aria-expanded') === 'true'
+    || document.querySelector('.missing-overlay');
+  if (movedOn) return;
+  const ing = lensById()[id];
+  if (!(ing && inOrderFlow(ing) && findOrderSupplier(ing.supplierId))) {
+    setStatus(t('orders.fromRecipe.notFound'), 'warn', 6000);
+    return;
+  }
+  openSupplier(ing.supplierId);
+  if (state.openSupplier !== ing.supplierId) return;
+  openedFromRecipe = ing.supplierId;
+  const box = detailView?.overlay.querySelector(`.ing-row[data-ing="${CSS.escape(id)}"] .ing-qty`);
+  if (!box) return;
+  try { box.scrollIntoView({ block: 'center' }); } catch (e) { /* best-effort */ }
+  try { box.focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
+}
+
 // Called by both live listeners: once both lists are in, the copy's job is over.
 function leaveCopyIfLive() {
   if (!bothLanded(state.loaded)) return;
@@ -756,6 +790,7 @@ function openSupplier(supplierId) {
   closeSupplierItems();         // two full-screen screens must never stack up
   closeSummary();
   closeAlertsPanel();           // the panel must never sit on top of a full screen
+  openedFromRecipe = null;      // any other supplier opened is an ordinary one
   state.openSupplier = supplierId;
   renderOpenSupplier();
   globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'supplier' }));
@@ -772,6 +807,7 @@ function closeSupplier() {
   quietSummaryClose = true;
   try { if (hadSummary) closeSummary(); } finally { quietSummaryClose = false; }
   state.openSupplier = null;
+  openedFromRecipe = null;
   detailView?.overlay.remove();
   detailView = null;
   if (id) globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
@@ -784,7 +820,11 @@ function closeSupplier() {
 // a keyboard or screen-reader user would be dropped at the top of the page.
 function leaveSupplier() {
   const openerId = state.openSupplier;
+  // Opened for an ingredient of a recipe: Back returns to that recipe. `replace`, so the phone's own
+  // Back from the recipe does not land on Orders again.
+  const toRecipe = openerId && openedFromRecipe === openerId ? recipeOriginHref : null;
   closeSupplier();
+  if (toRecipe) { window.location.replace(toRecipe); return; }
   if (openerId) document.getElementById(`open-${openerId}`)?.focus();
 }
 
@@ -915,7 +955,20 @@ function renderOpenSupplier() {
   };
 
   if (detailView && detailView.id === supplier.id) {
+    // ⚠️ A REPAINT REBUILDS THE ROWS, and with them the box that had the focus: right after the
+    // screen opens (the prices, History and the config arrive one by one) the quantity box a
+    // recipe's «Ordina» had just focused was replaced, and the focus fell to the page. The same
+    // box of the same row gets it back, without scrolling.
+    const focused = globalThis.document?.activeElement;
+    const box = focused && detailView.overlay.contains(focused)
+      ? ['ing-qty', 'ing-stock'].find(c => focused.classList.contains(c)) : null;
+    const rowId = box ? focused.closest('.ing-row')?.dataset.ing : null;
     detailView.repaint(ctx);
+    if (rowId) {
+      const again = [...detailView.overlay.querySelectorAll(`.ing-row .${box}`)]
+        .find(n => n.closest('.ing-row')?.dataset.ing === rowId);
+      try { again?.focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
+    }
     paintMoney();
     return;
   }

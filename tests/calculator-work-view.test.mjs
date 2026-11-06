@@ -554,9 +554,10 @@ test('S5: the Ricettario gets the same pair on its zoom view, and − / + do not
   assert.match(detail, /storageKey: 'mise\.catZoomStep',\s*target: ingList,/);
   assert.match(detail, /ingList\.appendChild\(zoomControls\.node\);/);
   assert.match(detail, /zoomed = on;\s*if \(on\) zoomControls\.sync\(\);/);
-  // the view's own tap-to-close and × are still there
-  assert.match(detail, /onclick: \(\) => setZoom\(!zoomed\)/);
-  assert.match(detail, /onclick: \(e\) => \{ e\.stopPropagation\(\); setZoom\(false\); \}/);
+  // the view opens from its own button only (a tap on the list opens a row's menu now), and the × is still there
+  assert.doesNotMatch(detail, /setZoom\(!zoomed\)/);
+  assert.match(detail, /onclick: \(\) => setZoom\(true\)/);
+  assert.match(detail, /onclick: \(\) => setZoom\(false\)/);
   const css = strip(read('catalogue.css'));
   assert.match(css, /\.cat-ing-list--zoom \{ padding-bottom: var\(--zoom-steps-room\); \}/);
   assert.match(css, /font-size: calc\(clamp\(1\.4rem, 6\.4vw, 2\.2rem\) \* var\(--zoom-scale, 1\)\)/);
