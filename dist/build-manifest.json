@@ -13,13 +13,13 @@
       }
     },
     "dist/calculator.js": {
-      "sha": "0f5db9fc5e80b103",
-      "mapSha": "c2a4ea11c03e655d",
+      "sha": "02605f2b96f52971",
+      "mapSha": "84b505d1120a54bb",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "41d275905d191c60",
         "js/app.js": "6c7dcc5f259fb85a",
-        "js/auth-gate.js": "035fa2c1e510f2a1",
+        "js/auth-gate.js": "671cff9926b3870c",
         "js/calc-fullscreen.js": "c665122603b01cb6",
         "js/calc.js": "2e512218dcced79a",
         "js/calculator-catalogue-link.js": "21b6d2cb54f087b7",
@@ -66,6 +66,7 @@
         "js/ingredient-name.js": "db8018ddb4e1b832",
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/join-code.js": "ebf5b5e52507b80b",
+        "js/join-hold.js": "f4e4baccf505ae0d",
         "js/join-link.js": "ebc14e887861385a",
         "js/keyboard-done.js": "571c769004340cf9",
         "js/kiosk-model.js": "684c3445ac304c1f",
@@ -141,14 +142,14 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "eabd1848f716c94c",
-      "mapSha": "fceff9b83a534d12",
+      "sha": "6f617862a8d876b2",
+      "mapSha": "5f17b250d8cc264b",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/allergen-terms.js": "76a36d0f822c248a",
         "js/app-version.js": "41d275905d191c60",
-        "js/auth-gate.js": "035fa2c1e510f2a1",
+        "js/auth-gate.js": "671cff9926b3870c",
         "js/calculator-config.js": "9078e52d96eab707",
         "js/catalogue/allergen-sheet.js": "0a1ec5ee0d8c6a56",
         "js/catalogue/catalogue-detail.js": "9695a6d263b67154",
@@ -213,6 +214,7 @@
         "js/ingredient-record-form.js": "68ee9149c62b835e",
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/join-code.js": "ebf5b5e52507b80b",
+        "js/join-hold.js": "f4e4baccf505ae0d",
         "js/join-link.js": "ebc14e887861385a",
         "js/keyboard-done.js": "571c769004340cf9",
         "js/kiosk-model.js": "684c3445ac304c1f",
@@ -281,12 +283,12 @@
       }
     },
     "dist/clients.js": {
-      "sha": "52af6fe06b168e40",
-      "mapSha": "549a605722974d72",
+      "sha": "3f5ae88059392b3b",
+      "mapSha": "d32c42c1f54ba839",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "41d275905d191c60",
-        "js/auth-gate.js": "035fa2c1e510f2a1",
+        "js/auth-gate.js": "671cff9926b3870c",
         "js/calculator-client-orders.js": "20ad759f26b91828",
         "js/calculator-config-store.js": "a91e6d5df87b3a2a",
         "js/calculator-config.js": "9078e52d96eab707",
@@ -323,6 +325,7 @@
         "js/ingredient-name.js": "db8018ddb4e1b832",
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/join-code.js": "ebf5b5e52507b80b",
+        "js/join-hold.js": "f4e4baccf505ae0d",
         "js/join-link.js": "ebc14e887861385a",
         "js/keyboard-done.js": "571c769004340cf9",
         "js/kiosk-model.js": "684c3445ac304c1f",
@@ -384,12 +387,12 @@
       }
     },
     "dist/foodcost.js": {
-      "sha": "9c5eed9c82569146",
-      "mapSha": "3b6e934795ee8149",
+      "sha": "9bdb1d587a48bc3e",
+      "mapSha": "edbe0d8f1c889015",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "41d275905d191c60",
-        "js/auth-gate.js": "035fa2c1e510f2a1",
+        "js/auth-gate.js": "671cff9926b3870c",
         "js/calculator-config.js": "9078e52d96eab707",
         "js/catalogue/catalogue-model.js": "f2b080da4336cc57",
         "js/catalogue/recipe-cost-model.js": "7dd027150da03725",
@@ -432,6 +435,7 @@
         "js/ingredient-name.js": "db8018ddb4e1b832",
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/join-code.js": "ebf5b5e52507b80b",
+        "js/join-hold.js": "f4e4baccf505ae0d",
         "js/join-link.js": "ebc14e887861385a",
         "js/keyboard-done.js": "571c769004340cf9",
         "js/kiosk-model.js": "684c3445ac304c1f",
@@ -495,12 +499,12 @@
       }
     },
     "dist/index.js": {
-      "sha": "990704975e617b79",
-      "mapSha": "e8b0ff01dc14fff3",
+      "sha": "cf8d07615f3bbec7",
+      "mapSha": "051ad004e4608460",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "41d275905d191c60",
-        "js/auth-gate.js": "035fa2c1e510f2a1",
+        "js/auth-gate.js": "671cff9926b3870c",
         "js/away-model.js": "81616fd7d69f85d1",
         "js/away-reminder.js": "3c7c0bc621a73eca",
         "js/away-screen.js": "8db8345e07788d36",
@@ -539,6 +543,7 @@
         "js/install-version.js": "0dd6560e29858388",
         "js/install.js": "19eb29f6f2bb79ee",
         "js/join-code.js": "ebf5b5e52507b80b",
+        "js/join-hold.js": "f4e4baccf505ae0d",
         "js/join-link.js": "ebc14e887861385a",
         "js/keyboard-done.js": "571c769004340cf9",
         "js/kiosk-model.js": "684c3445ac304c1f",
@@ -627,12 +632,12 @@
       }
     },
     "dist/inventory.js": {
-      "sha": "712b827ab2787e26",
-      "mapSha": "ed38fa0d7436d66c",
+      "sha": "69fa62fe764b13e4",
+      "mapSha": "f9ac539544f5fd3f",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "41d275905d191c60",
-        "js/auth-gate.js": "035fa2c1e510f2a1",
+        "js/auth-gate.js": "671cff9926b3870c",
         "js/calculator-config.js": "9078e52d96eab707",
         "js/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/credentials.js": "6fae38502c7eb5ee",
@@ -666,6 +671,7 @@
         "js/inventory/inventory-usage.js": "5cc561e12035afe6",
         "js/inventory/inventory-value.js": "fe714a0057753b63",
         "js/join-code.js": "ebf5b5e52507b80b",
+        "js/join-hold.js": "f4e4baccf505ae0d",
         "js/join-link.js": "ebc14e887861385a",
         "js/keyboard-done.js": "571c769004340cf9",
         "js/kiosk-model.js": "684c3445ac304c1f",
@@ -767,14 +773,14 @@
       }
     },
     "dist/orders.js": {
-      "sha": "ffdfc01898a00690",
-      "mapSha": "7f2e2cad52b9b758",
+      "sha": "020344d7c5f227f4",
+      "mapSha": "5b90865b79d40bee",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/allergen-terms.js": "76a36d0f822c248a",
         "js/app-version.js": "41d275905d191c60",
-        "js/auth-gate.js": "035fa2c1e510f2a1",
+        "js/auth-gate.js": "671cff9926b3870c",
         "js/away-model.js": "81616fd7d69f85d1",
         "js/calculator-config.js": "9078e52d96eab707",
         "js/confirm-dialog.js": "83f2ab3c9c69025d",
@@ -802,6 +808,7 @@
         "js/ingredient-record-form.js": "68ee9149c62b835e",
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/join-code.js": "ebf5b5e52507b80b",
+        "js/join-hold.js": "f4e4baccf505ae0d",
         "js/join-link.js": "ebc14e887861385a",
         "js/keyboard-done.js": "571c769004340cf9",
         "js/kiosk-model.js": "684c3445ac304c1f",
@@ -921,12 +928,12 @@
       }
     },
     "dist/pastries.js": {
-      "sha": "e745c722f1b49ddc",
-      "mapSha": "4338adb696e98d0d",
+      "sha": "ae702fb9e45da5e3",
+      "mapSha": "e5668243f5d6a424",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "41d275905d191c60",
-        "js/auth-gate.js": "035fa2c1e510f2a1",
+        "js/auth-gate.js": "671cff9926b3870c",
         "js/calculator-config.js": "9078e52d96eab707",
         "js/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/credentials.js": "6fae38502c7eb5ee",
@@ -949,6 +956,7 @@
         "js/ingredient-name.js": "db8018ddb4e1b832",
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/join-code.js": "ebf5b5e52507b80b",
+        "js/join-hold.js": "f4e4baccf505ae0d",
         "js/join-link.js": "ebc14e887861385a",
         "js/keyboard-done.js": "571c769004340cf9",
         "js/kiosk-model.js": "684c3445ac304c1f",
@@ -1027,14 +1035,14 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "275da66e40da4609",
-      "mapSha": "50b62c0ccc898b1e",
+      "sha": "cab06cce116cda0f",
+      "mapSha": "25157eedc0802d01",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/allergen-terms.js": "76a36d0f822c248a",
         "js/app-version.js": "41d275905d191c60",
-        "js/auth-gate.js": "035fa2c1e510f2a1",
+        "js/auth-gate.js": "671cff9926b3870c",
         "js/calculator-config.js": "9078e52d96eab707",
         "js/confirm-dialog.js": "83f2ab3c9c69025d",
         "js/credentials.js": "6fae38502c7eb5ee",
@@ -1061,6 +1069,7 @@
         "js/ingredient-record-form.js": "68ee9149c62b835e",
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/join-code.js": "ebf5b5e52507b80b",
+        "js/join-hold.js": "f4e4baccf505ae0d",
         "js/join-link.js": "ebc14e887861385a",
         "js/keyboard-done.js": "571c769004340cf9",
         "js/kiosk-model.js": "684c3445ac304c1f",

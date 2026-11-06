@@ -22,6 +22,7 @@ import { onSession, signIn, signUp, sendReset, chooseLocation, signOutNow,
 import { showPreviewRibbon } from './preview-ribbon.js';
 import { normalizeTyped } from './join-code.js';
 import { kindOfTyped, readJoinToken, codeShapeHint } from './join-link.js';
+import { keepJoinForm } from './join-hold.js';
 import { nameProblem, passwordProblem, confirmProblem, emailConfirmProblem, MIN_PASSWORD_LENGTH } from './credentials.js';
 import { isSectionAllowed, isSectionAllowedFor, pageWhenRefused } from './sections.js';
 import { cardVisibleTo } from './home-cards.js';
@@ -321,6 +322,9 @@ function signInScreen({ note = '' } = {}) {
   return card;
 }
 
+// The join form that has been sent, kept on screen through the session changes its own
+// sign-up causes (js/join-hold.js): { card, invited, busy }, or null.
+let sentJoin = null;
 
 // ── Joining with a code ──────────────────────────────────────────────────────
 //
@@ -333,7 +337,10 @@ function signInScreen({ note = '' } = {}) {
 // users/{uid} document, so every rule refuses it until a Cloud Function accepts
 // the code and writes the membership. That is why it is safe for the app to do
 // this part at all.
-function joinScreen({ needsAccount, prefill = '' }) {
+//
+// `kept` carries a form that was sent with a new account across to the form for that
+// account (see the submit below): { account, firstName, lastName, code, error, invited }.
+function joinScreen({ needsAccount, prefill = '', kept = null }) {
   const card = el('div', 'auth-card');
   // ⚠️ FOUR SITUATIONS, FOUR SENTENCES, NOT ONE HEDGED ONE. "Type the code you
   // were given" is a LIE to somebody who arrived by link — their code is already
@@ -356,7 +363,10 @@ function joinScreen({ needsAccount, prefill = '' }) {
   // screen said which. The code is single use, so a wrong account costs a new code
   // and a correction in «Who can get in». Named here, with the way out beside it.
   if (!needsAccount) {
-    const who = (lastSession && lastSession.user && lastSession.user.email) || lastAccount;
+    // A form carried over from a sign-up names the account it has just created: the
+    // session may not have caught up with it yet.
+    const who = (kept && kept.account)
+      || (lastSession && lastSession.user && lastSession.user.email) || lastAccount;
     // The sentence in ordinary text and the address on its own line: .auth-account breaks
     // anywhere (an email has no spaces), which split «account» in two inside a sentence.
     if (who) {
@@ -566,10 +576,24 @@ function joinScreen({ needsAccount, prefill = '' }) {
     const typed = normalizeTyped(code.value, kind);
 
     submit.disabled = true;
+    // ⚠️ AND NO WAY BACK WHILE IT RUNS (code review, 6 Nov 2026). Back from a form
+    // with a new account goes to the sign-in screen, but by then the account may exist
+    // and be signed in: the refusal would land nowhere, and signing in again from there
+    // changes no account, so no screen would ever follow.
+    back.disabled = true;
     setStatus(t(needsAccount ? 'join.creating' : 'join.checking'), 'busy');
+    // ⚠️ MARKED BEFORE THE SIGN-UP, because the sign-up is what moves the session on:
+    // from here until this submit ends, render() leaves this form where it is.
+    // `invited`: the invitation the window held at this tap, so only one opened LATER
+    // counts as new (js/join-hold.js).
+    const sent = { card, invited: invitedWith, busy: true };
+    sentJoin = sent;
+    let createdAccount = '';
     try {
       if (needsAccount) {
-        await signUp(email.value, password.value);
+        const cred = await signUp(email.value, password.value);
+        // The address as Firebase holds it, the same one the session will name.
+        createdAccount = (cred && cred.user && cred.user.email) || email.value.trim();
         setStatus(t('join.checkingCode'), 'busy');
       }
       // Loaded only now: this screen is on the critical path of every app open,
@@ -598,23 +622,65 @@ function joinScreen({ needsAccount, prefill = '' }) {
       // The second refusal that travels with a reason: six-digit codes paused for
       // everybody after too many wrong guesses across the app. Nothing about THIS code.
       const digitsPaused = err && err.details && err.details.reason === 'digits-paused';
-      setStatus(fromAuth ? messageFor(err)
+      const refusal = fromAuth ? messageFor(err)
         : alreadyMember ? t('join.alreadyMember')
         : digitsPaused ? t('join.digitsPaused')
-        : (err && err.message) || t('join.badCode'));
+        : (err && err.message) || t('join.badCode');
       // ⚠️ AND THE INVITATION IS DROPPED, because no amount of retrying can change
       // the answer. Left in place it is offered again on the next page and every
       // page after it — a question with one possible reply, asked for the life of
       // the window. The code itself is untouched on the server and still works for
       // the person it was minted for.
       if (alreadyMember) forgetInvite();
-      // ⚠️ ONE refusal has a way forward, so it gets one. Every other failure here
-      // is answered by trying again on this same screen; this one cannot be, because
-      // the account already exists and no amount of retyping will create it.
-      if (err && err.code === 'auth/email-already-in-use') signInInstead.hidden = false;
-      submit.disabled = false;
+      sent.busy = false;
+      // Signed out, or let into a venue, while the code was being checked: the
+      // screen has gone somewhere real, and a refusal drawn now would cover it.
+      if (!card.isConnected) return;
+      // ⚠️⚠️ THE ACCOUNT WAS CREATED AND ONLY THE CODE FAILED. This form can no longer
+      // be sent as it is — its email and password would ask Firebase for a SECOND
+      // account with the same address, refused as «already has an account». So it
+      // becomes the form for the account that now exists, with the name and the code
+      // still in their boxes and the refusal said in it (js/join-hold.js).
+      if (createdAccount) {
+        showGate(() => joinScreen({ needsAccount: false, prefill, kept: {
+          account: createdAccount, firstName: firstName.value, lastName: lastName.value,
+          code: code.value, error: refusal, invited: sent.invited,
+        } }));
+      } else {
+        setStatus(refusal);
+        // ⚠️ ONE refusal has a way forward, so it gets one. Every other failure here
+        // is answered by trying again on this same screen; this one cannot be, because
+        // the account already exists and no amount of retyping will create it.
+        if (err && err.code === 'auth/email-already-in-use') signInInstead.hidden = false;
+        submit.disabled = false;
+        back.disabled = false;
+      }
+      // A NEW invitation opened while the code was being checked was held back by the
+      // check (js/join-hold.js); now that it is over, it gets its own form. Only a new
+      // one: an invitation already remembered at the tap must not take the screen back.
+      if (invitedWith && invitedWith !== sent.invited && lastSession) render(lastSession);
     }
   });
+
+  if (kept) {
+    // Kept on screen like the form it replaces: a late 'no-access' must not wipe it.
+    sentJoin = { card, invited: kept.invited || '', busy: false };
+    firstName.value = kept.firstName || '';
+    lastName.value = kept.lastName || '';
+    if (!prefill) code.value = kept.code || '';
+    setStatus(kept.error || t('join.badCode'));
+    // Tied to the code box, so a screen reader landing there says why it was refused.
+    status.id = 'join-status';
+    code.setAttribute('aria-describedby', 'join-status');
+    // The refusal is about the code, so the cursor goes where the answer is typed —
+    // and the refusal itself, under «Join», is scrolled into sight: on a 6.1" phone
+    // it sat just below the bottom edge (measured at 296 × 668).
+    setTimeout(() => {
+      code.focus({ preventScroll: true });
+      status.scrollIntoView({ block: 'nearest' });
+    }, 0);
+    return card;
+  }
 
   setTimeout(() => firstName.focus(), 0);
   return card;
@@ -889,6 +955,14 @@ async function offerInvite(session) {
 
 function render(session) {
   lastSession = session;
+  if (session.status === 'no-access') lastAccount = session.user?.email || session.user?.uid || '';
+  // ⚠️ A JOIN FORM THAT HAS BEEN SENT IS NOT REDRAWN UNDER THE PERSON WHO SENT IT.
+  // Its own sign-up moves the session to 'no-access' while the code is still being
+  // checked; drawing that state here used to throw the form away mid-check, and the
+  // refusal that followed landed on a screen nobody could see (js/join-hold.js).
+  // Only a form still on screen counts: one left by Back has no claim on the gate.
+  const held = sentJoin && sentJoin.card.isConnected ? sentJoin : null;
+  if (keepJoinForm(held, session.status, invitedWith)) return;
   switch (session.status) {
     case 'loading':
       gateHost().hidden = false;
@@ -917,7 +991,7 @@ function render(session) {
       break;
 
     case 'no-access':
-      lastAccount = session.user?.email || session.user?.uid || '';
+      // (lastAccount is set above the hold, so a kept form does not leave it stale.)
       // Signed in already and holding an invitation — the second entrance, with
       // the code filled in. Somebody who made an account and got separated from
       // the first attempt must not be asked to make a second (v267).
