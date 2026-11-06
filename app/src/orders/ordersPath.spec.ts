@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, INGREDIENTS_PATH, LISTS_PATH, REORDER_PATH, requestPath, PLACE_ALL_CONFIRM_PATH, PLACE_ALL_PATH, SEND_PATH, SETTINGS_PATH, SUPPLIER_ORDER_PATH, historyDayPath, historyEditPath, incomingMissingPath, ordersScreenName, parseOrdersPath, supplierConfirmPath,
+  CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, INGREDIENTS_PATH, LISTS_PATH, REORDER_PATH, requestPath, PLACE_ALL_CONFIRM_PATH, PLACE_ALL_PATH, SEND_PATH, SETTINGS_PATH, SUPPLIER_ORDER_PATH, historyDayPath, historyEditPath, incomingMissingPath, ordersScreenName, parseOrdersPath, supplierConfirmPath, supplierSummaryPath,
 } from './ordersPath';
 
 describe('parseOrdersPath', () => {
@@ -24,6 +24,9 @@ describe('parseOrdersPath', () => {
     expect(parseOrdersPath('')).toEqual({ kind: 'list' });
     expect(parseOrdersPath('/supplier/a%2Fb')).toEqual({ kind: 'supplier', id: 'a/b' });
     expect(parseOrdersPath('/supplier/s-alp/items')).toEqual({ kind: 'items', id: 's-alp' });
+    expect(parseOrdersPath('/supplier/s-alp/summary')).toEqual({ kind: 'summary', id: 's-alp' });
+    expect(supplierSummaryPath('a/b')).toBe('/orders/supplier/a%2Fb/summary');
+    expect(parseOrdersPath('/supplier/s/summary/x')).toEqual({ kind: 'unknown' });
   });
 
   it('sends anything deeper or unknown back to the list', () => {
@@ -87,6 +90,7 @@ describe('ordersScreenName', () => {
     expect(ordersScreenName('/send')).toBe('orders-send');
     expect(ordersScreenName('/supplier/s')).toBe('orders-supplier');
     expect(ordersScreenName('/supplier/s/items')).toBe('orders-supplier-items');
+    expect(ordersScreenName('/supplier/s/summary')).toBe('orders-supplier-summary');
     expect(ordersScreenName('/clear/x')).toBe('orders');
     expect(ordersScreenName('')).toBe('orders');
   });

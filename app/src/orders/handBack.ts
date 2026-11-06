@@ -11,11 +11,15 @@ import { createContext, useContext, useMemo, useRef } from 'react';
 // (A copy of suppliers/handBack.ts, cut down to what the order list needs: a feature never imports from another feature's
 // folder.)
 
-// The row that opens a supplier's order, and the list icon of that row that opens «What they sell».
+// The row that opens a supplier's order, the list icon of that row that opens «What they sell», and (on the split) its clipboard
+// icon that opens the order summary.
 export const supplierOpener = (id: string): string => `supplier:${id}`;
 export const itemsOpener = (id: string): string => `items:${id}`;
+export const summaryOpener = (id: string): string => `summary:${id}`;
 // A supplier's screen: its «What they sell» button, where Back from the items list returns the focus.
 export const ITEMS_DOOR = 'items-door';
+// A supplier's screen: its «Summary (N)» button, where Back from the summary returns the focus.
+export const SUMMARY_DOOR = 'summary-door';
 // A supplier's screen: its «Order placed…» button, where Back from the confirm screen returns the focus.
 export const PLACE_DOOR = 'place-door';
 // The list's two buttons under the suppliers: «Order placed…» (the picker of the suppliers to record) and «Clear quantities…».

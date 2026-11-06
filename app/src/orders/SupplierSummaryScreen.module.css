@@ -1,0 +1,79 @@
+/* The order summary: a plain read-only card under the bar. The screen does not clip (no `overflow`), so the bar sticks. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.sub {
+  margin-top: 2px;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4) var(--s3);
+}
+
+.list {
+  margin: 0;
+  padding: 0 var(--s3);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  list-style: none;
+}
+
+/* The name and the quantity share a line; the cost drops onto a line of its own under them, right-aligned and free to wrap, so a
+   long cost text never squeezes the name on a 296px phone. */
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px var(--s3);
+  padding: var(--s3) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.label {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.qty {
+  flex: none;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.cost {
+  flex: 0 0 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: right;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: var(--fs-xs);
+}
+
+.cost.warn {
+  color: var(--warn-ink);
+  font-weight: 650;
+}
+
+.nothing {
+  padding: var(--s3);
+  color: var(--ink-2);
+}
