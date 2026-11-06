@@ -198,7 +198,7 @@ describe('leaving with a changed number', () => {
   it('asks on the way out by the navigation too, not only by the Back button', async () => {
     const { input, router, user } = await open();
     await user.type(input, '1');
-    await user.click(within(screen.getByRole('navigation', { name: 'Main sections' })).getByRole('link', { name: 'Stocktake' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Stocktake' }));
 
     const dialog = within(await question());
     expect(dialog.getByText('Discard changes?')).toBeInTheDocument();

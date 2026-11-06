@@ -17,24 +17,24 @@ const linkNames = (scope: { getAllByRole: (role: string) => HTMLElement[] }) =>
   scope.getAllByRole('link').map(link => link.textContent);
 
 describe('AppShell: navigation', () => {
-  it('sends / to Orders, current in both navigations', async () => {
+  it('sends / to Home, current in both navigations', async () => {
     renderApp('/');
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Orders' })).toBeInTheDocument();
-    expect(rail().getByRole('link', { name: 'Orders' })).toHaveAttribute('aria-current', 'page');
-    expect(tabs().getByRole('link', { name: 'Orders' })).toHaveAttribute('aria-current', 'page');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
+    expect(rail().getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
+    expect(tabs().getByRole('link', { name: 'Home' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('lists the sections in the rail in order, Settings last', () => {
     renderApp('/orders');
     expect(linkNames(rail())).toEqual([
-      'Orders', 'Suppliers', 'Recipes', 'Calculator', 'Pastries', 'Stocktake', 'Food cost', 'Settings',
+      'Home', 'Orders', 'Suppliers', 'Recipes', 'Calculator', 'Pastries', 'Stocktake', 'Food cost', 'Settings',
     ]);
   });
 
-  it('lists four sections and «More» in the tab bar', () => {
+  it('lists Home and three sections, then «More», in the tab bar', () => {
     renderApp('/orders');
-    expect(linkNames(tabs())).toEqual(['Orders', 'Recipes', 'Calculator', 'Stocktake', 'More']);
+    expect(linkNames(tabs())).toEqual(['Home', 'Orders', 'Recipes', 'Calculator', 'More']);
   });
 
   it('opens a section from the rail without reloading the page', async () => {
@@ -53,12 +53,11 @@ describe('AppShell: navigation', () => {
   it('opens a section from the tab bar', async () => {
     const { router, user } = renderApp('/orders');
 
-    await user.click(tabs().getByRole('link', { name: 'Stocktake' }));
+    await user.click(tabs().getByRole('link', { name: 'Recipes' }));
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Stocktake' })).toBeInTheDocument();
-    // The Stocktake is a real section: once its code has arrived, `/stocktake` lands on the month.
-    await waitFor(() => { expect(router.state.location.pathname).toMatch(/^\/stocktake(\/\d{4}-\d{2})?$/); });
-    expect(tabs().getByRole('link', { name: 'Stocktake' })).toHaveAttribute('aria-current', 'page');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Recipes' })).toBeInTheDocument();
+    await waitFor(() => { expect(router.state.location.pathname).toMatch(/^\/recipes/); });
+    expect(tabs().getByRole('link', { name: 'Recipes' })).toHaveAttribute('aria-current', 'page');
   });
 
   it('marks «More» as current on a section that has no tab of its own', () => {
@@ -81,7 +80,7 @@ describe('AppShell: navigation', () => {
 
     const list = within(screen.getByRole('list'));
     expect(list.getAllByRole('link').map(link => link.textContent)).toEqual([
-      'Suppliers', 'Pastries', 'Food cost', 'Settings',
+      'Suppliers', 'Pastries', 'Stocktake', 'Food cost', 'Settings',
     ]);
 
     await user.click(list.getByRole('link', { name: 'Pastries' }));
@@ -95,12 +94,12 @@ describe('AppShell: navigation', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Page not found' })).toBeInTheDocument();
     expect(screen.getByText('This address doesn’t lead to any section.')).toBeInTheDocument();
     // The navigation is still around it.
-    expect(rail().getAllByRole('link')).toHaveLength(8);
+    expect(rail().getAllByRole('link')).toHaveLength(9);
 
     await user.click(screen.getByRole('link', { name: 'Go to the start' }));
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Orders' })).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe('/orders');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/home');
   });
 });
 
@@ -164,9 +163,9 @@ describe('AppShell: focus after a navigation', () => {
     expect(screen.getByRole('heading', { level: 1 })).not.toHaveFocus();
   });
 
-  it('leaves the focus alone when / redirects to Orders on first load', async () => {
+  it('leaves the focus alone when / redirects to Home on first load', async () => {
     const { user } = renderApp('/');
-    const heading = await screen.findByRole('heading', { level: 1, name: 'Orders' });
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Home' });
     expect(heading).not.toHaveFocus();
     // So the first Tab still reaches the skip link.
     await user.tab();
@@ -287,17 +286,17 @@ describe('AppShell: Italian', () => {
     try {
       renderApp('/', { lang: 'it' });
 
-      expect(await screen.findByRole('heading', { level: 1, name: 'Ordini' })).toBeInTheDocument();
+      expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
       expect(linkNames(rail('Tutte le sezioni'))).toEqual([
-        'Ordini', 'Fornitori', 'Ricette', 'Calcolatore', 'Paste', 'Magazzino', 'Food cost', 'Impostazioni',
+        'Home', 'Ordini', 'Fornitori', 'Ricette', 'Calcolatore', 'Paste', 'Magazzino', 'Food cost', 'Impostazioni',
       ]);
       expect(linkNames(tabs('Sezioni principali'))).toEqual([
-        'Ordini', 'Ricette', 'Calcolatore', 'Magazzino', 'Altro',
+        'Home', 'Ordini', 'Ricette', 'Calcolatore', 'Altro',
       ]);
       expect(screen.getByText('sabato 10 ottobre')).toBeInTheDocument();
       expect(screen.getByRole('link', { name: 'Vai al contenuto' })).toBeInTheDocument();
       expect(document.documentElement.lang).toBe('it');
-      expect(document.title).toBe('Ordini · Mise');
+      expect(document.title).toBe('Home · Mise');
     } finally {
       vi.useRealTimers();
     }
@@ -345,7 +344,7 @@ describe('AppShell: a section that fails', () => {
     expect(main.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
     // The whole-app error screen is NOT what is showing.
     expect(screen.queryByRole('heading', { name: 'Mise stopped working.' })).not.toBeInTheDocument();
-    expect(rail().getAllByRole('link')).toHaveLength(8);
+    expect(rail().getAllByRole('link')).toHaveLength(9);
 
     await user.click(rail().getByRole('link', { name: 'Orders' }));
 

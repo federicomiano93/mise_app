@@ -55,16 +55,14 @@ describe('AppShell: it announces the screen', () => {
   // «not-found» at the start of every visit.
   it('announces only the section `/` lands on, never `/` itself', async () => {
     renderApp('/');
-    await screen.findByRole('heading', { level: 1, name: 'Orders' });
-    expect(heard).toEqual(['orders']);
+    await screen.findByRole('heading', { level: 1, name: 'Home' });
+    expect(heard).toEqual(['home']);
   });
 
-  it('announces the section a venue starts on when it is not Orders', async () => {
+  it('announces Home too for a venue that did not buy Orders', async () => {
     renderApp('/', { session: { location: { sections: { orders: false } } } });
     await screen.findByRole('heading', { level: 1 });
-    expect(heard).toHaveLength(1);
-    expect(heard[0]).not.toBe('orders');
-    expect(heard[0]).not.toBe('not-found');
+    expect(heard).toEqual(['home']);
   });
 
   it('does not announce again when the shell is only redrawn', () => {

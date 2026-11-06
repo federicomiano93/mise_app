@@ -18,6 +18,7 @@ export function lazyScreen(load: () => Promise<{ default: ComponentType }>): Laz
 // listed here owns every address under its own path (routes.tsx gives it `<path>/*`) and works out
 // what to show from the rest of the address itself.
 export const SECTION_SCREENS: Readonly<Partial<Record<SectionId, LazyExoticComponent<ComponentType>>>> = {
+  home: lazyScreen(() => import('../home/HomeSection')),
   pastries: lazyScreen(() => import('../pastries/PastriesSection')),
   stocktake: lazyScreen(() => import('../stocktake/StocktakeSection')),
   foodcost: lazyScreen(() => import('../foodcost/FoodcostSection')),

@@ -31,10 +31,13 @@ const GATES: ReadonlyArray<{ id: SectionId; section: SectionName; card: CardId }
 // `location` is the venue's own document (null while it has none: the shared rules then default
 // to everything on). `canManage` is the session's: true for an owner and for a manager.
 //
+// Home (the venue's to-do list, step 3g-1) is always visible too: every member of the venue may read and write it
+// (firestore.rules, `todos`), and it is where the app opens.
+//
 // Settings is always visible: it holds the person's own account and the way to sign out, and a
 // screen with nothing in it must never be the end of the road.
 export function visibleSectionIds(location: DocData | null, canManage: boolean): ReadonlySet<SectionId> {
-  const visible = new Set<SectionId>(['settings']);
+  const visible = new Set<SectionId>(['home', 'settings']);
   for (const gate of GATES) {
     if (isSectionAllowed(location, gate.section) && cardVisibleTo(location, canManage, gate.card)) {
       visible.add(gate.id);

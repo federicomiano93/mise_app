@@ -7,6 +7,8 @@ import { browserRandomBytes, createFirestoreClientOrdersSource } from '../calcul
 import type { ClientOrdersSource } from '../calculator/clientOrdersSource';
 import { createFirestoreFoodcostSource } from '../foodcost/foodcostSource';
 import type { FoodcostSource } from '../foodcost/foodcostSource';
+import { createFirestoreTodosSource } from '../home/todosSource';
+import type { TodosSource } from '../home/todosSource';
 import { createFirestorePastriesSource } from '../pastries/pastriesSource';
 import type { PastriesSource } from '../pastries/pastriesSource';
 import { createPhotoSource } from '../recipes/photoSource';
@@ -54,6 +56,8 @@ export interface DataServices {
   merge(locationId: string): MergeSource;
   // «Orders» (step 3f): the suppliers, the ingredients, config/orders and the shared order in progress (drafts/current).
   orders(locationId: string): OrdersSource;
+  // The venue's «Da fare» list on the Home (step 3g-1).
+  todos(locationId: string): TodosSource;
 }
 
 // What the data layers need from the backend besides Firestore: the account behind a client's ordering link is
@@ -83,6 +87,7 @@ export function createDataServices(firestore: () => Promise<FirestoreKit>, auth:
     priceChanges: locationId => createFirestorePriceChangesSource(firestore, locationId),
     merge: locationId => createLazyMergeSource(firestore, locationId),
     orders: locationId => createFirestoreOrdersSource(firestore, locationId),
+    todos: locationId => createFirestoreTodosSource(firestore, locationId),
   };
 }
 

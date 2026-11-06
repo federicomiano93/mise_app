@@ -19,7 +19,7 @@ afterEach(() => {
 const source = () => sourceWith([product('Green'), product('Red', { sellingPrice: 0.5, vatRate: 0 }), bareProduct('Bare')]);
 
 const rowOf = (name: RegExp) => screen.getByRole('button', { name });
-const tabs = () => within(screen.getByRole('navigation', { name: 'Main sections' }));
+const rail = () => within(screen.getByRole('navigation', { name: 'All sections' }));
 
 async function loaded(path = '/food-cost') {
   const view = renderFoodcost(path, { source: source() });
@@ -110,7 +110,7 @@ describe('the scroll on a phone', () => {
     const { user } = await loaded();
     const main = scrolledTo(400);
 
-    await user.click(tabs().getByRole('link', { name: 'Stocktake' }));
+    await user.click(rail().getByRole('link', { name: 'Stocktake' }));
     await screen.findByRole('heading', { level: 1, name: 'Stocktake' }, LOAD);
     expect(main.scrollTop).toBe(0);
   });

@@ -21,12 +21,12 @@ const RESTAURANT = {
 describe('the shell for an employee', () => {
   it('keeps Food cost and Stocktake out of the rail', () => {
     renderApp('/orders', { session: EMPLOYEE });
-    expect(linkNames(rail())).toEqual(['Orders', 'Suppliers', 'Recipes', 'Calculator', 'Pastries', 'Settings']);
+    expect(linkNames(rail())).toEqual(['Home', 'Orders', 'Suppliers', 'Recipes', 'Calculator', 'Pastries', 'Settings']);
   });
 
   it('keeps Stocktake out of the tab bar and both out of «More»', async () => {
     const { user } = renderApp('/orders', { session: EMPLOYEE });
-    expect(linkNames(tabs())).toEqual(['Orders', 'Recipes', 'Calculator', 'More']);
+    expect(linkNames(tabs())).toEqual(['Home', 'Orders', 'Recipes', 'Calculator', 'More']);
 
     await user.click(tabs().getByRole('link', { name: 'More' }));
 
@@ -42,7 +42,7 @@ describe('the shell for an employee', () => {
 
   it('shows a manager everything the venue bought', () => {
     renderApp('/orders', { session: { ...EMPLOYEE, canManage: true, role: 'manager' } });
-    expect(linkNames(rail())).toHaveLength(8);
+    expect(linkNames(rail())).toHaveLength(9);
   });
 
   it('says «not available» for an address typed by hand', async () => {
@@ -53,13 +53,13 @@ describe('the shell for an employee', () => {
     // Not the placeholder a shown section has.
     expect(screen.queryByText(/will arrive in one of the next steps/)).not.toBeInTheDocument();
     // The navigation is still around it, and «More» does not claim a section it does not hold.
-    expect(rail().getAllByRole('link')).toHaveLength(6);
+    expect(rail().getAllByRole('link')).toHaveLength(7);
     expect(tabs().getByRole('link', { name: 'More' })).not.toHaveAttribute('aria-current');
 
     await user.click(screen.getByRole('link', { name: 'Go to the start' }));
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'Orders' })).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe('/orders');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/home');
   });
 
   it('says «not available» for Stocktake too', () => {
@@ -70,14 +70,14 @@ describe('the shell for an employee', () => {
 });
 
 describe('the shell for a venue that bought less', () => {
-  it('lists Orders, Suppliers and Settings in the rail', () => {
+  it('lists Home, Orders, Suppliers and Settings in the rail', () => {
     renderApp('/orders', { session: RESTAURANT });
-    expect(linkNames(rail())).toEqual(['Orders', 'Suppliers', 'Settings']);
+    expect(linkNames(rail())).toEqual(['Home', 'Orders', 'Suppliers', 'Settings']);
   });
 
-  it('has Orders and «More» in the tab bar, with no empty column', () => {
+  it('has Home, Orders and «More» in the tab bar, with no empty column', () => {
     renderApp('/orders', { session: RESTAURANT });
-    expect(linkNames(tabs())).toEqual(['Orders', 'More']);
+    expect(linkNames(tabs())).toEqual(['Home', 'Orders', 'More']);
   });
 
   it('says «not available» for a section the venue did not buy, even to its owner', () => {
@@ -86,44 +86,51 @@ describe('the shell for a venue that bought less', () => {
     expect(screen.getByText('This section is not on for you at this venue.')).toBeInTheDocument();
   });
 
-  it('keeps Settings open when nothing else is', async () => {
+  it('keeps Home and Settings open when nothing else is', async () => {
     const nothing = { location: { sections: { orders: false, calculator: false, catalogue: false, pastries: false, foodcost: false } } };
     renderApp('/settings', { session: nothing });
     expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
-    expect(linkNames(rail())).toEqual(['Settings']);
+    expect(linkNames(rail())).toEqual(['Home', 'Settings']);
   });
 });
 
 describe('where the address with no section in it lands', () => {
-  it('is Orders when Orders is shown', async () => {
+  it('is Home for the default owner', async () => {
     const { router } = renderApp('/');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Orders' })).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe('/orders');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/home');
   });
 
-  it('is the first section shown when Orders is not', async () => {
+  it('is Home for an employee', async () => {
+    const { router } = renderApp('/', { session: EMPLOYEE });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/home');
+  });
+
+  it('is Home even when Orders is not shown', async () => {
     const { router } = renderApp('/', { session: { location: { sections: { orders: false } } } });
-    expect(await screen.findByRole('heading', { level: 1, name: 'Recipes' })).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe('/recipes');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/home');
   });
 
-  it('is Settings when nothing else is shown', async () => {
+  it('is Home when nothing else is shown, with the to-do card on it', async () => {
     const nothing = { location: { sections: { orders: false, calculator: false, catalogue: false, pastries: false, foodcost: false } } };
     const { router } = renderApp('/', { session: nothing });
-    expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe('/settings');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 2, name: 'To do' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/home');
   });
 
   it('leaves the focus alone, as the app arranging itself', async () => {
     renderApp('/', { session: { location: { sections: { orders: false } } } });
-    expect(await screen.findByRole('heading', { level: 1, name: 'Recipes' })).not.toHaveFocus();
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).not.toHaveFocus();
   });
 
   it('is where «Go to the start» on «Page not found» leads', async () => {
     const { router, user } = renderApp('/no-such-section', { session: { location: { sections: { orders: false } } } });
     await user.click(screen.getByRole('link', { name: 'Go to the start' }));
-    expect(await screen.findByRole('heading', { level: 1, name: 'Recipes' })).toBeInTheDocument();
-    expect(router.state.location.pathname).toBe('/recipes');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/home');
   });
 });
 

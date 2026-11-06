@@ -411,10 +411,10 @@ describe('leaving with unsaved edits', () => {
   it('the rail asks too, from a client\'s lines', async () => {
     const { user, ...view } = await open(ENTRY);
     await user.type(main().getByRole('textbox', { name: 'Extra line 1' }), '!');
-    await user.click(within(screen.getByRole('navigation', { name: 'Main sections' })).getByRole('link', { name: 'Stocktake' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Stocktake' }));
     await user.click(within(await question(LEAVE)).getByRole('button', { name: 'Cancel' }));
     expect(pathOf(view)).toBe(ENTRY);
-    await user.click(within(screen.getByRole('navigation', { name: 'Main sections' })).getByRole('link', { name: 'Stocktake' }));
+    await user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Stocktake' }));
     await user.click(within(await question(LEAVE)).getByRole('button', { name: 'Discard' }));
     await waitFor(() => { expect(pathOf(view)).toBe('/stocktake'); });
   });

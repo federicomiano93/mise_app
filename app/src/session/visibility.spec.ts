@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { visibleSectionIds } from './visibility';
 
-const ALL = ['orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'stocktake', 'foodcost', 'settings'];
+const ALL = ['home', 'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'stocktake', 'foodcost', 'settings'];
 const ids = (location: Record<string, unknown> | null, canManage: boolean) =>
   [...visibleSectionIds(location, canManage)].sort();
 const sorted = (list: string[]) => [...list].sort();
@@ -12,9 +12,9 @@ describe('visibleSectionIds', () => {
   });
 
   it('shows an employee the everyday sections, not the money ones, when the venue has said nothing', () => {
-    expect(ids(null, false)).toEqual(sorted(['orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'settings']));
+    expect(ids(null, false)).toEqual(sorted(['home', 'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'settings']));
     expect(ids({ name: 'A place' }, false)).toEqual(
-      sorted(['orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'settings']),
+      sorted(['home', 'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'settings']),
     );
   });
 
@@ -66,10 +66,10 @@ describe('visibleSectionIds', () => {
     expect(visibleSectionIds({ sections: { catalogue: false } }, true).has('recipes')).toBe(false);
   });
 
-  it('shows a restaurant that bought only Orders: Orders, Suppliers and Settings', () => {
+  it('shows a restaurant that bought only Orders: Home, Orders, Suppliers and Settings', () => {
     const restaurant = { sections: { calculator: false, catalogue: false, pastries: false, foodcost: false } };
-    expect(ids(restaurant, true)).toEqual(sorted(['orders', 'suppliers', 'settings']));
-    expect(ids(restaurant, false)).toEqual(sorted(['orders', 'suppliers', 'settings']));
+    expect(ids(restaurant, true)).toEqual(sorted(['home', 'orders', 'suppliers', 'settings']));
+    expect(ids(restaurant, false)).toEqual(sorted(['home', 'orders', 'suppliers', 'settings']));
   });
 
   // Straight from production (30 July 2026): the field names were saved with a stray space.
@@ -77,13 +77,20 @@ describe('visibleSectionIds', () => {
     const restaurant = {
       'sections ': { orders: true, 'calculator ': false, catalogue: false, 'pastries ': false, foodcost: false },
     };
-    expect(ids(restaurant, true)).toEqual(sorted(['orders', 'suppliers', 'settings']));
+    expect(ids(restaurant, true)).toEqual(sorted(['home', 'orders', 'suppliers', 'settings']));
   });
 
-  it('never hides Settings', () => {
+  it('shows Home to everybody: an employee, a manager and a venue that bought nothing', () => {
     const nothing = { sections: { orders: false, calculator: false, catalogue: false, pastries: false, foodcost: false } };
-    expect(ids(nothing, true)).toEqual(['settings']);
-    expect(ids(nothing, false)).toEqual(['settings']);
+    expect(visibleSectionIds(null, false).has('home')).toBe(true);
+    expect(visibleSectionIds({}, true).has('home')).toBe(true);
+    expect(visibleSectionIds(nothing, false).has('home')).toBe(true);
+  });
+
+  it('never hides Home or Settings', () => {
+    const nothing = { sections: { orders: false, calculator: false, catalogue: false, pastries: false, foodcost: false } };
+    expect(ids(nothing, true)).toEqual(['home', 'settings']);
+    expect(ids(nothing, false)).toEqual(['home', 'settings']);
   });
 
   it('treats a corrupt sections field as "everything on", like the current app', () => {

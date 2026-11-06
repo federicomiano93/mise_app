@@ -1,0 +1,98 @@
+/* The add / edit form's body, under its form bar (ui/FormBar). */
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+  padding: var(--s4);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  width: 100%;
+}
+
+.label {
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* 16px type on purpose: a smaller size makes iOS zoom the page in when the field is focused. */
+.input {
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+.input[aria-invalid='true'] {
+  border-color: var(--danger);
+}
+
+.counter {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  text-align: right;
+}
+
+.error {
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+}
+
+.quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.quick .quickButton {
+  flex: 1 1 0;
+}
+
+/* The day chosen by a quick button is shown as pressed: the accent frame, never colour alone (aria-pressed says it). */
+.quick .quickButton[aria-pressed='true'] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+/* Delete is small and low-key (P20): an icon at the foot, away from Save. */
+.low {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.trash {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-2);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.trash svg {
+  width: 20px;
+  height: 20px;
+}
+
+.trash[data-hovered] {
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+}
+
+.trash[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}

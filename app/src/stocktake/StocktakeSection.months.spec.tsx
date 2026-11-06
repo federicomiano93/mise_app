@@ -97,10 +97,10 @@ describe('Stocktake: which month opens', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Stocktake' })).toHaveFocus();
   });
 
-  it('puts the focus on the title when a person opens the Stocktake from the tab bar', async () => {
+  it('puts the focus on the title when a person opens the Stocktake from the rail', async () => {
     const { user } = renderStocktake('/orders');
     await user.click(
-      within(screen.getByRole('navigation', { name: 'Main sections' })).getByRole('link', { name: 'Stocktake' }),
+      within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Stocktake' }),
     );
     await month('October 2026');
     expect(screen.getByRole('heading', { level: 1, name: 'Stocktake' })).toHaveFocus();

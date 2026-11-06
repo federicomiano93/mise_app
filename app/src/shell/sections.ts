@@ -3,6 +3,7 @@ import {
   Calculator,
   ChartPie,
   Croissant,
+  House,
   LayoutGrid,
   Settings,
   ShoppingCart,
@@ -18,6 +19,7 @@ import { parseRecipesPath } from '../recipes/recipesPath';
 import { suppliersScreenName } from '../suppliers/suppliersPath';
 
 export type SectionId =
+  | 'home'
   | 'orders'
   | 'suppliers'
   | 'recipes'
@@ -44,12 +46,13 @@ export type Section = {
 // person is shown depends on the venue and the role (arrangeSections below, fed by
 // session/visibility.ts) — and a shown section is a gate on everything later put behind it.
 export const SECTIONS: readonly Section[] = [
+  { id: 'home', path: '/home', label: 'section.home', icon: House, inRail: 'top', inTabs: true },
   { id: 'orders', path: '/orders', label: 'section.orders', icon: ShoppingCart, inRail: 'top', inTabs: true },
   { id: 'suppliers', path: '/suppliers', label: 'section.suppliers', icon: Truck, inRail: 'top', inTabs: false },
   { id: 'recipes', path: '/recipes', label: 'section.recipes', icon: BookOpen, inRail: 'top', inTabs: true },
   { id: 'calculator', path: '/calculator', label: 'section.calculator', icon: Calculator, inRail: 'top', inTabs: true },
   { id: 'pastries', path: '/pastries', label: 'section.pastries', icon: Croissant, inRail: 'top', inTabs: false },
-  { id: 'stocktake', path: '/stocktake', label: 'section.stocktake', icon: Warehouse, inRail: 'top', inTabs: true },
+  { id: 'stocktake', path: '/stocktake', label: 'section.stocktake', icon: Warehouse, inRail: 'top', inTabs: false },
   { id: 'foodcost', path: '/food-cost', label: 'section.foodcost', icon: ChartPie, inRail: 'top', inTabs: false },
   { id: 'settings', path: '/settings', label: 'section.settings', icon: Settings, inRail: 'bottom', inTabs: false },
 ];
@@ -74,7 +77,7 @@ type ArrangedSections = {
 // constants; a constant is evaluated when the file is loaded, when no venue is open, so it
 // would freeze one list for every venue and every role for the life of the page.
 //
-// Settings is always shown (session/visibility.ts), so `first` always exists.
+// Home and Settings are always shown (session/visibility.ts), so `first` always exists and is Home.
 export function arrangeSections(visible: ReadonlySet<SectionId>): ArrangedSections {
   const shown = SECTIONS.filter(section => visible.has(section.id));
   return {
@@ -82,7 +85,7 @@ export function arrangeSections(visible: ReadonlySet<SectionId>): ArrangedSectio
     railBottom: shown.filter(section => section.inRail === 'bottom'),
     tabs: shown.filter(section => section.inTabs),
     more: shown.filter(section => !section.inTabs),
-    first: shown[0] ?? sectionById('settings'),
+    first: shown[0] ?? sectionById('home'),
   };
 }
 

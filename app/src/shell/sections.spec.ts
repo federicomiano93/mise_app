@@ -18,7 +18,7 @@ import type { SectionId } from './sections';
 describe('the section list', () => {
   it('is in the order the rail shows it', () => {
     expect(SECTIONS.map(section => section.id)).toEqual([
-      'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'stocktake', 'foodcost', 'settings',
+      'home', 'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'stocktake', 'foodcost', 'settings',
     ]);
   });
 
@@ -35,12 +35,12 @@ describe('the section list', () => {
   it('splits the sections between the rail, the tabs and «More»', () => {
     const arranged = arrangeSections(new Set(SECTIONS.map(section => section.id)));
     expect(arranged.railTop.map(section => section.id)).toEqual([
-      'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'stocktake', 'foodcost',
+      'home', 'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'stocktake', 'foodcost',
     ]);
     expect(arranged.railBottom.map(section => section.id)).toEqual(['settings']);
-    expect(arranged.tabs.map(section => section.id)).toEqual(['orders', 'recipes', 'calculator', 'stocktake']);
-    expect(arranged.more.map(section => section.id)).toEqual(['suppliers', 'pastries', 'foodcost', 'settings']);
-    expect(arranged.first.id).toBe('orders');
+    expect(arranged.tabs.map(section => section.id)).toEqual(['home', 'orders', 'recipes', 'calculator']);
+    expect(arranged.more.map(section => section.id)).toEqual(['suppliers', 'pastries', 'stocktake', 'foodcost', 'settings']);
+    expect(arranged.first.id).toBe('home');
   });
 
   it('finds a section by id', () => {
@@ -64,28 +64,29 @@ const ids = (list: readonly { id: SectionId }[]) => list.map(section => section.
 
 describe('arrangeSections', () => {
   it('leaves out what the person is not shown, keeping the order', () => {
-    const employee = arrangeSections(new Set<SectionId>(['orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'settings']));
-    expect(ids(employee.railTop)).toEqual(['orders', 'suppliers', 'recipes', 'calculator', 'pastries']);
+    const employee = arrangeSections(new Set<SectionId>(['home', 'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'settings']));
+    expect(ids(employee.railTop)).toEqual(['home', 'orders', 'suppliers', 'recipes', 'calculator', 'pastries']);
     expect(ids(employee.railBottom)).toEqual(['settings']);
-    expect(ids(employee.tabs)).toEqual(['orders', 'recipes', 'calculator']);
+    expect(ids(employee.tabs)).toEqual(['home', 'orders', 'recipes', 'calculator']);
     expect(ids(employee.more)).toEqual(['suppliers', 'pastries', 'settings']);
   });
 
-  it('gives a restaurant with only Orders a rail of Orders, Suppliers and Settings, and one tab', () => {
-    const restaurant = arrangeSections(new Set<SectionId>(['orders', 'suppliers', 'settings']));
-    expect(ids(restaurant.railTop)).toEqual(['orders', 'suppliers']);
+  it('gives a restaurant with only Orders a rail of Home, Orders, Suppliers and Settings, and two tabs', () => {
+    const restaurant = arrangeSections(new Set<SectionId>(['home', 'orders', 'suppliers', 'settings']));
+    expect(ids(restaurant.railTop)).toEqual(['home', 'orders', 'suppliers']);
     expect(ids(restaurant.railBottom)).toEqual(['settings']);
-    expect(ids(restaurant.tabs)).toEqual(['orders']);
+    expect(ids(restaurant.tabs)).toEqual(['home', 'orders']);
     expect(ids(restaurant.more)).toEqual(['suppliers', 'settings']);
   });
 
-  it('starts on the first section shown, not always on Orders', () => {
+  it('starts on the first section shown: Home, whatever else is shown', () => {
+    expect(arrangeSections(new Set<SectionId>(['home', 'recipes', 'settings'])).first.id).toBe('home');
     expect(arrangeSections(new Set<SectionId>(['recipes', 'settings'])).first.id).toBe('recipes');
     expect(arrangeSections(new Set<SectionId>(['settings'])).first.id).toBe('settings');
   });
 
-  it('falls back to Settings even for an empty set, so there is always somewhere to land', () => {
-    expect(arrangeSections(new Set<SectionId>()).first.id).toBe('settings');
+  it('falls back to Home even for an empty set, so there is always somewhere to land', () => {
+    expect(arrangeSections(new Set<SectionId>()).first.id).toBe('home');
   });
 });
 
@@ -94,13 +95,14 @@ describe('moreIsCurrent', () => {
     ['/more', true],
     ['/suppliers', true],
     ['/pastries', true],
+    ['/stocktake', true],
     ['/food-cost', true],
     ['/settings', true],
     ['/settings/language', true],
     ['/orders', false],
     ['/recipes', false],
     ['/calculator', false],
-    ['/stocktake', false],
+    ['/home', false],
     ['/', false],
     ['/no-such-section', false],
     ['/suppliers-archive', false],
@@ -119,6 +121,8 @@ describe('moreIsCurrent', () => {
 
 describe('screenNameFor', () => {
   it.each([
+    ['/home', 'home'],
+    ['/home/', 'home'],
     ['/orders', 'orders'],
     ['/food-cost', 'foodcost'],
     ['/suppliers/42', 'suppliers'],
@@ -276,6 +280,7 @@ describe('screenNameFor', () => {
 
 describe('titleKeyFor', () => {
   it.each([
+    ['/home', 'section.home'],
     ['/orders', 'section.orders'],
     ['/food-cost', 'section.foodcost'],
     ['/settings/language', 'section.settings'],
