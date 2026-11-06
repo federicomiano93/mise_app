@@ -82,7 +82,7 @@ import {
   unitConflicts, unitConflictList,
 } from './archive.js';
 import { storedUnitFor, entryUnit, isDefaultUnit } from '../order-unit.js';
-import { todayOrders, pendingSuppliers, closeOffer } from './reminders.js';
+import { todayOrders, dueTodayIds, pendingSuppliers, closeOffer } from './reminders.js';
 import { kioskSectionsFromData } from './kiosk-lines.js';
 import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
@@ -167,6 +167,7 @@ let pendingChecked = false;     // the unfinished-order check runs once per page
 let ordersConfig = normalizeOrdersConfig(null);   // config/orders, mirrored locally — see below
 let flatView = null;            // mounted flat-list handle, or null when not on screen
 let cardsView = null;           // mounted supplier-list handle, or null
+let remindersDay = '';          // the day the strip and the list highlight were last drawn for
 let detailView = null;          // the open supplier's screen, or null
 let itemsView = null;           // the open read-only product list, or null
 let summaryView = null;         // the open read-only order summary, or null (tablet)
@@ -614,6 +615,19 @@ function renderSupplierList(container, suppliers) {
     ingredientsBySupplier: ingredientsBySupplier(),
     entries: state.entries,
     forDay: futureDayOf,
+    dueToday: dueTodayNow(),
+  });
+}
+
+// The suppliers to highlight in the list: still to order today. ⚠️ Empty until suppliers, history
+// AND the draft (which holds the «non ordinato» closes) have all landed, and while the list is a
+// copy: a supplier already ordered would otherwise flash highlighted before its record arrives.
+function dueTodayNow() {
+  if (!(state.loaded.suppliers && state.loaded.history && state.loaded.draft) || state.showingCopy) {
+    return new Set();
+  }
+  return dueTodayIds({
+    suppliers: state.suppliers, history: state.history, today: todayISO(), skipped: state.skipped,
   });
 }
 
@@ -2752,6 +2766,9 @@ function renderReminders() {
     todayOrders({ suppliers: state.suppliers, history: state.history, today: todayISO(), skipped: state.skipped }),
     { onPick: expandSupplier, onOpenSkipped: whenLive(openSummary) },
   );
+  // The supplier list's highlight follows the same rule as the strip, repainted in place.
+  cardsView?.markDue(dueTodayNow());
+  remindersDay = todayISO();
 
   renderPending(document.getElementById('orders-pending'), state.pending, {
     onPlaced: recordPending,
@@ -2763,6 +2780,12 @@ function renderReminders() {
 
   renderUntoldChanges();
 }
+
+// ⚠️ A NEW DAY CHANGES WHAT IS DUE WITH NO DOCUMENT CHANGING: the lab tablet left on Orders
+// overnight would keep yesterday's strip and highlight. Asked once a minute; draws only at midnight.
+setInterval(() => {
+  if (remindersDay && todayISO() !== remindersDay) scheduleRender('reminders');
+}, 60 * 1000);
 
 // ⚠️⚠️ WHAT NOBODY HAS BEEN TOLD ABOUT. The shared order is live on every phone, and
 // both the sent list and the recorded order are only photographs of it — so a
