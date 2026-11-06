@@ -12,7 +12,7 @@
 import { t } from './i18n.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { feedbackPayload, FEEDBACK_MAX } from './feedback-model.js';
-import { askVersionOf, versionNumber } from './app-version.js';
+import { askPageVersion } from './app-version.js';
 
 // The real collaborators. firebase.js is loaded when a note is sent, not at import, so
 // this module (and its tests) never need the Firebase SDK from its CDN just to be read.
@@ -64,8 +64,7 @@ function buildForm(value, showError) {
 // The running release, or null. Never holds the form up for more than a moment.
 async function runningVersion() {
   try {
-    const controller = navigator.serviceWorker ? navigator.serviceWorker.controller : null;
-    return versionNumber(await askVersionOf(controller, { timeoutMs: 800, attempts: 1 }));
+    return askPageVersion({ timeoutMs: 800, attempts: 1 });
   } catch {
     return null;
   }
