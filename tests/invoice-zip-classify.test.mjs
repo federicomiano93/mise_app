@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   classify, cleanName, eggsPerPack, formatPackSize, isEgg, isUnattributedDiscount, normaliseName, packInfo, packWord,
-  parsePack, parsePackText, productKey,
+  parsePack, parsePackText, piecesOf, productKey,
 } from '../js/orders/invoice-zip/classify.js';
 
 const checkPack = (description, size, unit, count = null) => {
@@ -146,6 +146,34 @@ test('pack parsing: a carton weight is not multiplied by its piece count', () =>
   checkPack('ESEMPIO 35/40gr 2Kg* 6pz', 2, 'kg', 6);
   checkPack('PATATE 2,5kg* 4pz', 2.5, 'kg', 4);
   checkPack('PASTA 85gr* 50pz', 85, 'g', 50);
+});
+
+// Mirrored word for word in invoice-import/tests/test_classify.py.
+test('pack parsing: the count first, then grams each — sachets, never one 4 g pack', () => {
+  checkPack('9014 Vergn zucchero bianco bustina 2000x4g', 4, 'g', 2000);
+  checkPack('9164 Vergn zucchero grezzo bustina 1000x4g', 4, 'g', 1000);
+  checkPack('542 Vergn caps FAP ginseng dolce 50x6,5g', 6.5, 'g', 50);
+  checkPack('SO-FOR P.FIL SOL 5X 1KG', 1, 'kg', null); // kilos are not read count first
+  checkPack('ZUCCHERO BUSTINA 1x4g', 4, 'g', null);
+});
+
+// Mirrored word for word in invoice-import/tests/test_classify.py.
+test('pieces: a count written as pieces next to grams of one piece', () => {
+  const pieces = (text) => piecesOf(text);
+  assert.deepEqual(pieces('SG.CR.1980 PF VUOTO 85gr* 50pz'), { count: 50, size: 85 });
+  assert.deepEqual(pieces('CORNETTO RE BORBONE PZ.50 GR.85'), { count: 50, size: 85 });
+  assert.deepEqual(pieces('CORNETTO RE BORBONE CEREALI GR.85X50P'), { count: 50, size: 85 });
+  assert.deepEqual(pieces('PA Arancini BUFFET Ragu\' 50gr* 150pz'), { count: 150, size: 50 });
+  // The carton whose pieces add up to its weight: each piece is the carton shared out.
+  assert.deepEqual(pieces('MI GRAFFA mignon 35/40gr 2Kg* 55pz'), { count: 55, size: 36.4 });
+  assert.deepEqual(pieces('BRIOCHE mignon 35/40gr 2k* 55pz'), { count: 55, size: 36.4 });
+  assert.deepEqual(pieces('ESEMPIO 85gr 5Kg* 60pz'), { count: 60, size: 83.3 });
+  // Not pieces: kilos, no «pz», too heavy, no count, eggs.
+  for (const text of [
+    'DR CIPOLLE FETTE 2,5kg* 4pz', 'PATATE DIPPING STREEPS LW KG.2.5X4', 'SANTA LUCIA TRIS G 100X3 FLASH',
+    'TONNO gr.60X6 OO MARE APERTO', '9014 Vergn zucchero bianco bustina 2000x4g', '99715 PULY CAF PLUS POLVERE G 570 (X12PZ)',
+    'ESEMPIO 35/40gr 2Kg* 6pz', 'BRIOCHE 37,5gr 2Kg* 55pz', 'CORNETTI SFUSI 10 PZ', 'UOVA FRESCHE DA 30 PZ', 'PASTA 85gr* 1pz', '',
+  ]) assert.equal(pieces(text), null, text);
 });
 
 // Mirrored word for word in invoice-import/tests/test_classify.py.
