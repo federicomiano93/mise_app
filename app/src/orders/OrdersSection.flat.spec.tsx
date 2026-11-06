@@ -329,6 +329,28 @@ describe('on the split', () => {
     expect(screen.getByRole('main').querySelector('[data-view="ingredients"]')).not.toBeNull();
   });
 
+  it('keeps the flat view in the list column while History is open beside it, with its search, its frozen filter and its place', async () => {
+    split();
+    const draft = { entries: { 'i-butter': { qty: 2 }, 'i-milk': { qty: 1 } }, days: {} };
+    const view = await flat(seeded({ draft }));
+    await view.user.click(screen.getByRole('radio', { name: 'Ordering (2)' }));
+    await view.user.type(screen.getByRole('searchbox'), 'mil');
+    const main = screen.getByRole('main');
+    Object.defineProperty(main, 'scrollTop', { value: 640, writable: true });
+    await view.user.click(screen.getByRole('button', { name: 'History' }));
+    await screen.findByRole('region', { name: 'History' }, LOAD);
+    // Still there, beside History: the same box with the same text.
+    expect(screen.getByRole('searchbox', { name: 'Search an ingredient…' })).toHaveValue('mil');
+    expect(screen.getByRole('radio', { name: /^Ordering/ })).toHaveAttribute('aria-checked', 'true');
+    expect(main.scrollTop).toBe(640);
+    await view.user.click(within(screen.getByRole('region', { name: 'History' })).getByRole('button', { name: 'Back' }));
+    expect(path(view)).toBe('/orders/ingredients');
+    expect(screen.getByRole('searchbox')).toHaveValue('mil');
+    expect(screen.getByRole('radio', { name: /^Ordering/ })).toHaveAttribute('aria-checked', 'true');
+    expect(main.scrollTop).toBe(640);
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'History' })).toHaveFocus(); });
+  });
+
   it('opens History from the flat view, and Back returns to the flat view', async () => {
     split();
     const view = await flat();
@@ -360,6 +382,43 @@ describe('the sticky head (L21)', () => {
     await view.user.click(screen.getByRole('button', { name: 'Suppliers' }));
     await screen.findByRole('searchbox', { name: 'Search a supplier…' });
     expect(watched.every(w => w.disconnected)).toBe(true);
+  });
+});
+
+describe('the swap and the history entries', () => {
+  it('at list level replaces and never adds an entry', async () => {
+    const view = renderOrders('/', { source: seeded(), entries: ['/more', '/orders'] });
+    await view.user.click(await screen.findByRole('button', { name: 'Ingredients' }, LOAD));
+    expect(path(view)).toBe('/orders/ingredients');
+    await act(async () => { await view.router.navigate(-1); });
+    expect(path(view)).toBe('/more');
+  });
+
+  it('pressed with History open on the split steps back and lands on the other view with NO duplicate entry', async () => {
+    split();
+    const view = renderOrders('/', { source: seeded(), entries: ['/more', '/orders/ingredients'] });
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    await view.user.click(screen.getByRole('button', { name: 'History' }));
+    await screen.findByRole('region', { name: 'History' }, LOAD);
+    expect(path(view)).toBe('/orders/history');
+    await view.user.click(screen.getByRole('button', { name: 'Suppliers' }));
+    await waitFor(() => { expect(path(view)).toBe('/orders'); });
+    expect(view.router.state.historyAction).toBe('REPLACE');
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Ingredients' })).toHaveFocus(); });
+    await act(async () => { await view.router.navigate(-1); });
+    expect(path(view)).toBe('/more');
+  });
+
+  it('does the same from the supplier list with a screen open, going to the flat view', async () => {
+    split();
+    const view = renderOrders('/', { source: seeded(), entries: ['/more', '/orders'] });
+    await screen.findAllByRole('button', { name: 'History' }, LOAD);
+    await view.user.click(screen.getByRole('button', { name: 'History' }));
+    await screen.findByRole('region', { name: 'History' }, LOAD);
+    await view.user.click(screen.getByRole('button', { name: 'Ingredients' }));
+    await waitFor(() => { expect(path(view)).toBe('/orders/ingredients'); });
+    await act(async () => { await view.router.navigate(-1); });
+    expect(path(view)).toBe('/more');
   });
 });
 
