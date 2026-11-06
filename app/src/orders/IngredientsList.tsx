@@ -105,8 +105,9 @@ export function IngredientsList({ lens, ready, onSwap, onSend, onSettings, onHis
   const nothingAtAll = view.total === 0 && !anyOff;
   const nothingShown = view.rows.length === 0 && off.length === 0;
 
+  // ⚠️ `data-flat-view` IS THE DRIVERS' HOOK: the emulator drivers find the flat view by it. Nothing in the app reads it.
   return (
-    <div className={styles.root}>
+    <div className={styles.root} data-flat-view="">
       <OrdersHead
         view="ingredients"
         label={t('ord.searchAnIngredient')}

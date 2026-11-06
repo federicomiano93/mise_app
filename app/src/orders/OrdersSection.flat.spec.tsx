@@ -422,6 +422,23 @@ describe('the swap and the history entries', () => {
   });
 });
 
+describe('the head', () => {
+  it('puts the words (Send, swap, History) before the search box, which sticks with the gear; the view carries the drivers’ hook', async () => {
+    await flat();
+    expect(screen.getByRole('main').querySelector('[data-flat-view]')).not.toBeNull();
+    const search = screen.getByRole('searchbox');
+    const before = (node: HTMLElement) => Boolean(node.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(before(screen.getByRole('button', { name: 'Send' }))).toBe(true);
+    expect(before(screen.getByRole('button', { name: 'Suppliers' }))).toBe(true);
+    expect(before(screen.getByRole('button', { name: 'History' }))).toBe(true);
+    expect(search.compareDocumentPosition(screen.getByRole('button', { name: 'Orders settings' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // The sticky part is the search box and the gear alone: the words are not inside it.
+    const sticky = search.closest('[class*="head"]') as HTMLElement;
+    expect(sticky).not.toContainElement(screen.getByRole('button', { name: 'History' }));
+    expect(sticky).toContainElement(screen.getByRole('button', { name: 'Orders settings' }));
+  });
+});
+
 describe('the address', () => {
   it('is not remembered: entering the section lands on «by supplier»', async () => {
     const view = await flat();
