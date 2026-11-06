@@ -183,6 +183,18 @@ describe('«Ordering», frozen', () => {
     expect(rowNames().slice(0, 5)).toEqual(['Apple', 'Barley', 'Butter', 'Flour 00', 'Milk']);
   });
 
+  it('counts only the lines it can show: a line of a stopped supplier with a quantity is not in «Ordering»', async () => {
+    const source = seeded({
+      suppliers: [...SUPPLIERS, supplier('s-off', { name: 'Closed Co', active: false })],
+      ingredients: [...ITEMS, ingredient('i-cheese', { name: 'Cheese', supplierId: 's-off' })],
+      draft: { entries: { 'i-butter': { qty: 2 }, 'i-cheese': { qty: 5 } }, days: {} },
+    });
+    const { user } = await flat(source);
+    await user.click(screen.getByRole('radio', { name: 'Ordering (1)' }));
+    expect(count('1 ingredient in this order')).toBeInTheDocument();
+    expect(rowNames()).toEqual(['Butter']);
+  });
+
   it('can still be left once nothing is ordered', async () => {
     const { user } = await flat(seeded({ draft: { entries: { 'i-butter': { qty: 1 } }, days: {} } }));
     await user.click(screen.getByRole('radio', { name: 'Ordering (1)' }));

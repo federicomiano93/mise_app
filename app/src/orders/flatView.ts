@@ -74,8 +74,12 @@ export function notInUseLines(lens: OrdersLens, { query, only }: Scope): readonl
   return out;
 }
 
-// The ids of the lines with a quantity now, switched-off ones included (a line switched off with a quantity is in the order,
-// decision T10). The «Ordering» filter freezes this set when it is chosen.
+// Whether the view can show this line at all: its supplier is one of the lens's (a line of a stopped supplier is left out of the flat
+// view, as `flatRows` leaves it out, and so is never counted).
+export const isShownLine = (lens: OrdersLens, line: LensIngredient): boolean => lens.supplierById(line.supplierId ?? '') !== undefined;
+
+// The ids of the lines with a quantity now that the view can show, switched-off ones included (a line switched off with a quantity is
+// in the order, decision T10). The «Ordering» filter freezes this set when it is chosen, and «Ordering (n)» counts it.
 export function orderedIds(lens: OrdersLens, entries: DraftEntries): ReadonlySet<string> {
-  return new Set(lens.lines.filter(line => wholeNumber(entries[line.id]?.qty) > 0).map(line => line.id));
+  return new Set(lens.lines.filter(line => isShownLine(lens, line) && wholeNumber(entries[line.id]?.qty) > 0).map(line => line.id));
 }

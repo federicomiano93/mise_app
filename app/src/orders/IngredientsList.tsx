@@ -8,7 +8,7 @@ import { OrderLine } from './OrderLine';
 import { OrdersFilter } from './OrdersFilter';
 import { OrdersHead } from './OrdersHead';
 import { useOrders, useOrdersStore } from './OrdersContext';
-import { flatView, notInUseLines, orderedIds } from './flatView';
+import { flatView, isShownLine, notInUseLines, orderedIds } from './flatView';
 import type { FlatLine } from './flatView';
 import type { OrdersLens } from './ordersLens';
 import styles from './IngredientsList.module.css';
@@ -65,7 +65,7 @@ export function IngredientsList({ lens, ready, onSwap, onSend, onSettings, onHis
   // Four whole phrases, never a count with « in this order» glued on: Italian puts the words elsewhere.
   // In «Ordering» the lines switched off that are in the set stand in the group at the foot, so they are counted as shown too.
   const shown = view.rows.length + (frozen === null ? 0 : off.length);
-  const scope = frozen === null ? view.total : lens.lines.filter(line => frozen.has(line.id)).length;
+  const scope = frozen === null ? view.total : lens.lines.filter(line => frozen.has(line.id) && isShownLine(lens, line)).length;
   const countText = frozen === null
     ? (shown === scope ? t('ord.ingredientsCount', { n: scope }) : t('ord.flat.shown', { shown, n: scope }))
     : (shown === scope ? t('ord.flat.countInOrder', { n: scope }) : t('ord.flat.shownInOrder', { shown, n: scope }));

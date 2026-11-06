@@ -89,6 +89,11 @@ describe('notInUseLines', () => {
 });
 
 describe('orderedIds', () => {
+  it('leaves out a line the view cannot show, a stopped supplier’s, even with a quantity', () => {
+    const entries = { cheese: { qty: 3, stock: 0 }, milk: { qty: 1, stock: 0 } };
+    expect([...orderedIds(lensOf({ entries }), entries)]).toEqual(['milk']);
+  });
+
   it('collects the lines with a quantity, switched-off ones too, and ignores zero and junk', () => {
     const entries = { milk: { qty: 2, stock: 0 }, cream: { qty: 1, stock: 0 }, butter: { qty: 0, stock: 4 }, semola: { qty: Number.NaN, stock: 0 } };
     expect([...orderedIds(lensOf({ entries }), entries)].sort()).toEqual(['cream', 'milk']);
