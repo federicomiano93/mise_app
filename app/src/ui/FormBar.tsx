@@ -1,5 +1,6 @@
+import { useId } from 'react';
 import type { ReactNode, Ref } from 'react';
-import { ChevronLeft } from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from './Button';
 import styles from './FormBar.module.css';
 
@@ -15,6 +16,11 @@ type Props = {
   titleId?: string;
   // Lets the screen put the focus on its title when it opens.
   titleRef?: Ref<HTMLHeadingElement>;
+  // Makes the title a door: a button inside the h2 (which stays the focus target) with a chevron after the name. `titleHint` says
+  // where it goes, as the button's description (never part of its name, so the screen is still named by the title alone).
+  onTitle?: () => void;
+  titleHint?: string;
+  titleDoorRef?: Ref<HTMLButtonElement>;
   // Under the title: «Last 15 days», or «Unsaved changes». The caller styles it.
   sub?: ReactNode;
   // The one primary action, always here at the top (P20): Save.
@@ -24,14 +30,23 @@ type Props = {
 // The bar at the top of a screen one level down (the design's `.form-bar`): Back · title · the one
 // primary action. It sticks to the top of the scrolling area, so Save never scrolls out of reach
 // of a long form.
-export function FormBar({ backLabel, onBack, backDisabled = false, title, titleId, titleRef, sub, action }: Props) {
+export function FormBar({ backLabel, onBack, backDisabled = false, title, titleId, titleRef, onTitle, titleHint, titleDoorRef, sub, action }: Props) {
+  const hintId = useId();
   return (
     <header className={styles.bar}>
       <Button className={styles.back} aria-label={backLabel} onPress={onBack} isDisabled={backDisabled}>
         <ChevronLeft aria-hidden="true" />
       </Button>
       <div className={styles.text}>
-        <h2 ref={titleRef} id={titleId} tabIndex={-1} className={styles.title}>{title}</h2>
+        <h2 ref={titleRef} id={titleId} tabIndex={-1} className={styles.title}>
+          {onTitle ? (
+            <button ref={titleDoorRef} type="button" className={styles.door} aria-describedby={titleHint ? hintId : undefined} onClick={onTitle}>
+              {title}
+              <ChevronRight aria-hidden="true" />
+            </button>
+          ) : title}
+        </h2>
+        {onTitle && titleHint ? <span id={hintId} hidden>{titleHint}</span> : null}
         {sub}
       </div>
       {action ? <div className={styles.action}>{action}</div> : null}

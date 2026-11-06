@@ -1,14 +1,18 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { todayISO } from '@mise/shared/day';
+import { mayEditRecords } from '@mise/shared/records';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS, Page } from '../shell/Page';
 import { useOwnScrollArea } from '../shell/scrollArea';
 import { useOnline } from '../shell/useOnline';
+import { useSession } from '../session/SessionContext';
 import { SPLIT_QUERY } from '../ui/split';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
+import { CardDoorsProvider } from './CardDoors';
+import type { CardDoor } from './CardDoors';
 import { NoticesBell } from './NoticesBell';
 import { NoticesProvider } from './NoticesContext';
 import { OrdersProvider, useOrders, useOrdersStore } from './OrdersContext';
@@ -31,8 +35,10 @@ import { SupplierOrderScreen } from './SupplierOrderScreen';
 import { SupplierPicker } from './SupplierPicker';
 import { LATCH_GRACE_MS, PendingLatchProvider, latchCanLook, pendingNow, usePendingLatch } from './pendingLatch';
 import { LONG_MS } from './useClearQuantities';
+import { carriedTrip, carryTrip, forgetTrip } from './cardTrip';
+import type { TripPlace } from './cardTrip';
 import {
-  CLEAR_OPENER, HandBackProvider, HISTORY_DOOR, INCOMING_DOOR, ITEMS_DOOR, LISTS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, REORDER_DOOR, SEND_OPENER,
+  ADD_DOOR, CLEAR_OPENER, HandBackProvider, SEARCH_BOX, SUPPLIER_DOOR, SUPPLIER_TITLE, cardDoor, HISTORY_DOOR, INCOMING_DOOR, ITEMS_DOOR, LISTS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, REORDER_DOOR, SEND_OPENER,
   SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, SWAP_OPENER, arrivalOpener, correctOpener, itemsOpener, listOpener, pendingFallback, pendingOpener, sendDayOpener, supplierOpener,
   useHandBackState,
 } from './handBack';
@@ -112,6 +118,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const { pathname, state } = useLocation();
   const navigationType = useNavigationType();
   const split = useMediaQuery(SPLIT_QUERY);
+  const { canManage, location: venue } = useSession();
   // ⚠️ WHICH VIEW THE LIST COLUMN IS: «by supplier» or the flat view, whichever the person was on last at the list's level. On a phone a
   // screen opened from the flat view (History, the send screen, the settings) hides the column behind it, so the flat view must stay the
   // one mounted there: its search text and its place are still there on Back. On the split a screen opened from it sits beside the
@@ -200,6 +207,26 @@ function OrdersLayout({ view }: { view: ShownView }) {
   // Where the list was scrolled to when a screen opened over it on a phone, until Back restores it.
   const listTop = useRef<number | null>(null);
   const detail = useRef<HTMLDivElement>(null);
+
+  // ⚠️ THE TRIP TO A CARD (cardTrip.ts): Orders is unmounted while the person is on a card of «Ingredients & suppliers», so the place is
+  // kept in a module. Back (a POP) at the very address the trip started from takes it; it is forgotten on every mount, taken or not.
+  const trip = useRef<TripPlace | null>(navigationType === 'POP' && carriedTrip()?.pathname === pathname ? carriedTrip() : null);
+  useEffect(() => { forgetTrip(); }, []);
+  const cardDoors = {
+    // The very gate of the Suppliers section, asked on every render so it follows the venue's switch live.
+    may: mayEditRecords(venue, canManage),
+    open: (door: CardDoor) => {
+      carryTrip({
+        pathname,
+        target: door.target,
+        query: door.flat?.query ?? '',
+        only: door.flat?.only ?? null,
+        area: scrollArea()?.scrollTop ?? null,
+        pane: detail.current?.scrollTop ?? null,
+      });
+      void navigate(door.address, { state: door.state });
+    },
+  };
 
   // A screen opens one level down, so Back steps up to the list. On the split, with one already open beside the list, picking
   // another is lateral and replaces it — and keeps whatever the entry it replaces knew about where Back goes.
@@ -390,6 +417,22 @@ function OrdersLayout({ view }: { view: ShownView }) {
     if (!inHistory) historyPlace.current = null;
   }, [pathname]);
 
+  // Back from a card: once the screen is drawn (its data arrives after the section does, and a scroll box cannot be scrolled past
+  // content that is not there yet) the scroll goes back and the focus to the door that was pressed; a door that is gone (the ingredient
+  // deleted or moved, the gate now off) leaves the focus on the search box or the supplier's title.
+  const tripDone = useRef(false);
+  useLayoutEffect(() => {
+    const place = trip.current;
+    if (place === null || tripDone.current || !ready) return;
+    tripDone.current = true;
+    trip.current = null;
+    const area = scrollArea();
+    if (area !== null && place.area !== null) area.scrollTop = place.area;
+    if (detail.current !== null && place.pane !== null) detail.current.scrollTop = place.pane;
+    const door = place.target.kind === 'name' ? cardDoor(place.target.ingredientId) : place.target.kind === 'add' ? ADD_DOOR : SUPPLIER_DOOR;
+    if (!handBack.focus(door)) handBack.focus(view.kind === 'ingredients' ? SEARCH_BOX : SUPPLIER_TITLE);
+  }, [ready]);
+
   // ⚠️ WITH THE VENUE'S SWITCH OFF the three delivery addresses do not exist (decision F4): a bookmark, or a phone that was on
   // Incoming when somebody turned it off, goes to the list. Only once config/orders has answered (before that the switch reads on).
   const deliveryAddress = view.kind === 'incoming' || view.kind === 'incoming-missing' || view.kind === 'reorder';
@@ -399,6 +442,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
 
   return (
     <HandBackProvider value={handBack}>
+      <CardDoorsProvider value={cardDoors}>
       {/* The bell and its panel share one state, kept above the page: the number and what it opens cannot disagree (step 3f-6). */}
       <NoticesProvider lens={lens} ready={ready} onPanelOpen={dropHold}>
       <Page
@@ -412,7 +456,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
           <div className={styles.list}>
             <PartBoundary>
               {flatColumn ? (
-                <IngredientsList lens={lens} ready={ready} onSwap={swap} onSend={openSend} onSettings={openSettings} onHistory={openHistory} />
+                <IngredientsList lens={lens} ready={ready} onSwap={swap} onSend={openSend} onSettings={openSettings} onHistory={openHistory} initial={trip.current === null ? undefined : { query: trip.current.query, only: trip.current.only }} />
               ) : (
               <OrdersList
                 lens={lens}
@@ -445,6 +489,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
         </div>
       </Page>
       </NoticesProvider>
+      </CardDoorsProvider>
     </HandBackProvider>
   );
 }

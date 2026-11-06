@@ -44,6 +44,23 @@ describe('FormBar', () => {
     expect(ref.current).toHaveFocus();
   });
 
+  it('turns the title into a door when asked: the h2 stays the focus target, the name stays the title alone, the hint only describes', async () => {
+    const onTitle = vi.fn();
+    const ref = createRef<HTMLHeadingElement>();
+    render(<FormBar backLabel="Back" onBack={() => undefined} title="Alpine Mills" titleRef={ref} onTitle={onTitle} titleHint="Opens its card" />);
+    const door = screen.getByRole('button', { name: 'Alpine Mills' });
+    expect(ref.current).toContainElement(door);
+    expect(screen.getByRole('heading', { level: 2, name: 'Alpine Mills' })).toBe(ref.current);
+    expect(door).toHaveAccessibleDescription('Opens its card');
+    await userEvent.setup().click(door);
+    expect(onTitle).toHaveBeenCalledTimes(1);
+  });
+
+  it('draws a plain title with no button when no door is given', () => {
+    render(<FormBar backLabel="Back" onBack={() => undefined} title="Records" titleHint="unused" />);
+    expect(screen.queryByRole('button', { name: 'Records' })).not.toBeInTheDocument();
+  });
+
   it('is a header with no action when there is none', () => {
     render(<FormBar backLabel="Back" onBack={() => undefined} title="Records" />);
     expect(screen.getAllByRole('button')).toHaveLength(1);

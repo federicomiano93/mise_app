@@ -25,6 +25,14 @@ export const CLEAR_OPENER = 'clear';
 export const SEND_OPENER = 'send';
 // The swap button of the list's head (step 3f-8b): where the focus lands once the view («by supplier» / «by ingredient») changed.
 export const SWAP_OPENER = 'swap';
+// The doors to the cards of «Ingredients & suppliers» (step 3f-8b): where the focus returns after the trip (cardTrip.ts). A name's
+// button is registered under its ingredient's id; the others have one place each on the screen.
+export const cardDoor = (id: string): string => `card:${id}`;
+export const ADD_DOOR = 'add-door';
+export const SUPPLIER_DOOR = 'supplier-door';
+// What the focus falls back to when the door is gone: the supplier screen's title, the lists' search box.
+export const SUPPLIER_TITLE = 'supplier-title';
+export const SEARCH_BOX = 'search-box';
 // A pending banner's «Placed …» (the supplier's id), in the notices under the bell: where Back from its confirm screen returns the
 // focus. Gone once the order was recorded: then the supplier's row takes it (pendingFallback).
 export const pendingOpener = (id: string): string => `pending:${id}`;

@@ -1,7 +1,9 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { wholeNumber } from '@mise/shared/archive';
+import { fromOrdersList, ingredientCardAddress } from '@mise/shared/records-link';
 import { useT } from '../i18n/useT';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
+import { tabOfLine, useCardDoors } from './CardDoors';
 import { OrderLine } from './OrderLine';
 import { OrdersFilter } from './OrdersFilter';
 import { OrdersHead } from './OrdersHead';
@@ -19,6 +21,8 @@ type Props = {
   onSend: () => void;
   onSettings: () => void;
   onHistory: () => void;
+  // What the view starts with when Back brings the person from a card (cardTrip.ts): the search text and the frozen «Ordering» set.
+  initial?: { readonly query: string; readonly only: readonly string[] | null };
 };
 
 // The flat view, «by ingredient» (step 3f-8b, parity L17, L18, L21): every ingredient of every supplier in ONE A→Z list, each row
@@ -27,16 +31,17 @@ type Props = {
 //
 // ⚠️ ITS SEARCH TEXT AND ITS FILTER ARE ITS OWN, not the supplier list's, and NOT REMEMBERED: leaving the view (or the section)
 // ends them. The box is a controlled input in a component that stays mounted (OrdersHead), so a snapshot never remounts it.
-export function IngredientsList({ lens, ready, onSwap, onSend, onSettings, onHistory }: Props) {
+export function IngredientsList({ lens, ready, onSwap, onSend, onSettings, onHistory, initial }: Props) {
   const { t } = useT();
   const store = useOrdersStore();
   const snapshot = useOrders();
   const entries = snapshot.draft.entries;
   const showStock = snapshot.config.showStock;
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(initial?.query ?? '');
+  const doors = useCardDoors();
   // ⚠️ THE FROZEN SET: choosing «Ordering» takes the ids with a quantity AT THAT MOMENT and keeps them, so a line taken to 0 does
   // not vanish from under the finger correcting it. Choosing «Ordering» again refreshes the set; «All» drops it. null = «All».
-  const [frozen, setFrozen] = useState<ReadonlySet<string> | null>(null);
+  const [frozen, setFrozen] = useState<ReadonlySet<string> | null>(() => (initial?.only ? new Set(initial.only) : null));
 
   const view = useMemo(() => flatView(lens, { query, only: frozen }), [lens, query, frozen]);
   const off = useMemo(() => notInUseLines(lens, { query, only: frozen }), [lens, query, frozen]);
@@ -73,6 +78,14 @@ export function IngredientsList({ lens, ready, onSwap, onSend, onSettings, onHis
       showStock={showStock}
       hint={snapshot.suggester.hint(line.row.ingredient, entries[line.row.ingredient.id])}
       supplierName={line.supplierName}
+      onOpenCard={doors.may ? row => {
+        doors.open({
+          address: ingredientCardAddress(row.ingredient.id),
+          state: fromOrdersList(tabOfLine(row.ingredient)),
+          target: { kind: 'name', ingredientId: row.ingredient.id },
+          flat: { query, only: frozen === null ? null : [...frozen] },
+        });
+      } : undefined}
       onEdit={(edited, edit) => { store.editLine(line.supplier, edited.ingredient, edit); }}
     />
   );

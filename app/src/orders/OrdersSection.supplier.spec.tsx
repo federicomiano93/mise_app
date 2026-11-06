@@ -134,7 +134,8 @@ describe('typing a quantity', () => {
   it('shows the count on the list the moment a box is filled', async () => {
     const { user } = await opened();
     await user.type(qtyBox('Flour 00 25kg'), '3');
-    expect(screen.getByRole('button', { name: /^Alpine Mills/ })).toHaveTextContent('1 item');
+    // (The supplier's own title is a door to its card too, so the list's row is the first of the two.)
+    expect(screen.getAllByRole('button', { name: /^Alpine Mills/ })[0]).toHaveTextContent('1 item');
   });
 
   it('turns an empty box into 0 and a number into a whole number', async () => {
@@ -338,7 +339,7 @@ describe('another phone', () => {
     await user.click(input);
     act(() => { source.remoteMerge({ entries: { 'i-flour': { qty: 9 } } }); });
     // The snapshot has landed (the count on the list says so), the box under the finger has not moved.
-    await waitFor(() => { expect(screen.getByRole('button', { name: /^Alpine Mills/ })).toHaveTextContent('1 item'); });
+    await waitFor(() => { expect(screen.getAllByRole('button', { name: /^Alpine Mills/ })[0]).toHaveTextContent('1 item'); });
     expect(input).toHaveFocus();
     expect(input).toHaveValue(null);
     await user.tab();

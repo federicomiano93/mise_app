@@ -1,4 +1,4 @@
-import { useId, useRef } from 'react';
+import { useCallback, useId, useRef } from 'react';
 import type { MouseEvent } from 'react';
 import { Minus, Plus, X } from 'lucide-react';
 import { ingredientDisplayLabel, wholeNumber } from '@mise/shared/archive';
@@ -6,6 +6,7 @@ import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { entryUnit, sameUnit, unitChoices } from '@mise/shared/order-unit';
 import { useT } from '../i18n/useT';
 import { NumberBox } from './NumberBox';
+import { cardDoor, useHandBack } from './handBack';
 import type { BoxHandle } from './NumberBox';
 import type { DraftEntry } from './draftSync';
 import type { OrderRow } from './ordersLens';
@@ -24,6 +25,9 @@ type Props = {
   onEdit: (row: OrderRow, edit: LineEdit) => void;
   // The flat view («by ingredient»): the name of the supplier the line is ordered from, on a small line under the name.
   supplierName?: string;
+  // The name becomes a button that opens the ingredient's card in «Ingredients & suppliers» (step 3f-8b). Given only where the person may
+  // edit records; everybody else keeps plain text. Not given on History's editor or the confirm screen.
+  onOpenCard?: (row: OrderRow) => void;
 };
 
 const text = (value: unknown): string => (typeof value === 'string' ? value : '');
@@ -32,8 +36,12 @@ const text = (value: unknown): string => (typeof value === 'string' ? value : ''
 //
 // ⚠️ A ROW MARKED `elsewhere` SHOWS AN EMPTY ORDER BOX whatever the draft says: that number belongs to the other supplier's
 // order. Typing there (or + ) takes the line back — the store does it in the same write (ordersStore.ts editLine).
-export function OrderLine({ row, entry, showStock, hint, onEdit, supplierName }: Props) {
+export function OrderLine({ row, entry, showStock, hint, onEdit, supplierName, onOpenCard }: Props) {
   const { t } = useT();
+  const handBack = useHandBack();
+  const id = row.ingredient.id;
+  // Back from the card hands the focus back to this button (cardTrip.ts).
+  const doorNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(cardDoor(id), node); }, [handBack, id]);
   const { ingredient } = row;
   const orderBox = useRef<BoxHandle>(null);
   const hintId = useId();
@@ -69,7 +77,13 @@ export function OrderLine({ row, entry, showStock, hint, onEdit, supplierName }:
   return (
     <li className={styles.line} data-filled={qty > 0} data-elsewhere={row.elsewhere} data-stock={showStock}>
       <div className={styles.main}>
-        <span className={styles.name}>{name}</span>
+        {onOpenCard ? (
+          // ⚠️ A REAL BUTTON DRAWN LIKE THE NAME IT REPLACES, with its hit area grown by padding and a matching negative margin, so the
+          // row does not move between a button and plain text. The boxes and the × are SIBLINGS of it, never inside it.
+          <button ref={doorNode} type="button" className={styles.door} aria-label={t('ord.editIngredientFor', { name: label })} onClick={() => { onOpenCard(row); }}>
+            <span className={styles.name}>{name}</span>
+          </button>
+        ) : <span className={styles.name}>{name}</span>}
         {supplierName !== undefined && supplierName !== '' ? <span className={styles.supplier}>{supplierName}</span> : null}
         {weight !== '' ? <span className={styles.weight}>{weight}</span> : null}
         {note !== '' ? <span className={styles.note}>{note}</span> : null}

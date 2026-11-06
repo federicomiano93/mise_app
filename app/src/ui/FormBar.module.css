@@ -43,6 +43,38 @@
   margin-left: auto;
 }
 
+/* The title as a door (a supplier's name on its order screen): the name and a chevron, looking like the title it is. The padding and
+   the negative margin cancel, so the bar does not grow, and the hit area is as tall as a finger. */
+.door {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  max-width: 100%;
+  margin: calc(-1 * var(--s3)) 0;
+  padding: var(--s3) 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  overflow-wrap: break-word;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.door svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
+}
+
+.door:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-md);
+}
+
 /* A title takes the focus from script when its screen opens; a tap does not need a ring around it. */
 .title:focus:not(:focus-visible) {
   outline: none;

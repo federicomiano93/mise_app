@@ -3,7 +3,7 @@ import type { ReactNode, Ref } from 'react';
 import { ArrowLeftRight, History, Search, Settings, Share } from 'lucide-react';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
-import { HISTORY_DOOR, SEND_OPENER, SETTINGS_OPENER, SWAP_OPENER, useHandBack } from './handBack';
+import { HISTORY_DOOR, SEARCH_BOX, SEND_OPENER, SETTINGS_OPENER, SWAP_OPENER, useHandBack } from './handBack';
 import styles from './OrdersHead.module.css';
 
 type Props = {
@@ -40,6 +40,8 @@ export function OrdersHead({ view, label, query, onQuery, onLookingElsewhere, re
   const handBack = useHandBack();
   // Back from a screen hands the focus back to the button that opened it; the swap button gets it after the view changed.
   const sendNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SEND_OPENER, node); }, [handBack]);
+  // Where the focus falls back to when the door it was returned to is gone (cardTrip.ts).
+  const searchNode = useCallback((node: HTMLInputElement | null) => { handBack.register(SEARCH_BOX, node); }, [handBack]);
   const swapNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SWAP_OPENER, node); }, [handBack]);
   const settingsNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
   const historyNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(HISTORY_DOOR, node); }, [handBack]);
@@ -52,6 +54,7 @@ export function OrdersHead({ view, label, query, onQuery, onLookingElsewhere, re
         <div className={styles.search}>
           <Search aria-hidden="true" />
           <input
+            ref={searchNode}
             type="search"
             autoComplete="off"
             className={styles.input}
