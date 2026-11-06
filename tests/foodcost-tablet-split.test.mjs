@@ -143,6 +143,8 @@ test('several products use the recipe: beside the list the top one opens, on a p
   assert.match(narrowed, /listFilter = id;/);
   assert.match(narrowed, /const first = isTabletNow\(\) \? firstUsing\(id\) : null;/);
   assert.match(narrowed, /if \(first\) openProduct\(first\);\s*else showList\(\);/);
+  // ⚠️ A draft giving way sat beside the FULL list: the column must be painted again, narrowed.
+  assert.match(narrowed, /activeList = null;[\s\S]*if \(first\) openProduct\(first\);/);
   assert.doesNotMatch(narrowed, /entryEditor = true/, 'the page chose it from the list: Back stays the list\'s');
   assert.match(fnBody('reconsiderDraft'), /else openNarrowed\(id\);/);
   const first = fnBody('firstUsing');

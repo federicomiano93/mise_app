@@ -399,13 +399,18 @@ function firstUsing(id) {
 // ⚠️ Federico, 4 Nov 2026: «forse non mostra subito la scheda food cost». Beside the list
 // the pane was left empty («Scegli un prodotto»), so on a tablet the top product opens at
 // once; the narrowed list still sits on the left to switch product. entryEditor stays
-// false: the page chose this product from the list, and Back (listFilter is set) still
-// returns to the recipe. A phone keeps the narrowed list.
+// false: the page chose this product from the list, and on a tablet Back (listFilter is
+// set) still returns to the recipe. A phone keeps the narrowed list.
 function openNarrowed(id) {
   listFilter = id;
   // A new product the recipe opened first (reconsiderDraft) is no longer the page's.
   entryEditor = false;
   const first = isTabletNow() ? firstUsing(id) : null;
+  // ⚠️ A FRESH LIST COLUMN. A new product that gives way here (reconsiderDraft) sat beside
+  // the FULL list, built before the filter; openProduct only re-marks a live list, so the
+  // column would keep every product and never show «Prodotti con…» / «Mostra tutti» (code
+  // review). Dropping it makes openProduct paint the narrowed one.
+  activeList = null;
   if (first) openProduct(first);
   else showList();
 }
