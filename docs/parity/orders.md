@@ -1470,3 +1470,38 @@ deletes and freezes the unit of a typed line whose order unit it changes (`suppl
 - F-4. The flat view shows the head and the rows only: the notices panel, «Order today», the debt doors and «Order lists» stay on the
   supplier view, one tap away.
 - F-5. The letter dividers stick under the head and the column names while their letter's rows scroll.
+
+## Step 3f-8b as built
+
+**What it is.** The flat view at `/orders/ingredients`: every line A→Z across suppliers (`flatRows`), each row naming its supplier and
+drawn by the same `OrderLine` (edits go to the supplier the line is ordered from NOW), letter dividers, the column names and the letters
+sticking under the search head (L21: measured heights set inline), «Not in use» folded at the foot, the All / Ordering radiogroup with the
+frozen set (L18), the count line in four whole phrases. The swap button («Ingredienti» / «Fornitori») names the other view and replaces
+the entry. The doors: the ingredient's name on a row (supplier screen, «Not in use», flat view), «+» in the supplier screen's bar and the
+supplier's name in its title, each a push into «Ingredients & suppliers» with a state from `shared/records-link`; Back from there lands on
+the same Orders entry with the focus on the door, the scroll back and the flat view's search and frozen set back (`cardTrip.ts`, tied to
+the history entry). Drawn only where `mayEditRecords` says yes. No rule changed, no new read, no new key.
+
+**Taken for him, easy to change (besides F-1…F-5 above).**
+- B1. The head on every width: the words row («Manda», the swap, «Storico») above, scrolling away on a phone; only the search box, the
+  gear and the All / Ordering filter stick. At 296 the words take two lines. (Before this slice the gear was at the end of one line; with
+  the swap added it no longer fitted a phone.)
+- B2. On the tablet, a screen opened from the flat view (History, Send, Settings) sits beside it, and the flat view keeps its search, its
+  filter and its place; the swap pressed then goes back to the list level first, so Back never walks through a duplicate.
+- B3. The supplier's name in the bar shows a small arrow and is read as «Scheda di {supplier} in Ingredienti e fornitori»; on «Senza
+  fornitore» there is no title door and «+» reads «Aggiungi un ingrediente senza fornitore».
+- B4. Each order row is about 8px taller: the name's tap area grew to 44px without covering the line under it.
+
+**Fixed after the review.** The head off the edge of a 296px phone (the gear and «Storico» out of sight: a sideways overflow inside the
+shell's `main`, which the driver did not measure — it does now); the flat view losing its search and place on the tablet when a screen
+opened beside it; a swap from an open screen leaving a duplicate entry; a long one-word supplier name not breaking in the title door; the
+supplier row and the title door having the same name on the split; a trip replayed on a later visit to the same address; «N of M in this
+order» counting lines of a stopped supplier; two layout values added as design tokens; the caption covering the bottom of the name's tap
+area.
+
+**Known and left.**
+- Inside «Ingredients & suppliers» on the split, picking another supplier or «New» beside a card opened from Orders replaces the entry (the
+  existing pattern there): that screen's own Back then goes to the Suppliers list; the browser's Back still returns to Orders.
+- Found while driving, NOT this slice: on the ingredient card at 296px the fold headers «Elenco ingredienti da compilare», «Allergeni
+  dichiarato», «Valori nutrizionali Completi» are cut (step 3e code, unchanged here).
+- Not driven: the real tablet (finger taps on the doors), OFFLINE (a door opened offline: the card's own offline behaviour), EMPTY venue.
