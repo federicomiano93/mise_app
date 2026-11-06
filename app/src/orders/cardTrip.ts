@@ -13,6 +13,9 @@ export type TripTarget =
   | { readonly kind: 'supplier' };
 
 export interface TripPlace {
+  // ⚠️ THE ENTRY OF THE HISTORY, NOT ONLY THE ADDRESS: `location.key` of the Orders entry the door was pressed on. Back to that very entry
+  // takes the place; another visit to the same address (another route, an older entry) does not replay it.
+  readonly key: string;
   readonly pathname: string;
   readonly target: TripTarget;
   // The flat view's search text and frozen set (ids), when the door was pressed there; '' and null otherwise.

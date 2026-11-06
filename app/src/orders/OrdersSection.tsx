@@ -115,7 +115,8 @@ function StatusLine() {
 function OrdersLayout({ view }: { view: ShownView }) {
   const { t } = useT();
   const navigate = useNavigate();
-  const { pathname, state } = useLocation();
+  const location = useLocation();
+  const { pathname, state } = location;
   const navigationType = useNavigationType();
   const split = useMediaQuery(SPLIT_QUERY);
   const { canManage, location: venue } = useSession();
@@ -209,14 +210,17 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const detail = useRef<HTMLDivElement>(null);
 
   // ⚠️ THE TRIP TO A CARD (cardTrip.ts): Orders is unmounted while the person is on a card of «Ingredients & suppliers», so the place is
-  // kept in a module. Back (a POP) at the very address the trip started from takes it; it is forgotten on every mount, taken or not.
-  const trip = useRef<TripPlace | null>(navigationType === 'POP' && carriedTrip()?.pathname === pathname ? carriedTrip() : null);
+  // kept in a module. Back (a POP) to the very history entry the trip started from takes it; it is forgotten on every mount, taken or not.
+  const trip = useRef<TripPlace | null>(
+    navigationType === 'POP' && carriedTrip()?.pathname === pathname && carriedTrip()?.key === location.key ? carriedTrip() : null,
+  );
   useEffect(() => { forgetTrip(); }, []);
   const cardDoors = {
     // The very gate of the Suppliers section, asked on every render so it follows the venue's switch live.
     may: mayEditRecords(venue, canManage),
     open: (door: CardDoor) => {
       carryTrip({
+        key: location.key,
         pathname,
         target: door.target,
         query: door.flat?.query ?? '',

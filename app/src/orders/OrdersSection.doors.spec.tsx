@@ -235,6 +235,18 @@ describe('Back from the card', () => {
     await waitFor(() => { expect(screen.getByRole('heading', { level: 2, name: 'Alpine Mills' })).toHaveFocus(); });
   });
 
+  it('does not replay the trip on another entry of the same address', async () => {
+    const entries = ['/orders/ingredients', '/stocktake', '/orders/ingredients'];
+    const view = renderOrders('/', { source: seeded(), routes, entries });
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    await view.user.type(screen.getByRole('searchbox'), 'but');
+    await view.user.click(edit('Butter'));
+    await act(async () => { await view.router.navigate(-3); });
+    await screen.findAllByRole('spinbutton', undefined, LOAD);
+    expect(view.router.state.location.pathname).toBe('/orders/ingredients');
+    expect(screen.getByRole('searchbox')).toHaveValue('');
+  });
+
   it('forgets the trip: the next time the section is entered by another way nothing is restored', async () => {
     const view = await opened('/orders/ingredients');
     await view.user.type(screen.getByRole('searchbox'), 'but');
