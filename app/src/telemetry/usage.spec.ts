@@ -80,10 +80,11 @@ const todayKey = () => storeKey('bakery', 'u1', '20261009');
 
 // What the tracker keeps in storage for one person and one day.
 interface Stored {
-  acc: Record<'screens' | 'seconds' | 'taps' | 'routes' | 'actions' | 'loads' | 'loadMs', Record<string, number>>;
+  acc: Record<'screens' | 'seconds' | 'taps' | 'routes' | 'actions' | 'loads' | 'loadMs' | 'hours', Record<string, number>>;
   dirty: boolean;
   lastSentAt: number;
   rev: number;
+  appVersion?: string | null;
 }
 const stored = (storage: MemoryStorage, key = todayKey()): Stored => JSON.parse(storage.data[key] as string) as Stored;
 
@@ -211,6 +212,43 @@ describe('createTracker', () => {
     clock.t += 15000;
     tracker.tick();
     expect(tracker.pending().seconds.orders).toBe(30);
+    expect(tracker.pending().hours, 'the same active seconds, filed under the local hour').toEqual({ 10: 30 });
+  });
+
+  test('the hours follow the clock: idle and hidden time is not work', () => {
+    const { tracker, clock, state } = setup();
+    tracker.begin('orders');
+    clock.t = new Date(2026, 9, 9, 10, 59, 50).getTime();
+    tracker.input();
+    clock.t += 15000;
+    tracker.tick();
+    clock.t += IDLE_MS + 1000;
+    tracker.tick();
+    state.visible = false;
+    tracker.input();
+    clock.t += 15000;
+    tracker.tick();
+    // The first tick after the jump is capped at 30 seconds, like the screen time.
+    expect(tracker.pending().hours, 'only the active tick, in the hour it ended').toEqual({ 11: 30 });
+    expect(tracker.pending().seconds.orders).toBe(30);
+  });
+
+  test('the hours reach the stored day and the line, and survive a commit by another page', async () => {
+    const { tracker, clock, sent, storage } = setup();
+    tracker.setSession(READY);
+    tracker.begin('orders');
+    clock.t += 15000;
+    tracker.tick();
+    expect(stored(storage).acc.hours).toEqual({ 10: 15 });
+    // Another page (either app) adds to the same record: the hours stay.
+    const other = setup({ storage });
+    other.clock.t = clock.t;
+    other.tracker.begin('recipes');
+    other.tracker.setSession(READY);
+    expect(stored(storage).acc.hours).toEqual({ 10: 15 });
+    clock.t += SEND_EVERY_MS + 1000;
+    expect(await tracker.flush('timer')).toBe('sent');
+    expect(sent[0]?.payload.hours).toEqual({ 10: 15 });
   });
 
   test('offline seconds count while the page is visible and the network is down', () => {
@@ -279,6 +317,47 @@ describe('createTracker', () => {
     expect(sent[0]?.payload.appVersion).toBe('649');
     expect(sent[0]?.payload.screens.orders).toBe(1);
     expect(sent[0]?.payload && ('uid' in sent[0].payload || 'bakery' in sent[0].payload), 'the data layer adds those').toBe(false);
+  });
+
+  test('no answer about the release is not remembered: the next send asks again', async () => {
+    let answer: string | null = null;
+    let asks = 0;
+    const { tracker, clock, sent } = setup({ deps: { version: async () => { asks += 1; return answer; } } });
+    tracker.setSession(READY);
+    tracker.begin('orders');
+    tracker.setSession(READY);
+    clock.t += SEND_EVERY_MS + 1000;
+    expect(await tracker.flush('timer')).toBe('sent');
+    expect(sent[0]?.payload.appVersion).toBeNull();
+    answer = '741';
+    tracker.action('order-sent');
+    clock.t += SEND_EVERY_MS + 1000;
+    expect(await tracker.flush('timer')).toBe('sent');
+    expect(sent[1]?.payload.appVersion).toBe('741');
+    expect(asks, 'asked again after the first null').toBeGreaterThanOrEqual(2);
+  });
+
+  test('⚠️ a later send that cannot learn the release keeps the one already sent that day', async () => {
+    const storage = memoryStorage();
+    const first = setup({ storage });
+    first.tracker.setSession(READY);
+    first.tracker.begin('orders');
+    first.tracker.setSession(READY);
+    first.clock.t += SEND_EVERY_MS + 1000;
+    expect(await first.tracker.flush('timer')).toBe('sent');
+    expect(first.sent[0]?.payload.appVersion).toBe('649');
+    expect(stored(storage).appVersion, 'the record remembers the release it sent').toBe('649');
+    // The next page of the same day: its release is not known.
+    const next = setup({ storage, deps: { version: async () => null } });
+    next.clock.t = first.clock.t;
+    next.tracker.setSession(READY);
+    next.tracker.begin('catalogue');
+    next.tracker.setSession(READY);
+    expect(stored(storage).appVersion, 'a commit keeps it').toBe('649');
+    next.clock.t += SEND_EVERY_MS + 1000;
+    expect(await next.tracker.flush('timer')).toBe('sent');
+    expect(next.sent[0]?.payload.appVersion, 'the whole-line write must not wipe it').toBe('649');
+    expect(next.sent[0]?.payload.screens.catalogue).toBe(1);
   });
 
   test('a clean day is not sent again; a change makes it due once ten more minutes pass', async () => {

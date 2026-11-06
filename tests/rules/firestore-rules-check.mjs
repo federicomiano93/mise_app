@@ -3995,6 +3995,11 @@ async function usageStats() {
     deviceId: 'Dev6ce2Id3Abc4Def5Gh', firstMinute: 0, lastMinute: 1439, offlineSeconds: 86400,
   }), asAccount(SAM)));
   await expectAllowed('a tablet shared by a second person, same device and day', () => save(idFor(MAYA.uid), line(MAYA.uid, { kind: 'tablet' }), asAccount(MAYA)));
+  await expectAllowed('the active seconds of each hour', () => save(idFor(SAM.uid), line(SAM.uid, { hours: { '07': 1800, '08': 3600, 13: 45 } }), asAccount(SAM)));
+  await expectAllowed('all 24 hours, and an empty hours map', () => save(idFor(SAM.uid, 'Dev8ce2Id3Abc4Def5Gh'), line(SAM.uid, {
+    deviceId: 'Dev8ce2Id3Abc4Def5Gh', hours: Object.fromEntries(Array.from({ length: 24 }, (_, h) => [String(h).padStart(2, '0'), 60])),
+  }), asAccount(SAM)).then(r => (r.ok ? save(idFor(SAM.uid, 'Dev8ce2Id3Abc4Def5Gh'), line(SAM.uid, { deviceId: 'Dev8ce2Id3Abc4Def5Gh', hours: {} }), asAccount(SAM)) : r)));
+  await expectAllowed('a line from an older release, with no hours, still goes', () => save(idFor(SAM.uid), line(SAM.uid), asAccount(SAM)));
 
   await expectDenied('an id that names another uid', () => save(idFor(MAYA.uid, 'Dev7ce2Id3Abc4Def5Gh'), line(SAM.uid, { deviceId: 'Dev7ce2Id3Abc4Def5Gh' }), asAccount(SAM)));
   await expectDenied('a line signed with somebody else’s uid (and their id)', () => save(idFor(MAYA.uid, 'Dev7ce2Id3Abc4Def5Gh'), line(MAYA.uid, { deviceId: 'Dev7ce2Id3Abc4Def5Gh' }), asAccount(SAM)));
@@ -4013,6 +4018,10 @@ async function usageStats() {
   await expectDenied('21 loads', () => save(idFor(SAM.uid), line(SAM.uid, { loads: manyKeys(21) }), asAccount(SAM)));
   await expectDenied('21 load times', () => save(idFor(SAM.uid), line(SAM.uid, { loadMs: manyKeys(21) }), asAccount(SAM)));
   await expectDenied('a map that is a list', () => save(idFor(SAM.uid), line(SAM.uid, { routes: ['a>b'] }), asAccount(SAM)));
+  await expectDenied('an hour that does not exist', () => save(idFor(SAM.uid), line(SAM.uid, { hours: { 24: 60 } }), asAccount(SAM)));
+  await expectDenied('an hour written as one digit', () => save(idFor(SAM.uid), line(SAM.uid, { hours: { 7: 60 } }), asAccount(SAM)));
+  await expectDenied('something else hidden in the hours', () => save(idFor(SAM.uid), line(SAM.uid, { hours: { '08': 60, note: 1 } }), asAccount(SAM)));
+  await expectDenied('hours that are a list', () => save(idFor(SAM.uid), line(SAM.uid, { hours: [60, 60] }), asAccount(SAM)));
   await expectDenied('a minute that is not whole', () => save(idFor(SAM.uid), line(SAM.uid, { firstMinute: 90.5 }), asAccount(SAM)));
   await expectDenied('minute 1440', () => save(idFor(SAM.uid), line(SAM.uid, { lastMinute: 1440 }), asAccount(SAM)));
   await expectDenied('a negative minute', () => save(idFor(SAM.uid), line(SAM.uid, { firstMinute: -1 }), asAccount(SAM)));

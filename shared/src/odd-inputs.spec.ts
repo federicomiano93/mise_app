@@ -936,7 +936,7 @@ describe('usage-model: odd inputs', () => {
   const counts = (size: number, key: (i: number) => string): Record<string, number> =>
     Object.fromEntries(Array.from({ length: size }, (_, i) => [key(i), 1]));
   const emptyAcc = (): Record<string, unknown> => ({
-    screens: {}, seconds: {}, taps: {}, routes: {}, actions: {}, loads: {}, loadMs: {},
+    screens: {}, seconds: {}, taps: {}, routes: {}, actions: {}, loads: {}, loadMs: {}, hours: {},
     firstMinute: null, lastMinute: null, offlineSeconds: 0,
   });
   const nearlyFull = (): Record<string, unknown> => ({
@@ -944,17 +944,20 @@ describe('usage-model: odd inputs', () => {
     screens: counts(79, i => `p${i}`), seconds: counts(79, i => `p${i}`), taps: counts(79, i => `p${i}`),
     routes: counts(299, i => `s${i}>t${i}`), actions: counts(39, i => `act-${i}`),
     loads: counts(19, i => `pg${i}`), loadMs: counts(19, i => `pg${i}`),
+    // Every real hour: the cap (25) keeps one slot for 'other', which a real hour never reaches.
+    hours: counts(24, i => String(i).padStart(2, '0')),
   });
   const ACC_MAKERS: readonly (readonly [string, () => unknown])[] = [
     ['empty', emptyAcc],
     ['already counting', () => ({
       ...emptyAcc(), screens: { orders: 3, index: 1 }, seconds: { orders: 30 }, taps: { orders: 2 },
       routes: { 'index>orders': 2, other: 1 }, actions: { 'order-sent': 2 }, loads: { orders: 4 }, loadMs: { orders: 4000 },
+      hours: { '07': 600, '08': 3600 },
     })],
     ['every map one short of its cap', nearlyFull],
     ['every map one short of its cap, with other', () => {
       const acc = nearlyFull();
-      for (const name of ['screens', 'seconds', 'taps', 'routes', 'actions', 'loads', 'loadMs']) {
+      for (const name of ['screens', 'seconds', 'taps', 'routes', 'actions', 'loads', 'loadMs', 'hours']) {
         (acc[name] as Record<string, number>).other = 5;
       }
       return acc;
@@ -965,6 +968,7 @@ describe('usage-model: odd inputs', () => {
     ['damaged counts', () => ({
       ...emptyAcc(), screens: { orders: 'x', index: undefined, nul: null }, seconds: { orders: 'x' }, taps: { orders: NaN },
       routes: { 'a>b': 'x' }, actions: { 'order-sent': undefined }, loads: { orders: 'x' }, loadMs: { orders: null },
+      hours: { '08': 'x', '09': NaN },
     })],
     ['damaged minutes and offline', () => ({ ...emptyAcc(), firstMinute: 'x', lastMinute: undefined, offlineSeconds: 'lots' })],
     ['offline undefined', () => ({ ...emptyAcc(), offlineSeconds: undefined })],
@@ -1028,18 +1032,22 @@ describe('usage-model: odd inputs', () => {
     new Date(2026, 9, 9, 0, 0), new Date(2026, 9, 9, 0, 1), new Date('nope'), new Date(NaN), { getTime: () => 1 }, NOW,
     '2026-10-09', Object.create(Date.prototype), new Proxy(new Date(NOW), {})];
   agreeOnAcc('touchMinute', m.touchMinute, l.touchMinute, product(MOMENTS));
+  agreeOnAcc('addHour', m.addHour, l.addHour, product(MOMENTS, [...ODD, 15, 30, 14.5, 14.6, -5, 3600, 3601, 99999, '15', 1e309, 5n]));
 
   // What a stored accumulator could have turned into, one field at a time and a few together.
-  const MAP_NAMES = ['screens', 'seconds', 'taps', 'routes', 'actions', 'loads', 'loadMs'];
+  const MAP_NAMES = ['screens', 'seconds', 'taps', 'routes', 'actions', 'loads', 'loadMs', 'hours'];
   const MAP_VALUES: readonly unknown[] = [null, undefined, 'text', 5, true, [], ['orders'], [1, 2], {}, { orders: 1 }, { orders: '2' },
     { orders: -1 }, { orders: 0.4 }, { orders: 2.5 }, { orders: NaN }, { orders: Infinity }, { orders: null }, { orders: [3] },
     { 'a>b': 1, other: 2 }, { other: 3 }, { 'BAD KEY': 1 }, { 'new-key': 1, 'a>b': 1, 'order-sent': 1 }, { constructor: 1 },
     JSON.parse('{"__proto__":{"orders":1}}'), Object.create({ orders: 5 }), counts(100, i => `p${i}`),
-    counts(400, i => `s${i}>t${i}`), counts(50, i => `act-${i}`), counts(25, i => `pg${i}`)];
+    counts(400, i => `s${i}>t${i}`), counts(50, i => `act-${i}`), counts(25, i => `pg${i}`),
+    // Hours: two digits only, '00'…'23'; one digit, 24, a number key and 'other' are not hours.
+    { '00': 1, '23': 2 }, { '08': 4000 }, { 7: 5, 24: 5, '8': 1, '08 ': 1 }, { other: 3, '12': 60 }, counts(30, i => String(i).padStart(2, '0'))];
   const MINUTES: readonly unknown[] = [...ODD, 0, 1, 7, 480, 1020, 1439, 1440, -1, 100.5, '100', 570, 2 ** 31, new Date(0)];
   const GOOD_EXTRA = {
     screens: { orders: 2, index: 1 }, seconds: { orders: 30 }, taps: { orders: 2 }, routes: { 'index>orders': 2 },
     actions: { 'order-sent': 1 }, loads: { orders: 4 }, loadMs: { orders: 4000 }, firstMinute: 480, lastMinute: 1020, offlineSeconds: 20,
+    hours: { '08': 1800, '09': 3600 },
   };
   const DIRTY_EXTRA = {
     screens: { ok: 3, 'BAD KEY': 5, neg: -2, nan: 'x', frac: 2.6 }, routes: { 'a>b': 1, nothing: 4, other: 2 },
@@ -1081,7 +1089,8 @@ describe('usage-model: odd inputs', () => {
   const WHO = { deviceId: 'AbCdEfGhIjKlMnOpQrSt', dayKey: '20261009', kind: 'phone', appVersion: '649' };
   const ACC_VALUES: readonly unknown[] = [...ODD, 'junk', 42, ...ACC_MAKERS.map(([, make]) => make()), GOOD_EXTRA, DIRTY_EXTRA,
     ...MAP_NAMES.map(name => ({ [name]: { 'a>b': 1, orders: 2, 'order-sent': 3, other: 4, 'BAD KEY': 5 } })),
-    { ...GOOD_EXTRA, firstMinute: 1000, lastMinute: 100 }, { ...GOOD_EXTRA, offlineSeconds: 99999 }];
+    { ...GOOD_EXTRA, firstMinute: 1000, lastMinute: 100 }, { ...GOOD_EXTRA, offlineSeconds: 99999 },
+    { ...GOOD_EXTRA, hours: { '08': 7200, '09': 3600, '10': 3599 } }];
   agree('payloadOf', m.payloadOf, l.payloadOf, [
     ...product(ACC_VALUES, [undefined, {}, null, 'text', 5, WHO]),
     ...varying(WHO, { deviceId: DEVICE_IDS, dayKey: DAY_KEYS, kind: KIND_VALUES, appVersion: VERSIONS })
