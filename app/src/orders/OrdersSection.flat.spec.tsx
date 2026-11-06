@@ -342,7 +342,7 @@ describe('on the split', () => {
 });
 
 describe('the sticky head (L21)', () => {
-  it('publishes the head’s and the column names’ heights on the view, and ends its observers when the view goes', async () => {
+  it('measures the head and the column names for the sticky offsets, and ends its observers when the view goes', async () => {
     const watched: Array<{ node: Element | null; disconnected: boolean }> = [];
     class FakeObserver {
       private readonly mine = { node: null as Element | null, disconnected: false };
@@ -353,9 +353,9 @@ describe('the sticky head (L21)', () => {
     }
     vi.stubGlobal('ResizeObserver', FakeObserver);
     const view = await flat();
-    const root = screen.getByRole('main').querySelector('[data-flat-view]') as HTMLElement;
-    expect(root.style.getPropertyValue('--flat-head-h')).toBe('0px');
-    expect(root.style.getPropertyValue('--flat-cols-h')).toBe('0px');
+    // The column names stick under the head, the letters under both: their `top` is set inline from the measured heights.
+    expect(screen.getByText('Order').parentElement).toHaveStyle({ top: '0px' });
+    expect(screen.getAllByRole('heading', { level: 2 })[0]).toHaveStyle({ top: '0px' });
     expect(watched.filter(w => w.node !== null)).toHaveLength(2);
     await view.user.click(screen.getByRole('button', { name: 'Suppliers' }));
     await screen.findByRole('searchbox', { name: 'Search a supplier…' });

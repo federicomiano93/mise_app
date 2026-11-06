@@ -54,9 +54,9 @@ export function IngredientsList({ lens, ready, onSwap, onSend, onSettings, onHis
   // (decision T10) and must not hide.
   const group = useFoldedOpen(off.some(hasQty));
 
-  // The head's and the column names' heights, published as CSS variables on the view's root for the letters to stick under.
-  const headHeight = usePublishHeight('--flat-head-h');
-  const columnsHeight = usePublishHeight('--flat-cols-h');
+  // The head's and the column names' heights: the column names stick right under the head, the letters right under the column names.
+  const headHeight = useHeight();
+  const columnsHeight = useHeight();
 
   // Nothing typed anywhere: there is no «just what I'm ordering» to offer — unless it is on (it must be possible to leave it).
   const showFilter = ready && (ordering > 0 || frozen !== null);
@@ -106,7 +106,7 @@ export function IngredientsList({ lens, ready, onSwap, onSend, onSettings, onHis
   const nothingShown = view.rows.length === 0 && off.length === 0;
 
   return (
-    <div className={styles.root} data-flat-view="">
+    <div className={styles.root}>
       <OrdersHead
         view="ingredients"
         label={t('ord.searchAnIngredient')}
@@ -118,7 +118,7 @@ export function IngredientsList({ lens, ready, onSwap, onSend, onSettings, onHis
         onSend={onSend}
         onSettings={onSettings}
         onHistory={onHistory}
-        headRef={headHeight}
+        headRef={headHeight.ref}
       >
         {showFilter ? (
           <OrdersFilter
@@ -143,7 +143,7 @@ export function IngredientsList({ lens, ready, onSwap, onSend, onSettings, onHis
           ) : (
             <div className={styles.sheet}>
               {view.rows.length === 0 ? null : (
-                <div ref={columnsHeight} className={styles.columns} data-stock={showStock}>
+                <div ref={columnsHeight.ref} className={styles.columns} data-stock={showStock} style={{ top: headHeight.px }}>
                   <span />
                   <span className={styles.columnName}>{t('ord.field.order')}</span>
                   {showStock ? <span className={styles.columnName}>{t('ord.field.stock')}</span> : null}
@@ -151,7 +151,7 @@ export function IngredientsList({ lens, ready, onSwap, onSend, onSettings, onHis
               )}
               {runs.map(run => (
                 <div key={run.key} className={styles.run}>
-                  <h2 className={styles.letter}>{run.letter}</h2>
+                  <h2 className={styles.letter} style={{ top: headHeight.px + columnsHeight.px }}>{run.letter}</h2>
                   <ul className={styles.rows}>{run.lines.map(lineOf)}</ul>
                 </div>
               ))}
@@ -170,21 +170,21 @@ export function IngredientsList({ lens, ready, onSwap, onSend, onSettings, onHis
   );
 }
 
-// A box's height, kept current as it changes and published as a CSS custom property on the view's root (the nearest ancestor marked
-// `data-flat-view`), where the sticky letters and column names read it. The observer is ended when the box goes (L21: it holds the
-// node it watches, so one left running would pin a dead view and keep writing the variables of a screen that is gone).
-function usePublishHeight(name: string): (node: HTMLElement | null) => void {
+// A box's height in CSS pixels, kept current as it changes (the pattern of SupplierOrderScreen). The observer is ended when the box goes
+// (L21: it holds the node it watches, so one left running would pin a dead view and keep setting state of a screen that is gone).
+function useHeight(): { ref: (node: HTMLElement | null) => void; px: number } {
+  const [px, setPx] = useState(0);
   const observer = useRef<ResizeObserver | null>(null);
-  return useCallback((node: HTMLElement | null) => {
+  const ref = useCallback((node: HTMLElement | null) => {
     observer.current?.disconnect();
     observer.current = null;
     if (node === null) return;
-    const root = node.closest<HTMLElement>('[data-flat-view]');
-    const measure = () => { root?.style.setProperty(name, `${node.getBoundingClientRect().height}px`); };
+    const measure = () => { setPx(node.getBoundingClientRect().height); };
     measure();
     if (typeof ResizeObserver === 'function') {
       observer.current = new ResizeObserver(measure);
       observer.current.observe(node);
     }
-  }, [name]);
+  }, []);
+  return { ref, px };
 }

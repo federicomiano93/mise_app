@@ -31,12 +31,11 @@
   background: var(--surface);
 }
 
-/* ⚠️ THE COLUMN NAMES STICK RIGHT UNDER THE HEAD, and the letters right under them: `--flat-head-h` and `--flat-cols-h` are the
-   heights measured on the page (IngredientsList.tsx publishes them on the view's root; tokens.css holds the 0 they start from). The same columns as a
-   row (OrderLine.module.css). */
+/* ⚠️ THE COLUMN NAMES STICK RIGHT UNDER THE HEAD, and the letters right under them: their `top` is the measured height of what is above,
+   set inline by IngredientsList.tsx. The same columns as a row (OrderLine.module.css). */
 .columns {
   position: sticky;
-  top: var(--flat-head-h);
+  top: 0;
   z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr) 104px 64px;
@@ -73,7 +72,7 @@
 
 .letter {
   position: sticky;
-  top: calc(var(--flat-head-h) + var(--flat-cols-h));
+  top: 0;
   z-index: 1;
   margin: 0;
   padding: var(--s1) var(--s3);
