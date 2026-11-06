@@ -8,7 +8,7 @@
 // app/src/suppliers/ordersDoors.spec.ts pins the agreement against suppliersPath.ts and suppliersNav.ts.
 //
 // ⚠️ THE STATES CARRY `keepFocus` (shell/Page.tsx KEEP_FOCUS) so the page leaves the focus alone and the card puts it on its own
-// title, `fromOrders` (what the door says about itself; nothing reads it yet) and the Suppliers' own keys: `fromList` + `tab`
+// title, and the Suppliers' own keys: `fromList` + `tab`
 // (the card is opened from a list) or `fromSupplierScreen` (the card is opened from that supplier's screen).
 
 const SUPPLIERS = '/suppliers';
@@ -35,7 +35,7 @@ export function newIngredientAddress(supplierId: string | null): string {
 export const supplierScreenAddress = (id: string): string => `${SUPPLIERS}/supplier/${encodeURIComponent(id)}`;
 
 // A door that behaves like a row of the Suppliers list: Back is the browser's Back, and `tab` is the list beside the card.
-export const fromOrdersList = (tab: RecordsTab) => ({ keepFocus: true, fromList: true, fromOrders: true, tab }) as const;
+export const fromOrdersList = (tab: RecordsTab) => ({ keepFocus: true, fromList: true, tab }) as const;
 
 // A door that behaves like a button on that supplier's own screen («What they sell», «Add ingredient»).
-export const fromOrdersSupplier = (supplierId: string) => ({ keepFocus: true, fromSupplierScreen: supplierId, fromOrders: true }) as const;
+export const fromOrdersSupplier = (supplierId: string) => ({ keepFocus: true, fromSupplierScreen: supplierId }) as const;

@@ -216,7 +216,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
   );
   useEffect(() => { forgetTrip(); }, []);
   const cardDoors = {
-    // The very gate of the Suppliers section, asked on every render so it follows the venue's switch live.
+    // The same question as the Suppliers section's gate, asked on every render so it follows the venue's switch live — except that with no
+    // venue document it says no (the safe direction: a door that is not drawn cannot bounce).
     may: mayEditRecords(venue, canManage),
     open: (door: CardDoor) => {
       carryTrip({

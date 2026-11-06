@@ -17,12 +17,12 @@ describe('records-link addresses', () => {
 
 describe('records-link states', () => {
   it('says «came from a list» with the tab, keeping the focus where the card puts it', () => {
-    expect(fromOrdersList('ingredients')).toEqual({ keepFocus: true, fromList: true, fromOrders: true, tab: 'ingredients' });
+    expect(fromOrdersList('ingredients')).toEqual({ keepFocus: true, fromList: true, tab: 'ingredients' });
     expect(fromOrdersList('suppliers').tab).toBe('suppliers');
     expect(fromOrdersList('packaging').tab).toBe('packaging');
   });
 
   it('says «came from this supplier’s screen»', () => {
-    expect(fromOrdersSupplier('s-alp')).toEqual({ keepFocus: true, fromSupplierScreen: 's-alp', fromOrders: true });
+    expect(fromOrdersSupplier('s-alp')).toEqual({ keepFocus: true, fromSupplierScreen: 's-alp' });
   });
 });
