@@ -36,7 +36,14 @@ import { normalizeProduct, productionCost, unitsPerBatch, ingredientLineCost } f
 //   'no-price'    — no price (not linked, no price on the ingredient, the ingredient gone)
 //   'not-weighed' — in pieces or spoons, which a kilo cannot be cut into
 //   'no-recipe'   — a recipe inside that has no price of its own (gone, a loop, too deep)
-export const PER_KG_REASONS = Object.freeze(['no-price', 'not-weighed', 'no-recipe']);
+//   'no-piece-weight' — priced by the piece, used by weight, and nobody said what one weighs
+//   'no-piece-price'  — counted in pieces, and neither a price per piece nor a piece weight
+// ⚠️ THE LAST TWO ARE NOT «NO PRICE»: the ingredient HAS one, and saying otherwise sends a
+// person to type a price that is already there. The same split as the card's own lines.
+export const PER_KG_REASONS = Object.freeze(['no-price', 'not-weighed', 'no-recipe', 'no-piece-weight', 'no-piece-price']);
+
+// The card's reason for an ingredient line (ingredientLineCost) → this block's.
+const LINE_REASONS = { 'no-ingredient-price': 'no-price', 'no-piece-weight': 'no-piece-weight', 'no-piece-price': 'no-piece-price' };
 
 const RECIPE_REASONS = new Set(['missing-recipe', 'sub-not-costable', 'cycle', 'too-deep']);
 
@@ -72,8 +79,10 @@ function labelKey(label) {
 //            its cost and prices are null; its kg is set when it has a weight.
 //            ONE ROW PER INGREDIENT: flour in the dough and flour in the cream is one
 //            line, its two weights and costs added together — read like a lab sheet.
-//   partial — something on the product has no price: the total is too LOW, and the
-//            screen must say so, exactly as the card does
+//   partial — something on the product has no price, exactly as the card says it. ⚠️ NOT
+//            «too low» here: a row with no price adds neither cost nor weight, so a kilo
+//            can read too HIGH (water not linked) as well as too low — the screen says
+//            only that the figure is not exact yet
 //   packagingLeftOut — the product has packaging but not yet a way of selling it, so its
 //            share of a kilo cannot be known: left out, as the card leaves it out
 //   lossy  — a recipe opened here loses weight in the oven, so its ingredients weigh
@@ -158,13 +167,14 @@ export function costPerKg(product, tables = {}) {
     if (component.kind === 'ingredient') {
       const ingredient = lookup(tables.ingredients, component.ingredientId);
       if (!ingredient) continue; // gone: the card already says so, and it has no name
+      if (!(component.qty > 0)) continue; // a line nobody has given an amount yet
       const line = ingredientLineCost(component, ingredient);
       const key = `ing:${component.ingredientId}`;
       if (component.unit === 'pcs') {
         const pcs = component.qty * perKg;
         const each = ingredient.priceUnit === 'pcs' ? positiveNumber(ingredient.pricePerUnit) : null;
         if (line.cost === null) {
-          uncounted(`${key}:pcs`, ingredientDisplayName(ingredient), null, 'no-price', 'piece', pcs);
+          uncounted(`${key}:pcs`, ingredientDisplayName(ingredient), null, LINE_REASONS[line.reason] || 'no-price', 'piece', pcs);
           continue;
         }
         add({
@@ -177,7 +187,7 @@ export function costPerKg(product, tables = {}) {
       }
       const kg = (component.unit === 'kg' ? component.qty : component.qty / 1000) * perKg;
       if (line.cost === null) {
-        uncounted(key, ingredientDisplayName(ingredient), kg > 0 ? kg : null, 'no-price');
+        uncounted(key, ingredientDisplayName(ingredient), kg > 0 ? kg : null, LINE_REASONS[line.reason] || 'no-price');
         continue;
       }
       ingredientRow(ingredient, component.ingredientId, line.kg * perKg, line.cost * perKg);
@@ -204,11 +214,13 @@ export function costPerKg(product, tables = {}) {
     const unitsPerKg = units * perKg;
     for (const item of p.packaging) {
       const ingredient = lookup(tables.ingredients, item.ingredientId);
-      if (!ingredient) continue;
+      if (!ingredient || !(item.qtyPcs > 0)) continue;
       const pcs = item.qtyPcs * unitsPerKg;
       const each = ingredient.priceUnit === 'pcs' ? positiveNumber(ingredient.pricePerUnit) : null;
       if (each === null) {
-        uncounted(`pack:${item.ingredientId}`, ingredientDisplayName(ingredient), null, 'no-price', 'packaging', pcs);
+        // Bought by the kilo, or not priced at all — the card's two packaging answers.
+        const reason = positiveNumber(ingredient.pricePerUnit) === null ? 'no-price' : 'no-piece-price';
+        uncounted(`pack:${item.ingredientId}`, ingredientDisplayName(ingredient), null, reason, 'packaging', pcs);
         continue;
       }
       add({

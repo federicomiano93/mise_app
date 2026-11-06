@@ -248,7 +248,7 @@ test('packaging: so many pieces per kilo, once the way of selling says how many 
   assert.equal(notSold.total, 3.2);
 
   const byWeight = costPerKg(product({ packaging: [{ ingredientId: 'FILM', qtyPcs: 1 }] }), TABLES);
-  assert.equal(named(byWeight, 'Film').reason, 'no-price');
+  assert.equal(named(byWeight, 'Film').reason, 'no-piece-price');
 });
 
 test('nothing costed, or nothing weighed: no total — never a kilo that reads as free', () => {
@@ -266,4 +266,53 @@ test('the weighings typed on the card count: the tables it is given are the tabl
   const result = costPerKg(product(), live);
   near(sumOf(result.rows, 'kg'), 1.25, 1e-6);
   near(result.total, 4);
+});
+
+test('an ingredient that HAS a price is never called «no price»: the piece weight or price is named', () => {
+  const ing = {
+    ...INGREDIENTS,
+    TOPPING: { id: 'TOPPING', name: 'Topping', priceUnit: 'pcs', pricePerUnit: 0.2 },
+    NUT: { id: 'NUT', name: 'Nut', priceUnit: 'kg', pricePerUnit: 12 },
+  };
+  const result = costPerKg(product({ components: [
+    { recipeId: 'DOUGH', qtyKg: 10 },
+    { kind: 'ingredient', ingredientId: 'TOPPING', qty: 50, unit: 'g' },
+    { kind: 'ingredient', ingredientId: 'NUT', qty: 5, unit: 'pcs' },
+  ], packaging: [{ ingredientId: 'FILM', qtyPcs: 1 }] }), { ...TABLES, ingredients: ing });
+  assert.equal(named(result, 'Topping').reason, 'no-piece-weight');
+  assert.equal(named(result, 'Nut').reason, 'no-piece-price');
+  assert.equal(named(result, 'Film').reason, 'no-piece-price');
+});
+
+test('a line with no amount yet is not a row', () => {
+  const result = costPerKg(product({ components: [
+    { recipeId: 'DOUGH', qtyKg: 10 },
+    { kind: 'ingredient', ingredientId: 'SUGAR', qty: 0, unit: 'g' },
+  ], packaging: [{ ingredientId: 'BAG', qtyPcs: 0 }] }), TABLES);
+  assert.equal(named(result, 'Icing sugar'), undefined);
+  assert.equal(named(result, 'Paper bag'), undefined);
+});
+
+test('a chain past the depth limit ends in a row not counted, and the total is still the card\'s', () => {
+  const chain = {};
+  for (let i = 1; i <= 5; i++) {
+    chain[`C${i}`] = { id: `C${i}`, name: `Level ${i}`, lossPct: 10, ingredients: [
+      { label: 'Flour', grams: 500, unit: 'g', kind: 'ingredient', refId: 'FLOUR' },
+      ...(i < 5 ? [{ label: `Level ${i + 1}`, grams: 500, unit: 'g', kind: 'recipe', refId: `C${i + 1}` }] : []),
+    ] };
+  }
+  const tables = { ...TABLES, recipes: { ...TABLES.recipes, ...chain } };
+  const p = product({ components: [{ recipeId: 'C1', qtyKg: 3 }] });
+  const result = costPerKg(p, tables);
+  assert.equal(named(result, 'Level 5').reason, 'no-recipe');
+  const card = productionCost(p, tables);
+  near(result.total, card.batchCost / card.batch.kg);
+  near(sumOf(counted(result), 'cost'), result.total);
+});
+
+test('Map tables work as well as plain objects', () => {
+  const tables = { ingredients: new Map(Object.entries(INGREDIENTS)), recipes: new Map(Object.entries(TABLES.recipes)) };
+  const result = costPerKg(product({ components: [{ recipeId: 'FILLED', qtyKg: 4 }] }), tables);
+  near(named(result, 'Flour').kg, 0.6, 1e-6);
+  near(sumOf(counted(result), 'cost'), result.total);
 });
