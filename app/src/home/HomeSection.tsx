@@ -4,6 +4,7 @@ import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { Page } from '../shell/Page';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
+import { AwayBand } from './AwayBand';
 import { TodoCard } from './TodoCard';
 import { TodosProvider, useTodosStore } from './TodosContext';
 import styles from './HomeSection.module.css';
@@ -26,6 +27,9 @@ export default function HomeSection() {
         <StatusMessageProvider>
           <StoreMessages />
           <div className={styles.column}>
+            <PartBoundary>
+              <AwayBand />
+            </PartBoundary>
             <PartBoundary>
               <TodoCard />
             </PartBoundary>

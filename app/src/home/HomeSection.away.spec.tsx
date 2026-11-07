@@ -1,0 +1,96 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { screen, waitFor, within } from '@testing-library/react';
+import { fakeSettingsSource } from '../testing/fakeSettingsSource';
+import type { FakeSettingsSource } from '../testing/fakeSettingsSource';
+import { renderApp } from '../testing/renderApp';
+
+// Saturday 7 November 2026, 09:00. Only Date is faked: user-event and the router keep their real timers.
+const NOW = new Date(2026, 10, 7, 9, 0, 0);
+
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(NOW);
+  vi.spyOn(console, 'error').mockImplementation(() => undefined);
+});
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+const main = () => within(screen.getByRole('main'));
+
+async function open(seed: Parameters<typeof fakeSettingsSource>[0] = {}, options: NonNullable<Parameters<typeof renderApp>[1]> = {}) {
+  const source: FakeSettingsSource = fakeSettingsSource(seed);
+  const view = renderApp('/home', { ...options, data: { settings: () => source } });
+  await screen.findByRole('heading', { level: 2, name: options.lang === 'it' ? 'Da fare' : 'To do' });
+  await waitFor(() => { expect(source.readMyAway).toHaveBeenCalled(); });
+  return { ...view, source };
+}
+
+const band = () => main().findByRole('button', { name: /On holiday until 16 November/ });
+
+describe('Home: the holiday band', () => {
+  it('is not there when the person is not on holiday', async () => {
+    await open();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(main().queryByText(/On holiday until/)).not.toBeInTheDocument();
+  });
+
+  it('is not there when the holiday is over, the last day included', async () => {
+    await open({ away: { until: '2026-11-06' } });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(main().queryByText(/On holiday until/)).not.toBeInTheDocument();
+  });
+
+  it('is a BUTTON with a bold line and the sentence, above the «To do» card', async () => {
+    await open({ away: { until: '2026-11-16' } });
+    const button = await band();
+    expect(button.tagName).toBe('BUTTON');
+    expect(within(button).getByText('On holiday until 16 November')).toBeInTheDocument();
+    expect(within(button).getByText('Your phone is not alerting you. Tap here if you are already back.')).toBeInTheDocument();
+    const todo = main().getByRole('heading', { level: 2, name: 'To do' });
+    expect(button.compareDocumentPosition(todo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('is there for an employee too', async () => {
+    await open({ away: { until: '2026-11-16' } }, { session: { role: 'staff', canManage: false, isOwner: false } });
+    expect(await band()).toBeInTheDocument();
+  });
+
+  it('asks «Back already?» when tapped, and ends the holiday on «I am back»', async () => {
+    const { user, source } = await open({ away: { until: '2026-11-16' } });
+    await user.click(await band());
+
+    const question = await screen.findByRole('alertdialog', { name: 'Back already?' });
+    expect(within(question).getByText('Your holiday runs to 16 November. Ending it now turns your notifications back on.')).toBeInTheDocument();
+    await user.click(within(question).getByRole('button', { name: 'I am back' }));
+
+    expect(source.saveAway).toHaveBeenCalledWith('u1', '');
+    await waitFor(() => { expect(main().queryByText(/On holiday until/)).not.toBeInTheDocument(); });
+  });
+
+  it('keeps the holiday on Cancel', async () => {
+    const { user, source } = await open({ away: { until: '2026-11-16' } });
+    await user.click(await band());
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+    expect(source.saveAway).not.toHaveBeenCalled();
+    expect(await band()).toBeInTheDocument();
+  });
+
+  it('says «Not saved» and keeps the band when the write is refused', async () => {
+    const { user, source } = await open({ away: { until: '2026-11-16' } });
+    source.refuseWith = Object.assign(new Error('no'), { code: 'permission-denied' });
+    await user.click(await band());
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'I am back' }));
+
+    expect(await screen.findByText('Not saved — check the connection and try again.')).toBeInTheDocument();
+    expect(await band()).toBeInTheDocument();
+  });
+
+  it('speaks Italian', async () => {
+    await open({ away: { until: '2026-11-16' } }, { lang: 'it' });
+    const button = await main().findByRole('button', { name: /In ferie fino al 16 novembre/ });
+    expect(within(button).getByText('Il telefono non ti avvisa. Tocca qui se sei già tornato.')).toBeInTheDocument();
+  });
+});
