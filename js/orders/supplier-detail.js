@@ -100,6 +100,9 @@ export function buildSupplierDetail(supplier, ctx) {
       titleWrap,
       el('span', { class: 'app-header-slot' }, [addBtn]),
     ]),
+    // This screen's own status line (orders-main statusElement): it covers the page, so a save
+    // error or «Salvo la quantità…» written to the page's line underneath was never seen.
+    el('p', { class: 'orders-status supplier-detail-status', role: 'status', hidden: true }),
     body,
     summaryBar,
     live,

@@ -993,7 +993,11 @@ onSession((s) => {
   else if (view === 'detail' && activeDetail && currentRecipe) {
     const latest = getRecipes().find(r => r.id === currentRecipe.id) || currentRecipe;
     currentRecipe = latest;
-    activeDetail = renderDetail({ recipe: latest, app });
+    // The rows split in two stay split, and the old screen lets go of its listeners.
+    const split = activeDetail.splitRows?.() || [];
+    activeDetail.destroy?.();
+    document.body.classList.remove('cat-zoom-lock');
+    activeDetail = renderDetail({ recipe: latest, app, split });
     showDetailNode(latest, activeDetail.root);
     // The list column is on screen beside it: its header follows the session as well.
     if (splitOn) setListHeader();
@@ -1039,8 +1043,12 @@ watchTablet((isTablet) => {
   else if (view === 'detail' && currentRecipe && isTablet !== splitOn) {
     const latest = getRecipes().find(r => r.id === currentRecipe.id) || currentRecipe;
     currentRecipe = latest;
-    if (isTablet) showDetailTablet(latest);
-    else showDetailPhone(latest);
+    // A rotation keeps the rows split in two, and the old screen lets go of its listeners.
+    const split = activeDetail?.splitRows?.() || [];
+    activeDetail?.destroy?.();
+    document.body.classList.remove('cat-zoom-lock');
+    if (isTablet) showDetailTablet(latest, split);
+    else showDetailPhone(latest, split);
   }
 });
 

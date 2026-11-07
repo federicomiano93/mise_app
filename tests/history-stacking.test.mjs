@@ -66,7 +66,7 @@ test('a status message goes to the topmost open surface: editor, then History, t
   const historyAt = fn.indexOf("'history-status'");
   const pageAt = fn.indexOf("'orders-status'");
   assert.ok(editorAt > 0 && historyAt > editorAt && pageAt > historyAt, 'asked in that order');
-  assert.match(main, /function setStatus\(text, kind, autoHideMs\) \{\s*const elStatus = statusElement\(\);/);
+  assert.match(main, /function setStatus\(text, kind, autoHideMs\) \{\s*const target = statusElement\(\);/);
   assert.match(read('orders.html'), /<p class="orders-status" id="history-status" role="status" hidden><\/p>/);
   assert.match(read('js/orders/history-edit.js'), /const status = el\('p', \{ class: 'orders-status', role: 'status' \}\);/);
 });

@@ -637,7 +637,7 @@ body.cat-zoom-lock { overflow: hidden; }
 /* 44px hit area (the ui-check driver flags smaller); the negative margin keeps the head's height
    close to the other cards'. */
 .cat-zoom-open { flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: -6px -6px -6px 0; padding: 0; border: 1px solid var(--cat-border); border-radius: 50%; background: var(--cat-surface); color: var(--cat-text-2); cursor: pointer; transition: transform .06s ease; }
-.cat-zoom-open:hover { color: var(--cat-text); }
+@media (hover: hover) { .cat-zoom-open:hover { color: var(--cat-text); } }
 .cat-zoom-open:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
 .cat-zoom-open:active { transform: scale(.97); }
 

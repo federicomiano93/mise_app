@@ -412,6 +412,9 @@
    long supplier name that wraps stays centred instead of drifting half a button to the
    right (18px at 296px, measured 30 Sep 2026). At 296 that still leaves the title 176px. */
 .supplier-detail > .app-header { --app-header-side: 36px; }
+/* The screen's own status line (a save error, «Salvo la quantità…»): between the header and the
+   rows, never scrolled away, at the page's usual gutter. */
+.supplier-detail > .supplier-detail-status { flex: none; margin: 8px var(--app-gutter, 16px) 0; }
 .supplier-detail-body {
   flex: 1;
   min-height: 0;

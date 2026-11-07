@@ -559,24 +559,35 @@ export function flushDraftSave() {
 // emulator (7 Nov 2026), Orders went into the browser's back-forward cache FROZEN with that queue,
 // the Recipe book's own Firestore did not take it over, and the 3 had not reached the server 10 s
 // later. Never longer than `ms`: past that the note still answers for it, as before. Resolves
-// 'saved' when the server has everything, 'refused' when it said no (reported on screen like any
-// refused autosave — and NOT kept by the note, so the page must stay), 'late' on the time limit.
-const answered = () => !waiting && flights.length === 0;
+// 'saved' when the server has everything, 'refused' when something this device typed is still
+// unsent once every write has been answered (NOT kept by the note, so the page must ask before it
+// goes), 'late' on the time limit.
+//
+// ⚠️ WHAT IS UNSENT IS `pending`, NOT `refused`. A refused write hands its fields back to `pending`
+// and arms nothing; `refused` empties on the next success even when that success carried none of
+// those fields (sendPending leaves out what is already in the air). So: every call sends ALL that
+// is pending — a second tap on Back retries a refused value — and the answer is read from `pending`.
+const settled = () => !waiting && flights.length === 0;
+const unsent = () => !isEmpty(pending.entries) || !isEmpty(pending.days);
 function wakeLeavers() { leaveWaiters.slice().forEach(check => check()); }
 
 export function sendBeforeLeaving(ms = 8000) {
   // Through autosave, so a refusal shows the same save error as every other one.
-  if (waiting) autosave();
-  const outcome = () => (refused.length === 0 ? 'saved' : 'refused');
-  if (answered()) return Promise.resolve(outcome());
+  if (waiting || unsent()) autosave();
+  const outcome = () => (unsent() ? 'refused' : 'saved');
+  if (settled()) return Promise.resolve(outcome());
   return new Promise(resolve => {
-    const done = ok => {
+    const done = result => {
       clearTimeout(timer);
+      clearInterval(poll);
       leaveWaiters = leaveWaiters.filter(w => w !== check);
-      resolve(ok);
+      resolve(result);
     };
-    const check = () => { if (answered()) done(outcome()); };
+    const check = () => { if (settled()) done(outcome()); };
     const timer = setTimeout(() => done('late'), ms);
+    // A landing wakes the check at once; the poll covers the debounce re-armed by a keystroke during
+    // the wait that then sends nothing (same value as one in the air), which no landing announces.
+    const poll = setInterval(check, 200);
     leaveWaiters.push(check);
   });
 }

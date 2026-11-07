@@ -824,9 +824,6 @@ function closeSupplier() {
   // list row instead, or a keyboard user is dropped on the page body (leaveSupplier does the same).
   if (hadSummary && id) document.getElementById(`open-${id}`)?.focus();
 }
-// Back on the order screen: close it and hand focus back to the row that opened it — the
-// summary sheet's own pattern (closeSummary). Full screen covers the list, so without this
-// a keyboard or screen-reader user would be dropped at the top of the page.
 // Whether the page before this one, in this tab, is the page `href` names (path only: a referrer
 // never carries the #fragment).
 function cameFromPage(href) {
@@ -838,6 +835,33 @@ function cameFromPage(href) {
   } catch (e) { return false; }
 }
 
+// Still on the supplier screen that was opened for the recipe, with nothing over it: the only state
+// in which a delayed Back may still take the person away.
+function stillLeavingFrom(openerId) {
+  return state.openSupplier === openerId && openedFromRecipe === openerId
+    && state.summaryOverSupplier !== true
+    && !document.querySelector('.missing-overlay, .app-dialog')
+    && (document.getElementById('history-overlay')?.hidden ?? true);
+}
+
+// ⚠️ BACK IN THE HISTORY when the page before this one is the Recipe book: the recipe gave its own
+// entry the recipe's address before coming here (catalogue-main orderIngredient), so that entry shows
+// the recipe again, and the phone's own Back from there leaves the Recipe book as usual. Going
+// FORWARD to the recipe instead left that entry behind it, and the phone's Back from the recipe
+// showed the same recipe a second time. Anything else (Orders opened in a new tab, the address
+// typed) goes forward, replacing this page. ⚠️ So does a save still unanswered after the wait
+// ('late', offline): back in the history, Orders would stay frozen in the browser's cache holding
+// that write; replaced, it is let go, and the Recipe book's Firestore sends the write from this
+// device's queue.
+function goToRecipe(toRecipe, result) {
+  closeSupplier();
+  if (result !== 'late' && cameFromPage(toRecipe)) history.back();
+  else window.location.replace(toRecipe);
+}
+
+// Back on the order screen: close it and hand focus back to the row that opened it — the
+// summary sheet's own pattern (closeSummary). Full screen covers the list, so without this
+// a keyboard or screen-reader user would be dropped at the top of the page.
 function leaveSupplier() {
   const openerId = state.openSupplier;
   // Opened for an ingredient of a recipe: Back returns to that recipe, never leaving Orders behind
@@ -849,28 +873,32 @@ function leaveSupplier() {
     // ⚠️ A quantity typed a moment ago reaches the SERVER before the page goes (draft.js
     // sendBeforeLeaving): leaving at once kept it in this device's note only, sent the next time
     // Orders opens here — perhaps never, from the recipe screen. Usually a moment; at most 8 s
-    // (offline, or a freshly opened page), with a word on screen meanwhile.
-    setStatus(t('orders.fromRecipe.saving'), undefined, 9000);
-    sendBeforeLeaving().then(result => {
+    // (offline, or a freshly opened page), said on the supplier screen's own line meanwhile.
+    const saving = t('orders.fromRecipe.saving');
+    setStatus(saving, undefined, 9000);
+    sendBeforeLeaving().then(async result => {
+      clearStatusIf(saving);
+      // ⚠️ THE SCREEN STAYED USABLE DURING THE WAIT: somebody who opened the summary, tapped
+      // «Ordine fatto» or another supplier meanwhile is in the middle of something — never yanked
+      // away from it, least of all with an archive still in the air.
+      if (!stillLeavingFrom(openerId)) { leavingForRecipe = false; return; }
+      // ⚠️ REFUSED: ASK. Nothing else holds that quantity (the device's note leaves a refused value
+      // out), so leaving is a choice with a loss, never silent. «Resta qui» keeps the value in its
+      // box, and the next Back sends it again.
+      if (result === 'refused') {
+        const leave = await confirmDialog({
+          title: t('orders.fromRecipe.refusedTitle'),
+          message: t('orders.fromRecipe.refusedMessage'),
+          okLabel: t('orders.fromRecipe.leaveAnyway'),
+          cancelLabel: t('unsent.stay'),
+          danger: true,
+        });
+        if (!leave || !stillLeavingFrom(openerId)) { leavingForRecipe = false; return; }
+      }
       // Reset before the page goes: Orders may come back from the browser's cache (Forward), and
       // its Back must work there.
       leavingForRecipe = false;
-      clearStatusIf(t('orders.fromRecipe.saving'));
-      // ⚠️ REFUSED: STAY. The save error is on screen (setDraftSaveReporter), the quantity is still
-      // in its box, and nothing else holds it — the device's note leaves a refused value out.
-      if (result === 'refused') return;
-      closeSupplier();
-      // ⚠️ BACK IN THE HISTORY when the page before this one is the Recipe book: the recipe gave
-      // its own entry the recipe's address before coming here (catalogue-main orderIngredient), so
-      // that entry shows the recipe again, and the phone's own Back from there leaves the Recipe
-      // book as usual. Going FORWARD to the recipe instead left that entry behind it, and the
-      // phone's Back from the recipe showed the same recipe a second time. Anything else (Orders
-      // opened in a new tab, the address typed) goes forward, replacing this page. ⚠️ So does a
-      // save still unanswered after the wait ('late', offline): back in the history, Orders would
-      // stay frozen in the browser's cache holding that write; replaced, it is let go, and the
-      // Recipe book's Firestore sends the write from this device's queue.
-      if (result === 'saved' && cameFromPage(toRecipe)) history.back();
-      else window.location.replace(toRecipe);
+      goToRecipe(toRecipe, result);
     });
     return;
   }
@@ -1027,6 +1055,17 @@ function renderOpenSupplier() {
   const built = buildSupplierDetail(supplier, ctx);
   detailView = { ...built, id: supplier.id };
   document.body.appendChild(built.overlay);
+  // An ERROR already on the page's line (a save refused a moment ago, a stream lost) is repeated on
+  // the new screen's own line, which would otherwise start empty over it. Errors only: they stay
+  // until cleared by name (clearStatusIf clears both lines), where a passing word's timer would
+  // hide only the page's copy.
+  const pageLine = document.getElementById('orders-status');
+  const mirror = supplierStatusMirror(pageLine);
+  if (pageLine && mirror && !pageLine.hidden && pageLine.classList.contains('error')) {
+    mirror.textContent = pageLine.textContent;
+    mirror.className = pageLine.className + ' supplier-detail-status';
+    mirror.hidden = false;
+  }
   // Into the screen that now covers everything, on its Back — as the summary sheet does.
   // Only on a NEW screen: a repaint (above) must never pull focus out of a box mid-typing.
   built.overlay.querySelector('.orders-icon-btn')?.focus({ preventScroll: true });
@@ -3005,19 +3044,33 @@ function statusElement() {
   return document.getElementById('orders-status');
 }
 
+// ⚠️ A SUPPLIER'S SCREEN COVERS THE PAGE TOO, and it is where quantities are typed: a save error
+// written only to the page's line was never seen there. Its own line REPEATS the page's message
+// rather than replacing it, so a lasting one (a stream lost) is still on the page once the screen
+// closes, exactly as before.
+function supplierStatusMirror(target) {
+  if (target !== document.getElementById('orders-status')) return null;
+  return document.querySelector('.supplier-detail > .supplier-detail-status');
+}
+
 // Set the status line. With autoHideMs, the line hides itself after that delay,
 // but ONLY if its text is still the same — so a later error / "order saved"
 // message set in the meantime is never wiped.
 function setStatus(text, kind, autoHideMs) {
-  const elStatus = statusElement();
-  if (!elStatus) return;
+  const target = statusElement();
+  if (!target) return;
+  const lines = [target, supplierStatusMirror(target)].filter(Boolean);
   clearTimeout(statusTimer);
-  elStatus.hidden = false;
-  elStatus.textContent = text;
-  elStatus.className = 'orders-status' + (kind ? ' ' + kind : '');
+  for (const elStatus of lines) {
+    elStatus.hidden = false;
+    elStatus.textContent = text;
+    elStatus.className = elStatus.classList.contains('supplier-detail-status')
+      ? 'orders-status supplier-detail-status' + (kind ? ' ' + kind : '')
+      : 'orders-status' + (kind ? ' ' + kind : '');
+  }
   if (autoHideMs) {
     statusTimer = setTimeout(() => {
-      if (elStatus.textContent === text) elStatus.hidden = true;
+      for (const elStatus of lines) if (elStatus.textContent === text) elStatus.hidden = true;
     }, autoHideMs);
   }
 }
@@ -3053,7 +3106,8 @@ function listLost(lost) {
 // auto-hide above and for the same reason: whoever set a newer message — an error,
 // or "order saved to history ✓" — must never have it wiped by a stale clear.
 function clearStatusIf(text) {
-  for (const elStatus of [document.getElementById('orders-status'), document.getElementById('history-status')]) {
+  for (const elStatus of [document.getElementById('orders-status'), document.getElementById('history-status'),
+    document.querySelector('.supplier-detail > .supplier-detail-status')]) {
     if (elStatus && elStatus.textContent === text) elStatus.hidden = true;
   }
 }

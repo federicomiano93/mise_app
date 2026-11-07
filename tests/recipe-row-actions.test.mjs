@@ -207,16 +207,27 @@ test('Orders reads the ingredient, focuses its quantity box, and Back returns to
   assert.match(main, /\.ing-row\[data-ing="\$\{CSS\.escape\(id\)\}"\] \.ing-qty/);
   assert.match(main, /box\.focus\(/);
   assert.match(main, /setStatus\(t\('orders\.fromRecipe\.notFound'\)/);
-  const leave = main.slice(main.indexOf('function leaveSupplier'), main.indexOf('function leaveSupplier') + 2600);
-  assert.match(leave, /if \(result === 'refused'\) return;/, 'a refused save stays on Orders, with its error');
-  assert.match(leave, /leavingForRecipe = false;/, 'Back works again if Orders comes back from the cache');
-  assert.match(leave, /if \(result === 'saved' && cameFromPage\(toRecipe\)\) history\.back\(\);\s*else window\.location\.replace\(toRecipe\)/,
+  const leave = main.slice(main.indexOf('function leaveSupplier'), main.indexOf('function leaveSupplier') + 3200);
+  // A refused save ASKS (nothing else holds that quantity); «Resta qui» stays and the next Back retries.
+  assert.match(leave, /if \(result === 'refused'\) \{[\s\S]*?confirmDialog\(\{[\s\S]*?orders\.fromRecipe\.refusedTitle[\s\S]*?okLabel: t\('orders\.fromRecipe\.leaveAnyway'\)[\s\S]*?cancelLabel: t\('unsent\.stay'\)/,
+    'a refused save asks before leaving');
+  assert.match(leave, /if \(!leave \|\| !stillLeavingFrom\(openerId\)\) \{ leavingForRecipe = false; return; \}/);
+  // The wait left the screen usable: somebody who moved on meanwhile is never taken away.
+  assert.match(leave, /if \(!stillLeavingFrom\(openerId\)\) \{ leavingForRecipe = false; return; \}/);
+  const still = main.slice(main.indexOf('function stillLeavingFrom'), main.indexOf('function goToRecipe'));
+  assert.match(still, /state\.openSupplier === openerId && openedFromRecipe === openerId/);
+  assert.match(still, /state\.summaryOverSupplier !== true/);
+  assert.match(still, /\.missing-overlay, \.app-dialog/);
+  assert.match(still, /history-overlay/);
+  assert.match(leave, /leavingForRecipe = false;\s*goToRecipe\(toRecipe, result\)/, 'Back works again if Orders comes back from the cache');
+  const go = main.slice(main.indexOf('function goToRecipe'), main.indexOf('function leaveSupplier'));
+  assert.match(go, /closeSupplier\(\);\s*if \(result !== 'late' && cameFromPage\(toRecipe\)\) history\.back\(\);\s*else window\.location\.replace\(toRecipe\)/,
     'back in the history to the recipe’s own entry, else forward replacing Orders');
-  const came = main.slice(main.indexOf('function cameFromPage'), main.indexOf('function leaveSupplier'));
+  const came = main.slice(main.indexOf('function cameFromPage'), main.indexOf('function stillLeavingFrom'));
   assert.match(came, /history\.length < 2 \|\| !document\.referrer/);
   assert.match(came, /before\.origin === target\.origin && before\.pathname === target\.pathname/);
-  assert.match(leave, /sendBeforeLeaving\(\)\.then\(result =>/, 'what was typed reaches the server before the page goes');
-  assert.match(leave, /setStatus\(t\('orders\.fromRecipe\.saving'\), undefined, 9000\)/);
+  assert.match(leave, /sendBeforeLeaving\(\)\.then\(async result =>/, 'what was typed reaches the server before the page goes');
+  assert.match(leave, /const saving = t\('orders\.fromRecipe\.saving'\);\s*setStatus\(saving, undefined, 9000\)/);
   assert.match(leave, /if \(leavingForRecipe\) return;/, 'a second tap does not leave twice');
   assert.doesNotMatch(main, /location\.hash\s*=/);
   // Only live lists, and never over a screen somebody chose while they arrived.
@@ -245,9 +256,41 @@ test('every new word exists in English and Italian, exactly as agreed', () => {
     'cat.order.notInUse': ['Marked “not in use” in Suppliers', 'Segnato “non in uso” in Fornitori'],
     'orders.fromRecipe.notFound': ['This ingredient is not in any order list', 'Questo ingrediente non è in nessun elenco d’ordine'],
     'orders.fromRecipe.saving': ['Saving the quantity, then back to the recipe…', 'Salvo la quantità e torno alla ricetta…'],
+    'orders.fromRecipe.refusedTitle': ['Quantity not saved', 'Quantità non salvata'],
+    'orders.fromRecipe.refusedMessage': ['The quantity you typed could not be saved in Orders. If you go back to the recipe now, it will be lost.',
+      'Non sono riuscito a salvare in Ordini la quantità che hai scritto. Se torni adesso alla ricetta, andrà persa.'],
+    'orders.fromRecipe.leaveAnyway': ['Back to the recipe anyway', 'Torna comunque alla ricetta'],
+    'unsent.stay': ['Stay', 'Resta qui'],
   };
   for (const [key, [en, it]] of Object.entries(words)) {
     assert.equal(d.en[key], en, `en ${key}`);
     assert.equal(d.it[key], it, `it ${key}`);
   }
+});
+
+test('the supplier screen repeats the page’s status line, so a save error is seen where quantities are typed', () => {
+  const main = codeOf(read('js/orders/orders-main.js'));
+  const detail = codeOf(read('js/orders/supplier-detail.js'));
+  assert.match(detail, /el\('p', \{ class: 'orders-status supplier-detail-status', role: 'status', hidden: true \}\),\s*body,/,
+    'between the header and the rows');
+  const mirror = main.slice(main.indexOf('function supplierStatusMirror'), main.indexOf('function setStatus'));
+  assert.match(mirror, /if \(target !== document\.getElementById\('orders-status'\)\) return null;/, 'only a page-line message, never History’s');
+  const set = main.slice(main.indexOf('function setStatus'), main.indexOf('function liveDataLost'));
+  assert.match(set, /const lines = \[target, supplierStatusMirror\(target\)\]\.filter\(Boolean\)/, 'the page line is still written');
+  assert.match(set, /for \(const elStatus of lines\) if \(elStatus\.textContent === text\) elStatus\.hidden = true;/);
+  const clear = main.slice(main.indexOf('function clearStatusIf'), main.indexOf('function setupOfflineIndicator'));
+  assert.match(clear, /\.supplier-detail > \.supplier-detail-status/);
+  assert.match(main, /!pageLine\.hidden && pageLine\.classList\.contains\('error'\)/, 'an error already showing is repeated on a new screen');
+  assert.match(read('orders.css'), /\.supplier-detail > \.supplier-detail-status \{ flex: none;/);
+});
+
+test('a rotation or the session landing keeps the split rows and lets the old screen go', () => {
+  const main = codeOf(read('js/catalogue/catalogue-main.js'));
+  const rot = main.slice(main.indexOf('watchTablet((isTablet) =>'), main.indexOf('watchTablet((isTablet) =>') + 700);
+  assert.match(rot, /const split = activeDetail\?\.splitRows\?\.\(\) \|\| \[\];\s*activeDetail\?\.destroy\?\.\(\);/);
+  assert.match(rot, /showDetailTablet\(latest, split\)/);
+  assert.match(rot, /showDetailPhone\(latest, split\)/);
+  assert.match(main, /const split = activeDetail\.splitRows\?\.\(\) \|\| \[\];\s*activeDetail\.destroy\?\.\(\);[\s\S]{0,120}renderDetail\(\{ recipe: latest, app, split \}\)/);
+  assert.doesNotMatch(main, /renderDetail\(\{ recipe: latest, app \}\)/);
+  assert.match(read('catalogue.css'), /@media \(hover: hover\) \{ \.cat-zoom-open:hover/);
 });
