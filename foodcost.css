@@ -736,7 +736,9 @@ select.fc-input, .fc-select {
 .fc-full--edit > .fc-full-summary { cursor: default; }
 .fc-full-summary::-webkit-details-marker { display: none; }
 .fc-full-summary:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
-.fc-full[open] .fc-perkg-chevron { transform: rotate(180deg); }
+/* ⚠️ ONLY THE BOX'S OWN CHEVRON (`>`): «Costo per 1 kg» inside it uses the same class, and a
+   descendant rule turned its arrow up while that box was still closed (seen on a screenshot). */
+.fc-full[open] > .fc-full-summary .fc-perkg-chevron { transform: rotate(180deg); }
 .fc-full-body {
   display: flex; flex-direction: column; gap: 12px; padding: 12px;
   border-top: 1px solid var(--fc-border); background: var(--fc-ground);

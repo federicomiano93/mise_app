@@ -35,7 +35,8 @@ export function showsPiecesField(working) {
 const SOLD_TEXT = { piece: 'fc.byThePiece', weight: 'fc.byWeightPerKg', pack: 'fc.byThePack' };
 
 const positive = n => Number.isFinite(Number(n)) && Number(n) > 0;
-const unitWord = unit => (unit === 'pcs' ? t('fc.unit.pieces') : unit);
+// An amount with its unit. Pieces read «12 pz» (fc.perKg.pieces): «pezzi» after a 1 read «1 pezzi».
+const amountText = (n, unit) => (unit === 'pcs' ? t('fc.perKg.pieces', { n: localNumber(String(n)) }) : `${localNumber(String(n))} ${unit}`);
 
 function notSet() {
   return el('span', { class: 'fc-read-empty', text: t('fc.notSet') });
@@ -67,7 +68,7 @@ export function readProduct(working) {
   ];
   if (working.sellingMode === 'pack') {
     rows.push(readRow(t('fc.packHolds'), positive(working.packSize) && working.packUnit
-      ? `${localNumber(String(working.packSize))} ${unitWord(working.packUnit)}` : null));
+      ? amountText(working.packSize, working.packUnit) : null));
   }
   if (showsPiecesField(working)) {
     rows.push(readRow(t('fc.piecesPerBatch'), positive(working.piecesPerBatch)
@@ -88,7 +89,7 @@ export function readMadeOf({ components, lineName, lineNote }) {
     if (kind === 'recipe') {
       qty = positive(entry.qtyKg) ? perKgWeightText(Number(entry.qtyKg)) : null;
     } else {
-      qty = positive(entry.qty) ? `${localNumber(String(entry.qty))} ${unitWord(entry.unit)}` : null;
+      qty = positive(entry.qty) ? amountText(entry.qty, entry.unit) : null;
     }
     return readRow(name.text, qty, { note: lineNote(entry, kind), missing: name.missing });
   }));
@@ -123,7 +124,7 @@ export function readPackaging({ packaging, lineName, lineNote }) {
   if (!packaging.length) return nothingYet();
   return readList(packaging.map(entry => {
     const name = lineName(entry, 'packaging');
-    const qty = positive(entry.qtyPcs) ? `${localNumber(String(entry.qtyPcs))} ${t('fc.unit.pieces')}` : null;
+    const qty = positive(entry.qtyPcs) ? amountText(entry.qtyPcs, 'pcs') : null;
     return readRow(name.text, qty, { note: lineNote(entry, 'packaging'), missing: name.missing });
   }));
 }
