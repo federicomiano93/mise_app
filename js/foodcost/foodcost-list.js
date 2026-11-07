@@ -3,10 +3,14 @@
 // The reason to open this screen is to find what is losing money, so that is what
 // the top of the list shows. A product that cannot be costed sorts LAST: it is a
 // data-entry job, not a margin problem, and at the top it would bury the answer.
+//
+// Search (7 Nov 2026): one box above the rows that narrows them by name. The input is
+// mounted ONCE and never rebuilt by paint/refresh, so a data snapshot cannot wipe the text
+// or close the keyboard; the page keeps the text (onQuery) so Back finds the same search.
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
-import { sortByMargin, blockerText } from './foodcost-model.js';
+import { sortByMargin, blockerText, nameMatches } from './foodcost-model.js';
 import { formatRate, formatMoney } from '../price-model.js';
 
 // Keys, resolved at draw time — see js/calculator-render.js.
@@ -17,16 +21,37 @@ const STATUS_TEXT = { green: 'fc.onTarget', amber: 'fc.slightlyOver', red: 'fc.o
 // those products, and this says so on screen and offers the way back to all of them.
 const BOOK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>';
 
+const SEARCH_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>';
+
 // `fromBook` — () => number — is asked on EVERY paint: how many recipes have no product,
 // which changes as the recipes arrive. 0 draws no box. `onFromBook` opens the choice screen.
 export function renderList({
   products, tables, onOpen, onAdd, filter = null, selectedId = null, fromBook = null, onFromBook = null,
+  query: initialQuery = '', onQuery = null,
 }) {
   // The product open beside the list on a tablet, marked aria-current (tokens.css gives it
   // the picked look). Held here because refresh() repaints every row.
   let selected = selectedId;
   const rows = el('div', { class: 'fc-list' });
   const bookSlot = el('div');
+  let query = String(initialQuery || '');
+  let lastProducts = products;
+  let lastTables = tables;
+  const searchInput = el('input', {
+    class: 'fc-search-input', type: 'search', autocomplete: 'off',
+    placeholder: t('fc.search'), 'aria-label': t('fc.search'),
+    oninput: () => {
+      query = searchInput.value;
+      onQuery?.(query);
+      paintRows(lastProducts, lastTables);
+    },
+  });
+  searchInput.value = query;
+  const searchBox = el('div', { class: 'fc-search' }, [
+    el('span', { 'aria-hidden': 'true', icon: SEARCH_SVG }),
+    searchInput,
+  ]);
 
   const root = el('div', { class: 'fc-view' }, [
     filter ? el('div', { class: 'fc-filter' }, [
@@ -34,6 +59,7 @@ export function renderList({
       el('button', { class: 'fc-link', type: 'button', text: t('fc.showAll'), onclick: filter.onShowAll }),
     ]) : null,
     bookSlot,
+    searchBox,
     rows,
   ]);
 
@@ -61,10 +87,17 @@ export function renderList({
 
   function paint(nextProducts, nextTables) {
     paintBook();
-    const list = sortByMargin(nextProducts, nextTables);
-    rows.replaceChildren();
+    paintRows(nextProducts, nextTables);
+  }
 
-    if (!list.length) {
+  function paintRows(nextProducts, nextTables) {
+    lastProducts = nextProducts;
+    lastTables = nextTables;
+    const all = sortByMargin(nextProducts, nextTables);
+    rows.replaceChildren();
+    searchBox.hidden = all.length === 0;
+
+    if (!all.length) {
       // The screen-level empty state (tokens.css). Its button does what the header «+»
       // does — the header one is the only other way to add, so a first-time viewer is
       // never left hunting for it. Narrowed to a recipe, the header «+» still adds, and
@@ -74,6 +107,12 @@ export function renderList({
         el('p', { class: 'empty-sub', text: t('fc.empty.sub') }),
         el('button', { class: 'empty-action', type: 'button', text: t('fc.empty.action'), onclick: onAdd }),
       ]));
+      return;
+    }
+
+    const list = all.filter(({ product }) => nameMatches(product, query));
+    if (!list.length) {
+      rows.appendChild(el('p', { class: 'fc-empty', role: 'status', text: t('fc.searchNone', { q: query.trim() }) }));
       return;
     }
 

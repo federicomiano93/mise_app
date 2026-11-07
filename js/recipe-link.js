@@ -32,7 +32,22 @@ export function recipeHash(recipeId) {
 
 // The recipe's Food cost, and the way back to the recipe.
 export function foodCostHref(recipeId) { return `foodcost.html${recipeHash(recipeId)}`; }
-export function recipeHref(recipeId) { return `catalogue.html${recipeHash(recipeId)}`; }
+// `spot` 'foodcost' adds `&at=foodcost`: Back from Food cost lands on the Food cost card of
+// the recipe, where the tap came from. Any other spot is ignored.
+export function recipeHref(recipeId, spot) {
+  const hash = recipeHash(recipeId);
+  return `catalogue.html${hash && spot === 'foodcost' ? `${hash}&at=foodcost` : hash}`;
+}
+
+// The spot an address names inside the recipe: 'foodcost' or null.
+// ⚠️ STRICT allowlist — nothing else is ever echoed.
+export function recipeSpotFromHash(hash) {
+  const raw = String(hash ?? '').replace(/^#/, '');
+  if (!raw) return null;
+  let params;
+  try { params = new URLSearchParams(raw); } catch (e) { return null; }
+  return params.get('at') === 'foodcost' ? 'foodcost' : null;
+}
 
 // The recipe id an address names, or null.
 export function recipeIdFromHash(hash) {

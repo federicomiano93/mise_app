@@ -223,7 +223,9 @@ test('⚠️⚠️ every save carries the product model, and the rules refuse a 
 
 test('«Composto da» is one card: the lines, the add button, and the weighings LAST', () => {
   const editor = codeOf(read('js/foodcost/foodcost-editor.js'));
-  assert.match(editor, /const madeOf = el\('div', \{ class: 'fc-madeof' \}, \[componentRows, addLineBtn, weighRows\]\);/);
+  assert.match(editor, /const madeOf = el\('div', \{ class: 'fc-madeof' \}, \[componentRows, addLineBtn\]\);/);
+  assert.match(editor, /card\('fc\.madeOf', \[madeOf, weighHead, weighRows\]\)/,
+    'the weighings come LAST in the same card, under their own sub-heading');
   assert.match(editor, /addLineBtn\.textContent = working\.components\.length \? t\('fc\.addRecipeOrIngredient'\) : t\('fc\.addRecipe'\);/,
     'empty: add a recipe; after one: a recipe or an ingredient');
   assert.match(editor, /const chosen = await pick\(working\.components\.length \? 'line' : 'recipe'\);/);
