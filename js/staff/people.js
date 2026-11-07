@@ -87,9 +87,11 @@ export function openPeople(session) {
   let members = [];
   let stop = null;
   let pending = null;      // the invitation being shown, if any
-  // Which role the next code will invite as. It starts at Employee — the least
-  // power — so a distracted tap grants nothing.
-  let newChoice = ROLE_CHOICES.find(c => c.key === 'staff');
+  // Which role the next code will invite as. It starts EMPTY on purpose: the owner
+  // asked to be made to choose, and a pre-set Employee let him tap «Send a link»
+  // without ever looking at the role. Empty still grants nothing — mint() refuses.
+  let newChoice = null;
+  let missingRole = () => {};  // set by paintCode: flags the empty invite select
   let renaming = null;     // the uid whose row is currently two input boxes
 
   // ⚠️ TWO SEPARATE CARDS, in the settings kit (.set-section), because the screen
@@ -151,14 +153,24 @@ export function openPeople(session) {
   // confirmation below has to say so out loud, or four options read as four levels.
   // ⚠️ NATIVE, so the phone draws its own picker and the keyboard works untouched.
   // One <option> per ROLE_CHOICES entry, the single list the whole app shares.
-  function roleSelect(currentKey, extra) {
+  // `placeholder` is for the INVITE select only: a first, empty option that is shown
+  // until a role is picked. The roster selects always hold a real role.
+  // ⚠️ NOT `disabled`. iOS's picker wheel cannot rest on a disabled option: it jumps to
+  // the first enabled one — Owner, the most power — and «Done» commits it. An enabled
+  // empty option can be picked back, and mint() refuses it like no choice at all.
+  function roleSelect(currentKey, extra, placeholder) {
     const select = el('select', { class: 'set-select', ...extra });
+    if (placeholder) {
+      const empty = el('option', { value: '' }, placeholder);
+      empty.selected = !currentKey;
+      select.appendChild(empty);
+    }
     for (const choice of ROLE_CHOICES) {
       const option = el('option', { value: choice.key }, choiceLabel(choice));
       option.selected = choice.key === currentKey;
       select.appendChild(option);
     }
-    select.value = currentKey;
+    select.value = currentKey || '';
     return select;
   }
 
@@ -375,17 +387,38 @@ export function openPeople(session) {
     if (!pending) {
       // ⚠️ THE ROLE IS CHOSEN BEFORE THE INVITATION, not after they arrive. Going
       // back to change somebody's role afterwards is a second errand nobody
-      // remembers. It starts at Employee — the least power — so a distracted tap
-      // grants nothing.
+      // remembers. It starts EMPTY, so he has to choose (his request): a pre-set
+      // Employee let him skip the choice. Empty grants nothing — mint() refuses.
       // ⚠️ ON CHANGE ONLY THE SENTENCE IS REWRITTEN, never the select: rebuilding
       // it would drop the keyboard's focus in the middle of choosing.
       const selectId = 'people-invite-role';
-      const roleNote = el('p', { class: 'people-note', text: t(ROLE_MEANS[newChoice.key]) });
-      const roleField = roleSelect(newChoice.key, { id: selectId });
-      roleField.addEventListener('change', () => {
-        newChoice = ROLE_CHOICES.find(c => c.key === roleField.value) || newChoice;
-        roleNote.textContent = t(ROLE_MEANS[newChoice.key]);
+      const noteId = 'people-invite-role-note';
+      const roleNote = el('p', {
+        class: 'people-note', id: noteId, 'aria-live': 'polite',
+        text: newChoice ? t(ROLE_MEANS[newChoice.key]) : t('people.role.choosePrompt'),
       });
+      const roleField = roleSelect(newChoice ? newChoice.key : null,
+        { id: selectId, 'aria-describedby': noteId }, t('people.role.choose'));
+      // ⚠️ THE SAME KEYBOARD GUARD AS THE ROSTER. On Windows an arrow key on a closed
+      // select is already a choice, and the first option after «Choose a role…» is
+      // Owner: one stray ArrowDown would have chosen the most power.
+      roleField.addEventListener('keydown', pickFromOpenList);
+      roleField.addEventListener('change', () => {
+        // The empty option picked back means «no role» again, never the last one.
+        newChoice = ROLE_CHOICES.find(c => c.key === roleField.value) || null;
+        roleField.removeAttribute('aria-invalid');
+        roleNote.classList.remove('people-note--error');
+        roleNote.textContent = newChoice ? t(ROLE_MEANS[newChoice.key]) : t('people.role.choosePrompt');
+      });
+      // mint() uses these when it is tapped with no role (P20: block, jump to, highlight).
+      // Focus FIRST, then the new text: the select reads its description on focus and
+      // the live note then announces the change once, rather than the same words twice.
+      missingRole = () => {
+        roleField.setAttribute('aria-invalid', 'true');
+        roleField.focus();
+        roleNote.classList.add('people-note--error');
+        roleNote.textContent = t('people.role.missing');
+      };
       codeBox.appendChild(el('label', { class: 'set-label', for: selectId, text: t('people.roleGroup') }));
       codeBox.appendChild(roleField);
       codeBox.appendChild(roleNote);
@@ -420,6 +453,9 @@ export function openPeople(session) {
       // aria-live: a screen reader hears why the code button has just gone (P18).
       const digitsNote = el('p', { class: 'people-note', 'aria-live': 'polite', text: t('people.add.digitsStaffOnly') });
       const showDigits = () => {
+        // No role yet: show both buttons so the owner sees both ways; tapping either
+        // without a role explains what is missing.
+        if (!newChoice) { byDigits.hidden = false; digitsNote.hidden = true; return; }
         const staff = newChoice.role === 'staff';
         byDigits.hidden = !staff;
         digitsNote.hidden = staff;
@@ -511,17 +547,23 @@ export function openPeople(session) {
 
   function doneButton() {
     const done = el('button', { type: 'button', class: 'btn-secondary people-add' }, t('people.done'));
-    // ⚠️ AND THE NEXT INVITATION STARTS ON EMPLOYEE AGAIN. Kept from the last one, a
+    // ⚠️ AND THE NEXT INVITATION STARTS WITH NO ROLE AGAIN. Kept from the last one, a
     // co-owner invited first made the kitchen porter invited next an owner too.
     done.addEventListener('click', () => {
       pending = null;
-      newChoice = ROLE_CHOICES.find(c => c.key === 'staff');
+      newChoice = null;
       paintCode();
+      // The Done button has just been removed: put the keyboard on the next choice,
+      // not back at the top of the page.
+      const next = codeBox.querySelector('select');
+      if (next) next.focus();
     });
     return done;
   }
 
   async function mint(kind) {
+    // No role chosen: nothing goes to the server; the screen points at the select.
+    if (!newChoice) { missingRole(); return; }
     try {
       // ⚠️ THE ROLE AND THE SHAPE BOTH COME BACK FROM THE SERVER, AND THAT IS
       // WHAT IS SHOWN. The function reduces a role it does not recognise to an

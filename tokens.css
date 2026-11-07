@@ -1147,6 +1147,15 @@ body[data-card="foodcost"] .app-header.app-header--save {
   margin: 0;
 }
 
+/* The invite role was left empty: the sentence under the select turns into the
+   error, and the select itself is outlined (same pattern as .fb-area-invalid).
+   Declared after .people-note so it wins at equal specificity. */
+.people-note--error { color: var(--error); font-weight: 600; }
+.set-block .set-select[aria-invalid="true"] { border-color: var(--danger); background: var(--error-bg); }
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  .set-block .set-select[aria-invalid="true"] { background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
+}
+
 /* Read aloud across a kitchen, so it is the largest thing on the screen and the
    digits line up: tabular-nums stops "111" looking narrower than "888". */
 .people-digits {
