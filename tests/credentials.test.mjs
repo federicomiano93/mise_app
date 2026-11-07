@@ -14,6 +14,7 @@ import {
   nameProblem,
   passwordProblem,
   confirmProblem,
+  emailConfirmProblem,
 } from '../js/credentials.js';
 import { readFileSync } from 'node:fs';
 
@@ -153,9 +154,43 @@ test('the invitation form asks for the password twice and checks it before anyth
   const gate = readFileSync(new URL('../js/auth-gate.js', import.meta.url), 'utf8');
   assert.match(gate, /password2\.id = 'join-password2';/);
   assert.match(gate, /password2\.autocomplete = 'new-password';/);
-  assert.match(gate, /form\.append\(emailLabel, email, passLabel, password, pass2Label, password2\)/);
+  assert.match(gate, /form\.append\(emailLabel, email, email2Label, email2, passLabel, password, pass2Label, password2\)/);
   // Inside problem(), which runs before the network and before the account is created.
   const start = gate.indexOf('const problem = () => {');
   const problem = gate.slice(start, gate.indexOf("form.addEventListener('submit'", start));
   assert.match(problem, /confirmProblem\(password\.value, password2\.value\)/);
+  assert.match(problem, /emailConfirmProblem\(email\.value, email2\.value\)/);
+});
+
+// ── The email typed twice (his note of 3 Nov 2026) ───────────────────────────
+
+test('the repeated email must be there and be the same address', () => {
+  assert.equal(emailConfirmProblem('anna@forno.test', 'anna@forno.test'), null);
+  // Firebase treats addresses case-blind and trimmed, so these are the same account.
+  assert.equal(emailConfirmProblem('Anna@Forno.test', ' anna@forno.test '), null);
+  assert.ok(emailConfirmProblem('anna@forno.test', ''), 'empty second box');
+  assert.ok(emailConfirmProblem('anna@forno.test', '   '), 'only spaces');
+  assert.ok(emailConfirmProblem('anna@forno.test', undefined), 'missing second box');
+  assert.ok(emailConfirmProblem('anna@forno.test', 'ana@forno.test'), 'one letter off');
+  assert.notEqual(emailConfirmProblem('a@b.c', ''), emailConfirmProblem('a@b.c', 'x@b.c'), 'two different messages');
+});
+
+test('the second email box is really typed: the browser may not fill it', () => {
+  const gate = readFileSync(new URL('../js/auth-gate.js', import.meta.url), 'utf8');
+  assert.match(gate, /email2\.id = 'join-email2';/);
+  assert.match(gate, /email2\.autocomplete = 'off';/);
+});
+
+// ── Which account a code joins (his note of 3 Nov 2026) ──────────────────────
+
+test('the code form of a signed-in account names the account and offers another', () => {
+  const gate = readFileSync(new URL('../js/auth-gate.js', import.meta.url), 'utf8');
+  const start = gate.indexOf('function joinScreen(');
+  const body = gate.slice(start, gate.indexOf("const form = el('form', 'auth-form');", start));
+  assert.match(body, /if \(!needsAccount\) \{/);
+  assert.match(body, /el\('p', 'auth-sub', t\('join\.forAccount'\)\)/);
+  assert.match(body, /el\('p', 'auth-account', who\)/);
+  // Heard by a screen reader too, though focus jumps past it into the form.
+  assert.match(gate, /form\.setAttribute\('aria-describedby', 'join-for-account join-for-address'\)/);
+  assert.match(body, /otherAccountButton\(\)/);
 });
