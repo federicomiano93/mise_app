@@ -133,8 +133,8 @@ export function TodoCard() {
   return (
     <section ref={cardRef} className={styles.card} aria-labelledby="home-todo-title">
       <div className={styles.head}>
-        <h2 id="home-todo-title" className={styles.title}>{t('home.title')}</h2>
-        <Button ref={addRef} variant="primary" onPress={() => { setForm({ item: null }); }}>
+        <h2 id="home-todo-title" tabIndex={-1} className={styles.title}>{t('home.title')}</h2>
+        <Button ref={addRef} id="home-todo-add" variant="primary" onPress={() => { setForm({ item: null }); }}>
           <Plus aria-hidden="true" />
           {t('home.add')}
         </Button>

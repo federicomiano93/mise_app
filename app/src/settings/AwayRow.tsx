@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { maxAwayDate, toISODate } from '@mise/shared/away-model';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
@@ -8,6 +8,7 @@ import { useAway, useAwayStore } from '../shell/away/AwayContext';
 import { awayDayLabel } from '../shell/away/awayWords';
 import { SettingsRow } from './SettingsRow';
 import { useAskComeBack } from '../shell/away/useAskComeBack';
+import { useFocusOnBack } from '../shell/away/useFocusOnBack';
 import styles from './AwayRow.module.css';
 
 // «I am on holiday» — the row in Settings' «You» card, for everybody. Not away: a row that opens the date dialog. Away: the same row in
@@ -17,19 +18,23 @@ export function AwayRow() {
   const away = useAway();
   const say = useStatusMessage();
   const [asking, setAsking] = useState(false);
+  const row = useRef<HTMLButtonElement>(null);
+  // After «I am back» the row becomes «I am on holiday» again: the focus goes to it.
+  useFocusOnBack(() => row.current);
   const [askComeBack, backDialog] = useAskComeBack(() => { say(t('away.saveFailed')); });
 
   return (
     <>
       {away.away ? (
         <SettingsRow
+          ref={row}
           warn
           title={t('away.onUntil', { day: awayDayLabel(away.until, locale) })}
           sub={t('away.band.body')}
           onPress={() => { void askComeBack(); }}
         />
       ) : (
-        <SettingsRow title={t('away.title')} sub={t('settings.away.sub')} onPress={() => { setAsking(true); }} />
+        <SettingsRow ref={row} title={t('away.title')} sub={t('settings.away.sub')} onPress={() => { setAsking(true); }} />
       )}
       {asking ? <UntilDialog onClose={() => { setAsking(false); }} /> : null}
       {backDialog}

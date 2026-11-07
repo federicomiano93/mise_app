@@ -69,6 +69,14 @@ describe('Home: the holiday band', () => {
     await waitFor(() => { expect(main().queryByText(/On holiday until/)).not.toBeInTheDocument(); });
   });
 
+  it('puts the focus on the card’s «Add» after «I am back», never on the page body', async () => {
+    const { user } = await open({ away: { until: '2026-11-16' } });
+    await user.click(await band());
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'I am back' }));
+    await waitFor(() => { expect(main().queryByText(/On holiday until/)).not.toBeInTheDocument(); });
+    await waitFor(() => { expect(main().getByRole('button', { name: 'Add' })).toHaveFocus(); });
+  });
+
   it('keeps the holiday on Cancel', async () => {
     const { user, source } = await open({ away: { until: '2026-11-16' } });
     await user.click(await band());

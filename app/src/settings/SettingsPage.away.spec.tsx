@@ -123,6 +123,14 @@ describe('Settings: I am on holiday', () => {
     expect(await main().findByRole('button', { name: 'I am on holiday' })).toBeInTheDocument();
   });
 
+  it('puts the focus on the new «I am on holiday» row after «I am back»', async () => {
+    const { user } = await open({ away: { until: '2026-11-16' } });
+    await user.click(await main().findByRole('button', { name: 'On holiday until 16 November' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'I am back' }));
+    const row = await main().findByRole('button', { name: 'I am on holiday' });
+    await waitFor(() => { expect(row).toHaveFocus(); });
+  });
+
   it('keeps the holiday when the question is cancelled', async () => {
     const { user, source } = await open({ away: { until: '2026-11-16' } });
     await user.click(await main().findByRole('button', { name: 'On holiday until 16 November' }));
