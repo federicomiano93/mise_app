@@ -11,7 +11,7 @@ const editor = read('../js/foodcost/foodcost-editor.js');
 
 test('the panel reads every figure from the preview and adds nothing up', () => {
   assert.doesNotMatch(view, /productionCost|costProduct|suggestedGrossPrice|suggestedNetPrice/);
-  assert.match(view, /import \{ blockerText \} from '\.\/foodcost-model\.js'/);
+  assert.match(view, /import \{ blockerText, unpricedReasonText \} from '\.\/foodcost-model\.js'/);
   // Comments and string literals (the icon's SVG holds «w3.org/2000») are not arithmetic.
   const code = view.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
     .replace(/'[^'\n]*'/g, "''");

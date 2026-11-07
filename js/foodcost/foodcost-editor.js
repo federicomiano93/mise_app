@@ -17,8 +17,9 @@ import { el } from './dom.js';
 import {
   vatRatesFor, vatSelection, costProduct, productionCost, blockerText,
   snapshotWorthTaking, productSnapshot, normalizeProduct, suggestedGrossPrice,
-  ingredientLineCost, productsUsingRecipe, LINE_UNITS, PACK_UNITS, productPreview,
+  ingredientLineCost, packagingLineCost, productsUsingRecipe, LINE_UNITS, PACK_UNITS, productPreview,
 } from './foodcost-model.js';
+import { lineCostView } from './line-cost.js';
 import { previewPanel } from './preview-view.js';
 import { formatRate, formatMoney } from '../price-model.js';
 import { openVatGuide } from './vat-guide-view.js';
@@ -252,7 +253,11 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
   // holds an input — rebuilding the rows here would take the box from under the finger.
   function refreshLive() {
     const tables = liveTables();
-    for (const { note, entry, kind } of lineNotes) note.textContent = lineNote(entry, kind, tables);
+    // The money under each line moves with the oven loss too (a recipe's rate per kilo).
+    for (const { note, cost, entry, kind } of lineNotes) {
+      cost.textContent = lineCost(entry, kind, tables).text;
+      note.textContent = lineNote(entry, kind, tables);
+    }
     paintWeighViews();
     paintAnswer();
   }
@@ -304,7 +309,10 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
   }
 
   // ── Cost of one kilo of the finished product, line by line ─────────────────
-  // ⚠️ Its own box, never inside «Composto da»: no money there (13 Sep 2026). The
+  // ⚠️ Its own box, apart from «Composto da». It was «no money there» (13 Sep 2026) until
+  // Federico reversed it on 7 Nov 2026 («il costo dell'ingrediente al kg e il costo della
+  // quantità selezionata»: each line now shows its rate and cost, see line-cost.js); this box
+  // stays as the whole product's cost per kilo. The
   // element is created ONCE so it keeps open/closed through every repaint; only its
   // inner content is replaced.
   // ⚠️ THE SUMMARY IS BUILT ONCE TOO, and only its figure is rewritten: a tapped summary
@@ -371,6 +379,8 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
   const summary = el('div', { class: 'fc-summary' });
   // Whether its «Dettagli» is open: the panel is rebuilt on every keystroke, this is not.
   let summaryMoreOpen = false;
+  // …and whether its «Which?» list is.
+  let summaryWhichOpen = false;
 
   function paintSummary(tables) {
     try {
@@ -379,6 +389,7 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
       summary.replaceChildren(previewPanel(productPreview(working, tables), {
         caption: true, showMissing: false,
         moreOpen: summaryMoreOpen, onMoreToggle: (open) => { summaryMoreOpen = open; },
+        whichOpen: summaryWhichOpen, onWhichToggle: (open) => { summaryWhichOpen = open; },
       }));
     } catch (e) {
       summary.hidden = true;
@@ -659,6 +670,7 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
       oninput: e => {
         entry[qtyKey] = kind === 'recipe' ? kilosFromTyped(e.target.value, shownUnit()) : Number(e.target.value) || 0;
         markDirty();
+        cost.textContent = lineCost(entry, kind).text;
         note.textContent = lineNote(entry, kind);
         paintAnswer();
       },
@@ -671,7 +683,11 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
       unit = el('select', {
         class: 'fc-input fc-select fc-line-unit-select', 'aria-label': t('fc.aria.unit'),
         // ⚠️ Not repaint() either, for the same reason as the quantity box.
-        onchange: e => { entry.unit = e.target.value; markDirty(); note.textContent = lineNote(entry, kind); paintAnswer(); },
+        onchange: e => {
+          entry.unit = e.target.value; markDirty();
+          cost.textContent = lineCost(entry, kind).text; note.textContent = lineNote(entry, kind);
+          paintAnswer();
+        },
       }, LINE_UNITS.map(u => el('option', { value: u }, u === 'pcs' ? t('fc.unit.pieces') : u)));
       unit.value = entry.unit;
     } else if (kind === 'recipe') {
@@ -695,41 +711,47 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
       onclick: () => { list.splice(index, 1); markDirty(); repaint(); },
     });
 
+    const cost = el('p', { class: 'fc-line-cost', text: lineCost(entry, kind).text });
     const note = el('p', { class: 'fc-line-note', text: lineNote(entry, kind) });
-    lineNotes.push({ note, entry, kind });
+    lineNotes.push({ note, cost, entry, kind });
 
     return el('div', { class: 'fc-line' }, [
       el('div', { class: 'fc-line-row' }, [nameBtn, remove]),
       el('div', { class: 'fc-line-row fc-line-qtyrow' }, [qty, unit]),
+      cost,
       note,
     ]);
   }
 
+  // The money under a line: its rate and what the amount typed costs (line-cost.js). Its own
+  // element above the note, drawn and refreshed wherever the note is.
+  function lineCost(entry, kind, tables = liveTables()) {
+    return lineCostView(entry, kind, tables, { noWeightLoss: working.noWeightLoss === true });
+  }
+
+  // What a person must ACT on, under the money. Where the money line already says «No price»,
+  // the note that said the same thing is left out: one sentence, not two.
   function lineNote(entry, kind, tables = liveTables()) {
     if (kind === 'recipe') {
       const recipe = tables.recipes[entry.recipeId];
       if (!recipe) return entry.recipeId ? t('fc.thisRecipeNoLonger') : '';
-      // ⚠️ NO MONEY UNDER A RECIPE LINE. Federico, 13 Sep 2026: «nella sezione "composto
-      // da" non mostrare il prezzo». What stays is what a person must ACT on — a recipe
-      // with no price, or only part of one — because a silent gap is a cost too low.
+      // ⚠️ MONEY UNDER A RECIPE LINE SINCE 7 NOV 2026 (see line-cost.js) — it used to be none:
+      // Federico, 13 Sep 2026, «nella sezione "composto da" non mostrare il prezzo»; reversed by
+      // him on 7 Nov 2026, «il costo dell'ingrediente al kg e il costo della quantità
+      // selezionata». The money is NOT drawn here: this is the note under it. What stays is a
+      // recipe priced in part, because a silent gap is a cost too low.
       const costed = costRecipe(recipe, tables);
-      if (costed.pricePerKg === null) return t('fc.thisRecipeIsNot');
-      return costed.partial ? t('fc.thisRecipePartlyPriced') : '';
+      return costed.pricePerKg !== null && costed.partial ? t('fc.thisRecipePartlyPriced') : '';
     }
     const ingredient = tables.ingredients[entry.ingredientId];
     if (!ingredient) return entry.ingredientId ? t('fc.thisItemNoLonger') : '';
     if (kind === 'ingredient') {
-      // No money here either — only what stops the line from being costed.
       const line = ingredientLineCost(entry, ingredient);
-      return line.reason ? t(LINE_REASON_TEXT[line.reason]) : '';
+      return line.reason && line.reason !== 'no-ingredient-price' ? t(LINE_REASON_TEXT[line.reason]) : '';
     }
-    if (ingredient.priceUnit !== 'pcs') {
-      // Counted in pieces, so it has to be BOUGHT by the piece. Said plainly
-      // rather than silently costing nothing.
-      return t('fc.pricedByWeightSet');
-    }
-    const each = Number(ingredient.pricePerUnit) || 0;
-    return `${t('fc.priceEach', { price: formatRate(each) })}  ·  ${formatMoney((Number(entry.qtyPcs) || 0) * each)}`;
+    // Counted in pieces, so it has to be BOUGHT by the piece. Said plainly rather than silently
+    // costing nothing; a packaging item with no price at all is «No price» above instead.
+    return packagingLineCost(entry, ingredient).reason === 'no-piece-price' ? t('fc.pricedByWeightSet') : '';
   }
 
   // ── The plain-text view ────────────────────────────────────────────────────
@@ -749,6 +771,7 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
     readBoxes.product.replaceChildren(readProduct(working));
     readBoxes.madeOf.replaceChildren(readMadeOf({
       components: working.components, lineName, lineNote: (entry, kind) => lineNote(entry, kind, tables),
+      lineCost: (entry, kind) => lineCost(entry, kind, tables).text,
     }));
     readBoxes.weighings.replaceChildren(readWeighings({
       noWeightLoss: working.noWeightLoss === true, recipes: app.tables().recipes, recipeIds,
@@ -757,6 +780,7 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
     readBoxes.weighings.hidden = !recipeIds.length;
     readBoxes.packaging.replaceChildren(readPackaging({
       packaging: working.packaging, lineName, lineNote: (entry, kind) => lineNote(entry, kind, tables),
+      lineCost: (entry, kind) => lineCost(entry, kind, tables).text,
     }));
     readBoxes.labour.replaceChildren(readLabour({
       minutes: working.labourMinutes, people: working.labourPeople, note: labourNoteText(tables),

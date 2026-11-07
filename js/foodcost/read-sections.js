@@ -57,10 +57,12 @@ function notSet() {
 
 // One row: the label on the left, the value on the right. `value` null → «Not set».
 // `note` goes under the row (a warning about the line).
-function readRow(label, value, { note = '', missing = false, invalid = false } = {}) {
+// `cost` goes under it, above the note: the line's rate and what its amount costs (line-cost.js).
+function readRow(label, value, { note = '', cost = '', missing = false, invalid = false } = {}) {
   return el('div', { class: 'fc-read-row' }, [
     el('dt', { class: missing ? 'missing' : null, text: label }),
     el('dd', { class: invalid ? 'fc-read-invalid' : null }, [value === null || value === undefined || value === '' ? notSet() : value]),
+    cost ? el('dd', { class: 'fc-line-cost fc-read-note', text: cost }) : null,
     note ? el('dd', { class: 'fc-line-note fc-read-note', text: note }) : null,
   ]);
 }
@@ -91,9 +93,10 @@ export function readProduct(working) {
 }
 
 // ── Composto da ─────────────────────────────────────────────────────────────
-// `lineName(entry, kind)` → { text, missing } and `lineNote(entry, kind)` → text are the
-// editor's own, so the read view says exactly what the form says under each line.
-export function readMadeOf({ components, lineName, lineNote }) {
+// `lineName(entry, kind)` → { text, missing }, `lineNote(entry, kind)` → text and
+// `lineCost(entry, kind)` → text are the editor's own, so the read view says exactly what the
+// form says under each line.
+export function readMadeOf({ components, lineName, lineNote, lineCost = () => '' }) {
   if (!components.length) return nothingYet();
   return readList(components.map(entry => {
     const kind = entry.kind === 'ingredient' ? 'ingredient' : 'recipe';
@@ -104,7 +107,7 @@ export function readMadeOf({ components, lineName, lineNote }) {
     } else {
       qty = positive(entry.qty) ? amountText(entry.qty, entry.unit) : null;
     }
-    return readRow(name.text, qty, { note: lineNote(entry, kind), missing: name.missing });
+    return readRow(name.text, qty, { cost: lineCost(entry, kind), note: lineNote(entry, kind), missing: name.missing });
   }));
 }
 
@@ -134,12 +137,12 @@ export function readWeighings({ noWeightLoss, recipes, recipeIds }) {
 }
 
 // ── Imballaggio ─────────────────────────────────────────────────────────────
-export function readPackaging({ packaging, lineName, lineNote }) {
+export function readPackaging({ packaging, lineName, lineNote, lineCost = () => '' }) {
   if (!packaging.length) return nothingYet();
   return readList(packaging.map(entry => {
     const name = lineName(entry, 'packaging');
     const qty = positive(entry.qtyPcs) ? amountText(entry.qtyPcs, 'pcs') : null;
-    return readRow(name.text, qty, { note: lineNote(entry, 'packaging'), missing: name.missing });
+    return readRow(name.text, qty, { cost: lineCost(entry, 'packaging'), note: lineNote(entry, 'packaging'), missing: name.missing });
   }));
 }
 
