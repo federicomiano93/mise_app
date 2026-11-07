@@ -593,6 +593,11 @@ function clearAddress() {
 
 // The margin over time. Read on demand, never watched.
 async function openHistory(product) {
+  // ⚠️ P20 — ON A PHONE THE EDITOR IS DROPPED BELOW, so typed edits would go with it in
+  // silence (found by the code review of PR #483). Ask the editor's own guard first
+  // («Scartare le modifiche?»); no = stay in the form. A read view is never dirty, so it
+  // passes straight through; a tablet keeps the editor alive (heldEditor) and needs no question.
+  if (!splitOn && view === 'editor' && activeEditor && !(await askLeave())) return;
   view = 'history';
   globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'history' }));
   // ⚠️ ON A TABLET THE EDITOR IS SET ASIDE, NOT DROPPED: its node, its working copy and its

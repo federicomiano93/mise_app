@@ -311,3 +311,14 @@ test('the ingredient chooser keeps the 620px column on both tablets', () => {
   }
   assert.deepEqual(missingFromPrecache(['js/foodcost/crossing-route.js']), []);
 });
+
+// P20: on a phone the history DROPS the editor, so typed edits must be asked about first
+// (found by the code review of PR #483: «Storico dei margini» lost them in silence).
+test('on a phone the history asks the editor\'s guard before dropping the form', () => {
+  const hist = fnBody('openHistory');
+  const ask = hist.indexOf("if (!splitOn && view === 'editor' && activeEditor && !(await askLeave())) return;");
+  assert.ok(ask > -1, 'the phone asks the leave guard first, and stays in the form on «no»');
+  assert.ok(ask < hist.indexOf("view = 'history';"), 'asked before anything changes');
+  assert.ok(ask < hist.indexOf('leaveGuard = null'), 'asked before the guard is dropped');
+  assert.match(MAIN, /async function askLeave\(\) \{[\s\S]*?guardPending = true;/, 'one question at a time');
+});
