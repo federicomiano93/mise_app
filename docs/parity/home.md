@@ -176,3 +176,69 @@ Decisions to take with him:
   (b) the rail follows the venue's order and the order is set on the same screen. Recommended (a): the same place for
   every section on every tablet, and the five phone tabs stay what H2 decided.
 - D2. The holiday reminder and band work as in the current app (his choices of 13 Sep 2026), no change.
+
+## Step 3g-2 as built (Settings: holiday, app language, sections for employees)
+
+The decisions of the list above stand: D1 (a) the order of the sections stays fixed, nothing about `homeCardOrder`; D2 the holiday band and
+reminder as in the current app. What was built, and what was decided inside the brief:
+
+**Settings in cards by who a row is about.** `settings/SettingsPage.tsx`: «You» (`settings.you`, the holiday row, everybody), «The venue»
+(`settings.venue`, only when `canManage`: the doors «App language» and «Sections for employees», each with its sentence), «Account»
+(unchanged). No «This device» card (the app version waits for step 5, the kiosk for its slice). `settings.more` («The other settings arrive in
+the next steps») is removed in both languages. «Log out» stays on the title line. One row look, `SettingsRow` (title, sentence, chevron, 48px
+minimum, the whole row the target): a link for a door, a button for a dialog.
+
+**Addresses.** Settings now owns `/settings/*` (`settings/SettingsSection.tsx`, wired in `routes.tsx`): `/settings/language` and
+`/settings/sections`. A person without `canManage`, and any other address under `/settings`, is REPLACED by `/settings`. The usage record
+names them `settings-language` and `settings-sections` (`settings/settingsPath.ts`, used by `screenNameFor`). The sub-screens keep the
+page's h1 «Settings» and have a card with Back and an h2 (`SettingsSubScreen`, the Orders and Food cost shape); the screen opens on its h2,
+and Back puts the focus on the door that opened it (the door name travels in the navigation state with `KEEP_FOCUS`).
+
+**Data layer.** `settings/settingsSource.ts` (+ `testing/fakeSettingsSource.ts`, registered in `createDataServices` as `settings`):
+`readMyAway`, `saveAway` (decides `bad-date` synchronously, otherwise returns the write's promise), `setLanguage`, `setStaffCard`,
+`readVenueFromServer`. The two Cloud Functions are called with a 15 s timeout and each is followed by a read of the venue document from the
+server; `setLanguage` and `setStaffCard` ignore a failed read straight after (the call itself succeeded) — `setStaffCard` then resolves
+`null` and the screen applies the change to its own copy.
+
+**The holiday.** `settings/awayStore.ts` + `AwayContext.tsx`, provided by `AppShell`: one read when the venue opens, never a listener; a write
+shows at once and only a rejection is reported; `away` is re-derived from the clock when the day changes (`useTodayKey`). Words are copied from
+the current app (`away.*`, `settings.away.sub`). The row in «You»: not away, «I am on holiday» opens a `Dialog` with the sentence, a visible
+label on a native date field (`min` today, `max` `maxAwayDate`); an empty or out-of-range day shows `away.badDate` in a live region inside the
+dialog and writes nothing; away, the row is amber (`--warn-tint`, `--warn-ink`) with `away.onUntil` and `away.band.body` and asks «Back
+already?» (`I am back`, not red). The Home band (`home/AwayBand.tsx`) is a button above the «Da fare» card. A refused write says
+`away.saveFailed` in the status message (Home, Settings) or in an alert (the reminder, which sits in the shell and has no status line) and the
+state is put back. `shared/src/away-reminder.ts` is the full paired port of `js/away-reminder.js` (parity and odd-inputs entries).
+
+**The reminder.** One place, `shell/AwayReminder.tsx`, mounted once in `AppShell`: it judges an ARRIVAL in a section other than Home and
+Settings (a change of section, or the app opened straight into one) once the holiday read has answered; `/more` is not a section and does
+not trigger. Today is written to `away-reminded-date` before asking; storage that throws reminds. Continue or Escape keeps the holiday; the
+section is open behind the question either way.
+
+**App language** (`settings/LanguageScreen.tsx`): each language named in itself («English», «Italiano», not message keys), «In use»
+pressed and disabled, «Use this» for the other; the label sentence always, in the INTERFACE's words, from the existing `country.<X>.in` and
+`language.<x>.inSentence` keys, or `lang.labels.noCountry`; choosing shows `lang.saving` (a live region on the page from the start), turns the
+buttons off, calls `setLanguage`, then reloads through `settings/pageReload.ts` (an object a spec can spy on; Mise 2 had no UI-reachable
+reload). A failure shows `lang.err.save`. The screen imports only `countryOf`, `outputLanguage` and `canPrintLabel` from `market`.
+
+**Sections for employees** (`settings/StaffSectionsScreen.tsx`): one switch per `STAFF_CARDS` card whose venue section the venue has
+(`isSectionAllowed(location, card.section)`, the original's `allowedSections` rule), named with the Mise 2 section label (`calculator`
+→ Calculator, `catalogue` → Recipes, `orders` → Orders, `suppliers` → Suppliers, `pastries` → Pastries, `foodcost` → Food cost,
+`inventory` → Stocktake), the state word beside the switch and read as one. Hiding anything asks (danger; the push line for the
+cards that send notifications, the allergen-sheet line for Recipes); showing a money card asks (not danger); showing an everyday card
+saves at once. The switch moves only after the server agreed; every switch is disabled and `staffSections.saving` is said while saving;
+a failure says `staffSections.err.save` and nothing moved; the focus is put back on the switch pressed. Its state is the session's `location`
+at once, replaced by the server's answer when it arrives if nothing has been saved meanwhile, then by each save's answer; it lives only as long
+as the screen, so reopening reads the server again (the current app's module-level `override` is NOT carried over).
+
+**Choices the brief did not settle.**
+1. The sub-screens keep «Settings» as the h1 and use the card's h2 for their name (so the browser tab stays «Settings · Mise»).
+2. `/more` and the not-found page do not trigger the reminder; opening the app straight into a section does.
+3. Setting a holiday does not itself count as a reminder: if no reminder was shown today, the first section entered afterwards asks once
+   (as the current app does).
+4. A holiday row that is away is a button that asks; there is no separate «change the date» (as the current app).
+5. The language reload is `pageReload.reload()`; the session env's `reload` is not reachable from a screen.
+6. The StaffSections screen is not wrapped in `markBusy()`: a switch holds nothing unsaved.
+7. `settings/` screens are statically imported by the route (small), not lazy-loaded.
+8. A follow-up read that fails after a successful call is swallowed, as the original's `refreshVenueFromServer` does.
+
+Not done here: the order of the sections (D1, nothing built), «Who can enter» (3g-3), the app version row (step 5), the kiosk rows.
