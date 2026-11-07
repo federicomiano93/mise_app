@@ -1,0 +1,18 @@
+/* A screen one level below Settings: a card as wide as a list is comfortable to read. It does not clip (no `overflow`), so the bar keeps
+   sticking to the top of the scroll area. */
+
+.screen {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 40rem;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}

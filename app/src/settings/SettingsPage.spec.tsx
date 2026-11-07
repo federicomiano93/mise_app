@@ -11,11 +11,11 @@ const TWO = {
 const main = () => within(screen.getByRole('main'));
 
 describe('SettingsPage', () => {
-  it('is Settings, with the account card and a line about the rest', () => {
+  it('is Settings, with the account card and no promise about settings that are not there', () => {
     renderApp('/settings');
     expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
     expect(main().getByRole('heading', { level: 2, name: 'Account' })).toBeInTheDocument();
-    expect(main().getByText('The other settings arrive in the next steps of Mise 2.')).toBeInTheDocument();
+    expect(main().queryByText(/arrive in the next steps/)).not.toBeInTheDocument();
     // Not the placeholder any more.
     expect(screen.queryByText(/will arrive in one of the next steps/)).not.toBeInTheDocument();
   });
@@ -116,6 +116,70 @@ describe('SettingsPage', () => {
     expect(main().getByText('Locale')).toBeInTheDocument();
     expect(main().getByRole('button', { name: 'Cambia locale' })).toBeInTheDocument();
     expect(main().getByRole('button', { name: 'Esci' })).toBeInTheDocument();
-    expect(main().getByText('Le altre impostazioni arrivano nei prossimi passi di Mise 2.')).toBeInTheDocument();
+    expect(main().getByRole('heading', { level: 2, name: 'Tu' })).toBeInTheDocument();
+    expect(main().getByRole('heading', { level: 2, name: 'Il locale' })).toBeInTheDocument();
+  });
+});
+
+const EMPLOYEE = { role: 'staff', canManage: false, isOwner: false } as const;
+const MANAGER = { role: 'manager', canManage: true, isOwner: false } as const;
+const cardTitles = () => main().getAllByRole('heading', { level: 2 }).map(heading => heading.textContent);
+
+describe('SettingsPage: cards by who a row is about', () => {
+  it('shows an employee the You and Account cards only, in that order', () => {
+    renderApp('/settings', { session: EMPLOYEE });
+    expect(cardTitles()).toEqual(['You', 'Account']);
+    expect(main().queryByRole('link', { name: 'App language' })).not.toBeInTheDocument();
+    expect(main().queryByRole('link', { name: 'Sections for employees' })).not.toBeInTheDocument();
+  });
+
+  it('shows an owner You, The venue and Account, in that order', () => {
+    renderApp('/settings');
+    expect(cardTitles()).toEqual(['You', 'The venue', 'Account']);
+  });
+
+  it('shows a manager (a head chef holds this level) The venue too', () => {
+    renderApp('/settings', { session: MANAGER });
+    expect(cardTitles()).toEqual(['You', 'The venue', 'Account']);
+  });
+
+  it('has no «This device» card yet — the app version and the kiosk have their own steps', () => {
+    renderApp('/settings');
+    expect(main().queryByRole('heading', { name: /device/i })).not.toBeInTheDocument();
+  });
+
+  it('puts the holiday in You, and the two doors in The venue, each a whole row with its sentence', () => {
+    renderApp('/settings');
+    const you = main().getByRole('heading', { level: 2, name: 'You' }).closest('section') as HTMLElement;
+    expect(within(you).getByRole('button', { name: 'I am on holiday' })).toHaveAccessibleDescription('Your phone stops ringing while you are away.');
+    const venue = main().getByRole('heading', { level: 2, name: 'The venue' }).closest('section') as HTMLElement;
+    const language = within(venue).getByRole('link', { name: 'App language' });
+    expect(language).toHaveAttribute('href', '/settings/language');
+    expect(language).toHaveAccessibleDescription('The language everybody who works here reads on screen.');
+    const sections = within(venue).getByRole('link', { name: 'Sections for employees' });
+    expect(sections).toHaveAttribute('href', '/settings/sections');
+    expect(sections).toHaveAccessibleDescription('Choose which sections the people who work here see.');
+  });
+
+  it('opens a door, and Back hands the focus to the door that was opened', async () => {
+    const { router, user } = renderApp('/settings');
+    await user.click(main().getByRole('link', { name: 'App language' }));
+    expect(router.state.location.pathname).toBe('/settings/language');
+    await user.click(await screen.findByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/settings'); });
+    await waitFor(() => { expect(main().getByRole('link', { name: 'App language' })).toHaveFocus(); });
+  });
+
+  it('keeps one h1 and one main on the page', () => {
+    renderApp('/settings');
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
+    expect(screen.getAllByRole('main')).toHaveLength(1);
+  });
+
+  it('speaks Italian in the cards and the rows', () => {
+    renderApp('/settings', { lang: 'it' });
+    expect(main().getByRole('button', { name: 'Sono in ferie' })).toBeInTheDocument();
+    expect(main().getByRole('link', { name: 'Lingua dell’app' })).toBeInTheDocument();
+    expect(main().getByRole('link', { name: 'Sezioni per i dipendenti' })).toBeInTheDocument();
   });
 });

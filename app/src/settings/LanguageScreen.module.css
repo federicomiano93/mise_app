@@ -1,0 +1,54 @@
+/* App language: the intro, one row per language (its own name, then the button), the sentence about the labels. */
+
+.intro,
+.note {
+  margin: 0;
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s2) 0;
+  border-top: 1px solid var(--line);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.name {
+  font-weight: 600;
+}
+
+/* Empty until it speaks; on the page before that so a screen reader announces it. Not `display: none`. */
+.status {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.status:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+}
