@@ -25,6 +25,12 @@ const PROJECT = 'bakery-app-ebf90';
 const DOCS = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents`;
 
 function accessToken() {
+  // The session-start hook asks gcloud once and hands the same token to both counters (gcloud
+  // takes ~3 s per call). Honoured for --count ONLY, so a variable left set in a shell can never
+  // drive a delete; the same shape check applies; anything else falls back to gcloud.
+  const given = process.env.MISE_GCLOUD_TOKEN;
+  const counting = process.argv.length === 3 && process.argv[2] === '--count';
+  if (counting && given && /^[\w.\-~+/]+=*$/.test(given)) return given;
   try {
     // A fixed command string: on Windows gcloud is a .cmd, which only a shell can start.
     const out = execSync('gcloud auth print-access-token', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 15000 }).trim();

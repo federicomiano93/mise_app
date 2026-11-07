@@ -125,7 +125,7 @@ function foodCostPanel(recipe, app) {
   return catSection(t('cat.fc.title'), [
     el('p', { class: 'cat-fc-note', text: t('cat.fc.note') }),
     el('button', {
-      class: 'cat-import-btn', type: 'button',
+      class: 'cat-import-btn cat-fc-open', type: 'button',
       onclick: () => app.openFoodCost(recipe),
     }, [
       el('span', { icon: FOODCOST_SVG, 'aria-hidden': 'true' }),

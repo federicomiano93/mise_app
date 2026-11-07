@@ -75,7 +75,8 @@ test('Catalogue: Delete stays at the bottom, only for an owner, and a new recipe
 
 test('Food cost: the editor exposes save(); Delete and the history stay in .fc-actions', () => {
   const src = read('js/foodcost/foodcost-editor.js');
-  assert.match(src, /root,\s*save: onSave,/);
+  assert.match(src, /root,\s*mode,\s*save: onSave,/);
+  assert.match(src, /\[\.\.\.cards, actions\]/, 'at the bottom of the box, in both modes');
   assert.match(src, /historyBtn \|\| \(product && canManageHere\(\)\) \? el\('div', \{ class: 'fc-actions' \}/);
   assert.match(src, /class: 'fc-delete'/);
 });
@@ -84,13 +85,15 @@ test('Food cost: phone Save in the page header, tablet Save in the pane head, ne
   const js = read('js/foodcost/foodcost-main.js');
   // phone: only the editor's own phone header shows it
   const phone = js.slice(js.indexOf('function setEditorHeaderPhone'), js.indexOf('function openProduct'));
-  assert.match(phone, /saveBtn\.hidden = false/);
-  assert.equal(count(js, /saveBtn\.hidden = false/g), 1);
+  // Save for the form, the pencil for the read view: the editor is built first, its mode decides.
+  assert.match(phone, /saveBtn\.hidden = reading/);
+  assert.match(phone, /editBtn\.hidden = !reading/);
+  assert.equal(count(js, /saveBtn\.hidden = reading/g), 1);
   const setHeader = js.slice(js.indexOf('function setHeader'), js.indexOf('// The bottom bar.'));
   assert.match(setHeader, /saveBtn\.hidden = true/);
   // tablet: built into the pane head, only while an editor is open
   const head = js.slice(js.indexOf('function buildPaneHead'), js.indexOf('// A node into the pane'));
-  assert.match(head, /const withSave = view === 'editor' && !!activeEditor;/);
+  assert.match(head, /const withSave = showing === 'edit';/);
   assert.match(head, /withSave \? el\('button'/);
   assert.match(head, /class: 'app-header-save'/);
   assert.match(head, /activeEditor\?\.save\(\)/);
@@ -113,7 +116,7 @@ test('a header that holds a Save drops the 84px reserve, so the title never goes
     assert.match(js, /headerEl\.classList\.toggle\('app-header--save', !!fn\)/, f);
   }
   const fc = read('js/foodcost/foodcost-main.js');
-  assert.match(fc, /headerEl\.classList\.add\('app-header--save'\)/);
+  assert.match(fc, /headerEl\.classList\.toggle\('app-header--save', !reading\)/);
   assert.match(fc, /headerEl\.classList\.remove\('app-header--save'\)/);
   assert.match(fc, /withSave \? 'app-header app-header--save' : 'app-header'/);
 });

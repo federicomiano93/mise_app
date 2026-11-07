@@ -29,7 +29,7 @@ test('every role option comes from ROLE_CHOICES, in a native select', () => {
 test('the invite select has a real label bound by for/id', () => {
   assert.match(SCREEN, /const selectId = '([\w-]+)'/);
   const id = SCREEN.match(/const selectId = '([\w-]+)'/)[1];
-  assert.match(SCREEN, /roleSelect\(newChoice\.key, \{ id: selectId \}\)/);
+  assert.match(SCREEN, /roleSelect\(newChoice \? newChoice\.key : null,\s*\{ id: selectId, /);
   assert.match(SCREEN, /el\('label', \{ class: 'set-label', for: selectId, text: t\('people\.roleGroup'\) \}\)/);
   assert.ok(id.length > 0);
 });
@@ -39,7 +39,7 @@ test('changing the invite role rewrites the sentence and does not rebuild the se
   assert.notEqual(at, -1);
   const handler = SCREEN.slice(at, SCREEN.indexOf('});', at));
   assert.match(handler, /newChoice = /);
-  assert.match(handler, /roleNote\.textContent = t\(ROLE_MEANS\[newChoice\.key\]\)/);
+  assert.match(handler, /roleNote\.textContent = newChoice \? t\(ROLE_MEANS\[newChoice\.key\]\)/);
   assert.doesNotMatch(handler, /paintCode\(\)/, 'a repaint would drop the keyboard focus');
 });
 
@@ -106,10 +106,108 @@ test('on a roster select, step keys and typed letters open the list instead of c
     'the roster select carries the guard');
 });
 
-test('after an invitation, Done puts the next one back on Employee', () => {
+test('after an invitation, Done puts the next one back on NO role', () => {
   const at = SCREEN.indexOf('function doneButton');
   const fn = SCREEN.slice(at, SCREEN.indexOf('\n  }', at));
-  assert.match(fn, /newChoice = ROLE_CHOICES\.find\(c => c\.key === 'staff'\)/);
+  assert.match(fn, /newChoice = null;/);
+  assert.doesNotMatch(fn, /key === 'staff'/);
+});
+
+// ── The role must be chosen before an invitation is made ─────────────────────
+
+test('the invite role starts empty', () => {
+  assert.match(SCREEN, /let newChoice = null;/);
+  assert.doesNotMatch(SCREEN, /let newChoice = ROLE_CHOICES/);
+});
+
+test('only the invite select gets the placeholder; roster selects do not', () => {
+  assert.match(SCREEN, /roleSelect\(newChoice \? newChoice\.key : null,\s*\{ id: selectId, 'aria-describedby': noteId \}, t\('people\.role\.choose'\)\)/);
+  // The roster call closes after its one options object: no third argument, no placeholder.
+  assert.match(SCREEN, /const select = roleSelect\(currentKey, \{\s*'aria-label': t\('people\.roleOf', \{[^}]*\}\),\s*\}\);/);
+  const at = SCREEN.indexOf('function roleSelect');
+  const fn = SCREEN.slice(at, SCREEN.indexOf('\n  }', at));
+  assert.match(fn, /roleSelect\(currentKey, extra, placeholder\)/);
+  assert.match(fn, /if \(placeholder\)/);
+  assert.match(fn, /el\('option', \{ value: '' \}, placeholder\)/);
+  assert.match(fn, /empty\.selected = !currentKey;/);
+  assert.match(fn, /select\.value = currentKey \|\| '';/);
+});
+
+test('the note is announced and tied to the select', () => {
+  assert.match(SCREEN, /const noteId = 'people-invite-role-note'/);
+  assert.match(SCREEN, /id: noteId, 'aria-live': 'polite'/);
+  assert.match(SCREEN, /newChoice \? t\(ROLE_MEANS\[newChoice\.key\]\) : t\('people\.role\.choosePrompt'\)/);
+});
+
+test('with no role, mint stops before the server and points at the select', () => {
+  const at = SCREEN.indexOf('async function mint(');
+  const fn = SCREEN.slice(at, SCREEN.indexOf('\n  }', at));
+  const guard = fn.indexOf('if (!newChoice)');
+  assert.notEqual(guard, -1);
+  assert.ok(guard < fn.indexOf('createJoinCode'), 'the guard comes before the server call');
+  assert.match(fn, /if \(!newChoice\) \{ missingRole\(\); return; \}/);
+  assert.match(SCREEN, /pending = await createJoinCode\(newChoice\.role, newChoice\.title, kind\);/);
+
+  const m = SCREEN.indexOf('      missingRole = () => {');
+  assert.notEqual(m, -1);
+  const body = SCREEN.slice(m, SCREEN.indexOf('};', m));
+  assert.match(body, /roleField\.setAttribute\('aria-invalid', 'true'\)/);
+  assert.match(body, /roleNote\.classList\.add\('people-note--error'\)/);
+  assert.match(body, /roleNote\.textContent = t\('people\.role\.missing'\)/);
+  assert.match(body, /roleField\.focus\(\)/);
+});
+
+test('choosing a role clears the error', () => {
+  const at = SCREEN.indexOf("roleField.addEventListener('change'");
+  const handler = SCREEN.slice(at, SCREEN.indexOf('});', at));
+  assert.match(handler, /roleField\.removeAttribute\('aria-invalid'\)/);
+  assert.match(handler, /roleNote\.classList\.remove\('people-note--error'\)/);
+});
+
+// ⚠️ The first option after the placeholder is Owner. Each of these was a way to land
+// on it without choosing it (code review, 6 Nov 2026).
+test('the placeholder is NOT disabled (iOS would jump to Owner)', () => {
+  const at = SCREEN.indexOf('function roleSelect');
+  const fn = SCREEN.slice(at, SCREEN.indexOf('\n  }', at));
+  assert.doesNotMatch(fn, /\.disabled = true/);
+});
+
+test('picking the placeholder back means no role, never the previous one', () => {
+  const at = SCREEN.indexOf("roleField.addEventListener('change'");
+  const handler = SCREEN.slice(at, SCREEN.indexOf('});', at));
+  assert.match(handler, /newChoice = ROLE_CHOICES\.find\(c => c\.key === roleField\.value\) \|\| null;/);
+  assert.match(handler, /newChoice \? t\(ROLE_MEANS\[newChoice\.key\]\) : t\('people\.role\.choosePrompt'\)/);
+});
+
+test('the invite select carries the same keyboard guard as the roster', () => {
+  assert.match(SCREEN, /roleField\.addEventListener\('keydown', pickFromOpenList\)/);
+});
+
+test('after Done the keyboard lands on the new role menu', () => {
+  const at = SCREEN.indexOf('function doneButton');
+  const fn = SCREEN.slice(at, SCREEN.indexOf('return done;', at));
+  assert.match(fn, /paintCode\(\);\s*[\s\S]*codeBox\.querySelector\('select'\)[\s\S]*\.focus\(\)/);
+});
+
+test('with no role, both buttons show and the Employee-only note is hidden', () => {
+  assert.match(SCREEN, /if \(!newChoice\) \{ byDigits\.hidden = false; digitsNote\.hidden = true; return; \}/);
+  assert.match(SCREEN, /const staff = newChoice\.role === 'staff';\s*byDigits\.hidden = !staff;/);
+  assert.match(SCREEN, /roleField\.addEventListener\('change', showDigits\)/);
+});
+
+test('the three role-first sentences exist in every dictionary', () => {
+  const dicts = _dictionaries();
+  for (const lang of Object.keys(dicts)) {
+    for (const key of ['people.role.choose', 'people.role.choosePrompt', 'people.role.missing']) {
+      assert.ok(String(dicts[lang][key] || '').trim(), `${lang} is missing ${key}`);
+    }
+  }
+});
+
+test('the error styles exist, after .people-note so they win', () => {
+  assert.match(TOKENS, /\.people-note--error \{[^}]*color: var\(--error\)/);
+  assert.match(TOKENS, /\.set-block \.set-select\[aria-invalid="true"\] \{[^}]*border-color: var\(--danger\)/);
+  assert.ok(TOKENS.indexOf('.people-note--error') > TOKENS.indexOf('.people-hint, .people-note'));
 });
 
 test('a roster repaint gives the keyboard focus back to the same person\'s select', () => {
