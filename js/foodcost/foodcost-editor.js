@@ -17,8 +17,9 @@ import { el } from './dom.js';
 import {
   vatRatesFor, vatSelection, costProduct, productionCost, blockerText,
   snapshotWorthTaking, productSnapshot, normalizeProduct, suggestedGrossPrice,
-  ingredientLineCost, productsUsingRecipe, LINE_UNITS, PACK_UNITS,
+  ingredientLineCost, productsUsingRecipe, LINE_UNITS, PACK_UNITS, productPreview,
 } from './foodcost-model.js';
+import { previewPanel } from './preview-view.js';
 import { formatRate, formatMoney } from '../price-model.js';
 import { openVatGuide } from './vat-guide-view.js';
 import { firstInvalidNumber } from './product-limits.js';
@@ -361,11 +362,27 @@ export function renderEditor({ product, draft = null, app }) {
   // ── The answer, live ───────────────────────────────────────────────────────
   const answer = el('div', { class: 'fc-answer' });
 
+  // The preview at the top of the card (Federico, 7 Nov 2026): same numbers as the phone's
+  // preview dialog. A fault here must not take the card down (P17).
+  const summary = el('div', { class: 'fc-summary' });
+
+  function paintSummary(tables) {
+    try {
+      summary.hidden = productionCost(working, tables).batchCost === null;
+      if (summary.hidden) { summary.replaceChildren(); return; }
+      summary.replaceChildren(previewPanel(productPreview(working, tables), { caption: true, showMissing: false }));
+    } catch (e) {
+      summary.hidden = true;
+      summary.replaceChildren();
+    }
+  }
+
   function paintAnswer() {
     const tables = liveTables();
     paintProductionCost();
     paintSuggestion(tables);
     paintPerKg(tables);
+    paintSummary(tables);
     // Minutes typed but no rate to turn them into money: say where the rate is set — and
     // only to somebody who can set it; an employee is simply shown no labour money.
     labourNote.textContent = working.labourMinutes > 0 && app.mayManage() && !(Number(tables.labourCostPerHour) > 0)
@@ -1058,6 +1075,7 @@ export function renderEditor({ product, draft = null, app }) {
   repaint();
 
   const root = el('div', { class: 'fc-view fc-editor' }, [
+    summary,
     prodCost,
     answer,
     perKg,

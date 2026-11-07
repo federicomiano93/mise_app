@@ -23,7 +23,8 @@ import { renderEditor } from './foodcost-editor.js';
 import { getProductHistory, canWriteRecipes, venueCountry, authReady, canManageHere } from './firebase-foodcost.js';
 import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { el } from './dom.js';
-import { productsUsingRecipe, draftFromRecipe, sortByMargin } from './foodcost-model.js';
+import { productsUsingRecipe, draftFromRecipe, sortByMargin, productPreview } from './foodcost-model.js';
+import { previewPanel, previewCaption } from './preview-view.js';
 import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
 // Food or packaging? From js/ root, where the registry that files it asks the same question.
 import { isPackaging } from '../ingredient-kind.js';
@@ -76,6 +77,8 @@ let historyBody = null;
 let guardPending = false;   // a «discard changes?» question is already open
 // True while a move across the width runs: nothing may take the focus.
 let quietFocus = false;
+// The list's search text, kept here so Back from a card finds the same search (7 Nov 2026).
+let listQuery = '';
 
 // ── Opened from a recipe ─────────────────────────────────────────────────────
 //
@@ -159,10 +162,32 @@ function setListChrome() {
   });
 }
 
+// Phone: the preview first (Federico, 7 Nov 2026), in the app's one dialog; its main
+// button opens the card. Tablet: the card opens beside the list as before, with the same
+// panel at its top — the pane IS the preview there.
+async function openFromList(product) {
+  if (splitOn) { requestOpen(product); return; }
+  const preview = productPreview(product, tables());
+  const ok = await confirmDialog({
+    title: product.name || t('fc.untitledProduct'),
+    message: previewCaption(preview),
+    node: previewPanel(preview, { caption: false }),
+    okLabel: t('fc.preview.open'), cancelLabel: t('fc.preview.close'),
+  });
+  // The page may have moved on while the preview was open (a recipe link settling).
+  if (!ok || view !== 'list') return;
+  // The product as it is NOW: it may have changed or gone while the preview was open.
+  const fresh = getProducts().find((p) => p && p.id === product.id);
+  if (!fresh) { toast(t('fc.productDeleted')); return; }
+  requestOpen(fresh);
+}
+
 function buildList(selectedId) {
   return renderList({
-    products: listedProducts(), tables: tables(), onOpen: requestOpen, onAdd: () => requestOpen(null),
+    products: listedProducts(), tables: tables(), onOpen: openFromList, onAdd: () => requestOpen(null),
     selectedId,
+    query: listQuery,
+    onQuery: (q) => { listQuery = q; },
     fromBook: recipesWithoutProductCount,
     onFromBook: openFromBook,
     filter: listFilter ? {

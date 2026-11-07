@@ -70,7 +70,9 @@ test('every replace path awaits the editor\'s own guard and does nothing on «no
 
 test('the list, the «+» and «show all» all go through those guarded paths, never openProduct directly', () => {
   const build = fnBody('buildList');
-  assert.match(build, /onOpen: requestOpen, onAdd: \(\) => requestOpen\(null\)/);
+  // The phone shows the preview first (7 Nov 2026); openFromList hands on to requestOpen.
+  assert.match(build, /onOpen: openFromList, onAdd: \(\) => requestOpen\(null\)/);
+  assert.match(fnBody('openFromList'), /requestOpen\(product\)[\s\S]*requestOpen\(fresh\)/);
   assert.match(build, /onShowAll: requestShowAll/);
   assert.match(MAIN, /addBtn\.addEventListener\('click', \(\) => requestOpen\(null\)\);/);
   assert.doesNotMatch(MAIN, /onOpen: openProduct|onAdd: \(\) => openProduct/);
