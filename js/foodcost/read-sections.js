@@ -26,6 +26,19 @@ export function perKgWeightText(kg) {
   return `${localNumber(String(Number(kg.toFixed(3))))} kg`;
 }
 
+// A recipe line's quantity, as exact as the form's box (the line is stored in KILOS): under 1 kg
+// in grams with up to 2 decimals (0.0125 → «12,5 g»), from 1 kg in kilos with up to 4 decimals
+// (1.25 → «1,25 kg»), trailing zeros dropped. Decided on the ROUNDED grams, so 999.999 g reads
+// «1 kg», never «1000 g». localNumber() because the figure sits beside prices.
+export function recipeQtyText(kg) {
+  const g = Number((kg * 1000).toFixed(2));
+  if (g < 1000) return `${localNumber(String(g))} g`;
+  return `${localNumber(String(Number(kg.toFixed(4))))} kg`;
+}
+
+// A number the person typed (minutes, people, pieces, a rate), through the venue's layout.
+const plain = n => localNumber(String(n));
+
 // The pieces-per-batch box exists for what is sold by the piece, or by a pack counted in
 // pieces; for anything else it would mean nothing. Shared by the form and the read view.
 export function showsPiecesField(working) {
@@ -36,7 +49,7 @@ const SOLD_TEXT = { piece: 'fc.byThePiece', weight: 'fc.byWeightPerKg', pack: 'f
 
 const positive = n => Number.isFinite(Number(n)) && Number(n) > 0;
 // An amount with its unit. Pieces read «12 pz» (fc.perKg.pieces): «pezzi» after a 1 read «1 pezzi».
-const amountText = (n, unit) => (unit === 'pcs' ? t('fc.perKg.pieces', { n: localNumber(String(n)) }) : `${localNumber(String(n))} ${unit}`);
+const amountText = (n, unit) => (unit === 'pcs' ? t('fc.perKg.pieces', { n: plain(n) }) : `${plain(n)} ${unit}`);
 
 function notSet() {
   return el('span', { class: 'fc-read-empty', text: t('fc.notSet') });
@@ -44,10 +57,10 @@ function notSet() {
 
 // One row: the label on the left, the value on the right. `value` null → «Not set».
 // `note` goes under the row (a warning about the line).
-function readRow(label, value, { note = '', missing = false } = {}) {
+function readRow(label, value, { note = '', missing = false, invalid = false } = {}) {
   return el('div', { class: 'fc-read-row' }, [
     el('dt', { class: missing ? 'missing' : null, text: label }),
-    el('dd', {}, [value === null || value === undefined || value === '' ? notSet() : value]),
+    el('dd', { class: invalid ? 'fc-read-invalid' : null }, [value === null || value === undefined || value === '' ? notSet() : value]),
     note ? el('dd', { class: 'fc-line-note fc-read-note', text: note }) : null,
   ]);
 }
@@ -72,7 +85,7 @@ export function readProduct(working) {
   }
   if (showsPiecesField(working)) {
     rows.push(readRow(t('fc.piecesPerBatch'), positive(working.piecesPerBatch)
-      ? localNumber(String(working.piecesPerBatch)) : null));
+      ? plain(working.piecesPerBatch) : null));
   }
   return readList(rows);
 }
@@ -87,7 +100,7 @@ export function readMadeOf({ components, lineName, lineNote }) {
     const name = lineName(entry, kind);
     let qty = null;
     if (kind === 'recipe') {
-      qty = positive(entry.qtyKg) ? perKgWeightText(Number(entry.qtyKg)) : null;
+      qty = positive(entry.qtyKg) ? recipeQtyText(Number(entry.qtyKg)) : null;
     } else {
       qty = positive(entry.qty) ? amountText(entry.qty, entry.unit) : null;
     }
@@ -106,14 +119,15 @@ export function readWeighings({ noWeightLoss, recipes, recipeIds }) {
     const recipe = recipes[id];
     const state = startWeighing(recipe);
     const shown = readWeighing(recipe, state);
-    const grams = n => (positive(n) ? `${localNumber(String(n))} g` : null);
+    const grams = n => (positive(n) ? `${plain(n)} g` : null);
     return el('div', { class: 'fc-weigh' }, [
       known.length > 1 ? el('p', { class: 'fc-weigh-title', text: t('fc.weighFor', { name: recipe.name || '' }) }) : null,
       readList([
         readRow(t('fc.rawDough'), grams(state.raw)),
-        readRow(t('fc.cookedDough'), grams(state.cooked)),
+        readRow(t('fc.cookedDough'), grams(state.cooked), { invalid: !!shown.warning }),
       ]),
       el('p', { class: 'fc-weigh-out', text: t(shown.message.key, shown.message.params) }),
+      shown.warning ? el('p', { class: 'fc-weigh-warn', text: t(shown.warning.key, shown.warning.params) }) : null,
     ]);
   });
   return el('div', { class: 'fc-weighs' }, blocks);
@@ -134,10 +148,10 @@ export function readPackaging({ packaging, lineName, lineNote }) {
 export function readLabour({ minutes, people, note }) {
   const hasMinutes = positive(minutes);
   const rows = [
-    readRow(t('fc.labourMinutes'), hasMinutes ? localNumber(String(minutes)) : null),
+    readRow(t('fc.labourMinutes'), hasMinutes ? plain(minutes) : null),
     // People left empty means one person, as the form's placeholder says — but with no
     // minutes at all there is nothing for them to work on, so it is «Not set» too.
-    readRow(t('fc.labourPeople'), positive(people) ? localNumber(String(people)) : (hasMinutes ? '1' : null)),
+    readRow(t('fc.labourPeople'), positive(people) ? plain(people) : (hasMinutes ? '1' : null)),
   ];
   return el('div', { class: 'fc-read-block' }, [
     readList(rows),
@@ -148,8 +162,8 @@ export function readLabour({ minutes, people, note }) {
 // ── Prezzo ──────────────────────────────────────────────────────────────────
 export function readPrice({ vatRate, target, price }) {
   return readList([
-    readRow(t('fc.vatRate'), vatRate === null || vatRate === undefined ? null : `${vatRate}%`),
-    readRow(t('fc.foodCostTarget'), positive(target) ? `${target}%` : null),
+    readRow(t('fc.vatRate'), vatRate === null || vatRate === undefined ? null : `${plain(vatRate)}%`),
+    readRow(t('fc.foodCostTarget'), positive(target) ? `${plain(target)}%` : null),
     readRow(t('fc.sellingPriceVat', { currency: currentCurrency() }), positive(price) ? formatMoney(price) : null),
   ]);
 }

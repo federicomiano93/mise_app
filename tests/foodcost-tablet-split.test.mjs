@@ -76,11 +76,11 @@ test('the list, the «+» and «show all» all go through those guarded paths, n
   assert.match(build, /onShowAll: requestShowAll/);
   assert.match(MAIN, /addBtn\.addEventListener\('click', \(\) => requestOpen\(null\)\);/);
   assert.doesNotMatch(MAIN, /onOpen: openProduct|onAdd: \(\) => openProduct/);
-  // (ten matches = the definition + the callers) The only direct callers: the guarded path, the way back to the product, the
+  // (eleven matches = the definition + the callers) The only direct callers: the guarded path, the way back to the product, the
   // recipe-link entries (an untouched product, never a dirty one; openNarrowed too), and the pencil's three: startEdit,
-  // stopEdit (after its own guard) and showSaved (after a confirmed Save).
+  // stopEdit (after its own guard) and showSaved (after a confirmed Save), plus refreshRead (a read view has nothing typed, so it needs no guard).
   const callers = [...MAIN.matchAll(/\bopenProduct\(/g)].length;
-  assert.equal(callers, 10, 'a new direct call to openProduct: it must be guarded — update this list on purpose');
+  assert.equal(callers, 11, 'a new direct call to openProduct: it must be guarded — update this list on purpose');
 });
 
 test('tapping the product that is already open does nothing', () => {

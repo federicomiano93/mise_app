@@ -437,8 +437,33 @@ function openProduct(product, draft = null, { mode = 'auto', fromRead = false } 
 // The pencil: the SAME product, as the form. Back from it returns to the read view.
 function startEdit() {
   if (view !== 'editor' || !activeEditor || activeEditor.mode !== 'read' || !currentProduct) return;
-  const fresh = getProducts().find((p) => p && p.id === currentProduct.id) || currentProduct;
-  openProduct(fresh, null, { mode: 'edit', fromRead: true });
+  const fresh = getProducts().find((p) => p && p.id === currentProduct.id);
+  // Deleted on another device: never open the form of a product that no longer exists (a
+  // Save would bring it back).
+  if (!fresh && currentProduct.id && hasLiveProducts()) { toast(t('fc.productDeleted')); showList(); return; }
+  openProduct(fresh || currentProduct, null, { mode: 'edit', fromRead: true });
+}
+
+// The READ view redrawn from `fresh` IN PLACE: whether «Scheda completa» was open, the scroll and
+// the focus (when it was inside the view) come back. Nothing else changes — entryEditor,
+// listFilter, fromRecipe and editFromRead are not touched. Safe because a read view holds
+// nothing typed.
+function refreshRead(fresh) {
+  const scroller = splitOn ? screen.querySelector('.fc-pane-body') : screen;
+  const root = activeEditor ? activeEditor.root : null;
+  const wasOpen = !!(root && root.querySelector('.fc-full[open]'));
+  const top = scroller ? scroller.scrollTop : 0;
+  const active = document.activeElement;
+  const hadFocus = !!(root && active && root.contains(active));
+  quietFocus = true;
+  try { openProduct(fresh, null, { mode: 'read' }); } finally { quietFocus = false; }
+  const full = activeEditor && activeEditor.root.querySelector('details.fc-full');
+  if (full && wasOpen) full.open = true;
+  const after = splitOn ? screen.querySelector('.fc-pane-body') : screen;
+  if (after) after.scrollTop = top;
+  if (hadFocus) {
+    try { activeEditor.root.querySelector('.fc-full-summary').focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
+  }
 }
 
 // Back from a form opened with the pencil: one level up = the read view of the same product,
@@ -771,7 +796,14 @@ initFoodCost(
     // IS NEVER REPLACED by a remote edit (it never was): only the lines and the answer redraw.
     // Beside the list, a product deleted elsewhere sends an UNTOUCHED editor back to the
     // placeholder; one with typing in it is kept, as on a phone.
-    if (view === 'editor' && activeEditor) {
+    if (view === 'editor' && activeEditor && activeEditor.mode === 'read' && currentProduct && currentProduct.id) {
+      // A read view has nothing typed: it follows the stored product, a deletion included
+      // (phone and tablet alike).
+      const fresh = getProducts().find((p) => p && p.id === currentProduct.id);
+      if (!fresh && hasLiveProducts()) { toast(t('fc.productDeleted')); showList(); return; }
+      if (fresh && JSON.stringify(fresh) !== JSON.stringify(currentProduct)) refreshRead(fresh);
+      else activeEditor.refreshData();
+    } else if (view === 'editor' && activeEditor) {
       if (openProductWasDeleted(activeEditor)) { toast(t('fc.productDeleted')); showList(); return; }
       activeEditor.refreshData();
     }
@@ -795,7 +827,10 @@ initFoodCost(
 onLanguageChange(() => {
   if (view === 'list') showList();
   else if (view === 'loading') showWaiting();
-  else if (splitOn && (view === 'editor' || view === 'history')) {
+  else if (!splitOn && view === 'editor' && activeEditor && activeEditor.mode === 'read' && currentProduct) {
+    // A read view has nothing typed, so on a phone it can be redrawn in the new language.
+    refreshRead(currentProduct);
+  } else if (splitOn && (view === 'editor' || view === 'history')) {
     // The list beside the product, the page header and the pane head are words too; the
     // editor itself is left alone (its typing is never redrawn away).
     setListChrome();

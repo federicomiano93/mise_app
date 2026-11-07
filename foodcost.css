@@ -244,9 +244,11 @@ select.fc-input, .fc-select {
    is the thing that was missed. The box itself is framed in red by .fc-invalid. */
 .fc-weigh-warn { margin: 4px 0 0; font-size: .8rem; font-weight: 600; color: var(--fc-danger); }
 .fc-weigh-row .fc-invalid { box-shadow: 0 0 0 1px var(--fc-danger); }
+/* The read view's cooked weight of a wrong pair: the same red, with no box to frame. */
+.fc-read-row dd.fc-read-invalid { color: var(--fc-danger); }
 /* «Finished product, no weight loss»: the shared .set-row inside the «Composto da» card. The
    card already has its own padding, so the row's 16px side padding would double it. */
-.fc-madeof .fc-noloss { padding: 10px 2px; border-top: 1px dashed var(--fc-border); }
+.fc-card .fc-weighs .fc-noloss { padding: 10px 2px; border-top: 1px dashed var(--fc-border); }
 .fc-weighs .fc-noloss + .fc-weigh { margin-top: 0; }
 .fc-weigh-shared { margin-top: 4px; }
 .fc-weigh-warn[hidden],

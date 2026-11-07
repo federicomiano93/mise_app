@@ -378,14 +378,14 @@
       }
     },
     "dist/foodcost.css": {
-      "sha": "3e6eca88085bc6e0",
+      "sha": "608de571b5b5a37d",
       "inputs": {
-        "foodcost.css": "c6594df45dcbdeaf"
+        "foodcost.css": "fe008f6c8e2abb07"
       }
     },
     "dist/foodcost.js": {
-      "sha": "ed835bc10b05ac01",
-      "mapSha": "e4ba56fb755e3b72",
+      "sha": "18eb0a14e11257cb",
+      "mapSha": "b21d7299f36b935e",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "41d275905d191c60",
@@ -411,7 +411,7 @@
         "js/foodcost/firebase-foodcost.js": "385802cc24237b22",
         "js/foodcost/foodcost-editor.js": "818fbaf89c9bc6b6",
         "js/foodcost/foodcost-list.js": "5f8121ac395a175b",
-        "js/foodcost/foodcost-main.js": "60ce6a84037d76d5",
+        "js/foodcost/foodcost-main.js": "adb2e19c55ffcf4c",
         "js/foodcost/foodcost-model.js": "6361173bc312a4ad",
         "js/foodcost/foodcost-settings.js": "515cc9a266758252",
         "js/foodcost/foodcost-store.js": "cac52d213db0143f",
@@ -422,7 +422,7 @@
         "js/foodcost/per-kg-model.js": "f3edd9b3c38f1766",
         "js/foodcost/preview-view.js": "b554502407421cbd",
         "js/foodcost/product-limits.js": "ed45299d01a6997b",
-        "js/foodcost/read-sections.js": "c7c927c261411d49",
+        "js/foodcost/read-sections.js": "c0cf989fd41d1a36",
         "js/foodcost/tablet.js": "39ca59d6515191ad",
         "js/foodcost/vat-guide-view.js": "1b7355c4f514ca80",
         "js/foodcost/vat-guide.js": "7167dc662d3c5cf1",

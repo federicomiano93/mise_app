@@ -138,7 +138,7 @@ test('showSaved opens the fresh product in READ (forced), refreshing the tablet 
 
 test('the pencil opens the form from the read view; Back from it returns to the read view', () => {
   const code = codeOf(main);
-  assert.match(fnBody(code, 'startEdit'), /openProduct\(fresh, null, \{ mode: 'edit', fromRead: true \}\)/);
+  assert.match(fnBody(code, 'startEdit'), /openProduct\(fresh \|\| currentProduct, null, \{ mode: 'edit', fromRead: true \}\)/);
   assert.match(fnBody(code, 'startEdit'), /activeEditor\.mode !== 'read'/);
   const stop = fnBody(code, 'stopEdit');
   assert.match(stop, /if \(!\(await askLeave\(\)\)\) return;/, 'the usual «discard changes?» question first');
@@ -152,6 +152,41 @@ test('the pencil opens the form from the read view; Back from it returns to the 
   // Only a form opened by the pencil has a read view below it.
   assert.match(code, /editFromRead = fromRead && activeEditor\.mode === 'edit';/);
   assert.match(fnBody(code, 'showList'), /editFromRead = false;/);
+});
+
+test('the read view follows the stored product: redrawn in place, a deletion leaves it on any screen', () => {
+  const code = codeOf(main);
+  const cb = code.slice(code.indexOf('initFoodCost('));
+  assert.match(cb, /view === 'editor' && activeEditor && activeEditor\.mode === 'read' && currentProduct && currentProduct\.id/);
+  assert.match(cb, /if \(!fresh && hasLiveProducts\(\)\) \{ toast\(t\('fc\.productDeleted'\)\); showList\(\); return; \}/, 'no splitOn condition: phone too');
+  assert.match(cb, /JSON\.stringify\(fresh\) !== JSON\.stringify\(currentProduct\)\) refreshRead\(fresh\)/);
+  assert.match(cb, /else activeEditor\.refreshData\(\);/);
+  // The form keeps its working copy: its branch is the old one.
+  assert.match(cb, /\} else if \(view === 'editor' && activeEditor\) \{\s*if \(openProductWasDeleted\(activeEditor\)\)/);
+  const body = fnBody(code, 'refreshRead');
+  assert.match(body, /quietFocus = true;/);
+  assert.match(body, /openProduct\(fresh, null, \{ mode: 'read' \}\)/);
+  assert.match(body, /\.fc-full\[open\]/);
+  assert.match(body, /scrollTop/);
+  assert.match(body, /\.fc-pane-body/);
+  assert.match(body, /\.fc-full-summary'\)\.focus/);
+  assert.doesNotMatch(body, /entryEditor|listFilter|fromRecipe|editFromRead/);
+});
+
+test('the pencil refuses a product deleted elsewhere; the phone read view is redrawn when the language arrives', () => {
+  const code = codeOf(main);
+  const edit = fnBody(code, 'startEdit');
+  assert.match(edit, /!fresh && currentProduct\.id && hasLiveProducts\(\)\) \{ toast\(t\('fc\.productDeleted'\)\); showList\(\); return; \}/);
+  assert.ok(edit.indexOf('productDeleted') < edit.indexOf("mode: 'edit'"));
+  const lang = code.slice(code.indexOf('onLanguageChange(() => {'));
+  assert.match(lang, /!splitOn && view === 'editor' && activeEditor && activeEditor\.mode === 'read' && currentProduct\) \{\s*refreshRead\(currentProduct\);/);
+});
+
+test('the no-loss switch row keeps its padding and dashed line inside the «Composto da» card', () => {
+  const css = read('../foodcost.css');
+  assert.match(css, /\.fc-card \.fc-weighs \.fc-noloss \{ padding: 10px 2px; border-top: 1px dashed var\(--fc-border\); \}/);
+  assert.doesNotMatch(css, /\.fc-madeof \.fc-noloss/, 'the weighings are no longer inside .fc-madeof');
+  assert.match(css, /\.fc-read-row dd\.fc-read-invalid \{ color: var\(--fc-danger\); \}/);
 });
 
 test('the header: the phone shows the pencil in read and Save in the form; the tablet pane head draws the same', () => {
