@@ -22,8 +22,23 @@ export function AwayProvider({ children }: { children: ReactNode }) {
   const today = useTodayKey();
 
   useEffect(() => { store.start(); }, [store]);
-  // A tablet left open past midnight: the holiday may have ended on its own.
-  useEffect(() => { store.recheck(); }, [store, today]);
+  // A tablet left open past midnight: the holiday may have ended on its own, or been changed on another phone. The store asks the clock
+  // again at once and reads again (at most every ten minutes).
+  useEffect(() => {
+    store.recheck();
+    store.refresh();
+  }, [store, today]);
+  // The tablet comes back to the foreground: the same re-read, so a holiday set or ended elsewhere shows on waking.
+  useEffect(() => {
+    const wake = () => {
+      if (document.visibilityState === 'visible') {
+        store.recheck();
+        store.refresh();
+      }
+    };
+    document.addEventListener('visibilitychange', wake);
+    return () => { document.removeEventListener('visibilitychange', wake); };
+  }, [store]);
 
   return <AwayContext.Provider value={store}>{children}</AwayContext.Provider>;
 }

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { fakeSettingsSource } from '../testing/fakeSettingsSource';
 import type { FakeSettingsSource } from '../testing/fakeSettingsSource';
 import { renderApp } from '../testing/renderApp';
@@ -29,7 +29,9 @@ async function open(path: string, seed: Parameters<typeof fakeSettingsSource>[0]
 }
 
 const rail = () => within(screen.getByRole('navigation', { name: 'All sections' }));
-const reminder = () => screen.findByRole('alertdialog', { name: 'You are on holiday' });
+// A section loads lazily: under a full parallel run the question can come later than the default wait.
+const LOAD = { timeout: 10_000 };
+const reminder = () => screen.findByRole('alertdialog', { name: 'You are on holiday' }, LOAD);
 const noReminder = async () => {
   // Give the one read time to answer and the effect time to run.
   await new Promise(resolve => setTimeout(resolve, 20));
@@ -154,6 +156,49 @@ describe('the once-a-day holiday reminder', { timeout: 15_000 }, () => {
     const { user } = await open('/home');
     await user.click(rail().getByRole('link', { name: 'Recipes' }));
     expect(await reminder()).toBeInTheDocument();
+  });
+
+  describe('when the day changes under somebody sitting in a section', () => {
+    // The tablet wakes on a new day: the clock moved and the page became visible again.
+    const wakeOn = (day: Date) => {
+      vi.setSystemTime(day);
+      act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+    };
+
+    it('judges them again for the new day, key written first', async () => {
+      const { user } = await open('/home');
+      await user.click(rail().getByRole('link', { name: 'Recipes' }));
+      await user.click(within(await reminder()).getByRole('button', { name: 'Continue' }));
+      await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+      expect(localStorage.getItem(KEY)).toBe('2026-11-07');
+
+      wakeOn(new Date(2026, 10, 8, 8, 0, 0));
+      expect(await reminder()).toBeInTheDocument();
+      expect(localStorage.getItem(KEY)).toBe('2026-11-08');
+    });
+
+    it('does not ask twice on the same day when the tablet wakes again', async () => {
+      const { user } = await open('/home');
+      await user.click(rail().getByRole('link', { name: 'Recipes' }));
+      await user.click(within(await reminder()).getByRole('button', { name: 'Continue' }));
+      await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+      wakeOn(new Date(2026, 10, 7, 18, 0, 0));
+      await noReminder();
+    });
+
+    it('asks nothing in the Home or in Settings when the day changes there', async () => {
+      await open('/home');
+      wakeOn(new Date(2026, 10, 8, 8, 0, 0));
+      await noReminder();
+    });
+
+    it('asks nothing when the holiday has ended with the old day', async () => {
+      const { user } = await open('/home', { away: { until: '2026-11-07' } });
+      await user.click(rail().getByRole('link', { name: 'Recipes' }));
+      await user.click(within(await reminder()).getByRole('button', { name: 'Continue' }));
+      wakeOn(new Date(2026, 10, 8, 8, 0, 0));
+      await noReminder();
+    });
   });
 
   it('speaks Italian', async () => {

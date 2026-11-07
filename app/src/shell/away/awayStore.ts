@@ -35,6 +35,9 @@ export interface AwayStore {
   subscribe(listener: () => void): () => void;
   // Reads the holiday once. Safe to call more than once (React's development mode mounts twice): only the first reads.
   start(): void;
+  // Reads the holiday again — a day change, the tablet back in the foreground — at most once every ten minutes. Never overwrites a write
+  // still in the air.
+  refresh(): void;
   // Asks the clock again (the day may have changed).
   recheck(): void;
   // Sets the holiday to the day `until` ('YYYY-MM-DD'); '' ends it.
@@ -43,13 +46,24 @@ export interface AwayStore {
   comeBack(): AwayChange;
 }
 
+// How often the holiday may be read again (a day change, the tablet coming back to the foreground): a holiday ended or set on another
+// phone shows within a day or on waking, at the price of a read every ten minutes at most (P14).
+export const REREAD_MIN_MS = 600_000;
+
 export function createAwayStore(source: SettingsSource, uid: string, now: () => number = Date.now): AwayStore {
   let snapshot: AwaySnapshot = Object.freeze({ status: 'loading', until: null, away: false });
   const listeners = new Set<() => void>();
   let started = false;
-  // Counts this person's writes: an older write's refusal must not put back over a newer one, and a read that answers after a write
-  // must not overwrite it.
+  let lastRead = 0;
+  // Counts this person's writes: only the NEWEST write's refusal puts anything back.
   let writes = 0;
+  // Writes sent and not yet answered. While any is in the air a read never changes what the screen shows.
+  let inFlight = 0;
+  // ⚠️ THE LAST STATE THE SERVER IS KNOWN TO HOLD: what a read answered, or what a write whose promise resolved. undefined until
+  // either has happened. A refusal puts THIS back, never the previous optimistic value (which may itself have been refused).
+  let confirmed: string | null | undefined;
+  // The newest write the server has answered; a read that STARTED before it is older news than the write and changes nothing.
+  let lastConfirmedWrite = 0;
 
   function publish(next: Pick<AwaySnapshot, 'status' | 'until'>): void {
     const away = next.until !== null && isAway({ until: next.until }, now());
@@ -63,17 +77,39 @@ export function createAwayStore(source: SettingsSource, uid: string, now: () => 
     if (attempt.result === 'bad-date') return { accepted: false };
     const before = snapshot.until;
     writes += 1;
+    inFlight += 1;
     const mine = writes;
     publish({ status: 'ready', until });
     const saved = attempt.written.then(
-      () => true,
+      () => {
+        inFlight -= 1;
+        confirmed = until;
+        lastConfirmedWrite = Math.max(lastConfirmedWrite, mine);
+        return true;
+      },
       (err: unknown) => {
+        inFlight -= 1;
         console.error('Saving the holiday failed:', err);
-        if (writes === mine) publish({ status: 'ready', until: before });
+        if (writes === mine) publish({ status: 'ready', until: confirmed === undefined ? before : confirmed });
         return false;
       },
     );
     return { accepted: true, saved };
+  }
+
+  // One read. A read that answers while a local write is still in the air is recorded as the confirmed state but NOT shown over the
+  // write; if that write is then refused, the confirmed state is what comes back. A re-read that finds nothing is ignored: the document
+  // is never deleted (it is written empty), so nothing after a first answer means the read failed, not that the holiday went.
+  function read(first: boolean): void {
+    lastRead = now();
+    const startedAt = writes;
+    void source.readMyAway(uid).then(mine => {
+      if (!first && mine === null) return;
+      if (lastConfirmedWrite > startedAt) return;
+      confirmed = mine ? mine.until : null;
+      if (inFlight > 0) return;
+      publish({ status: 'ready', until: confirmed });
+    });
   }
 
   return {
@@ -85,10 +121,11 @@ export function createAwayStore(source: SettingsSource, uid: string, now: () => 
     start() {
       if (started) return;
       started = true;
-      void source.readMyAway(uid).then(mine => {
-        if (writes > 0) return;
-        publish({ status: 'ready', until: mine ? mine.until : null });
-      });
+      read(true);
+    },
+    refresh() {
+      if (!started || now() - lastRead < REREAD_MIN_MS) return;
+      read(false);
     },
     recheck() {
       publish({ status: snapshot.status, until: snapshot.until });
@@ -104,6 +141,7 @@ export const INERT_AWAY_STORE: AwayStore = Object.freeze({
   getSnapshot: (): AwaySnapshot => INERT_SNAPSHOT,
   subscribe: () => () => undefined,
   start: () => undefined,
+  refresh: () => undefined,
   recheck: () => undefined,
   set: (): AwayChange => ({ accepted: false }),
   comeBack: (): AwayChange => ({ accepted: false }),

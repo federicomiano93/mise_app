@@ -159,6 +159,105 @@ describe('the holiday store', () => {
     expect(store.getSnapshot()).not.toBe(first);
   });
 
+  it('puts back what the server is KNOWN to hold, not the previous optimistic value: two refusals in a row', async () => {
+    const { store, source } = make({ away: { until: '2026-11-20' } });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    store.start();
+    await flush();
+    const refusals: ((err: Error) => void)[] = [];
+    source.saveAway = vi.fn(() => ({ result: 'saved' as const, written: new Promise<void>((_, fail) => { refusals.push(fail); }) }));
+    const first = store.set('2026-11-12');
+    const second = store.comeBack();
+    expect(store.getSnapshot()).toMatchObject({ until: '', away: false });
+    refusals[0]?.(new Error('first refused'));
+    await flush();
+    // The older refusal changes nothing…
+    expect(store.getSnapshot().until).toBe('');
+    refusals[1]?.(new Error('second refused'));
+    expect(first.accepted && await first.saved).toBe(false);
+    expect(second.accepted && await second.saved).toBe(false);
+    // …and the newest one shows the server’s real state, not the first, also refused, value.
+    expect(store.getSnapshot()).toMatchObject({ until: '2026-11-20', away: true });
+  });
+
+  it('records a read that answers during a pending write without showing it over the write, and shows it if the write is refused', async () => {
+    const source = fakeSettingsSource({ now: () => NOW });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let answer: (mine: { until: string } | null) => void = () => undefined;
+    source.readMyAway = vi.fn(() => new Promise<{ until: string } | null>(done => { answer = done; }));
+    let refuse: (err: Error) => void = () => undefined;
+    source.saveAway = vi.fn(() => ({ result: 'saved' as const, written: new Promise<void>((_, fail) => { refuse = fail; }) }));
+    const store = createAwayStore(source, 'u1', () => NOW);
+    store.start();
+    const change = store.set('2026-11-12');
+    answer({ until: '2026-11-25' });
+    await flush();
+    expect(store.getSnapshot().until).toBe('2026-11-12');
+    refuse(new Error('no'));
+    expect(change.accepted && await change.saved).toBe(false);
+    expect(store.getSnapshot()).toMatchObject({ status: 'ready', until: '2026-11-25', away: true });
+  });
+
+  it('does not let a read that began before a confirmed write undo it', async () => {
+    const source = fakeSettingsSource({ now: () => NOW });
+    let answer: (mine: { until: string } | null) => void = () => undefined;
+    source.readMyAway = vi.fn(() => new Promise<{ until: string } | null>(done => { answer = done; }));
+    const store = createAwayStore(source, 'u1', () => NOW);
+    store.start();
+    const change = store.set('2026-11-12');
+    if (change.accepted) await change.saved;
+    answer({ until: '2026-11-25' });
+    await flush();
+    expect(store.getSnapshot().until).toBe('2026-11-12');
+  });
+
+  describe('reading again', () => {
+    it('reads again at most once every ten minutes, and shows what another phone set', async () => {
+      const { store, source, clock } = make({ away: null });
+      store.start();
+      await flush();
+      expect(store.getSnapshot().away).toBe(false);
+      source.away = { until: '2026-11-16' };
+      clock.now += 9 * 60_000;
+      store.refresh();
+      expect(source.readMyAway).toHaveBeenCalledTimes(1);
+      clock.now += 2 * 60_000;
+      store.refresh();
+      await flush();
+      expect(source.readMyAway).toHaveBeenCalledTimes(2);
+      expect(store.getSnapshot()).toMatchObject({ until: '2026-11-16', away: true });
+    });
+
+    it('never overwrites a local write still in the air', async () => {
+      const { store, source, clock } = make({ away: { until: '2026-11-20' } });
+      store.start();
+      await flush();
+      source.saveAway = vi.fn(() => ({ result: 'saved' as const, written: new Promise<void>(() => undefined) }));
+      store.set('2026-11-12');
+      clock.now += 11 * 60_000;
+      store.refresh();
+      await flush();
+      expect(store.getSnapshot().until).toBe('2026-11-12');
+    });
+
+    it('ignores a re-read that finds nothing: a holiday is never deleted, so nothing means the read failed', async () => {
+      const { store, source, clock } = make({ away: { until: '2026-11-20' } });
+      store.start();
+      await flush();
+      source.away = null;
+      clock.now += 11 * 60_000;
+      store.refresh();
+      await flush();
+      expect(store.getSnapshot().until).toBe('2026-11-20');
+    });
+
+    it('does nothing before the first read has been asked for', () => {
+      const { store, source } = make();
+      store.refresh();
+      expect(source.readMyAway).not.toHaveBeenCalled();
+    });
+  });
+
   it('has an inert store for nobody: never away, never writes', () => {
     expect(INERT_AWAY_STORE.getSnapshot()).toEqual({ status: 'ready', until: null, away: false });
     expect(INERT_AWAY_STORE.set('2026-11-16')).toEqual({ accepted: false });

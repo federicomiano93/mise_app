@@ -8,6 +8,7 @@ import { awayDayLabel } from './away/awayWords';
 import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import { SECTIONS } from './sections';
+import { useTodayKey } from './useTodayKey';
 
 // The section an address is in, when it is one that can remind: every section but the Home and Settings (they are where a holiday is
 // SEEN and ended, so asking there would be asking twice). «More» is not a section, it is a list of them. null for anything else.
@@ -40,7 +41,10 @@ export function AwayReminder() {
   const [confirm, confirmDialog] = useConfirm();
   const [alert, alertDialog] = useAlert();
   const section = remindingSection(pathname);
-  // The section this arrival has already been judged for: staying in it, or the holiday changing under it, asks nothing new.
+  // ⚠️ THE DAY IS WATCHED TOO: somebody sitting in a section when the day changes (or the tablet wakes on a new day) is judged again for
+  // the new day, by the same rules.
+  const day = useTodayKey();
+  // The arrival (section and day) already judged: staying in it, or the holiday changing under it, asks nothing new.
   const judged = useRef<string | null>(null);
 
   useEffect(() => {
@@ -49,8 +53,9 @@ export function AwayReminder() {
       return;
     }
     // The one read has not answered yet: wait, the arrival is judged when it does.
-    if (judged.current === section || away.status !== 'ready') return;
-    judged.current = section;
+    const arrival = `${section}|${day}`;
+    if (judged.current === arrival || away.status !== 'ready') return;
+    judged.current = arrival;
     if (!away.away) return;
 
     const today = toISODate(Date.now());
@@ -75,7 +80,7 @@ export function AwayReminder() {
       }
     })();
     // The words and the callbacks are read when the question is asked, not reasons to ask again.
-  },[section, away.status, away.away]);
+  }, [section, day, away.status, away.away]);
 
   return (
     <>
