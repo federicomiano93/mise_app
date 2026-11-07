@@ -39,6 +39,10 @@ import {
   weighingsChangeCost, otherProductsUsing,
 } from './foodcost-weighing.js';
 import { KILO_LINE_UNITS, kilosFromTyped, typedFromKilos } from './line-quantity.js';
+import {
+  perKgWeightText, showsPiecesField, readProduct, readMadeOf, readWeighings, readPackaging,
+  readLabour, readPrice,
+} from './read-sections.js';
 
 const TRASH_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>';
@@ -70,17 +74,6 @@ const PER_KG_REASON_TEXT = {
 const CHEVRON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 
-// A weight for the «Cost per 1 kg» list: under 1 kg in whole grams (one decimal under
-// 10 g), from 1 kg in kilos with up to 3 decimals. localNumber() because the figure sits
-// on the same line as a price.
-// Decided on the ROUNDED grams, so 999.6 g reads «1 kg», never «1000 g».
-function perKgWeightText(kg) {
-  const g = kg * 1000;
-  const shown = g < 10 ? Number(g.toFixed(1)) : Math.round(g);
-  if (shown < 1000) return `${localNumber(String(shown))} g`;
-  return `${localNumber(String(Number(kg.toFixed(3))))} kg`;
-}
-
 // A count of pieces in one kilo: one decimal, two under one piece (a box shared by many
 // kilos), so a counted cost never sits beside «0 pz».
 function perKgPiecesText(pcs) {
@@ -99,7 +92,11 @@ function unitWord(mode) {
 // the absent Delete and the absent margin history all key off `product`, and a draft is
 // none of those. And it opens NOT dirty — nobody has typed anything, so leaving at once
 // asks nothing and saves nothing.
-export function renderEditor({ product, draft = null, app }) {
+//
+// `mode` (7 Nov 2026): 'read' is the plain-text card, 'edit' the form, and 'auto' reads a stored
+// product that has a summary to show and opens everything else — a new product, a draft, a
+// product with nothing priced yet — straight in the form, because there is nothing to read.
+export function renderEditor({ product, draft = null, app, mode: wanted = 'auto' }) {
   // A working COPY. Nothing reaches the stored product until Save.
   const working = product
     ? JSON.parse(JSON.stringify(normalizeProduct(product)))
@@ -164,6 +161,13 @@ export function renderEditor({ product, draft = null, app }) {
   function liveTables() {
     return withWeighings(app.tables(), currentPatches());
   }
+
+  // Read or edit. 'auto' decides on the summary: it shows once something is costed.
+  const summaryShows = (() => {
+    try { return productionCost(working, liveTables()).batchCost !== null; } catch (e) { return false; }
+  })();
+  const mode = wanted === 'read' || wanted === 'edit' ? wanted : (product && summaryShows ? 'read' : 'edit');
+  const isRead = mode === 'read';
 
   // One recipe's two weighings. `titled` names the recipe, when the product has more than
   // one and the boxes would otherwise not say whose dough they are.
@@ -382,6 +386,11 @@ export function renderEditor({ product, draft = null, app }) {
     }
   }
 
+  function labourNoteText(tables) {
+    return working.labourMinutes > 0 && app.mayManage() && !(Number(tables.labourCostPerHour) > 0)
+      ? t('fc.labourSetRate') : '';
+  }
+
   function paintAnswer() {
     const tables = liveTables();
     paintProductionCost();
@@ -390,8 +399,7 @@ export function renderEditor({ product, draft = null, app }) {
     paintSummary(tables);
     // Minutes typed but no rate to turn them into money: say where the rate is set — and
     // only to somebody who can set it; an employee is simply shown no labour money.
-    labourNote.textContent = working.labourMinutes > 0 && app.mayManage() && !(Number(tables.labourCostPerHour) > 0)
-      ? t('fc.labourSetRate') : '';
+    labourNote.textContent = labourNoteText(tables);
     const result = costProduct(working, tables);
     answer.replaceChildren();
 
@@ -526,7 +534,9 @@ export function renderEditor({ product, draft = null, app }) {
     el('label', { class: 'set-switch' }, [noLossInput, el('span', { class: 'set-switch-track', 'aria-hidden': 'true' })]),
   ]);
   const addLineBtn = el('button', { class: 'fc-add-row', type: 'button', onclick: () => addLine() });
-  const madeOf = el('div', { class: 'fc-madeof' }, [componentRows, addLineBtn, weighRows]);
+  // The weighings sit in the SAME card as the lines, under their own sub-heading (7 Nov 2026).
+  const madeOf = el('div', { class: 'fc-madeof' }, [componentRows, addLineBtn]);
+  const weighHead = el('h3', { class: 'fc-subsection', text: t('fc.section.weighing') });
 
   const packagingRows = el('div', { class: 'fc-rows' });
   const packagingQty = el('p', { class: 'fc-label' });
@@ -722,13 +732,50 @@ export function renderEditor({ product, draft = null, app }) {
     return `${t('fc.priceEach', { price: formatRate(each) })}  ·  ${formatMoney((Number(entry.qtyPcs) || 0) * each)}`;
   }
 
+  // ── The plain-text view ────────────────────────────────────────────────────
+  // One box per section, filled by paintRead(); the builders are read-sections.js's.
+  const readBoxes = {
+    product: el('div', { class: 'fc-read-box' }),
+    madeOf: el('div', { class: 'fc-read-box' }),
+    weighings: el('div', { class: 'fc-read-box' }),
+    packaging: el('div', { class: 'fc-read-box' }),
+    labour: el('div', { class: 'fc-read-box' }),
+    price: el('div', { class: 'fc-read-box' }),
+  };
+
+  function paintRead() {
+    const tables = liveTables();
+    const recipeIds = [...new Set(recipeIdsOn(working.components))];
+    readBoxes.product.replaceChildren(readProduct(working));
+    readBoxes.madeOf.replaceChildren(readMadeOf({
+      components: working.components, lineName, lineNote: (entry, kind) => lineNote(entry, kind, tables),
+    }));
+    readBoxes.weighings.replaceChildren(readWeighings({
+      noWeightLoss: working.noWeightLoss === true, recipes: app.tables().recipes, recipeIds,
+    }));
+    weighHead.hidden = !recipeIds.length;
+    readBoxes.weighings.hidden = !recipeIds.length;
+    readBoxes.packaging.replaceChildren(readPackaging({
+      packaging: working.packaging, lineName, lineNote: (entry, kind) => lineNote(entry, kind, tables),
+    }));
+    readBoxes.labour.replaceChildren(readLabour({
+      minutes: working.labourMinutes, people: working.labourPeople, note: labourNoteText(tables),
+    }));
+    readBoxes.price.replaceChildren(readPrice({
+      vatRate: working.vatRate, target: working.foodCostTarget, price: working.sellingPrice,
+    }));
+  }
+
   function repaintLines() {
+    if (isRead) { paintRead(); return; }
     weighViews = [];
     lineNotes = [];
     componentRows.replaceChildren(...working.components.map((entry, index) =>
       lineRow({ list: working.components, index, entry, kind: entry.kind === 'ingredient' ? 'ingredient' : 'recipe' })));
     // One pair of weighings per RECIPE, however many lines carry it.
     const recipeIds = [...new Set(recipeIdsOn(working.components))];
+    // The sub-heading only when there is something under it.
+    weighHead.hidden = !recipeIds.length;
     weighRows.replaceChildren(
       ...(recipeIds.length ? [noLossRow] : []),
       ...recipeIds.map(id => weighBlock(id, recipeIds.length > 1)).filter(Boolean),
@@ -894,6 +941,11 @@ export function renderEditor({ product, draft = null, app }) {
     if (cost.partial) suggestion.appendChild(el('p', { class: 'fc-answer-partial', text: t('fc.suggestedPricePartial') }));
 
     const inUse = working.sellingPrice !== null && Math.abs(working.sellingPrice - price) < 0.005;
+    // ⚠️ THE READ VIEW HAS NO «USE THIS PRICE»: nothing there can be changed.
+    if (isRead) {
+      if (inUse) suggestion.appendChild(el('p', { class: 'fc-note', text: t('fc.suggestedPriceInUse') }));
+      return;
+    }
     suggestion.appendChild(inUse
       ? el('p', { class: 'fc-note', text: t('fc.suggestedPriceInUse') })
       : el('button', {
@@ -940,8 +992,7 @@ export function renderEditor({ product, draft = null, app }) {
     // The pieces field exists for what is sold by the piece, or by a pack counted in
     // pieces; for anything else it is a number that would mean nothing and invite being
     // filled in.
-    piecesField.hidden = !(working.sellingMode === 'piece'
-      || (working.sellingMode === 'pack' && working.packUnit === 'pcs'));
+    piecesField.hidden = !showsPiecesField(working);
     packField.hidden = working.sellingMode !== 'pack';
     addLineBtn.textContent = working.components.length ? t('fc.addRecipeOrIngredient') : t('fc.addRecipe');
     packagingQty.textContent = t('fc.packagingQtyFor', { per: t(PACKAGING_PER[working.sellingMode] || 'fc.packagingPer.unit') });
@@ -1041,10 +1092,12 @@ export function renderEditor({ product, draft = null, app }) {
       : null;
 
     dirty = false;
-    app.saveProduct(clean, snapshot, patches);
+    // ⚠️ BACK TO THE READ VIEW OF THE SAVED PRODUCT, not the list (7 Nov 2026). saveProduct
+    // returns the id — minted for a new product — so the page can find it again.
+    const savedId = app.saveProduct(clean, snapshot, patches);
     globalThis.window?.dispatchEvent(new CustomEvent('mise:action', { detail: 'foodcost-saved' }));
     app.toast(product ? t('fc.productSaved') : t('fc.productAdded'));
-    app.showList();
+    app.showSaved(savedId);
   }
 
   async function onDelete() {
@@ -1079,52 +1132,68 @@ export function renderEditor({ product, draft = null, app }) {
 
   repaint();
 
-  const root = el('div', { class: 'fc-view fc-editor' }, [
-    summary,
-    prodCost,
-    answer,
-    perKg,
+  // ── The page: the summary, then ONE box «Scheda completa» of framed cards ──────
+  // Federico, 7 Nov 2026. Inputs in the order they are filled, results last. The summary is
+  // NOT in the box. prodCost, answer, perKg and suggestion keep their classes: drivers outside
+  // the repo read them.
+  const card = (titleKey, children) => el('section', { class: 'fc-card' }, [
+    el('h2', { class: 'fc-section', text: t(titleKey) }),
+    ...children,
+  ]);
 
-    el('div', { class: 'fc-field' }, [
-      el('label', { class: 'fc-label', for: 'fcName', text: t('fc.name') }),
-      nameInput,
-      nameSuggest.node,
-      nameNote,
+  const cards = isRead ? [
+    card('fc.section.product', [readBoxes.product]),
+    card('fc.madeOf', [readBoxes.madeOf, weighHead, readBoxes.weighings]),
+    card('fc.packaging', [readBoxes.packaging]),
+    card('fc.labour', [readBoxes.labour]),
+    // The same suggestion box as the form, minus its button (paintSuggestion knows).
+    card('fc.section.price', [readBoxes.price, suggestion]),
+    card('fc.section.results', [prodCost, answer, perKg]),
+  ] : [
+    card('fc.section.product', [
+      el('div', { class: 'fc-field' }, [
+        el('label', { class: 'fc-label', for: 'fcName', text: t('fc.name') }),
+        nameInput,
+        nameSuggest.node,
+        nameNote,
+      ]),
+      field(t('fc.sold'), modeSelect),
+      packField,
+      piecesField,
     ]),
-
-    el('h2', { class: 'fc-section', text: t('fc.madeOf') }),
-    madeOf,
-
-    el('h2', { class: 'fc-section', text: t('fc.packaging') }),
-    packagingQty,
-    packagingRows,
-    el('button', { class: 'fc-add-row', type: 'button', text: t('fc.addPackaging'), onclick: () => addPackaging() }),
-    el('p', { class: 'fc-note', text: t('fc.packagingPerNote') }),
-
-    el('h2', { class: 'fc-section', text: t('fc.labour') }),
-    el('div', { class: 'fc-labour-pair' }, [
-      field(t('fc.labourMinutes'), labourMinutesInput),
-      field(t('fc.labourPeople'), labourPeopleInput),
+    card('fc.madeOf', [madeOf, weighHead, weighRows]),
+    card('fc.packaging', [
+      packagingQty,
+      packagingRows,
+      el('button', { class: 'fc-add-row', type: 'button', text: t('fc.addPackaging'), onclick: () => addPackaging() }),
+      el('p', { class: 'fc-note', text: t('fc.packagingPerNote') }),
     ]),
-    el('p', { class: 'fc-note', text: t('fc.labourNote') }),
-    labourNote,
-
-    el('h2', { class: 'fc-section', text: t('fc.howItIsSold') }),
-    field(t('fc.sold'), modeSelect),
-    packField,
-    piecesField,
+    card('fc.labour', [
+      el('div', { class: 'fc-labour-pair' }, [
+        field(t('fc.labourMinutes'), labourMinutesInput),
+        field(t('fc.labourPeople'), labourPeopleInput),
+      ]),
+      el('p', { class: 'fc-note', text: t('fc.labourNote') }),
+      labourNote,
+    ]),
     // ⚠️ IN THE ORDER THE SUM IS DONE: the VAT and the target first, then the price —
     // with, under it, the price those two suggest (13 Sep 2026).
-    vatField,
-    vatOther,
-    field(t('fc.foodCostTarget'), targetInput,
-      t('fc.theShareOfThe')),
-    field(t('fc.sellingPriceVat', { currency: currentCurrency() }), priceInput,
-      t('fc.thePriceOnThe')),
-    suggestion,
+    card('fc.section.price', [
+      vatField,
+      vatOther,
+      field(t('fc.foodCostTarget'), targetInput,
+        t('fc.theShareOfThe')),
+      field(t('fc.sellingPriceVat', { currency: currentCurrency() }), priceInput,
+        t('fc.thePriceOnThe')),
+      suggestion,
+    ]),
+    card('fc.section.results', [prodCost, answer, perKg]),
+  ];
 
-    // Save is in the header (foodcost-main.js asks the editor's save()). History and Delete
-    // stay here, small and low-key; a new product has neither, so no empty row.
+  // Save (or the pencil) is in the header (foodcost-main.js). History and Delete stay at the
+  // bottom of the box, small and low-key, in both views; a new product has neither, so no
+  // empty row.
+  const actions =
     historyBtn || (product && canManageHere()) ? el('div', { class: 'fc-actions' }, [
       historyBtn,
       // ⚠️ Owner only. Deleting a product takes its margin history with it, and
@@ -1135,11 +1204,31 @@ export function renderEditor({ product, draft = null, app }) {
       product && canManageHere() ? el('button', { class: 'fc-delete', type: 'button', onclick: onDelete }, [
         el('span', { icon: TRASH_SVG, 'aria-hidden': 'true' }), t('fc.deleteProduct2'),
       ]) : null,
-    ]) : null,
-  ]);
+    ]) : null;
+
+  const body = el('div', { class: 'fc-full-body' }, [...cards, actions]);
+  // ⚠️ READ: a closed <details>, built ONCE so it keeps open/closed through every repaint —
+  // open from the start only when there is no summary above it (nothing else to show).
+  // ⚠️ EDIT: a plain section, never collapsible, so a field Save checks (the name, a number)
+  // can never be hidden inside a closed box.
+  const full = isRead
+    ? el('details', { class: 'fc-full', open: summaryShows ? null : '' }, [
+      el('summary', { class: 'fc-full-summary' }, [
+        el('span', { text: t('fc.fullCard') }),
+        el('span', { class: 'fc-perkg-chevron', icon: CHEVRON_SVG }),
+      ]),
+      body,
+    ])
+    : el('section', { class: 'fc-full fc-full--edit' }, [
+      el('h2', { class: 'fc-full-summary', text: t('fc.fullCard') }),
+      body,
+    ]);
+
+  const root = el('div', { class: 'fc-view fc-editor' }, [summary, full]);
 
   return {
     root,
+    mode,
     save: onSave,
     // Still exactly as it arrived: nothing typed ever, and no Save under way.
     isUntouched: () => !touched && !busy,

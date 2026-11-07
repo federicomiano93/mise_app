@@ -17,11 +17,10 @@ test('the editor imports costPerKg and calls it with the live tables inside pain
   assert.match(paint, /paintPerKg\(tables\)/);
 });
 
-test('the block is one persistent details element, in root after the answer, never inside Composto da', () => {
+test('the block is one persistent details element, in «Costi calcolati» after the answer, never inside Composto da', () => {
   assert.match(src, /const perKg = el\('details', \{ class: 'fc-perkg' \}, \[/);
-  const root = /const root = el\('div', \{ class: 'fc-view fc-editor' \}, \[([\s\S]*?)\n    el\('div', \{ class: 'fc-field' \}/.exec(src);
-  assert.ok(root, 'root found');
-  assert.ok(root[1].indexOf('answer,') > -1 && root[1].indexOf('answer,') < root[1].indexOf('perKg,'));
+  const results = src.match(/card\('fc\.section\.results', \[prodCost, answer, perKg\]\)/g) || [];
+  assert.equal(results.length, 2, 'the same three nodes close the read view and the form');
   const madeOf = /const madeOf = el\([^\n]*/.exec(src)[0];
   assert.doesNotMatch(madeOf, /perKg/);
   // …and nothing puts it there later.

@@ -54,8 +54,8 @@ test('listQuery is declared before the first language or session callback', () =
 });
 
 test('the card shows the summary first and repaints it with the answer', () => {
-  const root = /const root = el\('div', \{ class: 'fc-view fc-editor' \}, \[([\s\S]*?)\n    answer,/.exec(editor)[1];
-  assert.ok(root.indexOf('summary,') > -1 && root.indexOf('summary,') < root.indexOf('prodCost,'));
+  // ⚠️ ABOVE the «Scheda completa» box, never inside it (7 Nov 2026).
+  assert.match(editor, /const root = el\('div', \{ class: 'fc-view fc-editor' \}, \[summary, full\]\);/);
   assert.match(/function paintAnswer\(\) \{([\s\S]{0,500})/.exec(editor)[1], /paintSummary\(tables\)/);
   assert.match(/function paintSummary\(tables\) \{([\s\S]*?)\n  \}\n/.exec(editor)[1], /catch/);
 });

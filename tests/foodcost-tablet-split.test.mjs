@@ -76,10 +76,11 @@ test('the list, the «+» and «show all» all go through those guarded paths, n
   assert.match(build, /onShowAll: requestShowAll/);
   assert.match(MAIN, /addBtn\.addEventListener\('click', \(\) => requestOpen\(null\)\);/);
   assert.doesNotMatch(MAIN, /onOpen: openProduct|onAdd: \(\) => openProduct/);
-  // (seven matches = the definition + the callers) The only direct callers: the guarded path, the way back to the product, and the
-  // recipe-link entries (an untouched product, never a dirty one; openNarrowed too).
+  // (ten matches = the definition + the callers) The only direct callers: the guarded path, the way back to the product, the
+  // recipe-link entries (an untouched product, never a dirty one; openNarrowed too), and the pencil's three: startEdit,
+  // stopEdit (after its own guard) and showSaved (after a confirmed Save).
   const callers = [...MAIN.matchAll(/\bopenProduct\(/g)].length;
-  assert.equal(callers, 7, 'a new direct call to openProduct: it must be guarded — update this list on purpose');
+  assert.equal(callers, 10, 'a new direct call to openProduct: it must be guarded — update this list on purpose');
 });
 
 test('tapping the product that is already open does nothing', () => {
@@ -100,8 +101,8 @@ test('a product on a tablet keeps the list alive: re-marked, never redrawn, head
   assert.match(body, /if \(listAlive\) activeList\.select\(key\);\s*else paintListColumn\(key\);/);
   assert.match(body, /setListChrome\(\);/);
   assert.match(body, /showNode\(activeEditor\.root\)/);
-  // The phone path is what it always was.
-  assert.match(body, /leaveSplit\(\);\s*activeList = null;\s*setEditorHeaderPhone\(product\);\s*activeEditor = renderEditor\(\{ product, draft, app \}\);\s*swap\(activeEditor\.root\);/);
+  // The phone path is what it always was — except that the editor is built BEFORE the header, which reads its mode.
+  assert.match(body, /leaveSplit\(\);\s*activeList = null;\s*activeEditor = renderEditor\(\{ product, draft, app, mode \}\);\s*editFromRead = fromRead && activeEditor\.mode === 'edit';\s*setEditorHeaderPhone\(product\);\s*swap\(activeEditor\.root\);/);
 });
 
 test('the list column: list chrome like the list has it, footer kept, phone path swapped', () => {
@@ -116,7 +117,9 @@ test('the list column: list chrome like the list has it, footer kept, phone path
 test('the pane head: the product\'s name, and a Back ONLY while it shows the history', () => {
   const head = fnBody('buildPaneHead');
   assert.match(head, /const inHistory = view === 'history';/);
-  assert.match(head, /inHistory \? el\('button'[\s\S]*onclick: backToProduct[\s\S]*\}\) : null/);
+  assert.match(head, /const backAction = inHistory \? backToProduct : \(withSave && editFromRead \? stopEdit : null\);/,
+    'a Back while it shows the history, or the form the pencil opened');
+  assert.match(head, /backAction \? el\('button'/);
   assert.match(head, /t\('fc\.newProduct'\)/);
   assert.match(fnBody('showNode'), /head\.querySelector\('h1'\)\.focus\(/, 'focus goes to the pane head');
 });

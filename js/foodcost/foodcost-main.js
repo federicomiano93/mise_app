@@ -51,8 +51,15 @@ const addBtn = document.getElementById('fcAdd');
 // The phone's Save for an open product. On a tablet the page header stays the list's and
 // the Save is built into the pane head instead (buildPaneHead) — never both.
 const saveBtn = document.getElementById('fcSave');
+// The phone's pencil for a product opened to READ: it turns the same product into the form
+// (7 Nov 2026). Like Save, a tablet builds its own in the pane head.
+const editBtn = document.getElementById('fcEdit');
 const headerEl = saveBtn.closest('.app-header');
 addBtn.addEventListener('click', () => requestOpen(null));
+
+// The catalogue's pencil, drawn the same here.
+const PENCIL_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
 // The bottom bar and its one button, Settings (13 Sep 2026). The button carries its own
 // permission; the bar is shown only while a button in it is.
 const footerBar = document.getElementById('fcFooter');
@@ -79,6 +86,11 @@ let guardPending = false;   // a «discard changes?» question is already open
 let quietFocus = false;
 // The list's search text, kept here so Back from a card finds the same search (7 Nov 2026).
 let listQuery = '';
+// True while the form on screen was opened with the PENCIL from the read view of the same
+// product: Back then returns to that read view (one level up). A form opened straight (a new
+// product, one with nothing priced) has no read view below it, so Back is what it always was.
+// ⚠️ Declared here, above the first onLanguageChange below, or it is a TDZ crash.
+let editFromRead = false;
 
 // ── Opened from a recipe ─────────────────────────────────────────────────────
 //
@@ -103,7 +115,8 @@ function setHeader({ title, sub, back, add = false }) {
   homeBtn.hidden = back;
   backBtn.hidden = !back;
   addBtn.hidden = !add;
-  saveBtn.hidden = true;   // only setEditorHeaderPhone shows it
+  saveBtn.hidden = true;   // only setEditorHeaderPhone shows it (Save, or the pencil)
+  editBtn.hidden = true;
   headerEl.classList.remove('app-header--save');
   paintFooter();
 }
@@ -281,20 +294,30 @@ function buildPaneHead() {
   const title = inHistory
     ? t('fc.marginHistory')
     : (currentProduct ? (currentProduct.name || t('fc.productWord')) : t('fc.newProduct'));
-  const withSave = view === 'editor' && !!activeEditor;
+  const showing = view === 'editor' && activeEditor ? activeEditor.mode : null;
+  const withSave = showing === 'edit';
+  const withPencil = showing === 'read';
+  // Back from the form to the read view it was opened from, and from the history to the
+  // product: the same chevron, a different level up.
+  const backAction = inHistory ? backToProduct : (withSave && editFromRead ? stopEdit : null);
   return el('header', { class: withSave ? 'app-header app-header--save' : 'app-header' }, [
     el('span', { class: 'app-header-slot' }, [
-      inHistory ? el('button', {
+      backAction ? el('button', {
         class: 'app-icon-btn', type: 'button', 'aria-label': t('ui.back'),
-        icon: backBtn.innerHTML, onclick: backToProduct,
+        icon: backBtn.innerHTML, onclick: backAction,
       }) : null,
     ]),
     el('div', { class: 'app-header-title' }, [el('h1', { text: title, tabindex: '-1' })]),
     el('span', { class: 'app-header-slot' }, [
-      // The product's Save, in the pane's own head (a phone has it in the page header).
+      // The product's Save (form) or pencil (read), in the pane's own head (a phone has them
+      // in the page header).
       withSave ? el('button', {
         type: 'button', class: 'app-header-save', onclick: () => activeEditor?.save(),
       }, t('ui.save')) : null,
+      withPencil ? el('button', {
+        class: 'app-icon-btn', type: 'button', 'aria-label': t('fc.editProduct'),
+        icon: PENCIL_SVG, onclick: startEdit,
+      }) : null,
     ]),
   ]);
 }
@@ -347,6 +370,7 @@ function showList() {
   historyBody = null;
   entryEditor = false;
   draftRecipeId = null;
+  editFromRead = false;
   // ⚠️ Narrowed, the list has Back (to the recipe) where it otherwise has Home.
   setListChrome();
   if (isTabletNow()) {
@@ -367,14 +391,20 @@ function filterTitle(recipeId) {
   return name ? t('fc.productsWithRecipe', { name }) : t('fc.productsWithThisRecipe');
 }
 
-// The editor's header on a PHONE: its own title and a Back.
+// The editor's header on a PHONE: its own title and a Back — and the pencil while the card is
+// read, Save while it is the form. ⚠️ THE EDITOR IS BUILT FIRST (activeEditor.mode decides).
 function setEditorHeaderPhone(product) {
   setHeader({ title: product ? (product.name || t('fc.productWord')) : t('fc.newProduct'), sub: t('fc.foodCost'), back: true });
-  saveBtn.hidden = false;
-  headerEl.classList.add('app-header--save');
+  const reading = !!activeEditor && activeEditor.mode === 'read';
+  saveBtn.hidden = reading;
+  editBtn.hidden = !reading;
+  headerEl.classList.toggle('app-header--save', !reading);
 }
 
-function openProduct(product, draft = null) {
+// `mode`: 'auto' reads a product that has a summary and opens the form for everything else;
+// 'read' / 'edit' force it. `fromRead`: the form was opened by the pencil, so Back returns to
+// the read view.
+function openProduct(product, draft = null, { mode = 'auto', fromRead = false } = {}) {
   view = 'editor';
   globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'editor' }));
   draftRecipeId = null;
@@ -391,15 +421,42 @@ function openProduct(product, draft = null) {
     const key = product ? product.id : null;
     if (listAlive) activeList.select(key);
     else paintListColumn(key);
-    activeEditor = renderEditor({ product, draft, app });
+    activeEditor = renderEditor({ product, draft, app, mode });
+    editFromRead = fromRead && activeEditor.mode === 'edit';
     showNode(activeEditor.root);
     return;
   }
   leaveSplit();
   activeList = null;
+  activeEditor = renderEditor({ product, draft, app, mode });
+  editFromRead = fromRead && activeEditor.mode === 'edit';
   setEditorHeaderPhone(product);
-  activeEditor = renderEditor({ product, draft, app });
   swap(activeEditor.root);
+}
+
+// The pencil: the SAME product, as the form. Back from it returns to the read view.
+function startEdit() {
+  if (view !== 'editor' || !activeEditor || activeEditor.mode !== 'read' || !currentProduct) return;
+  const fresh = getProducts().find((p) => p && p.id === currentProduct.id) || currentProduct;
+  openProduct(fresh, null, { mode: 'edit', fromRead: true });
+}
+
+// Back from a form opened with the pencil: one level up = the read view of the same product,
+// after the usual «discard changes?» question (asked only if something was typed).
+async function stopEdit() {
+  if (!(await askLeave())) return;
+  const fresh = (currentProduct && getProducts().find((p) => p && p.id === currentProduct.id)) || currentProduct;
+  openProduct(fresh, null, { mode: 'read' });
+}
+
+// After a Save: the read view of the product just saved (a new one included), never the list.
+// Forced to read even with no summary — the box starts open then. On a tablet the list column
+// is refreshed first, so a NEW product is in it to be marked.
+function showSaved(id) {
+  const fresh = getProducts().find((p) => p && p.id === id);
+  if (!fresh) { showList(); return; }
+  if (splitOn && activeList) activeList.refresh(listedProducts(), tables());
+  openProduct(fresh, null, { mode: 'read' });
 }
 
 // Back from the history in the pane (or on a phone that crossed the width with the editor
@@ -424,6 +481,7 @@ function showWaiting() {
   activeEditor = null;
   currentProduct = null;
   leaveGuard = null;
+  editFromRead = false;
   setHeader({ title: t('fc.foodCost'), sub: t('fc.productsAndMargins'), back: true });
   swap(el('div', { class: 'fc-view' }, [el('p', { class: 'fc-empty', text: t('fc.loading') })]));
 }
@@ -566,6 +624,13 @@ function shortDate(iso) {
 }
 
 async function handleBack() {
+  // ⚠️ FIRST: a form opened with the pencil goes back to the read view of the same product —
+  // one level up — before any other rule. (Beside the list the pane head has its own Back, and
+  // the page Back stays the list's.) The unsaved-edits question is stopEdit's.
+  if (!splitOn && view === 'editor' && editFromRead && activeEditor && activeEditor.mode === 'edit') {
+    await stopEdit();
+    return;
+  }
   // A phone that crossed the width with the editor set aside: Back is «back to the product».
   if (view === 'history' && heldEditor && !splitOn) { backToProduct(); return; }
   if (!(await askLeave())) return;
@@ -606,6 +671,7 @@ const app = {
   confirm: confirmDialog,
   toast,
   showList,
+  showSaved,
   openHistory,
   saveProduct,
   deleteProduct,
@@ -664,6 +730,7 @@ const app = {
 
 backBtn.addEventListener('click', handleBack);
 saveBtn.addEventListener('click', () => activeEditor?.save());
+editBtn.addEventListener('click', startEdit);
 // ⚠️ Home is a plain link. Beside an open editor it must ask the same guard first, or a tap on
 // it would throw the typing away with the page.
 homeBtn.addEventListener('click', async (e) => {

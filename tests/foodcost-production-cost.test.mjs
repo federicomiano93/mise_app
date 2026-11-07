@@ -149,9 +149,8 @@ test('the product screen draws it, above the food cost answer, on every repaint'
     'painted from paintAnswer, so every change that repaints the answer repaints the cost');
   assert.match(editor, /const cost = productionCost\(working, liveTables\(\)\);/,
     'from the live tables, or a weighing typed on this screen would not move it until Save');
-  const view = editor.slice(editor.indexOf("el('div', { class: 'fc-view fc-editor' }"));
-  assert.ok(view.indexOf('prodCost,') !== -1 && view.indexOf('prodCost,') < view.indexOf('answer,'),
-    'the cost sits at the top, above the food cost answer');
+  assert.match(editor, /card\('fc\.section\.results', \[prodCost, answer, perKg\]\)/,
+    'the cost sits first in «Costi calcolati», above the food cost answer');
   assert.match(editor, /prodCost\.hidden = cost\.batchCost === null;/, 'no box at all while nothing is costed');
 });
 
