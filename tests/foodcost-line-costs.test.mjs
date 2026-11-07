@@ -209,16 +209,15 @@ test('the same unpriced thing is listed once, and the order is the card\'s', () 
   assert.deepEqual(list.map(item => item.name), ['Water', 'Ribbon']);
 });
 
-test('pieces and spoons never count as unpriced (they never made the cost partial either)', () => {
+test('a labelled row in pieces or spoons is listed: it is what makes the warning stand', () => {
   const ODD = { id: 'ODD', name: 'Odd', lossPct: 0, ingredients: [flourRow(100), { label: 'Salt', grams: 2, unit: 'tsp', kind: 'ingredient', refId: 'SALT' }] };
   const tables = { ...TABLES, recipes: { ...TABLES.recipes, ODD } };
   const batch = batchTotals(product([recLine('ODD', 1)]), tables);
   const listed = unpricedParts(product([recLine('ODD', 1)]), tables);
-  assert.ok(!listed.some(item => item.reason === 'not-weighable'));
-  // The recipe model itself calls a labelled spoon row «partial», so the card's warning stands;
-  // the list names only what a person can go and price.
+  // The recipe model calls a labelled spoon row «partial», so the card shows its warning — and a
+  // «Quali?» with nothing under it, or no button at all, would leave the warning unexplained.
   assert.equal(batch.partial, true);
-  assert.deepEqual(listed, []);
+  assert.deepEqual(listed, [{ name: 'Salt', inRecipe: 'Odd', reason: 'not-weighable' }]);
 });
 
 test('productPreview carries the list; it is empty for no product', () => {
@@ -232,7 +231,7 @@ test('every unpriced reason becomes words, in both languages', () => {
   for (const lang of ['en', 'it']) {
     setLanguage(lang);
     for (const reason of ['no-ingredient-price', 'packaging-no-price', 'no-piece-weight', 'no-piece-price',
-      'packaging-no-mode', 'recipe-no-price', 'not-linked', 'sub-not-costable', 'missing-recipe', 'cycle', 'too-deep']) {
+      'packaging-no-mode', 'recipe-no-price', 'not-weighable', 'not-linked', 'sub-not-costable', 'missing-recipe', 'cycle', 'too-deep']) {
       assert.ok(unpricedReasonText(reason), `${reason} in ${lang}`);
     }
   }

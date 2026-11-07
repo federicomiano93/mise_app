@@ -706,8 +706,9 @@ export function productPreview(product, tables = {}) {
 // ⚠️ NEVER AN EMPTY NAME: an ingredient that no longer exists has no name to list, so it is
 // left out (the warning above still stands for it). A recipe row is listed by its label.
 // ⚠️ WHAT MAKES `partial` TRUE, NO MORE AND NO LESS: rows the recipe's own model marks
-// «not costed» with a label, except pieces and spoons (they never counted), opened into
-// sub-recipes — priced or not, because a sub-recipe that is itself partial counts too.
+// «not costed» with a label, opened into sub-recipes — priced or not, because a sub-recipe
+// that is itself partial counts too. ⚠️ PIECES AND SPOONS INCLUDED («sale q.b.»): costRecipe()
+// makes a labelled one partial, so leaving it out would show the warning with nothing to name.
 const UNPRICED_REASON_TEXT = {
   'no-ingredient-price': 'fc.unpriced.noPrice',
   'packaging-no-price': 'fc.unpriced.noPrice',
@@ -751,7 +752,7 @@ export function unpricedParts(product, tables = {}) {
       let named = 0;
       if (sub && (row.reason === 'sub-not-costable' || row.costed)) named = openRecipe(sub, depth + 1, new Set([...here, link.refId]));
       found += named;
-      if (!row.costed && row.label && row.reason !== 'not-weighable' && !(row.reason === 'sub-not-costable' && named > 0)) {
+      if (!row.costed && row.label && !(row.reason === 'sub-not-costable' && named > 0)) {
         add(row.label, recipeName, row.reason);
         found += 1;
       }
