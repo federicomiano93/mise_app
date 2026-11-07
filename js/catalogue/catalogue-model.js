@@ -499,6 +499,51 @@ export function linkedItemName(link, ingredients, recipes) {
   return (ing ? ingredientDisplayName(ing).trim() : '') || fallback;
 }
 
+// Every name the linked item answers to: its display name, its full (invoice) name and its short
+// name for an ingredient; its name for a recipe. Distinct, empty ones left out. [] when the item
+// is not loaded and the link carries no name.
+export function linkedItemNames(link, ingredients, recipes) {
+  const names = [linkedItemName(link, ingredients, recipes)];
+  if (link && link.kind === 'ingredient') {
+    const ing = ingredients && ingredients[String(link.refId)];
+    if (ing) names.push(ing.name, ing.shortName);
+  }
+  return [...new Set(names.map(n => String(n ?? '').trim()).filter(Boolean))];
+}
+
+// Trim, lower-case, no accents, one space between words: the shape two names are compared in.
+export function normalizeNameForCompare(value) {
+  return String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLocaleLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// Does a typed row name still resemble the item the row is linked to? Yes when, once normalised,
+// either contains the other, for ANY of the item's `names`. An empty name never resembles anything
+// here, but it is not a reason to warn either (the required-field check handles it): the caller
+// decides. ⚠️ Deliberately loose: «Farina» vs «Farina 0 Caputo» must pass; only a name that has
+// moved to another thing («Burro» on a flour link) is meant to be flagged.
+export function labelResemblesLink(label, names) {
+  const typed = normalizeNameForCompare(label);
+  if (!typed) return false;
+  return (Array.isArray(names) ? names : []).some(name => {
+    const other = normalizeNameForCompare(name);
+    return !!other && (other.includes(typed) || typed.includes(other));
+  });
+}
+
+// Should the link line of a LINKED row warn that its name has moved away from what it is linked
+// to? Only when the name differs from `openedLabel` (the name the row had when the editor opened
+// or was last linked by a pick) AND no longer resembles the link. Unlinked rows, empty names and
+// links that name nothing never warn. Typing the original name back clears it.
+export function staleLinkName({ label, openedLabel, link, ingredients, recipes }) {
+  if (!link) return '';
+  const typed = normalizeNameForCompare(label);
+  if (!typed || typed === normalizeNameForCompare(openedLabel)) return '';
+  const names = linkedItemNames(link, ingredients, recipes);
+  if (!names.length || labelResemblesLink(label, names)) return '';
+  return linkedItemName(link, ingredients, recipes);
+}
+
 // Is `chosen` the very link the row already has (same kind, same id)? Choosing it again
 // changes nothing — and so must not rename the row.
 export function isSameLink(current, chosen) {

@@ -15,7 +15,7 @@ import { canManageHere } from './firebase-catalogue.js';
 import { el } from './dom.js';
 import {
   findInvalidRecipe, unitOf, unitText, CATALOGUE_UNITS, isWeighableUnit, weighableTotalGrams,
-  linkOf, applyLink, linkedItemName, isSameLink, normalizeWeight, normalizeShelfLifeDays, moveRow,
+  linkOf, applyLink, linkedItemName, staleLinkName, isSameLink, normalizeWeight, normalizeShelfLifeDays, moveRow,
   hasDividerAfter, removeRow, keepRows, withoutTrailingDivider,
 } from './catalogue-model.js';
 // Drag to reorder the rows — the library the Calculator's clients and the Home cards use,
@@ -296,7 +296,12 @@ export function renderEditor({
       const labelInput = el('input', {
         class: 'cat-lbl', type: 'text', placeholder: t('cat.ingredient'), value: ing.label,
         'aria-label': t('cat.ingredientName'),
-        oninput: (e) => { ing.label = e.target.value; markDirty(); updateTotal(); if (showErrors) validateUI(); },
+        oninput: (e) => {
+          openedLabelOf(ing);          // remember the name before the first keystroke changes it
+          ing.label = e.target.value;
+          paintStaleLink(ing, e.target);
+          markDirty(); updateTotal(); if (showErrors) validateUI();
+        },
       });
       // Under the name, while it is typed: catalogue ingredients to link THIS row to.
       // ⚠️ A tap links the row and SETS its name to the linked item's display name — the
@@ -362,7 +367,13 @@ export function renderEditor({
         class: 'cat-del-icon', type: 'button', 'aria-label': t('cat.removeIngredient'), icon: TRASH_SVG,
         onclick: () => {
           // The line stays between the rows: the row above this one takes this row's line.
-          working.ingredients = removeRow(working.ingredients, idx);
+          const before = working.ingredients;
+          working.ingredients = removeRow(before, idx);
+          // removeRow copies the row that takes the deleted row's divider line: keep its memory.
+          const survivors = before.filter((_, i) => i !== idx);
+          working.ingredients.forEach((row, i) => {
+            if (survivors[i] && survivors[i] !== row && openedLabels.has(survivors[i])) openedLabels.set(row, openedLabels.get(survivors[i]));
+          });
           if (!working.ingredients.length) working.ingredients.push({ label: '', grams: '', unit: 'g' });
           markDirty();
           renderIngredientRows();
@@ -403,11 +414,58 @@ export function renderEditor({
   // cannot contribute a cost, and says so.
   function linkRow(ing, idx) {
     const link = linkOf(ing);
+    const stale = staleName(ing);
     const button = el('button', {
-      class: 'cat-ing-link' + (link ? ' linked' : ''), type: 'button',
+      class: 'cat-ing-link' + (link ? ' linked' : '') + (stale ? ' cat-ing-link--stale' : ''), type: 'button',
       onclick: () => pickFromChooser(idx),
-    }, [el('span', { class: 'cat-ing-link-text', text: linkText(ing) })]);
+    }, [el('span', { class: 'cat-ing-link-text', text: stale ? staleText(stale) : linkText(ing) })]);
     return button;
+  }
+
+  // ── A retyped name on a still-linked row (7 Nov 2026) ───────────────────────
+  //
+  // Federico: «quando cambio ingrediente il prezzo non si aggiorna». THE TRAP: retyping the name
+  // box of a linked row changes only `label`; the row keeps its link (`refId`), and the link is
+  // what recipe cost and every Food cost product built on it read. «Farina» retyped as «Burro»
+  // kept costing FLOUR, while the line under the row still said «→ Farina …» and nobody looked.
+  // ⚠️ A WARNING, NEVER AN AUTOMATIC UNLINK: fixing a typo («Farinna») must not lose the link.
+  // Only a pick relinks (linkTo). ⚠️ ONLY A NAME CHANGED IN THIS SESSION WARNS: old rows whose
+  // typed name differs from the linked item («Farina» on «Farina 0 Caputo», English invoice
+  // names) must not light up on opening. So each row remembers the name it had when the editor
+  // opened — or when it was last linked by a pick. ⚠️ The memory is a WeakMap keyed by the row
+  // object, NEVER a field of the row: the row is what Save writes and the rules whitelist its keys.
+  // moveRow keeps the same objects; removeRow copies only a row that takes a deleted row's divider
+  // line (carried over in the bin's handler).
+  const openedLabels = new WeakMap();
+
+  function openedLabelOf(ing) {
+    if (!openedLabels.has(ing)) openedLabels.set(ing, String(ing.label ?? ''));
+    return openedLabels.get(ing);
+  }
+
+  // The linked item's name when the row's name has moved away from it, else ''.
+  function staleName(ing) {
+    return staleLinkName({
+      label: ing.label, openedLabel: openedLabelOf(ing), link: linkOf(ing),
+      ingredients: app.ingredients(), recipes: app.allRecipes(),
+    });
+  }
+
+  function staleText(name) {
+    return t('cat.nameChangedStillLinked', { name });
+  }
+
+  // Live, from the name box: only the one row's link line changes. ⚠️ NO renderIngredientRows —
+  // rebuilding takes the box from under the finger. ⚠️ Only the text span is rewritten: the
+  // crossed-out euro mark (paintPriceMarks) lives in the same button and must survive.
+  function paintStaleLink(ing, input) {
+    const group = input.closest('.cat-ing-editgroup');
+    const button = group && group.querySelector('.cat-ing-link');
+    const text = button && button.querySelector('.cat-ing-link-text');
+    if (!text) return;
+    const stale = staleName(ing);
+    button.classList.toggle('cat-ing-link--stale', !!stale);
+    text.textContent = stale ? staleText(stale) : linkText(ing);
   }
 
   // The full-screen chooser — already searching what was typed, when «See all» under a
@@ -454,6 +512,9 @@ export function renderEditor({
     // is already there, or tapping the ticked suggestion, must not undo a name typed since.
     const same = isSameLink(before, chosen);
     applyLink(row, chosen, same ? {} : { label: linkedItemName(chosen, app.ingredients(), app.allRecipes()) });
+    // A pick (re)starts the comparison: the name now on the row is the one that fits the link.
+    // (Choosing the link it already has changes neither the name nor the memory.)
+    if (!same) openedLabels.set(row, String(row.label ?? ''));
     markDirty();
     renderIngredientRows();
     if (showErrors) validateUI();

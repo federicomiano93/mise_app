@@ -509,6 +509,9 @@ body.cat-zoom-lock { overflow: hidden; }
   color: var(--warn);
 }
 .cat-noprice svg { display: block; }
+/* The name was retyped but the row is still linked: an amber note, not an error. The text wraps
+   (overflow-wrap on the span); the same padding, so nothing jumps. --warn on --warn-bg is above 4.5:1. */
+.cat-ing-link.cat-ing-link--stale { color: var(--warn); background: var(--warn-bg); }
 .cat-ing-link:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: -2px; }
 
 /* What the dough weighs before the oven and after — the two numbers the loss is
