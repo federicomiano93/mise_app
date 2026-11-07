@@ -26,9 +26,10 @@
 import { t } from '../i18n.js';
 import { ingredientDisplayName } from '../ingredient-name.js';
 import { pricePerKg as ingredientPricePerKg, roundTo, positiveNumber } from '../price-model.js';
-import { costRecipe } from '../catalogue/recipe-cost-model.js';
-// How search text is compared — the catalogue's own rule, so a name found there is found here.
-import { normalizeSearchText } from '../catalogue/catalogue-model.js';
+import { costRecipe, costReasonLabel, MAX_RECIPE_DEPTH } from '../catalogue/recipe-cost-model.js';
+// How search text is compared — the catalogue's own rule, so a name found there is found here —
+// and which sub-recipe a recipe row points at.
+import { normalizeSearchText, linkOf } from '../catalogue/catalogue-model.js';
 // ⚠️ MOVED TO js/vat-rates.js (29 Sep 2026): the ingredient price form's
 // purchase-VAT field needs the same national rate menu, and a calculation
 // shared by more than one feature belongs in js/ root (CLAUDE.md "Modular by
@@ -237,57 +238,113 @@ export function ingredientLineCost(line, ingredient) {
 // can say WHICH line has no price rather than only that something has none.
 export function batchTotals(product, tables = {}) {
   const p = normalizeProduct(product) || { components: [], packaging: [] };
-  const recipesById = tables.recipes || {};
   let cost = 0;
   let kg = 0;
   let partial = false;
   const rows = [];
 
   p.components.forEach(component => {
-    if (component.kind === 'ingredient') {
-      const ingredient = lookup(tables.ingredients, component.ingredientId);
-      if (!ingredient) {
-        partial = true;
-        rows.push({ kind: 'ingredient', id: component.ingredientId, name: '', qty: component.qty, unit: component.unit, cost: null, reason: 'missing-ingredient' });
-        return;
-      }
-      const line = ingredientLineCost(component, ingredient);
-      if (line.cost === null) {
-        partial = true;
-        rows.push({ kind: 'ingredient', id: component.ingredientId, name: ingredientDisplayName(ingredient), qty: component.qty, unit: component.unit, cost: null, reason: line.reason });
-        return;
-      }
-      cost += line.cost;
-      kg += line.kg;
-      rows.push({ kind: 'ingredient', id: component.ingredientId, name: ingredientDisplayName(ingredient), qty: component.qty, unit: component.unit, cost: line.cost, reason: null });
+    // ⚠️ THE ONE PLACE A LINE IS COSTED: the card's own «rate and this amount» under each line
+    // (componentLineCost) and this total are the very same call, so they cannot disagree.
+    const line = componentLineCost(component, tables, { noWeightLoss: p.noWeightLoss });
+    const isIngredient = component.kind === 'ingredient';
+    const row = isIngredient
+      ? { kind: 'ingredient', id: component.ingredientId, name: line.name, qty: component.qty, unit: component.unit }
+      : { kind: 'recipe', id: component.recipeId, name: line.name, qty: component.qtyKg };
+    if (line.partial) partial = true;
+    if (line.cost === null) {
+      rows.push({ ...row, cost: null, reason: line.reason });
       return;
     }
-
-    const recipe = lookup(recipesById, component.recipeId);
-    if (!recipe) {
-      partial = true;
-      rows.push({ kind: 'recipe', id: component.recipeId, name: '', qty: component.qtyKg, cost: null, reason: 'missing-recipe' });
-      return;
-    }
-    // ⚠️ A FINISHED PRODUCT (Nov 2026, `noWeightLoss`) loses nothing in the oven, so the loss
-    // of the recipe on its line is laid aside for THIS cost only — the recipe keeps its own
-    // number, and so does every other product built on it.
-    const costed = costRecipe(p.noWeightLoss ? { ...recipe, lossPct: 0 } : recipe, tables);
-    if (costed.pricePerKg === null) {
-      partial = true;
-      rows.push({ kind: 'recipe', id: component.recipeId, name: recipe.name, qty: component.qtyKg, cost: null, reason: 'no-recipe-cost' });
-      return;
-    }
-    // A recipe that is only PARTLY priced makes the product partly priced too —
-    // the same rule, and the same reason, as one recipe inside another.
-    if (costed.partial) partial = true;
-    const lineCost = roundTo(component.qtyKg * costed.pricePerKg, 4);
-    cost += lineCost;
-    kg += component.qtyKg;
-    rows.push({ kind: 'recipe', id: component.recipeId, name: recipe.name, qty: component.qtyKg, cost: lineCost, reason: null });
+    cost += line.cost;
+    kg += line.kg;
+    rows.push({ ...row, cost: line.cost, reason: null });
   });
 
   return { cost: roundTo(cost, 4), kg: roundTo(kg, 4), partial, rows };
+}
+
+// What ONE line of «Made of» — a recipe or an ingredient added straight to the product —
+// is priced at and costs for the amount typed:
+//
+//   { name, rate, rateUnit, cost, kg, partial, reason }
+//
+//   rate      the price it is bought or made at: per kilo ('kg') or each ('pcs') — whichever
+//             matches how THIS line is costed; null when no usable price is known
+//   cost      for the amount on the line, or null when the line cannot be costed
+//   partial   true when the line makes the product only partly costed (gone, unpriced, or a
+//             recipe that is itself only partly priced)
+//   reason    why cost is null: 'missing-recipe' | 'missing-ingredient' | 'no-recipe-cost' |
+//             the reasons of ingredientLineCost
+//
+// ⚠️ UNKNOWN IS null, NEVER 0. A rate may be known while the cost is not (a price per piece
+// on a line counted in grams): the screen shows the rate and says what is missing.
+// ⚠️ `noWeightLoss` lays the recipe's oven loss aside, exactly as batchTotals always has.
+export function componentLineCost(component, tables = {}, { noWeightLoss = false } = {}) {
+  if (component && component.kind === 'ingredient') {
+    const ingredient = lookup(tables.ingredients, component.ingredientId);
+    if (!ingredient) {
+      return { name: '', rate: null, rateUnit: null, cost: null, kg: 0, partial: true, reason: 'missing-ingredient' };
+    }
+    const name = ingredientDisplayName(ingredient);
+    const line = ingredientLineCost(component, ingredient);
+    const each = ingredient.priceUnit === 'pcs' ? positiveNumber(ingredient.pricePerUnit) : null;
+    const perKg = ingredientPricePerKg(ingredient);
+    if (line.cost === null) {
+      // The price exists but cannot be used: say which one it is, and nothing more.
+      let rate = null;
+      let rateUnit = null;
+      if (line.reason === 'no-piece-weight' && each !== null) { rate = each; rateUnit = 'pcs'; }
+      else if (line.reason === 'no-piece-price' && perKg !== null) { rate = perKg; rateUnit = 'kg'; }
+      return { name, rate, rateUnit, cost: null, kg: 0, partial: true, reason: line.reason };
+    }
+    // A line in pieces priced each is costed each; every other costed line goes through a
+    // price per kilo (a weight line, or pieces of something bought by the kilo).
+    const eachLine = component.unit === 'pcs' && each !== null;
+    return {
+      name, rate: eachLine ? each : perKg, rateUnit: eachLine ? 'pcs' : 'kg',
+      cost: line.cost, kg: line.kg, partial: false, reason: null,
+    };
+  }
+
+  const recipe = lookup(tables.recipes, component && component.recipeId);
+  if (!recipe) {
+    return { name: '', rate: null, rateUnit: null, cost: null, kg: 0, partial: true, reason: 'missing-recipe' };
+  }
+  const qtyKg = Number(component.qtyKg) || 0;
+  // ⚠️ A FINISHED PRODUCT (Nov 2026, `noWeightLoss`) loses nothing in the oven, so the loss
+  // of the recipe on its line is laid aside for THIS cost only — the recipe keeps its own
+  // number, and so does every other product built on it.
+  const costed = costRecipe(noWeightLoss ? { ...recipe, lossPct: 0 } : recipe, tables);
+  if (costed.pricePerKg === null) {
+    return { name: recipe.name, rate: null, rateUnit: null, cost: null, kg: 0, partial: true, reason: 'no-recipe-cost' };
+  }
+  // A recipe that is only PARTLY priced makes the product partly priced too —
+  // the same rule, and the same reason, as one recipe inside another.
+  return {
+    name: recipe.name, rate: costed.pricePerKg, rateUnit: 'kg',
+    cost: roundTo(qtyKg * costed.pricePerKg, 4), kg: qtyKg, partial: !!costed.partial, reason: null,
+  };
+}
+
+// What ONE packaging item is priced at and costs, per unit sold:
+//
+//   { rate, rateUnit, cost, reason }
+//
+//   priced each          → rate each ('pcs'), cost = pieces × each
+//   priced by weight     → reason 'no-piece-price', with the per-kilo rate known
+//   no price at all      → reason 'no-price', rate null
+//
+// ⚠️ ONLY WHAT IS BOUGHT BY THE PIECE CAN BE COUNTED: «3 boxes» of something priced per kilo
+// means nothing. Unknown is null, never 0.
+export function packagingLineCost(item, ingredient) {
+  const ing = ingredient || {};
+  const qty = Number(item && item.qtyPcs) || 0;
+  const each = ing.priceUnit === 'pcs' ? positiveNumber(ing.pricePerUnit) : null;
+  if (each !== null) return { rate: each, rateUnit: 'pcs', cost: roundTo(qty * each, 4), reason: null };
+  if (positiveNumber(ing.pricePerUnit) === null) return { rate: null, rateUnit: null, cost: null, reason: 'no-price' };
+  const perKg = ingredientPricePerKg(ing);
+  return { rate: perKg, rateUnit: perKg === null ? null : 'kg', cost: null, reason: 'no-piece-price' };
 }
 
 // What the packaging of ONE UNIT SOLD costs — one piece, one pack or one kilo.
@@ -310,15 +367,15 @@ export function packagingPerUnit(product, tables = {}) {
       rows.push({ kind: 'packaging', id: item.ingredientId, name: '', qty: item.qtyPcs, cost: null, reason: 'missing-ingredient' });
       return;
     }
-    const each = ingredient.priceUnit === 'pcs' ? positiveNumber(ingredient.pricePerUnit) : null;
-    if (each === null) {
+    const line = packagingLineCost(item, ingredient);
+    if (line.cost === null) {
       partial = true;
+      // One reason for «no price» and «priced by weight»: the rows name what to give it, a price per piece.
       rows.push({ kind: 'packaging', id: item.ingredientId, name: ingredientDisplayName(ingredient), qty: item.qtyPcs, cost: null, reason: 'no-piece-price' });
       return;
     }
-    const lineCost = roundTo(item.qtyPcs * each, 4);
-    cost += lineCost;
-    rows.push({ kind: 'packaging', id: item.ingredientId, name: ingredientDisplayName(ingredient), qty: item.qtyPcs, cost: lineCost, reason: null });
+    cost += line.cost;
+    rows.push({ kind: 'packaging', id: item.ingredientId, name: ingredientDisplayName(ingredient), qty: item.qtyPcs, cost: line.cost, reason: null });
   });
 
   return { cost: roundTo(cost, 4), partial, rows };
@@ -589,7 +646,7 @@ export function suggestedNetPrice({ unitCost, targetPct } = {}) {
 //
 //   { unit, sellingPrice, materialsUnitCost, packagingUnitCost, hasPackaging,
 //     labourUnitCost, totalUnitCost, foodCostPct, targetPct, status, margin,
-//     idealGross, idealNet, partial, missing }
+//     idealGross, idealNet, partial, unpriced, missing }
 //
 // ⚠️ NOTHING HERE IS A NEW SUM: every figure is productionCost(), costProduct() or the
 // two suggested prices, so the preview can never disagree with the card or the list.
@@ -627,8 +684,117 @@ export function productPreview(product, tables = {}) {
     idealGross: suggestedGrossPrice({ unitCost, vatRate: p ? p.vatRate : null, targetPct }),
     idealNet: suggestedNetPrice({ unitCost, targetPct }),
     partial: cost.partial || result.partial,
+    // What has no price, for the «Which?» list under the partial warning.
+    unpriced: unpricedParts(p, tables),
     missing: [...new Set(missing)],
   };
+}
+
+// ── What has no price yet (Federico, 7 Nov 2026: «Quali?») ──────────────────
+//
+// Under the warning «a part of this product is not priced yet», the list of WHAT. Pure, so
+// the preview only draws it.
+//
+//   [{ name, inRecipe, reason }]   — inRecipe is '' for a line of the product itself
+//
+// reason: the reasons of ingredientLineCost ('no-ingredient-price', 'no-piece-weight',
+// 'no-piece-price'), 'packaging-no-price', 'packaging-no-mode', 'recipe-no-price', or a
+// costRecipe reason for a row inside a recipe ('no-price', 'not-linked', 'sub-not-costable'…).
+// unpricedReasonText() turns any of them into words.
+//
+// ⚠️ NEVER AN EMPTY NAME, AND NOTHING LEFT OUT: a line whose ingredient or recipe no longer
+// exists makes the cost partial too, so it is listed under the words the card's line shows
+// («This item no longer exists»), reason 'gone' — otherwise the warning would stand with
+// nothing to name (code review, 7 Nov 2026). A recipe row is listed by its label.
+// ⚠️ WHAT MAKES `partial` TRUE, NO MORE AND NO LESS: rows the recipe's own model marks
+// «not costed» with a label, opened into sub-recipes — priced or not, because a sub-recipe
+// that is itself partial counts too. ⚠️ PIECES AND SPOONS INCLUDED («sale q.b.»): costRecipe()
+// makes a labelled one partial, so leaving it out would show the warning with nothing to name.
+const UNPRICED_REASON_TEXT = {
+  'no-ingredient-price': 'fc.unpriced.noPrice',
+  'packaging-no-price': 'fc.unpriced.noPrice',
+  'no-piece-weight': 'fc.unpriced.noPieceWeight',
+  'no-piece-price': 'fc.unpriced.noPiecePrice',
+  'packaging-no-mode': 'fc.unpriced.packagingNoMode',
+  'packaging-no-units': 'fc.unpriced.packagingNoUnits',
+  'recipe-no-price': 'fc.unpriced.recipeNoPrice',
+  'gone': 'fc.unpriced.gone',
+};
+
+// The one place an unpriced reason becomes words — the recipe-row reasons are the catalogue's.
+export function unpricedReasonText(reason) {
+  return UNPRICED_REASON_TEXT[reason] ? t(UNPRICED_REASON_TEXT[reason]) : costReasonLabel(reason);
+}
+
+export function unpricedParts(product, tables = {}) {
+  const p = normalizeProduct(product);
+  if (!p) return [];
+  const out = [];
+  const keys = new Set();
+  const add = (name, inRecipe, reason) => {
+    const label = String(name || '').trim();
+    if (!label) return;
+    const key = JSON.stringify([label, inRecipe, reason]);
+    if (keys.has(key)) return;
+    keys.add(key);
+    out.push({ name: label, inRecipe, reason });
+  };
+
+  // The rows of one recipe that cannot be costed, opened into sub-recipes. Returns how many
+  // it found (de-duplicated ones included), so the caller knows whether anything was named.
+  // `depth` and `branch` are costRecipe's own, so this stops where the cost stops.
+  const openRecipe = (recipe, depth, branch) => {
+    const costed = costRecipe(recipe, tables, depth, branch);
+    const here = new Set([...branch, String(recipe.id || '')]);
+    const recipeName = String(recipe.name || '').trim();
+    let found = 0;
+    costed.rows.forEach((row, i) => {
+      const link = linkOf((recipe.ingredients || [])[i]);
+      const sub = link && link.kind === 'recipe' && depth < MAX_RECIPE_DEPTH && !here.has(link.refId)
+        ? lookup(tables.recipes, link.refId) : null;
+      let named = 0;
+      // ⚠️ A sub-recipe with no price is opened only under a LABELLED row: costRecipe() counts an
+      // unlabelled one as nothing, so listing what is inside it would name what is not partial.
+      // A priced sub-recipe is always opened — its own partial counts whatever the row's label.
+      if (sub && ((row.reason === 'sub-not-costable' && row.label) || row.costed)) named = openRecipe(sub, depth + 1, new Set([...here, link.refId]));
+      found += named;
+      if (!row.costed && row.label && !(row.reason === 'sub-not-costable' && named > 0)) {
+        add(row.label, recipeName, row.reason);
+        found += 1;
+      }
+    });
+    return found;
+  };
+
+  p.components.forEach(component => {
+    const line = componentLineCost(component, tables, { noWeightLoss: p.noWeightLoss });
+    if (component.kind === 'ingredient') {
+      if (line.reason === 'missing-ingredient') add(t('fc.thisItemNoLonger'), '', 'gone');
+      else if (line.cost === null) add(line.name, '', line.reason);
+      return;
+    }
+    if (line.reason === 'missing-recipe') { add(t('fc.thisRecipeNoLonger'), '', 'gone'); return; }
+    const recipe = lookup(tables.recipes, component.recipeId);
+    const found = openRecipe(recipe, 1, new Set());
+    if (line.rate === null && !found) add(recipe.name, '', 'recipe-no-price');
+  });
+
+  p.packaging.forEach(item => {
+    const ingredient = lookup(tables.ingredients, item.ingredientId);
+    if (!ingredient) { add(t('fc.thisItemNoLonger'), '', 'gone'); return; }
+    const line = packagingLineCost(item, ingredient);
+    if (line.cost !== null) return;
+    add(ingredientDisplayName(ingredient), '', line.reason === 'no-price' ? 'packaging-no-price' : 'no-piece-price');
+  });
+
+  // Packaging that cannot be multiplied out yet is missing from the batch figure (productionCost
+  // counts it as partial): ONE entry for all of it. ⚠️ TWO DIFFERENT ADVICES: no way of selling
+  // chosen → choose one; chosen but not complete (no pieces per batch, no pack size, nothing
+  // weighed yet) → finish it — «choose how it is sold» on a card that says «a pezzo» is wrong.
+  if (p.packaging.length > 0 && !(unitsPerBatch(p, batchTotals(p, tables)) > 0)) {
+    add(t('fc.unpriced.packagingName'), '', p.sellingMode ? 'packaging-no-units' : 'packaging-no-mode');
+  }
+  return out;
 }
 
 // green / amber / red against the product's own target, or null when it has none —

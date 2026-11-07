@@ -719,7 +719,8 @@ const app = {
 
   // The recipes a component can point at, by NAME ONLY.
   // ⚠️ NO PRICE IN THE CHOOSER. Federico, 13 Sep 2026: «nella sezione "composto da" non
-  // mostrare il prezzo». What the product costs is read in «Costo di produzione», once.
+  // mostrare il prezzo» — reversed for the LINES on 7 Nov 2026 (each shows its money,
+  // line-cost.js), kept for the list a line is picked from.
   recipeOptions() {
     return Object.values(getRecipes())
       .filter(r => r && String(r.name || '').trim())
@@ -729,7 +730,7 @@ const app = {
 
   // The ingredients a product can have added straight to it — never packaging, which has
   // its own section. By name, with the pack weight that tells two similar ones apart, and
-  // ⚠️ NO PRICE: «nella sezione "composto da" non mostrare il prezzo».
+  // ⚠️ NO PRICE in the chooser (13 Sep 2026; the lines show theirs since 7 Nov 2026).
   ingredientOptions() {
     return Object.values(getIngredients())
       .filter(i => i && i.active !== false && !isPackaging(i) && String(i.name || '').trim())

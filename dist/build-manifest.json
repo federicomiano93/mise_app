@@ -378,14 +378,14 @@
       }
     },
     "dist/foodcost.css": {
-      "sha": "608de571b5b5a37d",
+      "sha": "d0e8694fdb10dc1e",
       "inputs": {
-        "foodcost.css": "fe008f6c8e2abb07"
+        "foodcost.css": "337374db754134e9"
       }
     },
     "dist/foodcost.js": {
-      "sha": "b009736ecfc7f910",
-      "mapSha": "d6be6029159bd7dd",
+      "sha": "16cd90f0a73111b3",
+      "mapSha": "46268327d9803f56",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "41d275905d191c60",
@@ -409,20 +409,21 @@
         "js/foodcost/crossing-route.js": "ab3dc4743da26c00",
         "js/foodcost/dom.js": "02aea52bb04819e8",
         "js/foodcost/firebase-foodcost.js": "385802cc24237b22",
-        "js/foodcost/foodcost-editor.js": "818fbaf89c9bc6b6",
+        "js/foodcost/foodcost-editor.js": "88d85c4a2a9ed8a5",
         "js/foodcost/foodcost-list.js": "5f8121ac395a175b",
-        "js/foodcost/foodcost-main.js": "a5caecbb35ecd387",
-        "js/foodcost/foodcost-model.js": "6361173bc312a4ad",
+        "js/foodcost/foodcost-main.js": "10ecda038b613c70",
+        "js/foodcost/foodcost-model.js": "55da2798b7e788c5",
         "js/foodcost/foodcost-settings.js": "515cc9a266758252",
         "js/foodcost/foodcost-store.js": "cac52d213db0143f",
         "js/foodcost/foodcost-weighing.js": "464e8d54f042a4a9",
         "js/foodcost/from-recipes-view.js": "f80e6af01f5b52d9",
         "js/foodcost/from-recipes.js": "248ca57401afd438",
+        "js/foodcost/line-cost.js": "4b8e5429fb3b4ca2",
         "js/foodcost/line-quantity.js": "507b62946dae2409",
-        "js/foodcost/per-kg-model.js": "f3edd9b3c38f1766",
-        "js/foodcost/preview-view.js": "b554502407421cbd",
+        "js/foodcost/per-kg-model.js": "50780e9e8edb8ea9",
+        "js/foodcost/preview-view.js": "21c17e800e99cd6f",
         "js/foodcost/product-limits.js": "ed45299d01a6997b",
-        "js/foodcost/read-sections.js": "c0cf989fd41d1a36",
+        "js/foodcost/read-sections.js": "a2b472b0af5fff3f",
         "js/foodcost/tablet.js": "39ca59d6515191ad",
         "js/foodcost/vat-guide-view.js": "1b7355c4f514ca80",
         "js/foodcost/vat-guide.js": "7167dc662d3c5cf1",
@@ -492,10 +493,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "f9fe142cafcd3334",
-      "mapSha": "dc85715f324814d5",
+      "sha": "98ae2be9239543b8",
+      "mapSha": "9404138f1c81ec18",
       "inputs": {
-        "js/i18n.js": "c069c46cf7da418c"
+        "js/i18n.js": "4e9ea612d585a597"
       }
     },
     "dist/index.js": {
