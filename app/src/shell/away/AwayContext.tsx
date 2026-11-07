@@ -1,8 +1,8 @@
 import { createContext, useContext, useEffect, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
-import { useDataServices } from '../data/DataContext';
-import { useSession } from '../session/SessionContext';
-import { useTodayKey } from '../home/useTodayKey';
+import { useDataServices } from '../../data/DataContext';
+import { useSession } from '../../session/SessionContext';
+import { useTodayKey } from '../useTodayKey';
 import { INERT_AWAY_STORE, createAwayStore } from './awayStore';
 import type { AwaySnapshot, AwayStore } from './awayStore';
 

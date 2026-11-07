@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { fakeSettingsSource } from '../testing/fakeSettingsSource';
+import { fakeSettingsSource } from '../../testing/fakeSettingsSource';
 import { INERT_AWAY_STORE, createAwayStore } from './awayStore';
 
 // Saturday 7 November 2026, noon.

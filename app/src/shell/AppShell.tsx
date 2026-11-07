@@ -7,7 +7,7 @@ import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { SwitchVenueButton } from '../session/SwitchVenueButton';
-import { AwayProvider } from '../settings/AwayContext';
+import { AwayProvider } from './away/AwayContext';
 import { announceScreen } from '../telemetry/usage';
 import { AwayReminder } from './AwayReminder';
 import { OfflineBanner } from './OfflineBanner';

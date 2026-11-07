@@ -1,8 +1,8 @@
 import { CalendarOff } from 'lucide-react';
 import { useT } from '../i18n/useT';
-import { useAway } from '../settings/AwayContext';
-import { awayDayLabel } from '../settings/awayWords';
-import { useAskComeBack } from '../settings/useAskComeBack';
+import { useAway } from '../shell/away/AwayContext';
+import { awayDayLabel } from '../shell/away/awayWords';
+import { useAskComeBack } from '../shell/away/useAskComeBack';
 import { useStatusMessage } from '../ui/StatusMessage';
 import styles from './AwayBand.module.css';
 

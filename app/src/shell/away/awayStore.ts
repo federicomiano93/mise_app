@@ -14,7 +14,7 @@
 // day; recheck() re-asks it when the day changes on a tablet left open.
 
 import { isAway } from '@mise/shared/away-model';
-import type { SettingsSource } from './settingsSource';
+import type { SettingsSource } from '../../settings/settingsSource';
 
 export interface AwaySnapshot {
   // `loading` until the one read has answered (or failed: a failed read is «not away», and the button still works).

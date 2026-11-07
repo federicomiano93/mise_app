@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
-import { useT } from '../i18n/useT';
-import { useConfirm } from '../ui/useConfirm';
+import { useT } from '../../i18n/useT';
+import { useConfirm } from '../../ui/useConfirm';
 import { useAway, useAwayStore } from './AwayContext';
 import { awayDayLabel } from './awayWords';
 

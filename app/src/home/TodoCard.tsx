@@ -11,7 +11,7 @@ import type { TodoGroup } from './todoModel';
 import { shortDayText, dayHeading } from './todoWords';
 import { TodoForm } from './TodoForm';
 import type { FocusAfter } from './TodoForm';
-import { useTodayKey } from './useTodayKey';
+import { useTodayKey } from '../shell/useTodayKey';
 import { useTodos, useTodosStore } from './TodosContext';
 import type { TodoItem } from './todosSource';
 import styles from './TodoCard.module.css';

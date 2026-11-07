@@ -4,10 +4,10 @@ import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { useStatusMessage } from '../ui/StatusMessage';
-import { useAway, useAwayStore } from './AwayContext';
-import { awayDayLabel } from './awayWords';
+import { useAway, useAwayStore } from '../shell/away/AwayContext';
+import { awayDayLabel } from '../shell/away/awayWords';
 import { SettingsRow } from './SettingsRow';
-import { useAskComeBack } from './useAskComeBack';
+import { useAskComeBack } from '../shell/away/useAskComeBack';
 import styles from './AwayRow.module.css';
 
 // «I am on holiday» — the row in Settings' «You» card, for everybody. Not away: a row that opens the date dialog. Away: the same row in
