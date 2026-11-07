@@ -198,7 +198,7 @@ test('⚠️ Back from the first screen a recipe opened returns to that recipe',
   assert.doesNotMatch(back, /location\.href\s*=/);
   assert.equal(back.split("recipeHref(fromRecipe, 'foodcost')").length - 1, 2, 'both Back paths land on the Food cost card');
   assert.doesNotMatch(back, /recipeHref\(fromRecipe\)/);
-  assert.match(main, /renderEditor\(\{ product, draft, app \}\)/);
+  assert.match(main, /renderEditor\(\{ product, draft, app, mode \}\)/);
 });
 
 // ── What the code review found ───────────────────────────────────────────────

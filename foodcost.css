@@ -244,9 +244,11 @@ select.fc-input, .fc-select {
    is the thing that was missed. The box itself is framed in red by .fc-invalid. */
 .fc-weigh-warn { margin: 4px 0 0; font-size: .8rem; font-weight: 600; color: var(--fc-danger); }
 .fc-weigh-row .fc-invalid { box-shadow: 0 0 0 1px var(--fc-danger); }
+/* The read view's cooked weight of a wrong pair: the same red, with no box to frame. */
+.fc-read-row dd.fc-read-invalid { color: var(--fc-danger); }
 /* «Finished product, no weight loss»: the shared .set-row inside the «Composto da» card. The
    card already has its own padding, so the row's 16px side padding would double it. */
-.fc-madeof .fc-noloss { padding: 10px 2px; border-top: 1px dashed var(--fc-border); }
+.fc-card .fc-weighs .fc-noloss { padding: 10px 2px; border-top: 1px dashed var(--fc-border); }
 .fc-weighs .fc-noloss + .fc-weigh { margin-top: 0; }
 .fc-weigh-shared { margin-top: 4px; }
 .fc-weigh-warn[hidden],
@@ -723,3 +725,55 @@ select.fc-input, .fc-select {
 .app-dialog { overflow-y: auto; }
 .app-dialog > * { flex-shrink: 0; }
 .app-dialog .fc-preview { margin-bottom: 18px; }
+
+/* «Scheda completa» (Federico, 7 Nov 2026): ONE box under the summary, holding a framed card per
+   section. Read: a <details>, closed until tapped (the summary row is shaped like «Costo per 1 kg»,
+   a 44px row, the chevron on the right). Edit: the same box as a plain section, never collapsible. */
+.fc-full { border: 1px solid var(--fc-border); border-radius: var(--fc-radius); background: var(--fc-surface); }
+.fc-full-summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 44px; margin: 0; padding: 0 14px; cursor: pointer; list-style: none;
+  font-size: .88rem; font-weight: 600; color: var(--fc-text);
+}
+.fc-full--edit > .fc-full-summary { cursor: default; }
+.fc-full-summary::-webkit-details-marker { display: none; }
+.fc-full-summary:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
+/* ⚠️ ONLY THE BOX'S OWN CHEVRON (`>`): «Costo per 1 kg» inside it uses the same class, and a
+   descendant rule turned its arrow up while that box was still closed (seen on a screenshot). */
+.fc-full[open] > .fc-full-summary .fc-perkg-chevron { transform: rotate(180deg); }
+.fc-full-body {
+  display: flex; flex-direction: column; gap: 12px; padding: 12px;
+  border-top: 1px solid var(--fc-border); background: var(--fc-ground);
+  border-radius: 0 0 var(--fc-radius) var(--fc-radius);
+}
+.fc-card {
+  display: flex; flex-direction: column; gap: 10px; min-width: 0;
+  padding: 12px 14px; border: 1px solid var(--fc-border); border-radius: var(--fc-radius); background: var(--fc-surface);
+}
+.fc-card .fc-section { margin: 0; }
+/* The lines were framed on their own; inside a card the card is the frame. */
+.fc-card .fc-madeof { padding: 0; border: 0; background: none; }
+.fc-card .fc-madeof .fc-add-row { background: var(--fc-surface); }
+.fc-subsection { margin: 4px 0 0; font-size: .78rem; font-weight: 600; color: var(--fc-text); }
+.fc-subsection[hidden], .fc-read-box[hidden] { display: none; }
+.fc-full-body .fc-actions { margin-top: 0; }
+
+/* The read view: label left (muted), value right — the preview panel's rows. A long value wraps
+   (296px), it never overflows. */
+.fc-read { margin: 0; }
+.fc-read-row {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px;
+  padding: 6px 0; border-top: 1px solid var(--fc-border);
+}
+.fc-read-row:first-child { border-top: 0; }
+.fc-read-row dt { margin: 0; flex: 1 1 8rem; min-width: 0; font-size: .85rem; color: var(--fc-text-2); overflow-wrap: anywhere; }
+.fc-read-row dt.missing { color: var(--fc-danger); }
+.fc-read-row dd {
+  margin: 0; min-width: 0; max-width: 100%; font-size: .95rem; font-weight: 600;
+  font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere;
+}
+.fc-read-row dd.fc-read-note { flex: 1 0 100%; text-align: left; font-weight: 400; font-size: .72rem; margin: 0; }
+.fc-read-empty { margin: 0; font-size: .85rem; font-weight: 400; color: var(--fc-text-2); }
+.fc-read-line { margin: 0; font-size: .85rem; color: var(--fc-text); }
+.fc-read-block { display: flex; flex-direction: column; gap: 6px; }
+.fc-read-box { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
