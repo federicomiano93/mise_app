@@ -137,7 +137,7 @@ test('read-errors.mjs: fixed project, selected fields, 1000 limit, every delete 
 test('the session-start hook counts the errors and prints a line only when there are some', () => {
   const src = readFileSync(join(ROOT, '.claude/hooks/session-start.mjs'), 'utf8');
   assert.match(src, /'scripts\/read-errors\.mjs', '--count'/);
-  assert.match(src, /report\('the errors from the app', checkAppErrors\)/);
+  assert.match(src, /report\('the errors from the app', \(\) => token\.then\(checkAppErrors\)\)/);
   assert.match(src, /if \(count === 0\) return null;/);
   assert.match(src, /lines\.filter\(Boolean\)/);
 });
@@ -167,9 +167,55 @@ test('the aggregation answer is read as a count, anything else as no answer', ()
   }
 });
 
-test('the hook counts the errors after the notes, never beside them (one gcloud token fetch at a time)', () => {
+test('the hook asks gcloud ONCE and both counts share that token (two calls pushed it past 15 s)', () => {
   const src = readFileSync(join(ROOT, '.claude/hooks/session-start.mjs'), 'utf8');
-  assert.match(src, /notesCheck\.then\(\(\) => report\('the errors from the app', checkAppErrors\)\)/);
+  assert.equal(src.match(/exec\('gcloud auth print-access-token'/g).length, 1);
+  assert.doesNotMatch(src, /execFile\([^)]*gcloud/);
+  assert.match(src, /const token = gcloudToken\(\);/);
+  // Both counts are direct members of the one Promise.all, side by side — chained one after the
+  // other they could take 2 × CHECK_LIMIT_MS and pass the 15 s limit again.
+  const all = src.slice(src.indexOf('const lines = await Promise.all(['), src.indexOf(']);', src.indexOf('const lines = await Promise.all([')));
+  assert.match(all, /^ {2}report\('the notes from the app', \(\) => token\.then\(checkAppNotes\)\),$/m);
+  assert.match(all, /^ {2}report\('the errors from the app', \(\) => token\.then\(checkAppErrors\)\),$/m);
+  assert.doesNotMatch(all, /\.then\(\(\) => report\(/);
+  // The token wait leaves the counts time inside their cap, and is itself capped and shape-checked.
+  const ms = name => Number(new RegExp(`const ${name} = (\\d+);`).exec(src)[1]);
+  assert.ok(ms('TOKEN_MS') + 1000 < ms('CHECK_LIMIT_MS'));
+  assert.ok(ms('CHECK_LIMIT_MS') < 15000);
+  assert.match(src, /withDeadline\(job, TOKEN_MS \+ GRACE_MS\)\.then\(out => \(TOKEN_SHAPE\.test\(out\) \? out : null\), \(\) => null\)/);
+  // The token reaches only the two count scripts, never git, gh or the output: the word appears
+  // only in the token function, countEnv, the two count checks and the two report lines.
+  assert.equal(src.match(/NOTES_MS, countEnv\(token\)\)/g).length, 2);
+  assert.equal(src.match(/countEnv\(/g).length, 3); // the definition and those two calls
+  assert.doesNotMatch(src, /CHILD_ENV = \{[^}]*MISE_GCLOUD_TOKEN/);
+  assert.doesNotMatch(src, /\$\{token/);
+  const uses = src.split('\n').filter(line => /\btoken\b/.test(line) && !/^\s*\/\//.test(line)).map(line => line.trim());
+  assert.deepEqual(uses, [
+    "const child = exec('gcloud auth print-access-token', {",
+    "function countEnv(token) {",
+    "return { ...CHILD_ENV, MISE_GCLOUD_TOKEN: token };",
+    "async function checkAppNotes(token) {",
+    "if (!token) throw new Error('no token');",
+    "count = Number((await run(process.execPath, ['scripts/read-feedback.mjs', '--count'], NOTES_MS, countEnv(token))).trim());",
+    "async function checkAppErrors(token) {",
+    "if (!token) throw new Error('no token');",
+    "count = Number((await run(process.execPath, ['scripts/read-errors.mjs', '--count'], NOTES_MS, countEnv(token))).trim());",
+    "const token = gcloudToken();",
+    "report('the notes from the app', () => token.then(checkAppNotes)),",
+    "report('the errors from the app', () => token.then(checkAppErrors)),",
+  ]);
+});
+
+test('both count scripts take the hook\'s token for --count only, shape-checked, before asking gcloud', () => {
+  for (const file of ['scripts/read-feedback.mjs', 'scripts/read-errors.mjs']) {
+    const src = readFileSync(join(ROOT, file), 'utf8');
+    const given = src.indexOf('process.env.MISE_GCLOUD_TOKEN');
+    assert.ok(given > 0, file);
+    assert.equal(src.split('MISE_GCLOUD_TOKEN').length, 2, file);
+    assert.ok(given < src.indexOf('gcloud auth print-access-token'), file);
+    assert.match(src, /const counting = process\.argv\.length === 3 && process\.argv\[2\] === '--count';/, file);
+    assert.match(src, /if \(counting && given && \/\^\[\\w\.\\-~\+\/\]\+=\*\$\/\.test\(given\)\) return given;/, file);
+  }
 });
 
 test('errorsJson: groups and a 30-day trend, with no stack, uid or device id', () => {
