@@ -23,8 +23,11 @@
 // priced at 0 per kilo. Such a row is shown here, with its weight, as «not counted»: the
 // one place a person can see it, and fix it.
 //
-// ⚠️ NO MONEY UNDER «COMPOSTO DA» (Federico, 13 Sep 2026). This block is drawn apart from
-// it, on purpose: the lines of the product stay a list of what it is made of.
+// ⚠️ THIS BLOCK IS DRAWN APART FROM «COMPOSTO DA», on purpose. That section used to show no
+// money at all (Federico, 13 Sep 2026: «nella sezione "composto da" non mostrare il prezzo»);
+// he REVERSED it on 7 Nov 2026 — «il costo dell'ingrediente al kg e il costo della quantità
+// selezionata» — so each line there now shows its own rate and cost (line-cost.js). This block
+// stays what it was: the cost of ONE KILO of the finished product, cut into its parts.
 
 import { ingredientDisplayName } from '../ingredient-name.js';
 import { pricePerKg as ingredientPricePerKg, roundTo, positiveNumber } from '../price-model.js';

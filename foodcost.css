@@ -224,9 +224,16 @@ select.fc-input, .fc-select {
 .fc-qty, .fc-weigh-row .fc-input { -moz-appearance: textfield; }
 .fc-line-unit { font-size: .8rem; color: var(--fc-text-2); flex-shrink: 0; }
 .fc-line-note { margin: 6px 0 0; font-size: .72rem; color: var(--fc-text-2); font-family: var(--fc-font-mono); }
-/* A recipe line with nothing to say (priced, and no money shown since 13 Sep 2026) takes
-   no room: an empty note would still leave its margin under the row. */
+/* A line with nothing to do about it (priced: its money is on the line above, since 7 Nov 2026)
+   takes no room: an empty note would still leave its margin under the row. */
 .fc-line-note:empty { display: none; }
+/* The rate and what the amount typed costs, above the note (Federico, 7 Nov 2026). The same quiet
+   size and muted colour as the note — --fc-text-2 is the text colour used for it, 4.5:1 or better
+   on this surface; the figures stay readable without shouting over the quantity box. */
+.fc-line-cost { margin: 6px 0 0; font-size: .72rem; color: var(--fc-text-2); font-family: var(--fc-font-mono); overflow-wrap: anywhere; }
+.fc-line-cost:empty { display: none; }
+/* Close under the money only when there IS money: an empty (hidden) one keeps the note's 6px. */
+.fc-line-cost:not(:empty) + .fc-line-note { margin-top: 2px; }
 /* The dough weighed before the oven and after, under a recipe line — moved here from
    the recipe editor on 13 Sep 2026. Two boxes side by side, as they were there; the
    answer under them reads as a statement, not as a footnote. */
@@ -718,6 +725,20 @@ select.fc-input, .fc-select {
 .fc-preview-more-btn[aria-expanded="true"] .fc-preview-more-chevron { transform: rotate(180deg); }
 .fc-preview-more .fc-preview-list[hidden] { display: none; }
 .fc-preview-more .fc-preview-row:first-child { border-top: 1px solid var(--fc-border); }
+/* «Quali?»: a small, low-key text button right under the partial-price warning, opening the list
+   of what has no price. A 44px-high target like «Dettagli», but quiet: underlined text, no frame. */
+.fc-preview-which { display: flex; flex-direction: column; align-items: flex-start; }
+.fc-preview-which-btn {
+  display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding: 0 4px; margin-left: -4px;
+  border: 0; background: none; cursor: pointer; font-family: var(--fc-font); font-size: .78rem; font-weight: 600;
+  color: var(--fc-text-2); text-decoration: underline; text-underline-offset: 2px;
+}
+.fc-preview-which-btn:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
+.fc-preview-which-list { margin: 0 0 4px; padding-left: 18px; font-size: .78rem; color: var(--fc-text); }
+.fc-preview-which-list[hidden] { display: none; }
+.fc-preview-which-list li { margin-top: 2px; overflow-wrap: anywhere; }
+.fc-preview-which-name { font-weight: 600; }
+.fc-preview-which-why { margin-left: .35em; color: var(--fc-text-2); }
 .fc-preview-missing-title { margin: 8px 0 0; font-size: .78rem; font-weight: 600; color: var(--fc-text); }
 /* ⚠️ THE WHOLE DIALOG SCROLLS on a short phone, never the panel alone: a scrolling panel holds no
    button, so a keyboard could not reach it (axe, 296px). This page's dialogs only — foodcost.css

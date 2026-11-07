@@ -18,7 +18,7 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { formatRate, formatMoney } from '../price-model.js';
-import { blockerText } from './foodcost-model.js';
+import { blockerText, unpricedReasonText } from './foodcost-model.js';
 
 // Keys, resolved at draw time.
 const UNIT_TEXT = { piece: 'fc.perPiece', kg: 'fc.perKg', pack: 'fc.perPack' };
@@ -48,7 +48,11 @@ function row(label, value, extraClass = '') {
 // `moreOpen` / `onMoreToggle`: the card repaints this panel on every keystroke, so it keeps
 // whether «Dettagli» is open and hands it back here — a box that snapped shut while typing
 // would be one more thing to fight with.
-export function previewPanel(preview, { caption = true, showMissing = true, moreOpen = false, onMoreToggle = null } = {}) {
+// `whichOpen` / `onWhichToggle` do the same for the «Which?» list under the partial warning.
+export function previewPanel(preview, {
+  caption = true, showMissing = true, moreOpen = false, onMoreToggle = null,
+  whichOpen = false, onWhichToggle = null,
+} = {}) {
   const hasLabour = preview.labourUnitCost !== null;
 
   const foodCost = el('dd', {}, [
@@ -107,12 +111,39 @@ export function previewPanel(preview, { caption = true, showMissing = true, more
   paintMore();
   const more = el('div', { class: 'fc-preview-more' }, [moreBtn, moreList]);
 
+  // «Which?» under the partial warning: what has no price, closed until tapped (Federico,
+  // 7 Nov 2026). The list is the model's (preview.unpriced); this only words it. ⚠️ A BUTTON for
+  // the same reason as «Dettagli» above, and it keeps its state the same way.
+  const unpriced = preview.partial && Array.isArray(preview.unpriced) ? preview.unpriced : [];
+  let which = null;
+  if (unpriced.length) {
+    let whichShown = !!whichOpen;
+    const whichList = el('ul', { class: 'fc-preview-which-list', id: `fc-preview-which-${++seq}` },
+      unpriced.map((item) => el('li', {}, [
+        el('span', { class: 'fc-preview-which-name', text: item.name }),
+        el('span', { class: 'fc-preview-which-why', text: item.inRecipe
+          ? t('fc.unpriced.reasonIn', { reason: unpricedReasonText(item.reason), name: item.inRecipe })
+          : t('fc.unpriced.reason', { reason: unpricedReasonText(item.reason) }) }),
+      ])));
+    const whichBtn = el('button', {
+      type: 'button', class: 'fc-preview-which-btn', 'aria-controls': whichList.id, text: t('fc.preview.which'),
+      onclick: () => { whichShown = !whichShown; paintWhich(); onWhichToggle?.(whichShown); },
+    });
+    const paintWhich = () => {
+      whichBtn.setAttribute('aria-expanded', String(whichShown));
+      whichList.hidden = !whichShown;
+    };
+    paintWhich();
+    which = el('div', { class: 'fc-preview-which' }, [whichBtn, whichList]);
+  }
+
   const missing = preview.missing || [];
   return el('div', { class: 'fc-preview' }, [
     caption ? el('p', { class: 'fc-preview-caption', text: previewCaption(preview) }) : null,
     list,
     idealSub,
     preview.partial ? el('p', { class: 'fc-answer-partial', text: t('fc.costPartial') }) : null,
+    which,
     showMissing && missing.length ? el('p', { class: 'fc-preview-missing-title', text: t('fc.preview.missing') }) : null,
     showMissing && missing.length
       ? el('ul', { class: 'fc-blockers' }, missing.map((key) => el('li', { text: blockerText(key) })))
