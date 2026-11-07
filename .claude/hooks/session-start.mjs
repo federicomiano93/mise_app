@@ -8,16 +8,17 @@
 //   node .claude/hooks/session-start.mjs        (registered in .claude/settings.local.json)
 //
 // ⚠️ READ-ONLY, and it must NEVER FAIL OR BLOCK a session: no file is written (gcloud may refresh its own
-// login cache when the notes are counted), the only change
+// login cache when the token is fetched), the only change
 // to git state is `git fetch --prune`, every check has its own time limit, every error becomes
 // a short "could not check X" line, and the exit code is always 0. The whole run stays under
-// ~9 s even with no network.
+// ~9 s even with no network (every check, the token wait included, is capped at CHECK_LIMIT_MS
+// and they all run side by side) — well inside the 15 s the hook is given.
 //
 // ⚠️ WHAT IT PRINTS REACHES THE ASSISTANT AS CONTEXT, SO TEXT FROM STRANGERS MUST NOT: the repo
 // is public and anybody can open a PR with any title. The title of a PR from anybody but the
 // owner is therefore never printed, and every other text that comes from outside this PC is
 // stripped of control characters, cut short, or matched against a strict pattern first.
-import { execFile } from 'node:child_process';
+import { exec, execFile } from 'node:child_process';
 import { closeSync, existsSync, openSync, readSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
@@ -32,8 +33,12 @@ const FETCH_MS = 6000;
 const GH_MS = 6000;
 const HTTP_MS = 5000;
 const STATUS_MS = 5000;
-// gcloud alone takes ~3 s on this PC to print a token; the query is a second more.
+// gcloud alone takes ~3 s on this PC to print a token (far more when several sessions start at
+// once); each count is a second more once the token is there.
+const TOKEN_MS = 6000;
 const NOTES_MS = 8000;
+// What `gcloud auth print-access-token` prints; anything else is not passed on.
+const TOKEN_SHAPE = /^[\w.\-~+/]+=*$/;
 // After the fetch has used its whole allowance there is little of the 10 s left.
 const GIT_AFTER_FETCH_MS = 1500;
 // execFile's own timeout kills the child, but a grandchild (git-remote-https) can keep the pipe
@@ -51,10 +56,10 @@ function withDeadline(promise, ms) {
   return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
 }
 
-function run(file, args, ms) {
+function run(file, args, ms, env = CHILD_ENV) {
   const job = new Promise((resolve, reject) => {
     const child = execFile(file, args, {
-      cwd: REPO, encoding: 'utf8', timeout: ms, windowsHide: true, maxBuffer: 1 << 20, env: CHILD_ENV,
+      cwd: REPO, encoding: 'utf8', timeout: ms, windowsHide: true, maxBuffer: 1 << 20, env,
     }, (error, stdout) => (error ? reject(error) : resolve(stdout)));
     // A command that waits for input must get an end of input, not hang until its time is up.
     child.stdin?.on('error', () => {});
@@ -239,14 +244,36 @@ function checkStatoApp() {
   return `- STATO_APP.md last regenerated: ${clean(stamp[1], 80)} — ${offer}`;
 }
 
+// ONE Google login for both counts below. Each script used to ask gcloud for its own token, one
+// after the other (two at once slow each other down): ~3 s each, and when several sessions
+// started together the pair pushed this hook past its 15 s limit about one start in ten, so the
+// whole report was lost. The token goes only into the environment of the two count scripts —
+// never into git's or gh's, never into the output. null when gcloud cannot give one.
+function gcloudToken() {
+  const job = new Promise((resolve, reject) => {
+    // A fixed command string: on Windows gcloud is a .cmd, which only a shell can start.
+    const child = exec('gcloud auth print-access-token', {
+      cwd: REPO, encoding: 'utf8', timeout: TOKEN_MS, windowsHide: true, env: CHILD_ENV,
+    }, (error, stdout) => (error ? reject(error) : resolve(stdout.trim())));
+    child.stdin?.on('error', () => {});
+    child.stdin?.end();
+  });
+  return withDeadline(job, TOKEN_MS + GRACE_MS).then(out => (TOKEN_SHAPE.test(out) ? out : null), () => null);
+}
+
+function countEnv(token) {
+  return { ...CHILD_ENV, MISE_GCLOUD_TOKEN: token };
+}
+
 // How many notes people sent from the app's «?» sheet (scripts/read-feedback.mjs, which reads
 // production with the owner's gcloud login). ⚠️ ONLY THE COUNT IS PRINTED: the notes are
 // written by whoever works at a venue, and this output becomes the assistant's context. The
 // text is read on purpose, with the script, as data.
-async function checkAppNotes() {
+async function checkAppNotes(token) {
   let count;
   try {
-    count = Number((await run(process.execPath, ['scripts/read-feedback.mjs', '--count'], NOTES_MS)).trim());
+    if (!token) throw new Error('no token');
+    count = Number((await run(process.execPath, ['scripts/read-feedback.mjs', '--count'], NOTES_MS, countEnv(token))).trim());
   } catch {
     return '- could not count the notes from the app (offline, or `gcloud auth login` needed)';
   }
@@ -258,10 +285,11 @@ async function checkAppNotes() {
 // How many errors the app reported about itself (scripts/read-errors.mjs, js/error-report.js).
 // ⚠️ ONLY THE COUNT IS PRINTED: messages and stacks come from devices and this output becomes
 // the assistant's context. They are read on purpose, with the script, as data.
-async function checkAppErrors() {
+async function checkAppErrors(token) {
   let count;
   try {
-    count = Number((await run(process.execPath, ['scripts/read-errors.mjs', '--count'], NOTES_MS)).trim());
+    if (!token) throw new Error('no token');
+    count = Number((await run(process.execPath, ['scripts/read-errors.mjs', '--count'], NOTES_MS, countEnv(token))).trim());
   } catch {
     return '- could not count the errors from the app (offline, or `gcloud auth login` needed)';
   }
@@ -280,7 +308,7 @@ async function report(name, check) {
 }
 
 const fetched = gitFetch();
-const notesCheck = report('the notes from the app', checkAppNotes);
+const token = gcloudToken();
 const lines = await Promise.all([
   report('js/firebase.js', checkFirebaseConfig),
   report('the branch and working tree', checkBranchAndTree),
@@ -290,9 +318,9 @@ const lines = await Promise.all([
   report('the live site', checkLiveSite),
   report('the live release', () => checkLiveRelease(fetched)),
   report('STATO_APP.md', checkStatoApp),
-  notesCheck,
-  // After the notes, not beside them: two gcloud token fetches at once make each other slow.
-  notesCheck.then(() => report('the errors from the app', checkAppErrors)),
+  // Side by side: they share the one token, so no second gcloud runs.
+  report('the notes from the app', () => token.then(checkAppNotes)),
+  report('the errors from the app', () => token.then(checkAppErrors)),
 ]);
 
 const output = [

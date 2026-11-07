@@ -2376,7 +2376,7 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
                'bakery', 'name', 'components', 'packaging', 'sellingMode',
                'piecesPerBatch', 'packSize', 'packUnit', 'sellingPrice', 'vatRate',
-               'foodCostTarget', 'model', 'labourMinutes', 'labourPeople'
+               'foodCostTarget', 'model', 'labourMinutes', 'labourPeople', 'noWeightLoss'
              ])
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
@@ -2419,6 +2419,11 @@ service cloud.firestore {
               || (request.resource.data.labourPeople is number
                   && request.resource.data.labourPeople > 0
                   && request.resource.data.labourPeople <= 1000))
+          // «Finished product, no weight loss» (Nov 2026): the oven loss of the recipes on
+          // THIS product is ignored in its cost. Absent = false; the app writes it only when
+          // true. A boolean and nothing else — never a number a screen could mistake for a loss.
+          && (!('noWeightLoss' in request.resource.data)
+              || request.resource.data.noWeightLoss is bool)
           // ⚠️⚠️ THE OLD-PHONE GUARD, AND IT COSTS NO READ. A product is written WHOLE, so a
           // phone still on the version before ingredient lines and packs would save it back
           // without them and delete them in silence. Once a product carries `model`, a save
