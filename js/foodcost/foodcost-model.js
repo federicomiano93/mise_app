@@ -27,6 +27,8 @@ import { t } from '../i18n.js';
 import { ingredientDisplayName } from '../ingredient-name.js';
 import { pricePerKg as ingredientPricePerKg, roundTo, positiveNumber } from '../price-model.js';
 import { costRecipe } from '../catalogue/recipe-cost-model.js';
+// How search text is compared — the catalogue's own rule, so a name found there is found here.
+import { normalizeSearchText } from '../catalogue/catalogue-model.js';
 // ⚠️ MOVED TO js/vat-rates.js (29 Sep 2026): the ingredient price form's
 // purchase-VAT field needs the same national rate menu, and a calculation
 // shared by more than one feature belongs in js/ root (CLAUDE.md "Modular by
@@ -88,6 +90,8 @@ export const BLOCKER_TEXT = Object.freeze({
   'no-price': 'fc.enterTheSellingPrice',
   'no-recipe-cost': 'fc.theRecipesInThis',
   'no-weight': 'fc.theRecipesInThis2',
+  // Only the preview asks for it (productPreview): the food cost itself needs no target.
+  'no-target': 'fc.preview.needTarget',
 });
 
 // The one place a blocker key becomes words, so no screen can forget to translate it.
@@ -561,6 +565,67 @@ export function suggestedGrossPrice({ unitCost, vatRate, targetPct } = {}) {
   return Math.ceil(roundTo(gross * 100, 6) - 1e-9) / 100;
 }
 
+// The same price WITHOUT VAT: what one unit must bring in, net, for the food cost to be
+// exactly its target — or null when the cost or the target is missing. It needs no VAT
+// rate, so a product whose rate nobody has chosen yet can still be told what it must earn.
+//
+// ⚠️ ROUNDED UP TO THE CENT ON ITS OWN, like suggestedGrossPrice — never worked back from
+// the gross price, whose own rounding could leave the net a hair under the target.
+export function suggestedNetPrice({ unitCost, targetPct } = {}) {
+  const cost = positiveNumber(unitCost);
+  const target = positiveNumber(targetPct);
+  if (cost === null || target === null || target > 100) return null;
+  return Math.ceil(roundTo(cost / (target / 100) * 100, 6) - 1e-9) / 100;
+}
+
+// ── The preview of one product (Federico, 7 Nov 2026) ───────────────────────
+//
+// Tapping a product in the list shows, before the whole card, the figures that decide
+// its price — in HIS order: the selling price as typed, the raw materials, the packaging,
+// the labour (only where time and rate are known), the total, the food cost against its
+// target, the margin, and the ideal price with and without VAT. The card shows the same
+// panel at its top.
+//
+//   { unit, sellingPrice, materialsUnitCost, packagingUnitCost, hasPackaging,
+//     labourUnitCost, totalUnitCost, foodCostPct, targetPct, status, margin,
+//     idealGross, idealNet, partial, missing }
+//
+// ⚠️ NOTHING HERE IS A NEW SUM: every figure is productionCost(), costProduct() or the
+// two suggested prices, so the preview can never disagree with the card or the list.
+// The one figure of its own, the materials WITHOUT the packaging, is the batch's share
+// through perUnitOf — the very division unitCost is built from.
+// ⚠️ UNKNOWN IS null, NEVER 0, and `missing` names what to fill in (blocker keys, in the
+// order a person would fill them in), so the screen can say it instead of a number.
+export function productPreview(product, tables = {}) {
+  const p = normalizeProduct(product);
+  const cost = productionCost(p, tables);
+  const result = costProduct(p, tables);
+  const unitCost = cost.unitCost;
+  const share = p && unitCost !== null ? perUnitOf(p, cost.batch, cost.batch.cost) : null;
+  const labourUnitCost = cost.labourUnitCost;
+  const targetPct = p ? p.foodCostTarget : null;
+  const missing = [...result.blockers];
+  if (p && targetPct === null) missing.push('no-target');
+  return {
+    unit: unitCost !== null ? cost.unit : (p && p.sellingMode ? unitOf(p) : null),
+    sellingPrice: p ? p.sellingPrice : null,
+    materialsUnitCost: share === null ? null : roundTo(share, 4),
+    packagingUnitCost: unitCost === null ? null : cost.packaging.cost,
+    hasPackaging: !!p && p.packaging.length > 0,
+    labourUnitCost,
+    // Materials and packaging, plus the work where there is a figure for it.
+    totalUnitCost: labourUnitCost !== null ? cost.totalUnitCost : unitCost,
+    foodCostPct: result.foodCostPct,
+    targetPct,
+    status: result.status,
+    margin: result.margin,
+    idealGross: suggestedGrossPrice({ unitCost, vatRate: p ? p.vatRate : null, targetPct }),
+    idealNet: suggestedNetPrice({ unitCost, targetPct }),
+    partial: cost.partial || result.partial,
+    missing: [...new Set(missing)],
+  };
+}
+
 // green / amber / red against the product's own target, or null when it has none —
 // a product with no target is not failing, it simply has nothing to be measured
 // against, and colouring it would be inventing a standard nobody set.
@@ -597,6 +662,16 @@ export function sortByMargin(products, tables = {}) {
       if (bv === null) return -1;
       return bv - av || nameOf(a.product).localeCompare(nameOf(b.product));
     });
+}
+
+// The search bar of the list (Federico, 7 Nov 2026): does this product's NAME hold what
+// was typed? Accents and capitals do not count («caffe» finds «Caffè»), spaces around the
+// text neither, and nothing typed matches everything. Applied AFTER sortByMargin, so the
+// rows that stay keep the worst-margin-first order.
+export function nameMatches(product, query) {
+  const wanted = normalizeSearchText(query);
+  if (!wanted) return true;
+  return normalizeSearchText(product && product.name).includes(wanted);
 }
 
 // ── Snapshots ────────────────────────────────────────────────────────────────
