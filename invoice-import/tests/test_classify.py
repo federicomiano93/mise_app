@@ -2,7 +2,7 @@ import unittest
 
 from classify import (
     PackInfo, classify, clean_name, eggs_per_pack, format_pack_size, is_egg, is_unattributed_discount, normalise_name,
-    pack_word, parse_pack, parse_pack_text, product_key,
+    pack_word, parse_pack, parse_pack_text, pieces_of, Pieces, product_key,
 )
 
 
@@ -29,6 +29,29 @@ class PackParsingTest(unittest.TestCase):
         self.check("ESEMPIO 35/40gr 2Kg* 6pz", 2, "kg", 6)
         self.check("PATATE 2,5kg* 4pz", 2.5, "kg", 4)
         self.check("PASTA 85gr* 50pz", 85, "g", 50)
+
+    def test_the_count_first_then_grams_each(self):
+        # Mirrored word for word in tests/invoice-zip-classify.test.mjs.
+        self.check("9014 Vergn zucchero bianco bustina 2000x4g", 4, "g", 2000)
+        self.check("9164 Vergn zucchero grezzo bustina 1000x4g", 4, "g", 1000)
+        self.check("542 Vergn caps FAP ginseng dolce 50x6,5g", 6.5, "g", 50)
+        self.check("SO-FOR P.FIL SOL 5X 1KG", 1, "kg", None)
+        self.check("ZUCCHERO BUSTINA 1x4g", 4, "g", None)
+
+    def test_pieces_a_count_written_as_pieces_next_to_grams_of_one_piece(self):
+        # Mirrored word for word in tests/invoice-zip-classify.test.mjs.
+        self.assertEqual(pieces_of("SG.CR.1980 PF VUOTO 85gr* 50pz"), Pieces(50, 85))
+        self.assertEqual(pieces_of("CORNETTO RE BORBONE PZ.50 GR.85"), Pieces(50, 85))
+        self.assertEqual(pieces_of("CORNETTO RE BORBONE CEREALI GR.85X50P"), Pieces(50, 85))
+        self.assertEqual(pieces_of("PA Arancini BUFFET Ragu' 50gr* 150pz"), Pieces(150, 50))
+        self.assertEqual(pieces_of("MI GRAFFA mignon 35/40gr 2Kg* 55pz"), Pieces(55, 36.4))
+        self.assertEqual(pieces_of("BRIOCHE mignon 35/40gr 2k* 55pz"), Pieces(55, 36.4))
+        self.assertEqual(pieces_of("ESEMPIO 85gr 5Kg* 60pz"), Pieces(60, 83.3))
+        for text in ("DR CIPOLLE FETTE 2,5kg* 4pz", "PATATE DIPPING STREEPS LW KG.2.5X4", "SANTA LUCIA TRIS G 100X3 FLASH",
+                     "TONNO gr.60X6 OO MARE APERTO", "9014 Vergn zucchero bianco bustina 2000x4g",
+                     "99715 PULY CAF PLUS POLVERE G 570 (X12PZ)", "ESEMPIO 35/40gr 2Kg* 6pz", "BRIOCHE 37,5gr 2Kg* 55pz",
+                     "CORNETTI SFUSI 10 PZ", "UOVA FRESCHE DA 30 PZ", "PASTA 85gr* 1pz", ""):
+            self.assertIsNone(pieces_of(text), text)
 
     def test_a_bare_k_before_the_star_is_a_kilo_nowhere_else(self):
         # Mirrored word for word in tests/invoice-zip-classify.test.mjs.

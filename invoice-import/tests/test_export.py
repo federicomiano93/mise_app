@@ -136,6 +136,26 @@ class UnitsInTheFileTest(JsonCase):
         self.assertEqual(item["prices"][0]["pricePerUnit"], 2.0)
         self.assertEqual(item["prices"][0]["qty"], 30.0)
 
+    def test_a_product_counted_in_pieces_is_priced_per_piece(self):
+        # His rule (5 Nov 2026), mirrored in tests/invoice-zip-build.test.mjs.
+        self.add([{"desc": "SG.CR.1980 PF VUOTO 85gr* 50pz", "code": "CR1", "qty": 1, "unit": "CT", "total": 23.2},
+                  {"desc": "DR CIPOLLE FETTE 2,5kg* 4pz", "code": "CI", "qty": 1, "unit": "CT", "total": 22.8},
+                  {"desc": "9014 Vergn zucchero bianco bustina 2000x4g", "code": "9014", "qty": 1, "unit": "PZ",
+                   "total": 16.13}])
+        self.run_main("workbook")
+        for key in ("code:CR1", "code:CI", "code:9014"):
+            self.edit(key, **{workbook.H_ACTION: "importa"})
+        _, _, data = self.make_json()
+        cornetti = self.ingredient(data, "code:CR1")
+        self.assertEqual((cornetti["priceUnit"], cornetti["unitWeightKg"], cornetti["weight"], cornetti["packCount"],
+                          cornetti["packUnit"]), ("pcs", 0.085, "85 g", 50, ""))
+        self.assertEqual((cornetti["prices"][0]["pricePerUnit"], cornetti["prices"][0]["qty"]), (0.464, 50.0))
+        onion = self.ingredient(data, "code:CI")
+        self.assertEqual((onion["priceUnit"], onion["weight"], onion["packCount"]), ("kg", "2.5 kg", 4))
+        sugar = self.ingredient(data, "code:9014")
+        self.assertEqual((sugar["priceUnit"], sugar["packCount"], sugar["prices"][0]["pricePerUnit"],
+                          sugar["prices"][0]["qty"]), ("kg", 2000, 2.0163, 8.0))
+
     def test_litres_stay_litres(self):
         self.add([{"desc": "OLIO LT 1", "qty": 6, "unit": "NR", "total": 30}])
         self.run_main("workbook")
