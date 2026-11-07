@@ -4,8 +4,9 @@
 // the tablet and at the top of the card it is the same panel.
 // Federico, 7 Nov 2026, on the tablet: «ci sono troppe voci, dovrebbero essere di meno». His
 // choice: FOUR in sight — selling price, cost, food cost against its target, ideal price (with
-// VAT, and without it underneath) — and the rest (raw materials, packaging, labour, margin) in
-// «Dettagli», closed until tapped.
+// VAT, and without it underneath) — and the rest (raw materials, packaging, labour) in
+// «Dettagli», closed until tapped. Same evening, his next look: «nel riepilogo aggiungi il
+// margine» — the margin moved out of «Dettagli» into sight, right under the cost.
 //
 // ⚠️ EVERY FIGURE COMES FROM productPreview() (foodcost-model.js) and nothing is added up
 // here, so the preview can never disagree with the list or the card. This file only
@@ -62,11 +63,15 @@ export function previewPanel(preview, { caption = true, showMissing = true, more
   ]);
   foodCost.classList.add('fc-preview-wrap');
 
-  // The four in sight.
+  // In sight: price, cost, margin, food cost, ideal price.
   const list = el('dl', { class: 'fc-preview-list' }, [
     row(t('fc.preview.price'), shown(preview.sellingPrice, formatMoney)),
     // Materials and packaging, plus the work where there is a figure for it.
     row(t('fc.preview.cost'), shown(preview.totalUnitCost, formatRate)),
+    // The app's margin: net price less materials and packaging — so, where a labour row exists
+    // in «Dettagli», the label says the labour is left out of it.
+    row(hasLabour ? t('fc.preview.marginNoLabour') : t('fc.preview.margin'),
+      shown(preview.margin, formatMoney)),
     row(t('fc.preview.foodCost'), foodCost, ' fc-preview-fc'),
     row(t('fc.preview.ideal'), shown(preview.idealGross, formatMoney), ' fc-preview-ideal'),
   ]);
@@ -87,8 +92,6 @@ export function previewPanel(preview, { caption = true, showMissing = true, more
     row(t('fc.preview.packaging'), preview.hasPackaging
       ? shown(preview.packagingUnitCost, formatRate) : t('fc.preview.noPackaging')),
     hasLabour ? row(t('fc.preview.labour'), formatRate(preview.labourUnitCost)) : null,
-    row(hasLabour ? t('fc.preview.marginNoLabour') : t('fc.preview.margin'),
-      shown(preview.margin, formatMoney)),
   ]);
   const moreBtn = el('button', {
     type: 'button', class: 'fc-preview-more-btn', 'aria-controls': moreList.id,

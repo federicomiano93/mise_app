@@ -73,11 +73,14 @@ test('every preview and search key used exists in both languages', async () => {
   }
 });
 
-test('four figures in sight, the rest behind «Dettagli» — a real button, closed by default (7 Nov 2026)', () => {
-  // Federico on the tablet: «ci sono troppe voci». His choice: price, cost, food cost, ideal price.
+test('five figures in sight, the rest behind «Dettagli» — a real button, closed by default (7 Nov 2026)', () => {
+  // Federico on the tablet: «ci sono troppe voci». His choice: price, cost, food cost, ideal price;
+  // then «nel riepilogo aggiungi il margine», under the cost.
   const sight = /const list = el\('dl', \{ class: 'fc-preview-list' \}, \[([\s\S]*?)\n  \]\);/.exec(view)[1];
-  const labels = [...sight.matchAll(/row\(t\('(fc\.preview\.[a-zA-Z]+)'\)/g)].map((m) => m[1]);
-  assert.deepEqual(labels, ['fc.preview.price', 'fc.preview.cost', 'fc.preview.foodCost', 'fc.preview.ideal']);
+  const labels = [...sight.matchAll(/row\((?:hasLabour \? t\('fc\.preview\.marginNoLabour'\) : )?t\('(fc\.preview\.[a-zA-Z]+)'\)/g)].map((m) => m[1]);
+  assert.deepEqual(labels, ['fc.preview.price', 'fc.preview.cost', 'fc.preview.margin', 'fc.preview.foodCost', 'fc.preview.ideal']);
+  // Once only: no second margin inside «Dettagli».
+  assert.equal(view.match(/fc\.preview\.marginNoLabour/g).length, 1);
   assert.match(view, /fc\.preview\.idealSub/);
   // In the dialog the Tab trap walks buttons only, so «Dettagli» is a button, not <details>.
   assert.doesNotMatch(view, /el\('details'|el\('summary'/);
