@@ -102,7 +102,7 @@ describe('the settings source, as firestore.rules and the Cloud Functions expect
     const { source, callFunction, fs } = make({ venue: { language: 'it' } });
     await source.setLanguage('it');
     expect(callFunction).toHaveBeenCalledWith('setLocationLanguage', { locationId: 'panificio-miano', language: 'it' }, FUNCTION_TIMEOUT_MS);
-    expect(FUNCTION_TIMEOUT_MS).toBe(15_000);
+    expect(FUNCTION_TIMEOUT_MS).toBe(60_000);
     expect((fs.getDocFromServer.mock.calls[0] as [Ref])[0].path).toBe('locations/panificio-miano');
     // The call comes first: the phone hears of the change only after the server made it.
     expect(callFunction.mock.invocationCallOrder[0]).toBeLessThan(fs.getDocFromServer.mock.invocationCallOrder[0] ?? 0);
@@ -124,14 +124,14 @@ describe('the settings source, as firestore.rules and the Cloud Functions expect
     const venue = { staffHiddenCards: { pastries: true } };
     const { source, callFunction, fs } = make({ venue });
     expect(await source.setStaffCard('pastries', true)).toEqual(venue);
-    expect(callFunction).toHaveBeenCalledWith('setStaffCard', { locationId: 'panificio-miano', card: 'pastries', hidden: true }, 15_000);
+    expect(callFunction).toHaveBeenCalledWith('setStaffCard', { locationId: 'panificio-miano', card: 'pastries', hidden: true }, 60_000);
     expect(fs.getDocFromServer).toHaveBeenCalledTimes(1);
   });
 
   test('a money card is sent as the same card id and hidden flag — the server stores it the other way round', async () => {
     const { source, callFunction } = make({ venue: {} });
     await source.setStaffCard('foodcost', false);
-    expect(callFunction).toHaveBeenCalledWith('setStaffCard', { locationId: 'panificio-miano', card: 'foodcost', hidden: false }, 15_000);
+    expect(callFunction).toHaveBeenCalledWith('setStaffCard', { locationId: 'panificio-miano', card: 'foodcost', hidden: false }, 60_000);
   });
 
   test('a staff section saved on the server but not readable back says null, not an error', async () => {

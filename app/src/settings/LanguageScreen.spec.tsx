@@ -100,6 +100,16 @@ describe('App language', () => {
     expect(card().getByRole('status')).toHaveTextContent('');
   });
 
+  // Driven 7 Nov 2026: a cold function outlived the phone's wait and saved all the same.
+  it('reloads after all when the call failed but the server now holds the chosen language', async () => {
+    const { user, source } = await open();
+    source.functionsFailWith = Object.assign(new Error('timeout'), { code: 'functions/deadline-exceeded' });
+    source.venue = { ...(source.venue ?? {}), language: 'it' };
+    await user.click(main().getByRole('button', { name: 'Use this' }));
+    await waitFor(() => { expect(reload).toHaveBeenCalledTimes(1); });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+
   describe('the sentence about the labels', () => {
     it('names the language and the country of a venue in the United Kingdom', async () => {
       await open({ session: UK });

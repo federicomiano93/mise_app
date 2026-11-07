@@ -209,6 +209,21 @@ describe('Sections for employees', () => {
       expect(card().getByRole('status')).toHaveTextContent('');
       await waitFor(() => { expect(sw('Pastries Hidden')).toHaveFocus(); });
     });
+
+    // Driven 7 Nov 2026: the first call to a cold function outlived the phone's wait, the phone said «not saved» and the server
+    // saved it all the same. After a failure the screen shows what the server holds.
+    it('after a failure, shows what the server now holds (a save that landed after the phone stopped waiting)', async () => {
+      const { user, source } = await open({ session: { location: {} } }, { venue: {} });
+      source.functionsFailWith = Object.assign(new Error('timeout'), { code: 'functions/deadline-exceeded' });
+      // The server already holds the change the phone is about to be told failed.
+      source.venue = { staffHiddenCards: { pastries: true } };
+      await user.click(sw('Pastries Visible'));
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Hide it' }));
+
+      await waitFor(() => { expect(screen.getByText('Could not save the change. Check your connection and try again.')).toBeInTheDocument(); });
+      await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'OK' }));
+      await waitFor(() => { expect(sw('Pastries Hidden')).not.toBeChecked(); });
+    });
   });
 
   describe('what the screen starts from and keeps', () => {

@@ -43,6 +43,10 @@ export function LanguageScreen() {
       await source.setLanguage(language);
     } catch (err) {
       console.error('Changing the language failed:', err);
+      // A failure may still have reached the server (a cold function that outlived the phone's wait): if the venue now speaks
+      // the chosen language, the change happened, and the page reloads as it would have.
+      const truth = await source.readVenueFromServer().catch(() => null);
+      if (truth && truth['language'] === language) { pageReload.reload(); return; }
       setSaving(false);
       await alert({ message: t('lang.err.save'), okLabel: t('common.ok') });
       return;

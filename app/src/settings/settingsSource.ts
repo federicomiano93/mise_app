@@ -24,8 +24,11 @@ import type { FirestoreKit } from '../session/firebaseBackend';
 
 const AWAY = 'away';
 
-// How long the phone waits for a Cloud Function (the SDK's default of 70 s is far too long for a switch under a finger).
-export const FUNCTION_TIMEOUT_MS = 15_000;
+// How long the phone waits for a Cloud Function. ⚠️ NOT SHORT: a function that has not run for a while starts cold, and the
+// emulator's first call took longer than 15 s (driven, 7 Nov 2026) — the phone said «not saved» while the server went on and
+// saved it. A timeout is not a refusal: the screen re-reads the server after any failure (StaffSectionsScreen) so it never
+// shows a state the venue does not have. The current app uses the SDK's default of 70 s.
+export const FUNCTION_TIMEOUT_MS = 60_000;
 
 // A person's holiday as stored: the last day of it, or '' once they are back.
 export type MyAway = { readonly until: string };

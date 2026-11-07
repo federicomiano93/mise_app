@@ -121,6 +121,10 @@ export function StaffSectionsScreen() {
       setVenue(previous => fresh ?? withCard(previous, card, hide));
     } catch (err) {
       console.error('Changing a section for employees failed:', err);
+      // A failure may still have reached the server (a timeout, a lost answer): what the server now holds is the truth, when
+      // it can be read; offline the switch simply stays as it was.
+      const truth = await source.readVenueFromServer().catch(() => null);
+      if (truth) setVenue(truth);
       await alert({ message: t('staffSections.err.save'), okLabel: t('common.ok') });
     }
     setSaving(false);
