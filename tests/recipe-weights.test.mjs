@@ -120,8 +120,8 @@ test('⚠️ the recipe editor no longer asks for the two weighings, nor touches
 test('⚠️⚠️ the Food cost product is where they are typed, and Save hands them over', () => {
   assert.match(FC_EDITOR, /box\(t\('fc\.rawDough'\), typeRaw\)/, 'the raw box types through the pure model');
   assert.match(FC_EDITOR, /box\(t\('fc\.cookedDough'\), typeCooked\)/, 'and so does the cooked one');
-  assert.match(FC_EDITOR, /const patches = weighingPatches\(app\.tables\(\)\.recipes, weighings,\s*clean\.components\.filter\(c => c\.recipeId\)\.map\(c => c\.recipeId\)\);/,
-    'Save asks the model which recipes to write — only those on the product, only real changes');
+  assert.match(FC_EDITOR, /const weighedIds = clean\.noWeightLoss \? \[\] : clean\.components\.filter\(c => c\.recipeId\)\.map\(c => c\.recipeId\);\s*const patches = weighingPatches\(app\.tables\(\)\.recipes, weighings, weighedIds\);/,
+    'Save asks the model which recipes to write — only those on the product, only real changes, and none for a finished product');
   assert.match(FC_EDITOR, /app\.saveProduct\(clean, snapshot, patches\);/);
   assert.match(FC_EDITOR, /const tables = liveTables\(\);\s*paintProductionCost\(\);\s*paintSuggestion\(tables\);[\s\S]{0,400}?const result = costProduct\(working, tables\);/,
     'the answer at the top — and the suggested price — are worked out WITH the weighing being typed, not after Save');
@@ -159,9 +159,10 @@ test('⚠️⚠️ Food cost writes three fields and the stamp onto the recipe, 
   const at = FC_DATA.indexOf('export async function saveRecipeLoss(');
   assert.notEqual(at, -1, 'saveRecipeLoss must exist to be guarded');
   const body = FC_DATA.slice(at, FC_DATA.indexOf('\n}', at));
-  assert.match(body, /updateDoc\(doc\(db, pathFor\(RECIPES\), id\), withBakery\(\{\s*lossPct: patch\.lossPct,\s*rawGrams: patch\.rawGrams,\s*cookedGrams: patch\.cookedGrams,\s*\}\)\)/,
-    'updateDoc, so a deleted recipe fails instead of coming back nameless; three fields, so '
-    + 'the catalogue\'s name, rows and steps are never written from a stale copy');
+  assert.match(body, /const fields = \{ rawGrams: patch\.rawGrams, cookedGrams: patch\.cookedGrams \};\s*if \(patch\.lossPct !== undefined\) fields\.lossPct = patch\.lossPct;\s*return updateDoc\(doc\(db, pathFor\(RECIPES\), id\), withBakery\(fields\)\);/,
+    'updateDoc, so a deleted recipe fails instead of coming back nameless; at most three fields, so '
+    + 'the catalogue\'s name, rows and steps are never written from a stale copy — and a loss the '
+    + 'patch does not carry (a kept wrong pair) is left out, never sent as undefined');
   assert.ok(!/setDoc/.test(body), 'not a setDoc');
 });
 
@@ -279,7 +280,7 @@ test('the percentage input is gone, and the recipe editor\'s dictionary keys wit
     assert.ok(!EDITOR.includes(dead), `and the editor must not still ask for ${dead}`);
   }
   const weighing = codeOf(read('js/foodcost/foodcost-weighing.js'));
-  for (const key of ['fc.lossIs', 'fc.lossStored', 'fc.lossNotYet', 'fc.lossCookedHeavier', 'fc.lossCapped']) {
+  for (const key of ['fc.lossIs', 'fc.lossStored', 'fc.lossNotYet', 'fc.lossNeedBoth', 'fc.lossCookedHeavier', 'fc.lossCapped']) {
     assert.ok(weighing.includes(`'${key}'`), `the weighing model must speak ${key}`);
   }
 });

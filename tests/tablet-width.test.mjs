@@ -96,6 +96,7 @@ const EXEMPT = new Map([
   ['.fc-screen', 'wraps .fc-view, which is capped'],
   ['.inv-screen', 'wraps .inv-view, which is capped'],
   ['.pas-strip', 'a column of the tablet grid on body[data-card=pastries]: its outer tracks are var(--app-gutter), so it sits inside the cap; on a phone it is an 8px-margin strip'],
+  ['.app-dialog', 'the shared dialog box, capped at 360px by tokens.css; foodcost.css only lets it scroll when tall'],
   ['.inv-side', 'a column of .inv-view--list, which is capped by .inv-view inside .inv-screen'],
   ['.inv-list', 'a column of .inv-view--list on a tablet, inside .inv-view which is capped'],
   ['.recipe-scroll', 'wraps .recipe-content, which is capped'],

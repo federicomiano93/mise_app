@@ -523,6 +523,14 @@ body.cat-zoom-lock { overflow: hidden; }
   color: var(--warn);
 }
 .cat-noprice svg { display: block; }
+/* The name was retyped but the row is still linked: an amber note, not an error. The text wraps
+   (overflow-wrap on the span); the same padding, so nothing jumps. --warn on --warn-bg is above 4.5:1. */
+.cat-ing-link.cat-ing-link--stale { color: var(--warn); background: var(--warn-bg); }
+/* Visually hidden, still read aloud: the polite live region that announces a stale link. */
+.cat-sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
 .cat-ing-link:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: -2px; }
 
 /* What the dough weighs before the oven and after — the two numbers the loss is
@@ -659,6 +667,8 @@ body.cat-zoom-lock { overflow: hidden; }
    The button is .cat-import-btn, this screen's quiet button: it leads somewhere, it does
    not do the screen's job. */
 .cat-fc-note { margin: 0 0 10px; font-size: .84rem; line-height: 1.45; color: var(--cat-text-2); }
+/* The button Back from Food cost scrolls into view (catalogue-main.js openWantedRecipe). */
+.cat-fc-open { scroll-margin-block: var(--space-4); }
 
 /* The little list under a recipe row's name, and the full link chooser: their look moved
    to tokens.css (.pick-suggest*, .pick-*) on 13 Sep 2026, when Food cost needed the same

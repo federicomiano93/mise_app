@@ -178,7 +178,10 @@ the only other one is `client-accounts` (managers, or the account itself — aud
   packaging `qty` is per unit sold, not per batch; `labourMinutes` (per batch) + `labourPeople`
   (missing = 1). Products are saved whole, so the rules refuse a write whose `model` is lower than
   the stored one — an out-of-date phone gets «could not save» instead of deleting lines. Labour is
-  not frozen into snapshots.
+  not frozen into snapshots. `noWeightLoss` (bool, Nov 2026, written only when `true`): a finished
+  product — the oven loss of the recipes on ITS lines is ignored in ITS cost; the recipe's
+  `lossPct` is untouched and other products keep paying it. ⚠️ Mise 2's `normalizeProduct` must
+  carry it, or its next save of such a product drops it.
 - `foodcost-settings/main` — `{ bakery, labourCostPerHour, updatedAt }`; read and write
   `canManage(lid,'foodcost')` only, never deleted: an employee shown Food cost must not learn the
   rate.

@@ -37,8 +37,8 @@ import { allergensOn } from '../venue-features.js';
 // The way to a recipe's Food cost product, and the one judgement of who may take it.
 // From js/ root: the catalogue and Food cost share an address, never a folder.
 import {
-  mayOpenFoodCost, foodCostHref, recipeIdFromHash, mayOpenOrders, ordersHref, ordersIngredientHref,
-  recipeHref,
+  mayOpenFoodCost, foodCostHref, recipeIdFromHash, recipeSpotFromHash, mayOpenOrders, ordersHref,
+  ordersIngredientHref, recipeHref,
 } from '../recipe-link.js';
 // Whether this person may add an ingredient to the records from here — the same answer the
 // records page itself gives. From js/ root: the records belong to Orders.
@@ -921,6 +921,8 @@ setSyncErrorHandler((msg) => toast(msg));
 // yet: the call threw, the rest of this file never ran, and the catalogue stayed broken
 // until a reload, with every later data update throwing the same error.
 let wantedRecipeId = recipeIdFromHash(window.location.hash);
+// Where in that recipe Back should land: 'foodcost' (the Food cost card) or null.
+let wantedSpot = recipeSpotFromHash(window.location.hash);
 const WANTED_RECIPE_WAIT_MS = 5000;
 
 // Start the live sync; when the collection changes and the list is showing, refresh
@@ -1076,12 +1078,23 @@ function openWantedRecipe() {
   if (view !== 'list') { forgetWantedRecipe(); return; }
   const recipe = getRecipes().find(r => r.id === wantedRecipeId);
   if (!recipe) return;   // not arrived yet: the next data update asks again
+  const spot = wantedSpot;
   forgetWantedRecipe();
   openDetail(recipe);
+  // Federico: «dalla scheda ricetta andare alla sua scheda food cost e tornare» — Back lands
+  // where the tap came from, not at the top of a long recipe. No focus move: a programmatic
+  // focus ring on the button would look odd.
+  if (spot === 'foodcost') {
+    requestAnimationFrame(() => {
+      const button = document.querySelector('.cat-fc-open');
+      if (button && button.scrollIntoView) button.scrollIntoView({ block: 'center' });
+    });
+  }
 }
 
 function forgetWantedRecipe() {
   wantedRecipeId = null;
+  wantedSpot = null;
   try {
     history.replaceState(null, '', window.location.pathname + window.location.search);
   } catch (e) { /* best-effort: at worst a reload opens the recipe again */ }
