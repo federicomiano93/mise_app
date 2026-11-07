@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { splitAmount, splitBlockReason, orderTargetOf } from '../js/catalogue/row-actions-model.js';
+import { splitAmount, splitBlockReason, orderTargetOf, rowKeysOf } from '../js/catalogue/row-actions-model.js';
 import {
   ordersHref, ordersIngredientHref, orderIngredientFromHash, catalogueOriginFromHash, recipeHref,
 } from '../js/recipe-link.js';
@@ -153,14 +153,37 @@ test('rows are buttons with a menu; items are menuitems and a disabled one stays
   assert.match(DETAIL, /menu\.style\.top = /, 'positioned through the CSSOM, no style attribute');
 });
 
+test('rowKeysOf: the key stays with the ingredient when a row is added above it', () => {
+  const before = [{ label: 'Farina', refId: 'F' }, { label: 'Sale' }, { label: 'Acqua', refId: 'A' }];
+  const after = [{ label: 'Lievito', refId: 'L' }, ...before];
+  const k0 = rowKeysOf(before);
+  const k1 = rowKeysOf(after);
+  assert.deepEqual(k0, ['ingredient:F#1', 'name:Sale#1', 'ingredient:A#1']);
+  assert.equal(k1.indexOf(k0[2]), 3, 'Acqua keeps its key one row down');
+  assert.deepEqual(rowKeysOf([{ refId: 'F' }, { refId: 'F' }]), ['ingredient:F#1', 'ingredient:F#2'], 'a row listed twice');
+  assert.deepEqual(rowKeysOf([{ kind: 'recipe', refId: 'R' }]), ['recipe:R#1']);
+  assert.deepEqual(rowKeysOf(null), []);
+});
+
 test('the split is display only: nothing is saved, the export model is untouched', () => {
   assert.match(DETAIL, /exportModelOf\(recipe, amounts, total\)/);
   assert.doesNotMatch(DETAIL, /setScaledTarget\([^)]*split/i);
   assert.match(DETAIL, /splitRows: \(\) => \[\.\.\.splitSet\]/);
   const main = codeOf(read('js/catalogue/catalogue-main.js'));
-  assert.match(main, /activeDetail\?\.splitRows\?\.\(\)/);
+  assert.match(main, /activeDetail\?\.splitRows\?\.\(\)[^;]*;\s*activeDetail\?\.destroy\?\.\(\)/, 'the old screen lets go of its listeners');
+  assert.match(DETAIL, /const rowKeys = rowKeysOf\(recipe\.ingredients\)/);
+  assert.match(DETAIL, /splitSet\.has\(rowKeys\[i\]\)/);
+  assert.doesNotMatch(DETAIL, /splitSet\.(has|add|delete)\(i\)/, 'never by row number');
+  // Every document/window listener the screen adds is taken off again.
+  for (const [target, name] of [['document', 'scroll'], ['window', 'resize'], ['document', 'pointerdown'], ['document', 'keydown']]) {
+    const adds = DETAIL.split(`${target}.addEventListener('${name}'`).length - 1;
+    const removes = DETAIL.split(`${target}.removeEventListener('${name}'`).length - 1;
+    assert.ok(adds > 0 && removes >= adds, `${target} ${name}: ${adds} added, ${removes} removed`);
+  }
   assert.match(main, /renderDetail\(\{ recipe, app, split \}\)/);
-  assert.match(main, /orderIngredient\(recipeId, ingredientId\) \{ window\.location\.href = ordersIngredientHref/);
+  const order = main.slice(main.indexOf('orderIngredient(recipeId, ingredientId) {'), main.indexOf('orderIngredient(recipeId, ingredientId) {') + 300);
+  assert.match(order, /history\.replaceState\(null, '', recipeHref\(recipeId\)\)[\s\S]*window\.location\.href = ordersIngredientHref\(recipeId, ingredientId\)/,
+    'the page’s own address names the recipe first, so the phone’s Back lands on it');
   assert.match(main, /mayOpenOrders: \(\) =>/);
 });
 
@@ -171,6 +194,10 @@ test('the CSS: button row, menu, split line, full-screen button', () => {
   assert.match(CSS, /\.cat-row-menu \{[^}]*position: fixed; z-index: 5;/);
   assert.match(CSS, /\.cat-row-menu-item\[aria-disabled="true"\]/);
   assert.match(CSS, /\.cat-ing-split \{[^}]*flex-basis: 100%/);
+  // Hover only for a real mouse: on a touch screen it sticks after the tap.
+  assert.doesNotMatch(CSS.replace(/@media \(hover: hover\) \{[^\n]*\}/g, ''), /\.cat-ing-row-btn:hover|\.cat-row-menu-item:hover/);
+  assert.match(CSS, /@media \(hover: hover\) \{ \.cat-ing-row-btn:hover/);
+  assert.match(CSS, /@media \(hover: hover\) \{ \.cat-row-menu-item:hover/);
 });
 
 test('Orders reads the ingredient, focuses its quantity box, and Back returns to the recipe', () => {
@@ -180,9 +207,24 @@ test('Orders reads the ingredient, focuses its quantity box, and Back returns to
   assert.match(main, /\.ing-row\[data-ing="\$\{CSS\.escape\(id\)\}"\] \.ing-qty/);
   assert.match(main, /box\.focus\(/);
   assert.match(main, /setStatus\(t\('orders\.fromRecipe\.notFound'\)/);
-  const leave = main.slice(main.indexOf('function leaveSupplier'), main.indexOf('function leaveSupplier') + 700);
-  assert.match(leave, /window\.location\.replace\(toRecipe\)/);
-  assert.doesNotMatch(main, /history\.replaceState|location\.hash\s*=/);
+  const leave = main.slice(main.indexOf('function leaveSupplier'), main.indexOf('function leaveSupplier') + 2600);
+  assert.match(leave, /if \(result === 'refused'\) return;/, 'a refused save stays on Orders, with its error');
+  assert.match(leave, /leavingForRecipe = false;/, 'Back works again if Orders comes back from the cache');
+  assert.match(leave, /if \(result === 'saved' && cameFromPage\(toRecipe\)\) history\.back\(\);\s*else window\.location\.replace\(toRecipe\)/,
+    'back in the history to the recipe’s own entry, else forward replacing Orders');
+  const came = main.slice(main.indexOf('function cameFromPage'), main.indexOf('function leaveSupplier'));
+  assert.match(came, /history\.length < 2 \|\| !document\.referrer/);
+  assert.match(came, /before\.origin === target\.origin && before\.pathname === target\.pathname/);
+  assert.match(leave, /sendBeforeLeaving\(\)\.then\(result =>/, 'what was typed reaches the server before the page goes');
+  assert.match(leave, /setStatus\(t\('orders\.fromRecipe\.saving'\), undefined, 9000\)/);
+  assert.match(leave, /if \(leavingForRecipe\) return;/, 'a second tap does not leave twice');
+  assert.doesNotMatch(main, /location\.hash\s*=/);
+  // Only live lists, and never over a screen somebody chose while they arrived.
+  const wanted = main.slice(main.indexOf('function openWantedIngredient'), main.indexOf('function openWantedIngredient') + 1600);
+  assert.match(wanted, /state\.showingCopy/);
+  assert.match(wanted, /state\.openSupplier !== null \|\| heldSupplierId !== null/);
+  // A snapshot repaint gives the focus back to the same box of the same row.
+  assert.match(main, /detailView\.repaint\(ctx\)[\s\S]{0,900}\.focus\(/);
   const firstSubscription = main.search(/^(onSession|onLanguageChange)\(/m);
   assert.ok(firstSubscription < 0 || main.indexOf('let wantedIngredientId') < firstSubscription, 'declared above the first subscription');
 });
@@ -202,6 +244,7 @@ test('every new word exists in English and Italian, exactly as agreed', () => {
     'cat.order.isRecipe': ['A recipe from the Recipe book: not ordered', 'È una ricetta del Ricettario: non si ordina'],
     'cat.order.notInUse': ['Marked “not in use” in Suppliers', 'Segnato “non in uso” in Fornitori'],
     'orders.fromRecipe.notFound': ['This ingredient is not in any order list', 'Questo ingrediente non è in nessun elenco d’ordine'],
+    'orders.fromRecipe.saving': ['Saving the quantity, then back to the recipe…', 'Salvo la quantità e torno alla ricetta…'],
   };
   for (const [key, [en, it]] of Object.entries(words)) {
     assert.equal(d.en[key], en, `en ${key}`);

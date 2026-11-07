@@ -38,7 +38,7 @@ import { buildSupplierItems } from './supplier-items.js';
 import { buildOrderSummaryView } from './order-summary-view.js';
 import { paintOrderMoney } from './order-cost-view.js';
 import {
-  scheduleDraftSave, saveDraftNow, flushDraftSave, flushDraftWhenHidden, watchDraft, archiveSupplier, clearSupplier,
+  scheduleDraftSave, saveDraftNow, flushDraftSave, sendBeforeLeaving, flushDraftWhenHidden, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
   confirmDelivery, resolveMissing, dropDeletedIngredientFromDraft, freezeUnitInDraft,
 } from './draft.js';
@@ -156,6 +156,7 @@ const state = {
 let wantedIngredientId = null;   // the ingredient a recipe row asked for (#...&order=); taken once live data is in
 let recipeOriginHref = null;     // the recipe the person came from, for Back on the supplier screen opened for it
 let openedFromRecipe = null;     // the supplier whose screen was opened for that ingredient, while it is open
+let leavingForRecipe = false;    // Back to the recipe is under way: a second tap does nothing
 let heldSupplierId = null;       // the supplier tapped while showing the copy; opened once live data lands
 let copyWriteTimer = null;       // the one debounced timer that saves the list copy
 let copyServerSeen = { suppliers: false, ingredients: false }; // has the SERVER answered for this list? (list-copy.js)
@@ -243,9 +244,15 @@ function setupCatalogueBack() {
   const origin = catalogueOriginFromHash(window.location.hash);
   if (!origin) return;
   // A recipe row's «Order» item adds `&order=<ingredient id>`: remembered here, acted on once the
-  // lists are live (openWantedIngredient). The hash itself is never cleared.
+  // lists are live (openWantedIngredient). ⚠️ ONLY THAT PART is then taken out of the address, so a
+  // reload (the update banner, Android restoring the tab) does not open the supplier again; the
+  // `#from=recipe:<id>` stays, and with it the way back after a reload.
   recipeOriginHref = origin.href;
   wantedIngredientId = orderIngredientFromHash(window.location.hash);
+  if (wantedIngredientId !== null) {
+    const kept = window.location.hash.replace(/&order=[^&#?]*$/, '');
+    try { history.replaceState(history.state, '', window.location.pathname + window.location.search + kept); } catch (e) { /* best-effort */ }
+  }
   // Two forms of ONE control, same address: the round button in the green bar, and a row under
   // it. Both are shown here; orders.css leaves exactly one visible by width (440px).
   for (const id of ['orders-to-catalogue', 'orders-to-catalogue-row']) {
@@ -683,10 +690,12 @@ function openWantedIngredient() {
   if (!(state.loaded.suppliers && state.loaded.ingredients && state.loaded.draft)) return;
   const id = wantedIngredientId;
   wantedIngredientId = null;
-  // They moved on already: a supplier screen must not jump over what they are reading now.
+  // They moved on already: a supplier screen must not jump over what they are reading now — a
+  // supplier they opened, or tapped while the list copy showed (heldSupplierId), included.
   const movedOn = document.body.dataset.ordersTab !== 'order'
     || document.getElementById('orders-alerts-btn')?.getAttribute('aria-expanded') === 'true'
-    || document.querySelector('.missing-overlay');
+    || document.querySelector('.missing-overlay')
+    || state.openSupplier !== null || heldSupplierId !== null;
   if (movedOn) return;
   const ing = lensById()[id];
   if (!(ing && inOrderFlow(ing) && findOrderSupplier(ing.supplierId))) {
@@ -818,13 +827,54 @@ function closeSupplier() {
 // Back on the order screen: close it and hand focus back to the row that opened it — the
 // summary sheet's own pattern (closeSummary). Full screen covers the list, so without this
 // a keyboard or screen-reader user would be dropped at the top of the page.
+// Whether the page before this one, in this tab, is the page `href` names (path only: a referrer
+// never carries the #fragment).
+function cameFromPage(href) {
+  try {
+    if (history.length < 2 || !document.referrer) return false;
+    const before = new URL(document.referrer);
+    const target = new URL(href, window.location.href);
+    return before.origin === target.origin && before.pathname === target.pathname;
+  } catch (e) { return false; }
+}
+
 function leaveSupplier() {
   const openerId = state.openSupplier;
-  // Opened for an ingredient of a recipe: Back returns to that recipe. `replace`, so the phone's own
-  // Back from the recipe does not land on Orders again.
+  // Opened for an ingredient of a recipe: Back returns to that recipe, never leaving Orders behind
+  // it, so the phone's own Back from the recipe does not land on Orders again.
   const toRecipe = openerId && openedFromRecipe === openerId ? recipeOriginHref : null;
+  if (toRecipe) {
+    if (leavingForRecipe) return;
+    leavingForRecipe = true;
+    // ⚠️ A quantity typed a moment ago reaches the SERVER before the page goes (draft.js
+    // sendBeforeLeaving): leaving at once kept it in this device's note only, sent the next time
+    // Orders opens here — perhaps never, from the recipe screen. Usually a moment; at most 8 s
+    // (offline, or a freshly opened page), with a word on screen meanwhile.
+    setStatus(t('orders.fromRecipe.saving'), undefined, 9000);
+    sendBeforeLeaving().then(result => {
+      // Reset before the page goes: Orders may come back from the browser's cache (Forward), and
+      // its Back must work there.
+      leavingForRecipe = false;
+      clearStatusIf(t('orders.fromRecipe.saving'));
+      // ⚠️ REFUSED: STAY. The save error is on screen (setDraftSaveReporter), the quantity is still
+      // in its box, and nothing else holds it — the device's note leaves a refused value out.
+      if (result === 'refused') return;
+      closeSupplier();
+      // ⚠️ BACK IN THE HISTORY when the page before this one is the Recipe book: the recipe gave
+      // its own entry the recipe's address before coming here (catalogue-main orderIngredient), so
+      // that entry shows the recipe again, and the phone's own Back from there leaves the Recipe
+      // book as usual. Going FORWARD to the recipe instead left that entry behind it, and the
+      // phone's Back from the recipe showed the same recipe a second time. Anything else (Orders
+      // opened in a new tab, the address typed) goes forward, replacing this page. ⚠️ So does a
+      // save still unanswered after the wait ('late', offline): back in the history, Orders would
+      // stay frozen in the browser's cache holding that write; replaced, it is let go, and the
+      // Recipe book's Firestore sends the write from this device's queue.
+      if (result === 'saved' && cameFromPage(toRecipe)) history.back();
+      else window.location.replace(toRecipe);
+    });
+    return;
+  }
   closeSupplier();
-  if (toRecipe) { window.location.replace(toRecipe); return; }
   if (openerId) document.getElementById(`open-${openerId}`)?.focus();
 }
 

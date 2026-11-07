@@ -135,14 +135,14 @@
       }
     },
     "dist/catalogue.css": {
-      "sha": "a17ab72e4279b0b9",
+      "sha": "73ce4d0f0baec529",
       "inputs": {
-        "catalogue.css": "d4620552af669c29"
+        "catalogue.css": "956aa5bae495a922"
       }
     },
     "dist/catalogue.js": {
-      "sha": "fd021ccd4f39b502",
-      "mapSha": "0e326437d8026080",
+      "sha": "3c5699cc25f74786",
+      "mapSha": "48be90b9e0cccd4d",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -151,10 +151,10 @@
         "js/auth-gate.js": "7e7da9d190ffa167",
         "js/calculator-config.js": "9078e52d96eab707",
         "js/catalogue/allergen-sheet.js": "0a1ec5ee0d8c6a56",
-        "js/catalogue/catalogue-detail.js": "fbe6344331c77c60",
+        "js/catalogue/catalogue-detail.js": "7f94465e8a1d07f6",
         "js/catalogue/catalogue-editor.js": "149e0477ebe3d3a3",
         "js/catalogue/catalogue-list.js": "e200fbba7ece642f",
-        "js/catalogue/catalogue-main.js": "0220424893cca161",
+        "js/catalogue/catalogue-main.js": "2d6ebfb99d7b23a8",
         "js/catalogue/catalogue-model.js": "f2b080da4336cc57",
         "js/catalogue/catalogue-settings.js": "82db4b0e1b10235a",
         "js/catalogue/catalogue-store.js": "51431723feac1e2e",
@@ -181,7 +181,7 @@
         "js/catalogue/recipe-categories-model.js": "a4d0ef5c9873de04",
         "js/catalogue/recipe-cost-model.js": "7dd027150da03725",
         "js/catalogue/recipe-label-model.js": "d18b858bd007813a",
-        "js/catalogue/row-actions-model.js": "f7551f294bca1590",
+        "js/catalogue/row-actions-model.js": "a709fe21a8381e27",
         "js/catalogue/search-box.js": "6cd5b7c92acc83fe",
         "js/catalogue/tablet.js": "89a53f5776a0f78a",
         "js/catalogue/unpriced-rows.js": "fff9763e05688179",
@@ -489,10 +489,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "6033cf0277c71aff",
-      "mapSha": "3abc3fbdc0aafe08",
+      "sha": "2faa4cb18b8cf223",
+      "mapSha": "39f0d9c92a07529d",
       "inputs": {
-        "js/i18n.js": "cf814d8a5c7d8eb6"
+        "js/i18n.js": "4390fbe0c907ff1b"
       }
     },
     "dist/index.js": {
@@ -768,8 +768,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "4586ea009f858738",
-      "mapSha": "28bb204c06b5ecca",
+      "sha": "be2368b6bd2b1699",
+      "mapSha": "80aed70404d46839",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -823,7 +823,7 @@
         "js/orders/deliveries.js": "39df74692fef5a8c",
         "js/orders/dom.js": "99c731d8aa890a20",
         "js/orders/draft-journal.js": "919a40092aaee035",
-        "js/orders/draft.js": "99d136156c927ac5",
+        "js/orders/draft.js": "a99ea9769fb63eb9",
         "js/orders/favourite-suppliers.js": "9b54dd3bba8b4164",
         "js/orders/firebase-orders.js": "a7af178d24491efd",
         "js/orders/history-edit.js": "2a7bc27082d1ce54",
@@ -852,7 +852,7 @@
         "js/orders/order-summary.js": "ae2df3d8e163c852",
         "js/orders/order-text.js": "40ad3ba8ddb014c3",
         "js/orders/orders-config.js": "c968ce3171a34b1f",
-        "js/orders/orders-main.js": "66d8454511cc40ca",
+        "js/orders/orders-main.js": "22818cff4f8f105e",
         "js/orders/place-confirm.js": "61cd2d604037e847",
         "js/orders/preview.js": "daa32cf26e8b4e87",
         "js/orders/reminder-view.js": "2d263696a18298f2",
@@ -1029,7 +1029,7 @@
     },
     "dist/suppliers.js": {
       "sha": "658252708e077439",
-      "mapSha": "d71092df1ecca754",
+      "mapSha": "c36a92a9109bb984",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -1079,7 +1079,7 @@
         "js/orders/deliveries.js": "39df74692fef5a8c",
         "js/orders/dom.js": "99c731d8aa890a20",
         "js/orders/draft-journal.js": "919a40092aaee035",
-        "js/orders/draft.js": "99d136156c927ac5",
+        "js/orders/draft.js": "a99ea9769fb63eb9",
         "js/orders/favourite-suppliers.js": "9b54dd3bba8b4164",
         "js/orders/firebase-features.js": "5c93f14c6ab6eddd",
         "js/orders/firebase-orders.js": "a7af178d24491efd",

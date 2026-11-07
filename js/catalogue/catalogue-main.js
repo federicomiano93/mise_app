@@ -38,6 +38,7 @@ import { allergensOn } from '../venue-features.js';
 // From js/ root: the catalogue and Food cost share an address, never a folder.
 import {
   mayOpenFoodCost, foodCostHref, recipeIdFromHash, mayOpenOrders, ordersHref, ordersIngredientHref,
+  recipeHref,
 } from '../recipe-link.js';
 // Whether this person may add an ingredient to the records from here — the same answer the
 // records page itself gives. From js/ root: the records belong to Orders.
@@ -830,7 +831,13 @@ const app = {
   // A recipe row's «Order» item: shown for whoever Orders will let in (asked of the session each
   // time, like Food cost above), and it opens Orders on that ingredient's supplier.
   mayOpenOrders: () => { const s = currentSession(); return mayOpenOrders(s.location, s.canManage, s.role); },
-  orderIngredient(recipeId, ingredientId) { window.location.href = ordersIngredientHref(recipeId, ingredientId); },
+  // The page's own address first becomes this recipe's (#recipe=<id>, read by openWantedRecipe):
+  // the phone's own Back (Android's gesture, not the Orders arrow) then lands on the recipe that
+  // was left, not on the top of the list.
+  orderIngredient(recipeId, ingredientId) {
+    try { history.replaceState(null, '', recipeHref(recipeId)); } catch (e) { /* best-effort */ }
+    window.location.href = ordersIngredientHref(recipeId, ingredientId);
+  },
   // A recipe row's missing ingredient, added with the card «Fornitori e ingredienti» uses.
   // Federico, 13 Sep 2026: «semplicemente apri una scheda ingrediente come in fornitori ed
   // ingredienti». ⚠️ Asked of the session each time, like Food cost above.

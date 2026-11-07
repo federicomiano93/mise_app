@@ -39,3 +39,18 @@ export function orderTargetOf(row, ingredients, suppliers) {
   if (!supplier || supplier.active === false) return { ok: false, reason: 'noSupplier' };
   return { ok: true, ingredientId: link.refId };
 }
+
+// One key per recipe row that stays with its INGREDIENT, not its position, so a split shown on
+// screen survives a live redraw where a row was added or removed above it on another phone. The
+// key is the linked record (else the typed name), plus how many times that same one came before,
+// for a row listed twice.
+export function rowKeysOf(rows) {
+  const seen = new Map();
+  return (Array.isArray(rows) ? rows : []).map(row => {
+    const link = linkOf(row);
+    const base = link ? `${link.kind}:${link.refId}` : `name:${String((row && row.label) || '').trim()}`;
+    const n = (seen.get(base) || 0) + 1;
+    seen.set(base, n);
+    return `${base}#${n}`;
+  });
+}

@@ -16,7 +16,7 @@ import {
 import {
   getScaledTarget, setScaledTarget, clearScaledTarget, getIngredients, getRecipesById, getSuppliers,
 } from './catalogue-store.js';
-import { splitAmount, splitBlockReason, orderTargetOf } from './row-actions-model.js';
+import { splitAmount, splitBlockReason, orderTargetOf, rowKeysOf } from './row-actions-model.js';
 import { recipeAllergens, canLabel, incompleteText, ALLERGEN_REASON_TEXT } from './recipe-allergen-model.js';
 // The declaration this screen now shows. ⚠️ NO NEW ARITHMETIC: buildLabel already
 // flattens sub-recipes, sums duplicates, sorts DESCENDING BY WEIGHT (which is the law,
@@ -470,7 +470,7 @@ export function renderDetail({ recipe, app, split }) {
   let displayTarget = getScaledTarget(recipe.id) || 0;
 
   // The rows live in an inner container so re-rendering (renderRows) never wipes
-  // the zoom button that sits alongside them inside .cat-ing-list.
+  // what sits alongside them inside .cat-ing-list (the open row menu).
   const ingRows = el('div', { class: 'cat-ing-rows' });
 
   // Full screen: the recipe expands into a full-screen overlay (bigger figures, readable
@@ -556,9 +556,12 @@ export function renderDetail({ recipe, app, split }) {
   // INSIDE ingList — it goes away with the view on a live redraw and sits inside the zoom
   // overlay's stacking context — positioned fixed through the CSSOM (CSP: no style attribute).
   // The split is DISPLAY ONLY: nothing is saved and the export model is untouched.
-  const splitSet = new Set(Array.isArray(split)
-    ? split.filter(i => Number.isInteger(i) && i >= 0 && i < recipe.ingredients.length)
-    : []);
+  //
+  // ⚠️ A SPLIT BELONGS TO THE INGREDIENT, NOT TO THE ROW NUMBER: a row added above it on another
+  // phone (a live redraw) must not move the halves onto the next ingredient down. The key is the
+  // linked ingredient (or the typed name), with the occurrence count for a row listed twice.
+  const rowKeys = rowKeysOf(recipe.ingredients);
+  const splitSet = new Set(Array.isArray(split) ? split.filter(key => rowKeys.includes(key)) : []);
   let lastAmounts = [];
   let menuState = null; // { index, rowBtn, menu, cleanup }
 
@@ -609,7 +612,7 @@ export function renderDetail({ recipe, app, split }) {
     closeMenu(false);
     const ing = recipe.ingredients[i];
     const unit = unitOf(ing);
-    const isSplit = splitSet.has(i);
+    const isSplit = splitSet.has(rowKeys[i]);
     const items = [];
 
     const blocked = splitBlockReason(lastAmounts[i], unit);
@@ -620,7 +623,7 @@ export function renderDetail({ recipe, app, split }) {
       canToggle ? '' : t(blocked === 'toTaste' ? 'cat.split.toTaste' : 'cat.split.tooSmall'),
       canToggle,
       () => {
-        if (isSplit) splitSet.delete(i); else splitSet.add(i);
+        if (isSplit) splitSet.delete(rowKeys[i]); else splitSet.add(rowKeys[i]);
         closeMenu(false);
         renderRows();
         const again = rowButton(i);
@@ -655,12 +658,18 @@ export function renderDetail({ recipe, app, split }) {
       },
     }, items);
 
-    // Closes without moving focus on: a tap outside, any scroll (the page, the tablet pane or the
-    // zoom overlay) and a resize. Every listener goes with the menu.
+    // Closes without moving focus on a tap outside. A scroll (the page, the tablet pane or the zoom
+    // overlay) or a resize MOVES it with its row, and closes it only once the row has left the
+    // screen: the on-screen keyboard folding away as the row is tapped resizes and scrolls the page,
+    // and closing then made the menu flash and vanish under the finger. Every listener goes with it.
     const onPointerDown = (e) => {
       if (!menu.isConnected || (!menu.contains(e.target) && !rowBtn.contains(e.target))) closeMenu(false);
     };
-    const onAnyScroll = () => closeMenu(false);
+    const onAnyScroll = () => {
+      const r = rowBtn.getBoundingClientRect();
+      if (!rowBtn.isConnected || r.bottom < 0 || r.top > document.documentElement.clientHeight) closeMenu(false);
+      else placeMenu(menu, rowBtn);
+    };
     document.addEventListener('pointerdown', onPointerDown, true);
     document.addEventListener('scroll', onAnyScroll, true);
     window.addEventListener('resize', onAnyScroll);
@@ -711,7 +720,7 @@ export function renderDetail({ recipe, app, split }) {
       const unit = unitOf(ing);
       // A split row also shows the two parts, in the row's own unit. Recomputed from what the row
       // shows now, so a new batch weight updates it; an amount too small to split shows none.
-      const parts = splitSet.has(i) ? splitAmount(amounts[i], unit) : null;
+      const parts = splitSet.has(rowKeys[i]) ? splitAmount(amounts[i], unit) : null;
       const part = (v) => `${formatAmount(v, unit)} ${unitText(unit)}`;
       const row = el('button', {
         type: 'button',

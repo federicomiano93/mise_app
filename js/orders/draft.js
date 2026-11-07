@@ -35,6 +35,7 @@ const ORDERS_RETRY_MS = 30000; // a tablet can stay open for days: «the next op
 
 let saveTimer = null;
 let waiting = false;       // a change is waiting for the debounce, so it can be flushed
+let leaveWaiters = [];     // sendBeforeLeaving's checks, run whenever a write is answered
 let reportSaveResult = null;   // (ok: boolean) => void — injected by orders-main.js
 
 // The draft as this device last agreed on it with the server: what a snapshot
@@ -461,7 +462,9 @@ function sendPending() {
   if (!isEmpty(sent.days)) payload.days = sent.days;
 
   flights.push(sent);
-  const land = () => { flights.splice(flights.indexOf(sent), 1); };
+  // A leaver waiting for the server (sendBeforeLeaving) asks again once this write's answer has
+  // been fully handled, so after the baseline and the claims below, never before.
+  const land = () => { flights.splice(flights.indexOf(sent), 1); queueMicrotask(wakeLeavers); };
 
   // setDoc(merge) with a PARTIAL map: Firestore merges key by key, so the rows and
   // fields not mentioned here keep whatever anyone else has put there. It also still
@@ -543,6 +546,39 @@ function sendPending() {
 export function flushDraftSave() {
   if (!waiting) return Promise.resolve();
   return sendPending();
+}
+
+// ── Leaving the page ON PURPOSE (a recipe's «Ordina», then Back to the recipe) ────────────────────
+//
+// ⚠️ THE NOTE ALONE IS NOT ENOUGH ON THIS ROAD. Type «3», tap Back at once: the 3 is still in the
+// debounce or in the air, so only this device's note holds it, and the note is sent only the next
+// time ORDERS opens on this device, within 24 hours. The recipe screen is where this road leads, so
+// that may be never. Here the page is still alive and the person chose to leave: what is waiting
+// goes NOW, and the page waits for the SERVER's answer to every write in the air.
+// ⚠️ NOT just for a snapshot showing it (in this device's Firestore queue): measured on the
+// emulator (7 Nov 2026), Orders went into the browser's back-forward cache FROZEN with that queue,
+// the Recipe book's own Firestore did not take it over, and the 3 had not reached the server 10 s
+// later. Never longer than `ms`: past that the note still answers for it, as before. Resolves
+// 'saved' when the server has everything, 'refused' when it said no (reported on screen like any
+// refused autosave — and NOT kept by the note, so the page must stay), 'late' on the time limit.
+const answered = () => !waiting && flights.length === 0;
+function wakeLeavers() { leaveWaiters.slice().forEach(check => check()); }
+
+export function sendBeforeLeaving(ms = 8000) {
+  // Through autosave, so a refusal shows the same save error as every other one.
+  if (waiting) autosave();
+  const outcome = () => (refused.length === 0 ? 'saved' : 'refused');
+  if (answered()) return Promise.resolve(outcome());
+  return new Promise(resolve => {
+    const done = ok => {
+      clearTimeout(timer);
+      leaveWaiters = leaveWaiters.filter(w => w !== check);
+      resolve(ok);
+    };
+    const check = () => { if (answered()) done(outcome()); };
+    const timer = setTimeout(() => done('late'), ms);
+    leaveWaiters.push(check);
+  });
 }
 
 // ⚠️ THE PAGE GOING OUT OF SIGHT IS THE MOMENT TO SEND WHAT IS WAITING. Switching app or locking the
