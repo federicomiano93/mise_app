@@ -36,7 +36,9 @@ const noReminder = async () => {
   expect(screen.queryByRole('alertdialog', { name: 'You are on holiday' })).not.toBeInTheDocument();
 };
 
-describe('the once-a-day holiday reminder', () => {
+// Each case opens a whole section under the shell (Recipes, loaded lazily): under a full parallel run that alone took over the
+// default 5 s twice (7 Nov 2026), so the cases get 15 s.
+describe('the once-a-day holiday reminder', { timeout: 15_000 }, () => {
   it('asks when a section other than the Home and Settings is entered, with «I am back» as the main button', async () => {
     const { user, router } = await open('/home');
     await noReminder();
