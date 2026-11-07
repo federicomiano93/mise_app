@@ -147,7 +147,7 @@ test('crossing the width re-lays out the list and a recipe only, and leaves any 
   const body = MAIN.slice(at, MAIN.indexOf('\n});', at));
   assert.match(body, /if \(view === 'list'\) showList\(\);/);
   assert.match(body, /view === 'detail' && currentRecipe && isTablet !== splitOn/);
-  assert.match(body, /if \(isTablet\) showDetailTablet\(latest\);\s*else showDetailPhone\(latest\);/);
+  assert.match(body, /if \(isTablet\) showDetailTablet\(latest, split\);\s*else showDetailPhone\(latest, split\);/);
   assert.doesNotMatch(body, /openEditor|showSettings|openRun|openLabel/);
 });
 

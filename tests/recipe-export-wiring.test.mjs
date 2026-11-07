@@ -169,7 +169,7 @@ test('the recipe screen exports the very amounts renderRows drew, labelled with 
   assert.match(src, /openExportSheet\(\{ model: lastExport, totalLabel: t\('cat\.total'\), opener: exportBtn \}\)/);
   // ⚠️ At the END of the page, first of the secondary actions (his choice, 14 Oct 2026) — no longer under
   // the list, where it pushed the weight box down; and hidden when there is nothing to export.
-  assert.match(src, /catSection\(t\('cat\.ingredients'\), \[ingList\]\)/);
+  assert.match(src, /catSection\(t\('cat\.ingredients'\), \[ingList\], openBtn\)/);
   assert.match(src, /el\('div', \{ class: 'cat-detail-bottom' \}, \[\s*exportBtn,\s*importBtn,\s*importHint,/);
   // Import's explanation hides with Import, or it reads as Export's caption.
   assert.match(src, /importHint\.hidden = importBtn\.hidden;/);

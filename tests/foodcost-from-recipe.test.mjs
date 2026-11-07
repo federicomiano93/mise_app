@@ -229,7 +229,7 @@ test('⚠️ Back from Food cost really reopens the recipe, and only once the se
   const gate = fn.indexOf("currentSession().status !== 'ready'");
   assert.ok(gate !== -1 && gate < fn.indexOf('openDetail('),
     'never before the session: a recipe built then draws no «Elimina ricetta» for its owner');
-  assert.match(handler, /activeDetail = renderDetail\(\{ recipe: latest, app \}\);/,
+  assert.match(handler, /activeDetail = renderDetail\(\{ recipe: latest, app, split \}\);/,
     'a recipe opened before the session is rebuilt WHOLE — its buttons, not only its cards');
   assert.match(main, /sessionReady\.then\(\(\) => setTimeout\(forgetWantedRecipe, WANTED_RECIPE_WAIT_MS\)\)/,
     'the give-up clock starts when the session does, or a slow sign-in forgets the recipe');
