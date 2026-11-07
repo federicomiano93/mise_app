@@ -70,14 +70,16 @@ test('every replace path awaits the editor\'s own guard and does nothing on «no
 
 test('the list, the «+» and «show all» all go through those guarded paths, never openProduct directly', () => {
   const build = fnBody('buildList');
-  assert.match(build, /onOpen: requestOpen, onAdd: \(\) => requestOpen\(null\)/);
+  // The phone shows the preview first (7 Nov 2026); openFromList hands on to requestOpen.
+  assert.match(build, /onOpen: openFromList, onAdd: \(\) => requestOpen\(null\)/);
+  assert.match(fnBody('openFromList'), /requestOpen\(product\)[\s\S]*requestOpen\(fresh\)/);
   assert.match(build, /onShowAll: requestShowAll/);
   assert.match(MAIN, /addBtn\.addEventListener\('click', \(\) => requestOpen\(null\)\);/);
   assert.doesNotMatch(MAIN, /onOpen: openProduct|onAdd: \(\) => openProduct/);
-  // (six matches = the definition + the callers) The only direct callers: the guarded path, the way back to the product, and the two
-  // recipe-link entries (an untouched product, never a dirty one).
+  // (seven matches = the definition + the callers) The only direct callers: the guarded path, the way back to the product, and the
+  // recipe-link entries (an untouched product, never a dirty one; openNarrowed too).
   const callers = [...MAIN.matchAll(/\bopenProduct\(/g)].length;
-  assert.equal(callers, 6, 'a new direct call to openProduct: it must be guarded — update this list on purpose');
+  assert.equal(callers, 7, 'a new direct call to openProduct: it must be guarded — update this list on purpose');
 });
 
 test('tapping the product that is already open does nothing', () => {
@@ -133,9 +135,23 @@ test('the history in the pane sets the editor ASIDE and Back puts the same node 
 test('a recipe link opens the split too: the entry refreshes the page header\'s Back', () => {
   const settle = fnBody('settleRecipeLink');
   assert.match(settle, /openProduct\(using\[0\]\); entryEditor = true; refreshChrome\(\);/);
-  assert.match(settle, /listFilter = id; showList\(\);/);
+  assert.match(settle, /if \(using\.length > 1\) \{ openNarrowed\(id\); return; \}/);
   assert.match(settle, /openProduct\(null, draft\); entryEditor = true; draftRecipeId = id; refreshChrome\(\);/);
-  assert.match(fnBody('handleBack'), /if \(fromRecipe && \(listFilter \|\| entryEditor\)\) \{ window\.location\.replace\(recipeHref\(fromRecipe\)\); return; \}/);
+  assert.match(fnBody('handleBack'), /if \(fromRecipe && \(listFilter \|\| entryEditor\)\) \{ window\.location\.replace\(recipeHref\(fromRecipe, 'foodcost'\)\); return; \}/);
+});
+
+test('several products use the recipe: beside the list the top one opens, on a phone the narrowed list stays', () => {
+  const narrowed = fnBody('openNarrowed');
+  assert.match(narrowed, /listFilter = id;/);
+  assert.match(narrowed, /const first = isTabletNow\(\) \? firstUsing\(id\) : null;/);
+  assert.match(narrowed, /if \(first\) openProduct\(first\);\s*else showList\(\);/);
+  // ⚠️ A draft giving way sat beside the FULL list: the column must be painted again, narrowed.
+  assert.match(narrowed, /activeList = null;[\s\S]*if \(first\) openProduct\(first\);/);
+  assert.doesNotMatch(narrowed, /entryEditor = true/, 'the page chose it from the list: Back stays the list\'s');
+  assert.match(fnBody('reconsiderDraft'), /else openNarrowed\(id\);/);
+  const first = fnBody('firstUsing');
+  assert.match(first, /sortByMargin\(productsUsingRecipe\(getProducts\(\), id\), tables\(\)\)\[0\]\?\.product/);
+  assert.match(MAIN, /import \{[^}]*sortByMargin[^}]*\} from '\.\/foodcost-model\.js'/);
 });
 
 // ── Crossing the width ──────────────────────────────────────────────────────

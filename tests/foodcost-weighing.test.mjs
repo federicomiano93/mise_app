@@ -12,7 +12,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   startWeighing, typeRaw, typeCooked, readWeighing, withWeighings, weighingPatches,
-  otherProductsUsing, restoreAfterRefusal,
+  weighingsChangeCost, otherProductsUsing, restoreAfterRefusal,
 } from '../js/foodcost/foodcost-weighing.js';
 
 // 600 + 400 = 1000 g of weighable dough, plus a row with no weight that must not count.
@@ -46,13 +46,13 @@ test('⚠️⚠️ an untouched line produces no patch, whatever the recipe carr
   }
 });
 
-test('an unweighed recipe: the raw box follows the total, the cooked box is empty', () => {
+test('⚠️ an unweighed recipe opens with BOTH boxes empty — the raw box is never filled with the total', () => {
   const state = startWeighing(recipe({ lossPct: 12 }));
-  assert.equal(state.rawTyped, false);
   assert.equal(state.weighed, false);
+  assert.equal(state.raw, 0, 'Federico, Nov 2026: until both are written, the whole recipe weight stands');
   assert.equal(state.cooked, 0, 'no cooked weight is derived from a percentage');
-  assert.equal(readWeighing(recipe({ lossPct: 12 }), state).rawShown, '1000',
-    'the total of the rows that have a weight — «to taste» is not in it');
+  assert.ok(!('rawTyped' in state), 'there is no «raw follows the total» state any more');
+  assert.ok(!('rawShown' in readWeighing(recipe({ lossPct: 12 }), state)));
 });
 
 test('⚠️⚠️ a stored 0 is «nobody has weighed it», never «loses 0%»', () => {
@@ -78,46 +78,118 @@ test('⚠️ a weighed recipe opens showing its weights, and states the percenta
 
 // ── 2. A person types ────────────────────────────────────────────────────────
 
-test('typing the cooked weight alone works the loss out against the recipe total', () => {
+test('⚠️⚠️ the cooked weight ALONE writes no patch and leaves the stored loss as it is', () => {
   const r = recipe({ lossPct: 12 });
-  const state = typeCooked(startWeighing(r), '800');
+  const shown = readWeighing(r, typeCooked(startWeighing(r), '800'));
+  assert.equal(shown.patch, null, 'it used to work the loss out against the recipe total — an unmeasured raw');
+  assert.deepEqual(shown.message, { key: 'fc.lossNeedBoth', params: {} },
+    'one box alone says that both are needed, rather than «weigh the baked dough»');
+  assert.equal(shown.warning, null);
+});
+
+test('⚠️ nothing half-filled keeps the stored message; exactly one weight asks for the other', () => {
+  const stored = recipe({ lossPct: 12 });
+  assert.deepEqual(readWeighing(stored, startWeighing(stored)).message, { key: 'fc.lossStored', params: { pct: '12' } });
+  const none = recipe();
+  assert.deepEqual(readWeighing(none, startWeighing(none)).message, { key: 'fc.lossNotYet', params: {} });
+  // Typed and then both cleared: nothing is half-filled any more.
+  const both = typeCooked(typeRaw(startWeighing(stored), '1000'), '800');
+  assert.deepEqual(readWeighing(stored, typeCooked(typeRaw(both, ''), '')).message,
+    { key: 'fc.lossStored', params: { pct: '12' } });
+  for (const state of [typeRaw(startWeighing(none), '1000'), typeCooked(startWeighing(none), '800')]) {
+    assert.deepEqual(readWeighing(none, state).message, { key: 'fc.lossNeedBoth', params: {} });
+  }
+});
+
+test('the words say BOTH weights are needed, in both languages', async () => {
+  const { _dictionaries } = await import('../js/i18n.js');
+  const { en, it } = _dictionaries();
+  assert.equal(en['fc.lossNotYet'], 'Oven loss: weigh the dough raw and baked, both, to work it out');
+  assert.equal(it['fc.lossNotYet'], 'Calo peso in cottura: pesa l’impasto crudo e cotto, tutti e due, per saperlo');
+  assert.equal(en['fc.lossNeedBoth'], 'Fill in both weights to work out the loss.');
+  assert.equal(it['fc.lossNeedBoth'], 'Compila tutti e due i pesi per calcolare il calo.');
+});
+
+test('⚠️⚠️ the raw weight ALONE writes no patch either, and keeps naming the stored percentage', () => {
+  const r = recipe({ lossPct: 12 });
+  const shown = readWeighing(r, typeRaw(startWeighing(r), '1000'));
+  assert.equal(shown.patch, null, 'one weight cannot make a percentage');
+  assert.deepEqual(shown.message, { key: 'fc.lossNeedBoth', params: {} });
+  assert.equal(shown.warning, null);
+});
+
+test('⚠️ both boxes written: the loss is worked out and a patch exists', () => {
+  const r = recipe({ lossPct: 12 });
+  const state = typeCooked(typeRaw(startWeighing(r), '1250'), '1000');
   const shown = readWeighing(r, state);
-  assert.deepEqual(shown.patch, { lossPct: 20, rawGrams: 1000, cookedGrams: 800 });
+  assert.deepEqual(shown.patch, { lossPct: 20, rawGrams: 1250, cookedGrams: 1000 });
+  assert.equal(shown.keepsOnly, false);
   assert.deepEqual(shown.message, { key: 'fc.lossIs', params: { pct: '20' } });
   assert.equal(shown.warning, null);
 });
 
-test('a typed raw weight overrides the total, and clearing it hands the box back', () => {
-  const r = recipe();
-  let state = typeRaw(startWeighing(r), '1250');
-  state = typeCooked(state, '1000');
-  assert.deepEqual(readWeighing(r, state).patch, { lossPct: 20, rawGrams: 1250, cookedGrams: 1000 });
-  state = typeRaw(state, '   ');
-  assert.equal(state.rawTyped, false);
-  assert.equal(readWeighing(r, state).rawShown, '1000');
-  assert.equal(readWeighing(r, state).patch.rawGrams, 1000);
+test('⚠️ both written and then ONE cleared: no patch, the stored loss stays', () => {
+  const r = recipe({ lossPct: 12 });
+  const both = typeCooked(typeRaw(startWeighing(r), '1250'), '1000');
+  for (const state of [typeRaw(both, '   '), typeCooked(both, ''), typeRaw(both, '0')]) {
+    const shown = readWeighing(r, state);
+    assert.equal(shown.patch, null);
+    assert.deepEqual(shown.message, { key: 'fc.lossNeedBoth', params: {} });
+  }
 });
 
-test('⚠️ a half-filled pair writes nothing and still names the stored percentage', () => {
-  const r = recipe({ lossPct: 12 });
-  const state = typeRaw(startWeighing(r), '1000');
-  const shown = readWeighing(r, state);
-  assert.equal(shown.patch, null, 'one weight cannot make a percentage');
-  assert.deepEqual(shown.message, { key: 'fc.lossStored', params: { pct: '12' } },
-    'and it must not hide the real percentage the recipe already carries');
+test('a recipe weighed before opens showing its weights; changing one box re-works the loss', () => {
+  const r = recipe({ lossPct: 20, rawGrams: 1000, cookedGrams: 800 });
+  const state = typeCooked(startWeighing(r), '700');
+  assert.equal(state.raw, 1000, 'the stored raw weight is the other half of the pair');
+  assert.deepEqual(readWeighing(r, state).patch, { lossPct: 30, rawGrams: 1000, cookedGrams: 700 });
 });
 
-test('⚠️ a cooked dough heavier than the raw one is refused, not read as «loses nothing»', () => {
+test('⚠️⚠️ a cooked dough heavier than the raw one is KEPT, with the stored loss untouched', () => {
+  // Federico, Nov 2026: «per sbaglio avevo scritto il peso cotto maggiore del crudo, l'ho
+  // salvato e quando sono tornato nella scheda i valori non c'erano più».
   const r = recipe({ lossPct: 12 });
-  const shown = readWeighing(r, typeCooked(startWeighing(r), '1100'));
-  assert.equal(shown.patch, null);
+  const shown = readWeighing(r, typeCooked(typeRaw(startWeighing(r), '1000'), '1100'));
+  assert.deepEqual(shown.patch, { rawGrams: 1000, cookedGrams: 1100 },
+    'the numbers are written and the loss is NOT sent at all: a typo must never make a product cheaper, '
+    + 'and this phone\'s copy of the loss must never overwrite another phone\'s weighing');
+  assert.ok(!('lossPct' in shown.patch));
+  assert.equal(shown.keepsOnly, true);
   assert.deepEqual(shown.warning, { key: 'fc.lossCookedHeavier', params: {} });
   assert.deepEqual(shown.message, { key: 'fc.lossStored', params: { pct: '12' } });
 });
 
+test('a kept wrong pair on a recipe with no loss yet writes no loss either — «nobody has said»', () => {
+  const r = recipe();
+  const shown = readWeighing(r, typeCooked(typeRaw(startWeighing(r), '1000'), '1100'));
+  assert.deepEqual(shown.patch, { rawGrams: 1000, cookedGrams: 1100 });
+  assert.deepEqual(shown.message, { key: 'fc.lossNotYet', params: {} }, 'never «loses 0%»');
+});
+
+test('⚠️ a wrong pair that is already stored is not written again, and still warns', () => {
+  const r = recipe({ lossPct: 12, rawGrams: 1000, cookedGrams: 1100 });
+  const shown = readWeighing(r, typeCooked(typeRaw(startWeighing(r), '1000'), '1100'));
+  assert.equal(shown.patch, null);
+  assert.deepEqual(shown.warning, { key: 'fc.lossCookedHeavier', params: {} });
+});
+
+test('⚠️⚠️ a kept wrong pair opens RED again, showing its stored numbers, with no patch', () => {
+  const r = recipe({ lossPct: 5, rawGrams: 1000, cookedGrams: 1200 });
+  const state = startWeighing(r);
+  assert.equal(state.raw, 1000);
+  assert.equal(state.cooked, 1200, 'the boxes show what was kept');
+  const shown = readWeighing(r, state);
+  assert.deepEqual(shown.warning, { key: 'fc.lossCookedHeavier', params: {} });
+  assert.equal(shown.patch, null, 'opening it writes nothing');
+  assert.deepEqual(shown.message, { key: 'fc.lossStored', params: { pct: '5' } });
+  const never = recipe({ rawGrams: 1000, cookedGrams: 1200 });
+  assert.deepEqual(readWeighing(never, startWeighing(never)).message, { key: 'fc.lossNotYet', params: {} },
+    'a recipe that was never given a loss does not say «loses 0%»');
+});
+
 test('⚠️⚠️ a loss past 99% is capped and the screen admits it', () => {
   const r = recipe();
-  const shown = readWeighing(r, typeCooked(startWeighing(r), '1'));
+  const shown = readWeighing(r, typeCooked(typeRaw(startWeighing(r), '1000'), '1'));
   assert.equal(shown.patch.lossPct, 99,
     'a stored 100 divides the price per kilo by zero: every product on it would cost Infinity');
   assert.deepEqual(shown.warning, { key: 'fc.lossCapped', params: { max: '99' } });
@@ -148,8 +220,8 @@ test('⚠️ Save writes only for recipes still on the product, still existing, 
     same: recipe({ id: 'same', lossPct: 20, rawGrams: 1000, cookedGrams: 800 }),
   };
   const states = {
-    foc: typeCooked(startWeighing(recipes.foc), '800'),
-    bri: typeCooked(startWeighing(recipes.bri), '400'),        // typed, then its line removed
+    foc: typeCooked(typeRaw(startWeighing(recipes.foc), '1000'), '800'),
+    bri: typeCooked(typeRaw(startWeighing(recipes.bri), '500'), '400'),   // typed, then its line removed
     // Its recipe was deleted. Both boxes typed, so the pair alone WOULD make a patch —
     // only the «still exists» rule stops it.
     gone: typeCooked(typeRaw(startWeighing(recipe()), '1000'), '800'),
@@ -157,6 +229,18 @@ test('⚠️ Save writes only for recipes still on the product, still existing, 
   };
   const patches = weighingPatches(recipes, states, ['foc', 'same', 'gone', '']);
   assert.deepEqual(patches, { foc: { lossPct: 20, rawGrams: 1000, cookedGrams: 800 } });
+});
+
+test('⚠️ a kept wrong pair is written but is NOT a cost change, so no margin point is recorded for it', () => {
+  const recipes = { foc: recipe({ lossPct: 12 }), bri: recipe({ id: 'bri', lossPct: 12 }) };
+  const wrong = typeCooked(typeRaw(startWeighing(recipes.foc), '1000'), '1100');
+  const right = typeCooked(typeRaw(startWeighing(recipes.bri), '1000'), '800');
+  assert.deepEqual(weighingPatches(recipes, { foc: wrong }, ['foc']),
+    { foc: { rawGrams: 1000, cookedGrams: 1100 } });
+  assert.equal(weighingsChangeCost(recipes, { foc: wrong }, ['foc']), false);
+  assert.equal(weighingsChangeCost(recipes, { foc: wrong, bri: right }, ['foc', 'bri']), true,
+    'one real change among them is enough');
+  assert.equal(weighingsChangeCost(recipes, { bri: right }, []), false, 'a recipe off the product counts for nothing');
 });
 
 test('the screen costs with the typed weighing, without touching the stored tables', () => {
@@ -209,4 +293,32 @@ test('the note counts the OTHER products a recipe\'s loss changes', () => {
   assert.equal(otherProductsUsing(products, 'foc', 'p1'), 1);
   assert.equal(otherProductsUsing(products, 'foc', null), 2, 'a new product has no id yet');
   assert.equal(otherProductsUsing(products, 'none', 'p1'), 0);
+});
+
+test('⚠️ a FINISHED product is not counted: a loss typed here does not change its cost', () => {
+  const products = [
+    { id: 'p1', components: [{ recipeId: 'foc', qtyKg: 1 }] },
+    { id: 'p2', noWeightLoss: true, components: [{ recipeId: 'foc', qtyKg: 2 }] },
+    { id: 'p3', noWeightLoss: false, components: [{ recipeId: 'foc', qtyKg: 2 }] },
+  ];
+  assert.equal(otherProductsUsing(products, 'foc', 'p1'), 1, 'only p3');
+  assert.equal(otherProductsUsing(products, 'foc', null), 2);
+});
+
+test('⚠️ a refused kept wrong pair puts back ONLY the two numbers it carried', () => {
+  const prev = recipe({ lossPct: 12, rawGrams: 900, cookedGrams: 700 });
+  const patch = { rawGrams: 1000, cookedGrams: 1100 };
+  const restored = restoreAfterRefusal({ ...prev, ...patch }, prev, patch);
+  assert.deepEqual(
+    (({ lossPct, rawGrams, cookedGrams }) => ({ lossPct, rawGrams, cookedGrams }))(restored),
+    { lossPct: 12, rawGrams: 900, cookedGrams: 700 });
+  // The loss moved on another phone meanwhile: that is not what the patch carried, so it
+  // must neither block the rollback nor be rolled back.
+  const moved = { ...prev, ...patch, lossPct: 25 };
+  assert.equal(restoreAfterRefusal(moved, prev, patch).lossPct, 25);
+  const never = recipe({ lossPct: 12 });
+  const back = restoreAfterRefusal({ ...never, ...patch }, never, patch);
+  assert.ok(!('rawGrams' in back) && !('cookedGrams' in back));
+  assert.equal(back.lossPct, 12);
+  assert.equal(restoreAfterRefusal({ ...prev }, prev, {}), null, 'an empty patch rolls back nothing');
 });
