@@ -1,15 +1,15 @@
 import { useEffect, useId, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { useLocation } from 'react-router';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { SignOutButton } from '../session/SignOutButton';
 import { SwitchVenueButton } from '../session/SwitchVenueButton';
-import { KEEP_FOCUS, Page } from '../shell/Page';
+import { Page } from '../shell/Page';
 import { StatusMessageProvider } from '../ui/StatusMessage';
 import { AwayRow } from './AwayRow';
 import { SettingsRow } from './SettingsRow';
+import { FROM_SETTINGS, usePendingDoor } from './settingsHandBack';
 import { LANGUAGE_PATH, SECTIONS_PATH } from './settingsPath';
 import styles from './SettingsPage.module.css';
 
@@ -36,18 +36,19 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 export function SettingsPage() {
   const { t } = useT();
   const { user, name, options, canManage } = useSession();
-  const { state } = useLocation();
+  const pending = usePendingDoor();
   const language = useRef<HTMLAnchorElement>(null);
   const sections = useRef<HTMLAnchorElement>(null);
   // The email, or the account's id for the rare account that has none.
   const account = user?.email || user?.uid || '';
 
-  // Back from a screen below hands the focus to the door that opened it (SettingsSubScreen).
+  // Back from a screen below hands the focus to the door that opened it (settingsHandBack.ts): once, when this page is on show again.
   useEffect(() => {
-    const door = typeof state === 'object' && state !== null && 'door' in state ? (state as { door: unknown }).door : null;
+    const door = pending.current;
+    pending.current = null;
     if (door === 'language') language.current?.focus();
     if (door === 'sections') sections.current?.focus();
-  }, [state]);
+  }, [pending]);
 
   return (
     <Page title={t('section.settings')} action={<SignOutButton variant="small" />}>
@@ -63,8 +64,8 @@ export function SettingsPage() {
             <Card title={t('settings.venue')}>
               <PartBoundary>
                 <div className={styles.rows}>
-                  <SettingsRow ref={language} to={LANGUAGE_PATH} state={KEEP_FOCUS} title={t('lang.title')} sub={t('lang.intro')} />
-                  <SettingsRow ref={sections} to={SECTIONS_PATH} state={KEEP_FOCUS} title={t('staffSections.title')} sub={t('staffSections.intro')} />
+                  <SettingsRow ref={language} to={LANGUAGE_PATH} state={FROM_SETTINGS} onOpen={() => { pending.current = 'language'; }} title={t('lang.title')} sub={t('lang.intro')} />
+                  <SettingsRow ref={sections} to={SECTIONS_PATH} state={FROM_SETTINGS} onOpen={() => { pending.current = 'sections'; }} title={t('staffSections.title')} sub={t('staffSections.intro')} />
                 </div>
               </PartBoundary>
             </Card>

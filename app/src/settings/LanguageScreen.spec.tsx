@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { fakeSettingsSource } from '../testing/fakeSettingsSource';
 import type { FakeSettingsSource } from '../testing/fakeSettingsSource';
 import { renderApp } from '../testing/renderApp';
+import { markBusy } from '../session/busy';
 import { pageReload } from './pageReload';
 
 const main = () => within(screen.getByRole('main'));
@@ -35,11 +36,31 @@ describe('App language', () => {
     expect(screen.getAllByRole('main')).toHaveLength(1);
   });
 
-  it('opens on its title, and Back goes up one level to Settings', async () => {
+  it('opens on its title; opened by its address, Back REPLACES it with Settings (no history pile)', async () => {
     const { router, user } = await open();
     await waitFor(() => { expect(main().getByRole('heading', { level: 2, name: 'App language' })).toHaveFocus(); });
     await user.click(main().getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(router.state.location.pathname).toBe('/settings'); });
+    expect(router.state.historyAction).toBe('REPLACE');
+    await waitFor(() => { expect(main().getByRole('link', { name: 'App language' })).toHaveFocus(); });
+  });
+
+  it('opened from Settings, Back is the browser’s Back (POP) and so is the browser’s own Back; both hand the focus to the door', async () => {
+    const { router, user } = renderApp('/settings');
+    await user.click(main().getByRole('link', { name: 'App language' }));
+    expect(router.state.historyAction).toBe('PUSH');
+    await user.click(await screen.findByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/settings'); });
+    expect(router.state.historyAction).toBe('POP');
+    await waitFor(() => { expect(main().getByRole('link', { name: 'App language' })).toHaveFocus(); });
+
+    // The phone’s back gesture runs no code of the screen it leaves: the focus was promised when the screen opened.
+    await user.click(main().getByRole('link', { name: 'Sections for employees' }));
+    await screen.findByRole('button', { name: 'Back' });
+    await act(async () => { await router.navigate(-1); });
+    expect(router.state.historyAction).toBe('POP');
+    await waitFor(() => { expect(main().getByRole('link', { name: 'Sections for employees' })).toHaveFocus(); });
+    expect(router.state.location.pathname).toBe('/settings');
   });
 
   it('names each language in itself, in either interface language', async () => {
@@ -75,9 +96,10 @@ describe('App language', () => {
     await user.click(main().getByRole('button', { name: 'Use this' }));
     expect(source.setLanguage).toHaveBeenCalledWith('it');
     expect(status).toHaveTextContent('Saving…');
-    for (const button of main().getAllByRole('button', { name: /In use|Use this|Back/ })) {
-      if (button.textContent !== '') expect(button).toBeDisabled();
-    }
+    expect(main().getByRole('button', { name: 'In use' })).toBeDisabled();
+    expect(main().getByRole('button', { name: 'Use this' })).toBeDisabled();
+    // The icon-only Back is found by its name, and is off too: leaving would not undo the save in the air.
+    expect(main().getByRole('button', { name: 'Back' })).toBeDisabled();
     // The phone has not heard of the change yet: a reload now would read the old venue.
     expect(reload).not.toHaveBeenCalled();
 
@@ -97,7 +119,46 @@ describe('App language', () => {
 
     expect(reload).not.toHaveBeenCalled();
     expect(main().getByRole('button', { name: 'Use this' })).toBeEnabled();
+    expect(main().getByRole('button', { name: 'Back' })).toBeEnabled();
     expect(card().getByRole('status')).toHaveTextContent('');
+    // The button that was pressed gets the focus back once it is enabled again.
+    await waitFor(() => { expect(main().getByRole('button', { name: 'Use this' })).toHaveFocus(); });
+  });
+
+  describe('the reload never throws away typing', () => {
+    afterEach(() => { pageReload.retryMs = 5_000; });
+
+    it('waits while an editor holds the busy marker, then reloads once it is released', async () => {
+      pageReload.retryMs = 20;
+      const { user } = await open();
+      const release = markBusy();
+      await user.click(main().getByRole('button', { name: 'Use this' }));
+      await new Promise(resolve => setTimeout(resolve, 120));
+      expect(reload).not.toHaveBeenCalled();
+      release();
+      await waitFor(() => { expect(reload).toHaveBeenCalledTimes(1); });
+    });
+
+    it('also waits for the reload that follows a failure the server turned out to have saved', async () => {
+      pageReload.retryMs = 20;
+      const { user, source } = await open();
+      source.functionsFailWith = new Error('timeout');
+      source.venue = { ...(source.venue ?? {}), language: 'it' };
+      const release = markBusy();
+      await user.click(main().getByRole('button', { name: 'Use this' }));
+      await new Promise(resolve => setTimeout(resolve, 120));
+      expect(reload).not.toHaveBeenCalled();
+      release();
+      await waitFor(() => { expect(reload).toHaveBeenCalledTimes(1); });
+    });
+
+    it('reads the venue into the session before it reloads', async () => {
+      const { user, store } = await open();
+      await user.click(main().getByRole('button', { name: 'Use this' }));
+      await waitFor(() => { expect(reload).toHaveBeenCalledTimes(1); });
+      expect(store.refreshLocation).toHaveBeenCalledTimes(1);
+      expect(store.refreshLocation.mock.invocationCallOrder[0]).toBeLessThan(reload.mock.invocationCallOrder[0] ?? 0);
+    });
   });
 
   // Driven 7 Nov 2026: a cold function outlived the phone's wait and saved all the same.

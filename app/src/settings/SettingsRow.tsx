@@ -16,6 +16,8 @@ type Common = {
 type AsLink = Common & {
   to: string;
   state?: unknown;
+  // Called as the door is pressed (before the navigation).
+  onOpen?: () => void;
   ref?: Ref<HTMLAnchorElement>;
 };
 
@@ -45,7 +47,7 @@ export function SettingsRow(props: AsLink | AsButton) {
 
   if ('to' in props) {
     return (
-      <Link ref={props.ref} to={props.to} state={props.state} className={className} aria-labelledby={titleId} aria-describedby={described}>
+      <Link ref={props.ref} to={props.to} state={props.state} onClick={props.onOpen} className={className} aria-labelledby={titleId} aria-describedby={described}>
         {inside}
       </Link>
     );

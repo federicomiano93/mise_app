@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { canPrintLabel, countryOf, outputLanguage } from '@mise/shared/market';
 import { useT } from '../i18n/useT';
 import type { Language } from '../i18n/i18n';
-import { useSession } from '../session/SessionContext';
+import { useSession, useSessionStore } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { useAlert } from '../ui/useAlert';
 import { pageReload } from './pageReload';
@@ -33,9 +33,26 @@ const LANGUAGES: readonly { readonly code: Language; readonly name: string }[] =
 export function LanguageScreen() {
   const { t, lang } = useT();
   const { location } = useSession();
+  const sessionStore = useSessionStore();
   const source = useSettingsSource();
   const [alert, alertDialog] = useAlert();
   const [saving, setSaving] = useState(false);
+  const buttons = useRef(new Map<Language, HTMLButtonElement>());
+  // The button that was pressed, owed the focus once a failure has been read and the buttons are enabled again.
+  const [refocus, setRefocus] = useState<Language | null>(null);
+
+  useEffect(() => {
+    if (refocus === null || saving) return;
+    buttons.current.get(refocus)?.focus();
+    setRefocus(null);
+  }, [refocus, saving]);
+
+  // The language has changed on the server: the session's copy of the venue is read again (so the rest of the app holds the fresh venue)
+  // and the page reloads — but only when nobody is typing (pageReload.reloadWhenIdle).
+  async function changed(): Promise<void> {
+    await sessionStore.refreshLocation();
+    pageReload.reloadWhenIdle();
+  }
 
   async function choose(language: Language): Promise<void> {
     setSaving(true);
@@ -46,17 +63,18 @@ export function LanguageScreen() {
       // A failure may still have reached the server (a cold function that outlived the phone's wait): if the venue now speaks
       // the chosen language, the change happened, and the page reloads as it would have.
       const truth = await source.readVenueFromServer().catch(() => null);
-      if (truth && truth['language'] === language) { pageReload.reload(); return; }
+      if (truth && truth['language'] === language) { await changed(); return; }
       setSaving(false);
       await alert({ message: t('lang.err.save'), okLabel: t('common.ok') });
+      setRefocus(language);
       return;
     }
     // Left saving on purpose: the page is going away, and a button that came back for an instant would invite a second tap.
-    pageReload.reload();
+    await changed();
   }
 
   return (
-    <SettingsSubScreen door="language" title={t('lang.title')}>
+    <SettingsSubScreen door="language" title={t('lang.title')} backDisabled={saving}>
       <p className={styles.intro}>{t('lang.intro')}</p>
       <ul className={styles.list}>
         {LANGUAGES.map(({ code, name }) => {
@@ -65,6 +83,10 @@ export function LanguageScreen() {
             <li key={code} className={styles.row}>
               <span className={styles.name} lang={code}>{name}</span>
               <Button
+                ref={node => {
+                  if (node) buttons.current.set(code, node);
+                  else buttons.current.delete(code);
+                }}
                 variant={inUse ? 'secondary' : 'primary'}
                 aria-pressed={inUse}
                 isDisabled={inUse || saving}

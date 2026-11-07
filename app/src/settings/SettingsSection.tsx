@@ -1,8 +1,11 @@
+import { useRef } from 'react';
 import { Navigate, useLocation } from 'react-router';
 import { useSession } from '../session/SessionContext';
 import { KEEP_FOCUS } from '../shell/Page';
 import { LanguageScreen } from './LanguageScreen';
 import { SettingsPage } from './SettingsPage';
+import { HandBackContext } from './settingsHandBack';
+import type { PendingDoor } from './settingsHandBack';
 import { SETTINGS_PATH, settingsScreenOf } from './settingsPath';
 import { StaffSectionsScreen } from './StaffSectionsScreen';
 
@@ -16,9 +19,12 @@ export function SettingsSection() {
   const { pathname } = useLocation();
   const { canManage } = useSession();
   const screen = settingsScreenOf(pathname);
+  // The door whose screen is open, for the page to give the focus back to (settingsHandBack.ts). Lives as long as Settings does.
+  const pending: PendingDoor = useRef(null);
 
-  if (screen === 'page') return <SettingsPage />;
-  if (canManage && screen === 'language') return <LanguageScreen />;
-  if (canManage && screen === 'sections') return <StaffSectionsScreen />;
-  return <Navigate to={SETTINGS_PATH} replace state={KEEP_FOCUS} />;
+  let shown = <Navigate to={SETTINGS_PATH} replace state={KEEP_FOCUS} />;
+  if (screen === 'page') shown = <SettingsPage />;
+  if (canManage && screen === 'language') shown = <LanguageScreen />;
+  if (canManage && screen === 'sections') shown = <StaffSectionsScreen />;
+  return <HandBackContext.Provider value={pending}>{shown}</HandBackContext.Provider>;
 }

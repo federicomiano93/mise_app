@@ -212,6 +212,16 @@ describe('Sections for employees', () => {
 
     // Driven 7 Nov 2026: the first call to a cold function outlived the phone's wait, the phone said «not saved» and the server
     // saved it all the same. After a failure the screen shows what the server holds.
+    it('says «Saving…» no longer once the error is on screen', async () => {
+      const { user, source } = await open({ session: { location: { staffHiddenCards: { pastries: true } } } });
+      source.functionsFailWith = new Error('offline');
+      await user.click(sw('Pastries Hidden'));
+      await screen.findByRole('alertdialog');
+      // The dialog hides the page from assistive technology, so the region is asked for by `hidden`.
+      const region = screen.getByRole('heading', { level: 2, name: 'Sections for employees', hidden: true }).closest('section') as HTMLElement;
+      expect(within(region).getByRole('status', { hidden: true })).toHaveTextContent('');
+    });
+
     it('after a failure, shows what the server now holds (a save that landed after the phone stopped waiting)', async () => {
       const { user, source } = await open({ session: { location: {} } }, { venue: {} });
       source.functionsFailWith = Object.assign(new Error('timeout'), { code: 'functions/deadline-exceeded' });
@@ -227,6 +237,20 @@ describe('Sections for employees', () => {
   });
 
   describe('what the screen starts from and keeps', () => {
+    it('reads the session’s copy of the venue again once the server agreed, and not after a failure', async () => {
+      const { user, source, store } = await open({ session: { location: { staffHiddenCards: { pastries: true } } } });
+      await user.click(sw('Pastries Hidden'));
+      await screen.findByRole('switch', { name: 'Pastries Visible' });
+      expect(store.refreshLocation).toHaveBeenCalledTimes(1);
+      expect(store.refreshLocation.mock.invocationCallOrder[0]).toBeGreaterThan(vi.mocked(source.setStaffCard).mock.invocationCallOrder[0] ?? 0);
+
+      source.functionsFailWith = new Error('offline');
+      await user.click(sw('Pastries Visible'));
+      await screen.findByRole('alertdialog');
+      expect(store.refreshLocation).toHaveBeenCalledTimes(1);
+    });
+
+
     it('starts from the session’s copy at once, then follows the server’s answer', async () => {
       await open({ session: { location: {} } }, { venue: { staffHiddenCards: { pastries: true } } });
       await waitFor(() => { expect(sw('Pastries Hidden')).not.toBeChecked(); });

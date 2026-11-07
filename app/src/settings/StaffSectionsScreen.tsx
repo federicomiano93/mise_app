@@ -5,7 +5,7 @@ import { isSectionAllowed } from '@mise/shared/sections';
 import { useT } from '../i18n/useT';
 import type { MessageKey } from '../i18n/en';
 import type { DocData } from '../session/backend';
-import { useSession } from '../session/SessionContext';
+import { useSession, useSessionStore } from '../session/SessionContext';
 import { SettingSwitch } from '../ui/SettingSwitch';
 import { useAlert } from '../ui/useAlert';
 import type { ConfirmOptions } from '../ui/useConfirm';
@@ -52,6 +52,7 @@ function withCard(venue: DocData | null, card: StaffCard, hidden: boolean): DocD
 export function StaffSectionsScreen() {
   const { t } = useT();
   const { location } = useSession();
+  const sessionStore = useSessionStore();
   const source = useSettingsSource();
   const [confirm, confirmDialog] = useConfirm();
   const [alert, alertDialog] = useAlert();
@@ -109,6 +110,8 @@ export function StaffSectionsScreen() {
     return null;
   }
 
+  // Leaving the screen during a save owes no message: nothing here can still speak, and the next opening reads the server, which shows the
+  // truth whichever way the save went.
   async function toggle(card: StaffCard, hide: boolean): Promise<void> {
     refocus.current = card.id;
     const ask = question(card, hide);
@@ -117,6 +120,9 @@ export function StaffSectionsScreen() {
     setSaving(true);
     try {
       const fresh = await source.setStaffCard(card.id, hide);
+      // The session’s own copy of the venue is read again too, so reopening this screen shows the saved switches at once and the rest of the
+      // app holds the fresh venue (as the photo and panel switches do). It never rejects.
+      await sessionStore.refreshLocation();
       // Only after the server has agreed. Setting it first would leave the screen showing a change the venue never got.
       setVenue(previous => fresh ?? withCard(previous, card, hide));
     } catch (err) {
@@ -125,7 +131,10 @@ export function StaffSectionsScreen() {
       // it can be read; offline the switch simply stays as it was.
       const truth = await source.readVenueFromServer().catch(() => null);
       if (truth) setVenue(truth);
+      // ⚠️ SAVING ENDS BEFORE THE ALERT, so the live region does not keep saying «Saving…» under the error.
+      setSaving(false);
       await alert({ message: t('staffSections.err.save'), okLabel: t('common.ok') });
+      return;
     }
     setSaving(false);
   }

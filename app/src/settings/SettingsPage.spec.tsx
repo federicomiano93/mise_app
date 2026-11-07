@@ -167,6 +167,7 @@ describe('SettingsPage: cards by who a row is about', () => {
     expect(router.state.location.pathname).toBe('/settings/language');
     await user.click(await screen.findByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(router.state.location.pathname).toBe('/settings'); });
+    expect(router.state.historyAction).toBe('POP');
     await waitFor(() => { expect(main().getByRole('link', { name: 'App language' })).toHaveFocus(); });
   });
 
