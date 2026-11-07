@@ -49,9 +49,10 @@ export function kioskOrderSections({ toOrder, arriving } = {}) {
 // The same, straight from Orders data: suppliers + orders-history records. `today` is
 // "YYYY-MM-DD". Reuses the screen's own rules (todayOrders, pendingDeliveries) so the
 // rest screen can never disagree with the banners.
-export function kioskSectionsFromData({ suppliers, history, today, weekStartsOn }) {
-  const toOrder = todayOrders({ suppliers, history, today })
-    .filter(row => !row.placed).map(row => row.supplier);
+// `skipped` is drafts/current.skipped: a supplier closed as not ordered today is not «to order».
+export function kioskSectionsFromData({ suppliers, history, today, weekStartsOn, skipped = null }) {
+  const toOrder = todayOrders({ suppliers, history, today, skipped })
+    .filter(row => !row.placed && !row.skipped).map(row => row.supplier);
   const byId = {};
   (suppliers || []).forEach(s => { byId[s.id] = s; });
   const arriving = pendingDeliveries(history, byId, today, { weekStartsOn })

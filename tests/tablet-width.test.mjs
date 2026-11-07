@@ -135,6 +135,7 @@ const EXEMPT = new Map([
     'positioning shells; they use .scroll-area inside'],
   ['body', 'the app shell itself is full-bleed on purpose; the column is set inside it'],
   ['.cat-zoom-close', 'a floating close button, not a container'],
+  ['.cat-row-menu', 'a small popup menu (min 220px, max viewport minus 32px) placed next to its row, not a container'],
   ['.calc-zoom-scroll', 'the scrolling body of the full-screen recipe (a fixed overlay) with its own clamp() padding; on a tablet its rows are capped at 620px (.calc-zoom-rows, pinned by tests/calculator-work-view.test.mjs)'],
   ['.orders-offline', 'one centred line of text on a full-width ground; nothing to align to a column'],
   ['#sw-update-host', 'a transparent host; #sw-update-banner inside is capped at 480px and centred'],

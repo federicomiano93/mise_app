@@ -344,6 +344,32 @@
   transition: transform 0.06s ease;
 }
 .supplier-row-open:active { transform: scale(0.99); }
+/* ── «To order today» (both supplier lists) ─────────────────────────────────────
+   The warm crust family, deliberately NOT the green accent: on the tablet a green tint
+   plus bar already means «the row open in the pane» (.app-split-list [aria-current],
+   .reg-row-picked). The WORD in the tag is the signal; the colour only supports it
+   (P18: never colour alone). Borders stay 1px, so nothing shifts. [hidden] is hidden by
+   tokens.css' global rule. */
+.supplier-due-tag {
+  display: block;
+  width: fit-content;
+  margin-top: 4px;
+  padding: 2px 8px;
+  /* --radius-sm, not the pill: on one line it rounds fully anyway; at 296px the Orders row's name
+     column is ~100px and the words wrap, where a pill turned into a lumpy capsule (measured). */
+  border-radius: var(--radius-sm);
+  line-height: 1.3;
+  background: var(--crust-bg);
+  border: 1px solid var(--crust);
+  color: var(--crust-ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+.supplier-row.supplier-row--due {
+  border-color: var(--crust);
+  background: var(--crust-bg);
+}
 /* Tapped while the list is still the local copy: the supplier opens by itself once the live lists
    land (orders-main.js holdSupplier). A quiet dimming, no animation. */
 .supplier-row--waiting { opacity: 0.6; }
@@ -412,6 +438,9 @@
    long supplier name that wraps stays centred instead of drifting half a button to the
    right (18px at 296px, measured 30 Sep 2026). At 296 that still leaves the title 176px. */
 .supplier-detail > .app-header { --app-header-side: 36px; }
+/* The screen's own status line (a save error, «Salvo la quantità…»): between the header and the
+   rows, never scrolled away, at the page's usual gutter. */
+.supplier-detail > .supplier-detail-status { flex: none; margin: 8px max(16px, var(--app-gutter)) 0; }
 .supplier-detail-body {
   flex: 1;
   min-height: 0;
@@ -1587,6 +1616,12 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   cursor: pointer;
 }
 .reg-drill:active { transform: scale(0.97); }
+/* Still to order today (colour reasoning: see .supplier-due-tag). The row open in the
+   tablet's pane keeps its own tint, which must win. */
+.mgmt-item.reg-due:not([aria-current="true"]) {
+  border-color: var(--crust);
+  background: var(--crust-bg);
+}
 .reg-chevron {
   flex-shrink: 0;
   color: var(--text3);
@@ -1977,6 +2012,17 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   font-weight: 500;
   cursor: default;
 }
+/* Closed as «non ordinato» today (drafts/current.skipped): as quiet as a placed one, but still a
+   button — it opens the supplier's summary, where «Riapri» undoes it. The dashed edge is what
+   tells it from a placed one besides the words. */
+.today-chip.skipped {
+  border-style: dashed;
+  border-color: var(--text-3);
+  background: transparent;
+  color: var(--text-3);
+  font-weight: 500;
+}
+.today-chip-note { font-weight: 400; }
 /* The SVG's wrapper span is an inline box: without flex the tick sits on the text
    baseline, ~2px low. Same trap as .notif-status above. */
 .today-check { display: flex; align-items: center; }
@@ -3237,6 +3283,16 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
     border-radius: var(--radius);
     padding: 14px;
   }
+  /* «To order today» on the tablet: the card look sits on .supplier-row-open, the row stays
+     transparent, so the phone rule above is undone here and the tint goes on the card. */
+  body[data-section="orders"] .supplier-row.supplier-row--due {
+    background: transparent;
+    border: none;
+  }
+  body[data-section="orders"] .supplier-row.supplier-row--due > .supplier-row-open {
+    border-color: var(--crust);
+    background: var(--crust-bg);
+  }
   body[data-section="orders"] .supplier-row-view {
     width: var(--tap-min);
     height: var(--tap-min);
@@ -3392,6 +3448,45 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
    Not tablet-only: the summary sheet is a phone screen too. */
 .order-summary-cost { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-3); }
 .order-summary-cost--warn { color: var(--warn); font-weight: 600; }
+
+/* The sheet's buttons about TODAY's order (js/orders/order-summary-view.js appendActions):
+   «Ordine fatto» (the same green button as the supplier's screen), «Chiudi come non ordinato»
+   and, while closed, the status line with «Riapri». One column, full width, 48px targets. */
+.order-summary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+.order-summary-actions[hidden] { display: none; }   /* the display above would beat the attribute */
+.order-summary-actions .btn-primary { margin-top: 0; }
+.order-summary-place {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+}
+.order-summary-place-icon { display: flex; align-items: center; }
+.order-summary-skip,
+.order-summary-reopen {
+  width: 100%;
+  min-height: 48px;
+  transition: transform .06s ease;
+}
+.order-summary-skip:active,
+.order-summary-reopen:active { transform: scale(.97); }
+.order-summary-hint { margin: 0; font-size: 14px; color: var(--text-2); line-height: 1.4; }
+.order-summary-closed {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px dashed var(--text-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+}
+.order-summary-closed-text { font-size: 15px; font-weight: 600; color: var(--text); }
 
 /* ⚠️ PHONE LAYOUT OF THE SUMMARY. The sheet was a tablet screen until the bar on the supplier's
    screen opened it on phones too. With prices readable the cost line («10 × 12,50 € = 125,00 € ·

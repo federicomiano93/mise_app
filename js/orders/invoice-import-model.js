@@ -24,7 +24,7 @@
 import { splitWeight, joinWeight } from '../pack-size.js';
 import { pricePatch, roundTo, packBaseOf, INGREDIENT_DRAINED_FIELDS, PRICE_UNITS } from '../price-model.js';
 import { formatPatch, looseUnit } from '../pack-format.js';
-import { cartonWordFor, defaultPackFor } from '../record-choices.js';
+import { cartonWordFor, defaultPackFor, pieceWordFor } from '../record-choices.js';
 import { supplierLabel } from '../supplier-label.js';
 import { normalizeVat } from '../vat-number.js';
 import { sameUnitWeight } from './price-changes-model.js';
@@ -815,7 +815,9 @@ function newIngredientData(file, supplierId, language) {
   const weight = storedWeight(file.weight);
   const carton = file.packCount !== null && file.packCount !== undefined;
   const before = { kind: 'single', count: null, inner: '', unit: '', packUnit: '' };
-  const inner = file.packUnit || (carton ? defaultPackFor(language) : '');
+  // A carton of pieces priced per piece (cornetti, panzerotti: products.js) is «50 × pezzo», never «50 × busta».
+  const fallbackWord = file.priceUnit === 'pcs' ? pieceWordFor(language) : defaultPackFor(language);
+  const inner = file.packUnit || (carton ? fallbackWord : '');
   const format = formatPatch(
     before,
     { kind: carton ? 'carton' : 'single', count: file.packCount, inner, cartonWord: cartonWordFor(language) },

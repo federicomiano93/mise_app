@@ -29,7 +29,7 @@ import {
   LIST_COPY_WRITE_DELAY_MS,
 } from './list-copy.js';
 import { currentSession } from '../firebase.js';
-import { catalogueOriginFromHash } from '../recipe-link.js';
+import { catalogueOriginFromHash, orderIngredientFromHash } from '../recipe-link.js';
 import { el, groupBy } from './dom.js';
 import { mountSupplierList, refreshSupplierDerived, supplierStats } from './suppliers.js';
 import { buildSupplierDetail } from './supplier-detail.js';
@@ -38,9 +38,10 @@ import { buildSupplierItems } from './supplier-items.js';
 import { buildOrderSummaryView } from './order-summary-view.js';
 import { paintOrderMoney } from './order-cost-view.js';
 import {
-  scheduleDraftSave, saveDraftNow, flushDraftSave, flushDraftWhenHidden, watchDraft, archiveSupplier, clearSupplier,
+  scheduleDraftSave, saveDraftNow, flushDraftSave, sendBeforeLeaving, flushDraftWhenHidden, watchDraft, archiveSupplier, clearSupplier,
   clearQuantities, saveHistoryRecord, deleteHistoryRecord, setDraftSaveReporter,
   confirmDelivery, resolveMissing, dropDeletedIngredientFromDraft, freezeUnitInDraft,
+  setSupplierSkipped, clearSupplierSkipped,
 } from './draft.js';
 import { buildSendScreen } from './preview.js';
 import { buildSupplierPicker } from './supplier-picker.js';
@@ -81,7 +82,7 @@ import {
   unitConflicts, unitConflictList,
 } from './archive.js';
 import { storedUnitFor, entryUnit, isDefaultUnit } from '../order-unit.js';
-import { todayOrders, pendingSuppliers } from './reminders.js';
+import { todayOrders, dueTodayIds, pendingSuppliers, closeOffer } from './reminders.js';
 import { kioskSectionsFromData } from './kiosk-lines.js';
 import { renderTodayOrders, renderPending } from './reminder-view.js';
 import { resolveSuppliers, orderSuppliers, NO_SUPPLIER_ID } from './no-supplier.js';
@@ -135,6 +136,7 @@ const state = {
   entries: {},                  // { ingredientId: { qty, stock } } — shared object, mutated in place
   days: {},                     // { supplierId: 'YYYY-MM-DD' } — the day those rows are FOR (may be a future order day)
   draftUpdatedAt: '',           // fallback day for a draft written before `days` existed
+  skipped: {},                  // { supplierId: 'YYYY-MM-DD' } — closed as «non ordinato» that day (reminders.js skippedOn)
   pending: [],                  // orders typed on an earlier day and never placed
   openSupplier: null,           // the supplier whose own screen is open, or null
   viewingSupplier: null,        // the supplier whose read-only product list is open
@@ -153,6 +155,10 @@ const state = {
   showingCopy: false,
 };
 
+let wantedIngredientId = null;   // the ingredient a recipe row asked for (#...&order=); taken once live data is in
+let recipeOriginHref = null;     // the recipe the person came from, for Back on the supplier screen opened for it
+let openedFromRecipe = null;     // the supplier whose screen was opened for that ingredient, while it is open
+let leavingForRecipe = false;    // Back to the recipe is under way: a second tap does nothing
 let heldSupplierId = null;       // the supplier tapped while showing the copy; opened once live data lands
 let copyWriteTimer = null;       // the one debounced timer that saves the list copy
 let copyServerSeen = { suppliers: false, ingredients: false }; // has the SERVER answered for this list? (list-copy.js)
@@ -165,6 +171,7 @@ let pendingChecked = false;     // the unfinished-order check runs once per page
 let ordersConfig = normalizeOrdersConfig(null);   // config/orders, mirrored locally — see below
 let flatView = null;            // mounted flat-list handle, or null when not on screen
 let cardsView = null;           // mounted supplier-list handle, or null
+let remindersDay = '';          // the day the strip and the list highlight were last drawn for
 let detailView = null;          // the open supplier's screen, or null
 let itemsView = null;           // the open read-only product list, or null
 let summaryView = null;         // the open read-only order summary, or null (tablet)
@@ -189,6 +196,7 @@ const hooks = {
     // of quietly filing it under today. Done BEFORE the repaint below, which shows the stamp.
     // A stock-only edit never moves the day: counting stock is not ordering.
     if (!stockOnly) stampNow(supplierId, state.days[supplierId]);
+    if (!stockOnly) reopenIfTyped(supplierId);
     if (supplier) {
       refreshSupplierDerived(supplier, ingredientsBySupplier()[supplierId] || [], state.entries,
         futureDayOf(supplierId));
@@ -239,6 +247,16 @@ function readCachedConfig() {
 function setupCatalogueBack() {
   const origin = catalogueOriginFromHash(window.location.hash);
   if (!origin) return;
+  // A recipe row's «Order» item adds `&order=<ingredient id>`: remembered here, acted on once the
+  // lists are live (openWantedIngredient). ⚠️ ONLY THAT PART is then taken out of the address, so a
+  // reload (the update banner, Android restoring the tab) does not open the supplier again; the
+  // `#from=recipe:<id>` stays, and with it the way back after a reload.
+  recipeOriginHref = origin.href;
+  wantedIngredientId = orderIngredientFromHash(window.location.hash);
+  if (wantedIngredientId !== null) {
+    const kept = window.location.hash.replace(/&order=[^&#?]*$/, '');
+    try { history.replaceState(history.state, '', window.location.pathname + window.location.search + kept); } catch (e) { /* best-effort */ }
+  }
   // Two forms of ONE control, same address: the round button in the green bar, and a row under
   // it. Both are shown here; orders.css leaves exactly one visible by width (440px).
   for (const id of ['orders-to-catalogue', 'orders-to-catalogue-row']) {
@@ -560,6 +578,7 @@ function flushRender(parts) {
   if (parts.has('list')) drawPart('list', render);
   // A supplier tapped while the copy was showing opens only now: live data is in and drawn.
   if (heldSupplierId !== null) drawPart('held supplier', openHeldSupplier);
+  if (wantedIngredientId !== null) drawPart('wanted ingredient', openWantedIngredient);
   const incomingDrawn = incomingDrawCount !== incomingBefore;
   if (parts.has('sync')) drawPart('sync', syncInputsFromState);
   else if (parts.has('money')) drawPart('money', paintMoney);
@@ -611,6 +630,19 @@ function renderSupplierList(container, suppliers) {
     ingredientsBySupplier: ingredientsBySupplier(),
     entries: state.entries,
     forDay: futureDayOf,
+    dueToday: dueTodayNow(),
+  });
+}
+
+// The suppliers to highlight in the list: still to order today. ⚠️ Empty until suppliers, history
+// AND the draft (which holds the «non ordinato» closes) have all landed, and while the list is a
+// copy: a supplier already ordered would otherwise flash highlighted before its record arrives.
+function dueTodayNow() {
+  if (!(state.loaded.suppliers && state.loaded.history && state.loaded.draft) || state.showingCopy) {
+    return new Set();
+  }
+  return dueTodayIds({
+    suppliers: state.suppliers, history: state.history, today: todayISO(), skipped: state.skipped,
   });
 }
 
@@ -666,6 +698,34 @@ function openHeldSupplier() {
   const id = supplierToOpen(heldSupplierId, candidate => Boolean(findOrderSupplier(candidate)));
   heldSupplierId = null;
   if (id) openSupplier(id);
+}
+
+// The ingredient a recipe row asked for: its supplier's screen opens with the quantity box focused,
+// nothing prefilled. Taken ONCE, and only on live data (never the copy).
+function openWantedIngredient() {
+  if (wantedIngredientId === null || state.showingCopy) return;
+  if (!(state.loaded.suppliers && state.loaded.ingredients && state.loaded.draft)) return;
+  const id = wantedIngredientId;
+  wantedIngredientId = null;
+  // They moved on already: a supplier screen must not jump over what they are reading now — a
+  // supplier they opened, or tapped while the list copy showed (heldSupplierId), included.
+  const movedOn = document.body.dataset.ordersTab !== 'order'
+    || document.getElementById('orders-alerts-btn')?.getAttribute('aria-expanded') === 'true'
+    || document.querySelector('.missing-overlay')
+    || state.openSupplier !== null || heldSupplierId !== null;
+  if (movedOn) return;
+  const ing = lensById()[id];
+  if (!(ing && inOrderFlow(ing) && findOrderSupplier(ing.supplierId))) {
+    setStatus(t('orders.fromRecipe.notFound'), 'warn', 6000);
+    return;
+  }
+  openSupplier(ing.supplierId);
+  if (state.openSupplier !== ing.supplierId) return;
+  openedFromRecipe = ing.supplierId;
+  const box = detailView?.overlay.querySelector(`.ing-row[data-ing="${CSS.escape(id)}"] .ing-qty`);
+  if (!box) return;
+  try { box.scrollIntoView({ block: 'center' }); } catch (e) { /* best-effort */ }
+  try { box.focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
 }
 
 // Called by both live listeners: once both lists are in, the copy's job is over.
@@ -756,6 +816,7 @@ function openSupplier(supplierId) {
   closeSupplierItems();         // two full-screen screens must never stack up
   closeSummary();
   closeAlertsPanel();           // the panel must never sit on top of a full screen
+  openedFromRecipe = null;      // any other supplier opened is an ordinary one
   state.openSupplier = supplierId;
   renderOpenSupplier();
   globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'supplier' }));
@@ -772,6 +833,7 @@ function closeSupplier() {
   quietSummaryClose = true;
   try { if (hadSummary) closeSummary(); } finally { quietSummaryClose = false; }
   state.openSupplier = null;
+  openedFromRecipe = null;
   detailView?.overlay.remove();
   detailView = null;
   if (id) globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: '' }));
@@ -779,11 +841,95 @@ function closeSupplier() {
   // list row instead, or a keyboard user is dropped on the page body (leaveSupplier does the same).
   if (hadSummary && id) document.getElementById(`open-${id}`)?.focus();
 }
+// Whether the page before this one, in this tab, is the page `href` names (path only: a referrer
+// never carries the #fragment).
+function cameFromPage(href) {
+  try {
+    if (history.length < 2 || !document.referrer) return false;
+    const before = new URL(document.referrer);
+    const target = new URL(href, window.location.href);
+    return before.origin === target.origin && before.pathname === target.pathname;
+  } catch (e) { return false; }
+}
+
+// Still on the supplier screen that was opened for the recipe, with nothing over it: the only state
+// in which a delayed Back may still take the person away.
+function stillLeavingFrom(openerId) {
+  return state.openSupplier === openerId && openedFromRecipe === openerId
+    && state.summaryOverSupplier !== true && placing.size === 0
+    && !document.querySelector('.missing-overlay, .app-dialog, .pc-overlay, .mgmt-overlay')
+    && (document.getElementById('history-overlay')?.hidden ?? true);
+}
+
+// ⚠️ BACK IN THE HISTORY when the page before this one is the Recipe book: the recipe gave its own
+// entry the recipe's address before coming here (catalogue-main orderIngredient), so that entry shows
+// the recipe again, and the phone's own Back from there leaves the Recipe book as usual. Going
+// FORWARD to the recipe instead left that entry behind it, and the phone's Back from the recipe
+// showed the same recipe a second time. Anything else (Orders opened in a new tab, the address
+// typed) goes forward, replacing this page. ⚠️ So does a save still unanswered after the wait
+// ('late', offline): back in the history, Orders would stay frozen in the browser's cache holding
+// that write; replaced, it is let go, and the Recipe book's Firestore sends the write from this
+// device's queue.
+function goToRecipe(toRecipe, result) {
+  closeSupplier();
+  if (result !== 'late' && cameFromPage(toRecipe)) history.back();
+  else window.location.replace(toRecipe);
+}
+
 // Back on the order screen: close it and hand focus back to the row that opened it — the
 // summary sheet's own pattern (closeSummary). Full screen covers the list, so without this
 // a keyboard or screen-reader user would be dropped at the top of the page.
 function leaveSupplier() {
   const openerId = state.openSupplier;
+  // Opened for an ingredient of a recipe: Back returns to that recipe, never leaving Orders behind
+  // it, so the phone's own Back from the recipe does not land on Orders again.
+  const toRecipe = openerId && openedFromRecipe === openerId ? recipeOriginHref : null;
+  if (toRecipe) {
+    if (leavingForRecipe) return;
+    leavingForRecipe = true;
+    // ⚠️ A quantity typed a moment ago reaches the SERVER before the page goes (draft.js
+    // sendBeforeLeaving): leaving at once kept it in this device's note only, sent the next time
+    // Orders opens here — perhaps never, from the recipe screen. Usually a moment; at most 8 s
+    // (offline, or a freshly opened page), said on the supplier screen's own line meanwhile.
+    const saving = t('orders.fromRecipe.saving');
+    setStatus(saving, undefined, 9000);
+    // ⚠️ THE SCREEN STAYS USABLE DURING THE WAIT, so ANY touch or key after the Back tap calls the
+    // leave off: somebody who typed again, opened an ingredient card or tapped «Ordine fatto» is in
+    // the middle of something, and an archive or a clear may be in the air — never yanked away
+    // from it. Listing every screen that might be open would always miss the next one. So does
+    // the page being put away (the phone's own Back, bfcache): coming forward again must not
+    // carry on leaving. The Back tap's own pointerdown/keydown came before this handler ran.
+    let interrupted = false;
+    const interrupt = () => { interrupted = true; };
+    document.addEventListener('pointerdown', interrupt, true);
+    document.addEventListener('keydown', interrupt, true);
+    window.addEventListener('pagehide', interrupt);
+    sendBeforeLeaving().then(async result => {
+      document.removeEventListener('pointerdown', interrupt, true);
+      document.removeEventListener('keydown', interrupt, true);
+      window.removeEventListener('pagehide', interrupt);
+      clearStatusIf(saving);
+      if (interrupted || !stillLeavingFrom(openerId)) { leavingForRecipe = false; return; }
+      // ⚠️ REFUSED: ASK. Nothing else holds that quantity (the device's note leaves a refused value
+      // out), so leaving is a choice with a loss, never silent. «Resta qui» keeps the value in its
+      // box, and the next Back sends it again.
+      if (result === 'refused') {
+        const leave = await confirmDialog({
+          title: t('orders.fromRecipe.refusedTitle'),
+          message: t('orders.fromRecipe.refusedMessage'),
+          okLabel: t('orders.fromRecipe.leaveAnyway'),
+          cancelLabel: t('unsent.stay'),
+          danger: true,
+        });
+        if (!leave || !stillLeavingFrom(openerId)) { leavingForRecipe = false; return; }
+      }
+      // Reset before the page goes: Orders may come back from the browser's cache (Forward), and
+      // its Back must work there.
+      leavingForRecipe = false;
+      goToRecipe(toRecipe, result);
+    });
+    return;
+  }
   closeSupplier();
   if (openerId) document.getElementById(`open-${openerId}`)?.focus();
 }
@@ -915,7 +1061,20 @@ function renderOpenSupplier() {
   };
 
   if (detailView && detailView.id === supplier.id) {
+    // ⚠️ A REPAINT REBUILDS THE ROWS, and with them the box that had the focus: right after the
+    // screen opens (the prices, History and the config arrive one by one) the quantity box a
+    // recipe's «Ordina» had just focused was replaced, and the focus fell to the page. The same
+    // box of the same row gets it back, without scrolling.
+    const focused = globalThis.document?.activeElement;
+    const box = focused && detailView.overlay.contains(focused)
+      ? ['ing-qty', 'ing-stock'].find(c => focused.classList.contains(c)) : null;
+    const rowId = box ? focused.closest('.ing-row')?.dataset.ing : null;
     detailView.repaint(ctx);
+    if (rowId) {
+      const again = [...detailView.overlay.querySelectorAll(`.ing-row .${box}`)]
+        .find(n => n.closest('.ing-row')?.dataset.ing === rowId);
+      try { again?.focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
+    }
     paintMoney();
     return;
   }
@@ -924,6 +1083,18 @@ function renderOpenSupplier() {
   const built = buildSupplierDetail(supplier, ctx);
   detailView = { ...built, id: supplier.id };
   document.body.appendChild(built.overlay);
+  // An ERROR already on the page's line (a save refused a moment ago, a stream lost) is repeated on
+  // the new screen's own line, which would otherwise start empty over it. Errors only: they stay
+  // until cleared by name (clearStatusIf clears both lines), where a passing word's timer would
+  // hide only the page's copy.
+  const pageLine = document.getElementById('orders-status');
+  const mirror = supplierStatusMirror(pageLine);
+  if (pageLine && mirror && !pageLine.hidden && pageLine.classList.contains('error')
+    && pageLine.dataset.passing !== '1') {
+    mirror.textContent = pageLine.textContent;
+    mirror.className = pageLine.className + ' supplier-detail-status';
+    mirror.hidden = false;
+  }
   // Into the screen that now covers everything, on its Back — as the summary sheet does.
   // Only on a NEW screen: a repaint (above) must never pull focus out of a box mid-typing.
   built.overlay.querySelector('.orders-icon-btn')?.focus({ preventScroll: true });
@@ -1037,7 +1208,107 @@ function closeSummary() {
   // Focus goes back to the button that opened this screen — never assumed
   // still there: the row it belonged to may have been repainted, or the
   // supplier deactivated, while the summary was open.
-  document.getElementById(fromBar ? `summary-bar-${openerId}` : `summary-${openerId}`)?.focus();
+  // ⚠️ The list row's summary icon is HIDDEN when the supplier has nothing written (after
+  // «Ordine fatto», or a sheet opened from a closed chip): focusing it would drop focus on <body>,
+  // so the row itself takes it then.
+  const opener = document.getElementById(fromBar ? `summary-bar-${openerId}` : `summary-${openerId}`);
+  if (opener && opener.getClientRects().length) opener.focus();
+  else if (!fromBar && openerId) document.getElementById(`open-${openerId}`)?.focus();
+}
+
+// ── Closing today's order from the summary sheet (tablet notes, 2–3 Nov 2026) ───────────
+//
+// «Ordine fatto»: exactly the supplier screen's green button — placeOrder(), with its
+// confirmation and its «did you send it?».
+// ⚠️ THE SHEET CLOSES FIRST. Over a supplier's screen it sits at z 610, above the confirmation
+// screen (600): the confirmation opened UNDER it — invisible on a phone, behind the scrim on the
+// tablet — and a second tap on a button that «did nothing» built a second confirmation, which
+// could record the same order twice. Closed first, the confirmation is the top screen, Escape
+// there cannot close a sheet underneath, and there is no button left to tap twice. Cancelling it
+// leaves the person on the supplier's screen (or the list), where the same button is.
+function placeFromSummary(supplierId) {
+  if (state.summarySupplier === supplierId) closeSummary();
+  return placeOrder(supplierId);
+}
+
+// The way back after a close: the list, where the strip now says «non ordinato». Over a
+// supplier screen both go (closeSupplier closes its own sheet); from the list, the sheet.
+function backToListFrom(supplierId) {
+  if (state.summarySupplier !== supplierId) return;
+  if (state.summaryOverSupplier && state.openSupplier === supplierId) closeSupplier();
+  else closeSummary();
+}
+
+// The close as this screen holds it, changed locally at once (P20: local first). `day` null
+// removes it. The strip, the open sheet and the kiosk lines all read state.skipped.
+function setSkippedLocally(supplierId, day) {
+  const next = { ...state.skipped };
+  if (day) next[supplierId] = day; else delete next[supplierId];
+  state.skipped = next;
+  renderReminders();
+  renderSummary();
+}
+
+// «Chiudi come non ordinato» — nothing needed from this supplier today. Asked first (P20: a
+// save is confirmed). ⚠️ NEVER AWAITED: Firestore keeps the write in this phone's cache and
+// sends it when it can (js/firebase.js persistentLocalCache), so the screen moves on at once,
+// signal or not. Only a REFUSAL comes back — then the close is undone on screen and said so.
+let askingToClose = false;
+async function closeAsNotOrdered(supplierId) {
+  const supplier = findOrderSupplier(supplierId);
+  if (!supplier || askingToClose) return;
+  const name = supplierLabel(supplier);
+  askingToClose = true;
+  let ok = false;
+  try {
+    ok = await confirmDialog({
+      title: t('orders.summary.closeTitle', { supplier: name }),
+      message: t('orders.summary.closeMessage'),
+      okLabel: t('orders.summary.closeOk'),
+      cancelLabel: t('ui.cancel'),
+    });
+  } finally {
+    askingToClose = false;
+  }
+  if (!ok) return;
+  const today = todayISO();
+  backToListFrom(supplierId);
+  setSkippedLocally(supplierId, today);
+  setStatus(t('orders.summary.closedDone', { supplier: name }), 'ok', 4000);
+  setSupplierSkipped(supplierId, today).catch(err => {
+    console.error('Closing the supplier as not ordered failed:', err);
+    if (state.skipped[supplierId] === today) setSkippedLocally(supplierId, null);
+    setStatus(t('orders.summary.saveFailed'), 'error', 6000);
+  });
+}
+
+// «Riapri» — the undo. No question: it only puts the supplier back among today's orders, which
+// is what the screen showed before the close. The sheet stays open, now offering the close again.
+// Not awaited either, for the same reason; a refusal puts the close back on screen.
+function reopenToday(supplierId) {
+  const supplier = findOrderSupplier(supplierId);
+  const day = state.skipped[supplierId];
+  if (!supplier || !day) return;
+  setSkippedLocally(supplierId, null);
+  setStatus(t('orders.summary.reopened', { supplier: supplierLabel(supplier) }), 'ok', 4000);
+  clearSupplierSkipped(supplierId).catch(err => {
+    console.error('Reopening the supplier failed:', err);
+    if (!state.skipped[supplierId]) setSkippedLocally(supplierId, day);
+    setStatus(t('orders.summary.saveFailed'), 'error', 6000);
+  });
+}
+
+// ⚠️ A QUANTITY TYPED FOR A SUPPLIER CLOSED TODAY REOPENS IT. «Nothing needed» stopped being
+// true, and a close left standing would silence the strip, the Home badge and the kiosk for the
+// rest of the day — the very reminder that catches an order typed and then forgotten. Once per
+// supplier: the local state changes at once, so the next keystroke finds nothing to undo.
+function reopenIfTyped(supplierId) {
+  if (state.skipped[supplierId] !== todayISO()) return;
+  if (!supplierHasItems(supplierId, orderIngredients(), state.entries)) return;
+  setSkippedLocally(supplierId, null);
+  clearSupplierSkipped(supplierId).catch(err => {
+    console.error('Reopening a closed supplier after typing failed:', err);
+  });
 }
 
 function renderSummary() {
@@ -1059,6 +1330,14 @@ function renderSummary() {
   summaryView?.scrim.remove();
   const built = buildOrderSummaryView(supplier, ingredients, state.entries, {
     onBack: closeSummary, showMoney: state.pricesReadable === true,
+    // Today's order, closed from the sheet (Federico's tablet notes, 2–3 Nov 2026). Asked on
+    // every repaint, so a record or a close made on another phone shows here at once.
+    closeOffer: () => closeOffer({
+      supplier, history: state.history, today: todayISO(), skipped: state.skipped,
+    }),
+    onPlaced: whenLive(() => placeFromSummary(supplier.id)),
+    onSkip: whenLive(() => closeAsNotOrdered(supplier.id)),
+    onReopen: whenLive(() => reopenToday(supplier.id)),
   });
   summaryView = { ...built, id: supplier.id };
   // Above the supplier screen it sits over (orders.css .order-summary--over-supplier): both
@@ -2638,9 +2917,12 @@ function renderReminders() {
 
   renderTodayOrders(
     document.getElementById('orders-today'),
-    todayOrders({ suppliers: state.suppliers, history: state.history, today: todayISO() }),
-    { onPick: expandSupplier },
+    todayOrders({ suppliers: state.suppliers, history: state.history, today: todayISO(), skipped: state.skipped }),
+    { onPick: expandSupplier, onOpenSkipped: whenLive(openSummary) },
   );
+  // The supplier list's highlight follows the same rule as the strip, repainted in place.
+  cardsView?.markDue(dueTodayNow());
+  remindersDay = todayISO();
 
   renderPending(document.getElementById('orders-pending'), state.pending, {
     onPlaced: recordPending,
@@ -2652,6 +2934,12 @@ function renderReminders() {
 
   renderUntoldChanges();
 }
+
+// ⚠️ A NEW DAY CHANGES WHAT IS DUE WITH NO DOCUMENT CHANGING: the lab tablet left on Orders
+// overnight would keep yesterday's strip and highlight. Asked once a minute; draws only at midnight.
+setInterval(() => {
+  if (remindersDay && todayISO() !== remindersDay) scheduleRender('reminders');
+}, 60 * 1000);
 
 // ⚠️⚠️ WHAT NOBODY HAS BEEN TOLD ABOUT. The shared order is live on every phone, and
 // both the sent list and the recorded order are only photographs of it — so a
@@ -2902,19 +3190,36 @@ function statusElement() {
   return document.getElementById('orders-status');
 }
 
+// ⚠️ A SUPPLIER'S SCREEN COVERS THE PAGE TOO, and it is where quantities are typed: a save error
+// written only to the page's line was never seen there. Its own line REPEATS the page's message
+// rather than replacing it, so a lasting one (a stream lost) is still on the page once the screen
+// closes, exactly as before.
+function supplierStatusMirror(target) {
+  if (target !== document.getElementById('orders-status')) return null;
+  return document.querySelector('.supplier-detail > .supplier-detail-status');
+}
+
 // Set the status line. With autoHideMs, the line hides itself after that delay,
 // but ONLY if its text is still the same — so a later error / "order saved"
 // message set in the meantime is never wiped.
 function setStatus(text, kind, autoHideMs) {
-  const elStatus = statusElement();
-  if (!elStatus) return;
+  const target = statusElement();
+  if (!target) return;
+  const lines = [target, supplierStatusMirror(target)].filter(Boolean);
   clearTimeout(statusTimer);
-  elStatus.hidden = false;
-  elStatus.textContent = text;
-  elStatus.className = 'orders-status' + (kind ? ' ' + kind : '');
+  for (const elStatus of lines) {
+    elStatus.hidden = false;
+    elStatus.textContent = text;
+    elStatus.className = elStatus.classList.contains('supplier-detail-status')
+      ? 'orders-status supplier-detail-status' + (kind ? ' ' + kind : '')
+      : 'orders-status' + (kind ? ' ' + kind : '');
+    // A passing word (one with a timer) is never copied onto a supplier screen opened later: the
+    // timer knows only the lines that existed when it started.
+    elStatus.dataset.passing = autoHideMs ? '1' : '';
+  }
   if (autoHideMs) {
     statusTimer = setTimeout(() => {
-      if (elStatus.textContent === text) elStatus.hidden = true;
+      for (const elStatus of lines) if (elStatus.textContent === text) elStatus.hidden = true;
     }, autoHideMs);
   }
 }
@@ -2950,7 +3255,8 @@ function listLost(lost) {
 // auto-hide above and for the same reason: whoever set a newer message — an error,
 // or "order saved to history ✓" — must never have it wiped by a stale clear.
 function clearStatusIf(text) {
-  for (const elStatus of [document.getElementById('orders-status'), document.getElementById('history-status')]) {
+  for (const elStatus of [document.getElementById('orders-status'), document.getElementById('history-status'),
+    document.querySelector('.supplier-detail > .supplier-detail-status')]) {
     if (elStatus && elStatus.textContent === text) elStatus.hidden = true;
   }
 }
@@ -3082,6 +3388,7 @@ async function init() {
     const heldBefore = noteHeld(state.ingredients, state.entries, heldNotInUse);
     setEntries(draft.entries);
     state.days = draft.days || {};
+    state.skipped = draft.skipped || {};
     state.draftUpdatedAt = draft.updatedAt;
     state.loaded.draft = true;
     // ⚠️ A line a page left behind has just come back, maybe with last night's day stamp, and the
@@ -3203,7 +3510,7 @@ window.addEventListener('kiosk-rest-info', event => {
     if (!state.loaded.suppliers || !state.loaded.history) return;
     event.detail.sections.push(...kioskSectionsFromData({
       suppliers: state.suppliers, history: state.history, today: todayISO(),
-      weekStartsOn: ordersConfig.weekStartsOn,
+      weekStartsOn: ordersConfig.weekStartsOn, skipped: state.skipped,
     }));
   } catch (err) {
     console.warn('The kiosk lines are not available:', err);

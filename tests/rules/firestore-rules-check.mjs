@@ -788,6 +788,26 @@ async function drafts() {
   check('weekId survives the clear',
     after?.fields?.weekId?.stringValue === '2026-W28');
 
+  // «Chiudi come non ordinato» (6 Nov 2026): a supplier due today, closed because nothing was
+  // needed. Written by an EMPLOYEE too — closing the day's order is ordinary daily work — with no
+  // updatedAt (the draft's own stamp stands in for undated rows, so the mark must not move it).
+  await expectAllowed('an employee closes a supplier as not ordered today (skipped.<id>)', () =>
+    mergeWrite('locations/main/drafts/current', {
+      skipped: { SUP_LEGACY: '2026-11-06' },
+      bakery: 'main',
+    }, asAccount(SAM)));
+  await expectAllowed('…and reopens it (a surgical clear of skipped.<id>)', () =>
+    clearWrite('locations/main/drafts/current', { bakery: 'main' }, ['skipped.SUP_LEGACY'], asAccount(SAM)));
+  await expectDenied('skipped sent as a string instead of a map',
+    () => mergeWrite('locations/main/drafts/current', { skipped: '2026-11-06', bakery: 'main' }));
+  const manySkipped = {};
+  for (let i = 0; i < 201; i++) manySkipped[`S${i}`] = '2026-11-06';
+  await expectDenied('a draft stuffed with 201 closed suppliers',
+    () => mergeWrite('locations/main/drafts/current', { skipped: manySkipped, bakery: 'main' }));
+  await expectDenied('a member of ANOTHER venue closing a supplier here',
+    () => mergeWrite('locations/main/drafts/current', { skipped: { SUP_LEGACY: '2026-11-06' }, bakery: 'main' },
+      asAccount(BOB)));
+
   await expectDenied('an unknown key on the draft',
     () => mergeWrite('locations/main/drafts/current', { evil: 'x', bakery: 'main' }));
   await expectDenied('entries sent as a string instead of a map',

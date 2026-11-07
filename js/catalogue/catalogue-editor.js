@@ -178,7 +178,7 @@ export function renderEditor({
   // ingredienti già compilati».
   // ⚠️ A MODE, NOT A GRIP ON EVERY ROW. At 296px a row already holds a name, an amount, a
   // unit and a bin; a fifth control would take its width from the NAME. While reordering,
-  // each row is its grip, its name and its amount — nothing to type into, nothing to hit
+  // each row is its name, its amount and its grip — nothing to type into, nothing to hit
   // by accident while a finger is dragging.
   // ⚠️ THE SAME ROW OBJECTS MOVE (moveRow), so a guided mixing step, which points at a row
   // by its `rid`, still points at the right ingredient afterwards.
@@ -231,14 +231,17 @@ export function renderEditor({
       const name = String(ing.label || '').trim() || t('cat.unnamedRow');
       const unit = unitOf(ing);
       const qty = ing.grams === '' || ing.grams === undefined || unit === 'to taste' ? '' : String(ing.grams);
+      // ⚠️ THE GRIP IS THE LAST THING IN THE ROW, on the right (Federico, 3 Nov 2026: «Metti a
+      // destra i punti per trascinare gli ingredienti per riordinare») — under the right thumb
+      // on the lab tablet, and the name now starts where it starts in every other mode.
       rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup cat-reorder-row' + (hasDividerAfter(working.ingredients, idx) ? ' cat-reorder-row--divider' : '') }, [
+        el('span', { class: 'cat-reorder-name', text: name }),
+        el('span', { class: 'cat-reorder-amount', text: [qty, unit].filter(Boolean).join(' ') }),
         el('button', {
           type: 'button', class: 'home-cards-grip cat-reorder-grip', icon: GRIP_ICON,
           'aria-label': t('cat.moveRow', { name }), 'aria-describedby': 'catReorderHint',
           onkeydown: (event) => moveWithKeys(idx, event),
         }),
-        el('span', { class: 'cat-reorder-name', text: name }),
-        el('span', { class: 'cat-reorder-amount', text: [qty, unit].filter(Boolean).join(' ') }),
       ]));
     });
     // ⚠️ HOLD TO DRAG ON A PHONE (200ms), so scrolling the recipe with a thumb never moves
