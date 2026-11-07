@@ -1147,7 +1147,7 @@ input.cp-prod-weight {
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  padding: 2px 8px 2px 2px;
+  padding: 2px 2px 2px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   -webkit-user-select: none;
@@ -1155,7 +1155,8 @@ input.cp-prod-weight {
   -webkit-touch-callout: none;
 }
 .cp-reorder-row:last-child { border-bottom: 0; }
-/* The Home's grip pulls itself left into its row's padding; this row has 2px of it. */
+/* The grip sits on the RIGHT, as in the Recipe book (Federico, 3 Nov 2026): 12px of padding
+   before the name, 2px after the grip, and the Home grip's pull to the left cancelled. */
 .cp-reorder-grip { margin-left: 0; }
 .cp-reorder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; color: var(--text); }
 .cp-reorder-amount { flex-shrink: 0; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text2); }

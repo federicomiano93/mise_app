@@ -668,7 +668,7 @@ body.cat-zoom-lock { overflow: hidden; }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 8px 2px 2px;
+  padding: 2px 2px 2px 12px;
   border-bottom: 1px solid var(--cat-border);
   background: var(--cat-surface);
   -webkit-user-select: none;
@@ -676,7 +676,10 @@ body.cat-zoom-lock { overflow: hidden; }
   -webkit-touch-callout: none;
 }
 .cat-reorder-row:last-child { border-bottom: 0; }
-/* The Home's grip pulls itself left into its row's padding; this row has 2px of it. */
+/* The grip sits on the RIGHT (Federico, 3 Nov 2026), so the row's padding is 12px on the
+   left — where the name starts in divider mode too — and 2px on the right, against the
+   grip. The Home's grip pulls itself left into its row's padding; here it has a name
+   beside it instead, so that pull is cancelled. */
 .cat-reorder-grip { margin-left: 0; }
 .cat-reorder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .95rem; color: var(--cat-text); }
 .cat-reorder-amount { flex-shrink: 0; font-family: var(--cat-font-mono); font-size: .78rem; color: var(--cat-text-2); }
@@ -690,7 +693,9 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-ing-row--divider + .cat-ing-row,
 .cat-ing-editgroup--divider + .cat-ing-editgroup { border-top: 0; }
 .cat-divider-row,
-.cat-divider-row--last { min-height: 44px; padding-left: 12px; }
+/* The right side is set here too: these rows also carry .cat-reorder-row, whose right padding is
+   only 2px since its grip moved there (6 Nov 2026), and the amount must not touch the frame. */
+.cat-divider-row--last { min-height: 44px; padding-left: 12px; padding-right: 8px; }
 /* The row above already draws the edge between them (the buttons keep only a bottom border). */
 .cat-divider-row--last { border-top: 0; }
 .cat-divider-row { width: 100%; border-width: 0 0 1px; border-style: solid; border-color: var(--cat-border); text-align: left; font: inherit; cursor: pointer; }

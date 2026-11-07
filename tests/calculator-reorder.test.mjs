@@ -144,3 +144,13 @@ test('the styles exist, and a hidden button really is hidden', () => {
   assert.match(css, /\.cp-reorder-row\s*\{/);
   assert.match(css, /\.cp-reorder-btn\[hidden\]\s*\{\s*display:\s*none;\s*\}/);
 });
+
+test('⚠️ the grip sits on the RIGHT of each reorder row, as in the Recipe book (Federico, 3 Nov 2026)', () => {
+  const recipes = codeOf(read('js/recipes.js'));
+  const fn = recipes.slice(recipes.indexOf('function reorderList('), recipes.indexOf('function moveTo('));
+  assert.match(fn, /el\('div', \{ class: 'cp-reorder-row' \}, \[\s*el\('span', \{ class: 'cp-reorder-name' \}, name\),\s*el\('span', \{ class: 'cp-reorder-amount' \}[^\n]*\n\s*grip,\s*\]\)/,
+    'name, then amount, then the grip');
+  assert.match(fn, /grip\.addEventListener\('keydown'/, 'the arrow keys still move the row from the grip (P18)');
+  const css = codeOf(read('style.css'));
+  assert.match(css, /\.cp-reorder-row \{[^}]*padding: 2px 2px 2px 12px;/);
+});
