@@ -158,11 +158,12 @@ test('packagingPerUnit still reports both as «no-piece-price» and counts the p
 
 const parts = (components, over, tables = TABLES) => unpricedParts(product(components, over), tables);
 
-test('product lines that cannot be costed are listed with the reason; gone items are left out (no empty name)', () => {
+test('product lines that cannot be costed are listed with the reason; a gone item under the card’s own words', () => {
   assert.deepEqual(parts([ingLine('RIBBON', 1, 'g'), ingLine('SPRINKLE', 5, 'g'), ingLine('ICING', 5, 'pcs'), ingLine('GONE', 1, 'g')]), [
     { name: 'Ribbon', inRecipe: '', reason: 'no-ingredient-price' },
     { name: 'Sprinkle', inRecipe: '', reason: 'no-piece-weight' },
     { name: 'Icing', inRecipe: '', reason: 'no-piece-price' },
+    { name: 'This item no longer exists', inRecipe: '', reason: 'gone' },
   ]);
   assert.deepEqual(parts([ingLine('SALT', 1, 'g'), recLine('DOUGH', 1)]), [], 'nothing missing, nothing listed');
 });
@@ -389,4 +390,40 @@ test('every new word exists in both languages, and the Italian is Italian', () =
   assert.match(it['fc.unpriced.reasonIn'], /\{reason\}.*\{name\}/);
   assert.equal(en['fc.preview.which'], 'Which?');
   assert.equal(it['fc.preview.which'], 'Quali?');
+});
+
+// ── Code review, 7 Nov 2026: the list matches the warning, no more and no less ──
+
+test('a line or packaging whose item no longer exists is listed (it makes the cost partial too)', () => {
+  setLanguage('it');
+  const list = parts([recLine('DOUGH', 1), ingLine('GONE', 5, 'g'), recLine('NOPE', 1)], { packaging: [{ ingredientId: 'GONE2', qtyPcs: 1 }] });
+  const preview = productPreview(product([recLine('DOUGH', 1), ingLine('GONE', 5, 'g')]), TABLES);
+  setLanguage('en');
+  assert.ok(list.every(item => item.name && item.reason === 'gone'));
+  assert.deepEqual(list.map(i => i.name), ['Questa voce non esiste più', 'Questa ricetta non esiste più']);
+  assert.equal(preview.partial, true);
+  assert.equal(preview.unpriced.length, 1, 'the warning always has something under «Quali?»');
+});
+
+test('packaging with a way of selling chosen but not complete gets «finish it», not «choose one»', () => {
+  const list = parts([recLine('DOUGH', 1)], { piecesPerBatch: null, packaging: [{ ingredientId: 'BOX', qtyPcs: 1 }] });
+  assert.deepEqual(list.map(i => i.reason), ['packaging-no-units']);
+  assert.ok(unpricedReasonText('packaging-no-units'));
+  assert.ok(unpricedReasonText('gone'));
+});
+
+test('an UNLABELLED row pointing at an unpriced sub-recipe lists nothing: it is not partial', () => {
+  const SUB = { id: 'SUB', name: 'Sub', lossPct: 0, ingredients: [{ label: 'Water', grams: 100, unit: 'g' }] };
+  const TOP = { id: 'TOP', name: 'Top', lossPct: 0, ingredients: [flourRow(500), { label: '', grams: 100, unit: 'g', kind: 'recipe', refId: 'SUB' }] };
+  const tables = { ...TABLES, recipes: { ...TABLES.recipes, SUB, TOP } };
+  const preview = productPreview(product([recLine('TOP', 1)]), tables);
+  assert.equal(preview.partial, false);
+  assert.deepEqual(preview.unpriced, []);
+});
+
+test('the money line cannot take the lines down (P17)', () => {
+  const editor = read('js/foodcost/foodcost-editor.js');
+  const body = /function lineCost\(entry, kind, tables = liveTables\(\)\) \{([\s\S]*?)\n  \}\n/.exec(editor)[1];
+  assert.match(body, /^\s*try \{/);
+  assert.match(body, /catch \(e\) \{\s*return \{ text: '', noPrice: false \};/);
 });

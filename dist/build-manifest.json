@@ -378,14 +378,14 @@
       }
     },
     "dist/foodcost.css": {
-      "sha": "c8a02d6b72e02bb7",
+      "sha": "d0e8694fdb10dc1e",
       "inputs": {
-        "foodcost.css": "2cbd45100fb66f4e"
+        "foodcost.css": "337374db754134e9"
       }
     },
     "dist/foodcost.js": {
-      "sha": "6e212c51e97342e4",
-      "mapSha": "bd76c8d2d75e6184",
+      "sha": "16cd90f0a73111b3",
+      "mapSha": "46268327d9803f56",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "41d275905d191c60",
@@ -409,10 +409,10 @@
         "js/foodcost/crossing-route.js": "ab3dc4743da26c00",
         "js/foodcost/dom.js": "02aea52bb04819e8",
         "js/foodcost/firebase-foodcost.js": "385802cc24237b22",
-        "js/foodcost/foodcost-editor.js": "aa6521388527b3f6",
+        "js/foodcost/foodcost-editor.js": "88d85c4a2a9ed8a5",
         "js/foodcost/foodcost-list.js": "5f8121ac395a175b",
-        "js/foodcost/foodcost-main.js": "a5caecbb35ecd387",
-        "js/foodcost/foodcost-model.js": "0cebf8331c6ea7c3",
+        "js/foodcost/foodcost-main.js": "10ecda038b613c70",
+        "js/foodcost/foodcost-model.js": "55da2798b7e788c5",
         "js/foodcost/foodcost-settings.js": "515cc9a266758252",
         "js/foodcost/foodcost-store.js": "cac52d213db0143f",
         "js/foodcost/foodcost-weighing.js": "464e8d54f042a4a9",
@@ -493,10 +493,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "96df8c0c502438ce",
-      "mapSha": "4dcad1b97be9eb91",
+      "sha": "98ae2be9239543b8",
+      "mapSha": "9404138f1c81ec18",
       "inputs": {
-        "js/i18n.js": "30a37b225f92f367"
+        "js/i18n.js": "4e9ea612d585a597"
       }
     },
     "dist/index.js": {

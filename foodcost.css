@@ -224,15 +224,16 @@ select.fc-input, .fc-select {
 .fc-qty, .fc-weigh-row .fc-input { -moz-appearance: textfield; }
 .fc-line-unit { font-size: .8rem; color: var(--fc-text-2); flex-shrink: 0; }
 .fc-line-note { margin: 6px 0 0; font-size: .72rem; color: var(--fc-text-2); font-family: var(--fc-font-mono); }
-/* A recipe line with nothing to say (priced, and no money shown since 13 Sep 2026) takes
-   no room: an empty note would still leave its margin under the row. */
+/* A line with nothing to do about it (priced: its money is on the line above, since 7 Nov 2026)
+   takes no room: an empty note would still leave its margin under the row. */
 .fc-line-note:empty { display: none; }
 /* The rate and what the amount typed costs, above the note (Federico, 7 Nov 2026). The same quiet
    size and muted colour as the note — --fc-text-2 is the text colour used for it, 4.5:1 or better
    on this surface; the figures stay readable without shouting over the quantity box. */
 .fc-line-cost { margin: 6px 0 0; font-size: .72rem; color: var(--fc-text-2); font-family: var(--fc-font-mono); overflow-wrap: anywhere; }
 .fc-line-cost:empty { display: none; }
-.fc-line-cost + .fc-line-note { margin-top: 2px; }
+/* Close under the money only when there IS money: an empty (hidden) one keeps the note's 6px. */
+.fc-line-cost:not(:empty) + .fc-line-note { margin-top: 2px; }
 /* The dough weighed before the oven and after, under a recipe line — moved here from
    the recipe editor on 13 Sep 2026. Two boxes side by side, as they were there; the
    answer under them reads as a statement, not as a footnote. */

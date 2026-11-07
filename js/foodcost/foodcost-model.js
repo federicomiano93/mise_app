@@ -238,7 +238,6 @@ export function ingredientLineCost(line, ingredient) {
 // can say WHICH line has no price rather than only that something has none.
 export function batchTotals(product, tables = {}) {
   const p = normalizeProduct(product) || { components: [], packaging: [] };
-  const recipesById = tables.recipes || {};
   let cost = 0;
   let kg = 0;
   let partial = false;
@@ -703,8 +702,10 @@ export function productPreview(product, tables = {}) {
 // costRecipe reason for a row inside a recipe ('no-price', 'not-linked', 'sub-not-costable'…).
 // unpricedReasonText() turns any of them into words.
 //
-// ⚠️ NEVER AN EMPTY NAME: an ingredient that no longer exists has no name to list, so it is
-// left out (the warning above still stands for it). A recipe row is listed by its label.
+// ⚠️ NEVER AN EMPTY NAME, AND NOTHING LEFT OUT: a line whose ingredient or recipe no longer
+// exists makes the cost partial too, so it is listed under the words the card's line shows
+// («This item no longer exists»), reason 'gone' — otherwise the warning would stand with
+// nothing to name (code review, 7 Nov 2026). A recipe row is listed by its label.
 // ⚠️ WHAT MAKES `partial` TRUE, NO MORE AND NO LESS: rows the recipe's own model marks
 // «not costed» with a label, opened into sub-recipes — priced or not, because a sub-recipe
 // that is itself partial counts too. ⚠️ PIECES AND SPOONS INCLUDED («sale q.b.»): costRecipe()
@@ -715,7 +716,9 @@ const UNPRICED_REASON_TEXT = {
   'no-piece-weight': 'fc.unpriced.noPieceWeight',
   'no-piece-price': 'fc.unpriced.noPiecePrice',
   'packaging-no-mode': 'fc.unpriced.packagingNoMode',
+  'packaging-no-units': 'fc.unpriced.packagingNoUnits',
   'recipe-no-price': 'fc.unpriced.recipeNoPrice',
+  'gone': 'fc.unpriced.gone',
 };
 
 // The one place an unpriced reason becomes words — the recipe-row reasons are the catalogue's.
@@ -750,7 +753,10 @@ export function unpricedParts(product, tables = {}) {
       const sub = link && link.kind === 'recipe' && depth < MAX_RECIPE_DEPTH && !here.has(link.refId)
         ? lookup(tables.recipes, link.refId) : null;
       let named = 0;
-      if (sub && (row.reason === 'sub-not-costable' || row.costed)) named = openRecipe(sub, depth + 1, new Set([...here, link.refId]));
+      // ⚠️ A sub-recipe with no price is opened only under a LABELLED row: costRecipe() counts an
+      // unlabelled one as nothing, so listing what is inside it would name what is not partial.
+      // A priced sub-recipe is always opened — its own partial counts whatever the row's label.
+      if (sub && ((row.reason === 'sub-not-costable' && row.label) || row.costed)) named = openRecipe(sub, depth + 1, new Set([...here, link.refId]));
       found += named;
       if (!row.costed && row.label && !(row.reason === 'sub-not-costable' && named > 0)) {
         add(row.label, recipeName, row.reason);
@@ -763,10 +769,11 @@ export function unpricedParts(product, tables = {}) {
   p.components.forEach(component => {
     const line = componentLineCost(component, tables, { noWeightLoss: p.noWeightLoss });
     if (component.kind === 'ingredient') {
-      if (line.cost === null && line.reason !== 'missing-ingredient') add(line.name, '', line.reason);
+      if (line.reason === 'missing-ingredient') add(t('fc.thisItemNoLonger'), '', 'gone');
+      else if (line.cost === null) add(line.name, '', line.reason);
       return;
     }
-    if (line.reason === 'missing-recipe') return;
+    if (line.reason === 'missing-recipe') { add(t('fc.thisRecipeNoLonger'), '', 'gone'); return; }
     const recipe = lookup(tables.recipes, component.recipeId);
     const found = openRecipe(recipe, 1, new Set());
     if (line.rate === null && !found) add(recipe.name, '', 'recipe-no-price');
@@ -774,16 +781,18 @@ export function unpricedParts(product, tables = {}) {
 
   p.packaging.forEach(item => {
     const ingredient = lookup(tables.ingredients, item.ingredientId);
-    if (!ingredient) return;
+    if (!ingredient) { add(t('fc.thisItemNoLonger'), '', 'gone'); return; }
     const line = packagingLineCost(item, ingredient);
     if (line.cost !== null) return;
     add(ingredientDisplayName(ingredient), '', line.reason === 'no-price' ? 'packaging-no-price' : 'no-piece-price');
   });
 
-  // Packaging that cannot be multiplied out yet — no way of selling said — is missing from the
-  // batch figure (productionCost counts it as partial): ONE entry for all of it.
+  // Packaging that cannot be multiplied out yet is missing from the batch figure (productionCost
+  // counts it as partial): ONE entry for all of it. ⚠️ TWO DIFFERENT ADVICES: no way of selling
+  // chosen → choose one; chosen but not complete (no pieces per batch, no pack size, nothing
+  // weighed yet) → finish it — «choose how it is sold» on a card that says «a pezzo» is wrong.
   if (p.packaging.length > 0 && !(unitsPerBatch(p, batchTotals(p, tables)) > 0)) {
-    add(t('fc.unpriced.packagingName'), '', 'packaging-no-mode');
+    add(t('fc.unpriced.packagingName'), '', p.sellingMode ? 'packaging-no-units' : 'packaging-no-mode');
   }
   return out;
 }

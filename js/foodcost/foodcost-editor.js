@@ -577,7 +577,8 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
         if (mode === 'ingredient' || both) {
           out.push({
             heading: both ? t('fc.ingredients') : '',
-            // ⚠️ NO PRICE: «nella sezione "composto da" non mostrare il prezzo».
+            // ⚠️ NO PRICE IN THE CHOOSER (Federico, 13 Sep 2026). Since 7 Nov 2026 the LINES of
+            // «Composto da» show their money (line-cost.js); the list a line is picked from does not.
             items: app.ingredientOptions().filter(o => matches(o.name) || matches(o.invoiceName))
               .map(o => ({ name: o.name, meta: o.meta, value: { kind: 'ingredient', id: o.id } })),
           });
@@ -664,8 +665,8 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
       'aria-label': kind === 'ingredient' || kind === 'recipe' ? t('fc.aria.quantity') : t('fc.aria.pieces'),
       // ⚠️ NOT repaint(). That rebuilds every row — THIS BOX INCLUDED — so the finger lost
       // the box after one digit and «1.7» could not be typed at all. Found driving the
-      // screen on 13 Sep 2026. A quantity changes two things, and only those are
-      // refreshed: this line's note and the answer at the top. (`note` is declared below;
+      // screen on 13 Sep 2026. A quantity changes three things, and only those are
+      // refreshed: this line's money (since 7 Nov 2026), its note and the answer at the top. (`note` is declared below;
       // the handler only ever runs after it exists.)
       oninput: e => {
         entry[qtyKey] = kind === 'recipe' ? kilosFromTyped(e.target.value, shownUnit()) : Number(e.target.value) || 0;
@@ -725,8 +726,14 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
 
   // The money under a line: its rate and what the amount typed costs (line-cost.js). Its own
   // element above the note, drawn and refreshed wherever the note is.
+  // ⚠️ A FAULT HERE MUST NOT TAKE THE LINES DOWN (P17): the money is a reading aid, drawn inside
+  // every row; on a fault the line simply shows none, like paintPerKg and paintSummary.
   function lineCost(entry, kind, tables = liveTables()) {
-    return lineCostView(entry, kind, tables, { noWeightLoss: working.noWeightLoss === true });
+    try {
+      return lineCostView(entry, kind, tables, { noWeightLoss: working.noWeightLoss === true });
+    } catch (e) {
+      return { text: '', noPrice: false };
+    }
   }
 
   // What a person must ACT on, under the money. Where the money line already says «No price»,

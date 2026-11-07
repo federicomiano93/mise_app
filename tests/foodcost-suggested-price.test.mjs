@@ -1,4 +1,5 @@
-// «What do I sell it at?» — the suggested selling price, and no money under a recipe line.
+// «What do I sell it at?» — the suggested selling price, and what the note under a recipe line
+// says (its money moved to its own line on 7 Nov 2026: tests/foodcost-line-costs.test.mjs).
 //
 // Federico, 13 Sep 2026: «la sezione riguardante il prezzo di vendita … un'altra versione
 // dove avendo calcolato sopra il costo … io inserisco … l'iva, il food cost che voglio
