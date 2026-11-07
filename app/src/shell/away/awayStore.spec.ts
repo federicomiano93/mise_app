@@ -180,6 +180,24 @@ describe('the holiday store', () => {
     expect(store.getSnapshot()).toMatchObject({ until: '2026-11-20', away: true });
   });
 
+  it('comes back to what showed before the first write when two writes are refused before the first read answers', async () => {
+    const source = fakeSettingsSource({ now: () => NOW });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    source.readMyAway = vi.fn(() => new Promise<{ until: string } | null>(() => undefined));
+    const refusals: ((err: Error) => void)[] = [];
+    source.saveAway = vi.fn(() => ({ result: 'saved' as const, written: new Promise<void>((_, fail) => { refusals.push(fail); }) }));
+    const store = createAwayStore(source, 'u1', () => NOW);
+    store.start();
+    const first = store.set('2026-11-12');
+    const second = store.set('2026-11-14');
+    refusals[0]?.(new Error('first refused'));
+    refusals[1]?.(new Error('second refused'));
+    expect(first.accepted && await first.saved).toBe(false);
+    expect(second.accepted && await second.saved).toBe(false);
+    // Not the first refused day (12 Nov): nothing the server ever held.
+    expect(store.getSnapshot()).toMatchObject({ until: null, away: false });
+  });
+
   it('records a read that answers during a pending write without showing it over the write, and shows it if the write is refused', async () => {
     const source = fakeSettingsSource({ now: () => NOW });
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -249,6 +267,32 @@ describe('the holiday store', () => {
       store.refresh();
       await flush();
       expect(store.getSnapshot().until).toBe('2026-11-20');
+    });
+
+    // Review, 7 Nov 2026: Firestore's getDoc answers from the phone's copy WITH its own unconfirmed write on top.
+    it('never takes this phone’s own unconfirmed write, read back, as what the server holds', async () => {
+      const { store, source, clock } = make({ away: { until: '2026-11-20' } });
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      store.start();
+      await flush();
+      let refuse: (err: Error) => void = () => undefined;
+      source.saveAway = vi.fn(() => ({ result: 'saved' as const, written: new Promise<void>((_, fail) => { refuse = fail; }) }));
+      const change = store.comeBack();
+      source.away = { until: '', pending: true };
+      clock.now += 11 * 60_000;
+      store.refresh();
+      await flush();
+      refuse(new Error('refused'));
+      expect(change.accepted && await change.saved).toBe(false);
+      // The server still holds the holiday: the screen must say so, not «back».
+      expect(store.getSnapshot()).toMatchObject({ until: '2026-11-20', away: true });
+    });
+
+    it('shows a write queued before a reload, read back from the phone’s copy, when nothing is in the air', async () => {
+      const { store } = make({ away: { until: '2026-11-12', pending: true } });
+      store.start();
+      await flush();
+      expect(store.getSnapshot()).toMatchObject({ status: 'ready', until: '2026-11-12', away: true });
     });
 
     it('does nothing before the first read has been asked for', () => {

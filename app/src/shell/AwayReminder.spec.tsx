@@ -192,6 +192,20 @@ describe('the once-a-day holiday reminder', { timeout: 15_000 }, () => {
       await noReminder();
     });
 
+    // Review, 7 Nov 2026: the minute's tick, not a wake. The reminder's effect can run before the holiday store has asked the clock again.
+    it('asks nothing just after midnight on a tablet left awake, when the holiday ended with the old day', async () => {
+      vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+      vi.setSystemTime(NOW);
+      const { user } = await open('/home', { away: { until: '2026-11-07' } });
+      await user.click(rail().getByRole('link', { name: 'Recipes' }));
+      await user.click(within(await reminder()).getByRole('button', { name: 'Continue' }));
+      await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
+      vi.setSystemTime(new Date(2026, 10, 8, 0, 0, 30));
+      act(() => { vi.advanceTimersByTime(60_000); });
+      await noReminder();
+      expect(localStorage.getItem(KEY)).toBe('2026-11-07');
+    });
+
     it('asks nothing when the holiday has ended with the old day', async () => {
       const { user } = await open('/home', { away: { until: '2026-11-07' } });
       await user.click(rail().getByRole('link', { name: 'Recipes' }));

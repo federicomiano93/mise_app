@@ -94,6 +94,12 @@ describe('the settings source, as firestore.rules and the Cloud Functions expect
     warn.mockRestore();
   });
 
+  test('marks a holiday read back with this phone’s own unconfirmed write on top as pending, not as the server’s word', async () => {
+    const { source, fs } = make({ holiday: { until: '' } });
+    fs.getDoc.mockResolvedValueOnce({ exists: () => true, data: () => ({ until: '' }), metadata: { hasPendingWrites: true } } as never);
+    expect(await source.readMyAway('u1')).toEqual({ until: '', pending: true });
+  });
+
   test('«I am back» is still read as a holiday document with an empty until', async () => {
     expect(await make({ holiday: { until: '' } }).source.readMyAway('u1')).toEqual({ until: '' });
   });

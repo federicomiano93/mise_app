@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { useLocation } from 'react-router';
-import { toISODate } from '@mise/shared/away-model';
+import { isAway, toISODate } from '@mise/shared/away-model';
 import { AWAY_REMINDER_KEY, reminderDue } from '@mise/shared/away-reminder';
 import { useT } from '../i18n/useT';
 import { useAway, useAwayStore } from './away/AwayContext';
@@ -56,7 +56,9 @@ export function AwayReminder() {
     const arrival = `${section}|${day}`;
     if (judged.current === arrival || away.status !== 'ready') return;
     judged.current = arrival;
-    if (!away.away) return;
+    // ⚠️ ASKED OF THE CLOCK HERE, not taken from `away.away`: just after midnight this effect can run before the provider's recheck(), and
+    // the store's flag still says «away» for a holiday that ended yesterday (review, 7 Nov 2026).
+    if (away.until === null || !isAway({ until: away.until }, Date.now())) return;
 
     const today = toISODate(Date.now());
     let last: string | null = null;

@@ -31,7 +31,9 @@ const AWAY = 'away';
 export const FUNCTION_TIMEOUT_MS = 60_000;
 
 // A person's holiday as stored: the last day of it, or '' once they are back.
-export type MyAway = { readonly until: string };
+// `pending`: the answer came from this phone's copy with its own unconfirmed write applied on top (Firestore's getDoc does that), so it
+// is NOT what the server holds — the holiday store must not take it as confirmed.
+export type MyAway = { readonly until: string; readonly pending?: boolean };
 
 // The answer to a holiday write. `bad-date` is decided HERE, before anything is written; `saved` carries the write's own promise,
 // which settles only when the SERVER answers (offline: whenever the signal comes back) — a caller never waits for it before
@@ -90,7 +92,8 @@ export function createFirestoreSettingsSource(
         const snap = await fs.getDoc(fs.doc(db, awayPath, uid));
         if (!snap.exists()) return null;
         const until = (snap.data() as DocData).until;
-        return typeof until === 'string' ? { until } : null;
+        if (typeof until !== 'string') return null;
+        return snap.metadata?.hasPendingWrites === true ? { until, pending: true } : { until };
       } catch (err) {
         // A venue that has never used this, or an offline phone with nothing cached.
         console.warn('Could not read your own holiday:', err);

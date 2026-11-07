@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
+import { useNavigationType } from 'react-router';
 import type { ReactNode } from 'react';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
@@ -37,6 +38,7 @@ export function SettingsPage() {
   const { t } = useT();
   const { user, name, options, canManage } = useSession();
   const pending = usePendingDoor();
+  const arrival = useNavigationType();
   const language = useRef<HTMLAnchorElement>(null);
   const sections = useRef<HTMLAnchorElement>(null);
   // The email, or the account's id for the rare account that has none.
@@ -46,9 +48,11 @@ export function SettingsPage() {
   useEffect(() => {
     const door = pending.current;
     pending.current = null;
+    // Only a RETURN (Back, the phone's back gesture) hands the focus back. Settings tapped in the rail is a new arrival: its title.
+    if (arrival !== 'POP') return;
     if (door === 'language') language.current?.focus();
     if (door === 'sections') sections.current?.focus();
-  }, [pending]);
+  }, [pending, arrival]);
 
   return (
     <Page title={t('section.settings')} action={<SignOutButton variant="small" />}>

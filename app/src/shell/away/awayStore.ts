@@ -64,6 +64,9 @@ export function createAwayStore(source: SettingsSource, uid: string, now: () => 
   let confirmed: string | null | undefined;
   // The newest write the server has answered; a read that STARTED before it is older news than the write and changes nothing.
   let lastConfirmedWrite = 0;
+  // What showed before the first write while nothing was confirmed yet: two refusals in a row before the first read answers come back
+  // to THIS, never to the first refused value.
+  let firstBefore: string | null | undefined;
 
   function publish(next: Pick<AwaySnapshot, 'status' | 'until'>): void {
     const away = next.until !== null && isAway({ until: next.until }, now());
@@ -75,7 +78,7 @@ export function createAwayStore(source: SettingsSource, uid: string, now: () => 
   function write(until: string): AwayChange {
     const attempt = source.saveAway(uid, until);
     if (attempt.result === 'bad-date') return { accepted: false };
-    const before = snapshot.until;
+    if (confirmed === undefined && firstBefore === undefined) firstBefore = snapshot.until;
     writes += 1;
     inFlight += 1;
     const mine = writes;
@@ -90,7 +93,7 @@ export function createAwayStore(source: SettingsSource, uid: string, now: () => 
       (err: unknown) => {
         inFlight -= 1;
         console.error('Saving the holiday failed:', err);
-        if (writes === mine) publish({ status: 'ready', until: confirmed === undefined ? before : confirmed });
+        if (writes === mine) publish({ status: 'ready', until: confirmed !== undefined ? confirmed : (firstBefore ?? null) });
         return false;
       },
     );
@@ -106,6 +109,12 @@ export function createAwayStore(source: SettingsSource, uid: string, now: () => 
     void source.readMyAway(uid).then(mine => {
       if (!first && mine === null) return;
       if (lastConfirmedWrite > startedAt) return;
+      // This phone's own unconfirmed write, read back from its copy: show it if nothing is in the air (a write queued before a reload),
+      // never record it as what the server holds.
+      if (mine?.pending) {
+        if (inFlight === 0) publish({ status: 'ready', until: mine.until });
+        return;
+      }
       confirmed = mine ? mine.until : null;
       if (inFlight > 0) return;
       publish({ status: 'ready', until: confirmed });
