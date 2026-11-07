@@ -2,6 +2,10 @@
 //
 // Federico, 7 Nov 2026: on the phone a tap on a product shows this first, in a dialog; on
 // the tablet and at the top of the card it is the same panel.
+// Federico, 7 Nov 2026, on the tablet: «ci sono troppe voci, dovrebbero essere di meno». His
+// choice: FOUR in sight — selling price, cost, food cost against its target, ideal price (with
+// VAT, and without it underneath) — and the rest (raw materials, packaging, labour, margin) in
+// «Dettagli», closed until tapped.
 //
 // ⚠️ EVERY FIGURE COMES FROM productPreview() (foodcost-model.js) and nothing is added up
 // here, so the preview can never disagree with the list or the card. This file only
@@ -18,6 +22,9 @@ import { blockerText } from './foodcost-model.js';
 // Keys, resolved at draw time.
 const UNIT_TEXT = { piece: 'fc.perPiece', kg: 'fc.perKg', pack: 'fc.perPack' };
 const DASH = '—';
+let seq = 0;   // unique ids for aria-controls
+const CHEVRON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 
 function shown(value, format) {
   return value === null || value === undefined ? DASH : format(value);
@@ -37,7 +44,10 @@ function row(label, value, extraClass = '') {
   ]);
 }
 
-export function previewPanel(preview, { caption = true, showMissing = true } = {}) {
+// `moreOpen` / `onMoreToggle`: the card repaints this panel on every keystroke, so it keeps
+// whether «Dettagli» is open and hands it back here — a box that snapped shut while typing
+// would be one more thing to fight with.
+export function previewPanel(preview, { caption = true, showMissing = true, moreOpen = false, onMoreToggle = null } = {}) {
   const hasLabour = preview.labourUnitCost !== null;
 
   const foodCost = el('dd', {}, [
@@ -52,27 +62,53 @@ export function previewPanel(preview, { caption = true, showMissing = true } = {
   ]);
   foodCost.classList.add('fc-preview-wrap');
 
+  // The four in sight.
   const list = el('dl', { class: 'fc-preview-list' }, [
     row(t('fc.preview.price'), shown(preview.sellingPrice, formatMoney)),
+    // Materials and packaging, plus the work where there is a figure for it.
+    row(t('fc.preview.cost'), shown(preview.totalUnitCost, formatRate)),
+    row(t('fc.preview.foodCost'), foodCost, ' fc-preview-fc'),
+    row(t('fc.preview.ideal'), shown(preview.idealGross, formatMoney), ' fc-preview-ideal'),
+  ]);
+  // Under the ideal price: what it is without VAT, and for which food cost — or nothing,
+  // while there is no net figure to give.
+  const idealSub = preview.idealNet !== null && preview.targetPct !== null
+    ? el('p', { class: 'fc-preview-sub', text: t('fc.preview.idealSub', {
+      net: formatMoney(preview.idealNet), target: String(preview.targetPct),
+    }) })
+    : null;
+
+  // The rest, closed. ⚠️ A BUTTON, NOT <details>: the phone shows this panel inside the app's
+  // dialog, whose Tab trap walks buttons, fields and links only — a <summary> there could not be
+  // reached from a keyboard. aria-expanded tells a screen reader whether it is open.
+  let open = !!moreOpen;
+  const moreList = el('dl', { class: 'fc-preview-list', id: `fc-preview-more-${++seq}` }, [
     row(t('fc.preview.materials'), shown(preview.materialsUnitCost, formatRate)),
     row(t('fc.preview.packaging'), preview.hasPackaging
       ? shown(preview.packagingUnitCost, formatRate) : t('fc.preview.noPackaging')),
     hasLabour ? row(t('fc.preview.labour'), formatRate(preview.labourUnitCost)) : null,
-    row(t('fc.preview.total'), shown(preview.totalUnitCost, formatRate)),
-    row(t('fc.preview.foodCost'), foodCost, ' fc-preview-fc'),
     row(hasLabour ? t('fc.preview.marginNoLabour') : t('fc.preview.margin'),
       shown(preview.margin, formatMoney)),
-    row(t('fc.preview.idealGross'), shown(preview.idealGross, formatMoney), ' fc-preview-ideal'),
-    row(t('fc.preview.idealNet'), shown(preview.idealNet, formatMoney), ' fc-preview-ideal'),
   ]);
+  const moreBtn = el('button', {
+    type: 'button', class: 'fc-preview-more-btn', 'aria-controls': moreList.id,
+    onclick: () => { open = !open; paintMore(); onMoreToggle?.(open); },
+  }, [
+    el('span', { text: t('fc.preview.details') }),
+    el('span', { class: 'fc-preview-more-chevron', icon: CHEVRON_SVG }),
+  ]);
+  function paintMore() {
+    moreBtn.setAttribute('aria-expanded', String(open));
+    moreList.hidden = !open;
+  }
+  paintMore();
+  const more = el('div', { class: 'fc-preview-more' }, [moreBtn, moreList]);
 
   const missing = preview.missing || [];
   return el('div', { class: 'fc-preview' }, [
     caption ? el('p', { class: 'fc-preview-caption', text: previewCaption(preview) }) : null,
     list,
-    preview.idealNet !== null && preview.targetPct !== null
-      ? el('p', { class: 'fc-note', text: t('fc.preview.idealBasis', { target: String(preview.targetPct) }) })
-      : null,
+    idealSub,
     preview.partial ? el('p', { class: 'fc-answer-partial', text: t('fc.costPartial') }) : null,
     showMissing && missing.length ? el('p', { class: 'fc-preview-missing-title', text: t('fc.preview.missing') }) : null,
     showMissing && missing.length
@@ -81,5 +117,6 @@ export function previewPanel(preview, { caption = true, showMissing = true } = {
     !showMissing && preview.idealNet === null && missing.includes('no-target') && preview.totalUnitCost !== null
       ? el('p', { class: 'fc-note', text: blockerText('no-target') })
       : null,
+    more,
   ]);
 }

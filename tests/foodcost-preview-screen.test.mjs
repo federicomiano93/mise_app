@@ -12,7 +12,9 @@ const editor = read('../js/foodcost/foodcost-editor.js');
 test('the panel reads every figure from the preview and adds nothing up', () => {
   assert.doesNotMatch(view, /productionCost|costProduct|suggestedGrossPrice|suggestedNetPrice/);
   assert.match(view, /import \{ blockerText \} from '\.\/foodcost-model\.js'/);
-  const code = view.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n');
+  // Comments and string literals (the icon's SVG holds «w3.org/2000») are not arithmetic.
+  const code = view.split('\n').filter((l) => !l.trim().startsWith('//')).join('\n')
+    .replace(/'[^'\n]*'/g, "''");
   assert.doesNotMatch(code, /\d\s*[*/]\s*\w|\w\s*[*/]\s*\d/);
 });
 
@@ -69,4 +71,18 @@ test('every preview and search key used exists in both languages', async () => {
   for (const key of keys) {
     for (const lang of Object.keys(dicts)) assert.ok(dicts[lang][key], `${key} missing in ${lang}`);
   }
+});
+
+test('four figures in sight, the rest behind «Dettagli» — a real button, closed by default (7 Nov 2026)', () => {
+  // Federico on the tablet: «ci sono troppe voci». His choice: price, cost, food cost, ideal price.
+  const sight = /const list = el\('dl', \{ class: 'fc-preview-list' \}, \[([\s\S]*?)\n  \]\);/.exec(view)[1];
+  const labels = [...sight.matchAll(/row\(t\('(fc\.preview\.[a-zA-Z]+)'\)/g)].map((m) => m[1]);
+  assert.deepEqual(labels, ['fc.preview.price', 'fc.preview.cost', 'fc.preview.foodCost', 'fc.preview.ideal']);
+  assert.match(view, /fc\.preview\.idealSub/);
+  // In the dialog the Tab trap walks buttons only, so «Dettagli» is a button, not <details>.
+  assert.doesNotMatch(view, /el\('details'|el\('summary'/);
+  assert.match(view, /'aria-expanded', String\(open\)/);
+  assert.match(view, /let open = !!moreOpen/);
+  // The card keeps it open across its repaints.
+  assert.match(editor, /moreOpen: summaryMoreOpen, onMoreToggle: \(open\) => \{ summaryMoreOpen = open; \}/);
 });

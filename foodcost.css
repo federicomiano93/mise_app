@@ -701,6 +701,21 @@ select.fc-input, .fc-select {
 .fc-preview-ideal dd { font-size: 1.05rem; }
 .fc-preview-ideal dt { color: var(--fc-text); font-weight: 600; }
 .fc-preview .fc-note, .fc-preview .fc-answer-partial { margin-top: 6px; }
+/* Under the ideal price: the same price without VAT, and the target it is for. */
+.fc-preview-sub { margin: 0 0 2px; font-size: .78rem; color: var(--fc-text-2); text-align: right; }
+/* «Dettagli»: the rest of the figures, closed until tapped (Federico, 7 Nov 2026). The same
+   summary shape as «Costo per 1 kg»; a 44px row so a finger hits it. */
+.fc-preview-more { margin-top: 8px; border-top: 1px solid var(--fc-border); }
+.fc-preview-more-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+  min-height: 44px; padding: 0; border: 0; background: none; cursor: pointer; text-align: left;
+  font-family: var(--fc-font); font-size: .85rem; font-weight: 600; color: var(--fc-text);
+}
+.fc-preview-more-btn:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
+.fc-preview-more-chevron { display: flex; align-items: center; color: var(--fc-text-2); }
+.fc-preview-more-btn[aria-expanded="true"] .fc-preview-more-chevron { transform: rotate(180deg); }
+.fc-preview-more .fc-preview-list[hidden] { display: none; }
+.fc-preview-more .fc-preview-row:first-child { border-top: 1px solid var(--fc-border); }
 .fc-preview-missing-title { margin: 8px 0 0; font-size: .78rem; font-weight: 600; color: var(--fc-text); }
 /* ⚠️ THE WHOLE DIALOG SCROLLS on a short phone, never the panel alone: a scrolling panel holds no
    button, so a keyboard could not reach it (axe, 296px). This page's dialogs only — foodcost.css

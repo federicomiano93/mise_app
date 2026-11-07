@@ -365,12 +365,17 @@ export function renderEditor({ product, draft = null, app }) {
   // The preview at the top of the card (Federico, 7 Nov 2026): same numbers as the phone's
   // preview dialog. A fault here must not take the card down (P17).
   const summary = el('div', { class: 'fc-summary' });
+  // Whether its «Dettagli» is open: the panel is rebuilt on every keystroke, this is not.
+  let summaryMoreOpen = false;
 
   function paintSummary(tables) {
     try {
       summary.hidden = productionCost(working, tables).batchCost === null;
       if (summary.hidden) { summary.replaceChildren(); return; }
-      summary.replaceChildren(previewPanel(productPreview(working, tables), { caption: true, showMissing: false }));
+      summary.replaceChildren(previewPanel(productPreview(working, tables), {
+        caption: true, showMissing: false,
+        moreOpen: summaryMoreOpen, onMoreToggle: (open) => { summaryMoreOpen = open; },
+      }));
     } catch (e) {
       summary.hidden = true;
       summary.replaceChildren();
