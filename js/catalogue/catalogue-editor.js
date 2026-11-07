@@ -368,7 +368,7 @@ export function renderEditor({
         onclick: () => {
           // The line stays between the rows: the row above this one takes this row's line.
           const before = working.ingredients;
-          working.ingredients = removeRow(before, idx);
+          working.ingredients = removeRow(working.ingredients, idx);
           // removeRow copies the row that takes the deleted row's divider line: keep its memory.
           const survivors = before.filter((_, i) => i !== idx);
           working.ingredients.forEach((row, i) => {
