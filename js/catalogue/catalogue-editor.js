@@ -436,7 +436,12 @@ export function renderEditor({
   // object, NEVER a field of the row: the row is what Save writes and the rules whitelist its keys.
   // moveRow keeps the same objects; removeRow copies only a row that takes a deleted row's divider
   // line (carried over in the bin's handler).
+  // ⚠️ Known edge, left as it is: a NEW recipe's rows come back from the photo screen as fresh
+  // objects, so a warning showing before that visit is not drawn again after it.
   const openedLabels = new WeakMap();
+  // ONE polite live region for the editor: a screen reader hears the warning when a row TURNS stale,
+  // not on every keystroke. Outside rowsContainer, which is rebuilt.
+  const staleAnnouncer = el('div', { class: 'cat-sr-only', role: 'status', 'aria-live': 'polite' });
 
   function openedLabelOf(ing) {
     if (!openedLabels.has(ing)) openedLabels.set(ing, String(ing.label ?? ''));
@@ -464,8 +469,12 @@ export function renderEditor({
     const text = button && button.querySelector('.cat-ing-link-text');
     if (!text) return;
     const stale = staleName(ing);
+    const was = button.classList.contains('cat-ing-link--stale');
     button.classList.toggle('cat-ing-link--stale', !!stale);
     text.textContent = stale ? staleText(stale) : linkText(ing);
+    // Announced on the transition only; cleared when it is gone.
+    if (stale && !was) staleAnnouncer.textContent = staleText(stale);
+    else if (!stale && was) staleAnnouncer.textContent = '';
   }
 
   // The full-screen chooser — already searching what was typed, when «See all» under a
@@ -513,8 +522,9 @@ export function renderEditor({
     const same = isSameLink(before, chosen);
     applyLink(row, chosen, same ? {} : { label: linkedItemName(chosen, app.ingredients(), app.allRecipes()) });
     // A pick (re)starts the comparison: the name now on the row is the one that fits the link.
-    // (Choosing the link it already has changes neither the name nor the memory.)
-    if (!same) openedLabels.set(row, String(row.label ?? ''));
+    // A pick of the SAME link is the person saying «yes, this one»: the name is kept, but the
+    // warning's baseline moves to it, so the warning clears.
+    openedLabels.set(row, String(row.label ?? ''));
     markDirty();
     renderIngredientRows();
     if (showErrors) validateUI();
@@ -842,6 +852,7 @@ export function renderEditor({
     reorderHint,
     dividersHint,
     rowsContainer,
+    staleAnnouncer,
     totalNote,
     addRowBtn,
     labelField,
