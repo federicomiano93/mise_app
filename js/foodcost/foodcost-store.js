@@ -194,7 +194,7 @@ export function saveProduct(product, snapshot, lossPatches) {
 // The Firestore document of a product. The FIELDS ARE LISTED BY HAND because the rules
 // whitelist exactly these — spreading the product would send `id` and be refused.
 function productDocument(product) {
-  return {
+  const doc = {
     name: product.name,
     components: product.components || [],
     packaging: product.packaging || [],
@@ -217,6 +217,11 @@ function productDocument(product) {
     // phone gets «could not save» instead of quietly destroying the product.
     model: PRODUCT_MODEL,
   };
+  // «Finished product, no weight loss» (Nov 2026): written only when true. The product is
+  // saved whole, so leaving it out is how switching it off removes it — and a product nobody
+  // switched on stays byte-identical to what it was.
+  if (product.noWeightLoss === true) doc.noWeightLoss = true;
+  return doc;
 }
 
 // The weighings typed on a product's recipe lines, LOCAL-FIRST like the product.

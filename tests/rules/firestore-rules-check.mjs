@@ -1063,6 +1063,15 @@ async function neighbours() {
   await expectAllowed('Food cost may write a weighing onto an existing recipe', () =>
     mergeWrite('locations/main/recipes/r1',
       { bakery: 'main', lossPct: 20, rawGrams: 1000, cookedGrams: 800 }));
+  // ⚠️ A KEPT WRONG PAIR (cooked heavier than raw, Nov 2026) sends ONLY the two weights and the
+  // stamp — never the loss, which is whatever that phone last saw. The rules judge the MERGED
+  // document, so a partial write must land.
+  await expectAllowed('…and a kept wrong pair sends only rawGrams and cookedGrams', () =>
+    mergeWrite('locations/main/recipes/r1',
+      { bakery: 'main', rawGrams: 1000, cookedGrams: 1100 }));
+  await expectDenied('…but the two weights alone are still range-checked', () =>
+    mergeWrite('locations/main/recipes/r1',
+      { bakery: 'main', rawGrams: 1000, cookedGrams: 10000001 }));
   await expectDenied('…but that shape cannot conjure a nameless recipe out of nothing', () =>
     mergeWrite('locations/main/recipes/no-such-recipe',
       { bakery: 'main', lossPct: 20, rawGrams: 1000, cookedGrams: 800 }));
@@ -2048,6 +2057,16 @@ async function products() {
   await expectDenied('work time of zero minutes', () => wholeWrite(`${P}/P1`, product({ model: 2, labourMinutes: 0 })));
   await expectDenied('work time sent as text', () => wholeWrite(`${P}/P1`, product({ model: 2, labourMinutes: '90' })));
   await expectDenied('nobody working on it', () => wholeWrite(`${P}/P1`, product({ model: 2, labourPeople: 0 })));
+
+  // ── «Finished product, no weight loss» (Nov 2026): a boolean, nothing else ──
+  await expectAllowed('a product marked as losing no weight', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, noWeightLoss: true })));
+  await expectAllowed('…or explicitly not', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, noWeightLoss: false })));
+  await expectDenied('no weight loss sent as text', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, noWeightLoss: 'true' })));
+  await expectDenied('no weight loss sent as a number', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, noWeightLoss: 1 })));
 
   await expectAllowed('a member may delete a product', () => deleteWrite(`${P}/P2`));
 
@@ -3959,6 +3978,8 @@ async function staffCards() {
   await seedDoc(`${L}/recipes/R1`, { ...stamp, name: 'Focaccia', ingredients: [], lossPct: 12 });
   await expectAllowed('⚠️ a shown employee can save a weighing onto the recipe', () =>
     mergeWrite(`${L}/recipes/R1`, { ...stamp, lossPct: 20, rawGrams: 1000, cookedGrams: 800 }, asAccount(SAM)));
+  await expectAllowed('…and a kept wrong pair, which sends only the two weights', () =>
+    mergeWrite(`${L}/recipes/R1`, { ...stamp, rawGrams: 1000, cookedGrams: 1100 }, asAccount(SAM)));
 
   // ── Only the Stocktake shown: COUNTS, and no money ──
   await showMain({ inventory: true });
@@ -4284,6 +4305,8 @@ async function partialOwners() {
   // The oven loss Food cost weighs: those three numbers, on a recipe that exists.
   await expectAllowed('sales records a weighing on a recipe', () =>
     mergeWrite(`${L}/recipes/R1`, { ...stamp, lossPct: 20, rawGrams: 1000, cookedGrams: 800 }, asAccount(SALES)));
+  await expectAllowed('…and a kept wrong pair: only rawGrams and cookedGrams, no loss', () =>
+    mergeWrite(`${L}/recipes/R1`, { ...stamp, rawGrams: 1000, cookedGrams: 1100 }, asAccount(SALES)));
   await expectDenied('⚠️ …but changes nothing else of it', () =>
     mergeWrite(`${L}/recipes/R1`, { ...stamp, lossPct: 21, name: 'Mine now' }, asAccount(SALES)));
   await expectDenied('…not its rows', () =>
