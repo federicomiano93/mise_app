@@ -92,6 +92,7 @@ export const BLOCKER_TEXT = Object.freeze({
   'no-weight': 'fc.theRecipesInThis2',
   // Only the preview asks for it (productPreview): the food cost itself needs no target.
   'no-target': 'fc.preview.needTarget',
+  'no-packaging-price': 'fc.preview.needPackagingPrice',
 });
 
 // The one place a blocker key becomes words, so no screen can forget to translate it.
@@ -605,12 +606,16 @@ export function productPreview(product, tables = {}) {
   const labourUnitCost = cost.labourUnitCost;
   const targetPct = p ? p.foodCostTarget : null;
   const missing = [...result.blockers];
+  // ⚠️ AN UNPRICED BOX ADDS NOTHING to packagingPerUnit's sum, so its figure would read «0,00 €»
+  // — «the packaging is free». Unknown is unknown: no figure, and the line to fix is named.
+  const packagingKnown = !cost.packaging.partial;
+  if (p && !packagingKnown) missing.push('no-packaging-price');
   if (p && targetPct === null) missing.push('no-target');
   return {
     unit: unitCost !== null ? cost.unit : (p && p.sellingMode ? unitOf(p) : null),
     sellingPrice: p ? p.sellingPrice : null,
     materialsUnitCost: share === null ? null : roundTo(share, 4),
-    packagingUnitCost: unitCost === null ? null : cost.packaging.cost,
+    packagingUnitCost: unitCost === null || !packagingKnown ? null : cost.packaging.cost,
     hasPackaging: !!p && p.packaging.length > 0,
     labourUnitCost,
     // Materials and packaging, plus the work where there is a figure for it.

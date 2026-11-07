@@ -384,8 +384,8 @@
       }
     },
     "dist/foodcost.js": {
-      "sha": "b13b3c5ee8e2560e",
-      "mapSha": "5c09490a471683be",
+      "sha": "526980e794801c3b",
+      "mapSha": "b3c44f9b824a10aa",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "41d275905d191c60",
@@ -411,8 +411,8 @@
         "js/foodcost/firebase-foodcost.js": "385802cc24237b22",
         "js/foodcost/foodcost-editor.js": "fc06118710d10ca8",
         "js/foodcost/foodcost-list.js": "5f8121ac395a175b",
-        "js/foodcost/foodcost-main.js": "d9e9cfaa5914c193",
-        "js/foodcost/foodcost-model.js": "930821ca24ca033a",
+        "js/foodcost/foodcost-main.js": "bd7c6086875585b8",
+        "js/foodcost/foodcost-model.js": "6361173bc312a4ad",
         "js/foodcost/foodcost-settings.js": "515cc9a266758252",
         "js/foodcost/foodcost-store.js": "cac52d213db0143f",
         "js/foodcost/foodcost-weighing.js": "464e8d54f042a4a9",
@@ -491,10 +491,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "f76e9b3f83fefb4f",
-      "mapSha": "cbf6152b155da349",
+      "sha": "28bb9cef245bf88f",
+      "mapSha": "d8a1ae0c50d9b5c6",
       "inputs": {
-        "js/i18n.js": "d162c825dfbed865"
+        "js/i18n.js": "58e46c8155fe9716"
       }
     },
     "dist/index.js": {

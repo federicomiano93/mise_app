@@ -81,6 +81,19 @@ test('packaging is shown apart from the raw materials, and the total holds both'
   assert.equal(pv.idealNet, 1.4, '0.42 / 30%: the food cost counts the packaging, so the price does');
 });
 
+test('⚠️ an unpriced box is NOT a free box: no packaging figure, and it is named', () => {
+  const t = tables({ ingredients: { ...INGREDIENTS, BOX: { id: 'BOX', priceUnit: 'kg', pricePerUnit: 3 } } });
+  const pv = productPreview(product({ packaging: [{ ingredientId: 'BOX', qtyPcs: 1 }] }), t);
+  assert.equal(pv.packagingUnitCost, null, 'a box priced by the kilo cannot be counted per piece');
+  assert.ok(pv.missing.includes('no-packaging-price'));
+  assert.equal(pv.partial, true);
+  const gone = productPreview(product({ packaging: [{ ingredientId: 'DELETED', qtyPcs: 1 }] }), tables());
+  assert.equal(gone.packagingUnitCost, null, 'a box deleted from Suppliers');
+  assert.ok(gone.missing.includes('no-packaging-price'));
+  const { en, it } = _dictionaries();
+  assert.ok(en['fc.preview.needPackagingPrice'] && it['fc.preview.needPackagingPrice']);
+});
+
 test('labour appears only with minutes AND a rate, and goes into the total, never the food cost', () => {
   const p = product({ labourMinutes: 90, labourPeople: 2 });
   const withRate = productPreview(p, tables({ labourCostPerHour: 14 }));

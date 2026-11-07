@@ -168,14 +168,27 @@ function setListChrome() {
 async function openFromList(product) {
   if (splitOn) { requestOpen(product); return; }
   const preview = productPreview(product, tables());
-  const ok = await confirmDialog({
+  const answer = confirmDialog({
     title: product.name || t('fc.untitledProduct'),
     message: previewCaption(preview),
     node: previewPanel(preview, { caption: false }),
     okLabel: t('fc.preview.open'), cancelLabel: t('fc.preview.close'),
   });
+  // ⚠️ THE TOP FIRST: the dialog focuses its last button, and on a short phone a tall preview
+  // (whose whole box scrolls, foodcost.css) would open on its bottom half, price out of sight.
+  const box = document.querySelector('.app-dialog');
+  if (box) box.scrollTop = 0;
+  const ok = await answer;
+  if (!ok) {
+    // A data update while it was open redraws every row, so the one that opened it may be
+    // gone: focus its fresh copy rather than leave the keyboard on <body>.
+    if (document.activeElement === document.body) {
+      [...(activeList?.root.querySelectorAll('.fc-row') || [])].find((r) => r.dataset.id === product.id)?.focus();
+    }
+    return;
+  }
   // The page may have moved on while the preview was open (a recipe link settling).
-  if (!ok || view !== 'list') return;
+  if (view !== 'list') return;
   // The product as it is NOW: it may have changed or gone while the preview was open.
   const fresh = getProducts().find((p) => p && p.id === product.id);
   if (!fresh) { toast(t('fc.productDeleted')); return; }
