@@ -82,7 +82,7 @@ emulator does not run TTL, so the app also hides a ticked item older than 30 day
 
 What was decided inside the brief while building (nothing in H1–H10 changed):
 
-- **The day of «today» is `useTodayKey`** (`app/src/home/useTodayKey.ts`), not `shell/useToday.ts`: that one gives the
+- **The day of «today» is `useTodayKey`** (`app/src/shell/useTodayKey.ts`, moved from home/ in the 3g-2 review), not `shell/useToday.ts`: that one gives the
   day as a SPELLED label («Friday 6 November»), which the list cannot compare with. The new hook returns the local day
   as `YYYY-MM-DD` (`todayISO` of `@mise/shared/day`), checked every minute and when the tablet wakes, and the state only
   changes when the DAY does. The model takes `today` and `nowMs` as arguments and never reads the clock itself.
@@ -196,11 +196,11 @@ and Back puts the focus on the door that opened it (the door name travels in the
 
 **Data layer.** `settings/settingsSource.ts` (+ `testing/fakeSettingsSource.ts`, registered in `createDataServices` as `settings`):
 `readMyAway`, `saveAway` (decides `bad-date` synchronously, otherwise returns the write's promise), `setLanguage`, `setStaffCard`,
-`readVenueFromServer`. The two Cloud Functions are called with a 15 s timeout and each is followed by a read of the venue document from the
+`readVenueFromServer`. The two Cloud Functions are called with a 60 s timeout (a cold function's first call outlives anything shorter; the screens also read the server after a failure) and each is followed by a read of the venue document from the
 server; `setLanguage` and `setStaffCard` ignore a failed read straight after (the call itself succeeded) — `setStaffCard` then resolves
 `null` and the screen applies the change to its own copy.
 
-**The holiday.** `settings/awayStore.ts` + `AwayContext.tsx`, provided by `AppShell`: one read when the venue opens, never a listener; a write
+**The holiday.** `shell/away/awayStore.ts` + `AwayContext.tsx` (moved from settings/ in the review), provided by `AppShell`: one read when the venue opens, never a listener; a write
 shows at once and only a rejection is reported; `away` is re-derived from the clock when the day changes (`useTodayKey`). Words are copied from
 the current app (`away.*`, `settings.away.sub`). The row in «You»: not away, «I am on holiday» opens a `Dialog` with the sentence, a visible
 label on a native date field (`min` today, `max` `maxAwayDate`); an empty or out-of-range day shows `away.badDate` in a live region inside the
@@ -242,3 +242,31 @@ as the screen, so reopening reads the server again (the current app's module-lev
 8. A follow-up read that fails after a successful call is swallowed, as the original's `refreshVenueFromServer` does.
 
 Not done here: the order of the sections (D1, nothing built), «Who can enter» (3g-3), the app version row (step 5), the kiosk rows.
+
+### Review fixes
+
+- **A, a slow first call is not a refusal** (`settingsSource.ts`, `LanguageScreen.tsx`, `StaffSectionsScreen.tsx`): the Cloud Functions are
+  waited for 60 s; after a failure each screen reads the venue from the server, and a language the server already speaks reloads as if
+  the call had answered, a section the server already holds shows as saved.
+- **B, the language reload never throws away typing** (`pageReload.ts`, `LanguageScreen.tsx`): Back is off while the call is in the air, and
+  the reload (after a success or after the failure the server turned out to have saved) goes through `pageReload.reloadWhenIdle()`, which
+  waits, polling every `BUSY_RETRY_MS`, while an editor holds the busy marker. The session's own copy of the venue is read again first.
+- **C, Back is one level up** (`SettingsSubScreen.tsx`, `settingsHandBack.ts`): opened from the page, Back is `navigate(-1)`; opened by its
+  address it REPLACES itself with the page (the rule of `orders/ordersNav.ts`). The door that opened the screen is promised the focus when
+  the screen opens, so the phone's back gesture lands on it as well. Specs check the history action.
+- **D, the holiday is read again** (`shell/away/awayStore.ts`, `AwayContext.tsx`): on a new day and when the tablet returns to the
+  foreground, at most every ten minutes, never over a write still in the air. A re-read that finds nothing is ignored (the document is
+  written empty, never deleted, so nothing means the read failed).
+- **E, two refusals** (`awayStore.ts`): the store keeps `confirmed`, the last state the server is known to hold; the NEWEST write's refusal
+  puts that back, not the previous optimistic value. A first read that answers during a pending write is recorded but not shown over it, and
+  comes back if the write is refused.
+- **F, the reminder watches the day** (`shell/AwayReminder.tsx`): an arrival is a section AND a day, so somebody sitting in a section when
+  the day changes (or the tablet wakes on a new day) is judged again by the same rules.
+- **G, focus after «I am back»** (`shell/away/useFocusOnBack.ts`): from the Home band the focus goes to the card's «Add» (or its title),
+  from the Settings row to the new «I am on holiday» row, never to the page body, and only when the focus had nowhere to be.
+  `LanguageScreen` puts the focus back on the button pressed after a failure.
+- **H, the session's venue** (`StaffSectionsScreen.tsx`): after a save the session's `location` is read again (`refreshLocation`), so
+  reopening shows the saved switches at once. `readVenueFromServer` stays: the screen's first answer and the re-read after a failure
+  need to tell a failure apart, which `refreshLocation` cannot. «Saving…» ends before the error alert; leaving during a save owes no message.
+- **I, no cross-feature imports**: the holiday pieces moved to `shell/away/` and `useTodayKey` to `shell/useTodayKey.ts`; no file in
+  `home/` imports `settings/` or the other way round. The away half of the source stays in `settings/settingsSource.ts` (type imports only).
