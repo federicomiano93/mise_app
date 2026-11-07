@@ -207,17 +207,24 @@ test('Orders reads the ingredient, focuses its quantity box, and Back returns to
   assert.match(main, /\.ing-row\[data-ing="\$\{CSS\.escape\(id\)\}"\] \.ing-qty/);
   assert.match(main, /box\.focus\(/);
   assert.match(main, /setStatus\(t\('orders\.fromRecipe\.notFound'\)/);
-  const leave = main.slice(main.indexOf('function leaveSupplier'), main.indexOf('function leaveSupplier') + 3200);
+  const leave = main.slice(main.indexOf('function leaveSupplier'), main.indexOf('function leaveSupplier') + 4400);
   // A refused save ASKS (nothing else holds that quantity); «Resta qui» stays and the next Back retries.
   assert.match(leave, /if \(result === 'refused'\) \{[\s\S]*?confirmDialog\(\{[\s\S]*?orders\.fromRecipe\.refusedTitle[\s\S]*?okLabel: t\('orders\.fromRecipe\.leaveAnyway'\)[\s\S]*?cancelLabel: t\('unsent\.stay'\)/,
     'a refused save asks before leaving');
   assert.match(leave, /if \(!leave \|\| !stillLeavingFrom\(openerId\)\) \{ leavingForRecipe = false; return; \}/);
-  // The wait left the screen usable: somebody who moved on meanwhile is never taken away.
-  assert.match(leave, /if \(!stillLeavingFrom\(openerId\)\) \{ leavingForRecipe = false; return; \}/);
+  // The wait left the screen usable: ANY touch or key after the Back tap (or the page put away)
+  // calls the leave off, and the listeners go with the wait.
+  for (const [target, name, cap] of [['document', 'pointerdown', ', true'], ['document', 'keydown', ', true'], ['window', 'pagehide', '']]) {
+    assert.ok(leave.includes(`${target}.addEventListener('${name}', interrupt${cap})`), `${name} interrupts`);
+    assert.ok(leave.includes(`${target}.removeEventListener('${name}', interrupt${cap})`), `${name} listener removed`);
+  }
+  assert.match(leave, /if \(interrupted \|\| !stillLeavingFrom\(openerId\)\) \{ leavingForRecipe = false; return; \}/);
+  assert.ok(leave.indexOf('addEventListener(\'pointerdown\', interrupt') < leave.indexOf('sendBeforeLeaving()'), 'armed before the wait starts');
   const still = main.slice(main.indexOf('function stillLeavingFrom'), main.indexOf('function goToRecipe'));
   assert.match(still, /state\.openSupplier === openerId && openedFromRecipe === openerId/);
   assert.match(still, /state\.summaryOverSupplier !== true/);
-  assert.match(still, /\.missing-overlay, \.app-dialog/);
+  assert.match(still, /\.missing-overlay, \.app-dialog, \.pc-overlay, \.mgmt-overlay/);
+  assert.match(still, /placing\.size === 0/);
   assert.match(still, /history-overlay/);
   assert.match(leave, /leavingForRecipe = false;\s*goToRecipe\(toRecipe, result\)/, 'Back works again if Orders comes back from the cache');
   const go = main.slice(main.indexOf('function goToRecipe'), main.indexOf('function leaveSupplier'));
@@ -281,7 +288,9 @@ test('the supplier screen repeats the page’s status line, so a save error is s
   const clear = main.slice(main.indexOf('function clearStatusIf'), main.indexOf('function setupOfflineIndicator'));
   assert.match(clear, /\.supplier-detail > \.supplier-detail-status/);
   assert.match(main, /!pageLine\.hidden && pageLine\.classList\.contains\('error'\)/, 'an error already showing is repeated on a new screen');
-  assert.match(read('orders.css'), /\.supplier-detail > \.supplier-detail-status \{ flex: none;/);
+  assert.match(read('orders.css'), /\.supplier-detail > \.supplier-detail-status \{ flex: none; margin: 8px max\(16px, var\(--app-gutter\)\) 0; \}/);
+  assert.match(main, /elStatus\.dataset\.passing = autoHideMs \? '1' : ''/);
+  assert.match(main, /pageLine\.dataset\.passing !== '1'/, 'a passing word is never copied onto a supplier screen');
 });
 
 test('a rotation or the session landing keeps the split rows and lets the old screen go', () => {

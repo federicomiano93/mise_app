@@ -839,8 +839,8 @@ function cameFromPage(href) {
 // in which a delayed Back may still take the person away.
 function stillLeavingFrom(openerId) {
   return state.openSupplier === openerId && openedFromRecipe === openerId
-    && state.summaryOverSupplier !== true
-    && !document.querySelector('.missing-overlay, .app-dialog')
+    && state.summaryOverSupplier !== true && placing.size === 0
+    && !document.querySelector('.missing-overlay, .app-dialog, .pc-overlay, .mgmt-overlay')
     && (document.getElementById('history-overlay')?.hidden ?? true);
 }
 
@@ -876,12 +876,23 @@ function leaveSupplier() {
     // (offline, or a freshly opened page), said on the supplier screen's own line meanwhile.
     const saving = t('orders.fromRecipe.saving');
     setStatus(saving, undefined, 9000);
+    // ⚠️ THE SCREEN STAYS USABLE DURING THE WAIT, so ANY touch or key after the Back tap calls the
+    // leave off: somebody who typed again, opened an ingredient card or tapped «Ordine fatto» is in
+    // the middle of something, and an archive or a clear may be in the air — never yanked away
+    // from it. Listing every screen that might be open would always miss the next one. So does
+    // the page being put away (the phone's own Back, bfcache): coming forward again must not
+    // carry on leaving. The Back tap's own pointerdown/keydown came before this handler ran.
+    let interrupted = false;
+    const interrupt = () => { interrupted = true; };
+    document.addEventListener('pointerdown', interrupt, true);
+    document.addEventListener('keydown', interrupt, true);
+    window.addEventListener('pagehide', interrupt);
     sendBeforeLeaving().then(async result => {
+      document.removeEventListener('pointerdown', interrupt, true);
+      document.removeEventListener('keydown', interrupt, true);
+      window.removeEventListener('pagehide', interrupt);
       clearStatusIf(saving);
-      // ⚠️ THE SCREEN STAYED USABLE DURING THE WAIT: somebody who opened the summary, tapped
-      // «Ordine fatto» or another supplier meanwhile is in the middle of something — never yanked
-      // away from it, least of all with an archive still in the air.
-      if (!stillLeavingFrom(openerId)) { leavingForRecipe = false; return; }
+      if (interrupted || !stillLeavingFrom(openerId)) { leavingForRecipe = false; return; }
       // ⚠️ REFUSED: ASK. Nothing else holds that quantity (the device's note leaves a refused value
       // out), so leaving is a choice with a loss, never silent. «Resta qui» keeps the value in its
       // box, and the next Back sends it again.
@@ -1061,7 +1072,8 @@ function renderOpenSupplier() {
   // hide only the page's copy.
   const pageLine = document.getElementById('orders-status');
   const mirror = supplierStatusMirror(pageLine);
-  if (pageLine && mirror && !pageLine.hidden && pageLine.classList.contains('error')) {
+  if (pageLine && mirror && !pageLine.hidden && pageLine.classList.contains('error')
+    && pageLine.dataset.passing !== '1') {
     mirror.textContent = pageLine.textContent;
     mirror.className = pageLine.className + ' supplier-detail-status';
     mirror.hidden = false;
@@ -3067,6 +3079,9 @@ function setStatus(text, kind, autoHideMs) {
     elStatus.className = elStatus.classList.contains('supplier-detail-status')
       ? 'orders-status supplier-detail-status' + (kind ? ' ' + kind : '')
       : 'orders-status' + (kind ? ' ' + kind : '');
+    // A passing word (one with a timer) is never copied onto a supplier screen opened later: the
+    // timer knows only the lines that existed when it started.
+    elStatus.dataset.passing = autoHideMs ? '1' : '';
   }
   if (autoHideMs) {
     statusTimer = setTimeout(() => {
