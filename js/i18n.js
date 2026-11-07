@@ -99,6 +99,9 @@ const DICTIONARIES = Object.freeze({
     // its own entry, and the translator decides what it looks like.
     'people.make': 'Make {role}',
     'people.roleGroup': 'Role',
+    'people.role.choose': 'Choose a role…',
+    'people.role.choosePrompt': 'Choose the role first: it decides what they can do in the app.',
+    'people.role.missing': 'Choose the role first, then send the link or read out the code.',
     'people.section.invite': 'Invite someone',
     'people.section.members': 'People with access · {n}',
     'people.section.membersPlain': 'People with access',
@@ -3467,6 +3470,9 @@ const DICTIONARIES = Object.freeze({
     // site. «Rendi responsabile», not «Fai responsabile».
     'people.make': 'Rendi {role}',
     'people.roleGroup': 'Ruolo',
+    'people.role.choose': 'Scegli un ruolo…',
+    'people.role.choosePrompt': 'Scegli prima il ruolo: decide cosa potrà fare nell’app.',
+    'people.role.missing': 'Prima scegli il ruolo, poi manda il link o detta il codice.',
     'people.section.invite': 'Invita una persona',
     'people.section.members': 'Chi ha già accesso · {n}',
     'people.section.membersPlain': 'Chi ha già accesso',
