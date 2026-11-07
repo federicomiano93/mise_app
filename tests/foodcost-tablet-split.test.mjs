@@ -70,14 +70,17 @@ test('every replace path awaits the editor\'s own guard and does nothing on «no
 
 test('the list, the «+» and «show all» all go through those guarded paths, never openProduct directly', () => {
   const build = fnBody('buildList');
-  assert.match(build, /onOpen: requestOpen, onAdd: \(\) => requestOpen\(null\)/);
+  // The phone shows the preview first (7 Nov 2026); openFromList hands on to requestOpen.
+  assert.match(build, /onOpen: openFromList, onAdd: \(\) => requestOpen\(null\)/);
+  assert.match(fnBody('openFromList'), /requestOpen\(product\)[\s\S]*requestOpen\(fresh\)/);
   assert.match(build, /onShowAll: requestShowAll/);
   assert.match(MAIN, /addBtn\.addEventListener\('click', \(\) => requestOpen\(null\)\);/);
   assert.doesNotMatch(MAIN, /onOpen: openProduct|onAdd: \(\) => openProduct/);
-  // (six matches = the definition + the callers) The only direct callers: the guarded path, the way back to the product, and the two
-  // recipe-link entries (an untouched product, never a dirty one).
+  // (eleven matches = the definition + the callers) The only direct callers: the guarded path, the way back to the product, the
+  // recipe-link entries (an untouched product, never a dirty one; openNarrowed too), and the pencil's three: startEdit,
+  // stopEdit (after its own guard) and showSaved (after a confirmed Save), plus refreshRead (a read view has nothing typed, so it needs no guard).
   const callers = [...MAIN.matchAll(/\bopenProduct\(/g)].length;
-  assert.equal(callers, 6, 'a new direct call to openProduct: it must be guarded — update this list on purpose');
+  assert.equal(callers, 11, 'a new direct call to openProduct: it must be guarded — update this list on purpose');
 });
 
 test('tapping the product that is already open does nothing', () => {
@@ -98,8 +101,8 @@ test('a product on a tablet keeps the list alive: re-marked, never redrawn, head
   assert.match(body, /if \(listAlive\) activeList\.select\(key\);\s*else paintListColumn\(key\);/);
   assert.match(body, /setListChrome\(\);/);
   assert.match(body, /showNode\(activeEditor\.root\)/);
-  // The phone path is what it always was.
-  assert.match(body, /leaveSplit\(\);\s*activeList = null;\s*setEditorHeaderPhone\(product\);\s*activeEditor = renderEditor\(\{ product, draft, app \}\);\s*swap\(activeEditor\.root\);/);
+  // The phone path is what it always was — except that the editor is built BEFORE the header, which reads its mode.
+  assert.match(body, /leaveSplit\(\);\s*activeList = null;\s*activeEditor = renderEditor\(\{ product, draft, app, mode \}\);\s*editFromRead = fromRead && activeEditor\.mode === 'edit';\s*setEditorHeaderPhone\(product\);\s*swap\(activeEditor\.root\);/);
 });
 
 test('the list column: list chrome like the list has it, footer kept, phone path swapped', () => {
@@ -114,7 +117,9 @@ test('the list column: list chrome like the list has it, footer kept, phone path
 test('the pane head: the product\'s name, and a Back ONLY while it shows the history', () => {
   const head = fnBody('buildPaneHead');
   assert.match(head, /const inHistory = view === 'history';/);
-  assert.match(head, /inHistory \? el\('button'[\s\S]*onclick: backToProduct[\s\S]*\}\) : null/);
+  assert.match(head, /const backAction = inHistory \? backToProduct : \(withSave && editFromRead \? stopEdit : null\);/,
+    'a Back while it shows the history, or the form the pencil opened');
+  assert.match(head, /backAction \? el\('button'/);
   assert.match(head, /t\('fc\.newProduct'\)/);
   assert.match(fnBody('showNode'), /head\.querySelector\('h1'\)\.focus\(/, 'focus goes to the pane head');
 });
@@ -133,9 +138,23 @@ test('the history in the pane sets the editor ASIDE and Back puts the same node 
 test('a recipe link opens the split too: the entry refreshes the page header\'s Back', () => {
   const settle = fnBody('settleRecipeLink');
   assert.match(settle, /openProduct\(using\[0\]\); entryEditor = true; refreshChrome\(\);/);
-  assert.match(settle, /listFilter = id; showList\(\);/);
+  assert.match(settle, /if \(using\.length > 1\) \{ openNarrowed\(id\); return; \}/);
   assert.match(settle, /openProduct\(null, draft\); entryEditor = true; draftRecipeId = id; refreshChrome\(\);/);
-  assert.match(fnBody('handleBack'), /if \(fromRecipe && \(listFilter \|\| entryEditor\)\) \{ window\.location\.replace\(recipeHref\(fromRecipe\)\); return; \}/);
+  assert.match(fnBody('handleBack'), /if \(fromRecipe && \(listFilter \|\| entryEditor\)\) \{ window\.location\.replace\(recipeHref\(fromRecipe, 'foodcost'\)\); return; \}/);
+});
+
+test('several products use the recipe: beside the list the top one opens, on a phone the narrowed list stays', () => {
+  const narrowed = fnBody('openNarrowed');
+  assert.match(narrowed, /listFilter = id;/);
+  assert.match(narrowed, /const first = isTabletNow\(\) \? firstUsing\(id\) : null;/);
+  assert.match(narrowed, /if \(first\) openProduct\(first\);\s*else showList\(\);/);
+  // ⚠️ A draft giving way sat beside the FULL list: the column must be painted again, narrowed.
+  assert.match(narrowed, /activeList = null;[\s\S]*if \(first\) openProduct\(first\);/);
+  assert.doesNotMatch(narrowed, /entryEditor = true/, 'the page chose it from the list: Back stays the list\'s');
+  assert.match(fnBody('reconsiderDraft'), /else openNarrowed\(id\);/);
+  const first = fnBody('firstUsing');
+  assert.match(first, /sortByMargin\(productsUsingRecipe\(getProducts\(\), id\), tables\(\)\)\[0\]\?\.product/);
+  assert.match(MAIN, /import \{[^}]*sortByMargin[^}]*\} from '\.\/foodcost-model\.js'/);
 });
 
 // ── Crossing the width ──────────────────────────────────────────────────────
@@ -291,4 +310,15 @@ test('the ingredient chooser keeps the 620px column on both tablets', () => {
     assert.ok(read(css).includes(sel), `${css} must re-scope .pick-overlay`);
   }
   assert.deepEqual(missingFromPrecache(['js/foodcost/crossing-route.js']), []);
+});
+
+// P20: on a phone the history DROPS the editor, so typed edits must be asked about first
+// (found by the code review of PR #483: «Storico dei margini» lost them in silence).
+test('on a phone the history asks the editor\'s guard before dropping the form', () => {
+  const hist = fnBody('openHistory');
+  const ask = hist.indexOf("if (!splitOn && view === 'editor' && activeEditor && !(await askLeave())) return;");
+  assert.ok(ask > -1, 'the phone asks the leave guard first, and stays in the form on «no»');
+  assert.ok(ask < hist.indexOf("view = 'history';"), 'asked before anything changes');
+  assert.ok(ask < hist.indexOf('leaveGuard = null'), 'asked before the guard is dropped');
+  assert.match(MAIN, /async function askLeave\(\) \{[\s\S]*?guardPending = true;/, 'one question at a time');
 });
