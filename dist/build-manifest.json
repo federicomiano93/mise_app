@@ -389,7 +389,7 @@
     },
     "dist/foodcost.js": {
       "sha": "084d93e2a45f3482",
-      "mapSha": "c97a20c301103ee0",
+      "mapSha": "2791b38a3e08f22e",
       "inputs": {
         "js/allergen-model.js": "50434c6cea85b7de",
         "js/app-version.js": "41d275905d191c60",
@@ -423,7 +423,7 @@
         "js/foodcost/from-recipes-view.js": "f80e6af01f5b52d9",
         "js/foodcost/from-recipes.js": "248ca57401afd438",
         "js/foodcost/line-cost.js": "4b8e5429fb3b4ca2",
-        "js/foodcost/line-quantity.js": "a22c6f626adbc1a4",
+        "js/foodcost/line-quantity.js": "4a6b95fb3345dbd6",
         "js/foodcost/per-kg-model.js": "50780e9e8edb8ea9",
         "js/foodcost/preview-view.js": "21c17e800e99cd6f",
         "js/foodcost/product-limits.js": "ed45299d01a6997b",

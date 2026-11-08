@@ -4,8 +4,9 @@
 // Federico, Nov 2026: «nella casella composto da il peso non si vede tutto» — and a recipe
 // line should take grams the way an ingredient line does. ⚠️ WHAT IS STORED DID NOT MOVE:
 // `qtyKg`, in kilos, is what the rules, the cost model and every saved product already
-// carry, so the unit chosen here only changes how the number is TYPED and SHOWN. It is
-// never saved: a product always opens on GRAMS (since 8 Nov 2026 — see the editor's lineRow).
+// carry. The unit itself is never saved: a product always opens on GRAMS, and switching the
+// unit keeps the typed number and changes what it means, so the stored kilos change with it
+// (both since 8 Nov 2026 — see the editor's lineRow).
 
 export const KILO_LINE_UNITS = Object.freeze(['g', 'kg']);
 
