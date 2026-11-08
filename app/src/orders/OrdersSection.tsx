@@ -200,7 +200,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   // Quantities typed on an earlier page came back from this device's note (F-15): look again, as the current app does.
   const { relook } = pendingLatch;
   useEffect(() => {
-    if (snapshot.draftCameBack > 0) relook();
+    relook(snapshot.draftCameBack);
   }, [snapshot.draftCameBack, relook]);
   useEffect(() => {
     if (!ready || (pendingLatch.latched !== null && !pendingLatch.owed) || !latchCanLook(snapshot.serverSeen, online, graceOver)) return;

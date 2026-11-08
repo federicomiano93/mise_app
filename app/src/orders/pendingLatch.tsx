@@ -56,7 +56,9 @@ type Latch = {
   // A further look is owed (relook): the next complete look replaces the set.
   readonly owed: boolean;
   latch(ids: Iterable<string>): void;
-  relook(): void;
+  // `cameBack` is the store's count (OrdersSnapshot.draftCameBack): a look is owed only when it has gone up since the last
+  // relook, so a screen mounted again inside the section with the same count asks nothing (code review, 8 Nov 2026).
+  relook(cameBack: number): void;
 };
 
 const NOTHING: Latch = { latched: null, owed: false, latch: () => undefined, relook: () => undefined };
@@ -67,6 +69,7 @@ export function PendingLatchProvider({ children }: { children: ReactNode }) {
   const [latched, setLatched] = useState<ReadonlySet<string> | null>(null);
   const [owed, setOwed] = useState(false);
   const done = useRef(false);
+  const seenCameBack = useRef(0);
   const latch = useCallback((ids: Iterable<string>) => {
     if (done.current) return;
     done.current = true;
@@ -74,7 +77,9 @@ export function PendingLatchProvider({ children }: { children: ReactNode }) {
     setLatched(new Set(ids));
   }, []);
   // The set on screen stays until the new look replaces it: nothing blinks.
-  const relook = useCallback(() => {
+  const relook = useCallback((cameBack: number) => {
+    if (cameBack <= seenCameBack.current) return;
+    seenCameBack.current = cameBack;
     done.current = false;
     setOwed(true);
   }, []);

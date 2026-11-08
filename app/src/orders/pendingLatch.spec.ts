@@ -113,7 +113,7 @@ describe('PendingLatchProvider — relook', () => {
   it('after relook the set stays on screen, a look is owed, and the next look replaces it', () => {
     const seen = probe();
     act(() => { seen.latch?.latch(['mill']); });
-    act(() => { seen.latch?.relook(); });
+    act(() => { seen.latch?.relook(1); });
     expect(seen.latch?.owed).toBe(true);
     expect([...(seen.latch?.latched ?? [])]).toEqual(['mill']);
     act(() => { seen.latch?.latch(['mill', 'shop']); });
@@ -121,5 +121,29 @@ describe('PendingLatchProvider — relook', () => {
     expect(seen.latch?.owed).toBe(false);
     act(() => { seen.latch?.latch(['nothing']); });
     expect([...(seen.latch?.latched ?? [])]).toEqual(['mill', 'shop']);
+  });
+
+  it('a count already seen owes nothing: a screen mounted again with the same count does not look again', () => {
+    const seen = probe();
+    act(() => { seen.latch?.relook(0); });
+    expect(seen.latch?.owed).toBe(false);
+    act(() => { seen.latch?.latch(['mill']); });
+    act(() => { seen.latch?.relook(1); });
+    act(() => { seen.latch?.latch(['mill', 'shop']); });
+    act(() => { seen.latch?.relook(1); });
+    expect(seen.latch?.owed).toBe(false);
+    act(() => { seen.latch?.latch(['mill', 'shop', 'late']); });
+    expect([...(seen.latch?.latched ?? [])]).toEqual(['mill', 'shop']);
+  });
+});
+
+// The wire between the store and the latch (the current app's guard «if (draft.cameBack) pendingChecked = false;»): the screen
+// specs would stay green without it, because no note comes back in them.
+const sectionSource = Object.values(import.meta.glob<string>('./OrdersSection.tsx', { query: '?raw', import: 'default', eager: true }))[0] ?? '';
+
+describe('OrdersSection — a note that came back owes a new look', () => {
+  it('hands the store\'s came-back count to the latch, and lets an owed look through', () => {
+    expect(sectionSource).toMatch(/relook\(snapshot\.draftCameBack\);/);
+    expect(sectionSource).toMatch(/\(pendingLatch\.latched !== null && !pendingLatch\.owed\)/);
   });
 });
