@@ -3,7 +3,7 @@
 // only that day. These pin what the summary offers, what a close writes and what it does to «Order today».
 
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { addDays, parseISODate, todayISO, toISODate, weekdayOf } from '@mise/shared/day';
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
@@ -87,7 +87,7 @@ describe('the order summary: today\'s order', () => {
     await waitFor(() => { expect(path(view)).toBe('/orders'); });
     expect(await screen.findByText('Alpine Mills closed as not ordered.')).toBeInTheDocument();
     // The strip: Alpine is done for today (its chip opens the summary), Bee Farm is still to order.
-    const chip = await screen.findByRole('button', { name: 'Alpine Mills · not ordered' }, LOAD);
+    const chip = await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD);
     expect(screen.getByText('Order today')).toBeInTheDocument();
     await view.user.click(chip);
     await waitFor(() => { expect(path(view)).toBe('/orders/supplier/s-alp/summary'); });
@@ -149,6 +149,40 @@ describe('the order summary: today\'s order', () => {
     expect(screen.queryByRole('button', { name: 'Close as not ordered' })).not.toBeInTheDocument();
   });
 
+  it('⚠️ quantities that arrive while the question is open: nothing is closed', async () => {
+    const source = seeded();
+    const view = await summaryAt(source);
+    await view.user.click(await pane().findByRole('button', { name: 'Close as not ordered' }, LOAD));
+    const ask = await screen.findByRole('alertdialog');
+    act(() => { source.remoteMerge({ entries: { 'i-flour': { qty: 2 } } }); }); // a colleague types
+    await view.user.click(within(ask).getByRole('button', { name: 'Close' }));
+    expect(source.skippedWrites).toEqual([]);
+    expect(path(view)).toBe('/orders/supplier/s-alp/summary');
+    expect(await pane().findByRole('button', { name: 'Order placed…' })).toBeInTheDocument();
+  });
+
+  it('Back from the confirm screen opened from the summary hands the focus back to its «Order placed…»', async () => {
+    const view = await summaryFromList(seeded({ draft: { entries: { 'i-flour': { qty: 3 } }, days: {} } }));
+    await view.user.click(await pane().findByRole('button', { name: 'Order placed…' }, LOAD));
+    await waitFor(() => { expect(path(view)).toBe('/orders/supplier/s-alp/confirm'); });
+    await view.user.click(await screen.findByRole('button', { name: 'Back' }, LOAD));
+    await waitFor(() => { expect(path(view)).toBe('/orders/supplier/s-alp/summary'); });
+    await waitFor(() => { expect(pane().getByRole('button', { name: 'Order placed…' })).toHaveFocus(); });
+  });
+
+  it('after «Reopen» the focus waits for the screen to change, then goes to «Close as not ordered»', async () => {
+    const source = seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } });
+    // Real Firestore reports the reopen a moment after the tap: the fake tells its listeners only later.
+    const clear = source.clearSupplierSkipped.bind(source);
+    let release: () => void = () => undefined;
+    source.clearSupplierSkipped = id => new Promise<void>(resolve => { release = () => { void clear(id).then(resolve); }; });
+    const view = await summaryAt(source);
+    await view.user.click(await pane().findByRole('button', { name: 'Reopen' }, LOAD));
+    act(() => { release(); });
+    const close = await pane().findByRole('button', { name: 'Close as not ordered' });
+    await waitFor(() => { expect(close).toHaveFocus(); });
+  });
+
   it('a close refused by the server is said, and Firestore puts the supplier back', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const source = seeded();
@@ -156,17 +190,29 @@ describe('the order summary: today\'s order', () => {
     const view = await summaryFromList(source);
     await view.user.click(await pane().findByRole('button', { name: 'Close as not ordered' }, LOAD));
     await view.user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Close' }));
-    expect(await screen.findByText('Not saved — check the connection and try again.', undefined, LOAD)).toBeInTheDocument();
-    await waitFor(() => { expect(screen.queryByRole('button', { name: 'Alpine Mills · not ordered' })).not.toBeInTheDocument(); });
+    expect(await screen.findByText('Not saved — try again in a moment.', undefined, LOAD)).toBeInTheDocument();
+    await waitFor(() => { expect(screen.queryByRole('button', { name: 'Alpine Mills not ordered' })).not.toBeInTheDocument(); });
   });
 });
 
 describe('«Order today» with a supplier closed as not ordered', () => {
-  it('every supplier of the day placed or closed: «all placed»', async () => {
+  // ⚠️ The current app's a710dcb: «all placed» would be false, and the closed chip is the way to «Reopen».
+  it('every supplier of the day placed or closed, but not all placed: the chips stay, never «all placed»', async () => {
     renderOrders('/orders', {
       source: seeded({
         draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } },
         records: { [`${TODAY}_s-bee`]: record(TODAY, 's-bee') },
+      }),
+    });
+    expect(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD)).toBeInTheDocument();
+    expect(screen.getByText('Order today')).toBeInTheDocument();
+    expect(screen.queryByText('Today’s orders are all placed')).not.toBeInTheDocument();
+  });
+
+  it('every supplier of the day really placed: «all placed»', async () => {
+    renderOrders('/orders', {
+      source: seeded({
+        records: { [`${TODAY}_s-alp`]: record(TODAY, 's-alp'), [`${TODAY}_s-bee`]: record(TODAY, 's-bee') },
       }),
     });
     expect(await screen.findByText('Today’s orders are all placed', undefined, LOAD)).toBeInTheDocument();
@@ -175,12 +221,12 @@ describe('«Order today» with a supplier closed as not ordered', () => {
   it('⚠️ last week\'s close never hides this week\'s order', async () => {
     renderOrders('/orders', { source: seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': LAST_WEEK } } }) });
     await screen.findByText('Order today', undefined, LOAD);
-    expect(screen.queryByRole('button', { name: 'Alpine Mills · not ordered' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Alpine Mills not ordered' })).not.toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Alpine Mills' }).length).toBeGreaterThanOrEqual(2);
   });
 
   it('in Italian', async () => {
     renderOrders('/orders', { source: seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } }), lang: 'it' });
-    expect(await screen.findByRole('button', { name: 'Alpine Mills · non ordinato' }, LOAD)).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Alpine Mills non ordinato' }, LOAD)).toBeInTheDocument();
   });
 });

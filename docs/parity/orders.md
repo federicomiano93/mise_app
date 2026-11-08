@@ -1676,8 +1676,8 @@ Differences from the current app, on purpose:
 
 ## Closed as not ordered as built (8 Nov 2026)
 
-Item 3 of `docs/mise2-port-owed.md`: the current app's PR #470 (9b9fdf3, his tablet notes of 2–3 Nov 2026) and its rules commit
-f65d5c7. `drafts/current.skipped = { supplierId: 'YYYY-MM-DD' }`: a supplier whose order day it is, closed that day because
+Item 3 of `docs/mise2-port-owed.md`: the current app's PR #470 (9b9fdf3 and its review fix a710dcb, his tablet notes of 2–3 Nov
+2026) and its rules commit f65d5c7. `drafts/current.skipped = { supplierId: 'YYYY-MM-DD' }`: a supplier whose order day it is, closed that day because
 nothing was needed. The rules already allow it (an optional map, at most 200 keys); no rules change.
 
 What it does, as the current app does:
@@ -1694,11 +1694,12 @@ What it does, as the current app does:
 - **The writes** (`ordersSource.ts`): `setSupplierSkipped` merges only `skipped.<id>` with the venue stamp; `clearSupplierSkipped`
   deletes that one key (a FieldPath). Never through the autosave, and never `updatedAt` (the draft's own stamp stands in for the
   day of rows saved before day stamps existed). Local-first: Firestore shows them at once, offline too; a refusal is said («Not
-  saved — check the connection and try again.») and Firestore takes it back.
+  saved — try again in a moment.») and Firestore takes it back.
 - **A quantity typed for a supplier closed today reopens it** (`ordersStore.ts`, the current app's `reopenIfTyped`); a shelf count
   does not.
-- **«Order today»** (`TodayOrders.tsx`): a closed supplier is a dashed chip, «{supplier} · not ordered», that opens its summary;
-  every supplier of the day placed or closed reads «Today's orders are all placed», as in the current app.
+- **«Order today»** (`TodayOrders.tsx`): a closed supplier is a dashed chip, «{supplier} not ordered», that opens its summary.
+  «Today's orders are all placed» only when every supplier of the day was really PLACED (a710dcb): with some only closed, the
+  chips stay — the sentence would be false, and the closed chip is the way to «Reopen».
 - Specs: `shared/src/reminders.spec.ts` and `kiosk-lines.spec.ts` (both files, every pure case of
   `tests/orders-close-not-ordered.test.mjs`), `OrdersSection.closeNotOrdered.spec.tsx` (the sheet and the strip),
   `ordersStore.skipped.spec.ts`, `ordersSource.skipped.spec.ts` (the shapes written).
@@ -1713,5 +1714,13 @@ Differences, on purpose:
   close; the current app's sheet asks the same question of its own state.
 - **After the close, back to the list by walking the history back** (the summary may sit over the supplier's screen), or by
   replacing itself with the list when opened by its address; the focus is handed back to the summary's opener.
-- **After «Reopen» the focus goes to the button that took its place** («Close as not ordered», or «Order placed…»).
+- **After «Reopen» the focus goes to the button that took its place** («Close as not ordered», or «Order placed…»), once the
+  screen has stopped offering «Reopen» (Firestore reports the reopen a moment after the tap). Back from the confirm screen that
+  «Order placed…» opened returns the focus to that button, as on the supplier's screen.
+- **The close is asked of the data again after the question** (code review, 8 Nov 2026): quantities that arrived while «Close …
+  as not ordered?» was open (a colleague typing), or the order placed meanwhile, and OK closes nothing. The current app closes
+  anyway, and the strip and the kiosk then say nothing about an order that is typed.
+- **«Order placed…» opens the confirm screen OVER the summary**, so Back from it returns to the summary. The current app closes its
+  sheet first (a710dcb: the confirmation opened under the sheet, and a second tap could record twice); here the confirm screen is
+  an address of its own, drawn in place of the summary, so there is nothing under it to tap.
 

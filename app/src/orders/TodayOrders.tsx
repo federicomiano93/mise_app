@@ -13,7 +13,9 @@ import styles from './TodayOrders.module.css';
 //
 // A supplier CLOSED AS NOT ORDERED today (drafts/current.skipped, the current app's PR #470) is done too: nothing was needed. Its
 // chip, dashed, stays a button, but it opens the supplier's SUMMARY, where «Reopen» lives. Its visible words ARE its name
-// («Brava · not ordered»): no aria-label a screen reader would read differently from what is drawn.
+// («Brava not ordered»): no aria-label a screen reader would read differently from what is drawn.
+// ⚠️ «ALL PLACED» ONLY WHEN THEY REALLY WERE ALL PLACED (the current app's a710dcb): with some only closed the chips stay — the
+// sentence would be false, and the closed chip is the way to «Reopen».
 //
 // ⚠️ DRAWN ONLY ONCE THE SUPPLIERS AND THE RECORDS HAVE ARRIVED: before the records a supplier that was placed this morning would
 // flash as not placed, which is worse than saying nothing. A dead records stream says nothing either, for the same reason.
@@ -27,7 +29,7 @@ export function TodayOrders({ onOpenSupplier, onOpenSummary }: {
   const rows = todayOrders({ suppliers, history: history as readonly PlacedRecord[], today: todayISO(), skipped: draft.skipped });
   if (rows.length === 0) return null;
 
-  if (rows.every(row => row.placed || row.skipped)) {
+  if (rows.every(row => row.placed)) {
     return (
       <p className={styles.done}>
         <Check aria-hidden="true" />
@@ -49,7 +51,7 @@ export function TodayOrders({ onOpenSupplier, onOpenSummary }: {
               </span>
             ) : skipped ? (
               <Button variant="bare" className={styles.skipped} onPress={() => { onOpenSummary(supplier.id as string); }}>
-                {/* ⚠️ A REAL SPACE between the two: without it the name read out is «Brava· not ordered». */}
+                {/* ⚠️ A REAL SPACE between the two: without it the name read out is «Bravanot ordered». */}
                 <span>{supplierLabel(supplier)}</span>{' '}
                 <span className={styles.note}>{t('ord.today.notOrdered')}</span>
               </Button>

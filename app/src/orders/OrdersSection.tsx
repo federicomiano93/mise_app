@@ -422,6 +422,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
       handBack.deliverIf(SUMMARY_DOOR);
       handBack.deliverIf(PLACE_DOOR);
     }
+    // The summary coming back from the confirm screen its «Order placed…» opened: that button (close as not ordered, PR #470).
+    else if (view.kind === 'summary') handBack.deliverIf(PLACE_DOOR);
   }, [view.kind, handBack]);
 
   // On the split the right-hand side scrolls on its own and stays mounted from one supplier to the next: another supplier

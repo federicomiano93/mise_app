@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Check } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { todayISO } from '@mise/shared/day';
@@ -15,7 +15,7 @@ import { useConfirm } from '../ui/useConfirm';
 import { useMoney } from '../session/useMoney';
 import { OrderTotals } from './OrderTotals';
 import { useOrders, useOrdersStore } from './OrdersContext';
-import { SUMMARY_DOOR, summaryOpener, useHandBack } from './handBack';
+import { PLACE_DOOR, SUMMARY_DOOR, summaryOpener, useHandBack } from './handBack';
 import { FROM_LIST, cameFromList, cameFromSupplier, columnPart, listDistanceOf, useLeave } from './ordersNav';
 import { ORDERS_PATH, supplierConfirmPath, supplierPath } from './ordersPath';
 import { LONG_MS } from './useClearQuantities';
@@ -52,11 +52,21 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
   const handBack = useHandBack();
   const askingToClose = useRef(false);
   const closeButton = useRef<HTMLButtonElement>(null);
-  const placeButton = useRef<HTMLButtonElement>(null);
-  // After «Reopen» its own button goes: the focus is handed to what takes its place, once drawn.
+  const placeButton = useRef<HTMLButtonElement | null>(null);
+  // «Order placed…» is also where Cancel on its confirm screen hands the focus back, as on the supplier's screen (PLACE_DOOR):
+  // the two are never on screen together, both being the detail of the same supplier.
+  const placeNode = useCallback((node: HTMLButtonElement | null) => {
+    placeButton.current = node;
+    handBack.register(PLACE_DOOR, node);
+  }, [handBack]);
+  // After «Reopen» its own button goes: the focus is handed to what takes its place, once drawn. ⚠️ ONCE THE SCREEN NO LONGER
+  // OFFERS «Reopen», not at the next draw: Firestore reports the reopen a moment later, and focused before it the title took it.
   const [refocus, setRefocus] = useState(false);
+  // What the screen offers NOW, for the question below, which is answered later (code review, 8 Nov 2026).
+  const latest = useRef({ offer: '', lines: 0 });
   const titleId = useId();
   const title = useRef<HTMLHeadingElement>(null);
+  const screen = useRef<HTMLElement>(null);
   // Back is the browser's Back when the supplier's screen or the list is the entry behind; an address typed in goes up one level, to
   // the supplier's order.
   const leave = useLeave(supplierPath(id), () => { handBack.expect(cameFromSupplier(state) ? SUMMARY_DOOR : summaryOpener(id)); });
@@ -64,11 +74,12 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
   const supplier = lens.supplierById(id);
   const shown = supplier !== undefined;
   useEffect(() => {
-    if (shown && cameFromList(state)) title.current?.focus();
+    // ⚠️ NOT OVER A FOCUS ALREADY HANDED BACK INSIDE IT (Back from the confirm screen: its «Order placed…»), as the supplier's screen.
+    if (shown && cameFromList(state) && !screen.current?.contains(document.activeElement)) title.current?.focus();
   }, [shown]);
 
   useEffect(() => {
-    if (!refocus) return;
+    if (!refocus || latest.current.offer === 'reopen') return;
     setRefocus(false);
     (closeButton.current ?? placeButton.current ?? title.current)?.focus();
   });
@@ -89,6 +100,7 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
   const offer = historyLoaded && !historyBroken && draftLoaded
     ? closeOffer({ supplier, history: history as readonly PlacedRecord[], today, skipped: draft.skipped })
     : '';
+  latest.current = { offer, lines: lines.length };
 
   // The way to the list after a close: walked back when the list is in the history, else this screen replaces itself with it.
   const toList = listDistanceOf(state);
@@ -105,7 +117,7 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
       say(t('ord.offline.place'), LONG_MS);
       return;
     }
-    handBack.expect(summaryOpener(id));
+    handBack.expect(PLACE_DOOR);
     void navigate(supplierConfirmPath(id), {
       state: { ...FROM_LIST, ...(toList === undefined ? {} : { toList: toList + 1 }), ...columnPart(state) },
     });
@@ -126,6 +138,10 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
       askingToClose.current = false;
     }
     if (!ok) return;
+    // ⚠️ ASKED AGAIN AFTER THE ANSWER, a DIFFERENCE from the current app: quantities typed by a colleague (or the order placed)
+    // while the question was open would otherwise be closed as «not ordered», and the strip and the kiosk would stay silent
+    // about an order that is typed. Nothing is said: the screen now shows what changed.
+    if (latest.current.offer !== 'skip' || latest.current.lines > 0) return;
     // LOCAL-FIRST: Firestore shows the close at once (offline too); a refusal is said by the section and taken back.
     void store.closeNotOrdered(id);
     say(t('ord.summary.closedDone', { supplier: name }));
@@ -133,9 +149,10 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
   };
 
   const reopen = () => {
-    void store.reopenToday(id);
-    say(t('ord.summary.reopened', { supplier: name }));
     setRefocus(true);
+    // Refused: «Reopen» stays, and nothing is owed the focus any more.
+    void store.reopenToday(id).then(saved => { if (!saved) setRefocus(false); });
+    say(t('ord.summary.reopened', { supplier: name }));
   };
 
   const actions = (
@@ -147,7 +164,7 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
         </div>
       ) : null}
       {lines.length > 0 ? (
-        <Button ref={placeButton} variant="primary" isDisabled={placing.includes(id)} onPress={place}>
+        <Button ref={placeNode} variant="primary" isDisabled={placing.includes(id)} onPress={place}>
           <Check aria-hidden="true" />
           {t('ord.placeAction')}
         </Button>
@@ -165,7 +182,7 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
   const hasActions = offer !== '' || lines.length > 0;
 
   return (
-    <section className={styles.screen} aria-labelledby={titleId}>
+    <section ref={screen} className={styles.screen} aria-labelledby={titleId}>
       <FormBar
         backLabel={t('ui.back')}
         onBack={leave}
