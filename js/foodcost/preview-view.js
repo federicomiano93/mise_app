@@ -17,7 +17,7 @@
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
-import { formatRate, formatMoney } from '../price-model.js';
+import { fcMoney, fcNumber } from './fc-number.js';
 import { blockerText, unpricedReasonText } from './foodcost-model.js';
 
 // Keys, resolved at draw time.
@@ -61,29 +61,29 @@ export function previewPanel(preview, {
     el('span', {
       text: preview.foodCostPct === null ? DASH
         : preview.targetPct === null
-          ? t('fc.preview.noTarget', { pct: String(preview.foodCostPct) })
-          : t('fc.preview.vsTarget', { pct: String(preview.foodCostPct), target: String(preview.targetPct) }),
+          ? t('fc.preview.noTarget', { pct: fcNumber(preview.foodCostPct) })
+          : t('fc.preview.vsTarget', { pct: fcNumber(preview.foodCostPct), target: fcNumber(preview.targetPct) }),
     }),
   ]);
   foodCost.classList.add('fc-preview-wrap');
 
   // In sight: price, cost, margin, food cost, ideal price.
   const list = el('dl', { class: 'fc-preview-list' }, [
-    row(t('fc.preview.price'), shown(preview.sellingPrice, formatMoney)),
+    row(t('fc.preview.price'), shown(preview.sellingPrice, fcMoney)),
     // Materials and packaging, plus the work where there is a figure for it.
-    row(t('fc.preview.cost'), shown(preview.totalUnitCost, formatRate)),
+    row(t('fc.preview.cost'), shown(preview.totalUnitCost, fcMoney)),
     // The app's margin: net price less materials and packaging — so, where a labour row exists
     // in «Dettagli», the label says the labour is left out of it.
     row(hasLabour ? t('fc.preview.marginNoLabour') : t('fc.preview.margin'),
-      shown(preview.margin, formatMoney)),
+      shown(preview.margin, fcMoney)),
     row(t('fc.preview.foodCost'), foodCost, ' fc-preview-fc'),
-    row(t('fc.preview.ideal'), shown(preview.idealGross, formatMoney), ' fc-preview-ideal'),
+    row(t('fc.preview.ideal'), shown(preview.idealGross, fcMoney), ' fc-preview-ideal'),
   ]);
   // Under the ideal price: what it is without VAT, and for which food cost — or nothing,
   // while there is no net figure to give.
   const idealSub = preview.idealNet !== null && preview.targetPct !== null
     ? el('p', { class: 'fc-preview-sub', text: t('fc.preview.idealSub', {
-      net: formatMoney(preview.idealNet), target: String(preview.targetPct),
+      net: fcMoney(preview.idealNet), target: fcNumber(preview.targetPct),
     }) })
     : null;
 
@@ -92,10 +92,10 @@ export function previewPanel(preview, {
   // reached from a keyboard. aria-expanded tells a screen reader whether it is open.
   let open = !!moreOpen;
   const moreList = el('dl', { class: 'fc-preview-list', id: `fc-preview-more-${++seq}` }, [
-    row(t('fc.preview.materials'), shown(preview.materialsUnitCost, formatRate)),
+    row(t('fc.preview.materials'), shown(preview.materialsUnitCost, fcMoney)),
     row(t('fc.preview.packaging'), preview.hasPackaging
-      ? shown(preview.packagingUnitCost, formatRate) : t('fc.preview.noPackaging')),
-    hasLabour ? row(t('fc.preview.labour'), formatRate(preview.labourUnitCost)) : null,
+      ? shown(preview.packagingUnitCost, fcMoney) : t('fc.preview.noPackaging')),
+    hasLabour ? row(t('fc.preview.labour'), fcMoney(preview.labourUnitCost)) : null,
   ]);
   const moreBtn = el('button', {
     type: 'button', class: 'fc-preview-more-btn', 'aria-controls': moreList.id,

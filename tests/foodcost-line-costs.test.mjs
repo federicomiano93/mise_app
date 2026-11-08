@@ -257,9 +257,9 @@ test('a weighed line with a price: the rate per kilo and this amount; with no qu
   assert.equal(view(ingLine('FLOUR', 500, 'g'), 'ingredient').text, '2,00 €/kg · questa quantità 1,00 €');
 });
 
-test('a 2 g pinch of salt does not read 0.00 (exact, like the «Cost per 1 kg» box)', () => {
+test('a 2 g pinch of salt costing under a cent reads «< £0.01», never 0.00', () => {
   english();
-  assert.equal(view(ingLine('SALT', 2, 'g'), 'ingredient').text, '£1.50/kg · this amount £0.003');
+  assert.equal(view(ingLine('SALT', 2, 'g'), 'ingredient').text, '£1.50/kg · this amount < £0.01');
 });
 
 test('a line priced by the piece reads «each», in both languages', () => {
@@ -337,7 +337,7 @@ test('the read view draws the same money line, before the note, and still create
 
 test('the note no longer repeats «no price», and packaging\'s old «each · money» note is gone', () => {
   const note = EDITOR.slice(EDITOR.indexOf('function lineNote('), EDITOR.indexOf('// ── The plain-text view'));
-  assert.doesNotMatch(note, /fc\.thisRecipeIsNot|formatRate|formatMoney|fc\.priceEach/);
+  assert.doesNotMatch(note, /fc\.thisRecipeIsNot|fcMoney|fcNumber|fc\.priceEach/);
   assert.match(note, /reason !== 'no-ingredient-price'/);
 });
 

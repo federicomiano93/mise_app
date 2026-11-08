@@ -12,17 +12,17 @@
 //
 // ⚠️ UNKNOWN IS «— No price», NEVER 0. A price that exists but cannot be used (a price per piece
 // on a line counted in grams) shows the rate it has and nothing else; the note says what to do.
-// ⚠️ formatRate FOR BOTH THE RATE AND THE AMOUNT, like the «Costo per 1 kg» box: a 2 g pinch of
-// salt must not read 0,00 €.
+// ⚠️ fcMoney FOR BOTH THE RATE AND THE AMOUNT, like the «Costo per 1 kg» box (two decimals, Federico
+// 8 Nov 2026): a 2 g pinch of salt costing less than a cent reads «< 0,01 €», never «0,00 €» (free).
 
 import { t } from '../i18n.js';
-import { formatRate } from '../price-model.js';
+import { fcMoney } from './fc-number.js';
 import { componentLineCost, packagingLineCost } from './foodcost-model.js';
 
 const positive = n => Number.isFinite(Number(n)) && Number(n) > 0;
 
 function rateText(rate, rateUnit) {
-  return rateUnit === 'pcs' ? t('fc.line.each', { rate: formatRate(rate) }) : t('fc.line.perKg', { rate: formatRate(rate) });
+  return rateUnit === 'pcs' ? t('fc.line.each', { rate: fcMoney(rate) }) : t('fc.line.perKg', { rate: fcMoney(rate) });
 }
 
 // { text, noPrice } for one line. `text` is '' when there is nothing to say (the line's
@@ -56,7 +56,7 @@ export function lineCostView(entry, kind, tables, { noWeightLoss = false } = {})
   const rate = rateText(line.rate, line.rateUnit);
   // The amount only where it can be known and there is an amount to price.
   let text = line.cost !== null && positive(qty)
-    ? t('fc.line.withAmount', { rate, cost: formatRate(line.cost) })
+    ? t('fc.line.withAmount', { rate, cost: fcMoney(line.cost) })
     : rate;
   if (partial) text = t('fc.line.notExact', { text });
   return { text, noPrice: false };

@@ -246,7 +246,7 @@ test('⚠️ ingredients offered to a product are never packaging, and packaging
   const main = codeOf(read('js/foodcost/foodcost-main.js'));
   const ing = main.slice(main.indexOf('ingredientOptions()'), main.indexOf('packagingOptions()'));
   assert.match(ing, /!isPackaging\(i\)/);
-  assert.doesNotMatch(ing, /formatRate|priceEach|notPriced/, 'no price on an ingredient offered to «Composto da»');
+  assert.doesNotMatch(ing, /formatRate|fcMoney|fcNumber|priceEach|notPriced/, 'no price on an ingredient offered to «Composto da»');
   const pack = main.slice(main.indexOf('packagingOptions()'));
   assert.match(pack, /isPackaging\(i\)/);
 });
