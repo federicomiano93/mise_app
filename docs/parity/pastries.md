@@ -206,5 +206,43 @@ Port of the notes half of the current app's PR #446 (item 1 of `docs/mise2-port-
   puts it beside them on a tablet; here the focus order would then differ from the one drawn, and the lab tablet's split
   has no room for four boxes); a row holding only a note asks before it goes. The day list and the records show the whole
   note beside the number (it wraps, never cut short).
-- Still owed: «Copy day» (the menu, the confirm before replacing a list, the editor opened on the copy). Until it lands the
-  switch checklist keeps item 1 open.
+- «Copy day», the other half, is below («Copy day as built»).
+
+## Copy day as built (8 Nov 2026)
+
+Port of the «Copia giorno» half of the current app's PR #446 and of `ae7a415a` (`js/pastries/pastries-main.js`,
+`copyShownDay`; pinned there by `tests/pastries-copy-day.test.mjs`, here by `app/src/pastries/PastriesSection.copy.spec.tsx`).
+With it, item 1 of `docs/mise2-port-owed.md` is done.
+
+What it does, as the current app does:
+- «Copy day» sits under the day's bottom row, beside Records, on every day (also an empty one, and before the first answers).
+- Until the seven days AND tonight's confirmations have answered it only says «The list hasn’t arrived yet — try again in a
+  moment.» and opens nothing (it does not open by itself later). An empty day says there is nothing to copy.
+- The picker «Copy the list of {day}?»: the six other days as radio rows, the next day first and already chosen, each with
+  its count or «Nothing». Cancel writes nothing and goes nowhere; a second tap while it is open adds nothing.
+- A target that has rows asks «Replace the list of {day}?» (with the count, singular or plural, and the source); a recorded
+  target asks the lock question «Edit {day}?». Everything is looked at again after every answer (the source emptied, the
+  target filled or confirmed by another phone meanwhile, the person gone to another day), each question at most once.
+- NOTHING IS WRITTEN BY THE COPY. It opens the TARGET's editor pre-filled with the source's rows — names, quantities and
+  row notes — and the target's OWN standing note (the source's is not brought across). The editor is unsaved from the
+  start (Back, the router's blocker and a reload ask), and says «The list of {day} has been copied here. Check it, then tap
+  Save to keep it.» Only its Save writes, the same payload as any save (`day`, `items` with `note` only where there is one,
+  `note`, `bakery`, `updatedAt`: nothing the current app writes is dropped).
+- ⚠️ The permission to change a recorded target comes with the copy's SAVE, never with opening it (`ae7a415a`): a copy
+  thrown away leaves the recorded day locked; a permission the day already had survives.
+- Back returns to the source day; Save lands on the target day.
+
+Differences, on purpose:
+- **The copied editor has its own address** (`/pastries/{target}/edit`, as every editor here), so on a tablet the days list
+  shows the TARGET selected while it is open; the current app hides the strip and leaves the source's tab selected (and
+  removes the panel's label for that reason). Save replaces the editor's history entry with the target day.
+- **The copy survives a reload.** The request travels in the history entry's state (`copyOf` in `pastriesNav.ts`, read as
+  untrusted): a reload re-opens the copy from the source's CURRENT rows. A source emptied meanwhile, or a state that is not
+  exactly a copy request, makes it an ordinary edit (an empty copy would only wipe the target). The «Edit» already said on
+  the day carries tonight's work date and is only honoured on that work date: a reload after 4am asks again.
+- **The focus goes back to «Copy day»** when a copy is thrown away, as it goes back to the pencil after an ordinary edit.
+- **Messages in the status region**, not toasts (as everywhere in Mise 2).
+- **The day strip's tabs are at least 44px wide** (with a 2px gap; 7 x 44 + 6 x 2 = 320 fits a 360px phone's 328px strip,
+  and below that the strip scrolls inside itself), up from 40px, so every day is a full touch target
+  (`pastriesCss.spec.ts`).
+- **Not ported: the help line** `help.copyDay`. Mise 2 has no help screen for Pastries yet; it comes with that screen.
