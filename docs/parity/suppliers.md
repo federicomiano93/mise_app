@@ -1201,3 +1201,20 @@ Titles read for all; bodies read only where I name behaviour. All under `tests/`
 - `invoice-import/tests/` (Python, run in CI): `test_classify` (mirrored lists), `test_parsing`, `test_pricing`, `test_review_fixes` (type column, SDI exclusion, salt), `test_export` (JSON shape, refuses to write inside a git tree), `test_workbook` (workbook-only; no JS counterpart).
 - Outside the repo, names only: `C:\claude-workspace\mise_app_workspace\algprobe\invoice-golden\` holds `golden_py.py`, `golden_js.mjs`, `diff.mjs`, `golden-py.json`, `golden-js.json` (real-zip comparison of the port with Python; data files not opened; there is no README).
 
+
+## Piece weight in grams as built (8 Nov 2026)
+
+Port of the current app's #489 (`aa28e3f7`, item 20 of `docs/mise2-port-owed.md`). «Weight of one piece» said «(kg)» and an egg
+typed as 50 was saved as fifty kilos, which priced eggs at 0,0033 €/kg in every recipe.
+- The box SHOWS and READS grams on the new card (`priceCardModel.ts`) and on the card of before (`legacyPriceModel.ts`); the stored
+  `unitWeightKg` and every reader of it stay in kilos. `app/src/records/pieceWeight.ts` holds the original's two functions:
+  `gramsOfKg` (kilos → the grams the box shows, in the venue's layout) and `kgTextOfGrams` (what was typed → the kilo text the
+  price model reads). Anything `Number()` can read is converted — «55,», «,5», «1e2» too — so a half-typed number is never saved
+  as kilos; unreadable text passes through and Save refuses it on its box, as before.
+- An untouched box saves the stored kilos unchanged (`0.05` → «50» → `0.05`).
+- Wording, both languages, word for word: «Weight of one piece (g)» / «Peso di un pezzo (g)», the example «e.g. 55» / «es. 55»,
+  and the hint with an egg at about 55 and a vanilla pod at about 3.5 (3,5).
+- At the switch: an item saved with a piece weight typed in grams under the old «(kg)» box now reads a thousand times too much,
+  visibly — «Uova in vassoi» (Panificio Miano) holds 50 kg and will read 50000 g; retype 50.
+- Not run against `js/ingredient-record-form.js` itself (the whole ingredient screen, DOM and session): `pieceWeight.spec.ts`
+  copies every case of `tests/piece-weight-grams.test.mjs`.
