@@ -1221,11 +1221,11 @@ service cloud.firestore {
       // ⚠️ NO «WHO IMPORTED» (P13): nothing here names a person. `fileName` is the name of the
       // file(s) picked, with a sole trader's tax code blanked out by the reader. The dates are
       // the invoices' own `Data`, not the day of the upload. Same gate as the import itself and
-      // `invoice-decisions` (canManage Food cost: it decides what feeds the prices).
+      // `invoice-decisions` (managesPrices: it decides what feeds the prices, so the kitchen's owner, who loads the invoices, reaches it too).
       match /invoice-imports/{id} {
-        allow read: if canManage(lid, 'foodcost');
+        allow read: if managesPrices(lid);
 
-        allow create: if canManage(lid, 'foodcost')
+        allow create: if managesPrices(lid)
           && stampedFor(lid)
           && id.matches('^[A-Za-z0-9_-]{1,64}$')
           && request.resource.data.keys().hasOnly([
@@ -1255,7 +1255,7 @@ service cloud.firestore {
 
         allow update: if false;
         // No screen deletes one today; the same people may, to tidy a wrong record by hand.
-        allow delete: if canManage(lid, 'foodcost');
+        allow delete: if managesPrices(lid);
       }
 
       // ── The order in progress ───────────────────────────────────────────

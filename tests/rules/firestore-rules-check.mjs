@@ -4652,6 +4652,10 @@ async function partialOwners() {
     wholeWrite(`${L}/price-changes/inv-1-1-flour`, change('1'), asAccount(KITCHEN)));
   await expectAllowed('…remembers an invoice decision', () =>
     mergeWrite(`${L}/invoice-decisions/${'a'.repeat(64)}`, DECISION, asAccount(KITCHEN)));
+  // Mise 2's import log follows invoice-decisions (managesPrices): the kitchen loads the invoices.
+  await expectAllowed('…records an invoice import (Mise 2)', () =>
+    wholeWrite(`${L}/invoice-imports/impk`, { ...stamp, fileName: 'fatture.zip', importedAt: '2026-11-08T10:00:00.000Z', firstDate: '2026-10-01', lastDate: '2026-10-31', months: ['2026-10'], invoiceIds: ['18000000001'] }, asAccount(KITCHEN)));
+  await expectAllowed('…lists the invoice imports (Mise 2)', readAs(KITCHEN, `${L}/invoice-imports`));
   await expectAllowed('…and removes a price', () => deleteWrite(`${L}/ingredient-prices/flour`, asAccount(KITCHEN)));
 
   // ── …the Stocktake, whole, though it shares a section with Food cost ──
@@ -4718,6 +4722,8 @@ async function partialOwners() {
     wholeWrite(`${L}/price-changes/inv-2-1-flour`, change('2'), asAccount(SALES)));
   await expectAllowed('…remembers an invoice decision', () =>
     mergeWrite(`${L}/invoice-decisions/${'b'.repeat(64)}`, DECISION, asAccount(SALES)));
+  await expectAllowed('…records an invoice import (Mise 2)', () =>
+    wholeWrite(`${L}/invoice-imports/imps`, { ...stamp, fileName: 'fatture.zip', importedAt: '2026-11-08T10:00:00.000Z', firstDate: '2026-10-01', lastDate: '2026-10-31', months: ['2026-10'], invoiceIds: ['18000000001'] }, asAccount(SALES)));
   await expectAllowed('…sets the labour cost', () =>
     mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: 15, updatedAt: '2026-11-01' }, asAccount(SALES)));
   await expectAllowed('…mints an ordering link', () =>

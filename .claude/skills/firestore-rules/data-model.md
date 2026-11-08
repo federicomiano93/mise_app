@@ -88,7 +88,7 @@ both halves.
   written ONCE (create only, never edited) at the end of a run: `{ bakery, fileName (≤500, the picked files' names,
   a personal tax code blanked), importedAt (ISO), firstDate, lastDate (YYYY-MM-DD, the invoices' own Data, first ≤
   last), months[] (YYYY-MM, 1–600), invoiceIds[] (the reader's docId = the SDI id; 1–5000) }`. NO «who imported»
-  (P13). Read, written, deleted by `canManage(lid,'foodcost')` like `invoice-decisions`. The reader sets aside every
+  (P13). Read, written, deleted by `managesPrices(lid)` like `invoice-decisions` (so the kitchen's owner too). The reader sets aside every
   invoice whose id is here (`alreadyImported` of build-import), so a re-loaded file offers only its new invoices; an
   invoice is recorded only when every ingredient row holding a price of it was seen through
   (`app/src/suppliers/invoiceImport/importLog.ts`). The current app neither reads nor writes it.
@@ -117,7 +117,7 @@ match any new name there — `{ bakery, png (a `data:image/png;base64,…` addre
 height (int 1–1920), updatedAt? }`: written and deleted by `canManage` catalogue, read by members with the catalogue
 on; no other id. The current app saves recipes and `config/labels` with merge, so it keeps these keys.
 
-**Recipe shelf (Mise 2, 25 Oct 2026, rules not yet deployed).** Recipes may carry `category` (string 1–100; «no
+**Recipe shelf (Mise 2, 25 Oct 2026; `category` and `recipeCategories` are LIVE since main took them on 1 Nov, `archived` and its check are not yet deployed).** Recipes may carry `category` (string 1–100; «no
 category» is NO field — an emptied choice is a removal; a word not on the venue's list reads as «no category» and comes
 back if the word is put back) and `archived` (bool; only `true` is stored, a restore removes it). ⚠️ The rules ask
 `canManage(catalogue)` ONLY when the archived state MOVES (created archived, archived, restored): an employee's ordinary
