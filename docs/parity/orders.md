@@ -1661,6 +1661,14 @@ Differences from the current app, on purpose:
   Mise 2's draft listener already runs with `includeMetadataChanges` and says `fromServer`, so the note waits for that.
 - **One page.** Mise 2 never reloads between sections, and leaving Orders already sends what waits (`stop()`): the note matters for
   a reload, a closed Chrome or the tablet going off. The page-hidden listener exists only while Orders is open.
+- **Only an open Orders owns the note** (code review, 8 Nov 2026). The store of a closed Orders lives on until its last write is
+  answered, and Orders opened again reads the same note in a new store. So `stop()` stops the note (`stopJournal`): no check, no
+  30 s retry and no orders read still on its way brings anything back afterwards (it would judge on a frozen copy of the draft,
+  and could write an old number over a colleague's, a correction or a «Clear quantities»), and the note is never written whole
+  again from that store: a write answered after the close only takes its own fields out of the stored note (`releaseStored`).
+  The current app cannot meet this: leaving Orders unloads its page.
+- **A screen mounted again inside Orders does not look again** for orders never placed: the latch remembers the came-back count
+  it has seen (`relook(count)`).
 - **A deleted product's line always leaves the note.** The current app does it only from a page that holds no note of its own
   (Fornitori); in Mise 2 Orders is never on screen while «Ingredients & suppliers» deletes or merges a product.
 - **Not in this item:** the current app's `sendBeforeLeaving` (Back from Orders opened from a recipe waits for the server), which

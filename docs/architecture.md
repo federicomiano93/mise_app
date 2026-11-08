@@ -46,6 +46,9 @@ both, and the switch keeps the address) and it has consequences that every chang
   outside those prefixes on purpose: it holds one venue's supplier and ingredient names, so sign-out and a venue switch must
   wipe it. The keep-list says what SURVIVES; a shared key that must be wiped simply never joins it (`list-copy.spec.ts` pins
   this through both files' `keysToClear`).
+  `orders-draft-claims` (the current app's key and shape; `shared/src/draft-journal.ts`, F-15) is NOT kept either, for the same
+  reason: one venue's typed Orders quantities that have not reached Firestore's queue yet, wiped by sign-out and a venue switch
+  with Firestore's own queue of unsent writes (`draft-journal.spec.ts` pins it through both files' `keysToClear`).
 - **One service worker scope.** The current `sw.js` controls `/mise2/` too. Mise 2 registers no
   service worker until step 5, when it takes over at the same path and name.
 - **No App Check, no reCAPTCHA** (his decision, PR #212) — in either app.
