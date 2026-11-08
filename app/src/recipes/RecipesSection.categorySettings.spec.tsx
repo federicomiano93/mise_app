@@ -37,7 +37,8 @@ const words = () => card().queryAllByRole('listitem').map(item => item.textConte
 const box = () => card().getByRole('textbox', { name: 'New category' }) as HTMLInputElement;
 const add = () => card().getByRole('button', { name: 'Add' });
 const bin = (name: string) => card().getByRole('button', { name: `Delete the category “${name}”` });
-const saved = (source: ReturnType<typeof fakeRecipesSource>) => source.labelSaves.map(patch => patch.recipeCategories);
+// The words written, one at a time: { add } or { remove }.
+const saved = (source: ReturnType<typeof fakeRecipesSource>) => source.categoryWrites;
 
 describe('the card', () => {
   it('is the second card, right after the photo card and before the model card, with its note', async () => {
@@ -90,40 +91,16 @@ describe('the card', () => {
       return { ...view, source };
     }
 
-    it('keeps the words, the bins and the box drawn but unable to write, and says why', async () => {
+    it('⚠️ writes ONE WORD even from the phone’s own copy: it cannot take away a word another manager added', async () => {
       const { user, source } = await openFromCopy();
       expect(words()).toEqual(['Christmas', 'Easter', 'Spring']);
-      expect(card().getByText('Waiting for the server before the list can be changed…')).toBeInTheDocument();
-      expect(bin('Spring')).toHaveAttribute('aria-disabled', 'true');
-      expect(bin('Spring')).not.toBeDisabled();
-      expect(add()).toHaveAttribute('aria-disabled', 'true');
-      await user.click(bin('Spring'));
-      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
-      await user.type(box(), 'Summer');
-      await user.click(add());
-      await user.type(box(), '{Enter}');
-      expect(source.labelSaves).toEqual([]);
-      expect(box()).toHaveValue('Summer');
-    });
-
-    it('opens up when the server answers, and the sentence goes', async () => {
-      const { user, source } = await openFromCopy();
-      act(() => { source.releaseLabelConfig(); });
-      await waitFor(() => { expect(card().queryByText('Waiting for the server before the list can be changed…')).not.toBeInTheDocument(); });
       expect(bin('Spring')).not.toHaveAttribute('aria-disabled');
+      expect(add()).not.toHaveAttribute('aria-disabled');
       await user.type(box(), 'Summer');
       await user.click(add());
-      await waitFor(() => { expect(saved(source)).toEqual([['Easter', 'Christmas', 'Spring', 'Summer']]); });
-    });
-
-    it('says it in Italian', async () => {
-      const source = fakeRecipesSource({ recipes: RECIPES, labelConfig: { recipeCategories: ['Natale'] } });
-      source.holdLabelConfig();
-      renderRecipes('/recipes/settings', { source, lang: 'it', session: { location: GB, language: 'it' } });
-      await screen.findByRole('region', { name: 'Impostazioni' }, LOAD);
-      act(() => { source.releaseLabelConfig(false); });
-      const italian = within(await screen.findByRole('region', { name: 'Categorie delle ricette' }));
-      expect(italian.getByText('In attesa del server prima di poter cambiare la lista…')).toBeInTheDocument();
+      await waitFor(() => { expect(saved(source)).toEqual([{ add: 'Summer' }]); });
+      expect(words()).toEqual(['Christmas', 'Easter', 'Spring', 'Summer']);
+      expect(source.labelSaves).toEqual([]);
     });
   });
 
@@ -137,11 +114,11 @@ describe('the card', () => {
 });
 
 describe('adding a word', () => {
-  it('adds it with the button: saved whole through the label profile, the box emptied and the focus kept in it', async () => {
+  it('adds it with the button: one word written, the box emptied and the focus kept in it', async () => {
     const { user, source } = await openSettings();
     await user.type(box(), '  Summer   menu ');
     await user.click(add());
-    await waitFor(() => { expect(saved(source)).toEqual([['Easter', 'Christmas', 'Spring', 'Summer menu']]); });
+    await waitFor(() => { expect(saved(source)).toEqual([{ add: 'Summer menu' }]); });
     expect(words()).toEqual(['Christmas', 'Easter', 'Spring', 'Summer menu']);
     expect(box()).toHaveValue('');
     expect(box()).toHaveFocus();
@@ -150,7 +127,7 @@ describe('adding a word', () => {
   it('adds it with Enter too', async () => {
     const { user, source } = await openSettings([]);
     await user.type(box(), 'Autumn{Enter}');
-    await waitFor(() => { expect(saved(source)).toEqual([['Autumn']]); });
+    await waitFor(() => { expect(saved(source)).toEqual([{ add: 'Autumn' }]); });
     expect(words()).toEqual(['Autumn']);
   });
 
@@ -241,10 +218,10 @@ describe('deleting a word', () => {
     expect(within(dialog).getByText('1 recipe goes back to “No category”. If you add the word again, it comes back.')).toBeInTheDocument();
   });
 
-  it('writes only the list when confirmed — no recipe is rewritten — and the focus goes to the next bin', async () => {
+  it('writes only that word when confirmed — no recipe is rewritten — and the focus goes to the next bin', async () => {
     const { dialog, user, source } = await ask('Christmas');
     await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
-    await waitFor(() => { expect(saved(source)).toEqual([['Easter', 'Spring']]); });
+    await waitFor(() => { expect(saved(source)).toEqual([{ remove: ['Christmas'] }]); });
     expect(source.recipeWrites).toEqual([]);
     expect(words()).toEqual(['Easter', 'Spring']);
     await waitFor(() => { expect(bin('Easter')).toHaveFocus(); });

@@ -71,13 +71,17 @@ function handSource() {
   const saveLabelLogo = vi.fn<RecipesSource['saveLabelLogo']>(() => Promise.resolve());
   const removeLabelLogo = vi.fn<RecipesSource['removeLabelLogo']>(() => Promise.resolve());
   const readMember = vi.fn<RecipesSource['readMember']>(() => Promise.resolve(null));
+  const addRecipeCategoryWord = vi.fn<RecipesSource['addRecipeCategoryWord']>(() => Promise.resolve());
+  const removeRecipeCategoryWords = vi.fn<RecipesSource['removeRecipeCategoryWords']>(() => Promise.resolve());
   const source: RecipesSource = {
     watchRecipes, watchIngredients, watchLabelConfig, watchPrintAgents, queuePrintJob, saveLabelConfig, watchSuppliers,
     saveRecipeDoc, removeRecipeDoc, getCalculatorConfig, importIntoCalculator, watchLabelLogo, saveLabelLogo, removeLabelLogo,
-    readMember,
+    readMember, addRecipeCategoryWord, removeRecipeCategoryWords,
   };
   return {
     source,
+    addRecipeCategoryWord,
+    removeRecipeCategoryWords,
     watchSuppliers,
     stopSuppliers,
     saveRecipeDoc,
@@ -1239,23 +1243,78 @@ describe('the Recipe catalogue store', () => {
       expect(store.getSnapshot().labelConfigFromServer).toBe(true);
     });
 
-    test('saving the list goes through the label profile’s write, normalised, local-first', async () => {
-      const { store, labelServer, saveLabelConfig } = makeStore();
+    test('adding a word is local-first and sends that word alone (arrayUnion), never the list', async () => {
+      const { store, labelServer, addRecipeCategoryWord, saveLabelConfig, data } = makeStore();
       store.start();
-      labelServer({ widthMm: 57 });
-      const saved = store.saveRecipeCategories(['Natale', ' natale ', 'Estate']);
+      labelServer({ widthMm: 57, recipeCategories: ['Natale'] });
+      const saved = store.addRecipeCategory('Estate');
       expect(store.getSnapshot().categories).toEqual(['Natale', 'Estate']);
-      expect(saveLabelConfig).toHaveBeenCalledWith({ recipeCategories: ['Natale', 'Estate'] });
+      expect(JSON.parse(data.get(LABEL_CONFIG_KEY)!).recipeCategories).toEqual(['Natale', 'Estate']);
+      expect(addRecipeCategoryWord).toHaveBeenCalledWith('Estate');
+      expect(saveLabelConfig).not.toHaveBeenCalled();
+      await saved;
+      expect(store.getSnapshot().categories).toEqual(['Natale', 'Estate']);
+    });
+
+    test('a word can be added before the server has answered, and on a venue with no label profile', async () => {
+      const { store, labelCache, addRecipeCategoryWord } = makeStore();
+      store.start();
+      labelCache(null);
+      void store.addRecipeCategory('Estate');
+      expect(store.getSnapshot().categories).toEqual(['Estate']);
+      expect(addRecipeCategoryWord).toHaveBeenCalledWith('Estate');
+    });
+
+    test('⚠️ taking a word off sends every stored spelling of it, and the screen changes at once', async () => {
+      const { store, labelServer, removeRecipeCategoryWords } = makeStore();
+      store.start();
+      labelServer({ widthMm: 57, recipeCategories: ['Natale', 'Estate', 'natale '] });
+      const saved = store.removeRecipeCategory('NATALE');
+      expect(store.getSnapshot().categories).toEqual(['Estate']);
+      expect(removeRecipeCategoryWords).toHaveBeenCalledWith(['Natale', 'natale ']);
       await saved;
     });
 
-    test('a refused list is put back', async () => {
-      const { store, labelServer, saveLabelConfig } = makeStore();
-      saveLabelConfig.mockImplementationOnce(() => Promise.reject(new Error('permission-denied')));
+    test('⚠️ a refused add takes back ONLY that word: a word added meanwhile stays', async () => {
+      const { store, labelServer, addRecipeCategoryWord } = makeStore();
+      let refuse: (err: unknown) => void = () => undefined;
+      addRecipeCategoryWord.mockImplementationOnce(() => new Promise((_, reject) => { refuse = reject; }));
       store.start();
       labelServer({ widthMm: 57, recipeCategories: ['Natale'] });
-      await expect(store.saveRecipeCategories(['Natale', 'Estate'])).rejects.toThrow();
-      expect(store.getSnapshot().categories).toEqual(['Natale']);
+      const first = store.addRecipeCategory('Estate');
+      void store.addRecipeCategory('Pasqua');
+      expect(store.getSnapshot().categories).toEqual(['Natale', 'Estate', 'Pasqua']);
+      refuse(new Error('permission-denied'));
+      await expect(first).rejects.toThrow('permission-denied');
+      expect(store.getSnapshot().categories).toEqual(['Natale', 'Pasqua']);
+    });
+
+    test('⚠️ a refused remove puts back only that word', async () => {
+      const { store, labelServer, removeRecipeCategoryWords } = makeStore();
+      removeRecipeCategoryWords.mockImplementationOnce(() => Promise.reject(new Error('permission-denied')));
+      store.start();
+      labelServer({ widthMm: 57, recipeCategories: ['Natale', 'Estate'] });
+      await expect(store.removeRecipeCategory('Natale')).rejects.toThrow();
+      expect(store.getSnapshot().categories).toEqual(['Estate', 'Natale']);
+    });
+
+    test('⚠️ the categories are outside the label profile’s log: a refused label patch leaves a word, a refused word leaves a label setting', async () => {
+      const { store, labelServer, saveLabelConfig, addRecipeCategoryWord } = makeStore();
+      let refuseLabel: (err: unknown) => void = () => undefined;
+      saveLabelConfig.mockImplementationOnce(() => new Promise((_, reject) => { refuseLabel = reject; }));
+      store.start();
+      labelServer({ widthMm: 57 });
+      const label = store.saveLabelProfile({ widthMm: 40 });
+      void store.addRecipeCategory('Estate');
+      refuseLabel(new Error('permission-denied'));
+      await expect(label).rejects.toThrow();
+      expect(store.getSnapshot().categories).toEqual(['Estate']);
+      expect(store.getSnapshot().labelConfig).toMatchObject({ widthMm: 57, recipeCategories: ['Estate'] });
+
+      addRecipeCategoryWord.mockImplementationOnce(() => Promise.reject(new Error('permission-denied')));
+      await store.saveLabelProfile({ widthMm: 30 });
+      await expect(store.addRecipeCategory('Pasqua')).rejects.toThrow();
+      expect(store.getSnapshot().labelConfig).toMatchObject({ widthMm: 30, recipeCategories: ['Estate'] });
     });
   });
 

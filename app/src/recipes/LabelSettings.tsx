@@ -6,7 +6,7 @@ import {
 } from '@mise/shared/label-template-model';
 import type { DateKind, PrinterLanguage } from '@mise/shared/label-template-model';
 import {
-  RECIPE_CATEGORIES_MAX, RECIPE_CATEGORY_MAX, addCategory, countInCategory, removeCategory, sortedCategories,
+  RECIPE_CATEGORIES_MAX, RECIPE_CATEGORY_MAX, addCategory, countInCategory, sortedCategories,
 } from '@mise/shared/recipe-shelf';
 import type { CategoryRefusal } from '@mise/shared/recipe-shelf';
 import type { MessageKey } from '../i18n/en';
@@ -97,11 +97,11 @@ function Controls() {
     });
   }
 
-  // The recipe categories go through the same local-first write (saveRecipeCategories); a refusal puts the list back and says so
-  // in the same line.
-  function saveCategories(list: readonly string[]): void {
+  // The recipe categories are written one word at a time, local-first (addRecipeCategory / removeRecipeCategory); a refusal puts
+  // that word back and says so in the same line.
+  function saveCategories(write: () => Promise<void>): void {
     setFailed(null);
-    store.saveRecipeCategories(list).catch(() => {
+    write().catch(() => {
       if (mounted.current) setFailed('cat.shelf.categoriesNotSaved');
       else say(t('cat.shelf.categoriesNotSaved'));
     });
@@ -142,7 +142,10 @@ function Controls() {
     <div className={styles.body}>
       <PhotoCard />
 
-      <RecipeCategoriesCard onSave={saveCategories} />
+      <RecipeCategoriesCard
+        onAdd={word => { saveCategories(() => store.addRecipeCategory(word)); }}
+        onRemove={word => { saveCategories(() => store.removeRecipeCategory(word)); }}
+      />
 
       {/* ⚠️ THE MODEL DECIDES WHICH CARDS APPLY: the image label is always 80 × 60 mm at 203 dpi and has its own header, so
           the paper, the printer and «what else» belong to the standard model only (their code is untouched). */}
@@ -419,15 +422,12 @@ function PhotoCard() {
 // low-key bin on each, and a box to add one. Deleting a word writes no recipe: the recipes under it read as «no category» until
 // the word is added again, and the question says how many.
 //
-// ⚠️ DRAWN ONLY ONCE THE LABEL PROFILE HAS ARRIVED (LabelSettings shows nothing else before): the list lives in that document,
-// and a write over a list not yet seen would replace the venue's own words.
-function RecipeCategoriesCard({ onSave }: { onSave: (list: readonly string[]) => void }) {
+// ⚠️ A WORD AT A TIME: add and delete write that one word (arrayUnion / arrayRemove), so a phone that has not heard the server yet
+// — or is offline — cannot take away a word another manager added. Drawn once the label profile has arrived, as the rest of the
+// settings.
+function RecipeCategoriesCard({ onAdd, onRemove }: { onAdd: (word: string) => void; onRemove: (word: string) => void }) {
   const { t, locale } = useT();
-  const { categories, recipes, labelConfigFromServer } = useRecipes();
-  // ⚠️ THE LIST IS WRITTEN WHOLE, so it is changed only on the SERVER's word: a copy kept on this phone could be a version behind,
-  // and writing it would take away a word another manager added. Until then add and delete stay drawn (aria-disabled, never
-  // `disabled`: Chrome blurs a disabled control under the finger) and do nothing.
-  const writable = labelConfigFromServer;
+  const { categories, recipes } = useRecipes();
   const [confirm, confirmDialog] = useConfirm();
   const headId = useId();
   const boxId = useId();
@@ -451,7 +451,6 @@ function RecipeCategoriesCard({ onSave }: { onSave: (list: readonly string[]) =>
   });
 
   function add(): void {
-    if (!writable) return;
     const result = addCategory(categories, typed);
     if ('refusal' in result) {
       setRefusal({ kind: result.refusal, name: typed.trim().replace(/\s+/g, ' ') });
@@ -460,12 +459,12 @@ function RecipeCategoriesCard({ onSave }: { onSave: (list: readonly string[]) =>
     }
     setRefusal(null);
     setTyped('');
-    onSave(result.list);
+    onAdd(result.list[result.list.length - 1] ?? typed);
     box.current?.focus();
   }
 
   async function remove(name: string): Promise<void> {
-    if (asking.current || !writable) return;
+    if (asking.current) return;
     asking.current = true;
     try {
       const count = countInCategory(recipes, name, categories);
@@ -480,7 +479,7 @@ function RecipeCategoriesCard({ onSave }: { onSave: (list: readonly string[]) =>
       const index = list.indexOf(name);
       const rest = list.filter(word => word !== name);
       setAfter({ deleted: name, next: rest[Math.min(index, rest.length - 1)] ?? null });
-      onSave(removeCategory(categories, name));
+      onRemove(name);
     } finally {
       asking.current = false;
     }
@@ -499,7 +498,6 @@ function RecipeCategoriesCard({ onSave }: { onSave: (list: readonly string[]) =>
       <div className={styles.head}>
         <h3 id={headId} ref={heading} tabIndex={-1} className={styles.headTitle}>{t('cat.shelf.settingsTitle')}</h3>
         <p className={styles.note}>{t('cat.shelf.settingsNote')}</p>
-        {writable ? null : <p className={styles.note}>{t('cat.shelf.waitingForServer')}</p>}
       </div>
       {list.length === 0 ? (
         <div className={styles.row}>
@@ -519,7 +517,6 @@ function RecipeCategoriesCard({ onSave }: { onSave: (list: readonly string[]) =>
                 className={styles.bin}
                 aria-label={t('cat.shelf.deleteCategory', { name })}
                 title={t('cat.shelf.deleteCategory', { name })}
-                aria-disabled={writable ? undefined : 'true'}
                 onClick={() => { void remove(name); }}
               >
                 <Trash2 aria-hidden="true" />
@@ -549,7 +546,7 @@ function RecipeCategoriesCard({ onSave }: { onSave: (list: readonly string[]) =>
               add();
             }}
           />
-          <Button variant="secondary" isPending={!writable} onPress={add}>{t('cat.shelf.add')}</Button>
+          <Button variant="secondary" onPress={add}>{t('cat.shelf.add')}</Button>
         </div>
         {/* Empty until a word is refused; it is there before it speaks, so a screen reader hears the sentence. */}
         <p id={refusalId} role="status" className={refusal === null ? styles.quietInBlock : styles.rangeError}>{refusalText}</p>

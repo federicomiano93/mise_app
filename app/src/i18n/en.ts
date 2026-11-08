@@ -1037,7 +1037,6 @@ export const en = {
   'cat.shelf.bannerTitle': 'Archived',
   'cat.shelf.bannerText': 'Not in the list or in the choices for new links. The Calculator, labels and Food cost keep working.',
   'cat.shelf.allArchived': 'Every recipe is archived — restore one in the Recipe catalogue to choose it.',
-  'cat.shelf.waitingForServer': 'Waiting for the server before the list can be changed…',
   'cat.shelf.restore': 'Restore',
   'cat.shelf.restoredDone': 'Recipe restored.',
   'cat.shelf.couldNotArchive': 'Couldn’t archive “{name}” — check your connection.',
