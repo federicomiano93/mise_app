@@ -231,6 +231,23 @@ describe.each([
     expect(out.unitCost).toBe(0.4267);   // £3.20/0.75 = £4.2667/kg × 10 kg / 100
   });
 
+  test('«Finished product, no weight loss»: only a literal true switches it on', () => {
+    expect(m.normalizeProduct({ name: 'A' })).toMatchObject({ noWeightLoss: false });
+    expect(m.normalizeProduct({ name: 'A', noWeightLoss: 'true' })).toMatchObject({ noWeightLoss: false });
+    expect(m.normalizeProduct({ name: 'A', noWeightLoss: 1 })).toMatchObject({ noWeightLoss: false });
+    expect(m.normalizeProduct({ name: 'A', noWeightLoss: true })).toMatchObject({ noWeightLoss: true });
+  });
+
+  test('«Finished product, no weight loss» costs the recipe without its oven loss, and only for that product', () => {
+    const baked = { ...DOUGH, id: 'BAKED', lossPct: 25 };
+    const tables = { ingredients: INGREDIENTS, recipes: { BAKED: baked } };
+    const lines = { components: [{ recipeId: 'BAKED', qtyKg: 10 }] };
+    expect(m.costProduct(product(lines), tables).unitCost).toBe(0.4267);
+    expect(m.costProduct(product({ ...lines, noWeightLoss: true }), tables).unitCost).toBe(0.32);
+    expect(m.batchTotals(product({ ...lines, noWeightLoss: 'yes' }), tables).cost).toBe(42.667);
+    expect(baked.lossPct, 'the recipe keeps its own loss').toBe(25);
+  });
+
   // ── What is missing ────────────────────────────────────────────────────────
 
   test('a product that cannot be costed says what to fill in, and shows no number', () => {

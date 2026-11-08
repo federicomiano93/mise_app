@@ -40,6 +40,8 @@ export interface Working {
   // The free box. Only read while the menu says 'other'.
   vatOther: string;
   foodCostTarget: string;
+  // «Finished product, no weight loss»: the recipes' oven loss is laid aside for this product.
+  noWeightLoss: boolean;
 }
 
 // The numbers a product carries in a box, by the name the save limits know them by.
@@ -56,6 +58,7 @@ export function emptyWorking(): Working {
   return {
     name: '', components: [], packaging: [], sellingMode: '', piecesPerBatch: '', packSize: '', packUnit: '',
     labourMinutes: '', labourPeople: '', sellingPrice: '', vatSelect: '', vatOther: '', foodCostTarget: '',
+    noWeightLoss: false,
   };
 }
 
@@ -91,6 +94,7 @@ export function workingFrom(product: Product, country: unknown): Working {
     vatSelect: vat.select,
     vatOther: vat.other,
     foodCostTarget: text(product.foodCostTarget),
+    noWeightLoss: product.noWeightLoss === true,
   };
 }
 
@@ -153,6 +157,7 @@ export function toProduct(working: Working, id: string, name: string = working.n
     foodCostTarget: readNumber(working.foodCostTarget),
     labourMinutes: readNumber(working.labourMinutes),
     labourPeople: readNumber(working.labourPeople),
+    noWeightLoss: working.noWeightLoss,
     model: PRODUCT_MODEL,
   };
 }

@@ -89,3 +89,14 @@ describe('the working copy', () => {
     expect(recipeIdsOn(working)).toEqual(['a', 'b']);
   });
 });
+
+describe('«Finished product, no weight loss» in the working copy', () => {
+  it('travels from the product and back into what is saved; a new product starts without it', () => {
+    expect(emptyWorking().noWeightLoss).toBe(false);
+    const stored = normalizeProduct({ name: 'Loaf', components: [{ recipeId: 'r', qtyKg: 1 }], noWeightLoss: true }) as Product;
+    const working = workingFrom(stored, 'GB');
+    expect(working.noWeightLoss).toBe(true);
+    expect(toProduct(working, 'p').noWeightLoss).toBe(true);
+    expect(toProduct({ ...working, noWeightLoss: false }, 'p').noWeightLoss).toBe(false);
+  });
+});

@@ -384,6 +384,8 @@ export const it: Messages = {
   'fc.ingredientNoPieceWeight': 'Si compra a pezzo — scrivi quanto pesa un pezzo in Ingredienti e fornitori, oppure contalo in pezzi',
   'fc.ingredientNoPiecePrice': 'Si compra a peso — scrivi quanto pesa un pezzo in Ingredienti e fornitori, oppure contalo in grammi',
   'fc.weighFor': 'Impasto di «{name}»',
+  'fc.noWeightLoss': 'Prodotto finito, nessun calo peso',
+  'fc.noWeightLossHint': 'Il calo in forno delle ricette non viene usato per questo prodotto.',
   'fc.packHolds': 'Una confezione contiene',
   'fc.packHoldsAs': 'Quanto contiene una confezione',
   'fc.packHoldsNote': 'Il peso di una confezione, oppure quanti pezzi.',

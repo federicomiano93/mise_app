@@ -402,6 +402,63 @@ describe('the weighings', () => {
     expect(fake.saved[0]).toMatchObject({ snapshot: null });
   });
 
+  describe('«Finished product, no weight loss»', () => {
+    const SWITCH = 'Finished product — no weight loss';
+    const LOSSY = recipe('Dough', { lossPct: 20 });
+    const finished = () => product('Loaf', { components: [{ recipeId: 'Dough', qtyKg: 1 }], noWeightLoss: true });
+
+    it('is offered only while the product has a recipe line', async () => {
+      await open('/food-cost/product/Flat', editorSource([product('Flat')], { recipes: [LOSSY] }));
+      expect(screen.queryByRole('switch', { name: SWITCH })).not.toBeInTheDocument();
+      expect(screen.queryByText('The oven loss of the recipes is not used for this product.')).not.toBeInTheDocument();
+    });
+
+    it('on, takes the weighing boxes away and costs the recipe without its loss, with focus staying on it', async () => {
+      const { user } = await open('/food-cost/product/Loaf', editorSource([DOUGH_PRODUCT], { recipes: [LOSSY] }));
+      expect(screen.getByRole('group', { name: 'Production cost' })).toHaveTextContent('£0.25per piece');
+      const toggle = screen.getByRole('switch', { name: SWITCH });
+      expect(toggle).not.toBeChecked();
+      await user.click(toggle);
+      expect(screen.getByRole('switch', { name: SWITCH })).toBeChecked();
+      expect(screen.getByRole('switch', { name: SWITCH })).toHaveFocus();
+      expect(within(madeOf()).queryByRole('textbox', { name: 'Raw dough' })).not.toBeInTheDocument();
+      expect(screen.getByRole('group', { name: 'Production cost' })).toHaveTextContent('£0.20per piece');
+    });
+
+    it('saved on writes the flag and no weighing, even one typed before it was switched on; and takes a margin point', async () => {
+      const { user, fake } = await open('/food-cost/product/Loaf', editorSource([DOUGH_PRODUCT], { recipes: [recipe('Dough')] }));
+      await user.type(within(madeOf()).getByRole('textbox', { name: 'Cooked dough' }), '800');
+      await user.click(screen.getByRole('switch', { name: SWITCH }));
+      await user.click(saveBar());
+      await confirmSave(user);
+      await screen.findByText('Product saved.');
+      expect(fake.saved.map(write => write.kind)).toEqual(['product']);
+      expect(fake.saved[0]).toMatchObject({ data: { noWeightLoss: true }, snapshot: { unitCost: 0.2 } });
+    });
+
+    it('switched off writes no flag at all, and takes a margin point', async () => {
+      const { user, fake } = await open('/food-cost/product/Loaf', editorSource([finished()], { recipes: [LOSSY] }));
+      expect(screen.getByRole('switch', { name: SWITCH })).toBeChecked();
+      await user.click(screen.getByRole('switch', { name: SWITCH }));
+      expect(within(madeOf()).getByRole('textbox', { name: 'Raw dough' })).toBeInTheDocument();
+      await user.click(saveBar());
+      await confirmSave(user);
+      await screen.findByText('Product saved.');
+      expect(fake.saved.map(write => write.kind)).toEqual(['product']);
+      expect(fake.saved[0]?.data).not.toHaveProperty('noWeightLoss');
+      expect(fake.saved[0]).toMatchObject({ snapshot: { unitCost: 0.25 } });
+    });
+
+    it('a product left alone keeps the flag when something else is edited', async () => {
+      const { user, fake } = await open('/food-cost/product/Loaf', editorSource([finished()], { recipes: [LOSSY] }));
+      await user.type(nameBox(), '!');
+      await user.click(saveBar());
+      await confirmSave(user);
+      await screen.findByText('Product saved.');
+      expect(fake.saved[0]).toMatchObject({ data: { noWeightLoss: true }, snapshot: null });
+    });
+  });
+
   it('say the moment it is true that the loss changes other products too', async () => {
     const { user } = await open('/food-cost/product/Loaf', editorSource([
       DOUGH_PRODUCT, product('Roll', { components: [{ recipeId: 'Dough', qtyKg: 1 }] }),

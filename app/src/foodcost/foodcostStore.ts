@@ -130,6 +130,9 @@ export function toProductDocument(product: Product): Record<string, unknown> {
     foodCostTarget: product.foodCostTarget ?? null,
     labourMinutes: product.labourMinutes ?? null,
     labourPeople: product.labourPeople ?? null,
+    // ⚠️ WRITTEN ONLY WHEN TRUE, like the current app: the product is saved WHOLE, so switching it off
+    // leaves the key out and removes it from the document, and no product ever carries a stored false.
+    ...(product.noWeightLoss === true ? { noWeightLoss: true } : {}),
     model: PRODUCT_MODEL,
   };
 }

@@ -424,6 +424,8 @@ export const en = {
   'fc.ingredientNoPieceWeight': 'Bought by the piece — say what one piece weighs in Ingredients and suppliers, or count it in pieces',
   'fc.ingredientNoPiecePrice': 'Bought by weight — say what one piece weighs in Ingredients and suppliers, or count it in grams',
   'fc.weighFor': 'Dough for «{name}»',
+  'fc.noWeightLoss': 'Finished product — no weight loss',
+  'fc.noWeightLossHint': 'The oven loss of the recipes is not used for this product.',
   'fc.packHolds': 'One pack holds',
   'fc.packHoldsAs': 'What one pack holds',
   'fc.packHoldsNote': 'The weight in one pack, or how many pieces.',
