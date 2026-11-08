@@ -7,7 +7,7 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import { addDays, parseISODate, todayISO, toISODate, weekdayOf } from '@mise/shared/day';
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
-import { LOAD, ingredient, renderOrders, supplier } from '../testing/renderOrders';
+import { LOAD, ingredient, renderOrders, split, supplier } from '../testing/renderOrders';
 
 beforeAll(async () => { await import('./OrdersSection'); }, 60_000);
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
@@ -228,5 +228,75 @@ describe('«Order today» with a supplier closed as not ordered', () => {
   it('in Italian', async () => {
     renderOrders('/orders', { source: seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } }), lang: 'it' });
     expect(await screen.findByRole('button', { name: 'Alpine Mills non ordinato' }, LOAD)).toBeInTheDocument();
+  });
+});
+
+// The second port of this item (PR #496, closed as a duplicate of #495): what it did that the merged one did not.
+describe('close as not ordered: the second port\'s extras', () => {
+  // drafts/current answers only when `letIn` is called: the records and the suppliers are there, the draft is not yet.
+  function draftLate(source: FakeOrdersSource): { letIn: () => void } {
+    const watch = source.watchDraft.bind(source);
+    const gate = { letIn: () => undefined as void };
+    source.watchDraft = (onChange, onError) => {
+      let stop = () => undefined as void;
+      gate.letIn = () => { stop = watch(onChange, onError); };
+      return () => { stop(); };
+    };
+    return gate;
+  }
+  const pause = () => act(() => new Promise<void>(resolve => { setTimeout(resolve, 100); }));
+
+  it('⚠️ «Order today» waits for the draft: a supplier closed this morning never flashes as «to order»', async () => {
+    const source = seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } });
+    const gate = draftLate(source);
+    renderOrders('/orders', { source });
+    await waitFor(() => { expect(source.historyFrom).not.toBeNull(); }, LOAD);
+    await pause();
+    expect(screen.queryByText('Order today')).not.toBeInTheDocument();
+    act(() => { gate.letIn(); });
+    expect(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD)).toBeInTheDocument();
+  });
+
+  it('⚠️ the summary offers nothing over a dead draft stream: neither the close nor «Order placed…»', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const source = seeded({ draft: { entries: { 'i-flour': { qty: 3 } }, days: {}, skipped: { 's-alp': TODAY } } });
+    source.refuse.draft = true;
+    await summaryAt(source);
+    await pause();
+    expect(screen.queryByRole('button', { name: 'Close as not ordered' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reopen' })).not.toBeInTheDocument();
+  });
+
+  it('Back from a summary opened by a closed chip hands the focus back to that chip (phone)', async () => {
+    const view = renderOrders('/orders', { source: seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } }) });
+    await view.user.click(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD));
+    await waitFor(() => { expect(path(view)).toBe('/orders/supplier/s-alp/summary'); });
+    await view.user.click(within(await screen.findByRole('region', { name: 'Alpine Mills' }, LOAD)).getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(path(view)).toBe('/orders'); });
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Alpine Mills not ordered' })).toHaveFocus(); });
+  });
+
+  it('Back from a summary opened by a closed chip hands the focus back to that chip (split)', async () => {
+    split();
+    const view = renderOrders('/orders', { source: seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } }) });
+    await view.user.click(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD));
+    await waitFor(() => { expect(path(view)).toBe('/orders/supplier/s-alp/summary'); });
+    await view.user.click(within(await screen.findByRole('region', { name: 'Alpine Mills' }, LOAD)).getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(path(view)).toBe('/orders'); });
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Alpine Mills not ordered' })).toHaveFocus(); });
+  });
+
+  it('reopened from that summary, its chip is gone: Back hands the focus to the supplier\'s row', async () => {
+    const source = seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } });
+    const view = renderOrders('/orders', { source });
+    await view.user.click(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD));
+    await view.user.click(await pane().findByRole('button', { name: 'Reopen' }, LOAD));
+    await pane().findByRole('button', { name: 'Close as not ordered' });
+    await view.user.click(pane().getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(path(view)).toBe('/orders'); });
+    // The row, never the strip (where Alpine Mills is a «to order» chip again) and never the page.
+    await waitFor(() => { expect(document.activeElement).toHaveAccessibleName(expect.stringContaining('Alpine Mills') as string); });
+    expect(screen.getByText('Order today').parentElement?.contains(document.activeElement)).toBe(false);
+    expect(screen.queryByRole('button', { name: 'Alpine Mills not ordered' })).not.toBeInTheDocument();
   });
 });

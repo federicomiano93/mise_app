@@ -40,6 +40,8 @@ type Props = {
   onOpenItems: (id: string) => void;
   // The clipboard button of a row (the split only, while the supplier has quantities): the order summary beside the list.
   onOpenSummary: (id: string) => void;
+  // A closed supplier's chip in «Order today»: its summary, where «Reopen» is; Back from it returns to the chip.
+  onOpenClosed: (id: string) => void;
   // The two buttons under the list: the picker of the suppliers to record together, and the one to clear.
   onPlaceAll: () => void;
   onClearAll: () => void;
@@ -68,7 +70,7 @@ const HEADING_KEY = {
 // The left column: the head (OrdersHead: the search box, the send arrow, the tools and the All / Ordering filter, which stay put
 // while the rows scroll), over the suppliers. The search box's text lives HERE, in a component that stays mounted, so a data
 // snapshot never remounts the box (see OrdersHead).
-export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onOpenSummary, onPlaceAll, onClearAll, swapOpen, onSwap, onSend, onSettings, onHistory, onIncoming, onReorder, onLists, onOpenPending }: Props) {
+export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onOpenSummary, onOpenClosed, onPlaceAll, onClearAll, swapOpen, onSwap, onSend, onSettings, onHistory, onIncoming, onReorder, onLists, onOpenPending }: Props) {
   const { t } = useT();
   const { config, draft, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
@@ -130,7 +132,7 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
       </PartBoundary>
 
       <PartBoundary>
-        <TodayOrders onOpenSupplier={onOpenSupplier} onOpenSummary={onOpenSummary} />
+        <TodayOrders onOpenSupplier={onOpenSupplier} onOpenClosed={onOpenClosed} />
       </PartBoundary>
 
       <DeliveryDoors onIncoming={onIncoming} onReorder={onReorder} />

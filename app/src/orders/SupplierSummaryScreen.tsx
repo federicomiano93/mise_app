@@ -15,8 +15,8 @@ import { useConfirm } from '../ui/useConfirm';
 import { useMoney } from '../session/useMoney';
 import { OrderTotals } from './OrderTotals';
 import { useOrders, useOrdersStore } from './OrdersContext';
-import { PLACE_DOOR, SUMMARY_DOOR, summaryOpener, useHandBack } from './handBack';
-import { FROM_LIST, cameFromList, cameFromSupplier, columnPart, listDistanceOf, useLeave } from './ordersNav';
+import { PLACE_DOOR, SUMMARY_DOOR, summaryOpener, todayOpener, useHandBack } from './handBack';
+import { FROM_LIST, cameFromChip, cameFromList, cameFromSupplier, columnPart, listDistanceOf, useLeave } from './ordersNav';
 import { ORDERS_PATH, supplierConfirmPath, supplierPath } from './ordersPath';
 import { LONG_MS } from './useClearQuantities';
 import type { OrdersLens } from './ordersLens';
@@ -35,7 +35,8 @@ import styles from './SupplierSummaryScreen.module.css';
 //   • «Reopen» — the undo, shown with «Closed as not ordered today» while it is closed, with or without quantities (a close is
 //     never invisible). No question: it only puts back what the screen showed before the close.
 // What is offered is asked of the data on every draw (reminders closeOffer), so a close made on another phone shows at once; and
-// only once the records have arrived, or a supplier placed this morning would offer the close.
+// only once the records AND the draft have arrived, over live streams: before them, or over a dead one, a supplier placed or closed
+// this morning would offer the close — and over a dead draft, one with quantities typed would look like «nothing needed».
 //
 // ⚠️ THE SAME LINES AS THE MESSAGE: summaryFor() takes the lens's lines through the selection the send screen uses, so this can never
 // show what the supplier will not receive. The money (a cost line under each line, the totals box) is drawn ONLY when the store says
@@ -44,7 +45,7 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
   const { t } = useT();
   const money = useMoney();
   const { state } = useLocation();
-  const { draft, prices, pricesReadable, history, historyLoaded, historyBroken, draftLoaded, placing } = useOrders();
+  const { draft, prices, pricesReadable, history, historyLoaded, historyBroken, draftLoaded, draftBroken, placing } = useOrders();
   const store = useOrdersStore();
   const navigate = useNavigate();
   const say = useStatusMessage();
@@ -68,8 +69,10 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
   const title = useRef<HTMLHeadingElement>(null);
   const screen = useRef<HTMLElement>(null);
   // Back is the browser's Back when the supplier's screen or the list is the entry behind; an address typed in goes up one level, to
-  // the supplier's order.
-  const leave = useLeave(supplierPath(id), () => { handBack.expect(cameFromSupplier(state) ? SUMMARY_DOOR : summaryOpener(id)); });
+  // the supplier's order. Opened by a closed supplier's chip in «Order today», the focus goes back to that chip.
+  const leave = useLeave(supplierPath(id), () => {
+    handBack.expect(cameFromSupplier(state) ? SUMMARY_DOOR : cameFromChip(state) ? todayOpener(id) : summaryOpener(id));
+  });
 
   const supplier = lens.supplierById(id);
   const shown = supplier !== undefined;
@@ -97,7 +100,7 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
   const lines = summary.costLines;
   const name = supplierLabel(supplier);
   const today = todayISO();
-  const offer = historyLoaded && !historyBroken && draftLoaded
+  const offer = historyLoaded && !historyBroken && draftLoaded && !draftBroken
     ? closeOffer({ supplier, history: history as readonly PlacedRecord[], today, skipped: draft.skipped })
     : '';
   latest.current = { offer, lines: lines.length };

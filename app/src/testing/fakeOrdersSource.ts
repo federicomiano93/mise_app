@@ -28,7 +28,8 @@ export type FakeOrdersSource = OrdersSource & {
   writes: DraftPayload[];
   // The next draft writes are refused (the rules said no).
   refuseWrites: boolean;
-  // Every «closed as not ordered» write (setSupplierSkipped / clearSupplierSkipped), in order; `refuseSkipped` refuses them.
+  // Every «closed as not ordered» write (setSupplierSkipped / clearSupplierSkipped), in order; `refuseSkipped` refuses them, and
+  // `holdWrites` keeps them in the air too.
   skippedWrites: Array<{ op: 'set'; supplierId: string; day: string } | { op: 'clear'; supplierId: string }>;
   refuseSkipped: boolean;
   // The next watches fail (the rules refused them, or the stream died).
@@ -216,12 +217,14 @@ export function fakeOrdersSource(init: {
       tellDraft();
       const refused = source.refuseSkipped;
       return new Promise<void>((resolve, reject) => {
-        queueMicrotask(() => {
+        const settle = () => {
           if (!refused) { resolve(); return; }
           source.draft = before;
           tellDraft();
           reject(new Error('permission-denied'));
-        });
+        };
+        if (held) held.push(settle);
+        else queueMicrotask(settle);
       });
     },
 
@@ -236,12 +239,14 @@ export function fakeOrdersSource(init: {
       tellDraft();
       const refused = source.refuseSkipped;
       return new Promise<void>((resolve, reject) => {
-        queueMicrotask(() => {
+        const settle = () => {
           if (!refused) { resolve(); return; }
           source.draft = before;
           tellDraft();
           reject(new Error('permission-denied'));
-        });
+        };
+        if (held) held.push(settle);
+        else queueMicrotask(settle);
       });
     },
 
