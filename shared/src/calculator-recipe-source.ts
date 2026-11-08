@@ -6,7 +6,7 @@
 // (a linked row in kilos read as grams × 1000, 18 Oct 2026) is gone: the current app made the same fix, and
 // since 8 Nov 2026 both weigh a row through the Catalogue's own unit table (rowGrams, isWeighable).
 //
-// ⚠️ PORT OWED (release branch, 8 Nov 2026): `catalogueChoices` and `rowsToStamp` («Add a recipe» offers the
+// ⚠️ STILL OWED (8 Nov 2026): `catalogueChoices` and `rowsToStamp` («Add a recipe» offers the
 // recipe book first, linking stamps row ids — item 37 of docs/mise2-port-owed.md) are not here yet, so
 // parity.spec.ts still expects the export lists to differ.
 //
