@@ -1,6 +1,8 @@
 import { Trash2 } from 'lucide-react';
 import { LINE_UNITS } from '@mise/shared/foodcost-model';
 import type { LineUnit } from '@mise/shared/foodcost-model';
+import { KILO_LINE_UNITS } from '@mise/shared/line-quantity';
+import type { KiloLineUnit } from '@mise/shared/line-quantity';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import type { LineName } from './lineNotes';
@@ -15,17 +17,18 @@ type Props = {
   name: LineName;
   note: string;
   qty: string;
-  // Ingredient lines only.
+  // Ingredient lines (g, kg, pieces) and recipe lines (g, kg); packaging has none.
   unit?: LineUnit;
   registerQty: (key: string, node: HTMLInputElement | null) => void;
   onPick: () => void;
   onQty: (text: string) => void;
   onUnit: (unit: LineUnit) => void;
+  onRecipeUnit: (unit: KiloLineUnit) => void;
   onRemove: () => void;
 };
 
 const QTY_LABEL = {
-  recipe: 'fc.aria.kilos',
+  recipe: 'fc.aria.quantity',
   ingredient: 'fc.aria.quantity',
   packaging: 'fc.aria.pieces',
 } as const satisfies Record<LineKind, MessageKey>;
@@ -41,7 +44,7 @@ const REMOVE_LABEL = {
 //
 // ⚠️ A QUANTITY TYPED IN IT NEVER REBUILDS THE ROW: the row is keyed by its own id, so the box under
 // the finger is the same box after every digit.
-export function LineRow({ rowKey, kind, name, note, qty, unit, registerQty, onPick, onQty, onUnit, onRemove }: Props) {
+export function LineRow({ rowKey, kind, name, note, qty, unit, registerQty, onPick, onQty, onUnit, onRecipeUnit, onRemove }: Props) {
   const { t } = useT();
 
   return (
@@ -72,9 +75,18 @@ export function LineRow({ rowKey, kind, name, note, qty, unit, registerQty, onPi
           value={qty}
           onChange={event => { onQty(event.target.value); }}
         />
-        {/* A recipe is always kilos, packaging always pieces per unit sold; an ingredient is added in
-            grams, kilos or pieces. */}
-        {kind === 'ingredient' && unit !== undefined ? (
+        {/* An ingredient is added in grams, kilos or pieces, and a recipe in grams or kilos (stored in kilos whatever the
+            select says, and opened in grams: productEditorModel.ts); packaging is always pieces per unit sold. */}
+        {kind === 'recipe' && unit !== undefined ? (
+          <select
+            className={styles.unit}
+            aria-label={t('fc.aria.unit')}
+            value={unit}
+            onChange={event => { onRecipeUnit(event.target.value as KiloLineUnit); }}
+          >
+            {KILO_LINE_UNITS.map(option => <option key={option} value={option}>{option}</option>)}
+          </select>
+        ) : kind === 'ingredient' && unit !== undefined ? (
           <select
             className={styles.unit}
             aria-label={t('fc.aria.unit')}
@@ -86,7 +98,7 @@ export function LineRow({ rowKey, kind, name, note, qty, unit, registerQty, onPi
             ))}
           </select>
         ) : (
-          <span className={styles.fixedUnit}>{kind === 'recipe' ? 'kg' : t('fc.unit.pieces')}</span>
+          <span className={styles.fixedUnit}>{t('fc.unit.pieces')}</span>
         )}
       </div>
       {note === '' ? null : <p className={styles.note} data-kind={kind}>{note}</p>}

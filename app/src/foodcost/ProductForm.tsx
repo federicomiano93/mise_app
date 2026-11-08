@@ -11,6 +11,7 @@ import {
   startWeighing, typeCooked, typeRaw, weighingPatches, withWeighings, otherProductsUsing,
 } from '@mise/shared/foodcost-weighing';
 import type { WeighingState } from '@mise/shared/foodcost-weighing';
+import type { KiloLineUnit } from '@mise/shared/line-quantity';
 import { countryOf } from '@mise/shared/market';
 import { firstInvalidNumber } from '@mise/shared/product-limits';
 import { isSectionAllowedFor } from '@mise/shared/sections';
@@ -40,8 +41,8 @@ import { PickDialog } from './PickDialog';
 import type { Choice, PickMode } from './PickDialog';
 import { ProductAnswer, SuggestedPrice } from './ProductAnswer';
 import {
-  NUMBER_KEY, clearNumber, costable, emptyWorking, isNumberField, isShown, newLineKey, packSizeShown, piecesShown,
-  plainNumber, recipeIdsOn, toProduct, vatRateOf, workingFrom, workingFromDraft,
+  NUMBER_KEY, RECIPE_LINE_OPENS_IN, clearNumber, costable, emptyWorking, isNumberField, isShown, newLineKey, packSizeShown,
+  piecesShown, plainNumber, recipeIdsOn, recipeLineKg, toProduct, vatRateOf, workingFrom, workingFromDraft,
 } from './productEditorModel';
 import type { NumberField, Working, WorkingComponent } from './productEditorModel';
 import { VatGuideDialog } from './VatGuideDialog';
@@ -356,7 +357,7 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
         edit(current => ({
           ...current,
           components: [...current.components, choice.kind === 'recipe'
-            ? { key, kind: 'recipe', recipeId: choice.id, qty: '' }
+            ? { key, kind: 'recipe', recipeId: choice.id, qty: '', unit: RECIPE_LINE_OPENS_IN }
             : { key, kind: 'ingredient', ingredientId: choice.id, qty: '', unit: 'g' }],
         }));
         focusQtyOf.current = key;
@@ -409,6 +410,21 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
     }));
   };
 
+  // ⚠️ A RECIPE LINE'S g/kg SWITCH KEEPS THE TYPED NUMBER and changes what it means (owner, 8 Nov 2026: «quando cambio da kg
+  // a g la quantità non deve cambiare»; current app a7f4c75d): 522 in g → kg still shows 522 and stores 522 kg. So the
+  // stored kilos DO change and the form is dirty — unless they do not (an empty box): then only the unit moves, which is
+  // never saved, and nothing is marked.
+  const setRecipeUnit = (key: string, unit: KiloLineUnit) => {
+    const line = working.components.find(one => one.key === key);
+    if (!line || line.kind !== 'recipe' || line.unit === unit) return;
+    const moved = (current: Working): Working => ({
+      ...current,
+      components: current.components.map<WorkingComponent>(one => (one.key === key && one.kind === 'recipe' ? { ...one, unit } : one)),
+    });
+    if (recipeLineKg({ ...line, unit }) === recipeLineKg(line)) setWorking(moved);
+    else edit(moved);
+  };
+
   const removeLine = (key: string) => {
     edit(current => ({
       ...current,
@@ -430,7 +446,7 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
       name,
       components: current.components.some(line => line.kind === 'recipe' && line.recipeId === recipeId)
         ? current.components
-        : [{ key, kind: 'recipe', recipeId, qty: '' }, ...current.components],
+        : [{ key, kind: 'recipe', recipeId, qty: '', unit: RECIPE_LINE_OPENS_IN }, ...current.components],
     }));
     // Said, never prevented: two products on one recipe is normal (a small and a large loaf), but
     // making the same one twice by accident is what this catches.
@@ -581,6 +597,7 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
       onPick={() => { changeLine(line.key, kind); }}
       onQty={text => { setQty(line.key, text); }}
       onUnit={unit => { setUnit(line.key, unit); }}
+      onRecipeUnit={unit => { setRecipeUnit(line.key, unit); }}
       onRemove={() => { removeLine(line.key); }}
     />
   );
