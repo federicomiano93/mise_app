@@ -26,7 +26,7 @@ Data loss first:
 - [x] 2. Recipe categories written one word at a time (arrayUnion / arrayRemove), never the whole list — ported 8 Nov (PR into the release branch, `feature/mise2-port-data-loss`)
 - [x] 4. Food cost `noWeightLoss` kept by a Mise 2 product save — ported 8 Nov with the switch (`feature/mise2-port-data-loss`)
 - [x] 6. Orders draft journal and corrections in flight (F-15, F-16) — ported 8 Nov (PR into the release branch; `docs/parity/orders.md`, «Draft journal and corrections in flight as built»)
-- [ ] 3. `drafts/current.skipped` and «Order done» / «Close as not ordered»
+- [x] 3. `drafts/current.skipped` and «Order done» / «Close as not ordered» — ported 8 Nov (PR into the release branch; `docs/parity/orders.md`, «Closed as not ordered as built»)
 - [x] 5. Usage `hours` kept by Mise 2's usage write — already on this branch through PR #473 (`e1a4639d`), found on 8 Nov:
       the tick files the seconds under the hour (`addHour`), the stored day keeps them across both apps' commits and the
       payload carries them (`app/src/telemetry/usage.spec.ts`, «the hours reach the stored day and the line…»)
@@ -80,6 +80,8 @@ Before the switch, not ports:
    `app/src/recipes/recipesStore.ts`, its source (a `labelsSource`-style fs wrapper needing arrayUnion/arrayRemove + fake), specs. Size S.
    Already matched in Mise 2: `category` is sent only when the editor's menu moved it (`recipesStore.ts:103,717`), `archived` never sent by a save.
 3. **`drafts/current.skipped`** — PR #470 (in release #487, v1.143.0) + `f65d5c73` (rules).
+   DONE 8 Nov 2026 (what was built and every difference: `docs/parity/orders.md`, «Closed as not ordered as built»;
+   `dueTodayIds` is ported to shared/ too, its screens are item 12). The description below is how it stood before.
    DATA LOSS: LOW / probably no, unverified by a run. Shape `skipped: { supplierId: 'YYYY-MM-DD' }`. Rules already on the branch
    (`firestore.rules:1273,1295`). Mise 2's draft write is a partial-map merge (`ordersSource.ts:278-280`, `setDoc(..., {merge:true})`), so
    `skipped` survives a normal save. Risks left: any whole-document `set` of the draft, or the draft being deleted and recreated, would drop it.

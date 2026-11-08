@@ -76,7 +76,9 @@ export type OrdersMessage =
   // A later autosave landed: a «not saved» message still on screen can go.
   | { readonly kind: 'draft-saved' }
   // The day chosen on a supplier's day line was refused: the line is back on the day that is stored (parity D7).
-  | { readonly kind: 'day-not-saved' };
+  | { readonly kind: 'day-not-saved' }
+  // «Close as not ordered» or «Reopen» was refused: Firestore has already put the supplier back as it was on screen.
+  | { readonly kind: 'close-not-saved' };
 
 export interface OrdersSnapshot {
   // Every supplier, as stored (the lens keeps the active ones and sorts them).
@@ -278,6 +280,12 @@ export interface OrdersStore {
   // false = refused. ⚠️ Offline it waits for the connection, so no screen may wait on it before showing the change (step 3f-6:
   // the pending banner goes at once and comes back on false).
   setDay(supplier: StoredDoc, day: string): Promise<boolean>;
+  // «Close as not ordered» on the order summary (the current app's PR #470): today's close of this supplier, in
+  // drafts/current.skipped. LOCAL-FIRST like Firestore makes it (the listeners see it at once, offline too); a refusal is said
+  // ('close-not-saved') and Firestore takes it back. Resolves true once saved, false when refused. ⚠️ No screen waits on it.
+  closeNotOrdered(supplierId: string): Promise<boolean>;
+  // «Reopen»: the undo of the line above, the same promise.
+  reopenToday(supplierId: string): Promise<boolean>;
   // What the confirm screen needs before it opens, read once from the server (parity X2, X7). A record that cannot be read
   // counts as none: the transaction inside `place` still refuses a real clash.
   checkRecords(items: ReadonlyArray<{ readonly supplierId: string; readonly date: string }>, noSupplierName: string): Promise<RecordCheck[]>;
@@ -465,6 +473,19 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       },
     } : undefined,
   });
+
+  // ⚠️ A QUANTITY TYPED FOR A SUPPLIER CLOSED TODAY REOPENS IT (the current app's reopenIfTyped). «Nothing needed» stopped being
+  // true, and a close left standing would silence the «Order today» strip and the kiosk for the rest of the day — the very
+  // reminder that catches an order typed and then forgotten. Once: Firestore shows the reopen at once, so the next keystroke finds
+  // nothing to undo. Not awaited, and only logged on failure, as there.
+  function reopenIfTyped(supplierId: string) {
+    if (snapshot.draft.skipped[supplierId] !== deps.today()) return;
+    const entries = snapshot.draft.entries;
+    if (!lensNow('').linesOf(supplierId).some(line => wholeNumber(entries[line.id]?.qty) > 0)) return;
+    source.clearSupplierSkipped(supplierId).catch((err: unknown) => {
+      console.error('Reopening a closed supplier after typing failed:', err);
+    });
+  }
 
   // The lens as it is NOW, from the latest data: what an order records and clears is decided by the one lens the screens
   // draw (ordersLens.ts), never by a list taken before the confirm screen opened — a line another phone moved meanwhile
@@ -833,6 +854,24 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       set({ draft: { ...snapshot.draft, entries, days } });
       holdBusy();
       sync.change(entries, days);
+      if (!stockOnly) reopenIfTyped(supplier.id);
+    },
+
+    closeNotOrdered(supplierId) {
+      return source.setSupplierSkipped(supplierId, deps.today()).then(() => true, (err: unknown) => {
+        console.error('Closing the supplier as not ordered failed:', err);
+        say({ kind: 'close-not-saved' });
+        return false;
+      });
+    },
+
+    reopenToday(supplierId) {
+      if (!snapshot.draft.skipped[supplierId]) return Promise.resolve(true);
+      return source.clearSupplierSkipped(supplierId).then(() => true, (err: unknown) => {
+        console.error('Reopening the supplier failed:', err);
+        say({ kind: 'close-not-saved' });
+        return false;
+      });
     },
 
     // The current app's setSupplierDay + restamp: written at once rather than after the pause, rolled back when refused.
@@ -1014,6 +1053,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         today: deps.today(),
         weekStartsOn: snapshot.config.weekStartsOn,
         deliveryCheck: snapshot.deliveryCheck,
+        // A supplier closed as not ordered today is not «to order» (the current app's PR #470).
+        skipped: snapshot.draft.skipped,
       });
     },
 

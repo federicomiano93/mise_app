@@ -130,7 +130,7 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
       </PartBoundary>
 
       <PartBoundary>
-        <TodayOrders onOpenSupplier={onOpenSupplier} />
+        <TodayOrders onOpenSupplier={onOpenSupplier} onOpenSummary={onOpenSummary} />
       </PartBoundary>
 
       <DeliveryDoors onIncoming={onIncoming} onReorder={onReorder} />

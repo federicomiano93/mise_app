@@ -141,6 +141,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
   // in the line, so it is said even when the screen was left meanwhile.
   useEffect(() => store.onMessage(message => {
     if (message.kind === 'day-not-saved') say(t('ord.day.notSaved'), LONG_MS);
+    // «Close as not ordered» or «Reopen» refused: Firestore has already put the supplier back on screen as it is stored.
+    if (message.kind === 'close-not-saved') say(t('ord.summary.saveFailed'), LONG_MS);
   }), [store, say, t]);
 
   // ⚠️ THE LENS IS THE ONE PLACE THAT DECIDES AN INGREDIENT'S SUPPLIER (ordersLens.ts): the list, a supplier's screen and
@@ -420,6 +422,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
       handBack.deliverIf(SUMMARY_DOOR);
       handBack.deliverIf(PLACE_DOOR);
     }
+    // The summary coming back from the confirm screen its «Order placed…» opened: that button (close as not ordered, PR #470).
+    else if (view.kind === 'summary') handBack.deliverIf(PLACE_DOOR);
   }, [view.kind, handBack]);
 
   // On the split the right-hand side scrolls on its own and stays mounted from one supplier to the next: another supplier

@@ -55,6 +55,15 @@ export function fromSupplierState(supplierState: unknown) {
     : { ...FROM_SUPPLIER, ...columnPart(supplierState) };
 }
 
+// How many history entries lie between this screen and the list, when the list is in the history behind it; undefined when it
+// is not (opened by its address). A screen one level under a supplier's (its summary) counts the supplier's own steps too.
+export function listDistanceOf(state: unknown): number | undefined {
+  if (!cameFromList(state)) return undefined;
+  if (!cameFromSupplier(state)) return stepsUpOf(state);
+  const behind = numberIn(state, 'behindSteps');
+  return behind === undefined ? undefined : behind + 1;
+}
+
 // The state of a screen that REPLACES the one on show (a lateral pick on the split), so it knows where Back goes.
 //
 // ⚠️ A REPLACE KEEPS THE HISTORY BEHIND IT. History [list, A, items of A] with B picked beside the list becomes [list, A, B]:

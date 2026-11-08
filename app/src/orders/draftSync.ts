@@ -36,6 +36,9 @@ export type DraftDays = Readonly<Record<string, string>>;
 export interface DraftView {
   readonly entries: DraftEntries;
   readonly days: DraftDays;
+  // The suppliers closed as «not ordered» (drafts/current.skipped, { supplierId: 'YYYY-MM-DD' }), as the server last said.
+  // Written on their own, never by the autosave (ordersSource.setSupplierSkipped); only the day counts (reminders skippedOn).
+  readonly skipped: DraftDays;
   // The document's own `updatedAt` (ISO), '' when it has none.
   readonly updatedAt: string;
   // Whether drafts/current exists at all.
@@ -88,7 +91,7 @@ export const SAVE_DELAY_MS = 800;
 export const ORDERS_RETRY_MS = 30_000;
 
 export const EMPTY_DRAFT: DraftView = Object.freeze({
-  entries: Object.freeze({}), days: Object.freeze({}), updatedAt: '', exists: false,
+  entries: Object.freeze({}), days: Object.freeze({}), skipped: Object.freeze({}), updatedAt: '', exists: false,
 });
 
 export interface DraftSync {
@@ -537,6 +540,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     return {
       entries,
       days: { ...daysOf(doc?.days), ...pending.days },
+      skipped: daysOf(doc?.skipped),
       updatedAt: typeof doc?.updatedAt === 'string' ? doc.updatedAt : '',
       exists: doc !== null && doc !== undefined,
     };

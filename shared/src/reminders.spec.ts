@@ -218,3 +218,76 @@ describe.each([
     expect(suppliersStillToOrder(null, [], MONDAY)).toStrictEqual([]);
   });
 });
+
+// «Close as not ordered» (the current app's PR #470, tests/orders-close-not-ordered.test.mjs): drafts/current.skipped =
+// { supplierId: 'YYYY-MM-DD' }, the day it was closed. Only that day.
+describe.each([
+  ['shared/ (TypeScript)', ported],
+  ['js/ (current app)', legacy],
+] as const)('%s — a supplier closed as not ordered', (_name, m) => {
+  // 6 November 2026 is a Friday.
+  const FRIDAY = '2026-11-06';
+  const LAST_FRIDAY = '2026-10-30';
+  const ALBA = { id: 'alba', name: 'Alba', orderDays: ['Friday'], active: true };
+  const BRAVA = { id: 'brava', name: 'Brava', orderDays: ['Friday'], active: true };
+  const MONDAYS = { id: 'mon', name: 'Mondays', orderDays: ['Monday'], active: true };
+
+  test('skippedOn: only a close made TODAY counts — last week\'s never hides this week\'s order', () => {
+    expect([...m.skippedOn({ alba: FRIDAY, brava: LAST_FRIDAY }, FRIDAY)]).toStrictEqual(['alba']);
+    expect(m.skippedOn(null, FRIDAY).size).toBe(0);
+    expect(m.skippedOn(undefined, FRIDAY).size).toBe(0);
+    expect(m.skippedOn({ alba: FRIDAY }, '').size).toBe(0);
+    expect(m.skippedOn('alba', FRIDAY).size).toBe(0); // a stray non-map is ignored, never trusted
+  });
+
+  test('todayOrders: a closed supplier is skipped, not placed — and a real order wins over the close', () => {
+    const rows = m.todayOrders({
+      suppliers: [BRAVA, ALBA, MONDAYS],
+      history: [{ date: FRIDAY, supplierId: 'alba' }],
+      today: FRIDAY,
+      skipped: { alba: FRIDAY, brava: FRIDAY },
+    });
+    expect(rows.map(r => [r.supplier.id, r.placed, r.skipped])).toStrictEqual([
+      ['alba', true, false], // ordered after being closed: the order is what happened
+      ['brava', false, true],
+    ]);
+  });
+
+  test('todayOrders without skipped behaves as before (every row says skipped: false)', () => {
+    const rows = m.todayOrders({ suppliers: [ALBA], history: [], today: FRIDAY });
+    expect(rows.map(r => [r.placed, r.skipped])).toStrictEqual([[false, false]]);
+  });
+
+  test('the Home count does not count a supplier closed as not ordered today', () => {
+    expect(m.suppliersStillToOrder([ALBA, BRAVA], [], FRIDAY, { brava: FRIDAY }).map(s => s.id)).toStrictEqual(['alba']);
+    // A close from another day changes nothing; no argument at all is the old behaviour.
+    expect(m.suppliersStillToOrder([ALBA, BRAVA], [], FRIDAY, { brava: LAST_FRIDAY }).map(s => s.id)).toStrictEqual(['alba', 'brava']);
+    expect(m.suppliersStillToOrder([ALBA, BRAVA], [], FRIDAY).map(s => s.id)).toStrictEqual(['alba', 'brava']);
+  });
+
+  test('closeOffer: what the summary sheet offers about today', () => {
+    expect(m.closeOffer({ supplier: BRAVA, history: [], today: FRIDAY })).toBe('skip');
+    expect(m.closeOffer({ supplier: BRAVA, history: [], today: FRIDAY, skipped: { brava: FRIDAY } })).toBe('reopen');
+    expect(m.closeOffer({ supplier: BRAVA, history: [], today: FRIDAY, skipped: { brava: LAST_FRIDAY } })).toBe('skip');
+    // Not its order day: there is nothing to close.
+    expect(m.closeOffer({ supplier: MONDAYS, history: [], today: FRIDAY })).toBe('');
+    // Already ordered today: nothing to close, nothing to reopen.
+    expect(m.closeOffer({
+      supplier: BRAVA, history: [{ date: FRIDAY, supplierId: 'brava' }], today: FRIDAY, skipped: { brava: FRIDAY },
+    })).toBe('');
+    expect(m.closeOffer({ supplier: { ...BRAVA, active: false }, history: [], today: FRIDAY })).toBe('');
+    expect(m.closeOffer({ supplier: null, history: [], today: FRIDAY })).toBe('');
+    expect(m.closeOffer({ supplier: BRAVA, history: [], today: '' })).toBe('');
+  });
+
+  test('dueTodayIds: order day today, active, nothing recorded, not closed', () => {
+    const ids = m.dueTodayIds({
+      suppliers: [ALBA, BRAVA, MONDAYS, { id: 'c', name: 'Cara', orderDays: ['Friday'] }],
+      history: [{ date: FRIDAY, supplierId: 'alba' }],
+      today: FRIDAY,
+      skipped: { brava: FRIDAY },
+    });
+    expect([...ids]).toStrictEqual(['c']);
+    expect([...m.dueTodayIds({ suppliers: [ALBA], history: [], today: '' })]).toStrictEqual([]);
+  });
+});

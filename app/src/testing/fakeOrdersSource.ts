@@ -28,6 +28,9 @@ export type FakeOrdersSource = OrdersSource & {
   writes: DraftPayload[];
   // The next draft writes are refused (the rules said no).
   refuseWrites: boolean;
+  // Every «closed as not ordered» write (setSupplierSkipped / clearSupplierSkipped), in order; `refuseSkipped` refuses them.
+  skippedWrites: Array<{ op: 'set'; supplierId: string; day: string } | { op: 'clear'; supplierId: string }>;
+  refuseSkipped: boolean;
   // The next watches fail (the rules refused them, or the stream died).
   refuse: { suppliers: boolean; ingredients: boolean; config: boolean; draft: boolean; history: boolean; requests: boolean };
   // Another phone writes the draft: merged like a setDoc merge, then every watcher is told.
@@ -142,6 +145,8 @@ export function fakeOrdersSource(init: {
     draft: init.draft ?? null,
     writes: [],
     refuseWrites: false,
+    skippedWrites: [],
+    refuseSkipped: false,
     refuse: { suppliers: false, ingredients: false, config: false, draft: false, history: false, requests: false },
     historyFrom: null,
     historyCached: false,
@@ -200,6 +205,43 @@ export function fakeOrdersSource(init: {
       return new Promise<void>((resolve, reject) => {
         if (held) held.push(() => settle(resolve, reject));
         else queueMicrotask(() => settle(resolve, reject));
+      });
+    },
+
+    // Like Firestore: the change is shown to the listeners at once, and taken back when the server refuses it.
+    setSupplierSkipped(supplierId, day) {
+      source.skippedWrites.push({ op: 'set', supplierId, day });
+      const before = source.draft;
+      source.draft = deepMerge(before ?? {}, { skipped: { [supplierId]: day }, bakery: 'bakery' });
+      tellDraft();
+      const refused = source.refuseSkipped;
+      return new Promise<void>((resolve, reject) => {
+        queueMicrotask(() => {
+          if (!refused) { resolve(); return; }
+          source.draft = before;
+          tellDraft();
+          reject(new Error('permission-denied'));
+        });
+      });
+    },
+
+    clearSupplierSkipped(supplierId) {
+      source.skippedWrites.push({ op: 'clear', supplierId });
+      const before = source.draft;
+      if (!before) return Promise.reject(new Error('not-found'));
+      const next = structuredClone(before);
+      const skipped = next.skipped && typeof next.skipped === 'object' ? next.skipped as Record<string, unknown> : null;
+      if (skipped) delete skipped[supplierId];
+      source.draft = next;
+      tellDraft();
+      const refused = source.refuseSkipped;
+      return new Promise<void>((resolve, reject) => {
+        queueMicrotask(() => {
+          if (!refused) { resolve(); return; }
+          source.draft = before;
+          tellDraft();
+          reject(new Error('permission-denied'));
+        });
       });
     },
 
