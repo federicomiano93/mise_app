@@ -35,6 +35,15 @@ export function cameFromSupplier(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromSupplier' in state;
 }
 
+// What a closed supplier's chip in «Order today» adds to the summary's state (close as not ordered, the second port's extras): the
+// summary's own Back then hands the focus back to that chip, not to the row (the current app's row; a DIFFERENCE, the chip being
+// what was tapped).
+export const FROM_CHIP = { fromChip: true } as const;
+
+export function cameFromChip(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && (state as { fromChip?: unknown }).fromChip === true;
+}
+
 function numberIn(state: unknown, key: string): number | undefined {
   if (typeof state !== 'object' || state === null) return undefined;
   const value = (state as Record<string, unknown>)[key];

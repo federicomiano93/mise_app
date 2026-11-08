@@ -482,9 +482,18 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     if (snapshot.draft.skipped[supplierId] !== deps.today()) return;
     const entries = snapshot.draft.entries;
     if (!lensNow('').linesOf(supplierId).some(line => wholeNumber(entries[line.id]?.qty) > 0)) return;
-    source.clearSupplierSkipped(supplierId).catch((err: unknown) => {
+    busyUntilAnswered(source.clearSupplierSkipped(supplierId)).catch((err: unknown) => {
       console.error('Reopening a closed supplier after typing failed:', err);
     });
+  }
+
+  // ⚠️ RULE 2 FOR A CLOSE OR A REOPEN (drafts/current.skipped): written on its own, outside the autosave and its busy hold, and
+  // only once the Firestore module has loaded (ordersSource). Held busy until the server answers, so a self-started reload in the
+  // first moments cannot throw the tap away before Firestore's queue has it (F-15). Offline it waits for the connection, as
+  // setDay's hold does.
+  function busyUntilAnswered(write: Promise<void>): Promise<void> {
+    const release = deps.markBusy();
+    return write.finally(release);
   }
 
   // The lens as it is NOW, from the latest data: what an order records and clears is decided by the one lens the screens
@@ -858,7 +867,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     },
 
     closeNotOrdered(supplierId) {
-      return source.setSupplierSkipped(supplierId, deps.today()).then(() => true, (err: unknown) => {
+      return busyUntilAnswered(source.setSupplierSkipped(supplierId, deps.today())).then(() => true, (err: unknown) => {
         console.error('Closing the supplier as not ordered failed:', err);
         say({ kind: 'close-not-saved' });
         return false;
@@ -867,7 +876,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
 
     reopenToday(supplierId) {
       if (!snapshot.draft.skipped[supplierId]) return Promise.resolve(true);
-      return source.clearSupplierSkipped(supplierId).then(() => true, (err: unknown) => {
+      return busyUntilAnswered(source.clearSupplierSkipped(supplierId)).then(() => true, (err: unknown) => {
         console.error('Reopening the supplier failed:', err);
         say({ kind: 'close-not-saved' });
         return false;
@@ -1046,7 +1055,10 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     kioskSections() {
       // ⚠️ NOTHING UNTIL THE DATA IS HERE (review of 3f-8a; the current app answers only once suppliers and records are loaded): with
       // the records missing every order day reads «to order», and with config/orders missing the switch reads ON.
-      if (!snapshot.suppliersLoaded || !snapshot.historyLoaded || !snapshot.configLoaded) return null;
+      // …and with the draft missing, a supplier closed as not ordered this morning would read «to order». A DEAD draft stream counts
+      // as arrived (draftLoaded), and its closes are read as NONE, even those it delivered before it died: the line errs on the side
+      // of the reminder, as the current app's kiosk does when its read of the draft fails (and as «Order today» does).
+      if (!snapshot.suppliersLoaded || !snapshot.historyLoaded || !snapshot.configLoaded || !snapshot.draftLoaded) return null;
       return kioskSectionsFor({
         suppliers: snapshot.suppliers,
         history: snapshot.history,
@@ -1054,7 +1066,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         weekStartsOn: snapshot.config.weekStartsOn,
         deliveryCheck: snapshot.deliveryCheck,
         // A supplier closed as not ordered today is not «to order» (the current app's PR #470).
-        skipped: snapshot.draft.skipped,
+        skipped: snapshot.draftBroken ? null : snapshot.draft.skipped,
       });
     },
 

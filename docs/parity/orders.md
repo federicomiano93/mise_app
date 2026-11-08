@@ -1724,3 +1724,27 @@ Differences, on purpose:
   sheet first (a710dcb: the confirmation opened under the sheet, and a second tap could record twice); here the confirm screen is
   an address of its own, drawn in place of the summary, so there is nothing under it to tap.
 
+### Closed as not ordered — extras from the second port (8 Nov 2026)
+
+The item was ported twice: #495 (above) was merged, #496 was closed as a duplicate. Compared afterwards, four things #496 did
+were missing here and are now added, as small changes on #495's code (`fix/mise2-order-done-extras`):
+- **«Order today» and the kiosk lines wait for the draft too** (`TodayOrders.tsx`, `ordersStore.kioskSections`): before it, a
+  supplier closed this morning flashed as «to order». A DIFFERENCE from the current app, whose strip draws before its draft
+  arrives. A dead draft stream counts as arrived, and its closes are read as none, even those it delivered before it died (another
+  phone may have reopened since): a «to order» too many is the safe side (the current app's kiosk reads a failed draft read the
+  same way).
+- **The summary offers nothing over a dead draft stream** (`SupplierSummaryScreen.tsx`), as over a dead records stream: with the
+  draft gone, a supplier with quantities typed would look like «nothing needed» and be offered the close.
+- **The busy marker** (`ordersStore.ts`): a close, a reopen and the reopen that typing sends are held busy until the server
+  answers, so a self-started reload in that moment cannot drop the tap (F-15; offline it waits for the connection, as the day
+  line's hold does).
+- **Focus: Back from a summary opened by a closed chip goes back to that chip** (`todayOpener` in `handBack.ts`, `FROM_CHIP` in
+  `ordersNav.ts`). A DIFFERENCE: the current app goes to the row. Reopened meanwhile, the chip is gone and the row takes it.
+
+Already the same in both, so nothing to add: the shared rules (`skippedOn`, `closeOffer`, `todayOrders`, the kiosk lines), the
+writes and their shapes, every draft write being a merge or a field update (so nothing drops `skipped`), and the re-check after
+the question. #496 held its own close on screen until the snapshot showed it; here Firestore shows its pending write at once, so
+that adds nothing. Nothing #495 has and #496 lacked is a defect.
+Specs: `ordersStore.skipped.spec.ts` (the busy marker, the kiosk waiting for the draft, a dead draft, a refused close taking back
+only its own key) and
+`OrdersSection.closeNotOrdered.spec.tsx` («the second port's extras»).
