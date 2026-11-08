@@ -25,7 +25,8 @@ import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { el } from './dom.js';
 import { productsUsingRecipe, draftFromRecipe, sortByMargin, productPreview } from './foodcost-model.js';
 import { previewPanel, previewCaption } from './preview-view.js';
-import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
+import { pricePerKg } from '../price-model.js';
+import { fcMoney, fcNumber } from './fc-number.js';
 // Food or packaging? From js/ root, where the registry that files it asks the same question.
 import { isPackaging } from '../ingredient-kind.js';
 import { ingredientDisplayName } from '../ingredient-name.js';
@@ -631,11 +632,11 @@ async function openHistory(product) {
 
   body.replaceChildren(
     ...entries.map(entry => el('div', { class: 'fc-hist-row' }, [
-      el('span', { class: 'fc-hist-pct', text: `${entry.foodCostPct}%` }),
+      el('span', { class: 'fc-hist-pct', text: `${fcNumber(entry.foodCostPct)}%` }),
       el('span', { class: 'fc-hist-detail', text: t('fc.histDetail', {
-        cost: formatRate(entry.unitCost),
-        price: formatMoney(entry.sellingPrice),
-        vat: entry.vatRate,
+        cost: fcMoney(entry.unitCost),
+        price: fcMoney(entry.sellingPrice),
+        vat: entry.vatRate === null || entry.vatRate === undefined ? entry.vatRate : fcNumber(entry.vatRate),
       }) }),
       el('span', { class: 'fc-hist-when', text: shortDate(entry.recordedAt) }),
     ])),
@@ -750,7 +751,7 @@ const app = {
       .map(i => {
         const each = i.priceUnit === 'pcs' ? Number(i.pricePerUnit) : null;
         const perKg = pricePerKg(i);
-        const note = each ? t('fc.priceEach', { price: formatRate(each) })
+        const note = each ? t('fc.priceEach', { price: fcMoney(each) })
           : perKg !== null ? t('fc.pricedByWeight')
             : t('fc.notPriced');
         return { id: i.id, name: ingredientDisplayName(i).trim(), invoiceName: String(i.name).trim(), meta: note };

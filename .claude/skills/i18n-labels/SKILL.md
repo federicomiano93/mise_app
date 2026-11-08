@@ -70,7 +70,7 @@ goes through `supplierLabel()`.
 - **Money on screen**: always `formatMoney` / `formatRate` (`js/price-model.js`) — they
   read the symbol AND the layout («£1234.56» / «1.234,56 €», `js/currency.js` moneyText)
   inside the drawing function, both from the venue's country. `currentCurrency()` alone is
-  only for a field caption («Prezzo al kg (€)»): beside a number it would skip the layout. **Numbers and dates on screen**: `Intl` with `localeTag()` — which follows the
+  only for a field caption («Prezzo al kg (€)»): beside a number it would skip the layout. ⚠️ **Food cost (`js/foodcost/`) is the exception** (Federico, 8 Nov 2026): every figure there has exactly two decimals, through `js/foodcost/fc-number.js` (`fcMoney`, `fcNumber`, `fcWeight`); never `formatRate`/`formatMoney` in that folder (a test pins it). **Numbers and dates on screen**: `Intl` with `localeTag()` — which follows the
   INTERFACE language, so it is for screens, not for label text. Never format by hand.
   ⚠️ **The one exception: a number on the SAME LINE as a price** (a quantity «2,5 × 6,50 €»,
   the stocktake kilos beside a price) takes the money's layout with `localNumber()`

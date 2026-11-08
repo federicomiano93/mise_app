@@ -11,32 +11,26 @@
 
 import { t } from '../i18n.js';
 import { el } from './dom.js';
-import { formatMoney } from '../price-model.js';
 import { currentCurrency, localNumber } from '../currency.js';
+import { fcMoney, fcNumber, fcWeight, weighingParams } from './fc-number.js';
 import { startWeighing, readWeighing } from './foodcost-weighing.js';
 
-// A weight for the «Cost per 1 kg» list and for a recipe line: under 1 kg in whole grams (one
-// decimal under 10 g), from 1 kg in kilos with up to 3 decimals. localNumber() because the
+// A weight for the «Cost per 1 kg» list: always two decimals (Federico, 8 Nov 2026) — under 1 kg
+// in grams («12,50 g»), from 1 kg in kilos («1,25 kg»). fc-number.js decides the switch on the
+// ROUNDED grams, so 999.996 g reads «1,00 kg», never «1000,00 g». Venue layout, because the
 // figure sits on the same line as a price.
-// Decided on the ROUNDED grams, so 999.6 g reads «1 kg», never «1000 g».
 export function perKgWeightText(kg) {
-  const g = kg * 1000;
-  const shown = g < 10 ? Number(g.toFixed(1)) : Math.round(g);
-  if (shown < 1000) return `${localNumber(String(shown))} g`;
-  return `${localNumber(String(Number(kg.toFixed(3))))} kg`;
+  return fcWeight(kg);
 }
 
-// A recipe line's quantity, as exact as the form's box (the line is stored in KILOS): under 1 kg
-// in grams with up to 2 decimals (0.0125 → «12,5 g»), from 1 kg in kilos with up to 4 decimals
-// (1.25 → «1,25 kg»), trailing zeros dropped. Decided on the ROUNDED grams, so 999.999 g reads
-// «1 kg», never «1000 g». localNumber() because the figure sits beside prices.
+// A recipe line's quantity (the line is stored in KILOS), the same two-decimal weight:
+// 0.0125 → «12,50 g», 1.25 → «1,25 kg». The form's box still shows the exact figure.
 export function recipeQtyText(kg) {
-  const g = Number((kg * 1000).toFixed(2));
-  if (g < 1000) return `${localNumber(String(g))} g`;
-  return `${localNumber(String(Number(kg.toFixed(4))))} kg`;
+  return fcWeight(kg);
 }
 
-// A number the person typed (minutes, people, pieces, a rate), through the venue's layout.
+// A COUNT the person typed (minutes, people), through the venue's layout. Not a measure, so it
+// keeps its own figure («30», not «30,00»).
 const plain = n => localNumber(String(n));
 
 // The pieces-per-batch box exists for what is sold by the piece, or by a pack counted in
@@ -48,8 +42,8 @@ export function showsPiecesField(working) {
 const SOLD_TEXT = { piece: 'fc.byThePiece', weight: 'fc.byWeightPerKg', pack: 'fc.byThePack' };
 
 const positive = n => Number.isFinite(Number(n)) && Number(n) > 0;
-// An amount with its unit. Pieces read «12 pz» (fc.perKg.pieces): «pezzi» after a 1 read «1 pezzi».
-const amountText = (n, unit) => (unit === 'pcs' ? t('fc.perKg.pieces', { n: plain(n) }) : `${plain(n)} ${unit}`);
+// An amount with its unit. Pieces read «12,00 pz» (fc.perKg.pieces): «pezzi» after a 1 read «1,00 pezzi».
+const amountText = (n, unit) => (unit === 'pcs' ? t('fc.perKg.pieces', { n: fcNumber(n) }) : `${fcNumber(n)} ${unit}`);
 
 function notSet() {
   return el('span', { class: 'fc-read-empty', text: t('fc.notSet') });
@@ -87,7 +81,7 @@ export function readProduct(working) {
   }
   if (showsPiecesField(working)) {
     rows.push(readRow(t('fc.piecesPerBatch'), positive(working.piecesPerBatch)
-      ? plain(working.piecesPerBatch) : null));
+      ? fcNumber(working.piecesPerBatch) : null));
   }
   return readList(rows);
 }
@@ -122,15 +116,15 @@ export function readWeighings({ noWeightLoss, recipes, recipeIds }) {
     const recipe = recipes[id];
     const state = startWeighing(recipe);
     const shown = readWeighing(recipe, state);
-    const grams = n => (positive(n) ? `${plain(n)} g` : null);
+    const grams = n => (positive(n) ? `${fcNumber(n)} g` : null);
     return el('div', { class: 'fc-weigh' }, [
       known.length > 1 ? el('p', { class: 'fc-weigh-title', text: t('fc.weighFor', { name: recipe.name || '' }) }) : null,
       readList([
         readRow(t('fc.rawDough'), grams(state.raw)),
         readRow(t('fc.cookedDough'), grams(state.cooked), { invalid: !!shown.warning }),
       ]),
-      el('p', { class: 'fc-weigh-out', text: t(shown.message.key, shown.message.params) }),
-      shown.warning ? el('p', { class: 'fc-weigh-warn', text: t(shown.warning.key, shown.warning.params) }) : null,
+      el('p', { class: 'fc-weigh-out', text: t(shown.message.key, weighingParams(shown.message.params)) }),
+      shown.warning ? el('p', { class: 'fc-weigh-warn', text: t(shown.warning.key, weighingParams(shown.warning.params)) }) : null,
     ]);
   });
   return el('div', { class: 'fc-weighs' }, blocks);
@@ -165,8 +159,8 @@ export function readLabour({ minutes, people, note }) {
 // ── Prezzo ──────────────────────────────────────────────────────────────────
 export function readPrice({ vatRate, target, price }) {
   return readList([
-    readRow(t('fc.vatRate'), vatRate === null || vatRate === undefined ? null : `${plain(vatRate)}%`),
-    readRow(t('fc.foodCostTarget'), positive(target) ? `${plain(target)}%` : null),
-    readRow(t('fc.sellingPriceVat', { currency: currentCurrency() }), positive(price) ? formatMoney(price) : null),
+    readRow(t('fc.vatRate'), vatRate === null || vatRate === undefined ? null : `${fcNumber(vatRate)}%`),
+    readRow(t('fc.foodCostTarget'), positive(target) ? `${fcNumber(target)}%` : null),
+    readRow(t('fc.sellingPriceVat', { currency: currentCurrency() }), positive(price) ? fcMoney(price) : null),
   ]);
 }

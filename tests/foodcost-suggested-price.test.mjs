@@ -78,14 +78,14 @@ test('⚠️⚠️ the note under a recipe line holds no money (the money is lin
   const start = editor.indexOf('function lineNote(');
   const recipeBranch = editor.slice(start, editor.indexOf('const ingredient = tables.ingredients', start));
   assert.ok(recipeBranch.length > 50, 'the recipe branch of lineNote must be found');
-  assert.doesNotMatch(recipeBranch, /formatRate|formatMoney|\/ kg/, 'the note itself says nothing about money');
+  assert.doesNotMatch(recipeBranch, /formatRate|formatMoney|fcMoney|fcNumber|\/ kg/, 'the note itself says nothing about money');
   assert.match(recipeBranch, /t\('fc\.thisRecipePartlyPriced'\)/, 'a partly priced recipe still says so');
   assert.doesNotMatch(recipeBranch, /fc\.thisRecipeIsNot/, 'a recipe with no price says it in the money line, not twice');
   assert.match(read('js/foodcost/line-cost.js'), /t\('fc\.line\.noPrice'\)/, 'the money line says «No price»');
 
   const main = read('js/foodcost/foodcost-main.js');
   const opt = main.slice(main.indexOf('recipeOptions()'), main.indexOf('packagingOptions()'));
-  assert.doesNotMatch(opt, /costRecipe|formatRate|notPriced|\/ kg/, 'the chooser names recipes and nothing else');
+  assert.doesNotMatch(opt, /costRecipe|formatRate|fcMoney|fcNumber|notPriced|\/ kg/, 'the chooser names recipes and nothing else');
 });
 
 test('every new word exists in both languages, and the Italian is Italian', () => {
