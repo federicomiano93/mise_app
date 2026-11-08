@@ -49,6 +49,22 @@
   background: var(--warn);
 }
 
+/* «The list of Tuesday has been copied here»: a copy's one-line explanation. The region is on the page
+   empty from the first render (a live region inserted already filled is announced unreliably), so
+   the room around the words belongs to the filled state only. */
+.copied {
+  color: var(--accent-ink);
+  font-size: var(--fs-sm);
+  font-weight: 500;
+}
+
+.copied:not(:empty) {
+  margin: var(--s4) var(--s4) 0;
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+}
+
 /* The notice for a blocked save (the design's `.banner-danger`). The region around it is on the
    page empty, with no height; the notice carries the room around itself. */
 .banner {

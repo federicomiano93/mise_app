@@ -1,0 +1,54 @@
+/* The six days «Copy day» can copy onto: a list of rows inside the dialog, each a whole-row tap
+   target at least as tall as a touch target. */
+
+.days {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.day {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s2) var(--s4);
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.day:first-child {
+  border-top: 0;
+}
+
+/* The row of the chosen day is told by its tint as well as by the radio. */
+.day[data-checked="true"] {
+  background: var(--accent-tint);
+}
+
+/* The native radio, at a size a finger can see; the label around it is the touch target. */
+.radio {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+}
+
+.day[data-checked="true"] .name {
+  font-weight: 600;
+}
+
+/* ink-2 is above 4.5:1 on both the dialog's surface and the chosen row's tint. */
+.count {
+  flex: none;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
