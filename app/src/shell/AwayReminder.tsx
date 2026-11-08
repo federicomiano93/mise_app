@@ -8,12 +8,15 @@ import { awayDayLabel } from './away/awayWords';
 import { useConfirm } from '../ui/useConfirm';
 import { SECTIONS } from './sections';
 import { useTodayKey } from './useTodayKey';
+import { useVisibleSections } from './useVisibleSections';
 
 // The section an address is in, when it is one that can remind: every section but the Home and Settings (they are where a holiday is
-// SEEN and ended, so asking there would be asking twice). «More» is not a section, it is a list of them. null for anything else.
-function remindingSection(pathname: string): string | null {
+// SEEN and ended, so asking there would be asking twice), and only one this person is SHOWN — a hidden section's address opens «not
+// available», and the current app's reminder came with a card's tap, which a hidden card never gets. «More» is not a section, it is a
+// list of them. null for anything else.
+function remindingSection(pathname: string, visible: ReadonlySet<string>): string | null {
   for (const section of SECTIONS) {
-    if (section.id === 'home' || section.id === 'settings') continue;
+    if (section.id === 'home' || section.id === 'settings' || !visible.has(section.id)) continue;
     if (pathname === section.path || pathname.startsWith(`${section.path}/`)) return section.id;
   }
   return null;
@@ -38,7 +41,8 @@ export function AwayReminder() {
   const store = useAwayStore();
   const away = useAway();
   const [confirm, confirmDialog] = useConfirm();
-  const section = remindingSection(pathname);
+  const { visible } = useVisibleSections();
+  const section = remindingSection(pathname, visible);
   // ⚠️ THE DAY IS WATCHED TOO: somebody sitting in a section when the day changes (or the tablet wakes on a new day) is judged again for
   // the new day, by the same rules.
   const day = useTodayKey();

@@ -41,6 +41,17 @@ const noReminder = async () => {
 // Each case opens a whole section under the shell (Recipes, loaded lazily): under a full parallel run that alone took over the
 // default 5 s twice (7 Nov 2026), so the cases get 15 s.
 describe('the once-a-day holiday reminder', { timeout: 15_000 }, () => {
+  // Review, 8 Nov 2026: a section this person is not shown opens «not available»; the question is not put on top of it.
+  it('asks nothing in a section this person is not shown, and keeps the day’s reminder for one they are', async () => {
+    const STAFF = { session: { role: 'staff', canManage: false, isOwner: false } } as const;
+    const { user } = await open('/food-cost', AWAY, STAFF);
+    await screen.findByRole('heading', { level: 1, name: 'Food cost' }, LOAD);
+    await noReminder();
+    expect(localStorage.getItem(KEY)).toBeNull();
+    await user.click(rail().getByRole('link', { name: 'Recipes' }));
+    expect(await reminder()).toBeInTheDocument();
+  });
+
   it('asks when a section other than the Home and Settings is entered, with «I am back» as the main button', async () => {
     const { user, router } = await open('/home');
     await noReminder();
