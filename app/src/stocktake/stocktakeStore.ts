@@ -24,9 +24,10 @@
 // can be typed into a month that turns out to be closed.
 
 import {
-  COUNT_MAPS, carryOver, isClosed, isMonthId, monthBounds, nextMonth, normalizeMonth, productsOfMonth, readCount, toDocument,
+  COUNT_MAPS, LIST_STATUS, carryOver, isClosed, isMonthId, listStatus, monthBounds, monthReady, nextMonth, normalizeMonth,
+  productsOfMonth, readCount, toDocument, withoutEmptyMaps,
 } from '@mise/shared/inventory-model';
-import type { CountMap, InventoryMonth } from '@mise/shared/inventory-model';
+import type { CountMap, InventoryMonth, ListStatus } from '@mise/shared/inventory-model';
 import {
   EMPTY_OUTBOX, answered, applyOver, echoed, hasHeld, hasUnsaved, hasWork, isSending, release, revive,
   stage, stageMany, take, unsaved,
@@ -34,7 +35,6 @@ import {
 import type { Outbox } from '@mise/shared/inventory-outbox';
 import { purchasesInMonth } from '@mise/shared/inventory-purchases';
 import type { KeyValueStorage } from '../session/backend';
-import { monthReady, withoutEmptyMaps } from './stocktakeModel';
 import type { SnapshotMeta, StocktakeSource, StoredDoc } from './stocktakeSource';
 
 // How long after the last change a count is sent. Long enough that typing «12» is one write and
@@ -43,6 +43,12 @@ export const SAVE_DELAY_MS = 700;
 
 // The longest the SCREEN may wait for a sequence of writes before carrying on regardless.
 export const SETTLE_MS = 1200;
+
+// ⚠️ How long the list may say «loading» before it says the products have not arrived (the current app's STALL_MS). The
+// Firestore SDK itself gives up after 10 s without the server and answers from its copy; past that, with a browser that
+// believes it is online, nothing else tells the screen the signal is not there. Counted from the month being opened: Mise 2
+// changes month without a reload, and the month on screen is the one whose answer is awaited.
+export const STALL_MS = 10_000;
 
 // ⚠️ THE CURRENT APP'S KEY, WITH ITS MEANING (both apps share one origin), and THE VENUE IS IN IT:
 // one phone can hold two businesses. Not under KEEP_PREFIXES, so a venue switch wipes it.
@@ -89,6 +95,10 @@ export interface StocktakeSnapshot {
   // NOT monthLoaded and ingredientsLoaded: those say the screen has something to draw, and both turn true on the phone's
   // empty copy and on a failure. This one turns true only on what proves something.
   readonly ready: boolean;
+  // ⚠️ WHAT THE LIST MAY SAY WHILE IT HAS NO ROWS (listStatus, the current app's): «No products yet» only once the month
+  // AND the ingredients have proved it. Until then it is loading, the products have not arrived (offline with an empty
+  // copy, or STALL_MS without an answer), or a listener died.
+  readonly listStatus: ListStatus;
   // Counts typed here that Firestore has not confirmed yet (waiting, or in the air). While true the
   // section holds the session's busy marker, so a self-started reload never cuts a write short.
   readonly unsent: boolean;
@@ -130,6 +140,8 @@ export interface StocktakeDeps {
   // Calls back when the page is being hidden or left; returns the unsubscribe.
   onHide(callback: () => void): () => void;
   warn(message: string, detail?: unknown): void;
+  // navigator.onLine; undefined when the browser does not say (then only the stall timer says «not arrived»).
+  online?(): boolean | undefined;
 }
 
 export interface StocktakeStore {
@@ -212,6 +224,7 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
     ingredients: [],
     ingredientsLoaded: false,
     ready: false,
+    listStatus: LIST_STATUS.waiting,
     unsent: false,
   });
   const listeners = new Set<() => void>();
@@ -221,25 +234,71 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
   // signal is an empty list from the copy too, and that time it is true.
   let ingredientsProved = false;
   let pricesAnswered = false;
+  // The ingredients' listener died (until it answers again), and its last answer was the phone's copy saying «none».
+  let ingredientsFailed = false;
+  let emptyCopy = false;
+  // STALL_MS have passed since the month on screen was opened, with the two answers still out.
+  let stalled = false;
+  let stallTimer: unknown = null;
 
-  function isReady(next: StocktakeSnapshot): boolean {
+  // The month on screen, if the snapshot is about it.
+  function currentSession(next: StocktakeSnapshot): MonthSession | null {
     const s = session;
-    if (!s || !s.current || s.id !== next.monthId || next.month === null) return false;
+    return s && s.current && s.id === next.monthId && next.month !== null ? s : null;
+  }
+
+  // What the two listeners have PROVED, in the current app's words (listStatus). This store exists only inside an open
+  // venue, so its language is known: never `starting`.
+  function statusOf(s: MonthSession | null): ListStatus {
+    return listStatus({
+      venueOpen: locationId !== '',
+      monthAnswered: s !== null && s.monthProved,
+      ingredientsAnswered: ingredientsProved,
+      failed: ingredientsFailed || (s !== null && s.streamFailed),
+      emptyCopy,
+      stalled,
+      online: deps.online?.(),
+    });
+  }
+
+  function isReady(next: StocktakeSnapshot, status: ListStatus): boolean {
+    const s = currentSession(next);
+    if (!s || next.month === null) return false;
     const closed = isClosed(next.month);
     return monthReady({
-      // ⚠️ A STREAM THAT DIED CAN NO LONGER SAY THE MONTH WAS CLOSED MEANWHILE, whatever it said before.
-      monthAnswered: s.monthProved && !s.streamFailed,
-      ingredientsAnswered: ingredientsProved,
-      pricesAnswered,
+      // ⚠️ A STREAM THAT DIED CAN NO LONGER SAY THE MONTH WAS CLOSED MEANWHILE, whatever it said before (Mise 2 only: in the
+      // current app a failure does not take back an answer). For the list's words the answer still stands: the rows are
+      // drawn anyway, and the notice says what happened.
+      status: s.streamFailed ? LIST_STATUS.failed : status,
       closed,
       rows: closed ? productsOfMonth(next.month, next.ingredients).length : 0,
+      pricesAnswered,
     });
   }
 
   function update(partial: Partial<StocktakeSnapshot>): void {
     const next = { ...snapshot, ...partial };
-    snapshot = Object.freeze({ ...next, ready: isReady(next) });
+    const status = statusOf(currentSession(next));
+    snapshot = Object.freeze({ ...next, listStatus: status, ready: isReady(next, status) });
     for (const listener of [...listeners]) listener();
+  }
+
+  // ⚠️ THE WAIT HAS AN END. Without a timer a bad signal says «loading» for ever. Started again for every month opened;
+  // nothing to say if both listeners have answered by then.
+  function watchForStall(): void {
+    if (stallTimer !== null) deps.clearTimer(stallTimer);
+    stalled = false;
+    stallTimer = deps.setTimer(() => {
+      stallTimer = null;
+      if (session?.monthProved && ingredientsProved) return;
+      stalled = true;
+      update({});
+    }, STALL_MS);
+  }
+
+  function stopStallWatch(): void {
+    if (stallTimer !== null) deps.clearTimer(stallTimer);
+    stallTimer = null;
   }
 
   function say(message: StocktakeMessage): void {
@@ -590,6 +649,7 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
     // is not left a second time: that would start a second SETTLE_MS timer over the first one.
     if (session?.current) leave(session);
     session = openSession(monthId);
+    watchForStall();
     update({ monthId, month: session.month, monthLoaded: false, monthFailed: false, unsent: false });
   }
 
@@ -801,13 +861,20 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
       stopIngredients = source.watchIngredients(
         (list, answer) => {
           if (mine !== ingredientsSeq) return;
-          // ⚠️ AN EMPTY LIST FROM THE PHONE'S COPY IS NOT AN ANSWER.
-          if (list.length > 0 || !answer.fromCache) ingredientsProved = true;
+          // ⚠️ AN EMPTY LIST FROM THE PHONE'S COPY IS NOT AN ANSWER. And a list that has answered stays answered: the last
+          // row deleted with no signal is an empty list from the copy too, and that time it is true.
+          emptyCopy = list.length === 0 && answer.fromCache;
+          if (!emptyCopy) ingredientsProved = true;
+          ingredientsFailed = false;
           pricesAnswered = answer.pricesAnswered;
           update({ ingredients: list, ingredientsLoaded: true });
         },
-        // The list must not say «Loading…» for ever. It proves nothing.
-        () => { if (mine === ingredientsSeq) update({ ingredientsLoaded: true }); },
+        // The list must not say «Loading…» for ever. It proves nothing, and the list says it could not load.
+        () => {
+          if (mine !== ingredientsSeq) return;
+          ingredientsFailed = true;
+          update({ ingredientsLoaded: true });
+        },
       );
       // ⚠️ WHAT IS TYPED IS SENT BEFORE THE PAGE GOES AWAY: the save is debounced, so closing the
       // app a moment after the last number would otherwise lose it.
@@ -822,6 +889,7 @@ export function createStocktakeStore(source: StocktakeSource, locationId: string
     },
     stop() {
       ingredientsSeq += 1;
+      stopStallWatch();
       stopIngredients?.();
       stopIngredients = null;
       stopHide?.();
@@ -859,5 +927,6 @@ export function browserStocktakeDeps(): StocktakeDeps {
       };
     },
     warn: (message, detail) => console.warn(message, detail),
+    online: () => (typeof navigator === 'undefined' ? undefined : navigator.onLine),
   };
 }

@@ -438,3 +438,96 @@ describe.each([
     expect(out).toStrictEqual([{ id: 'flour', name: 'Farina', weight: '25kg' }]);
   });
 });
+
+// ── The close guard and the list's words (PR #440/#442 of the current app, ported 8 Nov 2026) ──────────────
+// Every model case of tests/inventory-close-month.test.mjs (monthReady, withoutEmptyMaps) and of
+// tests/inventory-empty-flash.test.mjs (listStatus), on both files.
+describe.each([
+  ['shared/ (TypeScript)', ported],
+  ['js/ (current app)', legacy],
+] as const)('%s: the close guard and the list\'s words', (_name, m) => {
+  test('⚠️ an empty map never goes out in a write: in a merge it wipes the stored one', () => {
+    expect(m.withoutEmptyMaps({ month: '2026-09', opening: {}, packKg: { a: 25 }, names: {}, unitPrice: {} }))
+      .toStrictEqual({ month: '2026-09', packKg: { a: 25 } });
+  });
+
+  test('what is not an empty map goes out untouched: an empty string reopens a month, a removal is not empty', () => {
+    class Sentinel {}
+    const removal = new Sentinel();
+    const kept = { closedAt: '', updatedAt: 'now', closing: { a: removal }, top: removal, nothing: null, zero: 0 };
+    expect(m.withoutEmptyMaps(kept)).toStrictEqual(kept);
+    expect(m.withoutEmptyMaps(kept).top, 'deleteField() is not a plain map: it goes through').toBe(removal);
+  });
+
+  const ready = (over: Partial<ported.MonthReadyInput> = {}): boolean => m.monthReady({
+    status: m.LIST_STATUS.answered, closed: false, rows: 3, pricesAnswered: true, ...over,
+  });
+
+  test('⚠️ an open month is ready only with its own answer, the ingredients\' and the prices\'', () => {
+    expect(ready()).toBe(true);
+    for (const status of [m.LIST_STATUS.starting, m.LIST_STATUS.waiting, m.LIST_STATUS.unreachable, m.LIST_STATUS.failed]) {
+      expect(ready({ status }), `status ${status}, with rows on screen`).toBe(false);
+    }
+    expect(ready({ pricesAnswered: false }), 'a close would freeze no money').toBe(false);
+    expect(ready({ pricesAnswered: undefined })).toBe(false);
+  });
+
+  test('a venue that has really answered with nothing is ready: the month can still be closed', () => {
+    expect(ready({ rows: 0 })).toBe(true);
+  });
+
+  test('a closed month is ready on its own rows, whatever the ingredients are doing; with none it needs the answer', () => {
+    expect(ready({ closed: true, status: m.LIST_STATUS.waiting, pricesAnswered: false })).toBe(true);
+    expect(ready({ closed: true, status: m.LIST_STATUS.waiting, rows: 0 })).toBe(false);
+    expect(ready({ closed: true, rows: 0 })).toBe(true);
+  });
+
+  const base = {
+    venueOpen: true, monthAnswered: false, ingredientsAnswered: false, failed: false,
+    emptyCopy: false, stalled: false, online: true,
+  };
+
+  test('⚠️ «no products» needs BOTH answers: a closed month reads its rows from the month, not the ingredients', () => {
+    expect(m.listStatus({ ...base, monthAnswered: true, ingredientsAnswered: true })).toBe(m.LIST_STATUS.answered);
+    expect(m.listStatus({ ...base, ingredientsAnswered: true }), 'the month has not spoken').toBe(m.LIST_STATUS.waiting);
+    expect(m.listStatus({ ...base, monthAnswered: true }), 'the ingredients have not spoken').toBe(m.LIST_STATUS.waiting);
+  });
+
+  test('⚠️ no venue open yet: no word at all, it would be in the wrong language', () => {
+    const closed = { ...base, venueOpen: false };
+    expect(m.listStatus(closed)).toBe(m.LIST_STATUS.starting);
+    expect(m.listStatus({ ...closed, stalled: true, online: false, failed: true, emptyCopy: true }),
+      'with no session the sign-in gate is what speaks').toBe(m.LIST_STATUS.starting);
+  });
+
+  test('⚠️ an empty copy while online is still waiting: a venue with no products gets it a moment before the server', () => {
+    expect(m.listStatus({ ...base, emptyCopy: true })).toBe(m.LIST_STATUS.waiting);
+  });
+
+  test('an empty copy with the browser offline is unreachable, at once', () => {
+    expect(m.listStatus({ ...base, emptyCopy: true, online: false })).toBe(m.LIST_STATUS.unreachable);
+  });
+
+  test('offline with nothing heard is still waiting: a full copy may be a moment away', () => {
+    expect(m.listStatus({ ...base, online: false })).toBe(m.LIST_STATUS.waiting);
+  });
+
+  test('too long without an answer is unreachable, whatever the browser believes', () => {
+    expect(m.listStatus({ ...base, stalled: true })).toBe(m.LIST_STATUS.unreachable);
+  });
+
+  test('a dead listener is told apart, and an answer wins over everything', () => {
+    expect(m.listStatus({ ...base, failed: true })).toBe(m.LIST_STATUS.failed);
+    expect(m.listStatus({ ...base, failed: true, stalled: true, online: false })).toBe(m.LIST_STATUS.failed);
+    expect(m.listStatus({
+      ...base, monthAnswered: true, ingredientsAnswered: true, failed: true, emptyCopy: true, stalled: true, online: false,
+    })).toBe(m.LIST_STATUS.answered);
+  });
+
+  test('the five words are the original\'s, frozen', () => {
+    expect(m.LIST_STATUS).toStrictEqual({
+      starting: 'starting', answered: 'answered', waiting: 'waiting', unreachable: 'unreachable', failed: 'failed',
+    });
+    expect(Object.isFrozen(m.LIST_STATUS)).toBe(true);
+  });
+});

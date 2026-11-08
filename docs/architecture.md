@@ -122,7 +122,9 @@ Aria does not support Preact. The numbers are below.
   ingredients, their prices, a month's orders read once), a store (`stocktakeStore.ts`: ONE month at
   a time — `openMonth()` follows the month in the address — with the outbox of `inventory-outbox`,
   local-first and never rolled back, a closed month refusing every change, and nothing typed into
-  a box until the month has answered once), a context (`StocktakeContext.tsx`), and the screens:
+  a box until the month has answered once; a close, a carry and a fill wait for `ready`, and the list's words for
+  `listStatus`, both decided by `@mise/shared/inventory-model` — `monthReady`, `listStatus`, `withoutEmptyMaps`, the
+  current app's PR #440/#442), a context (`StocktakeContext.tsx`), and the screens:
   `StocktakeSection` (the frame, the address `/stocktake/<YYYY-MM>[/product/<id>|/cost]`, the
   split from 1000px), `MonthBar`, `CountList` with `ProductRow` and `CountBox`, `StocktakeProduct`,
   `StocktakeCost`, `MonthActions`. The money comes from the venue's country through
