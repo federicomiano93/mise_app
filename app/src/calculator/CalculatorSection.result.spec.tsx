@@ -258,6 +258,7 @@ describe('a recipe taken from the catalogue', () => {
     while (panel && !statuses.some(status => status.parentElement === panel)) panel = panel.parentElement;
     const line = panel?.firstElementChild as HTMLElement | null | undefined;
     expect(line?.getAttribute('role'), 'the first thing in the panel is the problem line, a status').toBe('status');
+    expect(line?.hasAttribute('hidden'), 'never hidden: a live region is in the page before it speaks').toBe(false);
     return line as HTMLElement;
   };
 
@@ -300,14 +301,13 @@ describe('a recipe taken from the catalogue', () => {
   it('says nothing while the recipe is still on its way (not «it is gone»)', async () => {
     await openLinked(GOOD, true);
     await screen.findByRole('region', { name: 'Linked dough' }, LOAD);
-    expect(problemLine()).not.toBeVisible();
-    expect(problemLine()).toHaveTextContent('');
+    expect(problemLine(), 'empty, never hidden: a live region present before it speaks').toBeEmptyDOMElement();
   });
 
   it('says nothing for a tab that calculates, nor for a tab with its own ingredients', async () => {
     await openLinked(GOOD);
     await within(await screen.findByRole('region', { name: 'Linked dough' }, LOAD)).findByText('Flour', undefined, LOAD);
-    expect(problemLine()).not.toBeVisible();
+    expect(problemLine(), 'empty, never hidden: a live region present before it speaks').toBeEmptyDOMElement();
   });
 
   it('a tab with its own ingredients and no rows yet says nothing (it is still being written in Settings)', async () => {
@@ -315,8 +315,7 @@ describe('a recipe taken from the catalogue', () => {
     window.localStorage.setItem('calculator-config', JSON.stringify(configOf({ recipes: [own], clients: [] })));
     renderCalculator('/calculator/own', { source: fakeCalculatorSource({ config: configOf({ recipes: [own], clients: [] }) }) });
     await main().findByLabelText('Total dough (g)', undefined, LOAD);
-    expect(problemLine()).not.toBeVisible();
-    expect(problemLine()).toHaveTextContent('');
+    expect(problemLine(), 'empty, never hidden: a live region present before it speaks').toBeEmptyDOMElement();
   });
 
   it('closes the result card when the recipe becomes impossible to calculate (no old title over nothing)', async () => {
@@ -342,7 +341,7 @@ describe('a recipe taken from the catalogue', () => {
     await within(card).findByText('Flour', undefined, LOAD);
     // 1000 g of dough from 1000 : 600 : 400.
     expect(within(card).getAllByRole('listitem').map(row => row.textContent)).toEqual(['Flour500 g', 'Water300 g', 'Malt200 g']);
-    expect(problemLine()).not.toBeVisible();
+    expect(problemLine(), 'empty, never hidden: a live region present before it speaks').toBeEmptyDOMElement();
   });
 
   it('says the unweighable row in Italian too', async () => {

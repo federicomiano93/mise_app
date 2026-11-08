@@ -404,9 +404,10 @@ export function RecipePanel({ recipe, panelProps }: Props) {
   return (
     <div {...panelProps}>
       {/* FIRST in the panel: below a long list of client orders it would be off-screen and the tab silent again. Always
-          mounted, so the status region exists before its sentence arrives; React writes the text only when it changes,
-          so a keystroke never makes a screen reader read it out again (current app 1342cb79). */}
-      <p role="status" className={styles.sourceProblem} hidden={sourceProblem === ''}>{sourceProblem}</p>
+          mounted and never hidden (empty, its stylesheet gives it no room), so the status region is in the accessibility
+          tree before its sentence arrives; React writes the text only when it changes, so a keystroke never makes a screen
+          reader read it out again (current app 1342cb79). Difference, on purpose: the current app hides the empty line. */}
+      <p role="status" className={styles.sourceProblem}>{sourceProblem}</p>
       <ClearedNote rid={rid} />
       <div className={styles.layout}>{parts}</div>
       <Dialog
