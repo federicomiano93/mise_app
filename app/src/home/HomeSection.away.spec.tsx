@@ -92,8 +92,39 @@ describe('Home: the holiday band', () => {
     await user.click(await band());
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'I am back' }));
 
-    expect(await screen.findByText('Not saved — check the connection and try again.')).toBeInTheDocument();
+    const notice = await screen.findByRole('alertdialog', { name: 'I am on holiday' });
+    expect(within(notice).getByText('Not saved — check the connection and try again.')).toBeInTheDocument();
+    await user.click(within(notice).getByRole('button', { name: 'OK' }));
     expect(await band()).toBeInTheDocument();
+  });
+
+  // Review, 8 Nov 2026: the answer can land long after the Home has gone; the shell says it wherever the person is.
+  it('says «Not saved» in a dialog even when the refusal arrives after the person left the Home', async () => {
+    const { user, source } = await open({ away: { until: '2026-11-16' } });
+    source.holdWrites = true;
+    await user.click(await band());
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'I am back' }));
+    await waitFor(() => { expect(main().queryByText(/On holiday until/)).not.toBeInTheDocument(); });
+    await user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Recipes' }));
+    await screen.findByRole('heading', { level: 1, name: 'Recipes' });
+    source.refuseHeld(Object.assign(new Error('no'), { code: 'permission-denied' }));
+    const notice = await screen.findByRole('alertdialog', { name: 'I am on holiday' });
+    expect(within(notice).getByText('Not saved — check the connection and try again.')).toBeInTheDocument();
+  });
+
+  // Review, 8 Nov 2026: nobody pressed anything, so the focus is not moved (it would be announced out of nowhere).
+  it('leaves the focus alone when the holiday ends because another phone ended it', async () => {
+    const { source } = await open({ away: { until: '2026-11-16' } });
+    await band();
+    (document.activeElement as HTMLElement | null)?.blur();
+    source.away = { until: '' };
+    vi.setSystemTime(new Date(NOW.getTime() + 11 * 60_000));
+    document.dispatchEvent(new Event('visibilitychange'));
+    await waitFor(() => { expect(main().queryByText(/On holiday until/)).not.toBeInTheDocument(); });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(document.getElementById('home-todo-add')).not.toBeNull();
+    expect(document.getElementById('home-todo-add')).not.toHaveFocus();
+    expect(document.getElementById('home-todo-title')).not.toHaveFocus();
   });
 
   it('speaks Italian', async () => {

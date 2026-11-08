@@ -10,6 +10,7 @@ import { SwitchVenueButton } from '../session/SwitchVenueButton';
 import { AwayProvider } from './away/AwayContext';
 import { announceScreen } from '../telemetry/usage';
 import { AwayReminder } from './AwayReminder';
+import { AwayRefusalAlert } from './away/AwayRefusalAlert';
 import { OfflineBanner } from './OfflineBanner';
 import { MORE, moreIsCurrent, screenNameFor, sectionById, titleKeyFor } from './sections';
 import type { Section } from './sections';
@@ -76,6 +77,7 @@ function ShellFrame() {
         <SkipLink target={contentRef} />
         <PartBoundary>
           <AwayReminder />
+          <AwayRefusalAlert />
         </PartBoundary>
         <Rail />
         <div className={styles.main}>

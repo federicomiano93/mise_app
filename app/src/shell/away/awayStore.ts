@@ -44,6 +44,9 @@ export interface AwayStore {
   set(until: string): AwayChange;
   // Ends the holiday now. Asks nothing: its callers have already asked.
   comeBack(): AwayChange;
+  // Told when the server refused this person's NEWEST write (the state has been put back). The shell says it, once, wherever the person
+  // is by then (AwayRefusalAlert): the answer can land long after the screen that wrote it has gone.
+  onRefused(listener: () => void): () => void;
 }
 
 // How often the holiday may be read again (a day change, the tablet coming back to the foreground): a holiday ended or set on another
@@ -53,6 +56,7 @@ export const REREAD_MIN_MS = 600_000;
 export function createAwayStore(source: SettingsSource, uid: string, now: () => number = Date.now): AwayStore {
   let snapshot: AwaySnapshot = Object.freeze({ status: 'loading', until: null, away: false });
   const listeners = new Set<() => void>();
+  const refusedListeners = new Set<() => void>();
   let started = false;
   let lastRead = 0;
   // Counts this person's writes: only the NEWEST write's refusal puts anything back.
@@ -99,6 +103,7 @@ export function createAwayStore(source: SettingsSource, uid: string, now: () => 
           // carried that write on top (`pending`) and was not recorded, so `confirmed` may be unknown and what was put back a guess; by
           // the time the refusal arrives the phone's copy has dropped the refused write, so this read is the server's word.
           read(false);
+          refusedListeners.forEach(listener => { listener(); });
         }
         return false;
       },
@@ -147,6 +152,10 @@ export function createAwayStore(source: SettingsSource, uid: string, now: () => 
     },
     set: write,
     comeBack: () => write(''),
+    onRefused(listener) {
+      refusedListeners.add(listener);
+      return () => { refusedListeners.delete(listener); };
+    },
   };
 }
 
@@ -160,4 +169,5 @@ export const INERT_AWAY_STORE: AwayStore = Object.freeze({
   recheck: () => undefined,
   set: (): AwayChange => ({ accepted: false }),
   comeBack: (): AwayChange => ({ accepted: false }),
+  onRefused: () => () => undefined,
 });

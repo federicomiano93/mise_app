@@ -20,7 +20,7 @@ export default function HomeSection() {
   const { t } = useT();
   const { pathname } = useLocation();
   // After «I am back» from the band (which then goes away) the focus goes to the card's «Add», or to its title when Add is absent.
-  useFocusOnBack(() => document.getElementById('home-todo-add') ?? document.getElementById('home-todo-title'));
+  const armFocus = useFocusOnBack(() => document.getElementById('home-todo-add') ?? document.getElementById('home-todo-title'));
   // The Home has no address below it: anything typed after /home goes back to the Home, as the other sections send a junk
   // address back to their list (nothing is started for it).
   if (pathname !== '/home') return <Navigate to="/home" replace />;
@@ -31,7 +31,7 @@ export default function HomeSection() {
           <StoreMessages />
           <div className={styles.column}>
             <PartBoundary>
-              <AwayBand />
+              <AwayBand onBack={armFocus} />
             </PartBoundary>
             <PartBoundary>
               <TodoCard />

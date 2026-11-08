@@ -3,7 +3,6 @@ import { maxAwayDate, toISODate } from '@mise/shared/away-model';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
-import { useStatusMessage } from '../ui/StatusMessage';
 import { useAway, useAwayStore } from '../shell/away/AwayContext';
 import { awayDayLabel } from '../shell/away/awayWords';
 import { SettingsRow } from './SettingsRow';
@@ -16,12 +15,11 @@ import styles from './AwayRow.module.css';
 export function AwayRow() {
   const { t, locale } = useT();
   const away = useAway();
-  const say = useStatusMessage();
   const [asking, setAsking] = useState(false);
   const row = useRef<HTMLButtonElement>(null);
   // After «I am back» the row becomes «I am on holiday» again: the focus goes to it.
-  useFocusOnBack(() => row.current);
-  const [askComeBack, backDialog] = useAskComeBack(() => { say(t('away.saveFailed')); });
+  const armFocus = useFocusOnBack(() => row.current);
+  const [askComeBack, backDialog] = useAskComeBack(armFocus);
 
   return (
     <>
@@ -54,7 +52,6 @@ export function AwayRow() {
 function UntilDialog({ onClose }: { onClose: () => void }) {
   const { t } = useT();
   const store = useAwayStore();
-  const say = useStatusMessage();
   const inputId = useId();
   const [value, setValue] = useState('');
   // Said inside the dialog, in a live region that is there (empty) before it speaks.
@@ -68,7 +65,7 @@ function UntilDialog({ onClose }: { onClose: () => void }) {
       setProblem(true);
       return;
     }
-    void change.saved.then(saved => { if (!saved) say(t('away.saveFailed')); });
+    // A refusal is said by the shell (AwayRefusalAlert), wherever the person is when it arrives.
     onClose();
   }
 

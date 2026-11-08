@@ -146,7 +146,9 @@ describe('Settings: I am on holiday', () => {
     await user.click(await main().findByRole('button', { name: 'On holiday until 16 November' }));
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'I am back' }));
 
-    expect(await screen.findByText('Not saved — check the connection and try again.')).toBeInTheDocument();
+    const notice = await screen.findByRole('alertdialog', { name: 'I am on holiday' });
+    expect(within(notice).getByText('Not saved — check the connection and try again.')).toBeInTheDocument();
+    await user.click(within(notice).getByRole('button', { name: 'OK' }));
     expect(await main().findByRole('button', { name: 'On holiday until 16 November' })).toBeInTheDocument();
   });
 

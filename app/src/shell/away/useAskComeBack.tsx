@@ -6,11 +6,12 @@ import { awayDayLabel } from './awayWords';
 
 // «Back already?» — ending a holiday early, asked once, from the Home's band and from Settings' row.
 //
-//   const [askComeBack, dialog] = useAskComeBack(() => say(t('away.saveFailed')));
+//   const [askComeBack, dialog] = useAskComeBack(armFocus);
 //
 // ⚠️ COMING BACK IS ONE TAP AND IS NOT A DESTRUCTIVE ACT: no danger red, no warning (the current app's askComeBack). The whole point is
-// that it ends easily and by itself. `onFailed` is called when the server refused the write (the state is already put back).
-export function useAskComeBack(onFailed: () => void): readonly [() => Promise<void>, ReactNode] {
+// that it ends easily and by itself. `onBack` is called as the person answers «I am back», just before the holiday ends (useFocusOnBack's
+// arm). A refusal is said by the shell (AwayRefusalAlert), not here.
+export function useAskComeBack(onBack: () => void = () => undefined): readonly [() => Promise<void>, ReactNode] {
   const { t, locale } = useT();
   const store = useAwayStore();
   const away = useAway();
@@ -25,8 +26,8 @@ export function useAskComeBack(onFailed: () => void): readonly [() => Promise<vo
       cancelLabel: t('common.cancel'),
     });
     if (!back) return;
-    const change = store.comeBack();
-    if (change.accepted) void change.saved.then(saved => { if (!saved) onFailed(); });
+    onBack();
+    store.comeBack();
   }
 
   return [ask, dialog];

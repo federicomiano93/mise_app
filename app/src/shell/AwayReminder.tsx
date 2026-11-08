@@ -5,7 +5,6 @@ import { AWAY_REMINDER_KEY, reminderDue } from '@mise/shared/away-reminder';
 import { useT } from '../i18n/useT';
 import { useAway, useAwayStore } from './away/AwayContext';
 import { awayDayLabel } from './away/awayWords';
-import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import { SECTIONS } from './sections';
 import { useTodayKey } from './useTodayKey';
@@ -39,7 +38,6 @@ export function AwayReminder() {
   const store = useAwayStore();
   const away = useAway();
   const [confirm, confirmDialog] = useConfirm();
-  const [alert, alertDialog] = useAlert();
   const section = remindingSection(pathname);
   // ⚠️ THE DAY IS WATCHED TOO: somebody sitting in a section when the day changes (or the tablet wakes on a new day) is judged again for
   // the new day, by the same rules.
@@ -73,13 +71,8 @@ export function AwayReminder() {
         okLabel: t('away.back'),
         cancelLabel: t('away.reminder.continue'),
       });
-      if (!back) return;
-      const change = store.comeBack();
-      if (change.accepted) {
-        void change.saved.then(saved => {
-          if (!saved) void alert({ message: t('away.saveFailed'), okLabel: t('common.ok') });
-        });
-      }
+      // A refusal is said by the shell (AwayRefusalAlert), wherever the person is when it arrives.
+      if (back) store.comeBack();
     })();
     // The words and the callbacks are read when the question is asked, not reasons to ask again.
   }, [section, day, away.status, away.away]);
@@ -87,7 +80,6 @@ export function AwayReminder() {
   return (
     <>
       {confirmDialog}
-      {alertDialog}
     </>
   );
 }

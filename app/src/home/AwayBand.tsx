@@ -3,7 +3,6 @@ import { useT } from '../i18n/useT';
 import { useAway } from '../shell/away/AwayContext';
 import { awayDayLabel } from '../shell/away/awayWords';
 import { useAskComeBack } from '../shell/away/useAskComeBack';
-import { useStatusMessage } from '../ui/StatusMessage';
 import styles from './AwayBand.module.css';
 
 // The Home's holiday band, above the «Da fare» card, while this person is away (the current app's js/home-away.js; the owner, 13 Sep 2026:
@@ -11,11 +10,12 @@ import styles from './AwayBand.module.css';
 //
 // ⚠️ A BUTTON, NOT A LINK: tapping it does something HERE (asks «Back already?») rather than going somewhere. It borrows the amber of the
 // Orders banners — «to check» — and its words say it as well: the colour is never the only signal.
-export function AwayBand() {
+//
+// `onBack`: called as the person answers «I am back» (the Home's useFocusOnBack arm, so the focus lands on the card's Add).
+export function AwayBand({ onBack }: { onBack?: () => void }) {
   const { t, locale } = useT();
   const away = useAway();
-  const say = useStatusMessage();
-  const [askComeBack, dialog] = useAskComeBack(() => { say(t('away.saveFailed')); });
+  const [askComeBack, dialog] = useAskComeBack(onBack);
 
   if (!away.away) return null;
   return (
