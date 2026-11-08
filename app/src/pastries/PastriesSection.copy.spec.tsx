@@ -399,6 +399,60 @@ describe('Copy day: the editor opened by its address with a copy request', () =>
   });
 });
 
+// The current app's own tests of «Copia giorno» (tests/pastries-copy-day.test.mjs) that the cases
+// above do not already cover.
+describe('Copy day: as the current app pins it', () => {
+  it('opens the day chosen in the picker, not the preselected one', async () => {
+    const source = seeded();
+    const { router, user } = await openDay(source);
+    await pickTarget(user, 'Saturday');
+    await screen.findByRole('heading', { level: 2, name: 'Edit Saturday' });
+    expect(router.state.location.pathname).toBe('/pastries/Saturday/edit');
+    expect(rowsShown().map(([name]) => name)).toEqual(['Cornetti', 'Krapfen', 'Sfogliatelle']);
+  });
+
+  it('names a single pastry on the target in the singular', async () => {
+    const source = fakePastriesSource({ days: [dayDoc('Thursday', THURSDAY), dayDoc('Friday', [['Brioche', 6]])] });
+    const { user } = await openDay(source);
+    await pickTarget(user);
+    expect(await dialog('Replace the list of Friday?')).toHaveAccessibleDescription(
+      'The list of Friday already has 1 pastry. It will be replaced by the list of Thursday. Nothing is saved until you tap Save.',
+    );
+  });
+
+  it('a «no» at Save writes nothing and stays in the copied editor', async () => {
+    const source = seeded();
+    const { router, user } = await openDay(source);
+    await pickTarget(user);
+    await screen.findByRole('heading', { level: 2, name: 'Edit Friday' });
+
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await user.click(within(await dialog('Save Friday?')).getByRole('button', { name: 'Cancel' }));
+    await aFrame();
+    expect(source.saveDay).not.toHaveBeenCalled();
+    expect(router.state.location.pathname).toBe('/pastries/Friday/edit');
+    expect(rowsShown().map(([name]) => name)).toEqual(['Cornetti', 'Krapfen', 'Sfogliatelle']);
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+  });
+
+  it('a permission the target already had survives a copy thrown away', async () => {
+    window.localStorage.setItem('pastries-edit-Friday', WORK_DATE);
+    const source = seeded({ friday: true, recordedFriday: true });
+    const { router, user } = await openDay(source);
+    await pickTarget(user);
+    // Already open for editing tonight: only the replace question, never the lock one.
+    await user.click(within(await dialog('Replace the list of Friday?')).getByRole('button', { name: 'Replace' }));
+    await screen.findByRole('heading', { level: 2, name: 'Edit Friday' });
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await user.click(within(await dialog('Discard changes?')).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/pastries/Thursday'); });
+    expect(source.saveDay).not.toHaveBeenCalled();
+    expect(window.localStorage.getItem('pastries-edit-Friday')).toBe(WORK_DATE);
+  });
+});
+
 describe('Copy day: in Italian', () => {
   it('asks and explains in Italian', async () => {
     const { user } = renderPastries('/pastries/Thursday', { source: seeded(), lang: 'it' });
