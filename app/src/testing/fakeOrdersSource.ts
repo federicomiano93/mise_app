@@ -213,13 +213,14 @@ export function fakeOrdersSource(init: {
     setSupplierSkipped(supplierId, day) {
       source.skippedWrites.push({ op: 'set', supplierId, day });
       const before = source.draft;
+      const takeBack = skippedTakeBack(supplierId);
       source.draft = deepMerge(before ?? {}, { skipped: { [supplierId]: day }, bakery: 'bakery' });
       tellDraft();
       const refused = source.refuseSkipped;
       return new Promise<void>((resolve, reject) => {
         const settle = () => {
           if (!refused) { resolve(); return; }
-          source.draft = before;
+          source.draft = before === null ? null : takeBack(source.draft);
           tellDraft();
           reject(new Error('permission-denied'));
         };
@@ -232,6 +233,7 @@ export function fakeOrdersSource(init: {
       source.skippedWrites.push({ op: 'clear', supplierId });
       const before = source.draft;
       if (!before) return Promise.reject(new Error('not-found'));
+      const takeBack = skippedTakeBack(supplierId);
       const next = structuredClone(before);
       const skipped = next.skipped && typeof next.skipped === 'object' ? next.skipped as Record<string, unknown> : null;
       if (skipped) delete skipped[supplierId];
@@ -241,7 +243,7 @@ export function fakeOrdersSource(init: {
       return new Promise<void>((resolve, reject) => {
         const settle = () => {
           if (!refused) { resolve(); return; }
-          source.draft = before;
+          source.draft = takeBack(source.draft);
           tellDraft();
           reject(new Error('permission-denied'));
         };
@@ -544,6 +546,21 @@ export function fakeOrdersSource(init: {
       };
     },
   };
+
+  // Like Firestore, a refused close or reopen takes back ONLY its own key (`skipped.<id>` as it was before the write), never what
+  // was written meanwhile (typing, another supplier's close).
+  function skippedTakeBack(supplierId: string): (now: Record<string, unknown> | null) => Record<string, unknown> | null {
+    const was = source.draft?.skipped && typeof source.draft.skipped === 'object'
+      ? (source.draft.skipped as Record<string, unknown>)[supplierId] : undefined;
+    return now => {
+      const next = structuredClone(now ?? {});
+      const skipped = next.skipped && typeof next.skipped === 'object' ? next.skipped as Record<string, unknown> : {};
+      if (was === undefined) delete skipped[supplierId];
+      else skipped[supplierId] = was;
+      next.skipped = skipped;
+      return next;
+    };
+  }
 
   // `date >= from`, as the query asks: a record with no date (the legacy weekly one) is never in it.
   function historyFrom(from: string): StoredDoc[] {

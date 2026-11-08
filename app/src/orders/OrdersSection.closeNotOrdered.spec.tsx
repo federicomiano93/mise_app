@@ -257,9 +257,9 @@ describe('close as not ordered: the second port\'s extras', () => {
     expect(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD)).toBeInTheDocument();
   });
 
-  it('⚠️ the summary offers nothing over a dead draft stream: neither the close nor «Order placed…»', async () => {
+  it('⚠️ the summary offers no close and no «Reopen» over a draft stream dead from the start', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    const source = seeded({ draft: { entries: { 'i-flour': { qty: 3 } }, days: {}, skipped: { 's-alp': TODAY } } });
+    const source = seeded();
     source.refuse.draft = true;
     await summaryAt(source);
     await pause();
@@ -294,9 +294,36 @@ describe('close as not ordered: the second port\'s extras', () => {
     await pane().findByRole('button', { name: 'Close as not ordered' });
     await view.user.click(pane().getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(path(view)).toBe('/orders'); });
-    // The row, never the strip (where Alpine Mills is a «to order» chip again) and never the page.
-    await waitFor(() => { expect(document.activeElement).toHaveAccessibleName(expect.stringContaining('Alpine Mills') as string); });
-    expect(screen.getByText('Order today').parentElement?.contains(document.activeElement)).toBe(false);
+    // The row's own button (the first of its line), never the strip (where Alpine Mills is a «to order» chip again), never the page.
+    await waitFor(() => { expect(document.activeElement).toHaveAccessibleName(expect.stringMatching(/^Alpine Mills/) as string); });
+    const focused = document.activeElement as HTMLElement;
+    expect(focused.closest('li')?.querySelector('button')).toBe(focused);
+    expect(screen.getByText('Order today').parentElement?.contains(focused)).toBe(false);
     expect(screen.queryByRole('button', { name: 'Alpine Mills not ordered' })).not.toBeInTheDocument();
+  });
+
+  it('the phone\'s back gesture from a summary opened by a closed chip hands the focus back to that chip too', async () => {
+    const view = renderOrders('/orders', { source: seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } }) });
+    await view.user.click(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD));
+    await pane().findByRole('button', { name: 'Reopen' }, LOAD);
+    await act(async () => { await view.router.navigate(-1); });
+    await waitFor(() => { expect(path(view)).toBe('/orders'); });
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Alpine Mills not ordered' })).toHaveFocus(); });
+  });
+
+  it('⚠️ a draft stream that dies after its first answer: its closes are read as none, the strip errs on the side of the reminder', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const source = seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': TODAY } } });
+    const watch = source.watchDraft.bind(source);
+    let kill = () => undefined as void;
+    source.watchDraft = (onChange, onError) => {
+      kill = () => { onError(new Error('unavailable')); };
+      return watch(onChange, onError);
+    };
+    renderOrders('/orders', { source });
+    expect(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD)).toBeInTheDocument();
+    act(() => { kill(); });
+    await waitFor(() => { expect(screen.queryByRole('button', { name: 'Alpine Mills not ordered' })).not.toBeInTheDocument(); });
+    expect(screen.getByText('Order today')).toBeInTheDocument();
   });
 });

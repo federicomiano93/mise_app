@@ -11,7 +11,8 @@
 // FoodcostSettings.tsx, FoodcostContext.tsx). The Calculator holds it while a confirmed dough has not been
 // answered by the database (calculator/CalculatorContext.tsx, BusyWhileUnsent), and its Settings editors hold it while dirty
 // (calculator/SettingsEditor.tsx), and so does the market order form while quantities were changed by hand
-// (calculator/OrderForm.tsx). Each new editor adds itself here.
+// (calculator/OrderForm.tsx). Orders holds it while typing has not reached Firestore, while a day line is saved, and while a close
+// as not ordered or a reopen is answered (orders/ordersStore.ts). Each new editor adds itself here.
 
 const holders = new Set<symbol>();
 

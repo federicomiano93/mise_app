@@ -1056,8 +1056,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       // ⚠️ NOTHING UNTIL THE DATA IS HERE (review of 3f-8a; the current app answers only once suppliers and records are loaded): with
       // the records missing every order day reads «to order», and with config/orders missing the switch reads ON.
       // …and with the draft missing, a supplier closed as not ordered this morning would read «to order». A DEAD draft stream counts
-      // as arrived (draftLoaded): the closes are then unknown and the line errs on the side of the reminder, as the current app's
-      // kiosk does when its read of the draft fails.
+      // as arrived (draftLoaded), and its closes are read as NONE, even those it delivered before it died: the line errs on the side
+      // of the reminder, as the current app's kiosk does when its read of the draft fails (and as «Order today» does).
       if (!snapshot.suppliersLoaded || !snapshot.historyLoaded || !snapshot.configLoaded || !snapshot.draftLoaded) return null;
       return kioskSectionsFor({
         suppliers: snapshot.suppliers,
@@ -1066,7 +1066,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         weekStartsOn: snapshot.config.weekStartsOn,
         deliveryCheck: snapshot.deliveryCheck,
         // A supplier closed as not ordered today is not «to order» (the current app's PR #470).
-        skipped: snapshot.draft.skipped,
+        skipped: snapshot.draftBroken ? null : snapshot.draft.skipped,
       });
     },
 

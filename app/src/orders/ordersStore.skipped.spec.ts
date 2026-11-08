@@ -151,4 +151,32 @@ describe('ordersStore — closed as not ordered', () => {
     const toOrder = (h.store.kioskSections() ?? []).find(s => s.titleKey === 'kiosk.rest.toOrderTitle');
     expect(toOrder?.names).toEqual(['Mill', 'Shop']);
   });
+
+  it('a dead draft stream reads no closes, even those it delivered before it died', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    let kill = () => undefined as void;
+    const h = await started({ entries: {}, days: {}, skipped: { mill: TODAY } }, source => {
+      const watch = source.watchDraft.bind(source);
+      source.watchDraft = (onChange, onError) => { kill = () => { onError(new Error('unavailable')); }; return watch(onChange, onError); };
+    });
+    const before = (h.store.kioskSections() ?? []).find(s => s.titleKey === 'kiosk.rest.toOrderTitle');
+    expect(before?.names).toEqual(['Shop']);
+    kill();
+    const after = (h.store.kioskSections() ?? []).find(s => s.titleKey === 'kiosk.rest.toOrderTitle');
+    expect(after?.names).toEqual(['Mill', 'Shop']);
+  });
+
+  it('the fake, like Firestore, takes back only the refused key: another supplier closed meanwhile stays', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const h = await started({ entries: {}, days: {} });
+    const release = h.source.holdWrites();
+    h.source.refuseSkipped = true;
+    const refused = h.store.closeNotOrdered('mill');
+    h.source.refuseSkipped = false;
+    const kept = h.store.closeNotOrdered('shop');
+    release();
+    expect(await refused).toBe(false);
+    expect(await kept).toBe(true);
+    expect(h.source.draft?.skipped).toEqual({ shop: TODAY });
+  });
 });

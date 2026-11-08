@@ -22,16 +22,18 @@ import styles from './TodayOrders.module.css';
 //
 // ⚠️ DRAWN ONLY ONCE THE SUPPLIERS, THE RECORDS AND THE DRAFT HAVE ARRIVED: before the records a supplier that was placed this
 // morning would flash as not placed, before the draft one closed this morning would flash as «to order» — worse than saying
-// nothing. A dead records stream says nothing either, for the same reason. A DEAD DRAFT stream counts as arrived (draftLoaded): the
-// closes are then unknown, and a «to order» chip too many is the safe side (the current app's kiosk reads it so too).
+// nothing. A dead records stream says nothing either, for the same reason. A DEAD DRAFT stream counts as arrived (draftLoaded), and its
+// closes are read as NONE, even those it delivered before it died (another phone may have reopened since, and the summary offers no
+// «Reopen» over a dead draft): a «to order» chip too many is the safe side (the current app's kiosk reads a failed read so too).
 export function TodayOrders({ onOpenSupplier, onOpenClosed }: {
   onOpenSupplier: (id: string) => void;
   onOpenClosed: (id: string) => void;
 }) {
   const { t } = useT();
-  const { suppliers, suppliersLoaded, history, historyLoaded, historyBroken, draft, draftLoaded } = useOrders();
+  const { suppliers, suppliersLoaded, history, historyLoaded, historyBroken, draft, draftLoaded, draftBroken } = useOrders();
   if (!suppliersLoaded || !historyLoaded || historyBroken || !draftLoaded) return null;
-  const rows = todayOrders({ suppliers, history: history as readonly PlacedRecord[], today: todayISO(), skipped: draft.skipped });
+  const skipped = draftBroken ? null : draft.skipped;
+  const rows = todayOrders({ suppliers, history: history as readonly PlacedRecord[], today: todayISO(), skipped });
   if (rows.length === 0) return null;
 
   if (rows.every(row => row.placed)) {
