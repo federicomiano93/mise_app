@@ -150,6 +150,9 @@ export const en = {
   // «how many» labels are whole phrases, not a name slotted into one, so Italian can agree the
   // word with the noun («Quante paste»).
   'past.howManyOf': 'How many {name}',
+  'past.itemNotePlaceholder': 'Note, e.g. 9x3',
+  'past.itemNote': 'Note for this row',
+  'past.itemNoteFor': 'Note for {name}',
   'past.howManyPastries': 'How many pastries',
   'past.removeRow': 'Remove {name}',
   // What stops a save. The quantity limit is passed as text, so it reads «9999», never «9,999».

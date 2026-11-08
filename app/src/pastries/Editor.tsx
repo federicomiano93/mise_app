@@ -4,7 +4,7 @@ import { Check, Plus, Trash2 } from 'lucide-react';
 import { useBlocker, useLocation } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import {
-  MAX_NAME_LENGTH, MAX_NOTE_LENGTH, MAX_QTY, cleanItems, cleanNote, findInvalidItems,
+  MAX_ITEM_NOTE_LENGTH, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, MAX_QTY, cleanItems, cleanNote, findInvalidItems,
 } from '@mise/shared/pastries-model';
 import type { Weekday } from '@mise/shared/pastries-model';
 import { useT } from '../i18n/useT';
@@ -245,7 +245,7 @@ function EditorForm({ day, handBackFocus }: Props) {
 
   // ── The rows ──────────────────────────────────────────────────────────────────────────────
 
-  const change = (id: number, patch: { name?: string; qty?: string }) => {
+  const change = (id: number, patch: { name?: string; qty?: string; note?: string }) => {
     setRows(current => current.map(row => (row.id === id ? { ...row, ...patch } : row)));
     touch();
   };
@@ -452,6 +452,17 @@ function EditorForm({ day, handBackFocus }: Props) {
                       <Trash2 aria-hidden="true" />
                     </Button>
                   </div>
+                  <input
+                    ref={node => setInput(row.id, 'note', node)}
+                    type="text"
+                    value={row.note}
+                    autoComplete="off"
+                    maxLength={MAX_ITEM_NOTE_LENGTH}
+                    placeholder={t('past.itemNotePlaceholder')}
+                    aria-label={name === '' ? t('past.itemNote') : t('past.itemNoteFor', { name })}
+                    className={`${styles.input} ${styles.itemNote}`}
+                    onChange={event => change(row.id, { note: event.target.value })}
+                  />
                 </div>
                 {wrong && wrongField ? <p id={errorId} className={styles.err}>{problemMessage(t, wrong)}</p> : null}
               </li>

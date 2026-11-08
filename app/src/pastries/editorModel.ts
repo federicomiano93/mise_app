@@ -5,36 +5,38 @@ import type { MessageParams } from '../i18n/i18n';
 
 type Translate = (key: MessageKey, params?: MessageParams) => string;
 
-// One row of the editor's working copy. The quantity is TEXT while it is typed: a number field that
+// One row of the editor's working copy. `note` is the row's own note («9x3»), '' when none. The quantity is TEXT while it is typed: a number field that
 // is emptied must stay empty, not snap to 0 under the cursor. `id` is only for React (a row keeps its
 // inputs, and their focus, when another row goes).
 export interface EditorRow {
   readonly id: number;
   readonly name: string;
   readonly qty: string;
+  readonly note: string;
 }
 
-export type EditorField = 'name' | 'qty';
+export type EditorField = 'name' | 'qty' | 'note';
 
 export function blankRow(id: number): EditorRow {
-  return { id, name: '', qty: '' };
+  return { id, name: '', qty: '', note: '' };
 }
 
 // A day's stored list → the rows the editor starts from. ⚠️ AT LEAST ONE ROW, ALWAYS: an empty day
 // opens on one empty row, so the first thing a person sees is somewhere to type.
 export function rowsFrom(items: readonly PastryItem[], nextId: () => number): EditorRow[] {
-  const rows = items.map(item => ({ id: nextId(), name: item.name, qty: String(item.qty) }));
+  const rows = items.map(item => ({ id: nextId(), name: item.name, qty: String(item.qty), note: item.note ?? '' }));
   return rows.length > 0 ? rows : [blankRow(nextId())];
 }
 
-// What cleanItems, findInvalidItems and the rules read: name and quantity, no React key.
-export function workingItems(rows: readonly EditorRow[]): { name: string; qty: string }[] {
-  return rows.map(({ name, qty }) => ({ name, qty }));
+// What cleanItems, findInvalidItems and the rules read: name, quantity and note, no React key.
+export function workingItems(rows: readonly EditorRow[]): { name: string; qty: string; note: string }[] {
+  return rows.map(({ name, qty, note }) => ({ name, qty, note }));
 }
 
-// An untouched row (nothing typed in either box) goes without a question.
+// An untouched row (nothing typed in any box) goes without a question. A row with only a note typed
+// is NOT untouched: removing it would lose what somebody wrote.
 export function isUntouched(row: EditorRow): boolean {
-  return row.name.trim() === '' && row.qty.trim() === '';
+  return row.name.trim() === '' && row.qty.trim() === '' && row.note.trim() === '';
 }
 
 // The names already on the OTHER six days: the same pastries prove on several days, and typing

@@ -33,6 +33,22 @@
   font-weight: 600;
 }
 
+/* The row's own note («9x3»), between the name and the number: quiet, in same-width characters, and
+   cut short rather than allowed to push the number off the row. */
+.note {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40%;
+  overflow: hidden;
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .qty {
   flex: none;
   font-size: var(--fs-xl);
@@ -126,6 +142,10 @@
 
   .name {
     font-size: var(--fs-xl);
+  }
+
+  .note {
+    font-size: var(--fs-lg);
   }
 
   .qty {

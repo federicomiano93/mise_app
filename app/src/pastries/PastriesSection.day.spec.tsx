@@ -96,6 +96,14 @@ describe('a day\'s list', () => {
     expect(note.textContent).toBe('Butter is low.\nCheck the fridge.');
   });
 
+  it('shows each row\'s own note between its name and its number, and nothing when there is none', async () => {
+    await open(fakePastriesSource({ days: [dayDoc('Thursday', [['Cornetti', 24, '9x3'], ['Krapfen', 12]])] }));
+    await rowReady('Cornetti');
+    const cornetti = row('Cornetti');
+    expect([...cornetti.children].map(child => child.textContent)).toEqual(['Cornetti', '9x3', '24']);
+    expect([...row('Krapfen').children].map(child => child.textContent)).toEqual(['Krapfen', '12']);
+  });
+
   it('shows no note block when there is no note', async () => {
     await open();
     expect(screen.queryByText('Note')).not.toBeInTheDocument();
@@ -222,6 +230,19 @@ describe('correcting one number', () => {
       'Thursday',
       [{ name: 'Cornetti', qty: 30 }, { name: 'Krapfen', qty: 12 }, { name: 'Sfogliatelle', qty: 8 }],
       'Butter is low.',
+    );
+  });
+
+  it('⚠️ keeps a row\'s own note when its number is written', async () => {
+    const source = fakePastriesSource({ days: [dayDoc('Thursday', [['Cornetti', 24, '9x3'], ['Krapfen', 12]])] });
+    const { user } = await open(source);
+    await user.click(row('Cornetti'));
+    await user.type(box('Cornetti'), '30{Enter}');
+    await waitFor(() => { expect(source.saveDay).toHaveBeenCalledTimes(1); });
+    expect(source.saveDay).toHaveBeenCalledWith(
+      'Thursday',
+      [{ name: 'Cornetti', qty: 30, note: '9x3' }, { name: 'Krapfen', qty: 12 }],
+      '',
     );
   });
 

@@ -68,12 +68,19 @@ export const MAX_QTY = 9999;
 // whitelist the moment they deploy, so it cannot be renamed casually afterwards.
 export const MAX_NOTE_LENGTH = 500;
 
+// A row's own note, beside the pastry: «9x3», three trays of nine. Plain text, never parsed or
+// multiplied. It lives INSIDE the row, so the rules cannot see it either: this limit is one more
+// guarantee of this file. No rules change was needed, and none could have checked it.
+export const MAX_ITEM_NOTE_LENGTH = 40;
+
 // ── The shapes ───────────────────────────────────────────────────────────────
 
 // One pastry on one day's list.
 export interface PastryItem {
   name: string;
   qty: number;
+  // ⚠️ NO KEY AT ALL when there is no note, never ''.
+  note?: string;
 }
 
 // One day as the screen works with it: what to prove, and the standing note.
@@ -121,6 +128,14 @@ export function isWeekday(name: unknown): name is Weekday {
 
 function indexOfWeekday(day: unknown): number {
   return (WEEKDAYS as readonly unknown[]).indexOf(day);
+}
+
+// The six days a day's list can be copied onto, starting from the next one and wrapping: the day after
+// is the usual target, so it comes first. Anything that is not a weekday answers all seven.
+export function otherWeekdays(day: unknown): Weekday[] {
+  const i = indexOfWeekday(day);
+  if (i === -1) return [...WEEKDAYS];
+  return [1, 2, 3, 4, 5, 6].map(step => weekdayAt((i + step) % 7));
 }
 
 // Both wrap. Sunday's next day is Monday — a week has no end.
@@ -193,7 +208,19 @@ function normalizeItem(raw: unknown): PastryItem | null {
   const rawName = fieldOf(raw, 'name');
   const name = typeof rawName === 'string' ? rawName.trim() : '';
   if (!name) return null;
-  return { name: name.slice(0, MAX_NAME_LENGTH), qty: wholeNumber(fieldOf(raw, 'qty')) };
+  const item: PastryItem = { name: name.slice(0, MAX_NAME_LENGTH), qty: wholeNumber(fieldOf(raw, 'qty')) };
+  // ⚠️ NO KEY AT ALL WHEN THERE IS NO NOTE, never `note: ''`: a row nobody wrote a note on is stored
+  // exactly as it was before notes existed.
+  const note = cleanItemNote(fieldOf(raw, 'note'));
+  if (note) item.note = note;
+  return item;
+}
+
+// A row's note, made safe to store and to show. One line, unlike the day's note: it sits beside a
+// pastry's name, where a line break has nowhere to go.
+export function cleanItemNote(raw: unknown): string {
+  if (typeof raw !== 'string') return '';
+  return raw.replace(/\s+/g, ' ').trim().slice(0, MAX_ITEM_NOTE_LENGTH).trim();
 }
 
 // A standing note, made safe to store and to show. Anything that is not a string
@@ -241,7 +268,9 @@ export function setQuantityAt(
   const wanted = typeof expectedName === 'string' ? expectedName.trim().toLowerCase() : null;
   if (wanted === null || rowName.trim().toLowerCase() !== wanted) return null;
   const next = rows.slice();
-  next[i] = { name: rowName, qty: wholeNumber(qty) };
+  // ⚠️ THE SPREAD KEEPS THE ROW'S NOTE. The day is written whole, so a row rebuilt from its name and
+  // number here would lose «9x3» on every corrected quantity.
+  next[i] = { ...(row as object), qty: wholeNumber(qty) };
   return next;
 }
 

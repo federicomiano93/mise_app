@@ -75,6 +75,15 @@ describe('Records: what it shows', () => {
     expect(note.textContent).toBe('Butter was low.\nUsed the old dough.');
   });
 
+  it('shows the note each row was given that night, and nothing for a row without one', async () => {
+    await open(fakePastriesSource({ logs: [logDoc('Thursday', [['Cornetti', 27, '9x3'], ['Krapfen', 12]], '2026-10-14')] }));
+    await waitFor(() => { expect(cards()).toHaveLength(1); });
+    const first = within(cards()[0] as HTMLElement);
+    expect(first.getByText('Cornetti').closest('div')).toHaveTextContent('Cornetti9x327');
+    expect(first.getByText('9x3')).toBeInTheDocument();
+    expect(first.getByText('Krapfen').closest('div')).toHaveTextContent('Krapfen12');
+  });
+
   it('keeps a note\'s line breaks in the stylesheet too', async () => {
     const css = Object.values(import.meta.glob<string>('./Records.module.css', { query: '?raw', import: 'default', eager: true }))[0] ?? '';
     expect(css).toMatch(/\.note\s*\{[^}]*white-space:\s*pre-line/);

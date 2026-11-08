@@ -261,8 +261,6 @@ function show(value: unknown): string {
 }
 
 const PORT_OWED = new Set<string>([
-  // PORT OWED (release branch, 8 Nov 2026): main changed js/pastries-model.js (pastries notes: setQuantityAt), the port has not — remove its key when ported
-  'setQuantityAt',
   // PORT OWED (release branch, 8 Nov 2026): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings), the port has not — remove its keys when ported
   'startWeighing', 'typeRaw', 'readWeighing', 'weighingPatches', 'restoreAfterRefusal',
   // PORT OWED (release branch, 8 Nov 2026): main changed js/foodcost/foodcost-model.js (Which? names deleted lines, line money guard, two decimals), the port has not — remove its keys when ported
