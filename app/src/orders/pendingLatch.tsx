@@ -48,26 +48,37 @@ export function latchCanLook(seen: OrdersSnapshot['serverSeen'], online: boolean
 // worse than the one it reports. So the SET of suppliers found at the first complete look is kept here, above the routes (it
 // survives going to the confirm screen and back), and the screens show only those of them that `pendingNow` still returns with the
 // current data: a placed, restamped or discarded order goes by itself, and a refused restamp brings it back by itself. A supplier
-// that becomes pending later in the session is never added.
+// that becomes pending later in the session is never added — except by `relook`: quantities typed on an earlier page came back
+// from this device's note (F-15, the current app's `if (draft.cameBack) pendingChecked = false`), and the look is owed again.
 type Latch = {
   // null until the first complete look.
   readonly latched: ReadonlySet<string> | null;
+  // A further look is owed (relook): the next complete look replaces the set.
+  readonly owed: boolean;
   latch(ids: Iterable<string>): void;
+  relook(): void;
 };
 
-const NOTHING: Latch = { latched: null, latch: () => undefined };
+const NOTHING: Latch = { latched: null, owed: false, latch: () => undefined, relook: () => undefined };
 
 const PendingLatchContext = createContext<Latch>(NOTHING);
 
 export function PendingLatchProvider({ children }: { children: ReactNode }) {
   const [latched, setLatched] = useState<ReadonlySet<string> | null>(null);
+  const [owed, setOwed] = useState(false);
   const done = useRef(false);
   const latch = useCallback((ids: Iterable<string>) => {
     if (done.current) return;
     done.current = true;
+    setOwed(false);
     setLatched(new Set(ids));
   }, []);
-  const value = useMemo(() => ({ latched, latch }), [latched, latch]);
+  // The set on screen stays until the new look replaces it: nothing blinks.
+  const relook = useCallback(() => {
+    done.current = false;
+    setOwed(true);
+  }, []);
+  const value = useMemo(() => ({ latched, owed, latch, relook }), [latched, owed, latch, relook]);
   return <PendingLatchContext.Provider value={value}>{children}</PendingLatchContext.Provider>;
 }
 

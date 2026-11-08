@@ -6,6 +6,16 @@ import { cleanup, configure } from '@testing-library/react';
 // would see the screens the previous ones rendered.
 afterEach(cleanup);
 
+// The Orders section keeps a note of typed quantities in localStorage (F-15, @mise/shared/draft-journal), and the screen
+// specs draw the real section: without this a number typed in one spec would come back in the next one's draft.
+afterEach(() => {
+  try {
+    globalThis.localStorage?.removeItem('orders-draft-claims');
+  } catch {
+    /* no storage: nothing noted */
+  }
+});
+
 // jsdom has no modal <dialog> (the Calculator's full-screen view is one): showModal() opens it and puts the
 // focus where a browser would, on the control marked autofocus; close() shuts it and says so, as the browser
 // does. Nothing here makes the rest of the page inert — a spec that needs that asserts it differently.

@@ -1,8 +1,10 @@
+import { createElement } from 'react';
+import { act, render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { EMPTY_DRAFT } from './draftSync';
 import type { DraftView } from './draftSync';
 import { buildOrdersLens } from './ordersLens';
-import { latchCanLook, pendingNow, stillPendingOn } from './pendingLatch';
+import { PendingLatchProvider, latchCanLook, pendingNow, stillPendingOn, usePendingLatch } from './pendingLatch';
 import { pendingDayIn } from './PlaceConfirmScreen';
 
 const TODAY = '2026-10-28';
@@ -84,5 +86,40 @@ describe('pendingDayIn', () => {
     expect(pendingDayIn({ pendingDay: 5 }, TODAY)).toBeNull();
     expect(pendingDayIn(null, TODAY)).toBeNull();
     expect(pendingDayIn(undefined, TODAY)).toBeNull();
+  });
+});
+
+// F-15: quantities typed on an earlier page came back from this device's note, and the section looks again (the current
+// app's `if (draft.cameBack) pendingChecked = false`), without the set on screen blinking out in between.
+describe('PendingLatchProvider — relook', () => {
+  function probe() {
+    const seen: { latch: ReturnType<typeof usePendingLatch> | null } = { latch: null };
+    function Probe() {
+      seen.latch = usePendingLatch();
+      return null;
+    }
+    render(createElement(PendingLatchProvider, null, createElement(Probe)));
+    return seen;
+  }
+
+  it('latches once; a later look changes nothing', () => {
+    const seen = probe();
+    act(() => { seen.latch?.latch(['mill']); });
+    act(() => { seen.latch?.latch(['shop']); });
+    expect([...(seen.latch?.latched ?? [])]).toEqual(['mill']);
+    expect(seen.latch?.owed).toBe(false);
+  });
+
+  it('after relook the set stays on screen, a look is owed, and the next look replaces it', () => {
+    const seen = probe();
+    act(() => { seen.latch?.latch(['mill']); });
+    act(() => { seen.latch?.relook(); });
+    expect(seen.latch?.owed).toBe(true);
+    expect([...(seen.latch?.latched ?? [])]).toEqual(['mill']);
+    act(() => { seen.latch?.latch(['mill', 'shop']); });
+    expect([...(seen.latch?.latched ?? [])]).toEqual(['mill', 'shop']);
+    expect(seen.latch?.owed).toBe(false);
+    act(() => { seen.latch?.latch(['nothing']); });
+    expect([...(seen.latch?.latched ?? [])]).toEqual(['mill', 'shop']);
   });
 });

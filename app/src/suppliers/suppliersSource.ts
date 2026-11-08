@@ -25,6 +25,7 @@
 // first use (src/firestore-access.spec.ts).
 
 import { categoryPatch, planBatches } from '@mise/shared/category-batches';
+import { dropNotedLine } from '@mise/shared/draft-journal';
 import { deletePlan } from '@mise/shared/ingredient-edit-model';
 import { findUsage } from '@mise/shared/ingredient-merge';
 import { buildPath } from '@mise/shared/location-id';
@@ -385,6 +386,10 @@ export function createFirestoreSuppliersSource(
     // ⚠️ updateDoc, as the current app's clearFields: no draft means nothing to clear, and the write fails rather than
     // creating a draft that holds nothing. ⚠️ A FieldPath, never the dotted string: an id is data, not a path.
     async clearDraftEntry(id) {
+      // ⚠️ AND FROM THIS DEVICE'S NOTE OF TYPED QUANTITIES (F-15), first and whatever the write does: a number noted for a
+      // product that no longer exists would come back into the order on the next opening of Orders, and be written there.
+      // Only that line: the rest of the note is still somebody's typing (the current app's clearIngredientFromDraft).
+      dropNotedLine(locationId, checkId(id));
       const { fs, db } = await firestore();
       await fs.updateDoc(
         fs.doc(db, draftsPath, DRAFT_ID),
