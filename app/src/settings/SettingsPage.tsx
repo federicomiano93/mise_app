@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from 'react';
-import { useNavigationType } from 'react-router';
+import { useLocation, useNavigationType } from 'react-router';
 import type { ReactNode } from 'react';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
@@ -10,7 +10,7 @@ import { Page } from '../shell/Page';
 import { StatusMessageProvider } from '../ui/StatusMessage';
 import { AwayRow } from './AwayRow';
 import { SettingsRow } from './SettingsRow';
-import { FROM_SETTINGS, usePendingDoor } from './settingsHandBack';
+import { FROM_SETTINGS, isHandBack, usePendingDoor } from './settingsHandBack';
 import { LANGUAGE_PATH, SECTIONS_PATH } from './settingsPath';
 import styles from './SettingsPage.module.css';
 
@@ -39,6 +39,7 @@ export function SettingsPage() {
   const { user, name, options, canManage } = useSession();
   const pending = usePendingDoor();
   const arrival = useNavigationType();
+  const { state } = useLocation();
   const language = useRef<HTMLAnchorElement>(null);
   const sections = useRef<HTMLAnchorElement>(null);
   // The email, or the account's id for the rare account that has none.
@@ -48,11 +49,12 @@ export function SettingsPage() {
   useEffect(() => {
     const door = pending.current;
     pending.current = null;
-    // Only a RETURN (Back, the phone's back gesture) hands the focus back. Settings tapped in the rail is a new arrival: its title.
-    if (arrival !== 'POP') return;
+    // Only a RETURN hands the focus back: the browser's Back or the phone's gesture (a POP), or the screen's own Back when it REPLACED
+    // itself with the page (BACK_TO_SETTINGS). Settings tapped in the rail is a new arrival (a PUSH): the page's title has it.
+    if (arrival !== 'POP' && !isHandBack(state)) return;
     if (door === 'language') language.current?.focus();
     if (door === 'sections') sections.current?.focus();
-  }, [pending, arrival]);
+  }, [pending, arrival, state]);
 
   return (
     <Page title={t('section.settings')} action={<SignOutButton variant="small" />}>

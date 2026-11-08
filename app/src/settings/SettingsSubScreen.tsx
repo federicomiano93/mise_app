@@ -2,9 +2,9 @@ import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { useT } from '../i18n/useT';
-import { KEEP_FOCUS, Page } from '../shell/Page';
+import { Page } from '../shell/Page';
 import { FormBar } from '../ui/FormBar';
-import { cameFromSettings, usePendingDoor } from './settingsHandBack';
+import { BACK_TO_SETTINGS, cameFromSettings, usePendingDoor } from './settingsHandBack';
 import type { SettingsDoor } from './settingsPath';
 import { SETTINGS_PATH } from './settingsPath';
 import styles from './SettingsSubScreen.module.css';
@@ -36,7 +36,7 @@ export function SettingsSubScreen({ door, title, backDisabled = false, children 
   function back(): void {
     pending.current = door;
     if (cameFromSettings(state)) void navigate(-1);
-    else void navigate(SETTINGS_PATH, { replace: true, state: KEEP_FOCUS });
+    else void navigate(SETTINGS_PATH, { replace: true, state: BACK_TO_SETTINGS });
   }
 
   return (

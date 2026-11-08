@@ -21,6 +21,14 @@ export function usePendingDoor(): PendingDoor {
 // then leaves the focus alone, and the screen that opens puts it on its own title.
 export const FROM_SETTINGS = { ...KEEP_FOCUS, fromSettings: true } as const;
 
+// What Back puts in the state when it REPLACES the screen with the page (opened by its address, nothing behind it): «this is a return, hand
+// the focus to the door» — the page cannot tell it from the history action, which is a REPLACE, not a POP.
+export const BACK_TO_SETTINGS = { ...KEEP_FOCUS, handBack: true } as const;
+
+export function isHandBack(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && 'handBack' in state;
+}
+
 export function cameFromSettings(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromSettings' in state;
 }

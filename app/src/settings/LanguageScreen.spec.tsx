@@ -63,6 +63,18 @@ describe('App language', () => {
     expect(router.state.location.pathname).toBe('/settings');
   });
 
+  // Review, 8 Nov 2026: the door is owed the focus only on a RETURN; Settings tapped in the rail is a new arrival.
+  it('Settings tapped in the rail from a screen below is a new arrival: the page’s title has the focus, not the door', async () => {
+    const { router, user } = renderApp('/settings');
+    await user.click(main().getByRole('link', { name: 'App language' }));
+    await screen.findByRole('button', { name: 'Back' });
+    await user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Settings' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/settings'); });
+    expect(router.state.historyAction).toBe('PUSH');
+    await waitFor(() => { expect(screen.getByRole('heading', { level: 1, name: 'Settings' })).toHaveFocus(); });
+    expect(main().getByRole('link', { name: 'App language' })).not.toHaveFocus();
+  });
+
   it('names each language in itself, in either interface language', async () => {
     await open({ lang: 'it' });
     expect(main().getByText('English')).toBeInTheDocument();
