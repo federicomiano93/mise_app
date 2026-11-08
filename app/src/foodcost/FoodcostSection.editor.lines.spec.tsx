@@ -583,6 +583,17 @@ describe('a recipe line in grams', () => {
     expect(savedLines(fake), 'Save is not blocked').toEqual([{ recipeId: 'Dough', qtyKg: 522 }]);
   });
 
+  it('the warning comes FIRST, then the partly-priced note, in one note under the line', async () => {
+    // The half-priced recipe makes 1.02 kg (1000 g of flour and 20 g of salt); 522 kg is far beyond 20 batches.
+    const { user } = await open('/food-cost/product/Half', editorSource(
+      [product('Half', { components: [{ recipeId: 'Half', qtyKg: 0.522 }] })],
+      { recipes: [halfPricedRecipe('Half')] },
+    ));
+    await user.selectOptions(unitSelect(), 'kg');
+    expect(within(madeOf()).getByText(/but the recipe makes/))
+      .toHaveTextContent(/^522\.00 kg, but the recipe makes 1\.02 kg: did you mean 522\.00 g\? Only part of this recipe has a price$/);
+  });
+
   it('exactly 20 whole batches is a real order: no warning', async () => {
     await open('/food-cost/product/Dough', doughWith(20));
     expect(qtyBox()).toHaveValue('20000');

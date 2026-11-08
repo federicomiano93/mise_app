@@ -120,8 +120,8 @@ describe('a recipe line in the working copy', () => {
     expect(workingFromDraft(draft).components[0]).toMatchObject({ kind: 'recipe', qty: '', unit: 'g' });
   });
 
-  it('an untouched line is saved as the very kilos stored', () => {
-    for (const kilos of [0.522, 1.7, 0.001, 12.345678, 0.000001, 25, 3.233]) {
+  it('an untouched line is saved as the very kilos stored — even past six decimals (the old kilo box saved what was typed)', () => {
+    for (const kilos of [0.522, 1.7, 0.001, 12.345678, 0.000001, 25, 3.233, 0.0416667, 1.23456789]) {
       expect(toProduct(workingFrom(stored(kilos), 'IT'), 'p').components, String(kilos)).toEqual([{ recipeId: 'r', qtyKg: kilos }]);
     }
   });
@@ -134,5 +134,13 @@ describe('a recipe line in the working copy', () => {
     expect(recipeLineKg({ qty: '', unit: 'kg' }), 'an empty box is nothing in either unit').toBe(recipeLineKg({ qty: '', unit: 'g' }));
     expect(recipeLineKg({ qty: 'abc', unit: 'g' })).toBe(0);
   });
-});
 
+  it('a line opened past six decimals and then touched is read from its box', () => {
+    const [line] = workingFrom(stored(0.0416667), 'IT').components;
+    if (line?.kind !== 'recipe') throw new Error('no recipe line');
+    expect(line.qty).toBe('41.6667');
+    expect(recipeLineKg({ ...line, qty: '42' })).toBe(0.042);
+    expect(recipeLineKg({ ...line, unit: 'kg' }), 'the switch keeps the number: now 41.6667 kg').toBe(41.6667);
+    expect(recipeLineKg(line), 'as it opened: the stored kilos').toBe(0.0416667);
+  });
+});

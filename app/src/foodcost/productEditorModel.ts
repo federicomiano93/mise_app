@@ -20,8 +20,11 @@ import type { KiloLineUnit } from '@mise/shared/line-quantity';
 // a7f4c75d, 8 Nov 2026). Production showed 16 lines in 11 products 1000× too big: staff typed grams (as in the ingredient
 // lines right below) into a box that opened on kg; and a correct 3.233 kg read as «3.233», which an Italian takes for three
 // thousand. `unit` is memory only, never saved: `qty` is the text in that unit, and `qtyKg` is worked out from both.
+// ⚠️ UNTOUCHED MEANS UNCHANGED: `stored` is the line as it opened (its box text and the kilos behind it). While the box and the
+// unit are as they opened, the stored kilos are handed back EXACTLY — the old kilo box saved what was typed, so a 0.0416667
+// read through grams (six decimals) would come back 0.041667 and a rename-only save would record a margin point.
 export type WorkingComponent =
-  | { key: string; kind: 'recipe'; recipeId: string; qty: string; unit: KiloLineUnit }
+  | { key: string; kind: 'recipe'; recipeId: string; qty: string; unit: KiloLineUnit; stored?: { qty: string; kg: number } }
   | { key: string; kind: 'ingredient'; ingredientId: string; qty: string; unit: LineUnit };
 
 // The unit every recipe line opens on.
@@ -65,6 +68,12 @@ const qtyText = (value: number): string => (value ? String(value) : '');
 // A recipe line's stored kilos as its box shows them, in grams ('' for nothing yet, so the placeholder shows).
 const recipeQtyText = (kilos: number): string => typedFromKilos(kilos, RECIPE_LINE_OPENS_IN);
 
+// A stored recipe line as the working copy opens it: in grams, remembering what it opened with.
+function openRecipeLine(recipeId: string, qtyKg: number): WorkingComponent {
+  const qty = recipeQtyText(qtyKg);
+  return { key: newLineKey(), kind: 'recipe', recipeId, qty, unit: RECIPE_LINE_OPENS_IN, stored: { qty, kg: qtyKg } };
+}
+
 export function emptyWorking(): Working {
   return {
     name: '', components: [], packaging: [], sellingMode: '', piecesPerBatch: '', packSize: '', packUnit: '',
@@ -79,9 +88,7 @@ export function workingFromDraft(draft: ProductDraft): Working {
   return {
     ...emptyWorking(),
     name: draft.name,
-    components: draft.components.map<WorkingComponent>(line => ({
-      key: newLineKey(), kind: 'recipe', recipeId: line.recipeId, qty: recipeQtyText(line.qtyKg), unit: RECIPE_LINE_OPENS_IN,
-    })),
+    components: draft.components.map<WorkingComponent>(line => openRecipeLine(line.recipeId, line.qtyKg)),
   };
 }
 
@@ -93,7 +100,7 @@ export function workingFrom(product: Product, country: unknown): Working {
     name: product.name,
     components: product.components.map<WorkingComponent>(line => (line.kind === 'ingredient'
       ? { key: newLineKey(), kind: 'ingredient', ingredientId: line.ingredientId, qty: qtyText(line.qty), unit: line.unit }
-      : { key: newLineKey(), kind: 'recipe', recipeId: line.recipeId, qty: recipeQtyText(line.qtyKg), unit: RECIPE_LINE_OPENS_IN })),
+      : openRecipeLine(line.recipeId, line.qtyKg))),
     packaging: product.packaging.map(line => ({ key: newLineKey(), ingredientId: line.ingredientId, qty: qtyText(line.qtyPcs) })),
     sellingMode: product.sellingMode ?? '',
     piecesPerBatch: text(product.piecesPerBatch),
@@ -126,9 +133,10 @@ export function readQty(raw: string): number {
   return value !== null && Number.isFinite(value) ? value : 0;
 }
 
-// A recipe line's kilos: what its box says, read in the unit beside it (kilosFromTyped — six decimals at most, so 522 g is
-// 0.522 kg, never 0.5220000000001).
-export function recipeLineKg(line: { qty: string; unit: KiloLineUnit }): number {
+// A recipe line's kilos: the stored kilos, exactly, while the line is as it opened; else what its box says, read in the unit
+// beside it (kilosFromTyped — six decimals at most, so 522 g is 0.522 kg, never 0.5220000000001).
+export function recipeLineKg(line: { qty: string; unit: KiloLineUnit; stored?: { qty: string; kg: number } }): number {
+  if (line.stored && line.qty === line.stored.qty && line.unit === RECIPE_LINE_OPENS_IN) return line.stored.kg;
   return kilosFromTyped(readQty(line.qty), line.unit);
 }
 
