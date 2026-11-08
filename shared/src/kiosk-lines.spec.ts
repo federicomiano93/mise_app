@@ -2,7 +2,8 @@
 // js/orders/kiosk-lines.js, which the live app uses today. A FULL port, so parity.spec.ts also compares the exports.
 //
 // PORTED: the five pure tests of tests/kiosk-slice2.test.mjs about kioskOrderSections and kioskSectionsFromData, plus two more
-// (a supplier switched off, an order already said to have arrived).
+// (a supplier switched off, an order already said to have arrived), and the kiosk test of tests/orders-close-not-ordered.test.mjs (a
+// supplier closed as not ordered today, checklist item 3, 8 Nov 2026).
 // NOT PORTED: the tests of that file that read the source of orders-main.js and the kiosk's own settings (kiosk-model.js): they
 // test the current app's wiring and the kiosk, which is step 3g.
 
@@ -72,5 +73,25 @@ describe.each([
   test('from Orders data: nothing at all, and no day, give no sections', () => {
     expect(m.kioskSectionsFromData({ suppliers: [], history: [], today: '2026-10-07' })).toStrictEqual([]);
     expect(m.kioskSectionsFromData({ suppliers, history: [], today: '' })).toStrictEqual([]);
+  });
+
+  test('a supplier closed as not ordered today is not listed as to order', () => {
+    // 6 November 2026 is a Friday.
+    const FRIDAY = '2026-11-06';
+    const ALBA = { id: 'alba', name: 'Alba', orderDays: ['Friday'], active: true };
+    const BRAVA = { id: 'brava', name: 'Brava', orderDays: ['Friday'], active: true };
+    const sections = m.kioskSectionsFromData({
+      suppliers: [ALBA, BRAVA], history: [], today: FRIDAY, weekStartsOn: 'Sunday', skipped: { brava: FRIDAY },
+    });
+    expect(sections.find(s => s.titleKey === 'kiosk.rest.toOrderTitle')?.names).toStrictEqual(['Alba']);
+    const none = m.kioskSectionsFromData({
+      suppliers: [BRAVA], history: [], today: FRIDAY, weekStartsOn: 'Sunday', skipped: { brava: FRIDAY },
+    });
+    expect(none.find(s => s.titleKey === 'kiosk.rest.toOrderTitle')).toBeUndefined();
+    // A close from another day changes nothing.
+    const old = m.kioskSectionsFromData({
+      suppliers: [BRAVA], history: [], today: FRIDAY, weekStartsOn: 'Sunday', skipped: { brava: '2026-10-30' },
+    });
+    expect(old.find(s => s.titleKey === 'kiosk.rest.toOrderTitle')?.names).toStrictEqual(['Brava']);
   });
 });

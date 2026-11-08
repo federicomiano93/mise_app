@@ -377,7 +377,7 @@ const PORT_OWED = new Set<string>([
   'invoice-zip/classify :: exports exactly the same names',
   'invoice-zip/classify :: every export is a function in both or a value in both',
   'invoice-zip/classify :: every non-function export is strictly equal',
-  // PORT OWED (release branch, 8 Nov 2026): main added closeOffer, dueTodayIds and more exports to js/reminders.js (reminders due today), not yet in the port — remove its key when ported
+  // PORT OWED (release branch, 8 Nov 2026): main added dueTodayIds to js/orders/reminders.js (the «Order today» tag in both supplier lists, checklist item 12), not yet in the port — skippedOn and closeOffer came with item 3 — remove its key when ported
   'reminders :: exports exactly the same names',
   'reminders :: every export is a function in both or a value in both',
 ]);

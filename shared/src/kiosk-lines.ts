@@ -13,7 +13,7 @@
 
 import { supplierLabel } from './supplier-label';
 import { todayOrders } from './reminders';
-import type { ReminderSupplier, PlacedRecord } from './reminders';
+import type { ReminderSupplier, PlacedRecord, SkippedMap } from './reminders';
 import { pendingDeliveries } from './deliveries';
 
 // More than this many suppliers and the rest become «+N» (a resting screen is read from across the room).
@@ -57,15 +57,17 @@ export function kioskOrderSections({ toOrder, arriving }: { toOrder?: unknown; a
 }
 
 // The same, straight from Orders data: suppliers + orders-history records. `today` is "YYYY-MM-DD". Reuses the screen's own rules
-// (todayOrders, pendingDeliveries) so the rest screen can never disagree with the banners.
-export function kioskSectionsFromData<S extends ReminderSupplier>({ suppliers, history, today, weekStartsOn }: {
+// (todayOrders, pendingDeliveries) so the rest screen can never disagree with the banners. `skipped` is drafts/current.skipped: a
+// supplier closed as not ordered today is not «to order» (8 Nov 2026, the current app's v1.143.0).
+export function kioskSectionsFromData<S extends ReminderSupplier>({ suppliers, history, today, weekStartsOn, skipped = null }: {
   suppliers?: readonly S[] | null;
   history?: readonly PlacedRecord[] | null;
   today?: string;
   weekStartsOn?: string;
+  skipped?: SkippedMap | null;
 }): KioskSection[] {
-  const toOrder = todayOrders({ suppliers, history, today })
-    .filter(row => !row.placed).map(row => row.supplier);
+  const toOrder = todayOrders({ suppliers, history, today, skipped })
+    .filter(row => !row.placed && !row.skipped).map(row => row.supplier);
   const byId: Record<string, S> = {};
   (suppliers || []).forEach(s => { byId[s.id as string] = s; });
   const arriving = pendingDeliveries(history, byId, today, { weekStartsOn })

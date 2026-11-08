@@ -3,8 +3,12 @@
 //
 //   todayOrders      — what to order today, and what is already done.
 //   pendingSuppliers — an order typed on an earlier day and never marked placed; it must be offered for ITS day, not today.
+//   skippedOn / closeOffer — a supplier closed as «not ordered» today (drafts/current.skipped, checklist item 3, 8 Nov 2026).
 //
-// PORTED: every test of tests/orders-reminders.test.mjs. LEFT OUT: nothing.
+// PORTED: every test of tests/orders-reminders.test.mjs, and the pure tests of tests/orders-close-not-ordered.test.mjs (skippedOn,
+// todayOrders with `skipped`, the Home badge, closeOffer; its kiosk test is in kiosk-lines.spec.ts). LEFT OUT: that file's tests that
+// read the current app's source or draw its views (the Mise 2 wiring has its own specs: ordersStore.skipped.spec.ts,
+// OrdersSection.closeToday.spec.tsx), and dueTodayIds, which is not ported (checklist item 12).
 
 import { describe, expect, test } from 'vitest';
 import * as ported from './reminders';
@@ -216,5 +220,69 @@ describe.each([
     expect(suppliersStillToOrder(SUPPLIERS, [], MONDAY).length).toBe(SUPPLIERS.length);
     expect(suppliersStillToOrder(SUPPLIERS, null, MONDAY).length).toBe(SUPPLIERS.length);
     expect(suppliersStillToOrder(null, [], MONDAY)).toStrictEqual([]);
+  });
+});
+
+// ── Closed as «not ordered» today (drafts/current.skipped, Federico's tablet notes of 2–3 Nov 2026) ─────────────────────────────
+// Only a close made TODAY counts; a real order recorded after it wins; the badge, the strip and the summary read the same rule.
+describe.each([
+  ['shared/ (TypeScript)', ported],
+  ['js/ (current app)', legacy],
+] as const)('%s — closed as not ordered', (_name, m) => {
+  const { skippedOn, todayOrders, suppliersStillToOrder, closeOffer } = m;
+  // 6 November 2026 is a Friday.
+  const FRIDAY = '2026-11-06';
+  const LAST_FRIDAY = '2026-10-30';
+  const ALBA_F = { id: 'alba', name: 'Alba', orderDays: ['Friday'], active: true };
+  const BRAVA = { id: 'brava', name: 'Brava', orderDays: ['Friday'], active: true };
+  const MONDAYS = { id: 'mon', name: 'Mondays', orderDays: ['Monday'], active: true };
+
+  test("skippedOn: only a close made TODAY counts — last week's never hides this week's order", () => {
+    expect([...skippedOn({ alba: FRIDAY, brava: LAST_FRIDAY }, FRIDAY)]).toStrictEqual(['alba']);
+    expect(skippedOn(null, FRIDAY).size).toBe(0);
+    expect(skippedOn(undefined, FRIDAY).size).toBe(0);
+    expect(skippedOn({ alba: FRIDAY }, '').size).toBe(0);
+    // A stray non-map is ignored, never trusted.
+    expect(skippedOn('alba', FRIDAY).size).toBe(0);
+  });
+
+  test('todayOrders: a closed supplier is skipped, not placed — and a real order wins over the close', () => {
+    const rows = todayOrders({
+      suppliers: [BRAVA, ALBA_F, MONDAYS],
+      history: [{ date: FRIDAY, supplierId: 'alba' }],
+      today: FRIDAY,
+      skipped: { alba: FRIDAY, brava: FRIDAY },
+    });
+    expect(rows.map(r => [r.supplier.id, r.placed, r.skipped])).toStrictEqual([
+      ['alba', true, false], // ordered after being closed: the order is what happened
+      ['brava', false, true],
+    ]);
+  });
+
+  test('todayOrders without skipped behaves as before (every row says skipped: false)', () => {
+    const rows = todayOrders({ suppliers: [ALBA_F], history: [], today: FRIDAY });
+    expect(rows.map(r => [r.placed, r.skipped])).toStrictEqual([[false, false]]);
+  });
+
+  test('the Home badge does not count a supplier closed as not ordered today', () => {
+    expect(suppliersStillToOrder([ALBA_F, BRAVA], [], FRIDAY, { brava: FRIDAY }).map(s => s.id)).toStrictEqual(['alba']);
+    // A close from another day changes nothing; no argument at all is the old behaviour.
+    expect(suppliersStillToOrder([ALBA_F, BRAVA], [], FRIDAY, { brava: LAST_FRIDAY }).map(s => s.id)).toStrictEqual(['alba', 'brava']);
+    expect(suppliersStillToOrder([ALBA_F, BRAVA], [], FRIDAY).map(s => s.id)).toStrictEqual(['alba', 'brava']);
+  });
+
+  test('closeOffer: what the summary offers about today', () => {
+    expect(closeOffer({ supplier: BRAVA, history: [], today: FRIDAY })).toBe('skip');
+    expect(closeOffer({ supplier: BRAVA, history: [], today: FRIDAY, skipped: { brava: FRIDAY } })).toBe('reopen');
+    expect(closeOffer({ supplier: BRAVA, history: [], today: FRIDAY, skipped: { brava: LAST_FRIDAY } })).toBe('skip');
+    // Not its order day: there is nothing to close.
+    expect(closeOffer({ supplier: MONDAYS, history: [], today: FRIDAY })).toBe('');
+    // Already ordered today: nothing to close, nothing to reopen.
+    expect(closeOffer({
+      supplier: BRAVA, history: [{ date: FRIDAY, supplierId: 'brava' }], today: FRIDAY, skipped: { brava: FRIDAY },
+    })).toBe('');
+    expect(closeOffer({ supplier: { ...BRAVA, active: false }, history: [], today: FRIDAY })).toBe('');
+    expect(closeOffer({ supplier: null, history: [], today: FRIDAY })).toBe('');
+    expect(closeOffer({ supplier: BRAVA, history: [], today: '' })).toBe('');
   });
 });
