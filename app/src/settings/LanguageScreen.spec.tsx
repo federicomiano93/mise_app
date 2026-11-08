@@ -84,18 +84,18 @@ describe('App language', () => {
 
   it('marks the language in use as pressed and disabled, and offers the other', async () => {
     await open();
-    const inUse = main().getByRole('button', { name: 'In use' });
+    const inUse = main().getByRole('button', { name: 'English In use' });
     expect(inUse).toHaveAttribute('aria-pressed', 'true');
     expect(inUse).toBeDisabled();
-    const other = main().getByRole('button', { name: 'Use this' });
+    const other = main().getByRole('button', { name: 'Italiano Use this' });
     expect(other).toHaveAttribute('aria-pressed', 'false');
     expect(other).toBeEnabled();
   });
 
   it('marks Italian in use when the interface is Italian', async () => {
     await open({ lang: 'it' });
-    expect(main().getByRole('button', { name: 'In uso' })).toBeDisabled();
-    expect(main().getByRole('button', { name: 'Usa questa' })).toBeEnabled();
+    expect(main().getByRole('button', { name: 'Italiano In uso' })).toBeDisabled();
+    expect(main().getByRole('button', { name: 'English Usa questa' })).toBeEnabled();
   });
 
   it('changes the language with the server first, then reloads — and says «Saving…» meanwhile, with every button off', async () => {
@@ -105,11 +105,11 @@ describe('App language', () => {
     const status = card().getByRole('status');
     expect(status).toHaveTextContent('');
 
-    await user.click(main().getByRole('button', { name: 'Use this' }));
+    await user.click(main().getByRole('button', { name: 'Italiano Use this' }));
     expect(source.setLanguage).toHaveBeenCalledWith('it');
     expect(status).toHaveTextContent('Saving…');
-    expect(main().getByRole('button', { name: 'In use' })).toBeDisabled();
-    expect(main().getByRole('button', { name: 'Use this' })).toBeDisabled();
+    expect(main().getByRole('button', { name: 'English In use' })).toBeDisabled();
+    expect(main().getByRole('button', { name: 'Italiano Use this' })).toBeDisabled();
     // The icon-only Back is found by its name, and is off too: leaving would not undo the save in the air.
     expect(main().getByRole('button', { name: 'Back' })).toBeDisabled();
     // The phone has not heard of the change yet: a reload now would read the old venue.
@@ -122,7 +122,7 @@ describe('App language', () => {
   it('says it could not and does not reload when the change is refused, offline or past the timeout', async () => {
     const { user, source } = await open();
     source.functionsFailWith = Object.assign(new Error('denied'), { code: 'functions/permission-denied' });
-    await user.click(main().getByRole('button', { name: 'Use this' }));
+    await user.click(main().getByRole('button', { name: 'Italiano Use this' }));
 
     const notice = await screen.findByRole('alertdialog');
     expect(within(notice).getByText('Could not change the language. Check your connection and try again.')).toBeInTheDocument();
@@ -130,11 +130,11 @@ describe('App language', () => {
     await waitFor(() => { expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(); });
 
     expect(reload).not.toHaveBeenCalled();
-    expect(main().getByRole('button', { name: 'Use this' })).toBeEnabled();
+    expect(main().getByRole('button', { name: 'Italiano Use this' })).toBeEnabled();
     expect(main().getByRole('button', { name: 'Back' })).toBeEnabled();
     expect(card().getByRole('status')).toHaveTextContent('');
     // The button that was pressed gets the focus back once it is enabled again.
-    await waitFor(() => { expect(main().getByRole('button', { name: 'Use this' })).toHaveFocus(); });
+    await waitFor(() => { expect(main().getByRole('button', { name: 'Italiano Use this' })).toHaveFocus(); });
   });
 
   describe('the reload never throws away typing', () => {
@@ -144,7 +144,7 @@ describe('App language', () => {
       pageReload.retryMs = 20;
       const { user } = await open();
       const release = markBusy();
-      await user.click(main().getByRole('button', { name: 'Use this' }));
+      await user.click(main().getByRole('button', { name: 'Italiano Use this' }));
       await new Promise(resolve => setTimeout(resolve, 120));
       expect(reload).not.toHaveBeenCalled();
       release();
@@ -157,7 +157,7 @@ describe('App language', () => {
       source.functionsFailWith = new Error('timeout');
       source.venue = { ...(source.venue ?? {}), language: 'it' };
       const release = markBusy();
-      await user.click(main().getByRole('button', { name: 'Use this' }));
+      await user.click(main().getByRole('button', { name: 'Italiano Use this' }));
       await new Promise(resolve => setTimeout(resolve, 120));
       expect(reload).not.toHaveBeenCalled();
       release();
@@ -166,7 +166,7 @@ describe('App language', () => {
 
     it('reads the venue into the session before it reloads', async () => {
       const { user, store } = await open();
-      await user.click(main().getByRole('button', { name: 'Use this' }));
+      await user.click(main().getByRole('button', { name: 'Italiano Use this' }));
       await waitFor(() => { expect(reload).toHaveBeenCalledTimes(1); });
       expect(store.refreshLocation).toHaveBeenCalledTimes(1);
       expect(store.refreshLocation.mock.invocationCallOrder[0]).toBeLessThan(reload.mock.invocationCallOrder[0] ?? 0);
@@ -178,7 +178,7 @@ describe('App language', () => {
     const { user, source } = await open();
     source.functionsFailWith = Object.assign(new Error('timeout'), { code: 'functions/deadline-exceeded' });
     source.venue = { ...(source.venue ?? {}), language: 'it' };
-    await user.click(main().getByRole('button', { name: 'Use this' }));
+    await user.click(main().getByRole('button', { name: 'Italiano Use this' }));
     await waitFor(() => { expect(reload).toHaveBeenCalledTimes(1); });
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });
@@ -210,7 +210,7 @@ describe('App language', () => {
     it('is there while the change is saving, and after a failure', async () => {
       const { user, source } = await open();
       source.functionsFailWith = new Error('offline');
-      await user.click(main().getByRole('button', { name: 'Use this' }));
+      await user.click(main().getByRole('button', { name: 'Italiano Use this' }));
       await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'OK' }));
       expect(main().getByText(/printed in English/)).toBeInTheDocument();
     });
@@ -219,7 +219,7 @@ describe('App language', () => {
   describe('who may open it', () => {
     it('lets a manager in (a head chef is a manager)', async () => {
       await open({ session: { ...UK, role: 'manager', canManage: true, isOwner: false } });
-      expect(main().getByRole('button', { name: 'In use' })).toBeInTheDocument();
+      expect(main().getByRole('button', { name: 'English In use' })).toBeInTheDocument();
     });
 
     it('sends an employee back to Settings, whose page does not offer it', async () => {

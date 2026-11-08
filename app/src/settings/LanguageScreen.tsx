@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { canPrintLabel, countryOf, outputLanguage } from '@mise/shared/market';
 import { useT } from '../i18n/useT';
 import type { Language } from '../i18n/i18n';
@@ -37,6 +37,7 @@ export function LanguageScreen() {
   const source = useSettingsSource();
   const [alert, alertDialog] = useAlert();
   const [saving, setSaving] = useState(false);
+  const ids = useId();
   const buttons = useRef(new Map<Language, HTMLButtonElement>());
   // The button that was pressed, owed the focus once a failure has been read and the buttons are enabled again.
   const [refocus, setRefocus] = useState<Language | null>(null);
@@ -79,9 +80,13 @@ export function LanguageScreen() {
       <ul className={styles.list}>
         {LANGUAGES.map(({ code, name }) => {
           const inUse = code === lang;
+          // ⚠️ THE BUTTON IS NAMED WITH ITS LANGUAGE: «Italiano, Use this», not a bare «Use this» heard while tabbing. Its own visible
+          // words stay in the name (WCAG 2.5.3).
+          const nameId = `${ids}-${code}-name`;
+          const actionId = `${ids}-${code}-action`;
           return (
             <li key={code} className={styles.row}>
-              <span className={styles.name} lang={code}>{name}</span>
+              <span id={nameId} className={styles.name} lang={code}>{name}</span>
               <Button
                 ref={node => {
                   if (node) buttons.current.set(code, node);
@@ -89,10 +94,11 @@ export function LanguageScreen() {
                 }}
                 variant={inUse ? 'secondary' : 'primary'}
                 aria-pressed={inUse}
+                aria-labelledby={`${nameId} ${actionId}`}
                 isDisabled={inUse || saving}
                 onPress={() => { void choose(code); }}
               >
-                {inUse ? t('lang.inUse') : t('lang.use')}
+                <span id={actionId}>{inUse ? t('lang.inUse') : t('lang.use')}</span>
               </Button>
             </li>
           );
