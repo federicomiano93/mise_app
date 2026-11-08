@@ -13,6 +13,10 @@
 import { changedDays, changedEntries, wholeNumber } from '@mise/shared/archive';
 import { cleanSupplierId, overrideOf } from '@mise/shared/line-supplier';
 import { cleanUnit } from '@mise/shared/order-unit';
+import {
+  DRAFT_JOURNAL_MAX_AGE_MS, historyLookBackDay, orderedSince, readJournal, writeJournal,
+} from '@mise/shared/draft-journal';
+import type { DraftJournal, JournalStorage, NotedFields, NotedLine } from '@mise/shared/draft-journal';
 
 // One line of the order, as stored: `qty` and `stock` are whole numbers; `unit` only when the line is not in the card's
 // own unit ('' = back to the card's unit); `supplierId` only when the line is ordered from another supplier this time
@@ -57,10 +61,31 @@ export interface DraftSyncDeps {
   // How a save ended: true = it landed, false = it was refused. ⚠️ Success is said too, so a later save that carried the
   // same values clears a failure message left by a transient blip (parity L37).
   onResult(ok: boolean): void;
+  // The note that outlives the page (F-15, @mise/shared/draft-journal). Absent: nothing is noted (a spec of the sync alone).
+  journal?: DraftJournalDeps;
+}
+
+// What the note needs from the page around it.
+export interface DraftJournalDeps {
+  // The open venue: the note is one venue's.
+  readonly venue: string;
+  // localStorage, or null where it is blocked (private mode): the note is then simply not kept.
+  storage(): JournalStorage | null;
+  // The note's clock (ms).
+  now(): number;
+  // orders-history from `fromDay` ('YYYY-MM-DD') onwards, read from the SERVER, never from the phone's copy; REJECTS when the
+  // server cannot be reached (the note then waits).
+  ordersSince(fromDay: string): Promise<readonly unknown[]>;
+  // Asks again later, when the orders could not be read.
+  retryLater(run: () => void, ms: number): void;
+  // Lines came back from the note: what the screens draw now. The section can then look again for orders never placed.
+  onCameBack(view: DraftView): void;
 }
 
 // Debounce to limit Firestore writes (P14): one write per pause in the typing, never one per keystroke.
 export const SAVE_DELAY_MS = 800;
+// A tablet can stay open for days: «the next open» may be far away, so orders that could not be read are asked for again.
+export const ORDERS_RETRY_MS = 30_000;
 
 export const EMPTY_DRAFT: DraftView = Object.freeze({
   entries: Object.freeze({}), days: Object.freeze({}), updatedAt: '', exists: false,
@@ -69,7 +94,9 @@ export const EMPTY_DRAFT: DraftView = Object.freeze({
 export interface DraftSync {
   // A snapshot of drafts/current arrived (null = no document): it becomes the baseline, and what this phone typed and the
   // server has not confirmed goes back ON TOP. Returns what the screens draw.
-  receive(doc: Readonly<Record<string, unknown>> | null): DraftView;
+  // `fromServer`: the SERVER sent it (not the phone's own copy). The first such snapshot is what a note left by the last page
+  // waits for (F-15).
+  receive(doc: Readonly<Record<string, unknown>> | null, fromServer?: boolean): DraftView;
   // The whole local state after an edit: the changed rows are claimed as this phone's and the autosave is (re)armed.
   change(entries: DraftEntries, days: DraftDays): void;
   // Sends a waiting (or refused) change RIGHT NOW (leaving the section, or before a record is written). Resolves at once
@@ -84,6 +111,9 @@ export interface DraftSync {
   hasUnsaved(): boolean;
   // True while a write is in the air (sent, no answer yet).
   saving(): boolean;
+  // Sends a change still waiting for its pause NOW, and reports it as an autosave does (the page went out of sight: F-15).
+  // Nothing waiting, nothing sent.
+  sendWaiting(): void;
   // These lines (and these suppliers' day stamps) leave THIS phone now, before their clear is written: from the screen's
   // copy, from the baseline and from what this phone claims. `quantitiesOnly` keeps each line's stock reading (a «Clear
   // quantities», draft.js clearQuantities); otherwise the whole line goes (an order was recorded, draft.js clearSupplier).
@@ -181,6 +211,26 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
   // A change is waiting for the pause to end.
   let waiting = false;
 
+  // ── What survives this page (F-15, the current app's js/orders/draft.js) ─────────────────────────────────────────────
+  //
+  // ⚠️ `pending` DIES WITH THE PAGE. Measured on the lab tablet in the current app: on a freshly opened page a write reaches
+  // Firestore's queue about 5 s after the keystroke, and a reload before that lost the number for good. So every claim is
+  // also noted on this device, in the same keystroke (@mise/shared/draft-journal), until a snapshot shows it: Firestore only
+  // reports a write after storing it in the browser's database, so from then on the queue answers for it. A correction stays
+  // noted until the writes it corrects have landed too.
+  //
+  // ⚠️⚠️ THE NOTE IS NEVER SENT BLIND, AND NEVER ON THE WORD OF THE OFFLINE COPY. It can be hours old by the time the page
+  // opens, and the copy on this device may not know that a colleague has placed that order: sending it then would put back
+  // quantities of an order already placed, the very hole `pending` was rebuilt to close. So what the last page left waits in
+  // `restored`, off the screen and out of every save, until the SERVER has answered (settleRestored).
+  const journal = deps.journal;
+  let journalOpen = false; // read once, at the first snapshot or keystroke: only then is a venue certainly open
+  let journalAt = 0; // when the note was last typed into: what its 24 hours count from
+  let restored: DraftJournal | null = null; // what the last page left, while the server has not answered
+  let settleStarted = false;
+  // Writes the server said no to (wasRefused).
+  const refused: Array<{ entries: Rows; days: MutableDays }> = [];
+
   function disarm() {
     if (timer !== null) deps.clearTimer(timer);
     timer = null;
@@ -202,6 +252,194 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       if (days !== undefined && id in days) return days[id];
     }
     return undefined;
+  }
+
+  function openJournal() {
+    if (!journal || journalOpen) return;
+    journalOpen = true;
+    const note = readJournal(journal.venue, journal.now(), journal.storage());
+    if (!note) return;
+    journalAt = note.at;
+    restored = note;
+  }
+
+  // A write the server refused is refused again on the next open, and every save would then carry it: a note that outlived
+  // the page would turn one bad line into an order that can never be saved again, for good. So it stays claimed in this
+  // page, as before, but is not noted: a reload is still the way out. A saved write proves the rules accept this device
+  // again, and clears the list.
+  const wasRefused = (id: string, field: Field, value: unknown) =>
+    refused.some(write => write.entries[id] !== undefined && write.entries[id][field] === value);
+
+  // Bring the note up to date. `typed` says this comes from a keystroke, which restarts its 24 hours: not while something
+  // from an earlier page is still in it, which keeps its own age, or a tablet used offline could carry a number past the
+  // day it is allowed.
+  function saveJournal(typed = false) {
+    if (!journal) return;
+    openJournal();
+    if ((typed && !restored) || !journalAt) journalAt = journal.now();
+    const entries: Record<string, NotedLine> = {};
+    const days: Record<string, { day: string; base: string }> = {};
+    if (restored) {
+      for (const [id, left] of Object.entries(restored.entries)) {
+        entries[id] = { row: { ...left.row }, base: { ...left.base } };
+        if (left.air?.length) entries[id].air = left.air.map(seen => ({ ...seen }));
+      }
+      Object.assign(days, restored.days);
+    }
+    for (const [id, held] of Object.entries(pending.entries)) {
+      const there = stored(known.entries[id]);
+      const row: Record<string, number | string | undefined> = {};
+      const base: Record<string, number | string> = {};
+      const air: NotedFields[] = [];
+      const noteFields = (fields: readonly Field[], corrected: readonly NotedFields[]) => {
+        for (const field of fields) {
+          row[field] = held[field];
+          base[field] = there[field];
+        }
+        air.push(...corrected);
+      };
+      // ⚠️ «5 PUT BACK TO 0» MATCHES `known` UNTIL A SNAPSHOT SHOWS THE 5, BUT THE 5 MAY ALREADY BE IN FIRESTORE'S QUEUE: with
+      // the page gone before the 0 left, it lands and comes back. So a claim that corrects a write in the air is noted even
+      // when it matches `known`, and says what that write said, because on the next open the line can read either way
+      // (stillOurs).
+      const corrects = (fields: readonly Field[]): NotedFields[] => flights
+        .map(flight => flight.entries[id])
+        .filter((sent): sent is Row => sent !== undefined
+          && fields.every(field => field in sent)
+          && fields.some(field => sent[field] !== held[field])
+          && fields.some(field => sent[field] !== there[field]))
+        .map(sent => Object.fromEntries(fields.map(field => [field, sent[field]])) as NotedFields);
+      // What a snapshot already shows is in Firestore's queue. The group only as a whole.
+      const group = GROUP.filter(field => field in held);
+      const groupCorrects = group.length > 0 ? corrects(group) : [];
+      if ((group.some(field => held[field] !== there[field]) || groupCorrects.length > 0)
+        && !group.every(field => wasRefused(id, field, held[field]))) noteFields(group, groupCorrects);
+      const stockCorrects = 'stock' in held ? corrects(['stock']) : [];
+      if ('stock' in held && (held.stock !== there.stock || stockCorrects.length > 0)
+        && !wasRefused(id, 'stock', held.stock)) noteFields(['stock'], stockCorrects);
+      if (isEmpty(row)) continue;
+      const seen = [...(entries[id]?.air ?? []), ...air];
+      entries[id] = {
+        row: { ...entries[id]?.row, ...row } as NotedFields,
+        base: { ...entries[id]?.base, ...base } as NotedFields,
+      };
+      if (seen.length > 0) entries[id].air = seen;
+    }
+    for (const [id, day] of Object.entries(pending.days)) {
+      if (day && known.days[id] !== day && !refused.some(write => write.days[id] === day)) {
+        days[id] = { day, base: known.days[id] ?? '' };
+      }
+    }
+    writeJournal(journal.venue, { at: journalAt, entries, days }, journal.storage());
+  }
+
+  // What the last page left that `doc` still reads as it did when it was typed, or as a write it had in the air and had
+  // corrected (`air`: that write reached the queue and landed). Already holding it means it arrived; holding anything else
+  // means somebody changed that line meanwhile, and their word wins. The quantity group and the stock are judged apart, as
+  // they are written: a colleague's shelf count says nothing about a quantity.
+  function stillOurs(left: DraftJournal, doc: { entries: MutableEntries; days: MutableDays }): { entries: Rows; days: MutableDays } {
+    const entries: Rows = {};
+    for (const [id, { row, base, air = [] }] of Object.entries(left.entries)) {
+      const there = stored(doc.entries[id]);
+      const kept: Row = {};
+      const sides: Field[][] = [GROUP.filter(field => field in row), 'stock' in row ? ['stock'] : []];
+      for (const fields of sides) {
+        if (fields.length > 0 && [base, ...air].some(seen => fields.every(field => seen[field] === there[field]))
+          && fields.some(field => row[field] !== there[field])) {
+          for (const field of fields) kept[field] = row[field];
+        }
+      }
+      if (!isEmpty(kept)) entries[id] = kept;
+    }
+    const days: MutableDays = {};
+    for (const [id, { day, base }] of Object.entries(left.days)) {
+      const there = doc.days[id] ?? '';
+      if (there === base && there !== day) days[id] = day;
+    }
+    return { entries, days };
+  }
+
+  // The server has answered, so `known` is its word. Says whether any line came back, or null when the orders could not be
+  // read and the note goes on waiting.
+  //
+  // ⚠️⚠️ «STILL READS AS IT DID» CANNOT TELL AN UNTOUCHED LINE FROM ONE THAT WAS FILLED AND ORDERED: placing empties a line, and
+  // empty is what most lines were when typed on. Worse, the note may even be for a write that did get through, in the instant
+  // between Firestore storing it and telling this page. So before anything comes back the server is asked about the orders
+  // themselves: a line some order has named since it was typed stays out. Read only when there is something to bring back,
+  // which is rare.
+  async function settleRestored(): Promise<boolean | null> {
+    if (!journal || !restored) return false;
+    // ⚠️ AGAIN HERE, not only when the note is read: a page can wait offline for days.
+    const expired = journal.now() - restored.at > DRAFT_JOURNAL_MAX_AGE_MS;
+    if (expired || isEmpty(stillOurs(restored, known).entries)) {
+      restored = null;
+      saveJournal();
+      return false;
+    }
+    let ordered: Set<string>;
+    try {
+      ordered = orderedSince(await journal.ordersSince(historyLookBackDay(restored.at)), restored.at);
+    } catch (err) {
+      console.error('The orders could not be checked, the typed quantities wait:', err);
+      return null;
+    }
+    // Time has passed: whatever was typed or cleared since has already been taken out of `restored`, and `known` has moved on
+    // with every snapshot.
+    const left = restored;
+    if (!left) return false;
+    const { entries, days } = stillOurs(left, known);
+    restored = null;
+    for (const id of Object.keys(entries)) {
+      if (!ordered.has(id)) continue;
+      const row = entries[id] ?? {};
+      for (const field of GROUP) delete row[field];
+      if (isEmpty(row)) delete entries[id];
+    }
+    const quantities = (rows: readonly Row[]) => rows.filter(row => GROUP.some(field => field in row)).length;
+    // A correction whose line already reads as it wanted asked for nothing: it is no line dropped. ⚠️ UNLESS AN ORDER NAMES
+    // IT: placing empties a line too, and that is the stamp to keep out.
+    const typed = quantities(Object.entries(left.entries)
+      .filter(([id, { row, air }]) => !air?.length || ordered.has(id)
+        || GROUP.filter(field => field in row).some(field => row[field] !== stored(known.entries[id])[field]))
+      .map(([, { row }]) => row as Row));
+    const back = quantities(Object.values(entries));
+    const anyLine = !isEmpty(entries);
+    for (const [id, row] of Object.entries(entries)) pending.entries[id] = { ...row, ...pending.entries[id] };
+    // ⚠️ A DAY STAMP MEANS NOTHING WITHOUT ITS LINES, and a line dropped here may be why: a stamp for next week left on a
+    // supplier whose order has gone would date that supplier's next order too. This file does not know whose line is whose,
+    // so the stamps come back only if every quantity did. A line with none reads under the draft's own day, as it would
+    // anywhere, until the next keystroke stamps it.
+    if (back > 0 && back === typed) {
+      for (const [id, day] of Object.entries(days)) if (!(id in pending.days)) pending.days[id] = day;
+    }
+    saveJournal();
+    return anyLine;
+  }
+
+  // Started by the first snapshot the SERVER sent once the note is open; asks again later when the orders could not be read.
+  function settle() {
+    if (!journal) return;
+    void settleRestored().then(cameBack => {
+      if (cameBack === null) {
+        journal.retryLater(settle, ORDERS_RETRY_MS);
+        return;
+      }
+      if (!cameBack) return;
+      journal.onCameBack(view());
+      arm();
+    });
+  }
+
+  // A line typed on this page beats what the last page left for it, whatever comes later.
+  function forgetRestored(id: string, fields: readonly Field[]) {
+    const left = restored?.entries[id];
+    if (!left || !restored) return;
+    for (const field of fields) {
+      delete left.row[field];
+      delete left.base[field];
+    }
+    if (left.air) left.air = left.air.filter(seen => !fields.some(field => field in seen));
+    if (isEmpty(left.row)) delete restored.entries[id];
   }
 
   // What this phone's screen holds that the server does not — or will not once the writes in the air have landed.
@@ -288,6 +526,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     void settled.then(() => { answers.delete(settled); });
     return answer.then(() => {
       land();
+      refused.length = 0;
       // What landed joins the baseline — except a field a LATER write still in the air also carries: the baseline already
       // holds that newer value (Firestore showed it), and going back to this older one would make it look changed here
       // and be sent again over whatever a colleague writes meanwhile.
@@ -316,6 +555,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       for (const [id, day] of Object.entries(sent.days)) {
         if (!dayInAir(id) && pending.days[id] === day) delete pending.days[id];
       }
+      saveJournal();
     }, (err: unknown) => {
       land();
       // ⚠️ A REFUSED WRITE HANDS ITS TYPING BACK (parity L37: «the typing is kept»). A change made while it was in the air
@@ -344,8 +584,30 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
         delete days[id];
       }
       known = { entries, days };
+      refused.push(sent);
+      saveJournal();
       throw err;
     });
+  }
+
+  // Send what is waiting, reporting the result. ⚠️ The timer is the ONE write with no caller to hand a rejection to, so it
+  // catches its own: an unhandled refusal let somebody keep typing an order that was no longer being saved anywhere.
+  function autosave() {
+    saveNow()
+      .then(() => deps.onResult(true))
+      .catch((err: unknown) => {
+        console.error('Draft autosave failed:', err);
+        deps.onResult(false);
+      });
+  }
+
+  function arm() {
+    waiting = true;
+    disarm();
+    timer = deps.setTimer(() => {
+      timer = null;
+      if (waiting) autosave();
+    }, SAVE_DELAY_MS);
   }
 
   // Also after a refusal with nothing typed since: leaving the section tries the refused typing once more.
@@ -361,7 +623,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
   }
 
   return {
-    receive(doc) {
+    receive(doc, fromServer = false) {
       lastDoc = doc;
       // The server's word becomes the baseline, so a row somebody else changed is not «changed here» and never gets
       // re-asserted at this phone's stale value…
@@ -383,6 +645,12 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       for (const [id, day] of Object.entries(pending.days)) {
         if (!dayInAir(id) && known.days[id] === day) delete pending.days[id];
       }
+      saveJournal();
+      // The note waits for the SERVER's first word (never the offline copy's), and is judged against it.
+      if (fromServer && restored && !settleStarted) {
+        settleStarted = true;
+        settle();
+      }
       // …but anything typed here and not yet written goes back ON TOP, or the snapshot would erase it mid-keystroke.
       return view();
     },
@@ -390,22 +658,24 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     view,
 
     change(entries, days) {
-      waiting = true;
+      // First, so that typing can take a line out of what the last page left.
+      openJournal();
       // Claim exactly what differs from the server now: a line put back to the server's value is released at once.
       pending = differences(entries, days);
-      disarm();
-      timer = deps.setTimer(() => {
-        timer = null;
-        if (!waiting) return;
-        // ⚠️ The timer is the ONE write with no caller to hand a rejection to, so it catches its own: an unhandled
-        // refusal let somebody keep typing an order that was no longer being saved anywhere.
-        saveNow()
-          .then(() => deps.onResult(true))
-          .catch((err: unknown) => {
-            console.error('Draft autosave failed:', err);
-            deps.onResult(false);
-          });
-      }, SAVE_DELAY_MS);
+      if (restored) {
+        for (const [id, row] of Object.entries(pending.entries)) {
+          if (GROUP.some(field => field in row)) forgetRestored(id, GROUP);
+          if ('stock' in row) forgetRestored(id, ['stock']);
+        }
+        for (const id of Object.keys(pending.days)) delete restored.days[id];
+      }
+      // …and note it before anything else can happen.
+      saveJournal(true);
+      arm();
+    },
+
+    sendWaiting() {
+      if (waiting) autosave();
     },
 
     flush,
@@ -432,6 +702,12 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     // Called AFTER the record is written and BEFORE the clear: if the clear is refused, Firestore's take-back snapshot puts
     // the lines back on screen, which is the truth (they are still in the draft) and is said by the caller.
     forget(ingredientIds, supplierIds, { quantitiesOnly = false } = {}) {
+      // What the last page left for these lines goes too: an order placed (or a «clear») beats a number typed before it.
+      for (const id of ingredientIds) {
+        if (quantitiesOnly) forgetRestored(id, GROUP);
+        else if (restored) delete restored.entries[id];
+      }
+      if (restored) for (const id of supplierIds) delete restored.days[id];
       const entries: MutableEntries = { ...known.entries };
       const stored = (lastDoc?.entries && typeof lastDoc.entries === 'object' ? lastDoc.entries : {}) as Record<string, DraftEntry>;
       const shown: Record<string, DraftEntry> = { ...stored };
@@ -465,6 +741,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       }
       known = { entries, days };
       if (lastDoc) lastDoc = { ...lastDoc, entries: shown, days: shownDays };
+      saveJournal();
       return view();
     },
   };
