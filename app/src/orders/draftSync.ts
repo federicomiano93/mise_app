@@ -6,6 +6,11 @@
 //
 // ONE live document for the whole venue: every phone types into it at once (docs/parity/orders.md L31–L37).
 //
+// `skipped` (checklist item 3, 8 Nov 2026: the suppliers closed as «not ordered» today) is NOT typing: it is never in the autosave, the
+// claims or the note. It is written on its own by the store (ordersSource setSkipped / clearSkipped); this file only reads it from every
+// snapshot into the view, with this phone's own close or reopen laid on top until the server's answer shows it (`holdSkipped`), so the
+// screen moves at the tap whatever the signal (P20).
+//
 // ⚠️ ONLY THE FIELDS THIS PHONE CHANGED ARE SENT (changedEntries / changedDays of @mise/shared/archive, narrowed field by
 // field), through a merge write: the rows and fields not mentioned keep whatever anybody else has put there. Sending the whole map re-asserted every other
 // row at this phone's stale value and erased a colleague's typing (the current app's concurrency fix).
@@ -36,6 +41,9 @@ export type DraftDays = Readonly<Record<string, string>>;
 export interface DraftView {
   readonly entries: DraftEntries;
   readonly days: DraftDays;
+  // The suppliers closed as «not ordered», by supplier id: the day of the close, 'YYYY-MM-DD' (drafts/current.skipped). Only a close
+  // made today means anything (@mise/shared/reminders skippedOn); a key for another day is harmless and stays as stored.
+  readonly skipped: Readonly<Record<string, string>>;
   // The document's own `updatedAt` (ISO), '' when it has none.
   readonly updatedAt: string;
   // Whether drafts/current exists at all.
@@ -88,7 +96,7 @@ export const SAVE_DELAY_MS = 800;
 export const ORDERS_RETRY_MS = 30_000;
 
 export const EMPTY_DRAFT: DraftView = Object.freeze({
-  entries: Object.freeze({}), days: Object.freeze({}), updatedAt: '', exists: false,
+  entries: Object.freeze({}), days: Object.freeze({}), skipped: Object.freeze({}), updatedAt: '', exists: false,
 });
 
 export interface DraftSync {
@@ -123,6 +131,11 @@ export interface DraftSync {
   // quantities», draft.js clearQuantities); otherwise the whole line goes (an order was recorded, draft.js clearSupplier).
   // Returns what the screens draw.
   forget(ingredientIds: readonly string[], supplierIds: readonly string[], options?: { quantitiesOnly?: boolean }): DraftView;
+  // A close (`day`) or a reopen (null) of one supplier that this phone has just sent: shown on top of the server's `skipped` until a
+  // snapshot carries it. Returns what the screens draw.
+  holdSkipped(supplierId: string, day: string | null): DraftView;
+  // That write was refused: unless something newer was held since, the server's word stands again. Returns what the screens draw.
+  dropSkipped(supplierId: string, day: string | null): DraftView;
 }
 
 type MutableEntries = Record<string, DraftEntry>;
@@ -158,6 +171,9 @@ function daysOf(days: unknown): MutableDays {
   }
   return out;
 }
+
+// drafts/current.skipped as the screens read it: only the string values (a day), whatever else was written there.
+const skippedOf = daysOf;
 
 const isEmpty = (map: object) => Object.keys(map).length === 0;
 
@@ -211,6 +227,8 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
   const answers = new Set<Promise<unknown>>();
   // The last snapshot, so the screen can be redrawn when a refusal hands typing back.
   let lastDoc: Readonly<Record<string, unknown>> | null = null;
+  // This phone's closes (a day) and reopens (null) sent and not yet seen in a snapshot, by supplier id (holdSkipped).
+  const heldSkipped = new Map<string, string | null>();
   let timer: unknown = null;
   // A change is waiting for the pause to end.
   let waiting = false;
@@ -528,6 +546,16 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     return { entries: rows, days: claimedDays };
   }
 
+  // The server's closes with this phone's held ones on top.
+  function skippedNow(doc: Readonly<Record<string, unknown>> | null): Record<string, string> {
+    const out = skippedOf(doc?.skipped);
+    for (const [id, day] of heldSkipped) {
+      if (day === null) delete out[id];
+      else out[id] = day;
+    }
+    return out;
+  }
+
   // The screen's draft: the server's lines with this phone's unconfirmed fields on top.
   function view(): DraftView {
     const doc = lastDoc;
@@ -537,6 +565,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     return {
       entries,
       days: { ...daysOf(doc?.days), ...pending.days },
+      skipped: skippedNow(doc),
       updatedAt: typeof doc?.updatedAt === 'string' ? doc.updatedAt : '',
       exists: doc !== null && doc !== undefined,
     };
@@ -692,6 +721,12 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       for (const [id, day] of Object.entries(pending.days)) {
         if (!dayInAir(id) && known.days[id] === day) delete pending.days[id];
       }
+      // A held close or reopen the snapshot now shows is the snapshot's to show (Firestore keeps showing a pending write, and takes it
+      // back by itself if it is refused).
+      const theirSkipped = skippedOf(doc?.skipped);
+      for (const [id, day] of heldSkipped) {
+        if (day === null ? !(id in theirSkipped) : theirSkipped[id] === day) heldSkipped.delete(id);
+      }
       saveJournal();
       // The note waits for the SERVER's first word (never the offline copy's), and is judged against it.
       if (fromServer && restored && !settleStarted) {
@@ -703,6 +738,16 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     },
 
     view,
+
+    holdSkipped(supplierId, day) {
+      heldSkipped.set(supplierId, day);
+      return view();
+    },
+
+    dropSkipped(supplierId, day) {
+      if (heldSkipped.has(supplierId) && heldSkipped.get(supplierId) === day) heldSkipped.delete(supplierId);
+      return view();
+    },
 
     change(entries, days) {
       // First, so that typing can take a line out of what the last page left.

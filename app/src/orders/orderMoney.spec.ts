@@ -43,7 +43,7 @@ const PRICES = {
   flour: { priceUnit: 'kg', pricePerUnit: 2, vatRate: 4 },
   milk: { priceUnit: 'pcs', pricePerUnit: 1.5 },
 };
-const draftOf = (entries: Record<string, unknown>) => ({ entries: entries as never, days: {}, updatedAt: '', exists: true });
+const draftOf = (entries: Record<string, unknown>) => ({ entries: entries as never, days: {}, skipped: {}, updatedAt: '', exists: true });
 
 describe('summaryFor', () => {
   it('has exactly the lines of the message for that supplier, switched-off lines with a quantity included', () => {

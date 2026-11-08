@@ -76,7 +76,9 @@ export type OrdersMessage =
   // A later autosave landed: a «not saved» message still on screen can go.
   | { readonly kind: 'draft-saved' }
   // The day chosen on a supplier's day line was refused: the line is back on the day that is stored (parity D7).
-  | { readonly kind: 'day-not-saved' };
+  | { readonly kind: 'day-not-saved' }
+  // A «Close as not ordered» or a «Reopen» was refused: the screen shows the server's word again (checklist item 3).
+  | { readonly kind: 'skip-not-saved' };
 
 export interface OrdersSnapshot {
   // Every supplier, as stored (the lens keeps the active ones and sorts them).
@@ -278,6 +280,12 @@ export interface OrdersStore {
   // false = refused. ⚠️ Offline it waits for the connection, so no screen may wait on it before showing the change (step 3f-6:
   // the pending banner goes at once and comes back on false).
   setDay(supplier: StoredDoc, day: string): Promise<boolean>;
+  // «Close as not ordered» (checklist item 3, the current app's closeAsNotOrdered after its question): the supplier is closed for TODAY
+  // (drafts/current.skipped), LOCAL-FIRST — on screen at once, never awaited, written on its own and never through the autosave. A
+  // refusal puts the server's word back and says 'skip-not-saved'. The screen asks first; this does not.
+  closeToday(supplierId: string): void;
+  // «Reopen»: the close goes, the same way (no question). Nothing closed, nothing done.
+  reopenToday(supplierId: string): void;
   // What the confirm screen needs before it opens, read once from the server (parity X2, X7). A record that cannot be read
   // counts as none: the transaction inside `place` still refuses a real clash.
   checkRecords(items: ReadonlyArray<{ readonly supplierId: string; readonly date: string }>, noSupplierName: string): Promise<RecordCheck[]>;
@@ -676,6 +684,32 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     return 'applied';
   }
 
+  // One close or reopen of `skipped`, LOCAL-FIRST (the current app's setSkippedLocally + a write never awaited): held on screen at once,
+  // written on its own, and on a refusal the server's word comes back and the person is told.
+  function writeSkipped(supplierId: string, day: string | null) {
+    set({ draft: sync.holdSkipped(supplierId, day) });
+    const write = day === null ? source.clearSkipped(supplierId) : source.setSkipped(supplierId, day);
+    write.catch((err: unknown) => {
+      console.error(day === null ? 'Reopening the supplier failed:' : 'Closing the supplier as not ordered failed:', err);
+      set({ draft: sync.dropSkipped(supplierId, day) });
+      say({ kind: 'skip-not-saved' });
+    });
+  }
+
+  // ⚠️ A QUANTITY TYPED FOR A SUPPLIER CLOSED TODAY REOPENS IT (the current app's reopenIfTyped). «Nothing needed» stopped being true, and
+  // a close left standing would silence the strip and the kiosk for the rest of the day — the very reminder that catches an order typed
+  // and then forgotten. Once per supplier: the close leaves the screen at once, so the next keystroke finds nothing to undo. Silent when
+  // refused, as in the current app: the close simply comes back, and the summary still offers «Reopen» over the typed lines.
+  function reopenIfTyped(supplierId: string) {
+    if (snapshot.draft.skipped[supplierId] !== deps.today()) return;
+    if (lensNow('').filledFor(supplierId) === 0) return;
+    set({ draft: sync.holdSkipped(supplierId, null) });
+    source.clearSkipped(supplierId).catch((err: unknown) => {
+      console.error('Reopening a closed supplier after typing failed:', err);
+      set({ draft: sync.dropSkipped(supplierId, null) });
+    });
+  }
+
   // A snapshot that came from the browser's own database and holds nothing proves nothing (that database can be empty
   // because this phone never synced the collection): until the server speaks, or the copy holds something, «Loading…».
   const loadedBy = (list: readonly unknown[], meta: OrdersMeta) => meta.fromServer || list.length > 0;
@@ -833,6 +867,17 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       set({ draft: { ...snapshot.draft, entries, days } });
       holdBusy();
       sync.change(entries, days);
+      // Never for a stock-only edit: counting the shelves is not ordering.
+      if (!stockOnly) reopenIfTyped(supplier.id);
+    },
+
+    closeToday(supplierId) {
+      writeSkipped(supplierId, deps.today());
+    },
+
+    reopenToday(supplierId) {
+      if (snapshot.draft.skipped[supplierId] === undefined) return;
+      writeSkipped(supplierId, null);
     },
 
     // The current app's setSupplierDay + restamp: written at once rather than after the pause, rolled back when refused.
@@ -1007,13 +1052,15 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     kioskSections() {
       // ⚠️ NOTHING UNTIL THE DATA IS HERE (review of 3f-8a; the current app answers only once suppliers and records are loaded): with
       // the records missing every order day reads «to order», and with config/orders missing the switch reads ON.
-      if (!snapshot.suppliersLoaded || !snapshot.historyLoaded || !snapshot.configLoaded) return null;
+      // …and with the draft missing, a supplier closed as not ordered today (checklist item 3) would read «to order» again.
+      if (!snapshot.suppliersLoaded || !snapshot.historyLoaded || !snapshot.configLoaded || !snapshot.draftLoaded) return null;
       return kioskSectionsFor({
         suppliers: snapshot.suppliers,
         history: snapshot.history,
         today: deps.today(),
         weekStartsOn: snapshot.config.weekStartsOn,
         deliveryCheck: snapshot.deliveryCheck,
+        skipped: snapshot.draft.skipped,
       });
     },
 

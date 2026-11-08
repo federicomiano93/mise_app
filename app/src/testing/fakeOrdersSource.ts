@@ -26,8 +26,10 @@ export type FakeOrdersSource = OrdersSource & {
   draft: Record<string, unknown> | null;
   // Every draft write the store sent, in order (refused ones included).
   writes: DraftPayload[];
-  // The next draft writes are refused (the rules said no).
+  // The next draft writes are refused (the rules said no). The closes (`setSkipped` / `clearSkipped`) honour it too.
   refuseWrites: boolean;
+  // Every close («Close as not ordered», day) and reopen (day null) the store sent, in order (refused ones included).
+  skipWrites: Array<{ supplierId: string; day: string | null }>;
   // The next watches fail (the rules refused them, or the stream died).
   refuse: { suppliers: boolean; ingredients: boolean; config: boolean; draft: boolean; history: boolean; requests: boolean };
   // Another phone writes the draft: merged like a setDoc merge, then every watcher is told.
@@ -135,6 +137,25 @@ export function fakeOrdersSource(init: {
   let held: Array<() => void> | null = null;
   const fromServer: OrdersMeta = { fromServer: true };
 
+  // One write of `skipped`: applied and told at once, settled later (held while holdWrites is on), taken back when refused.
+  function skipWrite(next: (before: Record<string, unknown> | null) => Record<string, unknown>): Promise<void> {
+    const before = source.draft;
+    source.draft = next(before);
+    tellDraft();
+    const refused = source.refuseWrites;
+    const settle = (resolve: () => void, reject: (err: unknown) => void) => {
+      if (refused) {
+        source.draft = before;
+        tellDraft();
+        reject(new Error('permission-denied'));
+      } else resolve();
+    };
+    return new Promise<void>((resolve, reject) => {
+      if (held) held.push(() => settle(resolve, reject));
+      else queueMicrotask(() => settle(resolve, reject));
+    });
+  }
+
   const source: FakeOrdersSource = {
     suppliers: new Map((init.suppliers ?? []).map(s => [s.id, s])),
     ingredients: new Map((init.ingredients ?? []).map(i => [i.id, i])),
@@ -142,6 +163,7 @@ export function fakeOrdersSource(init: {
     draft: init.draft ?? null,
     writes: [],
     refuseWrites: false,
+    skipWrites: [],
     refuse: { suppliers: false, ingredients: false, config: false, draft: false, history: false, requests: false },
     historyFrom: null,
     historyCached: false,
@@ -200,6 +222,25 @@ export function fakeOrdersSource(init: {
       return new Promise<void>((resolve, reject) => {
         if (held) held.push(() => settle(resolve, reject));
         else queueMicrotask(() => settle(resolve, reject));
+      });
+    },
+
+    // Like mergeDraft: shown at once (Firestore's own view of a pending write), taken back when refused. `setSkipped` merges one key
+    // and creates the draft; `clearSkipped` deletes one key and is refused on a draft that does not exist (an updateDoc).
+    setSkipped(supplierId, day) {
+      source.skipWrites.push({ supplierId, day });
+      return skipWrite(before => {
+        const skipped = { ...((before?.skipped as Record<string, unknown> | undefined) ?? {}), [supplierId]: day };
+        return { ...(before ?? {}), skipped, bakery: 'bakery' };
+      });
+    },
+    clearSkipped(supplierId) {
+      source.skipWrites.push({ supplierId, day: null });
+      if (!source.draft) return Promise.reject(new Error('not-found'));
+      return skipWrite(before => {
+        const skipped = { ...((before?.skipped as Record<string, unknown> | undefined) ?? {}) };
+        delete skipped[supplierId];
+        return { ...(before ?? {}), skipped, bakery: 'bakery' };
       });
     },
 

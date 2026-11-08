@@ -435,7 +435,7 @@ describe('draftSync — flush and unsaved', () => {
 
   it('a missing document is an empty order that does not exist yet', () => {
     const h = harness();
-    expect(h.sync.receive(null)).toEqual({ entries: {}, days: {}, updatedAt: '', exists: false });
+    expect(h.sync.receive(null)).toEqual({ entries: {}, days: {}, skipped: {}, updatedAt: '', exists: false });
     expect(h.sync.receive({ entries: {}, updatedAt: 'x' }).exists).toBe(true);
   });
 });
@@ -812,5 +812,52 @@ describe('draftSync — a stock count typed while a clear is in the air (PR #410
     h.sync.change({ ...view.entries, c13: { qty: 0, stock: 4 } }, view.days);
     await h.tick();
     expect(h.saves.at(-1)?.entries).toEqual({ c13: { stock: 4 } });
+  });
+});
+
+// drafts/current.skipped (checklist item 3, 8 Nov 2026): read into the view from every snapshot, NEVER sent by the autosave, and this
+// phone's own close or reopen shown on top until a snapshot carries it.
+describe('draftSync — the suppliers closed as not ordered (`skipped`)', () => {
+  it('is read from the snapshot, only the days (a stray value is not trusted)', () => {
+    const h = harness();
+    expect(h.sync.receive({ entries: {}, skipped: { mill: '2026-11-06', odd: 3 } }).skipped).toEqual({ mill: '2026-11-06' });
+    expect(h.sync.receive({ entries: {}, skipped: 'mill' }).skipped).toEqual({});
+  });
+
+  it('is never in the autosave, and typing never blanks it on screen', async () => {
+    const h = harness();
+    h.sync.receive({ entries: {}, skipped: { mill: '2026-11-06' } });
+    h.sync.change({ flour: { qty: 2 } }, {});
+    expect(h.sync.view().skipped).toEqual({ mill: '2026-11-06' });
+    await h.tick();
+    expect(h.saves).toHaveLength(1);
+    expect(h.saves[0]).not.toHaveProperty('skipped');
+  });
+
+  it('a close or a reopen held here is shown until a snapshot carries it, and then the snapshot rules', () => {
+    const h = harness();
+    h.sync.receive({ entries: {}, skipped: { dairy: '2026-11-06' } });
+    expect(h.sync.holdSkipped('mill', '2026-11-06').skipped).toEqual({ dairy: '2026-11-06', mill: '2026-11-06' });
+    expect(h.sync.holdSkipped('dairy', null).skipped).toEqual({ mill: '2026-11-06' });
+    // A snapshot that does not carry them yet (an older one) does not undo them.
+    expect(h.sync.receive({ entries: {}, skipped: { dairy: '2026-11-06' } }).skipped).toEqual({ mill: '2026-11-06' });
+    // Carried: released, so a later change on another phone shows as it is.
+    h.sync.receive({ entries: {}, skipped: { mill: '2026-11-06' } });
+    expect(h.sync.receive({ entries: {}, skipped: { mill: '2026-11-06', dairy: '2026-11-06' } }).skipped)
+      .toEqual({ mill: '2026-11-06', dairy: '2026-11-06' });
+  });
+
+  it('a refused hold goes, unless a newer one was held since', () => {
+    const h = harness();
+    h.sync.receive({ entries: {} });
+    h.sync.holdSkipped('mill', '2026-11-06');
+    expect(h.sync.dropSkipped('mill', '2026-11-06').skipped).toEqual({});
+    // Closed on the server; reopened here, then closed again here before the reopen's answer.
+    h.sync.receive({ entries: {}, skipped: { mill: '2026-11-05' } });
+    h.sync.holdSkipped('mill', null);
+    h.sync.holdSkipped('mill', '2026-11-06');
+    // The refusal of the reopen arrives after the new close was held: the new close stands.
+    expect(h.sync.dropSkipped('mill', null).skipped).toEqual({ mill: '2026-11-06' });
+    expect(h.sync.dropSkipped('mill', '2026-11-06').skipped).toEqual({ mill: '2026-11-05' });
   });
 });

@@ -13,7 +13,8 @@
 //   • config/orders — the venue's supplier order, favourites, Stock box switch (parity M10).
 //   • drafts/current — the order in progress, shared live by every phone of the venue (parity L31).
 // It writes the draft (a merge of the changed lines and days, draftSync.ts decides what changed; and, from step 3f-2, the
-// clear of the lines an order took or a «Clear quantities» threw away) and ONE order record at a time
+// clear of the lines an order took or a «Clear quantities» threw away; from checklist item 3, 8 Nov 2026, one key of `skipped` — a supplier
+// closed as not ordered today — set or deleted on its own, never through the autosave) and ONE order record at a time
 // (orders-history/<day>_<supplier>, in a transaction — parity H1, H2). It reads a record once: the confirm screen asks whether
 // today's record exists before it opens. From step 3f-2b it also watches the LIVE WINDOW of orders-history — the last two
 // calendar months (@mise/shared/history-window), exactly the query of the current app's watchRecentHistory — which the
@@ -77,6 +78,16 @@ export interface OrdersSource {
   // `updatedAt` — an update, never a set: a merge cannot delete a nested key, and only the named paths go, so whatever
   // another phone is typing elsewhere in the document survives (js/orders/firebase-orders.js clearFields).
   clearDraft(paths: readonly string[], updatedAt: string): Promise<void>;
+  // «Close as not ordered» (checklist item 3, the current app's setSupplierSkipped): `skipped.<supplierId>` = `day` ('YYYY-MM-DD') in
+  // drafts/current, a merge of that ONE key — every other close, line and day stays — that creates the draft on a venue that never typed
+  // an order. ⚠️ NO `updatedAt`: the draft's own stamp stands in for the day of rows saved before day stamps existed (pendingSuppliers'
+  // fallbackDay), and closing a supplier is not typing an order. Settles when the server answers; offline it waits (Firestore shows it
+  // at once meanwhile); rejects when refused.
+  setSkipped(supplierId: string, day: string): Promise<void>;
+  // «Reopen»: only that supplier's key goes (an update with a FieldPath — an id is data, not a path), whatever another phone closed
+  // meanwhile survives. No `updatedAt` either. A draft that does not exist is refused, not created: there is nothing to reopen. Same
+  // contract.
+  clearSkipped(supplierId: string): Promise<void>;
   // orders-history/<id> as stored, once (null when there is none). A failure rejects.
   readRecord(id: string): Promise<Record<string, unknown> | null>;
   // Writes orders-history/<id> in a TRANSACTION: `merge` gets the record as stored (null when there is none) and returns the
@@ -291,6 +302,22 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
       const update: Record<string, unknown> = { updatedAt, bakery: locationId };
       for (const path of paths) update[path] = fs.deleteField();
       await fs.updateDoc(fs.doc(db, draftsPath, DRAFT_ID), update);
+    },
+
+    // ⚠️ setDoc WITH merge AND ONE KEY of `skipped`: Firestore merges maps key by key, so the other closes and the lines stay. The id
+    // is a KEY of the map here (data), never a dotted path.
+    async setSkipped(supplierId, day) {
+      const { fs, db } = await firestore();
+      await fs.setDoc(fs.doc(db, draftsPath, DRAFT_ID), { skipped: { [supplierId]: day }, bakery: locationId }, { merge: true });
+    },
+
+    async clearSkipped(supplierId) {
+      const { fs, db } = await firestore();
+      await fs.updateDoc(
+        fs.doc(db, draftsPath, DRAFT_ID),
+        new fs.FieldPath('skipped', supplierId), fs.deleteField(),
+        'bakery', locationId,
+      );
     },
 
     async readRecord(id) {
