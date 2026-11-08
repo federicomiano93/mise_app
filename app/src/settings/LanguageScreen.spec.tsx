@@ -36,9 +36,11 @@ describe('App language', () => {
     expect(screen.getAllByRole('main')).toHaveLength(1);
   });
 
-  it('opens on its title; opened by its address, Back REPLACES it with Settings (no history pile)', async () => {
+  // Review, 8 Nov 2026: opened by its address it is a first load, and the skip link stays the first Tab stop (shell/Page.tsx).
+  it('opened by its address leaves the focus alone, and Back REPLACES it with Settings (no history pile)', async () => {
     const { router, user } = await open();
-    await waitFor(() => { expect(main().getByRole('heading', { level: 2, name: 'App language' })).toHaveFocus(); });
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(main().getByRole('heading', { level: 2, name: 'App language' })).not.toHaveFocus();
     await user.click(main().getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(router.state.location.pathname).toBe('/settings'); });
     expect(router.state.historyAction).toBe('REPLACE');
@@ -49,6 +51,8 @@ describe('App language', () => {
     const { router, user } = renderApp('/settings');
     await user.click(main().getByRole('link', { name: 'App language' }));
     expect(router.state.historyAction).toBe('PUSH');
+    // Opened from the page: the person asked to move, so it opens on its title.
+    await waitFor(() => { expect(main().getByRole('heading', { level: 2, name: 'App language' })).toHaveFocus(); });
     await user.click(await screen.findByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(router.state.location.pathname).toBe('/settings'); });
     expect(router.state.historyAction).toBe('POP');

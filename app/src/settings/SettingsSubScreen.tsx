@@ -16,7 +16,8 @@ import styles from './SettingsSubScreen.module.css';
 // the page, so Back is the browser's Back and the browser's own Back keeps meaning the same thing. Opened by its address (a bookmark, a
 // reload with nothing behind it) there is nothing to step back to, so it REPLACES itself with the page.
 //
-// FOCUS: it opens on its title (the person asked to move), and the door that opened it is owed the focus when the page is back — promised in
+// FOCUS: opened from the page it opens on its title (the person asked to move); opened by its address (a cold start, a reload) it leaves
+// the focus alone, so the skip link stays the first Tab stop (shell/Page.tsx, and the Orders screens' cameFromList). The door that opened it is owed the focus when the page is back — promised in
 // settingsHandBack.ts, so the phone's back gesture lands on it too.
 export function SettingsSubScreen({ door, title, backDisabled = false, children }: {
   door: SettingsDoor;
@@ -31,7 +32,10 @@ export function SettingsSubScreen({ door, title, backDisabled = false, children 
   const pending = usePendingDoor();
   const titleRef = useRef<HTMLHeadingElement>(null);
 
-  useEffect(() => { titleRef.current?.focus(); }, []);
+  useEffect(() => {
+    if (cameFromSettings(state)) titleRef.current?.focus();
+    // Once, as the screen opens.
+  }, []);
 
   function back(): void {
     pending.current = door;
