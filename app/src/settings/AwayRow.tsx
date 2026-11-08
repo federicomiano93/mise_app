@@ -1,6 +1,7 @@
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { maxAwayDate, toISODate } from '@mise/shared/away-model';
 import { useT } from '../i18n/useT';
+import { markBusy } from '../session/busy';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { useAway, useAwayStore } from '../shell/away/AwayContext';
@@ -32,7 +33,15 @@ export function AwayRow() {
           onPress={() => { void askComeBack(); }}
         />
       ) : (
-        <SettingsRow ref={row} title={t('away.title')} sub={t('settings.away.sub')} onPress={() => { setAsking(true); }} />
+        // ⚠️ NOT PRESSABLE UNTIL THE ONE READ HAS ANSWERED (the current app draws its button only after readMyAway): somebody who IS away
+        // would otherwise see «I am on holiday» and could set a day over their real one, before the row turns amber under their finger.
+        <SettingsRow
+          ref={row}
+          title={t('away.title')}
+          sub={t('settings.away.sub')}
+          disabled={away.status === 'loading'}
+          onPress={() => { setAsking(true); }}
+        />
       )}
       {asking ? <UntilDialog onClose={() => { setAsking(false); }} /> : null}
       {backDialog}
@@ -57,6 +66,9 @@ function UntilDialog({ onClose }: { onClose: () => void }) {
   // Said inside the dialog, in a live region that is there (empty) before it speaks.
   const [problem, setProblem] = useState(false);
   const [bounds] = useState(() => ({ min: toISODate(Date.now()), max: maxAwayDate(Date.now()) }));
+  // A day picked and not yet set is typing: a self-started reload (session/busy.ts) waits for it.
+  const typed = value !== '';
+  useEffect(() => (typed ? markBusy() : undefined), [typed]);
 
   function set(): void {
     // An empty box is not a date: the store would take '' as «I am back», which is not what Set means.

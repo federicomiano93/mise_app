@@ -29,6 +29,14 @@
   outline-offset: -3px;
 }
 
+/* Not pressable yet (the holiday row while its one read is in the air): dimmed like a disabled button, no press shade. */
+.row[data-disabled],
+.row[data-disabled] .sub {
+  background: none;
+  color: var(--ink-3);
+  cursor: default;
+}
+
 @media (hover: hover) {
   .row:hover,
   .row[data-hovered] {

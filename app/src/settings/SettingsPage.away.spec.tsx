@@ -3,6 +3,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { fakeSettingsSource } from '../testing/fakeSettingsSource';
 import type { FakeSettingsSource } from '../testing/fakeSettingsSource';
 import { renderApp } from '../testing/renderApp';
+import { isBusy } from '../session/busy';
 
 // Saturday 7 November 2026, 09:00. Only Date is faked: user-event and the router keep their real timers.
 const NOW = new Date(2026, 10, 7, 9, 0, 0);
@@ -38,6 +39,29 @@ describe('Settings: I am on holiday', () => {
     expect(within(dialog).getByText(/Your phone stops ringing\. The order lists still arrive/)).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Set' })).toBeInTheDocument();
+  });
+
+  // Review, 8 Nov 2026: before the one read has answered the row cannot know whether the person is away.
+  it('cannot be pressed until the one read has answered', async () => {
+    const source = fakeSettingsSource();
+    let answer: (mine: { until: string } | null) => void = () => undefined;
+    source.readMyAway = vi.fn(() => new Promise<{ until: string } | null>(done => { answer = done; }));
+    renderApp('/settings', { data: { settings: () => source } });
+    const row = await main().findByRole('button', { name: 'I am on holiday' });
+    expect(row).toBeDisabled();
+    answer({ until: '2026-11-16' });
+    expect(await main().findByRole('button', { name: 'On holiday until 16 November' })).toBeEnabled();
+  });
+
+  it('holds the busy marker while a day is picked and not yet set, so a self-started reload waits', async () => {
+    const { user } = await open();
+    await user.click(main().getByRole('button', { name: 'I am on holiday' }));
+    await screen.findByRole('dialog', { name: 'I am on holiday' });
+    expect(isBusy()).toBe(false);
+    pickDate('2026-11-16');
+    expect(isBusy()).toBe(true);
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => { expect(isBusy()).toBe(false); });
   });
 
   it('offers the platform’s own date field, from today up to a year ahead, with a visible label', async () => {

@@ -23,6 +23,8 @@ type AsLink = Common & {
 
 type AsButton = Common & {
   onPress: () => void;
+  // Drawn but not pressable yet (the holiday row before its one read has answered).
+  disabled?: boolean;
   ref?: Ref<HTMLButtonElement>;
 };
 
@@ -53,7 +55,7 @@ export function SettingsRow(props: AsLink | AsButton) {
     );
   }
   return (
-    <Button ref={props.ref} variant="bare" className={className} onPress={props.onPress} aria-labelledby={titleId} aria-describedby={described}>
+    <Button ref={props.ref} variant="bare" className={className} onPress={props.onPress} isDisabled={props.disabled} aria-labelledby={titleId} aria-describedby={described}>
       {inside}
     </Button>
   );
