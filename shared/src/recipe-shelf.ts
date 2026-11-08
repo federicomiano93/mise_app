@@ -13,7 +13,8 @@
 //   • recipes/{id}.archived — `true`, or no field. Archiving and restoring are owner/manager only (the rules ask the role only
 //     when the flag moves). ⚠️ An archived recipe is NEVER hidden from what already points at it: a Calculator tab, a Food cost
 //     product, a sub-recipe row, a label — they read recipes by id and keep working. Only the list and the pickers change.
-//   • config/labels.recipeCategories — the venue's list, a list of strings (≤ 100 entries), written whole.
+//   • config/labels.recipeCategories — the venue's list, a list of strings (≤ 100 entries), written
+//     ONE WORD AT A TIME (arrayUnion / arrayRemove, as in the current app): a phone holding an old copy cannot replace the venue's words.
 
 // The longest word the Settings box takes (the rules allow 100: room to spare for a word stored by a later version).
 export const RECIPE_CATEGORY_MAX = 40;

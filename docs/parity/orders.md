@@ -546,6 +546,34 @@ F-13. **Deliveries and suggestions see only 2 months**: an order older than that
 design but unsaid on screen.
 F-14. **The road chooser counts on `overlay.remove()` before `take()`**, so a slow `beforeSend` refusal leaves no
 dialog on screen while it decides (`send-chooser.js:86-88`); harmless today because the check is synchronous.
+F-15. **A quantity typed on Orders can be lost if the page goes away too soon: found in the current app — PORTED 8 Nov 2026,
+see «Draft journal and corrections in flight as built» at the end.** Measured on the lab tablet in the current app on 1 Nov 2026 (302 ingredients): on a freshly opened page a write
+reaches Firestore's queue in IndexedDB 4.5–5.5 s after the keystroke (0.8 s pause + a busy SDK queue; +0.95 s on a settled
+page), and a reload before that lost the number for good, on the server too. `app/src/orders/draftSync.ts` has the same 0.8 s
+pause, keeps its claims in memory only and has no `visibilitychange` flush in `app/src/orders/` (read, NOT measured: Mise 2 is
+one page, so a section switch does not lose it, but a reload, a closed Chrome or the tablet going off should). The current
+app's fix, branch `fix/orders-typed-quantity-lost`, to port before the switch: `js/orders/draft-journal.js` (a localStorage
+note written in the keystroke, key `orders-draft-claims`, one venue's, deliberately NOT under `KEEP_PREFIXES`, dropped after
+24 h) and `js/orders/draft.js` (`saveJournal`, `settleRestored`, `flushDraftWhenHidden`). ⚠️ The note is never sent on the word
+of the offline copy: it waits for the first snapshot with `fromCache` false, and a claim goes out only where the server still
+reads as it did when typed, or it would put back quantities of an order a colleague has placed. The twin's reviewed specs
+should gain the cases of `tests/draft-journal.test.mjs`.
+
+F-16. **A correction typed while the write it corrects is in the air (found 1 Nov 2026 on the current app) — PORTED 8 Nov
+2026, see «Draft journal and corrections in flight as built» at the end.** Type 5, the write is sent, correct to 0 before a snapshot has shown the 5 (about 5 s on the lab tablet on a freshly
+opened page): the 0 matches `known`, so nothing carried it, the 5 landed, and it came back on screen and on the server. Measured
+on the current app's emulator, before and after. `differences` in `app/src/orders/draftSync.ts` (line 208) measures against
+`known` alone, so reading it the same should happen in Mise 2. And changing one's mind twice: 5, 0, 5 again, with the first 5
+answered inside the last pause, released the claim on the last 5 (the landing path, lines 297 and 302, has no `inAir` guard) and
+ended with the phone showing 5, the server at 0 and the other phone empty. The refusal path (line 317) can also hand a refused 5
+back over a 0 already in the air. The current app's fix, PR #444, to port before the switch, all in `js/orders/draft.js`:
+`differences` also claims a field or a day a write in the air says differently, only for lines and days the page still holds;
+the landing path releases nothing a later write in the air carries; the refusal path treats such a field as typed over. ⚠️ When
+the F-15 note is ported, it needs this too: a correction matching `known` is still noted, with what the write in the air said
+(`air`, `saveJournal`), because on the next open that write may have landed from Firestore's queue, and both readings count as
+still ours (`stillOurs`); a correction that needed nothing does not count against a line's day stamp, unless an order names that
+line (`settleRestored`). The twin's reviewed specs should gain the d1–d19 cases of `tests/draft-claims.test.mjs` and the
+«correction in the air» block of `tests/draft-journal.test.mjs`.
 
 ## Decisions
 
@@ -1590,3 +1618,133 @@ VAT rate; row button and pane on the split, none on a phone; the door sticking w
 the split; the summary from both doors, lines, money and totals; Back to the door; a price changed elsewhere moving the open total; the
 summary writing nothing), the employee of «bakery» at 360 and 1024 (not shown Food cost: lines, no money, no price asked for; shown it: the
 money appears). axe clean, targets, nothing clipped, no sideways scroll, one main, one h1, no console error, at every screen; all put back.
+
+## Draft journal and corrections in flight as built (8 Nov 2026)
+
+Item 6 of `docs/mise2-port-owed.md`: F-15 (the current app's `fix/orders-typed-quantity-lost`, PR #436) and F-16 (PR #444),
+ported decision for decision. Data loss on both: a quantity typed and lost on a reload, or corrected and put back by the write
+it corrected.
+
+**F-16, a correction while its write is in the air** (`app/src/orders/draftSync.ts`):
+- `differences` also claims a field (or a supplier's day) that a write in the air says differently, only for lines and days the
+  screen still holds: a line just forgotten is an order placed, and a blank row written now would outlive its clear.
+- A landing releases nothing a later write in the air still carries (5, 0, 5 again ended on 0).
+- A refusal hands nothing back over a newer value already on its way (a refused 5 over a 0 in the air).
+- Specs: the d1–d19 cases of `tests/draft-claims.test.mjs` (`draftSync.spec.ts`, «corrections while a write is in the air»);
+  16 of them fail on the code before this port, the other four pin what the fix must NOT claim.
+
+**F-15, the note that outlives the page**:
+- `shared/src/draft-journal.ts`: a FULL, paired port of `js/orders/draft-journal.js` (key `orders-draft-claims`, version 1,
+  one venue's, 24 hours, trusts nothing it reads, `orderedSince`, `historyLookBackDay`). Deliberately NOT under `KEEP_PREFIXES`:
+  sign-out and a venue switch wipe it (pinned through both files' `keysToClear`).
+- `draftSync.ts`: every claim is noted in the same keystroke with what the server held (`base`) and what corrected writes in the
+  air said (`air`), until a snapshot shows it (`saveJournal`). What the last page left (`restored`) stays off the screen and out
+  of every save until the SERVER's first snapshot; then only the lines that still read as typed, or as a corrected write in the
+  air, and that no order placed since names (`orders-history` of the last seven days, read with `getDocsFromServer`) come back
+  (`stillOurs`, `settleRestored`); day stamps only when every quantity came back. A refused write is not noted. Typing on the new
+  page, a «clear» and a placed order all beat the note (`forgetRestored`). The orders unreadable: nothing comes back, and it asks
+  again 30 s later.
+- `ordersStore.ts`: the venue, `localStorage`, the server's first answer (`fromServer` of the draft listener), the server read
+  of the orders (`ordersSource.getRecentHistoryFromServer`), and `draftCameBack`, which makes the section look again for orders
+  typed on an earlier day and never placed (`pendingLatch.relook`, the current app's `pendingChecked = false`).
+- `pageHidden.ts`: the page going out of sight while alive (switching app, locking the screen) sends a change still in its pause
+  at once (`sendWaiting`); after `pagehide` (going away for good) it does not, because the note answers for that.
+- A deleted product's line leaves the note too, in the two sources that clear it from the draft (`suppliersSource.clearDraftEntry`
+  and the merge, `mergeSource.ts`), as the current app's `clearIngredientFromDraft`.
+- Specs: `shared/src/draft-journal.spec.ts` (both files), `draftSync.journal.spec.ts` (every case of `tests/draft-journal.test.mjs`
+  that drives the draft, the «correction in the air» block included), `ordersStore.journal.spec.ts`, `pageHidden.spec.ts`,
+  `pendingLatch.spec.ts` («relook»). `testing/setup.ts` removes the note's key after every spec, so a screen spec never inherits
+  another one's typing.
+
+Differences from the current app, on purpose:
+- **No second listener for the server's answer.** The current app opens a one-shot `watchServerAnswer` on `drafts/current`;
+  Mise 2's draft listener already runs with `includeMetadataChanges` and says `fromServer`, so the note waits for that.
+- **One page.** Mise 2 never reloads between sections, and leaving Orders already sends what waits (`stop()`): the note matters for
+  a reload, a closed Chrome or the tablet going off. The page-hidden listener exists only while Orders is open.
+- **Only an open Orders owns the note** (code review, 8 Nov 2026). The store of a closed Orders lives on until its last write is
+  answered, and Orders opened again reads the same note in a new store. So `stop()` stops the note (`stopJournal`): no check, no
+  30 s retry and no orders read still on its way brings anything back afterwards (it would judge on a frozen copy of the draft,
+  and could write an old number over a colleague's, a correction or a «Clear quantities»), and the note is never written whole
+  again from that store: a write answered after the close only takes its own fields out of the stored note (`releaseStored`).
+  The current app cannot meet this: leaving Orders unloads its page.
+- **A screen mounted again inside Orders does not look again** for orders never placed: the latch remembers the came-back count
+  it has seen (`relook(count)`).
+- **A deleted product's line always leaves the note.** The current app does it only from a page that holds no note of its own
+  (Fornitori); in Mise 2 Orders is never on screen while «Ingredients & suppliers» deletes or merges a product.
+- **Not in this item:** the current app's `sendBeforeLeaving` (Back from Orders opened from a recipe waits for the server), which
+  belongs to item 32 of the checklist.
+
+## Closed as not ordered as built (8 Nov 2026)
+
+Item 3 of `docs/mise2-port-owed.md`: the current app's PR #470 (9b9fdf3 and its review fix a710dcb, his tablet notes of 2–3 Nov
+2026) and its rules commit f65d5c7. `drafts/current.skipped = { supplierId: 'YYYY-MM-DD' }`: a supplier whose order day it is, closed that day because
+nothing was needed. The rules already allow it (an optional map, at most 200 keys); no rules change.
+
+What it does, as the current app does:
+- **Shared** (`shared/src/reminders.ts`, paired): `skippedOn` (only a close made TODAY counts, so last week's never hides this
+  week's order and nothing is ever cleaned up), `todayOrders` and `suppliersStillToOrder` take the closes (a real order recorded
+  after the close wins: never both), `closeOffer` ('skip' | 'reopen' | ''), and `dueTodayIds` (ported for item 12, which uses
+  it). `shared/src/kiosk-lines.ts`: a closed supplier is not «to order» on the rest screen. The two `reminders` PORT OWED markers
+  of `parity.spec.ts` are gone: the exports match.
+- **The order summary** (`SupplierSummaryScreen.tsx`), under the lines: with quantities written, «Order placed…», the supplier
+  screen's own confirm (offline it says so and opens nothing); with nothing written and the order day today, the hint and «Close
+  as not ordered», asked first («Close {supplier} as not ordered?»), then back to the list with «{supplier} closed as not
+  ordered.»; while closed, «Closed as not ordered today» with «Reopen» (no question; «{supplier} is back on today's orders.»), with
+  or without quantities, so a close is never invisible. Asked of the data on every draw, so another phone's close shows at once.
+- **The writes** (`ordersSource.ts`): `setSupplierSkipped` merges only `skipped.<id>` with the venue stamp; `clearSupplierSkipped`
+  deletes that one key (a FieldPath). Never through the autosave, and never `updatedAt` (the draft's own stamp stands in for the
+  day of rows saved before day stamps existed). Local-first: Firestore shows them at once, offline too; a refusal is said («Not
+  saved — try again in a moment.») and Firestore takes it back.
+- **A quantity typed for a supplier closed today reopens it** (`ordersStore.ts`, the current app's `reopenIfTyped`); a shelf count
+  does not.
+- **«Order today»** (`TodayOrders.tsx`): a closed supplier is a dashed chip, «{supplier} not ordered», that opens its summary.
+  «Today's orders are all placed» only when every supplier of the day was really PLACED (a710dcb): with some only closed, the
+  chips stay — the sentence would be false, and the closed chip is the way to «Reopen».
+- Specs: `shared/src/reminders.spec.ts` and `kiosk-lines.spec.ts` (both files, every pure case of
+  `tests/orders-close-not-ordered.test.mjs`), `OrdersSection.closeNotOrdered.spec.tsx` (the sheet and the strip),
+  `ordersStore.skipped.spec.ts`, `ordersSource.skipped.spec.ts` (the shapes written).
+
+Differences, on purpose:
+- **The button with quantities reads «Order placed…» («Ordine fatto…»)**, the words of the supplier screen's green button in Mise
+  2, because it is that button: the current app's sheet says «Ordine fatto» without the dots.
+- **No Home badge to hand the closes to.** Mise 2's Home has no orders badge (its «Da fare» card is something else) and the bell
+  leaves the «order today» notice out; the strip and the kiosk lines are the readers here. A Home orders badge, when it comes,
+  must pass `skipped` to `suppliersStillToOrder`.
+- **The buttons wait for the records and the draft**: before the records arrive a supplier placed this morning would offer the
+  close; the current app's sheet asks the same question of its own state.
+- **After the close, back to the list by walking the history back** (the summary may sit over the supplier's screen), or by
+  replacing itself with the list when opened by its address; the focus is handed back to the summary's opener.
+- **After «Reopen» the focus goes to the button that took its place** («Close as not ordered», or «Order placed…»), once the
+  screen has stopped offering «Reopen» (Firestore reports the reopen a moment after the tap). Back from the confirm screen that
+  «Order placed…» opened returns the focus to that button, as on the supplier's screen.
+- **The close is asked of the data again after the question** (code review, 8 Nov 2026): quantities that arrived while «Close …
+  as not ordered?» was open (a colleague typing), or the order placed meanwhile, and OK closes nothing. The current app closes
+  anyway, and the strip and the kiosk then say nothing about an order that is typed.
+- **«Order placed…» opens the confirm screen OVER the summary**, so Back from it returns to the summary. The current app closes its
+  sheet first (a710dcb: the confirmation opened under the sheet, and a second tap could record twice); here the confirm screen is
+  an address of its own, drawn in place of the summary, so there is nothing under it to tap.
+
+### Closed as not ordered — extras from the second port (8 Nov 2026)
+
+The item was ported twice: #495 (above) was merged, #496 was closed as a duplicate. Compared afterwards, four things #496 did
+were missing here and are now added, as small changes on #495's code (`fix/mise2-order-done-extras`):
+- **«Order today» and the kiosk lines wait for the draft too** (`TodayOrders.tsx`, `ordersStore.kioskSections`): before it, a
+  supplier closed this morning flashed as «to order». A DIFFERENCE from the current app, whose strip draws before its draft
+  arrives. A dead draft stream counts as arrived, and its closes are read as none, even those it delivered before it died (another
+  phone may have reopened since): a «to order» too many is the safe side (the current app's kiosk reads a failed draft read the
+  same way).
+- **The summary offers nothing over a dead draft stream** (`SupplierSummaryScreen.tsx`), as over a dead records stream: with the
+  draft gone, a supplier with quantities typed would look like «nothing needed» and be offered the close.
+- **The busy marker** (`ordersStore.ts`): a close, a reopen and the reopen that typing sends are held busy until the server
+  answers, so a self-started reload in that moment cannot drop the tap (F-15; offline it waits for the connection, as the day
+  line's hold does).
+- **Focus: Back from a summary opened by a closed chip goes back to that chip** (`todayOpener` in `handBack.ts`, `FROM_CHIP` in
+  `ordersNav.ts`). A DIFFERENCE: the current app goes to the row. Reopened meanwhile, the chip is gone and the row takes it.
+
+Already the same in both, so nothing to add: the shared rules (`skippedOn`, `closeOffer`, `todayOrders`, the kiosk lines), the
+writes and their shapes, every draft write being a merge or a field update (so nothing drops `skipped`), and the re-check after
+the question. #496 held its own close on screen until the snapshot showed it; here Firestore shows its pending write at once, so
+that adds nothing. Nothing #495 has and #496 lacked is a defect.
+Specs: `ordersStore.skipped.spec.ts` (the busy marker, the kiosk waiting for the draft, a dead draft, a refused close taking back
+only its own key) and
+`OrdersSection.closeNotOrdered.spec.tsx` («the second port's extras»).

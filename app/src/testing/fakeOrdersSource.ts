@@ -28,6 +28,10 @@ export type FakeOrdersSource = OrdersSource & {
   writes: DraftPayload[];
   // The next draft writes are refused (the rules said no).
   refuseWrites: boolean;
+  // Every «closed as not ordered» write (setSupplierSkipped / clearSupplierSkipped), in order; `refuseSkipped` refuses them, and
+  // `holdWrites` keeps them in the air too.
+  skippedWrites: Array<{ op: 'set'; supplierId: string; day: string } | { op: 'clear'; supplierId: string }>;
+  refuseSkipped: boolean;
   // The next watches fail (the rules refused them, or the stream died).
   refuse: { suppliers: boolean; ingredients: boolean; config: boolean; draft: boolean; history: boolean; requests: boolean };
   // Another phone writes the draft: merged like a setDoc merge, then every watcher is told.
@@ -58,6 +62,9 @@ export type FakeOrdersSource = OrdersSource & {
   pageSize: number;
   olderReads: Array<{ before: string; cursor: unknown }>;
   legacyReads: number;
+  // Every server read of the recent orders (getRecentHistoryFromServer), by its first day; `failRecent` refuses them.
+  recentReads: string[];
+  failRecent: boolean;
   // The next older page / legacy read / rewrite transaction is refused (then the flag goes back to false).
   failHistory: { older: boolean; legacy: boolean; rewrite: boolean };
   // Runs inside the next rewrite transaction, after the read and before `decide` (another phone writing in that second).
@@ -139,6 +146,8 @@ export function fakeOrdersSource(init: {
     draft: init.draft ?? null,
     writes: [],
     refuseWrites: false,
+    skippedWrites: [],
+    refuseSkipped: false,
     refuse: { suppliers: false, ingredients: false, config: false, draft: false, history: false, requests: false },
     historyFrom: null,
     historyCached: false,
@@ -200,6 +209,49 @@ export function fakeOrdersSource(init: {
       });
     },
 
+    // Like Firestore: the change is shown to the listeners at once, and taken back when the server refuses it.
+    setSupplierSkipped(supplierId, day) {
+      source.skippedWrites.push({ op: 'set', supplierId, day });
+      const before = source.draft;
+      const takeBack = skippedTakeBack(supplierId);
+      source.draft = deepMerge(before ?? {}, { skipped: { [supplierId]: day }, bakery: 'bakery' });
+      tellDraft();
+      const refused = source.refuseSkipped;
+      return new Promise<void>((resolve, reject) => {
+        const settle = () => {
+          if (!refused) { resolve(); return; }
+          source.draft = before === null ? null : takeBack(source.draft);
+          tellDraft();
+          reject(new Error('permission-denied'));
+        };
+        if (held) held.push(settle);
+        else queueMicrotask(settle);
+      });
+    },
+
+    clearSupplierSkipped(supplierId) {
+      source.skippedWrites.push({ op: 'clear', supplierId });
+      const before = source.draft;
+      if (!before) return Promise.reject(new Error('not-found'));
+      const takeBack = skippedTakeBack(supplierId);
+      const next = structuredClone(before);
+      const skipped = next.skipped && typeof next.skipped === 'object' ? next.skipped as Record<string, unknown> : null;
+      if (skipped) delete skipped[supplierId];
+      source.draft = next;
+      tellDraft();
+      const refused = source.refuseSkipped;
+      return new Promise<void>((resolve, reject) => {
+        const settle = () => {
+          if (!refused) { resolve(); return; }
+          source.draft = takeBack(source.draft);
+          tellDraft();
+          reject(new Error('permission-denied'));
+        };
+        if (held) held.push(settle);
+        else queueMicrotask(settle);
+      });
+    },
+
     records: new Map(Object.entries(init.records ?? {})),
     clears: [],
     recordAttempts: 0,
@@ -244,6 +296,8 @@ export function fakeOrdersSource(init: {
     pageSize: 100,
     olderReads: [],
     legacyReads: 0,
+    recentReads: [],
+    failRecent: false,
     failHistory: { older: false, legacy: false, rewrite: false },
     duringRewrite: null,
     rewrites: [],
@@ -268,6 +322,16 @@ export function fakeOrdersSource(init: {
         cursor: records.length ? (records[records.length - 1] as StoredDoc).id : cursor,
         done: records.length < source.pageSize,
       };
+    },
+
+    // `date >= fromDate`, as the server holds them now.
+    async getRecentHistoryFromServer(fromDate) {
+      source.recentReads.push(fromDate);
+      await Promise.resolve();
+      if (source.failRecent) throw new Error('unavailable');
+      return [...source.records.entries()]
+        .filter(([, r]) => typeof r.date === 'string' && r.date >= fromDate)
+        .map(([id, r]) => ({ ...structuredClone(r), id }) as StoredDoc);
     },
 
     async getLegacyHistory() {
@@ -482,6 +546,21 @@ export function fakeOrdersSource(init: {
       };
     },
   };
+
+  // Like Firestore, a refused close or reopen takes back ONLY its own key (`skipped.<id>` as it was before the write), never what
+  // was written meanwhile (typing, another supplier's close).
+  function skippedTakeBack(supplierId: string): (now: Record<string, unknown> | null) => Record<string, unknown> | null {
+    const was = source.draft?.skipped && typeof source.draft.skipped === 'object'
+      ? (source.draft.skipped as Record<string, unknown>)[supplierId] : undefined;
+    return now => {
+      const next = structuredClone(now ?? {});
+      const skipped = next.skipped && typeof next.skipped === 'object' ? next.skipped as Record<string, unknown> : {};
+      if (was === undefined) delete skipped[supplierId];
+      else skipped[supplierId] = was;
+      next.skipped = skipped;
+      return next;
+    };
+  }
 
   // `date >= from`, as the query asks: a record with no date (the legacy weekly one) is never in it.
   function historyFrom(from: string): StoredDoc[] {

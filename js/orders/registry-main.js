@@ -13,14 +13,17 @@ import { onSession, currentSession } from '../firebase.js';
 import { outputLanguage } from '../market.js';
 import { currentLocationId } from '../location.js';
 import { categoryChoices, unitChoices, packChoices } from '../record-choices.js';
-import { withPrices } from '../price-model.js';
-import { buildRegistry } from './registry.js';
+import { withPrices, samePriceMaps } from '../price-model.js';
+import { buildRegistry, listStatus } from './registry.js';
 import { dropDeletedIngredientFromDraft, freezeUnitInDraft } from './draft.js';
 import {
-  COLLECTIONS, watchCollection, watchIngredientPrices, canManageHere,
+  COLLECTIONS, watchCollection, watchIngredientPrices, canManageHere, canManageVenueHere,
   saveDoc, removeDoc, saveIngredientWithPrice, saveSupplierRecord, getPriceHistory,
   watchDoc, setCategoryOnMany, deleteIngredientWithPrice, mayWritePrices, setFavouriteSupplier,
+  watchRecentHistory,
 } from './firebase-orders.js';
+import { dueTodayIds } from './reminders.js';
+import { todayISO } from './day.js';
 import { normalizeFavourites } from './favourite-suppliers.js';
 import { readIngredientPrice } from '../record-data.js';
 import { openInvoiceImport } from './invoice-import-screen.js';
@@ -31,6 +34,8 @@ const state = {
   suppliers: [],
   rawIngredients: [],
   ingredientPrices: {},
+  // The prices `ingredients` was last built from: what a new answer is compared with.
+  mergedPrices: null,
   ingredients: [],
   // The venue's saved category list (config/orders). null = never saved one, or not
   // loaded yet: both mean «offer the defaults».
@@ -39,22 +44,52 @@ const state = {
   weekStartsOn: weekStartOf(null),
   // The venue's starred suppliers (config/orders.favouriteSuppliers), ids only.
   favouriteSuppliers: [],
-  loaded: { suppliers: false, ingredients: false, config: false },
+  loaded: { suppliers: false, ingredients: false, config: false, todayHistory: false, draft: false },
+  // For the «To order today» highlight only: today's recorded orders, and the draft's
+  // «closed as not ordered» marks (drafts/current.skipped).
+  todayHistory: [],
+  skipped: null,
+  // What the screen says about a list that has not answered yet (listStatus in registry.js).
+  failed: { suppliers: false, ingredients: false },
+  emptyCopy: { suppliers: false, ingredients: false },
+  stalled: false,
+  stallWatched: false,
   // Whether the live prices have really answered (watchIngredientPrices' second argument): until
   // then an ingredient card reads its own price document before it opens (registry.js).
   pricesReadable: false,
 };
+// The price listener's first answer, whatever it said (readPrice below).
+let answerPrices;
+const pricesAnswered = new Promise((resolve) => { answerPrices = resolve; });
 
 const host = document.getElementById('registry-host');
 // The page header's round «+». ⚠️ NEVER HIDDEN ON A ROLE — the dashed button it replaces
 // had no gate either (js/orders/registry.js); registry.js says which word it carries.
 const addBtn = document.getElementById('registry-add');
 
+function dueNow() {
+  if (!(state.loaded.suppliers && state.loaded.todayHistory && state.loaded.draft)) return new Set();
+  return dueTodayIds({
+    suppliers: state.suppliers, history: state.todayHistory, today: todayISO(), skipped: state.skipped,
+  });
+}
+const idsSignature = (ids) => [...ids].sort().join('|');
+// What the supplier list was last painted with (see refreshIfDueChanged at the end of the file).
+let paintedDue = '';
+function dueForPaint() {
+  const ids = dueNow();
+  paintedDue = idsSignature(ids);
+  return ids;
+}
+
 const screen = buildRegistry(
   {
     suppliers: () => state.suppliers,
     ingredients: () => state.ingredients,
     favouriteSuppliers: () => state.favouriteSuppliers,
+    // The suppliers still to order today; nothing until suppliers, today's orders and the draft
+    // have all answered, so an order already placed never flashes as due.
+    dueToday: dueForPaint,
     // ⚠️ THE LANGUAGE IS READ HERE, AT CALL TIME: no venue is open when this module loads.
     // The words are the venue's OUTPUT language, not the screen's (js/record-choices.js).
     // `current` is the item being edited, whose own value is always offered.
@@ -66,7 +101,17 @@ const screen = buildRegistry(
     // the delete buttons off, or a delete would overwrite the saved list with them.
     categoriesLoaded: () => state.loaded.config,
     pricesLoaded: () => state.pricesReadable === true,
-    readPrice: (id) => readIngredientPrice(id),
+    listStatus: (list) => listStatus({
+      venueOpen: Boolean(currentLocationId()), loaded: state.loaded[list], failed: state.failed[list], emptyCopy: state.emptyCopy[list],
+      stalled: state.stalled, online: globalThis.navigator?.onLine,
+    }),
+    // ⚠️ THE ROWS DRAW BEFORE THE PRICES, so a quick tap lands here while the listener is still on its way, a
+    // moment from answering out of the phone's own copy. A read of its own would ask the network instead: no signal
+    // and a row with no price document is an error dialog, weak signal is seconds with nothing happening.
+    readPrice: async (id) => {
+      await pricesAnswered;
+      return state.pricesReadable ? (state.ingredientPrices[id] || null) : readIngredientPrice(id);
+    },
     orderUnits: (current) => unitChoices({
       ingredients: state.ingredients, language: outputLanguage(currentSession().location), current,
     }),
@@ -128,6 +173,12 @@ const screen = buildRegistry(
     // after this module runs) and is absent for staff. The rules decide either way (P2).
     get toggleFavouriteSupplier() {
       return canManageHere() ? (id, on) => setFavouriteSupplier(id, on) : undefined;
+    },
+    // ⚠️ A GETTER, AND THE GATE LIVES HERE (registry.js may ask no role): the Settings screen draws
+    // the venue's switches (allergens, nutrition, pack photo) only when this is true. canManageHere()
+    // would draw them for a partial owner, whom the server refuses. The rules decide either way (P2).
+    get mayChangeVenue() {
+      return canManageVenueHere();
     },
     // The shortened list and «no category» on every ingredient that used it — one batch.
     deleteCategory: (list, ids) => setCategoryOnMany(ids, 'Other',
@@ -208,6 +259,9 @@ priceChangesBtn?.addEventListener('click', () => {
 });
 
 onSession(() => {
+  watchForStall();
+  // A list still waiting has a word to say now that the venue, and so its language, is known.
+  if (!state.loaded.ingredients) screen.refresh();
   if (!footerEl || !settingsBtn) return;
   settingsBtn.hidden = !canManageHere();
   if (importBtn) importBtn.hidden = !(canManageHere() && mayWritePrices());
@@ -221,6 +275,8 @@ onSession(() => {
 function liveDataLost(what) {
   return (err) => {
     console.error(`Live ${what} failed:`, err);
+    state.failed[what] = true;
+    screen.refresh();
     const box = document.getElementById('registry-error');
     if (!box) return;
     box.hidden = false;
@@ -228,28 +284,43 @@ function liveDataLost(what) {
   };
 }
 
+// ⚠️ «MISSING» COUNTS ONLY WHEN THE SERVER SAID IT, like config/orders below: a cold start offline reports an empty
+// list from an empty cache, and «no ingredients» would be the wrong thing to believe. A list that has answered stays
+// answered: the last row deleted with no signal is an empty list from the cache too, and this time it is true.
+function listAnswered(what, list, fromCache) {
+  state.emptyCopy[what] = list.length === 0 && fromCache;
+  if (!state.emptyCopy[what]) state.loaded[what] = true;
+}
+
+// ⚠️ THE FIRESTORE SDK ITSELF GIVES UP AFTER 10 s without the server and answers from its copy. Past that, and
+// with a browser that believes it is online, nothing else will tell the screen the signal is not there. Counted from
+// the moment a venue opens: time spent on the venue picker says nothing about the signal.
+function watchForStall() {
+  if (state.stallWatched || !currentLocationId()) return;
+  state.stallWatched = true;
+  setTimeout(() => {
+    state.stalled = true;
+    if (!state.loaded.suppliers || !state.loaded.ingredients) screen.refresh();
+  }, 10000);
+}
+
+function mergePrices() {
+  state.ingredients = withPrices(state.rawIngredients, state.ingredientPrices);
+  state.mergedPrices = state.ingredientPrices;
+}
+
+// ⚠️ THE ORDER OF THESE FOUR IS THE ORDER THE SDK ANSWERS IN, AND IT IS WHAT THE SCREEN WAITS FOR. Firestore reads
+// its copy one listener at a time: with the 275 prices asked for first, the ingredients landed about 1.5 s later on
+// the lab tablet (1 Nov 2026). Suppliers first, because a row names its supplier; the one config document before
+// the rows, so its answer does not redraw them; the prices last, the rows draw without them and take them a moment later.
+
 // Suppliers and ingredients are a handful of documents and every one of them is
 // needed to draw the screen, so both are unbounded — the same choice Orders makes.
-watchCollection(COLLECTIONS.suppliers, list => {
+watchCollection(COLLECTIONS.suppliers, (list, fromCache) => {
   state.suppliers = list;
-  state.loaded.suppliers = true;
+  listAnswered('suppliers', list, fromCache);
   screen.refresh();
-}, liveDataLost('suppliers'));
-
-// ⚠️ THE PRICES ARE A SECOND COLLECTION AND ARRIVE SEPARATELY. They moved off the
-// ingredient document because Orders reads every ingredient to work at all, so a
-// rate written there is a rate everybody can read (js/price-model.js). Merged in
-// here so the form opens on the price it is meant to edit; an employee is refused
-// that collection and simply sees no price, which is the same thing they see for
-// an ingredient nobody has priced.
-watchIngredientPrices((map, readable) => {
-  state.ingredientPrices = map;
-  state.pricesReadable = readable === true;
-  if (state.loaded.ingredients) {
-    state.ingredients = withPrices(state.rawIngredients, map);
-    screen.refresh();
-  }
-});
+}, liveDataLost('suppliers'), { sayFromCache: true });
 
 // The venue's saved category list. A failure here is not shown on the page: the menus fall
 // back to the defaults plus whatever ingredients already use, which is a usable screen.
@@ -264,9 +335,61 @@ watchDoc(COLLECTIONS.config, 'orders', (doc, fromCache) => {
   screen.refresh();
 }, err => console.error('Live category list failed:', err));
 
-watchCollection(COLLECTIONS.ingredients, list => {
+watchCollection(COLLECTIONS.ingredients, (list, fromCache) => {
   state.rawIngredients = list;
-  state.ingredients = withPrices(list, state.ingredientPrices);
-  state.loaded.ingredients = true;
+  mergePrices();
+  listAnswered('ingredients', list, fromCache);
   screen.refresh();
-}, liveDataLost('ingredients'));
+}, liveDataLost('ingredients'), { sayFromCache: true });
+
+// ⚠️ THE PRICES ARE A SECOND COLLECTION AND ARRIVE SEPARATELY. They moved off the
+// ingredient document because Orders reads every ingredient to work at all, so a
+// rate written there is a rate everybody can read (js/price-model.js). Merged in
+// here so the form opens on the price it is meant to edit; an employee is refused
+// that collection and simply sees no price, which is the same thing they see for
+// an ingredient nobody has priced.
+//
+// ⚠️ THE SAME PRICES ARRIVE TWICE ON EVERY OPEN: this listener also answers when only the metadata
+// changes, so once the server has confirmed the phone's copy it hands over the identical map. A
+// redraw there rebuilt all 302 rows at about 8 s on the lab tablet and froze the list for about 2 s
+// (1 Nov 2026), to show the same numbers. Whether it may read prices is still taken from every answer.
+watchIngredientPrices((map, readable) => {
+  state.ingredientPrices = map;
+  state.pricesReadable = readable === true;
+  answerPrices();
+  if (state.loaded.ingredients && !samePriceMaps(map, state.mergedPrices)) {
+    mergePrices();
+    screen.refresh();
+  }
+});
+
+// ⚠️ THESE TWO ARE LAST ON PURPOSE: the rows draw without them and the highlight follows.
+// ⚠️ A REDRAW ONLY WHEN THE HIGHLIGHTED SET DIFFERS FROM THE ONE LAST PAINTED (paintedDue, kept by
+// the screen's own dueToday getter): the draft changes on every keystroke typed on another phone,
+// and each refresh rebuilds the whole tab that is showing — 302 ingredient rows, the 1–2 s freeze
+// on the lab tablet described above. Not even on a listener's first answer: until all three lists
+// are in, the set is empty, and whatever arrives last makes it differ.
+function refreshIfDueChanged(apply = () => {}) {
+  apply();
+  const now = idsSignature(dueNow());
+  if (now === paintedDue) return;
+  // ⚠️ SET HERE TOO, not only by the getter: with the Ingredients tab showing the getter is never
+  // asked, and every later keystroke elsewhere would look like a change and redraw again.
+  paintedDue = now;
+  screen.refresh();
+}
+
+// A bounded query (`date >= today`), a handful of documents, never the archive (P14). A failure
+// only means no highlight. The start stays at the day the page opened: past midnight it still
+// covers the new day.
+watchRecentHistory(todayISO(), (list) => {
+  refreshIfDueChanged(() => { state.todayHistory = list; state.loaded.todayHistory = true; });
+}, err => console.error('Live orders of today failed:', err));
+
+watchDoc(COLLECTIONS.drafts, 'current', (doc) => {
+  refreshIfDueChanged(() => { state.skipped = doc?.skipped || null; state.loaded.draft = true; });
+}, err => console.error('Live draft failed:', err));
+
+// ⚠️ A NEW DAY CHANGES THE ANSWER WITH NO DOCUMENT CHANGING: the lab tablet left on this page
+// overnight would keep yesterday's suppliers lit. Asked once a minute; it redraws only at midnight.
+setInterval(() => refreshIfDueChanged(), 60 * 1000);

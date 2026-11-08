@@ -3,16 +3,22 @@
 // Firestore listener can update the cards without rebuilding (and losing) the
 // search box.
 
-import { t } from '../i18n.js';
+import { t, localeTag } from '../i18n.js';
 import { el } from './dom.js';
 import { sortByUsage, filterByName } from './catalogue-model.js';
+import { groupByCategory, sortedCategories } from './recipe-categories-model.js';
 import { buildCatalogueSearch } from './search-box.js';
 
 // The one arrow: the same chevron every other list in the app draws.
 const CHEVRON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg>';
 
-export function renderList({ recipes, usageMap, initialQuery = '', selectedId = null, onQueryChange, onOpen, onAdd }) {
+// `getCategories` is a GETTER, asked at every paint: the venue's list can change on another phone
+// and refresh() must follow it.
+export function renderList({
+  recipes, usageMap, initialQuery = '', selectedId = null, onQueryChange, onOpen, onAdd,
+  getCategories = () => [],
+}) {
   let query = initialQuery;
   // The recipe open beside the list on a tablet, marked aria-current (tokens.css gives it
   // the picked look). Held here because refresh() repaints every row on each snapshot.
@@ -51,17 +57,31 @@ export function renderList({ recipes, usageMap, initialQuery = '', selectedId = 
         ]));
       return;
     }
-    for (const recipe of visible) {
-      listContainer.appendChild(el('button', {
-        class: 'cat-card',
-        type: 'button',
-        dataset: { id: recipe.id },
-        'aria-current': recipe.id === selected ? 'true' : null,
-        onclick: () => onOpen(recipe),
-      }, [
-        el('span', { class: 'name', text: recipe.name || t('cat.noName') }),
-        el('span', { class: 'chev', 'aria-hidden': 'true', icon: CHEVRON_SVG }),
-      ]));
+    const categories = getCategories();
+    // ⚠️ HEADINGS ONLY WHEN A CATEGORY IS IN USE OVER THE WHOLE LIST, not over the search result:
+    // otherwise a search hitting only uncategorised recipes would lose its heading, and a venue
+    // that never used categories sees the list exactly as it always was.
+    const headings = groupByCategory(currentRecipes, categories).some(group => group.category);
+    // Inside a group the most-used-first order of `visible` is kept.
+    for (const group of groupByCategory(visible, sortedCategories(categories, localeTag()))) {
+      if (headings) {
+        listContainer.appendChild(el('h2', {
+          class: 'cat-group-head',
+          text: group.category || t('cat.shelf.noCategory'),
+        }));
+      }
+      for (const recipe of group.recipes) {
+        listContainer.appendChild(el('button', {
+          class: 'cat-card',
+          type: 'button',
+          dataset: { id: recipe.id },
+          'aria-current': recipe.id === selected ? 'true' : null,
+          onclick: () => onOpen(recipe),
+        }, [
+          el('span', { class: 'name', text: recipe.name || t('cat.noName') }),
+          el('span', { class: 'chev', 'aria-hidden': 'true', icon: CHEVRON_SVG }),
+        ]));
+      }
     }
   }
 

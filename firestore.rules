@@ -100,7 +100,16 @@ service cloud.firestore {
         ? get(/databases/$(database)/documents/users/$(request.auth.uid))
         : null;
       return u != null
-        && u.data.get('locations', {}).get(lid, false) in [true, 'manager', 'owner'];
+        && isMemberValue(u.data.get('locations', {}).get(lid, false));
+    }
+
+    // ⚠️ EVERY VALUE THAT OPENS A LOCATION, IN ONE PLACE. A value missing here is not
+    // a lesser access, it is a LOCKOUT: js/sections.js ACCESS_VALUES and
+    // functions/onboarding.js ACCESS_VALUES must say the same, in the same release,
+    // and this file must be DEPLOYED before anybody is given a new value.
+    // tests/partial-owner-roles.test.mjs compares the three.
+    function isMemberValue(value) {
+      return value in [true, 'manager', 'owner', 'owner-sales', 'owner-kitchen'];
     }
 
     // ── Which parts of the app a location uses ────────────────────────────
@@ -119,8 +128,44 @@ service cloud.firestore {
       return l == null || l.data.get('sections', {}).get(name, true) != false;
     }
 
+    // ── The two partial owners ─────────────────────────────────────────────
+    // Federico, 1 Nov 2026: besides the owner who sees everything, an owner of the
+    // sales side only and an owner of the kitchen side only, refused by the database
+    // and not merely hidden.
+    //
+    //   'owner-sales'    Food cost and the clients. Reads recipes, ingredients and
+    //                    suppliers because a product is costed from them.
+    //   'owner-kitchen'  Calculator, Catalogue, Pastries, Orders, Stocktake and
+    //                    purchase prices. No selling prices, margins, labour rate,
+    //                    ordering links or client settings.
+    //
+    // ⚠️ THE TABLE IN js/sections.js (NOT_FOR_ROLE) SAYS THE SAME THING. The rules
+    // decide; that one only stops a screen collecting refusals.
+    //
+    // ⚠️ `is string` FIRST, for the reason on runsThePlace() below: an employee's value
+    // is the boolean `true`.
+    function isSalesOwner(value) {
+      return value is string && value == 'owner-sales';
+    }
+
+    function narrowedOut(value, section) {
+      return value is string
+        && ((value == 'owner-sales' && section in ['calculator', 'catalogue', 'orders', 'pastries'])
+            || (value == 'owner-kitchen' && section == 'foodcost'));
+    }
+
+    // ⚠️ canUse() READS users/{uid} THROUGH roleIn() INSTEAD OF CALLING member(), so a
+    // daily write still costs 2 reads, not 3: Firestore charges per call, and this is
+    // on nearly every rule of the file. signedIn() goes first because roleIn() builds
+    // its path from the uid. An account with NO users document (an ordering client)
+    // makes roleIn() an evaluation error rather than a false: both refuse, and the
+    // client's own `allow` statements are separate, so they still answer for it.
     function canUse(lid, section) {
-      return member(lid) && sectionOn(lid, section);
+      return signedIn() && canUseAs(roleIn(lid), lid, section);
+    }
+
+    function canUseAs(value, lid, section) {
+      return isMemberValue(value) && sectionOn(lid, section) && !narrowedOut(value, section);
     }
 
     // ── What a person may do once they are INSIDE a location ──────────────
@@ -195,17 +240,22 @@ service cloud.firestore {
     // type error rather than `false`. Asking the type first keeps the comparison
     // honest whatever is in the document, including whatever a future version
     // decides to store here.
+    //
+    // ⚠️ A PARTIAL OWNER RUNS THE PLACE ONLY INSIDE THEIR OWN SIDE. This answer alone
+    // would be everything: the narrowing is done by canUse() inside canManage() and by
+    // cardNarrowedOut() inside cardAccess(). Never call this without one of the two.
     function runsThePlace(value) {
-      return value is string && (value == 'owner' || value == 'manager');
+      return value is string
+        && (value == 'owner' || value == 'manager'
+            || value == 'owner-sales' || value == 'owner-kitchen');
     }
 
-    // ⚠️ IT IS canManage AND NOT isOwner, AND THE NAME MATTERS. There are three
-    // roles (js/roles.js): the owner, the manager who runs one location, and the
-    // ordinary employee. Everything an owner may do INSIDE a location, a manager
-    // may do too — deleting included. What separates them is hiring, and hiring
-    // never touches these rules: memberships and join codes are `allow write: if
-    // false` and are written only by functions/onboarding.js, which asks for the
-    // owner itself. So the rules need only two tiers, not three.
+    // ⚠️ IT IS canManage AND NOT isOwner, AND THE NAME MATTERS. Everything an owner may
+    // do INSIDE a location, a manager may do too — deleting included — and a partial
+    // owner inside their own side. What separates them is hiring, and hiring never
+    // touches these rules: memberships and join codes are `allow write: if false` and
+    // are written only by functions/onboarding.js, which asks for the owner itself. So
+    // the rules need only two tiers, not one for every role.
     //
     // ⚠️ IT TAKES THE SECTION TOO, so a manager of a location that does not use
     // Orders still cannot delete a supplier. A role narrows what membership and
@@ -225,7 +275,7 @@ service cloud.firestore {
     // 'none', or, for a document shaped unlike ours, as an evaluation error, which
     // Firestore answers with the same refusal.
     //
-    // It answers 'manage' (owner or manager, exactly canManage), 'staff' (an employee
+    // It answers 'manage' (whoever runs this side of the place), 'staff' (an employee
     // of a venue that showed this card) or 'none'.
     //
     // ⚠️ TWO READS, NOT THREE: users/{uid} and locations/{lid}, each ONCE, bound and
@@ -233,21 +283,41 @@ service cloud.firestore {
     // counts CALLS (see member()); tests/rules-read-budget.test.mjs pins it at 2.
     // ⚠️ The section is asked exactly as sectionOn() asks it: only an explicit false
     // switches it off, and a missing location document leaves every section on.
+    //
+    // ⚠️ 'prices' IS NOT A HOME CARD, it is what a purchase price is read and written
+    // through. The owner of the kitchen buys and loads the invoices, so they reach it
+    // without reaching Food cost, which also holds selling prices, margins and the
+    // labour rate. An employee is judged by the Food cost switch, as always.
+    //
+    // ⚠️ A PARTIAL OWNER NEVER FALLS THROUGH TO 'staff'. Their refusal is 'none' even
+    // where the venue showed the card to its employees: that switch is about employees.
     function cardAccess(lid, section, card) {
       let u = signedIn()
         ? get(/databases/$(database)/documents/users/$(request.auth.uid))
         : null;
       let l = get(/databases/$(database)/documents/locations/$(lid));
       let access = u == null ? false : u.data.get('locations', {}).get(lid, false);
-      let inVenue = access in [true, 'manager', 'owner']
+      let inVenue = isMemberValue(access)
         && (l == null || l.data.get('sections', {}).get(section, true) != false);
+      let shownCard = card == 'prices' ? 'foodcost' : card;
       return !inVenue
         ? 'none'
         : (runsThePlace(access)
-          ? 'manage'
-          : ((l != null && l.data.get('staffShownCards', {}).get(card, false) == true)
+          ? (cardNarrowedOut(access, card) ? 'none' : 'manage')
+          : ((l != null && l.data.get('staffShownCards', {}).get(shownCard, false) == true)
             ? 'staff'
             : 'none'));
+    }
+
+    function cardNarrowedOut(value, card) {
+      return (value == 'owner-sales' && card == 'inventory')
+        || (value == 'owner-kitchen' && card == 'foodcost');
+    }
+
+    // Who may write a purchase price, its history, a price change or an invoice decision.
+    // For everybody who is not a partial owner this is exactly canManage(lid, 'foodcost').
+    function managesPrices(lid) {
+      return cardAccess(lid, 'foodcost', 'prices') == 'manage';
     }
 
     // A stocktake month an EMPLOYEE may see: still open, and holding no frozen
@@ -376,6 +446,59 @@ service cloud.firestore {
         && (sectionOn(lid, 'orders')
             || sectionOn(lid, 'catalogue')
             || sectionOn(lid, 'foodcost'));
+    }
+
+    // ── Who may do what with the clients ──────────────────────────────────
+    // The clients belong to the Calculator's section, but the owner of the sales side
+    // has no Calculator and the owner of the kitchen has no clients to run: the kitchen
+    // only needs their names and quantities to work out the dough.
+    //
+    // Everybody but the kitchen's owner: exactly canUse(lid, 'calculator') for the three
+    // roles that existed before, because employees edit the address book all day.
+    function worksOnClients(lid) {
+      return signedIn() && worksOnClientsAs(roleIn(lid), lid);
+    }
+
+    function worksOnClientsAs(value, lid) {
+      return value in [true, 'manager', 'owner', 'owner-sales'] && sectionOn(lid, 'calculator');
+    }
+
+    // The ordering links, which hand somebody outside the business a way in. Exactly
+    // canManage(lid, 'calculator') for owner and manager; never an employee.
+    function managesClients(lid) {
+      return signedIn() && managesClientsAs(roleIn(lid), lid);
+    }
+
+    function managesClientsAs(value, lid) {
+      return value in ['manager', 'owner', 'owner-sales'] && sectionOn(lid, 'calculator');
+    }
+
+    // config/calculator holds the address book AND every recipe the Calculator owns, in
+    // one document. Keeping it whole and judging WHICH KEYS a save changes is far safer
+    // than splitting a document every phone reads and writes: the owner of the sales
+    // side may change the clients and never a recipe. ⚠️ THE CHANGED KEYS, NOT THE KEYS
+    // SENT: the Calculator's own whole-document save re-normalises recipes, so it would
+    // be refused here, so whatever screen the sales side saves from must send the one field.
+    // ⚠️ NO CREATE: a document that does not exist yet is the Calculator's to start.
+    function writesCalculatorConfig(lid) {
+      return signedIn() && writesCalculatorConfigAs(roleIn(lid), lid);
+    }
+
+    function writesCalculatorConfigAs(value, lid) {
+      return isMemberValue(value)
+        && sectionOn(lid, 'calculator')
+        && (!isSalesOwner(value)
+            || (resource != null
+                && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+                     ['bakery', 'clients', 'configModel', 'configRev', 'whatsappClients'])));
+    }
+
+    // Food cost records the oven loss a person weighed onto the RECIPE (js/foodcost/
+    // firebase-foodcost.js saveRecipeLoss), which is the one thing the owner of the sales
+    // side may write there. Where the catalogue is off nobody writes a recipe, as ever.
+    function weighsRecipeLoss(lid) {
+      return signedIn() && isSalesOwner(roleIn(lid))
+        && sectionOn(lid, 'foodcost') && sectionOn(lid, 'catalogue');
     }
 
     // Which locations an account may open. Readable only by that account, so
@@ -643,9 +766,9 @@ service cloud.firestore {
       match /ingredient-prices/{id} {
         // Readable by an employee of a venue that SHOWED them Food cost (see
         // cardAccess) — that screen is made of these prices. Writing stays below.
-        allow read: if cardAccess(lid, 'foodcost', 'foodcost') != 'none';
+        allow read: if cardAccess(lid, 'foodcost', 'prices') != 'none';
 
-        allow create, update: if canManage(lid, 'foodcost')
+        allow create, update: if managesPrices(lid)
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly([
                'bakery', 'priceUnit', 'pricePerUnit',
@@ -714,7 +837,7 @@ service cloud.firestore {
 
         // Deleting a price is deleting a fact about money, and the ingredient it
         // belongs to is deletable by the same people.
-        allow delete: if canManage(lid, 'foodcost');
+        allow delete: if managesPrices(lid);
       }
 
       match /ingredients/{id} {
@@ -920,9 +1043,9 @@ service cloud.firestore {
         // the Orders gate would be the back door into the thing the front door
         // was just locked.
         match /prices/{priceId} {
-          allow read: if cardAccess(lid, 'foodcost', 'foodcost') != 'none';
+          allow read: if cardAccess(lid, 'foodcost', 'prices') != 'none';
 
-          allow create: if canManage(lid, 'foodcost')
+          allow create: if managesPrices(lid)
             && stampedFor(lid)
             && request.resource.data.keys().hasOnly([
                  'bakery', 'recordedAt', 'priceUnit', 'pricePerUnit',
@@ -1010,9 +1133,9 @@ service cloud.firestore {
       // removes one that a late-arriving invoice made wrong; the changes of a
       // deleted ingredient stay as history under their frozen name.
       match /price-changes/{id} {
-        allow read: if canManage(lid, 'foodcost');
+        allow read: if managesPrices(lid);
 
-        allow create: if canManage(lid, 'foodcost')
+        allow create: if managesPrices(lid)
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly([
                'bakery', 'ingredientId', 'supplierId', 'name', 'priceUnit',
@@ -1056,7 +1179,7 @@ service cloud.firestore {
                   && request.resource.data.recordedAt.size() <= 40));
 
         allow update: if false;
-        allow delete: if canManage(lid, 'foodcost');
+        allow delete: if managesPrices(lid);
       }
 
       // ── What the owner decided about an invoice product (5 Oct 2026) ─────
@@ -1069,9 +1192,9 @@ service cloud.firestore {
       // hashing keeps the id a fixed, safe shape. Same gate as the import itself
       // (canManage Food cost: it decides what feeds the prices).
       match /invoice-decisions/{id} {
-        allow read: if canManage(lid, 'foodcost');
+        allow read: if managesPrices(lid);
 
-        allow create, update: if canManage(lid, 'foodcost')
+        allow create, update: if managesPrices(lid)
           && stampedFor(lid)
           && id.matches('^[0-9a-f]{64}$')
           && request.resource.data.keys().hasOnly(['bakery', 'decision', 'label', 'updatedAt'])
@@ -1085,7 +1208,7 @@ service cloud.firestore {
                   && request.resource.data.updatedAt.size() <= 40));
 
         // Undoing a decision («import it after all») removes it.
-        allow delete: if canManage(lid, 'foodcost');
+        allow delete: if managesPrices(lid);
       }
 
       // ── Which invoices were imported, and from which file (25 Oct 2026, Mise 2) ──
@@ -1098,11 +1221,11 @@ service cloud.firestore {
       // ⚠️ NO «WHO IMPORTED» (P13): nothing here names a person. `fileName` is the name of the
       // file(s) picked, with a sole trader's tax code blanked out by the reader. The dates are
       // the invoices' own `Data`, not the day of the upload. Same gate as the import itself and
-      // `invoice-decisions` (canManage Food cost: it decides what feeds the prices).
+      // `invoice-decisions` (managesPrices: it decides what feeds the prices, so the kitchen's owner, who loads the invoices, reaches it too).
       match /invoice-imports/{id} {
-        allow read: if canManage(lid, 'foodcost');
+        allow read: if managesPrices(lid);
 
-        allow create: if canManage(lid, 'foodcost')
+        allow create: if managesPrices(lid)
           && stampedFor(lid)
           && id.matches('^[A-Za-z0-9_-]{1,64}$')
           && request.resource.data.keys().hasOnly([
@@ -1132,7 +1255,7 @@ service cloud.firestore {
 
         allow update: if false;
         // No screen deletes one today; the same people may, to tidy a wrong record by hand.
-        allow delete: if canManage(lid, 'foodcost');
+        allow delete: if managesPrices(lid);
       }
 
       // ── The order in progress ───────────────────────────────────────────
@@ -1147,7 +1270,7 @@ service cloud.firestore {
           && id == 'current'
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly([
-               'bakery', 'entries', 'days', 'updatedAt', 'weekId'
+               'bakery', 'entries', 'days', 'updatedAt', 'weekId', 'skipped'
              ])
           && (!('entries' in request.resource.data)
               || (request.resource.data.entries is map
@@ -1160,7 +1283,18 @@ service cloud.firestore {
                   && request.resource.data.updatedAt.size() <= 64))
           && (!('weekId' in request.resource.data)
               || (request.resource.data.weekId is string
-                  && request.resource.data.weekId.size() <= 32));
+                  && request.resource.data.weekId.size() <= 32))
+          // `skipped` (6 Nov 2026) — { supplierId: 'YYYY-MM-DD' }: a supplier whose order day
+          // it is, closed as «non ordinato» that day because nothing was needed (Federico,
+          // tablet note 3 Nov). It counts only on that day, so a stale key is harmless: one
+          // key per supplier ever closed, overwritten each time, deleted by «Riapri» or by the
+          // first quantity typed for it. The cap only refuses a 201st supplier's close — typing
+          // an order never adds a key. Like `days`, the values are not judged.
+          // OPTIONAL in both directions, like `days`: a phone on the previous version never
+          // sends it. Once phones have saved it, it stays listed for good (retired-field trap).
+          && (!('skipped' in request.resource.data)
+              || (request.resource.data.skipped is map
+                  && request.resource.data.skipped.size() <= 200));
 
         allow delete: if false;
       }
@@ -1712,8 +1846,9 @@ service cloud.firestore {
       }
 
       match /config/{doc} {
-        allow read: if member(lid)
-          && sectionOn(lid, doc == 'orders' ? 'orders' : 'calculator');
+        allow read: if doc == 'orders'
+          ? canUse(lid, 'orders')
+          : (member(lid) && sectionOn(lid, 'calculator'));
 
         // ⚠️⚠️ WHO MAY WRITE DEPENDS ON WHICH DOCUMENT IT IS, AND THAT TERNARY IS
         // LOAD-BEARING. `config/orders` decides how the venue works — which roads
@@ -1725,7 +1860,8 @@ service cloud.firestore {
         // explaining it. The ternary already used for `sectionOn` one line down is
         // the same distinction; this simply applies it to the writer as well.
         //
-        // ⚠️ READING STAYS OPEN TO EVERY MEMBER. An employee has to know which
+        // ⚠️ READING STAYS OPEN TO EVERY MEMBER WITH ORDERS (not the owner of the sales
+        // side, who has no Orders; canUse() above). An employee has to know which
         // roads they have, or the send screen could not draw itself.
         // ⚠️⚠️ THE SECTION CHECK IS INSIDE EACH BRANCH, NOT SHARED, AND THAT IS
         // NOT TIDINESS — IT IS THE READ BUDGET. canManage() already contains
@@ -1745,7 +1881,7 @@ service cloud.firestore {
         allow create, update: if doc != 'labels'
           && (doc == 'orders'
               ? canManage(lid, 'orders')
-              : (member(lid) && sectionOn(lid, 'calculator')))
+              : writesCalculatorConfig(lid))
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly([
                'bakery', 'configRev',
@@ -1938,7 +2074,7 @@ service cloud.firestore {
       // itself still reads its own. The own-document test comes first so a client's
       // page never pays for canManage's reads.
       match /client-accounts/{uid} {
-        allow read: if (signedIn() && request.auth.uid == uid) || canManage(lid, 'calculator');
+        allow read: if (signedIn() && request.auth.uid == uid) || managesClients(lid);
 
         // OWNER ONLY, and the only WRITE gated in this change rather than a
         // delete. This document is what hands an account outside the business a
@@ -1946,7 +2082,7 @@ service cloud.firestore {
         // granting access is the owner's job by definition. Revoking it (below)
         // is owner-only for the same reason: a revoke cuts off a customer's
         // phone mid-order.
-        allow create, update: if canManage(lid, 'calculator')
+        allow create, update: if managesClients(lid)
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly(
                ['bakery', 'clientId', 'clientName', 'createdAt', 'linkToken'])
@@ -1982,7 +2118,7 @@ service cloud.firestore {
                   && request.resource.data.linkToken.size() <= 128));
 
         // OWNER ONLY — see the create above. Deleting this IS the revoke.
-        allow delete: if canManage(lid, 'calculator');
+        allow delete: if managesClients(lid);
       }
 
       // ── The one setting a client's own page has to know ─────────────────
@@ -2003,7 +2139,7 @@ service cloud.firestore {
       match /client-settings/{doc} {
         allow read: if member(lid) || orderClientOf(lid) != '';
 
-        allow create, update: if canUse(lid, 'calculator')
+        allow create, update: if worksOnClients(lid)
           && stampedFor(lid)
           && doc == 'orders'
           && request.resource.data.keys().hasOnly(['bakery', 'cutoff', 'updatedAt'])
@@ -2031,7 +2167,7 @@ service cloud.firestore {
       match /client-menus/{clientId} {
         allow read: if member(lid) || isOrderClient(lid, clientId);
 
-        allow create, update: if canUse(lid, 'calculator')
+        allow create, update: if worksOnClients(lid)
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly(
                ['bakery', 'bakeryName', 'clientName', 'country', 'products', 'updatedAt'])
@@ -2078,7 +2214,7 @@ service cloud.firestore {
         // app deletes this today (checked), so gating it costs no daily work;
         // the create/update stays open because saving the address book
         // republishes every changed menu, and that is ordinary work.
-        allow delete: if canManage(lid, 'calculator');
+        allow delete: if managesClients(lid);
       }
 
       // ── An order a client typed themselves ──────────────────────────────
@@ -2164,7 +2300,10 @@ service cloud.firestore {
         }
 
         // ── The bakery ──
-        allow read: if canUse(lid, 'calculator');
+        // ⚠️ READ BY EVERY MEMBER WHERE THE SECTION IS ON, the owner of the sales side
+        // included: they see what the clients asked for. Writing is below, and it is the
+        // Calculator's, because using an order in a dough is what writes one.
+        allow read: if member(lid) && sectionOn(lid, 'calculator');
 
         allow create, update: if canUse(lid, 'calculator')
           && stampedFor(lid)
@@ -2229,8 +2368,42 @@ service cloud.firestore {
       // refuse every save from an updated one. Same precedent as
       // orders-history.names and pastries.note.
       match /recipes/{id} {
+        // The oven loss and the two weighings it is worked out from, bounded by the same
+        // numbers wherever they are written.
+        function lossFieldsValid(data) {
+          // Capped at 99 here as well as in the model: the yield weight is the
+          // divisor of the price per kilo, and a stored 100 would make every
+          // recipe built on this one cost Infinity per kilo.
+          return (!('lossPct' in data)
+              || (data.lossPct is number
+                  && data.lossPct >= 0
+                  && data.lossPct <= 99))
+          // The two weighings that lossPct is now worked out FROM: the dough before the
+          // oven and the same dough after. ⚠️ THEY DO NOT REPLACE lossPct — that is
+          // still the field every reader uses (the cost model, the label, Food Cost) —
+          // they are kept so reopening the editor can show the numbers somebody typed.
+          //
+          // ⚠️ OPTIONAL IN BOTH DIRECTIONS, for the reason written at the top of this
+          // block: a phone still on the previous version sends neither and must keep
+          // saving, and a phone on the new one sends both and must not be refused.
+          //
+          // ⚠️ BOUNDED, NOT JUDGED. Ten tonnes — the cap exists to stop a runaway value
+          // reaching the database, the same reason the ingredient list is capped at 300.
+          // The RATIO between the two is what matters and the client computes it; a rule
+          // cannot check arithmetic it would have to redo.
+          && (!('rawGrams' in data)
+              || (data.rawGrams is number
+                  && data.rawGrams >= 0
+                  && data.rawGrams <= 10000000))
+          && (!('cookedGrams' in data)
+              || (data.cookedGrams is number
+                  && data.cookedGrams >= 0
+                  && data.cookedGrams <= 10000000));
+        }
+
         // Read by the catalogue that owns them AND by Food Cost, which costs a
-        // product from them. Writing stays the catalogue's alone.
+        // product from them. Writing stays the catalogue's alone, except the one thing
+        // Food Cost weighs (weighsRecipeLoss above).
         allow read: if member(lid)
           && (sectionOn(lid, 'catalogue') || sectionOn(lid, 'foodcost'));
         allow create, update: if canUse(lid, 'catalogue')
@@ -2265,34 +2438,7 @@ service cloud.firestore {
           && request.resource.data.name.size() < 200
           && request.resource.data.ingredients is list
           && request.resource.data.ingredients.size() <= 300
-          // Capped at 99 here as well as in the model: the yield weight is the
-          // divisor of the price per kilo, and a stored 100 would make every
-          // recipe built on this one cost Infinity per kilo.
-          && (!('lossPct' in request.resource.data)
-              || (request.resource.data.lossPct is number
-                  && request.resource.data.lossPct >= 0
-                  && request.resource.data.lossPct <= 99))
-          // The two weighings that lossPct is now worked out FROM: the dough before the
-          // oven and the same dough after. ⚠️ THEY DO NOT REPLACE lossPct — that is
-          // still the field every reader uses (the cost model, the label, Food Cost) —
-          // they are kept so reopening the editor can show the numbers somebody typed.
-          //
-          // ⚠️ OPTIONAL IN BOTH DIRECTIONS, for the reason written at the top of this
-          // block: a phone still on the previous version sends neither and must keep
-          // saving, and a phone on the new one sends both and must not be refused.
-          //
-          // ⚠️ BOUNDED, NOT JUDGED. Ten tonnes — the cap exists to stop a runaway value
-          // reaching the database, the same reason the ingredient list is capped at 300.
-          // The RATIO between the two is what matters and the client computes it; a rule
-          // cannot check arithmetic it would have to redo.
-          && (!('rawGrams' in request.resource.data)
-              || (request.resource.data.rawGrams is number
-                  && request.resource.data.rawGrams >= 0
-                  && request.resource.data.rawGrams <= 10000000))
-          && (!('cookedGrams' in request.resource.data)
-              || (request.resource.data.cookedGrams is number
-                  && request.resource.data.cookedGrams >= 0
-                  && request.resource.data.cookedGrams <= 10000000))
+          && lossFieldsValid(request.resource.data)
           // The guided mixing procedure: an ordered list of steps, each naming the
           // rows to add, how long to run, and at what speed. ⚠️ A STEP'S CONTENTS
           // ARE NOT VALIDATED HERE AND CANNOT BE — same list limitation as the
@@ -2352,6 +2498,13 @@ service cloud.firestore {
           && (request.resource.data.get('archived', false)
                 == (resource == null ? false : resource.data.get('archived', false))
               || canManage(lid, 'catalogue'));
+        // The owner of the sales side, through Food cost: those three numbers and nothing
+        // else of a recipe that already exists.
+        allow update: if weighsRecipeLoss(lid)
+          && stampedFor(lid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+               ['bakery', 'lossPct', 'rawGrams', 'cookedGrams'])
+          && lossFieldsValid(request.resource.data);
         // OWNER ONLY. A recipe is the business. It also carries the guided
         // procedure, the allergen links and whatever Food Cost products point
         // at it, none of which say so from the delete button.
@@ -2425,7 +2578,7 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
                'bakery', 'name', 'components', 'packaging', 'sellingMode',
                'piecesPerBatch', 'packSize', 'packUnit', 'sellingPrice', 'vatRate',
-               'foodCostTarget', 'model', 'labourMinutes', 'labourPeople'
+               'foodCostTarget', 'model', 'labourMinutes', 'labourPeople', 'noWeightLoss'
              ])
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
@@ -2468,6 +2621,11 @@ service cloud.firestore {
               || (request.resource.data.labourPeople is number
                   && request.resource.data.labourPeople > 0
                   && request.resource.data.labourPeople <= 1000))
+          // «Finished product, no weight loss» (Nov 2026): the oven loss of the recipes on
+          // THIS product is ignored in its cost. Absent = false; the app writes it only when
+          // true. A boolean and nothing else — never a number a screen could mistake for a loss.
+          && (!('noWeightLoss' in request.resource.data)
+              || request.resource.data.noWeightLoss is bool)
           // ⚠️⚠️ THE OLD-PHONE GUARD, AND IT COSTS NO READ. A product is written WHOLE, so a
           // phone still on the version before ingredient lines and packs would save it back
           // without them and delete them in silence. Once a product carries `model`, a save
@@ -3010,7 +3168,7 @@ service cloud.firestore {
           && stampedFor(lid)
           && request.resource.data.keys().hasOnly(['bakery', 'uid', 'deviceId', 'dayKey', 'kind',
                'appVersion', 'screens', 'seconds', 'taps', 'routes', 'actions', 'loads', 'loadMs',
-               'firstMinute', 'lastMinute', 'offlineSeconds', 'updatedAt'])
+               'firstMinute', 'lastMinute', 'offlineSeconds', 'hours', 'updatedAt'])
           && request.resource.data.keys().hasAll(['bakery', 'uid', 'deviceId', 'dayKey', 'updatedAt'])
           && request.resource.data.uid == request.auth.uid
           && request.resource.data.deviceId is string
@@ -3048,7 +3206,12 @@ service cloud.firestore {
           && (!('offlineSeconds' in request.resource.data)
               || (request.resource.data.offlineSeconds is int
                   && request.resource.data.offlineSeconds >= 0
-                  && request.resource.data.offlineSeconds <= 86400));
+                  && request.resource.data.offlineSeconds <= 86400))
+          // hours{'00'…'23': active seconds in that local hour} (6 Nov 2026): the real working hours.
+          // Optional — a phone on an older release never sends it — and keyed by the hour only.
+          && (!('hours' in request.resource.data)
+              || (request.resource.data.hours is map
+                  && request.resource.data.hours.keys().hasOnly(['00', '01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12', '13', '14', '15', '16', '17', '18', '19', '20', '21', '22', '23'])));
         allow read, delete: if false;
       }
 

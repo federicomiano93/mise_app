@@ -21,6 +21,7 @@ import { firebaseConfig, sessionReady, currentSession } from '../firebase.js';
 import { currentLocationId, pathFor } from '../location.js';
 import { withPrices } from '../price-model.js';
 import { countryOf } from '../market.js';
+import { isSectionAllowed } from '../sections.js';
 import {
   getApps,
   getApp,
@@ -36,6 +37,7 @@ import {
   deleteDoc,
   onSnapshot,
   writeBatch,
+  runTransaction,
   query,
   orderBy,
   limit,
@@ -135,6 +137,27 @@ export async function saveProductWithSnapshot(id, data, snapshot) {
   return ref.id;
 }
 
+// Create a product ONLY IF NO DOCUMENT HAS ITS ID YET — the products made from the recipe
+// book, whose id comes from their recipe (js/foodcost/from-recipes.js). Resolves true when
+// it was created, false when it was already there.
+//
+// ⚠️ A TRANSACTION, NOT A SET. The list on this phone can be an old offline copy (the
+// Firestore cache answers first, and offline it is the only answer), and a set at a fixed
+// id would overwrite a product another device has filled in since — price, pieces, VAT, all
+// gone, with no margin point to show it. A transaction reads the SERVER first; offline it
+// fails instead of queueing, which is the right answer for a bulk create: nothing lands
+// later on top of anybody's work.
+export async function createProductIfAbsent(id, data) {
+  await authReady;
+  const ref = doc(db, pathFor(PRODUCTS), id);
+  return runTransaction(db, async tx => {
+    const snap = await tx.get(ref);
+    if (snap.exists()) return false;
+    tx.set(ref, withBakery(data));
+    return true;
+  });
+}
+
 // The oven loss a person weighed on a product's recipe line, written onto the RECIPE —
 // which is where it has always lived, and where the cost model and the label read it.
 //
@@ -145,13 +168,14 @@ export async function saveProductWithSnapshot(id, data, snapshot) {
 // a nameless document.
 // ⚠️ `bakery` TRAVELS WITH IT because the rules judge the MERGED document and ask it to
 // name this location — the same stamp the catalogue sends on every save of a recipe.
+// ⚠️ A KEPT WRONG PAIR CARRIES NO `lossPct`, and none is sent: it would be the loss as this
+// phone last saw it, and could overwrite a correct weighing another phone saved meanwhile.
+// An absent field is left OUT, never sent as undefined — updateDoc throws on undefined.
 export async function saveRecipeLoss(id, patch) {
   await authReady;
-  return updateDoc(doc(db, pathFor(RECIPES), id), withBakery({
-    lossPct: patch.lossPct,
-    rawGrams: patch.rawGrams,
-    cookedGrams: patch.cookedGrams,
-  }));
+  const fields = { rawGrams: patch.rawGrams, cookedGrams: patch.cookedGrams };
+  if (patch.lossPct !== undefined) fields.lossPct = patch.lossPct;
+  return updateDoc(doc(db, pathFor(RECIPES), id), withBakery(fields));
 }
 
 // Whether this session may write a recipe at all.
@@ -161,8 +185,10 @@ export async function saveRecipeLoss(id, patch) {
 // them) but not writable (writing is the catalogue's), and two weighing boxes whose
 // Save is always refused would still record a margin point for a loss that never
 // landed. Same default as the rules: a section nobody switched off is on.
+// ⚠️ THE VENUE'S SECTION, NOT session.sections: the owner of the sales side has no catalogue
+// and may still write these three numbers (weighsRecipeLoss in firestore.rules).
 export function canWriteRecipes() {
-  return currentSession().sections?.catalogue === true;
+  return isSectionAllowed(currentSession().location, 'catalogue');
 }
 
 // The country the open venue sells in — which decides the VAT choices a product offers.

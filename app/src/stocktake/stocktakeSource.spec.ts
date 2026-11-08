@@ -265,11 +265,15 @@ describe('⚠️ what the source says it knows, and what it never sends', () => 
     const fake = fakeKit();
     const source = createFirestoreStocktakeSource(() => Promise.resolve(fake.kit), 'bakery');
     const told: { names: unknown[]; fromCache: boolean; pricesAnswered: boolean }[] = [];
+    const lists: (readonly Record<string, unknown>[])[] = [];
     const onError = vi.fn();
-    source.watchIngredients((list, answer) => told.push({ names: list.map(i => i.name), ...answer }), onError);
+    source.watchIngredients((list, answer) => {
+      told.push({ names: list.map(i => i.name), ...answer });
+      lists.push(list);
+    }, onError);
     await settle();
     return {
-      told, onError,
+      told, lists, onError,
       ingredients: fake.live('locations/bakery/ingredients')[0]!,
       prices: fake.live('locations/bakery/ingredient-prices')[0]!,
     };
@@ -385,12 +389,24 @@ describe('⚠️ what the source says it knows, and what it never sends', () => 
     expect(told.map(a => a.pricesAnswered)).toEqual([false, false]);
   });
 
-  test('⚠️ nor does it after they had answered: the prices are gone from the list', async () => {
-    const { told, ingredients, prices } = await listening();
+  // The current app's 5df661d3 (tests/inventory-close-month.test.mjs). Mise 2 used to take the answer back here.
+  test('⚠️ a price failure after an answer keeps the prices: the month stays ready, so a close would freeze no money', async () => {
+    const { told, lists, ingredients, prices } = await listening();
     ingredients.next(collectionSnap([FLOUR]));
     prices.next(collectionSnap([{ id: 'flour', priceUnit: 'kg', pricePerUnit: 2 }]));
-    expect(told.at(-1)!.pricesAnswered).toBe(true);
+    const before = lists.at(-1);
+    expect(before?.[0]).toMatchObject({ id: 'flour', pricePerUnit: 2 });
     prices.error(denied('resource-exhausted'));
-    expect(told.at(-1)!.pricesAnswered).toBe(false);
+    expect(told.at(-1)!.pricesAnswered).toBe(true);
+    expect(lists.at(-1)).toStrictEqual(before);
+  });
+
+  test('a refused read after an answer still empties the prices, and stays answered: that account will get no more', async () => {
+    const { told, lists, ingredients, prices } = await listening();
+    ingredients.next(collectionSnap([FLOUR]));
+    prices.next(collectionSnap([{ id: 'flour', priceUnit: 'kg', pricePerUnit: 2 }]));
+    prices.error(denied('permission-denied'));
+    expect(told.at(-1)!.pricesAnswered).toBe(true);
+    expect(lists.at(-1)?.[0]?.pricePerUnit ?? null).toBeNull();
   });
 });

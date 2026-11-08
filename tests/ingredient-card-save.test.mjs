@@ -136,6 +136,27 @@ test('an untouched save writes the stored price verbatim and records no history 
   }
 });
 
+// ⚠️ THE PRICE'S DATE MOVES ONLY WITH THE MONEY (20 Oct 2026): the invoice import updates a price only from an
+// invoice newer than this date, so a rename that re-dated it as today stopped every older invoice from counting.
+test('a rename keeps the date of the stored price; a new price takes today', async () => {
+  const dated = '2026-09-01T12:00:00.000Z';
+  for (const stored of [PACK_CASE, LEGACY_KG_COUNTED, PIECES_COUNTED, TYPED_KG, TYPED_SACK, TYPED_PIECE, CUSTOM, BUSTA_UNIT]) {
+    const item = { ...stored, priceUpdatedAt: dated };
+    const card = openCard({ item });
+    type(card.name, 'Farina rinominata');
+    const { payload, record } = await card.save();
+    assert.equal(payload.name, 'Farina rinominata');
+    assert.equal(payload.priceUpdatedAt, dated, `date of ${item.unit}/${item.caseItemUnit}`);
+    assert.equal(record, null);
+  }
+  const card = openCard({ item: { ...TYPED_KG, priceUpdatedAt: dated } });
+  type(card.rate, '7.6');
+  const { payload, record } = await card.save();
+  assert.equal(payload.pricePerUnit, 7.6);
+  assert.notEqual(payload.priceUpdatedAt, dated);
+  assert.equal(record.recordedAt, payload.priceUpdatedAt);
+});
+
 test('an untouched pack case keeps its own stored size even when the weight on the card has changed', async () => {
   // an employee re-weighed it 2.5kg → 3kg; a manager opens the card to fix a typo
   const card = openCard({ item: { ...PACK_CASE, weight: '3kg' } });
@@ -411,7 +432,7 @@ test('a NEW single with no weight, priced by kilo / litre / piece, gets kg / l /
     type(card.name, 'Zucchine');
     choose(card.howBought, priceUnit);
     type(card.rate, '3');
-    if (priceUnit === 'pcs') type(card.all().find(n => n.tagName === 'INPUT' && n.attributes.placeholder === 'e.g. 0.055'), '0.2');
+    if (priceUnit === 'pcs') type(card.all().find(n => n.tagName === 'INPUT' && n.attributes.placeholder === 'e.g. 55'), '200');
     const { payload } = await card.save();
     assert.equal(payload.unit, word, priceUnit);
     assert.equal('packCount' in payload, false);
@@ -498,7 +519,7 @@ test('reopening shows the stored size as a placeholder (not a value) and says wh
   assert.equal(card.weightAmount.value, '');
   assert.equal(card.weightUnit.value, 'kg');
   assert.ok(card.notes().includes('This price was for 4 × 2.5 kg: write the weight of one item to recalculate it.'), card.notes().join(' | '));
-  assert.equal(card.all().some(n => n.textContent === 'Weight of one piece (kg)' && shown(n.parentNode)), false, 'no piece weight');
+  assert.equal(card.all().some(n => n.textContent === 'Weight of one piece (g)' && shown(n.parentNode)), false, 'no piece weight');
   assert.equal(shown(card.recompute), false);
 });
 
@@ -885,9 +906,9 @@ test('3rd review 1: eggs (360 g pack, 0.06 kg a piece) open with NO note, the pi
     const card = openCard({ item });
     assert.equal(card.notes().some(n => /format has changed|saved price stays/.test(n)), false, card.notes().join(' | '));
     assert.equal(card.recompute === undefined || !shown(card.recompute), true, 'Ricalcola is not offered');
-    const pieceBox = card.all().find(n => n.tagName === 'INPUT' && n.attributes.placeholder === 'e.g. 0.055');
+    const pieceBox = card.all().find(n => n.tagName === 'INPUT' && n.attributes.placeholder === 'e.g. 55');
     assert.ok(pieceBox && shown(pieceBox.parentNode), 'the «Peso di un pezzo» box is visible');
-    assert.equal(pieceBox.value, String(item.unitWeightKg), 'pre-filled with the stored piece weight');
+    assert.equal(pieceBox.value, { 0.06: '60', 0.002: '2' }[item.unitWeightKg], 'pre-filled with the stored piece weight, in grams');
     assert.equal(shown(card.rate.parentNode), true, 'the price is «per piece», as today');
     assert.equal(shown(card.casePrice.parentNode), false, 'no «Pack price» box');
     const { payload, record } = await card.save();

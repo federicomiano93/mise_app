@@ -32,7 +32,7 @@ import {
 } from '@mise/shared/catalogue-model';
 import type { CalculatorImportKind, CatalogueRecipe, ImportAction } from '@mise/shared/catalogue-model';
 import { normalizeEndNote, normalizeSteps, ridOf, withRowIds } from '@mise/shared/guided-model';
-import { isArchivedRecipe, normalizeRecipeCategories } from '@mise/shared/recipe-shelf';
+import { categoryKey, isArchivedRecipe, normalizeRecipeCategories, removeCategory } from '@mise/shared/recipe-shelf';
 import type { KeyValueStorage } from '../session/backend';
 import { LABEL_TEXT_FIELDS, labelTextPatchOf, normalizeStoredRecipe, normalizeStoredRecipes } from './labelTexts';
 import { newRecipeId, withoutPrice } from './recipesSource';
@@ -236,10 +236,15 @@ export interface RecipesStore {
   // it). A refusal puts the recipe back as it was and says `recipe-not-archived`. Returns false, and writes nothing, when the
   // recipe is not held or is already where it was asked to go. The rules let only an owner or a manager move the flag.
   setArchived(id: string, archived: boolean): boolean;
-  // Replaces the venue's list of recipe categories (config/labels.recipeCategories), through saveLabelProfile: LOCAL-FIRST,
-  // the same rollback, rejects when refused. The list is normalised before it is written. The recipes filed under a word
-  // taken off the list are NOT rewritten (they read as «no category» until the word comes back).
-  saveRecipeCategories(list: readonly string[]): Promise<void>;
+  // Adds (or takes off) ONE word of the venue's list of recipe categories (config/labels.recipeCategories), LOCAL-FIRST: the
+  // list changes at once, offline too (the promise stays pending until the network is back; nothing waits for it), then the
+  // source is asked to arrayUnion / arrayRemove that word alone. ⚠️ A REFUSAL PUTS BACK ONLY THAT WORD, on the list as it is
+  // by then — another word added meanwhile stays — and the promise REJECTS. Taking a word off sends every stored spelling of
+  // it (the same categoryKey). The recipes filed under a word taken off are NOT rewritten (they read as «no category» until
+  // the word comes back). The categories stay OUT of the label profile's per-key log (saveLabelProfile), so a refused label
+  // patch never undoes a word and a refused word never undoes a label setting.
+  addRecipeCategory(word: string): Promise<void>;
+  removeRecipeCategory(word: string): Promise<void>;
   // Saves a recipe's mixing procedure (steps + closing message), LOCAL-FIRST like saveRecipe, as a MERGE of those two
   // fields only — plus the ingredient rows when some row had no id yet (see the method). An empty procedure is saved
   // as empty, which deletes it. A refusal puts the version before it back and says `recipe-not-saved`. Returns false,
@@ -389,6 +394,14 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
     }
     return { recipes, recipesLoaded, recipesFromServer, streamBroken, ingredients, ingredientsLoaded, ingredientsUnreadable, usage,
       scaled, labelConfig, labelConfigKnown, labelConfigFromServer, categories, printAgents, suppliers };
+  }
+
+  // The venue's list changed on this phone, ahead of the database: into the label profile object and the phone's copy, and
+  // announced. The profile may not exist yet (a venue that never saved a label setting): it starts as just the list.
+  function setLocalCategories(list: readonly string[]): void {
+    labelConfig = { ...(labelConfig ?? {}), recipeCategories: [...list] };
+    writeJson(LABEL_CONFIG_KEY, labelConfig);
+    changed();
   }
 
   function changed(): void {
@@ -870,9 +883,37 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
       return true;
     },
 
-    saveRecipeCategories(list) {
-      // Through the label profile's own local-first write: the same per-key rollback, the same «put back» on a refusal.
-      return store.saveLabelProfile({ recipeCategories: normalizeRecipeCategories(list) });
+    addRecipeCategory(word) {
+      setLocalCategories([...categories, word]);
+      let written: Promise<void>;
+      try {
+        written = source.addRecipeCategoryWord(word);
+      } catch (err) {
+        written = Promise.reject(err);
+      }
+      return written.catch((err: unknown) => {
+        deps.warn('Recipe category did not sync to Firestore:', err);
+        setLocalCategories(removeCategory(categories, word));
+        throw err;
+      });
+    },
+
+    removeRecipeCategory(word) {
+      // Every spelling stored: two phones offline may each have added the word in its own case.
+      const stored = Array.isArray(labelConfig?.recipeCategories) ? labelConfig.recipeCategories as unknown[] : [];
+      const spellings = stored.filter((held): held is string => typeof held === 'string' && categoryKey(held) === categoryKey(word));
+      setLocalCategories(removeCategory(categories, word));
+      let written: Promise<void>;
+      try {
+        written = source.removeRecipeCategoryWords(spellings.length > 0 ? spellings : [word]);
+      } catch (err) {
+        written = Promise.reject(err);
+      }
+      return written.catch((err: unknown) => {
+        deps.warn('Recipe category did not sync to Firestore:', err);
+        if (!categories.some(held => categoryKey(held) === categoryKey(word))) setLocalCategories([...categories, word]);
+        throw err;
+      });
     },
 
     calculatorImportOf(id) {

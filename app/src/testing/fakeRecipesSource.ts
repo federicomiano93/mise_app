@@ -42,6 +42,10 @@ export type FakeRecipesSource = RecipesSource & {
   // Every label-profile patch the screen sent, in the order it was sent (refused ones are not here). A merge write:
   // each is folded into `labelConfig`, and the watchers are told.
   labelSaves: Record<string, unknown>[];
+  // Every recipe-category write, in the order it was sent (refused ones are not here): one word added, or the stored spellings
+  // of one word removed. Each is folded into `labelConfig.recipeCategories` like arrayUnion / arrayRemove, and the watchers are
+  // told. They wait on holdLabelSaves() and are refused by `refuse.labelSave`, like a label patch.
+  categoryWrites: ({ add: string } | { remove: string[] })[];
   // The next label saves wait until the returned function is called (a slow network); the patch is merged then.
   holdLabelSaves(): () => void;
   // The suppliers the link chooser names.
@@ -97,6 +101,9 @@ export function fakeRecipesSource(
     onError: (err: unknown) => void;
   };
   const labelWatchers = new Set<LabelListener>();
+  const categoriesOf = (config: Record<string, unknown> | null): string[] => (
+    Array.isArray(config?.recipeCategories) ? (config.recipeCategories as string[]) : []
+  );
   const agentWatchers = new Set<{ onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void }>();
   const logoWatchers = new Set<LabelListener>();
   let logoWriteHold: Promise<void> | null = null;
@@ -132,6 +139,7 @@ export function fakeRecipesSource(
     printAgents: seed.printAgents ?? [],
     jobs: [],
     labelSaves: [],
+    categoryWrites: [],
     recipeWrites: [],
     refuseRecipeWrites: { save: false, remove: false },
     calculatorConfig: seed.calculatorConfig ?? null,
@@ -243,6 +251,21 @@ export function fakeRecipesSource(
       if (refuse.labelSave) throw refused();
       fake.labelSaves.push({ ...patch });
       fake.labelConfig = { ...(fake.labelConfig ?? {}), ...patch };
+      fake.push();
+    }),
+    addRecipeCategoryWord: vi.fn<RecipesSource['addRecipeCategoryWord']>(async word => {
+      if (labelSaveHold) await labelSaveHold;
+      if (refuse.labelSave) throw refused();
+      fake.categoryWrites.push({ add: word });
+      const held = categoriesOf(fake.labelConfig);
+      fake.labelConfig = { ...(fake.labelConfig ?? {}), recipeCategories: held.includes(word) ? held : [...held, word] };
+      fake.push();
+    }),
+    removeRecipeCategoryWords: vi.fn<RecipesSource['removeRecipeCategoryWords']>(async words => {
+      if (labelSaveHold) await labelSaveHold;
+      if (refuse.labelSave) throw refused();
+      fake.categoryWrites.push({ remove: [...words] });
+      fake.labelConfig = { ...(fake.labelConfig ?? {}), recipeCategories: categoriesOf(fake.labelConfig).filter(held => !words.includes(held)) };
       fake.push();
     }),
     watchSuppliers: vi.fn<RecipesSource['watchSuppliers']>(

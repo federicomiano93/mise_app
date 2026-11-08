@@ -247,6 +247,25 @@
       <span class="home-card-sub" data-i18n="ui.endOfMonthCount">End-of-month count</span>
     </a>
 
+    <!-- ⚠️ ONLY THE SALES OWNER HAS THIS CARD ('owner-sales', js/home-cards.js
+         ROLE_ONLY_CARDS): they run the clients and have no Calculator to reach them from.
+         Everybody else keeps the clients inside the Calculator's Settings, so this card
+         is removed from their Home like any card their role does not have.
+         data-section="calculator" because the clients live in config/calculator: a venue
+         without the Calculator has no clients to run, and the page is gated by it too. -->
+    <a class="home-card" href="clients.html" data-section="calculator" data-card="clients">
+      <span class="home-card-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="9" cy="8" r="3.5"/>
+          <path d="M2.5 20v-1a5.5 5.5 0 0 1 5.5-5.5h2a5.5 5.5 0 0 1 5.5 5.5v1"/>
+          <path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/>
+          <path d="M18.5 14a5.5 5.5 0 0 1 3 5v1"/>
+        </svg>
+      </span>
+      <span class="home-card-title" data-i18n="ui.clients">Clients</span>
+      <span class="home-card-sub" data-i18n="ui.clientsCardSub">Clients, links &amp; orders</span>
+    </a>
+
   </nav>
   <div id="install-host" class="install-host"></div>
 

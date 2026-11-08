@@ -46,7 +46,7 @@
 import { sameSession, type DeviceKind } from '@mise/shared/device-model';
 import {
   newAcc, mergeAcc, cleanAcc, isEmptyAcc, addScreen, addRoute, addSeconds, addTap, addAction,
-  addLoad, addOffline, touchMinute, dayKeyOf, docId, payloadOf, SCREEN_RE, ACTION_RE,
+  addLoad, addOffline, addHour, touchMinute, dayKeyOf, docId, payloadOf, SCREEN_RE, ACTION_RE,
   type UsageAcc, type UsagePayload,
 } from '@mise/shared/usage-model';
 import type { KeyValueStorage } from '../session/backend';
@@ -117,7 +117,13 @@ export function parseStoreKey(key: unknown): StoreKeyParts | null {
 
 // What a day's record looks like in storage. Read back from a place anything can write to, so
 // every field is `unknown` until it has been looked at.
-interface StoredRecord { acc?: unknown; dirty?: unknown; lastSentAt?: unknown; rev?: unknown }
+// `appVersion` is the release last sent for this day, shared with the current app (same key).
+interface StoredRecord { acc?: unknown; dirty?: unknown; lastSentAt?: unknown; rev?: unknown; appVersion?: unknown }
+
+// The release a stored record last sent, or null when it has none (or a damaged one).
+function storedVersion(rec: StoredRecord | null): string | null {
+  return rec && typeof rec.appVersion === 'string' && rec.appVersion ? rec.appVersion : null;
+}
 
 // The browser's own answers, and the data layer, as the tracker asks for them. Replaced one by
 // one in the specs; `browserUsageDeps` is the real set.
@@ -184,7 +190,13 @@ export function createTracker(deps: UsageDeps): Tracker {
   function version(): Promise<string | null> {
     if (!versionPromise) {
       versionPromise = Promise.resolve().then(() => d.version()).catch(() => null)
-        .then(v => { cachedVersion = v; return v; });
+        .then(v => {
+          // No answer is not remembered: the next send asks again. Kept, a null would stand for
+          // the whole page. (Mise 2's own release is a constant, so this is the original's guard.)
+          if (typeof v === 'string' && v) cachedVersion = v;
+          else versionPromise = null;
+          return v;
+        });
     }
     return versionPromise;
   }
@@ -274,6 +286,7 @@ export function createTracker(deps: UsageDeps): Tracker {
     if (!d.online()) addOffline(mem, elapsed);
     if (current && nowMs - lastInputAt <= IDLE_MS) {
       addSeconds(mem, current, elapsed);
+      addHour(mem, d.now(), elapsed);
       touchMinute(mem, d.now());
       remember(current);
     }
@@ -288,7 +301,7 @@ export function createTracker(deps: UsageDeps): Tracker {
       if (!isReadySession(session) || !storage || isEmptyAcc(mem)) return;
       const key = storeKey(session.locationId, session.user.uid, memDay || dayKeyOf(d.now()));
       const stored = readJson(storage, key) as StoredRecord | null;
-      const rec = {
+      const rec: StoredRecord & { acc: UsageAcc } = {
         acc: cleanAcc(stored && stored.acc),
         dirty: true,
         // The time of the last ATTEMPT to send; a new record starts its clock now, so a short
@@ -296,6 +309,11 @@ export function createTracker(deps: UsageDeps): Tracker {
         lastSentAt: finiteOr(stored && stored.lastSentAt, d.now().getTime()),
         rev: finiteOr(stored && stored.rev, 0) + 1,
       };
+      // The release last sent for this day (see flush) survives every commit. Both apps write the
+      // same record: the current app keeps it too since v1.138.0 (main's js/usage.js; this stack's
+      // copy is older until main is merged in).
+      const kept = storedVersion(stored);
+      if (kept) rec.appVersion = kept;
       mergeAcc(rec.acc, mem);
       if (writeJson(storage, key, rec)) { mem = newAcc(); memDay = null; }
     } catch (err) {
@@ -373,11 +391,15 @@ export function createTracker(deps: UsageDeps): Tracker {
           : (since >= SEND_EVERY_MS || (hidden && since >= SEND_ON_HIDE_MS));
         if (!due) continue;
         const id = docId(deviceId, p.dayKey, p.uid);
-        const payload = payloadOf(rec.acc, { deviceId, dayKey: p.dayKey, kind: d.kind(), appVersion });
+        // ⚠️ The line is written WHOLE, so a send with no version would wipe the one an earlier
+        // send of the same day carried: the release last sent for this day is kept in the record
+        // and used when this page could not learn its own.
+        const dayVersion = appVersion || storedVersion(rec);
+        const payload = payloadOf(rec.acc, { deviceId, dayKey: p.dayKey, kind: d.kind(), appVersion: dayVersion });
         if (!id || !payload) continue;
         const sentRev = finiteOr(rec.rev, 0);
         // The attempt is stamped BEFORE the write: a page that dies mid-write still bounds the retries.
-        if (!writeJson(storage, key, { ...rec, lastSentAt: nowMs })) continue;
+        if (!writeJson(storage, key, { ...rec, lastSentAt: nowMs, appVersion: payload.appVersion })) continue;
         let sending: Promise<unknown>;
         try { sending = Promise.resolve(d.send(payload, id)); } catch (err) { sending = Promise.reject(err); }
         sent += 1;

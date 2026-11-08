@@ -17,6 +17,7 @@
 //   - deleteLogFromFirestore(dough)   → js/log.js
 //   - watchCalculatorConfig(onChange) → js/calculator-config-store.js
 //   - saveCalculatorConfig(config)    → js/calculator-config-store.js
+//   - saveCalculatorClients(config)   → js/calculator-config-store.js
 //   - side-effect `import './firebase.js'` for init → js/app.js
 
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-app.js';
@@ -46,6 +47,7 @@ import {
   getDocFromServer,
   setDoc,
   addDoc,
+  runTransaction,
   serverTimestamp,
   deleteDoc,
   onSnapshot,
@@ -65,7 +67,7 @@ import {
   locationDocPath,
 } from './location.js';
 import { allowedSections, sectionsFor, pickStart, locationsOf } from './sections.js';
-import { roleOf, isOwner, canManage } from './roles.js';
+import { roleOf, isOwner, canManage, canManageVenue } from './roles.js';
 import {
   clearLocalData, shouldClearLocalData, offlineCacheVerdict, OFFLINE_CACHE_OWNER_KEY,
 } from './local-data.js';
@@ -286,7 +288,7 @@ function takePickVenue() {
 // is "no owner powers", the same direction the rules take for a value nobody set.
 let session = { status: 'loading', user: null, locationId: null, location: null,
                 sections: allowedSections(null), options: [], optionNames: {},
-                role: 'staff', canManage: false, isOwner: false, isAppAdmin: false };
+                role: 'staff', canManage: false, canManageVenue: false, isOwner: false, isAppAdmin: false };
 let userDocCache = null;
 // ⚠️ STARTS false AND IS CLEARED ON SIGN-OUT. A stale `true` surviving a sign-out
 // would draw the "New customer" entry for whoever signs in next on that phone.
@@ -407,6 +409,9 @@ async function enterLocation(locationId, options, user) {
     // is "may invite people and set roles" — the owner alone. Every delete
     // button reads canManage; only the "who can get in" entry reads isOwner.
     canManage: canManage(userDocCache, locationId),
+    // ⚠️ AND canManage IS TRUE FOR A PARTIAL OWNER, inside their own side. The whole venue —
+    // its language, its Home cards, its switches — asks this one instead.
+    canManageVenue: canManageVenue(userDocCache, locationId),
     isOwner: isOwner(userDocCache, locationId),
     // ⚠️ A THIRD ANSWER, AND NOT ABOUT THIS LOCATION AT ALL. isOwner is "may hire
     // into THIS venue"; this is "may create a NEW customer's venue" — the app's
@@ -606,7 +611,7 @@ onAuthStateChanged(auth, user => {
     markHubPassed(false);
     setSession({ status: 'signed-out', user: null, locationId: null, location: null,
                  options: [], sections: allowedSections(null),
-                 role: 'staff', canManage: false, isOwner: false, isAppAdmin: false });
+                 role: 'staff', canManage: false, canManageVenue: false, isOwner: false, isAppAdmin: false });
     return;
   }
 
@@ -888,12 +893,14 @@ export function readOldLogsOnce() {
 // js/calculator-config.js. See firestore.rules.
 
 // Subscribe to the config document in real time. onChange receives the raw data
-// object, or null when the document does not exist yet (fresh project).
+// object, or null when the document does not exist yet (fresh project), and whether
+// the answer came from Firestore's offline copy (see js/firebase.js).
 export function watchCalculatorConfig(onChange) {
   authReady.then(() => {
     onSnapshot(
       doc(db, pathFor('config'), 'calculator'),
-      snap => onChange(snap.exists() ? snap.data() : null),
+      { includeMetadataChanges: true },
+      snap => onChange(snap.exists() ? snap.data() : null, snap.metadata.fromCache),
       err => { console.error('Config listener failed:', err); },
     );
   });
@@ -905,6 +912,13 @@ export function saveCalculatorConfig(config) {
   return authReady
     .then(() => setDoc(doc(db, pathFor('config'), 'calculator'), { ...config, bakery: currentLocationId() }))
     .catch(err => { console.error('saveCalculatorConfig failed:', err); throw err; });
+}
+
+// Persist the address book ALONE, for the Clients page. See js/firebase.js.
+export function saveCalculatorClients(config) {
+  return authReady
+    .then(() => setDoc(doc(db, pathFor('config'), 'calculator'), { clients: config.clients, bakery: currentLocationId() }, { merge: true }))
+    .catch(err => { console.error('saveCalculatorClients failed:', err); throw err; });
 }
 
 // ── Orders system (js/orders/*) ──────────────────────────────────────────────
@@ -1094,10 +1108,23 @@ export function watchCatalogueRecipe(id, onChange) {
 // being designed out: a recipe's leavening can be called one thing in the
 // Calculator and another in the Catalogue. withRowIds is idempotent, so a recipe
 // already carrying ids comes back byte-identical.
-export function stampRecipeRowIds(id, ingredients) {
-  return authReady.then(() => setDoc(
-    doc(db, pathFor('recipes'), id),
-    { ingredients },
-    { merge: true },
-  ));
+//
+// ⚠️ A TRANSACTION ON THE RECIPE AS IT IS NOW, NEVER A COPY READ EARLIER. The list the
+// Calculator offers is read when its Recipes screen opens, and writing that copy back
+// replaced the whole ingredients array: a correction made in the Recipe catalogue since then,
+// on another phone, was silently undone (code review, 30 Oct 2026). `stamp(rows)` returns the
+// stamped rows, or null when every row already has its id — and then nothing is written.
+// Resolves the rows now stored, or null when the recipe no longer exists.
+export function stampRecipeRowIds(id, stamp) {
+  return authReady.then(() => runTransaction(db, async (tx) => {
+    const ref = doc(db, pathFor('recipes'), id);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    const rows = Array.isArray(data.ingredients) ? data.ingredients : [];
+    const stamped = stamp(rows);
+    if (!stamped) return rows;
+    tx.set(ref, { ingredients: stamped }, { merge: true });
+    return stamped;
+  }));
 }

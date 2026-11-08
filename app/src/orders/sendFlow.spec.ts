@@ -42,7 +42,7 @@ function lensOf(entries: Record<string, unknown>) {
     noSupplierName: 'No supplier',
   });
 }
-const draftOf = (entries: Record<string, unknown>) => ({ entries: entries as never, days: {}, updatedAt: '', exists: true });
+const draftOf = (entries: Record<string, unknown>) => ({ entries: entries as never, days: {}, skipped: {}, updatedAt: '', exists: true });
 
 const ALL_ON = normalizeSendRoutes({ sendRoutes: { manager: true, whatsapp: true, whatsappSupplier: true, email: true } });
 const settings = { grouped: true, locationName: 'Bakery', language: 'en' };

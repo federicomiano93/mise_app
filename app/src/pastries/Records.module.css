@@ -84,9 +84,25 @@
 }
 
 .name {
+  /* It takes the free space, so the note sits beside the number. */
+  flex: 1 1 auto;
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+/* The row's note as it was that night, between the name and the number. */
+.itemNote {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40%;
+  margin: 0;
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .qty {

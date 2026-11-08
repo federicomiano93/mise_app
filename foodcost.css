@@ -32,7 +32,7 @@ body {
      dragged. Only .fc-screen scrolls — see the min-height note there. */
   position: fixed;
   inset: 0;
-  height: 100dvh;
+  height: var(--vh100);
   display: flex;
   flex-direction: column;
   overscroll-behavior: none;
@@ -74,7 +74,10 @@ body {
 }
 .fc-row:active { transform: scale(.97); }
 .fc-row:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
-.fc-row.incomplete { opacity: .75; }
+/* ⚠️ NOT opacity on the whole row: it took the line saying what is missing to 3.3:1 (ui-check,
+   28 Oct 2026) — and products made from the recipe book all start incomplete. A dashed
+   border says «not finished» without fading the words. */
+.fc-row.incomplete { border-style: dashed; }
 .fc-row-main { min-width: 0; flex: 1; }
 .fc-row-name { display: block; font-size: .96rem; font-weight: 600; color: var(--fc-text); }
 .fc-row-sub { display: block; margin-top: 3px; font-size: .72rem; color: var(--fc-text-2); font-family: var(--fc-font-mono); }
@@ -201,12 +204,36 @@ select.fc-input, .fc-select {
 .fc-line { border: 1px solid var(--fc-border); border-radius: var(--radius-sm); padding: 8px 10px; background: var(--fc-surface); }
 .fc-line-row { display: flex; align-items: center; gap: 8px; }
 .fc-line-row .fc-select { flex: 1; min-width: 0; }
-.fc-qty { width: 4.6rem; flex-shrink: 0; text-align: right; }
+/* ⚠️ SIZED IN `ch`, NOT GUESSED IN PIXELS (Federico, Nov 2026: «nella casella composto da il peso
+   non si vede tutto»). The box was 4.6rem = 73.6px, of which 24px padding and 3px border left
+   46.6px of text: five or six digits, so «1234.567» was cut. 1ch is the width of a «0» in the
+   box's own font, and .fc-number sets tabular-nums, so every digit is exactly 1ch: nine of them
+   (the eight characters of «12345.678» plus a margin) need 9ch, plus 2 × 8px of padding and
+   2 × 1.5px of border = 19px. The padding is 8px, not the 12px of the other boxes, for the
+   same reason. Measured in headless Edge at 296, 360 and 1024px with «12345.678» and
+   «88888.888»: no box clips (the old 4.6rem one did), the row and the page never scroll
+   sideways, and at 296px the pair of weighing boxes — the tightest place — keeps 87px of text
+   for the 83px those eight digits and a point take. */
+.fc-qty { width: calc(9ch + 19px); flex-shrink: 0; text-align: right; padding: 0 8px; }
+/* A number box's own up/down arrows (a mouse on a desktop) take room from the digits; nobody
+   steps a weight with them, so the digits keep it. */
+.fc-qty::-webkit-outer-spin-button,
+.fc-qty::-webkit-inner-spin-button,
+.fc-weigh-row .fc-input::-webkit-outer-spin-button,
+.fc-weigh-row .fc-input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.fc-qty, .fc-weigh-row .fc-input { -moz-appearance: textfield; }
 .fc-line-unit { font-size: .8rem; color: var(--fc-text-2); flex-shrink: 0; }
 .fc-line-note { margin: 6px 0 0; font-size: .72rem; color: var(--fc-text-2); font-family: var(--fc-font-mono); }
-/* A recipe line with nothing to say (priced, and no money shown since 13 Sep 2026) takes
-   no room: an empty note would still leave its margin under the row. */
+/* A line with nothing to do about it (priced: its money is on the line above, since 7 Nov 2026)
+   takes no room: an empty note would still leave its margin under the row. */
 .fc-line-note:empty { display: none; }
+/* The rate and what the amount typed costs, above the note (Federico, 7 Nov 2026). The same quiet
+   size and muted colour as the note — --fc-text-2 is the text colour used for it, 4.5:1 or better
+   on this surface; the figures stay readable without shouting over the quantity box. */
+.fc-line-cost { margin: 6px 0 0; font-size: .72rem; color: var(--fc-text-2); font-family: var(--fc-font-mono); overflow-wrap: anywhere; }
+.fc-line-cost:empty { display: none; }
+/* Close under the money only when there IS money: an empty (hidden) one keeps the note's 6px. */
+.fc-line-cost:not(:empty) + .fc-line-note { margin-top: 2px; }
 /* The dough weighed before the oven and after, under a recipe line — moved here from
    the recipe editor on 13 Sep 2026. Two boxes side by side, as they were there; the
    answer under them reads as a statement, not as a footnote. */
@@ -215,10 +242,21 @@ select.fc-input, .fc-select {
 .fc-weigh-cell { display: block; min-width: 0; }
 .fc-weigh-label { display: block; font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); margin-bottom: 4px; }
 .fc-weigh-row { display: flex; align-items: center; gap: 6px; }
-.fc-weigh-row .fc-input { min-width: 0; }
+.fc-weigh-row .fc-input { min-width: 0; padding: 0 8px; }
 .fc-weigh-unit { font-size: .8rem; color: var(--fc-text-2); flex: none; }
 .fc-weigh-out { margin: 6px 0 0; font-size: .78rem; color: var(--fc-text); }
-.fc-weigh-warn { margin: 4px 0 0; font-size: .74rem; color: var(--fc-danger); }
+/* ⚠️ RED, AND READABLE: a wrong pair is KEPT, so its warning has to stay seen (Federico,
+   Nov 2026: «deve restare rosso»). --fc-danger (#A24A38) on the card's --surface (#FFFDF7) is
+   5.8:1, above the 4.5:1 small text needs; semibold, because a thin red line under two boxes
+   is the thing that was missed. The box itself is framed in red by .fc-invalid. */
+.fc-weigh-warn { margin: 4px 0 0; font-size: .8rem; font-weight: 600; color: var(--fc-danger); }
+.fc-weigh-row .fc-invalid { box-shadow: 0 0 0 1px var(--fc-danger); }
+/* The read view's cooked weight of a wrong pair: the same red, with no box to frame. */
+.fc-read-row dd.fc-read-invalid { color: var(--fc-danger); }
+/* «Finished product, no weight loss»: the shared .set-row inside the «Composto da» card. The
+   card already has its own padding, so the row's 16px side padding would double it. */
+.fc-card .fc-weighs .fc-noloss { padding: 10px 2px; border-top: 1px dashed var(--fc-border); }
+.fc-weighs .fc-noloss + .fc-weigh { margin-top: 0; }
 .fc-weigh-shared { margin-top: 4px; }
 .fc-weigh-warn[hidden],
 .fc-weigh-shared[hidden] { display: none; }
@@ -446,6 +484,61 @@ select.fc-input, .fc-select {
 .fc-guide-sources ul { margin: 4px 0 0; padding-left: 18px; }
 .fc-guide-sources a { color: var(--crust-ink); overflow-wrap: anywhere; }
 
+/* ── Products from the recipe book (28 Oct 2026) ───────────────────────────────
+   The box above the list, and the choice screen it opens. */
+.fc-frombook {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  background: var(--fc-surface);
+  border: 1px solid var(--fc-border);
+  border-radius: var(--radius-sm);
+}
+.fc-frombook-head { display: flex; align-items: center; gap: 10px; }
+.fc-frombook-icon { flex: none; display: flex; align-items: center; color: var(--fc-brand); }
+.fc-frombook-text { margin: 0; font-size: .9rem; font-weight: 600; color: var(--fc-text); }
+.fc-frombook-sub { margin: 2px 0 0; font-size: .8rem; color: var(--fc-text-2); }
+.fc-frombook .empty-action { margin-top: 0; width: 100%; min-height: 44px; }
+
+.fc-pick-intro { margin: 0; font-size: .86rem; color: var(--fc-text-2); line-height: 1.4; }
+.fc-pick-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-top: 4px; }
+.fc-pick-head .fc-link { align-self: auto; min-height: 44px; padding: 0 4px; }
+.fc-pick-group {
+  margin: 4px 0 0;
+  font-family: var(--fc-font-mono);
+  font-size: .72rem;
+  font-weight: 400;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--text-4);
+}
+.fc-pick-head .fc-pick-group { margin: 0; }
+.fc-pick-list { border: 1px solid var(--fc-border); border-radius: var(--radius-sm); background: var(--fc-surface); overflow: hidden; }
+.fc-pick-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--fc-border);
+  cursor: pointer;
+}
+.fc-pick-row:first-child { border-top: 0; }
+.fc-pick-row input { flex: none; width: 24px; height: 24px; margin: 0; accent-color: var(--brand); }
+.fc-pick-text { display: flex; flex-direction: column; min-width: 0; }
+.fc-pick-name { font-size: .92rem; font-weight: 600; color: var(--fc-text); overflow-wrap: anywhere; }
+.fc-pick-meta { font-size: .76rem; color: var(--fc-text-2); }
+.fc-frombook-bar {
+  flex: none;
+  /* max(): on a phone --app-gutter is 0 and the button would touch both edges. */
+  padding: 12px max(16px, var(--app-gutter)) calc(16px + env(safe-area-inset-bottom));
+  background: var(--fc-surface);
+  border-top: 1px solid var(--fc-border);
+}
+.fc-frombook-bar .empty-action { margin: 0; width: 100%; min-height: 48px; }
+.fc-frombook-bar .empty-action:disabled { opacity: .5; box-shadow: none; cursor: default; }
+
 /* ── Margin history ───────────────────────────────────────────────────────── */
 .fc-hist-row {
   display: flex;
@@ -537,3 +630,171 @@ select.fc-input, .fc-select {
     --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));
   }
 }
+
+/* Cost per 1 kg: a closed box under the answer, one line per ingredient */
+.fc-perkg {
+  border: 1px solid var(--fc-border);
+  border-radius: var(--fc-radius);
+  background: var(--fc-surface);
+}
+.fc-perkg[hidden] { display: none; }
+.fc-perkg-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 14px;
+  cursor: pointer;
+  list-style: none;
+  font-size: .88rem;
+  font-weight: 600;
+}
+.fc-perkg-summary::-webkit-details-marker { display: none; }
+.fc-perkg-summary:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
+.fc-perkg-sum { display: flex; align-items: center; gap: 6px; }
+.fc-perkg-num { font-variant-numeric: tabular-nums; font-weight: 600; }
+.fc-perkg-chevron { display: flex; align-items: center; color: var(--fc-text-2); }
+.fc-perkg[open] .fc-perkg-chevron { transform: rotate(180deg); }
+.fc-perkg-body { padding: 0 14px 12px; }
+.fc-perkg-list { list-style: none; margin: 0; padding: 0; }
+.fc-perkg-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--fc-border);
+}
+.fc-perkg-name { flex: 1 1 0; min-width: 0; overflow-wrap: anywhere; font-size: .88rem; color: var(--fc-text); }
+.fc-perkg-cost { font-size: .88rem; font-variant-numeric: tabular-nums; text-align: right; color: var(--fc-text); }
+.fc-perkg-detail { flex: 1 0 100%; font-size: .74rem; color: var(--fc-text-2); }
+.fc-perkg-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--fc-border);
+  font-weight: 700;
+  font-size: .9rem;
+}
+.fc-perkg-body .fc-note, .fc-perkg-body .fc-answer-partial { margin-top: 8px; }
+
+/* Search above the list (7 Nov 2026) — the catalogue's search box, in this page's colours. */
+.fc-search { position: relative; }
+.fc-search[hidden] { display: none; }
+.fc-search > span { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); display: flex; color: var(--fc-text-2); }
+.fc-search-input {
+  width: 100%; min-height: 44px; box-sizing: border-box; padding: 12px 14px 12px 40px; font-size: 1rem;
+  font-family: var(--fc-font); color: var(--fc-text); background: var(--fc-surface);
+  border: 1px solid var(--fc-border); border-radius: 12px; outline: none;
+}
+/* An outline, not a color-mix() ring: the lab tablet's Chrome 101 has no color-mix. */
+.fc-search-input:focus-visible { border-color: var(--fc-accent); outline: 2px solid var(--fc-accent); outline-offset: 1px; }
+
+/* The product preview: the phone's dialog and the top of the card (7 Nov 2026). */
+.fc-summary { padding: 12px 14px; border: 1px solid var(--fc-border); border-radius: var(--fc-radius); background: var(--fc-surface); }
+.fc-summary[hidden] { display: none; }
+.fc-preview { display: flex; flex-direction: column; }
+.fc-preview-caption { margin: 0 0 6px; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--fc-text-2); font-family: var(--fc-font-mono); }
+.fc-preview-list { margin: 0; }
+.fc-preview-row { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 6px 0; border-top: 1px solid var(--fc-border); }
+.fc-preview-row:first-child { border-top: 0; }
+.fc-preview-row dt { margin: 0; font-size: .85rem; color: var(--fc-text-2); min-width: 0; }
+.fc-preview-row dd { margin: 0; font-size: .95rem; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.fc-preview-row dd.fc-preview-wrap { white-space: normal; }
+/* «Food cost» is two short words: kept on one line, its figure beside it wraps instead (296px). */
+.fc-preview-fc dt { white-space: nowrap; }
+.fc-preview-ideal dd { font-size: 1.05rem; }
+.fc-preview-ideal dt { color: var(--fc-text); font-weight: 600; }
+.fc-preview .fc-note, .fc-preview .fc-answer-partial { margin-top: 6px; }
+/* Under the ideal price: the same price without VAT, and the target it is for. */
+.fc-preview-sub { margin: 0 0 2px; font-size: .78rem; color: var(--fc-text-2); text-align: right; }
+/* «Dettagli»: the rest of the figures, closed until tapped (Federico, 7 Nov 2026). The same
+   summary shape as «Costo per 1 kg»; a 44px row so a finger hits it. */
+.fc-preview-more { margin-top: 8px; border-top: 1px solid var(--fc-border); }
+.fc-preview-more-btn {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%;
+  min-height: 44px; padding: 0; border: 0; background: none; cursor: pointer; text-align: left;
+  font-family: var(--fc-font); font-size: .85rem; font-weight: 600; color: var(--fc-text);
+}
+.fc-preview-more-btn:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
+.fc-preview-more-chevron { display: flex; align-items: center; color: var(--fc-text-2); }
+.fc-preview-more-btn[aria-expanded="true"] .fc-preview-more-chevron { transform: rotate(180deg); }
+.fc-preview-more .fc-preview-list[hidden] { display: none; }
+.fc-preview-more .fc-preview-row:first-child { border-top: 1px solid var(--fc-border); }
+/* «Quali?»: a small, low-key text button right under the partial-price warning, opening the list
+   of what has no price. A 44px-high target like «Dettagli», but quiet: underlined text, no frame. */
+.fc-preview-which { display: flex; flex-direction: column; align-items: flex-start; }
+.fc-preview-which-btn {
+  display: inline-flex; align-items: center; min-height: 44px; min-width: 44px; padding: 0 4px; margin-left: -4px;
+  border: 0; background: none; cursor: pointer; font-family: var(--fc-font); font-size: .78rem; font-weight: 600;
+  color: var(--fc-text-2); text-decoration: underline; text-underline-offset: 2px;
+}
+.fc-preview-which-btn:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
+.fc-preview-which-list { margin: 0 0 4px; padding-left: 18px; font-size: .78rem; color: var(--fc-text); }
+.fc-preview-which-list[hidden] { display: none; }
+.fc-preview-which-list li { margin-top: 2px; overflow-wrap: anywhere; }
+.fc-preview-which-name { font-weight: 600; }
+.fc-preview-which-why { margin-left: .35em; color: var(--fc-text-2); }
+.fc-preview-missing-title { margin: 8px 0 0; font-size: .78rem; font-weight: 600; color: var(--fc-text); }
+/* ⚠️ THE WHOLE DIALOG SCROLLS on a short phone, never the panel alone: a scrolling panel holds no
+   button, so a keyboard could not reach it (axe, 296px). This page's dialogs only — foodcost.css
+   is loaded nowhere else — and its children keep their height instead of being squeezed. */
+.app-dialog { overflow-y: auto; }
+.app-dialog > * { flex-shrink: 0; }
+.app-dialog .fc-preview { margin-bottom: 18px; }
+
+/* «Scheda completa» (Federico, 7 Nov 2026): ONE box under the summary, holding a framed card per
+   section. Read: a <details>, closed until tapped (the summary row is shaped like «Costo per 1 kg»,
+   a 44px row, the chevron on the right). Edit: the same box as a plain section, never collapsible. */
+.fc-full { border: 1px solid var(--fc-border); border-radius: var(--fc-radius); background: var(--fc-surface); }
+.fc-full-summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 44px; margin: 0; padding: 0 14px; cursor: pointer; list-style: none;
+  font-size: .88rem; font-weight: 600; color: var(--fc-text);
+}
+.fc-full--edit > .fc-full-summary { cursor: default; }
+.fc-full-summary::-webkit-details-marker { display: none; }
+.fc-full-summary:focus-visible { outline: 2px solid var(--fc-accent); outline-offset: 2px; }
+/* ⚠️ ONLY THE BOX'S OWN CHEVRON (`>`): «Costo per 1 kg» inside it uses the same class, and a
+   descendant rule turned its arrow up while that box was still closed (seen on a screenshot). */
+.fc-full[open] > .fc-full-summary .fc-perkg-chevron { transform: rotate(180deg); }
+.fc-full-body {
+  display: flex; flex-direction: column; gap: 12px; padding: 12px;
+  border-top: 1px solid var(--fc-border); background: var(--fc-ground);
+  border-radius: 0 0 var(--fc-radius) var(--fc-radius);
+}
+.fc-card {
+  display: flex; flex-direction: column; gap: 10px; min-width: 0;
+  padding: 12px 14px; border: 1px solid var(--fc-border); border-radius: var(--fc-radius); background: var(--fc-surface);
+}
+.fc-card .fc-section { margin: 0; }
+/* The lines were framed on their own; inside a card the card is the frame. */
+.fc-card .fc-madeof { padding: 0; border: 0; background: none; }
+.fc-card .fc-madeof .fc-add-row { background: var(--fc-surface); }
+.fc-subsection { margin: 4px 0 0; font-size: .78rem; font-weight: 600; color: var(--fc-text); }
+.fc-subsection[hidden], .fc-read-box[hidden] { display: none; }
+.fc-full-body .fc-actions { margin-top: 0; }
+
+/* The read view: label left (muted), value right — the preview panel's rows. A long value wraps
+   (296px), it never overflows. */
+.fc-read { margin: 0; }
+.fc-read-row {
+  display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 4px 12px;
+  padding: 6px 0; border-top: 1px solid var(--fc-border);
+}
+.fc-read-row:first-child { border-top: 0; }
+.fc-read-row dt { margin: 0; flex: 1 1 8rem; min-width: 0; font-size: .85rem; color: var(--fc-text-2); overflow-wrap: anywhere; }
+.fc-read-row dt.missing { color: var(--fc-danger); }
+.fc-read-row dd {
+  margin: 0; min-width: 0; max-width: 100%; font-size: .95rem; font-weight: 600;
+  font-variant-numeric: tabular-nums; text-align: right; overflow-wrap: anywhere;
+}
+.fc-read-row dd.fc-read-note { flex: 1 0 100%; text-align: left; font-weight: 400; font-size: .72rem; margin: 0; }
+.fc-read-empty { margin: 0; font-size: .85rem; font-weight: 400; color: var(--fc-text-2); }
+.fc-read-line { margin: 0; font-size: .85rem; color: var(--fc-text); }
+.fc-read-block { display: flex; flex-direction: column; gap: 6px; }
+.fc-read-box { display: flex; flex-direction: column; gap: 8px; min-width: 0; }

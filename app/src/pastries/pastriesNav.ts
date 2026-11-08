@@ -1,4 +1,6 @@
 import { useCallback } from 'react';
+import { isWeekday } from '@mise/shared/pastries-model';
+import type { Weekday } from '@mise/shared/pastries-model';
 import { useLocation, useNavigate } from 'react-router';
 import { KEEP_FOCUS } from '../shell/Page';
 
@@ -9,6 +11,25 @@ export const FROM_DAY = { ...KEEP_FOCUS, fromDay: true } as const;
 
 export function cameFromDay(state: unknown): boolean {
   return typeof state === 'object' && state !== null && 'fromDay' in state;
+}
+
+// What «Copy day» puts in the navigation `state` beside FROM_DAY: the day whose list pre-fills the
+// editor, and the work date on which the person already said «yes, edit this recorded day» (null if
+// the target was not recorded or they were never asked). The date, not a flag: it lives in the
+// browser's history entry, so a reload tomorrow must ask again.
+export type CopyState = { readonly from: Weekday; readonly editAgreedOn: string | null };
+
+// ⚠️ THE STATE IS READ AS UNTRUSTED: a history entry survives reloads and can be anything. A shape
+// that is not exactly this one means «no copy», an ordinary edit.
+export function copyOf(state: unknown): CopyState | null {
+  if (typeof state !== 'object' || state === null || !('copy' in state)) return null;
+  const copy = state.copy;
+  if (typeof copy !== 'object' || copy === null) return null;
+  const from = 'from' in copy ? copy.from : undefined;
+  const editAgreedOn = 'editAgreedOn' in copy ? copy.editAgreedOn : undefined;
+  if (!isWeekday(from)) return null;
+  if (editAgreedOn !== null && typeof editAgreedOn !== 'string') return null;
+  return { from, editAgreedOn };
 }
 
 // How a screen one level down (the editor, Records) steps back up.

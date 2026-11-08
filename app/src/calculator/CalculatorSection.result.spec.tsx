@@ -248,27 +248,100 @@ describe('a recipe taken from the catalogue', () => {
     expect(within(card).queryByText(/still loading/)).not.toBeInTheDocument();
   });
 
+  // ⚠️ A TAB THAT CANNOT BE CALCULATED SAYS WHY ON THE TAB ITSELF, in a status line FIRST in the panel, and closes its
+  // result card (current app 6713adab, 1342cb79, 8 Nov 2026 port): the card would only repeat the sentence.
+  // The tab's panel: the closest element around the «Total dough» box with a status line as a direct child. Its FIRST
+  // child must be that line.
+  const problemLine = () => {
+    const statuses = main().queryAllByRole('status', { hidden: true });
+    let panel = main().getByLabelText('Total dough (g)').parentElement;
+    while (panel && !statuses.some(status => status.parentElement === panel)) panel = panel.parentElement;
+    const line = panel?.firstElementChild as HTMLElement | null | undefined;
+    expect(line?.getAttribute('role'), 'the first thing in the panel is the problem line, a status').toBe('status');
+    expect(line?.hasAttribute('hidden'), 'never hidden: a live region is in the page before it speaks').toBe(false);
+    return line as HTMLElement;
+  };
+
   it('says it cannot be read, with no number, when the recipe is gone', async () => {
     await openLinked(null);
-    const card = await screen.findByRole('region', { name: 'Linked dough' }, LOAD);
-    expect(await within(card).findByText(/cannot be read from the catalogue right now/, undefined, LOAD)).toBeInTheDocument();
-    expect(within(card).queryByText(/still loading/)).not.toBeInTheDocument();
-    expect(within(card).queryByRole('listitem')).not.toBeInTheDocument();
-    expect(within(card).queryByText(/g raw/)).not.toBeInTheDocument();
+    await waitFor(() => { expect(problemLine()).toHaveTextContent(/cannot be read from the catalogue right now/); }, LOAD);
+    expect(problemLine()).toBeVisible();
+    expect(main().queryByRole('region', { name: 'Linked dough' }), 'the result card is closed').not.toBeInTheDocument();
+    expect(main().queryByText(/still loading/)).not.toBeInTheDocument();
+    expect(main().queryByText(/g raw/)).not.toBeInTheDocument();
   });
 
   it('says so when it has no ingredients, and bakes nothing', async () => {
     await openLinked([]);
-    const card = await screen.findByRole('region', { name: 'Linked dough' }, LOAD);
-    expect(await within(card).findByText('That catalogue recipe has no ingredients yet.', undefined, LOAD)).toBeInTheDocument();
-    expect(within(card).queryByText(/Total dough/)).not.toBeInTheDocument();
+    await waitFor(() => { expect(problemLine()).toHaveTextContent('That catalogue recipe has no ingredients yet.'); }, LOAD);
+    expect(main().queryByRole('region', { name: 'Linked dough' })).not.toBeInTheDocument();
+    expect(main().queryByText(/Total dough$/)).not.toBeInTheDocument();
   });
 
   it('NAMES the row that has no weight, and bakes nothing', async () => {
     await openLinked([...GOOD, { rid: 'r-pinch', label: 'Pinch of salt', grams: 0, unit: 'pinch' }]);
+    await waitFor(() => { expect(problemLine()).toHaveTextContent(/“Pinch of salt” has no weight/); }, LOAD);
+    expect(main().queryByRole('region', { name: 'Linked dough' })).not.toBeInTheDocument();
+    expect(main().queryByRole('listitem')).not.toBeInTheDocument();
+  });
+
+  it('the problem line is the FIRST thing in the panel, a status, and says it before anything is typed', async () => {
+    window.localStorage.setItem('calculator-config', JSON.stringify(configOf({ recipes: [LINKED], clients: [] })));
+    const source = fakeCalculatorSource({
+      config: configOf({ recipes: [LINKED], clients: [] }),
+      recipes: [CATALOGUE([...GOOD, { rid: 'r-oil', label: 'Olio', unit: 'to taste' }])],
+    });
+    renderCalculator('/calculator/linked', { source });
+    await main().findByLabelText('Total dough (g)', undefined, LOAD);
+    await waitFor(() => { expect(problemLine()).toHaveTextContent(/“Olio” has no weight/); }, LOAD);
+    expect(problemLine(), 'first: below a long list of orders it would be off-screen').toBeVisible();
+    expect(main().queryByRole('region', { name: 'Linked dough' })).not.toBeInTheDocument();
+  });
+
+  it('says nothing while the recipe is still on its way (not «it is gone»)', async () => {
+    await openLinked(GOOD, true);
+    await screen.findByRole('region', { name: 'Linked dough' }, LOAD);
+    expect(problemLine(), 'empty, never hidden: a live region present before it speaks').toBeEmptyDOMElement();
+  });
+
+  it('says nothing for a tab that calculates, nor for a tab with its own ingredients', async () => {
+    await openLinked(GOOD);
+    await within(await screen.findByRole('region', { name: 'Linked dough' }, LOAD)).findByText('Flour', undefined, LOAD);
+    expect(problemLine(), 'empty, never hidden: a live region present before it speaks').toBeEmptyDOMElement();
+  });
+
+  it('a tab with its own ingredients and no rows yet says nothing (it is still being written in Settings)', async () => {
+    const own = { ...BRIOCHE, id: 'own', name: 'Own', ingredients: [] };
+    window.localStorage.setItem('calculator-config', JSON.stringify(configOf({ recipes: [own], clients: [] })));
+    renderCalculator('/calculator/own', { source: fakeCalculatorSource({ config: configOf({ recipes: [own], clients: [] }) }) });
+    await main().findByLabelText('Total dough (g)', undefined, LOAD);
+    expect(problemLine(), 'empty, never hidden: a live region present before it speaks').toBeEmptyDOMElement();
+  });
+
+  it('closes the result card when the recipe becomes impossible to calculate (no old title over nothing)', async () => {
+    const { source } = await openLinked(GOOD);
+    await within(await screen.findByRole('region', { name: 'Linked dough' }, LOAD)).findByText('Flour', undefined, LOAD);
+    act(() => {
+      source.recipes.set('cat-1', CATALOGUE([...GOOD, { rid: 'r-pinch', label: 'Pinch of salt', grams: 0, unit: 'pinch' }]));
+      source.push();
+    });
+    await waitFor(() => { expect(problemLine()).toHaveTextContent(/“Pinch of salt” has no weight/); }, LOAD);
+    expect(main().queryByRole('region', { name: 'Linked dough' })).not.toBeInTheDocument();
+  });
+
+  // ⚠️ A RECIPE WRITTEN IN LITRES CALCULATES, 1 ml = 1 g (current app e7f3dac0). It used to refuse the whole tab
+  // («“Acqua” has no weight») while the recipe book counted the same litres in its total and its Food cost.
+  it('a recipe with litre and ml rows calculates, 1 ml = 1 g', async () => {
+    await openLinked([
+      { rid: 'r-flour', label: 'Flour', grams: 1, unit: 'kg' },
+      { rid: 'r-water', label: 'Water', grams: 0.6, unit: 'l' },
+      { rid: 'r-malt', label: 'Malt', grams: 400, unit: 'ml' },
+    ]);
     const card = await screen.findByRole('region', { name: 'Linked dough' }, LOAD);
-    expect(await within(card).findByText(/“Pinch of salt” has no weight/, undefined, LOAD)).toBeInTheDocument();
-    expect(within(card).queryByRole('listitem')).not.toBeInTheDocument();
+    await within(card).findByText('Flour', undefined, LOAD);
+    // 1000 g of dough from 1000 : 600 : 400.
+    expect(within(card).getAllByRole('listitem').map(row => row.textContent)).toEqual(['Flour500 g', 'Water300 g', 'Malt200 g']);
+    expect(problemLine(), 'empty, never hidden: a live region present before it speaks').toBeEmptyDOMElement();
   });
 
   it('says the unweighable row in Italian too', async () => {

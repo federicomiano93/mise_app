@@ -66,6 +66,12 @@ export interface RecipesSource {
   // have Settings open, and a whole write would take the other one's paper size with it. The venue stamp is applied
   // here. Local-first on Firestore's side (the promise settles when the SERVER answers); REJECTS when refused.
   saveLabelConfig(patch: Readonly<Record<string, unknown>>): Promise<void>;
+  // The venue's recipe categories are written ONE WORD AT A TIME, as a merge of config/labels with arrayUnion / arrayRemove:
+  // a phone holding an old copy of the list, or none, must never replace every word of the venue with what it happens to know
+  // (the same reasoning as favouriteSuppliers in Orders). The venue stamp is applied here. Same promise contract as
+  // saveLabelConfig. `removeRecipeCategoryWords` takes every stored spelling of the word, as removed in one write.
+  addRecipeCategoryWord(word: string): Promise<void>;
+  removeRecipeCategoryWords(words: readonly string[]): Promise<void>;
   // The logo of the «with logo» image label (label-assets/logo) as stored (null when there is none), live. Same contract
   // as watchLabelConfig. ⚠️ WATCHED ONLY BY THE SCREENS THAT SHOW IT (the label screen and the label Settings), never by
   // the section: it is tens of kilobytes that every other recipe screen has no use for (P14).
@@ -264,6 +270,25 @@ export function createFirestoreRecipesSource(
         if (key in out && out[key] === null) out[key] = kit.fs.deleteField();
       }
       await kit.fs.setDoc(kit.fs.doc(kit.db, configPath, LABELS_DOC), { ...out, bakery: locationId }, { merge: true });
+    },
+
+    // ⚠️ arrayUnion / arrayRemove ON THE ONE WORD, merged, stamped like saveLabelConfig: see the interface.
+    addRecipeCategoryWord: async word => {
+      const kit = await firestore();
+      await kit.fs.setDoc(
+        kit.fs.doc(kit.db, configPath, LABELS_DOC),
+        { recipeCategories: kit.fs.arrayUnion(word), bakery: locationId },
+        { merge: true },
+      );
+    },
+
+    removeRecipeCategoryWords: async words => {
+      const kit = await firestore();
+      await kit.fs.setDoc(
+        kit.fs.doc(kit.db, configPath, LABELS_DOC),
+        { recipeCategories: kit.fs.arrayRemove(...words), bakery: locationId },
+        { merge: true },
+      );
     },
 
     // ⚠️ QUIET (warn), like the label profile: a refused or failed read is a label that says its logo is missing.

@@ -44,7 +44,7 @@ test('the append-only price history is never in the batch — the rules forbid d
 test('the two deletes the batch relies on are still granted by the roles the app mirrors', () => {
   const rules = read('firestore.rules');
   const prices = rules.slice(rules.indexOf('match /ingredient-prices/{id}'), rules.indexOf('match /ingredients/{id}'));
-  assert.match(prices, /allow delete: if canManage\(lid, 'foodcost'\);/, 'price delete = canManage + Food cost = mayWritePrices()');
+  assert.match(prices, /allow delete: if managesPrices\(lid\);/, 'price delete = whoever runs the place + Food cost on = mayWritePrices()');
   const ing = rules.slice(rules.indexOf('match /ingredients/{id}'), rules.indexOf('match /prices/{priceId}'));
   assert.match(ing, /allow delete: if canManage\(lid, 'orders'\);/, 'ingredient delete = canManage + Orders');
 });
@@ -158,7 +158,7 @@ test('Orders hands the action in only to an owner or manager, and the draft row 
   const draftJs = codeOf(read('js/orders/draft.js'));
   assert.match(draftJs, /export function dropDeletedIngredientFromDraft\(ingredientId\) \{\s*clearIngredientFromDraft\(ingredientId\)\.catch\(err => \{\s*console\.error\(/,
     'a failed clean-up is logged, never reported as a failed delete');
-  assert.match(draftJs, /export function clearIngredientFromDraft\(ingredientId\) \{\s*const paths = \[draftEntryPath\(ingredientId\)\];\s*return clearFields\(COLLECTIONS\.drafts, DRAFT_ID, paths,/);
+  assert.match(draftJs, /export function clearIngredientFromDraft\(ingredientId\) \{\s*const paths = \[draftEntryPath\(ingredientId\)\];\s*forgetRestoredPaths\(paths\);[\s\S]{0,300}?return clearFields\(COLLECTIONS\.drafts, DRAFT_ID, paths,/);
   assert.match(draftJs, /forgetKnown\(paths\);/, 'the autosave baseline forgets it too, or it is written straight back');
 });
 

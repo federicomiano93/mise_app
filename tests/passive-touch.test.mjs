@@ -66,7 +66,7 @@ test('pages without the magnifier keep the browser pinch-zoom', () => {
     .filter((f) => pageScripts(readFileSync(join(ROOT, f), 'utf8')).includes('js/hold-to-zoom.js'))
     .sort();
   assert.deepEqual(withZoom, [
-    'calculator.html', 'catalogue.html', 'index.html', 'orders.html', 'pastries.html', 'suppliers.html',
+    'calculator.html', 'catalogue.html', 'clients.html', 'index.html', 'orders.html', 'pastries.html', 'suppliers.html',
   ]);
   for (const page of ['foodcost.html', 'inventory.html', 'order.html']) {
     const html = readFileSync(join(ROOT, page), 'utf8');

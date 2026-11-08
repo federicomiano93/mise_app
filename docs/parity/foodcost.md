@@ -209,3 +209,36 @@ reason.
 - **Messages** are announced in a status region that exists before it changes, instead of a toast.
 - **The chooser and the VAT guide are dialogs** (focus kept inside, Esc closes), not overlays drawn
   over the page.
+
+## «Finished product, no weight loss» as built (8 Nov 2026)
+
+Port of the current app's step 1 switch (`bb1e0ede`, item 4 of `docs/mise2-port-owed.md`). Before it a Mise 2 save of a product
+(a WHOLE write) removed the flag and the recipes' oven loss started counting again.
+- `noWeightLoss` is read only as a literal `true` (`normalizeProduct`) and written only when true; switching it off removes the key.
+- The cost of a recipe line lays the recipe's own loss aside for that product alone (`batchTotals`); the recipe keeps its number.
+- The product form shows the switch, with its hint, only while the product has a recipe line. While it is on no weighing box is
+  drawn, nothing typed earlier is written onto the recipes, and the live figures are the lossless ones. Toggling it on a saved
+  product records a margin point. A finished product is not counted in «it changes N other products too» (`otherProductsUsing`).
+- Still owed (section E of the checklist): the per-kilo block, the per-line rate and the read view, which also honour the flag in
+  the current app.
+
+## Recipe line in grams as built (8 Nov 2026)
+
+Port of the current app's #488 (`a7f4c75d`, item 27 of `docs/mise2-port-owed.md`), with the g/kg select on recipe lines it needs
+from step 1 (#455, item 21). On 8 Nov 2026 production had 16 «Made of» lines in 11 products with grams typed into a box that
+opened on kilos: every one of those costs ×1000.
+- A recipe line OPENS IN GRAMS, every time (3.233 kg reads «3233»), and offers g or kg (`KILO_LINE_UNITS`); it is still stored as
+  `qtyKg`, in kilos, six decimals at most (`shared/src/line-quantity.ts`, a full port, paired). The unit lives only in the working
+  copy (`productEditorModel.ts`: a recipe line has `unit`, and `recipeLineKg` is its only way to kilos); it is never saved.
+- Switching the unit KEEPS THE TYPED NUMBER and changes what it means (522 g → 522 kg): the stored kilos change and the form is
+  dirty. On an empty box nothing changes, so nothing is marked and Back asks nothing (the current app's `kilos === entry.qtyKg`).
+- A line asking for more than 20 whole batches of its recipe (`tooMuchOfRecipe`, `wholeRecipeKg`: the weighable rows less the
+  oven loss) gets a note, FIRST under the line: «{qty}, but the recipe makes {whole}: did you mean {grams}?», the three weights
+  through `fcWeight` (two decimals, the venue's layout; `shared/src/fc-number.ts` ports only `fcNumber` and `fcWeight`). It never
+  blocks Save. A recipe of pieces only never warns.
+- The quantity box of a recipe line is named «Quantity» like the current app's (it was «Kilos»; `fc.aria.kilos` is gone).
+- Differences, on purpose: Mise 2's other notes under a recipe line stay as they were (no price / partly priced; the current app's
+  per-line money is item 26). The box keeps Mise 2's width (the current app's `9ch` width is item 21's, deferred). A typed comma is
+  a decimal mark (Mise 2's `readQty`); the current app's number box takes no comma.
+- Not ported (deferred until after the switch): the rest of item 21 (empty raw box, kept wrong weighings in red, wider boxes) and
+  items 22–26 and 28.

@@ -45,6 +45,18 @@
   outline-offset: 2px;
 }
 
+/* The title and the state wrap together, the chevron outside them: when the row is too narrow (296px) the state drops whole
+   onto a second line instead of breaking inside its pill or pushing the chevron off the card. A title longer than the whole
+   line («VALORI NUTRIZIONALI») still wraps by words. On the tablet it is still one row. */
+.words {
+  display: flex;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s1) var(--s3);
+  min-width: 0;
+}
+
 .title {
   color: var(--ink-2);
   font-size: var(--fs-sm);

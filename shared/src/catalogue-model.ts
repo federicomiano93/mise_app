@@ -598,7 +598,9 @@ export function nonWeighableLabels(recipe: unknown): unknown[] {
 
 // Why the Calculator could not follow a recipe, asked of the Calculator's OWN check (`resolveRecipe` on a tab linked to the
 // recipe) so the two can never disagree: null (it can), 'empty' (no rows), or the first row it cannot follow — 'notByWeight'
-// (pieces, spoons, «to taste», millilitres, litres…) or 'noAmount' (a row in grams or kilos with nothing in it). NEW IN MISE 2.
+// (pieces, spoons, a pinch, «to taste») or 'noAmount' (a row in a unit the Calculator weighs — g, kg, mg, l, dl, cl, ml — with
+// nothing in it). NEW IN MISE 2. ⚠️ Since 8 Nov 2026 the Calculator weighs litres and millilitres too (1 ml = 1 g, the current
+// app's e7f3dac0), so a recipe written in them is accepted here, and an empty one of them is «no amount», never «not by weight».
 export type CalculatorRefusal = { kind: 'empty' } | { kind: 'notByWeight' | 'noAmount'; row: string };
 
 export function calculatorRefusal(recipe: unknown): CalculatorRefusal | null {
@@ -608,7 +610,8 @@ export function calculatorRefusal(recipe: unknown): CalculatorRefusal | null {
   const rows = ((recipe as { ingredients?: unknown } | null)?.ingredients ?? []) as ({ label?: unknown; unit?: unknown } | null)[];
   const blocker = rows.find(r => r && String(r.label || '').trim() && !isWeighableRow(r));
   const unit = String(blocker?.unit || '').trim().toLowerCase();
-  return { kind: unit === '' || unit === 'g' || unit === 'gr' || unit === 'kg' ? 'noAmount' : 'notByWeight', row: resolved.problemRow };
+  const unitKey = unit === '' || unit === 'gr' ? 'g' : unit;
+  return { kind: isWeighableUnit(unitKey) ? 'noAmount' : 'notByWeight', row: resolved.problemRow };
 }
 
 // Add or update an imported recipe inside a config's recipes[]. The tab that already stands for the recipe is, in order: the

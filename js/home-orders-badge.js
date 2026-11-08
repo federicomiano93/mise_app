@@ -16,7 +16,7 @@
 // It reuses the Orders data layer + pure alert engine, so there is no duplicated
 // logic to drift out of sync.
 
-import { getCollection, getHistoryForDay } from './orders/firebase-orders.js';
+import { getCollection, getHistoryForDay, getDocOnce, COLLECTIONS } from './orders/firebase-orders.js';
 import { computeAlerts, maybeNotify, isReminderDue } from './orders/notifications.js';
 import { suppliersStillToOrder } from './orders/reminders.js';
 import { onSession } from './firebase.js';
@@ -37,9 +37,10 @@ function todayISO() {
 async function showOrdersHome() {
   try {
     const today = todayISO();
-    const [suppliers, todayHistory] = await Promise.all([
+    const [suppliers, todayHistory, skipped] = await Promise.all([
       getCollection('suppliers'),
       getHistoryForDay(today),
+      readSkipped(),
     ]);
 
     // Count what is STILL to order, not what the calendar says is due. The badge used
@@ -47,7 +48,9 @@ async function showOrdersHome() {
     // on the Home screen contradicted the Orders screen, which ticks them off — and a
     // reminder that stays lit after you have done the job is a reminder people learn
     // to ignore.
-    const stillToOrder = suppliersStillToOrder(suppliers, todayHistory, today);
+    // …nor a supplier closed as «non ordinato» today: nothing was needed, so there is nothing
+    // to remind anybody of.
+    const stillToOrder = suppliersStillToOrder(suppliers, todayHistory, today, skipped);
 
     // Only the primary "place the order" alert drives the Home — holiday/conflict
     // notices are informational and stay on the Orders page.
@@ -63,6 +66,18 @@ async function showOrdersHome() {
   } catch (err) {
     // Offline / not signed in / rules — no signal, never blocks the Home screen.
     console.warn('Orders home signal skipped:', err);
+  }
+}
+
+// The suppliers closed as «non ordinato» (drafts/current.skipped) — one document read. ⚠️ A
+// failed read must not cost the badge: without it the Home counts as it always did.
+async function readSkipped() {
+  try {
+    const draft = await getDocOnce(COLLECTIONS.drafts, 'current');
+    return draft?.skipped || null;
+  } catch (err) {
+    console.warn('Orders home signal: the closed suppliers could not be read:', err);
+    return null;
   }
 }
 
@@ -134,7 +149,7 @@ onSession(session => {
   // a page the gate then bounces back from reads as a broken app. The badge needs no
   // guard of its own — its card is already gone — but stopping here also spares the
   // two reads nobody would see.
-  if (!cardVisibleTo(session.location, session.canManage, 'orders')) return;
+  if (!cardVisibleTo(session.location, session.canManage, 'orders', session.role)) return;
   started = true;
   showOrdersHome();
 });

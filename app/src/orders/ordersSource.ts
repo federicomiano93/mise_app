@@ -77,6 +77,14 @@ export interface OrdersSource {
   // `updatedAt` — an update, never a set: a merge cannot delete a nested key, and only the named paths go, so whatever
   // another phone is typing elsewhere in the document survives (js/orders/firebase-orders.js clearFields).
   clearDraft(paths: readonly string[], updatedAt: string): Promise<void>;
+  // «Close as not ordered» (the current app's setSupplierSkipped, PR #470): drafts/current.skipped.<supplierId> = day, by a merge
+  // of that one key. ⚠️ ON ITS OWN, NEVER THROUGH THE AUTOSAVE, and with NO `updatedAt`: the draft's own stamp stands in for the day
+  // of rows saved before day stamps existed (pendingSuppliers' fallbackDay), and closing a supplier is not typing an order. It
+  // creates the draft on a venue that never typed one. Same promise contract as mergeDraft.
+  setSupplierSkipped(supplierId: string, day: string): Promise<void>;
+  // «Reopen»: only that supplier's key goes (a FieldPath: an id is data, not a path), whatever another phone closed meanwhile
+  // survives. A draft that does not exist is refused, as updateDoc does: «Reopen» is only offered over a key that was seen.
+  clearSupplierSkipped(supplierId: string): Promise<void>;
   // orders-history/<id> as stored, once (null when there is none). A failure rejects.
   readRecord(id: string): Promise<Record<string, unknown> | null>;
   // Writes orders-history/<id> in a TRANSACTION: `merge` gets the record as stored (null when there is none) and returns the
@@ -92,6 +100,10 @@ export interface OrdersSource {
   getOlderHistory(args: { before: string; cursor: unknown }): Promise<{ records: StoredDoc[]; cursor: unknown; done: boolean }>;
   // The legacy weekly records — the only ones with a `weekStart` and no `date` (parity H5). From the server only, as above.
   getLegacyHistory(): Promise<StoredDoc[]>;
+  // orders-history from `fromDate` ('YYYY-MM-DD') onwards, read ONCE from the SERVER (getDocsFromServer, never the phone's
+  // copy, which may not know an order a colleague placed): the check a note of typed quantities waits for before anything of
+  // it comes back (F-15, the current app's getRecentHistoryFromServer). REJECTS when the server cannot be reached.
+  getRecentHistoryFromServer(fromDate: string): Promise<StoredDoc[]>;
   // Rewrites orders-history/<id> in a TRANSACTION: `decide` gets the record as stored (null when there is none) and returns
   // the WHOLE new record (it replaces the stored one; the venue stamp is applied here) or null to DELETE it. What `decide`
   // throws aborts and rejects with it. Resolves with what was written (null after a delete). A transaction needs the
@@ -289,6 +301,20 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
       await fs.updateDoc(fs.doc(db, draftsPath, DRAFT_ID), update);
     },
 
+    async setSupplierSkipped(supplierId, day) {
+      const { fs, db } = await firestore();
+      await fs.setDoc(fs.doc(db, draftsPath, DRAFT_ID), { skipped: { [supplierId]: day }, bakery: locationId }, { merge: true });
+    },
+
+    async clearSupplierSkipped(supplierId) {
+      const { fs, db } = await firestore();
+      await fs.updateDoc(
+        fs.doc(db, draftsPath, DRAFT_ID),
+        new fs.FieldPath('skipped', supplierId), fs.deleteField(),
+        'bakery', locationId,
+      );
+    },
+
     async readRecord(id) {
       const { fs, db } = await firestore();
       const snap = await fs.getDoc(fs.doc(db, historyPath, id));
@@ -329,6 +355,12 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
         cursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : cursor,
         done: records.length < OLDER_PAGE_SIZE,
       };
+    },
+
+    async getRecentHistoryFromServer(fromDate) {
+      const { fs, db } = await firestore();
+      const snap = await fs.getDocsFromServer(fs.query(fs.collection(db, historyPath), fs.where('date', '>=', fromDate)));
+      return docsOf(snap);
     },
 
     // Only legacy records carry `weekStart` (the rules keep it off modern ones), so ordering by it returns just them.

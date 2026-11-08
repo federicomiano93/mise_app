@@ -351,8 +351,14 @@ export async function readRecipe({ uid, locationId, images, store, ask, now }) {
     return { error: { code: 'invalid-argument', key: bad.code, message: `Those photos cannot be read (${bad.code}).` } };
   }
 
-  if (!await store.access(uid, locationId)) {
+  const access = await store.access(uid, locationId);
+  if (!access) {
     return { error: { code: 'permission-denied', key: 'not-allowed', message: 'You are not in that venue.' } };
+  }
+  // ⚠️ THE OWNER OF THE SALES SIDE MAY NOT SAVE A RECIPE (firestore.rules), so a read
+  // here would be paid for and then refused at Save.
+  if (access === 'owner-sales') {
+    return { error: { code: 'permission-denied', key: 'not-allowed', message: 'The recipe catalogue is not part of your side.' } };
   }
   // ⚠️ ONE READ ANSWERS BOTH QUESTIONS. The section and the switch live on the same
   // document, so asking twice would double the reads for nothing.

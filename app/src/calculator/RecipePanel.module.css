@@ -69,6 +69,24 @@
   font-weight: 650;
 }
 
+/* Why a linked tab cannot be calculated, at reading size: it is the only thing the tab shows when its recipe-book recipe
+   cannot be calculated. The warning look of Settings' own sentence (RecipeScreen .problem). ⚠️ NEVER `hidden` and never
+   `display: none` while empty: a live region must be in the accessibility tree BEFORE its sentence arrives, or a screen reader
+   may not announce it. Empty, it has no margin and no padding, so it takes no room. */
+.sourceProblem {
+  margin: 0 0 var(--s3);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r-md);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  font-size: var(--fs-md);
+}
+
+.sourceProblem:empty {
+  margin: 0;
+  padding: 0;
+}
+
 /* Why the tab is empty, for twelve seconds after a new work day cleared it. Quiet: it explains, it does not
    warn. */
 .note {

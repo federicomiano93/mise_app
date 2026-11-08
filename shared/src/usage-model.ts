@@ -10,7 +10,7 @@
 // line the rules accept (firestore.rules, match /usage/{id}).
 //
 // ⚠️ EVERY MAP IS BOUNDED. The rules cap the size of each map (screens, seconds, taps 80 ·
-// routes 300 · actions 40 · loads, loadMs 20). Once a map is one short of its cap, any new key
+// routes 300 · actions 40 · loads, loadMs 20 · hours 24). Once a map is one short of its cap, any new key
 // is counted under the single key 'other', so a device can never build a line the rules would
 // refuse for good (and an unrefusable line is the only one that keeps getting sent).
 // ⚠️ EVERY NUMBER IS AN INTEGER, never NaN, clamped at 0 — the rules say `is int`.
@@ -18,7 +18,7 @@
 // No imports, on purpose: this file also runs where the app's own modules do not exist.
 
 export type UsageKind = 'phone' | 'tablet' | 'computer';
-export type MapName = 'screens' | 'seconds' | 'taps' | 'routes' | 'actions' | 'loads' | 'loadMs';
+export type MapName = 'screens' | 'seconds' | 'taps' | 'routes' | 'actions' | 'loads' | 'loadMs' | 'hours';
 // A name (a screen, a route, an action) and how many times it happened.
 export type CountMap = Record<string, number>;
 
@@ -31,6 +31,8 @@ export interface UsageAcc {
   actions: CountMap;
   loads: CountMap;
   loadMs: CountMap;
+  // Active seconds per local hour, keyed '00'…'23'.
+  hours: CountMap;
   firstMinute: number | null;
   lastMinute: number | null;
   offlineSeconds: number;
@@ -50,28 +52,33 @@ export interface UsagePayload {
   actions: CountMap;
   loads: CountMap;
   loadMs: CountMap;
+  hours: CountMap;
   offlineSeconds: number;
   firstMinute?: number;
   lastMinute?: number;
 }
 
 export const CAPS = Object.freeze({
-  screens: 80, seconds: 80, taps: 80, routes: 300, actions: 40, loads: 20, loadMs: 20,
+  // hours: 24 real keys at most, so the 'other' slot is never reached (and never accepted).
+  screens: 80, seconds: 80, taps: 80, routes: 300, actions: 40, loads: 20, loadMs: 20, hours: 25,
 });
 export const OTHER = 'other';
 export const SCREEN_RE = /^[a-z0-9:-]{1,40}$/;
 export const ACTION_RE = /^[a-z][a-z0-9-]{0,39}$/;
 export const ROUTE_RE = /^[a-z0-9:-]{1,40}>[a-z0-9:-]{1,40}$/;
 export const DAY_KEY_RE = /^20[0-9]{6}$/;
+// '00'…'23', the device's local hour (the rules accept exactly these keys).
+export const HOUR_RE = /^(?:[01][0-9]|2[0-3])$/;
 export const KINDS: UsageKind[] = ['phone', 'tablet', 'computer'];
 const VERSION_MAX = 12;
 const LOAD_MS_MAX = 60000;
 const DAY_SECONDS = 86400;
-const MAPS: readonly MapName[] = ['screens', 'seconds', 'taps', 'routes', 'actions', 'loads', 'loadMs'];
+const HOUR_SECONDS = 3600;
+const MAPS: readonly MapName[] = ['screens', 'seconds', 'taps', 'routes', 'actions', 'loads', 'loadMs', 'hours'];
 
 export function newAcc(): UsageAcc {
   return {
-    screens: {}, seconds: {}, taps: {}, routes: {}, actions: {}, loads: {}, loadMs: {},
+    screens: {}, seconds: {}, taps: {}, routes: {}, actions: {}, loads: {}, loadMs: {}, hours: {},
     firstMinute: null, lastMinute: null, offlineSeconds: 0,
   };
 }
@@ -134,6 +141,15 @@ export function addLoad(acc: UsageAcc, page: unknown, ms: unknown): void {
   bump(acc.loadMs, page, clamped, CAPS.loadMs);
 }
 
+// Active seconds in the local hour of `date`. firstMinute/lastMinute only bound the day: a
+// person seen at 7:00 and again at 22:00 looked busy all day long. This says WHEN they worked.
+export function addHour(acc: UsageAcc, date: unknown, seconds: unknown): void {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return;
+  const key = String(date.getHours()).padStart(2, '0');
+  if (!HOUR_RE.test(key)) return;
+  bump(acc.hours, key, count(seconds), CAPS.hours);
+}
+
 export function addOffline(acc: UsageAcc, seconds: unknown): void {
   acc.offlineSeconds = Math.min(DAY_SECONDS, acc.offlineSeconds + count(seconds));
 }
@@ -158,6 +174,7 @@ const KEY_OK: Record<MapName, (k: string) => boolean> = {
   actions: k => ACTION_RE.test(k),
   loads: k => SCREEN_RE.test(k),
   loadMs: k => SCREEN_RE.test(k),
+  hours: k => HOUR_RE.test(k),
 };
 
 // `extra` folded into `base` (which is changed and returned). `extra` may be anything read back
@@ -236,6 +253,8 @@ export function payloadOf(
     actions: safe.actions,
     loads: safe.loads,
     loadMs: safe.loadMs,
+    // Two tabs both count the same hour; an hour never holds more than an hour.
+    hours: Object.fromEntries(Object.entries(safe.hours).map(([h, n]) => [h, Math.min(HOUR_SECONDS, n)])),
     offlineSeconds: safe.offlineSeconds,
   };
   if (safe.firstMinute !== null) payload.firstMinute = safe.firstMinute;

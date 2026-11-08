@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { WEEKDAYS } from '@mise/shared/pastries-model';
 import { fakePastriesSource } from '../testing/fakePastriesSource';
 import { dayDoc, freezeClock, logDoc, renderPastries } from '../testing/renderPastries';
@@ -147,19 +147,31 @@ describe('Pastries: which day opens', () => {
     it('stops listening when Pastries is closed', async () => {
       const added = vi.spyOn(document, 'addEventListener');
       const removed = vi.spyOn(document, 'removeEventListener');
-      // The listeners that are on the document now: those added minus those taken away.
-      const live = () => added.mock.calls.filter(([type]) => type === 'visibilitychange').length
-        - removed.mock.calls.filter(([type]) => type === 'visibilitychange').length;
+      const listeners = (spy: typeof added, from = 0) => spy.mock.calls.slice(from)
+        .filter(([type]) => type === 'visibilitychange').map(([, listener]) => listener);
+      // ⚠️ PASTRIES' OWN LISTENERS, NOT A COUNT OF ALL OF THEM: the section left for, Orders, keeps a listener of its own
+      // while it is open (the page going out of sight sends a quantity still in its pause, F-15), so the total moves with it.
+      // The ones added while Pastries opened must all be taken away again when it closes.
       try {
         const { user } = renderPastries('/orders');
         await screen.findByRole('heading', { level: 1, name: 'Orders' });
-        const without = live();
+        const before = added.mock.calls.length;
         await user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Pastries' }));
+        // ⚠️ WAITED FOR, NOT READ AT ONCE: the router moves between screens inside a transition, and React runs a
+        // transition's effects — the listener added on the way in, taken away on the way out — a moment AFTER the new
+        // screen is drawn. Read in that moment, the count is one behind (it failed CI at random, 5 Nov 2026).
         await days();
-        expect(live()).toBeGreaterThan(without);
+        await waitFor(() => { expect(listeners(added, before).length).toBeGreaterThan(0); });
+        const pastries = listeners(added, before);
+        const after = added.mock.calls.length;
         await user.click(within(screen.getByRole('navigation', { name: 'All sections' })).getByRole('link', { name: 'Orders' }));
         await screen.findByRole('heading', { level: 1, name: 'Orders' });
-        expect(live()).toBe(without);
+        await waitFor(() => {
+          const gone = listeners(removed);
+          expect(pastries.filter(listener => !gone.includes(listener))).toEqual([]);
+        });
+        // And nothing of Pastries' came back on the way out.
+        expect(listeners(added, after).filter(listener => pastries.includes(listener))).toEqual([]);
       } finally {
         added.mockRestore();
         removed.mockRestore();

@@ -104,15 +104,33 @@ function withBakery(data) {
 // screen looking exactly like a location with no data in it, and onSnapshot does
 // NOT resubscribe after an error, so it stayed that way until a reload. The
 // console line remains for diagnosis; it is not a substitute for telling the user.
-export async function watchCollection(name, onChange, onError) {
+//
+// `sayFromCache`: for a screen that says «there are none», which only the server can prove. onChange
+// also gets whether the answer came from the phone's copy, and an EMPTY one proves nothing: a cold
+// start with no signal reports an empty list from an empty cache.
+// ⚠️ includeMetadataChanges, OR THE SERVER'S «YES, EMPTY» NEVER ARRIVES: confirming an empty copy changes
+// no document, so Firestore would stay silent (the same trap as watchIngredientPrices). And it answers
+// again when the server confirms a full list too, so that one is dropped: an identical answer would
+// rebuild every row of the screen.
+export async function watchCollection(name, onChange, onError, { sayFromCache = false } = {}) {
   await authReady;
+  const ref = collection(db, pathFor(name));
+  const failed = err => {
+    console.error(`watchCollection(${name}) failed:`, err);
+    onError?.(err);
+  };
+  if (!sayFromCache) return onSnapshot(ref, snap => onChange(snap.docs.map(d => ({ id: d.id, ...d.data() }))), failed);
+  let emptyFromCache = null;
   return onSnapshot(
-    collection(db, pathFor(name)),
-    snap => onChange(snap.docs.map(d => ({ id: d.id, ...d.data() }))),
-    err => {
-      console.error(`watchCollection(${name}) failed:`, err);
-      onError?.(err);
+    ref,
+    { includeMetadataChanges: true },
+    snap => {
+      const nowEmptyFromCache = snap.empty && snap.metadata.fromCache;
+      if (nowEmptyFromCache === emptyFromCache && !snap.docChanges().length) return;
+      emptyFromCache = nowEmptyFromCache;
+      onChange(snap.docs.map(d => ({ id: d.id, ...d.data() })), snap.metadata.fromCache);
     },
+    failed,
   );
 }
 
@@ -146,6 +164,15 @@ export async function watchRecentHistory(fromDate, onChange, onError) {
       onError?.(err);
     },
   );
+}
+
+// The orders from `fromDate` on, as the SERVER holds them right now: never the offline copy, which is
+// exactly what may not know about an order another phone has placed (js/orders/draft.js).
+export async function getRecentHistoryFromServer(fromDate) {
+  await authReady;
+  const snap = await getDocsFromServer(
+    query(collection(db, pathFor(COLLECTIONS.history)), where('date', '>=', fromDate)));
+  return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
 // ⚠️ BOTH ONE-OFF READS BELOW USE getDocsFromServer, NEVER getDocs. The app runs Firestore
@@ -464,6 +491,45 @@ export async function watchDoc(name, id, onChange, onError) {
   );
 }
 
+// Call back ONCE, the first time the SERVER itself has answered for this document: an answer from
+// the offline copy, however recent it looks, may not know what another phone has done since. Offline
+// it simply waits. ⚠️ includeMetadataChanges, because a server answer identical to the cached copy
+// changes no document and would otherwise never call back. On a document already being watched
+// Firestore shares the one listen, so this costs no extra read.
+export async function watchServerAnswer(name, id, onAnswer) {
+  await authReady;
+  const stop = onSnapshot(
+    doc(db, pathFor(name), id),
+    { includeMetadataChanges: true },
+    snap => {
+      if (snap.metadata.fromCache) return;
+      stop();
+      onAnswer(snap.exists() ? { id: snap.id, ...snap.data() } : null);
+    },
+    err => { console.error(`watchServerAnswer(${name}/${id}) failed:`, err); },
+  );
+  return stop;
+}
+
+// The same for a whole collection already being watched with watchCollection: called ONCE, the first
+// time the server itself has answered for it, and no extra read for the same reason. Its docs are never
+// read, so it costs a weak tablet nothing. console.warn, not console.error: the watcher already reports
+// the failure, and each console.error line becomes a saved error report (js/error-report.js).
+export async function watchCollectionServerAnswer(name, onAnswer) {
+  await authReady;
+  const stop = onSnapshot(
+    collection(db, pathFor(name)),
+    { includeMetadataChanges: true },
+    snap => {
+      if (snap.metadata.fromCache) return;
+      stop();
+      onAnswer();
+    },
+    err => { console.warn(`watchCollectionServerAnswer(${name}) failed:`, err); },
+  );
+  return stop;
+}
+
 // Whether this session may take things away in this location.
 //
 // ⚠️ UX ONLY (P2). The rules decide, and they read users/{uid} themselves rather
@@ -475,6 +541,14 @@ export async function watchDoc(name, id, onChange, onError) {
 // allowed the delete: the screen would be lying about what is possible.
 export function canManageHere() {
   return currentSession().canManage === true;
+}
+
+// Whether this session may change the VENUE's own switches (what it tracks, what it
+// pays for). ⚠️ NOT canManageHere(): that is true for the two partial owners inside their own
+// side, and the server refuses them these switches (functions/onboarding.js asks owner or
+// manager). UX only (P2).
+export function canManageVenueHere() {
+  return currentSession().canManageVenue === true;
 }
 
 // ── Order lists sent from one person to another ──────────────────────────────

@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 import unicodedata
 from dataclasses import dataclass
+from decimal import ROUND_HALF_UP, Decimal
 
 # ── product key ───────────────────────────────────────────────────────────────
 
@@ -157,15 +158,21 @@ def _counts_pieces_in_carton(before: str, size_kg: float, count: int) -> bool:
 _BARE_K = r"K(?=\s*\*\s*\d+\s*PZ)"
 
 
+def _with_fractions(description: str) -> str:
+    """"1/2KG", "1/4 KG": a fraction of a unit. Without this the "2KG" inside "1/2KG" reads as
+    a 2 kg pack — four times the real half kilo (real invoice, 3 Oct 2026)."""
+    return re.sub(r"(?<![\d/])(\d)\s*/\s*(\d)(?=\s*(?:(?:KG|GR|G|LT|L|ML)\b|" + _BARE_K + "))",
+                  lambda m: str(round(int(m.group(1)) / int(m.group(2)), 3)), (description or "").upper())
+
+
+_P_KG_X = _NUM + r"\s*(KG|" + _BARE_K + r"|GR|G)\.?\s*[*X]\s*(\d+)(?!\d)"
+
+
 def parse_pack(description: str) -> PackInfo | None:
-    d = (description or "").upper()
-    # "1/2KG", "1/4 KG": a fraction of a unit. Without this the "2KG" inside "1/2KG" reads as
-    # a 2 kg pack — four times the real half kilo (real invoice, 3 Oct 2026).
-    d = re.sub(r"(?<![\d/])(\d)\s*/\s*(\d)(?=\s*(?:(?:KG|GR|G|LT|L|ML)\b|" + _BARE_K + "))",
-               lambda m: str(round(int(m.group(1)) / int(m.group(2)), 3)), d)
+    d = _with_fractions(description)
 
     # "2,5kg* 4pz", "85gr* 50pz", "2,5 KG X 4", "1kgx6", "7gx80"
-    m = re.search(_NUM + r"\s*(KG|" + _BARE_K + r"|GR|G)\.?\s*[*X]\s*(\d+)(?!\d)", d)
+    m = re.search(_P_KG_X, d)
     if m:
         size, count = _f(m.group(1)), int(m.group(3))
         kilos = m.group(2).startswith("K")
@@ -198,6 +205,11 @@ def parse_pack(description: str) -> PackInfo | None:
     m = re.search(r"\bGR?\.?\s*(\d+)\s*X\s*(\d+)(?!\d)", d)
     if m and "PZ" not in d:
         return PackInfo(float(m.group(1)), "g", int(m.group(2)))
+    # "2000x4g": two thousand sachets of 4 g, 8 kg. Read as one 4 g pack the sugar cost 4,032 €/kg and was
+    # refused (real invoices, 5 Nov 2026). Grams only — in «22x50 Kg.0,500» the 22x50 is a roll in cm.
+    m = re.search(r"(?<![\d.,/])(\d+)\s*[X×]\s*" + _NUM + r"\s*(?:GR?|G)\b", d)
+    if m and int(m.group(1)) > 1:
+        return PackInfo(_f(m.group(2)), "g", int(m.group(1)))
     # "KG 25", "2,5KG"
     m = re.search(r"\bKG\.?\s*" + _NUM + r"|" + _NUM + r"\s*KG\b", d)
     if m:
@@ -222,6 +234,45 @@ def parse_pack(description: str) -> PackInfo | None:
     if m:
         return PackInfo(float(m.group(1)) * 10, "ml")
     return None
+
+
+# ⚠️ A PRODUCT COUNTED IN PIECES IS PRICED PER PIECE (his rule, 5 Nov 2026): a cornetto, a panzerotto, an arancino,
+# a graffa carries its price per piece with the piece weight beside it (0.464 €/pz, 85 g), never «5.46 €/kg of
+# 50 bags». Goods sold by weight stay per kilo. The description tells them apart: the count is written AS PIECES
+# («85gr* 50pz», «PZ.50 GR.85», «GR.85X50P») and one piece weighs at most MAX_PIECE_G grams. A count without «pz»
+# («G 100X3», «gr.60X6», «2000x4g») is packs of goods used by weight; a size in kilos («2,5kg* 4pz», «KG.2.5X4») is
+# a bag, not a piece; «G 570 (X12PZ)» is a box. The carton whose pieces add up to its weight («35/40gr 2Kg* 55pz»)
+# is pieces too, each the carton's weight shared out (36.4 g), so its price per kilo does not move.
+MAX_PIECE_G = 500
+
+
+@dataclass(frozen=True)
+class Pieces:
+    count: int
+    size: float  # grams of one piece
+
+
+def pieces_of(description: str) -> Pieces | None:
+    d = _with_fractions(description)
+    marked = {int(m.group(1) or m.group(2))
+              for m in re.finditer(r"(?<![\d.,])(\d+)\s*(?:PZ|PEZZI|P)\b|\bPZ\.?\s*(\d+)", d)}
+    marked = {n for n in marked if n > 1}
+    if not marked:
+        return None
+    info = parse_pack(description)
+    if not info:
+        return None
+    if info.unit == "g" and info.count in marked and 0 < info.size <= MAX_PIECE_G:
+        return Pieces(info.count, info.size)
+    if info.unit != "kg" or info.count is not None:
+        return None
+    m = re.search(_P_KG_X, d)
+    if not m or not m.group(2).startswith("K"):
+        return None
+    count = int(m.group(3))
+    size = float(Decimal(repr(_f(m.group(1)) * 1000 / count)).quantize(Decimal("0.1"), rounding=ROUND_HALF_UP))
+    carton = _counts_pieces_in_carton(d[: m.start()], _f(m.group(1)), count)
+    return Pieces(count, size) if carton and count in marked and 0 < size <= MAX_PIECE_G else None
 
 
 def format_number(x: float) -> str:

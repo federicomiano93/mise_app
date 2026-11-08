@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  STAFF_CARDS, HIDEABLE_IDS, OPT_IN_IDS, HIDDEN_FIELD, SHOWN_FIELD, ORDER_FIELD,
+  STAFF_CARDS, HIDEABLE_IDS, ROLE_ONLY_CARDS, OPT_IN_IDS, HIDDEN_FIELD, SHOWN_FIELD, ORDER_FIELD,
   isHiddenForStaff, cardVisibleTo, mayBeTold, cleanOrder, isValidOrder, orderedCardIds,
 } from '../js/home-cards.js';
 import { PUSH_KINDS, cardForKind, targetPage } from '../js/push-model.js';
@@ -128,7 +128,7 @@ test('every hideable card carries its id on the Home, exactly once, on the right
   // ⚠️ EVERY card, because a card without one is judged by nobody: the Home would show it
   // to everybody, the money cards included.
   const tags = home.match(/<a class="home-card"[^>]*>/g) || [];
-  assert.equal(tags.length, HIDEABLE_IDS.length, 'one card on the Home per id, and no other');
+  assert.equal(tags.length, HIDEABLE_IDS.length + ROLE_ONLY_CARDS.length, 'one card on the Home per id, and no other');
   for (const tag of tags) assert.match(tag, /\bdata-card="/, `${tag} carries no data-card`);
 });
 
@@ -183,7 +183,7 @@ test('⚠️ a callable missing from index.js is not deployed at all', () => {
 test('the Home filters on the card, and passes the session\'s canManage', () => {
   const src = withoutComments(read('js/home-session.js'));
   assert.match(src, /import \{ cardVisibleTo, orderedCardIds \} from '\.\/home-cards\.js';/);
-  assert.match(src, /cardVisibleTo\(location, canManage, card\.dataset\.card\)/);
+  assert.match(src, /cardVisibleTo\(location, canManage, card\.dataset\.card, role\)/);
   assert.match(src, /filterCards\(session\);/);
 });
 
@@ -193,7 +193,7 @@ test('⚠️ the button is drawn only for somebody who can manage the venue', ()
   // Since 28 Sep 2026 the rows sit in cards (tokens.css .set-*): the gate is a
   // conditional inside the «venue» card instead of an if around an append.
   assert.match(src,
-    /session\.canManage \? item\(t\('homeCards\.title'\)[\s\S]{0,200}openHomeCards\(session\)/);
+    /session\.canManageVenue \? item\(t\('homeCards\.title'\)[\s\S]{0,200}openHomeCards\(session\)/);
 });
 
 test('⚠️ the page gate asks too, after the section check and before the page is shown', () => {
@@ -202,7 +202,7 @@ test('⚠️ the page gate asks too, after the section check and before the page
   const ready = src.slice(src.indexOf("case 'ready':"), src.indexOf('clearGate();', src.indexOf("case 'ready':")));
   assert.ok(ready.length > 100, 'the slice must hold the ready case');
   assert.match(ready,
-    /if \(pageCard && !cardVisibleTo\(session\.location, session\.canManage, pageCard\)\) \{\s*location\.replace\(HOME\);\s*return;/);
+    /if \(pageCard && !cardVisibleTo\(session\.location, session\.canManage, pageCard, session\.role\)\) \{\s*location\.replace\(pageWhenRefused\(session\.role, pageCard\)\);\s*return;/);
 });
 
 test('the screen lists only the cards the venue has, and writes only after the server agrees', () => {
@@ -259,14 +259,14 @@ test('the callable refuses a location id that could never name a folder', () => 
 });
 
 test('⚠️ the Home filter reads canManage by that name, not another flag under it', () => {
-  assert.match(read('js/home-session.js'), /function filterCards\(\{ location, canManage \}\)/,
+  assert.match(read('js/home-session.js'), /function filterCards\(\{ location, canManage, role \}\)/,
     '`isOwner: canManage` would still match every other check and take the cards away from managers');
 });
 
 test('⚠️ the «order to place today» banner is no door to a hidden Orders card', () => {
   const src = withoutComments(read('js/home-orders-badge.js'));
   assert.match(src, /import \{ cardVisibleTo \} from '\.\/home-cards\.js';/);
-  const guard = src.search(/if \(!cardVisibleTo\(session\.location, session\.canManage, 'orders'\)\) return;/);
+  const guard = src.search(/if \(!cardVisibleTo\(session\.location, session\.canManage, 'orders', session\.role\)\) return;/);
   assert.ok(guard > 0 && guard < src.indexOf('showOrdersHome();', guard),
     'the guard must stop it before anything is read, painted or notified');
 });
@@ -434,8 +434,11 @@ test('⚠️ setHomeCardOrder refuses a bad list and an employee, and checks the
 test('⚠️⚠️ setStaffCard writes a money card as SHOWN, into the field the rules read', () => {
   assert.match(CALLABLE,
     /if \(OPT_IN_IDS\.includes\(card\)\) \{\s*await db\(\)\.doc\(`locations\/\$\{locationId\}`\)\.set\(\{ staffShownCards: \{ \[card\]: !hidden \} \}, \{ merge: true \}\);/);
-  assert.match(read('firestore.rules'), /l\.data\.get\('staffShownCards', \{\}\)\.get\(card, false\) == true/,
+  const rules = read('firestore.rules');
+  assert.match(rules, /l\.data\.get\('staffShownCards', \{\}\)\.get\(shownCard, false\) == true/,
     'the rules read the same field, with the same «only true» meaning');
+  assert.match(rules, /let shownCard = card == 'prices' \? 'foodcost' : card;/,
+    'a real card is judged by its own switch; purchase prices by the Food cost switch');
 });
 
 test('the Home applies the order after filtering, by moving the cards it still shows', () => {

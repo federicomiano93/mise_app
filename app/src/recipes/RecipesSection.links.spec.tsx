@@ -167,12 +167,20 @@ describe('importing', () => {
     expect(await screen.findByRole('alertdialog', { name: 'Import into Calculator?' })).toBeInTheDocument();
   });
 
-  it('a millilitre row is refused as not by weight', async () => {
-    const milk = recipe('milk', { name: 'Latte', ingredients: [{ label: 'Milk', grams: 100, unit: 'ml' }] });
-    const source = sourceWith([milk]);
-    const { user } = await open('milk', { source });
+  // Since 8 Nov 2026 the Calculator weighs litres and millilitres at 1 ml = 1 g (the current app's e7f3dac0).
+  it('⚠️ a millilitre row is accepted (the Calculator weighs it, 1 ml = 1 g): the question is asked', async () => {
+    const milk = recipe('milk', { name: 'Latte', ingredients: [{ label: 'Flour', grams: 500, unit: 'g' }, { label: 'Milk', grams: 100, unit: 'ml' }] });
+    const { user } = await open('milk', { source: sourceWith([milk]) });
     await user.click(importButton());
-    await says('The row “Milk” is not by weight, so the Calculator cannot follow this recipe. Write it in grams or kilos and try again.');
+    expect(await screen.findByRole('alertdialog', { name: 'Import into Calculator?' })).toBeInTheDocument();
+  });
+
+  it('a row in pieces is refused as not by weight', async () => {
+    const eggs = recipe('eggs', { name: 'Uova', ingredients: [{ label: 'Flour', grams: 500, unit: 'g' }, { label: 'Eggs', grams: 4, unit: 'pcs' }] });
+    const source = sourceWith([eggs]);
+    const { user } = await open('eggs', { source });
+    await user.click(importButton());
+    await says('The row “Eggs” is not by weight, so the Calculator cannot follow this recipe. Write it in grams or kilos and try again.');
     expect(source.importIntoCalculator).not.toHaveBeenCalled();
   });
 

@@ -18,7 +18,8 @@ export function OrdersProvider({ children, deps }: { children: ReactNode; deps?:
   const { locationId, location, canManage } = useSession();
   // The section is drawn only for a ready session (SectionRoute), so a venue is always open here.
   if (!locationId) throw new Error('Orders needs an open venue.');
-  const [store] = useState(() => createOrdersStore(services.orders(locationId), deps));
+  // The venue goes in too: the note of typed quantities that outlives the page is one venue's (F-15).
+  const [store] = useState(() => createOrdersStore(services.orders(locationId), deps, locationId));
 
   useEffect(() => {
     store.start();

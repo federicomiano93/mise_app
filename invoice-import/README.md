@@ -102,7 +102,10 @@ test suites.
   one month to the next, which is what carries the decisions over.
 - `mergeWith` is the name of an ingredient already in Mise («unisci con …»), or `''`.
 - `priceUnit` is `kg`, `l` or `pcs`. Litres are kept as litres (Mise reads 1 l as 1 kg,
-  as it does for prices typed by hand). `pcs` (eggs) always carries `unitWeightKg`.
+  as it does for prices typed by hand). `pcs` always carries `unitWeightKg`: eggs, and goods
+  counted in pieces whose description gives the count and the piece weight («85gr* 50pz»,
+  «2Kg* 55pz», a piece of 500 g at most) — priced per piece, `packUnit` `""` so Mise names the
+  inner unit «pezzo». A bag of fries «KG.2.5X4» has no piece count and stays per kg.
 - `pricePerUnit` is **net of VAT**, per `priceUnit`, computed from what the invoice line
   really cost (line total ÷ quantity, so discounts and free goods on a separate line are
   included). One entry per invoice per product: lines of the same product on the same

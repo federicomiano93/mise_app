@@ -14,7 +14,7 @@ from pathlib import Path
 
 from classify import (
     PackInfo, classify, clean_name, eggs_per_pack, is_egg, is_unattributed_discount, pack_word,
-    parse_pack, parse_pack_text, product_key,
+    parse_pack, parse_pack_text, pieces_of, product_key,
 )
 from fatturapa import KEPT_TYPES, Document, Line, LoadResult
 from pricing import (
@@ -223,6 +223,15 @@ def build_catalogue(load: LoadResult, config: Config) -> Catalogue:
 # ── proposals and evaluation ─────────────────────────────────────────────────
 
 
+def _pieces_of_entry(entry: Entry):
+    """A product invoiced by pieces or cartons whose description counts PIECES (classify.pieces_of): the line the
+    pack is read from — the first that names one, as below — decides. None for anything else, eggs included."""
+    if unit_class(entry.lines[0].unit)[0] != PIECES or any(is_egg(ln.description) for ln in entry.lines):
+        return None
+    line = next((ln for ln in entry.lines if parse_pack(ln.description)), None)
+    return pieces_of(line.description) if line else None
+
+
 def propose_params(product: Product, config: Config) -> Params:
     """Price unit and package, read from the most recent invoice's description."""
     entry = product.latest
@@ -232,6 +241,11 @@ def propose_params(product: Product, config: Config) -> Params:
     if cls == PIECES and any(is_egg(ln.description) for ln in entry.lines):
         n = next((eggs_per_pack(ln.description) for ln in entry.lines if eggs_per_pack(ln.description)), None)
         return Params("pcs", None, n if n and n > 1 else None, egg=True, egg_weight_kg=egg_weight)
+    pieces = _pieces_of_entry(entry)
+    if pieces:
+        # One piece is the «pack» and the carton holds `count` of them: pricing prices each piece, unit_weight_kg is
+        # its weight, and the app shows «Cartone, contiene 50 × pezzo da 85 g».
+        return Params("pcs", PackInfo(pieces.size, "g"), pieces.count, egg=False, egg_weight_kg=egg_weight)
     info = next((p for p in (parse_pack(ln.description) for ln in entry.lines) if p), None)
     pack_dim = PACK_UNITS[info.unit][0] if info else None
     if cls == PIECES:
@@ -259,6 +273,10 @@ def propose_pack_word(product: Product) -> str:
     cls, _ = unit_class(entry.lines[0].unit)
     if cls == PIECES and any(is_egg(ln.description) for ln in entry.lines):
         return EGG_PACK_WORD
+    # A piece is a piece: «BUSTA» or «CARTONE» in the text is the delivery, not what one cornetto is. The app names
+    # it with the venue's own word for a piece, never the default «busta».
+    if _pieces_of_entry(entry):
+        return ""
     return pack_word(product.description)
 
 

@@ -59,18 +59,39 @@ import { renderPackPhotoCapture } from './photo-capture.js';
 import { buildMergeChooser, runMergeFlow } from './ingredient-merge-screen.js';
 import { normalizeFavourites, splitByFavourite } from './favourite-suppliers.js';
 import { buildRegistrySettings } from './registry-settings.js';
+// Hand-made or from an invoice? The same rule as Mise 2 (pencil on the hand-made rows).
+import { fromInvoice } from '../ingredient-origin.js';
 import {
-  BACK_ICON, mgmtRow,
+  BACK_ICON, mgmtRow, reportFailure,
 } from './mgmt-ui.js';
 
-// data:    { suppliers(): [], favouriteSuppliers(): [supplierId], ingredients(): [], categories(current): [], orderUnits(current): [],
+// What a list's listener has told the screen so far, for a list with no row to draw.
+export const LIST_STATUS = Object.freeze({ starting: 'starting', answered: 'answered', waiting: 'waiting', unreachable: 'unreachable', failed: 'failed' });
+
+// ⚠️ A CACHED EMPTY LIST ALONE IS NOT «NO CONNECTION»: a venue that really has none gets it the moment the page
+// opens, a second before the server confirms it. So it counts only with the browser offline, or after `stalled`.
+// ⚠️ NOTHING AT ALL UNTIL A VENUE IS OPEN: the screen does not know its language yet, so any word would be in the
+// wrong one on an Italian tablet, and with no session the sign-in gate is what speaks.
+//   venueOpen: a venue is open. loaded: the list has really answered. failed: its listener died.
+//   emptyCopy: the phone's copy said «none». stalled: too long without an answer. online: navigator.onLine.
+export function listStatus({ venueOpen, loaded, failed, emptyCopy, stalled, online }) {
+  if (loaded) return LIST_STATUS.answered;
+  if (failed) return LIST_STATUS.failed;
+  if (!venueOpen) return LIST_STATUS.starting;
+  return stalled || (emptyCopy && online === false) ? LIST_STATUS.unreachable : LIST_STATUS.waiting;
+}
+
+// data:    { suppliers(): [], favouriteSuppliers(): [supplierId], dueToday?(): Set<supplierId> (optional: the
+//            suppliers still to order today, highlighted in the list; absent = none), ingredients(): [], categories(current): [], orderUnits(current): [],
 //            packs(current): [], categoriesLoaded(): boolean, pricesLoaded(): boolean,
+//            listStatus('ingredients' | 'suppliers'): one of LIST_STATUS,
 //            readPrice(id): Promise<price doc | null> } — live getters; categories,
 //            orderUnits and packs are the words the ingredient card's menus offer (orderUnits only
 //            for the card of before, which an old stored price shape opens)
 // actions: { saveSupplier, saveIngredient, priceHistory, setSupplierActive,
 //            setIngredientActive, deleteSupplier, deleteIngredient, deleteCategory(list, ids),
-//            toggleFavouriteSupplier(id, on) — a function only for owner/manager }
+//            toggleFavouriteSupplier(id, on) — a function only for owner/manager,
+//            mayChangeVenue — true only for owner/manager (the venue's switches in Settings) }
 // hooks:   { onChrome({ addLabel }) } — told on every paint which word the page
 //            header's «+» should carry, because it follows the active tab.
 //          { pane } — the element beside the list where a level opens on a TABLET
@@ -87,6 +108,16 @@ export function buildRegistry(data, actions, hooks = {}) {
   // wrong tab on the FIRST FRAME — a flash on every open.
   let tab = 'ingredients';        // 'ingredients' | 'packaging' | 'suppliers'
   let query = '';                 // the search text for that list
+  // ⚠️ ROWS STAY IN PLACE WHILE A LIST IS OPEN. The ids switched on or off (by the word at the
+  // right of a row) since this list was opened: they are drawn among the in-use rows, in their
+  // A–Z place, across every repaint — a live snapshot arrives right after the tap, and a row that
+  // jumped into the «Not in use» group under the finger would be a row you tap the wrong one of.
+  // Cleared when the tab changes; a supplier's own screen keeps its own on its stack entry.
+  // `group.open` is the «Not in use» group's open/closed state, kept for the same reason.
+  let listCtx = { switched: new Map(), group: { open: false } };
+  // Each list row's height as last laid out, by its data-sel (rememberRowHeights).
+  const rowHeights = new Map();
+  let rowHeightsWidth = null;
   // Everything above the page itself. Each entry is { view, overlay }; Back pops one.
   const stack = [];
   // The tablet's right-hand pane, its placeholder, and each overlay's own Back.
@@ -154,6 +185,7 @@ export function buildRegistry(data, actions, hooks = {}) {
     // Clear the search when switching, so one list's query never filters the other.
     query = '';
     search.input.value = '';
+    listCtx = { switched: new Map(), group: { open: false } };
     paintList();
   }
 
@@ -208,6 +240,23 @@ export function buildRegistry(data, actions, hooks = {}) {
     ]);
   }
 
+  // A list with no row to draw. ⚠️ «NOTHING HERE» IS A CLAIM ONLY THE LISTENER CAN MAKE: the page paints
+  // before any answer has arrived, and for 2 to 4 s on the lab tablet (302 ingredients, 1 Nov 2026) every
+  // open told a venue full of ingredients that it had none, with a button inviting it to add the first.
+  //   list: 'ingredients' | 'suppliers', the listener that answers. which: the words of the empty state.
+  function appendNoRows(list, which) {
+    const status = data.listStatus?.(list) ?? LIST_STATUS.answered;
+    if (status === LIST_STATUS.answered) listHost.appendChild(emptyState(which));
+    else if (status === LIST_STATUS.waiting) listHost.appendChild(el('p', { class: 'mgmt-empty', role: 'status', text: t('orders.loading') }));
+    else if (status === LIST_STATUS.unreachable) {
+      listHost.appendChild(el('div', { class: 'empty-state', role: 'status' }, [
+        el('p', { class: 'empty-title', text: t('orders.registry.notArrived.title') }),
+        el('p', { class: 'empty-sub', text: t('orders.registry.notArrived.sub') }),
+      ]));
+    }
+    // LIST_STATUS.starting: no word yet. LIST_STATUS.failed: nothing here, the page's own error line says it.
+  }
+
   // ⚠️ THE SWITCH AND THE SEARCH STAY PUT WHILE THE LIST SCROLLS (Federico, 29 Sep 2026:
   // «la fascia ingredienti, fornitori e imballaggi più la barra di ricerca devono restare
   // fisse quando scorro giù»). One wrapper, so the two stick together; orders.css
@@ -218,11 +267,30 @@ export function buildRegistry(data, actions, hooks = {}) {
   // ── The lists ───────────────────────────────────────────────────────────────
   function paintList() {
     paintChrome();
+    rememberRowHeights();
     listHost.replaceChildren();
     if (tab === 'suppliers') paintSuppliers();
     else paintItems(tab === 'packaging' ? 'packaging' : 'ingredient');
     paintSelection();
     paintPane();
+  }
+
+  // ⚠️ A REPAINT MUST NOT MOVE THE LIST. A row off screen takes its height from a guess (orders.css,
+  // .reg-list-host .reg-row) and a new row has forgotten the one it had, so every repaint — each
+  // «Disattiva» tap ends in one — would change the height above the row under the finger. So each row hands
+  // its height on to the row that replaces it (ingredientRow). The height of the frame's inside: that is what
+  // contain-intrinsic-size sets, without the border. Nothing is kept across a new width (the tablet turned): a row
+  // off screen would only report the old width's height, and it would stay written on the row from then on.
+  function rememberRowHeights() {
+    if (listHost.clientWidth !== rowHeightsWidth) {
+      rowHeights.clear();
+      rowHeightsWidth = listHost.clientWidth;
+      return;
+    }
+    listHost.querySelectorAll('.reg-row[data-sel]').forEach((row) => {
+      const height = row.getBoundingClientRect().height - (row.offsetHeight - row.clientHeight);
+      if (height > 0) rowHeights.set(row.dataset.sel, height);
+    });
   }
 
   function matches(name) {
@@ -240,7 +308,7 @@ export function buildRegistry(data, actions, hooks = {}) {
     const visible = all.filter(matchesSupplier);
 
     if (!all.length) {
-      listHost.appendChild(emptyState('suppliers'));
+      appendNoRows('suppliers', 'suppliers');
       return;
     }
     if (!visible.length) {
@@ -252,16 +320,26 @@ export function buildRegistry(data, actions, hooks = {}) {
     // point of this screen existing: one level at a time, so what a supplier SELLS
     // is reachable without going through its address details first.
     const counts = countBySupplier();
-    const supplierRow = (s) => drillRow(
-      supplierLabel(s),
-      // ⚠️ THE PLURAL IS IN THE DICTIONARY, never an `if` here: Italian and English
-      // do not agree about when one form becomes the other, and a ternary in code
-      // is a plural rule that only speaks English.
-      [s.category, t('orders.productsCount', { n: counts[s.id] || 0 })].filter(Boolean).join(' · '),
-      s.active !== false,
-      () => openFromList(() => openSupplier(s.id), `supplier:${s.id}`),
-      `supplier:${s.id}`,
-    );
+    // Asked ONCE per paint: the suppliers still to order today (absent getter = nobody lit).
+    const due = data.dueToday?.() || new Set();
+    const supplierRow = (s) => {
+      const row = drillRow(
+        supplierLabel(s),
+        // ⚠️ THE PLURAL IS IN THE DICTIONARY, never an `if` here: Italian and English
+        // do not agree about when one form becomes the other, and a ternary in code
+        // is a plural rule that only speaks English.
+        [s.category, t('orders.productsCount', { n: counts[s.id] || 0 })].filter(Boolean).join(' · '),
+        s.active !== false,
+        () => openFromList(() => openSupplier(s.id), `supplier:${s.id}`),
+        `supplier:${s.id}`,
+      );
+      if (due.has(s.id)) {
+        row.classList.add('reg-due');
+        row.querySelector('.mgmt-item-main')?.appendChild(
+          el('span', { class: 'supplier-due-tag', text: t('orders.list.dueToday') }));
+      }
+      return row;
+    };
     const listOf = (suppliers) => {
       const list = el('div', { class: 'mgmt-list' });
       suppliers.forEach(s => list.appendChild(supplierRow(s)));
@@ -296,7 +374,7 @@ export function buildRegistry(data, actions, hooks = {}) {
     const visible = all.filter(i => matches(i.name) || matches(i.shortName) || matches(i.invoiceName));
 
     if (!all.length) {
-      listHost.appendChild(emptyState(packaging ? 'packaging' : 'ingredients'));
+      appendNoRows('ingredients', packaging ? 'packaging' : 'ingredients');
       return;
     }
     if (!visible.length) {
@@ -304,13 +382,47 @@ export function buildRegistry(data, actions, hooks = {}) {
       return;
     }
 
-    const list = el('div', { class: 'mgmt-list' });
     // ⚠️ `?? ''`, NEVER undefined: undefined is what a supplier's OWN screen passes to mean
     // «do not name the supplier». An item with no supplier (or a deleted one) matched no
     // entry here, read as undefined, and was drawn as if on its supplier's screen — no
     // «No supplier», and a «Packaging» tag on the packaging list. Found driving it.
-    visible.forEach(i => list.appendChild(ingredientRow(i, supById[i.supplierId] ?? '')));
-    listHost.appendChild(list);
+    appendItemRows(listHost, visible, listCtx,
+      i => ingredientRow(i, supById[i.supplierId] ?? '', [listCtx.switched]),
+      query.trim() !== '');
+  }
+
+  // The in-use rows (plus the ids switched during this open, which stay where they were), then —
+  // only if there are any — ONE folded «Not in use (N)» group with every other switched-off item.
+  // `items` is already sorted A–Z and already filtered by the search, so the group's count is the
+  // number SHOWN. The group opens itself when a search found something in it, or when the item
+  // open in the tablet's pane is in it; once open it stays open (ctx.group.open) across repaints.
+  //   ctx — { switched: Map<id, in-use side at the first tap>, group: { open } } of this list or this supplier's screen
+  function appendItemRows(host, items, ctx, rowFor, searching) {
+    // A switched id keeps the side it was on at its FIRST tap (true = the in-use rows): switched off
+    // in the list, it stays in the list; switched back on inside the group, it stays in the group.
+    const stays = (i) => (ctx.switched.has(i.id) ? ctx.switched.get(i.id) : i.active !== false);
+    const inUse = items.filter(stays);
+    const notInUse = items.filter(i => !stays(i));
+    if (inUse.length) {
+      const list = el('div', { class: 'mgmt-list' });
+      inUse.forEach(i => list.appendChild(rowFor(i)));
+      host.appendChild(list);
+    }
+    if (!notInUse.length) return;
+    const key = selectedKey();
+    if (searching || (key !== null && notInUse.some(i => `ingredient:${i.id}` === key))) ctx.group.open = true;
+    const rows = el('div', { class: 'mgmt-list' });
+    notInUse.forEach(i => rows.appendChild(rowFor(i)));
+    const group = el('details', { class: 'reg-notinuse' }, [
+      el('summary', { class: 'reg-notinuse-head' }, [
+        el('span', { class: 'reg-notinuse-chev', 'aria-hidden': 'true', icon: SMALL_CHEVRON_SVG }),
+        el('span', { text: t('orders.notInUse.group', { n: notInUse.length }) }),
+      ]),
+      rows,
+    ]);
+    group.open = ctx.group.open;
+    group.addEventListener('toggle', () => { ctx.group.open = group.open; });
+    host.appendChild(group);
   }
 
   // How many products each supplier has. Built once per paint rather than filtered
@@ -330,7 +442,8 @@ export function buildRegistry(data, actions, hooks = {}) {
   // links at its right-hand end.
   // `selKey` ('supplier:<id>' | 'ingredient:<id>') is what paintSelection() matches to mark
   // the row that is open in the tablet's pane; a row without one is never marked.
-  function drillRow(name, meta, active, onOpen, selKey = null) {
+  // `nameNode` (optional) replaces the plain name — the ingredient rows put the pencil beside it.
+  function drillRow(name, meta, active, onOpen, selKey = null, nameNode = null) {
     return el('button', {
       type: 'button',
       class: 'mgmt-item reg-drill' + (active ? '' : ' inactive'),
@@ -338,7 +451,7 @@ export function buildRegistry(data, actions, hooks = {}) {
       onClick: onOpen,
     }, [
       el('div', { class: 'mgmt-item-main' }, [
-        el('span', { class: 'mgmt-item-name', text: name }),
+        nameNode || el('span', { class: 'mgmt-item-name', text: name }),
         el('span', { class: 'mgmt-item-meta', text: meta }),
       ]),
       el('span', { class: 'reg-chevron', 'aria-hidden': 'true', icon: CHEVRON_SVG }),
@@ -355,7 +468,13 @@ export function buildRegistry(data, actions, hooks = {}) {
   // `supplierName || t('orders.noSupplier')`, so every product on Aldo's own screen
   // said «Nessun fornitore» — a plain lie, on the screen that exists to say whose it
   // is. Found by looking at a screenshot after 34 driven checks had passed.
-  function ingredientRow(item, supplierName) {
+  //
+  // ⚠️ THE ROW IS A FRAME, NOT A BUTTON: the drill button (opens the card) and the word at the right
+  // («Disattiva» / «Riattiva») are two siblings — a button cannot nest in a button. The word saves ON
+  // THE TAP, no confirmation (it is reversible by the same tap), flips at once and never waits for
+  // the write (offline, a write resolves only when the server answers); a refusal puts it back and
+  // says so. `stay` — the maps that remember this id was switched (and on which side), so the row keeps its place.
+  function ingredientRow(item, supplierName, stay = []) {
     const meta = [
       // On a supplier's own screen both kinds share one list, so packaging says so.
       supplierName === undefined && isPackaging(item) ? t('orders.packagingTag') : null,
@@ -368,9 +487,52 @@ export function buildRegistry(data, actions, hooks = {}) {
     // holds; a row on a supplier's own screen — supplierName undefined, itself in the pane —
     // opens its card ABOVE that screen, as on a phone.
     const onList = supplierName !== undefined;
-    const row = drillRow(ingredientDisplayName(item), meta, item.active !== false,
+    const name = ingredientDisplayName(item);
+    let active = item.active !== false;
+    // ⚠️ A PENCIL, NOT A WORD: hand-made = not from an invoice. Read-only, the drill button stays the target.
+    const nameNode = el('span', { class: 'mgmt-item-name reg-name' }, [
+      el('span', { class: 'reg-name-text', text: name }),
+      fromInvoice(item) ? null : el('span', {
+        class: 'reg-handmade', role: 'img',
+        'aria-label': t('orders.handMade'), title: t('orders.handMade'), icon: PENCIL_SVG,
+      }),
+    ]);
+    const row = drillRow(name, meta, active,
       () => (onList ? openFromList(() => openIngredientForm(item, null), `ingredient:${item.id}`) : openIngredientForm(item, null)),
-      onList ? `ingredient:${item.id}` : null);
+      null, nameNode);
+    // ⚠️ THE ROWS DRAW BEFORE THE PRICES (registry-main.js), AND A PRICE CAN WRAP ITS LINE: every row below would
+    // drop under the finger as they land, and «Disattiva» saves on the tap. So the room for one is kept, unseen.
+    // A row that turns out to have no price gives it back.
+    if (!formatPricePerUnit(item) && needsPriceRead({ mayPrice: mayWritePrices(), pricesLoaded: data.pricesLoaded?.() === true })) {
+      row.querySelector('.mgmt-item-meta').appendChild(el('span', {
+        class: 'reg-price-room',
+        text: `${meta ? ' · ' : ''}${formatPricePerUnit({ pricePerUnit: 12.5, priceUnit: 'kg' })}`,
+      }));
+    }
+    // `data-word` lets refresh() find this word again in the repainted list and give it focus back.
+    const word = el('button', { type: 'button', class: 'reg-word', 'data-word': item.id });
+    const paintWord = () => {
+      word.textContent = t(active ? 'ui.deactivate' : 'ui.activate');
+      word.setAttribute('aria-label', t(active ? 'orders.row.deactivate' : 'orders.row.activate', { name }));
+      word.classList.toggle('reg-word-off', !active);
+      row.classList.toggle('inactive', !active);
+    };
+    paintWord();
+    word.addEventListener('click', () => {
+      const next = !active;
+      stay.forEach(map => { if (!map.has(item.id)) map.set(item.id, active); });
+      active = next;
+      paintWord();
+      let written;
+      try { written = Promise.resolve(actions.setIngredientActive(item.id, next)); } catch (err) { written = Promise.reject(err); }
+      written.catch((err) => {
+        if (active === next) { active = !next; paintWord(); }
+        return reportFailure(next ? 'activate' : 'deactivate', name, err);
+      });
+    });
+    const frame = el('div', { class: 'reg-row', 'data-sel': onList ? `ingredient:${item.id}` : null }, [row, word]);
+    const knownHeight = onList ? rowHeights.get(`ingredient:${item.id}`) : undefined;
+    if (knownHeight) frame.style.containIntrinsicSize = `auto ${knownHeight}px`;
     // ⚠️ A WORD, NEVER A COLOUR ALONE (P18, and the v1.63.0 rule). «Not declared»
     // and «contains none of the 14» look identical as an empty allergen list, and
     // only the verification stamp tells them apart.
@@ -385,7 +547,7 @@ export function buildRegistry(data, actions, hooks = {}) {
       row.querySelector('.mgmt-item-main').appendChild(
         el('span', { class: 'reg-flag', text: t('orders.notDeclaredShort') }));
     }
-    return row;
+    return frame;
   }
 
   // ── One supplier ────────────────────────────────────────────────────────────
@@ -436,9 +598,16 @@ export function buildRegistry(data, actions, hooks = {}) {
       if (!mine.length) {
         body.appendChild(el('p', { class: 'mgmt-empty', text: t('orders.noIngredientsYetAddPlus') }));
       } else {
-        const list = el('div', { class: 'mgmt-list' });
-        mine.forEach(i => list.appendChild(ingredientRow(i)));
-        body.appendChild(list);
+        // This screen's own memory of what was switched while it is open (see listCtx): it lives on
+        // the entry, which refresh() hands back to build() again; reopening the supplier = a new entry.
+        entry.ctx = entry.ctx || { switched: new Map(), group: { open: false } };
+        // The list beside it (tablet) must not jump either; `listCtx` is asked at tap time, because a
+        // tab change replaces it while this screen stays open.
+        const stay = [entry.ctx.switched, {
+          has: id => listCtx.switched.has(id),
+          set: (id, side) => listCtx.switched.set(id, side),
+        }];
+        appendItemRows(body, mine, entry.ctx, i => ingredientRow(i, undefined, stay), false);
       }
 
       // ⚠️ THE STAR IS DRAWN ONLY WHEN THE ACTION EXISTS (the gate is in registry-main.js, owner/manager).
@@ -554,7 +723,7 @@ export function buildRegistry(data, actions, hooks = {}) {
         // The form then knows nothing about overlays and this file stays the only
         // one that navigates — the same seam saveIngredient and priceHistory use.
         // ⚠️ `openMerge` ONLY FOR AN EXISTING INGREDIENT (never packaging) AND ONLY WHEN registry-main.js says this
-        // person may merge (`mergePacks`, a getter like `deleteIngredient`: owner or manager with Food cost).
+        // person may merge (`mergePacks`, a getter like `deleteIngredient`: whoever may write a price).
         actions: {
           ...actions,
           capturePackPhoto,
@@ -682,6 +851,8 @@ export function buildRegistry(data, actions, hooks = {}) {
       categoriesReady: () => data.categoriesLoaded?.() !== false,
       ingredients: () => data.ingredients(),
       onDeleteCategory: (list, ids) => actions.deleteCategory(list, ids),
+      // Read each time the screen is built, so it follows the session.
+      mayChangeVenue: actions.mayChangeVenue === true,
       onSet: async (key, on) => {
         // ⚠️ TWO CALLABLES, ROUTED BY KEY. setIngredientPanels writes two fields whose
         // absence means YES; setPackPhoto writes one whose absence means NO, because it
@@ -815,11 +986,17 @@ export function buildRegistry(data, actions, hooks = {}) {
 
   // Re-run after every repaint of the list (refresh() repaints on each snapshot) and every
   // change of the stack.
+  // ⚠️ «CURRENT» GOES ON THE BUTTON, so a screen reader says it on the control it lands on. An
+  // ingredient row is a frame around its drill button: the button carries aria-current, and the
+  // frame a class that paints the same picked look over the whole card, word cell included.
   function paintSelection() {
     const key = selectedKey();
     listHost.querySelectorAll('[data-sel]').forEach(row => {
-      if (key !== null && row.dataset.sel === key) row.setAttribute('aria-current', 'true');
-      else row.removeAttribute('aria-current');
+      const picked = key !== null && row.dataset.sel === key;
+      const target = row.querySelector('.reg-drill') || row;
+      if (picked) target.setAttribute('aria-current', 'true');
+      else target.removeAttribute('aria-current');
+      if (target !== row) row.classList.toggle('reg-row-picked', picked);
     });
   }
 
@@ -845,7 +1022,13 @@ export function buildRegistry(data, actions, hooks = {}) {
     if (active && active !== document.body && !pane.contains(active)) return;   // they are elsewhere
     const rows = [...listHost.querySelectorAll('[data-sel]')];
     const row = rows.find(r => r.dataset.sel === lastKey) || rows[0];
-    row?.focus({ preventScroll: true });
+    if (!row) return;
+    // A row inside a closed «Not in use» group cannot take focus: open the group first.
+    for (let up = row.parentNode; up && up !== listHost; up = up.parentNode) {
+      if (up.tagName === 'DETAILS' && !up.open) up.open = true;
+    }
+    // An ingredient row is a frame around its button; a supplier row is the button itself.
+    (row.querySelector('.reg-drill') || row).focus({ preventScroll: true });
   }
 
   // ⚠️ P20 — TYPED WORK IS NEVER LOST SILENTLY. True when any level of the pane holds a form
@@ -964,9 +1147,18 @@ export function buildRegistry(data, actions, hooks = {}) {
   // is exactly where somebody adding sixty-seven of them is standing. Only the
   // first render was ever checked in this project before v1.60.1 deleted an
   // allergen card on the second one.
+  //
+  // ⚠️ A REPAINT KEEPS THE PLACE: the scroll of a supplier's screen and the word that had focus.
+  // Every «Disattiva» / «Riattiva» tap is a save, and Firestore answers the open listener at once,
+  // so each tap ends here: without this the screen jumped back to the top on every tap, and the
+  // keyboard (or a screen reader) fell back to the page header.
   let redrawOwed = false;
   function refresh() {
+    const focused = document.activeElement;
+    const wordId = focused?.classList?.contains('reg-word') ? focused.dataset.word : null;
+    const wordInList = wordId !== null && listHost.contains(focused);
     paintList();
+    if (wordInList) refocusWord(listHost, wordId);
     const top = stack[stack.length - 1];
     if (!top || !top.overlay) return;
     if (top.overlay.querySelector('.mgmt-form')) return;   // a form: leave it be
@@ -974,16 +1166,30 @@ export function buildRegistry(data, actions, hooks = {}) {
     // only in that node, and a rebuild would drop both (and let the update gate reload over
     // a paid reading). One redraw is owed and runs when the level closes (popEntry).
     if (top.keepAlive) { redrawOwed = true; return; }
+    const wordOnTop = wordId !== null && top.overlay.contains(focused);
+    const scrollTop = top.overlay.querySelector('.mgmt-scroll')?.scrollTop || 0;
     const next = top.build(top);
     if (!next) return;                                     // build() popped it
     top.overlay.replaceWith(next);
     top.overlay = next;
+    const scroller = next.querySelector('.mgmt-scroll');
+    if (scroller) scroller.scrollTop = scrollTop;
+    if (wordOnTop) refocusWord(next, wordId);
+  }
+
+  function refocusWord(host, id) {
+    const again = [...host.querySelectorAll('.reg-word')].find(w => w.dataset.word === id);
+    if (!again) return;
+    for (let up = again.parentNode; up && up !== host; up = up.parentNode) {
+      if (up.tagName === 'DETAILS' && !up.open) return;   // folded away: nowhere visible to land
+    }
+    again.focus({ preventScroll: true });
   }
 
   paintList();
   // ⚠️ LAST, after every declaration above: both answer at once when there is something to
   // say (tests/early-session-callback.test.mjs).
-  onLanguageChange(paintPane);
+  onLanguageChange(paintList);
   watchTablet(placeOverlays);
   return { node, refresh, openSettings, addCurrent, askBeforeLeaving, leaveWouldAsk };
 }
@@ -997,6 +1203,13 @@ const STAR_SVG =
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${STAR_PATH}</svg>`;
 const STAR_FILLED_SVG =
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${STAR_PATH}</svg>`;
+
+const SMALL_CHEVRON_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';
+
+// Lucide «pencil»: the mark on a hand-made ingredient.
+const PENCIL_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.17 6.81a1 1 0 0 0-3.99-3.99L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/><path d="m15 5 4 4"/></svg>';
 
 const CHEVRON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>';

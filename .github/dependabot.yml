@@ -1,0 +1,36 @@
+# Keeps the GitHub Actions of .github/workflows/ current now that each one is pinned to a commit.
+#
+# ⚠️ WITHOUT THIS FILE THE PINS AGE IN SILENCE. GitHub raises Dependabot ALERTS only for actions
+# pinned by version tag (`@v5`), never for actions pinned to a commit SHA — and every `uses:` here
+# is a SHA (tests/ci-actions-pinned.test.mjs). So this monthly pull request is the only thing that
+# brings in a fixed version of an action.
+#
+# - Once a month, every action in ONE pull request. Major versions are left out: a major can
+#   change how a job behaves (a new Node runtime, a renamed input), so it is a task of its own.
+# - `cooldown`: a release is proposed only after 7 days in public — the same wait as the lockfile
+#   of ci/firebase-tools/ (`--before` 7 days). A hijacked release is usually spotted and pulled
+#   within days; this keeps it off CI until then.
+# - Merging it changes the production deploy job (test.yml, deploy-functions), so it goes live
+#   like any release. preview.yml skips these pull requests (why: above its build-mise2 job), so
+#   a new version of the sign-in action first runs in deploy-functions: the go-live check
+#   «deploy-functions success» is what proves it.
+# - npm is not listed: its security updates are a repository setting and stay as they are;
+#   version updates for npm would be a stream of pull requests nobody asked for.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7
+    groups:
+      github-actions:
+        patterns:
+          - '*'
+    ignore:
+      - dependency-name: '*'
+        update-types:
+          - version-update:semver-major
+    commit-message:
+      prefix: ci

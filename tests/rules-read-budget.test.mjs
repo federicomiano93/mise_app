@@ -162,8 +162,8 @@ test('exists() is not reintroduced beside a get() on the same document', () => {
 
 test('the most expensive gated rule stays well inside the budget of 10', () => {
   // canManage() is the deepest path a request can take: it calls canUse(), which
-  // calls member() and sectionOn(), and then roleIn().
-  const cost = costOf('member') + costOf('sectionOn') + costOf('roleIn');
+  // reads through roleIn() and sectionOn(), and then roleIn() again.
+  const cost = costOf('roleIn') + costOf('sectionOn') + costOf('roleIn');
 
   assert.equal(cost, 3,
     `a canManage()-gated rule now costs ${cost} reads, not 3. That is not automatically ` +
@@ -175,6 +175,35 @@ test('the most expensive gated rule stays well inside the budget of 10', () => {
     `a canManage()-gated rule costs ${cost} of the 10 reads a rule evaluation is allowed. ` +
     'Past 6 there is no room for the next feature, and the failure when it runs out is a ' +
     '403 that looks exactly like an ordinary refusal.');
+});
+
+// ⚠️ canUse() IS ON NEARLY EVERY RULE OF THE FILE, so one more read here is billed on nearly
+// every operation of every phone. Each helper hands the value it read to a second function,
+// which is what lets it ask the value and the section with one read of each document.
+for (const [helper, inner, section] of [
+  ['canUse', 'canUseAs', true],
+  ['worksOnClients', 'worksOnClientsAs', true],
+  ['managesClients', 'managesClientsAs', true],
+  ['writesCalculatorConfig', 'writesCalculatorConfigAs', true],
+]) {
+  test(`⚠️ ${helper}() costs 2 reads: users/{uid} once and locations/{lid} once`, () => {
+    const outer = bodyOf(helper);
+    const body = bodyOf(inner);
+    assert.ok(outer && body, `firestore.rules has no ${helper}() or ${inner}()`);
+    assert.equal(accessesIn(outer).length + accessesIn(body).length, 0, 'it reads through the helpers, never by itself');
+    assert.equal((outer.match(/\broleIn\(/g) || []).length, 1, `${helper}() must read the value once`);
+    assert.equal((body.match(/\bsectionOn\(/g) || []).length, section ? 1 : 0, `${inner}() must ask the section once`);
+    assert.doesNotMatch(outer + body, /\bmember\(|\bcardAccess\(/,
+      'a member() here would be a third read of the same two documents');
+  });
+}
+
+test('managesPrices() costs what cardAccess() costs, and the weighing door 3', () => {
+  assert.match(bodyOf('managesPrices'), /cardAccess\(lid, 'foodcost', 'prices'\)/);
+  assert.equal((bodyOf('managesPrices').match(/\bcardAccess\(/g) || []).length, 1);
+  const door = bodyOf('weighsRecipeLoss');
+  assert.equal((door.match(/\broleIn\(/g) || []).length, 1);
+  assert.equal((door.match(/\bsectionOn\(/g) || []).length, 2);
 });
 
 test('the feedback create rule costs exactly 2 reads — member()\'s users get and one locations get', () => {

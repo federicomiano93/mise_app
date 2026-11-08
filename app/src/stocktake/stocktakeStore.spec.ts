@@ -2,8 +2,9 @@ import { describe, expect, test, vi } from 'vitest';
 import type { CountMap } from '@mise/shared/inventory-model';
 import type { KeyValueStorage } from '../session/backend';
 import type { Clearing, IngredientsAnswer, SnapshotMeta, StocktakeSource, StoredDoc } from './stocktakeSource';
+import { LIST_STATUS } from '@mise/shared/inventory-model';
 import {
-  SAVE_DELAY_MS, SETTLE_MS, createStocktakeStore, monthCacheKey, monthSeenKey, unsavedCacheKey,
+  SAVE_DELAY_MS, SETTLE_MS, STALL_MS, createStocktakeStore, monthCacheKey, monthSeenKey, unsavedCacheKey,
 } from './stocktakeStore';
 import type { StocktakeDeps, StocktakeMessage } from './stocktakeStore';
 
@@ -1407,5 +1408,130 @@ describe('⚠️⚠️ whether the month may be acted on (ready)', () => {
     t.hears(null, COPY);
     expect(t.isReady()).toBe(false);
     expect(t.store.setCount('closing', 'flour', '3')).toBe(true);
+  });
+});
+
+// The current app's getListStatus (js/inventory/inventory-store.js, PR #440): what the list may say while it has no rows.
+// Every store case of tests/inventory-empty-flash.test.mjs that applies to a store made inside an open venue.
+describe('⚠️ what the list may say while it has no rows (listStatus)', () => {
+  const FLOUR = { id: 'flour', name: 'Flour' };
+  const COPY: SnapshotMeta = { fromServer: false, hasPendingWrites: false };
+  const SERVER: SnapshotMeta = { fromServer: true, hasPendingWrites: false };
+  const EMPTY_COPY: IngredientsAnswer = { fromCache: true, pricesAnswered: false };
+
+  function opened(online: boolean | undefined = true) {
+    const t = setup();
+    t.deps.online = () => online;
+    t.store.start();
+    t.store.openMonth('2026-10');
+    return {
+      ...t,
+      hears: (doc: Doc | null, meta: SnapshotMeta) => {
+        t.liveMonth('2026-10')[0]!.onChange(doc === null ? null : { id: '2026-10', ...doc }, meta);
+      },
+      lists: (list: StoredDoc[], answer: IngredientsAnswer) => { t.ingredients.at(-1)!.onChange(list, answer); },
+      status: () => t.store.getSnapshot().listStatus,
+    };
+  }
+
+  test('nothing heard: waiting, never «no products»; a venue with nothing at all ends answered', () => {
+    const t = opened();
+    expect(t.status()).toBe(LIST_STATUS.waiting);
+    t.hears(null, SERVER);
+    expect(t.status(), 'the month alone is not enough').toBe(LIST_STATUS.waiting);
+    t.lists([], FROM_SERVER);
+    expect(t.status()).toBe(LIST_STATUS.answered);
+  });
+
+  test('⚠️ a missing month from the phone’s own copy does not count; the server’s word does; so does a document', () => {
+    const t = opened();
+    t.lists([FLOUR], FROM_SERVER);
+    t.hears(null, COPY);
+    expect(t.status()).toBe(LIST_STATUS.waiting);
+    t.hears(null, SERVER);
+    expect(t.status()).toBe(LIST_STATUS.answered);
+    const u = opened();
+    u.lists([FLOUR], FROM_SERVER);
+    u.hears({ month: '2026-10' }, COPY);
+    expect(u.status()).toBe(LIST_STATUS.answered);
+  });
+
+  test('⚠️ an empty list from the copy is not an answer: waiting online, unreachable at once offline; rows from the server end it', () => {
+    const online = opened(true);
+    online.hears(null, SERVER);
+    online.lists([], EMPTY_COPY);
+    expect(online.status()).toBe(LIST_STATUS.waiting);
+    const offline = opened(false);
+    offline.hears(null, SERVER);
+    offline.lists([], EMPTY_COPY);
+    expect(offline.status()).toBe(LIST_STATUS.unreachable);
+    offline.lists([FLOUR], FROM_SERVER);
+    expect(offline.status()).toBe(LIST_STATUS.answered);
+  });
+
+  test('offline with nothing heard is still waiting: a full copy may be a moment away', () => {
+    expect(opened(false).status()).toBe(LIST_STATUS.waiting);
+  });
+
+  test('a list that has answered stays answered when its last row goes with no signal', () => {
+    const t = opened(false);
+    t.hears(null, SERVER);
+    t.lists([FLOUR], FROM_SERVER);
+    t.lists([], EMPTY_COPY);
+    expect(t.status()).toBe(LIST_STATUS.answered);
+  });
+
+  test('⚠️ the wait has an end: STALL_MS after the month opens, still unheard, the list says it has not arrived', async () => {
+    const t = opened();
+    await t.advance(STALL_MS - 1);
+    expect(t.status()).toBe(LIST_STATUS.waiting);
+    await t.advance(1);
+    expect(t.status()).toBe(LIST_STATUS.unreachable);
+    // And the answers still end it, by themselves.
+    t.hears(null, SERVER);
+    t.lists([FLOUR], FROM_SERVER);
+    expect(t.status()).toBe(LIST_STATUS.answered);
+  });
+
+  test('the timer says nothing when both have answered, and starts again for the next month opened', async () => {
+    const t = opened();
+    t.hears(null, SERVER);
+    t.lists([], FROM_SERVER);
+    await t.advance(STALL_MS);
+    expect(t.status()).toBe(LIST_STATUS.answered);
+    t.store.openMonth('2026-11');
+    expect(t.store.getSnapshot().listStatus, 'November has not spoken').toBe(LIST_STATUS.waiting);
+    await t.advance(STALL_MS);
+    expect(t.store.getSnapshot().listStatus).toBe(LIST_STATUS.unreachable);
+  });
+
+  test('a stopped store has no timer left to fire', async () => {
+    const t = opened();
+    t.store.stop();
+    const before = t.store.getSnapshot();
+    await t.advance(STALL_MS * 2);
+    expect(t.store.getSnapshot()).toBe(before);
+  });
+
+  test('a dead listener is told apart, from either one; an answer wins over it', () => {
+    const t = opened();
+    t.ingredients.at(-1)!.onError(new Error('boom'));
+    expect(t.status()).toBe(LIST_STATUS.failed);
+    const u = opened();
+    u.fail('2026-10', new Error('refused'));
+    expect(u.status()).toBe(LIST_STATUS.failed);
+    const v = opened();
+    v.hears(null, SERVER);
+    v.lists([FLOUR], FROM_SERVER);
+    v.fail('2026-10', new Error('refused'));
+    expect(v.status(), 'the rows are drawn anyway').toBe(LIST_STATUS.answered);
+    expect(v.store.getSnapshot().ready, 'but the month may not be acted on').toBe(false);
+  });
+
+  test('the ingredients answering again after a failure are no longer a failure', () => {
+    const t = opened();
+    t.ingredients.at(-1)!.onError(new Error('boom'));
+    t.lists([FLOUR], FROM_SERVER);
+    expect(t.status()).toBe(LIST_STATUS.waiting);
   });
 });

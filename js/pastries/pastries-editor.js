@@ -9,7 +9,7 @@ import { revealField } from '../reveal-field.js';
 import { el } from './dom.js';
 import {
   cleanItems, findInvalidItems, cleanNote,
-  MAX_NAME_LENGTH, MAX_NOTE_LENGTH, MAX_QTY, WEEKDAYS,
+  MAX_NAME_LENGTH, MAX_NOTE_LENGTH, MAX_ITEM_NOTE_LENGTH, MAX_QTY, WEEKDAYS,
 } from './pastries-model.js';
 
 const TRASH_SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>';
@@ -26,19 +26,23 @@ function problemMessage(problem, name) {
   return t('past.thatCannotBeSaved');
 }
 
-export function renderEditor({ day, items, note, allDays, app }) {
+// `copiedFrom` is the weekday whose list `items` came from when this editor was
+// opened by «Copy day»; null for an ordinary edit.
+export function renderEditor({ day, items, note, allDays, app, copiedFrom = null }) {
   // The working copy. Quantities are held as STRINGS while being typed, so a
   // half-typed field is not fighting a number: an empty box stays empty instead
   // of snapping to 0 under the cursor.
-  const working = (items || []).map(i => ({ name: i.name, qty: String(i.qty) }));
-  if (!working.length) working.push({ name: '', qty: '' });
+  const working = (items || []).map(i => ({ name: i.name, qty: String(i.qty), note: i.note || '' }));
+  if (!working.length) working.push({ name: '', qty: '', note: '' });
 
   // The standing note is part of the same working copy, so it inherits the Save
   // confirm and the "Discard changes?" guard. A permanent note somebody typed
   // and then navigated away from must not disappear without being asked about.
   let workingNote = typeof note === 'string' ? note : '';
 
-  let dirty = false;
+  // A copied list is unsaved work from the first moment: Back must ask before
+  // throwing it away, though nothing has been typed.
+  let dirty = !!copiedFrom;
   let showErrors = false;
   let busy = false;   // a confirm is open; taps keep arriving
 
@@ -94,6 +98,18 @@ export function renderEditor({ day, items, note, allDays, app }) {
         oninput: (e) => { row.qty = e.target.value; markDirty(); if (showErrors) validate(); },
       });
 
+      // The row's own note, e.g. «9x3». Free text: nothing validates it, so it
+      // stays out of validate()'s .pas-invalid handling.
+      const noteField = el('input', {
+        class: 'pas-item-note',
+        type: 'text',
+        value: row.note,
+        placeholder: t('past.itemNotePlaceholder'),
+        maxlength: String(MAX_ITEM_NOTE_LENGTH),
+        autocomplete: 'off',
+        oninput: (e) => { row.note = e.target.value; markDirty(); },
+      });
+
       const del = el('button', {
         class: 'pas-del-icon',
         type: 'button',
@@ -107,11 +123,12 @@ export function renderEditor({ day, items, note, allDays, app }) {
       function nameRow() {
         const label = (row.name || '').trim();
         qtyInput.setAttribute('aria-label', label ? t('past.howManyOf', { name: label }) : t('past.howManyPastries'));
+        noteField.setAttribute('aria-label', label ? t('past.itemNoteFor', { name: label }) : t('past.itemNote'));
         del.setAttribute('aria-label', t('past.removeRow', { name: label || t('past.thisRow') }));
       }
       nameRow();
 
-      rowsContainer.appendChild(el('div', { class: 'pas-editrow' }, [nameInput, qtyInput, del]));
+      rowsContainer.appendChild(el('div', { class: 'pas-editrow' }, [nameInput, qtyInput, noteField, del]));
     });
     updateCount();
   }
@@ -122,7 +139,7 @@ export function renderEditor({ day, items, note, allDays, app }) {
     // An untouched row has nothing to lose, so asking about it is noise. A row
     // with something typed in it gets the same low-key confirm every other
     // delete in this app gets.
-    const hasContent = (row.name || '').trim() || String(row.qty || '').trim();
+    const hasContent = (row.name || '').trim() || String(row.qty || '').trim() || (row.note || '').trim();
     if (hasContent) {
       busy = true;
       const ok = await app.confirm({
@@ -136,7 +153,7 @@ export function renderEditor({ day, items, note, allDays, app }) {
       if (!ok) return;
     }
     working.splice(idx, 1);
-    if (!working.length) working.push({ name: '', qty: '' });
+    if (!working.length) working.push({ name: '', qty: '', note: '' });
     markDirty();
     renderRows();
     if (showErrors) validate();
@@ -212,7 +229,7 @@ export function renderEditor({ day, items, note, allDays, app }) {
     class: 'pas-add-row',
     type: 'button',
     onclick: () => {
-      working.push({ name: '', qty: '' });
+      working.push({ name: '', qty: '', note: '' });
       markDirty();
       renderRows();
       // Put the cursor straight in the new row — the reason for tapping "add"
@@ -237,12 +254,20 @@ export function renderEditor({ day, items, note, allDays, app }) {
     oninput: (e) => { workingNote = e.target.value; markDirty(); },
   });
 
-  return el('div', { class: 'pas-view' }, [
+  // `pas-editor` names this screen to the update gate (js/update-gate.js): the day is
+  // saved whole, so a release reload mid-edit would throw the whole working copy away.
+  return el('div', { class: 'pas-view pas-editor' }, [
     datalist,
     el('div', { class: 'pas-editor-head' }, [
       el('span', { class: 'pas-editor-heading', text: t('past.toProveFor', { day: weekdayLabel(day) }) }),
       countEl,
     ]),
+    // Only the rows came across; the standing note below is this weekday's own.
+    copiedFrom ? el('p', {
+      class: 'pas-copied',
+      role: 'status',
+      text: t('past.copiedFromDay', { day: weekdayLabel(copiedFrom) }),
+    }) : null,
     rowsContainer,
     addBtn,
     el('div', { class: 'pas-editor-note' }, [

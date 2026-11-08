@@ -1,9 +1,14 @@
 // calculator-recipe-source.ts — where a Calculator tab's ingredients come from. PURE: no DOM, no Firestore.
 //
 // TypeScript FULL port of js/calculator-recipe-source.js for Mise 2. Behaviour is identical, input for
-// input, with ONE intended difference: `resolveRecipe` reads a linked row in kilos as grams × 1000 (18 Oct
-// 2026, see there). calculator-recipe-source.spec.ts runs every test against BOTH files, parity.spec.ts
-// compares their exports and odd-inputs.spec.ts feeds both the same strange values (none with a kg row).
+// input: calculator-recipe-source.spec.ts runs every test against BOTH files, parity.spec.ts compares their
+// exports and odd-inputs.spec.ts feeds both the same strange values. The one intended difference it once had
+// (a linked row in kilos read as grams × 1000, 18 Oct 2026) is gone: the current app made the same fix, and
+// since 8 Nov 2026 both weigh a row through the Catalogue's own unit table (rowGrams, isWeighable).
+//
+// ⚠️ STILL OWED (8 Nov 2026): `catalogueChoices` and `rowsToStamp` («Add a recipe» offers the
+// recipe book first, linking stamps row ids — item 37 of docs/mise2-port-owed.md) are not here yet, so
+// parity.spec.ts still expects the export lists to differ.
 //
 // NOT PART OF THIS FILE (it was never in the original either): `effectiveRecipe`, `isStillLoading`,
 // `recipeToSave` and `problemMessage` live in js/calculator-catalogue-link.js, which holds the map of the
@@ -20,7 +25,8 @@
 // was left with no weights at all, for everybody.
 
 import { ridOf } from './guided-model';
-import { keepRows } from './catalogue-model';
+// The Catalogue's own unit table, never a copy of it: a second table is a second place for kg to drift.
+import { ingredientGrams, isWeighableUnit, keepRows } from './catalogue-model';
 
 // ── What can go wrong, named ─────────────────────────────────────────────────
 //
@@ -52,6 +58,9 @@ export interface ResolvedRecipe {
   linked: boolean;
   problem: RecipeProblem | null;
   problemRow: string;
+  // On an `unweighable` refusal only: how many rows the linked recipe has, for the Recipes list's «N ingredients»
+  // (ingredientCount). The refusal's `ingredients` stays empty.
+  rowCount?: number;
 }
 
 const num = (v: unknown): number => { const n = Number(v); return Number.isFinite(n) ? n : 0; };
@@ -60,16 +69,36 @@ const num = (v: unknown): number => { const n = Number(v); return Number.isFinit
 type Row = { unit?: unknown; grams?: unknown; label?: unknown; dividerAfter?: unknown } | null | undefined;
 type Tab = { catalogueId?: unknown; name?: unknown; ingredients?: unknown; leaveningKey?: unknown; leaveningRid?: unknown } | null | undefined;
 
+// The row's unit as the Catalogue's table names it: no unit (a legacy row) and «gr» are grams.
+const unitKey = (row: Row): string => {
+  const unit = String(row?.unit || '').trim().toLowerCase();
+  return unit === 'gr' || !unit ? 'g' : unit;
+};
+
+// A weighable row's amount IN GRAMS.
+//
+// ⚠️⚠️ THE CATALOGUE STORES THE NUMBER AS TYPED, IN ITS OWN UNIT. «Flour 1 kg» is saved as { grams: 1, unit: 'kg' } —
+// the field is called `grams` for history, not because it holds grams. The unit is read loosely (trimmed, any case,
+// «gr») because the linked recipe arrives raw from Firestore, not through the Catalogue's normaliser. Rounded to the
+// milligram so 1.005 kg reads 1005 g, not 1004.9999999999999 g.
+function rowGrams(row: Row): number {
+  const g = ingredientGrams({ grams: num(row?.grams), unit: unitKey(row) });
+  return Math.round(g * 1000) / 1000;
+}
+
 // Is this row something the Calculator can scale? The Calculator works in grams and multiplies everything
 // by one factor; a row measured in pieces or "to taste" has no weight to multiply.
 //
 // ⚠️ IT BLOCKS THE WHOLE RECIPE AND NAMES THE ROW (decided 1 Aug 2026). Skipping it would produce a dough
 // that is quietly light by exactly that ingredient — the one direction a recipe must not be wrong in.
+//
+// ⚠️⚠️ WEIGHABLE MEANS WHAT THE RECIPE BOOK SAYS IT MEANS — its own table, litres included at 1 ml = 1 g. This used
+// to accept only g and kg, so a recipe-book recipe with «Acqua 0,65 l» refused the whole tab while the recipe book
+// counted the same litres in its total and its Food cost (Panificio Miano, 30 Oct 2026: «Le ricette nel calcolatore
+// non funzionano»; current app e7f3dac0).
 export function isWeighable(row: unknown): boolean {
   const r = row as Row;
-  const unit = String(r?.unit || '').trim().toLowerCase();
-  if (unit && unit !== 'g' && unit !== 'gr' && unit !== 'kg') return false;
-  return num(r?.grams) > 0;
+  return isWeighableUnit(unitKey(r)) && num(r?.grams) > 0;
 }
 
 // Which Catalogue recipes a Calculator config actually needs.
@@ -86,6 +115,22 @@ export function linkedRecipeIds(recipes: unknown): string[] {
 
 export function isLinked(recipe: unknown): boolean {
   return !!String((recipe as Tab)?.catalogueId || '').trim();
+}
+
+// How many ingredients the Recipes list says a recipe has, from the recipe as it resolves.
+//
+// ⚠️ A LINKED RECIPE'S OWN `ingredients` IS EMPTY (or a stale copy): its rows live in the recipe book. Counting the
+// tab's copy made every linked recipe say «0 ingredienti» in Calculator → Settings → Recipes (found on the lab
+// tablet, 31 Oct 2026; current app 535bcdb2). So the count comes from the resolved recipe — a recipe with a row the
+// Calculator cannot weigh («salt, to taste») still has its rows, and says how many — and null, no number at all,
+// when the linked recipe has not been read yet: a «0» there would be a wrong fact, while a recipe that really has no
+// rows still says 0.
+export function ingredientCount(recipe: unknown, resolved: Partial<ResolvedRecipe> | null | undefined): number | null {
+  const tab = recipe as Tab;
+  if (!isLinked(recipe)) return Array.isArray(tab?.ingredients) ? tab.ingredients.length : 0;
+  if (!resolved || resolved.problem === PROBLEMS.missing) return null;
+  if (resolved.problem === PROBLEMS.unweighable) return Number(resolved.rowCount) || 0;
+  return Array.isArray(resolved.ingredients) ? resolved.ingredients.length : 0;
 }
 
 function blank(): ResolvedRecipe {
@@ -137,6 +182,7 @@ export function resolveRecipe(recipe: unknown, catalogueById?: unknown): Resolve
       linked: true,
       problem: PROBLEMS.unweighable,
       problemRow: String(blocker.label || '').trim(),
+      rowCount: usable.length, // only for the Recipes list's «N ingredients» (ingredientCount)
     };
   }
 
@@ -145,14 +191,11 @@ export function resolveRecipe(recipe: unknown, catalogueById?: unknown): Resolve
   // Sourdough calls its leavening "Starter" in the Calculator and "Sourdough starter" in the Catalogue
   // TODAY. By position, inserting one row at the top makes the yeast step ask for the flour.
   //
-  // ⚠️ A ROW IN KILOS IS READ AS GRAMS × 1000 (NEW IN MISE 2, 18 Oct 2026). isWeighable accepts `kg`, but the original
-  // read the amount as it stands, so «1 kg» of flour became 1 g: a dough a thousand times too light, with no warning.
-  // This is the one intended difference from js/calculator-recipe-source.js, whose fix for the live app is a separate
-  // change; until it lands the two files disagree on a `kg` row (and only there).
+  // ⚠️ THE AMOUNT IS READ IN ITS OWN UNIT (rowGrams): «1 kg» of flour is 1000 g, «0,65 l» of water 650 g.
   const ingredients = usable.map(r => ({
     key: ridOf(r) || String((r as NonNullable<Row>).label || '').trim(),
     label: String((r as NonNullable<Row>).label || '').trim(),
-    grams: num((r as NonNullable<Row>).grams) * (String((r as NonNullable<Row>).unit || '').trim().toLowerCase() === 'kg' ? 1000 : 1),
+    grams: rowGrams(r),
   }));
 
   const wanted = String(tab.leaveningRid || '').trim();
@@ -190,6 +233,16 @@ export function sheetRecipe<T>(recipe: T, resolved: ResolvedRecipe | null | unde
 // answer.
 export function canCalculate(resolved: ResolvedRecipe | null | undefined): boolean {
   return !!resolved && !resolved.problem && resolved.ingredients.length > 0;
+}
+
+// Does the tab show the sentence saying why it cannot be calculated?
+//
+// ⚠️ A REFUSAL THAT SAYS NOTHING READS AS A BROKEN APP. The tab used to refuse in silence — the total typed, no
+// ingredient, no sentence — and the reason came out only after Confirm (Panificio Miano, 30 Oct 2026: «Le ricette nel
+// calcolatore non funzionano»; current app 6713adab). Only a LINKED tab: an own recipe with no rows is still being
+// written in Settings. And not while the recipe is on its way, which is not «it is gone».
+export function showsSourceProblem(recipe: unknown, resolved: Partial<ResolvedRecipe> | null | undefined, stillLoading: unknown): boolean {
+  return isLinked(recipe) && !!resolved?.problem && !stillLoading;
 }
 
 // Settings → Recipes: the leavening dropdown's answer, written on the tab being edited (a working copy, changed

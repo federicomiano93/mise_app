@@ -90,6 +90,10 @@ export function findUsage(id, sources) {
     const parts = [...(Array.isArray(p?.components) ? p.components : []), ...(Array.isArray(p?.packaging) ? p.packaging : [])];
     if (parts.some(c => c && c.ingredientId === id)) found.push({ kind: 'product', name: text(p.name) });
   });
+  // The owner of the kitchen may not read products, so the server answers with their names.
+  (Array.isArray(s.productNames) ? s.productNames : []).forEach(name => {
+    found.push({ kind: 'product', name: text(name) });
+  });
   (Array.isArray(s.recipes) ? s.recipes : []).forEach(r => {
     const rows = Array.isArray(r?.ingredients) ? r.ingredients : [];
     if (rows.some(row => row && row.refId === id && row.kind !== 'recipe')) found.push({ kind: 'recipe', name: text(r.name) });

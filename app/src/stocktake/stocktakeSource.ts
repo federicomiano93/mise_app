@@ -19,11 +19,10 @@
 // settings are fixed by its first use (src/firestore-access.spec.ts).
 
 import { buildPath } from '@mise/shared/location-id';
-import { isMonthId } from '@mise/shared/inventory-model';
+import { isMonthId, withoutEmptyMaps } from '@mise/shared/inventory-model';
 import { withPrices } from '@mise/shared/price-model';
 import type { DocumentReference, Query } from 'firebase/firestore';
 import type { FirestoreKit } from '../session/firebaseBackend';
-import { withoutEmptyMaps } from './stocktakeModel';
 
 // A document as the store reads it: its id beside its fields.
 export type StoredDoc = { readonly id: string } & Record<string, unknown>;
@@ -50,8 +49,8 @@ export interface IngredientsAnswer {
   // reports one.
   readonly fromCache: boolean;
   // The prices have really answered. An empty copy has not, and a month closed on it would freeze no money. A REFUSED read
-  // has: that account will never get more. Any other failure has not, whatever came before: the prices are gone from the
-  // list, and a month closed then would have no money and no warning.
+  // has: that account will never get more. Any other failure changes nothing: an answer stays an answer and keeps the prices
+  // it brought (the current app's 5df661d3), and with no answer yet there is still none.
   readonly pricesAnswered: boolean;
 }
 
@@ -245,9 +244,13 @@ export function createFirestoreStocktakeSource(
             prices = next;
             emit();
           },
+          // ⚠️ ANY OTHER FAILURE KEEPS WHAT HAS ALREADY ARRIVED (the current app's 5df661d3): an answer stays an answer, so
+          // wiping the prices here would let a later close freeze no money.
           err => {
-            prices = {};
-            pricesAnswered = (err as { code?: unknown }).code === 'permission-denied';
+            if ((err as { code?: unknown }).code === 'permission-denied') {
+              prices = {};
+              pricesAnswered = true;
+            }
             emit();
           },
         );

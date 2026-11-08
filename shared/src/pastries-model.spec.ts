@@ -466,7 +466,7 @@ describe.each([
   });
 
   test('a quantity set from the list is cleaned like any other', () => {
-    const items = [{ name: 'Cornetti', qty: 24 }];
+    const items: ported.PastryItem[] = [{ name: 'Cornetti', qty: 24 }];
     expect(m.setQuantityAt(items, 0, '18', 'Cornetti')?.[0]?.qty).toBe(18);
     expect(m.setQuantityAt(items, 0, 18.6, 'Cornetti')?.[0]?.qty).toBe(19);
     expect(m.setQuantityAt(items, 0, 1e999, 'Cornetti')?.[0]?.qty).toBe(0);
@@ -495,6 +495,66 @@ describe.each([
     expect(m.MAX_NAME_LENGTH).toBe(80);
     expect(m.MAX_QTY).toBe(9999);
     expect(m.MAX_NOTE_LENGTH).toBe(500);
+    expect(m.MAX_ITEM_NOTE_LENGTH).toBe(40);
+  });
+
+  // ── A row's own note («9x3») ─────────────────────────────────────────────────
+
+  test('a row with no note has no note key at all, so it is stored as it always was', () => {
+    for (const note of [undefined, '', '   ', null, 42, ['9x3'], { a: 1 }]) {
+      const [row] = m.cleanItems([{ name: 'Cornetti', qty: '27', note }]);
+      expect(row, JSON.stringify(note)).toStrictEqual({ name: 'Cornetti', qty: 27 });
+      expect('note' in (row as object)).toBe(false);
+    }
+    expect(Object.keys(m.normalizeDay({ items: [{ name: 'Cornetti', qty: 27 }] }, 'Monday').items[0] as object))
+      .toStrictEqual(['name', 'qty']);
+  });
+
+  test("a row keeps its note through cleaning, reading and the phone's own copy", () => {
+    const clean = m.cleanItems([{ name: ' Cornetti ', qty: '27', note: '  9x3 ' }]);
+    expect(clean).toStrictEqual([{ name: 'Cornetti', qty: 27, note: '9x3' }]);
+    expect(m.normalizeDay({ items: clean }, 'Monday').items).toStrictEqual(clean);
+    const stored = m.normalizeDays([{ id: 'Monday', items: clean }]);
+    expect(stored.Monday.items).toStrictEqual(clean);
+    expect(m.daysFromCache(JSON.parse(JSON.stringify(stored))).Monday.items).toStrictEqual(clean);
+  });
+
+  test("a row's note is one line and is clamped, and it is never read or worked out", () => {
+    expect(m.cleanItemNote('3 teglie\nda  9')).toBe('3 teglie da 9');
+    expect(m.cleanItemNote('9x3')).toBe('9x3');
+    expect(m.cleanItemNote('x'.repeat(m.MAX_ITEM_NOTE_LENGTH + 50))).toHaveLength(m.MAX_ITEM_NOTE_LENGTH);
+    // A cut that lands on a space does not leave it on the end.
+    expect(m.cleanItemNote(`${'x'.repeat(m.MAX_ITEM_NOTE_LENGTH - 1)} y`)).toBe('x'.repeat(m.MAX_ITEM_NOTE_LENGTH - 1));
+    // Clamped on the way IN too: a long note written by something else still fits the screen.
+    const [row] = m.normalizeDay({ items: [{ name: 'A', qty: 1, note: 'y'.repeat(500) }] }, 'Monday').items;
+    expect(row?.note).toHaveLength(m.MAX_ITEM_NOTE_LENGTH);
+  });
+
+  test('a note does not stop a save, and does not count towards anything', () => {
+    expect(m.findInvalidItems([{ name: 'Cornetti', qty: 27, note: 'x'.repeat(500) }])).toBe(null);
+    // A row with a note and no pastry is still an unfinished row: dropped, like one with a number.
+    expect(m.cleanItems([{ name: '', qty: '', note: '9x3' }])).toStrictEqual([]);
+  });
+
+  test("⚠️ correcting a quantity on the day list keeps the row's note", () => {
+    const items = [{ name: 'Cornetti', qty: 27, note: '9x3' }, { name: 'Bomboloni', qty: 10 }];
+    const next = m.setQuantityAt(items, 0, 36, 'Cornetti');
+    expect(next?.[0]).toStrictEqual({ name: 'Cornetti', qty: 36, note: '9x3' });
+    expect(next?.[1]).toStrictEqual({ name: 'Bomboloni', qty: 10 });
+    expect('note' in ((m.setQuantityAt(items, 1, 12, 'Bomboloni') as object[])[1] as object)).toBe(false);
+    expect(items[0]).toStrictEqual({ name: 'Cornetti', qty: 27, note: '9x3' });
+  });
+
+  test('a day can be copied onto the six others, the next one first, wrapping over the week', () => {
+    expect(m.otherWeekdays('Tuesday')).toStrictEqual(['Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday', 'Monday']);
+    expect(m.otherWeekdays('Sunday')).toStrictEqual(['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']);
+    for (const day of m.WEEKDAYS) {
+      expect(m.otherWeekdays(day)).toHaveLength(6);
+      expect(m.otherWeekdays(day).includes(day)).toBe(false);
+    }
+    const all = m.otherWeekdays('Funday');
+    expect(all).toStrictEqual([...m.WEEKDAYS]);
+    expect(all).not.toBe(m.WEEKDAYS);
   });
 
   test('the two weekday lists cannot be changed by a caller', () => {

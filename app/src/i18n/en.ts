@@ -150,6 +150,9 @@ export const en = {
   // «how many» labels are whole phrases, not a name slotted into one, so Italian can agree the
   // word with the noun («Quante paste»).
   'past.howManyOf': 'How many {name}',
+  'past.itemNotePlaceholder': 'Note, e.g. 9x3',
+  'past.itemNote': 'Note for this row',
+  'past.itemNoteFor': 'Note for {name}',
   'past.howManyPastries': 'How many pastries',
   'past.removeRow': 'Remove {name}',
   // What stops a save. The quantity limit is passed as text, so it reads «9999», never «9,999».
@@ -165,6 +168,22 @@ export const en = {
   'past.daySaved': '{day} saved.',
   'past.discardChanges': 'Discard changes?',
   'past.unsavedFor': 'You have unsaved changes to {day}. Discard them?',
+
+  // Copy day.
+  'past.copyDay': 'Copy day',
+  'past.copyDayQ': 'Copy the list of {day}?',
+  'past.copyPickDay': 'Choose the day to copy it onto. Quantities and notes go with it.',
+  'past.copyDayGo': 'Continue',
+  'past.copyDayNothing': 'Nothing',
+  'past.copyOnto': 'Copy onto',
+  'past.nothingToCopy': 'The list of {day} is empty: there is nothing to copy.',
+  'past.copyNotLoadedYet': 'The list hasn’t arrived yet — try again in a moment.',
+  'past.copyReplaceQ': 'Replace the list of {day}?',
+  'past.copyReplaces': {
+    one: 'The list of {day} already has {n} pastry. It will be replaced by the list of {from}. Nothing is saved until you tap Save.',
+    other: 'The list of {day} already has {n} pastries. It will be replaced by the list of {from}. Nothing is saved until you tap Save.',
+  },
+  'past.copiedFromDay': 'The list of {day} has been copied here. Check it, then tap Save to keep it.',
 
   // Records.
   'past.lastNDays': { one: 'Last day', other: 'Last {n} days' },
@@ -200,6 +219,10 @@ export const en = {
   'stock.nothingMatches': 'Nothing matches.',
   'stock.empty.title': 'No products yet',
   'stock.empty.sub': 'They come from Ingredients & suppliers.',
+  'stock.loading': 'Loading the products…',
+  'stock.notArrived.title': 'The products have not arrived yet',
+  'stock.notArrived.sub': 'Check your connection: they will appear here as soon as they arrive.',
+  'stock.loadFailed': 'Could not load the products. Check your connection and reload the page.',
   'stock.noCategory': 'No category',
   'stock.unnamedProduct': 'Product with no name',
   'stock.packsShort': 'packs',
@@ -329,6 +352,7 @@ export const en = {
   'fc.thisRecipeNoLonger': 'This recipe no longer exists',
   'fc.thisRecipeIsNot': 'This recipe is not priced yet',
   'fc.thisRecipePartlyPriced': 'Only part of this recipe has a price',
+  'fc.line.tooMuchRecipe': '{qty}, but the recipe makes {whole}: did you mean {grams}?',
   'fc.rawDough': 'Raw dough',
   'fc.cookedDough': 'Cooked dough',
   'fc.lossIs': 'Weight lost in the oven: {pct}%',
@@ -359,7 +383,6 @@ export const en = {
   'fc.notPriced': 'not priced',
   'fc.pricedByWeight': 'priced by weight',
   'fc.priceEach': '{price} each',
-  'fc.aria.kilos': 'Kilos',
   'fc.aria.pieces': 'Pieces',
   'fc.aria.quantity': 'Quantity',
   'fc.aria.unit': 'Unit',
@@ -424,6 +447,8 @@ export const en = {
   'fc.ingredientNoPieceWeight': 'Bought by the piece — say what one piece weighs in Ingredients and suppliers, or count it in pieces',
   'fc.ingredientNoPiecePrice': 'Bought by weight — say what one piece weighs in Ingredients and suppliers, or count it in grams',
   'fc.weighFor': 'Dough for «{name}»',
+  'fc.noWeightLoss': 'Finished product — no weight loss',
+  'fc.noWeightLossHint': 'The oven loss of the recipes is not used for this product.',
   'fc.packHolds': 'One pack holds',
   'fc.packHoldsAs': 'What one pack holds',
   'fc.packHoldsNote': 'The weight in one pack, or how many pieces.',
@@ -1034,7 +1059,6 @@ export const en = {
   'cat.shelf.bannerTitle': 'Archived',
   'cat.shelf.bannerText': 'Not in the list or in the choices for new links. The Calculator, labels and Food cost keep working.',
   'cat.shelf.allArchived': 'Every recipe is archived — restore one in the Recipe catalogue to choose it.',
-  'cat.shelf.waitingForServer': 'Waiting for the server before the list can be changed…',
   'cat.shelf.restore': 'Restore',
   'cat.shelf.restoredDone': 'Recipe restored.',
   'cat.shelf.couldNotArchive': 'Couldn’t archive “{name}” — check your connection.',
@@ -1676,7 +1700,7 @@ export const en = {
   'sup.price.eg.perKg': 'e.g. 7.20 (one kilo)',
   'sup.price.eg.perLitre': 'e.g. 6.00 (one litre)',
   'sup.price.eg.perPiece': 'e.g. 0.035 (one piece)',
-  'sup.price.eg.pieceWeight': 'e.g. 0.055',
+  'sup.price.eg.pieceWeight': 'e.g. 55',
   // orders.noPrice2 / orders.howItIsBought
   'sup.price.none': 'None',
   'sup.price.howBought': 'How it is bought',
@@ -1710,8 +1734,8 @@ export const en = {
   // orders.exVatNote: permanent, under the pair of boxes. It may not be dropped: a gross price inflates every recipe cost.
   'sup.price.exVatNote': 'Prices are net of VAT.',
   // orders.weightOfOnePiece / orders.neededOnlyToUse
-  'sup.price.weightOfOnePiece': 'Weight of one piece (kg)',
-  'sup.price.neededOnlyToUse': 'Needed only to use this in a recipe written in grams — one egg is about 0.055, a vanilla pod about 0.0035.',
+  'sup.price.weightOfOnePiece': 'Weight of one piece (g)',
+  'sup.price.neededOnlyToUse': 'Needed only to use this in a recipe written in grams — one egg is about 55, a vanilla pod about 3.5.',
   // orders.vat.label / orders.vat.notStated / orders.vat.summaryLine
   'sup.price.vat.label': 'VAT',
   'sup.price.vat.notStated': '— not stated',
@@ -2236,6 +2260,17 @@ export const en = {
   'ord.summaryFor': 'Order summary: {supplier}',
   'ord.summaryCount': { one: 'Order summary · {n} item', other: 'Order summary · {n} items' },
   'ord.summaryEmpty': 'No quantities typed',
+  // Closing today's order from the summary (the current app's PR #470, his tablet notes of 2–3 Nov 2026).
+  'ord.summary.closeNotOrdered': 'Close as not ordered',
+  'ord.summary.closeHint': 'Nothing needed today? Close it and it leaves “Order today”.',
+  'ord.summary.closedToday': 'Closed as not ordered today',
+  'ord.summary.reopen': 'Reopen',
+  'ord.summary.closeTitle': 'Close {supplier} as not ordered?',
+  'ord.summary.closeMessage': 'Nothing is ordered from them today. They leave “Order today” on every device, and you can reopen them from this summary.',
+  'ord.summary.closeOk': 'Close',
+  'ord.summary.closedDone': '{supplier} closed as not ordered.',
+  'ord.summary.reopened': '{supplier} is back on today’s orders.',
+  'ord.summary.saveFailed': 'Not saved — try again in a moment.',
   'ord.cost.noPrice': 'no price',
   'ord.cost.nothingPriced': 'No item here has a price yet: add it in the ingredient’s card',
   'ord.cost.lineTotal': '{qty} × {rate} = {total}',
@@ -2432,6 +2467,7 @@ export const en = {
   'ord.today.label': 'Order today',
   'ord.today.allPlaced': 'Today’s orders are all placed',
   'ord.today.placed': 'placed',
+  'ord.today.notOrdered': 'not ordered',
   'ord.notices.title': 'Notices',
   'ord.notices.bellCount': 'Notices: {n}',
   'ord.notices.empty': 'No notices right now.',

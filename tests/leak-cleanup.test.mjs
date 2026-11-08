@@ -15,8 +15,9 @@ test('catalogue settings releases both language listeners and hands dispose to i
   const src = read('js/catalogue/catalogue-settings.js');
   assert.match(src, /const stopPaintOnLanguage = onLanguageChange\(/);
   assert.match(src, /const stopLabelOnLanguage = onLanguageChange\(/);
-  assert.match(src, /const dispose = \(\) => \{ stopPaintOnLanguage\(\); stopLabelOnLanguage\(\); \};/);
-  assert.match(src, /return \{ root, refresh: paint, dispose \};/);
+  // The recipe-categories card holds a third listener; its dispose is released with the other two.
+  assert.match(src, /const dispose = \(\) => \{ stopPaintOnLanguage\(\); stopLabelOnLanguage\(\); categories\.dispose\(\); \};/);
+  assert.match(src, /return \{ root, refresh: paint, refreshCategories: categories\.refresh, dispose \};/);
 });
 
 test('catalogue-main clears Settings only through the helper that disposes it', () => {
@@ -59,7 +60,7 @@ test('the Orders pack-photo overlay disposes the screen on every way out', () =>
 });
 
 test('the client list Sortable is destroyed before the client detail replaces the content', () => {
-  const src = read('js/calculator-settings.js');
+  const src = read('js/clients-editor.js');
   const detail = src.slice(src.indexOf('function renderClientDetail'));
   const before = detail.slice(0, detail.indexOf("content.textContent = ''"));
   assert.match(before, /if \(clientSortable\) \{ clientSortable\.destroy\(\); clientSortable = null; \}/);

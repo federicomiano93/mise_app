@@ -120,6 +120,7 @@ export function Records({ handBackFocus }: Props) {
                         {log.items.map((item, index) => (
                           <div key={`${item.name}#${index}`} className={styles.item}>
                             <dt className={styles.name}>{item.name}</dt>
+                            {item.note ? <dd className={styles.itemNote}>{item.note}</dd> : null}
                             <dd className={styles.qty}>{item.qty}</dd>
                           </div>
                         ))}

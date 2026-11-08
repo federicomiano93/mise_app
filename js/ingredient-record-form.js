@@ -33,7 +33,7 @@ import { field, formActions, reportFailure, shortDate } from './record-ui.js';
 import {
   PRICE_UNITS, priceUnitLabel, PRICE_FORMS, priceFormOf, formatPriceInput, storedPriceInput, singleFromCaseInput, priceBoxStart, ownPieceWeight,
   weightNeededForPrice, positiveNumber, packBaseOf, storedCaseOf,
-  pricePatch, priceChanged, priceRecord, pricePerKg,
+  pricePatch, priceChanged, priceRecord, keepPriceDate, pricePerKg,
   formatPricePerUnit, formatRate, costReasonText, formatMoney,
   basisOptions, basisOf, basisToStore, rateBaseOf, storedPriceToBasis, convertBasisPrice, shownPrice,
 } from './price-model.js';
@@ -224,7 +224,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   // pieces, and a stale example is worse than none on the one field that cannot be
   // checked for what it is a price OF.
   const rate = money(item?.pricePerUnit, '');
-  const pieceWeight = money(item?.unitWeightKg, t('orders.eg.pieceWeight'));
+  const pieceWeight = money(gramsOfKg(item?.unitWeightKg), t('orders.eg.pieceWeight'));
   // The case / package price: «Prezzo cartone» or «Prezzo confezione» by the format. Its value is
   // FILLED by refresh() (priceBoxStart) for as long as nobody has typed in it.
   const casePriceBox = money('', '');
@@ -453,7 +453,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
         basis: priceFor,
         rate: typedDecimal(rate.value),
         unit: unitSelect.value || null,
-        pieceKg: typedDecimal(pieceWeight.value),
+        pieceKg: kgTextOfGrams(pieceWeight.value),
         vat,
       }),
       priceBasis,
@@ -738,7 +738,7 @@ function legacyPriceBlock(item, actions, defaultUnit = null, currentOrder = null
   });
   // ⚠️ The placeholder is EMPTY here and filled by refresh() below: it depends on the purchase unit.
   const rate = money(item?.pricePerUnit, '');
-  const pieceWeight = money(item?.unitWeightKg, t('orders.eg.pieceWeight'));
+  const pieceWeight = money(gramsOfKg(item?.unitWeightKg), t('orders.eg.pieceWeight'));
 
   // ── Priced per case: what the case costs, and what is in it ─────────────────
   // «Contiene [50] pz» or «Contiene [4] × [2.5] kg». Every box carries its own aria-label
@@ -860,7 +860,7 @@ function legacyPriceBlock(item, actions, defaultUnit = null, currentOrder = null
     return {
       priceUnit: unitSelect.value || null,
       pricePerUnit: typedDecimal(rate.value),
-      unitWeightKg: typedDecimal(pieceWeight.value),
+      unitWeightKg: kgTextOfGrams(pieceWeight.value),
       vatRate: vatSelect.value,
       // Only read as a case when the menu says so (pricePatch ignores them otherwise
       // and writes all four as null, which is what clears an old case).
@@ -1913,6 +1913,30 @@ function refusalMessage(box, text) {
   };
 }
 
+// ⚠️ THE PIECE WEIGHT IS TYPED IN GRAMS, STORED IN KILOS (8 Nov 2026). The box said «(kg)» and an egg was saved
+// as 50 — fifty kilos — which priced eggs at 0,0033 €/kg in every recipe. A recipe is written in grams and so is
+// what a person knows about one piece, so the box speaks grams; `unitWeightKg` and everything that reads it
+// (price-model.js, order-cost.js, Food cost, Mise 2's readers) stay in kilos, untouched. The conversion lives only
+// here. ⚠️ Mise 2's own card still asks for kilos (priceCardModel.ts, legacyPriceModel.ts): port this before the switch.
+// Stored kilos → the grams the box shows ('' for none; anything that is not a number is shown as it is).
+export function gramsOfKg(kg) {
+  if (kg === null || kg === undefined || kg === '') return '';
+  const n = Number(kg);
+  return Number.isFinite(n) ? String(Number((n * 1000).toPrecision(12))) : String(kg);
+}
+
+// What a person typed in grams → the kilo TEXT the price model reads (as typedDecimal hands it over). Everything
+// Number() can read is converted — «55,», «,5» and «1e2» too, because the price model reads the box with Number()
+// and would otherwise save them as KILOS, the very mistake above (review, 8 Nov 2026). Only text Number() cannot
+// read passes through untouched, so Save still refuses it on its box (unreadablePrice); '' stays '' (no weight).
+export function kgTextOfGrams(text) {
+  const typed = typedDecimal(text);
+  if (String(typed).trim() === '') return typed;
+  const n = Number(typed);
+  if (!Number.isFinite(n)) return typed;
+  return String(Number((n / 1000).toPrecision(12)));
+}
+
 // A price box whose text is not a number above zero («12,50 EUR» pasted from an invoice, «abc»,
 // «1.234,5», «0»): refused on Save and pointed at (P20), never saved as «no price» in silence.
 // Review of #278, 4 Oct 2026. [box, refusal, field] triples; a box counts only while it and its
@@ -2319,7 +2343,8 @@ export function buildIngredientForm({
 
     // Every price field is in the patch, as a number or as null, because this is a MERGE write: a field
     // left out keeps whatever it had, so emptying the boxes could never actually remove a price.
-    const patch = mayPrice ? pricePatch(price.read(), new Date().toISOString(), weight.read()) : {};
+    // keepPriceDate: a save that did not move the money keeps the price's date (the invoice import reads it).
+    const patch = mayPrice ? keepPriceDate(item, pricePatch(price.read(), new Date().toISOString(), weight.read())) : {};
     const packUnit = pack.read().slice(0, PACK_WORD_MAX);
     const payload = {
       name: name.value.trim(),
@@ -2333,7 +2358,10 @@ export function buildIngredientForm({
       // ⚠️ ONLY WHEN THERE IS SOMETHING TO SAY: a save that sent `packUnit: ''` on every ingredient
       // would be refused whole by a database whose rules do not know the key yet.
       ...(packUnit || item?.packUnit ? { packUnit } : {}),
-      active: item ? item.active !== false : true,
+      // ⚠️ `active` IS SENT ONLY FOR A NEW ITEM. The save is a merge write, so an existing item keeps
+      // what is stored — and a card left open on another phone can no longer undo the
+      // «Disattiva» / «Riattiva» tap made on the list row since it was opened.
+      ...(item ? {} : { active: true }),
       kind: startKind,
       ...patch,
       // ⚠️ NOT READ FOR PACKAGING: the merge then leaves any declaration already stored untouched.
@@ -2407,7 +2435,8 @@ export function buildIngredientForm({
     // fail the whole save of an ordinary rename.
     // `priceBasis` (price.read() carries it into pricePatch) is the memory of what the number was typed against;
     // it is saved by itself when only the segment moved (priceChanged compares money: no history entry).
-    const patch = mayPrice ? pricePatch(price.read(), new Date().toISOString(), weight.read()) : {};
+    // keepPriceDate: a save that did not move the money keeps the price's date (the invoice import reads it).
+    const patch = mayPrice ? keepPriceDate(item, pricePatch(price.read(), new Date().toISOString(), weight.read())) : {};
     // ⚠️ THE FORMAT ADDS KEYS ONLY WHEN IT WAS TOUCHED (pack-format.js formatPatch → {} otherwise):
     // the write is a merge, so an untouched save leaves `unit`, `packUnit` and `packCount` exactly as
     // they are stored. The one thing a NEW item gets besides: an empty `unit`, or — a loose item priced
@@ -2431,7 +2460,10 @@ export function buildIngredientForm({
       category: category.read() || 'Other',
       ...(item ? {} : { unit: looseWord }),
       ...formatKeys,
-      active: item ? item.active !== false : true,
+      // ⚠️ `active` IS SENT ONLY FOR A NEW ITEM. The save is a merge write, so an existing item keeps
+      // what is stored — and a card left open on another phone can no longer undo the
+      // «Disattiva» / «Riattiva» tap made on the list row since it was opened.
+      ...(item ? {} : { active: true }),
       kind: startKind,
       ...patch,
       // ⚠️ NOT READ FOR PACKAGING: the merge then leaves any declaration already stored

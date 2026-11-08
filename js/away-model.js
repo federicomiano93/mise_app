@@ -124,6 +124,14 @@ export function maxAwayDate(now = Date.now()) {
 
 // ── Who will actually be told ────────────────────────────────────────────────
 
+// Who an order list is for: whoever runs the place, and of the two partial owners only the
+// kitchen, because the owner of the sales side does not order from suppliers. ⚠️ THE SERVER
+// ASKS THIS TOO (functions/index.js managersAmong), so the sending screen and the phones
+// that ring cannot disagree.
+export function receivesOrderLists(role) {
+  return role === 'owner' || role === 'manager' || role === 'owner-kitchen';
+}
+
 // The people a notification would reach: whoever runs the place, minus the sender,
 // minus anybody away.
 //
@@ -140,7 +148,7 @@ export function maxAwayDate(now = Date.now()) {
 export function whoWillBeTold(roster, awaySet, senderUid) {
   return (roster || [])
     .filter(m => m && m.uid && m.uid !== senderUid)
-    .filter(m => m.role === 'owner' || m.role === 'manager')
+    .filter(m => receivesOrderLists(m.role))
     .filter(m => !(awaySet && awaySet.has(m.uid)));
 }
 
@@ -150,7 +158,7 @@ export function whoWillBeTold(roster, awaySet, senderUid) {
 export function nobodyWillBeTold(roster, awaySet, senderUid) {
   const runners = (roster || [])
     .filter(m => m && m.uid && m.uid !== senderUid)
-    .filter(m => m.role === 'owner' || m.role === 'manager');
+    .filter(m => receivesOrderLists(m.role));
   if (!runners.length) return false;
   return runners.every(m => awaySet && awaySet.has(m.uid));
 }
@@ -173,7 +181,7 @@ export function personName(member) {
 export function awayNames(roster, awaySet, senderUid) {
   return (roster || [])
     .filter(m => m && m.uid && m.uid !== senderUid)
-    .filter(m => m.role === 'owner' || m.role === 'manager')
+    .filter(m => receivesOrderLists(m.role))
     .filter(m => awaySet && awaySet.has(m.uid))
     .map(personName);
 }

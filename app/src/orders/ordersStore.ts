@@ -50,9 +50,11 @@ import {
   buildSupplierArchive, historyDocId, isUnitConflict, mergeArchives, quantityPathsFor, unitConflicts, wholeNumber,
 } from '@mise/shared/archive';
 import type { SupplierRecord } from '@mise/shared/archive';
+import type { JournalStorage } from '@mise/shared/draft-journal';
 import { confirmedEntries } from '@mise/shared/untold-changes';
 import { markBusy as markBusyOfSession } from '../session/busy';
 import { createDraftSync, EMPTY_DRAFT } from './draftSync';
+import { watchPageHidden } from './pageHidden';
 import type { DraftDays, DraftEntries, DraftEntry, DraftSync, DraftSyncDeps, DraftView } from './draftSync';
 import { buildOrdersLens } from './ordersLens';
 import { correctedRecord, sameOrder } from './historyEdit';
@@ -74,7 +76,9 @@ export type OrdersMessage =
   // A later autosave landed: a «not saved» message still on screen can go.
   | { readonly kind: 'draft-saved' }
   // The day chosen on a supplier's day line was refused: the line is back on the day that is stored (parity D7).
-  | { readonly kind: 'day-not-saved' };
+  | { readonly kind: 'day-not-saved' }
+  // «Close as not ordered» or «Reopen» was refused: Firestore has already put the supplier back as it was on screen.
+  | { readonly kind: 'close-not-saved' };
 
 export interface OrdersSnapshot {
   // Every supplier, as stored (the lens keeps the active ones and sorts them).
@@ -104,6 +108,9 @@ export interface OrdersSnapshot {
   readonly draftBroken: boolean;
   // The last autosave was refused and no later one has landed (parity L37).
   readonly draftSaveFailed: boolean;
+  // How many times quantities left by the last page came back from this device's note (F-15): the section then looks again
+  // for orders typed on an earlier day and never placed (the current app's `cameBack`).
+  readonly draftCameBack: number;
   // The suppliers whose order is being recorded right now: their «Order placed…» is off (parity X1).
   readonly placing: readonly string[];
   // The order records of the live window (the last two months, step 3f-2b), as stored. Empty until they arrive.
@@ -242,6 +249,15 @@ export interface OrdersDeps {
   // Whether the phone believes it is connected. ⚠️ Placing and clearing are refused offline (parity X3): Firestore would
   // keep the record and the clear waiting, to land in two different moments of connectivity — how an order gets lost.
   online(): boolean;
+  // The note of typed quantities that outlives the page (F-15, @mise/shared/draft-journal), with the clock it ages by, a
+  // later try when the orders could not be read, and the page going out of sight. Absent: nothing is noted (a spec that is
+  // not about it).
+  journal?: {
+    storage(): JournalStorage | null;
+    now(): number;
+    retryLater(run: () => void, ms: number): void;
+    onPageHidden(run: () => void): () => void;
+  };
 }
 
 export interface OrdersStore {
@@ -264,6 +280,12 @@ export interface OrdersStore {
   // false = refused. ⚠️ Offline it waits for the connection, so no screen may wait on it before showing the change (step 3f-6:
   // the pending banner goes at once and comes back on false).
   setDay(supplier: StoredDoc, day: string): Promise<boolean>;
+  // «Close as not ordered» on the order summary (the current app's PR #470): today's close of this supplier, in
+  // drafts/current.skipped. LOCAL-FIRST like Firestore makes it (the listeners see it at once, offline too); a refusal is said
+  // ('close-not-saved') and Firestore takes it back. Resolves true once saved, false when refused. ⚠️ No screen waits on it.
+  closeNotOrdered(supplierId: string): Promise<boolean>;
+  // «Reopen»: the undo of the line above, the same promise.
+  reopenToday(supplierId: string): Promise<boolean>;
   // What the confirm screen needs before it opens, read once from the server (parity X2, X7). A record that cannot be read
   // counts as none: the transaction inside `place` still refuses a real clash.
   checkRecords(items: ReadonlyArray<{ readonly supplierId: string; readonly date: string }>, noSupplierName: string): Promise<RecordCheck[]>;
@@ -333,6 +355,18 @@ export function browserOrdersDeps(): OrdersDeps {
       clearTimer: handle => clearTimeout(handle as ReturnType<typeof setTimeout>),
     },
     online: () => navigator.onLine,
+    journal: {
+      storage: () => {
+        try {
+          return window.localStorage;
+        } catch {
+          return null;
+        }
+      },
+      now: () => Date.now(),
+      retryLater: (run, ms) => { setTimeout(run, ms); },
+      onPageHidden: run => watchPageHidden(run),
+    },
   };
 }
 
@@ -343,12 +377,13 @@ export function orderable(lines: readonly LensIngredient[]): LensIngredient[] {
   return lines.map(line => ((line as { active?: unknown }).active === false ? { ...line, active: true } : line));
 }
 
-export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = browserOrdersDeps()): OrdersStore {
+// `venue` is the open venue's id: the note of typed quantities is one venue's (F-15). '' keeps no note.
+export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = browserOrdersDeps(), venue = ''): OrdersStore {
   let snapshot: OrdersSnapshot = {
     suppliers: [], suppliersLoaded: false, suppliersBroken: false,
     ingredients: [], ingredientsLoaded: false, ingredientsBroken: false,
     config: normalizeOrdersConfig(null), configLoaded: false, configAnswered: false, deliveryCheck: deliveryCheckOf(null),
-    draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false,
+    draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false, draftCameBack: 0,
     serverSeen: { suppliers: false, ingredients: false, draft: false },
     placing: [],
     history: [], historyLoaded: false, historyBroken: false, suggester: NO_SUGGESTIONS,
@@ -362,6 +397,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
   let releaseBusy: (() => void) | null = null;
   // The section was left: nothing can be typed any more, so the marker waits only for the writes still in the air.
   let stopped = false;
+  // The page-hidden listener (F-15), while the section is started.
+  let stopHidden: (() => void) | null = null;
   // The first day of the live window, fixed when the listeners start: the older pages are fetched from BEFORE it, so the two
   // never overlap and never leave a gap.
   let windowStart = liveHistoryStart(parseISODate(deps.today()));
@@ -422,7 +459,42 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       }
       dropBusyWhenSaved();
     },
+    journal: deps.journal && venue ? {
+      venue,
+      storage: deps.journal.storage,
+      now: deps.journal.now,
+      ordersSince: fromDay => source.getRecentHistoryFromServer(fromDay),
+      retryLater: deps.journal.retryLater,
+      // Lines this device typed on an earlier page are back (the server has answered, and no order has named them since): on
+      // screen now, and unsaved until their write lands, so a self-started reload waits (rule 2). The sync sends them.
+      onCameBack: view => {
+        holdBusy();
+        set({ draft: view, draftCameBack: snapshot.draftCameBack + 1 });
+      },
+    } : undefined,
   });
+
+  // ⚠️ A QUANTITY TYPED FOR A SUPPLIER CLOSED TODAY REOPENS IT (the current app's reopenIfTyped). «Nothing needed» stopped being
+  // true, and a close left standing would silence the «Order today» strip and the kiosk for the rest of the day — the very
+  // reminder that catches an order typed and then forgotten. Once: Firestore shows the reopen at once, so the next keystroke finds
+  // nothing to undo. Not awaited, and only logged on failure, as there.
+  function reopenIfTyped(supplierId: string) {
+    if (snapshot.draft.skipped[supplierId] !== deps.today()) return;
+    const entries = snapshot.draft.entries;
+    if (!lensNow('').linesOf(supplierId).some(line => wholeNumber(entries[line.id]?.qty) > 0)) return;
+    busyUntilAnswered(source.clearSupplierSkipped(supplierId)).catch((err: unknown) => {
+      console.error('Reopening a closed supplier after typing failed:', err);
+    });
+  }
+
+  // ⚠️ RULE 2 FOR A CLOSE OR A REOPEN (drafts/current.skipped): written on its own, outside the autosave and its busy hold, and
+  // only once the Firestore module has loaded (ordersSource). Held busy until the server answers, so a self-started reload in the
+  // first moments cannot throw the tap away before Firestore's queue has it (F-15). Offline it waits for the connection, as
+  // setDay's hold does.
+  function busyUntilAnswered(write: Promise<void>): Promise<void> {
+    const release = deps.markBusy();
+    return write.finally(release);
+  }
 
   // The lens as it is NOW, from the latest data: what an order records and clears is decided by the one lens the screens
   // draw (ordersLens.ts), never by a list taken before the confirm screen opened — a line another phone moved meanwhile
@@ -654,6 +726,10 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     start() {
       if (stops.length) return;
       stopped = false;
+      // This opening owns the note again: it is read afresh at the first snapshot or keystroke (draftSync.ts, journalLive).
+      sync.startJournal();
+      // Switching app or locking the screen: what waits for its pause goes now, while the page is still alive (pageHidden.ts).
+      stopHidden = deps.journal?.onPageHidden(() => { sync.sendWaiting(); }) ?? null;
       // Fixed before the first older page is asked for; once a page is in, the window it was cut from stays.
       if (!olderLoader) windowStart = liveHistoryStart(parseISODate(deps.today()));
       stops = [
@@ -692,7 +768,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         // no copy of it. The lines are drawn only once the server has answered or the copy holds the document.
         source.watchDraft(
           (data, meta) => set({
-            draft: sync.receive(data),
+            draft: sync.receive(data, meta.fromServer),
             draftLoaded: snapshot.draftLoaded || data !== null || meta.fromServer,
             draftBroken: false,
             serverSeen: meta.fromServer && !snapshot.serverSeen.draft ? { ...snapshot.serverSeen, draft: true } : snapshot.serverSeen,
@@ -723,6 +799,11 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       closePrices();
       for (const stop of stops) stop();
       stops = [];
+      stopHidden?.();
+      stopHidden = null;
+      // ⚠️ BEFORE THE FLUSH: from now on this sync judges nothing and never rewrites the note (a new opening owns it); its
+      // writes still in the air only take their own fields out of it when answered.
+      sync.stopJournal();
       // The write is handed to Firestore now; it carries on without the listeners and lands when it can.
       stopped = true;
       sync.flush().then(dropBusyWhenSaved, () => { /* said through onResult, which also releases the busy marker */ });
@@ -782,6 +863,24 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       set({ draft: { ...snapshot.draft, entries, days } });
       holdBusy();
       sync.change(entries, days);
+      if (!stockOnly) reopenIfTyped(supplier.id);
+    },
+
+    closeNotOrdered(supplierId) {
+      return busyUntilAnswered(source.setSupplierSkipped(supplierId, deps.today())).then(() => true, (err: unknown) => {
+        console.error('Closing the supplier as not ordered failed:', err);
+        say({ kind: 'close-not-saved' });
+        return false;
+      });
+    },
+
+    reopenToday(supplierId) {
+      if (!snapshot.draft.skipped[supplierId]) return Promise.resolve(true);
+      return busyUntilAnswered(source.clearSupplierSkipped(supplierId)).then(() => true, (err: unknown) => {
+        console.error('Reopening the supplier failed:', err);
+        say({ kind: 'close-not-saved' });
+        return false;
+      });
     },
 
     // The current app's setSupplierDay + restamp: written at once rather than after the pause, rolled back when refused.
@@ -956,13 +1055,18 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     kioskSections() {
       // ⚠️ NOTHING UNTIL THE DATA IS HERE (review of 3f-8a; the current app answers only once suppliers and records are loaded): with
       // the records missing every order day reads «to order», and with config/orders missing the switch reads ON.
-      if (!snapshot.suppliersLoaded || !snapshot.historyLoaded || !snapshot.configLoaded) return null;
+      // …and with the draft missing, a supplier closed as not ordered this morning would read «to order». A DEAD draft stream counts
+      // as arrived (draftLoaded), and its closes are read as NONE, even those it delivered before it died: the line errs on the side
+      // of the reminder, as the current app's kiosk does when its read of the draft fails (and as «Order today» does).
+      if (!snapshot.suppliersLoaded || !snapshot.historyLoaded || !snapshot.configLoaded || !snapshot.draftLoaded) return null;
       return kioskSectionsFor({
         suppliers: snapshot.suppliers,
         history: snapshot.history,
         today: deps.today(),
         weekStartsOn: snapshot.config.weekStartsOn,
         deliveryCheck: snapshot.deliveryCheck,
+        // A supplier closed as not ordered today is not «to order» (the current app's PR #470).
+        skipped: snapshot.draftBroken ? null : snapshot.draft.skipped,
       });
     },
 

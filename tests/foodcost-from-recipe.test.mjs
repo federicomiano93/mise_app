@@ -15,7 +15,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 import {
-  recipeHash, foodCostHref, recipeHref, recipeIdFromHash, mayOpenFoodCost,
+  recipeHash, foodCostHref, recipeHref, recipeIdFromHash, recipeSpotFromHash, mayOpenFoodCost,
 } from '../js/recipe-link.js';
 import { productsUsingRecipe, draftFromRecipe, normalizeProduct } from '../js/foodcost/foodcost-model.js';
 
@@ -28,6 +28,35 @@ test('⚠️ the address is a FRAGMENT, so the cached page is found offline', ()
   assert.equal(foodCostHref('abc123'), 'foodcost.html#recipe=abc123');
   assert.equal(recipeHref('abc123'), 'catalogue.html#recipe=abc123');
   assert.ok(!foodCostHref('abc').includes('?'));
+});
+
+test('Back can name the spot in the recipe, from an allowlist of one', () => {
+  assert.equal(recipeHref('abc', 'foodcost'), 'catalogue.html#recipe=abc&at=foodcost');
+  assert.equal(recipeHref('abc'), 'catalogue.html#recipe=abc');
+  assert.equal(recipeHref('abc', 'other'), 'catalogue.html#recipe=abc');
+  assert.equal(recipeHref('', 'foodcost'), 'catalogue.html');
+  assert.equal(recipeSpotFromHash('#recipe=a&at=foodcost'), 'foodcost');
+  for (const hash of ['#recipe=a&at=x', '#recipe=a', '', '#', null, undefined, '#at=FOODCOST', '#at=foodcost%20']) {
+    assert.equal(recipeSpotFromHash(hash), null, String(hash));
+  }
+  assert.equal(recipeSpotFromHash('#at=foodcost&at=x'), 'foodcost', 'the first value, as URLSearchParams.get');
+  assert.equal(recipeIdFromHash('#recipe=a%20b&at=foodcost'), 'a b');
+  assert.equal(recipeIdFromHash(recipeHref('a b&c', 'foodcost').replace('catalogue.html', '')), 'a b&c');
+});
+
+test('the catalogue scrolls to the Food cost card only for that spot, and the button carries the hook', () => {
+  const main = codeOf(read('js/catalogue/catalogue-main.js'));
+  assert.match(main, /let wantedSpot = recipeSpotFromHash\(window\.location\.hash\);/);
+  assert.ok(main.indexOf('let wantedSpot') < main.indexOf('initCatalogue('), 'declared above initCatalogue');
+  const fn = main.slice(main.indexOf('function openWantedRecipe()'), main.indexOf('function forgetWantedRecipe()'));
+  assert.match(fn, /if \(spot === 'foodcost'\) \{\s*requestAnimationFrame\(/);
+  assert.match(fn, /querySelector\('\.cat-fc-open'\)/);
+  assert.match(fn, /scrollIntoView\(\{ block: 'center' \}\)/);
+  assert.doesNotMatch(fn, /\.focus\(/);
+  assert.match(fn, /const spot = wantedSpot;\s*forgetWantedRecipe\(\);\s*openDetail\(/, 'read before it is forgotten');
+  const forget = main.slice(main.indexOf('function forgetWantedRecipe()'), main.indexOf('function forgetWantedRecipe()') + 200);
+  assert.match(forget, /wantedSpot = null;/);
+  assert.match(codeOf(read('js/catalogue/catalogue-detail.js')), /class: 'cat-import-btn cat-fc-open'/);
 });
 
 test('an id survives the trip, whatever it contains', () => {
@@ -68,12 +97,12 @@ test('⚠️ before a venue is open, nobody is shown it', () => {
 test('the rule is the auth gate\'s own, section AND card', () => {
   const gate = read('js/auth-gate.js');
   assert.match(gate, /isSectionAllowed\(session\.location, pageSection\)/);
-  assert.match(gate, /cardVisibleTo\(session\.location, session\.canManage, pageCard\)/);
+  assert.match(gate, /cardVisibleTo\(session\.location, session\.canManage, pageCard, session\.role\)/);
   assert.match(read('foodcost.html'), /<body data-section="foodcost" data-card="foodcost">/,
     'the page is judged by the section foodcost and the card foodcost — the two this mirrors');
   const link = codeOf(read('js/recipe-link.js'));
   assert.match(link, /isSectionAllowed\(locationDoc, 'foodcost'\)/);
-  assert.match(link, /cardVisibleTo\(locationDoc, canManage === true, 'foodcost'\)/);
+  assert.match(link, /cardVisibleTo\(locationDoc, canManage === true, 'foodcost', role\)/);
 });
 
 // ── What Food cost opens ────────────────────────────────────────────────────
@@ -126,7 +155,7 @@ test('the recipe screen shows the card only to whoever may open Food cost, first
     'asked on every build, before anything is drawn');
   assert.match(panel, /onclick: \(\) => app\.openFoodCost\(recipe\)/);
   const main = codeOf(read('js/catalogue/catalogue-main.js'));
-  assert.match(main, /mayOpenFoodCost\(s\.location, s\.canManage\)/);
+  assert.match(main, /mayOpenFoodCost\(s\.location, s\.canManage, s\.role\)/);
   assert.match(main, /foodCostHref\(recipe\.id\)/);
 });
 
@@ -152,7 +181,8 @@ test('⚠️⚠️ Food cost decides only once the products can be trusted, and 
     'the wait is checked BEFORE anything is decided');
   assert.match(settle, /productsUsingRecipe\(getProducts\(\), id\)/);
   assert.match(settle, /openProduct\(null, draft\)/, 'none: a new product, from the recipe');
-  assert.match(settle, /listFilter = id;/, 'several: the list narrowed to them');
+  assert.match(settle, /openNarrowed\(id\)/, 'several: the list narrowed to them');
+  assert.match(main, /function openNarrowed\(id\) \{\s*listFilter = id;/);
   assert.match(main, /authReady\.then\(\(\) => \{\s*setTimeout\(/,
     'the deadline starts once the venue is open, never while the sign-in screen is up');
 });
@@ -160,13 +190,15 @@ test('⚠️⚠️ Food cost decides only once the products can be trusted, and 
 test('⚠️ Back from the first screen a recipe opened returns to that recipe', () => {
   const main = codeOf(read('js/foodcost/foodcost-main.js'));
   const back = main.slice(main.indexOf('async function handleBack()'), main.indexOf('function toast('));
-  assert.ok(back.indexOf('await leaveGuard()') < back.indexOf('recipeHref(fromRecipe)'),
+  assert.ok(back.indexOf('await leaveGuard()') < back.indexOf('recipeHref(fromRecipe,'),
     'unsaved edits are asked about BEFORE leaving for the recipe');
   // ⚠️ replace, never href: an added history entry sends the phone's back gesture forward
   // into Food cost again (found by the code review).
-  assert.match(back, /window\.location\.replace\(recipeHref\(fromRecipe\)\);/);
+  assert.match(back, /window\.location\.replace\(recipeHref\(fromRecipe, 'foodcost'\)\);/);
   assert.doesNotMatch(back, /location\.href\s*=/);
-  assert.match(main, /renderEditor\(\{ product, draft, app \}\)/);
+  assert.equal(back.split("recipeHref(fromRecipe, 'foodcost')").length - 1, 2, 'both Back paths land on the Food cost card');
+  assert.doesNotMatch(back, /recipeHref\(fromRecipe\)/);
+  assert.match(main, /renderEditor\(\{ product, draft, app, mode \}\)/);
 });
 
 // ── What the code review found ───────────────────────────────────────────────
@@ -197,7 +229,7 @@ test('⚠️ Back from Food cost really reopens the recipe, and only once the se
   const gate = fn.indexOf("currentSession().status !== 'ready'");
   assert.ok(gate !== -1 && gate < fn.indexOf('openDetail('),
     'never before the session: a recipe built then draws no «Elimina ricetta» for its owner');
-  assert.match(handler, /activeDetail = renderDetail\(\{ recipe: latest, app \}\);/,
+  assert.match(handler, /activeDetail = renderDetail\(\{ recipe: latest, app, split \}\);/,
     'a recipe opened before the session is rebuilt WHOLE — its buttons, not only its cards');
   assert.match(main, /sessionReady\.then\(\(\) => setTimeout\(forgetWantedRecipe, WANTED_RECIPE_WAIT_MS\)\)/,
     'the give-up clock starts when the session does, or a slow sign-in forgets the recipe');

@@ -9,7 +9,9 @@ import {
   initCatalogue, getRecipes, getUsage, bumpUsage, saveRecipe, deleteRecipe, setSyncErrorHandler,
   getIngredients, getSuppliers, getRecipesById, getLabelProfile, saveLabelProfile,
   printerReady, queueLabelJob,
+  getRecipeCategories, addRecipeCategory, removeRecipeCategory,
 } from './catalogue-store.js';
+import { countInCategory } from './recipe-categories-model.js';
 import { renderList } from './catalogue-list.js';
 import { renderAllergenSheet } from './allergen-sheet.js';
 import { renderPhotoCapture } from './photo-capture.js';
@@ -18,6 +20,7 @@ import { setPhotoEnabled } from './firebase-photo.js';
 import { renderLabel } from './label-view.js';
 import { renderDetail } from './catalogue-detail.js';
 import { renderEditor } from './catalogue-editor.js';
+import { readPricesForEditor } from './editor-prices.js';
 import { renderGuidedEditor } from './guided-editor.js';
 import { renderRun, resumableSession, clearSession } from './guided-run.js';
 import { importRecipeIntoCalculator, isRecipeLinkedToCalculator } from './import-to-calculator.js';
@@ -34,7 +37,8 @@ import { allergensOn } from '../venue-features.js';
 // The way to a recipe's Food cost product, and the one judgement of who may take it.
 // From js/ root: the catalogue and Food cost share an address, never a folder.
 import {
-  mayOpenFoodCost, foodCostHref, recipeIdFromHash, mayOpenOrders, ordersHref,
+  mayOpenFoodCost, foodCostHref, recipeIdFromHash, recipeSpotFromHash, mayOpenOrders, ordersHref,
+  ordersIngredientHref, recipeHref,
 } from '../recipe-link.js';
 // Whether this person may add an ingredient to the records from here — the same answer the
 // records page itself gives. From js/ root: the records belong to Orders.
@@ -118,7 +122,7 @@ let listUsage = null;
 let ordersWanted = false;
 function paintOrdersBtn() {
   const session = currentSession();
-  ordersBtn.hidden = !(ordersWanted && mayOpenOrders(session.location, session.canManage));
+  ordersBtn.hidden = !(ordersWanted && mayOpenOrders(session.location, session.canManage, session.role));
   ordersBtn.title = t('catalogue.openOrders');
 }
 // Decided at the tap, not when the header was drawn: on a tablet the header stays the list's
@@ -261,6 +265,8 @@ function buildList(selectedId) {
     onQueryChange: (q) => { searchQuery = q; },
     onOpen: openDetail,
     onAdd: () => openEditor(null),
+    // A GETTER: the list asks at every paint, so a category added on another phone shows at once.
+    getCategories: () => getRecipeCategories(),
   });
 }
 
@@ -312,11 +318,14 @@ function redrawDetail(recipe) {
   const top = splitOn ? (body ? body.scrollTop : 0) : screen.scrollTop;
   // A zoomed list locks the page; the view that set the lock is about to be replaced.
   document.body.classList.remove('cat-zoom-lock');
+  // The rows the person split in two (display only) stay split across this live redraw.
+  const split = activeDetail?.splitRows?.() || [];
+  activeDetail?.destroy?.();
   currentRecipe = recipe;
   quietFocus = true;
   try {
-    if (splitOn) showDetailTablet(recipe);
-    else showDetailPhone(recipe);
+    if (splitOn) showDetailTablet(recipe, split);
+    else showDetailPhone(recipe, split);
   } finally { quietFocus = false; }
   const fresh = screen.querySelector('.cat-pane-body');
   if (splitOn && fresh) fresh.scrollTop = top;
@@ -473,11 +482,11 @@ function showAllergenSheet() {
 }
 
 // A recipe on a PHONE: the whole screen, the header's Back and Edit.
-function showDetailPhone(recipe) {
+function showDetailPhone(recipe, split) {
   leaveSplit();
   activeList = null;
   setHeader({ title: recipe.name || t('cat.recipe'), sub: t('cat.recipe'), back: true, add: false, edit: true, orders: true });
-  activeDetail = renderDetail({ recipe, app });
+  activeDetail = renderDetail({ recipe, app, split });
   swap(activeDetail.root);
 }
 
@@ -485,13 +494,13 @@ function showDetailPhone(recipe) {
 // list stays ALIVE in its column — ⚠️ not re-rendered when it is already there, which is
 // what keeps the search text, the scroll and the focus; only the open row is re-marked.
 // Coming from any other route (the column was emptied) it is painted here, once.
-function showDetailTablet(recipe) {
+function showDetailTablet(recipe, split) {
   const listAlive = splitOn && activeList;
   setSplit(true);
   setListHeader();
   if (listAlive) activeList.select(recipe.id);
   else paintListColumn(recipe.id);
-  activeDetail = renderDetail({ recipe, app });
+  activeDetail = renderDetail({ recipe, app, split });
   showDetailNode(recipe, activeDetail.root);
 }
 
@@ -531,6 +540,8 @@ function openEditor(recipe, draft) {
     // ⚠️ A GETTER, read when the editor is built: the two label fields appear only
     // for a venue that actually prints them, and that switch lives in Settings.
     getLabelProfile: () => getLabelProfile(),
+    // ⚠️ A GETTER, read once as the editor is built: the menu appears only when the venue has a list.
+    getRecipeCategories: () => getRecipeCategories(),
   }));
 }
 
@@ -586,7 +597,7 @@ async function togglePhoto() {
   }
 }
 
-// What this venue lets itself do. One switch today.
+// What this venue lets itself do: its recipe categories, the label paper, the photo reader.
 //
 // ⚠️ Reached only from the bottom bar, which setHeader() hides from anybody who is
 // not an owner or a manager — and the server refuses the change regardless.
@@ -604,6 +615,9 @@ function showSettings() {
   setActiveSettings(renderSettings({
     photoOn: photoIsOn(),
     onTogglePhoto: togglePhoto,
+    // ⚠️ canManageVenue, not canManage: a partial owner has canManage but the photo switch is the
+    // venue's, and the server refuses it to them.
+    showPhoto: currentSession().canManageVenue === true,
     // ⚠️ THE VALUE, not a getter, and the difference is deliberate: this screen is
     // where the profile is EDITED, so it owns a working copy for as long as it is
     // open. Re-reading the store under a half-typed size is how a field fights the
@@ -612,6 +626,12 @@ function showSettings() {
     // The store is local-first and rolls its own copy back on a rejection; the
     // screen rolls back what a person can see. Both, because they are two copies.
     onSaveLabel: patch => saveLabelProfile(patch),
+    // A GETTER, not a copy: the list can change on another phone while this screen is open.
+    getCategories: () => getRecipeCategories(),
+    countRecipes: (word, list) => countInCategory(getRecipes(), word, list),
+    onAddCategory: word => addRecipeCategory(word),
+    onRemoveCategory: word => removeRecipeCategory(word),
+    confirm: confirmDialog,
   }));
   swap(activeSettings.root);
 }
@@ -799,12 +819,29 @@ const app = {
   // The recipe screen's «Apri nel Food cost»: whether to draw it, and where it goes.
   // ⚠️ ASKED OF THE SESSION EACH TIME, never captured: the session arrives after the
   // first paint, and a manager can show Food cost to employees from another phone.
-  mayOpenFoodCost: () => { const s = currentSession(); return mayOpenFoodCost(s.location, s.canManage); },
+  mayOpenFoodCost: () => { const s = currentSession(); return mayOpenFoodCost(s.location, s.canManage, s.role); },
+  // The prices, read once when a recipe editor opens — only for somebody who may read Food
+  // cost (the rules refuse everyone else, so no request is made, no error is logged).
+  // ⚠️ ASKED WHEN THE EDITOR OPENS, never captured at load. editor-prices.js.
+  readEditorPrices: () => {
+    const s = currentSession();
+    return mayOpenFoodCost(s.location, s.canManage, s.role) ? readPricesForEditor() : Promise.resolve(null);
+  },
   openFoodCost: (recipe) => { if (recipe && recipe.id) window.location.href = foodCostHref(recipe.id); },
+  // A recipe row's «Order» item: shown for whoever Orders will let in (asked of the session each
+  // time, like Food cost above), and it opens Orders on that ingredient's supplier.
+  mayOpenOrders: () => { const s = currentSession(); return mayOpenOrders(s.location, s.canManage, s.role); },
+  // The page's own address first becomes this recipe's (#recipe=<id>, read by openWantedRecipe):
+  // the phone's own Back (Android's gesture, not the Orders arrow) then lands on the recipe that
+  // was left, not on the top of the list.
+  orderIngredient(recipeId, ingredientId) {
+    try { history.replaceState(null, '', recipeHref(recipeId)); } catch (e) { /* best-effort */ }
+    window.location.href = ordersIngredientHref(recipeId, ingredientId);
+  },
   // A recipe row's missing ingredient, added with the card «Fornitori e ingredienti» uses.
   // Federico, 13 Sep 2026: «semplicemente apri una scheda ingrediente come in fornitori ed
   // ingredienti». ⚠️ Asked of the session each time, like Food cost above.
-  mayCreateIngredient: () => { const s = currentSession(); return mayEditRecords(s.location, s.canManage); },
+  mayCreateIngredient: () => { const s = currentSession(); return mayEditRecords(s.location, s.canManage, s.role); },
   createIngredient: (name) => openIngredientCreate({ name, suppliers: getSuppliers(), ingredients: getIngredients() }),
   // Delete a catalogue recipe with a strong confirm, warning first if the recipe
   // was imported into the Calculator (the two are independent copies — deleting
@@ -884,6 +921,8 @@ setSyncErrorHandler((msg) => toast(msg));
 // yet: the call threw, the rest of this file never ran, and the catalogue stayed broken
 // until a reload, with every later data update throwing the same error.
 let wantedRecipeId = recipeIdFromHash(window.location.hash);
+// Where in that recipe Back should land: 'foodcost' (the Food cost card) or null.
+let wantedSpot = recipeSpotFromHash(window.location.hash);
 const WANTED_RECIPE_WAIT_MS = 5000;
 
 // Start the live sync; when the collection changes and the list is showing, refresh
@@ -895,6 +934,8 @@ initCatalogue(
     openWantedRecipe();
     // Beside an open recipe on a tablet the list is on screen too, and stays current.
     if (view === 'list' || (view === 'detail' && splitOn)) refreshList();
+    // The category list can arrive, or change on another phone, while Settings is open.
+    if (view === 'settings' && activeSettings) activeSettings.refreshCategories();
     // The offer needs the recipes to have arrived — a session is only worth
     // resuming if its recipe is still in the catalogue.
     if (view === 'list') offerResume();
@@ -954,7 +995,11 @@ onSession((s) => {
   else if (view === 'detail' && activeDetail && currentRecipe) {
     const latest = getRecipes().find(r => r.id === currentRecipe.id) || currentRecipe;
     currentRecipe = latest;
-    activeDetail = renderDetail({ recipe: latest, app });
+    // The rows split in two stay split, and the old screen lets go of its listeners.
+    const split = activeDetail.splitRows?.() || [];
+    activeDetail.destroy?.();
+    document.body.classList.remove('cat-zoom-lock');
+    activeDetail = renderDetail({ recipe: latest, app, split });
     showDetailNode(latest, activeDetail.root);
     // The list column is on screen beside it: its header follows the session as well.
     if (splitOn) setListHeader();
@@ -1000,8 +1045,12 @@ watchTablet((isTablet) => {
   else if (view === 'detail' && currentRecipe && isTablet !== splitOn) {
     const latest = getRecipes().find(r => r.id === currentRecipe.id) || currentRecipe;
     currentRecipe = latest;
-    if (isTablet) showDetailTablet(latest);
-    else showDetailPhone(latest);
+    // A rotation keeps the rows split in two, and the old screen lets go of its listeners.
+    const split = activeDetail?.splitRows?.() || [];
+    activeDetail?.destroy?.();
+    document.body.classList.remove('cat-zoom-lock');
+    if (isTablet) showDetailTablet(latest, split);
+    else showDetailPhone(latest, split);
   }
 });
 
@@ -1029,12 +1078,23 @@ function openWantedRecipe() {
   if (view !== 'list') { forgetWantedRecipe(); return; }
   const recipe = getRecipes().find(r => r.id === wantedRecipeId);
   if (!recipe) return;   // not arrived yet: the next data update asks again
+  const spot = wantedSpot;
   forgetWantedRecipe();
   openDetail(recipe);
+  // Federico: «dalla scheda ricetta andare alla sua scheda food cost e tornare» — Back lands
+  // where the tap came from, not at the top of a long recipe. No focus move: a programmatic
+  // focus ring on the button would look odd.
+  if (spot === 'foodcost') {
+    requestAnimationFrame(() => {
+      const button = document.querySelector('.cat-fc-open');
+      if (button && button.scrollIntoView) button.scrollIntoView({ block: 'center' });
+    });
+  }
 }
 
 function forgetWantedRecipe() {
   wantedRecipeId = null;
+  wantedSpot = null;
   try {
     history.replaceState(null, '', window.location.pathname + window.location.search);
   } catch (e) { /* best-effort: at worst a reload opens the recipe again */ }

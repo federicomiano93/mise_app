@@ -24,15 +24,25 @@ open.
   field needs no rules deploy but a Cloud Function (`allow write: if false`) — and each function
   writes ONE field with `merge`, never a spread, because the same document holds name, sections and
   country. `staffHiddenCards` / `staffShownCards` (`{ <cardId>: true|false }`) are display switches,
-  never access: only a literal `true` counts, `canManage` always sees every card; read by
+  never access: only a literal `true` counts, `canManage` passes them (a partial owner keeps only their
+  `ROLE_CARDS`); read by
   `js/home-cards.js`, `js/auth-gate.js` (body `data-card`) and `js/home-orders-badge.js`.
   `functions/home-cards.js` keeps a byte copy of the card ids (`tests/home-cards.test.mjs`).
 
 **Access control.** ⚠️ **The role IS the membership value**: `users/{uid}.locations.<lid>` is
-`true` | `'manager'` | `'owner'`; anything else is an employee and also not a member. A new
-membership value goes in THREE places or it is a lockout: `js/sections.js` `locationsOf()`,
-`firestore.rules` `member()`, `functions/onboarding.js` `accessValue()`. `is string` in the rules is
-deliberate (boolean for staff, string above it; the rules language is strongly typed).
+`true` | `'manager'` | `'owner'` | `'owner-sales'` | `'owner-kitchen'`; anything else is an employee
+and also not a member. A new membership value goes in THREE places or it is a lockout:
+`js/sections.js` `ACCESS_VALUES`, `firestore.rules` `isMemberValue()`, `functions/onboarding.js`
+`ACCESS_VALUES`. `is string` in the rules is deliberate (boolean for staff, string above it; the rules
+language is strongly typed).
+- **The two partial owners (his decision, 1 Nov 2026).** They run one side as an owner would, hire
+  nobody and change no venue setting. `'owner-sales'`: Food cost and the clients, reading recipes,
+  ingredients and suppliers because a product is costed from them. `'owner-kitchen'`: Calculator,
+  Catalogue, Pastries, Orders, Stocktake and purchase prices; client names and quantities only as the
+  Calculator needs them. `ROLE_CARDS` in `js/home-cards.js` deals every Home card to exactly one of them.
+  Only a full `'owner'` counts for the last-owner guard, so a venue always keeps one. The kitchen
+  may not read `products`, so the merge asks the callable `productsUsingIngredient`, which answers
+  with names alone (`functions/product-usage.js`).
 - `locations/{lid}/members/{uid}` — the roster `{ email, firstName, lastName, joinedAt }`. A label,
   never an identity: no rule reads it; no account may write it. A surname is personal data (UK
   GDPR).
@@ -78,11 +88,15 @@ both halves.
   written ONCE (create only, never edited) at the end of a run: `{ bakery, fileName (≤500, the picked files' names,
   a personal tax code blanked), importedAt (ISO), firstDate, lastDate (YYYY-MM-DD, the invoices' own Data, first ≤
   last), months[] (YYYY-MM, 1–600), invoiceIds[] (the reader's docId = the SDI id; 1–5000) }`. NO «who imported»
-  (P13). Read, written, deleted by `canManage(lid,'foodcost')` like `invoice-decisions`. The reader sets aside every
+  (P13). Read, written, deleted by `managesPrices(lid)` like `invoice-decisions` (so the kitchen's owner too). The reader sets aside every
   invoice whose id is here (`alreadyImported` of build-import), so a re-loaded file offers only its new invoices; an
   invoice is recorded only when every ingredient row holding a price of it was seen through
   (`app/src/suppliers/invoiceImport/importLog.ts`). The current app neither reads nor writes it.
 - `drafts/current` — the order in progress; `days` is the memory that makes the day model work.
+  `skipped` (6 Nov 2026, optional map ≤ 200) — `{ supplierId: 'YYYY-MM-DD' }`, a supplier due today
+  closed as «non ordinato» from the order summary (nothing needed); it counts only on that day
+  (`reminders.js skippedOn`) for the Orders strip, the Home badge and the kiosk. Written on its own,
+  never through the autosave, and never with `updatedAt`. Once production carries it, it stays listed.
 - `orders-history/{YYYY-MM-DD}_{supplierId}` — one record per day per supplier; `names` freezes each
   item's label; `deliveredAt`/`missing` optional. Since `v1.109.1` Orders reads only the last 2 months live (`date >=`,
   `js/orders/history-window.js`); older pages on demand from History; the legacy `2026-W28` record (no
@@ -103,7 +117,7 @@ match any new name there — `{ bakery, png (a `data:image/png;base64,…` addre
 height (int 1–1920), updatedAt? }`: written and deleted by `canManage` catalogue, read by members with the catalogue
 on; no other id. The current app saves recipes and `config/labels` with merge, so it keeps these keys.
 
-**Recipe shelf (Mise 2, 25 Oct 2026, rules not yet deployed).** Recipes may carry `category` (string 1–100; «no
+**Recipe shelf (Mise 2, 25 Oct 2026; `category` and `recipeCategories` are LIVE since main took them on 1 Nov, `archived` and its check are not yet deployed).** Recipes may carry `category` (string 1–100; «no
 category» is NO field — an emptied choice is a removal; a word not on the venue's list reads as «no category» and comes
 back if the word is put back) and `archived` (bool; only `true` is stored, a restore removes it). ⚠️ The rules ask
 `canManage(catalogue)` ONLY when the archived state MOVES (created archived, archived, restored): an employee's ordinary
@@ -120,6 +134,16 @@ field ids of `shared/src/haccp-label.ts`, values `'off'` | `'print'` | `'blank'`
 = every recipe). canManage like the rest of that document. The prepared-by name is READ from
 `locations/{lid}/members/{uid}.firstName` (a label, never an identity) only when that field is printed; ⚠️ P13: it puts a
 first name on paper, off by default.
+
+**Recipe categories (1 Nov 2026; the same fields as Mise 2, PR #404).** `recipes/{id}.category` (string 1–100; «no
+category» is NO field — an emptied choice is a removal). A word not on the venue's list reads as «no category» and comes
+back if the word is put back, so deleting a category writes no recipe. `config/labels.recipeCategories` (list ≤ 100,
+canManage like the rest of that document; each word ≤ 40 in the box). ⚠️ The current app changes it ONE WORD AT A TIME
+(`arrayUnion`/`arrayRemove`): a whole write from a phone with an old copy would wipe the venue's other words. Two phones
+offline can store a word in two cases; the reader folds them. ⚠️ A save sends `category` only when the editor's menu moved
+it (`categoryMoved`, never stored). ⚠️ Both fields stay in the whitelists for good once production carries them: an older
+rules file would make those recipes, and the venue's whole label settings, unwritable. The logic:
+`js/catalogue/recipe-categories-model.js`.
 
 ⚠️ **The language rule, for every screen:** a word that names a FOOD follows the venue's COUNTRY
 (`allergenName` / `allergenGroupName` / `nutrientName`, passed the output language); a word that
@@ -175,7 +199,9 @@ gcloud login; the session-start hook prints the count. The text is device data: 
 deviceId (20-char `device-id`), dayKey ('YYYYMMDD', local), kind? (phone|tablet|computer), appVersion?
 (≤12), screens{name: opens} · seconds{name: active seconds} · taps{name: n} (≤80 keys each) ·
 routes{'from>to': n} (≤300) · actions{name: n} (≤40) · loads{page: n} · loadMs{page: total ms} (≤20),
-firstMinute?, lastMinute? (0–1439, local), offlineSeconds? (0–86400), updatedAt (server time) }`,
+firstMinute?, lastMinute? (0–1439, local), offlineSeconds? (0–86400), hours?{'00'…'23': active seconds in
+that local hour, ≤3600 each; since 6 Nov 2026 — older lines only have the first/last minute}, updatedAt
+(server time) }`,
 written WHOLE (no merge) by `js/usage.js` through `saveUsage`. A screen is the page (`orders`) or
 `page:view` (`orders:supplier`), announced by `mise:screen` events; key actions by `mise:action`
 events (`order-sent`, `recipe-saved`…). Any member of THAT venue may create and update (no switch);
@@ -202,15 +228,18 @@ phone is offline (it waits for the signal, so «Not sent yet» means the person'
 app write another person's `users/{uid}` would be a master key to the whole database. `clientId`
 may not contain `_` (the order id is `{date}_{clientId}`).
 
-**Food cost** — the only collections whose READ is gated on a role (the reading is what is
-protected).
+**Food cost** — collections whose READ is gated on a role (the reading is what is protected);
+the only other one is `client-accounts` (managers, or the account itself — audit, 25 Oct 2026).
 - `products/{id}` · `products/{id}/snapshots/{autoId}`. A `vatRate` of 0 is a real answer.
   `model: 2`; `components[]` may hold `{kind:'ingredient', ingredientId, qty, unit:'g'|'kg'|'pcs'}`
   beside the legacy `{recipeId, qtyKg}`; `sellingMode` adds `'pack'` with `packSize`/`packUnit`;
   packaging `qty` is per unit sold, not per batch; `labourMinutes` (per batch) + `labourPeople`
   (missing = 1). Products are saved whole, so the rules refuse a write whose `model` is lower than
   the stored one — an out-of-date phone gets «could not save» instead of deleting lines. Labour is
-  not frozen into snapshots.
+  not frozen into snapshots. `noWeightLoss` (bool, Nov 2026, written only when `true`): a finished
+  product — the oven loss of the recipes on ITS lines is ignored in ITS cost; the recipe's
+  `lossPct` is untouched and other products keep paying it. ⚠️ Mise 2's `normalizeProduct` must
+  carry it, or its next save of such a product drops it.
 - `foodcost-settings/main` — `{ bakery, labourCostPerHour, updatedAt }`; read and write
   `canManage(lid,'foodcost')` only, never deleted: an employee shown Food cost must not learn the
   rate.
@@ -227,5 +256,8 @@ protected).
   write.
 
 **Pastries:** `pastries/{Weekday}` — seven documents, for ever; the work day rolls at 4am.
+A row is `{ name, qty, note? }`: `note` («9x3») is free text up to 40 characters, absent when empty, kept by
+`js/pastries/pastries-model.js` because rules cannot look inside a list. ⚠️ The day is written whole: a writer that
+rebuilds rows as `{ name, qty }` (the app before this note, Mise 2 until it is ported) deletes every note on that day.
 `pastry-logs/{YYYY-MM-DD}_{Weekday}` — nothing deletes it; the read is bounded
 (`orderBy('date','desc') + limit(120)`).

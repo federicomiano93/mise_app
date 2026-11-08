@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
-import { versionNumber, versionState, askVersionOf } from '../js/app-version.js';
+import { versionNumber, versionState, askVersionOf, askPageVersion } from '../js/app-version.js';
 
 test('versionNumber reads the trailing number of the cache name', () => {
   assert.equal(versionNumber('theitalianclub-v546'), '546');
@@ -62,6 +62,35 @@ test('askVersionOf retries: an answer on the second attempt is used', async () =
   const c = fakeController((n, port) => { if (n === 2) port.postMessage({ version: 'x-v2' }); });
   assert.equal(await askVersionOf(c, fast), 'x-v2');
   assert.equal(c.asks, 2);
+});
+
+test('askPageVersion asks the controller and answers the number', async () => {
+  const controller = fakeController((n, port) => port.postMessage({ version: 'theitalianclub-v741' }));
+  const nav = { serviceWorker: { controller, getRegistration: async () => { throw new Error('not asked'); } } };
+  assert.equal(await askPageVersion(fast, nav), '741');
+});
+
+test('askPageVersion: no controller (first visit, hard reload) → the active worker is asked', async () => {
+  const active = fakeController((n, port) => port.postMessage({ version: 'theitalianclub-v740' }));
+  const nav = { serviceWorker: { controller: null, getRegistration: async () => ({ active }) } };
+  assert.equal(await askPageVersion(fast, nav), '740');
+  assert.equal(active.asks, 1);
+});
+
+test('askPageVersion answers null, never throws, with no worker at all', async () => {
+  assert.equal(await askPageVersion(fast, {}), null);
+  assert.equal(await askPageVersion(fast, undefined), null);
+  assert.equal(await askPageVersion(fast, { serviceWorker: { controller: null, getRegistration: async () => undefined } }), null);
+  assert.equal(await askPageVersion(fast, { serviceWorker: { controller: null, getRegistration: async () => ({ active: null }) } }), null);
+  assert.equal(await askPageVersion(fast, { serviceWorker: { controller: null, getRegistration: () => Promise.reject(new Error('x')) } }), null);
+});
+
+test('the statistics and the notes ask through askPageVersion', () => {
+  for (const file of ['js/device-ping.js', 'js/error-report.js', 'js/usage.js', 'js/feedback.js']) {
+    const src = readFileSync(new URL(`../${file}`, import.meta.url), 'utf8');
+    assert.match(src, /askPageVersion\(\{ timeoutMs: 800, attempts: 1 \}\)/, file);
+    assert.doesNotMatch(src, /serviceWorker\.controller/, `${file} must not read the controller itself`);
+  }
 });
 
 test('askVersionOf answers null for a malformed reply, without retrying', async () => {

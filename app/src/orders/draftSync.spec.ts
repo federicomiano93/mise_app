@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { createDraftSync, SAVE_DELAY_MS } from './draftSync';
-import type { DraftPayload } from './draftSync';
+import type { DraftDays, DraftEntries, DraftEntry, DraftPayload } from './draftSync';
 
 function harness({ refuse = false } = {}) {
   const saves: DraftPayload[] = [];
@@ -435,7 +435,384 @@ describe('draftSync — flush and unsaved', () => {
 
   it('a missing document is an empty order that does not exist yet', () => {
     const h = harness();
-    expect(h.sync.receive(null)).toEqual({ entries: {}, days: {}, updatedAt: '', exists: false });
+    expect(h.sync.receive(null)).toEqual({ entries: {}, days: {}, skipped: {}, updatedAt: '', exists: false });
+    // The closes travel with the view (only string days: a stray value is no close).
+    expect(h.sync.receive({ entries: {}, skipped: { a: '2026-11-06', b: 7 } }).skipped).toEqual({ a: '2026-11-06' });
     expect(h.sync.receive({ entries: {}, updatedAt: 'x' }).exists).toBe(true);
+  });
+});
+
+// F-16 (docs/parity/orders.md), the current app's PR #444: a correction typed while the write it corrects is in the air.
+// The screen then matches `known` (no snapshot has shown the write yet: about 5 s on the lab tablet on a freshly opened
+// page), so measuring against `known` alone said «nothing to send», and the write in the air then landed and put the old
+// number back, on screen and on the server. The cases d1–d19 of tests/draft-claims.test.mjs, re-stated against the port: the
+// page is the store's copy, rebuilt from what the sync returns at every snapshot; a keystroke changes it and calls change().
+describe('draftSync — corrections while a write is in the air (F-16)', () => {
+  const DAY = '2026-10-28';
+  type Page = { entries: Record<string, DraftEntry>; days: Record<string, string> };
+
+  function onePage() {
+    const h = harness();
+    h.holdSaves();
+    let page: Page = { entries: {}, days: {} };
+    const draw = (view: { entries: DraftEntries; days: DraftDays }) => {
+      page = { entries: structuredClone({ ...view.entries }) as Record<string, DraftEntry>, days: { ...view.days } };
+    };
+    // The server's document; each call hands over fresh objects, as Firestore does.
+    const snapshot = (entries: Record<string, DraftEntry>, days: Record<string, string> = {}) => {
+      draw(h.sync.receive(structuredClone({ entries, days, updatedAt: 'x' })));
+    };
+    const type = (id: string, patch: DraftEntry) => {
+      page.entries[id] = { qty: 0, stock: 0, ...page.entries[id], ...patch };
+      h.sync.change(page.entries, page.days);
+    };
+    const stamp = (supplierId: string, day: string) => {
+      page.days[supplierId] = day;
+      h.sync.change(page.entries, page.days);
+    };
+    // The store's «save this right now» (a restamped day): the same claims a keystroke makes, sent without waiting.
+    const saveNow = () => h.sync.flush().catch(() => undefined);
+    const settle = () => new Promise(resolve => { setTimeout(resolve, 0); });
+    const held = (i: number) => h.pendingSaves[i];
+    const resolveFrom = async (from: number) => {
+      for (const write of h.pendingSaves.slice(from)) write.resolve();
+      await settle();
+    };
+    return {
+      h, snapshot, type, stamp, saveNow, settle, held, resolveFrom,
+      pause: h.tick,
+      page: () => page,
+      sent: (i: number) => h.saves[i],
+      shown: () => h.sync.view(),
+      forget: (ids: string[], suppliers: string[]) => { draw(h.sync.forget(ids, suppliers)); },
+    };
+  }
+  const GROUP0 = { qty: 0, unit: '', supplierId: '' };
+
+  it('d1 a quantity corrected to the server\'s value while the write is in the air goes out, and stays', async () => {
+    const p = onePage();
+    p.snapshot({});
+    p.type('d1', { qty: 5 });
+    await p.pause();
+    expect(p.h.saves).toHaveLength(1);
+    p.type('d1', { qty: 0 });
+    await p.pause();
+    expect(p.h.saves).toHaveLength(2);
+    expect(p.sent(1)?.entries).toEqual({ d1: GROUP0 });
+
+    p.held(0)?.resolve();
+    await p.settle();
+    p.snapshot({ d1: { qty: 5, stock: 0, unit: '', supplierId: '' } }); // the 5 reaches the server first…
+    expect(p.page().entries.d1?.qty).toBe(0);
+
+    p.held(1)?.resolve();
+    await p.settle();
+    p.snapshot({ d1: { qty: 0, stock: 0, unit: '', supplierId: '' } }); // …then the correction does
+    expect(p.page().entries.d1?.qty).toBe(0);
+    p.type('d1b', { qty: 1 });
+    await p.pause();
+    expect(Object.keys(p.sent(2)?.entries ?? {})).toEqual(['d1b']);
+    await p.resolveFrom(2);
+  });
+
+  it('d2 a quantity put back to the one the server already had, while the write is in the air, goes out', async () => {
+    const p = onePage();
+    p.snapshot({ d2: { qty: 3, stock: 0 } });
+    p.type('d2', { qty: 5 });
+    await p.pause();
+    p.type('d2', { qty: 3 });
+    await p.pause();
+    expect(p.sent(1)?.entries).toEqual({ d2: { qty: 3, unit: '', supplierId: '' } });
+    await p.resolveFrom(0);
+  });
+
+  it('d3 a correction still in its pause when the earlier write lands goes out after it', async () => {
+    const p = onePage();
+    p.snapshot({});
+    p.type('d3', { qty: 5 });
+    await p.pause();
+    p.type('d3', { qty: 0 });
+    p.held(0)?.resolve();
+    await p.settle();
+    await p.pause();
+    expect(p.sent(1)?.entries).toEqual({ d3: GROUP0 });
+    await p.resolveFrom(1);
+  });
+
+  it('d4 the correction goes out when leaving the section too', async () => {
+    const p = onePage();
+    p.snapshot({});
+    p.type('d4', { qty: 5 });
+    await p.pause();
+    p.type('d4', { qty: 0 });
+    const flushing = p.h.sync.flush();
+    expect(p.sent(1)?.entries).toEqual({ d4: GROUP0 });
+    await p.resolveFrom(0);
+    await flushing;
+  });
+
+  it('d5 a stock count corrected while its write is in the air goes out, and only the stock', async () => {
+    const p = onePage();
+    p.snapshot({ d5: { qty: 3, stock: 1 } });
+    p.type('d5', { stock: 2 });
+    await p.pause();
+    p.type('d5', { stock: 1 });
+    await p.pause();
+    expect(p.sent(1)?.entries).toEqual({ d5: { stock: 1 } });
+    await p.resolveFrom(0);
+  });
+
+  it('d6 a unit corrected while the write is in the air goes out with its quantity', async () => {
+    const p = onePage();
+    p.snapshot({ d6: { qty: 2, stock: 0 } });
+    p.type('d6', { unit: 'busta' });
+    await p.pause();
+    p.type('d6', { unit: '' });
+    await p.pause();
+    expect(p.sent(1)?.entries).toEqual({ d6: { qty: 2, unit: '', supplierId: '' } });
+    await p.resolveFrom(0);
+  });
+
+  it('d7 a day stamp put back while the write is in the air goes out', async () => {
+    const p = onePage();
+    p.snapshot({ d7: { qty: 2, stock: 0 } }, { aldo: '2026-10-27' });
+    p.stamp('aldo', DAY);
+    const moving = p.saveNow();
+    p.stamp('aldo', '2026-10-27');
+    await p.pause();
+    expect(p.sent(1)?.days).toEqual({ aldo: '2026-10-27' });
+    await p.resolveFrom(0);
+    await moving;
+  });
+
+  // What the fix must NOT do: speak about a line it has no correction for.
+  it('d8 retyping the value in the air sends nothing more, after a correction inside the pause', async () => {
+    const p = onePage();
+    p.snapshot({});
+    p.type('d8', { qty: 5 });
+    await p.pause();
+    p.type('d8', { qty: 0 });
+    p.type('d8', { qty: 5 });
+    await p.pause();
+    expect(p.h.saves).toHaveLength(1);
+    await p.resolveFrom(0);
+  });
+
+  it('d9 a line placed while its write is in the air is not written again, nor its day stamp', async () => {
+    const p = onePage();
+    p.snapshot({ d9: { qty: 3, stock: 0 } }, { aldo: DAY });
+    p.type('d9', { qty: 5 });
+    p.stamp('aldo', '2026-10-29');
+    await p.pause();
+    p.forget(['d9'], ['aldo']); // the order is recorded: the store forgets its lines and its day
+    p.type('d9b', { qty: 1 });
+    await p.pause();
+    expect(Object.keys(p.sent(1)?.entries ?? {})).toEqual(['d9b']);
+    expect(p.sent(1)?.days).toBeUndefined();
+    await p.resolveFrom(0);
+  });
+
+  it('d10 a field the write in the air does not carry is not claimed: a colleague\'s count is not re-asserted', async () => {
+    const p = onePage();
+    p.snapshot({ d10: { qty: 3, stock: 1 } });
+    p.type('d10', { qty: 5 });
+    await p.pause();
+    // Firestore shows this phone's 5 with a colleague's new shelf count on the same line.
+    p.snapshot({ d10: { qty: 5, stock: 7, unit: '', supplierId: '' } });
+    p.type('d10b', { qty: 1 });
+    await p.pause();
+    expect(Object.keys(p.sent(1)?.entries ?? {})).toEqual(['d10b']);
+    await p.resolveFrom(0);
+  });
+
+  it('d11 a correction outlives the refusal of the write it corrects', async () => {
+    const p = onePage();
+    p.snapshot({ d11: { qty: 3, stock: 0 } });
+    p.type('d11', { qty: 5 });
+    await p.pause();
+    p.type('d11', { qty: 3 });
+    p.held(0)?.reject(new Error('permission-denied'));
+    await p.settle();
+    expect(p.shown().entries.d11?.qty).toBe(3); // the refused 5 does not come back
+    p.snapshot({ d11: { qty: 3, stock: 0 } }); // Firestore takes the write back
+    expect(p.page().entries.d11?.qty).toBe(3);
+    await p.pause();
+    expect(p.h.saves).toHaveLength(1); // the take-back shows the 3: nothing is owed
+    p.snapshot({ d11: { qty: 3, stock: 0 } });
+    expect(p.page().entries.d11?.qty).toBe(3);
+  });
+
+  it('d11b refused, and the pause ends before the take-back: the 3 goes out, what the screen says', async () => {
+    const p = onePage();
+    p.snapshot({ d11b: { qty: 3, stock: 0 } });
+    p.type('d11b', { qty: 5 });
+    await p.pause();
+    p.type('d11b', { qty: 3 });
+    p.held(0)?.reject(new Error('permission-denied'));
+    await p.settle();
+    await p.pause();
+    // The server never took the 5, so this repeats what it holds: the same exposure as any keystroke, pinned so that a
+    // change to it is a decision.
+    expect(p.sent(1)?.entries).toEqual({ d11b: { qty: 3, unit: '', supplierId: '' } });
+    await p.resolveFrom(1);
+  });
+
+  it('d12 a refused write does not come back over a correction already on its way', async () => {
+    const p = onePage();
+    p.snapshot({});
+    p.type('d12', { qty: 5 });
+    await p.pause();
+    p.type('d12', { qty: 0 });
+    await p.pause();
+    p.type('d12b', { qty: 1 }); // the 0 is on its way, so its claim is dropped
+    p.held(0)?.reject(new Error('permission-denied'));
+    await p.settle();
+    p.snapshot({}); // Firestore takes the write back
+    expect(p.page().entries.d12?.qty ?? 0).toBe(0);
+    await p.pause();
+    expect(Object.keys(p.sent(2)?.entries ?? {})).toEqual(['d12b']);
+    await p.resolveFrom(1);
+  });
+
+  it('d19 a refused day stamp does not come back over a newer one already on its way', async () => {
+    const p = onePage();
+    p.snapshot({ d19: { qty: 2, stock: 0 } }, { aldo: '2026-10-27' });
+    p.stamp('aldo', DAY);
+    const first = p.saveNow();
+    p.stamp('aldo', '2026-10-29');
+    void p.saveNow();
+    p.snapshot({ d19: { qty: 2, stock: 0 } }, { aldo: '2026-10-29' }); // Firestore shows the newer stamp
+    p.type('d19b', { qty: 1 }); // so the keystroke drops its claim
+    p.held(0)?.reject(new Error('permission-denied'));
+    await first;
+    await p.settle();
+    await p.pause();
+    expect(p.sent(2)?.days).toBeUndefined();
+    expect(p.shown().days.aldo).toBe('2026-10-29');
+    await p.resolveFrom(1);
+  });
+
+  // Changing one's mind twice: the first write lands, and its value is the one typed last.
+  it('d13 5, 0, 5 again: the first 5 landing inside the pause does not stop the last 5 going out', async () => {
+    const p = onePage();
+    p.snapshot({});
+    p.type('d13', { qty: 5 });
+    await p.pause();
+    p.type('d13', { qty: 0 });
+    await p.pause();
+    p.type('d13', { qty: 5 });
+    p.held(0)?.resolve();
+    await p.settle();
+    await p.pause();
+    expect(p.sent(2)?.entries).toEqual({ d13: { qty: 5, unit: '', supplierId: '' } });
+    await p.resolveFrom(1);
+    expect(p.page().entries.d13?.qty).toBe(5);
+    expect(p.h.saves).toHaveLength(3); // and that is the end of it
+    // The server ends at the last 5, and a snapshot saying so leaves nothing claimed.
+    p.snapshot({ d13: { qty: 5, stock: 0, unit: '', supplierId: '' } });
+    expect(p.h.sync.hasUnsaved()).toBe(false);
+  });
+
+  it('d14 5, 7, 5 again on a saved line ends at 5, not at the number in the middle', async () => {
+    const p = onePage();
+    p.snapshot({ d14: { qty: 3, stock: 0 } });
+    p.type('d14', { qty: 5 });
+    await p.pause();
+    p.type('d14', { qty: 7 });
+    await p.pause();
+    p.type('d14', { qty: 5 });
+    p.held(0)?.resolve();
+    await p.settle();
+    await p.pause();
+    expect(p.sent(2)?.entries).toEqual({ d14: { qty: 5, unit: '', supplierId: '' } });
+    await p.resolveFrom(1);
+  });
+
+  it('d15 a shelf count 2, 1, 2 again ends at 2', async () => {
+    const p = onePage();
+    p.snapshot({ d15: { qty: 3, stock: 0 } });
+    p.type('d15', { stock: 2 });
+    await p.pause();
+    p.type('d15', { stock: 1 });
+    await p.pause();
+    p.type('d15', { stock: 2 });
+    p.held(0)?.resolve();
+    await p.settle();
+    await p.pause();
+    expect(p.sent(2)?.entries).toEqual({ d15: { stock: 2 } });
+    await p.resolveFrom(1);
+  });
+
+  it('d16 a day stamp moved and moved back ends where it was last put', async () => {
+    const p = onePage();
+    p.snapshot({ d16: { qty: 2, stock: 0 } }, { aldo: '2026-10-27' });
+    p.stamp('aldo', DAY);
+    void p.saveNow();
+    p.stamp('aldo', '2026-10-29');
+    void p.saveNow();
+    p.stamp('aldo', DAY);
+    p.held(0)?.resolve();
+    await p.settle();
+    await p.pause();
+    expect(p.sent(2)?.days).toEqual({ aldo: DAY });
+    await p.resolveFrom(1);
+  });
+
+  it('d17 with all three writes in the air, the first landing leaves the last one\'s claim standing', async () => {
+    const p = onePage();
+    p.snapshot({});
+    p.type('d17', { qty: 5 });
+    await p.pause();
+    p.type('d17', { qty: 0 });
+    await p.pause();
+    p.type('d17', { qty: 5 });
+    await p.pause();
+    p.held(0)?.resolve();
+    await p.settle();
+    p.snapshot({ d17: { qty: 0, stock: 0 } }); // a snapshot showing the write in the middle
+    expect(p.page().entries.d17?.qty).toBe(5);
+    p.type('d17b', { qty: 1 });
+    await p.pause();
+    expect(Object.keys(p.sent(3)?.entries ?? {})).toEqual(['d17b']);
+    await p.resolveFrom(1);
+  });
+
+  // A redraw that gives a line a blank row back makes the next keystroke write it at zero. Wanted: a 5 landing after the
+  // line was emptied would otherwise stay.
+  it('d18 a line emptied while its write is in the air, then redrawn, is written at zero', async () => {
+    const p = onePage();
+    p.snapshot({ d18: { qty: 3, stock: 0 } });
+    p.type('d18', { qty: 5 });
+    await p.pause();
+    p.page().entries.d18 = { qty: 0, stock: 0 };
+    p.type('d18b', { qty: 1 });
+    await p.pause();
+    expect(p.sent(1)?.entries?.d18).toEqual(GROUP0);
+    await p.resolveFrom(0);
+  });
+});
+
+// The current app's PR #410 (478b4767), whose claim logic came from this file: a stock count typed while a clear is in the
+// air. Here the store forgets the lines (forget) BEFORE the clear is written, and the clear's own snapshot comes later.
+describe('draftSync — a stock count typed while a clear is in the air (PR #410)', () => {
+  it('«clear the quantities»: the count, and only the count, is sent', async () => {
+    const h = harness();
+    h.sync.receive({ entries: { c12: { qty: 3, stock: 2 } }, days: { aldo: '2026-10-28' } });
+    const view = h.sync.forget(['c12'], ['aldo'], { quantitiesOnly: true });
+    expect(view.entries.c12).toEqual({ stock: 2 });
+    h.sync.change({ ...view.entries, c12: { stock: 4 } }, view.days);
+    await h.tick();
+    expect(h.saves.at(-1)?.entries).toEqual({ c12: { stock: 4 } });
+    expect(h.saves.at(-1)?.days).toBeUndefined();
+  });
+
+  it('a placed order being cleared: the count typed meanwhile is sent, never the placed quantity', async () => {
+    const h = harness();
+    h.sync.receive({ entries: { c13: { qty: 3, stock: 2 } }, days: { aldo: '2026-10-28' } });
+    const view = h.sync.forget(['c13'], ['aldo']);
+    expect(view.entries.c13).toBeUndefined();
+    h.sync.change({ ...view.entries, c13: { qty: 0, stock: 4 } }, view.days);
+    await h.tick();
+    expect(h.saves.at(-1)?.entries).toEqual({ c13: { stock: 4 } });
   });
 });

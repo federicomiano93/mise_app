@@ -11,6 +11,7 @@ import {
   startWeighing, typeCooked, typeRaw, weighingPatches, withWeighings, otherProductsUsing,
 } from '@mise/shared/foodcost-weighing';
 import type { WeighingState } from '@mise/shared/foodcost-weighing';
+import type { KiloLineUnit } from '@mise/shared/line-quantity';
 import { countryOf } from '@mise/shared/market';
 import { firstInvalidNumber } from '@mise/shared/product-limits';
 import { isSectionAllowedFor } from '@mise/shared/sections';
@@ -40,12 +41,13 @@ import { PickDialog } from './PickDialog';
 import type { Choice, PickMode } from './PickDialog';
 import { ProductAnswer, SuggestedPrice } from './ProductAnswer';
 import {
-  NUMBER_KEY, clearNumber, costable, emptyWorking, isNumberField, isShown, newLineKey, packSizeShown, piecesShown,
-  plainNumber, recipeIdsOn, toProduct, vatRateOf, workingFrom, workingFromDraft,
+  NUMBER_KEY, RECIPE_LINE_OPENS_IN, clearNumber, costable, emptyWorking, isNumberField, isShown, newLineKey, packSizeShown,
+  piecesShown, plainNumber, recipeIdsOn, recipeLineKg, toProduct, vatRateOf, workingFrom, workingFromDraft,
 } from './productEditorModel';
 import type { NumberField, Working, WorkingComponent } from './productEditorModel';
 import { VatGuideDialog } from './VatGuideDialog';
 import { WeighingPair } from './WeighingPair';
+import { SettingSwitch } from '../ui/SettingSwitch';
 import shell from './ProductEditor.module.css';
 import styles from './ProductForm.module.css';
 
@@ -202,9 +204,11 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
     // `recipeIds` is read through its key.
   }, [snap.recipes, weighings, recipeKey]);
   // What Save would write onto the recipes, right now.
+  // ⚠️ A FINISHED PRODUCT WRITES NO WEIGHINGS: with the switch on there are no boxes, and whatever was
+  // typed before it was switched on is not saved onto the recipes either.
   const patches = useMemo(
-    () => weighingPatches(snap.recipes, states, recipeIds),
-    [snap.recipes, states, recipeKey],
+    () => (working.noWeightLoss ? {} : weighingPatches(snap.recipes, states, recipeIds)),
+    [snap.recipes, states, recipeKey, working.noWeightLoss],
   );
   // ⚠️ EVERY NUMBER ON THIS SCREEN COMES FROM HERE: the stored recipes with the weighings typed on
   // this product laid over them. Reading the stored tables would keep showing the old cost per kilo
@@ -353,7 +357,7 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
         edit(current => ({
           ...current,
           components: [...current.components, choice.kind === 'recipe'
-            ? { key, kind: 'recipe', recipeId: choice.id, qty: '' }
+            ? { key, kind: 'recipe', recipeId: choice.id, qty: '', unit: RECIPE_LINE_OPENS_IN }
             : { key, kind: 'ingredient', ingredientId: choice.id, qty: '', unit: 'g' }],
         }));
         focusQtyOf.current = key;
@@ -406,6 +410,21 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
     }));
   };
 
+  // ⚠️ A RECIPE LINE'S g/kg SWITCH KEEPS THE TYPED NUMBER and changes what it means (owner, 8 Nov 2026: «quando cambio da kg
+  // a g la quantità non deve cambiare»; current app a7f4c75d): 522 in g → kg still shows 522 and stores 522 kg. So the
+  // stored kilos DO change and the form is dirty — unless they do not (an empty box): then only the unit moves, which is
+  // never saved, and nothing is marked.
+  const setRecipeUnit = (key: string, unit: KiloLineUnit) => {
+    const line = working.components.find(one => one.key === key);
+    if (!line || line.kind !== 'recipe' || line.unit === unit) return;
+    const moved = (current: Working): Working => ({
+      ...current,
+      components: current.components.map<WorkingComponent>(one => (one.key === key && one.kind === 'recipe' ? { ...one, unit } : one)),
+    });
+    if (recipeLineKg({ ...line, unit }) === recipeLineKg(line)) setWorking(moved);
+    else edit(moved);
+  };
+
   const removeLine = (key: string) => {
     edit(current => ({
       ...current,
@@ -427,7 +446,7 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
       name,
       components: current.components.some(line => line.kind === 'recipe' && line.recipeId === recipeId)
         ? current.components
-        : [{ key, kind: 'recipe', recipeId, qty: '' }, ...current.components],
+        : [{ key, kind: 'recipe', recipeId, qty: '', unit: RECIPE_LINE_OPENS_IN }, ...current.components],
     }));
     // Said, never prevented: two products on one recipe is normal (a small and a large loaf), but
     // making the same one twice by accident is what this catches.
@@ -515,7 +534,9 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
     // this product costs. The OTHER products using the same recipe record no point — the same gap as
     // an ingredient price drifting.
     const result = costProduct(clean, live);
-    const worthRecording = snapshotWorthTaking(initial, clean) || Object.keys(patches).length > 0;
+    // Switching «no weight loss» on or off moves the cost, so it is a change worth a point as well.
+    const worthRecording = snapshotWorthTaking(initial, clean) || Object.keys(patches).length > 0
+      || (!!initial && !!initial.noWeightLoss !== !!clean.noWeightLoss);
     const point = result.foodCostPct !== null && worthRecording
       ? productSnapshot(clean, result, new Date().toISOString(), live) as unknown as Record<string, unknown>
       : null;
@@ -576,6 +597,7 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
       onPick={() => { changeLine(line.key, kind); }}
       onQty={text => { setQty(line.key, text); }}
       onUnit={unit => { setUnit(line.key, unit); }}
+      onRecipeUnit={unit => { setRecipeUnit(line.key, unit); }}
       onRemove={() => { removeLine(line.key); }}
     />
   );
@@ -646,7 +668,21 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
             {working.components.length > 0 ? t('fc.addRecipeOrIngredient') : t('fc.addRecipe')}
           </Button>
           {/* The weighings LAST, one pair per recipe however many lines carry it. */}
-          {canWeigh ? recipeIds.map(recipeId => {
+          {recipeCount > 0 ? (
+            <div className={styles.switchRow}>
+              <span className={styles.switchWords}>
+                <span id={`${ids}-noloss`} className={styles.switchTitle}>{t('fc.noWeightLoss')}</span>
+                <span id={`${ids}-noloss-hint`} className={styles.note}>{t('fc.noWeightLossHint')}</span>
+              </span>
+              <SettingSwitch
+                selected={working.noWeightLoss}
+                onChange={on => { edit(current => ({ ...current, noWeightLoss: on })); }}
+                labelledBy={`${ids}-noloss`}
+                describedBy={`${ids}-noloss-hint`}
+              />
+            </div>
+          ) : null}
+          {canWeigh && !working.noWeightLoss ? recipeIds.map(recipeId => {
             const recipe = snap.recipes[recipeId];
             const weighing = states[recipeId];
             if (!recipe || !weighing) return null;

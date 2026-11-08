@@ -37,7 +37,7 @@ test('it fires when a list ARRIVES, not every time somebody ticks a line', () =>
 
 test('only the two upper roles are told', () => {
   const fn = src.slice(src.indexOf('async function managersAmong'));
-  assert.match(fn, /access === 'owner' \|\| access === 'manager'/);
+  assert.match(fn, /return receivesOrderLists\(access\);/);
   // The membership VALUE is the role — the same fact firestore.rules reads. A
   // second place deciding what a role is would be a second answer waiting to
   // disagree, which this project has already paid for three times.

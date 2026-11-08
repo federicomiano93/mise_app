@@ -266,6 +266,34 @@ describe('saving a day', () => {
   });
 });
 
+describe('a row\'s own note', () => {
+  const withNotes: PastryItem[] = [{ name: 'Cornetti', qty: 27, note: '9x3' }, { name: 'Bomboloni', qty: 10 }];
+
+  test('a day saved with notes is written with them, and a row without one has no note key', () => {
+    const { store, source } = setup();
+    store.saveDay('Monday', [{ name: ' Cornetti ', qty: 27, note: '  9x3 ' }, { name: 'Bomboloni', qty: 10, note: '   ' }], '');
+    const written = source.saveDay.mock.calls.at(-1)?.[1] ?? [];
+    expect(written).toStrictEqual([{ name: 'Cornetti', qty: 27, note: '9x3' }, { name: 'Bomboloni', qty: 10 }]);
+    expect(Object.keys(written[1] ?? {})).toStrictEqual(['name', 'qty']);
+  });
+
+  test('the notes survive a read: the day the source hands over keeps them', () => {
+    const { store, days } = setup();
+    store.start();
+    days[0]!.onChange([{ id: 'Monday', items: withNotes }]);
+    expect(store.getSnapshot().days.Monday.items).toStrictEqual(withNotes);
+  });
+
+  test('⚠️ correcting a quantity on a row with a note keeps the note, and saves the other rows as they were', () => {
+    const { store, source, days } = setup();
+    store.start();
+    days[0]!.onChange([{ id: 'Monday', items: withNotes }]);
+    source.saveDay.mockClear();
+    expect(store.setItemQuantity('Monday', 0, 'Cornetti', 36)).toBe(true);
+    expect(source.saveDay).toHaveBeenLastCalledWith('Monday', [{ name: 'Cornetti', qty: 36, note: '9x3' }, { name: 'Bomboloni', qty: 10 }], '');
+  });
+});
+
 describe('correcting one quantity from the list', () => {
   test('lands on the row it was typed on, and keeps the note', () => {
     const { store, source } = setup();

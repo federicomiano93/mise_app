@@ -151,6 +151,9 @@ test('the cover is wired the way the brief says (source pins)', () => {
   assert.match(src, /id = 'kiosk-rest'/);
   assert.match(src, /setAttribute\('role', 'button'\)/);
   assert.match(src, /acquireWakeLock\(WAKE_OWNER\)/);
+  // A lost lock is asked for again on every tick, and the waking tap goes through onWakeTap.
+  assert.match(src, /syncLock\(result\.wakeLock[^\n]*\n\s*if \(lockHeld\) refreshWakeLock\(\);/);
+  assert.match(src, /armWakeTap\(window, overlay, onWakeTap\)/);
   assert.match(src, /'kiosk-rest-info'/);
   assert.match(src, /'kiosk-settings-changed'/);
   assert.match(src, /KIOSK_RESUME_KEY/);

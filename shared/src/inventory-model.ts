@@ -350,3 +350,74 @@ export function toDocument(month: unknown): MonthDocument | null {
     updatedAt: m.updatedAt,
   };
 }
+
+// What the list may SAY about itself while it has no rows. Pure, so every branch is executed by a test.
+//
+// ⚠️ «NO PRODUCTS» NEEDS BOTH ANSWERS. A CLOSED month's rows come from the month document (`names` and
+// its counts, see productsOfMonth), not from the ingredients, so an empty ingredient list says nothing
+// until the month has answered too.
+// ⚠️ A CACHED EMPTY LIST ALONE IS NOT «NO CONNECTION»: a venue that really has none gets it a second
+// before the server confirms it. It counts only with the browser offline, or after `stalled`.
+// ⚠️ NO WORD AT ALL UNTIL A VENUE IS OPEN: the language is not known yet (the English «No products yet»
+// came first, then the Italian one), and with no session the sign-in gate is what speaks.
+//   venueOpen: a venue is open. monthAnswered / ingredientsAnswered: that listener has really answered.
+//   failed: a listener died. emptyCopy: the phone's copy of the ingredients said «none».
+//   stalled: too long without an answer. online: navigator.onLine.
+export const LIST_STATUS = Object.freeze({
+  starting: 'starting', answered: 'answered', waiting: 'waiting', unreachable: 'unreachable', failed: 'failed',
+} as const);
+
+export type ListStatus = typeof LIST_STATUS[keyof typeof LIST_STATUS];
+
+export interface ListStatusInput {
+  readonly venueOpen?: unknown;
+  readonly monthAnswered?: unknown;
+  readonly ingredientsAnswered?: unknown;
+  readonly failed?: unknown;
+  readonly emptyCopy?: unknown;
+  readonly stalled?: unknown;
+  readonly online?: unknown;
+}
+
+export function listStatus({ venueOpen, monthAnswered, ingredientsAnswered, failed, emptyCopy, stalled, online }: ListStatusInput): ListStatus {
+  if (monthAnswered && ingredientsAnswered) return LIST_STATUS.answered;
+  if (!venueOpen) return LIST_STATUS.starting;
+  if (failed) return LIST_STATUS.failed;
+  return stalled || (emptyCopy && online === false) ? LIST_STATUS.unreachable : LIST_STATUS.waiting;
+}
+
+// Whether what this phone holds is enough to ACT on the month: to close it, carry into it, fill it from the
+// orders, or say what it cost.
+//
+// ⚠️⚠️ AN OPEN MONTH NEEDS ALL THREE ANSWERS: ITSELF, THE INGREDIENTS AND THEIR PRICES. Rows on screen are not
+// enough: they can come from the phone's copy of the ingredients with the month never read here, and that month
+// may already be counted, or closed, on the server. And a close freezes what a unit cost, so with the prices
+// still out a month would be closed with no money in it.
+// ⚠️ A VENUE WITH NO PRICES AT ALL WAITS FOR THE SIGNAL TOO: an empty copy of the prices cannot prove there are none.
+// ⚠️ A CLOSED MONTH'S ROWS ARE ITS OWN (productsOfMonth): it is ready as soon as it has any.
+export interface MonthReadyInput {
+  readonly status: unknown;
+  readonly closed: unknown;
+  readonly rows: number;
+  readonly pricesAnswered: unknown;
+}
+
+export function monthReady({ status, closed, rows, pricesAnswered }: MonthReadyInput): boolean {
+  if (closed) return rows > 0 || status === LIST_STATUS.answered;
+  return status === LIST_STATUS.answered && pricesAnswered === true;
+}
+
+// A month's write without its empty maps.
+//
+// ⚠️⚠️ AN EMPTY MAP IN A MERGE DOES NOT MEAN «NOTHING TO ADD»: IT REPLACES THE STORED MAP WITH AN EMPTY ONE. A map
+// with keys merges key by key; `opening: {}` wipes every opening of that month. Seen on the emulator: a month closed
+// with nothing counted emptied the opening and the pack weights the next month already held. No write of this
+// feature means to wipe a map: a box is emptied by name, with deleteField(), which is not a plain map and goes through.
+export function withoutEmptyMaps(payload: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(payload)) {
+    const plainMap = Boolean(value) && Object.getPrototypeOf(value) === Object.prototype;
+    if (!plainMap || Object.keys(value as object).length) out[key] = value;
+  }
+  return out;
+}

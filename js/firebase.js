@@ -67,7 +67,7 @@ import {
   clearIndexedDbPersistence,
   waitForPendingWrites,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import { reconcileConfigWrite, CONFIG_MODEL } from './calculator-config.js';
+import { reconcileConfigWrite, clientsOnlyWrite, needsCalculatorSave, CONFIG_MODEL, NEEDS_CALCULATOR_SAVE } from './calculator-config.js';
 import {
   currentLocationId,
   pathFor,
@@ -75,7 +75,7 @@ import {
   locationDocPath,
 } from './location.js';
 import { allowedSections, sectionsFor, pickStart, locationsOf } from './sections.js';
-import { roleOf, isOwner, canManage } from './roles.js';
+import { roleOf, isOwner, canManage, canManageVenue } from './roles.js';
 import {
   clearLocalData, shouldClearLocalData, offlineCacheVerdict, OFFLINE_CACHE_OWNER_KEY,
 } from './local-data.js';
@@ -353,7 +353,7 @@ function takePickVenue() {
 // is "no owner powers", the same direction the rules take for a value nobody set.
 let session = { status: 'loading', user: null, locationId: null, location: null,
                 sections: allowedSections(null), options: [], optionNames: {},
-                role: 'staff', canManage: false, isOwner: false, isAppAdmin: false };
+                role: 'staff', canManage: false, canManageVenue: false, isOwner: false, isAppAdmin: false };
 let userDocCache = null;
 // ⚠️ STARTS false AND IS CLEARED ON SIGN-OUT, like userDocCache above. A stale
 // `true` surviving a sign-out would draw the "New customer" entry for whoever
@@ -592,6 +592,9 @@ async function enterLocation(locationId, options, user) {
     // button reads canManage; only the "who can get in" entry reads isOwner.
     // Using isOwner for a bin would take the bins away from every manager.
     canManage: canManage(userDocCache, locationId),
+    // ⚠️ AND canManage IS TRUE FOR A PARTIAL OWNER, inside their own side. The whole venue —
+    // its language, its Home cards, its switches — asks this one instead.
+    canManageVenue: canManageVenue(userDocCache, locationId),
     isOwner: isOwner(userDocCache, locationId),
     // ⚠️ A THIRD ANSWER, AND IT IS NOT ABOUT THIS LOCATION AT ALL. isOwner is
     // "may hire into THIS venue"; this is "may create a new customer's venue" —
@@ -773,7 +776,7 @@ onAuthStateChanged(auth, user => {
     markHubPassed(false);
     setSession({ status: 'signed-out', user: null, locationId: null, location: null,
                  options: [], sections: allowedSections(null),
-                 role: 'staff', canManage: false, isOwner: false, isAppAdmin: false });
+                 role: 'staff', canManage: false, canManageVenue: false, isOwner: false, isAppAdmin: false });
     return;
   }
 
@@ -1093,12 +1096,22 @@ export function readOldLogsOnce() {
 // products and per-client weights for the three dough tabs (+ the market order).
 
 // Subscribe to the config document in real time. onChange receives the raw data
-// object, or null when the document does not exist yet (fresh project).
+// object, or null when the document does not exist yet (fresh project), and as its
+// second argument whether the answer came from Firestore's offline copy rather than
+// the server — calculator-config-store.js must not take a cached "no document" for
+// the server's word.
+//
+// ⚠️ includeMetadataChanges, because the store sets that cached "no document" aside
+// and waits: when the server then says the same nothing, only the metadata changes,
+// and without this option that answer is never delivered — a brand-new location
+// would sit on «Loading…» for ever. It costs no reads: a repaint when the phone goes
+// offline or comes back.
 export function watchCalculatorConfig(onChange) {
   authReady.then(() => {
     onSnapshot(
       doc(db, pathFor('config'), 'calculator'),
-      snap => onChange(snap.exists() ? snap.data() : null),
+      { includeMetadataChanges: true },
+      snap => onChange(snap.exists() ? snap.data() : null, snap.metadata.fromCache),
       err => { console.error('Config listener failed:', err); },
     );
   }).catch(err => {
@@ -1131,6 +1144,22 @@ export function saveCalculatorConfig(config) {
       tx.set(ref, { ...config, recipes, configRev, configModel: CONFIG_MODEL, bakery: currentLocationId() });
     }))
     .catch(err => { console.error('saveCalculatorConfig failed:', err); throw err; });
+}
+
+// Persist the address book ALONE, for the Clients page. An update on the document as it is,
+// never a set: the recipes and every Calculator setting stay out of the request, so the rules
+// can let the owner of the sales side through and a stale copy on this phone cannot undo them.
+export function saveCalculatorClients(config) {
+  return authReady
+    .then(() => runTransaction(db, async (tx) => {
+      const ref = doc(db, pathFor('config'), 'calculator');
+      const snap = await tx.get(ref);
+      if (needsCalculatorSave(snap.exists() ? snap.data() : null)) {
+        throw Object.assign(new Error(NEEDS_CALCULATOR_SAVE), { code: NEEDS_CALCULATOR_SAVE });
+      }
+      tx.update(ref, { ...clientsOnlyWrite(config, snap.data()), configModel: CONFIG_MODEL, bakery: currentLocationId() });
+    }))
+    .catch(err => { console.error('saveCalculatorClients failed:', err); throw err; });
 }
 
 // ── The Calculator reading a recipe out of the Catalogue ─────────────────────
@@ -1181,13 +1210,26 @@ export function watchCatalogueRecipe(id, onChange) {
 // straight back to matching by name, which is the defect being designed out.
 //
 // withRowIds is idempotent: rows that already have a unique id come back
-// byte-identical, so this can never disturb a recipe that has been saved since.
-export function stampRecipeRowIds(id, ingredients) {
-  return authReady.then(() => setDoc(
-    doc(db, pathFor('recipes'), id),
-    { ingredients },
-    { merge: true },
-  ));
+// byte-identical.
+//
+// ⚠️ A TRANSACTION ON THE RECIPE AS IT IS NOW, NEVER A COPY READ EARLIER. The list the
+// Calculator offers is read when its Recipes screen opens, and writing that copy back
+// replaced the whole ingredients array: a correction made in the Recipe catalogue since then,
+// on another phone, was silently undone (code review, 30 Oct 2026). `stamp(rows)` returns the
+// stamped rows, or null when every row already has its id — and then nothing is written.
+// Resolves the rows now stored, or null when the recipe no longer exists.
+export function stampRecipeRowIds(id, stamp) {
+  return authReady.then(() => runTransaction(db, async (tx) => {
+    const ref = doc(db, pathFor('recipes'), id);
+    const snap = await tx.get(ref);
+    if (!snap.exists()) return null;
+    const data = snap.data();
+    const rows = Array.isArray(data.ingredients) ? data.ingredients : [];
+    const stamped = stamp(rows);
+    if (!stamped) return rows;
+    tx.set(ref, { ingredients: stamped }, { merge: true });
+    return stamped;
+  }));
 }
 
 // The Catalogue's recipes, for the picker that links one to a Calculator tab.

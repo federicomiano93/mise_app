@@ -860,6 +860,50 @@ with a rules conflict to settle. These hunks will meet their originals unchanged
 ingredient ALREADY saved with a wrong carton keeps its price in both apps (`storedWeightFactor` trusts the stored weight, and a
 re-import offers the wrong price again as `weight-rescaled`): it has to be corrected on its card.
 
+## Ingredient card: the fold heads at 296px as built
+
+Found by the 3f-8b driver («the card from Orders», 6 Nov 2026) and measured before touching anything: at 296px the head of
+each of the card's three folds (Ingredient list, Allergens, Nutrition) is 204px wide, and its title, state pill and chevron
+sat on one row that could not wrap. The chevron was pushed 11–25px past the head's edge (button `scrollWidth` 215–229 against
+204) — all three heads in Italian, «Allergens» in English; at 360px the title and the pill each broke onto two lines inside
+themselves.
+
+- The title and the state now sit in one wrapping group (`.words` in `AllergenSections.module.css`, tokens only), the chevron
+  beside it. When the row is too narrow the state drops whole under the title; the chevron stays on the right edge, centred,
+  and the head stays at least `--hit` tall. On the tablet nothing changes: the three still fit on one row.
+- The accessible name is unchanged («Allergeni non dichiarato»): the space between title and state is still there.
+- Pinned by `ingredientCardCss.spec.ts` (what `.words` says, the head row and the chevron never wrapping or shrinking, no
+  `overflow` in the folds) and `SuppliersSection.ingredient.allergens.spec.tsx` (the group carries the class, the chevron
+  is outside it). Measured after: `probe-mise2-fold-heads.mjs` 36/36 (was 32/36) at 1024/360/296 in IT and EN.
+- Not changed: the recipe screen's allergen card (`recipes/AllergenCard`) has the same one-row head; it is not measured here.
+
+## Invoice reader: goods counted in pieces priced per piece — TO PORT
+
+⚠️ **Not in Mise 2 yet.** The current app's fix on branch `fix/invoice-import-per-piece` (5 Nov 2026, his rule) must be ported
+to `shared/src/invoice-zip/` and `shared/src/invoice-import-model.ts` before the switch, with its specs, or Mise 2 goes back to
+pricing cornetti «per kilo of 50 bags».
+
+- **His rule:** a product counted in PIECES (cornetti, panzerotti, arancini, graffe…) carries its price per piece, with the piece
+  weight beside it (Chiaragel «85gr* 50pz» at 23.20 € a carton = 0.464 €/pz, 85 g). Goods sold BY WEIGHT stay per kilo («DR
+  CIPOLLE FETTE 2,5kg* 4pz», «KG.2.5X4» fries). Eggs unchanged.
+- **The test** (`classify.js` `piecesOf`, Python `pieces_of`): invoiced by pieces or cartons, not eggs, and the description writes
+  the count AS PIECES («50pz», «PZ.50», «X50P») next to a size in grams of at most `MAX_PIECE_G` = 500 g. «G 100X3», «gr.60X6»,
+  «2000x4g» (no «pz»), kilos, and «G 570 (X12PZ)» (too heavy) are not pieces. The carton whose pieces add up to its weight
+  («35/40gr 2Kg* 55pz») is 55 pieces of 2000/55 g rounded to 0.1 g (36.4 g), so its price per kilo does not move.
+- **What the import proposes for a piece product** (`products.js` `proposeParams`): `priceUnit 'pcs'`, pack = one piece, packCount
+  = the count, so `unitWeightKg` = the piece weight and `pricing.js` prices each piece (`piece-weight-from-description`, no
+  `fromPack`). `proposePackWord` gives '' for it, and `newIngredientData` names the inner item with the venue's word for a piece
+  (`pieceWordFor`: «pezzo» / «piece»), never the default «busta».
+- **The sugar sachets** (`parsePack`): «2000x4g» is read count FIRST — 2000 × 4 g = 8 kg — grams only, after `P_GR_X` and before
+  `P_KG`. It used to be one 4 g pack refused at 4,032 €/kg.
+- **Specs to port:** `invoice-zip-classify` («the count first, then grams each», «pieces: a count written as pieces…»),
+  `invoice-zip-build` («a product counted in pieces…», «goods sold by weight stay per kilo…», «sugar sachets…», the 55-piece
+  carton), `invoice-import-model` («a carton of pieces priced per piece is 50 × pezzo…»), and `invoice-pieces-cost` (a recipe in
+  grams costs the same before and after).
+- **Data already saved** keeps its price per kilo in both apps (the import never replaces a price kept in another unit): the
+  one-off correction is a script outside the repo, run on his yes (`algprobe/data-fixes/fix-piece-prices.mjs`). Mise 2 reads the
+  same documents, so it needs no correction of its own.
+
 ## Findings — things found while reading, not decided
 
 ### Findings — The page, the lists, suppliers
@@ -1157,3 +1201,20 @@ Titles read for all; bodies read only where I name behaviour. All under `tests/`
 - `invoice-import/tests/` (Python, run in CI): `test_classify` (mirrored lists), `test_parsing`, `test_pricing`, `test_review_fixes` (type column, SDI exclusion, salt), `test_export` (JSON shape, refuses to write inside a git tree), `test_workbook` (workbook-only; no JS counterpart).
 - Outside the repo, names only: `C:\claude-workspace\mise_app_workspace\algprobe\invoice-golden\` holds `golden_py.py`, `golden_js.mjs`, `diff.mjs`, `golden-py.json`, `golden-js.json` (real-zip comparison of the port with Python; data files not opened; there is no README).
 
+
+## Piece weight in grams as built (8 Nov 2026)
+
+Port of the current app's #489 (`aa28e3f7`, item 20 of `docs/mise2-port-owed.md`). «Weight of one piece» said «(kg)» and an egg
+typed as 50 was saved as fifty kilos, which priced eggs at 0,0033 €/kg in every recipe.
+- The box SHOWS and READS grams on the new card (`priceCardModel.ts`) and on the card of before (`legacyPriceModel.ts`); the stored
+  `unitWeightKg` and every reader of it stay in kilos. `app/src/records/pieceWeight.ts` holds the original's two functions:
+  `gramsOfKg` (kilos → the grams the box shows, in the venue's layout) and `kgTextOfGrams` (what was typed → the kilo text the
+  price model reads). Anything `Number()` can read is converted — «55,», «,5», «1e2» too — so a half-typed number is never saved
+  as kilos; unreadable text passes through and Save refuses it on its box, as before.
+- An untouched box saves the stored kilos unchanged (`0.05` → «50» → `0.05`).
+- Wording, both languages, word for word: «Weight of one piece (g)» / «Peso di un pezzo (g)», the example «e.g. 55» / «es. 55»,
+  and the hint with an egg at about 55 and a vanilla pod at about 3.5 (3,5).
+- At the switch: an item saved with a piece weight typed in grams under the old «(kg)» box now reads a thousand times too much,
+  visibly — «Uova in vassoi» (Panificio Miano) holds 50 kg and will read 50000 g; retype 50.
+- Not run against `js/ingredient-record-form.js` itself (the whole ingredient screen, DOM and session): `pieceWeight.spec.ts`
+  copies every case of `tests/piece-weight-grams.test.mjs`.

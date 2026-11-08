@@ -164,3 +164,30 @@ describe('ordersSource — rewriting one record', () => {
     expect(c.done).toStrictEqual([]);
   });
 });
+
+// F-15: the check a note of typed quantities waits for before anything of it comes back. ⚠️ FROM THE SERVER: offline, getDocs
+// answers from the phone's copy, which may not know an order a colleague placed, and the note would then put back a quantity
+// already ordered (the current app's «the lines that stand between the note and a double order»). Every spec on the fake
+// source would stay green.
+describe('ordersSource — the recent orders, read from the server', () => {
+  it('asks the SERVER (getDocsFromServer, never getDocs) for the records dated on or after the day, under the open venue', async () => {
+    const calls: Array<[string, ...unknown[]]> = [];
+    const fs = {
+      collection: (_db: unknown, path: string) => { calls.push(['collection', path]); return { path }; },
+      where: (field: string, op: string, value: unknown) => ({ field, op, value }),
+      query: (ref: unknown, ...constraints: unknown[]) => ({ ref, constraints }),
+      getDocsFromServer: (target: unknown) => {
+        calls.push(['getDocsFromServer', target]);
+        return Promise.resolve({ docs: [{ id: '2026-10-29_mill', data: () => ({ date: '2026-10-29' }) }] });
+      },
+      getDocs: () => { calls.push(['getDocs']); return Promise.resolve({ docs: [] }); },
+    };
+    const kit = { fs, db: {} } as unknown as FirestoreKit;
+    const source = createFirestoreOrdersSource(() => Promise.resolve(kit), 'bakery');
+    const records = await source.getRecentHistoryFromServer('2026-10-20');
+    expect(records).toEqual([{ id: '2026-10-29_mill', date: '2026-10-29' }]);
+    expect(calls.map(c => c[0])).toEqual(['collection', 'getDocsFromServer']);
+    expect(calls[0]).toEqual(['collection', 'locations/bakery/orders-history']);
+    expect(calls[1]?.[1]).toEqual({ ref: { path: 'locations/bakery/orders-history' }, constraints: [{ field: 'date', op: '>=', value: '2026-10-20' }] });
+  });
+});

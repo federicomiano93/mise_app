@@ -104,6 +104,15 @@
 [hidden] { display: none !important; }
 
 :root {
+  /* ⚠️ THE VISIBLE HEIGHT. Every stylesheet reads var(--vh100); none writes vh, dvh or svh
+     itself (tests/viewport-height.test.mjs). 100vh here; the @supports block right after
+     this rule switches it to 100dvh where that exists. The lab tablet's Chrome stops at 101
+     and dvh arrived in 108: there 100vh is the height WITHOUT the address bar and tab strip,
+     744px on a screen that shows 648, so the bottom 96px of every pinned screen were off the
+     glass (the Calculator's footer could not be reached by finger, 31 Oct 2026). Where dvh is
+     unknown js/viewport-height.js sets this inline on <html> to the real height; inline wins. */
+  --vh100: 100vh;
+
   /* Kiosk rest screen (js/kiosk.js): grey text on pure black. #8c8c8c on #000 is 6.3:1,
      above the 4.5:1 small text needs, and dim enough not to light up a dark room. */
   --kiosk-bg:   #000000;
@@ -304,6 +313,14 @@
   --field-label-size: 17px;
   --field-label-weight: 700;
   --field-label-color: var(--text);
+}
+
+/* The modern half of --vh100 (see the note at its declaration). It sits in @supports, AFTER
+   the plain value, because a "fallback" line before a declaration holding var() never works:
+   a value with var() is accepted at parse time and thrown out only at computed-value time,
+   so the property drops to its INITIAL value, not to the line above. */
+@supports (height: 100dvh) {
+  :root { --vh100: 100dvh; }
 }
 
 /* ⚠️ EVERY BOX A NUMBER IS TYPED INTO, IN ONE RULE — and `!important` on purpose. Each
@@ -581,7 +598,7 @@ input:is([type="number"], [inputmode="decimal"], [inputmode="numeric"]) {
   padding: 20px;
   width: 100%;
   max-width: 360px;
-  max-height: calc(100dvh - 48px);
+  max-height: calc(var(--vh100) - 48px);
   display: flex;
   flex-direction: column;
   box-shadow: var(--shadow);
@@ -1128,6 +1145,15 @@ body[data-card="foodcost"] .app-header.app-header--save {
   font-size: 13px;
   line-height: 1.45;
   margin: 0;
+}
+
+/* The invite role was left empty: the sentence under the select turns into the
+   error, and the select itself is outlined (same pattern as .fb-area-invalid).
+   Declared after .people-note so it wins at equal specificity. */
+.people-note--error { color: var(--error); font-weight: 600; }
+.set-block .set-select[aria-invalid="true"] { border-color: var(--danger); background: var(--error-bg); }
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  .set-block .set-select[aria-invalid="true"] { background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
 }
 
 /* Read aloud across a kitchen, so it is the largest thing on the screen and the
@@ -1720,6 +1746,11 @@ body[data-card="foodcost"] .app-header.app-header--save {
 /* Inside a card with overflow: hidden an outside ring is cut off: draw it inside. */
 .set-row:focus-visible { outline: 3px solid var(--accent-2); outline-offset: -3px; }
 .set-door:active { background: var(--surface-2); }
+/* A door that cannot be opened yet (Clients, until the address book has been read). Its sub-line
+   stays at full strength: it is the sentence saying why. */
+.set-door:disabled { cursor: default; }
+.set-door:disabled .set-title, .set-door:disabled::after { opacity: .5; }
+.set-door:disabled:active { background: transparent; }
 .set-door::after {
   content: '';
   flex-shrink: 0;

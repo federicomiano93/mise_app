@@ -40,10 +40,10 @@ import { carriedTrip, carryTrip, forgetTrip } from './cardTrip';
 import type { TripPlace } from './cardTrip';
 import {
   ADD_DOOR, CLEAR_OPENER, HandBackProvider, SEARCH_BOX, SUPPLIER_DOOR, SUPPLIER_TITLE, cardDoor, HISTORY_DOOR, INCOMING_DOOR, ITEMS_DOOR, LISTS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, REORDER_DOOR, SEND_OPENER, SUMMARY_DOOR,
-  SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, SWAP_OPENER, arrivalOpener, correctOpener, itemsOpener, listOpener, pendingFallback, pendingOpener, sendDayOpener, summaryOpener, supplierOpener,
+  SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, SWAP_OPENER, arrivalOpener, correctOpener, itemsOpener, listOpener, pendingFallback, pendingOpener, sendDayOpener, summaryOpener, supplierOpener, todayOpener,
   useHandBackState,
 } from './handBack';
-import { FROM_LIST, cameFromList, columnOf, columnPart, replacedState } from './ordersNav';
+import { FROM_CHIP, FROM_LIST, cameFromList, columnOf, columnPart, replacedState } from './ordersNav';
 import {
   CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, INGREDIENTS_PATH, LISTS_PATH, ORDERS_PATH, PLACE_ALL_PATH, REORDER_PATH, SEND_PATH, SETTINGS_PATH, SUPPLIER_ORDER_PATH, historyDayPath, historyEditPath,
   incomingMissingPath, parseOrdersPath, requestPath, supplierConfirmPath, supplierItemsPath, supplierPath, supplierSummaryPath,
@@ -141,6 +141,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
   // in the line, so it is said even when the screen was left meanwhile.
   useEffect(() => store.onMessage(message => {
     if (message.kind === 'day-not-saved') say(t('ord.day.notSaved'), LONG_MS);
+    // «Close as not ordered» or «Reopen» refused: Firestore has already put the supplier back on screen as it is stored.
+    if (message.kind === 'close-not-saved') say(t('ord.summary.saveFailed'), LONG_MS);
   }), [store, say, t]);
 
   // ⚠️ THE LENS IS THE ONE PLACE THAT DECIDES AN INGREDIENT'S SUPPLIER (ordersLens.ts): the list, a supplier's screen and
@@ -197,8 +199,13 @@ function OrdersLayout({ view }: { view: ShownView }) {
     const timer = window.setTimeout(() => { setGraceOver(true); }, LATCH_GRACE_MS);
     return () => { window.clearTimeout(timer); };
   }, []);
+  // Quantities typed on an earlier page came back from this device's note (F-15): look again, as the current app does.
+  const { relook } = pendingLatch;
   useEffect(() => {
-    if (!ready || pendingLatch.latched !== null || !latchCanLook(snapshot.serverSeen, online, graceOver)) return;
+    relook(snapshot.draftCameBack);
+  }, [snapshot.draftCameBack, relook]);
+  useEffect(() => {
+    if (!ready || (pendingLatch.latched !== null && !pendingLatch.owed) || !latchCanLook(snapshot.serverSeen, online, graceOver)) return;
     pendingLatch.latch(pendingNow(lens, snapshot.draft, todayISO()).map(row => row.supplier.id as string));
   }, [ready, pendingLatch, lens, snapshot.draft, snapshot.serverSeen, online, graceOver]);
 
@@ -236,14 +243,15 @@ function OrdersLayout({ view }: { view: ShownView }) {
 
   // A screen opens one level down, so Back steps up to the list. On the split, with one already open beside the list, picking
   // another is lateral and replaces it — and keeps whatever the entry it replaces knew about where Back goes.
-  const open = (opener: string, path: string) => {
+  // `extra` rides in the new entry's state (a summary opened by a closed chip says so, for its own Back).
+  const open = (opener: string, path: string, extra: Readonly<Record<string, unknown>> = {}) => {
     handBack.expect(opener);
     if (split && !atList) {
-      void navigate(path, { replace: true, state: replacedState(state) });
+      void navigate(path, { replace: true, state: { ...replacedState(state), ...extra } });
     } else {
       // On a phone the list is hidden behind the screen: the place in it is written down now, while it is what is on screen.
       if (!split && atList) listTop.current = scrollArea()?.scrollTop ?? null;
-      void navigate(path, { state: fromHere });
+      void navigate(path, { state: { ...fromHere, ...extra } });
     }
   };
   const openSupplier = (id: string) => { open(supplierOpener(id), supplierPath(id)); };
@@ -309,6 +317,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const openLists = whenLive(() => { open(LISTS_DOOR, LISTS_PATH); });
   const openItemsWhenLive = (id: string) => { whenLive(() => { openItems(id); })(); };
   const openSummaryWhenLive = (id: string) => { whenLive(() => { openSummary(id); })(); };
+  // A closed supplier's chip in «Order today»: its summary (where «Reopen» is), on a phone too; Back hands the focus to the chip.
+  const openClosedSummary = (id: string) => { whenLive(() => { open(todayOpener(id), supplierSummaryPath(id), FROM_CHIP); })(); };
 
   // ⚠️ THE HOLD: a supplier tapped on the copy (a row, an «Order today» chip, the notices panel) waits for the live data and then
   // opens by itself. The path is where the tap happened: if the person moves anywhere else the tap is dropped, and the last supplier
@@ -415,6 +425,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
       handBack.deliverIf(SUMMARY_DOOR);
       handBack.deliverIf(PLACE_DOOR);
     }
+    // The summary coming back from the confirm screen its «Order placed…» opened: that button (close as not ordered, PR #470).
+    else if (view.kind === 'summary') handBack.deliverIf(PLACE_DOOR);
   }, [view.kind, handBack]);
 
   // On the split the right-hand side scrolls on its own and stays mounted from one supplier to the next: another supplier
@@ -491,6 +503,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
                 onOpenSupplier={openOrHold}
                 onOpenItems={openItemsWhenLive}
                 onOpenSummary={openSummaryWhenLive}
+                onOpenClosed={openClosedSummary}
                 onPlaceAll={openPlaceAll}
                 onClearAll={openClear}
                 swapOpen={atList}

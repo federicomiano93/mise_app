@@ -93,12 +93,14 @@ test('the one Delete gate, and the one price gate, are still where they were', (
   // ⚠️ Found 13 Sep 2026: the role alone let an owner of a venue WITHOUT Food cost put
   // a price write in the batch, and the rules refused the whole save.
   assert.match(codeOf(read('js/record-data.js')),
-    /export function mayWritePrices\(\) \{\s*const session = currentSession\(\);\s*return session\.canManage === true && session\.sections\?\.foodcost === true;\s*\}/,
-    'a price is written only by whoever runs the place AND only where Food cost is on — the rules\' canManage(lid, \'foodcost\')');
+    /export function mayWritePrices\(\) \{\s*const session = currentSession\(\);\s*return session\.canManage === true && isSectionAllowed\(session\.location, 'foodcost'\);\s*\}/,
+    'a price is written only by whoever runs the place AND only where the venue has Food cost — the rules\' managesPrices(lid), which the kitchen owner also passes');
   const rules = read('firestore.rules');
   const prices = rules.slice(rules.indexOf('match /ingredient-prices/{id}'), rules.indexOf('match /ingredients/{id}'));
-  assert.match(prices, /allow create, update: if canManage\(lid, 'foodcost'\)/,
-    'and the rule it mirrors is still canManage(lid, \'foodcost\') — change one, change both');
+  assert.match(prices, /allow create, update: if managesPrices\(lid\)/,
+    'and the rule it mirrors is still managesPrices() — change one, change both');
+  assert.match(rules, /function managesPrices\(lid\) \{\s*return cardAccess\(lid, 'foodcost', 'prices'\) == 'manage';/,
+    'whoever runs the place, where Food cost is on: canManage(lid, \'foodcost\') for owner and manager');
   assert.match(codeOf(FORM), /mayPrice \? priceBlock\(/,
     'an employee gets NO price block at all — not a disabled one');
 });
@@ -457,7 +459,7 @@ test('a product on its own supplier\'s screen names no supplier at all', () => {
   assert.match(code, /supplierName === undefined \? null :/,
     'omitting the supplier must mean "do not print it", never fall through to '
     + '«No supplier» — on the one screen that exists to say whose product it is');
-  assert.match(code, /ingredientRow\(i\)\)/,
+  assert.match(code, /ingredientRow\(i, undefined, stay\)/,
     'the supplier screen calls it with the name omitted, not with null');
 });
 
@@ -503,14 +505,15 @@ test('⚠️ the card you tap and the screen you land on carry the SAME name', (
 // this test used to pin — the SHORT key, because three buttons shared a 320px phone
 // and this bar once shipped a broken release from a tab that wrapped by 3px — has no
 // button left to sit on. What replaces it is the rule that the bar cannot come back
-// crowded without somebody deciding to: it holds exactly one button.
-test('⚠️⚠️ the Orders bottom bar holds ONE button, and no door to suppliers', () => {
+// crowded without somebody deciding to: it holds exactly two buttons (History came
+// back beside Settings on 3 Nov 2026, his decision).
+test('⚠️⚠️ the Orders bottom bar holds TWO buttons, and no door to suppliers', () => {
   const page = read('orders.html');
   // The bar holds a button and nothing nested, so the first closing div is its own.
   const bar = page.match(/<div class="recipe-footer"[\s\S]*?<\/div>/);
   assert.ok(bar, 'orders.html must still have a bottom bar');
   const buttons = bar[0].match(/<(?:button|a)[^>]*class="recipe-footer-btn"/g) || [];
-  assert.equal(buttons.length, 1, 'one button: Settings');
+  assert.equal(buttons.length, 2, 'two buttons: History and Settings');
   assert.match(bar[0], /id="settings-footer-btn"/);
   assert.ok(!/id="suppliers-footer-btn"/.test(page),
     'the second door left with the bar — the Home card is the one that remains');

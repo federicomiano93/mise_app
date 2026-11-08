@@ -1640,8 +1640,10 @@ the category (its merge saves keep both fields).
 - `recipes/{id}.archived` — only `true` is stored; a restore removes it. The rules ask `canManage(catalogue)` only when the state
   MOVES, so an employee still saves an archived recipe. A save never sends the flag (the store keeps it); archiving is its own
   merge of the flag alone (`store.setArchived`), local-first with rollback (`recipe-not-archived`).
-- `config/labels.recipeCategories` — the venue's list (≤ 100 words, ≤ 40 characters each in the box), written whole through the
-  label profile's local-first write (`store.saveRecipeCategories`); no extra read: every recipe screen already watches the document.
+- `config/labels.recipeCategories` — the venue's list (≤ 100 words, ≤ 40 characters each in the box), changed ONE WORD AT A
+  TIME since 8 Nov 2026 (`store.addRecipeCategory` / `store.removeRecipeCategory` → `arrayUnion` / `arrayRemove`, as the current
+  app since `889a2ab0`; see «Recipe categories one word at a time as built» at the end); no extra read: every recipe screen already
+  watches the document.
 - The store keeps both recipe fields beside the shared normaliser's shape (`labelTexts.normalizeStoredRecipe`), and they reach the
   `catalogue-recipes` copy; the current app's normaliser drops them from its copy, which is harmless (the database keeps them).
 
@@ -1822,3 +1824,39 @@ rows below 14 pt lower; a recipe without dividers has none), the full-screen vie
 
 Review (opus, 5 Nov 2026): no data defect; fixed the reorder rows keeping their old place's line classes after a move (React Aria
 caches a row by its item: `dependencies={[rows]}`) and the full-screen view without lines.
+
+## Recipe screen: the allergen card's head at 296px as built (6 Nov 2026)
+
+Measured before touching anything (`algprobe/mise-drive/probe-mise2-recipe-allergen-heads.mjs`): at 296px the head of the recipe
+screen's allergen card is 196px wide, and its title, state pill and chevron sat on one row that could not wrap. The chevron was
+pushed 17–19px past the head's edge (button `scrollWidth` 213–215 against 196) — both states («dichiarati» / «non dichiarati»,
+«fully declared» / «not declared»), Italian and English. At 1024 and 360 it fitted. The Allergen sheet's «the law here» head
+(title and chevron only) fitted at every width.
+
+- The same fix as the ingredient card's folds (PR #467): the title and the state sit in one wrapping group (`.words` in
+  `AllergenCard.module.css`, tokens only), the chevron beside it. When the row is too narrow the state drops whole under the
+  title; the chevron stays on the right edge and the head stays 48px tall. On the tablet nothing changes.
+- The accessible name is unchanged («Allergens fully declared»): the space between title and state is still there.
+- Pinned by `recipesCss.spec.ts` (what `.words` says, the head row never wrapping, the chevron never shrinking, no `overflow`
+  in the card) and `RecipesSection.allergens.spec.tsx` (the group carries the class, the chevron is outside it). Measured
+  after: 60/60 (was 56/60) at 1024/360/296 in IT and EN, axe clean.
+
+## Recipe categories one word at a time as built (8 Nov 2026)
+
+Port of the current app's `889a2ab0` (item 2 of `docs/mise2-port-owed.md`). Before it Mise 2 wrote the venue's whole list, so a
+phone holding an old copy could take away a word another manager had added.
+- The source writes `config/labels` as a merge of `recipeCategories: arrayUnion(word)` or `arrayRemove(...spellings)` with the venue
+  stamp; a removal sends every stored spelling of the word (same `categoryKey`). The store is local-first; a refusal takes back
+  ONLY that word, on the list as it is by then, and the categories stay out of the label profile's per-key rollback.
+- The card no longer waits for the server's word before Add and Delete work (the lock existed only because the list was written
+  whole): a word can be added offline, as in the current app. `cat.shelf.waitingForServer` is gone.
+- A refused word comes back to the box unless something else has been typed there since (P20, as the current app).
+- Already matched: the watch of `config/labels` asks for metadata changes, so a venue with no label document gets its answer (`febb0092`).
+
+## «Import into Calculator» accepts litres and millilitres as built (8 Nov 2026)
+
+A consequence of the Calculator port of item 38 (`docs/parity/calculator.md`, «Linked recipes with litres, the problem line and the
+row count as built»; the current app's `e7f3dac0`). `calculatorRefusal` asks the Calculator's own `resolveRecipe`, which now weighs
+l, dl, cl, ml (1 ml = 1 g) and mg rows, so the recipe book's «Import into Calculator» ACCEPTS a recipe written in them — as the
+current app's own import does. The refusal above (around line 1619) now applies to pieces, spoons, a pinch and «to taste» only; a
+row in any weighable unit with nothing in it (0 ml, 0 l, 0 g…) is «has no amount», never «not by weight».
