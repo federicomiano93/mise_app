@@ -59,7 +59,7 @@ Before the switch, not ports:
 - [ ] Rules deployed from a branch that contains the latest main (`firestore-rules` skill), read back identical
 - [ ] The switch PR's CI runs the root suite with `MISE2_SWITCH=1`
 - [ ] TTL policy on `todos.expireAt` (his OK), CSP (functions host, `https://www.gov.uk`)
-- [ ] `feature/mise2-3g-2` (Settings: holidays, app language, sections for staff) finished and merged, or his OK to ship without
+- [x] `feature/mise2-3g-2` (Settings: holidays, app language, sections for staff) finished, 8 Nov 2026: review fixes done, PR into `feature/mise2-release` (merge with the release branch)
 - [ ] His OK on what the switch leaves out until later: staff and join screens, kiosk, reminder notifications, `order.html` kept as it is
 
 ## A. Data-loss risks (port BEFORE the switch)
@@ -242,6 +242,9 @@ log-model}.ts`, `app/src/calculator/*`. Size M for the group.
   clean-up function (F9, separate task).
 
 ## WIP branch left out of the release branch
+
+✅ Finished 8 Nov 2026: the review fixes are done and the branch is in a PR into `feature/mise2-release` (see `docs/parity/home.md`,
+«Review fixes, 8 Nov 2026»). What follows is the state it was left in on 7 Nov.
 
 `feature/mise2-3g-2` (origin too), head 06e1f3dc `wip(mise2-settings): 3g-2 in progress, stopped on his request`, 13 commits + 1 WIP commit,
 stacked on #477 `feature/mise2-home-todos`, NO PR. Content: Settings screen with Holidays, App language, «Sections for staff» (staffShownCards),

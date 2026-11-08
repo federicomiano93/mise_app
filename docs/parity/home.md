@@ -191,8 +191,8 @@ minimum, the whole row the target): a link for a door, a button for a dialog.
 **Addresses.** Settings now owns `/settings/*` (`settings/SettingsSection.tsx`, wired in `routes.tsx`): `/settings/language` and
 `/settings/sections`. A person without `canManage`, and any other address under `/settings`, is REPLACED by `/settings`. The usage record
 names them `settings-language` and `settings-sections` (`settings/settingsPath.ts`, used by `screenNameFor`). The sub-screens keep the
-page's h1 «Settings» and have a card with Back and an h2 (`SettingsSubScreen`, the Orders and Food cost shape); the screen opens on its h2,
-and Back puts the focus on the door that opened it (the door name travels in the navigation state with `KEEP_FOCUS`).
+page's h1 «Settings» and have a card with Back and an h2 (`SettingsSubScreen`, the Orders and Food cost shape); opened from the page the
+screen opens on its h2 (opened by its address it leaves the focus to the skip link), and Back puts the focus on the door that opened it.
 
 **Data layer.** `settings/settingsSource.ts` (+ `testing/fakeSettingsSource.ts`, registered in `createDataServices` as `settings`):
 `readMyAway`, `saveAway` (decides `bad-date` synchronously, otherwise returns the write's promise), `setLanguage`, `setStaffCard`,
@@ -205,17 +205,18 @@ shows at once and only a rejection is reported; `away` is re-derived from the cl
 the current app (`away.*`, `settings.away.sub`). The row in «You»: not away, «I am on holiday» opens a `Dialog` with the sentence, a visible
 label on a native date field (`min` today, `max` `maxAwayDate`); an empty or out-of-range day shows `away.badDate` in a live region inside the
 dialog and writes nothing; away, the row is amber (`--warn-tint`, `--warn-ink`) with `away.onUntil` and `away.band.body` and asks «Back
-already?» (`I am back`, not red). The Home band (`home/AwayBand.tsx`) is a button above the «Da fare» card. A refused write says
-`away.saveFailed` in the status message (Home, Settings) or in an alert (the reminder, which sits in the shell and has no status line) and the
-state is put back. `shared/src/away-reminder.ts` is the full paired port of `js/away-reminder.js` (parity and odd-inputs entries).
+already?» (`I am back`, not red); the row is disabled until the one read has answered. The Home band (`home/AwayBand.tsx`) is a button above
+the «Da fare» card. A refused write puts the state back and says `away.saveFailed` in a dialog titled «I am on holiday»
+(`shell/away/AwayRefusalAlert.tsx`, mounted once in the shell, so it is said wherever the person is when the answer lands — as the current
+app's `js/away-screen.js` says it). `shared/src/away-reminder.ts` is the full paired port of `js/away-reminder.js` (parity and odd-inputs entries).
 
 **The reminder.** One place, `shell/AwayReminder.tsx`, mounted once in `AppShell`: it judges an ARRIVAL in a section other than Home and
-Settings (a change of section, or the app opened straight into one) once the holiday read has answered; `/more` is not a section and does
+Settings, and only one this person is shown («not available» never reminds) (a change of section, or the app opened straight into one) once the holiday read has answered; `/more` is not a section and does
 not trigger. Today is written to `away-reminded-date` before asking; storage that throws reminds. Continue or Escape keeps the holiday; the
 section is open behind the question either way.
 
 **App language** (`settings/LanguageScreen.tsx`): each language named in itself («English», «Italiano», not message keys), «In use»
-pressed and disabled, «Use this» for the other; the label sentence always, in the INTERFACE's words, from the existing `country.<X>.in` and
+pressed and disabled, «Use this» for the other, each button labelled by its language and its words («Italiano, Use this»); the label sentence always, in the INTERFACE's words, from the existing `country.<X>.in` and
 `language.<x>.inSentence` keys, or `lang.labels.noCountry`; choosing shows `lang.saving` (a live region on the page from the start), turns the
 buttons off, calls `setLanguage`, then reloads through `settings/pageReload.ts` (an object a spec can spy on; Mise 2 had no UI-reachable
 reload). A failure shows `lang.err.save`. The screen imports only `countryOf`, `outputLanguage` and `canPrintLabel` from `market`.
@@ -226,7 +227,8 @@ reload). A failure shows `lang.err.save`. The screen imports only `countryOf`, `
 `inventory` → Stocktake), the state word beside the switch and read as one. Hiding anything asks (danger; the push line for the
 cards that send notifications, the allergen-sheet line for Recipes); showing a money card asks (not danger); showing an everyday card
 saves at once. The switch moves only after the server agreed; every switch is disabled and `staffSections.saving` is said while saving;
-a failure says `staffSections.err.save` and nothing moved; the focus is put back on the switch pressed. Its state is the session's `location`
+a failure reads the server: if it already holds the change, that is a success (nothing is said); otherwise it says
+`staffSections.err.save` and shows what the server holds; the focus is put back on the switch pressed. Its state is the session's `location`
 at once, replaced by the server's answer when it arrives if nothing has been saved meanwhile, then by each save's answer; it lives only as long
 as the screen, so reopening reads the server again (the current app's module-level `override` is NOT carried over).
 
@@ -240,6 +242,18 @@ as the screen, so reopening reads the server again (the current app's module-lev
 6. The StaffSections screen is not wrapped in `markBusy()`: a switch holds nothing unsaved.
 7. `settings/` screens are statically imported by the route (small), not lazy-loaded.
 8. A follow-up read that fails after a successful call is swallowed, as the original's `refreshVenueFromServer` does.
+
+**Choices taken for him since 7 Nov 2026** (the review of 8 Nov; each changes what a person sees):
+9. A refused holiday change is said in a DIALOG («I am on holiday — Not saved…», OK), from the Home, from Settings and from the reminder
+   alike, and wherever the person is when the server answers; before, the Home and Settings said it in their status line, which was gone
+   once the page was left. The current app uses a dialog too.
+10. While the holiday is still being read, the «I am on holiday» row is drawn dimmed and cannot be pressed (a moment on a slow connection).
+11. The once-a-day reminder never asks in a section the person is not shown (an employee opening a hidden section's address).
+12. «Sections for employees»: a save whose answer came too late but which the server did make is shown as saved, with no «Could not save».
+13. «App language» and «Sections for employees» opened by their address (a reload, a bookmark) no longer move the focus to their title;
+    Settings tapped in the rail opens on the page's title, not on the door used last.
+14. After «I am back» the focus moves to «Add» (Home) or the row (Settings) only when the person pressed it there, never when the holiday
+    ended by itself at midnight or on another phone.
 
 Not done here: the order of the sections (D1, nothing built), «Who can enter» (3g-3), the app version row (step 5), the kiosk rows.
 
@@ -258,8 +272,10 @@ Not done here: the order of the sections (D1, nothing built), «Who can enter» 
   foreground, at most every ten minutes, never over a write still in the air. A re-read that finds nothing is ignored (the document is
   written empty, never deleted, so nothing means the read failed).
 - **E, two refusals** (`awayStore.ts`): the store keeps `confirmed`, the last state the server is known to hold; the NEWEST write's refusal
-  puts that back, not the previous optimistic value. A first read that answers during a pending write is recorded but not shown over it, and
-  comes back if the write is refused.
+  puts that back, not the previous optimistic value. A read whose answer carries no unconfirmed write of this phone and arrives during a
+  pending write is recorded but not shown over it, and comes back if the write is refused. ⚠️ With real Firestore a read made while a write
+  is in the air carries that write on top (`hasPendingWrites`, read as `pending`) and is NEVER recorded; so the refusal also asks the server
+  again at once (finding K below).
 - **F, the reminder watches the day** (`shell/AwayReminder.tsx`): an arrival is a section AND a day, so somebody sitting in a section when
   the day changes (or the tablet wakes on a new day) is judged again by the same rules.
 - **G, focus after «I am back»** (`shell/away/useFocusOnBack.ts`): from the Home band the focus goes to the card's «Add» (or its title),
@@ -270,3 +286,31 @@ Not done here: the order of the sections (D1, nothing built), «Who can enter» 
   need to tell a failure apart, which `refreshLocation` cannot. «Saving…» ends before the error alert; leaving during a save owes no message.
 - **I, no cross-feature imports**: the holiday pieces moved to `shell/away/` and `useTodayKey` to `shell/useTodayKey.ts`; no file in
   `home/` imports `settings/` or the other way round. The away half of the source stays in `settings/settingsSource.ts` (type imports only).
+
+### Review fixes, 8 Nov 2026 (the interrupted review, finished)
+
+The WIP of 7 Nov (06e1f3dc) is kept: the `pending` read-back (`hasPendingWrites`), the reminder asking the clock rather than the store's flag
+just after midnight, and the door's focus handed back only on a return. The full review of the branch then found:
+
+- **J, Back by the address** (`SettingsPage.tsx`, `settingsHandBack.ts`): the WIP's POP-only hand-back dropped the focus to the body when a
+  screen opened by its address replaced itself with the page; that Back now marks the replace (`BACK_TO_SETTINGS`). The rail's Settings
+  (a PUSH) still opens on the title.
+- **K, a refusal asks the server again** (`awayStore.ts`): the newest refusal puts back what is known (`confirmed`, else what showed before
+  the writes now in the air) and reads at once past the ten-minute gate; Firestore has dropped the refused write from the phone's copy by
+  then. The WIP's `firstBefore` (kept for the store's whole life) is replaced by that per-burst value. The fake can hold writes and answers
+  reads with the write on top (`holdWrites`), the sequence real Firestore produces.
+- **L, a late refusal is said** (`shell/away/AwayRefusalAlert.tsx`, `awayStore.onRefused`): choice 9 above.
+- **M, focus only after one's own «I am back»** (`useFocusOnBack.ts` returns `arm`, called by `useAskComeBack`'s `onBack`): choice 14.
+- **N, the row waits for its read, and a picked day is typing** (`AwayRow.tsx`, `SettingsRow` `disabled`): choice 10; the date dialog holds
+  `markBusy()` while a day is picked and not set.
+- **O, a section saved late is saved** (`StaffSectionsScreen.tsx`): choice 12; the session's copy is read again on that path too.
+- **P, language buttons named** (`LanguageScreen.tsx`): `aria-labelledby` = the language's name and the button's words.
+- **Q, reminder for shown sections only** (`AwayReminder.tsx`, `useVisibleSections`): choice 11.
+- **R, first load keeps the skip link first** (`SettingsSubScreen.tsx`): choice 13, as the Orders screens (`cameFromList`).
+
+Left as they are, on purpose:
+- Two server reads of the venue per save (the source's, then the session's `refreshLocation`): merging them needs a session API that takes
+  a document; a save here happens a few times a year.
+- On waking on a new day the reminder judges with the holiday known before the wake's re-read: if another phone ended it, the question
+  can be asked once more; either answer is safe.
+- «In ferie fino al 1/8/11 novembre» wants «all'»: the words are the current app's own (`js/i18n.js`), so the fix belongs to both apps.
