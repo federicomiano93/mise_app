@@ -77,6 +77,14 @@ export interface OrdersSource {
   // `updatedAt` — an update, never a set: a merge cannot delete a nested key, and only the named paths go, so whatever
   // another phone is typing elsewhere in the document survives (js/orders/firebase-orders.js clearFields).
   clearDraft(paths: readonly string[], updatedAt: string): Promise<void>;
+  // «Close as not ordered» (the current app's setSupplierSkipped, PR #470): drafts/current.skipped.<supplierId> = day, by a merge
+  // of that one key. ⚠️ ON ITS OWN, NEVER THROUGH THE AUTOSAVE, and with NO `updatedAt`: the draft's own stamp stands in for the day
+  // of rows saved before day stamps existed (pendingSuppliers' fallbackDay), and closing a supplier is not typing an order. It
+  // creates the draft on a venue that never typed one. Same promise contract as mergeDraft.
+  setSupplierSkipped(supplierId: string, day: string): Promise<void>;
+  // «Reopen»: only that supplier's key goes (a FieldPath: an id is data, not a path), whatever another phone closed meanwhile
+  // survives. A draft that does not exist is refused, as updateDoc does: «Reopen» is only offered over a key that was seen.
+  clearSupplierSkipped(supplierId: string): Promise<void>;
   // orders-history/<id> as stored, once (null when there is none). A failure rejects.
   readRecord(id: string): Promise<Record<string, unknown> | null>;
   // Writes orders-history/<id> in a TRANSACTION: `merge` gets the record as stored (null when there is none) and returns the
@@ -291,6 +299,20 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
       const update: Record<string, unknown> = { updatedAt, bakery: locationId };
       for (const path of paths) update[path] = fs.deleteField();
       await fs.updateDoc(fs.doc(db, draftsPath, DRAFT_ID), update);
+    },
+
+    async setSupplierSkipped(supplierId, day) {
+      const { fs, db } = await firestore();
+      await fs.setDoc(fs.doc(db, draftsPath, DRAFT_ID), { skipped: { [supplierId]: day }, bakery: locationId }, { merge: true });
+    },
+
+    async clearSupplierSkipped(supplierId) {
+      const { fs, db } = await firestore();
+      await fs.updateDoc(
+        fs.doc(db, draftsPath, DRAFT_ID),
+        new fs.FieldPath('skipped', supplierId), fs.deleteField(),
+        'bakery', locationId,
+      );
     },
 
     async readRecord(id) {

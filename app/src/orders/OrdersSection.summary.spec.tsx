@@ -79,7 +79,7 @@ describe('the order summary', () => {
 
     // The same lines as the message the supplier would receive.
     const lens = buildOrdersLens({ suppliers: SUPPLIERS, suppliersLoaded: true, ingredients: ITEMS, entries: ENTRIES as never, supplierOrder: [], noSupplierName: 'No supplier' });
-    const message = draftSendRows(lens, { entries: ENTRIES as never, days: {}, updatedAt: '', exists: true }).find(row => row.id === 's-alp');
+    const message = draftSendRows(lens, { entries: ENTRIES as never, days: {}, skipped: {}, updatedAt: '', exists: true }).find(row => row.id === 's-alp');
     const labels = summaryLines(message?.items ?? []).map(line => line.label);
     expect(labels).toHaveLength(3);
     const rows = lineTexts();

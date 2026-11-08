@@ -1,21 +1,41 @@
-import { useEffect, useId, useRef } from 'react';
-import { useLocation } from 'react-router';
+import { useEffect, useId, useRef, useState } from 'react';
+import { Check } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router';
+import { todayISO } from '@mise/shared/day';
 import { qtyWithUnit } from '@mise/shared/order-unit';
+import { closeOffer } from '@mise/shared/reminders';
+import type { PlacedRecord } from '@mise/shared/reminders';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { useT } from '../i18n/useT';
+import { KEEP_FOCUS } from '../shell/Page';
+import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
+import { useStatusMessage } from '../ui/StatusMessage';
+import { useConfirm } from '../ui/useConfirm';
 import { useMoney } from '../session/useMoney';
 import { OrderTotals } from './OrderTotals';
-import { useOrders } from './OrdersContext';
+import { useOrders, useOrdersStore } from './OrdersContext';
 import { SUMMARY_DOOR, summaryOpener, useHandBack } from './handBack';
-import { cameFromList, cameFromSupplier, useLeave } from './ordersNav';
-import { supplierPath } from './ordersPath';
+import { FROM_LIST, cameFromList, cameFromSupplier, columnPart, listDistanceOf, useLeave } from './ordersNav';
+import { ORDERS_PATH, supplierConfirmPath, supplierPath } from './ordersPath';
+import { LONG_MS } from './useClearQuantities';
 import type { OrdersLens } from './ordersLens';
 import { lineCostText, summaryFor } from './orderMoney';
 import styles from './SupplierSummaryScreen.module.css';
 
-// The order summary: one supplier's CURRENT order, to LOOK AT. It writes nothing, which is why it can be opened in the middle of an
-// order without a thought (parity L19).
+// The order summary: one supplier's CURRENT order, to LOOK AT. Opening it writes nothing, which is why it can be opened in the
+// middle of an order without a thought (parity L19).
+//
+// ⚠️ THE ONLY BUTTONS ACT ON TODAY'S ORDER (the current app's PR #470, his tablet notes of 2–3 Nov 2026), each writing only
+// behind its own tap:
+//   • «Order placed…» — with something written: the SAME confirm screen as the supplier's own green button (its question, the
+//     «did you send it?», the record in History). Nothing new.
+//   • «Close as not ordered» — NOTHING written and its order day today: nothing needed, so it leaves «Order today» and the kiosk
+//     (drafts/current.skipped), after a question. Then back to the list, where the strip says «not ordered».
+//   • «Reopen» — the undo, shown with «Closed as not ordered today» while it is closed, with or without quantities (a close is
+//     never invisible). No question: it only puts back what the screen showed before the close.
+// What is offered is asked of the data on every draw (reminders closeOffer), so a close made on another phone shows at once; and
+// only once the records have arrived, or a supplier placed this morning would offer the close.
 //
 // ⚠️ THE SAME LINES AS THE MESSAGE: summaryFor() takes the lens's lines through the selection the send screen uses, so this can never
 // show what the supplier will not receive. The money (a cost line under each line, the totals box) is drawn ONLY when the store says
@@ -24,8 +44,17 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
   const { t } = useT();
   const money = useMoney();
   const { state } = useLocation();
-  const { draft, prices, pricesReadable } = useOrders();
+  const { draft, prices, pricesReadable, history, historyLoaded, historyBroken, draftLoaded, placing } = useOrders();
+  const store = useOrdersStore();
+  const navigate = useNavigate();
+  const say = useStatusMessage();
+  const [confirm, confirmDialog] = useConfirm();
   const handBack = useHandBack();
+  const askingToClose = useRef(false);
+  const closeButton = useRef<HTMLButtonElement>(null);
+  const placeButton = useRef<HTMLButtonElement>(null);
+  // After «Reopen» its own button goes: the focus is handed to what takes its place, once drawn.
+  const [refocus, setRefocus] = useState(false);
   const titleId = useId();
   const title = useRef<HTMLHeadingElement>(null);
   // Back is the browser's Back when the supplier's screen or the list is the entry behind; an address typed in goes up one level, to
@@ -38,6 +67,12 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
     if (shown && cameFromList(state)) title.current?.focus();
   }, [shown]);
 
+  useEffect(() => {
+    if (!refocus) return;
+    setRefocus(false);
+    (closeButton.current ?? placeButton.current ?? title.current)?.focus();
+  });
+
   if (supplier === undefined) {
     return (
       <section className={styles.screen} aria-label={t('section.orders')}>
@@ -49,6 +84,85 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
 
   const summary = summaryFor(lens, id, draft, prices, pricesReadable);
   const lines = summary.costLines;
+  const name = supplierLabel(supplier);
+  const today = todayISO();
+  const offer = historyLoaded && !historyBroken && draftLoaded
+    ? closeOffer({ supplier, history: history as readonly PlacedRecord[], today, skipped: draft.skipped })
+    : '';
+
+  // The way to the list after a close: walked back when the list is in the history, else this screen replaces itself with it.
+  const toList = listDistanceOf(state);
+  const leaveToList = () => {
+    handBack.expect(summaryOpener(id));
+    if (toList !== undefined) void navigate(-toList);
+    else void navigate(ORDERS_PATH, { replace: true, state: KEEP_FOCUS });
+  };
+
+  // The supplier screen's own «Order placed…»: refused offline (parity X3), otherwise its confirm screen, which goes back to the
+  // list once the order is recorded.
+  const place = () => {
+    if (navigator.onLine === false) {
+      say(t('ord.offline.place'), LONG_MS);
+      return;
+    }
+    handBack.expect(summaryOpener(id));
+    void navigate(supplierConfirmPath(id), {
+      state: { ...FROM_LIST, ...(toList === undefined ? {} : { toList: toList + 1 }), ...columnPart(state) },
+    });
+  };
+
+  const closeAsNotOrdered = async () => {
+    if (askingToClose.current) return;
+    askingToClose.current = true;
+    let ok = false;
+    try {
+      ok = await confirm({
+        title: t('ord.summary.closeTitle', { supplier: name }),
+        message: t('ord.summary.closeMessage'),
+        okLabel: t('ord.summary.closeOk'),
+        cancelLabel: t('common.cancel'),
+      });
+    } finally {
+      askingToClose.current = false;
+    }
+    if (!ok) return;
+    // LOCAL-FIRST: Firestore shows the close at once (offline too); a refusal is said by the section and taken back.
+    void store.closeNotOrdered(id);
+    say(t('ord.summary.closedDone', { supplier: name }));
+    leaveToList();
+  };
+
+  const reopen = () => {
+    void store.reopenToday(id);
+    say(t('ord.summary.reopened', { supplier: name }));
+    setRefocus(true);
+  };
+
+  const actions = (
+    <div className={styles.actions}>
+      {offer === 'reopen' ? (
+        <div className={styles.closed}>
+          <p className={styles.closedText}>{t('ord.summary.closedToday')}</p>
+          <Button onPress={reopen}>{t('ord.summary.reopen')}</Button>
+        </div>
+      ) : null}
+      {lines.length > 0 ? (
+        <Button ref={placeButton} variant="primary" isDisabled={placing.includes(id)} onPress={place}>
+          <Check aria-hidden="true" />
+          {t('ord.placeAction')}
+        </Button>
+      ) : null}
+      {/* ⚠️ ONLY WITH NOTHING WRITTEN: «nothing needed». With quantities on the sheet the honest choices are «Order placed…» or
+          clearing them on the supplier's screen first. */}
+      {lines.length === 0 && offer === 'skip' ? (
+        <>
+          <p className={styles.hint}>{t('ord.summary.closeHint')}</p>
+          <Button ref={closeButton} onPress={() => { void closeAsNotOrdered(); }}>{t('ord.summary.closeNotOrdered')}</Button>
+        </>
+      ) : null}
+    </div>
+  );
+  const hasActions = offer !== '' || lines.length > 0;
 
   return (
     <section className={styles.screen} aria-labelledby={titleId}>
@@ -80,7 +194,9 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
             {pricesReadable ? <OrderTotals totals={summary.totals} /> : null}
           </>
         )}
+        {hasActions ? actions : null}
       </div>
+      {confirmDialog}
     </section>
   );
 }

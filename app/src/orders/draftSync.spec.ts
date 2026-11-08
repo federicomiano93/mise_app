@@ -435,7 +435,9 @@ describe('draftSync — flush and unsaved', () => {
 
   it('a missing document is an empty order that does not exist yet', () => {
     const h = harness();
-    expect(h.sync.receive(null)).toEqual({ entries: {}, days: {}, updatedAt: '', exists: false });
+    expect(h.sync.receive(null)).toEqual({ entries: {}, days: {}, skipped: {}, updatedAt: '', exists: false });
+    // The closes travel with the view (only string days: a stray value is no close).
+    expect(h.sync.receive({ entries: {}, skipped: { a: '2026-11-06', b: 7 } }).skipped).toEqual({ a: '2026-11-06' });
     expect(h.sync.receive({ entries: {}, updatedAt: 'x' }).exists).toBe(true);
   });
 });
