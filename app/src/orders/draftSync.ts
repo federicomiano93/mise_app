@@ -204,19 +204,28 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     return undefined;
   }
 
-  // What this phone's screen holds that the server does not.
+  // What this phone's screen holds that the server does not — or will not once the writes in the air have landed.
+  //
+  // ⚠️ A CORRECTION MADE WHILE THE WRITE IT CORRECTS IS IN THE AIR (F-16, the current app's PR #444). Until a snapshot shows
+  // that write (about 5 s on the lab tablet, on a freshly opened page), «5 put back to 0» matches `known`, so measured
+  // against `known` alone it said nothing, and the 5 then landed and came back, on screen and on the server. So a field a
+  // write in the air says differently is claimed too. ONLY a line and a day the screen still holds: one it has just
+  // forgotten is an order placed, and a blank row written now would outlive its clear. A redraw that gives that line a
+  // blank row back makes the next keystroke write it at zero: wanted, because a 5 landing after the clear would stay.
   function differences(entries: DraftEntries, days: DraftDays): { entries: Rows; days: MutableDays } {
     const rows: Rows = {};
-    for (const id of Object.keys(changedEntries(entries, known.entries))) {
-      const exists = known.entries[id] !== undefined;
+    const ids = new Set(Object.keys(changedEntries(entries, known.entries)));
+    for (const flight of flights) for (const id of Object.keys(flight.entries)) if (entries[id]) ids.add(id);
+    for (const id of ids) {
       const mine = local(entries[id]);
       const theirs = stored(known.entries[id]);
+      const overtaken = (field: Field) => inAir(id, field) && carried(id, field) !== mine[field];
       const row: Row = {};
       // ⚠️ A LEFTOVER {qty: 0, supplierId: 'X'} IS NOT THIS PHONE'S TO CLEAN on an edit of another line: it is harmless at
       // zero, and cleaning it could erase a colleague typing a quantity under X in the same second. The first quantity
       // typed here for that line sends the override with it (below), which clears it.
       const overrideDiffers = mine.supplierId !== theirs.supplierId && !(mine.qty === 0 && theirs.qty === 0);
-      if (mine.qty !== theirs.qty || mine.unit !== theirs.unit || overrideDiffers) {
+      if (mine.qty !== theirs.qty || mine.unit !== theirs.unit || overrideDiffers || GROUP.some(overtaken)) {
         // ⚠️ THE GROUP GOES WHOLE, '' INCLUDED: «5 of the card's unit, from the usual supplier» must say both, or a colleague
         // switching the unit (or moving the line) in the same second turns this phone's 5 into 5 buste, or files it under
         // their supplier. '' is also the clear (a merge cannot delete a nested key).
@@ -226,10 +235,12 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       }
       // ⚠️ A LINE THE SERVER DOES NOT HAVE CARRIES ONLY WHAT IS IN IT: padded with stock 0, it erased the shelf count a
       // colleague put on the same line in the same second.
-      if (mine.stock !== theirs.stock) row.stock = mine.stock;
+      if (mine.stock !== theirs.stock || overtaken('stock')) row.stock = mine.stock;
       if (!isEmpty(row)) rows[id] = row;
     }
-    return { entries: rows, days: changedDays(days, known.days) as MutableDays };
+    const claimedDays = changedDays(days, known.days) as MutableDays;
+    for (const [id, day] of Object.entries(days)) if (dayInAir(id) && dayCarried(id) !== day) claimedDays[id] = day;
+    return { entries: rows, days: claimedDays };
   }
 
   // The screen's draft: the server's lines with this phone's unconfirmed fields on top.
@@ -289,23 +300,29 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       for (const [id, day] of Object.entries(sent.days)) if (!dayInAir(id)) days[id] = day;
       known = { entries, days };
       // Release only what was actually sent, and only if it has not been typed over meanwhile: a value changed again
-      // while this write was in the air is still this phone's, and must stay claimed. The group only as a whole.
+      // while this write was in the air is still this phone's, and must stay claimed. The group only as a whole. ⚠️ NEVER
+      // WHILE A LATER WRITE STILL CARRIES THE FIELD (F-16): 5, then 0, then 5 again, and the first 5 landing would release
+      // the last one, leaving the 0 to win.
       for (const [id, row] of Object.entries(sent.entries)) {
         const held = pending.entries[id];
         if (!held) continue;
         const group = GROUP.filter(field => field in held);
-        if (group.length > 0 && group.every(field => held[field] === row[field])) for (const field of group) delete held[field];
-        if ('stock' in held && held.stock === row.stock) delete held.stock;
+        if (group.length > 0 && !group.some(field => inAir(id, field)) && group.every(field => held[field] === row[field])) {
+          for (const field of group) delete held[field];
+        }
+        if ('stock' in held && !inAir(id, 'stock') && held.stock === row.stock) delete held.stock;
         if (isEmpty(held)) delete pending.entries[id];
       }
       for (const [id, day] of Object.entries(sent.days)) {
-        if (pending.days[id] === day) delete pending.days[id];
+        if (!dayInAir(id) && pending.days[id] === day) delete pending.days[id];
       }
     }, (err: unknown) => {
       land();
       // ⚠️ A REFUSED WRITE HANDS ITS TYPING BACK (parity L37: «the typing is kept»). A change made while it was in the air
       // may have dropped those fields from the claims — Firestore showed the write at once, so they matched `known` — and the
-      // snapshot that takes the write back would then erase them. Each group or stock goes back unless typed over since.
+      // snapshot that takes the write back would then erase them. Each group or stock goes back unless typed over since, or
+      // unless a later write still in the air already says something newer about it (F-16: a refused 5 must not come
+      // back over a 0 already on its way).
       // The baseline forgets those fields too (it may hold Firestore's showing of this very write), so a keystroke before the
       // take-back arrives still counts them as this phone's.
       const entries: MutableEntries = { ...known.entries };
@@ -314,7 +331,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
         const groupHeld = GROUP.some(field => field in held);
         const base: Record<string, unknown> = { ...(entries[id] ?? {}) };
         for (const field of Object.keys(row) as Field[]) {
-          const typedOver = field === 'stock' ? 'stock' in held : groupHeld;
+          const typedOver = (field === 'stock' ? 'stock' in held : groupHeld) || inAir(id, field);
           if (!typedOver) held[field] = row[field];
           delete base[field];
         }
@@ -323,7 +340,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       }
       const days: MutableDays = { ...known.days };
       for (const [id, day] of Object.entries(sent.days)) {
-        if (!(id in pending.days)) pending.days[id] = day;
+        if (!(id in pending.days) && !dayInAir(id)) pending.days[id] = day;
         delete days[id];
       }
       known = { entries, days };
