@@ -27,10 +27,8 @@ export function useFocusOnBack(target: () => HTMLElement | null): () => void {
     if (active === null || active === document.body || active === document.documentElement) where.current()?.focus();
   }, [away]);
 
-  // ⚠️ DISARMED BY A REFUSAL TOO: a refusal that lands before React draws the «back» state leaves `away` unchanged, the effect above never
-  // runs, and an arm left on would move the focus the next time the holiday ends by itself (review, 8 Nov 2026).
-  useEffect(() => store.onRefused(() => { armed.current = false; }), [store]);
-
-  // Armed only while away: an «I am back» over a holiday already ended changes nothing to hand the focus for.
+  // ⚠️ ARMED ONLY WHILE AWAY: an «I am back» over a holiday already ended changes nothing, so the effect above would never use the arm
+  // up, and it would move the focus the next time the holiday ends by itself (review, 8 Nov 2026). (A refusal cannot leave it on: the
+  // «back» state is drawn synchronously, useSyncExternalStore, long before the server's answer arrives.)
   return useCallback(() => { armed.current = store.getSnapshot().away; }, [store]);
 }

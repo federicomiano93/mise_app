@@ -314,8 +314,9 @@ just after midnight, and the door's focus handed back only on a return. The full
 A second review of the finished branch then found, and fixed:
 - **S, an outdated question closes** (`useConfirm`'s new optional `dismiss`, `useAskComeBack.tsx`, `AwayReminder.tsx`, `AwayBand.tsx`):
   choice 15.
-- **T, the arm cannot outlive a refusal** (`useFocusOnBack.ts`): a refusal that lands before React draws «back» left it on; it is now
-  switched off by `onRefused`, and armed only while away.
+- **T, the arm cannot be left on** (`useFocusOnBack.ts`, `useFocusOnBack.spec.tsx`): an «I am back» answered over a holiday already
+  ended left it on for the next end by itself; it is now armed only while away. (A refusal cannot leave it on: the «back» state is drawn
+  synchronously, long before the server answers.)
 - **U, a late read is old news** (`awayStore.ts`): a read answered with this phone's write on top is shown only if no write started since
   the read did (a write refused meanwhile could otherwise come back on screen, for good when the server has no holiday document).
 - **V, the refusal alert has its own `PartBoundary`** (`AppShell.tsx`), and the dimmed row takes no hover shade (`SettingsRow.module.css`).

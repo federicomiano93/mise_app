@@ -40,6 +40,11 @@ export function AwayProvider({ children }: { children: ReactNode }) {
     return () => { document.removeEventListener('visibilitychange', wake); };
   }, [store]);
 
+  return <AwayStoreProvider store={store}>{children}</AwayStoreProvider>;
+}
+
+// Hands a store that already exists to the hooks below: AwayProvider's own, or a spec's.
+export function AwayStoreProvider({ store, children }: { store: AwayStore; children: ReactNode }) {
   return <AwayContext.Provider value={store}>{children}</AwayContext.Provider>;
 }
 

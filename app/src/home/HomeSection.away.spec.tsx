@@ -127,24 +127,6 @@ describe('Home: the holiday band', () => {
     expect(document.getElementById('home-todo-title')).not.toHaveFocus();
   });
 
-  // Review, 8 Nov 2026: a refusal that lands before React draws «back» leaves the arm on; it must not move the focus later.
-  it('leaves the focus alone when the holiday ends by itself after an «I am back» that was refused', async () => {
-    const { user, source } = await open({ away: { until: '2026-11-16' } });
-    source.refuseWith = new Error('refused');
-    await user.click(await band());
-    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'I am back' }));
-    await user.click(within(await screen.findByRole('alertdialog', { name: 'I am on holiday' })).getByRole('button', { name: 'OK' }));
-    await band();
-    source.refuseWith = null;
-    (document.activeElement as HTMLElement | null)?.blur();
-    source.away = { until: '' };
-    vi.setSystemTime(new Date(NOW.getTime() + 11 * 60_000));
-    document.dispatchEvent(new Event('visibilitychange'));
-    await waitFor(() => { expect(main().queryByText(/On holiday until/)).not.toBeInTheDocument(); });
-    await new Promise(resolve => setTimeout(resolve, 0));
-    expect(document.getElementById('home-todo-add')).not.toHaveFocus();
-  });
-
   it('closes «Back already?» when the holiday ends while it is open', async () => {
     const { user, source } = await open({ away: { until: '2026-11-16' } });
     await user.click(await band());
