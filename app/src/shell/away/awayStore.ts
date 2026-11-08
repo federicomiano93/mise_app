@@ -15,6 +15,7 @@
 // day; recheck() re-asks it when the day changes on a tablet left open.
 
 import { isAway } from '@mise/shared/away-model';
+import { markBusy } from '../../session/busy';
 import type { SettingsSource } from '../../settings/settingsSource';
 
 export interface AwaySnapshot {
@@ -54,7 +55,10 @@ export interface AwayStore {
 // phone shows within a day or on waking, at the price of a read every ten minutes at most (P14).
 export const REREAD_MIN_MS = 600_000;
 
-export function createAwayStore(source: SettingsSource, uid: string, now: () => number = Date.now): AwayStore {
+// `hold` is session/busy.ts's markBusy (a spec passes its own).
+export function createAwayStore(
+  source: SettingsSource, uid: string, now: () => number = Date.now, hold: () => () => void = markBusy,
+): AwayStore {
   let snapshot: AwaySnapshot = Object.freeze({ status: 'loading', until: null, away: false });
   const listeners = new Set<() => void>();
   const refusedListeners = new Set<() => void>();
@@ -88,7 +92,11 @@ export function createAwayStore(source: SettingsSource, uid: string, now: () => 
     inFlight += 1;
     const mine = writes;
     publish({ status: 'ready', until });
-    const saved = attempt.written.then(
+    // ⚠️ BUSY UNTIL THE SERVER HAS ANSWERED (review of 3g-2, 8 Nov 2026): a self-started reload (the session's, or a new
+    // release of the service worker) while the write is in the air would leave nobody listening for a refusal — the phone
+    // would show a holiday the server never accepted, with no «Not saved» — or, with no offline copy, lose the write.
+    const release = hold();
+    const saved = attempt.written.finally(release).then(
       () => {
         inFlight -= 1;
         confirmed = until;

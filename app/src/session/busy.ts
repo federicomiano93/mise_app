@@ -12,7 +12,9 @@
 // answered by the database (calculator/CalculatorContext.tsx, BusyWhileUnsent), and its Settings editors hold it while dirty
 // (calculator/SettingsEditor.tsx), and so does the market order form while quantities were changed by hand
 // (calculator/OrderForm.tsx). Orders holds it while typing has not reached Firestore, while a day line is saved, and while a close
-// as not ordered or a reopen is answered (orders/ordersStore.ts). Each new editor adds itself here.
+// as not ordered or a reopen is answered (orders/ordersStore.ts). The holiday holds it while a picked day is not set yet
+// (settings/AwayRow.tsx) and while a holiday change has not been answered by the server (shell/away/awayStore.ts). Each new editor
+// adds itself here.
 
 const holders = new Set<symbol>();
 
