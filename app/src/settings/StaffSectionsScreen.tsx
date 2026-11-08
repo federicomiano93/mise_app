@@ -131,6 +131,14 @@ export function StaffSectionsScreen() {
       // it can be read; offline the switch simply stays as it was.
       const truth = await source.readVenueFromServer().catch(() => null);
       if (truth) setVenue(truth);
+      // ⚠️ THE SERVER HOLDS WHAT WAS ASKED: the change happened (a cold function that outlived the phone's wait), so it is a success —
+      // the session's copy is read again and nothing says «could not save» beside a switch that did move (review, 8 Nov 2026; the
+      // language screen does the same).
+      if (truth && isHiddenForStaff(truth, card.id) === hide) {
+        await sessionStore.refreshLocation();
+        setSaving(false);
+        return;
+      }
       // ⚠️ SAVING ENDS BEFORE THE ALERT, so the live region does not keep saying «Saving…» under the error.
       setSaving(false);
       await alert({ message: t('staffSections.err.save'), okLabel: t('common.ok') });

@@ -222,17 +222,34 @@ describe('Sections for employees', () => {
       expect(within(region).getByRole('status', { hidden: true })).toHaveTextContent('');
     });
 
-    it('after a failure, shows what the server now holds (a save that landed after the phone stopped waiting)', async () => {
-      const { user, source } = await open({ session: { location: {} } }, { venue: {} });
+    // Review, 8 Nov 2026: a save the server holds is a success, however late its answer was.
+    it('after a failure the server turns out to have saved, shows it saved and says nothing failed', async () => {
+      const { user, source, store } = await open({ session: { location: {} } }, { venue: {} });
       source.functionsFailWith = Object.assign(new Error('timeout'), { code: 'functions/deadline-exceeded' });
       // The server already holds the change the phone is about to be told failed.
       source.venue = { staffHiddenCards: { pastries: true } };
       await user.click(sw('Pastries Visible'));
       await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Hide it' }));
 
+      expect(await screen.findByRole('switch', { name: 'Pastries Hidden' })).not.toBeChecked();
+      await waitFor(() => { expect(card().getByRole('status')).toHaveTextContent(''); });
+      expect(screen.queryByText('Could not save the change. Check your connection and try again.')).not.toBeInTheDocument();
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+      expect(store.refreshLocation).toHaveBeenCalledTimes(1);
+    });
+
+    it('after a failure, shows what the server now holds even when it is not what was asked', async () => {
+      const { user, source } = await open({ session: { location: {} } }, { venue: {} });
+      source.functionsFailWith = new Error('denied');
+      // Another phone hid Calculator meanwhile; Pastries was not saved.
+      source.venue = { staffHiddenCards: { calculator: true } };
+      await user.click(sw('Pastries Visible'));
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Hide it' }));
+
       await waitFor(() => { expect(screen.getByText('Could not save the change. Check your connection and try again.')).toBeInTheDocument(); });
       await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'OK' }));
-      await waitFor(() => { expect(sw('Pastries Hidden')).not.toBeChecked(); });
+      await waitFor(() => { expect(sw('Calculator Hidden')).not.toBeChecked(); });
+      expect(sw('Pastries Visible')).toBeChecked();
     });
   });
 
