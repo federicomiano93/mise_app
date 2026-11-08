@@ -265,8 +265,6 @@ const PORT_OWED = new Set<string>([
   'startWeighing', 'typeRaw', 'readWeighing', 'weighingPatches', 'restoreAfterRefusal',
   // PORT OWED (release branch, 8 Nov 2026): main changed js/foodcost/foodcost-model.js (Which? names deleted lines, line money guard, two decimals), the port has not — remove its keys when ported
   'batchTotals', 'productionCost', 'costProduct', 'sortByMargin',
-  // PORT OWED (release branch, 8 Nov 2026): main changed js/calculator-recipe-source.js (catalogue choices), the port has not — remove its keys when ported
-  'isWeighable', 'resolveRecipe',
 ]);
 
 // Calls both functions with every argument list and reports every disagreement at once.
