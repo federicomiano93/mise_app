@@ -341,3 +341,27 @@ describe('the recipe is saved with its link', () => {
     expect(source.catalogueReads()).toBe(0);
   });
 });
+
+// ⚠️ A LINKED RECIPE COUNTS THE RECIPE BOOK'S ROWS in Calculator → Settings → Recipes (current app 535bcdb2, found on the
+// lab tablet, 31 Oct 2026): it counted the tab's own (empty, or stale) copy, so every linked recipe said «0 ingredients».
+describe('the Recipes list counts a linked recipe from the recipe book', () => {
+  const head = (name: string) => main().getByRole('button', { name: new RegExp(`^${name}\\b`) });
+
+  it('a linked recipe counts the recipe book’s rows, not the tab’s own copy', async () => {
+    await open(LIST, { config: configOf({ recipes: [LINKED] }), recipes: [STAMPED] });
+    // The tab's own copy has FOCACCIA's four rows; the recipe book's recipe has two.
+    await waitFor(() => { expect(head('Focaccia')).toHaveTextContent(/From orders\s+·\s+2 ingredients\s+·\s+shown/); }, LOAD);
+  });
+
+  it('a row that cannot be weighed still counts', async () => {
+    const pinch = { ...STAMPED, ingredients: [...STAMPED.ingredients, { rid: 'rsalt0000', label: 'Salt', grams: 1, unit: 'pinch' }] };
+    await open(LIST, { config: configOf({ recipes: [LINKED] }), recipes: [pinch] });
+    await waitFor(() => { expect(head('Focaccia')).toHaveTextContent(/From orders\s+·\s+3 ingredients\s+·\s+shown/); }, LOAD);
+  });
+
+  it('a linked recipe that cannot be read gives no number rather than a wrong «0»', async () => {
+    await open(LIST, { config: configOf({ recipes: [LINKED] }), recipes: [] });
+    await waitFor(() => { expect(head('Focaccia')).toHaveTextContent(/^Focaccia\s+From orders\s+·\s+shown$/); }, LOAD);
+    expect(head('Focaccia')).not.toHaveTextContent(/ingredient/);
+  });
+});

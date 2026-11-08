@@ -5,6 +5,7 @@ import {
   LOGICS, MAX_TRAY_WEIGHT, MAX_VISIBLE_RECIPES, MIN_TRAY_WEIGHT, isValidTrayWeight, usesTrays,
 } from '@mise/shared/calculator-config';
 import type { Logic } from '@mise/shared/calculator-config';
+import { ingredientCount } from '@mise/shared/calculator-recipe-source';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
@@ -93,7 +94,10 @@ function RecipeRow({ recipe, onDeleted }: { recipe: EditableRecipe; onDeleted: (
   const logic = logicOf(recipe);
   const shownName = recipe.name.trim() === '' ? t('calc.unnamedRecipe') : recipe.name;
   // «From a total · 16 ingredients · shown»: the current app's whole phrases, kept in step live by the open row.
-  const sub = `${t(LOGIC_LABELS[logic])}  ·  ${t('calc.ingredientCount', { n: recipe.ingredients.length })}`
+  // ⚠️ A LINKED RECIPE COUNTS THE RECIPE BOOK'S ROWS (ingredientCount, current app 535bcdb2): its own `ingredients` is
+  // empty, so every linked recipe said «0 ingredients». One not read yet shows no count rather than a wrong «0».
+  const n = ingredientCount(recipe, editor.resolved(recipe));
+  const sub = t(LOGIC_LABELS[logic]) + (n === null ? '' : `  ·  ${t('calc.ingredientCount', { n })}`)
     + (recipe.visible !== false ? t('calc.shown') : t('calc.hidden'));
 
   const register = useCallback((node: HTMLButtonElement | null) => {
