@@ -142,8 +142,8 @@
       }
     },
     "dist/catalogue.js": {
-      "sha": "bf769dca86e7dd16",
-      "mapSha": "3e4cf8e7ddca765f",
+      "sha": "4014d9d0933a2b79",
+      "mapSha": "df583d1b99d84d34",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -212,7 +212,7 @@
         "js/ingredient-edit-model.js": "4aa9df389998ef05",
         "js/ingredient-kind.js": "29f19b5cae6c3969",
         "js/ingredient-name.js": "db8018ddb4e1b832",
-        "js/ingredient-record-form.js": "68ee9149c62b835e",
+        "js/ingredient-record-form.js": "7190478d2d7a1dc2",
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/join-code.js": "ebf5b5e52507b80b",
         "js/join-hold.js": "f4e4baccf505ae0d",
@@ -498,10 +498,10 @@
       }
     },
     "dist/i18n.js": {
-      "sha": "068acf0ed9033a58",
-      "mapSha": "5303ad692ba358b0",
+      "sha": "78cfc843460fc5e1",
+      "mapSha": "aaf903f506850427",
       "inputs": {
-        "js/i18n.js": "3a49f70cc26ac64d"
+        "js/i18n.js": "fe6dd6cd4f1d0dec"
       }
     },
     "dist/index.js": {
@@ -779,8 +779,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "ee7bbd6a883ac550",
-      "mapSha": "234bc995cc6d49d6",
+      "sha": "8ee03df75521937d",
+      "mapSha": "89db350e1e9c296f",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -811,7 +811,7 @@
         "js/ingredient-edit-model.js": "4aa9df389998ef05",
         "js/ingredient-kind.js": "29f19b5cae6c3969",
         "js/ingredient-name.js": "db8018ddb4e1b832",
-        "js/ingredient-record-form.js": "68ee9149c62b835e",
+        "js/ingredient-record-form.js": "7190478d2d7a1dc2",
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/join-code.js": "ebf5b5e52507b80b",
         "js/join-hold.js": "f4e4baccf505ae0d",
@@ -1041,8 +1041,8 @@
       }
     },
     "dist/suppliers.js": {
-      "sha": "17d58dd205a72ad7",
-      "mapSha": "bc1b12226c0f6197",
+      "sha": "52b566751099fab0",
+      "mapSha": "5539e1148644a8dd",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -1072,7 +1072,7 @@
         "js/ingredient-kind.js": "29f19b5cae6c3969",
         "js/ingredient-name.js": "db8018ddb4e1b832",
         "js/ingredient-origin.js": "720702ef195bae05",
-        "js/ingredient-record-form.js": "68ee9149c62b835e",
+        "js/ingredient-record-form.js": "7190478d2d7a1dc2",
         "js/install-hint.js": "6a8b72cf05dc878e",
         "js/join-code.js": "ebf5b5e52507b80b",
         "js/join-hold.js": "f4e4baccf505ae0d",
