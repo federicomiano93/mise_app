@@ -1918,6 +1918,29 @@ describe('inventory-model: odd inputs', () => {
   agree('countableProducts', m.countableProducts as AnyFn, l.countableProducts as AnyFn, product(PRODUCT_LISTS));
   agree('productsOfMonth', m.productsOfMonth as AnyFn, l.productsOfMonth as AnyFn,
     [...product(PRODUCT_MONTHS, PRODUCT_LISTS.slice(0, 20)), ...product(PRODUCT_MONTHS.slice(0, 30), PRODUCT_LISTS.slice(20))]);
+
+  // The close guard and the list's words (ported 8 Nov 2026). Each flag of the two is tried with every odd value: they are
+  // read as truthy or compared with ===, and an argument that is not an object must throw in both.
+  const FLAGS: readonly unknown[] = [...ODD, 'answered', 'waiting', 'failed'];
+  const STATUS_INPUT = {
+    venueOpen: true, monthAnswered: false, ingredientsAnswered: false, failed: false, emptyCopy: false, stalled: false, online: true,
+  };
+  agree('listStatus', m.listStatus as AnyFn, l.listStatus as AnyFn,
+    [...product(ODD), ...product(varying(STATUS_INPUT, Object.fromEntries(Object.keys(STATUS_INPUT).map(key => [key, FLAGS]))))]);
+  const READY_INPUT = { status: 'answered', closed: false, rows: 3, pricesAnswered: true };
+  agree('monthReady', m.monthReady as AnyFn, l.monthReady as AnyFn, [
+    ...product(ODD),
+    ...product(varying(READY_INPUT, { status: FLAGS, closed: FLAGS, rows: FLAGS, pricesAnswered: FLAGS })),
+    ...product(varying({ ...READY_INPUT, closed: true }, { status: FLAGS, rows: FLAGS, pricesAnswered: FLAGS })),
+  ]);
+  class Removal {}
+  const PAYLOAD = { month: '2026-09', opening: { flour: 1 }, closedAt: '', packKg: {} };
+  agree('withoutEmptyMaps', m.withoutEmptyMaps as AnyFn, l.withoutEmptyMaps as AnyFn, [
+    ...product(ODD), ...product(['abc', 5, new Map([['a', 1]]), Object.create(null), Object.create({ a: 1 })]),
+    ...product(varying(PAYLOAD, {
+      opening: [...ODD, Object.create(null), Object.create({ a: 1 }), new Removal(), new Map(), new Date(0), [{}], { a: {} }],
+    })),
+  ]);
 });
 
 // ── inventory-outbox ─────────────────────────────────────────────────────────

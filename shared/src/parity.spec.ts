@@ -357,11 +357,6 @@ const PORT_OWED = new Set<string>([
   'sections :: every export is a function in both or a value in both',
   'sections :: every non-function export is strictly equal',
   'sections :: frozen-ness matches for every object and array export, all the way down',
-  // PORT OWED (release branch, 8 Nov 2026): main added LIST_STATUS and more exports to js/inventory-model.js, not yet in the port — remove its key when ported
-  'inventory-model :: exports exactly the same names',
-  'inventory-model :: every export is a function in both or a value in both',
-  'inventory-model :: every non-function export is strictly equal',
-  'inventory-model :: frozen-ness matches for every object and array export, all the way down',
   // PORT OWED (release branch, 8 Nov 2026): main added weighingsChangeCost to js/foodcost/foodcost-weighing.js, not yet in the port — remove its key when ported
   'foodcost-weighing :: exports exactly the same names',
   'foodcost-weighing :: every export is a function in both or a value in both',
