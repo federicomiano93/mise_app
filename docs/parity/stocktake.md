@@ -254,8 +254,8 @@ What it cannot know: with no signal it goes by this phone's copy, as closing in 
 says «open» can close again a month another phone has closed since. And with rows on screen and the month never read, the boxes
 still accept a typed number, as in the current app: it waits with the rest, and it proves nothing.
 
-`withoutEmptyMaps` and `monthReady` live in `app/src/stocktake/stocktakeModel.ts` for now: `shared/src/inventory-model.ts` is a
-paired port, and the stack does not hold the current app's side yet. When main is merged into the stack they move there.
+`withoutEmptyMaps` and `monthReady` moved to `shared/src/inventory-model.ts` on 8 Nov 2026 (see «Close guard in shared/ as
+built» at the end).
 
 ## Differences from the current app, on purpose
 
@@ -295,8 +295,43 @@ paired port, and the stack does not hold the current app's side yet. When main i
   over a saved number deleted it. A box emptied on purpose (nothing in it, blanks included) still
   removes the count. Covers the list's boxes, the product's three and the pack-weight box.
 - **Enter in a count box moves to the next row's box**, which is what the keyboard's «next» promises.
-- **A price failure other than a refused read takes the answer back**, even after the prices had answered: they are gone from
-  the list, and a month closed then would freeze no money. In the current app the answer stays true with the prices wiped.
+- ~~A price failure other than a refused read takes the answer back~~ — no longer a difference since 8 Nov 2026: the current
+  app's 5df661d3 keeps the prices and the answer, and Mise 2 now does the same (see «Close guard in shared/ as built»).
 - **A month whose stream has died is not ready**: it can no longer say the month was closed meanwhile.
 - **Messages** are announced in a status region that exists before it changes, instead of a toast.
 - **The other-unit sentence** is a dialog with one button, «OK», as the current app's alert.
+
+## Close guard in shared/ as built (8 Nov 2026, checklist item 7)
+
+The current app's PR #440 (`2e4ee2a1`, the list's words), PR #442 (`6538e1db`, the close guard) and `5df661d3` (a failed
+price read), ported in full on the release branch. Source of truth: `js/inventory/*.js` and `tests/inventory-close-month.test.mjs`,
+`tests/inventory-empty-flash.test.mjs` on `main`.
+
+56. **The four exports are in `shared/src/inventory-model.ts`**, word for word: `LIST_STATUS` (frozen, the same five words),
+    `listStatus`, `monthReady` (now with the original's argument, `{ status, closed, rows, pricesAnswered }`) and
+    `withoutEmptyMaps`. `app/src/stocktake/stocktakeModel.ts` no longer has its own copies. `parity.spec.ts` compares the module
+    in full again (its four PORT OWED keys are gone and pass); `inventory-model.spec.ts` runs every model case of the two
+    current-app test files on both files; `odd-inputs.spec.ts` feeds the three functions odd inputs. **spec** (model)
+57. **«No products yet» only when both answers prove it**: the store's snapshot carries `listStatus` (the month proved, as for
+    `ready`; the ingredients proved; a listener dead; the phone's copy saying «none»; `STALL_MS` = 10 s; `navigator.onLine`).
+    With no rows on screen the list says, instead of its rows: «Loading the products…» (`role=status`), «The products have not
+    arrived yet» / «Check your connection: they will appear here as soon as they arrive.» (offline with an empty copy, or after
+    10 s; `role=status`), or «Could not load the products. Check your connection and reload the page.» (`role=alert`). No
+    summary («0 of 0», the note about boxes) and no «Nothing matches.» meanwhile. A venue that has really answered with
+    nothing keeps «No products yet» and its «0 of 0». A closed month with frozen rows draws them at once, while the
+    ingredients are still on their way. **spec** (store, list)
+58. **A failed price read keeps the prices already received** (`5df661d3`): only a refused read (`permission-denied`) empties
+    them, and it counts as answered; any other failure changes nothing — an answer stays an answer, so a close cannot freeze
+    no money. **spec** (source)
+
+Differences, on purpose:
+- **The stall timer starts again for every month opened**, not once per page from the venue opening: Mise 2 changes month
+  without a reload, and the month on screen is the one whose answer is awaited.
+- **A month stream that dies keeps the list's words where its answer left them** (the rows are drawn; the notice says what
+  happened) but takes `ready` back (48-55 above): as in the current app for the words, as before in Mise 2 for the guard.
+- **`listStatus` is never `starting`**: a Stocktake store is made only inside an open venue, whose language is known.
+- **A failed ingredients read that answers again is no longer a failure** (the current app keeps `failed` until the reload).
+
+Not driven: the emulator run of `mise2-check` (axe-core at 1024, 360 and 296 in both languages) needs drivers outside the
+repository; the states above are pinned by `StocktakeSection.list.spec.tsx` and `stocktakeStore.spec.ts`.
+

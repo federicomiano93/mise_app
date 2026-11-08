@@ -30,7 +30,7 @@ Data loss first:
 - [x] 5. Usage `hours` kept by Mise 2's usage write — already on this branch through PR #473 (`e1a4639d`), found on 8 Nov:
       the tick files the seconds under the hour (`addHour`), the stored day keeps them across both apps' commits and the
       payload carries them (`app/src/telemetry/usage.spec.ts`, «the hours reach the stored day and the line…»)
-- [ ] 7. Stocktake «Close month» guard moved into shared/ (`LIST_STATUS`, wording)
+- [x] 7. Stocktake «Close month» guard moved into shared/ (`LIST_STATUS`, wording) — ported 8 Nov (`feature/mise2-stocktake-guard`, PR into the release branch; `docs/parity/stocktake.md`, «Close guard in shared/ as built»)
 
 Roles, Orders, Suppliers:
 - [ ] 8-11. Partial owners (owner-sales, owner-kitchen): sections, records, price gate, Clients page, weighing door
@@ -113,6 +113,9 @@ Before the switch, not ports:
    `app/src/stocktake/stocktakeModel.ts` has `withoutEmptyMaps`, `monthReady`). Mise 2: PARTIAL. Owed: move both plus `LIST_STATUS` /
    `listStatus` into `shared/src/inventory-model.ts` (parity marked PORT OWED: inventory-model), the «No products» wording only when both answers prove
    it, and check `5df661d3` (a failed price read keeps the prices already received). No data at risk if the guard is intact. Size S.
+   DONE 8 Nov 2026: all four in `shared/src/inventory-model.ts` and paired; the wording waits for both answers; `5df661d3` was
+   NOT in Mise 2 (a failed price read wiped the prices and took the answer back) and is ported. Every difference:
+   `docs/parity/stocktake.md`, «Close guard in shared/ as built».
 
 ## B. Roles and access (partial owners): rules already live, Mise 2 UI blind
 
