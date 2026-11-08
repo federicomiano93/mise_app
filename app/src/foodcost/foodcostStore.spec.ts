@@ -259,6 +259,15 @@ describe('the Food cost store', () => {
     expect(doc).not.toHaveProperty('id');
   });
 
+  test('⚠️ noWeightLoss is written only when true: switching it off removes the key from the whole document', () => {
+    const on = toProductDocument(product({ id: 'p1', name: 'Loaf', noWeightLoss: true } as Product & { name: string }));
+    expect(on.noWeightLoss).toBe(true);
+    const off = toProductDocument(product({ id: 'p1', name: 'Loaf', noWeightLoss: false } as Product & { name: string }));
+    expect(off).not.toHaveProperty('noWeightLoss');
+    const missing = toProductDocument(product({ id: 'p1', name: 'Loaf' } as Product & { name: string }));
+    expect(missing).not.toHaveProperty('noWeightLoss');
+  });
+
   test('the margin point travels with the product', () => {
     const { fake, store } = setup();
     store.start();

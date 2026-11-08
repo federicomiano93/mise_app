@@ -27,10 +27,27 @@
 }
 
 .name {
+  /* It takes the free space, so the note sits beside the number and the notes of a list line up. */
+  flex: 1 1 auto;
   min-width: 0;
   overflow-wrap: anywhere;
   font-size: var(--fs-lg);
   font-weight: 600;
+}
+
+/* The row's own note («9x3»), between the name and the number: quiet, in same-width characters. It wraps
+   inside its 40% rather than being cut short — the kitchen reads the whole note here, as in the current app —
+   and the cap keeps the number on the row. */
+.note {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 40%;
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: var(--fs-md);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .qty {
@@ -126,6 +143,10 @@
 
   .name {
     font-size: var(--fs-xl);
+  }
+
+  .note {
+    font-size: var(--fs-lg);
   }
 
   .qty {

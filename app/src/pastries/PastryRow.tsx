@@ -45,6 +45,7 @@ export function PastryRow({ item, open, disabled, typed, inputRef, onToggle, onT
         onClick={() => { if (!disabled) onToggle(); }}
       >
         <span className={styles.name}>{item.name}</span>
+        {item.note ? <span className={styles.note}>{item.note}</span> : null}
         <span className={styles.qty}>{item.qty}</span>
       </button>
       {open ? (

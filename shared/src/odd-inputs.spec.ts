@@ -261,12 +261,10 @@ function show(value: unknown): string {
 }
 
 const PORT_OWED = new Set<string>([
-  // PORT OWED (release branch, 8 Nov 2026): main changed js/pastries-model.js (pastries notes: setQuantityAt), the port has not — remove its key when ported
-  'setQuantityAt',
   // PORT OWED (release branch, 8 Nov 2026): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings), the port has not — remove its keys when ported
   'startWeighing', 'typeRaw', 'readWeighing', 'weighingPatches', 'restoreAfterRefusal',
   // PORT OWED (release branch, 8 Nov 2026): main changed js/foodcost/foodcost-model.js (Which? names deleted lines, line money guard, two decimals), the port has not — remove its keys when ported
-  'normalizeProduct', 'normalizeProducts', 'batchTotals', 'productionCost', 'costProduct', 'sortByMargin',
+  'batchTotals', 'productionCost', 'costProduct', 'sortByMargin',
   // PORT OWED (release branch, 8 Nov 2026): main changed js/calculator-recipe-source.js (catalogue choices), the port has not — remove its keys when ported
   'isWeighable', 'resolveRecipe',
 ]);
@@ -1140,6 +1138,8 @@ const PASTRY_NUMBERS = (count: number): { name: string; qty: number }[] =>
 const PASTRY_QUANTITIES: readonly unknown[] = [0, '', null, undefined, 'abc', -3, 1e999, -1e999, NaN, 0.4, 0.5, 1.5, 24, '24',
   ' 24 ', '1e2', '0x10', '1,5', 9999, 10000, 50000, '9999', '1e4', [5], [5, 6], {}, true, false, new Date(5), 5n,
   new Number(7), { valueOf: () => 7 }];
+const PASTRY_ITEM_NOTES: readonly unknown[] = [...ODD, '9x3', ' 9x3 ', '', '   ', '9\n x 3', '\t2 teglie\r\nda 9 ', 'x'.repeat(39),
+  'x'.repeat(40), 'x'.repeat(41), ` ${'x'.repeat(40)} y`, `${'x'.repeat(39)} y`, 42, ['9x3'], new String('9x3'), { toString: () => '9x3' }];
 const PASTRY_ROW_LISTS: readonly unknown[] = [...ODD, 'Cornetti', 42,
   [{ name: 'Cornetti', qty: 24 }, { name: 'Bomboloni', qty: 10 }],
   [{ name: '  Cornetti  ', qty: '24' }, { name: '', qty: '' }, { name: ' cornetti ', qty: 3 }],
@@ -1153,7 +1153,9 @@ const PASTRY_ROW_LISTS: readonly unknown[] = [...ODD, 'Cornetti', 42,
   [{ name: 'Cornetti', qty: 24, extra: true, id: 'x' }], PASTRY_NUMBERS(99), PASTRY_NUMBERS(100), PASTRY_NUMBERS(101),
   PASTRY_NUMBERS(300), Object.freeze([{ name: 'Cornetti', qty: 24 }]),
   [{ name: 'Cornetti', qty: 24 }, , { name: 'Bomboloni', qty: 10 }],
-  { length: 1, 0: { name: 'Cornetti', qty: 24 } }, new Set([{ name: 'Cornetti', qty: 24 }])];
+  { length: 1, 0: { name: 'Cornetti', qty: 24 } }, new Set([{ name: 'Cornetti', qty: 24 }]),
+  // Rows with their own note («9x3», PR #446): empty, blank, multi-line, at and past 40, not a string.
+  ...PASTRY_ITEM_NOTES.map(note => [{ name: 'Cornetti', qty: 24, note }, { name: 'Bomboloni', qty: 10 }])];
 
 const PASTRY_DAY_DOCS: readonly unknown[] = [...ODD, 'doc', 42,
   ...PASTRY_ROW_LISTS.map(items => ({ items })), ...PASTRY_NOTES.map(note => ({ note })),
@@ -1190,6 +1192,8 @@ describe('pastries-model: odd inputs', () => {
   agree('provingDayFor', m.provingDayFor, l.provingDayFor, product(PASTRY_MOMENTS));
   agree('wholeNumber', m.wholeNumber, l.wholeNumber, product([...ODD, ...PASTRY_QUANTITIES, Symbol('amount')]));
   agree('cleanNote', m.cleanNote, l.cleanNote, product(PASTRY_NOTES));
+  agree('cleanItemNote', m.cleanItemNote, l.cleanItemNote, product(PASTRY_ITEM_NOTES));
+  agree('otherWeekdays', m.otherWeekdays, l.otherWeekdays, product(PASTRY_DAY_NAMES));
   agree('cleanItems', m.cleanItems, l.cleanItems, product(PASTRY_ROW_LISTS));
   agree('findInvalidItems', m.findInvalidItems, l.findInvalidItems, product(PASTRY_ROW_LISTS));
   agree('normalizeDay', m.normalizeDay, l.normalizeDay, product(PASTRY_DAY_DOCS, [undefined, ...PASTRY_DAY_NAMES]));
@@ -2588,7 +2592,10 @@ describe('foodcost-weighing: odd inputs', () => {
       { id: 'p3', components: [{ recipeId: 'bri', qtyKg: 1 }] }, null],
     [null, undefined, 0, '', { id: 'p' }, { id: 'p', components: null }, { id: 'q', components: [null, undefined, 5, { recipeId: 'foc' }] }],
     [{ id: 'p', components: 'foc' }], [{ id: 'p', components: {} }], [{ id: 'p', components: 5 }], [{ components: [{ recipeId: 'foc' }] }],
-    [{ id: 'p', components: [{ kind: 'ingredient', ingredientId: 'foc' }] }]];
+    [{ id: 'p', components: [{ kind: 'ingredient', ingredientId: 'foc' }] }],
+    // A finished product («no weight loss») is not counted; only a literal true lays the loss aside.
+    [{ id: 'p1', components: [{ recipeId: 'foc' }] }, { id: 'p2', noWeightLoss: true, components: [{ recipeId: 'foc' }] },
+      { id: 'p3', noWeightLoss: 'true', components: [{ recipeId: 'foc' }] }, { id: 'p4', noWeightLoss: 1, components: [{ recipeId: 'foc' }] }]];
   agree('otherProductsUsing', m.otherProductsUsing, l.otherProductsUsing, product(PRODUCT_LISTS, [...ODD, 'foc', 'bri', 'none'], [...ODD, 'p1', 'p', 'q']));
 });
 

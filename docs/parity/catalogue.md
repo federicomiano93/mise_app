@@ -1640,8 +1640,10 @@ the category (its merge saves keep both fields).
 - `recipes/{id}.archived` — only `true` is stored; a restore removes it. The rules ask `canManage(catalogue)` only when the state
   MOVES, so an employee still saves an archived recipe. A save never sends the flag (the store keeps it); archiving is its own
   merge of the flag alone (`store.setArchived`), local-first with rollback (`recipe-not-archived`).
-- `config/labels.recipeCategories` — the venue's list (≤ 100 words, ≤ 40 characters each in the box), written whole through the
-  label profile's local-first write (`store.saveRecipeCategories`); no extra read: every recipe screen already watches the document.
+- `config/labels.recipeCategories` — the venue's list (≤ 100 words, ≤ 40 characters each in the box), changed ONE WORD AT A
+  TIME since 8 Nov 2026 (`store.addRecipeCategory` / `store.removeRecipeCategory` → `arrayUnion` / `arrayRemove`, as the current
+  app since `889a2ab0`; see «Recipe categories one word at a time as built» at the end); no extra read: every recipe screen already
+  watches the document.
 - The store keeps both recipe fields beside the shared normaliser's shape (`labelTexts.normalizeStoredRecipe`), and they reach the
   `catalogue-recipes` copy; the current app's normaliser drops them from its copy, which is harmless (the database keeps them).
 
@@ -1838,3 +1840,15 @@ pushed 17–19px past the head's edge (button `scrollWidth` 213–215 against 19
 - Pinned by `recipesCss.spec.ts` (what `.words` says, the head row never wrapping, the chevron never shrinking, no `overflow`
   in the card) and `RecipesSection.allergens.spec.tsx` (the group carries the class, the chevron is outside it). Measured
   after: 60/60 (was 56/60) at 1024/360/296 in IT and EN, axe clean.
+
+## Recipe categories one word at a time as built (8 Nov 2026)
+
+Port of the current app's `889a2ab0` (item 2 of `docs/mise2-port-owed.md`). Before it Mise 2 wrote the venue's whole list, so a
+phone holding an old copy could take away a word another manager had added.
+- The source writes `config/labels` as a merge of `recipeCategories: arrayUnion(word)` or `arrayRemove(...spellings)` with the venue
+  stamp; a removal sends every stored spelling of the word (same `categoryKey`). The store is local-first; a refusal takes back
+  ONLY that word, on the list as it is by then, and the categories stay out of the label profile's per-key rollback.
+- The card no longer waits for the server's word before Add and Delete work (the lock existed only because the list was written
+  whole): a word can be added offline, as in the current app. `cat.shelf.waitingForServer` is gone.
+- A refused word comes back to the box unless something else has been typed there since (P20, as the current app).
+- Already matched: the watch of `config/labels` asks for metadata changes, so a venue with no label document gets its answer (`febb0092`).

@@ -82,6 +82,25 @@
   border-color: var(--accent);
 }
 
+/* The «finished product» switch row: its words on the left, the switch at the right edge. */
+.switchRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  width: 100%;
+}
+
+.switchWords {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.switchTitle {
+  font-weight: 600;
+}
+
 /* The guide's button: the icon alone, square, with its name for a screen reader. */
 .guide {
   width: var(--hit);

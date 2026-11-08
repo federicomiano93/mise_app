@@ -205,9 +205,12 @@ export function restoreAfterRefusal(now: unknown, prev: unknown, patch: unknown)
 
 // How many OTHER products use a recipe — the ones a weighing typed here changes too, without anybody
 // opening them. Said on screen, because the loss belongs to the recipe.
+// ⚠️ NOT THE FINISHED PRODUCTS: one marked «no weight loss» lays the loss aside, so a loss typed here moves nothing of what
+// it costs.
 export function otherProductsUsing(products: unknown, recipeId: unknown, productId: unknown): number {
-  type Card = { id?: unknown; components?: readonly ({ recipeId?: unknown } | null | undefined)[] } | null | undefined;
+  type Card = { id?: unknown; noWeightLoss?: unknown; components?: readonly ({ recipeId?: unknown } | null | undefined)[] } | null | undefined;
   return ((products || []) as readonly Card[]).filter(p => p
     && p.id !== productId
+    && p.noWeightLoss !== true
     && (p.components || []).some(c => c && c.recipeId === recipeId)).length;
 }

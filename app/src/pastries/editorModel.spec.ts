@@ -17,13 +17,21 @@ const t = (key: MessageKey, params?: MessageParams) => format('en', en[key], par
 describe('rowsFrom', () => {
   it('turns a stored list into rows, the quantity as text', () => {
     expect(rowsFrom([{ name: 'Cornetti', qty: 24 }, { name: 'Krapfen', qty: 0 }], counter())).toEqual([
-      { id: 1, name: 'Cornetti', qty: '24' },
-      { id: 2, name: 'Krapfen', qty: '0' },
+      { id: 1, name: 'Cornetti', qty: '24', note: '' },
+      { id: 2, name: 'Krapfen', qty: '0', note: '' },
     ]);
   });
 
+  it("carries a row's note, '' when it has none", () => {
+    expect(rowsFrom([{ name: 'Cornetti', qty: 27, note: '9x3' }, { name: 'Krapfen', qty: 4 }], counter()))
+      .toEqual([
+        { id: 1, name: 'Cornetti', qty: '27', note: '9x3' },
+        { id: 2, name: 'Krapfen', qty: '4', note: '' },
+      ]);
+  });
+
   it('is never empty: an empty day is one empty row', () => {
-    expect(rowsFrom([], counter())).toEqual([{ id: 1, name: '', qty: '' }]);
+    expect(rowsFrom([], counter())).toEqual([{ id: 1, name: '', qty: '', note: '' }]);
   });
 
   it('gives every row its own id', () => {
@@ -33,15 +41,16 @@ describe('rowsFrom', () => {
 });
 
 describe('workingItems and isUntouched', () => {
-  it('hands the rules name and quantity only', () => {
-    expect(workingItems([{ id: 7, name: 'a', qty: '2' }])).toEqual([{ name: 'a', qty: '2' }]);
+  it('hands the rules name, quantity and note, without the React key', () => {
+    expect(workingItems([{ id: 7, name: 'a', qty: '2', note: '9x3' }])).toEqual([{ name: 'a', qty: '2', note: '9x3' }]);
   });
 
   it.each([
-    [{ name: '', qty: '' }, true],
-    [{ name: '   ', qty: ' ' }, true],
-    [{ name: 'a', qty: '' }, false],
-    [{ name: '', qty: '0' }, false],
+    [{ name: '', qty: '', note: '' }, true],
+    [{ name: '   ', qty: ' ', note: ' ' }, true],
+    [{ name: 'a', qty: '', note: '' }, false],
+    [{ name: '', qty: '0', note: '' }, false],
+    [{ name: '', qty: '', note: '9x3' }, false],
   ])('%j is untouched: %s', (row, expected) => {
     expect(isUntouched({ id: 1, ...row })).toBe(expected);
   });

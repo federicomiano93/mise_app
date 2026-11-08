@@ -19,19 +19,23 @@ export function freezeClock(at: Date = EVENING): void {
 }
 
 // A day's document as Firestore would hand it over.
-export function dayDoc(day: Weekday, items: readonly (readonly [string, number])[], note = ''): StoredDoc {
-  return { id: day, day, bakery: 'bakery', note, items: items.map(([name, qty]) => ({ name, qty })) };
+// A row is [name, quantity] or [name, quantity, note]: a row without a note has no `note` key at all.
+type RowSpec = readonly [string, number] | readonly [string, number, string];
+const rowOf = ([name, qty, note]: RowSpec) => (note === undefined ? { name, qty } : { name, qty, note });
+
+export function dayDoc(day: Weekday, items: readonly RowSpec[], note = ''): StoredDoc {
+  return { id: day, day, bakery: 'bakery', note, items: items.map(rowOf) };
 }
 
 // Tonight's record of a day: what Confirm writes, and what makes the day show as done.
-export function logDoc(day: Weekday, items: readonly (readonly [string, number])[] = [], date: string = WORK_DATE): StoredDoc {
+export function logDoc(day: Weekday, items: readonly RowSpec[] = [], date: string = WORK_DATE): StoredDoc {
   return {
     id: `${date}_${day}`,
     date,
     day,
     bakery: 'bakery',
     note: '',
-    items: items.map(([name, qty]) => ({ name, qty })),
+    items: items.map(rowOf),
     createdAt: new Date(2026, 9, 14, 20, 0, 0).toISOString(),
   };
 }

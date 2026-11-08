@@ -127,6 +127,8 @@ export interface Product {
   foodCostTarget: number | null;
   labourMinutes: number | null;
   labourPeople: number | null;
+  // «Finished product, no weight loss»: the recipes' oven loss is laid aside for this product's cost.
+  noWeightLoss: boolean;
   model: number | null;
 }
 
@@ -331,6 +333,9 @@ export function normalizeProduct(raw: unknown): Product | null {
     // time said is not «no time taken».
     labourMinutes: positiveNumber(doc.labourMinutes),
     labourPeople: positiveNumber(doc.labourPeople),
+    // «Finished product, no weight loss» (Nov 2026). Only a literal true switches it on: missing, null or
+    // anything else is «the recipes' own loss applies», the old behaviour.
+    noWeightLoss: doc.noWeightLoss === true,
     model: Number.isInteger(doc.model) && (doc.model as number) > 0 ? doc.model as number : null,
   };
 }
@@ -394,7 +399,7 @@ export function ingredientLineCost(line: unknown, ingredient: unknown): Ingredie
 // Returns { cost, kg, partial, rows } — `rows` explains each line, so the screen can say WHICH line has no
 // price rather than only that something has none.
 export function batchTotals(product: unknown, tables: CostTables = {}): BatchTotals {
-  const p = normalizeProduct(product) || { components: [], packaging: [] };
+  const p = normalizeProduct(product) || { components: [], packaging: [], noWeightLoss: false };
   const recipesById = tables.recipes || {};
   let cost = 0;
   let kg = 0;
@@ -427,7 +432,8 @@ export function batchTotals(product: unknown, tables: CostTables = {}): BatchTot
       rows.push({ kind: 'recipe', id: component.recipeId, name: '', qty: component.qtyKg, cost: null, reason: 'missing-recipe' });
       return;
     }
-    const costed = costRecipe(recipe, tables);
+    // A FINISHED PRODUCT loses nothing in the oven: the recipe's loss is laid aside for THIS cost only.
+    const costed = costRecipe(p.noWeightLoss ? { ...recipe, lossPct: 0 } : recipe, tables);
     if (costed.pricePerKg === null) {
       partial = true;
       rows.push({ kind: 'recipe', id: component.recipeId, name: recipe.name, qty: component.qtyKg, cost: null, reason: 'no-recipe-cost' });

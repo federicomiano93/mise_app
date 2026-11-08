@@ -222,4 +222,13 @@ describe.each([
     expect(m.otherProductsUsing(products, 'foc', null), 'a new product has no id yet').toBe(2);
     expect(m.otherProductsUsing(products, 'none', 'p1')).toBe(0);
   });
+
+  test('a finished product («no weight loss») is not among the products a loss changes', () => {
+    const products = [
+      { id: 'p1', components: [{ recipeId: 'foc', qtyKg: 1 }] },
+      { id: 'p2', noWeightLoss: true, components: [{ recipeId: 'foc', qtyKg: 1 }] },
+      { id: 'p3', noWeightLoss: 'true', components: [{ recipeId: 'foc', qtyKg: 1 }] },
+    ];
+    expect(m.otherProductsUsing(products, 'foc', 'p1'), 'only a literal true lays the loss aside').toBe(1);
+  });
 });

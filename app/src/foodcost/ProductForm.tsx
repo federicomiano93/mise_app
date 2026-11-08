@@ -46,6 +46,7 @@ import {
 import type { NumberField, Working, WorkingComponent } from './productEditorModel';
 import { VatGuideDialog } from './VatGuideDialog';
 import { WeighingPair } from './WeighingPair';
+import { SettingSwitch } from '../ui/SettingSwitch';
 import shell from './ProductEditor.module.css';
 import styles from './ProductForm.module.css';
 
@@ -202,9 +203,11 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
     // `recipeIds` is read through its key.
   }, [snap.recipes, weighings, recipeKey]);
   // What Save would write onto the recipes, right now.
+  // ⚠️ A FINISHED PRODUCT WRITES NO WEIGHINGS: with the switch on there are no boxes, and whatever was
+  // typed before it was switched on is not saved onto the recipes either.
   const patches = useMemo(
-    () => weighingPatches(snap.recipes, states, recipeIds),
-    [snap.recipes, states, recipeKey],
+    () => (working.noWeightLoss ? {} : weighingPatches(snap.recipes, states, recipeIds)),
+    [snap.recipes, states, recipeKey, working.noWeightLoss],
   );
   // ⚠️ EVERY NUMBER ON THIS SCREEN COMES FROM HERE: the stored recipes with the weighings typed on
   // this product laid over them. Reading the stored tables would keep showing the old cost per kilo
@@ -515,7 +518,9 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
     // this product costs. The OTHER products using the same recipe record no point — the same gap as
     // an ingredient price drifting.
     const result = costProduct(clean, live);
-    const worthRecording = snapshotWorthTaking(initial, clean) || Object.keys(patches).length > 0;
+    // Switching «no weight loss» on or off moves the cost, so it is a change worth a point as well.
+    const worthRecording = snapshotWorthTaking(initial, clean) || Object.keys(patches).length > 0
+      || (!!initial && !!initial.noWeightLoss !== !!clean.noWeightLoss);
     const point = result.foodCostPct !== null && worthRecording
       ? productSnapshot(clean, result, new Date().toISOString(), live) as unknown as Record<string, unknown>
       : null;
@@ -646,7 +651,21 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
             {working.components.length > 0 ? t('fc.addRecipeOrIngredient') : t('fc.addRecipe')}
           </Button>
           {/* The weighings LAST, one pair per recipe however many lines carry it. */}
-          {canWeigh ? recipeIds.map(recipeId => {
+          {recipeCount > 0 ? (
+            <div className={styles.switchRow}>
+              <span className={styles.switchWords}>
+                <span id={`${ids}-noloss`} className={styles.switchTitle}>{t('fc.noWeightLoss')}</span>
+                <span id={`${ids}-noloss-hint`} className={styles.note}>{t('fc.noWeightLossHint')}</span>
+              </span>
+              <SettingSwitch
+                selected={working.noWeightLoss}
+                onChange={on => { edit(current => ({ ...current, noWeightLoss: on })); }}
+                labelledBy={`${ids}-noloss`}
+                describedBy={`${ids}-noloss-hint`}
+              />
+            </div>
+          ) : null}
+          {canWeigh && !working.noWeightLoss ? recipeIds.map(recipeId => {
             const recipe = snap.recipes[recipeId];
             const weighing = states[recipeId];
             if (!recipe || !weighing) return null;

@@ -195,3 +195,16 @@ Differences from the current app are listed at the end, each with its reason.
   plural: «Quanti Sfogliatelle?» is wrong). Only in Mise 2's dictionary, like the line above.
   - `past.howMany`: «Quanti {name}?» becomes «Manca la quantità di {name}.»
   - `past.howManyOf` (the quantity box's name, Mise 2 only): «Quantità di {name}»
+
+## Row notes as built (8 Nov 2026)
+
+Port of the notes half of the current app's PR #446 (item 1 of `docs/mise2-port-owed.md`). Before it Mise 2 rebuilt each row as
+`{name, qty}` and its first save of a day erased every note of that day.
+- Shared model: `MAX_ITEM_NOTE_LENGTH` (40), `cleanItemNote` (one line), `otherWeekdays`; a row carries `note` only when there is
+  one (no empty key), a corrected quantity keeps it, and the record frozen in `pastry-logs` keeps it too.
+- Editor: a third box per row, «Note, e.g. 9x3», on a line of its own under name and quantity at every width (DIFFERENCE: the current app
+  puts it beside them on a tablet; here the focus order would then differ from the one drawn, and the lab tablet's split
+  has no room for four boxes); a row holding only a note asks before it goes. The day list and the records show the whole
+  note beside the number (it wraps, never cut short).
+- Still owed: «Copy day» (the menu, the confirm before replacing a list, the editor opened on the copy). Until it lands the
+  switch checklist keeps item 1 open.

@@ -233,4 +233,17 @@ describe.each([
     expect(read.note).toBe(built.note);
     expect(m.isLogVisible(read, NOW)).toBe(true);
   });
+
+  test("a record freezes each row's note with it, and a row without one has no key", () => {
+    const built = m.buildLog({
+      day: 'Wednesday', note: '', nowMs: NOW,
+      items: [{ name: 'Cornetti', qty: 27, note: ' 9x3 ' }, { name: 'Bomboloni', qty: 10 }, { name: 'Girelle', qty: 4, note: 7 }],
+    });
+    expect(built.items).toStrictEqual([
+      { name: 'Cornetti', qty: 27, note: '9x3' },
+      { name: 'Bomboloni', qty: 10 },
+      { name: 'Girelle', qty: 4 },
+    ]);
+    expect(m.normalizeLog(built, built.id).items).toStrictEqual(built.items);
+  });
 });

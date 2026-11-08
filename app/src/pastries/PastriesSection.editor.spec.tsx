@@ -462,6 +462,16 @@ describe('the editor: adding and removing rows', () => {
     await waitFor(() => { expect(rowsShown()).toEqual([['Cornetti', '24'], ['Sfogliatelle', '8']]); });
   });
 
+  it('asks about a row that has only a note in it', async () => {
+    const { user } = await openByAddress(fakePastriesSource());
+    await user.type(screen.getByRole('textbox', { name: 'Note for this row' }), '9x3');
+    await user.click(screen.getByRole('button', { name: 'Remove this row' }));
+    const ask = await dialog('Remove this pastry?');
+    expect(ask).toHaveAccessibleDescription('Remove this row from Thursday?');
+    await user.click(within(ask).getByRole('button', { name: 'Cancel' }));
+    expect(screen.getByRole('textbox', { name: 'Note for this row' })).toHaveValue('9x3');
+  });
+
   it('asks about a row that has only a number in it', async () => {
     const { user } = await openByAddress(fakePastriesSource());
     await user.type(qtyBoxes()[0] as HTMLElement, '5');
@@ -685,6 +695,46 @@ describe('the editor: Save', () => {
     expect(await within(region() as HTMLElement).findByText('Thursday saved.')).toBeInTheDocument();
     // The day shows the new list.
     expect(screen.getByRole('button', { name: /^Brioche/ })).toBeInTheDocument();
+  });
+
+  describe('a row\'s own note', () => {
+    const rowNotes = () => screen.getAllByRole('textbox', { name: /^Note for / }) as HTMLInputElement[];
+
+    it('is a third box on each row, filled from the stored row, with its own words', async () => {
+      const source = fakePastriesSource({ days: [dayDoc('Thursday', [['Cornetti', 24, '9x3'], ['Krapfen', 12]])] });
+      await openByAddress(source);
+      expect(rowNotes().map(box => box.value)).toEqual(['9x3', '']);
+      expect(screen.getByRole('textbox', { name: 'Note for Cornetti' })).toHaveAttribute('maxlength', '40');
+      expect(screen.getByRole('textbox', { name: 'Note for Krapfen' })).toHaveAttribute('placeholder', 'Note, e.g. 9x3');
+    });
+
+    it('is called «Note for this row» while the name is empty', async () => {
+      const { user } = await openByAddress(fakePastriesSource());
+      expect(screen.getByRole('textbox', { name: 'Note for this row' })).toBeInTheDocument();
+      await user.type(nameBoxes()[0] as HTMLElement, ' Brioche ');
+      expect(screen.getByRole('textbox', { name: 'Note for Brioche' })).toBeInTheDocument();
+    });
+
+    it('marks the editor as changed when it is typed in', async () => {
+      const { user } = await openByAddress();
+      expect(isBusy()).toBe(false);
+      await user.type(rowNotes()[0] as HTMLElement, 'x');
+      expect(isBusy()).toBe(true);
+      expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+    });
+
+    it('is written with the row on Save, cleaned, and a row without one has no note key', async () => {
+      const source = fakePastriesSource({ days: [dayDoc('Thursday', [['Cornetti', 24], ['Krapfen', 12, 'old']])] });
+      const { user } = await openByAddress(source);
+      await user.type(rowNotes()[0] as HTMLElement, '  9x3 ');
+      await user.clear(rowNotes()[1] as HTMLElement);
+      await user.click(saveButton());
+      await user.click(within(await dialog('Save Thursday?')).getByRole('button', { name: 'Save' }));
+      await waitFor(() => { expect(source.saveDay).toHaveBeenCalledTimes(1); });
+      const written = vi.mocked(source.saveDay).mock.calls[0]?.[1] ?? [];
+      expect(written).toStrictEqual([{ name: 'Cornetti', qty: 24, note: '9x3' }, { name: 'Krapfen', qty: 12 }]);
+      expect(Object.keys(written[1] ?? {})).toStrictEqual(['name', 'qty']);
+    });
   });
 
   it('keeps the note that was there when the note is left alone', async () => {

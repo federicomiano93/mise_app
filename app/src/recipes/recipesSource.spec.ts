@@ -18,6 +18,8 @@ function fakeKit() {
   const fs = {
     addDoc: vi.fn(async (target: Ref, data: unknown) => { added.push({ target, data }); return { id: 'new' }; }),
     setDoc: vi.fn(async (_target: Ref, _data: unknown, _options: unknown) => undefined),
+    arrayUnion: (...values: unknown[]) => ({ arrayUnion: values }),
+    arrayRemove: (...values: unknown[]) => ({ arrayRemove: values }),
     collection:(_db: unknown, ...segments: string[]): Ref => ({ kind: 'collection', path: segments.join('/') }),
     doc: (_db: unknown, ...segments: string[]): Ref => ({ kind: 'doc', path: segments.join('/') }),
     onSnapshot: vi.fn((target: Ref, ...rest: unknown[]) => {
@@ -260,6 +262,27 @@ describe('the Recipe catalogue source', () => {
       { haccpCategory: removal, haccpSize: '50x30', bakery: 'bakery' }, { merge: true });
     expect(fs.setDoc).toHaveBeenNthCalledWith(2, { kind: 'doc', path: 'locations/bakery/config/labels' },
       { haccpCategory: 'Semilavorati', bakery: 'bakery' }, { merge: true });
+  });
+
+  test('⚠️ a recipe category is arrayUnion / arrayRemove on config/labels, merged and stamped — never the whole list', async () => {
+    const { kit, fs } = fakeKit();
+    const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'panificio-miano');
+    await source.addRecipeCategoryWord('Natale');
+    await source.removeRecipeCategoryWords(['Natale', 'natale ']);
+    const labels = { kind: 'doc', path: 'locations/panificio-miano/config/labels' };
+    expect(fs.setDoc).toHaveBeenNthCalledWith(1, labels,
+      { recipeCategories: { arrayUnion: ['Natale'] }, bakery: 'panificio-miano' }, { merge: true });
+    expect(fs.setDoc).toHaveBeenNthCalledWith(2, labels,
+      { recipeCategories: { arrayRemove: ['Natale', 'natale '] }, bakery: 'panificio-miano' }, { merge: true });
+  });
+
+  test('a recipe category write rejects when it is refused or Firestore cannot load', async () => {
+    const { kit, fs } = fakeKit();
+    fs.setDoc.mockRejectedValueOnce(new Error('permission-denied'));
+    await expect(createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery').addRecipeCategoryWord('A')).rejects.toThrow('permission-denied');
+    fs.setDoc.mockRejectedValueOnce(new Error('permission-denied'));
+    await expect(createFirestoreRecipesSource(() => Promise.resolve(kit), 'bakery').removeRecipeCategoryWords(['A'])).rejects.toThrow('permission-denied');
+    await expect(createFirestoreRecipesSource(() => Promise.reject(new Error('chunk')), 'bakery').addRecipeCategoryWord('A')).rejects.toThrow('chunk');
   });
 
   test('a roster line is read once from the open venue\'s members; none, and a read that fails, are null', async () => {

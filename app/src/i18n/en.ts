@@ -150,6 +150,9 @@ export const en = {
   // «how many» labels are whole phrases, not a name slotted into one, so Italian can agree the
   // word with the noun («Quante paste»).
   'past.howManyOf': 'How many {name}',
+  'past.itemNotePlaceholder': 'Note, e.g. 9x3',
+  'past.itemNote': 'Note for this row',
+  'past.itemNoteFor': 'Note for {name}',
   'past.howManyPastries': 'How many pastries',
   'past.removeRow': 'Remove {name}',
   // What stops a save. The quantity limit is passed as text, so it reads «9999», never «9,999».
@@ -424,6 +427,8 @@ export const en = {
   'fc.ingredientNoPieceWeight': 'Bought by the piece — say what one piece weighs in Ingredients and suppliers, or count it in pieces',
   'fc.ingredientNoPiecePrice': 'Bought by weight — say what one piece weighs in Ingredients and suppliers, or count it in grams',
   'fc.weighFor': 'Dough for «{name}»',
+  'fc.noWeightLoss': 'Finished product — no weight loss',
+  'fc.noWeightLossHint': 'The oven loss of the recipes is not used for this product.',
   'fc.packHolds': 'One pack holds',
   'fc.packHoldsAs': 'What one pack holds',
   'fc.packHoldsNote': 'The weight in one pack, or how many pieces.',
@@ -1035,7 +1040,6 @@ export const en = {
   'cat.shelf.bannerTitle': 'Archived',
   'cat.shelf.bannerText': 'Not in the list or in the choices for new links. The Calculator, labels and Food cost keep working.',
   'cat.shelf.allArchived': 'Every recipe is archived — restore one in the Recipe catalogue to choose it.',
-  'cat.shelf.waitingForServer': 'Waiting for the server before the list can be changed…',
   'cat.shelf.restore': 'Restore',
   'cat.shelf.restoredDone': 'Recipe restored.',
   'cat.shelf.couldNotArchive': 'Couldn’t archive “{name}” — check your connection.',
