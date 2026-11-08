@@ -15,12 +15,13 @@ import { workDayIndex } from './log-model';
 import * as legacyLogJs from '../../js/log-model.js';
 import appSource from '../../js/app.js?raw';
 import calcSource from '../../js/calc.js?raw';
-import settingsSource from '../../js/calculator-settings.js?raw';
+// The Clients editor moved out of js/calculator-settings.js on main (Clienti, #449); the removal is the same line.
+import clientsEditorSource from '../../js/clients-editor.js?raw';
 
 const lf = (text: string): string => text.replace(/\r\n/g, '\n');
 const appJs = lf(appSource);
 const calcJs = lf(calcSource);
-const settingsJs = lf(settingsSource);
+const clientsEditorJs = lf(clientsEditorSource);
 
 // The body of a top-level function of a source file, from its signature to the closing brace in column 0.
 function bodyOf(source: string, signature: string): string {
@@ -62,9 +63,8 @@ describe('the key spelling is the current app\'s', () => {
     }
   });
 
-  // PORT OWED (release branch, 8 Nov 2026): main changed js/calculator-tab-keys.js so the quantity key is no longer the product box id — remove .fails when ported
-  test.fails('a quantity key is the product box\'s own id, which is what the Clients editor also removes', () => {
-    expect(/localStorage\.removeItem\('qty-' \+ pairId\(client\.id, product\.id\)\)/.test(settingsJs)).toBe(true);
+  test('a quantity key is the product box\'s own id, which is what the Clients editor also removes', () => {
+    expect(/localStorage\.removeItem\('qty-' \+ pairId\(client\.id, product\.id\)\)/.test(clientsEditorJs)).toBe(true);
     expect(keys.qtyKey('c1::p1')).toBe('qty-' + 'c1::p1');
   });
 });
