@@ -10,11 +10,13 @@
 
 .list {
   display: grid;
-  /* The seven chips SHARE the width: on a 360px phone the strip is 328px, and 7 x 40 + 6 x 4 = 304
-     fits it. Below that (a 296px phone) the strip scrolls rather than squeezing a day into a
-     sliver. pastries-css.spec.ts adds it up. */
-  grid-template-columns: repeat(7, minmax(40px, 1fr));
-  gap: var(--s1);
+  /* The seven chips SHARE the width, and none is narrower than 44px (the touch floor): on a 360px
+     phone the strip is 328px, and 7 x 44 + 6 x 2 = 320 fits it. Below that (a 296px phone) the
+     strip scrolls inside itself rather than squeezing a day into a sliver. The gap is 2px
+     because a 4px one would push the sum to 332px and past the strip.
+     pastries-css.spec.ts adds it up. */
+  grid-template-columns: repeat(7, minmax(44px, 1fr));
+  gap: 2px;
   overflow-x: auto;
 }
 
