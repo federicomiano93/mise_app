@@ -21,8 +21,8 @@ import { useOrders, useOrdersStore } from './OrdersContext';
 import { buildConfirmGroups, confirmedItems } from './confirmCopy';
 import type { ConfirmGroup } from './confirmCopy';
 import { dayTranslate } from './dayWords';
-import { PLACE_ALL_OPENER, PLACE_DOOR, SEND_OPENER, pendingOpener, supplierOpener, useHandBack } from './handBack';
-import { useLeave, useLeaveToList } from './ordersNav';
+import { PLACE_ALL_OPENER, PLACE_DOOR, SEND_OPENER, SUMMARY_PLACE_DOOR, pendingOpener, supplierOpener, useHandBack } from './handBack';
+import { cameFromSummary, useLeave, useLeaveToList } from './ordersNav';
 import { stillPendingOn } from './pendingLatch';
 import { PLACE_ALL_PATH, supplierPath } from './ordersPath';
 import { recordDateFor } from './orderDay';
@@ -69,7 +69,11 @@ export function SupplierConfirmScreen({ id, lens }: { id: string; lens: OrdersLe
   // Opened from a pending banner, the focus goes back to its «Placed …» (or, once the order is recorded and the banner gone, to the
   // supplier's row: handBack's pendingFallback); opened from the supplier's screen, to its «Order placed…».
   const fromBanner = pendingDayIn(state, todayISO()) !== null;
-  const leave = useLeave(supplierPath(id), () => { handBack.expect(fromBanner ? pendingOpener(id) : PLACE_DOOR); });
+  // Opened from the order summary's «Order placed…» (checklist item 3), Back is that summary again, and the focus goes to that button.
+  const fromSummary = cameFromSummary(state);
+  const leave = useLeave(supplierPath(id), () => {
+    handBack.expect(fromBanner ? pendingOpener(id) : fromSummary ? SUMMARY_PLACE_DOOR : PLACE_DOOR);
+  });
   const toList = useLeaveToList(useCallback(() => {
     handBack.expect(fromBanner ? pendingOpener(id) : supplierOpener(id));
   }, [handBack, id, fromBanner]));

@@ -42,12 +42,18 @@ export const SEARCH_BOX = 'search-box';
 // A pending banner's «Placed …» (the supplier's id), in the notices under the bell: where Back from its confirm screen returns the
 // focus. Gone once the order was recorded: then the supplier's row takes it (pendingFallback).
 export const pendingOpener = (id: string): string => `pending:${id}`;
+// A closed supplier's chip in «Order today» (checklist item 3): where Back from the summary it opened returns the focus. Gone once the
+// supplier is reopened or ordered: then the supplier's row takes it (pendingFallback).
+export const todayOpener = (id: string): string => `today:${id}`;
+// The summary's «Order placed…» (checklist item 3): where Back from the confirm screen it opened returns the focus.
+export const SUMMARY_PLACE_DOOR = 'summary-place-door';
 // Back to the list owed to a button that is gone: the supplier's row takes the focus instead. A pending banner goes once the order is
 // recorded; a row's summary button goes once the supplier has no quantity left (another phone placed or cleared it while the summary
 // was open), or when the window narrows below the split — without this the focus fell to the page (review of 3f-8c).
 export const pendingFallback = (name: string): string | null => {
   if (name.startsWith('pending:')) return supplierOpener(name.slice('pending:'.length));
   if (name.startsWith('summary:')) return supplierOpener(name.slice('summary:'.length));
+  if (name.startsWith('today:')) return supplierOpener(name.slice('today:'.length));
   return null;
 };
 

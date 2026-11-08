@@ -40,8 +40,8 @@ import { carriedTrip, carryTrip, forgetTrip } from './cardTrip';
 import type { TripPlace } from './cardTrip';
 import {
   ADD_DOOR, CLEAR_OPENER, HandBackProvider, SEARCH_BOX, SUPPLIER_DOOR, SUPPLIER_TITLE, cardDoor, HISTORY_DOOR, INCOMING_DOOR, ITEMS_DOOR, LISTS_DOOR, PLACE_ALL_OPENER, PLACE_DOOR, REORDER_DOOR, SEND_OPENER, SUMMARY_DOOR,
-  SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, SWAP_OPENER, arrivalOpener, correctOpener, itemsOpener, listOpener, pendingFallback, pendingOpener, sendDayOpener, summaryOpener, supplierOpener,
-  useHandBackState,
+  SUMMARY_PLACE_DOOR, SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, SWAP_OPENER, arrivalOpener, correctOpener, itemsOpener, listOpener, pendingFallback, pendingOpener, sendDayOpener, summaryOpener, supplierOpener,
+  todayOpener, useHandBackState,
 } from './handBack';
 import { FROM_LIST, cameFromList, columnOf, columnPart, replacedState } from './ordersNav';
 import {
@@ -141,6 +141,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
   // in the line, so it is said even when the screen was left meanwhile.
   useEffect(() => store.onMessage(message => {
     if (message.kind === 'day-not-saved') say(t('ord.day.notSaved'), LONG_MS);
+    // A close or a reopen of today's order was refused (checklist item 3): the screen already shows the server's word again.
+    else if (message.kind === 'skip-not-saved') say(t('ord.close.notSaved'), LONG_MS);
   }), [store, say, t]);
 
   // ⚠️ THE LENS IS THE ONE PLACE THAT DECIDES AN INGREDIENT'S SUPPLIER (ordersLens.ts): the list, a supplier's screen and
@@ -314,6 +316,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const openLists = whenLive(() => { open(LISTS_DOOR, LISTS_PATH); });
   const openItemsWhenLive = (id: string) => { whenLive(() => { openItems(id); })(); };
   const openSummaryWhenLive = (id: string) => { whenLive(() => { openSummary(id); })(); };
+  // A closed supplier's chip in «Order today» opens its summary on a phone too (where «Reopen» is); Back hands the focus to the chip.
+  const openClosedSummary = (id: string) => { whenLive(() => { open(todayOpener(id), supplierSummaryPath(id)); })(); };
 
   // ⚠️ THE HOLD: a supplier tapped on the copy (a row, an «Order today» chip, the notices panel) waits for the live data and then
   // opens by itself. The path is where the tap happened: if the person moves anywhere else the tap is dropped, and the last supplier
@@ -413,6 +417,8 @@ function OrdersLayout({ view }: { view: ShownView }) {
     else if (view.kind === 'lists') handBack.deliverWhere(name => name.startsWith('list:'));
     // Back from the supplier order to the settings: the door that opened it.
     else if (view.kind === 'settings') handBack.deliverIf(SUPPLIER_ORDER_DOOR);
+    // Back from the confirm screen to the summary that opened it (its «Order placed…», checklist item 3).
+    else if (view.kind === 'summary') handBack.deliverIf(SUMMARY_PLACE_DOOR);
     // The supplier's screen coming back from «What they sell» or the summary: only its own button is owed the focus. ⚠️ NOT deliver(): a
     // supplier opened from the list expects the list row, which must keep its focus (phone: the title takes it; split: the row).
     else if (view.kind === 'supplier') {
@@ -496,6 +502,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
                 onOpenSupplier={openOrHold}
                 onOpenItems={openItemsWhenLive}
                 onOpenSummary={openSummaryWhenLive}
+                onOpenClosed={openClosedSummary}
                 onPlaceAll={openPlaceAll}
                 onClearAll={openClear}
                 swapOpen={atList}

@@ -1,4 +1,4 @@
-/* The order summary: a plain read-only card under the bar. The screen does not clip (no `overflow`), so the bar sticks. */
+/* The order summary: a plain card under the bar, with the buttons about today's order at its foot. The screen does not clip (no `overflow`), so the bar sticks. */
 
 .screen {
   min-width: 0;
@@ -76,4 +76,35 @@
 .nothing {
   padding: var(--s3);
   color: var(--ink-2);
+}
+
+/* The buttons about TODAY's order (checklist item 3): «Order placed…», «Close as not ordered» and, while closed, the status with
+   «Reopen». One column, full width, each at least --hit tall (Button). After the lines and NOT stuck: a bar stuck to the bottom of a
+   phone would take the lines' room. */
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s2);
+}
+
+.hint {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* Closed as not ordered today: the same dashed edge as its chip in «Order today». */
+.closed {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--s3);
+  padding: var(--s3);
+  border: 1px dashed var(--ink-3);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.closedText {
+  font-weight: 650;
 }

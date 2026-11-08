@@ -112,3 +112,41 @@ export function useLeaveToList(onLeaving: () => void): () => void {
     else void navigate(ORDERS_PATH, { replace: true, state: KEEP_FOCUS });
   }, [navigate, toList, onLeaving]);
 }
+
+// How many history entries lie between the order SUMMARY and the list (checklist item 3), or undefined when the list is not in the
+// history behind it (opened by its address). Opened from the list it is the summary's own count; opened from a supplier's screen
+// (fromSupplierState) it is that screen's count plus one — unknown when that screen itself was not opened from the list.
+export function summaryStepsToList(summaryState: unknown): number | undefined {
+  if (!cameFromList(summaryState)) return undefined;
+  if (cameFromSupplier(summaryState)) {
+    const behind = numberIn(summaryState, 'behindSteps');
+    return behind === undefined ? undefined : behind + 1;
+  }
+  return stepsUpOf(summaryState);
+}
+
+// The state of the confirm screen opened by the summary's «Order placed…» (checklist item 3): pushed ON TOP of the summary, so its Back
+// is the summary again (where the same button is), and a recorded order still goes back to the LIST (`toList`, one entry further than
+// the summary's own distance). `fromSummary` names the button Back hands the focus to.
+export function confirmFromSummaryState(summaryState: unknown) {
+  const steps = summaryStepsToList(summaryState);
+  return { ...FROM_LIST, ...(steps === undefined ? {} : { toList: steps + 1 }), fromSummary: true, ...columnPart(summaryState) };
+}
+
+export function cameFromSummary(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && (state as { fromSummary?: unknown }).fromSummary === true;
+}
+
+// Back to the list from the summary after «Close as not ordered» (checklist item 3; the current app's backToListFrom: over a supplier's
+// screen both go, from the list the summary goes): the history is walked back when the list is in it, else the summary replaces itself
+// with the list. `onLeaving` runs first (the focus owed to the supplier's row).
+export function useSummaryToList(onLeaving: () => void): () => void {
+  const navigate = useNavigate();
+  const { state } = useLocation();
+  const steps = summaryStepsToList(state);
+  return useCallback(() => {
+    onLeaving();
+    if (steps !== undefined) void navigate(-steps);
+    else void navigate(ORDERS_PATH, { replace: true, state: KEEP_FOCUS });
+  }, [navigate, steps, onLeaving]);
+}
