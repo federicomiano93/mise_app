@@ -1673,3 +1673,67 @@ Differences from the current app, on purpose:
   (Fornitori); in Mise 2 Orders is never on screen while «Ingredients & suppliers» deletes or merges a product.
 - **Not in this item:** the current app's `sendBeforeLeaving` (Back from Orders opened from a recipe waits for the server), which
   belongs to item 32 of the checklist.
+
+## Order done and close as not ordered as built (8 Nov 2026)
+
+Items 3 and 13 of `docs/mise2-port-owed.md`: the current app's `drafts/current.skipped` and the order summary's «Ordine fatto» /
+«Chiudi come non ordinato» (v1.143.0; commits f65d5c73 for the rules, 9b9fdf3c for the feature, a710dcbb for its review), ported
+decision for decision. Data: `skipped: { supplierId: 'YYYY-MM-DD' }`, the day of the close; only a close made TODAY means anything.
+The rules were already on the release branch (`firestore.rules`, the `drafts/{id}` block: an optional map of at most 200 keys, with
+its emulator cases in `tests/rules/firestore-rules-check.mjs`) and are unchanged.
+
+**The rule** (`shared/src/reminders.ts`, `shared/src/kiosk-lines.ts`, specs against both files):
+- `skippedOn(skipped, today)`, the `skipped` argument of `suppliersStillToOrder`, `todayOrders` (rows gain `skipped`, never together
+  with `placed`: a real order recorded after the close wins) and `kioskSectionsFromData`, and `closeOffer` ('skip', 'reopen' or '').
+- `dueTodayIds` is NOT ported: only the «Order today» tag in the two supplier lists reads it (item 12, deferred until after the
+  switch), so the `reminders` export check in `parity.spec.ts` stays marked PORT OWED for that one name.
+
+**The data layer**:
+- `ordersSource.ts`: `setSkipped` (a `setDoc` merge of ONE key, `{ skipped: { [id]: day }, bakery }`, which also creates the draft
+  on a venue that never typed an order) and `clearSkipped` (an `updateDoc` deleting `skipped.<id>` through a `FieldPath`). Neither
+  stamps `updatedAt`: the draft's own stamp stands in for the day of rows saved before day stamps existed, and closing a supplier is
+  not typing an order. The same shapes as the current app's `setSupplierSkipped` / `clearSupplierSkipped`.
+- `draftSync.ts`: the view carries `skipped` from every snapshot (only string values), so a repaint from the note of typed
+  quantities never blanks it; it is never in the autosave, the claims or the note. This phone's close or reopen is held on top
+  (`holdSkipped`) until a snapshot carries it, and dropped on a refusal unless a newer one was held since (`dropSkipped`).
+- `ordersStore.ts`: `closeToday` / `reopenToday`, LOCAL-FIRST and never awaited (a710dcbb: a weak signal must never leave a button
+  hanging); a refusal puts the server's word back and says `skip-not-saved` («Not saved — try again in a moment.»). ⚠️ A quantity
+  typed for a supplier closed today reopens it, once (`editLine`, never for a stock count or a 0); a refused reopen-by-typing is
+  silent, as in the current app. `kioskSections()` passes the closes and waits for the draft.
+- No draft write in Mise 2 is a whole-document `set` (the autosave and the day are merges of the changed keys; placing, «Clear
+  quantities», a deleted or merged product are updates of named paths), so nothing drops `skipped`.
+  `ordersStore.skipped.spec.ts` pins it for the autosave, placing an order and «Clear quantities».
+
+**The screens**:
+- `SupplierSummaryScreen.tsx` ends with the actions about today, under the lines: with quantities «Order placed…»; with nothing typed
+  and the order day today, the hint and «Close as not ordered» (asked first in `useConfirm`, then back to the list, and said);
+  while closed, «Closed as not ordered today» with «Reopen» (no question; the summary stays, now offering the close again). A
+  supplier closed and then given quantities shows both the close and «Order placed…». When the buttons change under a focus
+  («Reopen» pressed, or a change from another phone), the focus moves to the first new button, never to the page.
+- `TodayOrders.tsx`: a closed supplier is a quiet chip with a DASHED edge and the words «not ordered» (they are the button's name),
+  still a button: it opens the supplier's summary (on a phone too), where «Reopen» is. «Today's orders are all placed» only when
+  every one was really PLACED; with a closed one among them the chips stay.
+- Focus: Back from a summary opened by a closed chip goes to that chip (`todayOpener`, falling back to the supplier's row once it is
+  gone); Back from the confirm screen opened by the summary goes to the summary's «Order placed…» (`SUMMARY_PLACE_DOOR`).
+- Words: the current app's, word for word, in English and Italian (`ord.close.*`, `ord.today.notOrdered`).
+- Specs: `OrdersSection.closeToday.spec.tsx` (the view tests of `tests/orders-close-not-ordered.test.mjs`, driven through the real
+  section), `ordersStore.skipped.spec.ts`, `ordersSource.skipped.spec.ts`, `draftSync.spec.ts` («the suppliers closed as not
+  ordered»), `shared/src/reminders.spec.ts` and `kiosk-lines.spec.ts` (its pure tests, both files). Its tests that read the
+  current app's source are replaced by these, which drive the Mise 2 code.
+
+Differences from the current app, on purpose:
+- **«Order placed…» opens the confirm screen ON TOP of the summary.** The current app closes its summary SHEET first, because the
+  sheet sat above the confirmation and a second tap could record the order twice; a Mise 2 screen is a route, always the top
+  screen, so the summary stays behind it: Back from the confirm screen comes back to the summary (where the same button is), and a
+  recorded order goes to the list as from the supplier's own button (`confirmFromSummaryState`).
+- **The button says «Order placed…» with the dots**, Mise 2's word for the supplier screen's button, which opens the same confirm
+  screen (the current app's sheet says «Ordine fatto»). Offline it says so and opens nothing, as that button does.
+- **Nothing is offered until the records and the draft have arrived**, and the strip waits for the draft too: before them a supplier
+  placed or closed this morning would be offered the close again, or flash as still to order. The kiosk lines wait for the draft.
+- **No grey banner when every supplier is handled.** The current app greys its banner box when all are placed or closed; Mise 2's
+  strip has no box, so only the chips say it.
+- **No Home badge to change.** Mise 2's Home has no Orders badge (its «Da fare» card is the to-dos) and the bell leaves the
+  «order» alert out, so the only readers are the strip and the kiosk lines; a future Home badge must hand `skipped` to
+  `suppliersStillToOrder`.
+- **«Put back» and «Another supplier» in «To re-order» do not reopen a close**, exactly as in the current app (its `onReorder` and
+  `onOtherSupplier` do not run `afterChange`); only typing on a row does.

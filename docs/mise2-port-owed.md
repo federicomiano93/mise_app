@@ -26,7 +26,7 @@ Data loss first:
 - [x] 2. Recipe categories written one word at a time (arrayUnion / arrayRemove), never the whole list — ported 8 Nov (PR into the release branch, `feature/mise2-port-data-loss`)
 - [x] 4. Food cost `noWeightLoss` kept by a Mise 2 product save — ported 8 Nov with the switch (`feature/mise2-port-data-loss`)
 - [x] 6. Orders draft journal and corrections in flight (F-15, F-16) — ported 8 Nov (PR into the release branch; `docs/parity/orders.md`, «Draft journal and corrections in flight as built»)
-- [ ] 3. `drafts/current.skipped` and «Order done» / «Close as not ordered»
+- [x] 3. `drafts/current.skipped` and «Order done» / «Close as not ordered» — ported 8 Nov (`feature/mise2-order-done`, PR into the release branch; `docs/parity/orders.md`, «Order done and close as not ordered as built»; item 13 with it)
 - [x] 5. Usage `hours` kept by Mise 2's usage write — already on this branch through PR #473 (`e1a4639d`), found on 8 Nov:
       the tick files the seconds under the hour (`addHour`), the stored day keeps them across both apps' commits and the
       payload carries them (`app/src/telemetry/usage.spec.ts`, «the hours reach the stored day and the line…»)
@@ -88,6 +88,8 @@ Before the switch, not ports:
    again in Mise 2 (strip, Home badge, kiosk lines). Files: `shared/src/reminders.ts` (closeOffer, dueTodayIds, skippedOn), `app/src/orders/{ordersSource,
    draftSync,OrdersContext,SupplierSummaryScreen}`, i18n, `docs/parity/orders.md`. Size M. Note: change in the order-summary UX
    (#470 buttons) is the visible part.
+   DONE 8 Nov 2026 (what was built and every difference: `docs/parity/orders.md`, «Order done and close as not ordered as built»).
+   `dueTodayIds` stays with item 12. The description above is how it stood before.
 4. **Food cost product `noWeightLoss`** — `bb1e0ede` (step 1, PR #455 in #487), rules `firestore.rules:2589,2635`.
    DATA LOSS: YES. Mise 2 saves a product WHOLE (`app/src/foodcost/foodcostSource.ts:236`, «WHOLE, NOT MERGED») and has no `noWeightLoss`
    field (grep: no hit in app/ or shared/), so the first Mise 2 save of a product flagged «Finished product, no weight loss» removes the flag
@@ -134,7 +136,7 @@ Before the switch, not ports:
 12. **Suppliers «Order today» tag** — #474 (in #487). `dueTodayIds` (`js/orders/reminders.js:80`) missing in `shared/src/reminders.ts`
     (parity marked PORT OWED: reminders). Both supplier lists (Orders and Suppliers), needs today's orders and the draft `skipped`, redraw only when the lit set
     changes, midnight re-check. Mise 2: NONE. Depends on item 3. Files: `shared/src/reminders.ts`, `app/src/orders/IngredientsList`, `SuppliersList.tsx`. Size S.
-13. **Order summary «Order done» / «Close as not ordered»** — #470, see item 3.
+13. **Order summary «Order done» / «Close as not ordered»** — #470, see item 3. DONE 8 Nov 2026 with item 3.
 14. **History door in the bottom bar** — #454 (`f29b20e4`). Mise 2 has an `onHistory` door and a parity section «History beside the gear (3 Nov)»:
     DONE (`docs/parity/orders.md:1377`).
 15. **List copy** (#448, `mayWriteCopy`, `6e94be64`, `7d7b2d95`, `f8c36eee`) — DONE: `shared/src/list-copy.ts`, `app/src/orders/useListCopy.ts`
