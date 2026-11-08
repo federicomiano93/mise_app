@@ -177,21 +177,23 @@ export function CountList({ monthId, openProductId, onOpenProduct, onCarry, onPu
 // What stands in for the rows until the list has really answered (the current app's noAnswerYet in inventory-list.js).
 // Nothing at all while no venue is open: the language is not known yet (a store is made inside a venue, so Mise 2 never
 // gets there, but the word is the model's).
+// ⚠️ ONE STATUS REGION FOR «LOADING» AND «NOT ARRIVED», THE SAME ELEMENT ACROSS BOTH (architecture rule 6): a live region
+// that arrives already filled is not read by many screen readers, so the change after 10 s must happen inside one that is
+// already there. The failure is an alert of its own, which is announced when it appears.
 function NoAnswerYet({ status }: { status: ListStatus }) {
   const { t } = useT();
-  switch (status) {
-    case LIST_STATUS.waiting:
-      return <p role="status" className={styles.loading}>{t('stock.loading')}</p>;
-    case LIST_STATUS.unreachable:
-      return (
-        <div role="status" className={styles.empty}>
+  if (status === LIST_STATUS.failed) return <p role="alert" className={styles.loading}>{t('stock.loadFailed')}</p>;
+  if (status !== LIST_STATUS.waiting && status !== LIST_STATUS.unreachable) return null;
+  return (
+    <div role="status" className={status === LIST_STATUS.unreachable ? styles.empty : undefined}>
+      {status === LIST_STATUS.waiting ? (
+        <p className={styles.loading}>{t('stock.loading')}</p>
+      ) : (
+        <>
           <p className={styles.emptyTitle}>{t('stock.notArrived.title')}</p>
           <p className={styles.emptySub}>{t('stock.notArrived.sub')}</p>
-        </div>
-      );
-    case LIST_STATUS.failed:
-      return <p role="alert" className={styles.loading}>{t('stock.loadFailed')}</p>;
-    default:
-      return null;
-  }
+        </>
+      )}
+    </div>
+  );
 }

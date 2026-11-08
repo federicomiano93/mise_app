@@ -19,11 +19,10 @@
 // settings are fixed by its first use (src/firestore-access.spec.ts).
 
 import { buildPath } from '@mise/shared/location-id';
-import { isMonthId } from '@mise/shared/inventory-model';
+import { isMonthId, withoutEmptyMaps } from '@mise/shared/inventory-model';
 import { withPrices } from '@mise/shared/price-model';
 import type { DocumentReference, Query } from 'firebase/firestore';
 import type { FirestoreKit } from '../session/firebaseBackend';
-import { withoutEmptyMaps } from '@mise/shared/inventory-model';
 
 // A document as the store reads it: its id beside its fields.
 export type StoredDoc = { readonly id: string } & Record<string, unknown>;

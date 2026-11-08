@@ -319,7 +319,8 @@ price read), ported in full on the release branch. Source of truth: `js/inventor
     10 s; `role=status`), or «Could not load the products. Check your connection and reload the page.» (`role=alert`). No
     summary («0 of 0», the note about boxes) and no «Nothing matches.» meanwhile. A venue that has really answered with
     nothing keeps «No products yet» and its «0 of 0». A closed month with frozen rows draws them at once, while the
-    ingredients are still on their way. **spec** (store, list)
+    ingredients are still on their way. «Loading» and «not arrived» are said in ONE status region, the same element across
+    both, so a screen reader hears the change after 10 s; «could not load» is an alert. **spec** (store, list)
 58. **A failed price read keeps the prices already received** (`5df661d3`): only a refused read (`permission-denied`) empties
     them, and it counts as answered; any other failure changes nothing — an answer stays an answer, so a close cannot freeze
     no money. **spec** (source)
@@ -327,11 +328,11 @@ price read), ported in full on the release branch. Source of truth: `js/inventor
 Differences, on purpose:
 - **The stall timer starts again for every month opened**, not once per page from the venue opening: Mise 2 changes month
   without a reload, and the month on screen is the one whose answer is awaited.
-- **A month stream that dies keeps the list's words where its answer left them** (the rows are drawn; the notice says what
-  happened) but takes `ready` back (48-55 above): as in the current app for the words, as before in Mise 2 for the guard.
+- **A month stream that dies takes `ready` back even after both answers** (48-55 above, as before in Mise 2). For the list's
+  words it counts as the current app's: «could not load» while the two answers are not both in, and nothing once they are
+  (the rows are drawn; the notice says what happened).
 - **`listStatus` is never `starting`**: a Stocktake store is made only inside an open venue, whose language is known.
 - **A failed ingredients read that answers again is no longer a failure** (the current app keeps `failed` until the reload).
 
 Not driven: the emulator run of `mise2-check` (axe-core at 1024, 360 and 296 in both languages) needs drivers outside the
 repository; the states above are pinned by `StocktakeSection.list.spec.tsx` and `stocktakeStore.spec.ts`.
-

@@ -531,4 +531,3 @@ describe.each([
     expect(Object.isFrozen(m.LIST_STATUS)).toBe(true);
   });
 });
-

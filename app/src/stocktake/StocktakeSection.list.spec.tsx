@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { fakeStocktakeSource } from '../testing/fakeStocktakeSource';
 import {
   closedMonthDoc, freezeClock, ingredient, monthDoc, renderStocktake,
@@ -199,7 +199,7 @@ describe('the counting list: loading and empty', () => {
     renderStocktake('/stocktake/2026-10', { source: fake });
 
     const word = await screen.findByText('Loading the products…', undefined, LOAD);
-    expect(word).toHaveAttribute('role', 'status');
+    expect(word.closest('[role="status"]')).not.toBeNull();
     expect(screen.queryByText('No products yet')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 3 })).not.toBeInTheDocument();
     // The summary does not claim «0 of 0», nor the note about boxes, while the products are not known.
@@ -247,6 +247,31 @@ describe('the counting list: loading and empty', () => {
     } finally {
       online.mockRestore();
     }
+  });
+
+  it('⚠️ «not arrived» replaces «loading» inside the SAME status region, so a screen reader hears it', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      const fake = source([monthDoc('2026-10')], []);
+      let tell: Parameters<typeof fake.watchIngredients>[0] | undefined;
+      vi.mocked(fake.watchIngredients).mockImplementation(onChange => { tell = onChange; return () => undefined; });
+      renderStocktake('/stocktake/2026-10', { source: fake });
+      const region = (await screen.findByText('Loading the products…', undefined, LOAD)).closest('[role="status"]');
+      expect(region).not.toBeNull();
+      act(() => { tell?.([], { fromCache: true, pricesAnswered: false }); });
+      const after = (await screen.findByText('The products have not arrived yet', undefined, LOAD)).closest('[role="status"]');
+      expect(after).toBe(region);
+    } finally {
+      online.mockRestore();
+    }
+  });
+
+  it('a closed month with nothing recorded and no ingredients yet keeps waiting', async () => {
+    const fake = source([monthDoc('2026-10', { closedAt: '2026-11-01T09:00:00.000Z' })]);
+    vi.mocked(fake.watchIngredients).mockImplementation(() => () => undefined);
+    renderStocktake('/stocktake/2026-10', { source: fake });
+    expect(await screen.findByText('Loading the products…', undefined, LOAD)).toBeInTheDocument();
+    expect(screen.queryByText('No products yet')).not.toBeInTheDocument();
   });
 
   it('⚠️ a search typed while waiting does NOT say nothing matches; after the answer it does', async () => {

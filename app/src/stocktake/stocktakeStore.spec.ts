@@ -1535,4 +1535,3 @@ describe('⚠️ what the list may say while it has no rows (listStatus)', () =>
     expect(t.status()).toBe(LIST_STATUS.waiting);
   });
 });
-
