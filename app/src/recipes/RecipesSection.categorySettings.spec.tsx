@@ -191,6 +191,23 @@ describe('adding a word', () => {
     await view.user.click(add());
     expect(await screen.findByText('Couldn’t save the categories — the change has been put back.')).toBeInTheDocument();
     await waitFor(() => { expect(words()).toEqual(['Easter']); });
+    // P20, as the current app: the refused word comes back to the box, so nothing typed is lost.
+    await waitFor(() => { expect(box()).toHaveValue('Spring'); });
+  });
+
+  it('a refused word does not overwrite another one typed meanwhile', async () => {
+    const source = fakeRecipesSource({ recipes: RECIPES, labelConfig: { recipeCategories: ['Easter'] } });
+    source.refuse.labelSave = true;
+    const free = source.holdLabelSaves();
+    const view = renderRecipes('/recipes/settings', { source, session: { location: GB } });
+    await screen.findByRole('region', { name: 'Settings' }, LOAD);
+    await within(screen.getByRole('region', { name: 'Recipe categories' })).findByRole('textbox', { name: 'New category' });
+    await view.user.type(box(), 'Spring');
+    await view.user.click(add());
+    await view.user.type(box(), 'Summ');
+    free();
+    expect(await screen.findByText('Couldn’t save the categories — the change has been put back.')).toBeInTheDocument();
+    expect(box()).toHaveValue('Summ');
   });
 });
 

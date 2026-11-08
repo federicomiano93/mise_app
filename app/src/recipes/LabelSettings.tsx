@@ -98,12 +98,14 @@ function Controls() {
   }
 
   // The recipe categories are written one word at a time, local-first (addRecipeCategory / removeRecipeCategory); a refusal puts
-  // that word back and says so in the same line.
-  function saveCategories(write: () => Promise<void>): void {
+  // that word back and says so in the same line. Never rejects: it answers whether the word was saved, so the card can hand a
+  // refused word back to its box.
+  function saveCategories(write: () => Promise<void>): Promise<boolean> {
     setFailed(null);
-    write().catch(() => {
+    return write().then(() => true, () => {
       if (mounted.current) setFailed('cat.shelf.categoriesNotSaved');
       else say(t('cat.shelf.categoriesNotSaved'));
+      return false;
     });
   }
 
@@ -143,8 +145,8 @@ function Controls() {
       <PhotoCard />
 
       <RecipeCategoriesCard
-        onAdd={word => { saveCategories(() => store.addRecipeCategory(word)); }}
-        onRemove={word => { saveCategories(() => store.removeRecipeCategory(word)); }}
+        onAdd={word => saveCategories(() => store.addRecipeCategory(word))}
+        onRemove={word => { void saveCategories(() => store.removeRecipeCategory(word)); }}
       />
 
       {/* ⚠️ THE MODEL DECIDES WHICH CARDS APPLY: the image label is always 80 × 60 mm at 203 dpi and has its own header, so
@@ -425,7 +427,7 @@ function PhotoCard() {
 // ⚠️ A WORD AT A TIME: add and delete write that one word (arrayUnion / arrayRemove), so a phone that has not heard the server yet
 // — or is offline — cannot take away a word another manager added. Drawn once the label profile has arrived, as the rest of the
 // settings.
-function RecipeCategoriesCard({ onAdd, onRemove }: { onAdd: (word: string) => void; onRemove: (word: string) => void }) {
+function RecipeCategoriesCard({ onAdd, onRemove }: { onAdd: (word: string) => Promise<boolean>; onRemove: (word: string) => void }) {
   const { t, locale } = useT();
   const { categories, recipes } = useRecipes();
   const [confirm, confirmDialog] = useConfirm();
@@ -459,7 +461,12 @@ function RecipeCategoriesCard({ onAdd, onRemove }: { onAdd: (word: string) => vo
     }
     setRefusal(null);
     setTyped('');
-    onAdd(result.list[result.list.length - 1] ?? typed);
+    const word = result.list[result.list.length - 1] ?? typed;
+    // ⚠️ A REFUSED WORD COMES BACK TO THE BOX (P20, as the current app since 889a2ab0) — unless somebody has started typing
+    // another one meanwhile, which is theirs to keep.
+    void onAdd(word).then(saved => {
+      if (!saved) setTyped(current => (current === '' ? word : current));
+    });
     box.current?.focus();
   }
 
