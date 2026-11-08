@@ -25,6 +25,9 @@
 // the pure `dayLabelParts` instead), guided-model.ts (whole, but `stepRows`, `overdueText` and `progressText` take their words / the translator as an argument) and zoom-steps.ts (the storage and DOM halves); their
 // specs (calculator-config.spec.ts, log-model.spec.ts, guided-model via calculator-recipe-source.spec.ts,
 // zoom-steps.spec.ts) compare what they do port. calculator-tab-keys.ts is new in Mise 2 and has no original.
+// fc-number.ts and from-recipes.ts are partial ports too (8 Nov 2026, the Food cost recipe line in grams): only `fcNumber`
+// and `fcWeight` (adapted: they take the money), and only `wholeRecipeKg`; fc-number.spec.ts and from-recipes.spec.ts run
+// what they port against both files.
 // recipe-link.ts is a partial port too (step 3d-7): it leaves out the page addresses of the current app (`recipeHash`,
 // `foodCostHref`, `recipeHref`, `ordersHref`, `catalogueOriginFromHash`) and adds four things with no original; its spec
 // compares names and shapes itself.
@@ -175,6 +178,7 @@ import * as holidaysIt from './holidays-it';
 import * as kioskLines from './kiosk-lines';
 import * as orderSummary from './order-summary';
 import * as draftJournal from './draft-journal';
+import * as lineQuantity from './line-quantity';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -252,6 +256,7 @@ import * as legacyHolidaysIt from '../../js/orders/holidays-it.js';
 import * as legacyKioskLines from '../../js/orders/kiosk-lines.js';
 import * as legacyOrderSummary from '../../js/orders/order-summary.js';
 import * as legacyDraftJournal from '../../js/orders/draft-journal.js';
+import * as legacyLineQuantity from '../../js/foodcost/line-quantity.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -331,6 +336,7 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['kiosk-lines', kioskLines, legacyKioskLines],
   ['order-summary', orderSummary, legacyOrderSummary],
   ['draft-journal', draftJournal, legacyDraftJournal],
+  ['line-quantity', lineQuantity, legacyLineQuantity],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -418,7 +424,7 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all seventy-seven models are compared', () => {
+test('all seventy-eight models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
@@ -429,5 +435,6 @@ test('all seventy-seven models are compared', () => {
       'allergen-terms', 'allergen-match', 'records', 'invoice-zip/reasons', 'invoice-zip/py-compat', 'invoice-zip/sha256',
       'invoice-zip/classify', 'invoice-zip/pricing', 'invoice-zip/fatturapa', 'invoice-zip/products', 'invoice-zip/selection',
       'work-week', 'price-changes-model', 'invoice-import-model', 'invoice-import-plan', 'ingredient-merge', 'send-routes', 'supplier-order', 'orders-config', 'line-supplier', 'order-text', 'ingredient-search', 'order-day', 'sent-check', 'suggestions',
-      'history-window', 'deliveries', 'reminders', 'untold-changes', 'alert-dismissal', 'holidays-it', 'kiosk-lines', 'order-summary', 'draft-journal']);
+      'history-window', 'deliveries', 'reminders', 'untold-changes', 'alert-dismissal', 'holidays-it', 'kiosk-lines', 'order-summary', 'draft-journal',
+      'line-quantity']);
 });
