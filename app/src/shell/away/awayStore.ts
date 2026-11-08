@@ -64,9 +64,9 @@ export function createAwayStore(source: SettingsSource, uid: string, now: () => 
   let confirmed: string | null | undefined;
   // The newest write the server has answered; a read that STARTED before it is older news than the write and changes nothing.
   let lastConfirmedWrite = 0;
-  // What showed before the first write while nothing was confirmed yet: two refusals in a row before the first read answers come back
-  // to THIS, never to the first refused value.
-  let firstBefore: string | null | undefined;
+  // What showed before the first of the writes now in the air: with nothing confirmed yet (the first read has not answered, or answered
+  // only with this phone's own unconfirmed write), a refusal puts back THIS, never an earlier refused value.
+  let burstBefore: string | null = null;
 
   function publish(next: Pick<AwaySnapshot, 'status' | 'until'>): void {
     const away = next.until !== null && isAway({ until: next.until }, now());
@@ -78,7 +78,7 @@ export function createAwayStore(source: SettingsSource, uid: string, now: () => 
   function write(until: string): AwayChange {
     const attempt = source.saveAway(uid, until);
     if (attempt.result === 'bad-date') return { accepted: false };
-    if (confirmed === undefined && firstBefore === undefined) firstBefore = snapshot.until;
+    if (inFlight === 0) burstBefore = snapshot.until;
     writes += 1;
     inFlight += 1;
     const mine = writes;
@@ -93,7 +93,13 @@ export function createAwayStore(source: SettingsSource, uid: string, now: () => 
       (err: unknown) => {
         inFlight -= 1;
         console.error('Saving the holiday failed:', err);
-        if (writes === mine) publish({ status: 'ready', until: confirmed !== undefined ? confirmed : (firstBefore ?? null) });
+        if (writes === mine) {
+          publish({ status: 'ready', until: confirmed !== undefined ? confirmed : burstBefore });
+          // ⚠️ AND ASKED AGAIN AT ONCE, past the ten-minute gate. With real Firestore a read that answered while the write was in the air
+          // carried that write on top (`pending`) and was not recorded, so `confirmed` may be unknown and what was put back a guess; by
+          // the time the refusal arrives the phone's copy has dropped the refused write, so this read is the server's word.
+          read(false);
+        }
         return false;
       },
     );

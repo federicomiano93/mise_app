@@ -216,6 +216,49 @@ describe('the holiday store', () => {
     expect(store.getSnapshot()).toMatchObject({ status: 'ready', until: '2026-11-25', away: true });
   });
 
+  // Review, 8 Nov 2026: with real Firestore a read made while a write is in the air answers with that write on top (`pending`), so it is
+  // never recorded as the server's word; the refusal must ask the server again rather than trust a guess.
+  it('shows what the server holds after a refusal, when the only read answered with the refused write on top', async () => {
+    const source = fakeSettingsSource({ away: { until: '2026-11-20' }, now: () => NOW });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    source.holdWrites = true;
+    const realRead = source.readMyAway;
+    let answer: () => void = () => undefined;
+    let calls = 0;
+    // The first read is slow: it answers only after the write has gone out, as this phone's copy then holds it.
+    source.readMyAway = vi.fn(uid => (calls++ === 0
+      ? new Promise<Awaited<ReturnType<typeof realRead>>>(done => { answer = () => { void realRead(uid).then(done); }; })
+      : realRead(uid)));
+    const store = createAwayStore(source, 'u1', () => NOW);
+    store.start();
+    const change = store.set('2026-11-14');
+    answer();
+    await flush();
+    expect(store.getSnapshot().until).toBe('2026-11-14');
+    source.refuseHeld(new Error('refused'));
+    expect(change.accepted && await change.saved).toBe(false);
+    await flush();
+    // Not «not away»: the server still holds the holiday until 20 Nov, and the phone is still silent.
+    expect(store.getSnapshot()).toMatchObject({ status: 'ready', until: '2026-11-20', away: true });
+    expect(source.readMyAway).toHaveBeenCalledTimes(2);
+  });
+
+  it('takes a held write the server confirmed as what it holds', async () => {
+    const { store, source } = make({ away: { until: '2026-11-20' } });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    store.start();
+    await flush();
+    source.holdWrites = true;
+    const first = store.set('2026-11-12');
+    source.confirmHeld();
+    expect(first.accepted && await first.saved).toBe(true);
+    const second = store.comeBack();
+    source.refuseHeld(new Error('refused'));
+    expect(second.accepted && await second.saved).toBe(false);
+    await flush();
+    expect(store.getSnapshot()).toMatchObject({ until: '2026-11-12', away: true });
+  });
+
   it('does not let a read that began before a confirmed write undo it', async () => {
     const source = fakeSettingsSource({ now: () => NOW });
     let answer: (mine: { until: string } | null) => void = () => undefined;
@@ -275,15 +318,14 @@ describe('the holiday store', () => {
       vi.spyOn(console, 'error').mockImplementation(() => undefined);
       store.start();
       await flush();
-      let refuse: (err: Error) => void = () => undefined;
-      source.saveAway = vi.fn(() => ({ result: 'saved' as const, written: new Promise<void>((_, fail) => { refuse = fail; }) }));
+      source.holdWrites = true;
       const change = store.comeBack();
-      source.away = { until: '', pending: true };
       clock.now += 11 * 60_000;
       store.refresh();
       await flush();
-      refuse(new Error('refused'));
+      source.refuseHeld(new Error('refused'));
       expect(change.accepted && await change.saved).toBe(false);
+      await flush();
       // The server still holds the holiday: the screen must say so, not «back».
       expect(store.getSnapshot()).toMatchObject({ until: '2026-11-20', away: true });
     });

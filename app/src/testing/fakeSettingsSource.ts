@@ -16,6 +16,12 @@ export type FakeSettingsSource = SettingsSource & {
   venue: DocData | null;
   // While true, readVenueFromServer rejects (offline).
   offline: boolean;
+  // While true, a holiday write stays in the air until `confirmHeld()` or `refuseHeld()` answers it, and a read made meanwhile answers
+  // as Firestore's getDoc does: the server's document with this phone's newest unanswered write on top, marked `pending`.
+  holdWrites: boolean;
+  // Answers the OLDEST held write: confirmed (the «server» now holds it) or refused (the «server» keeps what it had).
+  confirmHeld(): void;
+  refuseHeld(err: Error): void;
 };
 
 // `now` is the clock the holiday is judged against (a date in the past is refused, as in the real source).
@@ -29,7 +35,9 @@ export function fakeSettingsSource(
     functionsFailWith: null as unknown,
     venue: seed.venue === undefined ? {} : seed.venue,
     offline: false,
+    holdWrites: false,
   };
+  const held: { until: string; confirm: () => void; refuse: (err: Error) => void }[] = [];
 
   return {
     get away() { return state.away; },
@@ -42,12 +50,29 @@ export function fakeSettingsSource(
     set venue(value) { state.venue = value; },
     get offline() { return state.offline; },
     set offline(value) { state.offline = value; },
+    get holdWrites() { return state.holdWrites; },
+    set holdWrites(value) { state.holdWrites = value; },
+    confirmHeld() { held.shift()?.confirm(); },
+    refuseHeld(err) { held.shift()?.refuse(err); },
 
-    readMyAway: vi.fn(() => Promise.resolve(state.away)),
+    readMyAway: vi.fn(() => {
+      const newest = held[held.length - 1];
+      return Promise.resolve(newest ? { until: newest.until, pending: true } : state.away);
+    }),
     saveAway: vi.fn((uid, until) => {
       const doc = buildAwayDoc({ uid, until, now: now() });
       if (!doc) return { result: 'bad-date' as const };
       if (state.refuseWith !== null) return { result: 'saved' as const, written: Promise.reject(state.refuseWith as Error) };
+      if (state.holdWrites) {
+        const written = new Promise<void>((done, fail) => {
+          held.push({
+            until: doc.until,
+            confirm: () => { state.away = { until: doc.until }; done(); },
+            refuse: fail,
+          });
+        });
+        return { result: 'saved' as const, written };
+      }
       state.away = { until: doc.until };
       return { result: 'saved' as const, written: Promise.resolve() };
     }),
