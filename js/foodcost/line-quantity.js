@@ -22,8 +22,6 @@ export function kilosFromTyped(text, unit) {
   return unit === 'g' ? round6(n / 1000) : n;
 }
 
-// The stored kilos → the text the box shows in the unit on it. '' for nothing yet, so the
-// placeholder shows instead of a 0.
 // A recipe line is «too much» when it is more than this many whole batches of the recipe.
 // A slip of ×1000 (grams typed into the kilos box) is always far beyond 20×; a real double or
 // triple batch is well under it. Only a NOTE under the line, it never blocks Save.
@@ -37,6 +35,8 @@ export function tooMuchOfRecipe(qtyKg, wholeKg) {
   return wholeKg > 0 && qtyKg > TOO_MUCH_RECIPE_FACTOR * wholeKg;
 }
 
+// The stored kilos → the text the box shows in the unit on it. '' for nothing yet, so the
+// placeholder shows instead of a 0.
 export function typedFromKilos(kilos, unit) {
   const n = Number(kilos) || 0;
   if (!n) return '';
