@@ -25,7 +25,7 @@ Data loss first:
 - [ ] 1. Pastries row notes and «Copy day» (a Mise 2 day save erases the notes) — the notes are ported (8 Nov, no longer erased); «Copy day» still owed
 - [x] 2. Recipe categories written one word at a time (arrayUnion / arrayRemove), never the whole list — ported 8 Nov (PR into the release branch, `feature/mise2-port-data-loss`)
 - [x] 4. Food cost `noWeightLoss` kept by a Mise 2 product save — ported 8 Nov with the switch (`feature/mise2-port-data-loss`)
-- [ ] 6. Orders draft journal and corrections in flight (F-15, F-16)
+- [x] 6. Orders draft journal and corrections in flight (F-15, F-16) — ported 8 Nov (PR into the release branch; `docs/parity/orders.md`, «Draft journal and corrections in flight as built»)
 - [ ] 3. `drafts/current.skipped` and «Order done» / «Close as not ordered»
 - [x] 5. Usage `hours` kept by Mise 2's usage write — already on this branch through PR #473 (`e1a4639d`), found on 8 Nov:
       the tick files the seconds under the hour (`addHour`), the stored day keeps them across both apps' commits and the
@@ -102,6 +102,9 @@ Before the switch, not ports:
    NONE for the journal (`orders-draft-claims` / `visibilitychange` flush absent; `draftSync.ts` has `inAir`/`flights` from earlier work but not
    the #444 rules). Files: `app/src/orders/draftSync.ts` (+ a localStorage journal module), specs from `tests/draft-claims.test.mjs`,
    `tests/draft-journal.test.mjs`. Size M.
+   DONE 8 Nov 2026 (what was built and every difference: `docs/parity/orders.md`, «Draft journal and corrections in flight as
+   built»). #410 was already in Mise 2 (the current app took its claim logic from `draftSync.ts`); its two stock-count cases are
+   pinned too. The description above is how it stood before.
 7. **Stocktake «Close month» guard** — PR #442/#440 (`6538e1db`, `2e4ee2a1`, `5df661d3`). Core data fix ported on the stack (PR #443,
    `app/src/stocktake/stocktakeModel.ts` has `withoutEmptyMaps`, `monthReady`). Mise 2: PARTIAL. Owed: move both plus `LIST_STATUS` /
    `listStatus` into `shared/src/inventory-model.ts` (parity marked PORT OWED: inventory-model), the «No products» wording only when both answers prove

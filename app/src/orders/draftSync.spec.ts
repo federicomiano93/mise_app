@@ -789,3 +789,28 @@ describe('draftSync — corrections while a write is in the air (F-16)', () => {
     await p.resolveFrom(0);
   });
 });
+
+// The current app's PR #410 (478b4767), whose claim logic came from this file: a stock count typed while a clear is in the
+// air. Here the store forgets the lines (forget) BEFORE the clear is written, and the clear's own snapshot comes later.
+describe('draftSync — a stock count typed while a clear is in the air (PR #410)', () => {
+  it('«clear the quantities»: the count, and only the count, is sent', async () => {
+    const h = harness();
+    h.sync.receive({ entries: { c12: { qty: 3, stock: 2 } }, days: { aldo: '2026-10-28' } });
+    const view = h.sync.forget(['c12'], ['aldo'], { quantitiesOnly: true });
+    expect(view.entries.c12).toEqual({ stock: 2 });
+    h.sync.change({ ...view.entries, c12: { stock: 4 } }, view.days);
+    await h.tick();
+    expect(h.saves.at(-1)?.entries).toEqual({ c12: { stock: 4 } });
+    expect(h.saves.at(-1)?.days).toBeUndefined();
+  });
+
+  it('a placed order being cleared: the count typed meanwhile is sent, never the placed quantity', async () => {
+    const h = harness();
+    h.sync.receive({ entries: { c13: { qty: 3, stock: 2 } }, days: { aldo: '2026-10-28' } });
+    const view = h.sync.forget(['c13'], ['aldo']);
+    expect(view.entries.c13).toBeUndefined();
+    h.sync.change({ ...view.entries, c13: { qty: 0, stock: 4 } }, view.days);
+    await h.tick();
+    expect(h.saves.at(-1)?.entries).toEqual({ c13: { stock: 4 } });
+  });
+});

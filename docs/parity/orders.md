@@ -546,8 +546,8 @@ F-13. **Deliveries and suggestions see only 2 months**: an order older than that
 design but unsaid on screen.
 F-14. **The road chooser counts on `overlay.remove()` before `take()`**, so a slow `beforeSend` refusal leaves no
 dialog on screen while it decides (`send-chooser.js:86-88`); harmless today because the check is synchronous.
-F-15. **A quantity typed on Orders can be lost if the page goes away too soon: found in the current app, not yet handled
-here.** Measured on the lab tablet in the current app on 1 Nov 2026 (302 ingredients): on a freshly opened page a write
+F-15. **A quantity typed on Orders can be lost if the page goes away too soon: found in the current app — PORTED 8 Nov 2026,
+see «Draft journal and corrections in flight as built» at the end.** Measured on the lab tablet in the current app on 1 Nov 2026 (302 ingredients): on a freshly opened page a write
 reaches Firestore's queue in IndexedDB 4.5–5.5 s after the keystroke (0.8 s pause + a busy SDK queue; +0.95 s on a settled
 page), and a reload before that lost the number for good, on the server too. `app/src/orders/draftSync.ts` has the same 0.8 s
 pause, keeps its claims in memory only and has no `visibilitychange` flush in `app/src/orders/` (read, NOT measured: Mise 2 is
@@ -559,8 +559,8 @@ of the offline copy: it waits for the first snapshot with `fromCache` false, and
 reads as it did when typed, or it would put back quantities of an order a colleague has placed. The twin's reviewed specs
 should gain the cases of `tests/draft-journal.test.mjs`.
 
-F-16. **A correction typed while the write it corrects is in the air (found 1 Nov 2026 on the current app; Mise 2 read, NOT
-run).** Type 5, the write is sent, correct to 0 before a snapshot has shown the 5 (about 5 s on the lab tablet on a freshly
+F-16. **A correction typed while the write it corrects is in the air (found 1 Nov 2026 on the current app) — PORTED 8 Nov
+2026, see «Draft journal and corrections in flight as built» at the end.** Type 5, the write is sent, correct to 0 before a snapshot has shown the 5 (about 5 s on the lab tablet on a freshly
 opened page): the 0 matches `known`, so nothing carried it, the 5 landed, and it came back on screen and on the server. Measured
 on the current app's emulator, before and after. `differences` in `app/src/orders/draftSync.ts` (line 208) measures against
 `known` alone, so reading it the same should happen in Mise 2. And changing one's mind twice: 5, 0, 5 again, with the first 5
@@ -1618,3 +1618,50 @@ VAT rate; row button and pane on the split, none on a phone; the door sticking w
 the split; the summary from both doors, lines, money and totals; Back to the door; a price changed elsewhere moving the open total; the
 summary writing nothing), the employee of «bakery» at 360 and 1024 (not shown Food cost: lines, no money, no price asked for; shown it: the
 money appears). axe clean, targets, nothing clipped, no sideways scroll, one main, one h1, no console error, at every screen; all put back.
+
+## Draft journal and corrections in flight as built (8 Nov 2026)
+
+Item 6 of `docs/mise2-port-owed.md`: F-15 (the current app's `fix/orders-typed-quantity-lost`, PR #436) and F-16 (PR #444),
+ported decision for decision. Data loss on both: a quantity typed and lost on a reload, or corrected and put back by the write
+it corrected.
+
+**F-16, a correction while its write is in the air** (`app/src/orders/draftSync.ts`):
+- `differences` also claims a field (or a supplier's day) that a write in the air says differently, only for lines and days the
+  screen still holds: a line just forgotten is an order placed, and a blank row written now would outlive its clear.
+- A landing releases nothing a later write in the air still carries (5, 0, 5 again ended on 0).
+- A refusal hands nothing back over a newer value already on its way (a refused 5 over a 0 in the air).
+- Specs: the d1–d19 cases of `tests/draft-claims.test.mjs` (`draftSync.spec.ts`, «corrections while a write is in the air»);
+  16 of them fail on the code before this port, the other four pin what the fix must NOT claim.
+
+**F-15, the note that outlives the page**:
+- `shared/src/draft-journal.ts`: a FULL, paired port of `js/orders/draft-journal.js` (key `orders-draft-claims`, version 1,
+  one venue's, 24 hours, trusts nothing it reads, `orderedSince`, `historyLookBackDay`). Deliberately NOT under `KEEP_PREFIXES`:
+  sign-out and a venue switch wipe it (pinned through both files' `keysToClear`).
+- `draftSync.ts`: every claim is noted in the same keystroke with what the server held (`base`) and what corrected writes in the
+  air said (`air`), until a snapshot shows it (`saveJournal`). What the last page left (`restored`) stays off the screen and out
+  of every save until the SERVER's first snapshot; then only the lines that still read as typed, or as a corrected write in the
+  air, and that no order placed since names (`orders-history` of the last seven days, read with `getDocsFromServer`) come back
+  (`stillOurs`, `settleRestored`); day stamps only when every quantity came back. A refused write is not noted. Typing on the new
+  page, a «clear» and a placed order all beat the note (`forgetRestored`). The orders unreadable: nothing comes back, and it asks
+  again 30 s later.
+- `ordersStore.ts`: the venue, `localStorage`, the server's first answer (`fromServer` of the draft listener), the server read
+  of the orders (`ordersSource.getRecentHistoryFromServer`), and `draftCameBack`, which makes the section look again for orders
+  typed on an earlier day and never placed (`pendingLatch.relook`, the current app's `pendingChecked = false`).
+- `pageHidden.ts`: the page going out of sight while alive (switching app, locking the screen) sends a change still in its pause
+  at once (`sendWaiting`); after `pagehide` (going away for good) it does not, because the note answers for that.
+- A deleted product's line leaves the note too, in the two sources that clear it from the draft (`suppliersSource.clearDraftEntry`
+  and the merge, `mergeSource.ts`), as the current app's `clearIngredientFromDraft`.
+- Specs: `shared/src/draft-journal.spec.ts` (both files), `draftSync.journal.spec.ts` (every case of `tests/draft-journal.test.mjs`
+  that drives the draft, the «correction in the air» block included), `ordersStore.journal.spec.ts`, `pageHidden.spec.ts`,
+  `pendingLatch.spec.ts` («relook»). `testing/setup.ts` removes the note's key after every spec, so a screen spec never inherits
+  another one's typing.
+
+Differences from the current app, on purpose:
+- **No second listener for the server's answer.** The current app opens a one-shot `watchServerAnswer` on `drafts/current`;
+  Mise 2's draft listener already runs with `includeMetadataChanges` and says `fromServer`, so the note waits for that.
+- **One page.** Mise 2 never reloads between sections, and leaving Orders already sends what waits (`stop()`): the note matters for
+  a reload, a closed Chrome or the tablet going off. The page-hidden listener exists only while Orders is open.
+- **A deleted product's line always leaves the note.** The current app does it only from a page that holds no note of its own
+  (Fornitori); in Mise 2 Orders is never on screen while «Ingredients & suppliers» deletes or merges a product.
+- **Not in this item:** the current app's `sendBeforeLeaving` (Back from Orders opened from a recipe waits for the server), which
+  belongs to item 32 of the checklist.
