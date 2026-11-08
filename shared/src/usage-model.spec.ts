@@ -189,7 +189,7 @@ describe.each([
     m.touchMinute(acc, new Date(2026, 9, 9, 9, 30));
     const p = made(m.payloadOf(acc, WHO));
     const allowed = ['bakery', 'uid', 'deviceId', 'dayKey', 'kind', 'appVersion', 'screens', 'seconds', 'taps',
-      'routes', 'actions', 'loads', 'loadMs', 'firstMinute', 'lastMinute', 'offlineSeconds', 'updatedAt'];
+      'routes', 'actions', 'loads', 'loadMs', 'firstMinute', 'lastMinute', 'offlineSeconds', 'hours', 'updatedAt'];
     for (const key of Object.keys(p)) expect(allowed.includes(key), `${key} is not in the rules' whitelist`).toBe(true);
     for (const key of ['bakery', 'uid', 'updatedAt']) expect(key in p, `${key} is the data layer's`).toBe(false);
     for (const key of ['deviceId', 'dayKey', 'kind']) expect(key in p).toBe(true);
@@ -198,6 +198,44 @@ describe.each([
     expect(p.offlineSeconds).toBe(0);
     expect(p.appVersion).toBe('649');
     expect(Number.isInteger(p.loadMs.orders)).toBe(true);
+  });
+
+  test('active seconds are filed under the local hour, two digits, whole and never negative', () => {
+    const acc = m.newAcc();
+    m.addHour(acc, new Date(2026, 9, 9, 7, 59), 30);
+    m.addHour(acc, new Date(2026, 9, 9, 7, 5), 14.6);
+    m.addHour(acc, new Date(2026, 9, 9, 23, 0), 15);
+    m.addHour(acc, new Date(2026, 9, 9, 0, 1), 15);
+    m.addHour(acc, new Date(2026, 9, 9, 13, 0), -5);
+    m.addHour(acc, new Date(2026, 9, 9, 13, 0), Number.NaN);
+    m.addHour(acc, new Date('nonsense'), 15);
+    m.addHour(acc, 'today', 15);
+    expect(acc.hours).toStrictEqual({ '07': 45, 23: 15, '00': 15 });
+    expect(m.isEmptyAcc(m.newAcc())).toBe(true);
+    const onlyHours = m.newAcc();
+    m.addHour(onlyHours, new Date(2026, 9, 9, 9, 0), 15);
+    expect(m.isEmptyAcc(onlyHours), 'an hour worked is something to send').toBe(false);
+  });
+
+  test('the line carries the hours, each at most one hour long; storage cannot slip in a bad hour', () => {
+    const acc = m.newAcc();
+    for (let i = 0; i < 300; i += 1) m.addHour(acc, new Date(2026, 9, 9, 8, 0), 30);
+    m.addHour(acc, new Date(2026, 9, 9, 9, 0), 20);
+    expect(made(m.payloadOf(acc, WHO)).hours).toStrictEqual({ '08': 3600, '09': 20 });
+    const merged = m.mergeAcc(m.newAcc(), { hours: { '10': 60, 24: 5, 7: 5, other: 9, '11': 'x', '12': -3 } });
+    expect(merged.hours).toStrictEqual({ 10: 60 });
+    expect(made(m.payloadOf(m.newAcc(), WHO)).hours).toStrictEqual({});
+  });
+
+  // The js/ test also reads firestore.rules and compares its list of hours; this package has no
+  // file access, so that half stays in tests/usage-model.test.mjs.
+  test('the 24 hours fit without ever reaching «other»', () => {
+    const acc = m.newAcc();
+    for (let h = 0; h < 24; h += 1) m.addHour(acc, new Date(2026, 9, 9, h, 0), 60);
+    expect(Object.keys(acc.hours)).toHaveLength(24);
+    expect(m.OTHER in acc.hours).toBe(false);
+    expect(m.CAPS.hours).toBeGreaterThan(24);
+    for (const k of Object.keys(acc.hours)) expect(k).toMatch(m.HOUR_RE);
   });
 
   test('an empty day still makes a valid line, with no minutes', () => {
