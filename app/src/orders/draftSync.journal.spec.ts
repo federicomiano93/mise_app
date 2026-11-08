@@ -36,7 +36,7 @@ function fakeStorage() {
 function device() {
   const storage = fakeStorage();
   const clock = { now: START };
-  const history = { records: [] as unknown[], fail: false, reads: 0 };
+  const history = { records: [] as unknown[], fail: false, reads: 0, gate: null as Promise<void> | null };
   const saves: DraftPayload[] = [];
   const held: Array<{ resolve: () => void; reject: (err: unknown) => void }> = [];
   const retries: Array<() => void> = [];
@@ -66,6 +66,7 @@ function device() {
         now: () => clock.now,
         ordersSince: async () => {
           history.reads += 1;
+          if (history.gate) await history.gate;
           if (history.fail) throw new Error('unavailable');
           return history.records;
         },
@@ -688,3 +689,105 @@ describe('draft journal — a correction made while its write is in the air, and
     expect(d.noted()).toBe(false);
   });
 });
+
+// Mise 2 is one page: the sync of a closed Orders lives on until its last write is answered, and Orders opened again reads the
+// same note in a new sync (code review, 8 Nov 2026). Only the open one owns the note.
+describe('draft journal — a closed section no longer owns the note', () => {
+  it('⚠️ a retry that fires after the section closed brings nothing back and writes nothing', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const d = device();
+    d.openPage().type('flour', { qty: 5 });
+    const second = d.openPage();
+    d.history.fail = true;
+    await second.answer(server());
+    expect(d.retries).toHaveLength(1);
+    second.sync.stopJournal(); // the person left Orders
+    const noted = d.storage.getItem(DRAFT_JOURNAL_KEY);
+    d.history.fail = false;
+    d.retries.shift()?.();
+    await settle();
+    await settle();
+    errors.mockRestore();
+    expect(second.sync.view().entries.flour).toBeUndefined();
+    expect(second.cameBack).toBe(0);
+    await second.pause();
+    expect(d.saves).toEqual([]);
+    expect(d.storage.getItem(DRAFT_JOURNAL_KEY)).toBe(noted); // left for the next opening, untouched
+  });
+
+  it('⚠️ an orders read still on its way when the section closed brings nothing back', async () => {
+    const d = device();
+    d.openPage().type('flour', { qty: 5 });
+    const second = d.openPage();
+    let open: () => void = () => undefined;
+    d.history.gate = new Promise<void>(resolve => { open = resolve; });
+    await second.answer(server());
+    second.sync.stopJournal();
+    open();
+    await settle();
+    await settle();
+    expect(second.sync.view().entries.flour).toBeUndefined();
+    expect(second.cameBack).toBe(0);
+    await second.pause();
+    expect(d.saves).toEqual([]);
+    expect(d.note().entries.flour).toBeDefined();
+  });
+
+  it('⚠️ a write answered after the section closed takes only its own fields out of the note a newer opening wrote', async () => {
+    const d = device();
+    const first = d.openPage();
+    d.holdSaves();
+    first.type('flour', { qty: 5 });
+    await first.pause(); // the 5 is in the air
+    first.sync.stopJournal(); // the person leaves Orders…
+    d.letSavesThrough();
+    const second = d.openPage(); // …and comes back: the new opening reads the note and notes a new line
+    second.type('salt', { qty: 2 });
+    expect(Object.keys(d.note().entries).sort()).toEqual(['flour', 'salt']);
+    d.held[0]?.resolve(); // the old opening's 5 lands
+    await settle();
+    expect(Object.keys(d.note().entries)).toEqual(['salt']); // the salt the new one noted is still there
+  });
+
+  it('a write refused after the section closed leaves the note too: it could never be saved', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const d = device();
+    const page = d.openPage();
+    d.holdSaves();
+    page.type('flour', { qty: 5 });
+    page.type('salt', { qty: 2 });
+    await page.pause();
+    page.sync.stopJournal();
+    d.held[0]?.reject(new Error('permission-denied'));
+    await settle();
+    errors.mockRestore();
+    expect(d.noted()).toBe(false);
+  });
+
+  it('a line typed differently since the write left keeps its claim when that write lands after the close', async () => {
+    const d = device();
+    const first = d.openPage();
+    d.holdSaves();
+    first.type('flour', { qty: 5 });
+    await first.pause();
+    first.sync.stopJournal();
+    d.letSavesThrough();
+    const second = d.openPage();
+    second.type('flour', { qty: 8 });
+    d.held[0]?.resolve();
+    await settle();
+    expect(d.note().entries.flour?.row.qty).toBe(8);
+  });
+
+  it('opened again (start after stop), it reads the note afresh and judges it on the next server answer', async () => {
+    const d = device();
+    d.openPage().type('flour', { qty: 5 });
+    const page = d.openPage();
+    page.sync.stopJournal();
+    page.sync.startJournal();
+    await page.answer(server());
+    expect(page.entries.flour?.qty).toBe(5);
+    expect(page.cameBack).toBe(1);
+  });
+});
+

@@ -114,6 +114,10 @@ export interface DraftSync {
   // Sends a change still waiting for its pause NOW, and reports it as an autosave does (the page went out of sight: F-15).
   // Nothing waiting, nothing sent.
   sendWaiting(): void;
+  // The section closed (stopJournal) or opened again (startJournal): see `journalLive` below. A sync without a journal ignores
+  // both.
+  stopJournal(): void;
+  startJournal(): void;
   // These lines (and these suppliers' day stamps) leave THIS phone now, before their clear is written: from the screen's
   // copy, from the baseline and from what this phone claims. `quantitiesOnly` keeps each line's stock reading (a «Clear
   // quantities», draft.js clearQuantities); otherwise the whole line goes (an order was recorded, draft.js clearSupplier).
@@ -228,6 +232,15 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
   let journalAt = 0; // when the note was last typed into: what its 24 hours count from
   let restored: DraftJournal | null = null; // what the last page left, while the server has not answered
   let settleStarted = false;
+  // ⚠️ ONLY AN OPEN SECTION OWNS THE NOTE (code review, 8 Nov 2026). Mise 2 is one page: the store, and this sync with it,
+  // outlives a closed Orders until its last write is answered, and Orders opened again reads the same note in a new store.
+  // A closed one judging the note on its frozen copy of the draft (a 30 s retry, an order read still on its way) wrote an old
+  // number back over a colleague's, over a correction or over a «Clear quantities»; rewriting the note whole from its own
+  // memory erased what the open one had just noted. So once stopped it judges nothing, brings nothing back and never writes the
+  // note whole: a write answered after the stop only takes its own fields out of the stored note (releaseStored). `epoch` tells
+  // a check that began before the stop.
+  let journalLive = true;
+  let epoch = 0;
   // Writes the server said no to (wasRefused).
   const refused: Array<{ entries: Rows; days: MutableDays }> = [];
 
@@ -255,7 +268,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
   }
 
   function openJournal() {
-    if (!journal || journalOpen) return;
+    if (!journal || !journalLive || journalOpen) return;
     journalOpen = true;
     const note = readJournal(journal.venue, journal.now(), journal.storage());
     if (!note) return;
@@ -274,7 +287,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
   // from an earlier page is still in it, which keeps its own age, or a tablet used offline could carry a number past the
   // day it is allowed.
   function saveJournal(typed = false) {
-    if (!journal) return;
+    if (!journal || !journalLive) return;
     openJournal();
     if ((typed && !restored) || !journalAt) journalAt = journal.now();
     const entries: Record<string, NotedLine> = {};
@@ -377,12 +390,16 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       return false;
     }
     let ordered: Set<string>;
+    const asked = epoch;
     try {
       ordered = orderedSince(await journal.ordersSince(historyLookBackDay(restored.at)), restored.at);
     } catch (err) {
+      if (asked !== epoch) return false;
       console.error('The orders could not be checked, the typed quantities wait:', err);
       return null;
     }
+    // The section closed while the orders were read: what it holds is no longer the draft. The next opening judges the note.
+    if (asked !== epoch) return false;
     // Time has passed: whatever was typed or cleared since has already been taken out of `restored`, and `known` has moved on
     // with every snapshot.
     const left = restored;
@@ -417,17 +434,47 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
   }
 
   // Started by the first snapshot the SERVER sent once the note is open; asks again later when the orders could not be read.
-  function settle() {
+  // (Not the public settle(), which waits for the writes in the air.)
+  function checkNote() {
     if (!journal) return;
+    const asked = epoch;
     void settleRestored().then(cameBack => {
+      if (asked !== epoch) return;
       if (cameBack === null) {
-        journal.retryLater(settle, ORDERS_RETRY_MS);
+        journal.retryLater(() => { if (asked === epoch) checkNote(); }, ORDERS_RETRY_MS);
         return;
       }
       if (!cameBack) return;
       journal.onCameBack(view());
       arm();
     });
+  }
+
+  // A write answered after the section closed: its fields leave the STORED note (it may be the one a newer opening wrote), and
+  // nothing else of it changes. Landed, the server has them; refused, they could never be saved and would be replayed for
+  // ever (wasRefused). A line typed differently since keeps its own claim.
+  function releaseStored(sent: { entries: Rows; days: MutableDays }) {
+    if (!journal) return;
+    const note = readJournal(journal.venue, journal.now(), journal.storage());
+    if (!note) return;
+    for (const [id, row] of Object.entries(sent.entries)) {
+      const line = note.entries[id];
+      if (!line) continue;
+      const sides: Field[][] = [GROUP.filter(field => field in row), 'stock' in row ? ['stock'] : []];
+      for (const fields of sides) {
+        if (fields.length === 0 || !fields.every(field => line.row[field] === row[field])) continue;
+        const gone: readonly Field[] = fields.includes('stock') ? ['stock'] : GROUP;
+        for (const field of gone) {
+          delete line.row[field];
+          delete line.base[field];
+        }
+        if (line.air) line.air = line.air.filter(seen => !gone.some(field => field in seen));
+      }
+      if (line.air?.length === 0) delete line.air;
+      if (isEmpty(line.row)) delete note.entries[id];
+    }
+    for (const [id, day] of Object.entries(sent.days)) if (note.days[id]?.day === day) delete note.days[id];
+    writeJournal(journal.venue, note, journal.storage());
   }
 
   // A line typed on this page beats what the last page left for it, whatever comes later.
@@ -555,7 +602,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       for (const [id, day] of Object.entries(sent.days)) {
         if (!dayInAir(id) && pending.days[id] === day) delete pending.days[id];
       }
-      saveJournal();
+      if (journalLive) saveJournal(); else releaseStored(sent);
     }, (err: unknown) => {
       land();
       // ⚠️ A REFUSED WRITE HANDS ITS TYPING BACK (parity L37: «the typing is kept»). A change made while it was in the air
@@ -585,7 +632,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       }
       known = { entries, days };
       refused.push(sent);
-      saveJournal();
+      if (journalLive) saveJournal(); else releaseStored(sent);
       throw err;
     });
   }
@@ -649,7 +696,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       // The note waits for the SERVER's first word (never the offline copy's), and is judged against it.
       if (fromServer && restored && !settleStarted) {
         settleStarted = true;
-        settle();
+        checkNote();
       }
       // …but anything typed here and not yet written goes back ON TOP, or the snapshot would erase it mid-keystroke.
       return view();
@@ -676,6 +723,20 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
 
     sendWaiting() {
       if (waiting) autosave();
+    },
+
+    stopJournal() {
+      journalLive = false;
+      epoch += 1;
+      // Forgotten here, not in storage: the note stays for the next opening, which reads it afresh.
+      restored = null;
+      journalOpen = false;
+      settleStarted = false;
+      journalAt = 0;
+    },
+
+    startJournal() {
+      journalLive = true;
     },
 
     flush,

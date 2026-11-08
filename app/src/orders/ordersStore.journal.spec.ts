@@ -3,7 +3,7 @@
 // placed, and the page going out of sight. What the note decides is draftSync.journal.spec.ts; here, only that the store hands
 // it what it needs.
 
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DRAFT_JOURNAL_KEY } from '@mise/shared/draft-journal';
 import { fakeOrdersSource } from '../testing/fakeOrdersSource';
 import type { FakeOrdersSource } from '../testing/fakeOrdersSource';
@@ -36,6 +36,7 @@ afterEach(() => { stops.forEach(stop => stop()); stops = []; });
 function device() {
   const storage = fakeStorage();
   const hidden = { run: null as (() => void) | null, subscribed: 0 };
+  const retries: Array<() => void> = [];
   function open(source: FakeOrdersSource, venue = VENUE) {
     let timer: (() => void) | null = null;
     const deps: OrdersDeps = {
@@ -50,7 +51,7 @@ function device() {
       journal: {
         storage: () => storage,
         now: () => NOW,
-        retryLater: () => undefined,
+        retryLater: run => { retries.push(run); },
         onPageHidden: run => {
           hidden.run = run;
           hidden.subscribed += 1;
@@ -69,7 +70,7 @@ function device() {
     };
     return { store, autosave };
   }
-  return { storage, hidden, open };
+  return { storage, hidden, retries, open };
 }
 
 describe('ordersStore — the note of typed quantities (F-15)', () => {
@@ -150,5 +151,29 @@ describe('ordersStore — the note of typed quantities (F-15)', () => {
     expect(source.writes).toHaveLength(1);
     page.store.stop();
     expect(d.hidden.subscribed).toBe(0);
+  });
+
+  it('⚠️ closing the section stops the note: a retry after it brings nothing back and writes nothing', async () => {
+    const d = device();
+    const page = d.open(fakeOrdersSource({ suppliers: [mill], ingredients: [flour], draft: { entries: {}, days: {} } }));
+    await settle();
+    page.store.editLine(mill, flour, { qty: 4 });
+    const server = fakeOrdersSource({ suppliers: [mill], ingredients: [flour], draft: { entries: {}, days: {} } });
+    server.failRecent = true;
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const next = d.open(server);
+    await settle();
+    await settle();
+    expect(d.retries).toHaveLength(1);
+    next.store.stop();
+    server.failRecent = false;
+    d.retries.shift()?.();
+    await settle();
+    await settle();
+    errors.mockRestore();
+    expect(next.store.getSnapshot().draftCameBack).toBe(0);
+    await next.autosave();
+    expect(server.writes).toEqual([]);
+    expect(d.storage.getItem(DRAFT_JOURNAL_KEY)).not.toBeNull(); // left for the next opening
   });
 });

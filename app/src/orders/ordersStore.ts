@@ -696,6 +696,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     start() {
       if (stops.length) return;
       stopped = false;
+      // This opening owns the note again: it is read afresh at the first snapshot or keystroke (draftSync.ts, journalLive).
+      sync.startJournal();
       // Switching app or locking the screen: what waits for its pause goes now, while the page is still alive (pageHidden.ts).
       stopHidden = deps.journal?.onPageHidden(() => { sync.sendWaiting(); }) ?? null;
       // Fixed before the first older page is asked for; once a page is in, the window it was cut from stays.
@@ -769,6 +771,9 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       stops = [];
       stopHidden?.();
       stopHidden = null;
+      // ⚠️ BEFORE THE FLUSH: from now on this sync judges nothing and never rewrites the note (a new opening owns it); its
+      // writes still in the air only take their own fields out of it when answered.
+      sync.stopJournal();
       // The write is handed to Firestore now; it carries on without the listeners and lands when it can.
       stopped = true;
       sync.flush().then(dropBusyWhenSaved, () => { /* said through onResult, which also releases the busy marker */ });
