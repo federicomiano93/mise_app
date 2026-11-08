@@ -12,7 +12,7 @@
 // Under the open venue:
 //   • client-settings/orders — the ordering deadline, `{ bakery, cutoff, updatedAt }`; watched live.
 //   • client-menus/{clientId} — what one client may order; republished when the address book changes.
-//   • client-accounts/{uid} — the grant behind one ordering link (canManage only, in the rules).
+//   • client-accounts/{uid} — the grant behind one ordering link (managesClients only, in the rules).
 //   • client-orders/{date}_{clientId} — an order a client typed; still-to-come ones watched, past ones read once.
 //
 // ⚠️ NO ROLE IS READ HERE, ON PURPOSE: the screens hide what a person cannot do, firestore.rules decides (P2).

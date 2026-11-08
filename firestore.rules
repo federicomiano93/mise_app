@@ -2498,14 +2498,6 @@ service cloud.firestore {
           && (request.resource.data.get('archived', false)
                 == (resource == null ? false : resource.data.get('archived', false))
               || canManage(lid, 'catalogue'));
-                  && request.resource.data.shelfLifeDays <= 3650))
-          // Bounded, not judged: whether the word is on the venue's list is the app's
-          // business (a word taken off the list reads as «no category», and comes back
-          // if the word is put back). «No category» is NO FIELD, never an empty one.
-          && (!('category' in request.resource.data)
-              || (request.resource.data.category is string
-                  && request.resource.data.category.size() > 0
-                  && request.resource.data.category.size() <= 100));
         // The owner of the sales side, through Food cost: those three numbers and nothing
         // else of a recipe that already exists.
         allow update: if weighsRecipeLoss(lid)
