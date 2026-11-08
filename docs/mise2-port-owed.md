@@ -25,7 +25,7 @@ Data loss first:
 - [ ] 1. Pastries row notes and «Copy day» (a Mise 2 day save erases the notes)
 - [ ] 2. Recipe categories written one word at a time (arrayUnion / arrayRemove), never the whole list
 - [ ] 4. Food cost `noWeightLoss` kept by a Mise 2 product save
-- [ ] 6. Orders draft journal and corrections in flight (F-15, F-16)
+- [x] 6. Orders draft journal and corrections in flight (F-15, F-16)
 - [ ] 3. `drafts/current.skipped` and «Order done» / «Close as not ordered»
 - [ ] 5. Usage `hours` kept by Mise 2's usage write
 - [ ] 7. Stocktake «Close month» guard moved into shared/ (`LIST_STATUS`, wording)
@@ -93,7 +93,7 @@ Before the switch, not ports:
    writes the day's usage doc with a whole `setDoc`, so a device that opened both apps in a day loses `hours` for that day. Mise 2: NONE in
    `app/src/telemetry/usage.ts` (the shared model `shared/src/usage-model.ts` already knows `hours`). Files: `app/src/telemetry/usage.ts`,
    `sinks.ts`, specs. Size S. (Memory note says Mise 2 telemetry uses its own `m2-…` versions: keep that.)
-6. **Draft journal and corrections in flight (Orders)** — PRs #436 (`e3a12e49`, `f1da219c`, `eff23069`) and #444 (`345b94ce`, `d7eeea6a`,
+6. **Draft journal and corrections in flight (Orders)** — PORTED (8 Nov 2026, PR pending). — PRs #436 (`e3a12e49`, `f1da219c`, `eff23069`) and #444 (`345b94ce`, `d7eeea6a`,
    `2dc0c071`), #410 (`2edd1a01`, `478b4767`). DATA LOSS: YES in the sense of a typed quantity lost or reverted (reload before the write
    lands; 5,0,5 ending on 5/0). Parity doc says «to port before the switch»: `docs/parity/orders.md` F-15, F-16 (lines 551-576). Mise 2:
    NONE for the journal (`orders-draft-claims` / `visibilitychange` flush absent; `draftSync.ts` has `inAir`/`flights` from earlier work but not

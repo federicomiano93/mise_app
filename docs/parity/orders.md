@@ -546,7 +546,7 @@ F-13. **Deliveries and suggestions see only 2 months**: an order older than that
 design but unsaid on screen.
 F-14. **The road chooser counts on `overlay.remove()` before `take()`**, so a slow `beforeSend` refusal leaves no
 dialog on screen while it decides (`send-chooser.js:86-88`); harmless today because the check is synchronous.
-F-15. **A quantity typed on Orders can be lost if the page goes away too soon: found in the current app, not yet handled
+F-15. (PORTED, see «Draft journal and corrections in flight as built».) **A quantity typed on Orders can be lost if the page goes away too soon: found in the current app, not yet handled
 here.** Measured on the lab tablet in the current app on 1 Nov 2026 (302 ingredients): on a freshly opened page a write
 reaches Firestore's queue in IndexedDB 4.5–5.5 s after the keystroke (0.8 s pause + a busy SDK queue; +0.95 s on a settled
 page), and a reload before that lost the number for good, on the server too. `app/src/orders/draftSync.ts` has the same 0.8 s
@@ -559,7 +559,7 @@ of the offline copy: it waits for the first snapshot with `fromCache` false, and
 reads as it did when typed, or it would put back quantities of an order a colleague has placed. The twin's reviewed specs
 should gain the cases of `tests/draft-journal.test.mjs`.
 
-F-16. **A correction typed while the write it corrects is in the air (found 1 Nov 2026 on the current app; Mise 2 read, NOT
+F-16. (PORTED, see «Draft journal and corrections in flight as built».) **A correction typed while the write it corrects is in the air (found 1 Nov 2026 on the current app; Mise 2 read, NOT
 run).** Type 5, the write is sent, correct to 0 before a snapshot has shown the 5 (about 5 s on the lab tablet on a freshly
 opened page): the 0 matches `known`, so nothing carried it, the 5 landed, and it came back on screen and on the server. Measured
 on the current app's emulator, before and after. `differences` in `app/src/orders/draftSync.ts` (line 208) measures against
@@ -1618,3 +1618,20 @@ VAT rate; row button and pane on the split, none on a phone; the door sticking w
 the split; the summary from both doors, lines, money and totals; Back to the door; a price changed elsewhere moving the open total; the
 summary writing nothing), the employee of «bakery» at 360 and 1024 (not shown Food cost: lines, no money, no price asked for; shown it: the
 money appears). axe clean, targets, nothing clipped, no sideways scroll, one main, one h1, no console error, at every screen; all put back.
+
+## Draft journal and corrections in flight as built (8 Nov 2026)
+
+Ported from the current app's `js/orders/draft.js` and `draft-journal.js` (F-15, F-16; PRs #436 and #444), decision for decision.
+
+- **`shared/src/draft-journal.ts`**: a full port, paired in `parity.spec.ts`; `draft-journal.spec.ts` runs the pure cases against both files and cross-reads the bytes. Same key (`orders-draft-claims`, deliberately not under KEEP_PREFIXES: a sign-out or venue switch wipes it), version, shape and refusals.
+- **`draftSync.ts`**: the #444 rules (`differences` also claims a field or day a write in the air says differently, only for lines and days the screen still holds; a landing releases nothing a later write still carries; a refusal hands back nothing a later write already says) and the journal (`open`, `saveJournal`, `stillOurs`, `settleRestored`, `forgetRestored`, refused list, `typed` age rule). The first receive from the SERVER while a note waits judges it; the orders come from `getRecentHistoryFromServer`; a failed read retries after 30 s. Lines that came back: the store draws them, counts `draftCameBack`, holds the busy marker and the autosave is armed. The pending latch looks again for each round (`round` in `pendingLatch.tsx`).
+- **The page going out of sight** sends a waiting change (`OrdersDeps.onHidden`: hidden, not after pagehide, reset on pageshow).
+- **Suppliers**: deleting an ingredient, and the merge, take that line out of the note (`dropNotedLine`).
+
+Differences from the current app:
+- **One writer of the note.** The current app is one page = one module. Mise 2 makes a new store and sync each time Orders mounts, and the previous one may still have a write in the air whose landing would overwrite the new sync's note. A module-level owner: `open()` makes a sync the owner; a stopped sync stays the owner until another opens (its in-air corrections are still noted); `close()` (from the store's `stop()`) stops it judging a note, since its snapshots have ended.
+- The note is read when the store STARTS, not at the first keystroke (a keystroke before that opens it too).
+
+Not ported: `sendBeforeLeaving` (Mise 2 is one page; leaving the Recipe book's «Ordina» does not unload Orders' Firestore) and the two-tabs case.
+
+Specs: `draftSync.claims.spec.ts`, `draftSync.journal.spec.ts`, `ordersStore.journal.spec.ts`, `pendingLatch.provider.spec.tsx`, the Suppliers source and merge specs.
