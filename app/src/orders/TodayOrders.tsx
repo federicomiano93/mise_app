@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { Check } from 'lucide-react';
 import { todayISO } from '@mise/shared/day';
 import { todayOrders } from '@mise/shared/reminders';
@@ -27,7 +28,6 @@ export function TodayOrders({ onOpenSupplier, onOpenClosed }: {
   onOpenClosed: (id: string) => void;
 }) {
   const { t } = useT();
-  const handBack = useHandBack();
   const { suppliers, suppliersLoaded, history, historyLoaded, historyBroken, draft, draftLoaded } = useOrders();
   if (!suppliersLoaded || !historyLoaded || historyBroken || !draftLoaded) return null;
   const rows = todayOrders({ suppliers, history: history as readonly PlacedRecord[], today: todayISO(), skipped: draft.skipped });
@@ -54,18 +54,7 @@ export function TodayOrders({ onOpenSupplier, onOpenClosed }: {
                 <span className="visually-hidden">{t('ord.today.placed')}</span>
               </span>
             ) : skipped ? (
-              // The visible words ARE the button's name («Brava · not ordered»): no aria-label a screen reader would read differently.
-              <Button
-                ref={node => { handBack.register(todayOpener(supplier.id as string), node); }}
-                variant="bare"
-                className={styles.skipped}
-                onPress={() => { onOpenClosed(supplier.id as string); }}
-              >
-                <span>{supplierLabel(supplier)}</span>
-                {/* The space keeps the two words apart in the button's name; the gap draws it. */}
-                {' '}
-                <span className={styles.note}>{t('ord.today.notOrdered')}</span>
-              </Button>
+              <ClosedChip id={supplier.id as string} label={supplierLabel(supplier)} onOpen={onOpenClosed} />
             ) : (
               <Button variant="bare" className={styles.chip} onPress={() => { onOpenSupplier(supplier.id as string); }}>
                 {supplierLabel(supplier)}
@@ -75,5 +64,21 @@ export function TodayOrders({ onOpenSupplier, onOpenClosed }: {
         ))}
       </ul>
     </div>
+  );
+}
+
+// A closed supplier's chip. Registered under its own opener, so Back from the summary it opens hands the focus back to it.
+// The visible words ARE the button's name («Brava not ordered»): no aria-label a screen reader would read differently.
+function ClosedChip({ id, label, onOpen }: { id: string; label: string; onOpen: (id: string) => void }) {
+  const { t } = useT();
+  const handBack = useHandBack();
+  const ref = useCallback((node: HTMLButtonElement | null) => { handBack.register(todayOpener(id), node); }, [handBack, id]);
+  return (
+    <Button ref={ref} variant="bare" className={styles.skipped} onPress={() => { onOpen(id); }}>
+      <span>{label}</span>
+      {/* The space keeps the two words apart in the button's name; the gap draws it. */}
+      {' '}
+      <span className={styles.note}>{t('ord.today.notOrdered')}</span>
+    </Button>
   );
 }

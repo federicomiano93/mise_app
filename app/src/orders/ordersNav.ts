@@ -113,6 +113,14 @@ export function useLeaveToList(onLeaving: () => void): () => void {
   }, [navigate, toList, onLeaving]);
 }
 
+// What the «Order today» strip adds to the state when a closed supplier's chip opens its summary (checklist item 3): the summary's own
+// Back then hands the focus back to that chip, not to the row's summary icon.
+export const FROM_CHIP = { fromChip: true } as const;
+
+export function cameFromChip(state: unknown): boolean {
+  return typeof state === 'object' && state !== null && (state as { fromChip?: unknown }).fromChip === true;
+}
+
 // How many history entries lie between the order SUMMARY and the list (checklist item 3), or undefined when the list is not in the
 // history behind it (opened by its address). Opened from the list it is the summary's own count; opened from a supplier's screen
 // (fromSupplierState) it is that screen's count plus one — unknown when that screen itself was not opened from the list.

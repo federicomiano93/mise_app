@@ -14,8 +14,8 @@ import { useConfirm } from '../ui/useConfirm';
 import { useMoney } from '../session/useMoney';
 import { OrderTotals } from './OrderTotals';
 import { useOrders, useOrdersStore } from './OrdersContext';
-import { SUMMARY_DOOR, SUMMARY_PLACE_DOOR, summaryOpener, supplierOpener, useHandBack } from './handBack';
-import { cameFromList, cameFromSupplier, confirmFromSummaryState, useLeave, useSummaryToList } from './ordersNav';
+import { SUMMARY_DOOR, SUMMARY_PLACE_DOOR, summaryOpener, supplierOpener, todayOpener, useHandBack } from './handBack';
+import { cameFromChip, cameFromList, cameFromSupplier, confirmFromSummaryState, useLeave, useSummaryToList } from './ordersNav';
 import { supplierConfirmPath, supplierPath } from './ordersPath';
 import { LONG_MS } from './useClearQuantities';
 import type { OrdersLens } from './ordersLens';
@@ -55,7 +55,10 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
   const actions = useRef<HTMLDivElement>(null);
   // Back is the browser's Back when the supplier's screen or the list is the entry behind; an address typed in goes up one level, to
   // the supplier's order.
-  const leave = useLeave(supplierPath(id), () => { handBack.expect(cameFromSupplier(state) ? SUMMARY_DOOR : summaryOpener(id)); });
+  // Opened by a closed supplier's chip in «Order today», the focus goes back to that chip.
+  const leave = useLeave(supplierPath(id), () => {
+    handBack.expect(cameFromSupplier(state) ? SUMMARY_DOOR : cameFromChip(state) ? todayOpener(id) : summaryOpener(id));
+  });
   // After a close, the list, where «Order today» now says «not ordered»: the supplier's row takes the focus.
   const toList = useSummaryToList(useCallback(() => { handBack.expect(supplierOpener(id)); }, [handBack, id]));
   // «Order placed…» one level down: Back from the confirm screen hands the focus back to it.

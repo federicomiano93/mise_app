@@ -43,7 +43,7 @@ import {
   SUMMARY_PLACE_DOOR, SETTINGS_OPENER, SUPPLIER_ORDER_DOOR, SWAP_OPENER, arrivalOpener, correctOpener, itemsOpener, listOpener, pendingFallback, pendingOpener, sendDayOpener, summaryOpener, supplierOpener,
   todayOpener, useHandBackState,
 } from './handBack';
-import { FROM_LIST, cameFromList, columnOf, columnPart, replacedState } from './ordersNav';
+import { FROM_CHIP, FROM_LIST, cameFromList, columnOf, columnPart, replacedState } from './ordersNav';
 import {
   CLEAR_PATH, HISTORY_PATH, INCOMING_PATH, INGREDIENTS_PATH, LISTS_PATH, ORDERS_PATH, PLACE_ALL_PATH, REORDER_PATH, SEND_PATH, SETTINGS_PATH, SUPPLIER_ORDER_PATH, historyDayPath, historyEditPath,
   incomingMissingPath, parseOrdersPath, requestPath, supplierConfirmPath, supplierItemsPath, supplierPath, supplierSummaryPath,
@@ -243,14 +243,15 @@ function OrdersLayout({ view }: { view: ShownView }) {
 
   // A screen opens one level down, so Back steps up to the list. On the split, with one already open beside the list, picking
   // another is lateral and replaces it — and keeps whatever the entry it replaces knew about where Back goes.
-  const open = (opener: string, path: string) => {
+  // `extra` rides in the new entry's state (the summary opened by a closed chip says so, for its own Back).
+  const open = (opener: string, path: string, extra: Readonly<Record<string, unknown>> = {}) => {
     handBack.expect(opener);
     if (split && !atList) {
-      void navigate(path, { replace: true, state: replacedState(state) });
+      void navigate(path, { replace: true, state: { ...replacedState(state), ...extra } });
     } else {
       // On a phone the list is hidden behind the screen: the place in it is written down now, while it is what is on screen.
       if (!split && atList) listTop.current = scrollArea()?.scrollTop ?? null;
-      void navigate(path, { state: fromHere });
+      void navigate(path, { state: { ...fromHere, ...extra } });
     }
   };
   const openSupplier = (id: string) => { open(supplierOpener(id), supplierPath(id)); };
@@ -317,7 +318,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const openItemsWhenLive = (id: string) => { whenLive(() => { openItems(id); })(); };
   const openSummaryWhenLive = (id: string) => { whenLive(() => { openSummary(id); })(); };
   // A closed supplier's chip in «Order today» opens its summary on a phone too (where «Reopen» is); Back hands the focus to the chip.
-  const openClosedSummary = (id: string) => { whenLive(() => { open(todayOpener(id), supplierSummaryPath(id)); })(); };
+  const openClosedSummary = (id: string) => { whenLive(() => { open(todayOpener(id), supplierSummaryPath(id), FROM_CHIP); })(); };
 
   // ⚠️ THE HOLD: a supplier tapped on the copy (a row, an «Order today» chip, the notices panel) waits for the live data and then
   // opens by itself. The path is where the tap happened: if the person moves anywhere else the tap is dropped, and the last supplier

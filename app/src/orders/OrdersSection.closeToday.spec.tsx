@@ -175,6 +175,15 @@ describe('«Order today» with a closed supplier', () => {
     expect(path(view)).toBe('/orders/supplier/s-alp/summary');
   });
 
+  it('Back from the summary a closed chip opened hands the focus back to that chip', async () => {
+    const view = await atList(seeded({ draft: { entries: {}, skipped: { 's-alp': TODAY } } }));
+    await view.user.click(await screen.findByRole('button', { name: 'Alpine Mills not ordered' }, LOAD));
+    await screen.findByText('Closed as not ordered today', undefined, LOAD);
+    await view.user.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(path(view)).toBe('/orders'); });
+    await waitFor(() => { expect(screen.getByRole('button', { name: 'Alpine Mills not ordered' })).toHaveFocus(); });
+  });
+
   it('a close from another day means nothing today: an ordinary chip', async () => {
     await atList(seeded({ draft: { entries: {}, skipped: { 's-alp': inDays(-7) } } }));
     await screen.findByText('Order today', undefined, LOAD);
