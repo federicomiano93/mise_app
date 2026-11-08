@@ -131,12 +131,14 @@ test('a location that is not yours at all', () => {
 
 // ── The small pieces ─────────────────────────────────────────────────────────
 
-test('there are three roles and no more', () => {
-  assert.deepEqual([...ROLES], ['owner', 'manager', 'staff']);
+test('there are five roles and no more', () => {
+  assert.deepEqual([...ROLES], ['owner', 'owner-sales', 'owner-kitchen', 'manager', 'staff']);
 });
 
-test('isValidRole refuses everything that is not one of the three', () => {
+test('isValidRole refuses everything that is not one of the five', () => {
   assert.equal(isValidRole('owner'), true);
+  assert.equal(isValidRole('owner-sales'), true);
+  assert.equal(isValidRole('owner-kitchen'), true);
   assert.equal(isValidRole('manager'), true);
   assert.equal(isValidRole('staff'), true);
   for (const bad of ['head-chef', 'Owner', 'Manager', '', ' staff', null, undefined, 1, {}, true]) {
@@ -231,10 +233,10 @@ test('the two manager pills grant exactly the same thing', () => {
   assert.notEqual(manager.title, chef.title, 'and differ only in the word');
 });
 
-test('four pills, three levels of power', () => {
-  assert.equal(ROLE_CHOICES.length, 4);
+test('six pills, five levels of power', () => {
+  assert.equal(ROLE_CHOICES.length, 6);
   assert.deepEqual([...new Set(ROLE_CHOICES.map(c => c.role))].sort(),
-    ['manager', 'owner', 'staff']);
+    ['manager', 'owner', 'owner-kitchen', 'owner-sales', 'staff']);
 });
 
 test('the title is ignored on anybody who is not a manager', () => {

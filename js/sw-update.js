@@ -255,6 +255,12 @@ function scheduleGate(reg) {
 
   const attempt = () => {
     if (dismissed) { stopWatchingForQuiet(); return true; }
+    // ⚠️ Not while the kiosk rest cover is up (js/kiosk.js; by id only — no import between
+    // files). The gate sits above the cover (z-index), so a white «Update the app» box would
+    // shine over the black rest screen for hours. The cover leaving the body is a childList
+    // mutation, so the gate then appears for the person who just woke the tablet. The cover
+    // is deliberately NOT in BUSY_SELECTORS: kiosk.js uses those to decide it may rest.
+    if (document.getElementById('kiosk-rest')) return false;
     const state = updateGateState({
       waiting: true,
       busy: isBusy(document),

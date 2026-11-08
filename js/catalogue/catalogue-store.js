@@ -23,6 +23,8 @@ import {
   watchSuppliers,
   watchLabelConfig,
   saveLabelConfig,
+  addRecipeCategoryWord,
+  removeRecipeCategoryWords,
   watchPrintAgents,
   queuePrintJob,
   saveRecipeDoc,
@@ -30,6 +32,7 @@ import {
   newRecipeId,
 } from './firebase-catalogue.js';
 import { normalizeLabelProfile } from './label-template-model.js';
+import { normalizeRecipeCategories, categoryKey, removeCategory, categoryPatchOf } from './recipe-categories-model.js';
 import { buildJob, printerPresence } from '../print-queue-model.js';
 import { currentSession } from '../firebase.js';
 import { currentLocationId } from '../location.js';
@@ -217,6 +220,46 @@ export async function saveLabelProfile(patch) {
   return getLabelProfile();
 }
 
+// ── The recipe categories ────────────────────────────────────────────────────
+
+// The venue's list, as stored and made safe, in no particular order: the screens sort it. Read from
+// the document itself because normalizeLabelProfile() keeps only what a label needs.
+export function getRecipeCategories() {
+  return normalizeRecipeCategories(labelConfig && labelConfig.recipeCategories);
+}
+
+function setLocalCategories(list) {
+  labelConfig = { ...(labelConfig || {}), recipeCategories: list };
+  writeJson(LABEL_CONFIG_KEY, labelConfig);
+  if (notify) notify(recipes);
+}
+
+// ⚠️ ONLY THIS WORD IS PUT BACK, never a copy of the document taken before the write: other words,
+// and the label settings, may have changed in the meantime. Said wherever the person is by now.
+function categoryWriteRefused(err, undo) {
+  console.warn('Recipe categories did not sync to Firestore:', err);
+  setLocalCategories(undo(getRecipeCategories()));
+  if (onSyncError) onSyncError(t('cat.shelf.categoriesNotSaved'));
+  throw err;
+}
+
+// Local-first, one word at a time (see the data layer for why). The screen changes at once, offline
+// too, where the promise stays pending until the network is back: nothing may wait for it.
+export function addRecipeCategory(word) {
+  setLocalCategories([...getRecipeCategories(), word]);
+  return addRecipeCategoryWord(word)
+    .catch(err => categoryWriteRefused(err, list => removeCategory(list, word)));
+}
+
+export function removeRecipeCategory(word) {
+  // Every spelling stored: two phones offline may each have added the word in its own case.
+  const stored = Array.isArray(labelConfig && labelConfig.recipeCategories) ? labelConfig.recipeCategories : [];
+  const spellings = stored.filter(held => categoryKey(held) === categoryKey(word));
+  setLocalCategories(removeCategory(getRecipeCategories(), word));
+  return removeRecipeCategoryWords(spellings.length ? spellings : [word])
+    .catch(err => categoryWriteRefused(err, list => [...list, word]));
+}
+
 // ── Ingredients and suppliers (read-only, owned by Orders) ────────────────────
 // Mirrored to localStorage like the recipes, so a recipe opened offline still shows
 // its links and its allergens instead of silently reading as undeclared. No prices:
@@ -370,12 +413,17 @@ export function saveRecipe(recipe) {
   // field this object does not send is a field it cannot put back: a recipe opened
   // here before somebody weighed it in Food cost, and saved after, keeps the new
   // number. Sending the copy this screen read would silently undo it.
+  //
+  // ⚠️ THE CATEGORY TRAVELS ONLY WHEN THE EDITOR'S MENU MOVED IT (`categoryMoved`), on the same
+  // reasoning: saving the steps or fixing a typo must not write back the category this screen read,
+  // over a change made on another phone — nor strip a recipe of a word the list no longer has.
+  Object.assign(data, categoryPatchOf(recipe));
   const id = recipe.id || newRecipeId();
   const prev = recipes.find(r => r.id === id) || null;
   // …and the list on screen keeps them too, for the same reason: the write leaves the
   // document's loss alone, so the local copy must not drop it until the next snapshot.
   const kept = {};
-  if (prev) ['lossPct', 'rawGrams', 'cookedGrams'].forEach(k => { if (prev[k] !== undefined) kept[k] = prev[k]; });
+  if (prev) ['lossPct', 'rawGrams', 'cookedGrams', 'category'].forEach(k => { if (prev[k] !== undefined) kept[k] = prev[k]; });
   upsertLocal({ ...kept, id, ...data });
   saveRecipeDoc(id, data).catch(err => {
     console.warn('Recipe did not sync to Firestore:', err);

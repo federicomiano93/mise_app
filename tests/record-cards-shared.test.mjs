@@ -45,7 +45,7 @@ test('the «no supplier» id is ONE string, whichever feature files the ingredie
 
 test('the Catalogue asks that rule, of the session, each time', () => {
   assert.match(codeOf(read('js/catalogue/catalogue-main.js')),
-    /mayCreateIngredient: \(\) => \{ const s = currentSession\(\); return mayEditRecords\(s\.location, s\.canManage\); \},/);
+    /mayCreateIngredient: \(\) => \{ const s = currentSession\(\); return mayEditRecords\(s\.location, s\.canManage, s\.role\); \},/);
 });
 
 // ── The create row ───────────────────────────────────────────────────────────

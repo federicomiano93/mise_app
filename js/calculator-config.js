@@ -420,6 +420,22 @@ export function recipeSpec(recipe) {
   return { amounts, leaveningKey, baselinePct };
 }
 
+// The ingredients in a new order: the one at `from` moved to `to`. A NEW list holding the
+// SAME row objects, so each row keeps its `key` (the leavening is found by it). An index
+// outside the list, or a move to where it already is, gives the list back as it was.
+// ⚠️ A deliberate copy of the Catalogue's moveRow (js/catalogue/catalogue-model.js): cheap,
+// and a feature may not import from another feature's folder.
+export function moveIngredient(list, from, to) {
+  const rows = Array.isArray(list) ? list.slice() : [];
+  const a = Math.trunc(Number(from));
+  const b = Math.trunc(Number(to));
+  if (!Number.isInteger(a) || !Number.isInteger(b) || a === b
+    || a < 0 || b < 0 || a >= rows.length || b >= rows.length) return rows;
+  const [row] = rows.splice(a, 1);
+  rows.splice(b, 0, row);
+  return rows;
+}
+
 // The saved independent WhatsApp lists (empty array for a missing/garbage config).
 export function getWhatsappLists(config) {
   return (config && Array.isArray(config.whatsappLists)) ? config.whatsappLists : [];
@@ -935,17 +951,30 @@ function normalizeRecipe(raw, index) {
   const id = String(raw.id || ('r-' + (slug(name) || index)));
   const logic = LOGICS.includes(raw.logic) ? raw.logic : 'orders';
 
-  const ingredients = [];
+  // ⚠️ ROWS THAT ALREADY HAVE A KEY CLAIM IT FIRST, then the new ones (no key yet) get theirs.
+  // A new row's key is made from its name, and when two rows ask for the same key the first
+  // one in the list used to win. Since the ingredients can be reordered (29 Oct 2026), a new
+  // «Yeast» dragged above the saved Yeast would have taken the key `yeast` — and the leavening,
+  // which is found by that key, would have moved onto the new row, changing every dough.
+  // Rows that all have keys, or none, are keyed exactly as before.
   const usedKeys = new Set();
   const rawIngs = Array.isArray(raw.ingredients) ? raw.ingredients : [];
+  const rows = [];
   rawIngs.forEach((ri, i) => {
     const row = normalizeIngredientRow(ri, i);
-    if (!row) return;
-    let key = row.key;
-    while (usedKeys.has(key)) key = key + '-' + i; // keep keys unique within the recipe
-    usedKeys.add(key);
-    ingredients.push({ key, label: row.label, grams: row.grams });
+    if (row) rows.push({ row, i, saved: !!ri.key });
   });
+  const keyOf = new Map();
+  for (const pass of [true, false]) {
+    for (const r of rows) {
+      if (r.saved !== pass) continue;
+      let key = r.row.key;
+      while (usedKeys.has(key)) key = key + '-' + r.i; // keep keys unique within the recipe
+      usedKeys.add(key);
+      keyOf.set(r, key);
+    }
+  }
+  const ingredients = rows.map(r => ({ key: keyOf.get(r), label: r.row.label, grams: r.row.grams }));
 
   const leaveningKey = (raw.leaveningKey && usedKeys.has(String(raw.leaveningKey)))
     ? String(raw.leaveningKey) : null;
@@ -1199,6 +1228,40 @@ export function reconcileConfigWrite(config, server) {
   return { recipes, configRev: serverRev + 1 };
 }
 
+// The code of the error a clients-only save throws when the document needs the Calculator's
+// whole save first (see needsCalculatorSave).
+export const NEEDS_CALCULATOR_SAVE = 'needs-calculator-save';
+
+// Can this server document take a clients-only save? Two cases where it cannot:
+// - it does not exist: the rules let the owner of the sales side change it, never start it.
+// - ⚠️ IT IS STILL IN A RETIRED SHAPE. normalizeConfig asks the old keys before `clients`, and a
+//   clients-only save cannot delete them as the whole save does (the rules refuse this role
+//   those keys). So next to a top-level products[] the saved clients are read through
+//   migrateCatalogue, which looks only at clients[].items: every client would come back with no
+//   products, on every phone. And on the oldest per-tab shape a new clients[] would hide the
+//   clients and recipes still migrated from it.
+export function needsCalculatorSave(server) {
+  if (!server || typeof server !== 'object') return true;
+  if (Array.isArray(server.products)) return true;
+  return !Array.isArray(server.clients)
+    && !!(server.focaccia || server.brioche || server.sourdough || server.market);
+}
+
+// What the Clients page (js/clients/clients-main.js) writes: the address book and the next
+// revision, nothing else. ⚠️ THE RULES JUDGE THE KEYS A SAVE CHANGES, and the Calculator's whole
+// save re-normalises the recipes, so the owner of the sales side could never send it
+// (writesCalculatorConfigAs in firestore.rules). Leaving the recipes out also means this save
+// cannot overwrite one, so there is nothing for reconcileConfigWrite to rescue.
+//
+// ⚠️ NO LIST OF CLIENTS IS AN ERROR, NEVER AN EMPTY LIST: an empty one would wipe the address book.
+export function clientsOnlyWrite(config, server) {
+  if (!config || !Array.isArray(config.clients)) throw new TypeError('clientsOnlyWrite: no clients');
+  return {
+    clients: config.clients,
+    configRev: (Number(server && server.configRev) || 0) + 1,
+  };
+}
+
 // Which sentence tells a person that a config save did NOT reach the server (a key of
 // js/i18n.js), or null when it did. `result` is what saveConfig resolves with.
 // permission-denied is the server REFUSING: since the configModel guard that means this
@@ -1206,5 +1269,6 @@ export function reconcileConfigWrite(config, server) {
 // connection. 'no-server-answer' explains itself inside saveConfig, so it has no key here.
 export function saveFailureKey(result) {
   if (!result || result.reason !== 'write-failed') return null;
+  if (result.code === NEEDS_CALCULATOR_SAVE) return 'calc.notSavedNoConfig';
   return result.code === 'permission-denied' ? 'calc.notSavedOutOfDate' : 'calc.notSavedCheckConnection';
 }

@@ -41,10 +41,11 @@ test('night stays night until an input (the runtime sets active)', () => {
   assert.equal(nextKioskState({ ...base, state: 'night', restSince: 0 }).state, 'night');
 });
 
-test('auto-update only when resting, free and an update is waiting', () => {
-  const ok = { state: 'rest', busy: false, updateWaiting: true };
+test('auto-update only at the night ENTRY, free and an update is waiting — never under the rest cover', () => {
+  const ok = { prevState: 'rest', state: 'night', busy: false, updateWaiting: true };
   assert.equal(shouldAutoUpdate(ok), true);
-  assert.equal(shouldAutoUpdate({ ...ok, state: 'night' }), true);
+  assert.equal(shouldAutoUpdate({ ...ok, prevState: 'night' }), false, 'later in night the update waits for the wake');
+  assert.equal(shouldAutoUpdate({ ...ok, state: 'rest' }), false, 'a reload in rest switches the screen off at once');
   assert.equal(shouldAutoUpdate({ ...ok, state: 'active' }), false);
   assert.equal(shouldAutoUpdate({ ...ok, busy: true }), false);
   assert.equal(shouldAutoUpdate({ ...ok, updateWaiting: false }), false);

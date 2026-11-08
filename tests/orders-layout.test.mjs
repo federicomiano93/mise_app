@@ -107,47 +107,40 @@ test('⚠️ the order-lists button changes colour when a list is waiting', () =
   assert.match(CSS, /\.orders-lists-btn\.is-waiting\s*\{[^}]*background:\s*var\(--crust\)/);
 });
 
-// ── 3. One button in the bar, and History behind the gear ────────────────────
+// ── 3. Two buttons in the bar: History beside Settings ───────────────────────
 
-test('the bar holds one button, and the bar itself is derived from it', () => {
+test('the bar holds History beside Settings, and the bar itself is derived from them', () => {
   const bar = PAGE.match(/<div class="recipe-footer"[\s\S]*?<\/div>/)[0];
-  assert.equal((bar.match(/class="recipe-footer-btn"/g) || []).length, 1);
-  assert.match(bar, /id="settings-footer-btn"/);
+  assert.equal((bar.match(/class="recipe-footer-btn"/g) || []).length, 2);
+  assert.match(bar, /id="history-footer-btn"[\s\S]*data-i18n="ui\.history"[\s\S]*id="settings-footer-btn"/);
   assert.match(MAIN, /footerEl\.hidden = !\[\.\.\.footerEl\.children\]\.some/,
     'no visible button, no bar — derived, never typed');
 });
 
 // ⚠️⚠️ THE v1.62.0 CHECK, MADE AGAIN. A gate on a container is a gate on everything
-// later put inside it. History has never had a role, and the panel it now lives in is
-// open to everybody — `isAdmin` is the always-true placeholder and each control in
-// there carries its own permission.
-test('⚠️⚠️ moving History into Settings takes it away from nobody', () => {
+// later put inside it. History has never had a role, and neither has the bar that
+// holds its button. The settings panel is open to everybody too — `isAdmin` is the
+// always-true placeholder and each control in there carries its own permission.
+test('⚠️⚠️ History is for everybody, and shut while the list is still the local copy', () => {
+  assert.match(MAIN, /getElementById\('history-footer-btn'\)\?\.addEventListener\('click', whenLive\(openHistory\)\)/);
+  const wiring = MAIN.slice(MAIN.indexOf("getElementById('history-footer-btn')") - 200, MAIN.indexOf("getElementById('history-footer-btn')"));
+  assert.doesNotMatch(wiring.slice(wiring.lastIndexOf('}')), /if \(/, 'no role in front of it');
+  assert.equal(MAIN.split('history-footer-btn').length - 1, 1, 'and nothing else may hide it: the wiring is the only line that names it');
+});
+
+test('Settings no longer opens History, and keeps the field that says how far back it draws', () => {
   assert.match(codeOf(read('js/orders/management.js')), /export const isAdmin = true/,
     'the settings panel is for everybody; each control is gated on its own');
   const render = MGMT.slice(MGMT.indexOf('function render()'));
   const body = render.slice(0, render.search(/^  \}/m));
   assert.ok(body.length > 100, 'the slice must not be empty');
+  assert.doesNotMatch(MGMT, /openHistory/);
+  assert.doesNotMatch(MAIN.slice(MAIN.indexOf('buildManagement(')), /openHistory: \(\)/);
   const at = body.indexOf("section('orders.section.more'");
-  assert.ok(at > 0, 'History lives in the «More» section of the panel');
-  assert.match(body.slice(at), /actions\.openHistory \? door\('orders\.settings\.openHistory'/);
+  assert.ok(at > 0, 'the days field and Help live in the «More» section of the panel');
+  assert.match(body.slice(at), /buildHistoryDaysField\(config, boss\)/);
   assert.ok(!/if \(boss\)\s*$/.test(body.slice(0, at).trimEnd()),
     'and that section must not sit behind `boss`');
-});
-
-// ⚠️⚠️ AND IT HAS TO BE IN THE RIGHT HALF OF THE CALL. buildManagement(data,
-// actions) reads it as actions.openHistory and skips the whole section when it is
-// missing — so putting it in `data` left History simply not there, in silence, with
-// every test green. Only opening the screen showed it. A guard that asks whether the
-// WORD appears would have passed too; this one asks where.
-test('⚠️⚠️ the way into History is handed in as an ACTION, not as data', () => {
-  const call = MAIN.slice(MAIN.indexOf('buildManagement('));
-  // The call ends at the closing paren in column 3.
-  const args = call.slice(0, call.search(/^  \);/m));
-  assert.ok(args.length > 100, 'the slice must not be empty');
-  const secondObject = args.slice(args.indexOf('onClose:'));
-  assert.ok(secondObject.includes('openHistory:'),
-    'openHistory must sit beside onClose, in the actions object');
-  assert.match(MGMT, /actions\.openHistory\(\)/, 'management.js only calls what it was given');
 });
 
 // ── 4. The settings groups can be told apart ─────────────────────────────────
@@ -169,7 +162,7 @@ test('an empty group draws no heading at all', () => {
 // ── 5. The words ─────────────────────────────────────────────────────────────
 
 test('every new phrase exists in BOTH languages', () => {
-  const keys = ['orders.alert.close', 'orders.alert.reopen', 'orders.settings.openHistory'];
+  const keys = ['orders.alert.close', 'orders.alert.reopen', 'ui.history'];
   const dicts = Object.entries(_dictionaries());
   assert.ok(dicts.length >= 2);
   for (const [lang, dict] of dicts) {

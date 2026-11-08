@@ -22,25 +22,31 @@
 // role can no longer disagree with a membership — the earlier shape allowed
 // `roles: { someone-elses-place: 'owner' }` and had to defend against it.
 
-import { accessValue, OWNER, MANAGER } from './sections.js';
+import { accessValue, OWNER, MANAGER, OWNER_SALES, OWNER_KITCHEN } from './sections.js';
 
-// THREE roles, and the third one earns its place. Federico's own words for them
-// (11 Aug 2026): the proprietario, the head chef or manager, and the ordinary
-// employee. That is a real distinction in a kitchen, not a technical one — it
-// separates the person who HIRES from the people who WORK — which is why it will
-// still make sense when the software has changed.
+// Three roles first. Federico's own words for them (11 Aug 2026): the proprietario, the
+// head chef or manager, and the ordinary employee. That is a real distinction in a
+// kitchen, not a technical one — it separates the person who HIRES from the people who
+// WORK — which is why it will still make sense when the software has changed.
 //
-// ⚠️ THREE IS ALSO THE CEILING. The reason is not effort, it is that a
-// permission system nobody can hold in their head fails the same way every
-// time: it becomes so tiring to work out who may do what that everybody is made
-// an owner to get the app working, and then there are no roles at all.
+// ⚠️ THREE WAS MEANT TO BE THE CEILING, and the reason still holds: a permission system
+// nobody can hold in their head fails the same way every time, it becomes so tiring to
+// work out who may do what that everybody is made an owner to get the app working, and
+// then there are no roles at all.
+//
+// ⚠️ FEDERICO RAISED IT ON 1 NOV 2026, knowing that: an owner of the sales side only and
+// an owner of the kitchen side only, beside the owner who sees everything. They run
+// their side as an owner would and hire nobody, which is what keeps them explainable in
+// one line (js/sections.js ROLE_CARDS says which cards each one has). Do not add a sixth
+// without asking him the same question.
+//
 // ⚠️ THE WORDS COME FROM THE DICTIONARY; THE VALUES DO NOT AND MUST NOT. Every
 // identifier in this file — 'owner', 'manager', 'staff', 'head-chef' — is stored
 // in users/{uid} and read by firestore.rules, so it is DATA. Only the words a
 // person reads are looked up. tests/i18n.test.mjs fails if the two are confused.
 import { t } from './i18n.js';
 
-export const ROLES = Object.freeze([OWNER, MANAGER, 'staff']);
+export const ROLES = Object.freeze([OWNER, OWNER_SALES, OWNER_KITCHEN, MANAGER, 'staff']);
 
 // ⚠️ THE DEFAULT IS THE WHOLE DESIGN, AND IT POINTS AT `staff`.
 //
@@ -60,16 +66,13 @@ export function isValidRole(value) {
   return typeof value === 'string' && ROLES.includes(value);
 }
 
-// The role this account holds in one location. Anything that is not exactly
-// 'owner' or 'manager' — a plain `true`, a missing entry, a corrupt one, a role
-// from a future version of the app, a value with a stray space — is an ordinary
-// employee. A value nobody here understands must never be read as more power
-// than the least.
+// The role this account holds in one location. Anything that is not exactly one of the
+// named roles — a plain `true`, a missing entry, a corrupt one, a role from a future
+// version of the app, a value with a stray space — is an ordinary employee. A value
+// nobody here understands must never be read as more power than the least.
 export function roleOf(userDoc, locationId) {
   const value = accessValue(userDoc, locationId);
-  if (value === OWNER) return OWNER;
-  if (value === MANAGER) return MANAGER;
-  return DEFAULT_ROLE;
+  return typeof value === 'string' ? value : DEFAULT_ROLE;
 }
 
 // May this account take things away in this location — suppliers, ingredients,
@@ -83,9 +86,29 @@ export function roleOf(userDoc, locationId) {
 // Said plainly because it is easy to assume otherwise from the name: the guard
 // against a manager emptying a supplier list is not this function, it is the
 // nightly backup (restore tested 1 Aug 2026, 0 documents lost).
+//
+// ⚠️ A PARTIAL OWNER ANSWERS YES HERE, because every screen they can open is on their own
+// side and the rules refuse the rest. It says nothing about the venue as a whole: that is
+// canManageVenue() below.
 export function canManage(userDoc, locationId) {
   const value = accessValue(userDoc, locationId);
+  return value === OWNER || value === MANAGER || value === OWNER_SALES || value === OWNER_KITCHEN;
+}
+
+// May this account change how the whole venue works — its language, its Home cards, what
+// its employees are shown? The Cloud Functions behind those switches ask for exactly
+// these two values (functions/onboarding.js).
+export function canManageVenue(userDoc, locationId) {
+  const value = accessValue(userDoc, locationId);
   return value === OWNER || value === MANAGER;
+}
+
+// Does this person work on the clients at all — the Clients editor, the WhatsApp lists, the
+// ordering links and menus? Everybody but the owner of the kitchen, who reads names and
+// quantities only inside the Calculator. Same list as worksOnClientsAs() in firestore.rules
+// (tests/partial-owner-roles.test.mjs compares them). `role` is the session's, 'staff' for `true`.
+export function worksOnClients(role) {
+  return role !== OWNER_KITCHEN;
 }
 
 // May this account invite people and decide their roles?
@@ -104,6 +127,8 @@ export function isOwner(userDoc, locationId) {
 export function roleLabel(role) {
   if (role === OWNER) return t('role.owner');
   if (role === MANAGER) return t('role.manager');
+  if (role === OWNER_SALES) return t('role.ownerSales');
+  if (role === OWNER_KITCHEN) return t('role.ownerKitchen');
   return t('role.staff');
 }
 
@@ -144,10 +169,10 @@ export function personLabel(role, title) {
   return titleLabel(title);
 }
 
-// The role choices on "Who can get in": FOUR words, THREE levels of power.
+// The role choices on "Who can get in": SIX words, FIVE levels of power.
 //
 // ⚠️ Two of them grant exactly the same thing, and the screen has to say so out
-// loud — a row of four that looks like four levels is worse than no title at all.
+// loud — a row that looks like one level per word is worse than no title at all.
 //
 // ⚠️ IT CARRIES A KEY, NOT A WORD, AND THAT IS NOT A STYLE CHOICE. This is a
 // frozen constant built when the file is first imported — long before anybody has
@@ -157,6 +182,8 @@ export function personLabel(role, title) {
 // for the word at the moment it draws it.
 export const ROLE_CHOICES = Object.freeze([
   { key: OWNER, role: OWNER, title: null, labelKey: 'role.owner' },
+  { key: OWNER_SALES, role: OWNER_SALES, title: null, labelKey: 'role.ownerSales' },
+  { key: OWNER_KITCHEN, role: OWNER_KITCHEN, title: null, labelKey: 'role.ownerKitchen' },
   { key: MANAGER, role: MANAGER, title: 'manager', labelKey: 'role.manager' },
   { key: 'head-chef', role: MANAGER, title: 'head-chef', labelKey: 'role.headChef' },
   { key: 'staff', role: 'staff', title: null, labelKey: 'role.staff' },
@@ -175,6 +202,8 @@ export function choiceLabel(choice) {
 export function personLabelInSentence(role, title) {
   if (role !== MANAGER) {
     if (role === OWNER) return t('role.owner.inSentence');
+    if (role === OWNER_SALES) return t('role.ownerSales.inSentence');
+    if (role === OWNER_KITCHEN) return t('role.ownerKitchen.inSentence');
     return t('role.staff.inSentence');
   }
   return title === 'head-chef' ? t('role.headChef.inSentence') : t('role.manager.inSentence');

@@ -143,7 +143,7 @@ test('the Calculator’s three buttons wrap in the shared bar — no grid, no pe
   assert.doesNotMatch(css, /body\[data-section="calculator"\] \.recipe-footer/);
   assert.doesNotMatch(css, /#settings-footer-btn \{/);
   const orders = read('orders.css').replace(/\/\*[\s\S]*?\*\//g, '');
-  assert.doesNotMatch(orders, /#orders-footer/, 'the shared bar already centres one button');
+  assert.doesNotMatch(orders, /#orders-footer/, 'the shared bar already centres its buttons');
   assert.match(orders, /body\[data-section="orders"\] \.recipe-footer-btn \{ min-height: var\(--tap-min\); \}/,
     'the tablet floor stays');
 });
@@ -159,7 +159,7 @@ test('«Reset quantities…» is a quiet text button: no frame, danger text, 44p
   assert.match(rule, /margin:\s*8px auto 0/);
   assert.match(read('orders.html'), /id="clear-all-btn"/);
   assert.match(read('js/orders/orders-main.js'),
-    /getElementById\('clear-all-btn'\)\?\.addEventListener\('click', openClearScreen\)/);
+    /getElementById\('clear-all-btn'\)\?\.addEventListener\('click', whenLive\(openClearScreen\)\)/);
 });
 
 // The supplier screen's summary bar (3 Oct 2026) follows the same pairing: the page's ground

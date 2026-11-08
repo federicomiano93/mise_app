@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   usagePath, lineFrom, linesFrom, isStale, summarise, summaryLines, toJson, median, dayOf, PRUNE_DAYS,
+  USAGE_FIELDS,
 } from '../scripts/usage-summary.mjs';
 
 const DEV_A = 'AbCdEfGhIjKlMnOpQrSt';
@@ -110,6 +111,69 @@ test('per venue: the last 7 and 30 days, people and devices per day, screens, ro
   assert.deepEqual(b.last7.loadMedianMs, [['orders', 700]]);
   assert.equal(b.last7.offlineMinutes, 2);
   assert.deepEqual(b.last7.versions, [['649', 2]]);
+});
+
+test('a device counts with the release of its NEWEST line that names one', () => {
+  const lines = linesFrom([
+    row('bakery', DEV_A, '20261005', 'u1', { appVersion: { stringValue: '716' } }),
+    row('bakery', DEV_A, '20261008', 'u1', { appVersion: { stringValue: '741' } }),
+    row('bakery', DEV_A, '20261009', 'u1', { appVersion: { nullValue: null } }),
+    row('bakery', DEV_B, '20261003', 'u2', { appVersion: { nullValue: null } }),
+    row('bakery', DEV_B, '20261004', 'u2', { appVersion: { stringValue: '700' } }),
+  ]);
+  assert.deepEqual(summarise(lines, NOW)[0].last30.versions, [['741', 1], ['700', 1]]);
+  const unknown = linesFrom([row('bakery', DEV_A, '20261009', 'u1', { appVersion: { nullValue: null } })]);
+  assert.deepEqual(summarise(unknown, NOW)[0].last7.versions, [['unknown', 1]]);
+});
+
+test('real hours count only the hours worked; older lines fall back to the first/last-minute span', () => {
+  const lines = linesFrom([
+    // Looked in at 7, worked again at 22: with real hours that is two hours, not sixteen.
+    row('bakery', DEV_A, '20261009', 'u1', {
+      firstMinute: { integerValue: '420' }, lastMinute: { integerValue: '1330' },
+      hours: ints({ '07': 600, 22: 1200, 24: 99, x: 5 }),
+    }),
+    row('bakery', DEV_B, '20261009', 'u2', { firstMinute: { integerValue: '540' }, lastMinute: { integerValue: '660' } }),
+  ]);
+  assert.deepEqual(lines[0].hours, { '07': 600, 22: 1200 });
+  const w = summarise(lines, NOW)[0].last7;
+  assert.equal(w.hours[7], 1);
+  assert.equal(w.hours[8], 0, 'nobody worked at 8 on the exact line, and the old line starts at 9');
+  assert.equal(w.hours[9], 1);
+  assert.equal(w.hours[11], 1);
+  assert.equal(w.hours[15], 0, 'the span 7→22 is no longer counted');
+  assert.equal(w.hours[22], 1);
+  assert.equal(w.hoursEstimated, 1);
+  assert.equal(w.minutesByHour[7], 10);
+  assert.equal(w.minutesByHour[22], 20);
+  assert.equal(w.minutesByHour[9], 0, 'estimated lines add no minutes');
+  const text = summaryLines(summarise(lines, NOW)[0], 'B').join('\n');
+  assert.match(text, /1 of 2 lines estimated/);
+  assert.match(text, /minutes worked per hour .*07 10/);
+});
+
+test('load times are also split by kind of device', () => {
+  const lines = linesFrom([
+    row('bakery', DEV_A, '20261009', 'u1', { kind: { stringValue: 'tablet' }, loads: ints({ orders: 1 }), loadMs: ints({ orders: 1500 }) }),
+    row('bakery', DEV_B, '20261009', 'u2', { loads: ints({ orders: 2 }), loadMs: ints({ orders: 800 }) }),
+  ]);
+  const w = summarise(lines, NOW)[0].last7;
+  assert.deepEqual(w.loadMedianByKind, [['orders', 'tablet', 1500], ['orders', 'phone', 400]]);
+  const odd = linesFrom([row('bakery', DEV_A, '20261009', 'u1', { loads: ints({ index: 3 }), loadMs: ints({ index: 1000 }) })]);
+  assert.deepEqual(summarise(odd, NOW)[0].last7.loadMedianByKind, [['index', 'phone', 333]], 'whole milliseconds');
+  assert.match(summaryLines(summarise(lines, NOW)[0], 'B').join('\n'), /orders\/tablet 1500/);
+});
+
+test('⚠️ every field the reader reads is one the script downloads', () => {
+  // runQuery returns only the projected fields: a field missing from USAGE_FIELDS reads as absent
+  // for ever (found in review, 6 Nov 2026: `hours` was recorded but never downloaded).
+  const src = readFileSync(new URL('../scripts/usage-summary.mjs', import.meta.url), 'utf8');
+  const body = src.slice(src.indexOf('export function lineFrom'), src.indexOf('export function linesFrom'));
+  const read = [...new Set([...body.matchAll(/\bf\.([A-Za-z]+)/g)].map(m => m[1]))].sort();
+  assert.ok(read.includes('hours') && read.includes('appVersion'), read.join());
+  assert.deepEqual(read, [...USAGE_FIELDS].sort());
+  const reader = readFileSync(new URL('../scripts/read-usage.mjs', import.meta.url), 'utf8');
+  assert.match(reader, /const FIELDS = USAGE_FIELDS;/);
 });
 
 test('the top routes are fifteen at most', () => {

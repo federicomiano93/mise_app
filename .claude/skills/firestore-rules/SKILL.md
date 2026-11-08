@@ -22,26 +22,41 @@ reach Firestore only through `backend.firestore()` (`app/src/session/firebaseBac
 | Does this venue use this part of the app? | `sectionOn(lid, name)` | **allow** (only an explicit `false` turns a section off) |
 | Is this document well formed? | the field rules of the block | — |
 
-- `canUse(lid, section)` = `member` + `sectionOn` — what ordinary daily work needs.
-- `canManage(lid, section)` = `canUse` + role is `'owner'` or `'manager'`. Among others it
-  guards DELETING suppliers, ingredients, recipes, products, client menus; WRITING
-  `config/orders`, `config/labels`, `ingredient-prices`, `client-accounts`; and even
-  READING `foodcost-settings`. Always read the block itself — it is not only a delete gate. ⚠️ Two tiers only: hiring lives in
-  `functions/onboarding.js`, never in the rules.
+- `canUse(lid, section)` = a member value + `sectionOn` − the sections a partial owner is kept
+  out of (`narrowedOut`) — what ordinary daily work needs. It reads through `roleIn`, 2 reads.
+- `canManage(lid, section)` = `canUse` + `runsThePlace` (`'owner'`, `'manager'`, or a partial
+  owner, whom `canUse` has already narrowed). Among others it guards DELETING suppliers,
+  ingredients, recipes, products; WRITING `config/orders`, `config/labels`; and even READING
+  `foodcost-settings`. Always read the block itself — it is not only a delete gate. ⚠️ Two
+  tiers only: hiring lives in `functions/onboarding.js`, never in the rules.
 - `cardAccess(lid, section, card)` → `'manage' | 'staff' | 'none'` — the MONEY screens
   (Food cost, Magazzino). An employee gets `'staff'` only where the venue set
-  `staffShownCards.<card> == true` (literal `true`).
+  `staffShownCards.<card> == true` (literal `true`). A partial owner gets `'manage'` or `'none'`,
+  never `'staff'`. The pseudo-card `'prices'` is what purchase prices go through, so the kitchen
+  reaches them without Food cost; `managesPrices(lid)` is `cardAccess(…, 'prices') == 'manage'`.
+- **The clients:** `worksOnClients(lid)` (everybody but the kitchen's owner: `client-settings`,
+  writing `client-menus`) and `managesClients(lid)` (owner, manager, sales: `client-accounts`,
+  whose `linkToken` is the ordering account's password — the account itself reads its own —
+  and deleting a menu). `client-orders` are read by every member, written by `canUse(lid, 'calculator')`.
+- ⚠️ **The two partial owners, and only they:** `'owner-sales'` writes only `clients`,
+  `whatsappClients` and the stamps of `config/calculator`, judged by CHANGED keys
+  (`writesCalculatorConfig`), and only the three weighing fields of a recipe
+  (`weighsRecipeLoss`). `'owner-kitchen'` still saves `config/calculator` whole, clients included:
+  the Calculator re-normalises the whole document on every save, so a key check would refuse a
+  dough. Their table is `narrowedOut` / `cardNarrowedOut` here, `NOT_FOR_ROLE` in `js/sections.js`
+  and `ROLE_CARDS` in `js/home-cards.js`; `tests/partial-owner-roles.test.mjs` compares them.
 - Client ordering accounts are NEVER a `member()` — they have no `users/{uid}`; their grant
   is `locations/{lid}/client-accounts/{uid}` (`isOrderClient`). Keep it that way: never let
   the app write another person's `users/{uid}` — that would be a master key.
-- Kept open to every member ON PURPOSE (people correct their own work): `logs`, `log`,
-  `orders-history`, `client-orders`, `pastry-logs`, and `config/calculator`.
+- Kept open to every member of that side ON PURPOSE (people correct their own work): `logs`,
+  `log`, `orders-history`, `client-orders`, `pastry-logs`, and `config/calculator`.
 
 **The membership value IS the role**: `users/{uid}.locations.<lid>` = `true` (employee) |
-`'manager'` | `'owner'`. ⚠️ `is string` before comparing (a boolean vs a string is a type
-error). ⚠️ **A new membership value goes in THREE places or it is a lockout:**
-`js/sections.js` `locationsOf()`, `firestore.rules` `member()` (and `cardAccess`),
-`functions/onboarding.js` `accessValue()`.
+`'manager'` | `'owner'` | `'owner-sales'` | `'owner-kitchen'`. ⚠️ `is string` before comparing
+(a boolean vs a string is a type error). ⚠️ **A new membership value goes in THREE places or
+it is a lockout:** `js/sections.js` `ACCESS_VALUES`, `firestore.rules` `isMemberValue()`,
+`functions/onboarding.js` `ACCESS_VALUES`, pinned together by
+`tests/partial-owner-roles.test.mjs`. ⚠️ Mise 2 has a fourth, `shared/src/sections.ts`.
 
 ## Documents no client may write
 
@@ -56,7 +71,8 @@ error). ⚠️ **A new membership value goes in THREE places or it is a lockout:
      is built from it.
   2. **The role check:** `const access = await accessValue(uid, locationId);` and refuse
      with `permission-denied` unless `access` is `'owner'` or `'manager'` (only `'owner'` for
-     anything about people). Without it any signed-in account can change ANY venue.
+     anything about people). Without it any signed-in account can change ANY venue. ⚠️ A partial
+     owner is deliberately neither: they hire nobody and change no venue setting.
   3. Write **ONE field with `{ merge: true }`**, never a spread (the document also holds the
      name, sections and country).
   4. **Add it to the `export { … } from './onboarding.js'` list in `functions/index.js`** —
@@ -99,7 +115,7 @@ error). ⚠️ **A new membership value goes in THREE places or it is a lockout:
 6. **`allow read` also answers collection QUERIES, where `resource == null`.** A rule that
    judges `resource.data` must split `allow get` from `allow list` (see `inventory`).
 7. **Count the reads.** Firestore allows 10 document accesses per rule evaluation, counted
-   by CALL (the same doc twice = 2). Today: `canManage` ≈ 3, `cardAccess` = 2. Use one
+   by CALL (the same doc twice = 2). Today: `canUse` = 2, `canManage` = 3, `cardAccess` = 2. Use one
    `get()` bound with `let`, never `exists()` + `get()`. `tests/rules-read-budget.test.mjs`
    pins the shapes — update it with intent, never to make it pass. A budget crash and a
    refusal are both 403, so the rules suite alone cannot see it.

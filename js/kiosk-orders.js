@@ -6,8 +6,8 @@
 // kept in memory and handed over synchronously. It stays silent where the Orders page
 // already answers (its live data is fresher and a second answer would double the lines).
 //
-// Reads, per refresh (see fetchRestSections): config/orders (1 document), suppliers (all of
-// them), orders-history from the start of the current work week (a bounded `date >=`
+// Reads, per refresh (see fetchRestSections): config/orders (1 document), drafts/current (1 document,
+// for the suppliers closed as not ordered), suppliers (all of them), orders-history from the start of the current work week (a bounded `date >=`
 // query — a handful of documents). Refreshed when the screen goes to rest and every
 // 15 minutes while it stays there; never in the night, never while somebody is working.
 //
@@ -39,11 +39,14 @@ export async function fetchRestSections() {
   }
   const weekStartsOn = weekStartOf(config);
 
-  const [suppliers, history] = await Promise.all([
+  // drafts/current.skipped: a supplier closed as «non ordinato» today is not «to order». A failed
+  // read of it only means the closes are not known — never that the rest screen goes blank.
+  const [suppliers, history, skipped] = await Promise.all([
     orders.getCollection(orders.COLLECTIONS.suppliers),
     orders.getHistoryFrom(weekStart(today, weekStartsOn)),
+    orders.getDocOnce(orders.COLLECTIONS.drafts, 'current').then(d => d?.skipped || null, () => null),
   ]);
-  return kioskSectionsFromData({ suppliers, history, today, weekStartsOn });
+  return kioskSectionsFromData({ suppliers, history, today, weekStartsOn, skipped });
 }
 
 // The scheduler and the memory, with everything outside injected so it can be tested:

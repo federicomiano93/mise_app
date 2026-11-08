@@ -28,6 +28,9 @@ const DECOMMISSION = {
   18: '2025-10-30',
   20: '2026-10-30',
   22: '2027-10-30',
+  // GA for 2nd-gen functions (all of ours) and in firebase-tools 15.26.0, the
+  // CLI CI deploys with; Google publishes 2028-10-31 for it.
+  24: '2028-10-31',
 };
 
 test('the functions runtime is one Firebase actually offers', () => {
@@ -53,7 +56,7 @@ test('the runtime is not within six months of being decommissioned', () => {
 // says, in prose, "move them when functions/package.json moves, not before" —
 // which is the right instruction and has nothing enforcing it. When the test
 // above goes red six months before a decommission and somebody raises
-// package.json, nothing makes the three `node-version:` lines follow. The
+// package.json, nothing makes the `node-version:` lines follow. The
 // symptom of them drifting apart is not a failure: it is CI quietly testing the
 // server code on a runtime nobody deploys it to, plus an EBADENGINE warning in
 // the deploy's npm ci that everybody has learnt to scroll past. That exact state

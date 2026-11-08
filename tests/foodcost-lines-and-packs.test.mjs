@@ -200,7 +200,10 @@ test('an ingredient line is never taken for a recipe', () => {
 test('⚠️⚠️ every save carries the product model, and the rules refuse a save without it over one that has it', () => {
   assert.equal(PRODUCT_MODEL, 2);
   const store = codeOf(read('js/foodcost/foodcost-store.js'));
-  const save = store.slice(store.indexOf('export function saveProduct('), store.indexOf('const prev = products.find'));
+  // The fields every save writes live in productDocument(), used by saveProduct and by the
+  // products made from the recipe book alike (28 Oct 2026).
+  assert.match(store, /const data = productDocument\(product\);/);
+  const save = store.slice(store.indexOf('function productDocument('), store.indexOf('export async function createProductsFromRecipes'));
   assert.match(save, /model: PRODUCT_MODEL,/, 'the store writes the model on every save');
   assert.match(save, /packSize: product\.packSize \?\? null,/);
   assert.match(save, /packUnit: product\.packUnit \?\? null,/);
@@ -220,7 +223,9 @@ test('⚠️⚠️ every save carries the product model, and the rules refuse a 
 
 test('«Composto da» is one card: the lines, the add button, and the weighings LAST', () => {
   const editor = codeOf(read('js/foodcost/foodcost-editor.js'));
-  assert.match(editor, /const madeOf = el\('div', \{ class: 'fc-madeof' \}, \[componentRows, addLineBtn, weighRows\]\);/);
+  assert.match(editor, /const madeOf = el\('div', \{ class: 'fc-madeof' \}, \[componentRows, addLineBtn\]\);/);
+  assert.match(editor, /card\('fc\.madeOf', \[madeOf, weighHead, weighRows\]\)/,
+    'the weighings come LAST in the same card, under their own sub-heading');
   assert.match(editor, /addLineBtn\.textContent = working\.components\.length \? t\('fc\.addRecipeOrIngredient'\) : t\('fc\.addRecipe'\);/,
     'empty: add a recipe; after one: a recipe or an ingredient');
   assert.match(editor, /const chosen = await pick\(working\.components\.length \? 'line' : 'recipe'\);/);
@@ -241,7 +246,7 @@ test('⚠️ ingredients offered to a product are never packaging, and packaging
   const main = codeOf(read('js/foodcost/foodcost-main.js'));
   const ing = main.slice(main.indexOf('ingredientOptions()'), main.indexOf('packagingOptions()'));
   assert.match(ing, /!isPackaging\(i\)/);
-  assert.doesNotMatch(ing, /formatRate|priceEach|notPriced/, 'no price on an ingredient offered to «Composto da»');
+  assert.doesNotMatch(ing, /formatRate|fcMoney|fcNumber|priceEach|notPriced/, 'no price on an ingredient offered to «Composto da»');
   const pack = main.slice(main.indexOf('packagingOptions()'));
   assert.match(pack, /isPackaging\(i\)/);
 });

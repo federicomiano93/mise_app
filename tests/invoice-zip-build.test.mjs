@@ -105,12 +105,75 @@ test('eggs are pieces with the egg weight; a tray of 30 is a carton of 30 eggs',
   assert.equal(ingredient(c.build({ eggWeightG: 52 }), 'uova').unitWeightKg, 0.052);
 });
 
-test('a carton of 55 pieces weighing 2 kg is priced per kg of the carton, not of 55 cartons', () => {
+test('a carton of 55 pieces weighing 2 kg is 55 pieces of 36.4 g, priced per piece, not 55 cartons', () => {
   const c = newCase();
   c.add([{ desc: 'BRIOCHE MIGNON 35/40gr 2Kg* 55pz', code: 'BR1', qty: 1, unit: 'CT', total: 14.5 }]);
   const brioche = ingredient(c.build(), 'BR1');
-  assert.equal(brioche.priceUnit, 'kg');
-  assert.equal(brioche.prices[0].pricePerUnit, 7.25);
+  assert.deepEqual([brioche.priceUnit, brioche.weight, brioche.packCount, brioche.unitWeightKg], ['pcs', '36.4 g', 55, 0.0364]);
+  assert.equal(brioche.prices[0].pricePerUnit, 0.2636); // 14.5 / 55
+  // Per kilo it is still the carton's price per kilo (14.5 / 2 kg = 7.25), to within the rounding of a piece.
+  assert.ok(Math.abs(brioche.prices[0].pricePerUnit / brioche.unitWeightKg - 7.25) < 0.02);
+});
+
+// ⚠️ HIS RULE (5 Nov 2026): goods counted in pieces are priced per piece with the piece weight beside it; goods sold
+// by weight stay per kilo. Invented invoices shaped like the real ones.
+test('a product counted in pieces is priced per piece, with the piece weight and no «busta»', () => {
+  const c = newCase();
+  c.add([
+    { desc: 'SG.CR.1980 PF VUOTO 85gr* 50pz', code: 'CR1', qty: 1, unit: 'CT', total: 23.2 },
+    { desc: 'CORNETTO ESEMPIO PZ.50 GR.85', code: 'CR2', qty: 2, unit: 'CT', total: 57 },
+    { desc: 'CORNETTO CEREALI GR.85X50P', code: 'CR3', qty: 1, unit: 'CT', total: 35 },
+    { desc: 'PANZEROTTI CREMA PZ.25 GR.170', code: 'PZ1', qty: 1, unit: 'PZ', total: 24.5 },
+  ]);
+  const result = c.build();
+  const cornetti = ingredient(result, 'CR1');
+  assert.deepEqual(
+    [cornetti.priceUnit, cornetti.unitWeightKg, cornetti.weight, cornetti.packCount, cornetti.packUnit],
+    ['pcs', 0.085, '85 g', 50, ''],
+    'the app names the piece with the venue\'s own word (invoice-import-model.js), never the default «busta»',
+  );
+  assert.deepEqual([cornetti.prices[0].pricePerUnit, cornetti.prices[0].qty], [0.464, 50]);
+  assert.equal(cornetti.prices[0].fromPack, undefined, 'a price per piece is never re-read with a stored pack weight');
+  assert.equal(product(result, 'CR1').reliability, 'media');
+  assert.deepEqual([ingredient(result, 'CR2').priceUnit, ingredient(result, 'CR2').prices[0].pricePerUnit], ['pcs', 0.57]);
+  assert.deepEqual([ingredient(result, 'CR3').priceUnit, ingredient(result, 'CR3').unitWeightKg], ['pcs', 0.085]);
+  assert.deepEqual([ingredient(result, 'PZ1').priceUnit, ingredient(result, 'PZ1').prices[0].pricePerUnit], ['pcs', 0.98]);
+  // The file the app reads accepts them: a price per piece always carries its piece weight.
+  const parsed = parseImportFile(JSON.stringify(result.importFile));
+  assert.equal(parsed.ok, true);
+  assert.deepEqual(parsed.file.ingredients.filter((i) => i.invalid), []);
+});
+
+test('goods sold by weight stay per kilo, even in a carton counted in «pz»', () => {
+  const c = newCase();
+  c.add([
+    { desc: 'DR CIPOLLE FETTE 2,5kg* 4pz', code: 'CI', qty: 1, unit: 'CT', total: 22.8 },
+    { desc: 'PATATE DIPPING KG.2.5X4', code: 'PA', qty: 1, unit: 'CT', total: 40.5 },
+    { desc: 'MOZZARELLA TRIS G 100X3', code: 'MO', qty: 2, unit: 'PZ', total: 5.58 },
+    { desc: 'DETERGENTE POLVERE G 570 (X12PZ)', code: 'DE', qty: 1, unit: 'CT', total: 9.74 },
+  ]);
+  const result = c.build();
+  const onion = ingredient(result, 'CI');
+  assert.deepEqual([onion.priceUnit, onion.weight, onion.packCount, onion.unitWeightKg], ['kg', '2.5 kg', 4, null]);
+  assert.equal(onion.prices[0].pricePerUnit, 2.28);
+  assert.deepEqual([ingredient(result, 'PA').priceUnit, ingredient(result, 'PA').prices[0].pricePerUnit], ['kg', 4.05]);
+  assert.deepEqual([ingredient(result, 'MO').priceUnit, ingredient(result, 'MO').prices[0].pricePerUnit], ['kg', 9.3]);
+  assert.equal(ingredient(result, 'DE').priceUnit, 'kg', 'a 570 g box is not a piece of pastry');
+});
+
+test('sugar sachets «2000x4g» are 8 kg, «1000x4g» 4 kg — not one 4 g pack at 4,032 €/kg', () => {
+  const c = newCase();
+  c.add([
+    { desc: '9014 Vergn zucchero bianco bustina 2000x4g', code: '9014', qty: 1, unit: 'PZ', total: 16.13 },
+    { desc: '9164 Vergn zucchero grezzo bustina 1000x4g', code: '9164', qty: 1, unit: 'PZ', total: 14.34 },
+  ]);
+  const result = c.build();
+  const white = ingredient(result, '9014');
+  assert.deepEqual([white.priceUnit, white.weight, white.packCount], ['kg', '4 g', 2000]);
+  assert.deepEqual([white.prices[0].pricePerUnit, white.prices[0].qty], [2.0163, 8]);
+  assert.equal(product(result, '9014').reliability, 'media');
+  const raw = ingredient(result, '9164');
+  assert.deepEqual([raw.packCount, raw.prices[0].pricePerUnit, raw.prices[0].qty], [1000, 3.585, 4]);
 });
 
 test('six trays of ten eggs is a pack count of sixty', () => {
@@ -398,6 +461,75 @@ test('an archive that lies about a size is truncated, never inflated past the de
   c.files.push({ name: 'lie.zip', bytes: zip });
   const read = c.read();
   assert.equal(read.containers[0].entries['a.xml'].length, 50, 'exactly the declared size comes out, not the real 200');
+});
+
+test('a STORED entry that declares a compressed size as long as the archive is judged by it, and never copied', () => {
+  // A stored entry is copied by its compressed size: declaring 2 GB there while the original size says 1200 bytes used to pass.
+  const zip = zipSync({ 'a.xml': strToU8('<x/>'.repeat(300)) }, { level: 0 });
+  const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+  let end = zip.length - 22;
+  while (view.getUint32(end, true) !== 0x06054b50) end -= 1;
+  // The central directory's «compressed size» of the one entry (offset 20 of its header).
+  view.setUint32(view.getUint32(end + 16, true) + 20, 0x7fffffff, true);
+  const c = newCase();
+  c.files.push({ name: 'stored.zip', bytes: zip });
+  const read = c.read({ limits: { maxXmlBytes: 5000 } });
+  assert.equal(read.containers[0]?.entries['a.xml'], undefined);
+  assert.ok(read.skipped.some((s) => s.reason === 'file-too-large'));
+});
+
+// One archive holding two entries under ONE name, a small one and a huge one, put together by hand (zipSync keys by name).
+// forgeStoredTwin: the twin is STORED, holds bigBytes, and its central-directory compressed size is forged to 2 GB.
+const twoOfOneName = (smallBytes, bigBytes, { forgeStoredTwin = false } = {}) => {
+  const parts = (zip) => {
+    const view = new DataView(zip.buffer, zip.byteOffset, zip.byteLength);
+    let end = zip.length - 22;
+    while (view.getUint32(end, true) !== 0x06054b50) end -= 1;
+    const cdOffset = view.getUint32(end + 16, true);
+    const cdSize = view.getUint32(end + 12, true);
+    return { local: zip.subarray(0, cdOffset), cd: zip.slice(cdOffset, cdOffset + cdSize) };
+  };
+  const a = parts(zipSync({ 'a.xml': new Uint8Array(smallBytes) }));
+  const b = parts(zipSync({ 'a.xml': new Uint8Array(bigBytes) }, { level: forgeStoredTwin ? 0 : 9 }));
+  new DataView(b.cd.buffer).setUint32(42, a.local.length, true); // the twin's local header sits after the first entry
+  if (forgeStoredTwin) new DataView(b.cd.buffer).setUint32(20, 0x7fffffff, true);
+  const cd = new Uint8Array([...a.cd, ...b.cd]);
+  const eocd = new Uint8Array(22);
+  const view = new DataView(eocd.buffer);
+  view.setUint32(0, 0x06054b50, true);
+  view.setUint16(8, 2, true);
+  view.setUint16(10, 2, true);
+  view.setUint32(12, cd.length, true);
+  view.setUint32(16, a.local.length + b.local.length, true);
+  return new Uint8Array([...a.local, ...b.local, ...cd, ...eocd]);
+};
+
+test('two entries of one name: the huge twin is never inflated, only the entry within the limit is read', () => {
+  // Pass 1 accepts the NAME for the small one; pass 2 used to inflate every entry of that name, the huge one too.
+  const c = newCase();
+  c.files.push({ name: 'twins.zip', bytes: twoOfOneName(10, 5_000_000) });
+  const read = c.read({ limits: { maxXmlBytes: 1000 } });
+  assert.deepEqual(Object.keys(read.containers[0].entries), ['a.xml']);
+  assert.equal(read.containers[0].entries['a.xml'].length, 10);
+});
+
+test('pass 2 judges a STORED twin by its forged compressed size too, so it is never copied', () => {
+  // The twin declares 20 bytes but a 2 GB compressed size: pass 1 already refuses it, and pass 2 must not let the
+  // small entry's NAME carry it through (fflate copies a stored entry up to the end of the archive).
+  const c = newCase();
+  c.files.push({ name: 'twins.zip', bytes: twoOfOneName(10, 20, { forgeStoredTwin: true }) });
+  const read = c.read({ limits: { maxXmlBytes: 1000 } });
+  assert.deepEqual(Object.keys(read.containers[0].entries), ['a.xml']);
+  assert.equal(read.containers[0].entries['a.xml'].length, 10);
+});
+
+test('two entries of one name both count towards the archive total', () => {
+  // Pass 1 sums per entry, not per name (it always did), so twins that each fit cannot slip a double size past the limit.
+  const c = newCase();
+  c.files.push({ name: 'twins.zip', bytes: twoOfOneName(60, 60) });
+  const read = c.read({ limits: { maxXmlBytes: 100, maxArchiveBytes: 100 } });
+  assert.deepEqual(read.containers, []);
+  assert.deepEqual(read.skipped, [{ name: 'twins.zip', reason: 'archive-too-large', detail: '' }]);
 });
 
 test('a corrupt archive is reported, not thrown', () => {

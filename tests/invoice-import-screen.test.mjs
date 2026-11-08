@@ -47,7 +47,8 @@ test('the screen is handed live getters and the venue\'s OUTPUT language, read w
   assert.match(call, /ready: \(\) => state\.loaded\.suppliers && state\.loaded\.ingredients && state\.pricesReadable === true/,
     'a plan drawn before the suppliers arrived would call every supplier new');
   assert.match(call, /opener: importBtn/, 'focus goes back to the footer button on close');
-  assert.match(MAIN, /watchCollection\(COLLECTIONS\.suppliers, list => \{\s*state\.suppliers = list;\s*state\.loaded\.suppliers = true;/);
+  // listAnswered sets state.loaded.suppliers, and only on an answer that proves it (registry-empty-flash.test.mjs).
+  assert.match(MAIN, /watchCollection\(COLLECTIONS\.suppliers, \(list, fromCache\) => \{\s*state\.suppliers = list;\s*listAnswered\('suppliers', list, fromCache\);/);
   assert.match(call, /language: \(\) => outputLanguage\(currentSession\(\)\.location\)/);
 });
 
@@ -138,6 +139,17 @@ test('⚠️ the suppliers step re-reads the suppliers from the server before wr
   assert.ok(save.indexOf('await linkSupplierVat') > fresh);
   assert.match(save, /changedSupplierKeys\(s\.supplierPlan, fresh, settled\)/);
   assert.match(save, /t\('invoiceImport\.suppliers\.changed'\)/);
+});
+
+test('⚠️ the reads that decide «new or already there» can see this phone’s queued writes, so a retry after a timeout never creates twice', () => {
+  // A timed-out write stays in the SDK's queue. Only the full SDK's listener-based reads lay that queue over the server's
+  // answer; Firestore Lite or a REST read would not, and a quick retry would create the supplier or ingredient again.
+  assert.match(DATA, /from 'https:\/\/www\.gstatic\.com\/firebasejs\/[\d.]+\/firebase-firestore\.js'/);
+  assert.doesNotMatch(DATA, /firestore-lite|firestore\.googleapis\.com/);
+  assert.match(DATA, /export async function freshSuppliers\(\) \{[^}]*getDocsFromServer\(/);
+  assert.match(DATA, /export async function freshIngredientsForSupplier\(supplierId\) \{[^}]*getDocsFromServer\(query\(/);
+  // The queue survives a reload only with the on-disk cache.
+  assert.match(read('js/firebase.js'), /localCache: persistentLocalCache\(/);
 });
 
 test('the screen is a dialog, its file box is a label for a hidden input, and a chip with nothing under it is not drawn', () => {

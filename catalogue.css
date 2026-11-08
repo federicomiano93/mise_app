@@ -82,6 +82,10 @@ body {
 
 /* Recipe list — names only */
 .cat-list { display: flex; flex-direction: column; gap: 10px; }
+/* A category's title in the list: quiet, so the recipe names stay the loudest thing. Only drawn
+   when the venue has a category in use. The gap above it is 10px (the list's) + this margin. */
+.cat-group-head { margin: 10px 2px 0; font-size: .85rem; font-weight: 600; color: var(--cat-text-2); }
+.cat-group-head:first-child { margin-top: 0; }
 .cat-card {
   appearance: none; text-align: left; width: 100%; cursor: pointer;
   background: var(--cat-surface); border: 1px solid var(--cat-border); border-radius: var(--cat-radius);
@@ -110,8 +114,7 @@ body {
 
 /* Detail — the ingredient list is the focus of the screen (no title above it;
    the recipe name already sits in the green header). */
-.cat-ing-list { position: relative; background: var(--cat-surface); border: 1px solid var(--cat-border); border-radius: var(--cat-radius); overflow: hidden; cursor: zoom-in; }
-.cat-ing-list:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
+.cat-ing-list { position: relative; background: var(--cat-surface); border: 1px solid var(--cat-border); border-radius: var(--cat-radius); overflow: hidden; }
 
 /* Close (×) button, shown only while zoomed (fixed to the screen corner). */
 .cat-zoom-close { display: none; }
@@ -125,16 +128,17 @@ body {
    screen — so long recipes still scroll from the top. */
 /* The hold-to-magnify view. Its clamp() already widens the gutter with the screen,
    but only to 56px — on a 1366 tablet that still leaves a 1254px line. */
-.cat-ing-list--zoom { position: fixed; inset: 0; z-index: 50; margin: 0; border: 0; border-radius: 0; overflow-y: auto; cursor: zoom-out; display: flex; flex-direction: column; padding: 20px clamp(16px, 6vw, 56px); padding-inline: max(clamp(16px, 6vw, 56px), var(--app-gutter)); }
+.cat-ing-list--zoom { position: fixed; inset: 0; z-index: 50; margin: 0; border: 0; border-radius: 0; overflow-y: auto; display: flex; flex-direction: column; padding: 20px clamp(16px, 6vw, 56px); padding-inline: max(clamp(16px, 6vw, 56px), var(--app-gutter)); }
 .cat-ing-list--zoom .cat-ing-rows { margin: auto 0; width: 100%; }
-.cat-ing-list--zoom .cat-ing-row { padding: clamp(14px, 3.2vh, 30px) 6px; }
+.cat-ing-list--zoom .cat-ing-row { padding: clamp(14px, calc(var(--vh100) * 0.032), 30px) 6px; }
 /* The − / + text size (js/catalogue/zoom-steps.js): each step multiplies the base size above.
    A row WRAPS when it does not fit, the grams dropping under a long name, right-aligned, so the
    largest step never scrolls sideways at 296px. The bottom is padded so the pair (tokens.css)
    never covers the last row. */
 .cat-ing-list--zoom { padding-bottom: var(--zoom-steps-room); }
 .cat-ing-list--zoom .cat-ing-name,
-.cat-ing-list--zoom .cat-ing-amt { font-size: calc(clamp(1.4rem, 6.4vw, 2.2rem) * var(--zoom-scale, 1)); }
+.cat-ing-list--zoom .cat-ing-amt,
+.cat-ing-list--zoom .cat-ing-split { font-size: calc(clamp(1.4rem, 6.4vw, 2.2rem) * var(--zoom-scale, 1)); }
 .cat-ing-list--zoom .cat-ing-row { flex-wrap: wrap; row-gap: 2px; }
 .cat-ing-list--zoom .cat-ing-amt { margin-left: auto; }
 .cat-ing-list:not(.cat-ing-list--zoom) .zoom-steps { display: none; }
@@ -145,6 +149,16 @@ body.cat-zoom-lock { overflow: hidden; }
    figures so it fills the view rather than sitting as a small card at the top. */
 .cat-ing-row { display: flex; align-items: baseline; gap: 12px; padding: 17px 18px; border-top: 1px solid var(--cat-border); }
 .cat-ing-row:first-child { border-top: 0; }
+/* A tap on an ingredient row opens its menu (Split into 2 parts / Order), so the row is a button.
+   Placed right after .cat-ing-row so the :first-child and divider rules below and further down still
+   win over the border reset. */
+.cat-ing-row-btn { width: 100%; margin: 0; font: inherit; color: inherit; text-align: left; background: transparent; border-width: 1px 0 0; border-style: solid; border-color: var(--cat-border); border-radius: 0; cursor: pointer; min-height: 44px; }
+.cat-ing-row-btn:first-child { border-top-width: 0; }
+.cat-ing-row-btn:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: -2px; }
+.cat-ing-row-btn[aria-expanded="true"] { background: var(--cat-surface-2); }
+/* Hover only for a real mouse: on a touch screen :hover sticks after the tap and leaves a row
+   looking selected after its menu has closed. */
+@media (hover: hover) { .cat-ing-row-btn:hover { background: var(--cat-surface-2); } }
 /* Name takes the left space and WRAPS when long (min-width:0 lets it shrink instead
    of pushing the amount off-screen); the amount is pinned right so the grams are
    always visible. */
@@ -158,6 +172,10 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-ing-total .cat-ing-name { font-weight: 700; }
 .cat-ing-total .cat-ing-amt { font-weight: 700; color: var(--cat-brand-2); }
 @media (prefers-color-scheme: dark) { .cat-ing-total .cat-ing-amt { color: var(--cat-accent); } }
+/* A row split in two parts (display only): the parts sit on their own line under the amount. */
+.cat-ing-row--split { flex-wrap: wrap; row-gap: 2px; }
+.cat-ing-split { flex-basis: 100%; display: flex; justify-content: flex-end; align-items: baseline; gap: 5px; font-family: var(--cat-font-mono); font-variant-numeric: tabular-nums; font-weight: 600; font-size: 1.12rem; color: var(--cat-brand-2); }
+@media (prefers-color-scheme: dark) { .cat-ing-split { color: var(--cat-accent); } }
 
 /* Total-weight panel — deliberately COMPACT and quiet (secondary to the recipe):
    small input, tight padding, no shadow. Sits right below the recipe, visible on open. */
@@ -181,8 +199,13 @@ body.cat-zoom-lock { overflow: hidden; }
 /* The recipe + weight panel fill at least a screenful, so Import/Delete always sit
    BELOW the fold and are only reached by scrolling (never on open). The offset is a
    little less than the header height so the block clears the fold without leaving a
-   large gap; svh is the stable mobile unit (ignores the address bar). */
-.cat-detail-top { min-height: calc(100vh - 56px); min-height: calc(100svh - 56px); }
+   large gap; svh is the stable mobile unit (ignores the address bar), so it goes in
+   @supports AFTER the plain line — Chrome before 108 (the lab tablet) has no svh, and
+   --vh100 there is the measured visible height (tokens.css). */
+.cat-detail-top { min-height: calc(var(--vh100) - 56px); }
+@supports (height: 100svh) {
+  .cat-detail-top { min-height: calc(100svh - 56px); }
+}
 
 /* Secondary actions below the recipe — reached by scrolling down, never competing
    with the recipe on open. */
@@ -211,6 +234,10 @@ body.cat-zoom-lock { overflow: hidden; }
 /* Editor */
 .cat-editor label { display: block; font-size: var(--field-label-size); color: var(--field-label-color); font-weight: var(--field-label-weight); margin: 0 2px 6px; }
 .cat-editor .cat-name-input { width: 100%; padding: 12px 14px; font-size: 1.05rem; font-family: var(--cat-font-round); font-weight: 600; color: var(--cat-text); background: var(--cat-surface); border: 1px solid var(--cat-border); border-radius: 12px; outline: none; margin-bottom: 18px; }
+/* The category menu under the name: full width (.set-select only limits itself inside a .set-row),
+   the same 18px under it as the name box. */
+.cat-editor .cat-category-select { width: 100%; margin-bottom: 18px; }
+.cat-editor .cat-category-select:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
 .cat-editor .cat-name-input:focus { border-color: var(--cat-accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--cat-accent) 22%, transparent); }
 /* Ingredients: ONE framed list, one row per ingredient, closed by a live Total —
    the same shape as the read-only recipe (.cat-ing-list), so a recipe reads the
@@ -427,6 +454,18 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-del-icon:hover { color: var(--cat-danger); background: var(--cat-surface-2); }
 .cat-add-row { margin-top: 12px; padding: 10px; width: 100%; background: var(--cat-surface-2); border: 1px dashed var(--cat-border); color: var(--cat-text-2); border-radius: 10px; font-family: var(--cat-font); font-size: .92rem; cursor: pointer; }
 .cat-add-row:hover { color: var(--cat-text); border-color: var(--cat-accent); }
+/* Settings → Recipe categories. The Add row: box and button on one line. */
+.cat-category-addrow { display: flex; align-items: center; gap: 8px; }
+.cat-category-addrow .set-input { flex: 1; min-width: 0; }
+.cat-category-add { flex: none; min-height: 44px; padding: 0 18px; background: var(--cat-surface-2); border: 1px solid var(--cat-border); border-radius: 12px; color: var(--cat-text); font-family: var(--cat-font); font-size: 15px; font-weight: 600; cursor: pointer; transition: transform .06s ease; }
+.cat-category-add:active { transform: scale(.97); }
+.cat-category-add:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
+.set-block .cat-category-error { margin: 0; }
+/* A word of the list: the row is tighter than a plain .set-row because its bin is a 44px target. */
+.set-row.cat-category-row { min-height: 0; padding: 4px 8px 4px 16px; }
+.cat-category-del { flex: none; width: 44px; height: 44px; border: 0; border-radius: 50%; background: transparent; color: var(--cat-text-2); cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.cat-category-del:hover { color: var(--cat-danger); background: var(--cat-surface-2); }
+.cat-category-del:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: -2px; }
 .cat-editor-actions { display: flex; gap: 10px; align-items: center; margin-top: 22px; }
 .cat-save-btn { flex: 1; padding: 13px; border: 0; border-radius: 12px; background: var(--cat-brand); color: var(--cat-brand-ink); font-size: 1rem; font-weight: 600; font-family: var(--cat-font-round); cursor: pointer; }
 .cat-save-btn:hover { background: var(--cat-brand-2); }
@@ -472,6 +511,26 @@ body.cat-zoom-lock { overflow: hidden; }
   cursor: pointer;
 }
 .cat-ing-link.linked { color: var(--brand); }
+/* The crossed-out euro at the END of the link line: a row Food cost cannot price. Inline after
+   the text, so when the line wraps the icon wraps with the last word instead of hanging
+   alone at the edge. No words: the label is for screen readers. */
+.cat-ing-link-text { overflow-wrap: anywhere; }
+.cat-noprice {
+  display: inline-block;
+  margin-left: 6px;
+  vertical-align: -3px;
+  line-height: 0;
+  color: var(--warn);
+}
+.cat-noprice svg { display: block; }
+/* The name was retyped but the row is still linked: an amber note, not an error. The text wraps
+   (overflow-wrap on the span); the same padding, so nothing jumps. --warn on --warn-bg is above 4.5:1. */
+.cat-ing-link.cat-ing-link--stale { color: var(--warn); background: var(--warn-bg); }
+/* Visually hidden, still read aloud: the polite live region that announces a stale link. */
+.cat-sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+}
 .cat-ing-link:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: -2px; }
 
 /* What the dough weighs before the oven and after — the two numbers the loss is
@@ -580,6 +639,27 @@ body.cat-zoom-lock { overflow: hidden; }
 /* ⚠ THE BLOCKS INSIDE KEEP THEIR OWN SPACING EXCEPT THE FIRST MARGIN, which would
    otherwise push every card's content away from its own heading. */
 .cat-sec-body > :first-child { margin-top: 0; }
+/* A card head with a button at its top right (the Ingredients card's full-screen button). */
+.cat-sec-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cat-sec-top .cat-sec-head { flex: 1; min-width: 0; }
+/* 44px hit area (the ui-check driver flags smaller); the negative margin keeps the head's height
+   close to the other cards'. */
+.cat-zoom-open { flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: -6px -6px -6px 0; padding: 0; border: 1px solid var(--cat-border); border-radius: 50%; background: var(--cat-surface); color: var(--cat-text-2); cursor: pointer; transition: transform .06s ease; }
+@media (hover: hover) { .cat-zoom-open:hover { color: var(--cat-text); } }
+.cat-zoom-open:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
+.cat-zoom-open:active { transform: scale(.97); }
+
+/* A row's menu (Split into 2 parts / Order). Fixed, positioned from the script through the CSSOM;
+   inside the full-screen view it sits in that view's stacking context, above the × (z 2) and the
+   − / + pair (z 3). Its text does NOT follow the zoom scale: a menu is not part of the recipe. */
+.cat-row-menu { position: fixed; z-index: 5; min-width: 220px; max-width: calc(100vw - 32px); padding: 4px; background: var(--cat-surface); border: 1px solid var(--cat-border); border-radius: 12px; box-shadow: var(--cat-shadow); font-size: 1rem; font-family: var(--cat-font); color: var(--cat-text); }
+.cat-row-menu-item { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; width: 100%; min-height: 44px; padding: 8px 14px; border: 0; border-radius: 8px; background: transparent; color: var(--cat-text); font: inherit; text-align: left; cursor: pointer; }
+.cat-row-menu-item:focus { background: var(--cat-surface-2); }
+@media (hover: hover) { .cat-row-menu-item:hover { background: var(--cat-surface-2); } }
+.cat-row-menu-item:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: -2px; }
+.cat-row-menu-item[aria-disabled="true"] { color: var(--cat-text-2); cursor: default; }
+.cat-row-menu-label { font-weight: 500; }
+.cat-row-menu-why { font-size: .82rem; color: var(--cat-text-2); }
 .cat-sec-body .cat-guided-panel { margin-top: 0; }
 .cat-sec-body .cat-weight-panel { margin-top: 0; }
 
@@ -587,6 +667,8 @@ body.cat-zoom-lock { overflow: hidden; }
    The button is .cat-import-btn, this screen's quiet button: it leads somewhere, it does
    not do the screen's job. */
 .cat-fc-note { margin: 0 0 10px; font-size: .84rem; line-height: 1.45; color: var(--cat-text-2); }
+/* The button Back from Food cost scrolls into view (catalogue-main.js openWantedRecipe). */
+.cat-fc-open { scroll-margin-block: var(--space-4); }
 
 /* The little list under a recipe row's name, and the full link chooser: their look moved
    to tokens.css (.pick-suggest*, .pick-*) on 13 Sep 2026, when Food cost needed the same
@@ -621,7 +703,7 @@ body.cat-zoom-lock { overflow: hidden; }
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 2px 8px 2px 2px;
+  padding: 2px 2px 2px 12px;
   border-bottom: 1px solid var(--cat-border);
   background: var(--cat-surface);
   -webkit-user-select: none;
@@ -629,7 +711,10 @@ body.cat-zoom-lock { overflow: hidden; }
   -webkit-touch-callout: none;
 }
 .cat-reorder-row:last-child { border-bottom: 0; }
-/* The Home's grip pulls itself left into its row's padding; this row has 2px of it. */
+/* The grip sits on the RIGHT (Federico, 3 Nov 2026), so the row's padding is 12px on the
+   left — where the name starts in divider mode too — and 2px on the right, against the
+   grip. The Home's grip pulls itself left into its row's padding; here it has a name
+   beside it instead, so that pull is cancelled. */
 .cat-reorder-grip { margin-left: 0; }
 .cat-reorder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .95rem; color: var(--cat-text); }
 .cat-reorder-amount { flex-shrink: 0; font-family: var(--cat-font-mono); font-size: .78rem; color: var(--cat-text-2); }
@@ -643,7 +728,9 @@ body.cat-zoom-lock { overflow: hidden; }
 .cat-ing-row--divider + .cat-ing-row,
 .cat-ing-editgroup--divider + .cat-ing-editgroup { border-top: 0; }
 .cat-divider-row,
-.cat-divider-row--last { min-height: 44px; padding-left: 12px; }
+/* The right side is set here too: these rows also carry .cat-reorder-row, whose right padding is
+   only 2px since its grip moved there (6 Nov 2026), and the amount must not touch the frame. */
+.cat-divider-row--last { min-height: 44px; padding-left: 12px; padding-right: 8px; }
 /* The row above already draws the edge between them (the buttons keep only a bottom border). */
 .cat-divider-row--last { border-top: 0; }
 .cat-divider-row { width: 100%; border-width: 0 0 1px; border-style: solid; border-color: var(--cat-border); text-align: left; font: inherit; cursor: pointer; }

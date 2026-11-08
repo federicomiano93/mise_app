@@ -9,7 +9,7 @@
 import { t } from './i18n.js';
 import { guarded } from './guard.js';
 import { DEFAULT_CONFIG, cloneConfig, normalizeConfig, getClients, saveFailureKey } from './calculator-config.js';
-import { watchCalculatorConfig, saveCalculatorConfig } from './firebase.js';
+import { watchCalculatorConfig, saveCalculatorConfig, saveCalculatorClients } from './firebase.js';
 import { alertDialog } from './confirm-dialog.js';
 import { publishMenus } from './client-orders-data.js';
 import { menuFor, menuChanged } from './client-order-model.js';
@@ -18,6 +18,7 @@ const CACHE_KEY = 'calculator-config';
 
 let current = readCache();
 let notify = null; // called with the new config whenever it changes (set by initConfig)
+let lastRemoteText = null; // the last server document applied, as JSON (see initConfig)
 
 // Has Firestore ANSWERED yet — including answering "there is no document"?
 //
@@ -31,8 +32,15 @@ let notify = null; // called with the new config whenever it changes (set by ini
 //
 // So a save is only allowed to leave the device once the server has told us what
 // it holds. "No document yet" is a real answer (a brand-new location must be
-// able to save); never having heard back is not.
+// able to save); never having heard back is not — and neither is Firestore's own
+// offline copy saying "no document" (see initConfig).
 let serverAnswered = false;
+let serverSaidNoDoc = false;
+
+// ⚠️ THE PAGE DECIDES ONCE, HERE, WHAT A SAVE MAY SEND, so no screen on the Clients page can
+// send more than the address book whichever save it calls: the rules refuse the rest for the
+// owner of the sales side, and a refused save is an edit lost.
+let clientsOnly = false;
 
 function readCache() {
   try {
@@ -60,13 +68,26 @@ export function getConfig() {
 // Start syncing with Firestore. onUpdate(config) fires whenever the remote
 // config changes so the app can re-render. Returns the synchronous initial
 // config so the first paint never waits on the network.
-export function initConfig(onUpdate) {
+export function initConfig(onUpdate, { onlyClients = false } = {}) {
+  clientsOnly = onlyClients === true;
   notify = guarded('Calculator config: screen refresh', onUpdate);
-  watchCalculatorConfig(remote => {
+  watchCalculatorConfig((remote, fromCache) => {
+    // ⚠️ A FROM-CACHE "NO DOCUMENT" IS «NOTHING KNOWN», NOT «NOTHING HERE».
+    // Offline, Firestore answers a document it has never fetched on this phone
+    // with "does not exist", from its cache — and entering a location wipes that
+    // cache. Believing it would unlock saving on DEFAULT_CONFIG's sample clients,
+    // and the first Save would replace the real address book (the transaction
+    // rescues only cat-* recipes). So it is ignored, the screen stays on
+    // «Loading…», and the server's own answer is awaited: firebase.js asks for
+    // metadata changes, so that answer arrives even when it is the same nothing
+    // (audit, 25 Oct 2026). A cached document that EXISTS is believed: it can
+    // only have come from the server, and working offline must keep working.
+    if (!remote && fromCache) return;
     const firstAnswer = !serverAnswered;
     // Set BEFORE the early return: "there is no document" is an answer, and a
     // brand-new location has to be able to save its first client.
     serverAnswered = true;
+    serverSaidNoDoc = !remote;
     if (!remote) {
       // ⚠️ THE SCREEN HAS TO HEAR "THERE IS NO DOCUMENT" TOO. The empty Calculator
       // waits on this answer to tell "you have no recipes yet" from "the server has
@@ -78,6 +99,14 @@ export function initConfig(onUpdate) {
       if (firstAnswer && notify) notify(current);
       return; // no document yet — keep cache/default
     }
+    // ⚠️ THE SAME DOCUMENT AGAIN IS NOT NEWS. Metadata changes (see firebase.js) send
+    // it again when the server confirms the cached copy and whenever the phone goes
+    // offline or comes back — and a repaint here is a full rebuild of the Calculator:
+    // it closes the full-screen recipe, drops the focus and jumps to the top (code
+    // review, 25 Oct 2026). Only data that differs from the last applied is drawn.
+    const text = JSON.stringify(remote);
+    if (text === lastRemoteText) return;
+    lastRemoteText = text;
     current = normalizeConfig(remote);
     writeCache(current);
     if (notify) notify(current);
@@ -89,6 +118,12 @@ export function initConfig(onUpdate) {
 // itself rather than leaving the operator to wonder why nothing synced.
 export function canSyncConfig() {
   return serverAnswered;
+}
+
+// Has the server said this venue has no config document? A screen that cannot start one (the
+// Clients page) says so BEFORE somebody types a whole address book it could not save.
+export function configDocMissing() {
+  return serverAnswered && serverSaidNoDoc;
 }
 
 // Persist a new config. Local-first (P17): update memory + cache and re-render
@@ -128,7 +163,7 @@ export function saveConfig(config) {
 
   const willRepublish = menusWouldChange(previous, current);
 
-  return saveCalculatorConfig(current)
+  return (clientsOnly ? saveCalculatorClients : saveCalculatorConfig)(current)
     .then(async () => {
       // ── Keep every client's ordering page in step with the address book ──
       //

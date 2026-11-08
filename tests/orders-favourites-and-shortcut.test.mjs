@@ -130,7 +130,7 @@ test('the Catalogue passes `orders: true` from the list and a recipe only', () =
   assert.equal(withOrders.length, 2);
   assert.ok(withOrders.some(c => /section\.catalogue/.test(c)), 'the list');
   assert.ok(withOrders.some(c => /edit: true/.test(c) && /cat\.recipe/.test(c)), 'a recipe');
-  assert.match(main, /ordersBtn\.hidden = !\(ordersWanted && mayOpenOrders\(session\.location, session\.canManage\)\)/);
+  assert.match(main, /ordersBtn\.hidden = !\(ordersWanted && mayOpenOrders\(session\.location, session\.canManage, session\.role\)\)/);
   assert.match(main, /paintOrdersBtn\(\);\s*if \(view === 'list'\) showList\(\)/, 'repainted when the session lands');
   assert.match(main, /ordersHref\(view === 'detail' && currentRecipe \? currentRecipe\.id : null\)/);
 });
@@ -151,7 +151,12 @@ test('Orders: the way back sits after Back (which still goes Home), hidden, fill
   assert.match(tag, /data-i18n="orders\.backToCatalogue" data-i18n-attr="aria-label"/);
   const main = codeOf(read('js/orders/orders-main.js'));
   assert.match(main, /catalogueOriginFromHash\(window\.location\.hash\)/);
-  assert.doesNotMatch(main, /history\.replaceState|location\.hash\s*=/, 'the hash stays, so a reload keeps the button');
+  assert.doesNotMatch(main, /location\.hash\s*=/, 'the hash stays, so a reload keeps the button');
+  // The one rewrite of the address takes out a recipe row's `&order=` part only; `#from=…` stays.
+  const rewrites = main.match(/history\.replaceState\([^;]*/g) || [];
+  assert.equal(rewrites.length, 1);
+  assert.match(main, /const kept = window\.location\.hash\.replace\(\/&order=\[\^&#\?\]\*\$\/, ''\)/);
+  assert.match(rewrites[0], /\+ kept\)/);
 });
 
 test('the two new words exist in both languages', () => {

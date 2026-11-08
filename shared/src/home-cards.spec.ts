@@ -76,6 +76,31 @@ describe.each([
     }
   });
 
+  test('⚠️⚠️ a partial owner sees the cards of their own side and no other', () => {
+    const kitchen = ['calculator', 'catalogue', 'orders', 'suppliers', 'pastries', 'inventory'];
+    for (const id of c.HIDEABLE_IDS) {
+      expect(c.cardVisibleTo({}, true, id, 'owner-sales'), `sales: ${id}`).toBe(id === 'foodcost');
+      expect(c.cardVisibleTo({}, true, id, 'owner-kitchen'), `kitchen: ${id}`).toBe(kitchen.includes(id));
+      expect(c.cardVisibleTo({}, true, id, 'owner'), `owner: ${id}`).toBe(true);
+      expect(c.cardVisibleTo({}, true, id), `no role: ${id}`).toBe(true);
+    }
+    expect(c.cardVisibleTo({}, true, undefined, 'owner-sales'), 'a card with no id').toBe(true);
+    expect(c.roleHasCard('owner-kitchen', 'foodcost')).toBe(false);
+    expect(c.roleHasCard('owner-kitchen', 'inventory')).toBe(true);
+    for (const role of ['owner', 'manager', true, undefined, 'toString', '__proto__']) {
+      expect(c.roleHasCard(role, 'foodcost'), `${String(role)} is not narrowed`).toBe(true);
+    }
+  });
+
+  test('the Clients card is the sales owner\'s alone, and every doubt answers no', () => {
+    expect([...c.ROLE_ONLY_CARDS]).toEqual(['clients']);
+    expect(c.roleHasCard('owner-sales', 'clients')).toBe(true);
+    for (const role of ['owner', 'manager', 'owner-kitchen', true, undefined, 'toString', '__proto__']) {
+      expect(c.roleHasCard(role, 'clients'), `${String(role)} has no Clients card`).toBe(false);
+    }
+    expect(c.HIDEABLE_IDS as readonly string[]).not.toContain('clients');
+  });
+
   test('only a literal canManage === true passes the switch', () => {
     const doc = { [c.HIDDEN_FIELD]: { pastries: true } };
     for (const canManage of [undefined, null, 'true', 1, false]) {
@@ -157,6 +182,16 @@ describe.each([
     expect([...(told ?? [])].sort(),
       'owner and manager (a head chef holds manager) are told; an employee, a corrupt role and an unreadable one are not')
       .toStrictEqual(['mgr', 'own']);
+  });
+
+  test('⚠️⚠️ mayBeTold: a partial owner is told about their own side only', () => {
+    const access = new Map<string, unknown>([['sal', 'owner-sales'], ['kit', 'owner-kitchen'], ['emp', true]]);
+    const everything = { [c.HIDDEN_FIELD]: Object.fromEntries(c.HIDEABLE_IDS.map(id => [id, true])) };
+    const told = (cardId: string) => [...(c.mayBeTold(everything, cardId, ['sal', 'kit', 'emp'], access) ?? [])];
+    expect(told('calculator'), 'a client order is the business of both').toStrictEqual(['sal', 'kit']);
+    expect(told('catalogue'), 'a timer belongs to the kitchen').toStrictEqual(['kit']);
+    expect(told('foodcost'), 'the sales side is told about client orders and nothing else').toStrictEqual([]);
+    expect(told('orders')).toStrictEqual(['kit']);
   });
 
   test('mayBeTold: no uid, a non-string uid and a missing map tell nobody and do not throw', () => {

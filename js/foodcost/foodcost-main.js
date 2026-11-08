@@ -13,15 +13,20 @@ import { t, localeTag, onLanguageChange } from '../i18n.js';
 import {
   initFoodCost, getProducts, tables, saveProduct, deleteProduct, setSyncErrorHandler,
   getRecipes, getIngredients, hasLiveProducts, hasLiveRecipes, getLabourCostPerHour, saveLabourRate,
+  createProductsFromRecipes,
 } from './foodcost-store.js';
+import { recipesWithoutProducts } from './from-recipes.js';
+import { openFromRecipes } from './from-recipes-view.js';
 import { openFoodcostSettings } from './foodcost-settings.js';
 import { renderList } from './foodcost-list.js';
 import { renderEditor } from './foodcost-editor.js';
 import { getProductHistory, canWriteRecipes, venueCountry, authReady, canManageHere } from './firebase-foodcost.js';
-import { confirmDialog } from './confirm-dialog.js';
+import { confirmDialog, alertDialog } from './confirm-dialog.js';
 import { el } from './dom.js';
-import { productsUsingRecipe, draftFromRecipe } from './foodcost-model.js';
-import { formatRate, formatMoney, pricePerKg } from '../price-model.js';
+import { productsUsingRecipe, draftFromRecipe, sortByMargin, productPreview } from './foodcost-model.js';
+import { previewPanel, previewCaption } from './preview-view.js';
+import { pricePerKg } from '../price-model.js';
+import { fcMoney, fcNumber } from './fc-number.js';
 // Food or packaging? From js/ root, where the registry that files it asks the same question.
 import { isPackaging } from '../ingredient-kind.js';
 import { ingredientDisplayName } from '../ingredient-name.js';
@@ -47,8 +52,15 @@ const addBtn = document.getElementById('fcAdd');
 // The phone's Save for an open product. On a tablet the page header stays the list's and
 // the Save is built into the pane head instead (buildPaneHead) — never both.
 const saveBtn = document.getElementById('fcSave');
+// The phone's pencil for a product opened to READ: it turns the same product into the form
+// (7 Nov 2026). Like Save, a tablet builds its own in the pane head.
+const editBtn = document.getElementById('fcEdit');
 const headerEl = saveBtn.closest('.app-header');
 addBtn.addEventListener('click', () => requestOpen(null));
+
+// The catalogue's pencil, drawn the same here.
+const PENCIL_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
 // The bottom bar and its one button, Settings (13 Sep 2026). The button carries its own
 // permission; the bar is shown only while a button in it is.
 const footerBar = document.getElementById('fcFooter');
@@ -73,6 +85,13 @@ let historyBody = null;
 let guardPending = false;   // a «discard changes?» question is already open
 // True while a move across the width runs: nothing may take the focus.
 let quietFocus = false;
+// The list's search text, kept here so Back from a card finds the same search (7 Nov 2026).
+let listQuery = '';
+// True while the form on screen was opened with the PENCIL from the read view of the same
+// product: Back then returns to that read view (one level up). A form opened straight (a new
+// product, one with nothing priced) has no read view below it, so Back is what it always was.
+// ⚠️ Declared here, above the first onLanguageChange below, or it is a TDZ crash.
+let editFromRead = false;
 
 // ── Opened from a recipe ─────────────────────────────────────────────────────
 //
@@ -97,7 +116,8 @@ function setHeader({ title, sub, back, add = false }) {
   homeBtn.hidden = back;
   backBtn.hidden = !back;
   addBtn.hidden = !add;
-  saveBtn.hidden = true;   // only setEditorHeaderPhone shows it
+  saveBtn.hidden = true;   // only setEditorHeaderPhone shows it (Save, or the pencil)
+  editBtn.hidden = true;
   headerEl.classList.remove('app-header--save');
   paintFooter();
 }
@@ -156,15 +176,85 @@ function setListChrome() {
   });
 }
 
+// Phone: the preview first (Federico, 7 Nov 2026), in the app's one dialog; its main
+// button opens the card. Tablet: the card opens beside the list as before, with the same
+// panel at its top — the pane IS the preview there.
+async function openFromList(product) {
+  if (splitOn) { requestOpen(product); return; }
+  const preview = productPreview(product, tables());
+  const answer = confirmDialog({
+    title: product.name || t('fc.untitledProduct'),
+    message: previewCaption(preview),
+    node: previewPanel(preview, { caption: false }),
+    okLabel: t('fc.preview.open'), cancelLabel: t('fc.preview.close'),
+  });
+  // ⚠️ THE TOP FIRST: the dialog focuses its last button, and on a short phone a tall preview
+  // (whose whole box scrolls, foodcost.css) would open on its bottom half, price out of sight.
+  const box = document.querySelector('.app-dialog');
+  if (box) box.scrollTop = 0;
+  const ok = await answer;
+  if (!ok) {
+    // A data update while it was open redraws every row, so the one that opened it may be
+    // gone: focus its fresh copy rather than leave the keyboard on <body>.
+    if (document.activeElement === document.body) {
+      [...(activeList?.root.querySelectorAll('.fc-row') || [])].find((r) => r.dataset.id === product.id)?.focus();
+    }
+    return;
+  }
+  // The page may have moved on while the preview was open (a recipe link settling).
+  if (view !== 'list') return;
+  // The product as it is NOW: it may have changed or gone while the preview was open.
+  const fresh = getProducts().find((p) => p && p.id === product.id);
+  if (!fresh) { toast(t('fc.productDeleted')); return; }
+  requestOpen(fresh);
+}
+
 function buildList(selectedId) {
   return renderList({
-    products: listedProducts(), tables: tables(), onOpen: requestOpen, onAdd: () => requestOpen(null),
+    products: listedProducts(), tables: tables(), onOpen: openFromList, onAdd: () => requestOpen(null),
     selectedId,
+    query: listQuery,
+    onQuery: (q) => { listQuery = q; },
+    fromBook: recipesWithoutProductCount,
+    onFromBook: openFromBook,
     filter: listFilter ? {
       title: filterTitle(listFilter),
       // Everything, and the page stops being «the recipe's»: Back becomes Home again.
       onShowAll: requestShowAll,
     } : null,
+  });
+}
+
+// How many recipes have no product — the box at the top of the list. ⚠️ NEVER DECIDED ON THE
+// LOCAL COPY: a product's id comes from its recipe and a save writes the WHOLE document, so
+// a list that had not arrived could overwrite a real product. Both lists must be live, only
+// the people who run the place see it, and not while the list is narrowed to a recipe.
+function recipesWithoutProductCount() {
+  if (!canManageHere() || !hasLiveProducts() || !hasLiveRecipes() || listFilter) return 0;
+  return recipesWithoutProducts(getRecipes(), getProducts()).create.length;
+}
+
+// The choice screen, over everything. The lists are a snapshot taken now.
+function openFromBook() {
+  const { create, maybe } = recipesWithoutProducts(getRecipes(), getProducts());
+  let made = 0;
+  openFromRecipes({
+    create,
+    maybe,
+    confirm: app.confirm,
+    // Closed without creating: the box's button that opened it. After a create, the list
+    // itself — the products arrive a moment later and redraw the list, the box (and a focus
+    // left on its button) going with it.
+    returnFocus: () => (made === 0 && document.querySelector('.fc-frombook .empty-action')) || activeList?.root || null,
+    async onCreate(recipes) {
+      const result = await createProductsFromRecipes(recipes);
+      made += result.made;
+      if (result.made > 0) toast(t('fc.fromBook.done', { n: result.made }));
+      else if (!result.failed && result.skipped > 0) toast(t('fc.fromBook.already'));
+      // Offline, or refused: say so, and how many — the rest were created.
+      if (result.failed > 0) await alertDialog(t('fc.fromBook.failed', { n: result.failed }));
+      return result;
+    },
   });
 }
 
@@ -205,20 +295,30 @@ function buildPaneHead() {
   const title = inHistory
     ? t('fc.marginHistory')
     : (currentProduct ? (currentProduct.name || t('fc.productWord')) : t('fc.newProduct'));
-  const withSave = view === 'editor' && !!activeEditor;
+  const showing = view === 'editor' && activeEditor ? activeEditor.mode : null;
+  const withSave = showing === 'edit';
+  const withPencil = showing === 'read';
+  // Back from the form to the read view it was opened from, and from the history to the
+  // product: the same chevron, a different level up.
+  const backAction = inHistory ? backToProduct : (withSave && editFromRead ? stopEdit : null);
   return el('header', { class: withSave ? 'app-header app-header--save' : 'app-header' }, [
     el('span', { class: 'app-header-slot' }, [
-      inHistory ? el('button', {
+      backAction ? el('button', {
         class: 'app-icon-btn', type: 'button', 'aria-label': t('ui.back'),
-        icon: backBtn.innerHTML, onclick: backToProduct,
+        icon: backBtn.innerHTML, onclick: backAction,
       }) : null,
     ]),
     el('div', { class: 'app-header-title' }, [el('h1', { text: title, tabindex: '-1' })]),
     el('span', { class: 'app-header-slot' }, [
-      // The product's Save, in the pane's own head (a phone has it in the page header).
+      // The product's Save (form) or pencil (read), in the pane's own head (a phone has them
+      // in the page header).
       withSave ? el('button', {
         type: 'button', class: 'app-header-save', onclick: () => activeEditor?.save(),
       }, t('ui.save')) : null,
+      withPencil ? el('button', {
+        class: 'app-icon-btn', type: 'button', 'aria-label': t('fc.editProduct'),
+        icon: PENCIL_SVG, onclick: startEdit,
+      }) : null,
     ]),
   ]);
 }
@@ -271,6 +371,7 @@ function showList() {
   historyBody = null;
   entryEditor = false;
   draftRecipeId = null;
+  editFromRead = false;
   // ⚠️ Narrowed, the list has Back (to the recipe) where it otherwise has Home.
   setListChrome();
   if (isTabletNow()) {
@@ -291,14 +392,20 @@ function filterTitle(recipeId) {
   return name ? t('fc.productsWithRecipe', { name }) : t('fc.productsWithThisRecipe');
 }
 
-// The editor's header on a PHONE: its own title and a Back.
+// The editor's header on a PHONE: its own title and a Back — and the pencil while the card is
+// read, Save while it is the form. ⚠️ THE EDITOR IS BUILT FIRST (activeEditor.mode decides).
 function setEditorHeaderPhone(product) {
   setHeader({ title: product ? (product.name || t('fc.productWord')) : t('fc.newProduct'), sub: t('fc.foodCost'), back: true });
-  saveBtn.hidden = false;
-  headerEl.classList.add('app-header--save');
+  const reading = !!activeEditor && activeEditor.mode === 'read';
+  saveBtn.hidden = reading;
+  editBtn.hidden = !reading;
+  headerEl.classList.toggle('app-header--save', !reading);
 }
 
-function openProduct(product, draft = null) {
+// `mode`: 'auto' reads a product that has a summary and opens the form for everything else;
+// 'read' / 'edit' force it. `fromRead`: the form was opened by the pencil, so Back returns to
+// the read view.
+function openProduct(product, draft = null, { mode = 'auto', fromRead = false } = {}) {
   view = 'editor';
   globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'editor' }));
   draftRecipeId = null;
@@ -315,15 +422,67 @@ function openProduct(product, draft = null) {
     const key = product ? product.id : null;
     if (listAlive) activeList.select(key);
     else paintListColumn(key);
-    activeEditor = renderEditor({ product, draft, app });
+    activeEditor = renderEditor({ product, draft, app, mode });
+    editFromRead = fromRead && activeEditor.mode === 'edit';
     showNode(activeEditor.root);
     return;
   }
   leaveSplit();
   activeList = null;
+  activeEditor = renderEditor({ product, draft, app, mode });
+  editFromRead = fromRead && activeEditor.mode === 'edit';
   setEditorHeaderPhone(product);
-  activeEditor = renderEditor({ product, draft, app });
   swap(activeEditor.root);
+}
+
+// The pencil: the SAME product, as the form. Back from it returns to the read view.
+function startEdit() {
+  if (view !== 'editor' || !activeEditor || activeEditor.mode !== 'read' || !currentProduct) return;
+  const fresh = getProducts().find((p) => p && p.id === currentProduct.id);
+  // Deleted on another device: never open the form of a product that no longer exists (a
+  // Save would bring it back).
+  if (!fresh && currentProduct.id && hasLiveProducts()) { toast(t('fc.productDeleted')); showList(); return; }
+  openProduct(fresh || currentProduct, null, { mode: 'edit', fromRead: true });
+}
+
+// The READ view redrawn from `fresh` IN PLACE: whether «Scheda completa» was open, the scroll and
+// the focus (when it was inside the view) come back. Nothing else changes — entryEditor,
+// listFilter, fromRecipe and editFromRead are not touched. Safe because a read view holds
+// nothing typed.
+function refreshRead(fresh) {
+  const scroller = splitOn ? screen.querySelector('.fc-pane-body') : screen;
+  const root = activeEditor ? activeEditor.root : null;
+  const wasOpen = !!(root && root.querySelector('.fc-full[open]'));
+  const top = scroller ? scroller.scrollTop : 0;
+  const active = document.activeElement;
+  const hadFocus = !!(root && active && root.contains(active));
+  quietFocus = true;
+  try { openProduct(fresh, null, { mode: 'read' }); } finally { quietFocus = false; }
+  const full = activeEditor && activeEditor.root.querySelector('details.fc-full');
+  if (full && wasOpen) full.open = true;
+  const after = splitOn ? screen.querySelector('.fc-pane-body') : screen;
+  if (after) after.scrollTop = top;
+  if (hadFocus) {
+    try { activeEditor.root.querySelector('.fc-full-summary').focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
+  }
+}
+
+// Back from a form opened with the pencil: one level up = the read view of the same product,
+// after the usual «discard changes?» question (asked only if something was typed).
+async function stopEdit() {
+  if (!(await askLeave())) return;
+  const fresh = (currentProduct && getProducts().find((p) => p && p.id === currentProduct.id)) || currentProduct;
+  openProduct(fresh, null, { mode: 'read' });
+}
+
+// After a Save: the read view of the product just saved (a new one included), never the list.
+// Forced to read even with no summary — the box starts open then. On a tablet the list column
+// is refreshed first, so a NEW product is in it to be marked.
+function showSaved(id) {
+  const fresh = getProducts().find((p) => p && p.id === id);
+  if (!fresh) { showList(); return; }
+  if (splitOn && activeList) activeList.refresh(listedProducts(), tables());
+  openProduct(fresh, null, { mode: 'read' });
 }
 
 // Back from the history in the pane (or on a phone that crossed the width with the editor
@@ -348,8 +507,34 @@ function showWaiting() {
   activeEditor = null;
   currentProduct = null;
   leaveGuard = null;
+  editFromRead = false;
   setHeader({ title: t('fc.foodCost'), sub: t('fc.productsAndMargins'), back: true });
   swap(el('div', { class: 'fc-view' }, [el('p', { class: 'fc-empty', text: t('fc.loading') })]));
+}
+
+// The product the narrowed list shows FIRST (the list sorts with sortByMargin too).
+function firstUsing(id) {
+  return sortByMargin(productsUsingRecipe(getProducts(), id), tables())[0]?.product;
+}
+
+// Several products use the recipe: narrow the list to them.
+// ⚠️ Federico, 4 Nov 2026: «forse non mostra subito la scheda food cost». Beside the list
+// the pane was left empty («Scegli un prodotto»), so on a tablet the top product opens at
+// once; the narrowed list still sits on the left to switch product. entryEditor stays
+// false: the page chose this product from the list, and on a tablet Back (listFilter is
+// set) still returns to the recipe. A phone keeps the narrowed list.
+function openNarrowed(id) {
+  listFilter = id;
+  // A new product the recipe opened first (reconsiderDraft) is no longer the page's.
+  entryEditor = false;
+  const first = isTabletNow() ? firstUsing(id) : null;
+  // ⚠️ A FRESH LIST COLUMN. A new product that gives way here (reconsiderDraft) sat beside
+  // the FULL list, built before the filter; openProduct only re-marks a live list, so the
+  // column would keep every product and never show «Prodotti con…» / «Mostra tutti» (code
+  // review). Dropping it makes openProduct paint the narrowed one.
+  activeList = null;
+  if (first) openProduct(first);
+  else showList();
 }
 
 // ⚠️⚠️ DECIDED ONCE, AND NEVER ON A LIST THAT HAS NOT ARRIVED. On a phone that has never
@@ -369,7 +554,7 @@ function settleRecipeLink() {
   const id = fromRecipe;
   const using = productsUsingRecipe(getProducts(), id);
   if (using.length === 1) { openProduct(using[0]); entryEditor = true; refreshChrome(); return; }
-  if (using.length > 1) { listFilter = id; showList(); return; }
+  if (using.length > 1) { openNarrowed(id); return; }
   const draft = draftFromRecipe(getRecipes()[id]);
   if (draft) { openProduct(null, draft); entryEditor = true; draftRecipeId = id; refreshChrome(); return; }
   // A recipe nobody can find — deleted, or still not here at the deadline: the plain
@@ -390,7 +575,7 @@ function reconsiderDraft() {
   const using = productsUsingRecipe(getProducts(), id);
   if (!using.length) return false;
   if (using.length === 1) { openProduct(using[0]); entryEditor = true; refreshChrome(); }
-  else { listFilter = id; showList(); }
+  else openNarrowed(id);
   return true;
 }
 
@@ -409,6 +594,11 @@ function clearAddress() {
 
 // The margin over time. Read on demand, never watched.
 async function openHistory(product) {
+  // ⚠️ P20 — ON A PHONE THE EDITOR IS DROPPED BELOW, so typed edits would go with it in
+  // silence (found by the code review of PR #483). Ask the editor's own guard first
+  // («Scartare le modifiche?»); no = stay in the form. A read view is never dirty, so it
+  // passes straight through; a tablet keeps the editor alive (heldEditor) and needs no question.
+  if (!splitOn && view === 'editor' && activeEditor && !(await askLeave())) return;
   view = 'history';
   globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'history' }));
   // ⚠️ ON A TABLET THE EDITOR IS SET ASIDE, NOT DROPPED: its node, its working copy and its
@@ -442,11 +632,11 @@ async function openHistory(product) {
 
   body.replaceChildren(
     ...entries.map(entry => el('div', { class: 'fc-hist-row' }, [
-      el('span', { class: 'fc-hist-pct', text: `${entry.foodCostPct}%` }),
+      el('span', { class: 'fc-hist-pct', text: `${fcNumber(entry.foodCostPct)}%` }),
       el('span', { class: 'fc-hist-detail', text: t('fc.histDetail', {
-        cost: formatRate(entry.unitCost),
-        price: formatMoney(entry.sellingPrice),
-        vat: entry.vatRate,
+        cost: fcMoney(entry.unitCost),
+        price: fcMoney(entry.sellingPrice),
+        vat: entry.vatRate === null || entry.vatRate === undefined ? entry.vatRate : fcNumber(entry.vatRate),
       }) }),
       el('span', { class: 'fc-hist-when', text: shortDate(entry.recordedAt) }),
     ])),
@@ -465,13 +655,20 @@ function shortDate(iso) {
 }
 
 async function handleBack() {
+  // ⚠️ FIRST: a form opened with the pencil goes back to the read view of the same product —
+  // one level up — before any other rule. (Beside the list the pane head has its own Back, and
+  // the page Back stays the list's.) The unsaved-edits question is stopEdit's.
+  if (!splitOn && view === 'editor' && editFromRead && activeEditor && activeEditor.mode === 'edit') {
+    await stopEdit();
+    return;
+  }
   // A phone that crossed the width with the editor set aside: Back is «back to the product».
   if (view === 'history' && heldEditor && !splitOn) { backToProduct(); return; }
   if (!(await askLeave())) return;
   leaveGuard = null;
   // Beside the list the page Back is the LIST's Back (to the recipe), whatever the pane holds.
   if (splitOn && (view === 'editor' || view === 'history')) {
-    if (fromRecipe && (listFilter || entryEditor)) { window.location.replace(recipeHref(fromRecipe)); return; }
+    if (fromRecipe && (listFilter || entryEditor)) { window.location.replace(recipeHref(fromRecipe, 'foodcost')); return; }
     showList();
     return;
   }
@@ -486,7 +683,8 @@ async function handleBack() {
   if (fromRecipe && (view === 'loading' || (view === 'editor' && entryEditor) || (view === 'list' && listFilter))) {
     // ⚠️ replace(), NOT href: Back must not ADD a page to the phone's history, or the
     // system back gesture walks forward into Food cost again — two more pages per trip.
-    window.location.replace(recipeHref(fromRecipe));
+    // Back lands where the tap came from (the Food cost card), not at the top of the recipe.
+    window.location.replace(recipeHref(fromRecipe, 'foodcost'));
     return;
   }
   showList();
@@ -504,6 +702,7 @@ const app = {
   confirm: confirmDialog,
   toast,
   showList,
+  showSaved,
   openHistory,
   saveProduct,
   deleteProduct,
@@ -521,7 +720,8 @@ const app = {
 
   // The recipes a component can point at, by NAME ONLY.
   // ⚠️ NO PRICE IN THE CHOOSER. Federico, 13 Sep 2026: «nella sezione "composto da" non
-  // mostrare il prezzo». What the product costs is read in «Costo di produzione», once.
+  // mostrare il prezzo» — reversed for the LINES on 7 Nov 2026 (each shows its money,
+  // line-cost.js), kept for the list a line is picked from.
   recipeOptions() {
     return Object.values(getRecipes())
       .filter(r => r && String(r.name || '').trim())
@@ -531,7 +731,7 @@ const app = {
 
   // The ingredients a product can have added straight to it — never packaging, which has
   // its own section. By name, with the pack weight that tells two similar ones apart, and
-  // ⚠️ NO PRICE: «nella sezione "composto da" non mostrare il prezzo».
+  // ⚠️ NO PRICE in the chooser (13 Sep 2026; the lines show theirs since 7 Nov 2026).
   ingredientOptions() {
     return Object.values(getIngredients())
       .filter(i => i && i.active !== false && !isPackaging(i) && String(i.name || '').trim())
@@ -551,7 +751,7 @@ const app = {
       .map(i => {
         const each = i.priceUnit === 'pcs' ? Number(i.pricePerUnit) : null;
         const perKg = pricePerKg(i);
-        const note = each ? t('fc.priceEach', { price: formatRate(each) })
+        const note = each ? t('fc.priceEach', { price: fcMoney(each) })
           : perKg !== null ? t('fc.pricedByWeight')
             : t('fc.notPriced');
         return { id: i.id, name: ingredientDisplayName(i).trim(), invoiceName: String(i.name).trim(), meta: note };
@@ -562,6 +762,7 @@ const app = {
 
 backBtn.addEventListener('click', handleBack);
 saveBtn.addEventListener('click', () => activeEditor?.save());
+editBtn.addEventListener('click', startEdit);
 // ⚠️ Home is a plain link. Beside an open editor it must ask the same guard first, or a tap on
 // it would throw the typing away with the page.
 homeBtn.addEventListener('click', async (e) => {
@@ -582,7 +783,11 @@ settingsBtn.addEventListener('click', () => {
   });
 });
 // Who is looking arrives with the session, after the first paint.
-authReady.then(paintFooter);
+// The list's «recipes without a product» box also depends on who is looking.
+authReady.then(() => {
+  paintFooter();
+  if (view === 'list' && activeList) activeList.refresh(listedProducts(), tables());
+});
 setSyncErrorHandler(msg => toast(msg));
 
 initFoodCost(
@@ -598,7 +803,14 @@ initFoodCost(
     // IS NEVER REPLACED by a remote edit (it never was): only the lines and the answer redraw.
     // Beside the list, a product deleted elsewhere sends an UNTOUCHED editor back to the
     // placeholder; one with typing in it is kept, as on a phone.
-    if (view === 'editor' && activeEditor) {
+    if (view === 'editor' && activeEditor && activeEditor.mode === 'read' && currentProduct && currentProduct.id) {
+      // A read view has nothing typed: it follows the stored product, a deletion included
+      // (phone and tablet alike).
+      const fresh = getProducts().find((p) => p && p.id === currentProduct.id);
+      if (!fresh && hasLiveProducts()) { toast(t('fc.productDeleted')); showList(); return; }
+      if (fresh && JSON.stringify(fresh) !== JSON.stringify(currentProduct)) refreshRead(fresh);
+      else activeEditor.refreshData();
+    } else if (view === 'editor' && activeEditor) {
       if (openProductWasDeleted(activeEditor)) { toast(t('fc.productDeleted')); showList(); return; }
       activeEditor.refreshData();
     }
@@ -622,7 +834,10 @@ initFoodCost(
 onLanguageChange(() => {
   if (view === 'list') showList();
   else if (view === 'loading') showWaiting();
-  else if (splitOn && (view === 'editor' || view === 'history')) {
+  else if (!splitOn && view === 'editor' && activeEditor && activeEditor.mode === 'read' && currentProduct) {
+    // A read view has nothing typed, so on a phone it can be redrawn in the new language.
+    refreshRead(currentProduct);
+  } else if (splitOn && (view === 'editor' || view === 'history')) {
     // The list beside the product, the page header and the pane head are words too; the
     // editor itself is left alone (its typing is never redrawn away).
     setListChrome();

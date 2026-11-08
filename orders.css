@@ -32,6 +32,54 @@
 .home-scroll > * { flex-shrink: 0; }
 #session-logout-host { margin-top: auto; }
 
+/* ── The Home bar: «Settings» centred, a small quiet «Log out» at the far right ──
+   (Federico, 15 Oct 2026.) Three columns: an empty one, Settings, and Log out. The right
+   column is never narrower than the button's own words (min-content), so at 296px the two
+   buttons cannot overlap: Settings gives way and shifts a little off centre instead. Scoped to
+   the Home bar — .recipe-footer is shared and pinned by tests/bottom-bar.test.mjs. */
+#session-logout-host .recipe-footer {
+  display: grid;
+  /* ⚠️ THE MIDDLE COLUMN CARRIES SETTINGS' WIDTH, the same as every other bar's button: style.css
+     gives it flex 0 1 240px capped at half the bar less 6px, which a grid has no way to say, so it is
+     restated here in viewport units. Set on the ITEM instead, the auto column ignored it and the
+     button spilled out of its column to the right (off centre by 50px on a tablet). It may still
+     grow to its words (max-content), which keeps «Impostazioni» on one line at 296px. */
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(max-content, min(240px, calc(50vw - max(16px, var(--app-gutter)) - 6px)))
+    minmax(min-content, 1fr);
+  align-items: center;
+  column-gap: 8px;
+}
+#session-logout-host .recipe-footer-btn {
+  grid-column: 2;
+  width: 100%;
+  max-width: none;
+  white-space: nowrap;
+}
+#session-logout-host .home-signout {
+  grid-column: 3;
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 4px 8px;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-sm);
+  color: var(--text-2);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+#session-logout-host .home-signout[hidden] { display: none; }
+#session-logout-host .home-signout svg { flex-shrink: 0; }
+#session-logout-host .home-signout:active { background: var(--accent-light); }
+#session-logout-host .home-signout:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+
 .home-header { position: relative; }
 /* A short crust rule fading out to the right, under the venue name. Decorative
    only, so it is drawn from CSS and never announced. */
@@ -296,6 +344,35 @@
   transition: transform 0.06s ease;
 }
 .supplier-row-open:active { transform: scale(0.99); }
+/* ── «To order today» (both supplier lists) ─────────────────────────────────────
+   The warm crust family, deliberately NOT the green accent: on the tablet a green tint
+   plus bar already means «the row open in the pane» (.app-split-list [aria-current],
+   .reg-row-picked). The WORD in the tag is the signal; the colour only supports it
+   (P18: never colour alone). Borders stay 1px, so nothing shifts. [hidden] is hidden by
+   tokens.css' global rule. */
+.supplier-due-tag {
+  display: block;
+  width: fit-content;
+  margin-top: 4px;
+  padding: 2px 8px;
+  /* --radius-sm, not the pill: on one line it rounds fully anyway; at 296px the Orders row's name
+     column is ~100px and the words wrap, where a pill turned into a lumpy capsule (measured). */
+  border-radius: var(--radius-sm);
+  line-height: 1.3;
+  background: var(--crust-bg);
+  border: 1px solid var(--crust);
+  color: var(--crust-ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+.supplier-row.supplier-row--due {
+  border-color: var(--crust);
+  background: var(--crust-bg);
+}
+/* Tapped while the list is still the local copy: the supplier opens by itself once the live lists
+   land (orders-main.js holdSupplier). A quiet dimming, no animation. */
+.supplier-row--waiting { opacity: 0.6; }
 /* The narrow half: "show me what this supplier sells". Quiet by default — a secondary
    action must not compete with the row's main one.
    ⚠️ 36px WIDE, not 44: on a 282px phone every pixel here comes off the supplier's
@@ -361,6 +438,9 @@
    long supplier name that wraps stays centred instead of drifting half a button to the
    right (18px at 296px, measured 30 Sep 2026). At 296 that still leaves the title 176px. */
 .supplier-detail > .app-header { --app-header-side: 36px; }
+/* The screen's own status line (a save error, «Salvo la quantità…»): between the header and the
+   rows, never scrolled away, at the page's usual gutter. */
+.supplier-detail > .supplier-detail-status { flex: none; margin: 8px max(16px, var(--app-gutter)) 0; }
 .supplier-detail-body {
   flex: 1;
   min-height: 0;
@@ -1536,6 +1616,12 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   cursor: pointer;
 }
 .reg-drill:active { transform: scale(0.97); }
+/* Still to order today (colour reasoning: see .supplier-due-tag). The row open in the
+   tablet's pane keeps its own tint, which must win. */
+.mgmt-item.reg-due:not([aria-current="true"]) {
+  border-color: var(--crust);
+  background: var(--crust-bg);
+}
 .reg-chevron {
   flex-shrink: 0;
   color: var(--text3);
@@ -1551,6 +1637,7 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
    them apart — so the row has to SAY which one it is (the v1.63.0 rule, and P18).
    The amber pair is the system's own, already shipped on the Log's day badge; no
    new colour is chosen here. */
+.reg-price-room { visibility: hidden; }
 .reg-flag {
   display: inline-block;
   margin-top: 4px;
@@ -1562,6 +1649,97 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   font-size: 11px;
   font-weight: 600;
 }
+
+/* An ingredient / packaging row: a FRAME carrying the card look, holding the drill button and the
+   word at the right («Disattiva» / «Riattiva»). A button cannot nest in a button, so the two are
+   siblings (same reasoning as .wa-entry-card in style.css). The tablet's picked look covers the
+   whole card: see .reg-row-picked below. */
+.reg-row {
+  display: flex;
+  align-items: stretch;
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+/* ⚠️ ROWS OFF SCREEN ARE NOT LAID OUT OR PAINTED UNTIL THEY ARE NEAR THE VIEW: 302 of them cost the lab
+   tablet about 1.3 s on every open. Only on the long lists, never in a supplier's own screen, whose
+   rebuild puts its scroll back by number. The height is a guess until a row has been drawn;
+   registry.js carries the real one across a repaint, so a repaint does not move the list. */
+.reg-list-host .reg-row {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 100px;
+}
+/* The tablet's rows are one line shorter, measured on the lab tablet. */
+@media (min-width: 900px) and (min-height: 600px), (min-width: 1000px) {
+  .reg-list-host .reg-row { contain-intrinsic-size: auto 79px; }
+}
+.reg-row .reg-drill {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+/* ⚠️ Only the drill part is dimmed (.mgmt-item.inactive): the word keeps its full contrast. */
+.reg-word {
+  flex-shrink: 0;
+  min-width: 100px;
+  min-height: 44px;
+  padding: 0 14px;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid var(--border);
+  font-family: 'Manrope', sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+  color: var(--brand);
+  cursor: pointer;
+}
+.reg-word-off { color: var(--crust-ink); }
+/* ⚠️ A NARROW PHONE (296px measured): at 100px the word left the name 106px, and «non dichiarato»
+   (106.4px) broke onto two lines. A narrower cell gives the name back ~16px; the word still fits. */
+@media (max-width: 340px) {
+  .reg-word { min-width: 84px; padding: 0 10px; }
+}
+.reg-word:active { background: var(--surface2); transform: scale(0.97); }
+/* ⚠️ THE RING IS DRAWN INSIDE: the frame clips (overflow: hidden), so the browser's own ring,
+   drawn outside the button, was cut off on every edge that touches the frame. */
+.reg-row .reg-drill:focus-visible,
+.reg-word:focus-visible { outline: 3px solid var(--accent-2); outline-offset: -3px; }
+/* The tablet's picked row: aria-current sits on the drill button (tokens.css paints it); the frame
+   takes the same tint and border so the word cell is part of the picked card too. */
+.app-split-list .reg-row.reg-row-picked {
+  background: var(--accent-light);
+  border-color: var(--accent-border);
+}
+
+/* The name and, for a hand-made item, the pencil: a flex row so the icon sits on the text's centre line. */
+.reg-name { display: flex; align-items: center; gap: 7px; }
+.reg-name-text { min-width: 0; }
+.reg-handmade { flex-shrink: 0; display: flex; align-items: center; color: var(--text-3); }
+
+/* The folded «Not in use (N)» group. A native <details>: it opens and closes with no script. */
+.reg-notinuse { margin-top: 18px; }
+.reg-notinuse-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+  list-style: none;
+  font-family: 'DM Mono', monospace;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.reg-notinuse-head::-webkit-details-marker { display: none; }
+.reg-notinuse-chev { display: flex; align-items: center; transition: transform 0.15s; }
+.reg-notinuse[open] .reg-notinuse-chev { transform: rotate(90deg); }
 
 /* ── Management forms ─────────────────────────────────────────────────────── */
 .mgmt-form { display: flex; flex-direction: column; gap: 14px; }
@@ -1834,6 +2012,17 @@ body[data-section="orders"] .ing-filter .view-switch-btn:not(.active) { color: v
   font-weight: 500;
   cursor: default;
 }
+/* Closed as «non ordinato» today (drafts/current.skipped): as quiet as a placed one, but still a
+   button — it opens the supplier's summary, where «Riapri» undoes it. The dashed edge is what
+   tells it from a placed one besides the words. */
+.today-chip.skipped {
+  border-style: dashed;
+  border-color: var(--text-3);
+  background: transparent;
+  color: var(--text-3);
+  font-weight: 500;
+}
+.today-chip-note { font-weight: 400; }
 /* The SVG's wrapper span is an inline box: without flex the tick sits on the text
    baseline, ~2px low. Same trap as .notif-status above. */
 .today-check { display: flex; align-items: center; }
@@ -2956,7 +3145,7 @@ body[data-section="orders"] .order-box-head .tab-bar .tab.active { font-weight: 
   left: max(8px, var(--app-gutter));
   right: max(8px, var(--app-gutter));
   margin-top: 8px;
-  max-height: 70vh;
+  max-height: calc(var(--vh100) * 0.7);
   overflow-y: auto;
   padding: 12px;
   background: var(--surface);
@@ -3093,6 +3282,16 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 14px;
+  }
+  /* «To order today» on the tablet: the card look sits on .supplier-row-open, the row stays
+     transparent, so the phone rule above is undone here and the tint goes on the card. */
+  body[data-section="orders"] .supplier-row.supplier-row--due {
+    background: transparent;
+    border: none;
+  }
+  body[data-section="orders"] .supplier-row.supplier-row--due > .supplier-row-open {
+    border-color: var(--crust);
+    background: var(--crust-bg);
   }
   body[data-section="orders"] .supplier-row-view {
     width: var(--tap-min);
@@ -3249,6 +3448,45 @@ body:not([data-orders-tab="deliveries"]) #orders-owed { display: none; }
    Not tablet-only: the summary sheet is a phone screen too. */
 .order-summary-cost { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--text-3); }
 .order-summary-cost--warn { color: var(--warn); font-weight: 600; }
+
+/* The sheet's buttons about TODAY's order (js/orders/order-summary-view.js appendActions):
+   «Ordine fatto» (the same green button as the supplier's screen), «Chiudi come non ordinato»
+   and, while closed, the status line with «Riapri». One column, full width, 48px targets. */
+.order-summary-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+.order-summary-actions[hidden] { display: none; }   /* the display above would beat the attribute */
+.order-summary-actions .btn-primary { margin-top: 0; }
+.order-summary-place {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+}
+.order-summary-place-icon { display: flex; align-items: center; }
+.order-summary-skip,
+.order-summary-reopen {
+  width: 100%;
+  min-height: 48px;
+  transition: transform .06s ease;
+}
+.order-summary-skip:active,
+.order-summary-reopen:active { transform: scale(.97); }
+.order-summary-hint { margin: 0; font-size: 14px; color: var(--text-2); line-height: 1.4; }
+.order-summary-closed {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 14px;
+  border: 1px dashed var(--text-3);
+  border-radius: var(--radius-sm);
+  background: var(--surface2);
+}
+.order-summary-closed-text { font-size: 15px; font-weight: 600; color: var(--text); }
 
 /* ⚠️ PHONE LAYOUT OF THE SUMMARY. The sheet was a tablet screen until the bar on the supplier's
    screen opened it on phones too. With prices readable the cost line («10 × 12,50 € = 125,00 € ·

@@ -799,6 +799,20 @@ export function priceChanged(before, after) {
   return priceChangedByRepresentation(before, after);
 }
 
+// ⚠️ THE PRICE'S DATE MOVES ONLY WITH THE MONEY (20 Oct 2026). `priceUpdatedAt` is the date of the price in
+// force, and the invoice import and the pack merge read it to decide whether an incoming invoice is newer than
+// that price (invoice-import-model.js matchedRow, ingredient-merge.js). pricePatch stamps «now» on every complete
+// price, so a card saved only to fix a name used to date an old invoice price as today: every invoice dated
+// before that day then went to the history only and never updated the price. So when the money did not move
+// (priceChanged — the same rule that plants no history entry), the stored date is kept. A stored price with no
+// date takes the new one, as before.
+export function keepPriceDate(before, patch) {
+  if (!patch || patch.priceUpdatedAt == null) return patch;
+  const stored = before && typeof before.priceUpdatedAt === 'string' ? before.priceUpdatedAt : '';
+  if (!stored || positiveNumber(before.pricePerUnit) === null || priceChanged(before, patch)) return patch;
+  return { ...patch, priceUpdatedAt: stored };
+}
+
 // One entry in the append-only history. It carries the SUPPLIER as well as the
 // price, because the whole point of keeping it is to answer "what did we pay, to
 // whom, when" long after the ingredient's current supplier has changed.
@@ -884,4 +898,15 @@ export function withPrices(ingredients, prices) {
     PRICE_FIELDS.forEach(key => { if (key in clean) clean[key] = null; });
     return price ? { ...clean, ...price } : clean;
   });
+}
+
+// Whether two id → price document maps say the same thing, so a screen can skip a redraw.
+// ⚠️ IT MAY ONLY ERR TOWARDS «DIFFERENT»: the same fields in another order count as different, which
+// costs one redraw and can never leave an old price on screen.
+export function samePriceMaps(a, b) {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const ids = Object.keys(a);
+  if (ids.length !== Object.keys(b).length) return false;
+  return ids.every(id => id in b && JSON.stringify(a[id]) === JSON.stringify(b[id]));
 }

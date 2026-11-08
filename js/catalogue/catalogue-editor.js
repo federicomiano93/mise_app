@@ -7,14 +7,15 @@
 // to (ingredient-suggest.js). Persists per document to recipes/{id} via the store (not
 // into config).
 
-import { t } from '../i18n.js';
+import { t, localeTag } from '../i18n.js';
+import { sortedCategories, categoryOf } from './recipe-categories-model.js';
 import { supplierLabel } from '../supplier-label.js';
 import { revealField } from '../reveal-field.js';
 import { canManageHere } from './firebase-catalogue.js';
 import { el } from './dom.js';
 import {
   findInvalidRecipe, unitOf, unitText, CATALOGUE_UNITS, isWeighableUnit, weighableTotalGrams,
-  linkOf, applyLink, linkedItemName, isSameLink, normalizeWeight, normalizeShelfLifeDays, moveRow,
+  linkOf, applyLink, linkedItemName, staleLinkName, isSameLink, normalizeWeight, normalizeShelfLifeDays, moveRow,
   hasDividerAfter, removeRow, keepRows, withoutTrailingDivider,
 } from './catalogue-model.js';
 // Drag to reorder the rows — the library the Calculator's clients and the Home cards use,
@@ -22,6 +23,7 @@ import {
 import Sortable from '../vendor/sortable.esm.js';
 import { openLinkPicker } from './ingredient-picker.js';
 import { attachLinkSuggestions } from './ingredient-suggest.js';
+import { unpricedRowFlags } from './unpriced-rows.js';
 
 // Whole grams, no thousands separator — the same reading as the recipe view.
 const nf = new Intl.NumberFormat('en-GB', { maximumFractionDigits: 0, useGrouping: false });
@@ -44,7 +46,9 @@ const CAMERA_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"
 // Delete button would appear — and calling it would delete `undefined` — and
 // line 1 below would read `.ingredients` off something that might not have any.
 // Keeping `recipe` null is what makes all four correct without touching them.
-export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile = () => ({}) }) {
+export function renderEditor({
+  recipe, draft, allRecipes, app, getLabelProfile = () => ({}), getRecipeCategories = () => [],
+}) {
   // Working copy — nothing touches the stored recipe until Save.
   // ⚠️ ...i, NOT a hand-listed set of fields. This copy and cleanWorking() below
   // both rebuild every row, so any field named in neither is dropped on save —
@@ -73,6 +77,10 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
         ...(normalizeWeight(draft.netWeightG) > 0 ? { netWeightG: normalizeWeight(draft.netWeightG) } : {}),
         ...(normalizeShelfLifeDays(draft.shelfLifeDays) !== null
           ? { shelfLifeDays: normalizeShelfLifeDays(draft.shelfLifeDays) } : {}),
+        // ⚠️ A CATEGORY CHOSEN BEFORE THE PHOTO SCREEN TRAVELS WITH THE TYPED COPY (the draft is
+        // `working` handed back). A new recipe has no stored category, so any choice is a move.
+        ...(typeof draft.category === 'string' && draft.category
+          ? { category: draft.category, categoryMoved: true } : {}),
       }
       : { id: null, name: '', ingredients: [{ label: '', grams: '', unit: 'g' }] };
 
@@ -129,6 +137,39 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     // Nothing to put in order with a single row.
     reorderBtn.hidden = working.ingredients.length < 2 || dividing;
     dividerBtn.hidden = working.ingredients.length < 2 || reordering;
+    // Runs on every amount, unit and name input, and after every redraw of the rows, so
+    // the mark follows what is typed. A no-op until the prices have arrived.
+    paintPriceMarks();
+  }
+
+  // ── The crossed-out euro on a row Food cost cannot price (28 Oct 2026) ──────
+  //
+  // ⚠️ HELD IN THIS CLOSURE ONLY. null until the read answers, and null for good when it is
+  // refused or this person may not read Food cost: no marks, no error. The map is never
+  // stored anywhere and no money is shown — unpricedRowFlags answers with booleans.
+  let editorPrices = null;
+
+  // Lucide «euro» plus a slash; the colour is the warning amber, from the button's context.
+  const NO_PRICE_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h12"/><path d="M4 14h9"/><path d="M19 6a7.7 7.7 0 0 0-5.2-2A7.9 7.9 0 0 0 6 12c0 4.4 3.5 8 7.8 8 2 0 3.8-.8 5.2-2"/><path d="M3 3l18 18"/></svg>';
+
+  function paintPriceMarks() {
+    if (reordering || dividing || !editorPrices) return;
+    const flags = unpricedRowFlags(working, {
+      ingredients: app.ingredients(), recipes: app.allRecipes(), prices: editorPrices,
+    });
+    const groups = rowsContainer.querySelectorAll('.cat-ing-editgroup');
+    flags.forEach((unpriced, i) => {
+      const button = groups[i] && groups[i].querySelector('.cat-ing-link');
+      if (!button) return;
+      const mark = button.querySelector('.cat-noprice');
+      if (!unpriced) { if (mark) mark.remove(); return; }
+      if (mark) return;
+      // The label is read NOW, in the language of the moment (never frozen at load).
+      button.appendChild(el('span', {
+        class: 'cat-noprice', role: 'img', 'aria-label': t('cat.noPriceMark'), icon: NO_PRICE_SVG,
+      }));
+    });
   }
 
   // ── Reordering the rows (13 Sep 2026) ───────────────────────────────────────
@@ -137,7 +178,7 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
   // ingredienti già compilati».
   // ⚠️ A MODE, NOT A GRIP ON EVERY ROW. At 296px a row already holds a name, an amount, a
   // unit and a bin; a fifth control would take its width from the NAME. While reordering,
-  // each row is its grip, its name and its amount — nothing to type into, nothing to hit
+  // each row is its name, its amount and its grip — nothing to type into, nothing to hit
   // by accident while a finger is dragging.
   // ⚠️ THE SAME ROW OBJECTS MOVE (moveRow), so a guided mixing step, which points at a row
   // by its `rid`, still points at the right ingredient afterwards.
@@ -190,14 +231,17 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
       const name = String(ing.label || '').trim() || t('cat.unnamedRow');
       const unit = unitOf(ing);
       const qty = ing.grams === '' || ing.grams === undefined || unit === 'to taste' ? '' : String(ing.grams);
+      // ⚠️ THE GRIP IS THE LAST THING IN THE ROW, on the right (Federico, 3 Nov 2026: «Metti a
+      // destra i punti per trascinare gli ingredienti per riordinare») — under the right thumb
+      // on the lab tablet, and the name now starts where it starts in every other mode.
       rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup cat-reorder-row' + (hasDividerAfter(working.ingredients, idx) ? ' cat-reorder-row--divider' : '') }, [
+        el('span', { class: 'cat-reorder-name', text: name }),
+        el('span', { class: 'cat-reorder-amount', text: [qty, unit].filter(Boolean).join(' ') }),
         el('button', {
           type: 'button', class: 'home-cards-grip cat-reorder-grip', icon: GRIP_ICON,
           'aria-label': t('cat.moveRow', { name }), 'aria-describedby': 'catReorderHint',
           onkeydown: (event) => moveWithKeys(idx, event),
         }),
-        el('span', { class: 'cat-reorder-name', text: name }),
-        el('span', { class: 'cat-reorder-amount', text: [qty, unit].filter(Boolean).join(' ') }),
       ]));
     });
     // ⚠️ HOLD TO DRAG ON A PHONE (200ms), so scrolling the recipe with a thumb never moves
@@ -255,7 +299,12 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
       const labelInput = el('input', {
         class: 'cat-lbl', type: 'text', placeholder: t('cat.ingredient'), value: ing.label,
         'aria-label': t('cat.ingredientName'),
-        oninput: (e) => { ing.label = e.target.value; markDirty(); updateTotal(); if (showErrors) validateUI(); },
+        oninput: (e) => {
+          openedLabelOf(ing);          // remember the name before the first keystroke changes it
+          ing.label = e.target.value;
+          paintStaleLink(ing, e.target);
+          markDirty(); updateTotal(); if (showErrors) validateUI();
+        },
       });
       // Under the name, while it is typed: catalogue ingredients to link THIS row to.
       // ⚠️ A tap links the row and SETS its name to the linked item's display name — the
@@ -321,7 +370,13 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
         class: 'cat-del-icon', type: 'button', 'aria-label': t('cat.removeIngredient'), icon: TRASH_SVG,
         onclick: () => {
           // The line stays between the rows: the row above this one takes this row's line.
+          const before = working.ingredients;
           working.ingredients = removeRow(working.ingredients, idx);
+          // removeRow copies the row that takes the deleted row's divider line: keep its memory.
+          const survivors = before.filter((_, i) => i !== idx);
+          working.ingredients.forEach((row, i) => {
+            if (survivors[i] && survivors[i] !== row && openedLabels.has(survivors[i])) openedLabels.set(row, openedLabels.get(survivors[i]));
+          });
           if (!working.ingredients.length) working.ingredients.push({ label: '', grams: '', unit: 'g' });
           markDirty();
           renderIngredientRows();
@@ -362,11 +417,67 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
   // cannot contribute a cost, and says so.
   function linkRow(ing, idx) {
     const link = linkOf(ing);
+    const stale = staleName(ing);
     const button = el('button', {
-      class: 'cat-ing-link' + (link ? ' linked' : ''), type: 'button',
+      class: 'cat-ing-link' + (link ? ' linked' : '') + (stale ? ' cat-ing-link--stale' : ''), type: 'button',
       onclick: () => pickFromChooser(idx),
-    }, linkText(ing));
+    }, [el('span', { class: 'cat-ing-link-text', text: stale ? staleText(stale) : linkText(ing) })]);
     return button;
+  }
+
+  // ── A retyped name on a still-linked row (7 Nov 2026) ───────────────────────
+  //
+  // Federico: «quando cambio ingrediente il prezzo non si aggiorna». THE TRAP: retyping the name
+  // box of a linked row changes only `label`; the row keeps its link (`refId`), and the link is
+  // what recipe cost and every Food cost product built on it read. «Farina» retyped as «Burro»
+  // kept costing FLOUR, while the line under the row still said «→ Farina …» and nobody looked.
+  // ⚠️ A WARNING, NEVER AN AUTOMATIC UNLINK: fixing a typo («Farinna») must not lose the link.
+  // Only a pick relinks (linkTo). ⚠️ ONLY A NAME CHANGED IN THIS SESSION WARNS: old rows whose
+  // typed name differs from the linked item («Farina» on «Farina 0 Caputo», English invoice
+  // names) must not light up on opening. So each row remembers the name it had when the editor
+  // opened — or when it was last linked by a pick. ⚠️ The memory is a WeakMap keyed by the row
+  // object, NEVER a field of the row: the row is what Save writes and the rules whitelist its keys.
+  // moveRow keeps the same objects; removeRow copies only a row that takes a deleted row's divider
+  // line (carried over in the bin's handler).
+  // ⚠️ Known edge, left as it is: a NEW recipe's rows come back from the photo screen as fresh
+  // objects, so a warning showing before that visit is not drawn again after it.
+  const openedLabels = new WeakMap();
+  // ONE polite live region for the editor: a screen reader hears the warning when a row TURNS stale,
+  // not on every keystroke. Outside rowsContainer, which is rebuilt.
+  const staleAnnouncer = el('div', { class: 'cat-sr-only', role: 'status', 'aria-live': 'polite' });
+
+  function openedLabelOf(ing) {
+    if (!openedLabels.has(ing)) openedLabels.set(ing, String(ing.label ?? ''));
+    return openedLabels.get(ing);
+  }
+
+  // The linked item's name when the row's name has moved away from it, else ''.
+  function staleName(ing) {
+    return staleLinkName({
+      label: ing.label, openedLabel: openedLabelOf(ing), link: linkOf(ing),
+      ingredients: app.ingredients(), recipes: app.allRecipes(),
+    });
+  }
+
+  function staleText(name) {
+    return t('cat.nameChangedStillLinked', { name });
+  }
+
+  // Live, from the name box: only the one row's link line changes. ⚠️ NO renderIngredientRows —
+  // rebuilding takes the box from under the finger. ⚠️ Only the text span is rewritten: the
+  // crossed-out euro mark (paintPriceMarks) lives in the same button and must survive.
+  function paintStaleLink(ing, input) {
+    const group = input.closest('.cat-ing-editgroup');
+    const button = group && group.querySelector('.cat-ing-link');
+    const text = button && button.querySelector('.cat-ing-link-text');
+    if (!text) return;
+    const stale = staleName(ing);
+    const was = button.classList.contains('cat-ing-link--stale');
+    button.classList.toggle('cat-ing-link--stale', !!stale);
+    text.textContent = stale ? staleText(stale) : linkText(ing);
+    // Announced on the transition only; cleared when it is gone.
+    if (stale && !was) staleAnnouncer.textContent = staleText(stale);
+    else if (!stale && was) staleAnnouncer.textContent = '';
   }
 
   // The full-screen chooser — already searching what was typed, when «See all» under a
@@ -413,6 +524,10 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     // is already there, or tapping the ticked suggestion, must not undo a name typed since.
     const same = isSameLink(before, chosen);
     applyLink(row, chosen, same ? {} : { label: linkedItemName(chosen, app.ingredients(), app.allRecipes()) });
+    // A pick (re)starts the comparison: the name now on the row is the one that fits the link.
+    // A pick of the SAME link is the person saying «yes, this one»: the name is kept, but the
+    // warning's baseline moves to it, so the warning clears.
+    openedLabels.set(row, String(row.label ?? ''));
     markDirty();
     renderIngredientRows();
     if (showErrors) validateUI();
@@ -652,6 +767,17 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
 
   renderIngredientRows();
 
+  // The prices, asked for once as the editor opens. A refusal or a failure resolves null and
+  // leaves the editor without marks; the editor may be gone by the time this answers, and
+  // painting into rows nobody sees is harmless.
+  if (app.readEditorPrices) {
+    Promise.resolve(app.readEditorPrices()).then(prices => {
+      if (!prices) return;
+      editorPrices = prices;
+      paintPriceMarks();
+    }).catch(() => { /* no prices, no marks */ });
+  }
+
   // ⚠️ ONLY ON A NEW RECIPE, AND ONLY WHEN THE VENUE HAS IT SWITCHED ON. `recipe` is
   // null exactly when this is a new one — the same flag that already decides the
   // title, the toast and the absent Delete button. Federico, 23 Aug 2026: this is
@@ -687,9 +813,40 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     }, [el('span', { icon: CAMERA_ICON, 'aria-hidden': 'true' }), el('span', { text: t('cat.photo.fill') })])
     : null;
 
+  // ── The category (1 Nov 2026) ───────────────────────────────────────────────
+  //
+  // ⚠️ DRAWN ONLY WHEN THE VENUE HAS A LIST: nothing to choose from is a box nobody can use. Read
+  // once, as the editor is built. Whoever may edit a recipe may file it: no role gate.
+  // ⚠️ `categoryMoved` IS WHAT MAKES THE STORE WRITE THE CATEGORY AT ALL. Left untouched, a recipe
+  // keeps the word it has — even one that is off the list and reads as «none» — and choosing
+  // «none» again after another word is no move either. It is never sent to the database.
+  const categories = getRecipeCategories();
+  // A draft carried a choice made before the photo screen; a word since taken off the list is dropped.
+  if (working.categoryMoved && !categoryOf(working, categories)) {
+    delete working.category;
+    delete working.categoryMoved;
+  }
+  const initialCategory = draft ? '' : categoryOf(working, categories);
+  const categorySelect = categories.length
+    ? el('select', {
+      id: 'catRecipeCategory', class: 'set-select cat-category-select',
+      onchange: (e) => {
+        working.category = e.target.value;
+        working.categoryMoved = e.target.value !== initialCategory;
+        markDirty();
+      },
+    }, [
+      el('option', { value: '' }, t('cat.shelf.categoryNone')),
+      ...sortedCategories(categories, localeTag()).map(word => el('option', { value: word }, word)),
+    ])
+    : null;
+  if (categorySelect) categorySelect.value = categoryOf(working, categories);
+
   return el('div', { class: 'cat-view cat-editor' }, [
     el('label', { for: 'catRecipeName', text: t('cat.recipeName') }),
     nameInput,
+    categorySelect ? el('label', { for: 'catRecipeCategory', text: t('cat.shelf.categoryLabel') }) : null,
+    categorySelect,
     el('div', { class: 'cat-ing-head' }, [
       el('label', { class: 'cat-ing-head-label', text: t('cat.ingredients') }),
       countEl,
@@ -698,6 +855,7 @@ export function renderEditor({ recipe, draft, allRecipes, app, getLabelProfile =
     reorderHint,
     dividersHint,
     rowsContainer,
+    staleAnnouncer,
     totalNote,
     addRowBtn,
     labelField,

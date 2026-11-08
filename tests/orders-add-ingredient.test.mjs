@@ -45,7 +45,7 @@ test('Orders opens the shared card from js/ root, over the supplier screen, with
   // with the Catalogue's own question — otherwise Orders would quietly undo the switch.
   assert.match(MAIN, /onAddIngredient: mayAddIngredient\(\) \? \(\) => openAddIngredient\(supplier\.id\) : null,/);
   assert.match(MAIN, /import \{ mayEditRecords \} from '\.\.\/records\.js';/);
-  assert.match(MAIN, /function mayAddIngredient\(\) \{\s*const \{ location, canManage \} = currentSession\(\);\s*return mayEditRecords\(location, canManage\);/);
+  assert.match(MAIN, /function mayAddIngredient\(\) \{\s*const \{ location, canManage, role \} = currentSession\(\);\s*return mayEditRecords\(location, canManage, role\);/);
   assert.match(MAIN, /\.catch\(err => \{[\s\S]*?alertDialog\(t\('orders\.addIngredientFailed'\)\)/, 'a card that fails to open says so');
   assert.match(MAIN, /presetSupplierId: supplierId === NO_SUPPLIER_ID \? null : supplierId,/);
   assert.match(MAIN, /layerClass: 'mgmt-overlay',/);

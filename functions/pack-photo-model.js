@@ -168,8 +168,14 @@ export async function readPackText({ uid, locationId, images, store, ask, now })
     return { error: { code: 'invalid-argument', key: bad.code, message: `Those photos cannot be read (${bad.code}).` } };
   }
 
-  if (!await store.access(uid, locationId)) {
+  const access = await store.access(uid, locationId);
+  if (!access) {
     return { error: { code: 'permission-denied', key: 'not-allowed', message: 'You are not in that venue.' } };
+  }
+  // ⚠️ THE OWNER OF THE SALES SIDE MAY NOT SAVE AN INGREDIENT (firestore.rules), so a read
+  // here would be paid for and then refused at Save.
+  if (access === 'owner-sales') {
+    return { error: { code: 'permission-denied', key: 'not-allowed', message: 'Orders is not part of your side.' } };
   }
   // One read answers both questions: the section and the switch are on one document.
   const location = await store.location(locationId);

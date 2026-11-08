@@ -19,7 +19,7 @@
 // Lines are kept no longer than they are useful (P13).
 import { execSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
-import { linesFrom, summarise, summaryLines, toJson, isStale, usagePath } from './usage-summary.mjs';
+import { linesFrom, summarise, summaryLines, toJson, isStale, usagePath, USAGE_FIELDS } from './usage-summary.mjs';
 import { clean } from './feedback-notes.mjs';
 
 const PROJECT = 'bakery-app-ebf90';
@@ -54,8 +54,9 @@ async function call(url, init = {}) {
   return res.status === 204 ? null : res.json();
 }
 
-const FIELDS = ['kind', 'appVersion', 'screens', 'seconds', 'taps', 'routes', 'actions',
-  'loads', 'loadMs', 'firstMinute', 'lastMinute', 'offlineSeconds'];
+// The projection lives beside lineFrom (usage-summary.mjs), which a test holds to it: a field
+// missing here is never downloaded, and the reader silently falls back.
+const FIELDS = USAGE_FIELDS;
 
 // Every usage line in every venue, a page at a time (ordered by document name, so no index).
 async function readUsage() {

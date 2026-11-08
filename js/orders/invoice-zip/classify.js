@@ -3,7 +3,7 @@
 // overrides any of it, so a rule that is wrong costs one edited cell, not a wrong price in the database.
 // Pure. The Python `\b` is written B_START / B_END (see py-compat.js): accented letters are word characters.
 
-import { B_END, B_START, WORD, escapeRegex, stripChars } from './py-compat.js';
+import { B_END, B_START, WORD, escapeRegex, roundHalfUp, stripChars } from './py-compat.js';
 import { EXCLUDED } from './reasons.js';
 
 // ── product key ───────────────────────────────────────────────────────────────
@@ -119,6 +119,8 @@ const P_PZ_GR = new RegExp(`${B_START}PZ\\.?\\s*(\\d+)\\s*GR\\.?\\s*(\\d+)`, 'u'
 const P_UNIT_FIRST = new RegExp(`(?<![A-Z])(ML|CL|LT|L|GR|G|KG)\\s*\\.?\\s*${NUM}\\s*[X×*]\\s*(\\d+)(?!\\d)`, 'u');
 const P_KG_NUM_X = new RegExp(`${B_START}KG\\.?\\s*${NUM}\\s*X\\s*(\\d+)(?!\\d)`, 'u');
 const P_GR_X = new RegExp(`${B_START}GR?\\.?\\s*(\\d+)\\s*X\\s*(\\d+)(?!\\d)`, 'u');
+// «2000x4g»: the COUNT first, then the size of each. Grams only — in «22x50 Kg.0,500» the 22x50 is a roll in cm.
+const P_COUNT_X_G = new RegExp(`(?<![\\d.,/])(\\d+)\\s*[X×]\\s*${NUM}\\s*(?:GR?|G)${B_END}`, 'u');
 const P_KG = new RegExp(`${B_START}KG\\.?\\s*${NUM}|${NUM}\\s*KG${B_END}`, 'u');
 const P_G_DOT = new RegExp(
   `${B_START}(?:GR?|G)\\.\\s*(\\d+)${B_END}|${B_START}GR\\s+(\\d+)${B_END}|${B_START}G\\s+(\\d{3,4})${B_END}`, 'u');
@@ -139,11 +141,13 @@ function countsPiecesInCarton(before, sizeKg, count) {
   return Math.abs(grams - sizeKg * 1000) <= sizeKg * 1000 * 0.15;
 }
 
+// "1/2KG", "1/4 KG": a fraction of a unit. Without this the "2KG" inside "1/2KG" reads as
+// a 2 kg pack — four times the real half kilo (real invoice, 3 Oct 2026).
+const withFractions = (description) => String(description || '').toUpperCase()
+  .replace(FRACTION_RE, (match, a, b) => (Number(b) === 0 ? match : fractionText(Number(a), Number(b))));
+
 export function parsePack(description) {
-  let d = String(description || '').toUpperCase();
-  // "1/2KG", "1/4 KG": a fraction of a unit. Without this the "2KG" inside "1/2KG" reads as
-  // a 2 kg pack — four times the real half kilo (real invoice, 3 Oct 2026).
-  d = d.replace(FRACTION_RE, (match, a, b) => (Number(b) === 0 ? match : fractionText(Number(a), Number(b))));
+  const d = withFractions(description);
 
   // "2,5kg* 4pz", "85gr* 50pz", "2,5 KG X 4", "1kgx6", "7gx80"
   let m = P_KG_X.exec(d);
@@ -176,6 +180,10 @@ export function parsePack(description) {
   // "gr.70x6" (not when "PZ" is there: that is a count in front of something else)
   m = P_GR_X.exec(d);
   if (m && !d.includes('PZ')) return packInfo(Number(m[1]), 'g', Number(m[2]));
+  // "2000x4g": two thousand sachets of 4 g, 8 kg. Read as one 4 g pack the sugar cost 4,032 €/kg and was refused
+  // (real invoices, 5 Nov 2026).
+  m = P_COUNT_X_G.exec(d);
+  if (m && Number(m[1]) > 1) return packInfo(f(m[2]), 'g', Number(m[1]));
   // "KG 25", "2,5KG"
   m = P_KG.exec(d);
   if (m) return packInfo(f(m[1] || m[2]), 'kg', countAfter(d));
@@ -194,6 +202,34 @@ export function parsePack(description) {
   m = P_CL.exec(d);
   if (m) return packInfo(Number(m[1]) * 10, 'ml');
   return null;
+}
+
+// ⚠️ A PRODUCT COUNTED IN PIECES IS PRICED PER PIECE (his rule, 5 Nov 2026): a cornetto, a panzerotto, an arancino,
+// a graffa carries its price per piece with the piece weight beside it (0.464 €/pz, 85 g), never «5.46 €/kg of
+// 50 bags». Goods sold by weight stay per kilo. The description tells them apart: the count is written AS PIECES
+// («85gr* 50pz», «PZ.50 GR.85», «GR.85X50P») and one piece weighs at most MAX_PIECE_G grams. A count without «pz»
+// («G 100X3», «gr.60X6», «2000x4g») is packs of goods used by weight; a size in kilos («2,5kg* 4pz», «KG.2.5X4») is
+// a bag, not a piece; «G 570 (X12PZ)» is a box. The carton whose pieces add up to its weight («35/40gr 2Kg* 55pz»)
+// is pieces too, each the carton's weight shared out (36.4 g), so its price per kilo does not move.
+// -> { count, size (grams of one piece) } or null.
+export const MAX_PIECE_G = 500;
+const PIECE_MARKS_RE = new RegExp(`(?<![\\d.,])(\\d+)\\s*(?:PZ|PEZZI|P)${B_END}|${B_START}PZ\\.?\\s*(\\d+)`, 'gu');
+export function piecesOf(description) {
+  const d = withFractions(description);
+  const marked = new Set([...d.matchAll(PIECE_MARKS_RE)].map((mk) => Number(mk[1] || mk[2])).filter((n) => n > 1));
+  if (!marked.size) return null;
+  const info = parsePack(description);
+  if (!info) return null;
+  if (info.unit === 'g' && marked.has(info.count) && info.size > 0 && info.size <= MAX_PIECE_G) {
+    return { count: info.count, size: info.size };
+  }
+  if (info.unit !== 'kg' || info.count !== null) return null;
+  const m = P_KG_X.exec(d);
+  if (!m || !m[2].startsWith('K')) return null;
+  const count = Number(m[3]);
+  const size = roundHalfUp((f(m[1]) * 1000) / count, 1);
+  const carton = countsPiecesInCarton(d.slice(0, m.index), f(m[1]), count);
+  return carton && marked.has(count) && size > 0 && size <= MAX_PIECE_G ? { count, size } : null;
 }
 
 // f"{x:.6f}".rstrip("0").rstrip(".")

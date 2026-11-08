@@ -61,7 +61,7 @@ test('⚠️⚠️ the catalogue no longer writes the loss, so it cannot undo a 
   for (const key of ['lossPct', 'rawGrams', 'cookedGrams']) {
     assert.ok(!data.includes(key), `the catalogue's document must not carry ${key}`);
   }
-  assert.match(save, /\['lossPct', 'rawGrams', 'cookedGrams'\]\.forEach\(k => \{ if \(prev\[k\] !== undefined\) kept\[k\] = prev\[k\]; \}\);/,
+  assert.match(save, /\['lossPct', 'rawGrams', 'cookedGrams', 'category'\]\.forEach\(k => \{ if \(prev\[k\] !== undefined\) kept\[k\] = prev\[k\]; \}\);/,
     'and the list on screen keeps the loss it had, rather than dropping it until the next snapshot');
   assert.match(save, /upsertLocal\(\{ \.\.\.kept, id, \.\.\.data \}\)/);
 });
@@ -88,7 +88,7 @@ test('⚠️⚠️ the catalogue store WRITES the label fields the editor lets y
 
 test('⚠️ an emptied label box is REMOVED from the document, not left behind by the merge', () => {
   const data = codeOf(read('js/catalogue/firebase-catalogue.js'));
-  assert.match(data, /const CLEARABLE_RECIPE_FIELDS = \['netWeightG', 'shelfLifeDays'\];/);
+  assert.match(data, /const CLEARABLE_RECIPE_FIELDS = \['netWeightG', 'shelfLifeDays', 'category'\];/);
   assert.match(data, /if \(key in out && out\[key\] === null\) out\[key\] = deleteField\(\);/,
     'a null must travel as deleteField(): the rules refuse a stored null');
   assert.match(data, /setDoc\(doc\(db, pathFor\(RECIPES\), id\), withBakery\(out\), \{ merge: true \}\)/,
@@ -120,8 +120,8 @@ test('⚠️ the recipe editor no longer asks for the two weighings, nor touches
 test('⚠️⚠️ the Food cost product is where they are typed, and Save hands them over', () => {
   assert.match(FC_EDITOR, /box\(t\('fc\.rawDough'\), typeRaw\)/, 'the raw box types through the pure model');
   assert.match(FC_EDITOR, /box\(t\('fc\.cookedDough'\), typeCooked\)/, 'and so does the cooked one');
-  assert.match(FC_EDITOR, /const patches = weighingPatches\(app\.tables\(\)\.recipes, weighings,\s*clean\.components\.filter\(c => c\.recipeId\)\.map\(c => c\.recipeId\)\);/,
-    'Save asks the model which recipes to write — only those on the product, only real changes');
+  assert.match(FC_EDITOR, /const weighedIds = clean\.noWeightLoss \? \[\] : clean\.components\.filter\(c => c\.recipeId\)\.map\(c => c\.recipeId\);\s*const patches = weighingPatches\(app\.tables\(\)\.recipes, weighings, weighedIds\);/,
+    'Save asks the model which recipes to write — only those on the product, only real changes, and none for a finished product');
   assert.match(FC_EDITOR, /app\.saveProduct\(clean, snapshot, patches\);/);
   assert.match(FC_EDITOR, /const tables = liveTables\(\);\s*paintProductionCost\(\);\s*paintSuggestion\(tables\);[\s\S]{0,400}?const result = costProduct\(working, tables\);/,
     'the answer at the top — and the suggested price — are worked out WITH the weighing being typed, not after Save');
@@ -150,8 +150,8 @@ test('⚠️⚠️ saving a product really hands every weighing to the database'
 test('⚠️ no weighing boxes where the database would refuse their Save', () => {
   assert.match(FC_EDITOR, /if \(!id \|\| !app\.tables\(\)\.recipes\[id\] \|\| !app\.canWeigh\(\)\) return null;/,
     'a venue with the catalogue off can READ its recipes in Food cost but not write them');
-  assert.match(FC_DATA, /export function canWriteRecipes\(\) \{\s*return currentSession\(\)\.sections\?\.catalogue === true;/,
-    'the catalogue section, as the session narrowed it — the same default as the rules');
+  assert.match(FC_DATA, /export function canWriteRecipes\(\) \{\s*return isSectionAllowed\(currentSession\(\)\.location, 'catalogue'\);/,
+    'the venue catalogue section, not the role-narrowed one: sales writes these three numbers with no catalogue — the same default as the rules');
   assert.match(codeOf(read('js/foodcost/foodcost-main.js')), /canWeigh: canWriteRecipes,/);
 });
 
@@ -159,9 +159,10 @@ test('⚠️⚠️ Food cost writes three fields and the stamp onto the recipe, 
   const at = FC_DATA.indexOf('export async function saveRecipeLoss(');
   assert.notEqual(at, -1, 'saveRecipeLoss must exist to be guarded');
   const body = FC_DATA.slice(at, FC_DATA.indexOf('\n}', at));
-  assert.match(body, /updateDoc\(doc\(db, pathFor\(RECIPES\), id\), withBakery\(\{\s*lossPct: patch\.lossPct,\s*rawGrams: patch\.rawGrams,\s*cookedGrams: patch\.cookedGrams,\s*\}\)\)/,
-    'updateDoc, so a deleted recipe fails instead of coming back nameless; three fields, so '
-    + 'the catalogue\'s name, rows and steps are never written from a stale copy');
+  assert.match(body, /const fields = \{ rawGrams: patch\.rawGrams, cookedGrams: patch\.cookedGrams \};\s*if \(patch\.lossPct !== undefined\) fields\.lossPct = patch\.lossPct;\s*return updateDoc\(doc\(db, pathFor\(RECIPES\), id\), withBakery\(fields\)\);/,
+    'updateDoc, so a deleted recipe fails instead of coming back nameless; at most three fields, so '
+    + 'the catalogue\'s name, rows and steps are never written from a stale copy — and a loss the '
+    + 'patch does not carry (a kept wrong pair) is left out, never sent as undefined');
   assert.ok(!/setDoc/.test(body), 'not a setDoc');
 });
 
@@ -241,12 +242,16 @@ test('⚠️⚠️ the rules whitelist carries both new keys', () => {
   for (const key of ['bakery', 'name', 'ingredients', 'lossPct', 'rawGrams', 'cookedGrams']) {
     assert.ok(hasOnly.includes(`'${key}'`), `${key} must be in the recipe whitelist`);
   }
+  // The bounds live in lossFieldsValid() since 1 Nov 2026, shared with the one other door
+  // that may write a weighing; the catalogue's own rule must still ask it.
+  assert.match(block, /lossFieldsValid\(request\.resource\.data\)/,
+    'the rule a recipe is saved through must still check the weighings');
   for (const key of ['rawGrams', 'cookedGrams']) {
-    assert.match(block, new RegExp(`!\\('${key}' in request\\.resource\\.data\\)`),
+    assert.match(block, new RegExp(`!\\('${key}' in data\\)`),
       `${key} must be OPTIONAL: rules reach every phone the instant they deploy while `
       + 'code arrives one device at a time, so a phone on the old build sends neither '
       + 'and must keep saving');
-    assert.match(block, new RegExp(`request\\.resource\\.data\\.${key} is number`),
+    assert.match(block, new RegExp(`data\\.${key} is number`),
       `${key} must still be type-checked when it IS sent`);
   }
 });
@@ -275,7 +280,7 @@ test('the percentage input is gone, and the recipe editor\'s dictionary keys wit
     assert.ok(!EDITOR.includes(dead), `and the editor must not still ask for ${dead}`);
   }
   const weighing = codeOf(read('js/foodcost/foodcost-weighing.js'));
-  for (const key of ['fc.lossIs', 'fc.lossStored', 'fc.lossNotYet', 'fc.lossCookedHeavier', 'fc.lossCapped']) {
+  for (const key of ['fc.lossIs', 'fc.lossStored', 'fc.lossNotYet', 'fc.lossNeedBoth', 'fc.lossCookedHeavier', 'fc.lossCapped']) {
     assert.ok(weighing.includes(`'${key}'`), `the weighing model must speak ${key}`);
   }
 });

@@ -87,6 +87,9 @@ let SAM = null, LEGACY = null;
 // location entirely, which is a different and much louder failure.
 let MAYA = null;
 
+// The two partial owners (Federico, 1 Nov 2026): the sales side only, the kitchen only.
+let SALES = null, KITCHEN = null;
+
 // CLIENT_A and CLIENT_B are ORDERING accounts: wholesale customers, the first people
 // outside the business ever to hold an account here. They have no users/{uid}
 // document at all — only a client-accounts document inside one location — so every
@@ -118,6 +121,8 @@ async function seedAccess() {
   // MAYA runs 'main'. The value is the membership AND the role, so this single
   // line is what lets her in and what gives her the deletes.
   await seedDoc(`users/${MAYA.uid}`, { locations: { main: 'manager' } });
+  await seedDoc(`users/${SALES.uid}`, { locations: { main: 'owner-sales' } });
+  await seedDoc(`users/${KITCHEN.uid}`, { locations: { main: 'owner-kitchen' } });
     await seedDoc('locations/main', { name: 'The Italian Club Bakery' });
   // ⚠️ EVERY SECTION THE VENUE DOES NOT USE MUST BE LISTED false, INCLUDING NEW
   // ONES. sectionOn() defaults to TRUE for a key that is not there, so a section
@@ -784,6 +789,26 @@ async function drafts() {
   check('weekId survives the clear',
     after?.fields?.weekId?.stringValue === '2026-W28');
 
+  // «Chiudi come non ordinato» (6 Nov 2026): a supplier due today, closed because nothing was
+  // needed. Written by an EMPLOYEE too — closing the day's order is ordinary daily work — with no
+  // updatedAt (the draft's own stamp stands in for undated rows, so the mark must not move it).
+  await expectAllowed('an employee closes a supplier as not ordered today (skipped.<id>)', () =>
+    mergeWrite('locations/main/drafts/current', {
+      skipped: { SUP_LEGACY: '2026-11-06' },
+      bakery: 'main',
+    }, asAccount(SAM)));
+  await expectAllowed('…and reopens it (a surgical clear of skipped.<id>)', () =>
+    clearWrite('locations/main/drafts/current', { bakery: 'main' }, ['skipped.SUP_LEGACY'], asAccount(SAM)));
+  await expectDenied('skipped sent as a string instead of a map',
+    () => mergeWrite('locations/main/drafts/current', { skipped: '2026-11-06', bakery: 'main' }));
+  const manySkipped = {};
+  for (let i = 0; i < 201; i++) manySkipped[`S${i}`] = '2026-11-06';
+  await expectDenied('a draft stuffed with 201 closed suppliers',
+    () => mergeWrite('locations/main/drafts/current', { skipped: manySkipped, bakery: 'main' }));
+  await expectDenied('a member of ANOTHER venue closing a supplier here',
+    () => mergeWrite('locations/main/drafts/current', { skipped: { SUP_LEGACY: '2026-11-06' }, bakery: 'main' },
+      asAccount(BOB)));
+
   await expectDenied('an unknown key on the draft',
     () => mergeWrite('locations/main/drafts/current', { evil: 'x', bakery: 'main' }));
   await expectDenied('entries sent as a string instead of a map',
@@ -1059,6 +1084,15 @@ async function neighbours() {
   await expectAllowed('Food cost may write a weighing onto an existing recipe', () =>
     mergeWrite('locations/main/recipes/r1',
       { bakery: 'main', lossPct: 20, rawGrams: 1000, cookedGrams: 800 }));
+  // ⚠️ A KEPT WRONG PAIR (cooked heavier than raw, Nov 2026) sends ONLY the two weights and the
+  // stamp — never the loss, which is whatever that phone last saw. The rules judge the MERGED
+  // document, so a partial write must land.
+  await expectAllowed('…and a kept wrong pair sends only rawGrams and cookedGrams', () =>
+    mergeWrite('locations/main/recipes/r1',
+      { bakery: 'main', rawGrams: 1000, cookedGrams: 1100 }));
+  await expectDenied('…but the two weights alone are still range-checked', () =>
+    mergeWrite('locations/main/recipes/r1',
+      { bakery: 'main', rawGrams: 1000, cookedGrams: 10000001 }));
   await expectDenied('…but that shape cannot conjure a nameless recipe out of nothing', () =>
     mergeWrite('locations/main/recipes/no-such-recipe',
       { bakery: 'main', lossPct: 20, rawGrams: 1000, cookedGrams: 800 }));
@@ -1495,6 +1529,48 @@ async function configAndLogs() {
   await expectAllowed('labels: a phone that only knows about the paper size', () =>
     mergeWrite(`${A}/config/labels`, { bakery: 'main', widthMm: 102, heightMm: 76 }));
 
+  // ── Recipe categories (1 Nov 2026; the same fields as Mise 2) ─────────────
+  //
+  // Filing a recipe under a category is everybody's work, like the rest of the
+  // recipe; the venue's list of words is for whoever runs the place.
+  await expectAllowed('recipes: a recipe filed under a category', () =>
+    wholeWrite(`${A}/recipes/R_CATEGORY`, { bakery: 'main', name: 'Panettone', ingredients: [], category: 'Natale' }));
+  await expectAllowed('recipes: an employee files a recipe under a category', () =>
+    mergeWrite(`${A}/recipes/R_CATEGORY`, { bakery: 'main', name: 'Panettone', ingredients: [], category: 'Dolci' },
+      asAccount(SAM)));
+  await expectAllowed('recipes: an old phone\'s save, which knows nothing of categories, keeps working', () =>
+    mergeWrite(`${A}/recipes/R_CATEGORY`, { bakery: 'main', name: 'Panettone classico', ingredients: [] }, asAccount(SAM)));
+  const filed = await fetch(`${FS}/${A}/recipes/R_CATEGORY`, { headers: asUser() }).then(r => r.json());
+  check('recipes: that save did not take the category away',
+    filed.fields?.category?.stringValue === 'Dolci' && filed.fields?.name?.stringValue === 'Panettone classico');
+  await expectAllowed('recipes: an employee takes the category away (the field removed)', () =>
+    clearWrite(`${A}/recipes/R_CATEGORY`, { bakery: 'main', name: 'Panettone', ingredients: [] }, ['category'],
+      asAccount(SAM)));
+  await expectDenied('recipes: an empty category (no category is no field)',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], category: '' }));
+  await expectDenied('recipes: a category longer than any word on a list',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], category: 'x'.repeat(101) }));
+  await expectDenied('recipes: a category sent as a list',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], category: ['Natale'] }));
+  await expectDenied('recipes: a member of another venue cannot file a recipe here',
+    () => mergeWrite(`${A}/recipes/R_CATEGORY`, { bakery: 'main', name: 'Pane', ingredients: [], category: 'Dolci' },
+      asAccount(BOB)));
+
+  await expectAllowed('labels: the venue\'s list of recipe categories', () =>
+    mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: ['Natale', 'Estate', 'Pane'] }));
+  await expectAllowed('labels: …and an empty one, the manager writing', () =>
+    mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: [] }, asAccount(MAYA)));
+  await expectAllowed('labels: the longest list', () =>
+    mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: Array.from({ length: 100 }, (_, i) => `c${i}`) }));
+  await expectDenied('labels: a list of categories used as free storage',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: Array.from({ length: 101 }, (_, i) => `c${i}`) }));
+  await expectDenied('labels: the categories sent as one word',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: 'Natale' }));
+  await expectDenied('labels: an employee cannot change the categories',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: ['Natale'] }, asAccount(SAM)));
+  await expectDenied('labels: a member of another venue cannot change the categories',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: ['Natale'] }, asAccount(BOB)));
+
   // ⚠️ A 0 mm LABEL IS NOT A SMALLER ANSWER, IT IS NO LABEL — and it would be drawn
   // as an empty rectangle with no error anywhere. The app refuses it too, but the
   // app can be an old build on somebody's phone.
@@ -1868,6 +1944,8 @@ CLIENT_B = await account('client-b');
 SAM = await account('sam');
 LEGACY = await account('legacy');
 MAYA = await account('maya');
+SALES = await account('sales');
+KITCHEN = await account('kitchen');
 TOKEN = ALICE.token;
 
 // ── pastries/{Weekday} ───────────────────────────────────────────────────────
@@ -1899,6 +1977,14 @@ async function pastries() {
   for (const d of ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']) {
     await expectAllowed(`the weekday id ${d}`, () => wholeWrite(`${A}/pastries/${d}`, day(d)));
   }
+
+  // The row's own note («9x3»). ⚠️ THE RULES DO NOT JUDGE IT, because they cannot look inside a
+  // list: this pins that the note needs no rules change and reaches the database as it is. Its
+  // length is kept by js/pastries/pastries-model.js, like the length of a name.
+  await expectAllowed('a pastry carrying its own note, next to one without', () =>
+    wholeWrite(`${A}/pastries/Monday`, day('Monday', {
+      items: [{ name: 'Cornetti', qty: 27, note: '9x3' }, { name: 'Bomboloni', qty: 10 }],
+    })));
 
   await expectAllowed('a member reads a day', readAs(ALICE, `${A}/pastries/Monday`));
 
@@ -2006,6 +2092,9 @@ async function pastryLogs() {
   await expectAllowed('…carrying the standing note it was proved under', () =>
     wholeWrite(`${A}/pastry-logs/2026-08-05_Wednesday`,
       log('2026-08-05', 'Wednesday', { note: 'Butter is low' })));
+  await expectAllowed('…with a pastry carrying its own note', () =>
+    wholeWrite(`${A}/pastry-logs/2026-08-05_Wednesday`,
+      log('2026-08-05', 'Wednesday', { items: [{ name: 'Cornetti', qty: 27, note: '9x3' }] })));
   await expectAllowed('a night with nothing proved', () =>
     wholeWrite(`${A}/pastry-logs/2026-08-06_Thursday`,
       log('2026-08-06', 'Thursday', { items: [] })));
@@ -2185,6 +2274,16 @@ async function products() {
   await expectDenied('work time of zero minutes', () => wholeWrite(`${P}/P1`, product({ model: 2, labourMinutes: 0 })));
   await expectDenied('work time sent as text', () => wholeWrite(`${P}/P1`, product({ model: 2, labourMinutes: '90' })));
   await expectDenied('nobody working on it', () => wholeWrite(`${P}/P1`, product({ model: 2, labourPeople: 0 })));
+
+  // ── «Finished product, no weight loss» (Nov 2026): a boolean, nothing else ──
+  await expectAllowed('a product marked as losing no weight', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, noWeightLoss: true })));
+  await expectAllowed('…or explicitly not', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, noWeightLoss: false })));
+  await expectDenied('no weight loss sent as text', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, noWeightLoss: 'true' })));
+  await expectDenied('no weight loss sent as a number', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, noWeightLoss: 1 })));
 
   await expectAllowed('a member may delete a product', () => deleteWrite(`${P}/P2`));
 
@@ -4321,6 +4420,8 @@ async function staffCards() {
   await seedDoc(`${L}/recipes/R1`, { ...stamp, name: 'Focaccia', ingredients: [], lossPct: 12 });
   await expectAllowed('⚠️ a shown employee can save a weighing onto the recipe', () =>
     mergeWrite(`${L}/recipes/R1`, { ...stamp, lossPct: 20, rawGrams: 1000, cookedGrams: 800 }, asAccount(SAM)));
+  await expectAllowed('…and a kept wrong pair, which sends only the two weights', () =>
+    mergeWrite(`${L}/recipes/R1`, { ...stamp, rawGrams: 1000, cookedGrams: 1100 }, asAccount(SAM)));
 
   // ── Only the Stocktake shown: COUNTS, and no money ──
   await showMain({ inventory: true });
@@ -4410,11 +4511,368 @@ async function staffCards() {
   await expectDenied('…and counts nothing here', readAs(BOB, `${M}/2026-10`));
 }
 
+// ── The owner of the sales side and the owner of the kitchen (1 Nov 2026) ────
+// Federico: besides the owner who sees everything, one for each side, refused by the
+// database and not merely hidden. Every line below is one cell of that table. The other
+// three roles must see no difference at all, so the end of this scenario asks them too.
+async function partialOwners() {
+  await wipe();
+  await seedAccess();
+
+  const L = 'locations/main';
+  const M = `${L}/inventory`;
+  const CFG = `${L}/config/calculator`;
+  const stamp = { bakery: 'main' };
+  const readAs = (who, path) => () => fetch(`${FS}/${path}`, { headers: asAccount(who) });
+  const menu = { ...stamp, clientName: 'CLIENT A', updatedAt: '2026-11-01T09:00:00.000Z', products: [] };
+  const grant = { ...stamp, clientId: 'c-two', clientName: 'CLIENT B', createdAt: '2026-11-01T09:00:00.000Z' };
+  const inDays = offset => {
+    const d = new Date(Date.now() + offset * 86400000);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+  const TOMORROW = inDays(1);
+  const ORDER = `${L}/client-orders/${TOMORROW}_c-one`;
+  const order = (over = {}) => ({
+    ...stamp, date: TOMORROW, clientId: 'c-one', clientName: 'CLIENT A',
+    quantities: { 'p-buns': 40 }, names: { 'p-buns': 'Buns' }, note: 'half cut',
+    createdAt: '2026-08-10T09:00:00.000Z', updatedAt: '2026-08-10T09:00:00.000Z', ...over,
+  });
+  const usedInADough = { appliedAt: '2026-08-10T16:00:00.000Z', appliedFor: '2026-08-10T09:00:00.000Z' };
+  const LOG = { ...stamp, dough: 'Focaccia', versions: [] };
+  const PRICE = {
+    ...stamp, recordedAt: '2026-11-01T09:00:00.000Z', priceUnit: 'kg', pricePerUnit: 9, supplierId: '', source: 'manual',
+  };
+  const SNAP = {
+    ...stamp, recordedAt: '2026-11-01T09:00:00.000Z', unitCost: 0.32, foodCostPct: 32, sellingPrice: 1.2, vatRate: 20,
+    sellingMode: 'piece', frozenPrices: { FLOUR: 2 },
+  };
+  const DECISION = { ...stamp, decision: 'skip', label: 'DETERSIVO', updatedAt: '2026-11-01T10:00:00.000Z' };
+  const change = invoiceId => ({
+    ...stamp, ingredientId: 'flour', invoiceId, line: 1, priceUnit: 'kg', oldPrice: 1, newPrice: 2, pct: 100,
+    oldDate: '2026-10-01', date: '2026-11-01',
+  });
+  const PASTRY = {
+    ...stamp, date: '2026-11-03', day: 'Tuesday', items: [{ name: 'Cornetti', qty: 24 }],
+    createdAt: '2026-11-03T20:00:00.000Z', updatedAt: '2026-11-03T20:00:00.000Z',
+  };
+  const showMain = shown => seedDoc(L, { name: 'The Italian Club Bakery', staffShownCards: shown });
+
+  const seedWorld = async () => {
+    await seedDoc(L, { name: 'The Italian Club Bakery' });
+    await seedDoc(`${L}/members/${SALES.uid}`, { ...stamp, role: 'owner-sales' });
+    await seedDoc(`${L}/members/${KITCHEN.uid}`, { ...stamp, role: 'owner-kitchen' });
+    await seedDoc(`${L}/logs/L1`, { ...stamp, name: 'L1' });
+    await seedDoc(`${L}/log/focaccia`, { ...stamp });
+    await seedDoc(`${L}/daily-logs/2026-11-01`, { ...stamp, date: '2026-11-01' });
+    await seedDoc(`${L}/suppliers/S1`, { ...stamp, name: 'S1' });
+    await seedDoc(`${L}/ingredients/flour`, { ...stamp, name: 'Flour' });
+    await seedDoc(`${L}/ingredient-prices/flour`, { ...stamp, priceUnit: 'kg', pricePerUnit: 0.72 });
+    await seedDoc(`${L}/ingredients/flour/prices/H1`,
+      { ...stamp, recordedAt: '2026-09-01', priceUnit: 'kg', pricePerUnit: 0.72 });
+    await seedDoc(`${L}/price-changes/PC1`, { ...stamp });
+    await seedDoc(`${L}/invoice-decisions/ID1`, { ...stamp });
+    await seedDoc(`${L}/drafts/current`, { ...stamp });
+    await seedDoc(`${L}/orders-history/O1`, { ...stamp });
+    await seedDoc(`${L}/order-requests/OR1`, { ...stamp });
+    await seedDoc(`${L}/recipes/R1`, { ...stamp, name: 'Pane', ingredients: [], lossPct: 12 });
+    await seedDoc(`${L}/products/P1`, { ...stamp, name: 'P1' });
+    await seedDoc(`${L}/products/P1/snapshots/SN1`, { ...stamp, recordedAt: '2026-09-01' });
+    await seedDoc(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: 14.5, updatedAt: '2026-09-13' });
+    await seedDoc(`${L}/pastries/Monday`, { ...stamp });
+    await seedDoc(`${L}/pastry-logs/2026-11-02_Monday`, { ...stamp });
+    await seedDoc(`${L}/print-jobs/J1`, { ...stamp });
+    await seedDoc(`${L}/config/orders`, { ...stamp, showStock: true });
+    await seedDoc(`${L}/config/labels`, { ...stamp });
+    await seedDoc(CFG, {
+      ...stamp, configModel: 4, configRev: 1,
+      clients: [{ id: 'c-one', name: 'CLIENT A', products: [] }],
+      recipes: [{ id: 'r-one', name: 'Pane' }],
+    });
+    await seedDoc(`${L}/client-accounts/${CLIENT_A.uid}`,
+      { ...stamp, clientId: 'c-one', clientName: 'CLIENT A', createdAt: '2026-08-10T09:00:00.000Z' });
+    await seedDoc(`${L}/client-menus/c-one`, menu);
+    await seedDoc(`${L}/client-settings/orders`, { ...stamp });
+    await seedDoc(`${L}/client-orders/2026-11-02_c-one`, { ...stamp, clientId: 'c-one' });
+    await seedDoc(ORDER, order());
+    await seedDoc(`${M}/2026-08`,
+      { ...stamp, month: '2026-08', closing: { flour: 3 }, unitPrice: { flour: 18 }, closedAt: '2026-09-01T09:00:00.000Z' });
+    await seedDoc(`${M}/2026-09`, { ...stamp, month: '2026-09', closing: { flour: 2 }, closedAt: '' });
+  };
+  await seedWorld();
+
+  // ── Both of them are inside the venue ──
+  for (const who of [SALES, KITCHEN]) {
+    await expectAllowed('a partial owner opens the location', readAs(who, L));
+    await expectAllowed('…and sees who works there', readAs(who, `${L}/members/${who.uid}`));
+    await expectDenied('⚠️ but writes no membership', () =>
+      mergeWrite(`users/${who.uid}`, { locations: { main: 'owner' } }, asAccount(who)));
+    await expectDenied('…no roster row', () =>
+      mergeWrite(`${L}/members/${who.uid}`, { role: 'owner' }, asAccount(who)));
+    await expectDenied('…and no venue document', () =>
+      mergeWrite(L, { name: 'Mine now' }, asAccount(who)));
+    await expectDenied('…and is nobody in another venue', readAs(who, 'locations/trattoria-x'));
+  }
+
+  // ── The owner of the KITCHEN: everything that is making things ──
+  for (const path of [`${L}/logs/L1`, `${L}/log/focaccia`, `${L}/daily-logs/2026-11-01`, `${L}/drafts/current`,
+    `${L}/orders-history/O1`, `${L}/order-requests/OR1`, `${L}/pastries/Monday`, `${L}/pastry-logs/2026-11-02_Monday`,
+    `${L}/print-jobs/J1`, `${L}/recipes/R1`, `${L}/suppliers/S1`, `${L}/ingredients/flour`, `${L}/config/orders`,
+    `${L}/config/labels`, CFG]) {
+    await expectAllowed(`the kitchen reads ${path}`, readAs(KITCHEN, path));
+  }
+  await expectAllowed('the kitchen saves a production log', () =>
+    wholeWrite(`${L}/logs/L2`, LOG, asAccount(KITCHEN)));
+  await expectAllowed('…saves a recipe', () =>
+    wholeWrite(`${L}/recipes/R9`, { ...stamp, name: 'Focaccia', ingredients: [] }, asAccount(KITCHEN)));
+  await expectAllowed('…changes an ingredient', () =>
+    mergeWrite(`${L}/ingredients/flour`, { ...stamp, shortName: 'Farina' }, asAccount(KITCHEN)));
+  await expectAllowed('…changes a supplier', () =>
+    mergeWrite(`${L}/suppliers/S1`, { ...stamp, active: false }, asAccount(KITCHEN)));
+  await expectAllowed('…records the pastries of a day', () =>
+    wholeWrite(`${L}/pastry-logs/2026-11-03_Tuesday`, PASTRY, asAccount(KITCHEN)));
+  await expectAllowed('the kitchen deletes a supplier, as whoever runs that side', () =>
+    deleteWrite(`${L}/suppliers/S1`, asAccount(KITCHEN)));
+  await expectAllowed('…deletes a recipe', () => deleteWrite(`${L}/recipes/R1`, asAccount(KITCHEN)));
+  await expectAllowed('…deletes a production log', () => deleteWrite(`${L}/logs/L1`, asAccount(KITCHEN)));
+  await expectAllowed('…changes how orders leave', () =>
+    mergeWrite(`${L}/config/orders`, { ...stamp, showStock: false }, asAccount(KITCHEN)));
+  await expectAllowed('…saves the Calculator whole, recipes and clients together', () =>
+    mergeWrite(CFG, { ...stamp, configModel: 4, recipes: [], clients: [{ id: 'c-one', name: 'CLIENT A', products: [] }] }, asAccount(KITCHEN)));
+
+  // ── …the purchase prices, because the kitchen buys ──
+  await expectAllowed('the kitchen reads what an ingredient costs', readAs(KITCHEN, `${L}/ingredient-prices/flour`));
+  await expectAllowed('…the price history', readAs(KITCHEN, `${L}/ingredients/flour/prices/H1`));
+  await expectAllowed('…the price changes', readAs(KITCHEN, `${L}/price-changes/PC1`));
+  await expectAllowed('…the invoice decisions', readAs(KITCHEN, `${L}/invoice-decisions/ID1`));
+  await expectAllowed('…writes a purchase price', () =>
+    mergeWrite(`${L}/ingredient-prices/flour`, { ...stamp, priceUnit: 'kg', pricePerUnit: 0.8 }, asAccount(KITCHEN)));
+  await expectAllowed('…adds to the history', () =>
+    createWrite(`${L}/ingredients/flour/prices`, PRICE, asAccount(KITCHEN)));
+  await expectAllowed('…records a price change', () =>
+    wholeWrite(`${L}/price-changes/inv-1-1-flour`, change('1'), asAccount(KITCHEN)));
+  await expectAllowed('…remembers an invoice decision', () =>
+    mergeWrite(`${L}/invoice-decisions/${'a'.repeat(64)}`, DECISION, asAccount(KITCHEN)));
+  await expectAllowed('…and removes a price', () => deleteWrite(`${L}/ingredient-prices/flour`, asAccount(KITCHEN)));
+
+  // ── …the Stocktake, whole, though it shares a section with Food cost ──
+  await expectAllowed('the kitchen reads a closed month, prices included', readAs(KITCHEN, `${M}/2026-08`));
+  await expectAllowed('…lists the months', readAs(KITCHEN, M));
+  await expectAllowed('…and closes one', () =>
+    mergeWrite(`${M}/2026-09`, { ...stamp, month: '2026-09', closedAt: '2026-10-01T09:00:00.000Z' }, asAccount(KITCHEN)));
+
+  // ── …what the clients asked for, without running them ──
+  await expectAllowed('the kitchen reads a client order, to work out the dough',
+    readAs(KITCHEN, `${L}/client-orders/2026-11-02_c-one`));
+  await expectAllowed('…marks it as used in a dough', () =>
+    wholeWrite(ORDER, order(usedInADough), asAccount(KITCHEN)));
+  await expectAllowed('…and removes it', () =>
+    deleteWrite(`${L}/client-orders/2026-11-02_c-one`, asAccount(KITCHEN)));
+  await expectAllowed('…reads a menu', readAs(KITCHEN, `${L}/client-menus/c-one`));
+
+  // ⚠️ THE REFUSALS THAT ARE THE WHOLE POINT.
+  await expectDenied('⚠️ the kitchen reads no product', readAs(KITCHEN, `${L}/products/P1`));
+  await expectDenied('⚠️ …no margin history', readAs(KITCHEN, `${L}/products/P1/snapshots/SN1`));
+  await expectDenied('⚠️ …and not the hourly labour cost', readAs(KITCHEN, `${L}/foodcost-settings/main`));
+  await expectDenied('…writes no product', () =>
+    mergeWrite(`${L}/products/P2`, { ...stamp, name: 'P2' }, asAccount(KITCHEN)));
+  await expectDenied('…records no margin, in the exact shape the sales side saves', () =>
+    createWrite(`${L}/products/P1/snapshots`, SNAP, asAccount(KITCHEN)));
+  await expectDenied('…deletes no product', () => deleteWrite(`${L}/products/P1`, asAccount(KITCHEN)));
+  await expectDenied('…sets no labour cost', () =>
+    mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: 1 }, asAccount(KITCHEN)));
+  await expectDenied('⚠️ …reads no ordering link', readAs(KITCHEN, `${L}/client-accounts/${CLIENT_A.uid}`));
+  await expectDenied('…mints none', () =>
+    wholeWrite(`${L}/client-accounts/${NOBODY.uid}`, grant, asAccount(KITCHEN)));
+  await expectDenied('…revokes none', () =>
+    deleteWrite(`${L}/client-accounts/${CLIENT_A.uid}`, asAccount(KITCHEN)));
+  await expectDenied('…publishes no menu', () => wholeWrite(`${L}/client-menus/c-one`, menu, asAccount(KITCHEN)));
+  await expectDenied('…deletes no menu', () => deleteWrite(`${L}/client-menus/c-one`, asAccount(KITCHEN)));
+  await expectDenied('…and changes no client setting', () =>
+    mergeWrite(`${L}/client-settings/orders`, { ...stamp, cutoff: '16:00', updatedAt: '2026-11-01T09:00:00.000Z' }, asAccount(KITCHEN)));
+
+  // ⚠️ A SWITCH ABOUT EMPLOYEES OPENS NOTHING FOR THEM.
+  await showMain({ foodcost: true });
+  await expectDenied('⚠️ showing Food cost to employees does not show it to the kitchen',
+    readAs(KITCHEN, `${L}/products/P1`));
+  await seedDoc(L, { name: 'The Italian Club Bakery' });
+
+  // ── The owner of the SALES side: Food cost and the clients ──
+  await seedWorld();
+  for (const path of [`${L}/products/P1`, `${L}/products/P1/snapshots/SN1`, `${L}/foodcost-settings/main`,
+    `${L}/ingredient-prices/flour`, `${L}/ingredients/flour/prices/H1`, `${L}/price-changes/PC1`,
+    `${L}/invoice-decisions/ID1`, `${L}/recipes/R1`, `${L}/ingredients/flour`, `${L}/suppliers/S1`, CFG,
+    `${L}/client-accounts/${CLIENT_A.uid}`, `${L}/client-menus/c-one`, `${L}/client-settings/orders`,
+    `${L}/client-orders/2026-11-02_c-one`]) {
+    await expectAllowed(`sales reads ${path}`, readAs(SALES, path));
+  }
+  await expectAllowed('sales writes a product', () =>
+    mergeWrite(`${L}/products/P2`, { ...stamp, name: 'P2' }, asAccount(SALES)));
+  await expectAllowed('…deletes one', () => deleteWrite(`${L}/products/P2`, asAccount(SALES)));
+  await expectAllowed('…records a margin', () =>
+    createWrite(`${L}/products/P1/snapshots`, SNAP, asAccount(SALES)));
+  await expectAllowed('…writes a purchase price', () =>
+    mergeWrite(`${L}/ingredient-prices/flour`, { ...stamp, priceUnit: 'kg', pricePerUnit: 0.8 }, asAccount(SALES)));
+  await expectAllowed('…adds to the history', () =>
+    createWrite(`${L}/ingredients/flour/prices`, PRICE, asAccount(SALES)));
+  await expectAllowed('…records a price change', () =>
+    wholeWrite(`${L}/price-changes/inv-2-1-flour`, change('2'), asAccount(SALES)));
+  await expectAllowed('…remembers an invoice decision', () =>
+    mergeWrite(`${L}/invoice-decisions/${'b'.repeat(64)}`, DECISION, asAccount(SALES)));
+  await expectAllowed('…sets the labour cost', () =>
+    mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: 15, updatedAt: '2026-11-01' }, asAccount(SALES)));
+  await expectAllowed('…mints an ordering link', () =>
+    wholeWrite(`${L}/client-accounts/${NOBODY.uid}`, grant, asAccount(SALES)));
+  await expectAllowed('…revokes it', () => deleteWrite(`${L}/client-accounts/${NOBODY.uid}`, asAccount(SALES)));
+  await expectAllowed('…publishes a menu', () => wholeWrite(`${L}/client-menus/c-two`, { ...menu, clientName: 'B' }, asAccount(SALES)));
+  await expectAllowed('…deletes it', () => deleteWrite(`${L}/client-menus/c-two`, asAccount(SALES)));
+  await expectAllowed('…changes a client setting', () =>
+    mergeWrite(`${L}/client-settings/orders`, { ...stamp, cutoff: '16:00', updatedAt: '2026-11-01T09:00:00.000Z' }, asAccount(SALES)));
+
+  // ⚠️ config/calculator: THE CLIENTS, AND NEVER A RECIPE.
+  await expectAllowed('⚠️ sales changes the address book, the one field', () =>
+    mergeWrite(CFG, { ...stamp, configRev: 2, clients: [{ id: 'c-one', name: 'RENAMED', products: [] }] }, asAccount(SALES)));
+  await expectAllowed('⚠️ …with exactly what the Clients page sends (js/firebase.js saveCalculatorClients)', () =>
+    mergeWrite(CFG, { ...stamp, configRev: 3, configModel: 4, clients: [{ id: 'c-one', name: 'RENAMED', products: [] }] }, asAccount(SALES)));
+  await expectDenied('⚠️ sales cannot change a recipe in the Calculator', () =>
+    mergeWrite(CFG, { ...stamp, recipes: [] }, asAccount(SALES)));
+  await expectDenied('…nor hide one in a save of the clients', () =>
+    mergeWrite(CFG, { ...stamp, clients: [], recipes: [] }, asAccount(SALES)));
+  await expectDenied('…nor change a Calculator setting', () =>
+    mergeWrite(CFG, { ...stamp, extraDough: 5 }, asAccount(SALES)));
+  await expectDenied('…nor replace the whole document', () =>
+    wholeWrite(CFG, { ...stamp, configModel: 4, clients: [] }, asAccount(SALES)));
+  await expectDenied('…nor start a document that is not there', () =>
+    wholeWrite(`${L}/config/another`, { ...stamp, clients: [] }, asAccount(SALES)));
+
+  // The oven loss Food cost weighs: those three numbers, on a recipe that exists.
+  await expectAllowed('sales records a weighing on a recipe', () =>
+    mergeWrite(`${L}/recipes/R1`, { ...stamp, lossPct: 20, rawGrams: 1000, cookedGrams: 800 }, asAccount(SALES)));
+  await expectAllowed('…and a kept wrong pair: only rawGrams and cookedGrams, no loss', () =>
+    mergeWrite(`${L}/recipes/R1`, { ...stamp, rawGrams: 1000, cookedGrams: 1100 }, asAccount(SALES)));
+  await expectDenied('⚠️ …but changes nothing else of it', () =>
+    mergeWrite(`${L}/recipes/R1`, { ...stamp, lossPct: 21, name: 'Mine now' }, asAccount(SALES)));
+  await expectDenied('…not its rows', () =>
+    mergeWrite(`${L}/recipes/R1`, { ...stamp, ingredients: ['flour'], lossPct: 22 }, asAccount(SALES)));
+  await expectDenied('…no loss the model would divide by zero', () =>
+    mergeWrite(`${L}/recipes/R1`, { ...stamp, lossPct: 100 }, asAccount(SALES)));
+  await expectDenied('…no weighing that is not a number', () =>
+    mergeWrite(`${L}/recipes/R1`, { ...stamp, rawGrams: 'a lot' }, asAccount(SALES)));
+  await expectDenied('…creates no recipe', () =>
+    wholeWrite(`${L}/recipes/R2`, { ...stamp, name: 'New', ingredients: [] }, asAccount(SALES)));
+  await expectDenied('…deletes none', () => deleteWrite(`${L}/recipes/R1`, asAccount(SALES)));
+
+  // ⚠️ THE REFUSALS THAT ARE THE WHOLE POINT.
+  for (const path of [`${L}/logs/L1`, `${L}/log/focaccia`, `${L}/daily-logs/2026-11-01`, `${L}/drafts/current`,
+    `${L}/orders-history/O1`, `${L}/order-requests/OR1`, `${L}/pastries/Monday`, `${L}/pastry-logs/2026-11-02_Monday`,
+    `${L}/print-jobs/J1`, `${L}/config/orders`, `${M}/2026-08`, `${M}/2026-09`]) {
+    await expectDenied(`⚠️ sales reads nothing of ${path}`, readAs(SALES, path));
+  }
+  await expectDenied('sales lists no stocktake month', readAs(SALES, M));
+  await expectDenied('…writes no stocktake', () =>
+    mergeWrite(`${M}/2026-09`, { ...stamp, month: '2026-09', closing: { flour: 1 } }, asAccount(SALES)));
+  await expectDenied('…writes no supplier', () =>
+    mergeWrite(`${L}/suppliers/S1`, { ...stamp, name: 'Mine' }, asAccount(SALES)));
+  await expectDenied('…deletes none', () => deleteWrite(`${L}/suppliers/S1`, asAccount(SALES)));
+  await expectDenied('…writes no ingredient', () =>
+    mergeWrite(`${L}/ingredients/flour`, { ...stamp, name: 'Mine' }, asAccount(SALES)));
+  await expectDenied('…deletes none', () => deleteWrite(`${L}/ingredients/flour`, asAccount(SALES)));
+  await expectDenied('…changes nothing in how orders leave', () =>
+    mergeWrite(`${L}/config/orders`, { ...stamp, showStock: false }, asAccount(SALES)));
+  await expectDenied('…nothing on a label', () =>
+    mergeWrite(`${L}/config/labels`, { ...stamp }, asAccount(SALES)));
+  await expectDenied('…writes no production log, in the exact shape the kitchen saves', () =>
+    wholeWrite(`${L}/logs/L3`, LOG, asAccount(SALES)));
+  await expectDenied('…no pastries of a day, likewise', () =>
+    wholeWrite(`${L}/pastry-logs/2026-11-03_Tuesday`, PASTRY, asAccount(SALES)));
+  await expectDenied('…and a client order only reads: no delete', () =>
+    deleteWrite(`${L}/client-orders/2026-11-02_c-one`, asAccount(SALES)));
+  await expectDenied('…no update, in the exact shape the kitchen saves', () =>
+    wholeWrite(ORDER, order(usedInADough), asAccount(SALES)));
+  await expectDenied('…and no new one', () =>
+    wholeWrite(`${L}/client-orders/${TOMORROW}_c-two`, order({ clientId: 'c-two' }), asAccount(SALES)));
+  // A switch about employees opens nothing here either.
+  await showMain({ inventory: true });
+  await expectDenied('⚠️ showing the Stocktake to employees does not show it to sales', readAs(SALES, `${M}/2026-09`));
+
+  // ── A venue that does not use a section gives nobody that section ──
+  await seedDoc(L, { name: 'The Italian Club Bakery', sections: { foodcost: false, calculator: false, catalogue: false, orders: false } });
+  await expectDenied('Food cost off: no product for sales', readAs(SALES, `${L}/products/P1`));
+  await expectDenied('Calculator off: no ordering link for sales', readAs(SALES, `${L}/client-accounts/${CLIENT_A.uid}`));
+  await expectDenied('Calculator off: no address book for sales', () =>
+    mergeWrite(CFG, { ...stamp, clients: [] }, asAccount(SALES)));
+  await expectDenied('Food cost off: no purchase price for the kitchen', readAs(KITCHEN, `${L}/ingredient-prices/flour`));
+  await expectDenied('Food cost off: no stocktake for the kitchen', readAs(KITCHEN, `${M}/2026-08`));
+  await expectDenied('Orders off: no supplier deleted by the kitchen', () =>
+    deleteWrite(`${L}/suppliers/S1`, asAccount(KITCHEN)));
+  await seedDoc(L, { name: 'The Italian Club Bakery', sections: { catalogue: false } });
+  await expectDenied('⚠️ Catalogue off: nobody weighs on a recipe, sales included', () =>
+    mergeWrite(`${L}/recipes/R1`, { ...stamp, lossPct: 30 }, asAccount(SALES)));
+  await seedDoc(L, { name: 'The Italian Club Bakery' });
+
+  // ── A value that only looks like one of them opens nothing ──
+  for (const wrong of ['owner-Sales', 'owner_kitchen', 'sales', 'kitchen', 'owner-sales ']) {
+    await seedDoc(`users/${LEGACY.uid}`, { locations: { main: wrong } });
+    await expectDenied(`«${wrong}» is no access at all`, readAs(LEGACY, L));
+    await expectDenied(`«${wrong}» reads no recipe`, readAs(LEGACY, `${L}/recipes/R1`));
+    await expectDenied(`«${wrong}» writes no daily work`, () =>
+      deleteWrite(`${L}/logs/L1`, asAccount(LEGACY)));
+  }
+  await seedDoc(`users/${LEGACY.uid}`, { locations: { main: 'owner-sales', 'trattoria-x': true } });
+  await expectDenied('a partial owner somewhere is only staff elsewhere', () =>
+    deleteWrite('locations/trattoria-x/suppliers/S1', asAccount(LEGACY)));
+
+  // ── The three roles that existed before see no difference ──
+  await seedWorld();
+  for (const [who, name] of [[ALICE, 'the owner'], [MAYA, 'a manager']]) {
+    await expectAllowed(`${name} still reads a product`, readAs(who, `${L}/products/P1`));
+    await expectAllowed(`${name} still reads the labour cost`, readAs(who, `${L}/foodcost-settings/main`));
+    await expectAllowed(`${name} still reads an ordering link`, readAs(who, `${L}/client-accounts/${CLIENT_A.uid}`));
+    await expectAllowed(`${name} still reads a closed stocktake`, readAs(who, `${M}/2026-08`));
+    await expectAllowed(`${name} still reads a log`, readAs(who, `${L}/logs/L1`));
+    await expectAllowed(`${name} still writes a purchase price`, () =>
+      mergeWrite(`${L}/ingredient-prices/flour`, { ...stamp, priceUnit: 'kg', pricePerUnit: 0.9 }, asAccount(who)));
+    await expectAllowed(`${name} still saves the Calculator whole`, () =>
+      mergeWrite(CFG, { ...stamp, configModel: 4, recipes: [] }, asAccount(who)));
+  }
+  await expectAllowed('an employee still saves the Calculator whole, clients included', () =>
+    mergeWrite(CFG, { ...stamp, configModel: 4, clients: [] }, asAccount(SAM)));
+  await expectAllowed('an employee still publishes a menu', () =>
+    wholeWrite(`${L}/client-menus/c-one`, menu, asAccount(SAM)));
+  await expectAllowed('an employee still changes a client setting', () =>
+    mergeWrite(`${L}/client-settings/orders`, { ...stamp, cutoff: '16:00', updatedAt: '2026-11-01T09:00:00.000Z' }, asAccount(SAM)));
+  await expectAllowed('an employee still reads a client order', readAs(SAM, `${L}/client-orders/2026-11-02_c-one`));
+  await expectDenied('an employee still reads no ordering link', readAs(SAM, `${L}/client-accounts/${CLIENT_A.uid}`));
+  await expectDenied('an employee still deletes no menu', () => deleteWrite(`${L}/client-menus/c-one`, asAccount(SAM)));
+  await expectDenied('an employee still reads no price change', readAs(SAM, `${L}/price-changes/PC1`));
+  await expectDenied('an employee still reads no price without the Food cost switch', readAs(SAM, `${L}/ingredient-prices/flour`));
+  await expectAllowed('an employee still records a weighing, through the catalogue\'s own rule', () =>
+    mergeWrite(`${L}/recipes/R1`, { ...stamp, lossPct: 15 }, asAccount(SAM)));
+  await expectAllowed('…and still changes the rest of a recipe', () =>
+    mergeWrite(`${L}/recipes/R1`, { ...stamp, name: 'Pane nuovo' }, asAccount(SAM)));
+  await expectAllowed('an employee still saves a production log', () =>
+    wholeWrite(`${L}/logs/L4`, LOG, asAccount(SAM)));
+  await expectAllowed('…and still marks a client order as used', () =>
+    wholeWrite(ORDER, order(usedInADough), asAccount(SAM)));
+  await showMain({ foodcost: true });
+  await expectAllowed('a shown employee still reads a purchase price', readAs(SAM, `${L}/ingredient-prices/flour`));
+  await expectDenied('…and still writes none', () =>
+    mergeWrite(`${L}/ingredient-prices/flour`, { ...stamp, priceUnit: 'kg', pricePerUnit: 1 }, asAccount(SAM)));
+  await seedDoc(L, { name: 'The Italian Club Bakery' });
+
+  // ── An ordering client is nobody here, with no users document at all ──
+  await expectAllowed('a client still reads its own grant', readAs(CLIENT_A, `${L}/client-accounts/${CLIENT_A.uid}`));
+  await expectAllowed('a client still reads its own menu', readAs(CLIENT_A, `${L}/client-menus/c-one`));
+  await expectDenied('a client reads nobody else\'s grant', readAs(CLIENT_A, `${L}/client-accounts/${NOBODY.uid}`));
+  await expectDenied('a client saves no address book', () => mergeWrite(CFG, { ...stamp, clients: [] }, asAccount(CLIENT_A)));
+  await expectDenied('a client weighs nothing', () => mergeWrite(`${L}/recipes/R1`, { ...stamp, lossPct: 1 }, asAccount(CLIENT_A)));
+  await expectDenied('an account with no document reads no log', readAs(NOBODY, `${L}/logs/L1`));
+}
+
 for (const scenario of [suppliers, ingredients, ingredientPrices, drafts, history, neighbours,
                         locationTree, isolation, configAndLogs, pastries, pastryLogs,
                         products, stocktake, staffCards, clientOrders, orderRequests, awayDays,
                         pushNotifications, feedbackNotes, todos, deviceCount, errorReports, usageStats,
-                        roles, onboardingCollections]) {
+                        roles, partialOwners, onboardingCollections]) {
   await scenario();
 }
 

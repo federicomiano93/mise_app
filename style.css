@@ -37,14 +37,14 @@ body {
   /* Pin the app shell to the VISIBLE viewport. height:100% resolves to the LARGE
      mobile viewport (address bar hidden), so the body overflowed the visible area
      and the whole page could be dragged — hiding the fixed header. dvh tracks the
-     browser's dynamic chrome (100vh is the fallback); position:fixed stops iOS from
+     browser's dynamic chrome (--vh100, tokens.css; the lab tablet has no dvh and gets
+     the measured height from js/viewport-height.js); position:fixed stops iOS from
      bouncing the whole document. Only the .scroll-area inside still scrolls. */
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
-  height: 100vh;
-  height: 100dvh;
+  height: var(--vh100);
 }
 
 /* Header
@@ -390,7 +390,7 @@ select.qty-select:focus { outline: none; border-color: var(--crust); background:
   border-radius: 20px;
   padding: 18px;
   color: var(--text);
-  min-height: 80vh;
+  min-height: calc(var(--vh100) * 0.8);
 }
 .result-header {
   display: flex;
@@ -726,6 +726,13 @@ body.calc-zoom-lock .scroll-area { overflow: hidden; }
   text-decoration: none;
 }
 .recipe-footer-btn:active { background: var(--accent-light); }
+/* ⚠️ THE ICON NEVER SHRINKS: at 296px «Impostazioni» beside it squeezed the gear to a dot, and half a bar is all a button gets. There the
+   button gives up some padding and the icon a little size, so icon and word both fit. */
+.recipe-footer-btn svg { flex: none; }
+@media (max-width: 320px) {
+  .recipe-footer-btn { gap: 6px; padding-inline: 8px; }
+  .recipe-footer-btn svg { width: 16px; height: 16px; }
+}
 
 /* Settings overlays (hub + clients/products editor) */
 #settings-overlay, #cp-overlay {
@@ -1107,6 +1114,52 @@ input.cp-prod-weight {
   font-weight: 700;
 }
 .cp-prod-card-row { display: flex; align-items: center; gap: 8px; }
+
+/* Reordering a recipe's ingredients (same look as the Catalogue's editor, Calculator tokens).
+   The drag states reuse .cp-sortable-ghost/-chosen/-drag above. */
+.cp-ing-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.cp-ing-head .cp-label { margin-bottom: 0; }
+.cp-reorder-btn {
+  margin-left: auto;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cp-reorder-btn[hidden] { display: none; }
+.cp-reorder-btn:active { transform: scale(.97); }
+.cp-reorder-btn:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+.cp-reorder-hint { margin: 0 0 6px; font-size: 13px; color: var(--text2); }
+.cp-reorder-list {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  overflow: hidden;
+}
+.cp-reorder-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 2px 2px 2px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.cp-reorder-row:last-child { border-bottom: 0; }
+/* The grip sits on the RIGHT, as in the Recipe book (Federico, 3 Nov 2026): 12px of padding
+   before the name, 2px after the grip, and the Home grip's pull to the left cancelled. */
+.cp-reorder-grip { margin-left: 0; }
+.cp-reorder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; color: var(--text); }
+.cp-reorder-amount { flex-shrink: 0; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text2); }
 /* A fixed label column, so Recipe / Weight / Type all begin on the same x. Only the
    FIRST .cp-unit of a row is a label; a trailing one ("g", "pz") stays as wide as its
    own text. */
@@ -1300,6 +1353,9 @@ input.cp-prod-weight {
   border-radius: 0;
 }
 .wa-entry-card .wa-entry-open:active { background: var(--surface2); }
+#recipe-content .wa-entry-open:disabled,
+#recipe-content .cp-add-client:disabled { opacity: 0.5; cursor: default; }
+#recipe-content .cp-add-client + .cp-hint { margin-top: 10px; }
 .wa-entry-card .cp-del-icon { padding: 0 16px; }
 .wa-entry-open { flex: 1; margin-bottom: 12px; }
 .wa-entry-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; text-align: left; }
@@ -1553,7 +1609,7 @@ input.cp-prod-weight {
   padding: 24px 20px 32px;
   width: 100%;
   max-width: 480px;
-  max-height: 88vh;
+  max-height: calc(var(--vh100) * 0.88);
   overflow-y: auto;
   text-align: left;
 }
@@ -1571,7 +1627,7 @@ input.cp-prod-weight {
   body[data-card="calculator"] #loaf-modal-box, body[data-card="calculator"] #list-select-box, body[data-card="calculator"] #day-modal-box, body[data-card="calculator"] #send-who-box {
     border-radius: var(--radius);
     padding: 20px;
-    max-height: calc(100dvh - 48px);
+    max-height: calc(var(--vh100) - 48px);
   }
   body[data-card="calculator"] #loaf-modal.visible #loaf-modal-box,
   body[data-card="calculator"] #list-select-modal.visible #list-select-box,
@@ -1912,6 +1968,13 @@ input.cp-prod-weight {
   font-size: 13px;
   line-height: 1.5;
 }
+/* The same sentence on the Calculator tab itself, at reading size: it is the only thing
+   the tab shows when its Ricettario recipe cannot be calculated. */
+.calc-source-problem {
+  margin: 0 0 var(--space-3);
+  font-size: 15px;
+}
+.calc-source-problem[hidden] { display: none; }
 
 /* ══ The Calculator on a tablet (29 Sep 2026) ════════════════════════════════════════
    The page is wide (tokens.css widens body[data-card="calculator"]); a recipe tab is one
@@ -1998,15 +2061,31 @@ input.cp-prod-weight {
   body[data-card="calculator"] #wa-overlay,
   body[data-card="calculator"] #cp-overlay,
   body[data-card="calculator"] #clientorders-overlay,
-  body[data-card="calculator"] .log-overlay {
+  body[data-card="calculator"] .log-overlay,
+  body[data-card="clients"] #cp-overlay,
+  body[data-card="clients"] #clientorders-overlay,
+  body[data-card="clients"] #cosettings-overlay {
     --app-max-width: 620px;
     --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));
+  }
+  /* The sales owner's Clients page (clients.html): its hub is the same 620px column,
+     centred. The gutter is re-declared on the layer, like the screens above. */
+  body[data-card="clients"] .settings-menu {
+    --app-max-width: 620px;
+    --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));
+    max-width: 620px;
+    margin-inline: auto;
   }
   /* ⚠️ AND THE BODIES HAVE TO USE IT. Most of these screens pad their content with a
      flat 16px (.settings-menu, #cp-content, #logview-content…), so the header sat in
      its 620px column while the Settings cards ran the full 1180px under it (driven,
      29 Sep 2026). #recipe-content already carries the gutter itself — not twice. */
-  body[data-card="calculator"] .recipe-scroll > :not(#recipe-content) {
+  body[data-card="calculator"] .recipe-scroll > :not(#recipe-content),
+  body[data-card="clients"] .recipe-scroll > :not(#recipe-content) {
     padding-inline: max(16px, var(--app-gutter));
   }
 }
+
+/* The notification switch of clients.html is drawn into a host inside its card, so it is
+   not the head's next sibling: take the line above the first row off, as .set-head + .set-row does. */
+body[data-card="clients"] #clients-push-row > .set-row { border-top: 0; }

@@ -65,3 +65,24 @@ test('⚠️ Save with a row to fix leaves reorder mode first, so that row can b
   assert.match(save, /if \(problem\) \{\s*showErrors = true;\s*if \(reordering\) setReordering\(false\);\s*if \(dividing\) setDividing\(false\);\s*renderIngredientRows\(\);/);
   assert.match(editor, /onclick: \(\) => setReordering\(!reordering\),/, 'the button and the save share one way out');
 });
+
+test('⚠️ the grip sits on the RIGHT of each reorder row, after the name and the amount (Federico, 3 Nov 2026)', () => {
+  // «Metti a destra i punti per trascinare gli ingredienti per riordinare».
+  const editor = codeOf(read('js/catalogue/catalogue-editor.js'));
+  const fn = editor.slice(editor.indexOf('function renderReorderRows()'), editor.indexOf('function moveTo('));
+  const name = fn.indexOf("class: 'cat-reorder-name'");
+  const amount = fn.indexOf("class: 'cat-reorder-amount'");
+  const grip = fn.indexOf("class: 'home-cards-grip cat-reorder-grip'");
+  assert.ok(name > 0 && amount > name && grip > amount, 'name, then amount, then the grip');
+  // The keyboard still moves the row from the grip (P18), and the grip is still a real button.
+  assert.match(fn, /type: 'button', class: 'home-cards-grip cat-reorder-grip'[\s\S]*?onkeydown: \(event\) => moveWithKeys\(idx, event\)/);
+  const css = codeOf(read('catalogue.css'));
+  assert.match(css, /\.cat-reorder-row \{[^}]*padding: 2px 2px 2px 12px;/, 'room before the name, the grip against the right edge');
+  assert.match(css, /\.cat-reorder-grip \{ margin-left: 0; \}/, 'the Home grip’s pull to the left is cancelled');
+});
+
+test('⚠️ «Divisioni» rows keep 8px on the right: they also carry .cat-reorder-row, whose right padding is 2px (code review, 6 Nov 2026)', () => {
+  const css = codeOf(read('catalogue.css'));
+  assert.match(css, /\.cat-divider-row,\s*\.cat-divider-row--last \{[^}]*padding-left: 12px;[^}]*padding-right: 8px;/,
+    'the amount must not touch the list frame in divider mode');
+});

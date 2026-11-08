@@ -814,6 +814,17 @@ test('a Cartone with no word for what is inside gets the venue\'s default one, l
   assert.equal(en.packUnit, 'bag');
 });
 
+test('a carton of pieces priced per piece is «50 × pezzo», never «50 × busta», in the venue\'s word', () => {
+  const pieces = { priceUnit: 'pcs', unitWeightKg: 0.085, weight: '85 g', packUnit: '', packCount: 50 };
+  const it = writesFor(oneIngredient(pieces)).batches[0][0].data;
+  assert.deepEqual([it.packUnit, it.packCount, it.unit, it.weight], ['pezzo', 50, 'cartone', '85 g']);
+  const en = writesFor(oneIngredient(pieces), ctxOf(), { language: 'en' }).batches[0][0].data;
+  assert.equal(en.packUnit, 'piece');
+  // A word the file does give still wins (eggs: «uovo»).
+  const eggs = writesFor(oneIngredient({ ...pieces, weight: '', unitWeightKg: 0.05, packUnit: 'uovo', packCount: 30 })).batches[0][0].data;
+  assert.equal(eggs.packUnit, 'uovo');
+});
+
 test('the file\'s own brand and category are kept', () => {
   const data = writesFor(oneIngredient({ brand: 'Esempio', category: 'Flour' })).batches[0][0].data;
   assert.equal(data.brand, 'Esempio');

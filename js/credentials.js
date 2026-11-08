@@ -113,3 +113,14 @@ export function confirmProblem(value, repeated) {
   if (repeated !== value) return t('help.passwordsDoNotMatch');
   return null;
 }
+
+// What is wrong with the repeated email — or null. Asked twice since his note of 3 Nov
+// 2026 («mi deve chiedere due volte l'email e la password»): a mistyped address is an
+// account nobody can reset the password of. Compared trimmed and case-folded, because
+// Firebase itself treats addresses that way — «Anna@x.it» and «anna@x.it » are one account.
+export function emailConfirmProblem(value, repeated) {
+  if (typeof repeated !== 'string' || !repeated.trim()) return t('help.repeatTheEmail');
+  const norm = s => String(s == null ? '' : s).trim().toLowerCase();
+  if (norm(repeated) !== norm(value)) return t('help.emailsDoNotMatch');
+  return null;
+}
