@@ -9,7 +9,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { kilosFromTyped, typedFromKilos, KILO_LINE_UNITS } from '../js/foodcost/line-quantity.js';
+import { kilosFromTyped, typedFromKilos, KILO_LINE_UNITS, tooMuchOfRecipe, TOO_MUCH_RECIPE_FACTOR } from '../js/foodcost/line-quantity.js';
 import { normalizeProduct } from '../js/foodcost/foodcost-model.js';
 import { _dictionaries as dictionaries } from '../js/i18n.js';
 
@@ -45,13 +45,47 @@ test('⚠️ typed in grams, the STORED value is still kilos — and never float
   }
 });
 
-test('⚠️ switching the unit shows the same kilos in the other unit, and changes nothing stored', () => {
+test('⚠️ a box opens in grams: 3.233 kg shows «3233», 0.522 shows «522»', () => {
+  assert.equal(typedFromKilos(3.233, 'g'), '3233');
+  assert.equal(typedFromKilos(0.522, 'g'), '522');
   for (const kilos of [0.522, 1.7, 0.001, 12.345678, 0.000001, 25]) {
     const asGrams = typedFromKilos(kilos, 'g');
     assert.equal(kilosFromTyped(asGrams, 'g'), kilos, `${kilos} kg shown as ${asGrams} g and read back`);
-    assert.equal(typedFromKilos(kilos, 'kg'), String(kilos));
   }
-  assert.equal(typedFromKilos(0.522, 'g'), '522');
+});
+
+test('⚠️ switching the unit keeps the typed number and changes its meaning', () => {
+  assert.equal(kilosFromTyped('522', 'g'), 0.522);
+  assert.equal(kilosFromTyped('522', 'kg'), 522, 'g -> kg: the box still says 522, now kilos');
+  assert.equal(kilosFromTyped('522', 'g'), 0.522, 'and back to g: still 522, 0.522 kg stored');
+  assert.equal(kilosFromTyped('', 'kg'), kilosFromTyped('', 'g'), 'an empty box changes nothing');
+});
+
+test('tooMuchOfRecipe: only beyond 20 whole batches, only when the recipe makes something', () => {
+  assert.equal(TOO_MUCH_RECIPE_FACTOR, 20);
+  assert.equal(tooMuchOfRecipe(20, 1), false, 'exactly 20x is fine');
+  assert.equal(tooMuchOfRecipe(20.001, 1), true, 'just over warns');
+  assert.equal(tooMuchOfRecipe(522, 0.522), true, 'grams typed as kilos');
+  assert.equal(tooMuchOfRecipe(3, 1), false, 'a real triple batch');
+  assert.equal(tooMuchOfRecipe(500, 0), false, 'a recipe of pieces only never warns');
+  assert.equal(tooMuchOfRecipe(500, null), false);
+  assert.equal(tooMuchOfRecipe(500, undefined), false);
+  assert.equal(tooMuchOfRecipe(NaN, 1), false);
+  assert.equal(tooMuchOfRecipe(500, NaN), false);
+  assert.equal(tooMuchOfRecipe(Infinity, 1), false);
+});
+
+test('⚠️ lineNote warns on a recipe line through the new key, first, then the partly-priced note', () => {
+  const at = EDITOR.indexOf('function lineNote(');
+  const body = EDITOR.slice(at, EDITOR.indexOf("const ingredient = tables.ingredients", at));
+  assert.match(body, /tooMuchOfRecipe\(entry\.qtyKg, whole\)/);
+  assert.match(body, /t\('fc\.line\.tooMuchRecipe'/);
+  assert.match(body, /recipeQtyText\(entry\.qtyKg \/ 1000\)/);
+  assert.match(body, /\[tooMuch, partly\]\.filter\(Boolean\)\.join\(' '\)/);
+  const { en, it } = dictionaries();
+  for (const lang of [en, it]) {
+    for (const hole of ['{qty}', '{whole}', '{grams}']) assert.ok(lang['fc.line.tooMuchRecipe'].includes(hole), hole);
+  }
 });
 
 test('the impossible numbers are still left to product-limits.js: nothing is clamped here', () => {
@@ -66,10 +100,15 @@ test('⚠️ the select is the ingredient line\'s own: same class, same label, n
   assert.match(select, /class: 'fc-input fc-select fc-line-unit-select', 'aria-label': t\('fc\.aria\.unit'\)/);
   assert.match(select, /KILO_LINE_UNITS\.map\(/);
   assert.match(select, /lineUnits\.set\(entry, e\.target\.value\);/);
-  assert.match(select, /qty\.value = typedFromKilos\(entry\.qtyKg, shownUnit\(\)\);/, 'the same kilos, shown again');
-  assert.ok(!/markDirty|repaint|paintAnswer|entry\.qtyKg\s*=/.test(select), 'switching changes nothing that is stored or costed');
+  assert.match(select, /const typed = qty\.value;/, 'the typed NUMBER is kept');
+  assert.match(select, /kilosFromTyped\(typed, shownUnit\(\)\)/, 'and read in the new unit');
+  assert.ok(!/qty\.value\s*=/.test(select), 'the box is never rewritten by a switch');
+  assert.match(select, /if \(kilos === entry\.qtyKg\) return;/, 'nothing changed (empty box): no dirty mark');
+  assert.match(select, /entry\.qtyKg = kilos;\s*markDirty\(\);/);
+  assert.match(select, /cost\.textContent = lineCost\(entry, kind\)\.text;\s*note\.textContent = lineNote\(entry, kind\);\s*paintAnswer\(\);/);
+  assert.ok(!/repaint/.test(select), 'repaint would steal the focus');
   assert.match(EDITOR, /const lineUnits = new WeakMap\(\);/, 'in memory, keyed by the line, never in the product');
-  assert.match(EDITOR, /lineUnits\.get\(entry\) \|\| 'kg'/, 'every line starts on kilos');
+  assert.match(EDITOR, /lineUnits\.get\(entry\) \|\| 'g'/, 'every line opens on grams');
   assert.match(EDITOR, /entry\.qtyKg = kilosFromTyped\(e\.target\.value, shownUnit\(\)\)|entry\[qtyKey\] = kind === 'recipe' \? kilosFromTyped\(e\.target\.value, shownUnit\(\)\)/);
 });
 
