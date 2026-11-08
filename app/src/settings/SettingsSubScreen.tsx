@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import type { ReactNode } from 'react';
-import { useLocation, useNavigate } from 'react-router';
+import { useLocation, useNavigate, useNavigationType } from 'react-router';
 import { useT } from '../i18n/useT';
 import { Page } from '../shell/Page';
 import { FormBar } from '../ui/FormBar';
@@ -29,11 +29,13 @@ export function SettingsSubScreen({ door, title, backDisabled = false, children 
   const { t } = useT();
   const navigate = useNavigate();
   const { state } = useLocation();
+  // The state survives a reload (the hash router keeps it in history.state): a reload is a POP, and only a PUSH is an arrival asked for.
+  const arrival = useNavigationType();
   const pending = usePendingDoor();
   const titleRef = useRef<HTMLHeadingElement>(null);
 
   useEffect(() => {
-    if (cameFromSettings(state)) titleRef.current?.focus();
+    if (arrival === 'PUSH' && cameFromSettings(state)) titleRef.current?.focus();
     // Once, as the screen opens.
   }, []);
 
