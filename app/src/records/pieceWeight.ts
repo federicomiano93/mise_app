@@ -5,7 +5,8 @@ import { typedDecimal } from '@mise/shared/currency';
 // what a person knows about one piece, so the box speaks grams; `unitWeightKg` and everything that reads it (price-model.ts,
 // order-cost.ts, Food cost) stay in kilos, untouched. The conversion lives only in the card, on the new card (priceCardModel.ts)
 // and on the card of before (legacyPriceModel.ts): the same two functions as gramsOfKg / kgTextOfGrams in
-// js/ingredient-record-form.js, which pieceWeight.spec.ts runs side by side with these.
+// js/ingredient-record-form.js. ⚠️ NOT imported by any spec (that file is the whole ingredient screen): pieceWeight.spec.ts
+// copies every case of the original's tests/piece-weight-grams.test.mjs, so a change to the original must be copied here by hand.
 
 // Stored kilos → the grams the box shows ('' for none; anything that is not a number is shown as it is).
 export function gramsOfKg(kg: unknown): string {
