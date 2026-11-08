@@ -7,13 +7,56 @@ commits behind them, checked against `app/src` and `shared/src` (evidence for «
 memory notes and `docs/parity/` read by grep. Sizes: S = a short session, M = one session.
 
 **The machine-checked half.** Where a spec compares a port with its `js/` original, the comparisons main broke are
-EXPECTED failures (`test.fails`) carrying the marker `PORT OWED (release branch, 8 Nov 2026)` — 57 of them on 8 Nov:
+EXPECTED failures (`test.fails`) carrying the marker `PORT OWED (release branch, 8 Nov 2026)` — 56 of them on 8 Nov:
 the `PORT_OWED` sets in `shared/src/parity.spec.ts` (sections, inventory-model, foodcost-weighing,
 calculator-recipe-source, log-time, records, invoice-zip/classify, reminders) and `shared/src/odd-inputs.spec.ts`, plus
 single tests in the per-module specs and `app/src/suppliers/invoiceImport/buildImport.spec.ts`. Each fails again by itself
 once its port lands: remove the marker then. `tests/mise2-port-owed.test.mjs` prints how many are left on every root
 `npm test` and FAILS the switch (a Mise 2 service worker, or `MISE2_SWITCH=1`) while any is left. Modules no spec pairs
 (pastries-model, price-model, the recipe book, usage) have no marker: those items below come from reading diffs.
+
+## Switch checklist
+
+`tests/mise2-port-owed.test.mjs` FAILS the switch build while any line below is unticked (`- [ ]`). Tick a line
+(`- [x]`) when its port lands, or when Federico decides to ship without it (write his decision beside it). The numbers
+point at the items below, which say what and where.
+
+Data loss first:
+- [ ] 1. Pastries row notes and «Copy day» (a Mise 2 day save erases the notes)
+- [ ] 2. Recipe categories written one word at a time (arrayUnion / arrayRemove), never the whole list
+- [ ] 4. Food cost `noWeightLoss` kept by a Mise 2 product save
+- [ ] 6. Orders draft journal and corrections in flight (F-15, F-16)
+- [ ] 3. `drafts/current.skipped` and «Order done» / «Close as not ordered»
+- [ ] 5. Usage `hours` kept by Mise 2's usage write
+- [ ] 7. Stocktake «Close month» guard moved into shared/ (`LIST_STATUS`, wording)
+
+Roles, Orders, Suppliers:
+- [ ] 8-11. Partial owners (owner-sales, owner-kitchen): sections, records, price gate, Clients page, weighing door
+- [ ] 12. «Order today» tag in both supplier lists
+- [ ] 16. Suppliers empty-flash, scroll and focus fixes, «hand-made» mark (verify)
+- [ ] 18. Invoice import: goods counted in pieces priced per piece
+- [ ] 20. Piece weight typed in grams
+
+Food cost, Recipe book, Calculator:
+- [ ] 21-22, 24-28. Food cost steps 1, 2, 4, A, B, recipe line in grams, two decimals
+- [ ] 23. Food cost recipe link with several products (check)
+- [ ] 29. Create products from the recipe book
+- [ ] 30. Crossed-out euro on rows Food cost cannot price
+- [ ] 31. Recipe book renamed-row warning
+- [ ] 32. Recipe row menu, full screen from a button, Back from Orders keeps the quantity
+- [ ] 36-40. Calculator: reorder, «Add a recipe» from the book, litres and ml, dough history dates, cached «no config»
+- [ ] 44. Chrome 101 visible height (check on the lab tablet)
+- [ ] 47. `order-sent` usage statistic
+
+Before the switch, not ports:
+- [ ] Every shop computer running the Zebra print agent pulled and restarted (agent 1.1.0) BEFORE the switch: the branch's
+      `js/catalogue/label-zpl.js` adds `^PON` to every standard label, which agent 1.0.1 refuses («not a single label made
+      by the app»). No venue printing through the Zebra queue = nothing to do; say which.
+- [ ] Rules deployed from a branch that contains the latest main (`firestore-rules` skill), read back identical
+- [ ] The switch PR's CI runs the root suite with `MISE2_SWITCH=1`
+- [ ] TTL policy on `todos.expireAt` (his OK), CSP (functions host, `https://www.gov.uk`)
+- [ ] `feature/mise2-3g-2` (Settings: holidays, app language, sections for staff) finished and merged, or his OK to ship without
+- [ ] His OK on what the switch leaves out until later: staff and join screens, kiosk, reminder notifications, `order.html` kept as it is
 
 ## A. Data-loss risks (port BEFORE the switch)
 
