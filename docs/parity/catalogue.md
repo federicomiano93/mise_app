@@ -1852,3 +1852,11 @@ phone holding an old copy could take away a word another manager had added.
   whole): a word can be added offline, as in the current app. `cat.shelf.waitingForServer` is gone.
 - A refused word comes back to the box unless something else has been typed there since (P20, as the current app).
 - Already matched: the watch of `config/labels` asks for metadata changes, so a venue with no label document gets its answer (`febb0092`).
+
+## «Import into Calculator» accepts litres and millilitres as built (8 Nov 2026)
+
+A consequence of the Calculator port of item 38 (`docs/parity/calculator.md`, «Linked recipes with litres, the problem line and the
+row count as built»; the current app's `e7f3dac0`). `calculatorRefusal` asks the Calculator's own `resolveRecipe`, which now weighs
+l, dl, cl, ml (1 ml = 1 g) and mg rows, so the recipe book's «Import into Calculator» ACCEPTS a recipe written in them — as the
+current app's own import does. The refusal above (around line 1619) now applies to pieces, spoons, a pinch and «to taste» only; a
+row in any weighable unit with nothing in it (0 ml, 0 l, 0 g…) is «has no amount», never «not by weight».
