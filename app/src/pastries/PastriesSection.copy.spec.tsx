@@ -453,6 +453,46 @@ describe('Copy day: as the current app pins it', () => {
   });
 });
 
+// Code review, 8 Nov 2026: a copy request left in the history entry would bring the copy back on a
+// reload or on the browser's Forward, without «Replace the list of {day}?» about a target that
+// another phone may have filled meanwhile. The opening that reads it spends it.
+describe('Copy day: the request is spent by the opening that reads it', () => {
+  it('takes the copy out of the history entry, keeping the way back to the day', async () => {
+    const { router, user } = await openDay(seeded());
+    await pickTarget(user);
+    await screen.findByRole('heading', { level: 2, name: 'Edit Friday' });
+    await waitFor(() => { expect(router.state.location.state).toEqual({ keepFocus: true, fromDay: true }); });
+    expect(router.state.location.pathname).toBe('/pastries/Friday/edit');
+    // Still the copy on screen, still unsaved.
+    expect(rowsShown().map(([name]) => name)).toEqual(['Cornetti', 'Krapfen', 'Sfogliatelle']);
+    expect(screen.getByText(COPIED)).toBeInTheDocument();
+    expect(screen.getByText('Unsaved changes')).toBeInTheDocument();
+  });
+
+  it('Forward after a Discard opens an ordinary edit of the target, asking the lock question again', async () => {
+    const source = seeded({ friday: true, recordedFriday: true });
+    const { router, user } = await openDay(source);
+    await pickTarget(user);
+    await user.click(within(await dialog('Replace the list of Friday?')).getByRole('button', { name: 'Replace' }));
+    await user.click(within(await dialog('Edit Friday?')).getByRole('button', { name: 'Edit' }));
+    await screen.findByRole('heading', { level: 2, name: 'Edit Friday' });
+    await waitFor(() => { expect(router.state.location.state).toEqual({ keepFocus: true, fromDay: true }); });
+
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await user.click(within(await dialog('Discard changes?')).getByRole('button', { name: 'Discard' }));
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/pastries/Thursday'); });
+
+    act(() => { void router.navigate(1); });
+    await waitFor(() => { expect(router.state.location.pathname).toBe('/pastries/Friday/edit'); });
+    // Recorded and not granted: the question comes back, and Edit then shows Friday's own list.
+    await user.click(within(await dialog('Edit Friday?')).getByRole('button', { name: 'Edit' }));
+    await screen.findByRole('heading', { level: 2, name: 'Edit Friday' });
+    expect(rowsShown().map(([name]) => name)).toEqual(['Brioche', 'Bomboloni']);
+    expect(screen.queryByText(COPIED)).not.toBeInTheDocument();
+    expect(source.saveDay).not.toHaveBeenCalled();
+  });
+});
+
 describe('Copy day: in Italian', () => {
   it('asks and explains in Italian', async () => {
     const { user } = renderPastries('/pastries/Thursday', { source: seeded(), lang: 'it' });

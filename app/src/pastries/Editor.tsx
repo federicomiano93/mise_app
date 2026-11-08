@@ -19,7 +19,7 @@ import { blankRow, fieldOf, isUntouched, namesOnOtherDays, problemMessage, rowsF
 import type { EditorField, EditorRow } from './editorModel';
 import { editRecordedDayQuestion } from './lockQuestion';
 import { usePastries, usePastriesStore } from './PastriesContext';
-import { cameFromDay, copyOf, useLeave } from './pastriesNav';
+import { FROM_DAY, cameFromDay, copyOf, useLeave } from './pastriesNav';
 import { dayPath, tabId, weekdayLabel } from './weekdays';
 import styles from './Editor.module.css';
 
@@ -75,7 +75,8 @@ export function Editor(props: Props) {
   const { day } = props;
   const { t } = useT();
   const store = usePastriesStore();
-  const { state } = useLocation();
+  const { state, pathname } = useLocation();
+  const navigate = useNavigate();
   const { daysLoaded, confirmedLoaded } = usePastries();
   const [confirm, confirmDialog] = useConfirm();
   const [phase, setPhase] = useState<Phase>('waiting');
@@ -105,6 +106,18 @@ export function Editor(props: Props) {
     setCopy(usable ? { from: requested.from, agreed } : null);
     setPhase(store.isLocked(day) && !agreed ? 'asking' : 'open');
   }
+
+  // ⚠️ A COPY REQUEST IS SPENT BY THE OPENING THAT READ IT. Once the phase is decided it is taken out of
+  // the history entry (the same address, replaced, its other marks kept): left there, a reload or the
+  // browser's Forward after a Discard would bring the copy back without its questions — «Replace the
+  // list of {day}?» above all, about a target another phone may have filled meanwhile (code review,
+  // 8 Nov 2026). Spent, they open an ordinary edit of the target, as a reload does in the current app.
+  // The same address is never blocked (shouldBlock below), and the editor is keyed on its day, so
+  // nothing on screen starts over.
+  useEffect(() => {
+    if (phase === 'waiting' || copyOf(state) === null) return;
+    void navigate(pathname, { replace: true, state: cameFromDay(state) ? FROM_DAY : KEEP_FOCUS });
+  }, [phase, state, pathname, navigate]);
 
   // Started by the phase, and dropped with the editor (a way out of the page while it is open; React's
   // development mode, which mounts everything twice, starts it again).
@@ -155,8 +168,8 @@ export function Editor(props: Props) {
 // (store.getSnapshot(), never usePastries()): replacing the rows would delete what somebody is in
 // the middle of typing. The names on the other days are read once too, for the same reason.
 //
-// ⚠️ A COPY IS DIRTY FROM THE START: nothing of it is stored yet, so Back, the router's blocker and a
-// reload all ask before throwing it away. Its rows (name, quantity and row note) come from the
+// ⚠️ A COPY IS DIRTY FROM THE START: nothing of it is stored yet, so Back and the router's blocker
+// ask before throwing it away (a reload asks nothing and opens an ordinary edit: see Editor above). Its rows (name, quantity and row note) come from the
 // source day; the standing note stays the TARGET's own.
 function EditorForm(props: Props & { copy: CopyRequest | null }) {
   const { day, handBackFocus, handBackToCopy, copy } = props;
