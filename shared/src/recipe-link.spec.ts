@@ -114,12 +114,12 @@ describe('the port against the original', () => {
     for (const name of LEFT_OUT) expect(typeof original[name], name).toBe('function');
   });
 
-  // PORT OWED (release branch, 8 Nov 2026): main added exports to js/recipe-link.js (roles), not yet in the port — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 8): main added exports to js/recipe-link.js (roles), not yet in the port — remove .fails when ported
   test.fails('exports exactly the same names, except those', () => {
     expect(Object.keys(port).sort()).toStrictEqual([...shared, ...ADDED].sort());
   });
 
-  // PORT OWED (release branch, 8 Nov 2026): main changed js/recipe-link.js (mayOpenFoodCost takes a role argument), the port has not — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 8): main changed js/recipe-link.js (mayOpenFoodCost takes a role argument), the port has not — remove .fails when ported
   test.fails('every function has the same name and the same number of required parameters', () => {
     for (const name of shared) {
       expect((port[name] as { name: string }).name, name).toBe((original[name] as { name: string }).name);

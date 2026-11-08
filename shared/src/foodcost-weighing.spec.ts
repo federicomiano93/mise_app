@@ -52,7 +52,7 @@ describe.each([
     }
   });
 
-  // PORT OWED (release branch, 8 Nov 2026): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings, no-loss switch), the port has not — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 21): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings, no-loss switch), the port has not — remove .fails when ported
   (_name === 'js/ (current app)' ? test.fails : test)('an unweighed recipe: the raw box follows the total, the cooked box is empty', () => {
     const state = m.startWeighing(recipe({ lossPct: 12 }));
     expect(state.rawTyped).toBe(false);
@@ -85,7 +85,7 @@ describe.each([
 
   // ── 2. A person types ──────────────────────────────────────────────────────
 
-  // PORT OWED (release branch, 8 Nov 2026): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings, no-loss switch), the port has not — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 21): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings, no-loss switch), the port has not — remove .fails when ported
   (_name === 'js/ (current app)' ? test.fails : test)('typing the cooked weight alone works the loss out against the recipe total', () => {
     const r = recipe({ lossPct: 12 });
     const state = m.typeCooked(m.startWeighing(r), '800');
@@ -95,7 +95,7 @@ describe.each([
     expect(shown.warning).toBe(null);
   });
 
-  // PORT OWED (release branch, 8 Nov 2026): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings, no-loss switch), the port has not — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 21): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings, no-loss switch), the port has not — remove .fails when ported
   (_name === 'js/ (current app)' ? test.fails : test)('a typed raw weight overrides the total, and clearing it hands the box back', () => {
     const r = recipe();
     let state = m.typeRaw(m.startWeighing(r), '1250');
@@ -107,7 +107,7 @@ describe.each([
     expect(m.readWeighing(r, state).patch?.rawGrams).toBe(1000);
   });
 
-  // PORT OWED (release branch, 8 Nov 2026): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings, no-loss switch), the port has not — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 21): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings, no-loss switch), the port has not — remove .fails when ported
   (_name === 'js/ (current app)' ? test.fails : test)('⚠️ a half-filled pair writes nothing and still names the stored percentage', () => {
     const r = recipe({ lossPct: 12 });
     const state = m.typeRaw(m.startWeighing(r), '1000');
@@ -117,7 +117,7 @@ describe.each([
       .toStrictEqual({ key: 'fc.lossStored', params: { pct: '12' } });
   });
 
-  // PORT OWED (release branch, 8 Nov 2026): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings, no-loss switch), the port has not — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 21): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings, no-loss switch), the port has not — remove .fails when ported
   (_name === 'js/ (current app)' ? test.fails : test)('⚠️ a cooked dough heavier than the raw one is refused, not read as «loses nothing»', () => {
     const r = recipe({ lossPct: 12 });
     const shown = m.readWeighing(r, m.typeCooked(m.startWeighing(r), '1100'));
@@ -126,7 +126,7 @@ describe.each([
     expect(shown.message).toStrictEqual({ key: 'fc.lossStored', params: { pct: '12' } });
   });
 
-  // PORT OWED (release branch, 8 Nov 2026): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings, no-loss switch), the port has not — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 21): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings, no-loss switch), the port has not — remove .fails when ported
   (_name === 'js/ (current app)' ? test.fails : test)('⚠️⚠️ a loss past 99% is capped and the screen admits it', () => {
     const r = recipe();
     const shown = m.readWeighing(r, m.typeCooked(m.startWeighing(r), '1'));
@@ -153,7 +153,7 @@ describe.each([
 
   // ── 3. What Save writes, and what the screen costs with ───────────────────
 
-  // PORT OWED (release branch, 8 Nov 2026): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings, no-loss switch), the port has not — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 21): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings, no-loss switch), the port has not — remove .fails when ported
   (_name === 'js/ (current app)' ? test.fails : test)('⚠️ Save writes only for recipes still on the product, still existing, and really changed', () => {
     const recipes = {
       foc: recipe({ lossPct: 12 }),

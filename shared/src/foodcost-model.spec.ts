@@ -876,7 +876,7 @@ describe.each([
   // ── Added ──────────────────────────────────────────────────────────────────
   // Not in the original tests: the shapes the rest of Mise 2 relies on.
 
-  // PORT OWED (release branch, 8 Nov 2026): main added two blockers to BLOCKER_TEXT in js/foodcost/foodcost-model.js, the port has not — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 26): main added two blockers to BLOCKER_TEXT in js/foodcost/foodcost-model.js, the port has not — remove .fails when ported
   (_name === 'js/ (current app)' ? test.fails : test)('the blockers’ dictionary keys are the current app’s, frozen', () => {
     expect({ ...m.BLOCKER_TEXT }).toStrictEqual({
       'no-components': 'fc.addAtLeastOne',
@@ -932,12 +932,12 @@ describe('the port against the original', () => {
     for (const name of LEFT_OUT) expect(typeof original[name], name).toBe('function');
   });
 
-  // PORT OWED (release branch, 8 Nov 2026): main added exports to js/foodcost/foodcost-model.js (Which? names deleted lines, line money guard), not yet in the port — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 26): main added exports to js/foodcost/foodcost-model.js (Which? names deleted lines, line money guard), not yet in the port — remove .fails when ported
   test.fails('exports exactly the same names, except those', () => {
     expect(Object.keys(port).sort()).toStrictEqual(shared);
   });
 
-  // PORT OWED (release branch, 8 Nov 2026): main changed js/foodcost/foodcost-model.js (BLOCKER_TEXT has two more blockers), the port has not — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 26): main changed js/foodcost/foodcost-model.js (BLOCKER_TEXT has two more blockers), the port has not — remove .fails when ported
   test.fails('every non-function export is strictly equal and frozen the same way', () => {
     for (const name of shared) {
       if (typeof original[name] === 'function') continue;
