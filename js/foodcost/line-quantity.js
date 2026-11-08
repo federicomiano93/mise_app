@@ -5,7 +5,7 @@
 // line should take grams the way an ingredient line does. ⚠️ WHAT IS STORED DID NOT MOVE:
 // `qtyKg`, in kilos, is what the rules, the cost model and every saved product already
 // carry, so the unit chosen here only changes how the number is TYPED and SHOWN. It is
-// never saved: a product always opens on kilos.
+// never saved: a product always opens on GRAMS (since 8 Nov 2026 — see the editor's lineRow).
 
 export const KILO_LINE_UNITS = Object.freeze(['g', 'kg']);
 
@@ -24,6 +24,19 @@ export function kilosFromTyped(text, unit) {
 
 // The stored kilos → the text the box shows in the unit on it. '' for nothing yet, so the
 // placeholder shows instead of a 0.
+// A recipe line is «too much» when it is more than this many whole batches of the recipe.
+// A slip of ×1000 (grams typed into the kilos box) is always far beyond 20×; a real double or
+// triple batch is well under it. Only a NOTE under the line, it never blocks Save.
+export const TOO_MUCH_RECIPE_FACTOR = 20;
+
+// True only when both numbers are real, one whole recipe makes something, and the line
+// asks for more than TOO_MUCH_RECIPE_FACTOR of it. A recipe of pieces only (wholeKg 0) never warns.
+export function tooMuchOfRecipe(qtyKg, wholeKg) {
+  if (typeof qtyKg !== 'number' || typeof wholeKg !== 'number') return false;
+  if (!Number.isFinite(qtyKg) || !Number.isFinite(wholeKg)) return false;
+  return wholeKg > 0 && qtyKg > TOO_MUCH_RECIPE_FACTOR * wholeKg;
+}
+
 export function typedFromKilos(kilos, unit) {
   const n = Number(kilos) || 0;
   if (!n) return '';

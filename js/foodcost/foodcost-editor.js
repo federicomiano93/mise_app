@@ -39,10 +39,11 @@ import {
   startWeighing, typeRaw, typeCooked, readWeighing, withWeighings, weighingPatches,
   weighingsChangeCost, otherProductsUsing,
 } from './foodcost-weighing.js';
-import { KILO_LINE_UNITS, kilosFromTyped, typedFromKilos } from './line-quantity.js';
+import { KILO_LINE_UNITS, kilosFromTyped, typedFromKilos, tooMuchOfRecipe } from './line-quantity.js';
+import { wholeRecipeKg } from './from-recipes.js';
 import {
   perKgWeightText, showsPiecesField, readProduct, readMadeOf, readWeighings, readPackaging,
-  readLabour, readPrice,
+  readLabour, readPrice, recipeQtyText,
 } from './read-sections.js';
 
 const TRASH_SVG =
@@ -654,10 +655,12 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
     }, [el('span', { text: name.text })]);
 
     const qtyKey = kind === 'recipe' ? 'qtyKg' : kind === 'ingredient' ? 'qty' : 'qtyPcs';
-    // ⚠️ A RECIPE LINE IS STORED IN KILOS, WHATEVER THE BOX SHOWS. The unit chosen below only
-    // changes how the number is typed and read back; it starts on «kg» every time the
-    // product is opened, so an existing card looks as it always did.
-    const shownUnit = () => (kind === 'recipe' ? lineUnits.get(entry) || 'kg' : null);
+    // ⚠️ A RECIPE LINE IS STORED IN KILOS, WHATEVER THE BOX SHOWS — but the box OPENS IN GRAMS,
+    // every time, since 8 Nov 2026. Production showed 16 lines in 11 products 1000× too big:
+    // staff typed grams (as in the ingredient lines right below) into a box that opened on kg;
+    // and a correct 3.233 kg read as «3.233», which an Italian takes for three thousand.
+    // The chosen unit is memory only; the stored value stays `qtyKg`.
+    const shownUnit = () => (kind === 'recipe' ? lineUnits.get(entry) || 'g' : null);
     const qty = el('input', {
       class: 'fc-input fc-qty', type: 'number', min: '0', step: 'any',
       inputmode: 'decimal', placeholder: '0',
@@ -694,11 +697,20 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
     } else if (kind === 'recipe') {
       unit = el('select', {
         class: 'fc-input fc-select fc-line-unit-select', 'aria-label': t('fc.aria.unit'),
-        // ⚠️ Not repaint() either. Switching the unit changes NOTHING that is stored: the same
-        // kilos are shown again in the new unit, so no note, no answer and no dirty mark.
+        // ⚠️ Not repaint() either. Switching the unit KEEPS THE TYPED NUMBER and changes what it
+        // means (owner, 8 Nov 2026: «quando cambio da kg a g la quantità non deve cambiare»):
+        // 522 in g → kg still shows 522 and stores 522 kg. So the stored kilos DO change, and
+        // the money, the note and the answer are refreshed like the box's own oninput does.
         onchange: e => {
+          const typed = qty.value;
           lineUnits.set(entry, e.target.value);
-          qty.value = typedFromKilos(entry.qtyKg, shownUnit());
+          const kilos = kilosFromTyped(typed, shownUnit());
+          if (kilos === entry.qtyKg) return;
+          entry.qtyKg = kilos;
+          markDirty();
+          cost.textContent = lineCost(entry, kind).text;
+          note.textContent = lineNote(entry, kind);
+          paintAnswer();
         },
       }, KILO_LINE_UNITS.map(u => el('option', { value: u }, u)));
       unit.value = shownUnit();
@@ -748,7 +760,15 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
       // selezionata». The money is NOT drawn here: this is the note under it. What stays is a
       // recipe priced in part, because a silent gap is a cost too low.
       const costed = costRecipe(recipe, tables);
-      return costed.pricePerKg !== null && costed.partial ? t('fc.thisRecipePartlyPriced') : '';
+      const partly = costed.pricePerKg !== null && costed.partial ? t('fc.thisRecipePartlyPriced') : '';
+      // A NOTE only, never a block: more than 20 whole batches is almost surely grams typed as kilos.
+      const whole = wholeRecipeKg(recipe);
+      const tooMuch = tooMuchOfRecipe(entry.qtyKg, whole)
+        ? t('fc.line.tooMuchRecipe', {
+          qty: recipeQtyText(entry.qtyKg), whole: recipeQtyText(whole), grams: recipeQtyText(entry.qtyKg / 1000),
+        })
+        : '';
+      return [tooMuch, partly].filter(Boolean).join(' ');
     }
     const ingredient = tables.ingredients[entry.ingredientId];
     if (!ingredient) return entry.ingredientId ? t('fc.thisItemNoLonger') : '';
