@@ -284,8 +284,8 @@ export interface OrdersStore {
   // (drafts/current.skipped), LOCAL-FIRST — on screen at once, never awaited, written on its own and never through the autosave. A
   // refusal puts the server's word back and says 'skip-not-saved'. The screen asks first; this does not.
   closeToday(supplierId: string): void;
-  // «Reopen»: the close goes, the same way (no question). Nothing closed, nothing done.
-  reopenToday(supplierId: string): void;
+  // «Reopen»: the close goes, the same way (no question). Nothing closed, nothing done: false.
+  reopenToday(supplierId: string): boolean;
   // What the confirm screen needs before it opens, read once from the server (parity X2, X7). A record that cannot be read
   // counts as none: the transaction inside `place` still refuses a real clash.
   checkRecords(items: ReadonlyArray<{ readonly supplierId: string; readonly date: string }>, noSupplierName: string): Promise<RecordCheck[]>;
@@ -686,14 +686,17 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
 
   // One close or reopen of `skipped`, LOCAL-FIRST (the current app's setSkippedLocally + a write never awaited): held on screen at once,
   // written on its own, and on a refusal the server's word comes back and the person is told.
+  // ⚠️ RULE 2: held busy until the write is answered, so a self-started reload in the first seconds of a page (before Firestore has the
+  // write in its queue, F-15) cannot throw the close away.
   function writeSkipped(supplierId: string, day: string | null) {
     set({ draft: sync.holdSkipped(supplierId, day) });
+    const release = deps.markBusy();
     const write = day === null ? source.clearSkipped(supplierId) : source.setSkipped(supplierId, day);
     write.catch((err: unknown) => {
       console.error(day === null ? 'Reopening the supplier failed:' : 'Closing the supplier as not ordered failed:', err);
       set({ draft: sync.dropSkipped(supplierId, day) });
       say({ kind: 'skip-not-saved' });
-    });
+    }).finally(release);
   }
 
   // ⚠️ A QUANTITY TYPED FOR A SUPPLIER CLOSED TODAY REOPENS IT (the current app's reopenIfTyped). «Nothing needed» stopped being true, and
@@ -704,10 +707,11 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     if (snapshot.draft.skipped[supplierId] !== deps.today()) return;
     if (lensNow('').filledFor(supplierId) === 0) return;
     set({ draft: sync.holdSkipped(supplierId, null) });
+    const release = deps.markBusy();
     source.clearSkipped(supplierId).catch((err: unknown) => {
       console.error('Reopening a closed supplier after typing failed:', err);
       set({ draft: sync.dropSkipped(supplierId, null) });
-    });
+    }).finally(release);
   }
 
   // A snapshot that came from the browser's own database and holds nothing proves nothing (that database can be empty
@@ -876,8 +880,9 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     },
 
     reopenToday(supplierId) {
-      if (snapshot.draft.skipped[supplierId] === undefined) return;
+      if (snapshot.draft.skipped[supplierId] === undefined) return false;
       writeSkipped(supplierId, null);
+      return true;
     },
 
     // The current app's setSupplierDay + restamp: written at once rather than after the pause, rolled back when refused.

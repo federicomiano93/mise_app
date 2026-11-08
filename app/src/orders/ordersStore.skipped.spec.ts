@@ -31,8 +31,9 @@ afterEach(() => { stops.forEach(stop => stop()); stops = []; });
 async function started(init: Parameters<typeof fakeOrdersSource>[0] = {}) {
   const source = fakeOrdersSource({ suppliers: [mill, dairy], ingredients: [flour, milk], ...init });
   let timer: (() => void) | null = null;
+  let busy = 0;
   const deps: OrdersDeps = {
-    markBusy: () => () => undefined,
+    markBusy: () => { busy += 1; return () => { busy -= 1; }; },
     today: () => TODAY,
     draft: {
       nowIso: () => `${TODAY}T09:00:00.000Z`,
@@ -54,7 +55,7 @@ async function started(init: Parameters<typeof fakeOrdersSource>[0] = {}) {
   store.start();
   stops.push(() => store.stop());
   await settle();
-  return { source, store, messages, settle, autosave };
+  return { source, store, messages, settle, autosave, busy: () => busy };
 }
 
 const line = (doc: StoredDoc): LensIngredient => doc as unknown as LensIngredient;
@@ -127,9 +128,19 @@ describe('ordersStore — closing today\'s order', () => {
     expect(h.messages).toEqual([{ kind: 'skip-not-saved' }]);
   });
 
-  it('nothing closed, nothing to reopen: no write', async () => {
+  it('⚠️ holds the page busy until the close is answered (a self-started reload must not lose it)', async () => {
     const h = await started({ draft: { entries: {} } });
-    h.store.reopenToday('mill');
+    const release = h.source.holdWrites();
+    h.store.closeToday('mill');
+    expect(h.busy()).toBe(1);
+    release();
+    await h.settle();
+    expect(h.busy()).toBe(0);
+  });
+
+  it('nothing closed, nothing to reopen: no write, and it says so (false)', async () => {
+    const h = await started({ draft: { entries: {} } });
+    expect(h.store.reopenToday('mill')).toBe(false);
     await h.settle();
     expect(h.source.skipWrites).toEqual([]);
   });

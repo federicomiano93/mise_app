@@ -1735,5 +1735,10 @@ Differences from the current app, on purpose:
 - **No Home badge to change.** Mise 2's Home has no Orders badge (its «Da fare» card is the to-dos) and the bell leaves the
   «order» alert out, so the only readers are the strip and the kiosk lines; a future Home badge must hand `skipped` to
   `suppliersStillToOrder`.
+- **Back from a summary opened by a closed chip gives the focus back to that chip** (the current app gives it to the row, or the row's
+  summary icon); the order recorded on another phone while the focus is on the summary's buttons gives it to the summary's title,
+  never to the page (the current app's hidden host drops it).
+- **A close or a reopen holds the page busy until it is answered** (rule 2), so a self-started reload in a page's first seconds cannot
+  lose it; the current app has no such marker for it. The summary also offers nothing over a dead records or draft stream.
 - **«Put back» and «Another supplier» in «To re-order» do not reopen a close**, exactly as in the current app (its `onReorder` and
   `onOtherSupplier` do not run `afterChange`); only typing on a row does.

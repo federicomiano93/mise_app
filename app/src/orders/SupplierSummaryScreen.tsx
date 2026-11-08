@@ -45,7 +45,7 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
   const { state } = useLocation();
   const navigate = useNavigate();
   const store = useOrdersStore();
-  const { draft, draftLoaded, history, historyLoaded, prices, pricesReadable, placing } = useOrders();
+  const { draft, draftLoaded, draftBroken, history, historyLoaded, historyBroken, prices, pricesReadable, placing } = useOrders();
   const handBack = useHandBack();
   const say = useStatusMessage();
   const [confirm, confirmDialog] = useConfirm();
@@ -74,7 +74,9 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
 
   const summary = supplier === undefined ? null : summaryFor(lens, id, draft, prices, pricesReadable);
   const lines = summary?.costLines ?? [];
-  const offer = supplier === undefined || !historyLoaded || !draftLoaded ? '' : closeOffer({
+  // ⚠️ A DEAD STREAM IS NOT AN ANSWER either (as the strip): a failed records listener says «loaded» with no records, and a supplier
+  // ordered this morning would be offered the close.
+  const offer = supplier === undefined || !historyLoaded || !draftLoaded || historyBroken || draftBroken ? '' : closeOffer({
     supplier, history: history as readonly PlacedRecord[], today: todayISO(), skipped: draft.skipped,
   });
 
@@ -91,7 +93,10 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
   useLayoutEffect(() => {
     if (!moveFocus.current) return;
     moveFocus.current = false;
-    actions.current?.querySelector('button')?.focus();
+    // Nothing left to offer (the order was recorded on another phone): the title takes it, never the page.
+    const next = actions.current?.querySelector('button');
+    if (next) next.focus();
+    else title.current?.focus();
   }, [actionsKey]);
 
   if (supplier === undefined || summary === null) {
@@ -99,6 +104,8 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
       <section className={styles.screen} aria-label={t('section.orders')}>
         <FormBar backLabel={t('ui.back')} onBack={leave} title={t('section.orders')} titleRef={title} />
         <p className={styles.nothing}>{t('ord.supplierGone')}</p>
+        {/* A question still open when the supplier went is answered «no» here, never left pending unseen. */}
+        {confirmDialog}
       </section>
     );
   }
@@ -131,8 +138,7 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
   };
 
   const reopen = () => {
-    store.reopenToday(id);
-    say(t('ord.close.reopened', { supplier: label }));
+    if (store.reopenToday(id)) say(t('ord.close.reopened', { supplier: label }));
   };
 
   const hasActions = offer === 'reopen' || lines.length > 0 || offer === 'skip';

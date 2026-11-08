@@ -96,6 +96,27 @@ describe('the order summary — what it offers about today', () => {
     expect(closeButton()).not.toBeInTheDocument();
   });
 
+  it('⚠️ offers nothing over a dead records stream (as the strip): an order placed this morning cannot be seen', async () => {
+    const source = seeded();
+    source.refuse.history = true;
+    await onSummary('s-alp', source);
+    expect(await screen.findByText('No quantities typed', undefined, LOAD)).toBeInTheDocument();
+    expect(closeButton()).not.toBeInTheDocument();
+  });
+
+  it('the order recorded on another phone while the focus is on «Order placed…»: the title takes the focus, never the page', async () => {
+    const source = seeded({ draft: { entries: { 'i-flour': { qty: 3 } }, days: {} } });
+    const view = await onSummary('s-alp', source);
+    const place = await screen.findByRole('button', { name: 'Order placed…' }, LOAD);
+    place.focus();
+    source.records.set(`${TODAY}_s-alp`, record(TODAY, 's-alp', { 'i-flour': 3 }));
+    source.emitHistory();
+    source.remoteMerge({ entries: { 'i-flour': { qty: 0 } } });
+    await waitFor(() => { expect(placeButton()).not.toBeInTheDocument(); });
+    await waitFor(() => { expect(screen.getByRole('heading', { level: 2, name: 'Alpine Mills' })).toHaveFocus(); });
+    expect(path(view)).toBe('/orders/supplier/s-alp/summary');
+  });
+
   it('in Italian, with the current app\'s words', async () => {
     await onSummary('s-alp', seeded(), { lang: 'it' });
     expect(await screen.findByRole('button', { name: 'Chiudi come non ordinato' }, LOAD)).toBeInTheDocument();
