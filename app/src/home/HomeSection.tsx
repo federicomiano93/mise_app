@@ -3,7 +3,9 @@ import { Navigate, useLocation } from 'react-router';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { Page } from '../shell/Page';
+import { useFocusOnBack } from '../shell/away/useFocusOnBack';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
+import { AwayBand } from './AwayBand';
 import { TodoCard } from './TodoCard';
 import { TodosProvider, useTodosStore } from './TodosContext';
 import styles from './HomeSection.module.css';
@@ -17,6 +19,8 @@ import styles from './HomeSection.module.css';
 export default function HomeSection() {
   const { t } = useT();
   const { pathname } = useLocation();
+  // After «I am back» from the band (which then goes away) the focus goes to the card's «Add», or to its title when Add is absent.
+  const armFocus = useFocusOnBack(() => document.getElementById('home-todo-add') ?? document.getElementById('home-todo-title'));
   // The Home has no address below it: anything typed after /home goes back to the Home, as the other sections send a junk
   // address back to their list (nothing is started for it).
   if (pathname !== '/home') return <Navigate to="/home" replace />;
@@ -26,6 +30,9 @@ export default function HomeSection() {
         <StatusMessageProvider>
           <StoreMessages />
           <div className={styles.column}>
+            <PartBoundary>
+              <AwayBand onBack={armFocus} />
+            </PartBoundary>
             <PartBoundary>
               <TodoCard />
             </PartBoundary>
