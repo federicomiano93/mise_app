@@ -4,14 +4,14 @@
 import { describe, expect, test, vi } from 'vitest';
 import { markBusy } from '../session/busy';
 import {
-  BUSY_RETRY_MS, MIN_RELOAD_GAP_MS, RELOAD_GRACE_MS, TAKEOVER_TIMEOUT_MS, watchServiceWorker,
-  browserServiceWorkerEnv, type ServiceWorkerEnv,
+  BUSY_RETRY_MS, MAX_RELOADS, MIN_RELOAD_GAP_MS, RELOAD_GRACE_MS, RELOADS_WINDOW_MS, TAKEOVER_TIMEOUT_MS, watchServiceWorker,
+  browserServiceWorkerEnv, type ReloadStamp, type ServiceWorkerEnv,
 } from './serviceWorker';
 
 class FakeTarget {
   private listeners = new Map<string, Array<() => void>>();
   addEventListener(type: string, fn: () => void) { this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]); }
-  emit(type: string) { const fns = this.listeners.get(type) ?? []; this.listeners.delete(type); fns.forEach(fn => fn()); }
+  emit(type: string) { (this.listeners.get(type) ?? []).forEach(fn => fn()); }
 }
 
 function world({ controlled = true, waiting = true } = {}) {
@@ -28,7 +28,7 @@ function world({ controlled = true, waiting = true } = {}) {
   });
   const timers: Array<{ at: number; fn: () => void }> = [];
   let clock = 1_000_000;
-  let stamp: number | null = null;
+  let stamp: ReloadStamp | null = null;
   let visible: (() => void) | null = null;
   const env: ServiceWorkerEnv = {
     container: container as unknown as ServiceWorkerContainer,
@@ -52,7 +52,7 @@ function world({ controlled = true, waiting = true } = {}) {
       due.fn();
     }
   };
-  return { env, reg, container, posted, advance, setStamp: (v: number) => { stamp = v; }, visible: () => visible?.() };
+  return { env, reg, container, posted, advance, setStamp: (v: ReloadStamp) => { stamp = v; }, stamp: () => stamp, now: () => clock, visible: () => visible?.() };
 }
 
 describe('watchServiceWorker', () => {
@@ -114,11 +114,55 @@ describe('watchServiceWorker', () => {
     expect(w.env.reload).toHaveBeenCalledTimes(1);
   });
 
-  test('no loop: reloaded for an update less than a minute ago, it does not ask again', async () => {
+  test('reloaded for an update less than a minute ago: it waits out the minute, then asks — never gives up for good', async () => {
     const w = world();
-    w.setStamp(1_000_000 - MIN_RELOAD_GAP_MS / 2);
+    w.setStamp({ at: 1_000_000 - MIN_RELOAD_GAP_MS / 2, count: 1 });
     await watchServiceWorker(w.env);
     expect(w.posted).toEqual([]);
+    w.advance(MIN_RELOAD_GAP_MS / 2);
+    expect(w.posted).toEqual([{ action: 'skipWaiting' }]);
+  });
+
+  test('no loop: after three update reloads in a row it pauses ten minutes — then asks again, never gives up for good', async () => {
+    const w = world();
+    w.setStamp({ at: 1_000_000 - MIN_RELOAD_GAP_MS * 2, count: MAX_RELOADS });
+    await watchServiceWorker(w.env);
+    w.advance(MIN_RELOAD_GAP_MS * 5);
+    expect(w.posted).toEqual([]);
+    w.advance(RELOADS_WINDOW_MS);
+    expect(w.posted).toEqual([{ action: 'skipWaiting' }]);
+  });
+
+  test('each update reload is counted', async () => {
+    const w = world();
+    await watchServiceWorker(w.env);
+    w.container.emit('controllerchange');
+    w.advance(RELOAD_GRACE_MS);
+    expect(w.stamp()).toEqual({ at: w.now(), count: 1 });
+  });
+
+  test('⚠️ a release already installing when the page registers is followed too', async () => {
+    const w = world({ waiting: false });
+    const incoming = Object.assign(new FakeTarget(), { state: 'installing' });
+    w.reg.installing = incoming;
+    await watchServiceWorker(w.env);
+    w.reg.waiting = { postMessage: (m: unknown) => w.posted.push(m) };
+    incoming.state = 'installed';
+    incoming.emit('statechange');
+    expect(w.posted).toEqual([{ action: 'skipWaiting' }]);
+  });
+
+  test('⚠️ another open Mise 2 window, taken over by a release it did not ask for, reloads too — when nobody edits', async () => {
+    const w = world({ waiting: false });
+    await watchServiceWorker(w.env);
+    const release = markBusy();
+    try {
+      w.container.emit('controllerchange');
+      w.advance(BUSY_RETRY_MS * 3);
+      expect(w.env.reload).not.toHaveBeenCalled();
+    } finally { release(); }
+    w.advance(BUSY_RETRY_MS);
+    expect(w.env.reload).toHaveBeenCalledTimes(1);
   });
 
   test('coming back to the app checks for a release', async () => {

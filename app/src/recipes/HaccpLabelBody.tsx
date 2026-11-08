@@ -183,10 +183,14 @@ function HaccpLabelReady({ recipe, fieldsKey, size, declared }: ReadyProps) {
   const [storageTyped, setStorageTyped] = useState<string | null>(null);
   const storage = storageTyped ?? labelTextsOf(recipe).haccpStorage;
   const [quantity, setQuantity] = useState('');
-  // What the person typed for this print (not the name the roster fills in): an update's reload would lose it, and the
-  // lab tablet stays on this screen for hours (session/busy.ts).
+  // What the person typed for this print (not the name the roster fills in): an update's reload would lose it
+  // (session/busy.ts). ⚠️ HELD ONLY UNTIL IT IS PRINTED: the lab tablet stays on this screen for hours, and a hold kept
+  // after the label came out would keep that tablet off every update — and off the way back after a revert.
+  const typedKey = JSON.stringify([quantity, lotTyped, storageTyped, datesTyped]);
+  const [printedKey, setPrintedKey] = useState<string | null>(null);
   const typedHere = quantity !== '' || lotTyped !== null || storageTyped !== null || Object.keys(datesTyped).length > 0;
-  useEffect(() => (typedHere ? markBusy() : undefined), [typedHere]);
+  const holding = typedHere && typedKey !== printedKey;
+  useEffect(() => (holding ? markBusy() : undefined), [holding]);
 
   // ⚠️ THE ROSTER IS READ ONCE, ONLY WHEN THE FIELD IS PRINTED, and what it gives is a starting point: a person who has typed
   // in the box before the answer comes keeps their words. The tablet in the lab is one shared account, so the name is editable.
@@ -339,6 +343,7 @@ function HaccpLabelReady({ recipe, fieldsKey, size, declared }: ReadyProps) {
     openHaccpPrintHost(current.png, size);
     try {
       window.print();
+      setPrintedKey(typedKey);
       announceAction('haccp-label-printed');
     } catch {
       closePrintHost();

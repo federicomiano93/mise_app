@@ -14,7 +14,7 @@
 // ⚠️⚠️ AND THE WAY BACK IS THE SAME ROAD. A revert puts the current app's sw.js back at this address with a
 // higher CACHE_NAME: it installs and waits, Mise 2's page (shell/serviceWorker.ts) applies a waiting worker
 // as soon as nobody is editing, and the current app's activate() deletes every cache but its own — this one
-// included. Proved by app/sw/rollback.spec.ts, which runs both files.
+// included. Proved by app/src/shell/rollback.spec.ts, which runs both files.
 //
 // ⚠️ ONLY CACHES ARE EVER DELETED. The person's data lives in IndexedDB (Firebase Auth's record of who is
 // signed in, Firestore's offline copy and its queue of unsent writes) and in localStorage (the current app's
@@ -25,17 +25,17 @@
 //
 // BUILD CONSTANTS (written above this file by app/sw-plugin.ts):
 //   CACHE_NAME     this release's cache: CACHE_PREFIX + a fingerprint of the whole precache list
-//   CACHE_PREFIX   'mise2-<base>-': only caches of THIS address are ever replaced (the preview's origins can
+//   CACHE_PREFIX   'mise2-<base>--': only caches of THIS address are ever replaced (the preview's origins can
 //                  hold a Mise 2 at / and another at /mise2/, which must not delete each other's)
 //   PRECACHE       [{ url, rev, html? }] — every file of the build, `url` relative to this worker, `rev` the
 //                  first 16 hex digits of the SHA-256 of its bytes
-//   ENTRY          the address of the entry script index.html loads: a copy of index.html that does not name
-//                  it is the PREVIOUS release (a CDN still holding it), never stored
+//   PAGE_NEEDS     the addresses of this release's entry script and stylesheets that index.html names: a copy of
+//                  index.html missing any of them is the PREVIOUS release (a CDN still holding it), never stored
 //   TAKE_OVER      true when Mise 2 is built for the site's own address (the switch): the current app's caches
 //                  are then this worker's to remove. false at /mise2/ beside the current app (the old preview).
 //   LEGACY_ROUTES  { 'orders.html': '/orders', … } — the current app's pages, and the Mise 2 screen each one is now
 
-/* global CACHE_NAME, CACHE_PREFIX, PRECACHE, ENTRY, TAKE_OVER, LEGACY_ROUTES */
+/* global CACHE_NAME, CACHE_PREFIX, PRECACHE, PAGE_NEEDS, TAKE_OVER, LEGACY_ROUTES */
 
 const REV_HEADER = 'x-mise2-rev';
 const PRECACHE_ATTEMPTS = 3;
@@ -96,11 +96,13 @@ async function cacheOne(cache, olderCaches, entry) {
   }
   if (VERIFY && got.rev !== entry.rev) {
     // ⚠️ index.html is the one file whose OLD copy breaks the app: it names the previous release's scripts,
-    // which are no longer on the server. A copy that does not name this release's entry script is refused
-    // (the install fails and is tried again later, when the CDN has caught up). A copy that DOES name it was
+    // and stylesheets, which are no longer on the server. A copy that does not name every one of this release's
+    // is refused (the install fails and is tried again later, when the CDN has caught up — a release that
+    // changed only a stylesheet keeps its script's name, hence all of them). A copy that DOES name them was
     // changed on the way in (an antivirus or a company proxy rewriting HTML): refusing it would stop that
     // device updating for ever, so it is stored, as the current app does with every mismatch.
-    if (entry.html && !new TextDecoder().decode(got.bytes).includes(ENTRY)) {
+    const page = entry.html ? new TextDecoder().decode(got.bytes) : '';
+    if (entry.html && !PAGE_NEEDS.every(url => page.includes(url))) {
       throw new Error(`${entry.url}: the server still sends the previous release`);
     }
     console.warn(`${entry.url}: the server sent ${got.rev}, this release is ${entry.rev} — stored as received`);
@@ -196,16 +198,22 @@ self.addEventListener('fetch', event => {
       event.respondWith(fromCache(`${SCOPE}index.html`));
       return;
     }
-    // A page of the current app: its Mise 2 screen. (Without this worker, the build's own stub pages do the
-    // same: app/sw-plugin.ts writes them from the same list.)
+    // A page of the current app: its Mise 2 screen. (Without this worker — a new device, a bookmark — the
+    // site's stub pages do the same, written by the Pages build from the same list.)
     const target = legacyTarget(url.href);
     if (target && target !== url.href) {
       event.respondWith(Response.redirect(target, 302));
       return;
     }
-    // ⚠️ Everything else is the NETWORK, untouched, and never written to a cache: `order.html` (the
-    // wholesale clients' page, kept as it is) and `reset-password.html`, whose address carries a one-time
-    // code that must never land in a cache key.
+    // ⚠️⚠️ THE PASSWORD-RESET PAGE: its address carries a one-time code. Never written to any cache, and asked
+    // with no-store so the browser's own HTTP cache (GitHub Pages says max-age=600) does not keep it either —
+    // exactly as the current app's worker does.
+    if (page === 'reset-password.html') {
+      event.respondWith(fetch(request, { cache: 'no-store' }));
+      return;
+    }
+    // Everything else is the NETWORK, untouched, and never written to a cache: `order.html` (the wholesale
+    // clients' page, kept as it is), `install-guide.html`.
     return;
   }
 

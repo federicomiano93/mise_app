@@ -25,7 +25,7 @@ function build(files = FILES, base = BASE) {
     const rev = revOf(new TextEncoder().encode(body));
     return url === 'index.html' ? { url, rev, html: true as const } : { url, rev };
   });
-  return composeWorker({ base, precache, entry: ENTRY });
+  return composeWorker({ base, precache, pageNeeds: [ENTRY] });
 }
 
 function serve(world: World, files = FILES, base = BASE) {
@@ -42,7 +42,7 @@ async function installed(world = createWorld()) {
 describe('install', () => {
   test('precaches every file of the build, the alarm included, in its own cache', async () => {
     const { world, cacheName } = await installed();
-    expect(cacheName).toMatch(/^mise2-mise_app-[0-9a-f]{12}$/);
+    expect(cacheName).toMatch(/^mise2-mise_app--[0-9a-f]{12}$/);
     const cached = [...world.caches.get(cacheName)!.keys()].sort();
     expect(cached).toEqual(Object.keys(FILES).map(f => `${SCOPE}${f}`).sort());
     expect(cached).toContain(`${SCOPE}assets/alarm-0a1b2c.wav`);
@@ -93,6 +93,17 @@ describe('install', () => {
     await expect(sw.install()).rejects.toThrow(/precache incomplete.*index\.html/);
   });
 
+  test('⚠️ a release that changed only a stylesheet: an index.html naming the old one is the previous release too', async () => {
+    const css = `${BASE}assets/index-NEW.css`;
+    const files = { ...FILES, 'index.html': `<script type="module" src="${ENTRY}"></script><link rel="stylesheet" href="${css}">` };
+    const world = createWorld();
+    serve(world, files);
+    world.server.set(`${SCOPE}index.html`, { body: `<script type="module" src="${ENTRY}"></script><link rel="stylesheet" href="${BASE}assets/index-OLD.css">` });
+    const precache: PrecacheEntry[] = Object.entries(files).map(([url, body]) => ({ url, rev: revOf(new TextEncoder().encode(body)), ...(url === 'index.html' ? { html: true as const } : {}) }));
+    const sw = loadWorker(world, composeWorker({ base: BASE, precache, pageNeeds: [css, ENTRY] }));
+    await expect(sw.install()).rejects.toThrow(/index\.html/);
+  });
+
   test('an index.html changed on the way in (it still names this release) is stored: refusing would stop that phone updating for ever', async () => {
     const world = createWorld();
     serve(world);
@@ -115,12 +126,12 @@ describe('install', () => {
 describe('activate: the take-over', () => {
   test('removes the current app\'s caches and the older Mise 2 ones, keeps anything else, and touches no stored data', async () => {
     const world = createWorld();
-    for (const name of ['theitalianclub-v766', 'theitalianclub-v765', 'firebase-sdk-12-19-0', 'mise2-mise_app-000000000000', 'mise2-mise2-111111111111', 'someone-elses']) {
+    for (const name of ['theitalianclub-v766', 'theitalianclub-v765', 'firebase-sdk-12-19-0', 'mise2-mise_app--000000000000', 'mise2-mise2--111111111111', 'mise2-mise_app-mise2--222222222222', 'someone-elses']) {
       world.caches.set(name, new Map());
     }
     const { sw, cacheName } = await installed(world);
     await sw.activate();
-    expect([...world.caches.keys()].sort()).toEqual([cacheName, 'mise2-mise2-111111111111', 'someone-elses'].sort());
+    expect([...world.caches.keys()].sort()).toEqual([cacheName, 'mise2-mise2--111111111111', 'mise2-mise_app-mise2--222222222222', 'someone-elses'].sort());
     // IndexedDB (Auth, Firestore's offline copy and its unsent writes) and localStorage: never reached.
     expect(world.storageTouched).toEqual([]);
   });
@@ -130,7 +141,7 @@ describe('activate: the take-over', () => {
     world.caches.set('theitalianclub-v766', new Map());
     world.caches.set('firebase-sdk-12-19-0', new Map());
     serve(world, FILES, '/mise2/');
-    const sw = loadWorker(world, build(FILES, '/mise2/').replace(JSON.stringify(ENTRY), JSON.stringify(ENTRY)), '/mise2/sw.js');
+    const sw = loadWorker(world, build(FILES, '/mise2/'), '/mise2/sw.js');
     await sw.install();
     await sw.activate();
     expect(world.caches.has('theitalianclub-v766')).toBe(true);
@@ -166,12 +177,23 @@ describe('fetch', () => {
     }
   });
 
-  test('order.html and reset-password.html go to the network untouched, and are never cached', async () => {
+  test('order.html and the install guide go to the network untouched, and are never cached', async () => {
     const { world, sw, cacheName } = await installed();
-    for (const url of [`${SCOPE}order.html?c=abc`, `${SCOPE}reset-password.html?mode=resetPassword&oobCode=SECRET`, `${SCOPE}install-guide.html`]) {
+    for (const url of [`${SCOPE}order.html?c=abc`, `${SCOPE}install-guide.html`]) {
       expect(await sw.fetch(url, { mode: 'navigate' }), url).toBeUndefined();
     }
-    expect([...world.caches.get(cacheName)!.keys()].some(k => k.includes('oobCode'))).toBe(false);
+    expect([...world.caches.get(cacheName)!.keys()].some(k => k.includes('order.html'))).toBe(false);
+  });
+
+  test('⚠️ reset-password.html (a one-time code in its address) is asked with no-store and never cached', async () => {
+    const { world, sw } = await installed();
+    world.server.set(`${SCOPE}reset-password.html`, { body: 'reset page' });
+    world.fetched.length = 0; world.fetchInits.length = 0;
+    const res = await sw.fetch(`${SCOPE}reset-password.html?mode=resetPassword&oobCode=SECRET`, { mode: 'navigate' });
+    expect(await res!.text()).toBe('reset page');
+    expect(world.fetchInits).toEqual([{ cache: 'no-store' }]);
+    const keys = [...world.caches.values()].flatMap(c => [...c.keys()]);
+    expect(keys.some(k => k.includes('oobCode') || k.includes('reset-password'))).toBe(false);
   });
 
   test('a file of this release comes from its cache; other hosts, other files and writes are not touched', async () => {
@@ -230,7 +252,7 @@ describe('the build plugin', () => {
     vm.runInContext(readFileSync(join(out, 'sw.js'), 'utf8'), context);
     const urls = (vm.runInContext('PRECACHE', context) as PrecacheEntry[]).map(e => e.url);
     expect(urls).toEqual([...Object.keys(FILES), 'favicon.svg', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png'].sort());
-    expect(vm.runInContext('ENTRY', context)).toBe(ENTRY);
+    expect(vm.runInContext('PAGE_NEEDS', context)).toEqual([ENTRY]);
     expect(vm.runInContext('TAKE_OVER', context)).toBe(true);
   });
 

@@ -24,6 +24,8 @@ export interface World {
   server: Map<string, ServedFile | ((attempt: number) => ServedFile | 'fail' | 404)>;
   caches: Map<string, Map<string, Response>>;
   fetched: string[];
+  // The init each download was asked with (its cache mode), in the order of `fetched`.
+  fetchInits: (RequestInit | undefined)[];
   deleted: string[];
   skipWaiting: number;
   notifications: { title: string; options: Record<string, unknown> }[];
@@ -33,7 +35,7 @@ export interface World {
 }
 
 export function createWorld(): World {
-  return { server: new Map(), caches: new Map(), fetched: [], deleted: [], skipWaiting: 0, notifications: [], opened: [], storageTouched: [] };
+  return { server: new Map(), caches: new Map(), fetched: [], fetchInits: [], deleted: [], skipWaiting: 0, notifications: [], opened: [], storageTouched: [] };
 }
 
 const bytesOf = (body: Uint8Array<ArrayBuffer> | string): Uint8Array<ArrayBuffer> => (typeof body === 'string' ? new TextEncoder().encode(body) : body);
@@ -91,9 +93,10 @@ export function loadWorker(world: World, source: string, swPath = `${BASE}sw.js`
         return undefined;
       },
     },
-    fetch: async (r: string | Request) => {
+    fetch: async (r: string | Request, init?: RequestInit) => {
       const url = typeof r === 'string' ? new URL(r, `${ORIGIN}${swPath}`).href : r.url;
       world.fetched.push(url);
+      world.fetchInits.push(init);
       const n = (attempts.get(url) ?? 0) + 1;
       attempts.set(url, n);
       const plain = url.split('?')[0]!;

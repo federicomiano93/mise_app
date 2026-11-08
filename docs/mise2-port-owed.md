@@ -12,12 +12,12 @@ the `PORT_OWED` sets in `shared/src/parity.spec.ts` (sections, inventory-model, 
 calculator-recipe-source, log-time, records, invoice-zip/classify, reminders) and `shared/src/odd-inputs.spec.ts`, plus
 single tests in the per-module specs and `app/src/suppliers/invoiceImport/buildImport.spec.ts`. Each fails again by itself
 once its port lands: remove the marker then. `tests/mise2-port-owed.test.mjs` prints how many are left on every root
-`npm test` and FAILS the switch (a Mise 2 service worker, or `MISE2_SWITCH=1`) while any is left. Modules no spec pairs
+`npm test` and FAILS the switch build (`MISE2_SWITCH=1`, which CI sets on the release PR into `main` and on `main` itself) while any is left. Modules no spec pairs
 (pastries-model, price-model, the recipe book, usage) have no marker: those items below come from reading diffs.
 
 ## Switch checklist
 
-`tests/mise2-port-owed.test.mjs` FAILS the switch build (`MISE2_SWITCH=1`, or a Mise 2 service worker) while any line
+`tests/mise2-port-owed.test.mjs` FAILS the switch build (`MISE2_SWITCH=1`, set by CI on the release PR into `main` and on `main`) while any line
 below is unticked (`- [ ]`). Tick a line (`- [x]`) when its port lands, or when Federico decides to ship without it (write
 his decision beside it). The numbers point at the items below, which say what and where.
 

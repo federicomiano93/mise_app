@@ -4,7 +4,8 @@
 //   - every file the worker precaches exists, with the fingerprint it carries (a precache 404 fails every install);
 //   - every built file but the source maps and sw.js is precached (a missing one is a blank screen offline);
 //   - the guided-mixing alarm, the manifest and its icons are in it;
-//   - index.html is marked, names the entry script the worker expects, and links the manifest.
+//   - index.html is marked, names every script and stylesheet the worker expects, and links the manifest;
+//   - no precached name starts with «_» (Jekyll would drop it).
 // Plain Node, no dependency: the build has already run.
 
 import { createHash } from 'node:crypto';
@@ -19,7 +20,7 @@ const say = message => problems.push(message);
 const context = vm.createContext({ self: { location: new URL('https://example.test/sw.js'), addEventListener: () => {} }, URL, Map });
 vm.runInContext(readFileSync(join(dir, 'sw.js'), 'utf8'), context);
 const PRECACHE = vm.runInContext('PRECACHE', context);
-const ENTRY = vm.runInContext('ENTRY', context);
+const PAGE_NEEDS = vm.runInContext('PAGE_NEEDS', context);
 const LEFT_OUT = vm.runInContext('LEFT_OUT', context);
 
 const files = [];
@@ -51,7 +52,10 @@ for (const pattern of [/^assets\/alarm-[^/]+\.wav$/, /^manifest\.json$/, /^icons
 }
 const index = readFileSync(join(dir, 'index.html'), 'utf8');
 if (!PRECACHE.find(e => e.url === 'index.html')?.html) say('index.html is not marked as the page');
-if (!index.includes(ENTRY)) say(`index.html does not name the entry script ${ENTRY}`);
+for (const url of PAGE_NEEDS) if (!index.includes(url)) say(`index.html does not name ${url}`);
+if (!PAGE_NEEDS.some(url => url.endsWith('.js'))) say('the worker knows no script of index.html');
+// GitHub Pages' own Jekyll build drops files whose name starts with «_»: a precached one would fail every install.
+for (const entry of PRECACHE) if (entry.url.split('/').some(part => part.startsWith('_'))) say(`a name Jekyll would drop: ${entry.url}`);
 if (!/<link rel="manifest" href="[^"]*manifest\.json">/.test(index)) say('index.html links no manifest');
 
 if (problems.length) {

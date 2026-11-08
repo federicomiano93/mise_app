@@ -15,8 +15,10 @@
 // (calculator/OrderForm.tsx). Orders holds it while typing has not reached Firestore, while a day line is saved, and while a close
 // as not ordered or a reopen is answered (orders/ordersStore.ts). Added with the service worker (step 5): a client's
 // ordering link while it is made or turned off (calculator/OrderingLink.tsx), a WhatsApp line typed and not added yet
-// (calculator/WhatsappPicker.tsx), what was typed on a HACCP label (recipes/HaccpLabelBody.tsx) and the sign-in form
-// while it holds text (session/SignInScreen.tsx). Each new editor adds itself here.
+// (calculator/WhatsappPicker.tsx) and what was typed on a HACCP label until it is printed (recipes/HaccpLabelBody.tsx).
+// ⚠️ A HOLD MUST END: a screen left open with a hold that never lets go keeps that device off every update, and off the
+// way back after a revert. (Not the sign-in form for that reason: a browser's autofill or a half-typed address left on
+// a shared tablet would block it for days, for a box that takes seconds to retype.) Each new editor adds itself here.
 
 const holders = new Set<symbol>();
 

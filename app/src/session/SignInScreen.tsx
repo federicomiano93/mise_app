@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { FieldError, Input, Label, TextField } from 'react-aria-components';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { resetFailureKey, signInErrorKey } from './authErrors';
-import { markBusy } from './busy';
 import { GateScreen } from './GateScreen';
 import { useSessionStore } from './SessionContext';
 import styles from './SignInScreen.module.css';
@@ -31,9 +30,6 @@ export function SignInScreen() {
   const [notice, setNotice] = useState<Notice | null>(null);
   const [signingIn, setSigningIn] = useState(false);
   const [resetting, setResetting] = useState(false);
-  // An update's reload would empty the two boxes under somebody's fingers (busy.ts).
-  const typing = email !== '' || password !== '';
-  useEffect(() => (typing ? markBusy() : undefined), [typing]);
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const noticeCount = useRef(0);
