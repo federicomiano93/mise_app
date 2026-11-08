@@ -198,9 +198,10 @@ function OrdersLayout({ view }: { view: ShownView }) {
     return () => { window.clearTimeout(timer); };
   }, []);
   useEffect(() => {
-    if (!ready || pendingLatch.latched !== null || !latchCanLook(snapshot.serverSeen, online, graceOver)) return;
-    pendingLatch.latch(pendingNow(lens, snapshot.draft, todayISO()).map(row => row.supplier.id as string));
-  }, [ready, pendingLatch, lens, snapshot.draft, snapshot.serverSeen, online, graceOver]);
+    // Once per opening — and once more each time lines the last page left have come back (draftCameBack, parity F-15).
+    if (!ready || pendingLatch.round >= snapshot.draftCameBack || !latchCanLook(snapshot.serverSeen, online, graceOver)) return;
+    pendingLatch.latch(pendingNow(lens, snapshot.draft, todayISO()).map(row => row.supplier.id as string), snapshot.draftCameBack);
+  }, [ready, pendingLatch, lens, snapshot.draft, snapshot.draftCameBack, snapshot.serverSeen, online, graceOver]);
 
   // ⚠️ THIS SECTION OWNS THE SCROLL for the moves inside itself (shell/scrollArea.tsx): its list and its suppliers are
   // separate addresses, so the shell's reset to the top at every address would send the list back to the top at each supplier

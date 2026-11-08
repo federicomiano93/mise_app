@@ -25,6 +25,7 @@
 // first use (src/firestore-access.spec.ts).
 
 import { categoryPatch, planBatches } from '@mise/shared/category-batches';
+import { dropNotedLine } from '@mise/shared/draft-journal';
 import { deletePlan } from '@mise/shared/ingredient-edit-model';
 import { findUsage } from '@mise/shared/ingredient-merge';
 import { buildPath } from '@mise/shared/location-id';
@@ -386,6 +387,10 @@ export function createFirestoreSuppliersSource(
     // creating a draft that holds nothing. ⚠️ A FieldPath, never the dotted string: an id is data, not a path.
     async clearDraftEntry(id) {
       const { fs, db } = await firestore();
+      // ⚠️ THE DRAFT JOURNAL (parity F-15) HOLDS NO NOTE ON THIS SCREEN, but it may hold one for this very line, left by Orders: a
+      // line that came back after its ingredient was deleted would sit in the document for ever, with no row to draw it. Only this
+      // line goes (draft.js clearIngredientFromDraft); the rest of the note is still somebody's typing.
+      dropNotedLine(locationId, checkId(id));
       await fs.updateDoc(
         fs.doc(db, draftsPath, DRAFT_ID),
         new fs.FieldPath('entries', checkId(id)), fs.deleteField(),

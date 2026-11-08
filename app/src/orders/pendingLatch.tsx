@@ -45,29 +45,34 @@ export function latchCanLook(seen: OrdersSnapshot['serverSeen'], online: boolean
 
 // ⚠️⚠️ THE BANNERS ARE LATCHED ONCE PER OPENING OF ORDERS (the original's `pendingChecked`): the draft changes on every keystroke,
 // another phone's included, and a banner that appeared under somebody's finger — or came back after it was answered — would be
-// worse than the one it reports. So the SET of suppliers found at the first complete look is kept here, above the routes (it
+// worse than the one it reports. EXCEPT WHEN A LINE THE LAST PAGE LEFT BEHIND HAS JUST COME BACK (parity F-15), maybe with last
+// night's day stamp: the question «this was never placed» was asked before it was here, so the look is made once more for each
+// round of that (`round` is the store's `draftCameBack`; the original resets its `pendingChecked`). Otherwise once. So the SET of suppliers found at the first complete look is kept here, above the routes (it
 // survives going to the confirm screen and back), and the screens show only those of them that `pendingNow` still returns with the
 // current data: a placed, restamped or discarded order goes by itself, and a refused restamp brings it back by itself. A supplier
 // that becomes pending later in the session is never added.
 type Latch = {
   // null until the first complete look.
   readonly latched: ReadonlySet<string> | null;
-  latch(ids: Iterable<string>): void;
+  // The round of the look that made `latched`: -1 before the first one.
+  readonly round: number;
+  // Keeps the set found by the look of `round`; a look of a round already kept is ignored (the once-per-opening rule).
+  latch(ids: Iterable<string>, round?: number): void;
 };
 
-const NOTHING: Latch = { latched: null, latch: () => undefined };
+const NOTHING: Latch = { latched: null, round: -1, latch: () => undefined };
 
 const PendingLatchContext = createContext<Latch>(NOTHING);
 
 export function PendingLatchProvider({ children }: { children: ReactNode }) {
-  const [latched, setLatched] = useState<ReadonlySet<string> | null>(null);
-  const done = useRef(false);
-  const latch = useCallback((ids: Iterable<string>) => {
-    if (done.current) return;
-    done.current = true;
-    setLatched(new Set(ids));
+  const [looked, setLooked] = useState<{ latched: ReadonlySet<string> | null; round: number }>({ latched: null, round: -1 });
+  const done = useRef(-1);
+  const latch = useCallback((ids: Iterable<string>, round = 0) => {
+    if (done.current >= round) return;
+    done.current = round;
+    setLooked({ latched: new Set(ids), round });
   }, []);
-  const value = useMemo(() => ({ latched, latch }), [latched, latch]);
+  const value = useMemo(() => ({ latched: looked.latched, round: looked.round, latch }), [looked, latch]);
   return <PendingLatchContext.Provider value={value}>{children}</PendingLatchContext.Provider>;
 }
 

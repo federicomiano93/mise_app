@@ -1,5 +1,6 @@
 import { describe, expect, test, vi } from 'vitest';
 import type { FirestoreKit } from '../session/firebaseBackend';
+import { readJournal, writeJournal } from '@mise/shared/draft-journal';
 import { createFirestoreSuppliersSource } from './suppliersSource';
 
 // The ingredient card's writes (step 3e-2) against a recording fake of the Firestore SDK: the shapes firestore.rules
@@ -105,6 +106,25 @@ describe('the ingredient card’s writes, as firestore.rules expect them', () =>
     expect(k1).toBe('updatedAt');
     expect(typeof v1).toBe('string');
     expect([k2, v2]).toEqual(['bakery', VENUE]);
+  });
+
+  test('⚠️ deleting an ingredient takes its line out of the draft journal of this device too (parity F-15), and only that line', async () => {
+    const map = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => { map.set(key, value); },
+      removeItem: (key: string) => { map.delete(key); },
+    });
+    try {
+      const line = (qty: number) => ({ row: { qty }, base: { qty: 0 } });
+      writeJournal(VENUE, { at: Date.now(), entries: { i1: line(5), i2: line(2) }, days: {} });
+      const { source } = make();
+      await source.clearDraftEntry('i1');
+      const left = readJournal(VENUE);
+      expect(Object.keys(left?.entries ?? {})).toEqual(['i2']);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   test('a draft line is read as stored; no draft, no line, or a line that is not a map read as null', async () => {

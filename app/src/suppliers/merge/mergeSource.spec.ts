@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
+import { readJournal, writeJournal } from '@mise/shared/draft-journal';
 import type { FirestoreKit } from '../../session/firebaseBackend';
 import { MERGE_TIMEOUT_MS, MergeError, createFirestoreMergeSource } from './mergeSource';
 
@@ -154,6 +155,25 @@ describe('the merge', () => {
     const [ref, field] = parts.fs.updateDoc.mock.calls[0]!;
     expect((ref as Ref).path).toBe(at('drafts/current'));
     expect((field as { segments: string[] }).segments, 'a FieldPath, never a dotted string').toEqual(['entries', 'b']);
+  });
+
+  test('⚠️ the merged-away line also leaves the draft journal of this device (parity F-15), and only that line', async () => {
+    const map = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => { map.set(key, value); },
+      removeItem: (key: string) => { map.delete(key); },
+    });
+    try {
+      const line = (qty: number) => ({ row: { qty }, base: { qty: 0 } });
+      writeJournal(VENUE, { at: Date.now(), entries: { b: line(5), c: line(2) }, days: {} });
+      const parts = make();
+      seed(parts);
+      await parts.source.mergeIngredients('a', 'b');
+      expect(Object.keys(readJournal(VENUE)?.entries ?? {})).toEqual(['c']);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   test('⚠️ fresh data: the queue drains, A and B are read again, and the usage is checked ONCE MORE before the first write', async () => {

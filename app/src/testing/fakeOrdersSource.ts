@@ -59,7 +59,9 @@ export type FakeOrdersSource = OrdersSource & {
   olderReads: Array<{ before: string; cursor: unknown }>;
   legacyReads: number;
   // The next older page / legacy read / rewrite transaction is refused (then the flag goes back to false).
-  failHistory: { older: boolean; legacy: boolean; rewrite: boolean };
+  failHistory: { older: boolean; legacy: boolean; rewrite: boolean; recent: boolean };
+  // Every getRecentHistoryFromServer asked for, by its `fromDate`.
+  recentReads: string[];
   // Runs inside the next rewrite transaction, after the read and before `decide` (another phone writing in that second).
   duringRewrite: (() => void) | null;
   // Every rewrite attempted, by record id.
@@ -244,7 +246,8 @@ export function fakeOrdersSource(init: {
     pageSize: 100,
     olderReads: [],
     legacyReads: 0,
-    failHistory: { older: false, legacy: false, rewrite: false },
+    failHistory: { older: false, legacy: false, rewrite: false, recent: false },
+    recentReads: [],
     duringRewrite: null,
     rewrites: [],
 
@@ -268,6 +271,16 @@ export function fakeOrdersSource(init: {
         cursor: records.length ? (records[records.length - 1] as StoredDoc).id : cursor,
         done: records.length < source.pageSize,
       };
+    },
+
+    // `date >= fromDate`, as the server holds the records now.
+    async getRecentHistoryFromServer(fromDate) {
+      source.recentReads.push(fromDate);
+      await Promise.resolve();
+      if (source.failHistory.recent) throw new Error('unavailable');
+      return [...source.records.entries()]
+        .filter(([, r]) => typeof r.date === 'string' && r.date >= fromDate)
+        .map(([id, r]) => ({ ...structuredClone(r), id }) as StoredDoc);
     },
 
     async getLegacyHistory() {

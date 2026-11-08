@@ -52,6 +52,7 @@ import {
 import type { SupplierRecord } from '@mise/shared/archive';
 import { confirmedEntries } from '@mise/shared/untold-changes';
 import { markBusy as markBusyOfSession } from '../session/busy';
+import type { CopyStorage } from '@mise/shared/list-copy';
 import { createDraftSync, EMPTY_DRAFT } from './draftSync';
 import type { DraftDays, DraftEntries, DraftEntry, DraftSync, DraftSyncDeps, DraftView } from './draftSync';
 import { buildOrdersLens } from './ordersLens';
@@ -98,6 +99,9 @@ export interface OrdersSnapshot {
   // The order in progress: the server's document with this phone's unsent typing on top (draftSync.ts).
   readonly draft: DraftView;
   readonly draftLoaded: boolean;
+  // Counts the times lines the last page left (this device's note, parity F-15) have come back onto the screen. The «never placed»
+  // question was asked before they were here, so the pending check looks again whenever this changes (pendingLatch.tsx).
+  readonly draftCameBack: number;
   // Whether the SERVER has answered for the suppliers, the ingredients and the draft (not only this phone's own database): the
   // pending check looks once, and a look at a copy days old would miss an order typed on another phone (step 3f-6, review).
   readonly serverSeen: { readonly suppliers: boolean; readonly ingredients: boolean; readonly draft: boolean };
@@ -242,6 +246,13 @@ export interface OrdersDeps {
   // Whether the phone believes it is connected. ⚠️ Placing and clearing are refused offline (parity X3): Firestore would
   // keep the record and the clear waiting, to land in two different moments of connectivity — how an order gets lost.
   online(): boolean;
+  // This device's note of unconfirmed typing (parity F-15): its storage and clock. Absent = no note (a spec). The venue comes
+  // from createOrdersStore.
+  journal?: { storage: CopyStorage | null; now(): number };
+  // Runs `run` whenever the page goes out of sight while it is still alive (switching app, locking the screen), NOT when it is
+  // going away for good (pagehide comes first there: there is no time left, and a write that did get through would leave its note
+  // behind to be read as unsent after a colleague may have placed that order). Returns the way to stop listening.
+  onHidden?(run: () => void): () => void;
 }
 
 export interface OrdersStore {
@@ -333,7 +344,27 @@ export function browserOrdersDeps(): OrdersDeps {
       clearTimer: handle => clearTimeout(handle as ReturnType<typeof setTimeout>),
     },
     online: () => navigator.onLine,
+    journal: { storage: browserStorage(), now: () => Date.now() },
+    onHidden: run => {
+      let leaving = false;
+      const gone = () => { leaving = true; };
+      const back = () => { leaving = false; };
+      const changed = () => { if (document.visibilityState === 'hidden' && !leaving) run(); };
+      window.addEventListener('pagehide', gone);
+      window.addEventListener('pageshow', back);
+      document.addEventListener('visibilitychange', changed);
+      return () => {
+        window.removeEventListener('pagehide', gone);
+        window.removeEventListener('pageshow', back);
+        document.removeEventListener('visibilitychange', changed);
+      };
+    },
   };
+}
+
+// localStorage can throw on being touched (blocked, private mode): then there is no note, and typing still works.
+function browserStorage(): CopyStorage | null {
+  try { return globalThis.localStorage ?? null; } catch { return null; }
 }
 
 // A switched-off line with a quantity is ordered, recorded and cleared like any other (decision T10): the record's own lens
@@ -343,12 +374,12 @@ export function orderable(lines: readonly LensIngredient[]): LensIngredient[] {
   return lines.map(line => ((line as { active?: unknown }).active === false ? { ...line, active: true } : line));
 }
 
-export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = browserOrdersDeps()): OrdersStore {
+export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = browserOrdersDeps(), locationId = ''): OrdersStore {
   let snapshot: OrdersSnapshot = {
     suppliers: [], suppliersLoaded: false, suppliersBroken: false,
     ingredients: [], ingredientsLoaded: false, ingredientsBroken: false,
     config: normalizeOrdersConfig(null), configLoaded: false, configAnswered: false, deliveryCheck: deliveryCheckOf(null),
-    draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false,
+    draft: EMPTY_DRAFT, draftLoaded: false, draftCameBack: 0, draftBroken: false, draftSaveFailed: false,
     serverSeen: { suppliers: false, ingredients: false, draft: false },
     placing: [],
     history: [], historyLoaded: false, historyBroken: false, suggester: NO_SUGGESTIONS,
@@ -359,6 +390,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
   const listeners = new Set<() => void>();
   const messageListeners = new Set<(message: OrdersMessage) => void>();
   let stops: Array<() => void> = [];
+  // The page going out of sight (deps.onHidden): listened to while the section is started.
+  let stopHidden: (() => void) | null = null;
   let releaseBusy: (() => void) | null = null;
   // The section was left: nothing can be typed any more, so the marker waits only for the writes still in the air.
   let stopped = false;
@@ -411,6 +444,18 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     nowIso: deps.draft.nowIso,
     setTimer: deps.draft.setTimer,
     clearTimer: deps.draft.clearTimer,
+    // ⚠️ The note is this device's, for this venue (parity F-15). Without a venue or without `deps.journal` there is none.
+    journal: deps.journal && locationId ? {
+      lid: locationId,
+      storage: deps.journal.storage,
+      now: deps.journal.now,
+      ordersSince: fromDate => source.getRecentHistoryFromServer(fromDate),
+      // The sync arms the autosave right after this: the marker is held until it has gone, like any typing.
+      onCameBack: view => {
+        holdBusy();
+        set({ draft: view, draftCameBack: snapshot.draftCameBack + 1 });
+      },
+    } : undefined,
     onResult: ok => {
       if (ok && snapshot.draftSaveFailed) {
         set({ draftSaveFailed: false });
@@ -654,6 +699,14 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     start() {
       if (stops.length) return;
       stopped = false;
+      // The venue is certainly open here: this device's note is read now, and this store becomes the one writer of it.
+      sync.open();
+      // The page going out of sight is the moment to send what is waiting (switching app or locking the screen hides it while it
+      // is still alive, with time for the write to reach the browser's own database).
+      stopHidden?.();
+      stopHidden = deps.onHidden?.(() => {
+        if (sync.waiting()) sync.flush().then(dropBusyWhenSaved, () => { /* said through onResult, which also releases the marker */ });
+      }) ?? null;
       // Fixed before the first older page is asked for; once a page is in, the window it was cut from stays.
       if (!olderLoader) windowStart = liveHistoryStart(parseISODate(deps.today()));
       stops = [
@@ -692,7 +745,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         // no copy of it. The lines are drawn only once the server has answered or the copy holds the document.
         source.watchDraft(
           (data, meta) => set({
-            draft: sync.receive(data),
+            draft: sync.receive(data, meta),
             draftLoaded: snapshot.draftLoaded || data !== null || meta.fromServer,
             draftBroken: false,
             serverSeen: meta.fromServer && !snapshot.serverSeen.draft ? { ...snapshot.serverSeen, draft: true } : snapshot.serverSeen,
@@ -720,6 +773,9 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     },
 
     stop() {
+      stopHidden?.();
+      stopHidden = null;
+      sync.close();
       closePrices();
       for (const stop of stops) stop();
       stops = [];

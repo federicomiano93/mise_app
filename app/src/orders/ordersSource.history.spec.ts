@@ -164,3 +164,27 @@ describe('ordersSource — rewriting one record', () => {
     expect(c.done).toStrictEqual([]);
   });
 });
+
+// The draft journal's check (parity F-15) asks the orders of the SERVER, never the browser's copy: a copy that does not know an
+// order another phone placed is the very hole the check closes. The current app pins the same lines in tests/draft-journal.test.mjs.
+describe('ordersSource — the orders the journal checks', () => {
+  it('reads the records from the day on, under the open venue, with getDocsFromServer and never getDocs', async () => {
+    const calls: Array<[string, ...unknown[]]> = [];
+    const fs = {
+      collection: (_db: unknown, path: string) => { calls.push(['collection', path]); return { path }; },
+      where: (field: string, op: string, value: unknown) => { calls.push(['where', field, op, value]); return { field, op, value }; },
+      query: (ref: unknown, ...constraints: unknown[]) => ({ ref, constraints }),
+      getDocsFromServer: async () => { calls.push(['getDocsFromServer']); return { docs: [{ id: '2026-10-30_mill', data: () => ({ date: '2026-10-30' }) }] }; },
+      getDocs: async () => { calls.push(['getDocs']); return { docs: [] }; },
+    };
+    const kit = { fs, db: {} } as unknown as FirestoreKit;
+    const source = createFirestoreOrdersSource(() => Promise.resolve(kit), 'bakery');
+    const records = await source.getRecentHistoryFromServer('2026-10-25');
+    expect(records).toEqual([{ date: '2026-10-30', id: '2026-10-30_mill' }]);
+    expect(calls).toEqual([
+      ['collection', 'locations/bakery/orders-history'],
+      ['where', 'date', '>=', '2026-10-25'],
+      ['getDocsFromServer'],
+    ]);
+  });
+});
