@@ -10,6 +10,8 @@ const code = import.meta.glob<string>(
   ['../**/*.ts', '../**/*.tsx', '!../**/*.spec.*', '!../**/*.test.*'],
   { query: '?raw', import: 'default', eager: true },
 );
+// The service worker's source (app/sw/worker.js, outside src/): it runs on the lab tablet's Chrome 101 too.
+const worker = import.meta.glob<string>('../../sw/*.js', { query: '?raw', import: 'default', eager: true });
 
 describe('app/src uses nothing newer than Chrome 101', () => {
   it('reads the source it checks, and sees what it forbids', () => {
@@ -25,5 +27,10 @@ describe('app/src uses nothing newer than Chrome 101', () => {
 
   it('has no JS or DOM API newer than Chrome 101', () => {
     expect(findings(code, JS_TOKENS, codeWithoutComments)).toEqual([]);
+  });
+
+  it('nor does the service worker', () => {
+    expect(Object.keys(worker)).toEqual(['../../sw/worker.js']);
+    expect(findings(worker, JS_TOKENS, codeWithoutComments)).toEqual([]);
   });
 });

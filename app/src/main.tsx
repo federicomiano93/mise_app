@@ -16,6 +16,7 @@ import { createFirebaseBackend } from './session/firebaseBackend';
 import { createSession } from './session/session';
 import { SessionGate } from './session/SessionGate';
 import { SessionProvider } from './session/SessionContext';
+import { browserServiceWorkerEnv, watchServiceWorker } from './shell/serviceWorker';
 import { installViewportHeight } from './shell/viewportHeight';
 import { createTelemetrySinks } from './telemetry/sinks';
 import { startTelemetry } from './telemetry/startTelemetry';
@@ -64,6 +65,13 @@ document.documentElement.lang = wanted;
 
 // Where the browser has no dvh (the lab tablet's Chrome 101), the stylesheets read the visible height from here.
 installViewportHeight();
+
+// The service worker (step 5): same address and name as the current app's, so installed phones update to Mise 2
+// and, after a revert, back. Built app only — `npm run dev` and the specs register nothing. After the page has
+// loaded, so its own files come first; a new release is let in only when nobody is editing (shell/serviceWorker.ts).
+if (import.meta.env.PROD) {
+  window.addEventListener('load', () => { void watchServiceWorker(browserServiceWorkerEnv(import.meta.env.BASE_URL)); });
+}
 
 void loadLanguage(wanted).then(({ lang, messages }) => {
   createRoot(container).render(

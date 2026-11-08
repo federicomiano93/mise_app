@@ -1,12 +1,15 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { miseVersion } from './build-version.ts';
+import { miseServiceWorker } from './sw-plugin.ts';
 
 // The address the app is served under is given at build time (`vite build --base=/mise2/`
 // on the preview), so the same source serves the preview path today and /mise_app/ at the
 // switch. Locally (`npm run dev`) it is the root.
 export default defineConfig({
-  plugins: [react()],
+  // miseServiceWorker: the build's sw.js, its precache list, and the manifest and icons the current app shares
+  // (sw-plugin.ts says why it is not Workbox). Build only: the dev server and the specs register no worker.
+  plugins: [react(), miseServiceWorker()],
   // The release stamp the telemetry carries (src/telemetry/version.ts). Computed once, when the
   // config loads; Vitest reads this same file, so specs see the same constant.
   define: {

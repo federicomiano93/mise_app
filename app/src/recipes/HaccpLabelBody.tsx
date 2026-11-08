@@ -20,6 +20,7 @@ import type { RecipeAllergens } from '@mise/shared/recipe-allergen-model';
 import { allergensOn } from '@mise/shared/venue-features';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
+import { markBusy } from '../session/busy';
 import { useSession } from '../session/SessionContext';
 import { announceAction } from '../telemetry/usage';
 import { useAllergenTables } from './allergenTables';
@@ -182,6 +183,10 @@ function HaccpLabelReady({ recipe, fieldsKey, size, declared }: ReadyProps) {
   const [storageTyped, setStorageTyped] = useState<string | null>(null);
   const storage = storageTyped ?? labelTextsOf(recipe).haccpStorage;
   const [quantity, setQuantity] = useState('');
+  // What the person typed for this print (not the name the roster fills in): an update's reload would lose it, and the
+  // lab tablet stays on this screen for hours (session/busy.ts).
+  const typedHere = quantity !== '' || lotTyped !== null || storageTyped !== null || Object.keys(datesTyped).length > 0;
+  useEffect(() => (typedHere ? markBusy() : undefined), [typedHere]);
 
   // ⚠️ THE ROSTER IS READ ONCE, ONLY WHEN THE FIELD IS PRINTED, and what it gives is a starting point: a person who has typed
   // in the box before the answer comes keeps their words. The tablet in the lab is one shared account, so the name is editable.

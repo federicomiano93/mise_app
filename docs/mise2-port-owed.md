@@ -146,7 +146,8 @@ Before the switch, not ports:
     **switch an ingredient off from its row, fold unused, mark hand-made** (`4de37fec`, `89fad957`, `d2dad140`, `c20f812b`, `a9e55262`,
     `2bd4e58e`, `c2b95402`) — «Not in use» group DONE in Orders (`564980cd`, branch `feature/mise2-ingredient-not-in-use`); NOT verified: the
     empty-flash fixes, the scroll/focus keep on Deactivate/Reactivate, «hand-made» mark, the card stopping resending `active`. Size S (verification).
-17. **Update gate held on invoice import / Pastries editor** (`7fe1b955`, `2ae76d58`) — N/A until Mise 2 has a service worker (step 5): remember
+17. **Update gate held on invoice import / Pastries editor** (`7fe1b955`, `2ae76d58`) — DONE with the service worker (8 Nov 2026):
+    the invoice import and the Pastries editor hold `markBusy()`, and so does every editor (`app/src/session/busy.ts` lists them). Before: remember
     `markBusy()` in every editor (already in piano-mise-2).
 
 ## D. Suppliers / invoice import

@@ -1,7 +1,8 @@
-import { useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Navigate } from 'react-router';
 import { useT } from '../i18n/useT';
+import { markBusy } from '../session/busy';
 import { KEEP_FOCUS } from '../shell/Page';
 import { Button } from '../ui/Button';
 import { useCalculator } from './CalculatorContext';
@@ -31,6 +32,10 @@ export function WhatsappPicker({ clientId }: { clientId: string | null }) {
   const input = useRef<HTMLInputElement>(null);
   const [typed, setTyped] = useState('');
   const [warning, setWarning] = useState('');
+  // A line typed in the box and not added yet is not in the editor's copy, so the editor's own hold may be off: an
+  // update's reload would lose it (session/busy.ts).
+  const typing = typed.trim() !== '';
+  useEffect(() => (typing ? markBusy() : undefined), [typing]);
 
   const lines = linesOf(working, clientId);
   if (lines === undefined) {
