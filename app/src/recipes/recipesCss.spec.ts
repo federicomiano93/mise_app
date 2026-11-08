@@ -4,6 +4,7 @@ import detailCss from './RecipesDetail.module.css?raw';
 import listCss from './RecipesList.module.css?raw';
 import sectionCss from './RecipesSection.module.css?raw';
 import viewCss from './RecipeView.module.css?raw';
+import allergenCardCss from './AllergenCard.module.css?raw';
 
 // What a stylesheet decides and jsdom cannot see: jsdom applies no layout, so a row too short to tap, a
 // card that clips the bar stuck to its top or a pane that does not scroll on its own is invisible to
@@ -111,5 +112,30 @@ describe('the recipe screen', () => {
   it('draws the pane\'s waiting and prompt states in the same card shape', () => {
     expect(declaration(rule(detailCss, '.waiting'), 'border-radius')).toBe('var(--r-lg)');
     expect(declaration(rule(detailCss, '.prompt'), 'border')).toContain('dashed');
+  });
+});
+
+// Measured on 6 Nov 2026 at 296px: the allergen card's head was 196px wide, and the title, the state and the chevron on one
+// unwrapping row pushed the chevron 17–19px past the card's edge (both states, Italian and English). The same fix as the
+// ingredient card's folds (PR #467).
+describe('the allergen card\'s head never pushes its chevron off the card', () => {
+  it('the title and the state wrap together, as a group that may shrink', () => {
+    const words = rule(allergenCardCss, '.words');
+    expect(declaration(words, 'display')).toBe('flex');
+    expect(declaration(words, 'flex-wrap')).toBe('wrap');
+    expect(declaration(words, 'flex')).toBe('1 1 auto');
+    expect(declaration(words, 'min-width')).toBe('0');
+    expect(declaration(words, 'gap')).toBe('var(--s1) var(--s3)');
+  });
+
+  it('the head itself stays one row at least a thumb tall, and the chevron never shrinks', () => {
+    const toggle = rule(allergenCardCss, '.toggle');
+    expect(declaration(toggle, 'flex-wrap')).toBeUndefined();
+    expect(declaration(toggle, 'min-height')).toBe('var(--hit)');
+    expect(declaration(rule(allergenCardCss, '.chevron'), 'flex')).toBe('none');
+  });
+
+  it('nothing in the card clips', () => {
+    expect(withoutComments(allergenCardCss)).not.toMatch(/overflow(-[xy])?:\s*(hidden|auto|scroll|clip)/);
   });
 });

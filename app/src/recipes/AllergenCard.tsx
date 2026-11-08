@@ -105,11 +105,15 @@ export function AllergenCard({ recipe }: { recipe: CatalogueRecipe }) {
           aria-controls={bodyId}
           onClick={() => { setOpen(!open); }}
         >
-          <span className={styles.label}>{t('cat.alg.title')}</span>
-          {/* A space between the two, or the accessible name reads «Allergensnot declared». */}
-          {' '}
-          <span className={`${styles.state} ${incomplete ? styles.blocked : styles.ok}`}>
-            {incomplete ? t('cat.alg.notDeclared') : t('cat.alg.declared')}
+          {/* The words wrap as one group, so on a narrow phone the state drops whole under the title and the chevron keeps its
+              place on the right (at 296px the three pieces did not fit on one row and the chevron was pushed past the edge). */}
+          <span className={styles.words}>
+            <span className={styles.label}>{t('cat.alg.title')}</span>
+            {/* A space between the two, or the accessible name reads «Allergensnot declared». */}
+            {' '}
+            <span className={`${styles.state} ${incomplete ? styles.blocked : styles.ok}`}>
+              {incomplete ? t('cat.alg.notDeclared') : t('cat.alg.declared')}
+            </span>
           </span>
           <ChevronDown aria-hidden="true" className={styles.chevron} />
         </button>

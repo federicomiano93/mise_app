@@ -69,6 +69,21 @@ describe('the allergen card of a complete recipe', () => {
     expect(algCard().getByText('From the suppliers’ specifications. It does not cover what your own kitchen may add.')).not.toBeVisible();
   });
 
+  it('holds the title and the state in one group, the chevron beside it, so a narrow phone wraps the words, not the chevron', async () => {
+    await open([CAKE], [FLOUR, MILK, SALT], 'cake');
+    await screen.findByText('Wheat, Milk');
+    const [words, chevron, ...rest] = [...algButton().children];
+    expect(rest).toHaveLength(0);
+    expect(words?.tagName).toBe('SPAN');
+    // The group carries the wrapping rule (recipesCss.spec.ts pins what `.words` says).
+    expect(words?.className).toMatch(/(^|_)words(_|$)/);
+    expect(words?.children).toHaveLength(2);
+    expect(chevron?.tagName.toLowerCase()).toBe('svg');
+    expect(chevron).toHaveAttribute('aria-hidden', 'true');
+    // The accessible name is unchanged: the space between title and state is still there.
+    expect(algButton()).toHaveAccessibleName('Allergens fully declared');
+  });
+
   it('is a real heading with the disclosure button inside it, and opens CLOSED', async () => {
     const { user } = await open([CAKE], [FLOUR, MILK, SALT], 'cake');
     await screen.findByText('Wheat, Milk');

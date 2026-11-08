@@ -1822,3 +1822,19 @@ rows below 14 pt lower; a recipe without dividers has none), the full-screen vie
 
 Review (opus, 5 Nov 2026): no data defect; fixed the reorder rows keeping their old place's line classes after a move (React Aria
 caches a row by its item: `dependencies={[rows]}`) and the full-screen view without lines.
+
+## Recipe screen: the allergen card's head at 296px as built (6 Nov 2026)
+
+Measured before touching anything (`algprobe/mise-drive/probe-mise2-recipe-allergen-heads.mjs`): at 296px the head of the recipe
+screen's allergen card is 196px wide, and its title, state pill and chevron sat on one row that could not wrap. The chevron was
+pushed 17–19px past the head's edge (button `scrollWidth` 213–215 against 196) — both states («dichiarati» / «non dichiarati»,
+«fully declared» / «not declared»), Italian and English. At 1024 and 360 it fitted. The Allergen sheet's «the law here» head
+(title and chevron only) fitted at every width.
+
+- The same fix as the ingredient card's folds (PR #467): the title and the state sit in one wrapping group (`.words` in
+  `AllergenCard.module.css`, tokens only), the chevron beside it. When the row is too narrow the state drops whole under the
+  title; the chevron stays on the right edge and the head stays 48px tall. On the tablet nothing changes.
+- The accessible name is unchanged («Allergens fully declared»): the space between title and state is still there.
+- Pinned by `recipesCss.spec.ts` (what `.words` says, the head row never wrapping, the chevron never shrinking, no `overflow`
+  in the card) and `RecipesSection.allergens.spec.tsx` (the group carries the class, the chevron is outside it). Measured
+  after: 60/60 (was 56/60) at 1024/360/296 in IT and EN, axe clean.
