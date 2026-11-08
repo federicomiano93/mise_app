@@ -1,8 +1,9 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import { Check, History, Pencil } from 'lucide-react';
+import { Check, Copy, History, Pencil } from 'lucide-react';
 import { Link, useNavigate } from 'react-router';
-import { MAX_QTY } from '@mise/shared/pastries-model';
+import { workDate } from '@mise/shared/pastries-log-model';
+import { MAX_QTY, WEEKDAYS, otherWeekdays } from '@mise/shared/pastries-model';
 import type { Weekday } from '@mise/shared/pastries-model';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
@@ -10,6 +11,7 @@ import { announceAction } from '../telemetry/usage';
 import { Button } from '../ui/Button';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
+import { CopyDayPicker } from './CopyDayPicker';
 import { editRecordedDayQuestion } from './lockQuestion';
 import { usePastries, usePastriesStore } from './PastriesContext';
 import { FROM_DAY } from './pastriesNav';
@@ -27,6 +29,8 @@ type Props = {
   // Set by the editor or Records when they hand the person back to the day: the pencil that
   // opened the editor takes the focus, so a keyboard or screen-reader user lands where they left.
   handBackFocus: RefObject<boolean>;
+  // Set by the editor of a COPY when it hands the person back: «Copy day» takes the focus instead.
+  handBackToCopy: RefObject<boolean>;
 };
 
 // One day's list and the fast way to correct one number. The screen somebody reads standing up at
@@ -54,7 +58,7 @@ type Props = {
 // own cache counts as an answer, so working offline is untouched — except an EMPTY answer from it on
 // a phone that never had the list (pastriesStore.ts, believable()). The wording of an empty day
 // follows the days only.
-export function DayPanel({ day, opening, handBackFocus }: Props) {
+export function DayPanel({ day, opening, handBackFocus, handBackToCopy }: Props) {
   const { t } = useT();
   const store = usePastriesStore();
   const { days, daysLoaded, confirmedAnsweredOnce } = usePastries();
@@ -75,7 +79,15 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
   const pencil = useRef<HTMLButtonElement>(null);
   const confirmButton = useRef<HTMLButtonElement>(null);
   const editButton = useRef<HTMLButtonElement>(null);
+  const copyButton = useRef<HTMLButtonElement>(null);
   const confirming = useRef(false);
+  // A second tap on «Copy day» while one of its questions is open does nothing.
+  const copying = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   // The day this panel shows NOW, for an answer that arrives after the person has moved on.
   const shownDay = useRef(day);
   // A swap of the two bottom buttons this phone asked for and is waiting to see (see below).
@@ -94,11 +106,18 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
   }
 
   // Back from the editor or Records: the pencil takes the focus (once).
+  // Back from the editor of a COPY: the button that started it takes the focus, not the pencil.
   useEffect(() => {
+    if (handBackToCopy.current) {
+      handBackToCopy.current = false;
+      handBackFocus.current = false;
+      copyButton.current?.focus();
+      return;
+    }
     if (!handBackFocus.current) return;
     handBackFocus.current = false;
     pencil.current?.focus();
-  }, [handBackFocus]);
+  }, [handBackFocus, handBackToCopy]);
 
   // The box takes the focus when its row opens.
   useEffect(() => {
@@ -164,6 +183,77 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
   async function pressPencil() {
     if (!(await requestEdit()) || shownDay.current !== day) return;
     void navigate(editorPath(day), { state: FROM_DAY });
+  }
+
+  // ⚠️ «COPY DAY» WRITES NOTHING: it opens the TARGET day's editor, pre-filled, and only that
+  // editor's own Save writes (and, for a recorded target, grants the permission to edit — a copy
+  // thrown away must not leave a recorded day unlocked).
+  async function copyDay() {
+    if (copying.current) return;
+    // The same rule as the rows: until the answers are in, the list on screen may be only this
+    // phone's old copy. Unlike the pencil it does not open by itself later (a picker appearing
+    // unasked would be odd), so it says to try again.
+    const first = store.getSnapshot();
+    if (!(first.daysLoaded && first.confirmedAnsweredOnce)) {
+      say(t('past.copyNotLoadedYet'));
+      return;
+    }
+    const from = day;
+    const fromLabel = label;
+    if (first.days[from].items.length === 0) {
+      say(t('past.nothingToCopy', { day: fromLabel }));
+      return;
+    }
+    copying.current = true;
+    try {
+      const counts = Object.fromEntries(WEEKDAYS.map(d => [d, first.days[d].items.length])) as Record<Weekday, number>;
+      // The next day is the usual target and is already chosen.
+      const choice: RefObject<Weekday> = { current: otherWeekdays(from)[0] ?? from };
+      const picked = await confirm({
+        title: t('past.copyDayQ', { day: fromLabel }),
+        message: t('past.copyPickDay'),
+        okLabel: t('past.copyDayGo'),
+        cancelLabel: t('common.cancel'),
+        body: <CopyDayPicker from={from} counts={counts} choice={choice} />,
+      });
+      if (!picked) return;
+      const to = choice.current;
+      const toLabel = weekdayLabel(t, to);
+
+      // The dialogs take time, and a snapshot from another phone can land during them: the screen
+      // may have moved on, the source may be gone, the target may have filled up or been confirmed.
+      // So everything is looked at again after each answer, and each question is asked at most once.
+      let agreedToReplace = false;
+      let agreedToEdit = false;
+      for (;;) {
+        if (!mounted.current || shownDay.current !== from) return;
+        const { days } = store.getSnapshot();
+        if (days[from].items.length === 0) {
+          say(t('past.nothingToCopy', { day: fromLabel }));
+          return;
+        }
+        if (days[to].items.length > 0 && !agreedToReplace) {
+          const replace = await confirm({
+            title: t('past.copyReplaceQ', { day: toLabel }),
+            message: t('past.copyReplaces', { n: days[to].items.length, day: toLabel, from: fromLabel }),
+            okLabel: t('ui.replace'),
+            cancelLabel: t('common.cancel'),
+          });
+          if (!replace) return;
+          agreedToReplace = true;
+        } else if (store.isLocked(to) && !agreedToEdit) {
+          // ⚠️ NO store.grantEdit HERE: the permission comes with the copy's Save.
+          if (!(await confirm(editRecordedDayQuestion(t, toLabel)))) return;
+          agreedToEdit = true;
+        } else {
+          break;
+        }
+      }
+      const copy = { from, editAgreedOn: agreedToEdit ? workDate(Date.now()) : null };
+      void navigate(editorPath(to), { state: { ...FROM_DAY, copy } });
+    } finally {
+      copying.current = false;
+    }
   }
 
   function commit(index: number, key: string) {
@@ -310,7 +400,13 @@ export function DayPanel({ day, opening, handBackFocus }: Props) {
         </div>
       </div>
       <div className={styles.foot}>
-        <Link to={RECORDS_PATH} state={FROM_DAY} className={styles.records}>
+        {/* ⚠️ ALWAYS BUILT, like the bottom row: the answers arrive live, and it says so itself
+            when pressed too early. */}
+        <Button ref={copyButton} variant="bare" className={styles.footAction} onPress={() => { void copyDay(); }}>
+          <Copy aria-hidden="true" />
+          {t('past.copyDay')}
+        </Button>
+        <Link to={RECORDS_PATH} state={FROM_DAY} className={styles.footAction}>
           <History aria-hidden="true" />
           {t('past.records')}
         </Link>
