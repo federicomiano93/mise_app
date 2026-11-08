@@ -74,3 +74,24 @@ describe.each([
     expect(m.kioskSectionsFromData({ suppliers, history: [], today: '' })).toStrictEqual([]);
   });
 });
+
+// The current app's PR #470: a supplier closed as not ordered today is not «to order» on the rest screen.
+describe.each([
+  ['shared/ (TypeScript)', ported],
+  ['js/ (current app)', legacy],
+] as const)('%s — a supplier closed as not ordered', (_name, m) => {
+  const FRIDAY = '2026-11-06';
+  const ALBA = { id: 'alba', name: 'Alba', orderDays: ['Friday'], active: true };
+  const BRAVA = { id: 'brava', name: 'Brava', orderDays: ['Friday'], active: true };
+
+  test('is not listed as to order; with nothing else to order there is no such section', () => {
+    const sections = m.kioskSectionsFromData({
+      suppliers: [ALBA, BRAVA], history: [], today: FRIDAY, weekStartsOn: 'Sunday', skipped: { brava: FRIDAY },
+    });
+    expect(sections.find(s => s.titleKey === 'kiosk.rest.toOrderTitle')?.names).toStrictEqual(['Alba']);
+    const none = m.kioskSectionsFromData({
+      suppliers: [BRAVA], history: [], today: FRIDAY, weekStartsOn: 'Sunday', skipped: { brava: FRIDAY },
+    });
+    expect(none.find(s => s.titleKey === 'kiosk.rest.toOrderTitle')).toBeUndefined();
+  });
+});
