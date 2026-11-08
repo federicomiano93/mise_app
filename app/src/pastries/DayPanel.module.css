@@ -129,10 +129,14 @@
   background: var(--surface);
 }
 
-/* After the bottom row, in the normal flow: the end of the panel. */
+/* After the bottom row, in the normal flow: the end of the panel. «Copy day» and Records sit side
+   by side and wrap onto two lines on the narrowest phone (296px). */
 .foot {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
+  gap: var(--s2) var(--s4);
   padding: var(--s2) var(--s4) var(--s4);
 }
 
@@ -153,20 +157,29 @@
   font-weight: 600;
 }
 
-/* A quiet link to Records, centred under the button: a place to go, not an action of this day. */
-.records {
+/* The quiet actions under the button: Records (a link) and «Copy day» (a button). They share one
+   look, so the button reads as the same kind of thing as its neighbour; `bare` gives the button no
+   look of its own, which is why the resets are here. */
+.footAction {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: var(--s2);
   min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 0;
   border-radius: var(--r-md);
+  background: transparent;
+  color: var(--accent-ink);
+  font: inherit;
   font-weight: 600;
   text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 @media (hover: hover) {
-  .records:hover {
+  .footAction:hover {
     background: var(--sunken);
   }
 }

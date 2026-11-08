@@ -22,7 +22,7 @@ once its port lands: remove the marker then. `tests/mise2-port-owed.test.mjs` pr
 point at the items below, which say what and where.
 
 Data loss first:
-- [ ] 1. Pastries row notes and «Copy day» (a Mise 2 day save erases the notes) — the notes are ported (8 Nov, no longer erased); «Copy day» still owed
+- [x] 1. Pastries row notes and «Copy day» (a Mise 2 day save erases the notes) — notes ported 8 Nov (PR #492); «Copy day» ported 8 Nov (`feature/mise2-copy-day`, PR into the release branch; `docs/parity/pastries.md`, «Copy day as built»)
 - [x] 2. Recipe categories written one word at a time (arrayUnion / arrayRemove), never the whole list — ported 8 Nov (PR into the release branch, `feature/mise2-port-data-loss`)
 - [x] 4. Food cost `noWeightLoss` kept by a Mise 2 product save — ported 8 Nov with the switch (`feature/mise2-port-data-loss`)
 - [ ] 6. Orders draft journal and corrections in flight (F-15, F-16)
@@ -63,6 +63,8 @@ Before the switch, not ports:
 ## A. Data-loss risks (port BEFORE the switch)
 
 1. **Pastries row notes + «Copy day»** — PR #446 (v1.133.0), also `ae7a415a` (a discarded copy must not leave a recorded day locked).
+   DONE 8 Nov 2026: the notes with PR #492, «Copy day» with `feature/mise2-copy-day` (what was built and every difference:
+   `docs/parity/pastries.md`, «Row notes as built» and «Copy day as built»). The description below is how it stood before.
    DATA LOSS: YES. `pastries/{Weekday}.items[]` is `{name, qty, note?}` (note ≤ 40 chars, key absent when empty, also frozen in
    `pastry-logs`). Mise 2 rebuilds rows as `{name, qty}` (`app/src/pastries/editorModel.ts:26,31`) and writes the day whole,
    so the first save erases every note of that day. Mise 2: NONE (`MAX_ITEM_NOTE_LENGTH`, `cleanItemNote`, `otherWeekdays` absent from

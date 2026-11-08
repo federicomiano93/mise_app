@@ -73,6 +73,8 @@ function PastriesScreen({ opening }: { opening: Weekday }) {
   // Set by the editor and Records when they hand the person back to the day, read once by the day
   // panel that mounts next (it gives the focus back to the pencil).
   const handBackFocus = useRef(false);
+  // The same, for the editor of a COPY: the day panel then focuses «Copy day», the button that began it.
+  const handBackToCopy = useRef(false);
 
   // A day that is not a weekday, or an address that leads nowhere: back to the start of Pastries.
   if (view.kind === 'unknown') return <Navigate to={PASTRIES_PATH} replace state={KEEP_FOCUS} />;
@@ -101,7 +103,7 @@ function PastriesScreen({ opening }: { opening: Weekday }) {
         </div>
         <div className={styles.detail}>
           <PartBoundary resetKey={pathname}>
-            <Detail view={view} opening={opening} handBackFocus={handBackFocus} />
+            <Detail view={view} opening={opening} handBackFocus={handBackFocus} handBackToCopy={handBackToCopy} />
           </PartBoundary>
         </div>
       </div>
@@ -109,15 +111,22 @@ function PastriesScreen({ opening }: { opening: Weekday }) {
   );
 }
 
-type DetailProps = { view: ShownView; opening: Weekday; handBackFocus: RefObject<boolean> };
+type DetailProps = {
+  view: ShownView;
+  opening: Weekday;
+  handBackFocus: RefObject<boolean>;
+  handBackToCopy: RefObject<boolean>;
+};
 
-function Detail({ view, opening, handBackFocus }: DetailProps) {
+function Detail({ view, opening, handBackFocus, handBackToCopy }: DetailProps) {
   switch (view.kind) {
     case 'day':
-      return <DayPanel day={view.day ?? opening} opening={opening} handBackFocus={handBackFocus} />;
+      return (
+        <DayPanel day={view.day ?? opening} opening={opening} handBackFocus={handBackFocus} handBackToCopy={handBackToCopy} />
+      );
     // Keyed on the day: another day's editor is a fresh working copy, never the old one renamed.
     case 'editor':
-      return <Editor key={view.day} day={view.day} handBackFocus={handBackFocus} />;
+      return <Editor key={view.day} day={view.day} handBackFocus={handBackFocus} handBackToCopy={handBackToCopy} />;
     case 'records':
       return <Records handBackFocus={handBackFocus} />;
   }

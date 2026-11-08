@@ -169,6 +169,22 @@ export const en = {
   'past.discardChanges': 'Discard changes?',
   'past.unsavedFor': 'You have unsaved changes to {day}. Discard them?',
 
+  // Copy day.
+  'past.copyDay': 'Copy day',
+  'past.copyDayQ': 'Copy the list of {day}?',
+  'past.copyPickDay': 'Choose the day to copy it onto. Quantities and notes go with it.',
+  'past.copyDayGo': 'Continue',
+  'past.copyDayNothing': 'Nothing',
+  'past.copyOnto': 'Copy onto',
+  'past.nothingToCopy': 'The list of {day} is empty: there is nothing to copy.',
+  'past.copyNotLoadedYet': 'The list hasn’t arrived yet — try again in a moment.',
+  'past.copyReplaceQ': 'Replace the list of {day}?',
+  'past.copyReplaces': {
+    one: 'The list of {day} already has {n} pastry. It will be replaced by the list of {from}. Nothing is saved until you tap Save.',
+    other: 'The list of {day} already has {n} pastries. It will be replaced by the list of {from}. Nothing is saved until you tap Save.',
+  },
+  'past.copiedFromDay': 'The list of {day} has been copied here. Check it, then tap Save to keep it.',
+
   // Records.
   'past.lastNDays': { one: 'Last day', other: 'Last {n} days' },
   'past.nothingWasProved': 'Nothing was proved.',

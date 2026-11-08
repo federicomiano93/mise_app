@@ -1,14 +1,16 @@
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import type { RefObject } from 'react';
 import { Check, Plus, Trash2 } from 'lucide-react';
-import { useBlocker, useLocation } from 'react-router';
+import { useBlocker, useLocation, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import {
   MAX_ITEM_NOTE_LENGTH, MAX_NAME_LENGTH, MAX_NOTE_LENGTH, MAX_QTY, cleanItems, cleanNote, findInvalidItems,
 } from '@mise/shared/pastries-model';
+import { workDate } from '@mise/shared/pastries-log-model';
 import type { Weekday } from '@mise/shared/pastries-model';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
+import { KEEP_FOCUS } from '../shell/Page';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
@@ -17,7 +19,7 @@ import { blankRow, fieldOf, isUntouched, namesOnOtherDays, problemMessage, rowsF
 import type { EditorField, EditorRow } from './editorModel';
 import { editRecordedDayQuestion } from './lockQuestion';
 import { usePastries, usePastriesStore } from './PastriesContext';
-import { cameFromDay, useLeave } from './pastriesNav';
+import { FROM_DAY, cameFromDay, copyOf, useLeave } from './pastriesNav';
 import { dayPath, tabId, weekdayLabel } from './weekdays';
 import styles from './Editor.module.css';
 
@@ -25,7 +27,24 @@ type Props = {
   day: Weekday;
   // Set when the person is handed back to the day, so the pencil takes the focus (DayPanel).
   handBackFocus: RefObject<boolean>;
+  // Set instead of handBackFocus when this editor is a COPY and the person steps back to the day it
+  // was copied from: «Copy day» takes the focus there, not the pencil (DayPanel).
+  handBackToCopy: RefObject<boolean>;
 };
+
+// «Copy day» in the editor: the day whose list pre-fills it, and whether the person has already
+// agreed to change a RECORDED target. Agreeing is all it records — the permission itself is only
+// granted by the copy's Save, so a copy thrown away leaves the recorded day locked.
+type CopyRequest = { readonly from: Weekday; readonly agreed: boolean };
+
+// The hand-back flag to raise when stepping back to the day: the pencil's, or «Copy day»'s for a copy
+// that came from the day (opened by its address there is no «Copy day» button behind it).
+function useHandBack(props: Props, copying: boolean, fromDay: boolean): () => void {
+  const { handBackFocus, handBackToCopy } = props;
+  return useCallback(() => {
+    (copying && fromDay ? handBackToCopy : handBackFocus).current = true;
+  }, [handBackFocus, handBackToCopy, copying, fromDay]);
+}
 
 // Where to put the focus once the rows have been redrawn: on a new row, or where a removed one was.
 type FocusRequest = { readonly row: 'last' } | { readonly row: number };
@@ -53,24 +72,52 @@ type Phase = 'waiting' | 'asking' | 'open';
 // it is never asked again: a colleague confirming the day while it is open changes nothing here, as
 // in the current app.
 export function Editor(props: Props) {
-  const { day, handBackFocus } = props;
+  const { day } = props;
   const { t } = useT();
   const store = usePastriesStore();
+  const { state, pathname } = useLocation();
+  const navigate = useNavigate();
   const { daysLoaded, confirmedLoaded } = usePastries();
   const [confirm, confirmDialog] = useConfirm();
   const [phase, setPhase] = useState<Phase>('waiting');
+  // The copy this editor was opened for, if any: fixed when the phase is decided (below).
+  const [copy, setCopy] = useState<CopyRequest | null>(null);
   const label = weekdayLabel(t, day);
-  const handBack = useCallback(() => { handBackFocus.current = true; }, [handBackFocus]);
+  const handBack = useHandBack(props, copy !== null, cameFromDay(state));
   const leave = useLeave(dayPath(day), handBack);
-  // The latest of both, read by the question below, which must not start over when they change.
-  const latest = useRef({ leave, label });
-  useEffect(() => { latest.current = { leave, label }; });
+  // The latest of all, read by the question below, which must not start over when they change.
+  const latest = useRef({ leave, label, copy });
+  useEffect(() => { latest.current = { leave, label, copy }; });
 
   // Decided while drawing, not in an effect, so the form is never on the page for a frame before the
   // question. The lock is read from the clock, like the day panel does (store.isLocked).
+  //
+  // ⚠️ A COPY WHOSE SOURCE HAS NO ROWS IS AN ORDINARY EDIT: the source may have been emptied by
+  // another phone between the question and now, and an empty copy would only wipe the target.
+  // And a person who already said «Edit» for the copy TODAY (the day panel asked, and the request
+  // carries the work date) is not asked again; an older date — a reload tomorrow, a stale history
+  // entry — is.
   if (phase === 'waiting' && daysLoaded && confirmedLoaded) {
-    setPhase(store.isLocked(day) ? 'asking' : 'open');
+    const requested = copyOf(state);
+    const usable = requested !== null
+      && requested.from !== day
+      && store.getSnapshot().days[requested.from].items.length > 0;
+    const agreed = usable && requested.editAgreedOn === workDate(Date.now());
+    setCopy(usable ? { from: requested.from, agreed } : null);
+    setPhase(store.isLocked(day) && !agreed ? 'asking' : 'open');
   }
+
+  // ⚠️ A COPY REQUEST IS SPENT BY THE OPENING THAT READ IT. Once the phase is decided it is taken out of
+  // the history entry (the same address, replaced, its other marks kept): left there, a reload or the
+  // browser's Forward after a Discard would bring the copy back without its questions — «Replace the
+  // list of {day}?» above all, about a target another phone may have filled meanwhile (code review,
+  // 8 Nov 2026). Spent, they open an ordinary edit of the target, as a reload does in the current app.
+  // The same address is never blocked (shouldBlock below), and the editor is keyed on its day, so
+  // nothing on screen starts over.
+  useEffect(() => {
+    if (phase === 'waiting' || copyOf(state) === null) return;
+    void navigate(pathname, { replace: true, state: cameFromDay(state) ? FROM_DAY : KEEP_FOCUS });
+  }, [phase, state, pathname, navigate]);
 
   // Started by the phase, and dropped with the editor (a way out of the page while it is open; React's
   // development mode, which mounts everything twice, starts it again).
@@ -81,8 +128,13 @@ export function Editor(props: Props) {
       const ok = await confirm(editRecordedDayQuestion(t, latest.current.label));
       if (cancelled) return;
       if (ok) {
-        // The permission carries tonight's work date, so 4am spends it — and so does the next Confirm.
-        store.grantEdit(day);
+        if (latest.current.copy) {
+          // A copy only records the yes: the permission comes with its Save (see CopyRequest).
+          setCopy(current => (current ? { ...current, agreed: true } : current));
+        } else {
+          // The permission carries tonight's work date, so 4am spends it — and so does the next Confirm.
+          store.grantEdit(day);
+        }
         setPhase('open');
       } else {
         latest.current.leave();
@@ -99,7 +151,7 @@ export function Editor(props: Props) {
       </section>
     );
   }
-  return <EditorForm {...props} />;
+  return <EditorForm {...props} copy={copy} />;
 }
 
 // One day's list, edited (the form; Editor above waits for the day and for the lock question).
@@ -115,9 +167,15 @@ export function Editor(props: Props) {
 // ⚠️ A SNAPSHOT FROM ANOTHER PHONE DOES NOT REPAINT IT. It reads the stored day once, when it opens
 // (store.getSnapshot(), never usePastries()): replacing the rows would delete what somebody is in
 // the middle of typing. The names on the other days are read once too, for the same reason.
-function EditorForm({ day, handBackFocus }: Props) {
+//
+// ⚠️ A COPY IS DIRTY FROM THE START: nothing of it is stored yet, so Back and the router's blocker
+// ask before throwing it away (a reload asks nothing and opens an ordinary edit: see Editor above). Its rows (name, quantity and row note) come from the
+// source day; the standing note stays the TARGET's own.
+function EditorForm(props: Props & { copy: CopyRequest | null }) {
+  const { day, handBackFocus, handBackToCopy, copy } = props;
   const { t } = useT();
   const store = usePastriesStore();
+  const navigate = useNavigate();
   const say = useStatusMessage();
   const [confirm, confirmDialog] = useConfirm();
   const { state } = useLocation();
@@ -137,7 +195,9 @@ function EditorForm({ day, handBackFocus }: Props) {
   // The working copy: the stored day as it is NOW, read once.
   const [start] = useState(() => {
     const { days } = store.getSnapshot();
-    return { rows: rowsFrom(days[day].items, nextId), note: days[day].note, suggestions: namesOnOtherDays(days, day) };
+    // A copy takes its rows from the source day; the standing note is always the target's own.
+    const source = copy ? days[copy.from] : days[day];
+    return { rows: rowsFrom(source.items, nextId), note: days[day].note, suggestions: namesOnOtherDays(days, day) };
   });
   const [rows, setRows] = useState<EditorRow[]>(start.rows);
   const [note, setNote] = useState(start.note);
@@ -146,8 +206,8 @@ function EditorForm({ day, handBackFocus }: Props) {
   // ⚠️ DIRTY IS «SOMETHING WAS TOUCHED», as in the current app, and it is also kept in a ref: the
   // router's blocker reads it at the moment of a navigation, and a state value read there could be
   // one render behind.
-  const [dirty, setDirty] = useState(false);
-  const dirtyRef = useRef(false);
+  const [dirty, setDirty] = useState(copy !== null);
+  const dirtyRef = useRef(copy !== null);
   const touch = () => {
     dirtyRef.current = true;
     setDirty(true);
@@ -187,7 +247,14 @@ function EditorForm({ day, handBackFocus }: Props) {
     if (cameFromDay(state)) title.current?.focus();
   }, []);
 
-  const handBack = useCallback(() => { handBackFocus.current = true; }, [handBackFocus]);
+  // The copy's notice. ⚠️ THE REGION IS ON THE PAGE EMPTY and filled right after mount: a live
+  // region inserted already filled in is announced unreliably.
+  const [copiedNotice, setCopiedNotice] = useState('');
+  useEffect(() => {
+    if (copy) setCopiedNotice(t('past.copiedFromDay', { day: weekdayLabel(t, copy.from) }));
+  }, []);
+
+  const handBack = useHandBack(props, copy !== null, cameFromDay(state));
   const leave = useLeave(dayPath(day), handBack);
 
   // ── Leaving with unsaved changes ──────────────────────────────────────────────────────────
@@ -230,6 +297,7 @@ function EditorForm({ day, handBackFocus }: Props) {
           // Staying: the Back button has already said «the day panel should take the focus», and
           // nobody is going there. Left set, the next day panel to open would grab the focus.
           handBackFocus.current = false;
+          handBackToCopy.current = false;
           current.reset();
           // ⚠️ A REFUSED PICK LEAVES THE FOCUS ON A DAY THAT IS NOT SELECTED (and out of the Tab
           // order): the arrow keys would carry on from the wrong place. Back to the day being edited.
@@ -330,9 +398,22 @@ function EditorForm({ day, handBackFocus }: Props) {
     // Saved: nothing is unsaved any more, so leaving asks nothing (the blocker reads the ref).
     dirtyRef.current = false;
     setDirty(false);
+    if (copy === null) {
+      store.saveDay(day, clean, cleanNote(note));
+      say(t('past.daySaved', { day: label }));
+      leave();
+      return;
+    }
+    // ⚠️ A COPY GRANTS FIRST, THEN SAVES, and only here: a recorded target the person agreed to
+    // change is unlocked by the Save that changes it, never by opening the copy (a copy thrown
+    // away would leave the recorded day open all night). Granting first means the day is already
+    // open for editing when the save repaints it, as the pencil's route does.
+    if (copy.agreed) store.grantEdit(day);
     store.saveDay(day, clean, cleanNote(note));
     say(t('past.daySaved', { day: label }));
-    leave();
+    // Land on the day just written, not on the one it was copied from (which Back would show).
+    handBackFocus.current = true;
+    void navigate(dayPath(day), { replace: true, state: KEEP_FOCUS });
   }
 
   // ⚠️ THE BACK BUTTON ASKS FOR ITSELF, BEFORE IT NAVIGATES, instead of leaving it to the blocker.
@@ -384,6 +465,8 @@ function EditorForm({ day, handBackFocus }: Props) {
           </Button>
         }
       />
+
+      {copy === null ? null : <p role="status" className={styles.copied}>{copiedNotice}</p>}
 
       {/* The notice for a blocked save. The region is on the page, empty, before there is anything
           to say: a notice inserted already filled in is announced unreliably. It has no height

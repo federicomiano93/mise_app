@@ -37,12 +37,13 @@ describe('the seven days fit a 360px phone without a sideways scroll', () => {
   const list = rule(daysNavCss, '.list');
   const columns = declaration(list, 'grid-template-columns') ?? '';
   const min = Number(/repeat\(7,\s*minmax\((\d+)px,\s*1fr\)\)/.exec(columns)?.[1]);
-  const gap = token(declaration(list, 'gap')?.replace(/var\((--[\w-]+)\)/, '$1') ?? '--none');
+  const gap = Number(/^(\d+)px$/.exec(declaration(list, 'gap') ?? '')?.[1]);
   // 360px wide, the page's own padding on both sides (a phone is below the shell's 700px).
   const pagePadding = token(/padding:\s*var\((--[\w-]+)\)/.exec(rule(pageCss, '.body'))?.[1] ?? '--none');
   const strip = 360 - 2 * pagePadding;
 
-  it('shares the width in seven equal columns, none wider than its share', () => {
+  it('shares the width in seven equal columns, none narrower than the 44px touch floor', () => {
+    expect(min).toBeGreaterThanOrEqual(44);
     expect(columns).toMatch(/^repeat\(7,\s*minmax\(\d+px,\s*1fr\)\)$/);
   });
 

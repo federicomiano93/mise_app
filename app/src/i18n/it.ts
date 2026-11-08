@@ -137,6 +137,21 @@ export const it: Messages = {
   'past.discardChanges': 'Vuoi scartare le modifiche?',
   'past.unsavedFor': 'Hai modifiche non salvate per {day}. Vuoi scartarle?',
 
+  'past.copyDay': 'Copia giorno',
+  'past.copyDayQ': 'Vuoi copiare la lista di {day}?',
+  'past.copyPickDay': 'Scegli il giorno su cui copiarla, con quantità e appunti.',
+  'past.copyDayGo': 'Continua',
+  'past.copyDayNothing': 'Niente',
+  'past.copyOnto': 'Copia su',
+  'past.nothingToCopy': 'La lista di {day} è vuota: non c’è niente da copiare.',
+  'past.copyNotLoadedYet': 'La lista non è ancora arrivata: riprova tra un attimo.',
+  'past.copyReplaceQ': 'Vuoi sostituire la lista di {day}?',
+  'past.copyReplaces': {
+    one: 'La lista di {day} ha già {n} pasta: verrà sostituita da quella di {from}. Non si salva nulla finché non tocchi Salva.',
+    other: 'La lista di {day} ha già {n} paste: verrà sostituita da quella di {from}. Non si salva nulla finché non tocchi Salva.',
+  },
+  'past.copiedFromDay': 'La lista di {day} è stata copiata qui. Controllala e tocca Salva per tenerla.',
+
   'past.lastNDays': { one: 'Ultimo giorno', other: 'Ultimi {n} giorni' },
   'past.nothingWasProved': 'Non è stato messo niente a lievitare.',
   'past.removeRecordFor': 'Togli la registrazione di {day}, {date}',
