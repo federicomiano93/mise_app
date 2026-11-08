@@ -254,6 +254,8 @@ as the screen, so reopening reads the server again (the current app's module-lev
     Settings tapped in the rail opens on the page's title, not on the door used last.
 14. After «I am back» the focus moves to «Add» (Home) or the row (Settings) only when the person pressed it there, never when the holiday
     ended by itself at midnight or on another phone.
+15. A holiday question that has lost its point closes by itself: «Back already?» and the daily reminder disappear when the holiday ends
+    while they are open (midnight, another phone, a refused holiday put back), so «You are on holiday» never stays beside «Not saved».
 
 Not done here: the order of the sections (D1, nothing built), «Who can enter» (3g-3), the app version row (step 5), the kiosk rows.
 
@@ -306,7 +308,17 @@ just after midnight, and the door's focus handed back only on a return. The full
 - **O, a section saved late is saved** (`StaffSectionsScreen.tsx`): choice 12; the session's copy is read again on that path too.
 - **P, language buttons named** (`LanguageScreen.tsx`): `aria-labelledby` = the language's name and the button's words.
 - **Q, reminder for shown sections only** (`AwayReminder.tsx`, `useVisibleSections`): choice 11.
-- **R, first load keeps the skip link first** (`SettingsSubScreen.tsx`): choice 13, as the Orders screens (`cameFromList`).
+- **R, first load keeps the skip link first** (`SettingsSubScreen.tsx`): choice 13, as the Orders screens (`cameFromList`); only a PUSH
+  counts, since the navigation state survives a reload (the Orders screens share that gap; not touched here).
+
+A second review of the finished branch then found, and fixed:
+- **S, an outdated question closes** (`useConfirm`'s new optional `dismiss`, `useAskComeBack.tsx`, `AwayReminder.tsx`, `AwayBand.tsx`):
+  choice 15.
+- **T, the arm cannot outlive a refusal** (`useFocusOnBack.ts`): a refusal that lands before React draws «back» left it on; it is now
+  switched off by `onRefused`, and armed only while away.
+- **U, a late read is old news** (`awayStore.ts`): a read answered with this phone's write on top is shown only if no write started since
+  the read did (a write refused meanwhile could otherwise come back on screen, for good when the server has no holiday document).
+- **V, the refusal alert has its own `PartBoundary`** (`AppShell.tsx`), and the dimmed row takes no hover shade (`SettingsRow.module.css`).
 
 Left as they are, on purpose:
 - Two server reads of the venue per save (the source's, then the session's `refreshLocation`): merging them needs a session API that takes
