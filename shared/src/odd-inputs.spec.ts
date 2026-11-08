@@ -1138,6 +1138,8 @@ const PASTRY_NUMBERS = (count: number): { name: string; qty: number }[] =>
 const PASTRY_QUANTITIES: readonly unknown[] = [0, '', null, undefined, 'abc', -3, 1e999, -1e999, NaN, 0.4, 0.5, 1.5, 24, '24',
   ' 24 ', '1e2', '0x10', '1,5', 9999, 10000, 50000, '9999', '1e4', [5], [5, 6], {}, true, false, new Date(5), 5n,
   new Number(7), { valueOf: () => 7 }];
+const PASTRY_ITEM_NOTES: readonly unknown[] = [...ODD, '9x3', ' 9x3 ', '', '   ', '9\n x 3', '\t2 teglie\r\nda 9 ', 'x'.repeat(39),
+  'x'.repeat(40), 'x'.repeat(41), ` ${'x'.repeat(40)} y`, `${'x'.repeat(39)} y`, 42, ['9x3'], new String('9x3'), { toString: () => '9x3' }];
 const PASTRY_ROW_LISTS: readonly unknown[] = [...ODD, 'Cornetti', 42,
   [{ name: 'Cornetti', qty: 24 }, { name: 'Bomboloni', qty: 10 }],
   [{ name: '  Cornetti  ', qty: '24' }, { name: '', qty: '' }, { name: ' cornetti ', qty: 3 }],
@@ -1151,7 +1153,9 @@ const PASTRY_ROW_LISTS: readonly unknown[] = [...ODD, 'Cornetti', 42,
   [{ name: 'Cornetti', qty: 24, extra: true, id: 'x' }], PASTRY_NUMBERS(99), PASTRY_NUMBERS(100), PASTRY_NUMBERS(101),
   PASTRY_NUMBERS(300), Object.freeze([{ name: 'Cornetti', qty: 24 }]),
   [{ name: 'Cornetti', qty: 24 }, , { name: 'Bomboloni', qty: 10 }],
-  { length: 1, 0: { name: 'Cornetti', qty: 24 } }, new Set([{ name: 'Cornetti', qty: 24 }])];
+  { length: 1, 0: { name: 'Cornetti', qty: 24 } }, new Set([{ name: 'Cornetti', qty: 24 }]),
+  // Rows with their own note («9x3», PR #446): empty, blank, multi-line, at and past 40, not a string.
+  ...PASTRY_ITEM_NOTES.map(note => [{ name: 'Cornetti', qty: 24, note }, { name: 'Bomboloni', qty: 10 }])];
 
 const PASTRY_DAY_DOCS: readonly unknown[] = [...ODD, 'doc', 42,
   ...PASTRY_ROW_LISTS.map(items => ({ items })), ...PASTRY_NOTES.map(note => ({ note })),
@@ -1188,6 +1192,8 @@ describe('pastries-model: odd inputs', () => {
   agree('provingDayFor', m.provingDayFor, l.provingDayFor, product(PASTRY_MOMENTS));
   agree('wholeNumber', m.wholeNumber, l.wholeNumber, product([...ODD, ...PASTRY_QUANTITIES, Symbol('amount')]));
   agree('cleanNote', m.cleanNote, l.cleanNote, product(PASTRY_NOTES));
+  agree('cleanItemNote', m.cleanItemNote, l.cleanItemNote, product(PASTRY_ITEM_NOTES));
+  agree('otherWeekdays', m.otherWeekdays, l.otherWeekdays, product(PASTRY_DAY_NAMES));
   agree('cleanItems', m.cleanItems, l.cleanItems, product(PASTRY_ROW_LISTS));
   agree('findInvalidItems', m.findInvalidItems, l.findInvalidItems, product(PASTRY_ROW_LISTS));
   agree('normalizeDay', m.normalizeDay, l.normalizeDay, product(PASTRY_DAY_DOCS, [undefined, ...PASTRY_DAY_NAMES]));

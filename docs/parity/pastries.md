@@ -202,7 +202,9 @@ Port of the notes half of the current app's PR #446 (item 1 of `docs/mise2-port-
 `{name, qty}` and its first save of a day erased every note of that day.
 - Shared model: `MAX_ITEM_NOTE_LENGTH` (40), `cleanItemNote` (one line), `otherWeekdays`; a row carries `note` only when there is
   one (no empty key), a corrected quantity keeps it, and the record frozen in `pastry-logs` keeps it too.
-- Editor: a third box per row, «Note, e.g. 9x3», under name and quantity on a phone and between them from 1000px; a row holding
-  only a note asks before it goes. The day list and the records show the note between the name and the number.
+- Editor: a third box per row, «Note, e.g. 9x3», on a line of its own under name and quantity at every width (DIFFERENCE: the current app
+  puts it beside them on a tablet; here the focus order would then differ from the one drawn, and the lab tablet's split
+  has no room for four boxes); a row holding only a note asks before it goes. The day list and the records show the whole
+  note beside the number (it wraps, never cut short).
 - Still owed: «Copy day» (the menu, the confirm before replacing a list, the editor opened on the copy). Until it lands the
   switch checklist keeps item 1 open.

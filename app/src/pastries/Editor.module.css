@@ -107,8 +107,10 @@
 /* The name, then the quantity and the bin. They share a line when it is wide enough for all three;
    when it is not (a phone) the quantity and the bin drop together to a line of their own, under
    the name, so neither is ever squeezed to nothing. No media query decides it.
-   The row's note comes last and takes a line of its own (the current app's second line on a phone);
-   from 1000px it sits between the name and the quantity. */
+   The row's note comes last and takes a line of its own at EVERY width (the current app's second line
+   on a phone). ⚠️ Not moved beside the name on the tablet with `order`: the focus would then go name,
+   quantity, bin, note in a different order from the one drawn (WCAG 2.4.3), and on the lab tablet's
+   split the four boxes do not fit on one line anyway. */
 .line {
   display: flex;
   flex-wrap: wrap;
@@ -245,20 +247,6 @@
 
   .banner {
     margin: var(--s6) var(--s6) 0;
-  }
-
-  .name {
-    order: 1;
-  }
-
-  .itemNote {
-    order: 2;
-    flex: 0 0 11rem;
-  }
-
-  .end {
-    order: 3;
-    margin-left: 0;
   }
 
   .body {

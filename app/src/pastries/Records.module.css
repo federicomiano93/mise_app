@@ -84,6 +84,8 @@
 }
 
 .name {
+  /* It takes the free space, so the note sits beside the number. */
+  flex: 1 1 auto;
   min-width: 0;
   margin: 0;
   overflow-wrap: anywhere;
