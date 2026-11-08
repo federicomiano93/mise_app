@@ -37,16 +37,18 @@ Roles, Orders, Suppliers:
 - [ ] 12. «Order today» tag in both supplier lists
 - [ ] 16. Suppliers empty-flash, scroll and focus fixes, «hand-made» mark (verify)
 - [ ] 18. Invoice import: goods counted in pieces priced per piece
-- [ ] 20. Piece weight typed in grams
+- [x] 20. Piece weight typed in grams — ported 8 Nov (`feature/mise2-number-ports`, PR into the release branch; `docs/parity/suppliers.md`, «Piece weight in grams as built»)
 
 Food cost, Recipe book, Calculator:
-- [ ] 21-22, 24-28. Food cost steps 1, 2, 4, A, B, recipe line in grams, two decimals
+- [x] 27. Food cost recipe line in grams (with the g/kg select of step 1 it needs) — ported 8 Nov (`feature/mise2-number-ports`; `docs/parity/foodcost.md`, «Recipe line in grams as built»)
+- [ ] 21-22, 24-26, 28. Food cost steps 1 (all but the g/kg select on recipe lines, ported with 27), 2, 4, A, B, two decimals
 - [ ] 23. Food cost recipe link with several products (check)
 - [ ] 29. Create products from the recipe book
 - [ ] 30. Crossed-out euro on rows Food cost cannot price
 - [ ] 31. Recipe book renamed-row warning
 - [ ] 32. Recipe row menu, full screen from a button, Back from Orders keeps the quantity
-- [ ] 36-40. Calculator: reorder, «Add a recipe» from the book, litres and ml, dough history dates, cached «no config»
+- [x] 38. Calculator: linked recipes with litres and ml, the problem line, the row count — ported 8 Nov (`feature/mise2-number-ports`; `docs/parity/calculator.md`, «Linked recipes with litres, the problem line and the row count as built»)
+- [ ] 36-37, 39-40. Calculator: reorder, «Add a recipe» from the book, dough history dates, cached «no config»
 - [ ] 44. Chrome 101 visible height (check on the lab tablet)
 - [ ] 47. `order-sent` usage statistic
 
@@ -164,6 +166,7 @@ Before the switch, not ports:
     «55,» and «,5» converted). Mise 2: NONE (`app/src/records/{priceCardModel,legacyPriceModel}.ts`, `PriceSection.tsx`, `LegacyPriceSection.tsx`, en/it
     still kilos). DATA LOSS: no, but a number typed in grams by someone used to the new screen is read as kilos by Mise 2 (50 g -> 50 kg). Also
     one-off at go-live: «Uova in vassoi» (Miano) holds 50 kg, shows 50000 g. Size S.
+    **DONE 8 Nov 2026** (`feature/mise2-number-ports`): `app/src/records/pieceWeight.ts`; the one-off above still stands (he retypes 50).
 
 ## E. Food cost (his Food-cost exception, steps 1-6, all in v1.140.0-v1.144.1)
 
@@ -181,7 +184,9 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     before dropping typed edits (#484). NONE. Size M.
 26. **Step B line costs + «Which?»** (#485): cost on every «Composed of» line, «No price», «not exactly yet», «Which?» list of unpriced parts
     (card summary + phone dialog), packaging lines. NONE. Size M.
-27. **Recipe line in grams** (#488, `a7f4c75d`): opens in grams, the g/kg switch keeps the typed number, warning at 20 times a batch. NONE. Size S.
+27. **Recipe line in grams** (#488, `a7f4c75d`): opens in grams, the g/kg switch keeps the typed number, warning at 20 times a batch.
+    **DONE 8 Nov 2026** (`feature/mise2-number-ports`), with the g/kg select of item 21 it needs: `shared/src/line-quantity.ts` (full),
+    `fc-number.ts` (`fcNumber`, `fcWeight` only) and `from-recipes.ts` (`wholeRecipeKg` only), `app/src/foodcost/productEditorModel.ts`.
 28. **Two decimals everywhere on Food cost** (#490, `151ea191`): `fcNumber/fcMoney/fcWeight`, «< 0,01 €», percentages where drawn; price-model
     untouched (Fornitori/Stocktake keep 6 decimals). NONE. Size S (do together with 24-27).
 29. **Create products from the recipe book** (#415, `b5cf999e`, `5f2fcb67`, `f8d54f35`, `f8e64a6a`): box and choice screen, only after the
@@ -209,6 +214,9 @@ log-model}.ts`, `app/src/calculator/*`. Size M for the group.
 37. «Add a recipe» offers the recipe book's recipes first (`a221c160`), linking never writes back an older copy (`56864739`, `97ac8fe3`, `e0b92090`).
 38. A linked recipe with litres / ml rows calculates, 1 ml = 1 g (`e7f3dac0`, `rowGrams` rounding), a linked tab that cannot calculate says why
     (`6713adab`), problem line first and speaks once (`1342cb79`), linked recipe counts its own rows (`535bcdb2`, #424).
+    **DONE 8 Nov 2026** (`feature/mise2-number-ports`): `isWeighable`, `rowGrams`, `ingredientCount`, `showsSourceProblem` in
+    `shared/src/calculator-recipe-source.ts`; the problem line in `RecipePanel`, the count in `RecipeList`. `showsSourceProblem` and
+    `ingredientCount` are now in the port; `catalogueChoices` and `rowsToStamp` (item 37) are what keeps its parity markers.
 39. Dough history: dates in the venue's language (`021a49ff`), says how much a «from a total» dough is (`b00983dc`), opened dough shows its total once
     (`4b235f3d`), unsaved-changes question in the venue's language (`66e76c84`), labelled grams / leavening fields and Back buttons (`6c70cb38`, `7d5683b8`).
 40. Calculator `config` cached «no config» never taken for the server's answer (`d3eb57f3`, `3d98a3e4`) — check Mise 2's calculator store. Size S.

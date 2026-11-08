@@ -986,3 +986,24 @@ Applies to the export from the Calculator's card and from the Recipe book's page
 - **Driven** 216/216 (`algprobe/mise-drive/drive-mise2-recipe-pdf.mjs <base> <cdp-port> <out-dir>`): IT and EN at 1024, 360, 296, PDF text and measures read
   back from the file, the .xlsx unzipped. Not driven, because nothing in them changed: an employee (the export has no role), offline and a failed library
   (paths untouched, covered by the specs). Owed: the real tablet (SM-T550) and a printed sheet.
+
+## Linked recipes with litres, the problem line and the row count as built (8 Nov 2026)
+
+Port of the current app's #424 (`e7f3dac0`, `6713adab`, `1342cb79`) and `535bcdb2` — item 38 of `docs/mise2-port-owed.md`
+(Panificio Miano, 30 Oct 2026: «Le ricette nel calcolatore non funzionano»).
+- `isWeighable` asks the recipe book's own unit table (`isWeighableUnit`): l, dl, cl and ml rows are weighed at 1 ml = 1 g, mg
+  too; pieces, spoons, a pinch and «to taste» still refuse the whole tab and name the row. `rowGrams` reads every row in its own
+  unit through `ingredientGrams`, rounded to the milligram (1.005 kg is 1005 g). This also replaces Mise 2's own «kg × 1000» of
+  18 Oct 2026: the two files agree again, and odd-inputs' markers for `isWeighable` and `resolveRecipe` are gone.
+- Every `RecipePanel` starts with a status line (`role="status"`, hidden while empty) that says why a LINKED tab cannot be
+  calculated — gone, empty, or a row with no weight — in the same sentence as Settings and the Confirm dialog, before anything
+  is typed (`showsSourceProblem`). Nothing for a tab with its own ingredients, nothing while the recipe is still on its way.
+  React writes the text only when it changes, so a keystroke never makes it speak again.
+- A tab that cannot be calculated closes its result card (the current app's `hideResult`). Difference, on purpose: a tab
+  whose linked recipe is still LOADING keeps Mise 2's card with its «still loading» sentence (the current app shows nothing
+  then); the problem line says nothing while loading in both.
+- Settings › Recipes counts a linked recipe's rows from the recipe book (`ingredientCount`, from the editor's
+  `resolved(recipe)`), still counting a row it cannot weigh, and shows no count at all while the linked recipe has not been
+  read («0 ingredients» before).
+- Still owed in this group: items 36, 37 (`catalogueChoices`, `rowsToStamp`: the parity markers of calculator-recipe-source stay),
+  39 and 40.

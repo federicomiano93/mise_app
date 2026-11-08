@@ -4,10 +4,13 @@ import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { formatMoney, formatRate } from '@mise/shared/price-model';
 import type { Money } from '@mise/shared/currency';
 import { costRecipe } from '@mise/shared/recipe-cost-model';
+import { fcWeight } from '@mise/shared/fc-number';
+import { wholeRecipeKg } from '@mise/shared/from-recipes';
+import { tooMuchOfRecipe } from '@mise/shared/line-quantity';
 import type { MessageKey } from '../i18n/en';
 import type { MessageParams } from '../i18n/i18n';
 import type { WorkingComponent, WorkingPackaging } from './productEditorModel';
-import { readQty } from './productEditorModel';
+import { readQty, recipeLineKg } from './productEditorModel';
 
 type Translate = (key: MessageKey, params?: MessageParams) => string;
 
@@ -67,8 +70,15 @@ export function lineNote(
     const recipe = lookup(tables.recipes, line.recipeId);
     if (!recipe) return line.recipeId && loaded.recipes ? t('fc.thisRecipeNoLonger') : '';
     const costed = costRecipe(recipe, tables);
-    if (costed.pricePerKg === null) return t('fc.thisRecipeIsNot');
-    return costed.partial ? t('fc.thisRecipePartlyPriced') : '';
+    const priced = costed.pricePerKg === null ? t('fc.thisRecipeIsNot') : costed.partial ? t('fc.thisRecipePartlyPriced') : '';
+    // ⚠️ A NOTE only, never a block, and FIRST (current app a7f4c75d, 8 Nov 2026): more than 20 whole batches is almost
+    // surely grams typed as kilos — production had 16 such lines in 11 products, every cost ×1000.
+    const qtyKg = recipeLineKg(line as Extract<WorkingComponent, { kind: 'recipe' }>);
+    const whole = wholeRecipeKg(recipe);
+    const tooMuch = tooMuchOfRecipe(qtyKg, whole)
+      ? t('fc.line.tooMuchRecipe', { qty: fcWeight(qtyKg, money), whole: fcWeight(whole, money), grams: fcWeight(qtyKg / 1000, money) })
+      : '';
+    return [tooMuch, priced].filter(Boolean).join(' ');
   }
 
   const ingredientId = (line as { ingredientId: string }).ingredientId;

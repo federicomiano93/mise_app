@@ -417,7 +417,7 @@ describe('ingredient-card-save: a new loose item takes its order unit from its p
       card.name('Zucchine');
       card.unit(priceUnit);
       card.rate('3');
-      if (priceUnit === 'pcs') card.pieceKg('0.2');
+      if (priceUnit === 'pcs') card.pieceKg('200');
       const { payload } = card.saved();
       expect(payload.unit, priceUnit).toBe(word);
       expect('packCount' in payload).toBe(false);
@@ -833,7 +833,8 @@ describe('ingredient-card-save: 3rd deep review', () => {
       expect(card.notes().some(note => /format has changed|saved price stays/.test(note)), card.notes().join(' | ')).toBe(false);
       expect(card.view().changedNote, 'Ricalcola is not offered').toBeNull();
       expect(card.view().pieceWeight.shown, 'the «Peso di un pezzo» box is visible').toBe(true);
-      expect(card.view().pieceWeight.value, 'pre-filled with the stored piece weight').toBe(String(item.unitWeightKg));
+      expect(card.view().pieceWeight.value, 'pre-filled with the stored piece weight, in grams')
+        .toBe({ 0.06: '60', 0.002: '2' }[item.unitWeightKg as number]);
       expect(card.view().typedForm, 'the price is «per piece», as today').toBe(true);
       const { payload, record } = card.saved();
       for (const key of PRICE_KEYS) expect(payload[key] ?? null, key).toBe(item[key] ?? null);
@@ -1125,7 +1126,7 @@ describe('price-basis-card', () => {
     };
     const card = openCard({ item });
     expect(card.pressed()).toEqual(['per pack']);
-    card.pieceKg('0.05');
+    card.pieceKg('50'); // grams, saved as 0.05 kg
     const { payload } = card.saved();
     expect(payload.casePrice).toBe(23.47);
     expect(payload.unitWeightKg).toBe(0.05);
@@ -1504,7 +1505,7 @@ describe('ingredient-form-guards: the VAT menu (C75) and the money typing (C61)'
     const italy = moneyOf('€', moneyLayoutOf({ country: 'IT' }));
     const card = openCard({ item: TYPED_PIECE, money: italy });
     expect(card.price.rate).toBe('0,3');
-    expect(card.price.pieceKg).toBe('0,05');
+    expect(card.price.pieceKg, 'the piece weight in grams (0.05 kg)').toBe('50');
     card.rate('1,5');
     expect(readPrice(card.price, card.ctx())).toMatchObject({ pricePerUnit: '1.5' });
   });

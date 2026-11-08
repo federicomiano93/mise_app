@@ -16,6 +16,7 @@ import type { MessageKey } from '../i18n/en';
 import type { MessageParams } from '../i18n/i18n';
 import { formState, orderNow, weightText } from './ingredientCardModel';
 import type { ItemLike, Working } from './ingredientCardModel';
+import { gramsOfKg, kgTextOfGrams } from './pieceWeight';
 
 // The price on the ingredient card, with no screen in the way (parity C58–C79, C84–C86): the working copy of the price, the
 // events that change it, the exact input the save reads, the refusals and everything the section draws, as data. The port of
@@ -47,6 +48,7 @@ export interface PriceState {
   readonly unit: string;
   // The boxes as they stand, in the venue's layout («7,2» in Italy).
   readonly rate: string;
+  // ⚠️ The «Weight of one piece» box: its text is in GRAMS (pieceWeight.ts), the stored `unitWeightKg` in kilos.
   readonly pieceKg: string;
   readonly box: string;
   // The price box's placeholder: the carried price, frozen at the moment the person starts typing (as the original's).
@@ -247,7 +249,7 @@ export function priceStateFrom(item: ItemLike | null, defaultUnit: 'pcs' | null,
   const first: PriceState = {
     unit,
     rate: boxText(item?.pricePerUnit, ctx.money),
-    pieceKg: boxText(item?.unitWeightKg, ctx.money),
+    pieceKg: boxText(gramsOfKg(item?.unitWeightKg), ctx.money),
     box: '',
     boxHint: '',
     vat: storedVat !== null && Number.isFinite(storedVat) ? String(storedVat) : '',
@@ -338,7 +340,7 @@ export function readPrice(state: PriceState, ctx: PriceCtx): PriceInput {
       basis: priceFor,
       rate: typedDecimal(state.rate),
       unit: state.unit || null,
-      pieceKg: typedDecimal(state.pieceKg),
+      pieceKg: kgTextOfGrams(state.pieceKg),
       vat: state.vat,
     }),
     priceBasis,

@@ -352,6 +352,7 @@ export const en = {
   'fc.thisRecipeNoLonger': 'This recipe no longer exists',
   'fc.thisRecipeIsNot': 'This recipe is not priced yet',
   'fc.thisRecipePartlyPriced': 'Only part of this recipe has a price',
+  'fc.line.tooMuchRecipe': '{qty}, but the recipe makes {whole}: did you mean {grams}?',
   'fc.rawDough': 'Raw dough',
   'fc.cookedDough': 'Cooked dough',
   'fc.lossIs': 'Weight lost in the oven: {pct}%',
@@ -382,7 +383,6 @@ export const en = {
   'fc.notPriced': 'not priced',
   'fc.pricedByWeight': 'priced by weight',
   'fc.priceEach': '{price} each',
-  'fc.aria.kilos': 'Kilos',
   'fc.aria.pieces': 'Pieces',
   'fc.aria.quantity': 'Quantity',
   'fc.aria.unit': 'Unit',
@@ -1701,7 +1701,7 @@ export const en = {
   'sup.price.eg.perKg': 'e.g. 7.20 (one kilo)',
   'sup.price.eg.perLitre': 'e.g. 6.00 (one litre)',
   'sup.price.eg.perPiece': 'e.g. 0.035 (one piece)',
-  'sup.price.eg.pieceWeight': 'e.g. 0.055',
+  'sup.price.eg.pieceWeight': 'e.g. 55',
   // orders.noPrice2 / orders.howItIsBought
   'sup.price.none': 'None',
   'sup.price.howBought': 'How it is bought',
@@ -1735,8 +1735,8 @@ export const en = {
   // orders.exVatNote: permanent, under the pair of boxes. It may not be dropped: a gross price inflates every recipe cost.
   'sup.price.exVatNote': 'Prices are net of VAT.',
   // orders.weightOfOnePiece / orders.neededOnlyToUse
-  'sup.price.weightOfOnePiece': 'Weight of one piece (kg)',
-  'sup.price.neededOnlyToUse': 'Needed only to use this in a recipe written in grams — one egg is about 0.055, a vanilla pod about 0.0035.',
+  'sup.price.weightOfOnePiece': 'Weight of one piece (g)',
+  'sup.price.neededOnlyToUse': 'Needed only to use this in a recipe written in grams — one egg is about 55, a vanilla pod about 3.5.',
   // orders.vat.label / orders.vat.notStated / orders.vat.summaryLine
   'sup.price.vat.label': 'VAT',
   'sup.price.vat.notStated': '— not stated',

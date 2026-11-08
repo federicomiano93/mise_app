@@ -184,3 +184,14 @@ describe('the doors at the top of the work view on a phone', () => {
     expect(text).toMatch(/@media \(max-width: 339\.98px\)\s*\{\s*\.top\s*\{[^}]*grid-template-columns: repeat\(2, minmax\(0, 1fr\)\);/);
   });
 });
+
+// ⚠️ The problem line is a live region: present (never display: none) while empty, and taking no room then (8 Nov 2026).
+describe('the problem line of a linked tab', () => {
+  it('takes no room while empty and is never taken out of the page', () => {
+    const empty = rule(panelCss, '.sourceProblem:empty');
+    expect(declaration(empty, 'padding')).toBe('0');
+    expect(declaration(empty, 'margin')).toBe('0');
+    expect(withoutComments(panelCss)).not.toMatch(/\.sourceProblem[^{]*\{[^}]*display:\s*none/);
+    expect(declaration(rule(panelCss, '.sourceProblem'), 'color')).toBe('var(--warn-ink)');
+  });
+});

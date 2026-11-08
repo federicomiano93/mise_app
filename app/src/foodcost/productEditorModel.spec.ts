@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { normalizeProduct } from '@mise/shared/foodcost-model';
 import type { Product } from '@mise/shared/foodcost-model';
+import { draftFromRecipe } from '@mise/shared/foodcost-model';
 import {
-  clearNumber, emptyWorking, isShown, readNumber, readQty, recipeIdsOn, toProduct, vatRateOf, workingFrom,
+  clearNumber, emptyWorking, isShown, readNumber, readQty, recipeIdsOn, recipeLineKg, toProduct, vatRateOf, workingFrom,
+  workingFromDraft,
 } from './productEditorModel';
 
 describe('reading a box', () => {
@@ -98,5 +100,47 @@ describe('«Finished product, no weight loss» in the working copy', () => {
     expect(working.noWeightLoss).toBe(true);
     expect(toProduct(working, 'p').noWeightLoss).toBe(true);
     expect(toProduct({ ...working, noWeightLoss: false }, 'p').noWeightLoss).toBe(false);
+  });
+});
+
+// ⚠️ A RECIPE LINE OPENS IN GRAMS AND IS STORED IN KILOS (current app a7f4c75d, 8 Nov 2026): the unit lives only in the
+// working copy, and the stored `qtyKg` is worked out from the box and the unit beside it.
+describe('a recipe line in the working copy', () => {
+  const stored = (qtyKg: number) => normalizeProduct({ id: 'p', name: 'Loaf', components: [{ recipeId: 'r', qtyKg }] }) as Product;
+
+  it('opens in grams: 3.233 kg shows «3233», 0.522 shows «522», nothing shows the placeholder', () => {
+    expect(workingFrom(stored(3.233), 'IT').components[0]).toMatchObject({ kind: 'recipe', qty: '3233', unit: 'g' });
+    expect(workingFrom(stored(0.522), 'IT').components[0]).toMatchObject({ qty: '522', unit: 'g' });
+    expect(workingFrom(stored(0), 'IT').components[0]).toMatchObject({ qty: '', unit: 'g' });
+  });
+
+  it('a draft from a recipe opens in grams too', () => {
+    const draft = draftFromRecipe({ id: 'r', name: 'Loaf' });
+    if (!draft) throw new Error('no draft');
+    expect(workingFromDraft(draft).components[0]).toMatchObject({ kind: 'recipe', qty: '', unit: 'g' });
+  });
+
+  it('an untouched line is saved as the very kilos stored — even past six decimals (the old kilo box saved what was typed)', () => {
+    for (const kilos of [0.522, 1.7, 0.001, 12.345678, 0.000001, 25, 3.233, 0.0416667, 1.23456789]) {
+      expect(toProduct(workingFrom(stored(kilos), 'IT'), 'p').components, String(kilos)).toEqual([{ recipeId: 'r', qtyKg: kilos }]);
+    }
+  });
+
+  it('the box is read in its unit, a comma as a decimal mark, and never with float noise', () => {
+    expect(recipeLineKg({ qty: '522', unit: 'g' })).toBe(0.522);
+    expect(recipeLineKg({ qty: '522', unit: 'kg' }), 'g → kg keeps the number: now 522 kg').toBe(522);
+    expect(recipeLineKg({ qty: '1,5', unit: 'kg' })).toBe(1.5);
+    expect(recipeLineKg({ qty: '0,5', unit: 'g' })).toBe(0.0005);
+    expect(recipeLineKg({ qty: '', unit: 'kg' }), 'an empty box is nothing in either unit').toBe(recipeLineKg({ qty: '', unit: 'g' }));
+    expect(recipeLineKg({ qty: 'abc', unit: 'g' })).toBe(0);
+  });
+
+  it('a line opened past six decimals and then touched is read from its box', () => {
+    const [line] = workingFrom(stored(0.0416667), 'IT').components;
+    if (line?.kind !== 'recipe') throw new Error('no recipe line');
+    expect(line.qty).toBe('41.6667');
+    expect(recipeLineKg({ ...line, qty: '42' })).toBe(0.042);
+    expect(recipeLineKg({ ...line, unit: 'kg' }), 'the switch keeps the number: now 41.6667 kg').toBe(41.6667);
+    expect(recipeLineKg(line), 'as it opened: the stored kilos').toBe(0.0416667);
   });
 });

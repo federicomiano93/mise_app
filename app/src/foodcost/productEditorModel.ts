@@ -4,6 +4,8 @@ import {
 import type {
   LineUnit, PackUnit, Product, ProductComponent, ProductDraft, SellingMode,
 } from '@mise/shared/foodcost-model';
+import { kilosFromTyped, typedFromKilos } from '@mise/shared/line-quantity';
+import type { KiloLineUnit } from '@mise/shared/line-quantity';
 
 // The product being edited, as the editor holds it: a WORKING COPY (P20) in which every number is
 // the TEXT of its box, so «12.» (a number half typed) and an empty box both survive a render, and
@@ -14,9 +16,19 @@ import type {
 // rebuild the row and the finger would lose the box after one digit (found driving the current
 // app on 13 Sep 2026). It is stripped before the product is saved or costed.
 
+// ⚠️ A RECIPE LINE IS STORED IN KILOS, WHATEVER THE BOX SHOWS — but the box OPENS IN GRAMS, every time (current app
+// a7f4c75d, 8 Nov 2026). Production showed 16 lines in 11 products 1000× too big: staff typed grams (as in the ingredient
+// lines right below) into a box that opened on kg; and a correct 3.233 kg read as «3.233», which an Italian takes for three
+// thousand. `unit` is memory only, never saved: `qty` is the text in that unit, and `qtyKg` is worked out from both.
+// ⚠️ UNTOUCHED MEANS UNCHANGED: `stored` is the line as it opened (its box text and the kilos behind it). While the box and the
+// unit are as they opened, the stored kilos are handed back EXACTLY — the old kilo box saved what was typed, so a 0.0416667
+// read through grams (six decimals) would come back 0.041667 and a rename-only save would record a margin point.
 export type WorkingComponent =
-  | { key: string; kind: 'recipe'; recipeId: string; qty: string }
+  | { key: string; kind: 'recipe'; recipeId: string; qty: string; unit: KiloLineUnit; stored?: { qty: string; kg: number } }
   | { key: string; kind: 'ingredient'; ingredientId: string; qty: string; unit: LineUnit };
+
+// The unit every recipe line opens on.
+export const RECIPE_LINE_OPENS_IN: KiloLineUnit = 'g';
 
 export interface WorkingPackaging {
   key: string;
@@ -53,6 +65,14 @@ export const newLineKey = (): string => `line-${++lastKey}`;
 
 const text = (value: number | null): string => (value === null ? '' : String(value));
 const qtyText = (value: number): string => (value ? String(value) : '');
+// A recipe line's stored kilos as its box shows them, in grams ('' for nothing yet, so the placeholder shows).
+const recipeQtyText = (kilos: number): string => typedFromKilos(kilos, RECIPE_LINE_OPENS_IN);
+
+// A stored recipe line as the working copy opens it: in grams, remembering what it opened with.
+function openRecipeLine(recipeId: string, qtyKg: number): WorkingComponent {
+  const qty = recipeQtyText(qtyKg);
+  return { key: newLineKey(), kind: 'recipe', recipeId, qty, unit: RECIPE_LINE_OPENS_IN, stored: { qty, kg: qtyKg } };
+}
 
 export function emptyWorking(): Working {
   return {
@@ -68,9 +88,7 @@ export function workingFromDraft(draft: ProductDraft): Working {
   return {
     ...emptyWorking(),
     name: draft.name,
-    components: draft.components.map<WorkingComponent>(line => ({
-      key: newLineKey(), kind: 'recipe', recipeId: line.recipeId, qty: qtyText(line.qtyKg),
-    })),
+    components: draft.components.map<WorkingComponent>(line => openRecipeLine(line.recipeId, line.qtyKg)),
   };
 }
 
@@ -82,7 +100,7 @@ export function workingFrom(product: Product, country: unknown): Working {
     name: product.name,
     components: product.components.map<WorkingComponent>(line => (line.kind === 'ingredient'
       ? { key: newLineKey(), kind: 'ingredient', ingredientId: line.ingredientId, qty: qtyText(line.qty), unit: line.unit }
-      : { key: newLineKey(), kind: 'recipe', recipeId: line.recipeId, qty: qtyText(line.qtyKg) })),
+      : openRecipeLine(line.recipeId, line.qtyKg))),
     packaging: product.packaging.map(line => ({ key: newLineKey(), ingredientId: line.ingredientId, qty: qtyText(line.qtyPcs) })),
     sellingMode: product.sellingMode ?? '',
     piecesPerBatch: text(product.piecesPerBatch),
@@ -115,6 +133,13 @@ export function readQty(raw: string): number {
   return value !== null && Number.isFinite(value) ? value : 0;
 }
 
+// A recipe line's kilos: the stored kilos, exactly, while the line is as it opened; else what its box says, read in the unit
+// beside it (kilosFromTyped — six decimals at most, so 522 g is 0.522 kg, never 0.5220000000001).
+export function recipeLineKg(line: { qty: string; unit: KiloLineUnit; stored?: { qty: string; kg: number } }): number {
+  if (line.stored && line.qty === line.stored.qty && line.unit === RECIPE_LINE_OPENS_IN) return line.stored.kg;
+  return kilosFromTyped(readQty(line.qty), line.unit);
+}
+
 export function vatRateOf(working: Working): number | null {
   if (working.vatSelect === 'other') return readNumber(working.vatOther);
   return working.vatSelect === '' ? null : Number(working.vatSelect);
@@ -142,7 +167,7 @@ export function isShown(working: Working, field: NumberField): boolean {
 export function toProduct(working: Working, id: string, name: string = working.name): Product {
   const components = working.components.map<ProductComponent>(line => (line.kind === 'ingredient'
     ? { kind: 'ingredient', ingredientId: line.ingredientId, qty: readQty(line.qty), unit: line.unit }
-    : { recipeId: line.recipeId, qtyKg: readQty(line.qty) }));
+    : { recipeId: line.recipeId, qtyKg: recipeLineKg(line) }));
   return {
     id,
     name,

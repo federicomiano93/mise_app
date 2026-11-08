@@ -6,6 +6,7 @@ import {
   normalizeTrays, traysGrams, usesOrders, usesTrays, usesTypedTotal,
 } from '@mise/shared/calculator-config';
 import type { Recipe } from '@mise/shared/calculator-config';
+import { showsSourceProblem } from '@mise/shared/calculator-recipe-source';
 import { runConfirm } from '@mise/shared/confirm-flow';
 import type { ForDay } from '@mise/shared/log-model';
 import {
@@ -20,9 +21,9 @@ import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import { useCalculator, useCalculatorStore } from './CalculatorContext';
 import { numberOf, knobRange } from './calculatorInput';
-import { problemSentence } from './calculatorMessages';
+import { problemSentence, recipeProblemSentence } from './calculatorMessages';
 import { buildDoughVersion } from './calculatorSave';
-import { calculateTab, showsKnob, sourceRecipe } from './calculatorResult';
+import { calculateTab, showsKnob, sourceRecipe, stillLoading } from './calculatorResult';
 import { useTabState, useTabVersion } from './TabStateContext';
 import { NumberField } from './NumberField';
 import { OrderCards } from './OrderCards';
@@ -111,7 +112,18 @@ export function RecipePanel({ recipe, panelProps }: Props) {
     knob: hasKnob ? knobText : null,
   });
   const hasDough = result.kind !== 'none';
-  const shown = revealed && hasDough;
+  // ⚠️ A TAB THAT CANNOT BE CALCULATED CLOSES ITS RESULT CARD (current app 1342cb79): the problem line at the top of the
+  // panel says why, and a card left open under it would only repeat the sentence under the old title. A recipe still on
+  // its way keeps the card and its «loading» sentence (the problem line says nothing yet).
+  const shown = revealed && hasDough && result.kind !== 'problem';
+
+  // ⚠️ WHY A LINKED TAB CANNOT BE CALCULATED, ON THE TAB ITSELF, before anything is typed (current app 6713adab). It used
+  // to refuse in silence — the total typed, no ingredient, no sentence — and the reason came out only after Confirm, in a
+  // dialog (Panificio Miano, 30 Oct 2026: «Le ricette nel calcolatore non funzionano»). Worked out from the resolved recipe,
+  // not from the result, so it shows with a total of 0 too. Same sentence as Settings and the Confirm dialog.
+  const sourceProblem = showsSourceProblem(recipe, resolved, stillLoading(recipe, linked)) && resolved.problem
+    ? recipeProblemSentence(t, { problem: resolved.problem, row: resolved.problemRow })
+    : '';
 
   // The first reveal scrolls to the top: Confirm is tapped at the bottom of the entries, and the recipe, now
   // the first thing in the panel, must come into view. The shell's `main` is the scroll area; the section does
@@ -391,6 +403,11 @@ export function RecipePanel({ recipe, panelProps }: Props) {
 
   return (
     <div {...panelProps}>
+      {/* FIRST in the panel: below a long list of client orders it would be off-screen and the tab silent again. Always
+          mounted and never hidden (empty, its stylesheet gives it no room), so the status region is in the accessibility
+          tree before its sentence arrives; React writes the text only when it changes, so a keystroke never makes a screen
+          reader read it out again (current app 1342cb79). Difference, on purpose: the current app hides the empty line. */}
+      <p role="status" className={styles.sourceProblem}>{sourceProblem}</p>
       <ClearedNote rid={rid} />
       <div className={styles.layout}>{parts}</div>
       <Dialog
