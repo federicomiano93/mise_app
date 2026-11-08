@@ -197,8 +197,13 @@ function OrdersLayout({ view }: { view: ShownView }) {
     const timer = window.setTimeout(() => { setGraceOver(true); }, LATCH_GRACE_MS);
     return () => { window.clearTimeout(timer); };
   }, []);
+  // Quantities typed on an earlier page came back from this device's note (F-15): look again, as the current app does.
+  const { relook } = pendingLatch;
   useEffect(() => {
-    if (!ready || pendingLatch.latched !== null || !latchCanLook(snapshot.serverSeen, online, graceOver)) return;
+    relook(snapshot.draftCameBack);
+  }, [snapshot.draftCameBack, relook]);
+  useEffect(() => {
+    if (!ready || (pendingLatch.latched !== null && !pendingLatch.owed) || !latchCanLook(snapshot.serverSeen, online, graceOver)) return;
     pendingLatch.latch(pendingNow(lens, snapshot.draft, todayISO()).map(row => row.supplier.id as string));
   }, [ready, pendingLatch, lens, snapshot.draft, snapshot.serverSeen, online, graceOver]);
 

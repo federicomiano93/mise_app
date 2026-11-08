@@ -92,6 +92,10 @@ export interface OrdersSource {
   getOlderHistory(args: { before: string; cursor: unknown }): Promise<{ records: StoredDoc[]; cursor: unknown; done: boolean }>;
   // The legacy weekly records — the only ones with a `weekStart` and no `date` (parity H5). From the server only, as above.
   getLegacyHistory(): Promise<StoredDoc[]>;
+  // orders-history from `fromDate` ('YYYY-MM-DD') onwards, read ONCE from the SERVER (getDocsFromServer, never the phone's
+  // copy, which may not know an order a colleague placed): the check a note of typed quantities waits for before anything of
+  // it comes back (F-15, the current app's getRecentHistoryFromServer). REJECTS when the server cannot be reached.
+  getRecentHistoryFromServer(fromDate: string): Promise<StoredDoc[]>;
   // Rewrites orders-history/<id> in a TRANSACTION: `decide` gets the record as stored (null when there is none) and returns
   // the WHOLE new record (it replaces the stored one; the venue stamp is applied here) or null to DELETE it. What `decide`
   // throws aborts and rejects with it. Resolves with what was written (null after a delete). A transaction needs the
@@ -329,6 +333,12 @@ export function createFirestoreOrdersSource(firestore: () => Promise<FirestoreKi
         cursor: snap.docs.length ? snap.docs[snap.docs.length - 1] : cursor,
         done: records.length < OLDER_PAGE_SIZE,
       };
+    },
+
+    async getRecentHistoryFromServer(fromDate) {
+      const { fs, db } = await firestore();
+      const snap = await fs.getDocsFromServer(fs.query(fs.collection(db, historyPath), fs.where('date', '>=', fromDate)));
+      return docsOf(snap);
     },
 
     // Only legacy records carry `weekStart` (the rules keep it off modern ones), so ordering by it returns just them.

@@ -156,6 +156,17 @@ describe('the merge', () => {
     expect((field as { segments: string[] }).segments, 'a FieldPath, never a dotted string').toEqual(['entries', 'b']);
   });
 
+  // F-15: B's line leaves this device's note of typed quantities too, or it would come back on the next opening of Orders.
+  test('⚠️ B\'s line leaves this device\'s note of typed quantities, and only B\'s', async () => {
+    localStorage.setItem('orders-draft-claims', JSON.stringify({ v: 1, lid: VENUE, at: Date.now(), days: {}, entries: {
+      b: { row: { qty: 5 }, base: { qty: 0 } }, a: { row: { qty: 2 }, base: { qty: 0 } },
+    } }));
+    const parts = make();
+    seed(parts);
+    await parts.source.mergeIngredients('a', 'b');
+    expect(Object.keys(JSON.parse(localStorage.getItem('orders-draft-claims') ?? 'null').entries)).toEqual(['a']);
+  });
+
   test('⚠️ fresh data: the queue drains, A and B are read again, and the usage is checked ONCE MORE before the first write', async () => {
     const parts = make();
     seed(parts);

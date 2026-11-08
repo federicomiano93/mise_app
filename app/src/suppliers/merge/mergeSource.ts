@@ -25,6 +25,7 @@
 // ⚠️ NO ROLE IS READ HERE: the door is courtesy; firestore.rules decide (canManage Food cost for prices and price changes,
 // canManage Orders for deleting an ingredient).
 
+import { dropNotedLine } from '@mise/shared/draft-journal';
 import { deletePlan } from '@mise/shared/ingredient-edit-model';
 import { deletionBatches, findUsage, monthKeyOf, planMerge, previousMonthKeyOf } from '@mise/shared/ingredient-merge';
 import type { MergeIngredient, MergePlan, UsageFound } from '@mise/shared/ingredient-merge';
@@ -279,7 +280,9 @@ export function createFirestoreMergeSource(
 
         // Its line in the order in progress (a quantity of zero: above zero the merge was refused). ⚠️ updateDoc and a
         // FieldPath, as suppliersSource.clearDraftEntry: no draft means nothing to clear, and an id is data, not a path.
-        // Fire-and-forget like the current app's dropDeletedIngredientFromDraft: the merge has already succeeded.
+        // Fire-and-forget like the current app's dropDeletedIngredientFromDraft: the merge has already succeeded. Out of this
+        // device's note of typed quantities too (F-15), or it would come back on the next opening of Orders.
+        dropNotedLine(locationId, b.id);
         fs.updateDoc(
           fs.doc(db, pathOf(DRAFTS), CURRENT_DRAFT),
           new fs.FieldPath('entries', b.id), fs.deleteField(),

@@ -107,6 +107,20 @@ describe('the ingredient card’s writes, as firestore.rules expect them', () =>
     expect([k2, v2]).toEqual(['bakery', VENUE]);
   });
 
+  // F-15: a number noted on this device for a product that no longer exists would come back into the order on the next opening
+  // of Orders, and be written there (the current app's «Fornitori holds no note: deleting a product … takes that line out»).
+  test('⚠️ clearing the draft line takes it out of this device\'s note of typed quantities too, and only that line', async () => {
+    const note = { v: 1, lid: VENUE, at: Date.now(), days: {}, entries: {
+      i1: { row: { qty: 5 }, base: { qty: 0 } }, salt: { row: { qty: 2 }, base: { qty: 0 } },
+    } };
+    localStorage.setItem('orders-draft-claims', JSON.stringify(note));
+    const { source } = make();
+    await source.clearDraftEntry('yeast');
+    expect(JSON.parse(localStorage.getItem('orders-draft-claims') ?? 'null').entries).toEqual(note.entries);
+    await source.clearDraftEntry('i1');
+    expect(Object.keys(JSON.parse(localStorage.getItem('orders-draft-claims') ?? 'null').entries)).toEqual(['salt']);
+  });
+
   test('a draft line is read as stored; no draft, no line, or a line that is not a map read as null', async () => {
     expect(await make({ draft: { entries: { i1: { qty: 3 } } } }).source.readDraftEntry('i1')).toEqual({ qty: 3 });
     expect(await make({ draft: null }).source.readDraftEntry('i1')).toBeNull();
