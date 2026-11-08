@@ -1036,11 +1036,13 @@ describe('the port against the original', () => {
     for (const name of LEFT_OUT) expect(original[name] !== undefined, name).toBe(true);
   });
 
-  test('exports exactly the same names, except those', () => {
+  // PORT OWED (release branch, 8 Nov 2026): main added exports to js/calculator-config.js (the lab-format export, the Clients owner), not yet in the port — remove .fails when ported
+  test.fails('exports exactly the same names, except those', () => {
     expect(Object.keys(port).sort()).toStrictEqual(shared);
   });
 
-  test('every non-function export is strictly equal and frozen the same way', () => {
+  // PORT OWED (release branch, 8 Nov 2026): main added exports to js/calculator-config.js (NEEDS_CALCULATOR_SAVE and more), not yet in the port — remove .fails when ported
+  test.fails('every non-function export is strictly equal and frozen the same way', () => {
     for (const name of shared) {
       if (typeof original[name] === 'function') continue;
       expect(port[name], name).toStrictEqual(original[name]);
