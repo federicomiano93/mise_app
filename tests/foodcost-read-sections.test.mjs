@@ -58,40 +58,40 @@ function english() {
   setCurrency('£', { decimal: '.', group: '', symbolAfter: false });
 }
 
-test('VAT 0 reads «0%», VAT not set reads «Non inserito»; the target uses the decimal comma', () => {
+test('VAT 0 reads «0,00%», VAT not set reads «Non inserito»; the target uses the decimal comma and two decimals', () => {
   italian();
   const zero = rs.readPrice({ vatRate: 0, target: 32.5, price: 6.5 });
-  assert.equal(valueOf(zero, 'fc.vatRate'), '0%');
-  assert.equal(valueOf(zero, 'fc.foodCostTarget'), '32,5%');
+  assert.equal(valueOf(zero, 'fc.vatRate'), '0,00%');
+  assert.equal(valueOf(zero, 'fc.foodCostTarget'), '32,50%');
   const unset = rs.readPrice({ vatRate: null, target: null, price: null });
   assert.deepEqual(values(unset), ['Non inserito', 'Non inserito', 'Non inserito']);
   const free = rs.readPrice({ vatRate: 10, target: 30, price: 0 });
   assert.equal(values(free)[2], 'Non inserito', 'a price of 0 is «Not set», never a zero price');
 });
 
-test('a recipe line is as exact as the form: 0.0125 kg, 0.5 kg, 1.25 kg, 10 kg', () => {
+test('a recipe line reads in two decimals: 0.0125 kg, 0.5 kg, 1.25 kg, 10 kg', () => {
   italian();
-  assert.equal(rs.recipeQtyText(0.0125), '12,5 g');
-  assert.equal(rs.recipeQtyText(0.5), '500 g');
+  assert.equal(rs.recipeQtyText(0.0125), '12,50 g');
+  assert.equal(rs.recipeQtyText(0.5), '500,00 g');
   assert.equal(rs.recipeQtyText(1.25), '1,25 kg');
-  assert.equal(rs.recipeQtyText(10), '10 kg');
-  assert.equal(rs.recipeQtyText(0.999999), '1 kg', 'never «1000 g»');
+  assert.equal(rs.recipeQtyText(10), '10,00 kg');
+  assert.equal(rs.recipeQtyText(0.999999), '1,00 kg', 'never «1000,00 g»');
   english();
-  assert.equal(rs.recipeQtyText(0.0125), '12.5 g');
+  assert.equal(rs.recipeQtyText(0.0125), '12.50 g');
   const comps = [0.0125, 0.5, 1.25].map((qtyKg) => ({ kind: 'recipe', qtyKg }));
   const view = rs.readMadeOf({ components: comps, lineName: () => ({ text: 'Dough', missing: false }), lineNote: () => '' });
-  assert.deepEqual(values(view), ['12.5 g', '500 g', '1.25 kg']);
+  assert.deepEqual(values(view), ['12.50 g', '500.00 g', '1.25 kg']);
 });
 
 test('ingredient pieces read «3 pz» in Italian and «3 pcs» in English; packaging lines too', () => {
   const comps = [{ kind: 'ingredient', qty: 3, unit: 'pcs' }, { kind: 'ingredient', qty: 2.5, unit: 'kg' }];
   const args = { components: comps, lineName: () => ({ text: 'Egg', missing: false }), lineNote: () => '' };
   italian();
-  assert.deepEqual(values(rs.readMadeOf(args)), ['3 pz', '2,5 kg']);
+  assert.deepEqual(values(rs.readMadeOf(args)), ['3,00 pz', '2,50 kg']);
   const pack = rs.readPackaging({ packaging: [{ qtyPcs: 1 }, { qtyPcs: 4 }], lineName: () => ({ text: 'Box', missing: false }), lineNote: () => '' });
-  assert.deepEqual(values(pack), ['1 pz', '4 pz']);
+  assert.deepEqual(values(pack), ['1,00 pz', '4,00 pz']);
   english();
-  assert.equal(values(rs.readMadeOf(args))[0], '3 pcs');
+  assert.equal(values(rs.readMadeOf(args))[0], '3.00 pcs');
 });
 
 test('an empty «Composto da» and an empty packaging say «Nothing yet»', () => {
@@ -121,5 +121,5 @@ test('labour and pack figures go through the venue layout', () => {
   const labour = rs.readLabour({ minutes: 7.5, people: 2, note: '' });
   assert.deepEqual(values(labour), ['7,5', '2']);
   const product = rs.readProduct({ name: 'Pane', sellingMode: 'pack', packSize: 0.5, packUnit: 'kg', piecesPerBatch: null });
-  assert.equal(valueOf(product, 'fc.packHolds'), '0,5 kg');
+  assert.equal(valueOf(product, 'fc.packHolds'), '0,50 kg');
 });

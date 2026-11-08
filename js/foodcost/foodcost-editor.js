@@ -21,13 +21,13 @@ import {
 } from './foodcost-model.js';
 import { lineCostView } from './line-cost.js';
 import { previewPanel } from './preview-view.js';
-import { formatRate, formatMoney } from '../price-model.js';
+import { fcMoney, fcNumber, weighingParams } from './fc-number.js';
 import { openVatGuide } from './vat-guide-view.js';
 import { firstInvalidNumber } from './product-limits.js';
 // ⚠️ READ WHERE THE FIELD IS DRAWN, never at module load: the venue — and therefore
 // its country, and therefore its currency — arrives with the session, after every
 // module has been evaluated. See js/currency.js.
-import { currentCurrency, localNumber } from '../currency.js';
+import { currentCurrency } from '../currency.js';
 import { costPerKg } from './per-kg-model.js';
 import { costRecipe } from '../catalogue/recipe-cost-model.js';
 // Pure models only, like recipe-cost-model.js above: what a typed name matches, and how
@@ -76,10 +76,10 @@ const PER_KG_REASON_TEXT = {
 const CHEVRON_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>';
 
-// A count of pieces in one kilo: one decimal, two under one piece (a box shared by many
-// kilos), so a counted cost never sits beside «0 pz».
+// A count of pieces in one kilo, two decimals like every figure here; a box shared by many
+// kilos reads «< 0,01», so a counted cost never sits beside «0,00 pz».
 function perKgPiecesText(pcs) {
-  return localNumber(String(pcs < 1 ? Number(pcs.toFixed(2)) : Number(pcs.toFixed(1))));
+  return fcNumber(pcs);
 }
 
 // The unit word for a selling mode's figures: «per piece», «per kg», «per pack».
@@ -218,8 +218,8 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
       // putting the parsed 12 back would eat the decimal point.
       if (focused !== view.rawInput) view.rawInput.value = state.raw > 0 ? String(state.raw) : '';
       if (focused !== view.cookedInput) view.cookedInput.value = state.cooked > 0 ? String(state.cooked) : '';
-      view.out.textContent = t(shown.message.key, shown.message.params);
-      view.warn.textContent = shown.warning ? t(shown.warning.key, shown.warning.params) : '';
+      view.out.textContent = t(shown.message.key, weighingParams(shown.message.params));
+      view.warn.textContent = shown.warning ? t(shown.warning.key, weighingParams(shown.warning.params)) : '';
       view.warn.hidden = !shown.warning;
       // ⚠️ THE COOKED BOX STAYS RED FOR AS LONG AS ITS WARNING STANDS (Federico, Nov 2026:
       // «deve restare rosso»): the sentence alone, under the pair, was easy to miss.
@@ -285,23 +285,23 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
     prodCost.appendChild(el('div', { class: 'fc-prodcost-head' }, [
       el('span', { class: 'fc-answer-label', text: t('fc.productionCost') }),
       el('span', { class: 'fc-prodcost-value' }, [
-        el('span', { class: 'fc-prodcost-num', text: perUnit ? formatRate(cost.unitCost) : formatMoney(cost.batchCost) }),
+        el('span', { class: 'fc-prodcost-num', text: fcMoney(perUnit ? cost.unitCost : cost.batchCost) }),
         el('span', { class: 'fc-prodcost-unit', text: perUnit
           ? t(UNIT_TEXT[cost.unit])
           : t('fc.wholeBatchWord') }),
       ]),
     ]));
     if (perUnit) {
-      prodCost.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.wholeBatch', { cost: formatMoney(cost.batchCost) }) }));
+      prodCost.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.wholeBatch', { cost: fcMoney(cost.batchCost) }) }));
     }
     // The work, beside the materials — drawn only when there is a figure, which needs the
     // hourly rate, which only whoever runs the place is ever sent.
     if (cost.labourUnitCost !== null) {
       prodCost.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.costSplit', {
-        materials: formatRate(cost.unitCost), labour: formatRate(cost.labourUnitCost),
+        materials: fcMoney(cost.unitCost), labour: fcMoney(cost.labourUnitCost),
       }) }));
       prodCost.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.costTotal', {
-        total: formatRate(cost.totalUnitCost), unit: t(UNIT_TEXT[cost.unit]),
+        total: fcMoney(cost.totalUnitCost), unit: t(UNIT_TEXT[cost.unit]),
       }) }));
     }
     // ⚠️ THE SAME RULE AS THE ANSWER BELOW: a partial cost is always too LOW, so it may
@@ -339,7 +339,7 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
     perKg.hidden = res.total === null;
     perKgBody.replaceChildren();
     if (res.total === null) return;
-    perKgNum.textContent = formatRate(res.total);
+    perKgNum.textContent = fcMoney(res.total);
 
     const list = el('ul', { class: 'fc-perkg-list' });
     res.rows.forEach(row => {
@@ -349,13 +349,13 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
       if (hasKg && !(row.kind === 'piece' && hasPcs)) parts.push(perKgWeightText(row.kg));
       else if (hasPcs) parts.push(t('fc.perKg.pieces', { n: perKgPiecesText(row.pcs) }));
       if (row.reason) parts.push(t(PER_KG_REASON_TEXT[row.reason]));
-      else if (row.pricePerKg !== null && row.pricePerKg !== undefined) parts.push(`${formatRate(row.pricePerKg)} / kg`);
-      else if (row.priceEach !== null && row.priceEach !== undefined) parts.push(t('price.perEach', { rate: formatRate(row.priceEach) }));
+      else if (row.pricePerKg !== null && row.pricePerKg !== undefined) parts.push(`${fcMoney(row.pricePerKg)} / kg`);
+      else if (row.priceEach !== null && row.priceEach !== undefined) parts.push(t('price.perEach', { rate: fcMoney(row.priceEach) }));
       list.appendChild(el('li', { class: 'fc-perkg-row' }, [
         el('span', { class: 'fc-perkg-name', text: row.name }),
-        // ⚠️ formatRate, LIKE THE TOTAL: rows in cents beside a total in tenths of a cent
-        // visibly fail to add up, and the box would look wrong when it is not.
-        row.reason ? null : el('span', { class: 'fc-perkg-cost', text: formatRate(row.cost) }),
+        // Federico, 8 Nov 2026: rows and total are both shown in cents. The total is worked out from
+        // the exact values, so the rows may differ from it by a cent; that is accepted.
+        row.reason ? null : el('span', { class: 'fc-perkg-cost', text: fcMoney(row.cost) }),
         el('span', { class: 'fc-perkg-detail', text: parts.join(' · ') }),
       ]));
     });
@@ -363,7 +363,7 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
     perKgBody.appendChild(list);
     perKgBody.appendChild(el('div', { class: 'fc-perkg-total' }, [
       el('span', { text: t('fc.perKg.total') }),
-      el('span', { class: 'fc-perkg-num', text: formatRate(res.total) }),
+      el('span', { class: 'fc-perkg-num', text: fcMoney(res.total) }),
     ]));
     // ⚠️ NEUTRAL, NOT «IT COSTS MORE»: a row with no price adds neither cost nor weight in
     // the cost model, so the figure can be too high (water not linked) as well as too low.
@@ -432,14 +432,14 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
     answer.className = `fc-answer ${status || 'none'}`;
     answer.appendChild(el('div', { class: 'fc-answer-head' }, [
       el('span', { class: 'fc-answer-label', text: t('fc.foodCost') }),
-      el('span', { class: 'fc-answer-value', text: `${result.foodCostPct}%` }),
+      el('span', { class: 'fc-answer-value', text: `${fcNumber(result.foodCostPct)}%` }),
     ]));
 
     answer.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.answerBasis', {
-      cost: formatRate(result.unitCost),
+      cost: fcMoney(result.unitCost),
       unit: unitWord(working.sellingMode),
-      net: formatMoney(result.netUnitPrice),
-      margin: formatMoney(result.margin),
+      net: fcMoney(result.netUnitPrice),
+      margin: fcMoney(result.margin),
     }) }));
 
     if (status) answer.appendChild(el('p', { class: 'fc-answer-status', text: t(STATUS_TEXT[status]) }));
@@ -448,7 +448,7 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
     // ingredients and packaging take; this says what the work takes, and everything.
     if (result.labourPct !== null) {
       answer.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.labourPctLine', {
-        labour: String(result.labourPct), total: String(result.totalCostPct),
+        labour: fcNumber(result.labourPct), total: fcNumber(result.totalCostPct),
       }) }));
     }
 
@@ -980,12 +980,12 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
     suggestion.appendChild(el('div', { class: 'fc-prodcost-head' }, [
       el('span', { class: 'fc-answer-label', text: t('fc.suggestedPrice') }),
       el('span', { class: 'fc-prodcost-value' }, [
-        el('span', { class: 'fc-prodcost-num', text: formatMoney(price) }),
+        el('span', { class: 'fc-prodcost-num', text: fcMoney(price) }),
         el('span', { class: 'fc-prodcost-unit', text: t(UNIT_TEXT[cost.unit]) }),
       ]),
     ]));
     suggestion.appendChild(el('p', { class: 'fc-answer-basis', text: t('fc.suggestedPriceBasis', {
-      vat: String(working.vatRate), target: String(working.foodCostTarget),
+      vat: fcNumber(working.vatRate), target: fcNumber(working.foodCostTarget),
     }) }));
     // ⚠️ THE SAME RULE AS THE COST ABOVE: a partly priced product costs more than it says,
     // so the price that would hit the target is HIGHER than this one — say so.
@@ -1109,7 +1109,7 @@ export function renderEditor({ product, draft = null, app, mode: wanted = 'auto'
     const message = weighIssues.length
       ? t('fc.saveWithWeightWarnings', {
         lines: weighIssues.map(issue => t('fc.weightWarningLine', {
-          name: issue.name, warning: t(issue.warning.key, issue.warning.params),
+          name: issue.name, warning: t(issue.warning.key, weighingParams(issue.warning.params)),
         })).join('\n'),
       })
       : t('fc.saveTheseChanges');

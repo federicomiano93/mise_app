@@ -9,7 +9,8 @@
 // Modelled on vat-guide-view.js. ⚠️ NOT `.preview-overlay`: that class is a busy marker in
 // js/update-gate.js, and nothing here can be lost by closing it.
 
-import { t, localeTag } from '../i18n.js';
+import { t } from '../i18n.js';
+import { fcNumber } from './fc-number.js';
 import { el } from './dom.js';
 
 const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>';
@@ -19,7 +20,6 @@ const BACK_ICON = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" w
 //           been redrawn while this was open, and the button that opened it with it) }
 export function openFromRecipes({ create = [], maybe = [], confirm, onCreate, returnFocus = null } = {}) {
   // Read here, not at module load: the venue's language arrives after the page starts.
-  const kgFormat = new Intl.NumberFormat(localeTag(), { maximumFractionDigits: 2 });
   const ticked = new Map();
   [...create, ...maybe].forEach(item => ticked.set(item, create.includes(item)));
 
@@ -60,7 +60,7 @@ export function openFromRecipes({ create = [], maybe = [], confirm, onCreate, re
     if (item.reason === 'used') return t('fc.fromBook.usedIn', { name: item.productName });
     if (item.reason === 'same-name') return t('fc.fromBook.sameName');
     return item.kg > 0
-      ? t('fc.fromBook.wholeRecipe', { kg: kgFormat.format(item.kg) })
+      ? t('fc.fromBook.wholeRecipe', { kg: fcNumber(item.kg) })
       : t('fc.fromBook.noWeight');
   }
 

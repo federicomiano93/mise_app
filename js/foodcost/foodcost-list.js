@@ -11,7 +11,7 @@
 import { t } from '../i18n.js';
 import { el } from './dom.js';
 import { sortByMargin, blockerText, nameMatches } from './foodcost-model.js';
-import { formatRate, formatMoney } from '../price-model.js';
+import { fcMoney, fcNumber } from './fc-number.js';
 
 // Keys, resolved at draw time — see js/calculator-render.js.
 const STATUS_TEXT = { green: 'fc.onTarget', amber: 'fc.slightlyOver', red: 'fc.overTarget' };
@@ -146,7 +146,7 @@ function row(product, result, onOpen, isSelected) {
   });
 
   const figure = costed
-    ? el('span', { class: 'fc-pct', text: `${result.foodCostPct}%` })
+    ? el('span', { class: 'fc-pct', text: `${fcNumber(result.foodCostPct)}%` })
     : el('span', { class: 'fc-pct fc-pct-none', text: '—' });
 
   // What is still missing, or what it earns. Either way ONE line, so every card is
@@ -155,8 +155,8 @@ function row(product, result, onOpen, isSelected) {
     // ⚠️ «cost» and «margin» were English written into the code, on an Italian venue
     // too — no dictionary could reach them. Keys since 13 Sep 2026.
     ? [result.status ? t(STATUS_TEXT[result.status]) : t('fc.noTargetSet'),
-       t('fc.listCost', { cost: formatRate(result.unitCost) }),
-       t('fc.listMargin', { margin: formatMoney(result.margin) })].join('  ·  ')
+       t('fc.listCost', { cost: fcMoney(result.unitCost) }),
+       t('fc.listMargin', { margin: fcMoney(result.margin) })].join('  ·  ')
     : (result.blockers.length ? blockerText(result.blockers[0]) : t('fc.notCostedYet'));
 
   return el('button', {

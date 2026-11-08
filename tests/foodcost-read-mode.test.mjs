@@ -38,20 +38,20 @@ test('a missing value is «Not set», never 0 or a zero price', () => {
   const code = codeOf(readSections);
   assert.match(code, /t\('fc\.notSet'\)/);
   assert.match(code, /t\('fc\.read\.nothingYet'\)/);
-  assert.match(code, /positive\(price\) \? formatMoney\(price\) : null/);
+  assert.match(code, /positive\(price\) \? fcMoney\(price\) : null/);
 });
 
 test('the read sections import only models and formatters, never the editor or another feature', () => {
   const imports = [...readSections.matchAll(/from '([^']+)'/g)].map((m) => m[1]);
-  assert.deepEqual(imports.sort(), ['../currency.js', '../i18n.js', '../price-model.js', './dom.js', './foodcost-weighing.js'].sort());
+  assert.deepEqual(imports.sort(), ['../currency.js', '../i18n.js', './dom.js', './fc-number.js', './foodcost-weighing.js'].sort());
 });
 
 test('perKgWeightText and showsPiecesField: grams under a kilo, kilos from a kilo; pieces only where sold so', async () => {
   const { perKgWeightText, showsPiecesField } = await import('../js/foodcost/read-sections.js');
-  assert.equal(perKgWeightText(0.25), '250 g');
-  assert.equal(perKgWeightText(0.0042), '4.2 g');
-  assert.equal(perKgWeightText(0.9996), '1 kg', '999.6 g reads «1 kg», never «1000 g»');
-  assert.equal(perKgWeightText(1.5), '1.5 kg');
+  assert.equal(perKgWeightText(0.25), '250.00 g');
+  assert.equal(perKgWeightText(0.0042), '4.20 g');
+  assert.equal(perKgWeightText(0.999999), '1.00 kg', '999.999 g reads «1.00 kg», never «1000.00 g»');
+  assert.equal(perKgWeightText(1.5), '1.50 kg');
   assert.equal(showsPiecesField({ sellingMode: 'piece' }), true);
   assert.equal(showsPiecesField({ sellingMode: 'pack', packUnit: 'pcs' }), true);
   assert.equal(showsPiecesField({ sellingMode: 'pack', packUnit: 'g' }), false);

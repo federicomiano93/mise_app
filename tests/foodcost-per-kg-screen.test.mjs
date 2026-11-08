@@ -32,15 +32,15 @@ test('the summary is built ONCE, outside the painting: a focused summary survive
   assert.doesNotMatch(body, /'summary'/);
   assert.doesNotMatch(body, /perKg\.replaceChildren/);
   assert.match(body, /perKgBody\.replaceChildren\(\)/);
-  assert.match(body, /perKgNum\.textContent = formatRate\(res\.total\)/);
+  assert.match(body, /perKgNum\.textContent = fcMoney\(res\.total\)/);
   // A fault in the box never takes the card down (P17).
   assert.match(body, /try \{ res = costPerKg\(working, tables\); \} catch/);
 });
 
 test('rows and total use the same money formatter, so they visibly add up', () => {
   const body = /function paintPerKg\(tables\) \{([\s\S]*?)\n  \}\n/.exec(src)[1];
-  assert.match(body, /'fc-perkg-cost', text: formatRate\(row\.cost\)/);
-  assert.doesNotMatch(body, /formatMoney/);
+  assert.match(body, /'fc-perkg-cost', text: fcMoney\(row\.cost\)/);
+  assert.doesNotMatch(body, /formatMoney|formatRate/);
 });
 
 test('the reason key table holds every reason the model gives', async () => {
