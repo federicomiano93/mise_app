@@ -16,6 +16,7 @@ import { isWeekday } from '@mise/shared/pastries-model';
 import type { MessageKey } from '../i18n/en';
 import { ordersScreenName } from '../orders/ordersPath';
 import { parseRecipesPath } from '../recipes/recipesPath';
+import { settingsScreenName } from '../settings/settingsPath';
 import { suppliersScreenName } from '../suppliers/suppliersPath';
 
 export type SectionId =
@@ -122,6 +123,8 @@ export function screenNameFor(pathname: string): string | null {
   if (isUnder(pathname, MORE.path)) return 'more';
   const section = SECTIONS.find(candidate => isUnder(pathname, candidate.path));
   if (!section) return 'not-found';
+  // Settings (step 3g-2): the page, and the app language and the sections for employees below it.
+  if (section.id === 'settings') return settingsScreenName(pathname);
   if (section.id === 'pastries') return pastriesScreenName(pathname, section.path);
   if (section.id === 'stocktake') return stocktakeScreenName(pathname, section.path);
   if (section.id === 'foodcost') return foodcostScreenName(pathname, section.path);

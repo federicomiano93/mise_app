@@ -1,6 +1,6 @@
 import type { RouteObject } from 'react-router';
 import { RootError } from './errors/RootError';
-import { SettingsPage } from './settings/SettingsPage';
+import { SettingsSection } from './settings/SettingsSection';
 import { AppShell } from './shell/AppShell';
 import { MorePage } from './shell/MorePage';
 import { NotFound } from './shell/NotFound';
@@ -25,10 +25,11 @@ export const routes: RouteObject[] = [
         // A built section owns every address under its own path (`/pastries/Tuesday/edit`) and
         // reads the rest itself; `/pastries/*` also matches `/pastries`. One route, so moving
         // between its screens never remounts it (and never throws away what it holds).
-        path: hasScreen(section.id) ? `${section.path}/*` : section.path,
-        // Settings is every signed-in person's own (their account, the way out), so it has no
+        // Settings owns its addresses too (`/settings/language`) and sends a junk one back to its page.
+        path: hasScreen(section.id) || section.id === 'settings' ? `${section.path}/*` : section.path,
+        // Settings is every signed-in person's own (their account, the way out, their holiday), so it has no
         // gate; every other section is on only for those the venue shows it to.
-        element: section.id === 'settings' ? <SettingsPage /> : <SectionRoute sectionId={section.id} />,
+        element: section.id === 'settings' ? <SettingsSection /> : <SectionRoute sectionId={section.id} />,
       })),
       { path: MORE.path, element: <MorePage /> },
       { path: '*', element: <NotFound /> },

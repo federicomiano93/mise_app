@@ -7,7 +7,10 @@ import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { SwitchVenueButton } from '../session/SwitchVenueButton';
+import { AwayProvider } from './away/AwayContext';
 import { announceScreen } from '../telemetry/usage';
+import { AwayReminder } from './AwayReminder';
+import { AwayRefusalAlert } from './away/AwayRefusalAlert';
 import { OfflineBanner } from './OfflineBanner';
 import { MORE, moreIsCurrent, screenNameFor, sectionById, titleKeyFor } from './sections';
 import type { Section } from './sections';
@@ -27,7 +30,16 @@ const sectionOf = (pathname: string): string => pathname.split('/')[1] ?? '';
 // script measures the width: a tablet turned from landscape to portrait, or a window resized,
 // changes the layout with no render at all, and `display: none` keeps the hidden one out of the
 // tab order and away from screen readers.
+// This person's holiday is held here, at the venue level, so the Home's band, Settings' row and the once-a-day reminder agree.
 export function AppShell() {
+  return (
+    <AwayProvider>
+      <ShellFrame />
+    </AwayProvider>
+  );
+}
+
+function ShellFrame() {
   const { t } = useT();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -63,6 +75,13 @@ export function AppShell() {
     <AriaRouterProvider navigate={to => navigate(to)} useHref={useHref}>
       <div className={styles.shell}>
         <SkipLink target={contentRef} />
+        <PartBoundary>
+          <AwayReminder />
+        </PartBoundary>
+        {/* Its own boundary: a reminder that fails to draw must not take the one «Not saved» of the holiday with it. */}
+        <PartBoundary>
+          <AwayRefusalAlert />
+        </PartBoundary>
         <Rail />
         <div className={styles.main}>
           <TopBar />
