@@ -2586,7 +2586,10 @@ describe('foodcost-weighing: odd inputs', () => {
       { id: 'p3', components: [{ recipeId: 'bri', qtyKg: 1 }] }, null],
     [null, undefined, 0, '', { id: 'p' }, { id: 'p', components: null }, { id: 'q', components: [null, undefined, 5, { recipeId: 'foc' }] }],
     [{ id: 'p', components: 'foc' }], [{ id: 'p', components: {} }], [{ id: 'p', components: 5 }], [{ components: [{ recipeId: 'foc' }] }],
-    [{ id: 'p', components: [{ kind: 'ingredient', ingredientId: 'foc' }] }]];
+    [{ id: 'p', components: [{ kind: 'ingredient', ingredientId: 'foc' }] }],
+    // A finished product («no weight loss») is not counted; only a literal true lays the loss aside.
+    [{ id: 'p1', components: [{ recipeId: 'foc' }] }, { id: 'p2', noWeightLoss: true, components: [{ recipeId: 'foc' }] },
+      { id: 'p3', noWeightLoss: 'true', components: [{ recipeId: 'foc' }] }, { id: 'p4', noWeightLoss: 1, components: [{ recipeId: 'foc' }] }]];
   agree('otherProductsUsing', m.otherProductsUsing, l.otherProductsUsing, product(PRODUCT_LISTS, [...ODD, 'foc', 'bri', 'none'], [...ODD, 'p1', 'p', 'q']));
 });
 
