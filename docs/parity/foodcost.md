@@ -209,3 +209,15 @@ reason.
 - **Messages** are announced in a status region that exists before it changes, instead of a toast.
 - **The chooser and the VAT guide are dialogs** (focus kept inside, Esc closes), not overlays drawn
   over the page.
+
+## «Finished product, no weight loss» as built (8 Nov 2026)
+
+Port of the current app's step 1 switch (`bb1e0ede`, item 4 of `docs/mise2-port-owed.md`). Before it a Mise 2 save of a product
+(a WHOLE write) removed the flag and the recipes' oven loss started counting again.
+- `noWeightLoss` is read only as a literal `true` (`normalizeProduct`) and written only when true; switching it off removes the key.
+- The cost of a recipe line lays the recipe's own loss aside for that product alone (`batchTotals`); the recipe keeps its number.
+- The product form shows the switch, with its hint, only while the product has a recipe line. While it is on no weighing box is
+  drawn, nothing typed earlier is written onto the recipes, and the live figures are the lossless ones. Toggling it on a saved
+  product records a margin point. A finished product is not counted in «it changes N other products too» (`otherProductsUsing`).
+- Still owed (section E of the checklist): the per-kilo block, the per-line rate and the read view, which also honour the flag in
+  the current app.

@@ -22,12 +22,14 @@ once its port lands: remove the marker then. `tests/mise2-port-owed.test.mjs` pr
 point at the items below, which say what and where.
 
 Data loss first:
-- [ ] 1. Pastries row notes and «Copy day» (a Mise 2 day save erases the notes)
-- [ ] 2. Recipe categories written one word at a time (arrayUnion / arrayRemove), never the whole list
-- [ ] 4. Food cost `noWeightLoss` kept by a Mise 2 product save
+- [ ] 1. Pastries row notes and «Copy day» (a Mise 2 day save erases the notes) — the notes are ported (8 Nov, no longer erased); «Copy day» still owed
+- [x] 2. Recipe categories written one word at a time (arrayUnion / arrayRemove), never the whole list — ported 8 Nov (PR into the release branch, `feature/mise2-port-data-loss`)
+- [x] 4. Food cost `noWeightLoss` kept by a Mise 2 product save — ported 8 Nov with the switch (`feature/mise2-port-data-loss`)
 - [ ] 6. Orders draft journal and corrections in flight (F-15, F-16)
 - [ ] 3. `drafts/current.skipped` and «Order done» / «Close as not ordered»
-- [ ] 5. Usage `hours` kept by Mise 2's usage write
+- [x] 5. Usage `hours` kept by Mise 2's usage write — already on this branch through PR #473 (`e1a4639d`), found on 8 Nov:
+      the tick files the seconds under the hour (`addHour`), the stored day keeps them across both apps' commits and the
+      payload carries them (`app/src/telemetry/usage.spec.ts`, «the hours reach the stored day and the line…»)
 - [ ] 7. Stocktake «Close month» guard moved into shared/ (`LIST_STATUS`, wording)
 
 Roles, Orders, Suppliers:
@@ -89,7 +91,8 @@ Before the switch, not ports:
    field (grep: no hit in app/ or shared/), so the first Mise 2 save of a product flagged «Finished product, no weight loss» removes the flag
    and the recipes' oven loss starts counting again (changes the cost). Mise 2: NONE. Files: `shared/src/foodcost-model.ts`,
    `app/src/foodcost/{productEditorModel,ProductForm,WeighingPair}.tsx`, source + store round trip. Size S (carry the field) + switch UI (S).
-5. **Usage record `hours`** — PR #472 (v1.139.x), `97d6beae`. DATA LOSS: minor (statistics only). `app/src/telemetry/sinks.ts:122-125`
+5. **Usage record `hours`** — DONE: it came into this branch with PR #473 (`e1a4639d`, step 1); the description below was
+   written before that was noticed. PR #472 (v1.139.x), `97d6beae`. DATA LOSS: minor (statistics only). `app/src/telemetry/sinks.ts:122-125`
    writes the day's usage doc with a whole `setDoc`, so a device that opened both apps in a day loses `hours` for that day. Mise 2: NONE in
    `app/src/telemetry/usage.ts` (the shared model `shared/src/usage-model.ts` already knows `hours`). Files: `app/src/telemetry/usage.ts`,
    `sinks.ts`, specs. Size S. (Memory note says Mise 2 telemetry uses its own `m2-…` versions: keep that.)
