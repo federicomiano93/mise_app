@@ -72,6 +72,20 @@ describe('which sections are drawn', () => {
     expect(nutritionHead(region)).toHaveAccessibleName('Nutrition 6 of 8 empty');
   });
 
+  it('each head holds its title and state in one group, the chevron beside it, so a narrow phone wraps the words, not the chevron', async () => {
+    const { region } = await open('/suppliers/ingredient/i-declared');
+    for (const head of [packHead(region), allergenHead(region), nutritionHead(region)]) {
+      const [words, chevron, ...rest] = [...head.children];
+      expect(rest).toHaveLength(0);
+      expect(words?.tagName).toBe('SPAN');
+      // The group carries the wrapping rule (ingredientCardCss.spec.ts pins what `.words` says).
+      expect(words?.className).toMatch(/(^|_)words(_|$)/);
+      expect(words?.children).toHaveLength(2);
+      expect(chevron?.tagName.toLowerCase()).toBe('svg');
+      expect(chevron).toHaveAttribute('aria-hidden', 'true');
+    }
+  });
+
   it('an ingredient nobody has declared says so in words, outside the fold', async () => {
     const { region } = await open('/suppliers/ingredient/i-plain');
     expect(region.getByText('Not checked yet — this ingredient blocks any label it is used in.')).toBeVisible();

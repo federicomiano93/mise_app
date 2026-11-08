@@ -860,6 +860,23 @@ with a rules conflict to settle. These hunks will meet their originals unchanged
 ingredient ALREADY saved with a wrong carton keeps its price in both apps (`storedWeightFactor` trusts the stored weight, and a
 re-import offers the wrong price again as `weight-rescaled`): it has to be corrected on its card.
 
+## Ingredient card: the fold heads at 296px as built
+
+Found by the 3f-8b driver («the card from Orders», 6 Nov 2026) and measured before touching anything: at 296px the head of
+each of the card's three folds (Ingredient list, Allergens, Nutrition) is 204px wide, and its title, state pill and chevron
+sat on one row that could not wrap. The chevron was pushed 11–25px past the head's edge (button `scrollWidth` 215–229 against
+204) — all three heads in Italian, «Allergens» in English; at 360px the title and the pill each broke onto two lines inside
+themselves.
+
+- The title and the state now sit in one wrapping group (`.words` in `AllergenSections.module.css`, tokens only), the chevron
+  beside it. When the row is too narrow the state drops whole under the title; the chevron stays on the right edge, centred,
+  and the head stays at least `--hit` tall. On the tablet nothing changes: the three still fit on one row.
+- The accessible name is unchanged («Allergeni non dichiarato»): the space between title and state is still there.
+- Pinned by `ingredientCardCss.spec.ts` (what `.words` says, the head row and the chevron never wrapping or shrinking, no
+  `overflow` in the folds) and `SuppliersSection.ingredient.allergens.spec.tsx` (the group carries the class, the chevron
+  is outside it). Measured after: `probe-mise2-fold-heads.mjs` 36/36 (was 32/36) at 1024/360/296 in IT and EN.
+- Not changed: the recipe screen's allergen card (`recipes/AllergenCard`) has the same one-row head; it is not measured here.
+
 ## Findings — things found while reading, not decided
 
 ### Findings — The page, the lists, suppliers
