@@ -45,7 +45,7 @@ Number ports (wrong numbers otherwise):
 
 Before the switch, not ports:
 - [ ] `feature/mise2-3g-2` (Settings: holidays, app language, sections for staff) finished and merged, or his OK to ship without
-- [ ] The Mise 2 service worker at the same path and name as today's (`sw.js`, step 5), every editor holding `markBusy()` (item 17), the rollback to the current app proved by a test
+- [x] The Mise 2 service worker at the same path and name as today's (`sw.js`, step 5), every editor holding `markBusy()` (item 17), the rollback to the current app proved by a test — done 8 Nov 2026 (`feature/mise2-switch-prep-sw`, `feature/mise2-switch-prep-rollback`; `app/src/shell/{worker,serviceWorker,rollback}.spec.ts`, `node app/sw/drive-switch.cjs` in Chromium, `docs/switch-runbook.md`)
 - [ ] GitHub Pages built by CI: Mise 2 at the same address, `order.html`, `reset-password.html` and the rest kept (the Pages source setting is switched at the switch hour, `docs/switch-runbook.md`)
 - [ ] CSP of Mise 2's page (functions host, `https://www.gov.uk`, no App Check hosts), Auth persistence and the Firebase version as the current app's
 - [ ] The release PR's preview shows Mise 2 as it will be live (fake data, `mise-app-preview`)
