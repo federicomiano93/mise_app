@@ -259,6 +259,53 @@ describe('the holiday store', () => {
     expect(store.getSnapshot()).toMatchObject({ until: '2026-11-12', away: true });
   });
 
+  // Review, 8 Nov 2026: a read that began before a write, answered with that write on top after it was refused, is old news.
+  it('never shows a read carrying a write that started after the read and was then refused', async () => {
+    const { store, source, clock } = make({ away: null });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    store.start();
+    await flush();
+    const realRead = source.readMyAway;
+    let late: (mine: { until: string; pending?: boolean } | null) => void = () => undefined;
+    let calls = 0;
+    source.readMyAway = vi.fn(uid => (calls++ === 0
+      ? new Promise<{ until: string; pending?: boolean } | null>(done => { late = done; })
+      : realRead(uid)));
+    clock.now += 11 * 60_000;
+    store.refresh();
+    source.holdWrites = true;
+    const change = store.set('2026-11-14');
+    source.refuseHeld(new Error('refused'));
+    expect(change.accepted && await change.saved).toBe(false);
+    await flush();
+    late({ until: '2026-11-14', pending: true });
+    await flush();
+    expect(store.getSnapshot()).toMatchObject({ until: null, away: false });
+  });
+
+  it('tells onRefused once, for the newest write only', async () => {
+    const { store, source } = make({ away: { until: '2026-11-20' } });
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    store.start();
+    await flush();
+    const told = vi.fn();
+    const stop = store.onRefused(told);
+    source.holdWrites = true;
+    const older = store.set('2026-11-12');
+    const newer = store.set('2026-11-14');
+    source.refuseHeld(new Error('older refused'));
+    expect(older.accepted && await older.saved).toBe(false);
+    expect(told).not.toHaveBeenCalled();
+    source.refuseHeld(new Error('newer refused'));
+    expect(newer.accepted && await newer.saved).toBe(false);
+    expect(told).toHaveBeenCalledTimes(1);
+    stop();
+    const third = store.comeBack();
+    source.refuseHeld(new Error('third refused'));
+    expect(third.accepted && await third.saved).toBe(false);
+    expect(told).toHaveBeenCalledTimes(1);
+  });
+
   it('does not let a read that began before a confirmed write undo it', async () => {
     const source = fakeSettingsSource({ now: () => NOW });
     let answer: (mine: { until: string } | null) => void = () => undefined;

@@ -40,7 +40,7 @@ export function AwayReminder() {
   const { pathname } = useLocation();
   const store = useAwayStore();
   const away = useAway();
-  const [confirm, confirmDialog] = useConfirm();
+  const [confirm, confirmDialog, dismiss] = useConfirm();
   const { visible } = useVisibleSections();
   const section = remindingSection(pathname, visible);
   // ⚠️ THE DAY IS WATCHED TOO: somebody sitting in a section when the day changes (or the tablet wakes on a new day) is judged again for
@@ -48,6 +48,10 @@ export function AwayReminder() {
   const day = useTodayKey();
   // The arrival (section and day) already judged: staying in it, or the holiday changing under it, asks nothing new.
   const judged = useRef<string | null>(null);
+
+  // ⚠️ THE QUESTION CLOSES WHEN THE HOLIDAY IS NO LONGER THERE: a holiday set on a weak signal and then refused is put back while the
+  // question is open, and «You are on holiday» must not stay on screen beside «Not saved» (review, 8 Nov 2026).
+  useEffect(() => { if (!away.away) dismiss(); }, [away.away, dismiss]);
 
   useEffect(() => {
     if (section === null) {

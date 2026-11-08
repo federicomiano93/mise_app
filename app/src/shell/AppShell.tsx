@@ -77,6 +77,9 @@ function ShellFrame() {
         <SkipLink target={contentRef} />
         <PartBoundary>
           <AwayReminder />
+        </PartBoundary>
+        {/* Its own boundary: a reminder that fails to draw must not take the one «Not saved» of the holiday with it. */}
+        <PartBoundary>
           <AwayRefusalAlert />
         </PartBoundary>
         <Rail />

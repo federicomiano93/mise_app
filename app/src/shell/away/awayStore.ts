@@ -4,11 +4,12 @@
 // (awayStore.spec.ts). The screens read it through AwayContext.tsx. It is held at the VENUE level (the shell), not by a screen, so the
 // Home's band, Settings' row and the once-a-day reminder always agree after a write.
 //
-// ⚠️ READ ONCE, NEVER A LISTENER (P14): the holiday changes about twice a year. start() reads the document one time when the venue
-// opens; after that the store is the truth for this phone, changed only by this person's own writes.
+// ⚠️ NEVER A LISTENER (P14): the holiday changes about twice a year. start() reads the document when the venue opens; after that it is
+// read again only on a new day, on waking (at most every ten minutes) and right after a refusal.
 //
 // ⚠️ LOCAL-FIRST (P20): a write shows at once and the screen never waits for the server. The store listens only for a REJECTION; then it
-// puts the state back (unless a newer write of this person has happened since) and says so through the `saved` promise of the change.
+// puts the state back (unless a newer write of this person has happened since), reads the server again, says so through the `saved`
+// promise of the change and tells `onRefused` (the shell's AwayRefusalAlert says it).
 //
 // ⚠️ `away` IS DERIVED FROM THE CLOCK every time it is asked (isAway of the shared away-model), so a holiday ends by itself on its last
 // day; recheck() re-asks it when the day changes on a tablet left open.
@@ -122,8 +123,9 @@ export function createAwayStore(source: SettingsSource, uid: string, now: () => 
       if (lastConfirmedWrite > startedAt) return;
       // This phone's own unconfirmed write, read back from its copy: show it if nothing is in the air (a write queued before a reload),
       // never record it as what the server holds.
+      // ⚠️ AND ONLY IF NO WRITE HAS STARTED SINCE THIS READ DID: otherwise the write on top may be one refused meanwhile (review, 8 Nov 2026).
       if (mine?.pending) {
-        if (inFlight === 0) publish({ status: 'ready', until: mine.until });
+        if (inFlight === 0 && startedAt === writes) publish({ status: 'ready', until: mine.until });
         return;
       }
       confirmed = mine ? mine.until : null;

@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { fakeSettingsSource } from '../testing/fakeSettingsSource';
 import type { FakeSettingsSource } from '../testing/fakeSettingsSource';
 import { renderApp } from '../testing/renderApp';
@@ -50,6 +50,22 @@ describe('the once-a-day holiday reminder', { timeout: 15_000 }, () => {
     expect(localStorage.getItem(KEY)).toBeNull();
     await user.click(rail().getByRole('link', { name: 'Recipes' }));
     expect(await reminder()).toBeInTheDocument();
+  });
+
+  // Review, 8 Nov 2026: «You are on holiday» must not stay on screen beside «Not saved».
+  it('closes its question when the holiday it asks about is refused and put back', async () => {
+    const { user, source } = await open('/settings', { away: null });
+    source.holdWrites = true;
+    await user.click(await within(screen.getByRole('main')).findByRole('button', { name: 'I am on holiday' }));
+    await screen.findByRole('dialog', { name: 'I am on holiday' });
+    fireEvent.change(screen.getByLabelText('Away until, and including'), { target: { value: '2026-11-16' } });
+    await user.click(screen.getByRole('button', { name: 'Set' }));
+    await user.click(rail().getByRole('link', { name: 'Recipes' }));
+    await reminder();
+    source.refuseHeld(new Error('refused'));
+    const notice = await screen.findByRole('alertdialog', { name: 'I am on holiday' });
+    expect(within(notice).getByText('Not saved — check the connection and try again.')).toBeInTheDocument();
+    await waitFor(() => { expect(screen.queryByRole('alertdialog', { name: 'You are on holiday', hidden: true })).not.toBeInTheDocument(); });
   });
 
   it('asks when a section other than the Home and Settings is entered, with «I am back» as the main button', async () => {

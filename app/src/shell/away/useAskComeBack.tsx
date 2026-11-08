@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import type { ReactNode } from 'react';
 import { useT } from '../../i18n/useT';
 import { useConfirm } from '../../ui/useConfirm';
@@ -15,7 +16,10 @@ export function useAskComeBack(onBack: () => void = () => undefined): readonly [
   const { t, locale } = useT();
   const store = useAwayStore();
   const away = useAway();
-  const [confirm, dialog] = useConfirm();
+  const [confirm, dialog, dismiss] = useConfirm();
+  // ⚠️ A QUESTION THAT HAS LOST ITS POINT CLOSES: the holiday ended while «Back already?» was open (midnight, another phone, a refused
+  // holiday put back). Left open it would still say «on holiday until…», and «I am back» would write over a state that is not away.
+  useEffect(() => { if (!away.away) dismiss(); }, [away.away, dismiss]);
 
   async function ask(): Promise<void> {
     if (!away.away) return;

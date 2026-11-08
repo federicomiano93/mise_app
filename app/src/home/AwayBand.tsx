@@ -17,7 +17,8 @@ export function AwayBand({ onBack }: { onBack?: () => void }) {
   const away = useAway();
   const [askComeBack, dialog] = useAskComeBack(onBack);
 
-  if (!away.away) return null;
+  // The question is drawn whatever the holiday: if it ends while «Back already?» is open, useAskComeBack closes the question itself.
+  if (!away.away) return <>{dialog}</>;
   return (
     <>
       <button type="button" className={styles.band} onClick={() => { void askComeBack(); }}>
