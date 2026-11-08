@@ -224,7 +224,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
   // pieces, and a stale example is worse than none on the one field that cannot be
   // checked for what it is a price OF.
   const rate = money(item?.pricePerUnit, '');
-  const pieceWeight = money(item?.unitWeightKg, t('orders.eg.pieceWeight'));
+  const pieceWeight = money(gramsOfKg(item?.unitWeightKg), t('orders.eg.pieceWeight'));
   // The case / package price: «Prezzo cartone» or «Prezzo confezione» by the format. Its value is
   // FILLED by refresh() (priceBoxStart) for as long as nobody has typed in it.
   const casePriceBox = money('', '');
@@ -453,7 +453,7 @@ function priceBlock(item, actions, defaultUnit = null, ctx) {
         basis: priceFor,
         rate: typedDecimal(rate.value),
         unit: unitSelect.value || null,
-        pieceKg: typedDecimal(pieceWeight.value),
+        pieceKg: kgTextOfGrams(pieceWeight.value),
         vat,
       }),
       priceBasis,
@@ -738,7 +738,7 @@ function legacyPriceBlock(item, actions, defaultUnit = null, currentOrder = null
   });
   // ⚠️ The placeholder is EMPTY here and filled by refresh() below: it depends on the purchase unit.
   const rate = money(item?.pricePerUnit, '');
-  const pieceWeight = money(item?.unitWeightKg, t('orders.eg.pieceWeight'));
+  const pieceWeight = money(gramsOfKg(item?.unitWeightKg), t('orders.eg.pieceWeight'));
 
   // ── Priced per case: what the case costs, and what is in it ─────────────────
   // «Contiene [50] pz» or «Contiene [4] × [2.5] kg». Every box carries its own aria-label
@@ -860,7 +860,7 @@ function legacyPriceBlock(item, actions, defaultUnit = null, currentOrder = null
     return {
       priceUnit: unitSelect.value || null,
       pricePerUnit: typedDecimal(rate.value),
-      unitWeightKg: typedDecimal(pieceWeight.value),
+      unitWeightKg: kgTextOfGrams(pieceWeight.value),
       vatRate: vatSelect.value,
       // Only read as a case when the menu says so (pricePatch ignores them otherwise
       // and writes all four as null, which is what clears an old case).
@@ -1911,6 +1911,30 @@ function refusalMessage(box, text) {
       box.removeAttribute('aria-describedby');
     },
   };
+}
+
+// ⚠️ THE PIECE WEIGHT IS TYPED IN GRAMS, STORED IN KILOS (8 Nov 2026). The box said «(kg)» and an egg was saved
+// as 50 — fifty kilos — which priced eggs at 0,0033 €/kg in every recipe. A recipe is written in grams and so is
+// what a person knows about one piece, so the box speaks grams; `unitWeightKg` and everything that reads it
+// (price-model.js, order-cost.js, Food cost, Mise 2's readers) stay in kilos, untouched. The conversion lives only
+// here. ⚠️ Mise 2's own card still asks for kilos (priceCardModel.ts, legacyPriceModel.ts): port this before the switch.
+// Stored kilos → the grams the box shows ('' for none; anything that is not a number is shown as it is).
+export function gramsOfKg(kg) {
+  if (kg === null || kg === undefined || kg === '') return '';
+  const n = Number(kg);
+  return Number.isFinite(n) ? String(Number((n * 1000).toPrecision(12))) : String(kg);
+}
+
+// What a person typed in grams → the kilo TEXT the price model reads (as typedDecimal hands it over). Everything
+// Number() can read is converted — «55,», «,5» and «1e2» too, because the price model reads the box with Number()
+// and would otherwise save them as KILOS, the very mistake above (review, 8 Nov 2026). Only text Number() cannot
+// read passes through untouched, so Save still refuses it on its box (unreadablePrice); '' stays '' (no weight).
+export function kgTextOfGrams(text) {
+  const typed = typedDecimal(text);
+  if (String(typed).trim() === '') return typed;
+  const n = Number(typed);
+  if (!Number.isFinite(n)) return typed;
+  return String(Number((n / 1000).toPrecision(12)));
 }
 
 // A price box whose text is not a number above zero («12,50 EUR» pasted from an invoice, «abc»,

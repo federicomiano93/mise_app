@@ -432,7 +432,7 @@ test('a NEW single with no weight, priced by kilo / litre / piece, gets kg / l /
     type(card.name, 'Zucchine');
     choose(card.howBought, priceUnit);
     type(card.rate, '3');
-    if (priceUnit === 'pcs') type(card.all().find(n => n.tagName === 'INPUT' && n.attributes.placeholder === 'e.g. 0.055'), '0.2');
+    if (priceUnit === 'pcs') type(card.all().find(n => n.tagName === 'INPUT' && n.attributes.placeholder === 'e.g. 55'), '200');
     const { payload } = await card.save();
     assert.equal(payload.unit, word, priceUnit);
     assert.equal('packCount' in payload, false);
@@ -519,7 +519,7 @@ test('reopening shows the stored size as a placeholder (not a value) and says wh
   assert.equal(card.weightAmount.value, '');
   assert.equal(card.weightUnit.value, 'kg');
   assert.ok(card.notes().includes('This price was for 4 × 2.5 kg: write the weight of one item to recalculate it.'), card.notes().join(' | '));
-  assert.equal(card.all().some(n => n.textContent === 'Weight of one piece (kg)' && shown(n.parentNode)), false, 'no piece weight');
+  assert.equal(card.all().some(n => n.textContent === 'Weight of one piece (g)' && shown(n.parentNode)), false, 'no piece weight');
   assert.equal(shown(card.recompute), false);
 });
 
@@ -906,9 +906,9 @@ test('3rd review 1: eggs (360 g pack, 0.06 kg a piece) open with NO note, the pi
     const card = openCard({ item });
     assert.equal(card.notes().some(n => /format has changed|saved price stays/.test(n)), false, card.notes().join(' | '));
     assert.equal(card.recompute === undefined || !shown(card.recompute), true, 'Ricalcola is not offered');
-    const pieceBox = card.all().find(n => n.tagName === 'INPUT' && n.attributes.placeholder === 'e.g. 0.055');
+    const pieceBox = card.all().find(n => n.tagName === 'INPUT' && n.attributes.placeholder === 'e.g. 55');
     assert.ok(pieceBox && shown(pieceBox.parentNode), 'the «Peso di un pezzo» box is visible');
-    assert.equal(pieceBox.value, String(item.unitWeightKg), 'pre-filled with the stored piece weight');
+    assert.equal(pieceBox.value, { 0.06: '60', 0.002: '2' }[item.unitWeightKg], 'pre-filled with the stored piece weight, in grams');
     assert.equal(shown(card.rate.parentNode), true, 'the price is «per piece», as today');
     assert.equal(shown(card.casePrice.parentNode), false, 'no «Pack price» box');
     const { payload, record } = await card.save();

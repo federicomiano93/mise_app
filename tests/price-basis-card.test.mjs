@@ -251,7 +251,7 @@ test('a 750-piece carton at 23.47, shown per pack, stays 23.47 when only the pie
   };
   const card = openCard(item);
   assert.deepEqual(card.pressed(), ['per pack']);
-  type(cardField(card, /^Weight of one piece/), '0.05');
+  type(cardField(card, /^Weight of one piece/), '50'); // grams, saved as 0.05 kg
   const { payload } = await card.save();
   assert.equal(payload.casePrice, 23.47);
   assert.equal(payload.unitWeightKg, 0.05);
