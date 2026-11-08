@@ -14,6 +14,7 @@ import type { MessageKey } from '../i18n/en';
 import type { MessageParams } from '../i18n/i18n';
 import { NEW_CHOICE, PACK_WORD_MAX, activePatch, choiceIsBlankNew, readChoice, weightText } from './ingredientCardModel';
 import type { CardKind, ChoiceState, ItemLike, Working } from './ingredientCardModel';
+import { gramsOfKg, kgTextOfGrams } from './pieceWeight';
 import { sharedTranslate } from './priceCardModel';
 
 // The CARD OF BEFORE (step 3e-5, decision T4 — parity C82, C83, C11): the price block, and the two product-data menus, that an
@@ -45,6 +46,7 @@ export interface LegacyPriceState {
   readonly unit: string;
   // The boxes as they stand, in the venue's layout («7,2» in Italy).
   readonly rate: string;
+  // ⚠️ The «Weight of one piece» box: its text is in GRAMS (pieceWeight.ts), the stored `unitWeightKg` in kilos.
   readonly pieceKg: string;
   readonly casePrice: string;
   readonly caseCount: string;
@@ -94,7 +96,7 @@ export function legacyStateFrom(item: ItemLike | null, defaultUnit: 'pcs' | null
   return {
     unit: stored ? CASE_MODE : (item ? (isPriceUnit(item.priceUnit) ? item.priceUnit : '') : (defaultUnit ?? '')),
     rate: boxText(item?.pricePerUnit, money),
-    pieceKg: boxText(item?.unitWeightKg, money),
+    pieceKg: boxText(gramsOfKg(item?.unitWeightKg), money),
     casePrice: boxText(stored?.casePrice, money),
     caseCount: boxText(stored?.caseCount, money),
     caseSize: boxText(stored?.caseItemSize, money),
@@ -163,7 +165,7 @@ export function readLegacy(state: LegacyPriceState, opened?: LegacyPriceState): 
     ...(opened && state.rate === opened.rate ? { keepRate: true } : {}),
     priceUnit: state.unit || null,
     pricePerUnit: typedDecimal(state.rate),
-    unitWeightKg: typedDecimal(state.pieceKg),
+    unitWeightKg: kgTextOfGrams(state.pieceKg),
     vatRate: state.vat,
     casePrice: typedDecimal(state.casePrice),
     caseCount: typedDecimal(state.caseCount),

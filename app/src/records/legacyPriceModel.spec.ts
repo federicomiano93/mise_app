@@ -150,7 +150,7 @@ describe('opening', () => {
   test('the boxes show the stored figures in the venue\'s layout, every digit of them', () => {
     const state = legacyStateFrom(FINE_RATE, null, ITALY);
     expect(state.rate).toBe('1,666667');
-    expect(legacyStateFrom(PIECES, null, ITALY).pieceKg).toBe('0,06');
+    expect(legacyStateFrom(PIECES, null, ITALY).pieceKg, 'the piece weight in grams (0.06 kg)').toBe('60');
     expect(legacyStateFrom(KG_CASE, null, ITALY).caseSize).toBe('2,5');
     expect(legacyStateFrom(G_CASE, null, ITALY).vat).toBe('10');
   });
@@ -427,7 +427,7 @@ describe('what is said', () => {
 
   test('a price by the piece adds what a kilo costs when the piece weight is known', () => {
     const card = openCard(WORD_WEIGHT);
-    card.set({ pieceKg: '0.5' });
+    card.set({ pieceKg: '500' }); // grams: 0.5 kg
     expect(card.view().summary.main).toMatch(/2\.00 each\s+·\s+€4\.00 \/ kg|each.*4\.00 \/ kg/);
   });
 
