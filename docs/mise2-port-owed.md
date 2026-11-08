@@ -44,7 +44,7 @@ Number ports (wrong numbers otherwise):
 - [x] 38. Calculator: linked recipes with litres and ml, the problem line, the row count — ported 8 Nov (`feature/mise2-number-ports`; `docs/parity/calculator.md`, «Linked recipes with litres, the problem line and the row count as built»)
 
 Before the switch, not ports:
-- [ ] `feature/mise2-3g-2` (Settings: holidays, app language, sections for staff) finished and merged, or his OK to ship without
+- [x] `feature/mise2-3g-2` (Settings: holidays, app language, sections for staff) finished and merged — 8 Nov 2026, PR #500 (and its review fix, PR #501)
 - [x] The Mise 2 service worker at the same path and name as today's (`sw.js`, step 5), every editor holding `markBusy()` (item 17), the rollback to the current app proved by a test — done 8 Nov 2026 (`feature/mise2-switch-prep-sw`, `feature/mise2-switch-prep-rollback`; `app/src/shell/{worker,serviceWorker,rollback}.spec.ts`, `node app/sw/drive-switch.cjs` in Chromium, `docs/switch-runbook.md`)
 - [ ] GitHub Pages built by CI: Mise 2 at the same address, `order.html`, `reset-password.html` and the rest kept (the Pages source setting is switched at the switch hour, `docs/switch-runbook.md`)
 - [ ] CSP of Mise 2's page (functions host, `https://www.gov.uk`, no App Check hosts), Auth persistence and the Firebase version as the current app's
@@ -261,13 +261,11 @@ Deferred too, with no item number:
 - `order.html` stays served as it is (client links already sent): the Pages build keeps it, see `docs/switch-runbook.md`.
 - The 3-month order-list clean-up function (F9, a separate task): until it exists nothing is deleted, as today.
 
-## WIP branch left out of the release branch
+## Settings 3g-2 (was the WIP branch left out of the release branch)
 
-`feature/mise2-3g-2` (origin too), head 06e1f3dc `wip(mise2-settings): 3g-2 in progress, stopped on his request`, 13 commits + 1 WIP commit,
-stacked on #477 `feature/mise2-home-todos`, NO PR. Content: Settings screen with Holidays, App language, «Sections for staff» (staffShownCards),
-fixed section order, review fixes partly done (Back one level up, language reload waits for typing, session venue refreshed, focus). Left to do:
-finish the review fixes, `mise2-check`, open the PR on #477. Consequence of leaving it out: Mise 2 has no screen to change the venue's holidays, app
-language or which cards staff see (these can only be changed in the current app until it ships).
+Merged into `feature/mise2-release` on 8 Nov 2026 as PR #500 (Settings: Holidays, App language, «Sections for staff»;
+what was built: `docs/parity/home.md`, the 3g-2 «as built»), with its review fix PR #501 (a holiday change in the air
+holds `markBusy()`). The old branch `feature/mise2-3g-2` (head 06e1f3dc, the 7 Nov WIP) is superseded by them.
 
 ## Suggested order
 

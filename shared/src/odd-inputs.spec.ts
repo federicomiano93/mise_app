@@ -14,6 +14,7 @@ import * as joinCode from './join-code';
 import * as pushModel from './push-model';
 import * as homeCards from './home-cards';
 import * as awayModel from './away-model';
+import * as awayReminder from './away-reminder';
 import * as allergenModel from './allergen-model';
 import * as sections from './sections';
 import * as firebaseTarget from './firebase-target';
@@ -89,6 +90,7 @@ import * as legacyJoinCodeJs from '../../js/join-code.js';
 import * as legacyPushModelJs from '../../js/push-model.js';
 import * as legacyHomeCardsJs from '../../js/home-cards.js';
 import * as legacyAwayModelJs from '../../js/away-model.js';
+import * as legacyAwayReminderJs from '../../js/away-reminder.js';
 import * as legacyAllergenModelJs from '../../js/allergen-model.js';
 import * as legacySectionsJs from '../../js/sections.js';
 import * as legacyFirebaseTargetJs from '../../js/firebase-target.js';
@@ -167,6 +169,7 @@ const legacyJoinCode = legacyJoinCodeJs as unknown as typeof joinCode;
 const legacyPushModel = legacyPushModelJs as unknown as typeof pushModel;
 const legacyHomeCards = legacyHomeCardsJs as unknown as typeof homeCards;
 const legacyAwayModel = legacyAwayModelJs as unknown as typeof awayModel;
+const legacyAwayReminder = legacyAwayReminderJs as unknown as typeof awayReminder;
 const legacyAllergenModel = legacyAllergenModelJs as unknown as typeof allergenModel;
 const legacySections = legacySectionsJs as unknown as typeof sections;
 const legacyFirebaseTarget = legacyFirebaseTargetJs as unknown as typeof firebaseTarget;
@@ -442,6 +445,16 @@ describe('home-cards: odd inputs', () => {
     [undefined, null, [], ['a'], MARKUP, ['calculator', 'orders'], ['orders', 'orders', 'calculator'],
       ['foodcost', 'orders'], [undefined, 'orders'], 'abc', 5, {}],
   ));
+});
+
+// ── away-reminder ────────────────────────────────────────────────────────────
+
+describe('away-reminder: odd inputs', () => {
+  const DAYS = [...ODD, '2026-09-16', '2026-09-15', '2026-02-30', '2026-13-01', '2026-9-16', ' 2026-09-16', '2026-09-16 ',
+    '0000-00-00', '9999-12-31', 20260916, new Date(NOW)];
+  agree('reminderDue', awayReminder.reminderDue, legacyAwayReminder.reminderDue,
+    product([true, false, 'true', 1, ...ODD], DAYS, DAYS));
+  agree('dayFromISO', awayReminder.dayFromISO, legacyAwayReminder.dayFromISO, product(DAYS));
 });
 
 // ── away-model ───────────────────────────────────────────────────────────────

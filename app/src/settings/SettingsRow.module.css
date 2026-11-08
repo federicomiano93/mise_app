@@ -1,0 +1,81 @@
+/* A row of a Settings card: title, a sentence, a chevron. The whole row is the target, at least as tall as a thumb. */
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s3) var(--s4);
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.row[data-pressed],
+.row:active {
+  background: var(--sunken);
+}
+
+.row:focus-visible,
+.row[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+@media (hover: hover) {
+  .row:hover,
+  .row[data-hovered] {
+    background: var(--bg);
+  }
+}
+
+/* Not pressable yet (the holiday row while its one read is in the air): dimmed like a disabled button, no press or hover shade. AFTER
+   the hover rule, which weighs the same. */
+.row[data-disabled],
+.row[data-disabled] .sub {
+  background: none;
+  color: var(--ink-3);
+  cursor: default;
+}
+
+.text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.title {
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}
+
+.chevron {
+  flex: none;
+  color: var(--ink-3);
+}
+
+/* A holiday in progress: amber means «to check» (tokens.css). The title and the sentence say it in words as well. */
+.row.warn {
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
+.warn .sub,
+.warn .chevron {
+  color: var(--warn-ink);
+}
