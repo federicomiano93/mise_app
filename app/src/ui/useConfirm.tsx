@@ -29,8 +29,11 @@ type Question = { options: ConfirmOptions; settle: (answer: boolean) => void };
 // while one is still open. The page behind the dialog is not dismissable by pressing outside it
 // (Dialog.tsx): a question that needs an answer is never thrown away by a stray tap.
 //
+// The optional third value closes an open question from outside, answering «no»: for a question the world has made pointless while it
+// was open (the holiday's «Back already?» once the holiday has ended anyway).
+//
 // ⚠️ NEVER THE BROWSER'S confirm() — it cannot be styled, translated or tested.
-export function useConfirm(): readonly [(options: ConfirmOptions) => Promise<boolean>, ReactNode] {
+export function useConfirm(): readonly [(options: ConfirmOptions) => Promise<boolean>, ReactNode, () => void] {
   const [question, setQuestion] = useState<Question | null>(null);
   // The same question, readable at once: the state is only read on the next render.
   const open = useRef<Question | null>(null);
@@ -80,5 +83,7 @@ export function useConfirm(): readonly [(options: ConfirmOptions) => Promise<boo
     </Dialog>
   );
 
-  return [confirm, dialog];
+  const dismiss = useCallback(() => { answer(false); }, [answer]);
+
+  return [confirm, dialog, dismiss];
 }

@@ -50,9 +50,9 @@ describe('the section list', () => {
   it('has a route for every section, for «More», and a catch-all', () => {
     const root = routes[0];
     const paths = (root?.children ?? []).map(route => route.path);
-    // A built section owns every address under its path, so its route ends in /*.
+    // A built section owns every address under its path, so its route ends in /*. Settings owns its own (/settings/language, step 3g-2).
     for (const section of SECTIONS) {
-      expect(paths).toContain(hasScreen(section.id) ? `${section.path}/*` : section.path);
+      expect(paths).toContain(hasScreen(section.id) || section.id === 'settings' ? `${section.path}/*` : section.path);
     }
     expect(paths).toContain(MORE.path);
     expect(paths[paths.length - 1]).toBe('*');
