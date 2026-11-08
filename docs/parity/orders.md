@@ -1673,3 +1673,45 @@ Differences from the current app, on purpose:
   (Fornitori); in Mise 2 Orders is never on screen while «Ingredients & suppliers» deletes or merges a product.
 - **Not in this item:** the current app's `sendBeforeLeaving` (Back from Orders opened from a recipe waits for the server), which
   belongs to item 32 of the checklist.
+
+## Closed as not ordered as built (8 Nov 2026)
+
+Item 3 of `docs/mise2-port-owed.md`: the current app's PR #470 (9b9fdf3, his tablet notes of 2–3 Nov 2026) and its rules commit
+f65d5c7. `drafts/current.skipped = { supplierId: 'YYYY-MM-DD' }`: a supplier whose order day it is, closed that day because
+nothing was needed. The rules already allow it (an optional map, at most 200 keys); no rules change.
+
+What it does, as the current app does:
+- **Shared** (`shared/src/reminders.ts`, paired): `skippedOn` (only a close made TODAY counts, so last week's never hides this
+  week's order and nothing is ever cleaned up), `todayOrders` and `suppliersStillToOrder` take the closes (a real order recorded
+  after the close wins: never both), `closeOffer` ('skip' | 'reopen' | ''), and `dueTodayIds` (ported for item 12, which uses
+  it). `shared/src/kiosk-lines.ts`: a closed supplier is not «to order» on the rest screen. The two `reminders` PORT OWED markers
+  of `parity.spec.ts` are gone: the exports match.
+- **The order summary** (`SupplierSummaryScreen.tsx`), under the lines: with quantities written, «Order placed…», the supplier
+  screen's own confirm (offline it says so and opens nothing); with nothing written and the order day today, the hint and «Close
+  as not ordered», asked first («Close {supplier} as not ordered?»), then back to the list with «{supplier} closed as not
+  ordered.»; while closed, «Closed as not ordered today» with «Reopen» (no question; «{supplier} is back on today's orders.»), with
+  or without quantities, so a close is never invisible. Asked of the data on every draw, so another phone's close shows at once.
+- **The writes** (`ordersSource.ts`): `setSupplierSkipped` merges only `skipped.<id>` with the venue stamp; `clearSupplierSkipped`
+  deletes that one key (a FieldPath). Never through the autosave, and never `updatedAt` (the draft's own stamp stands in for the
+  day of rows saved before day stamps existed). Local-first: Firestore shows them at once, offline too; a refusal is said («Not
+  saved — check the connection and try again.») and Firestore takes it back.
+- **A quantity typed for a supplier closed today reopens it** (`ordersStore.ts`, the current app's `reopenIfTyped`); a shelf count
+  does not.
+- **«Order today»** (`TodayOrders.tsx`): a closed supplier is a dashed chip, «{supplier} · not ordered», that opens its summary;
+  every supplier of the day placed or closed reads «Today's orders are all placed», as in the current app.
+- Specs: `shared/src/reminders.spec.ts` and `kiosk-lines.spec.ts` (both files, every pure case of
+  `tests/orders-close-not-ordered.test.mjs`), `OrdersSection.closeNotOrdered.spec.tsx` (the sheet and the strip),
+  `ordersStore.skipped.spec.ts`, `ordersSource.skipped.spec.ts` (the shapes written).
+
+Differences, on purpose:
+- **The button with quantities reads «Order placed…» («Ordine fatto…»)**, the words of the supplier screen's green button in Mise
+  2, because it is that button: the current app's sheet says «Ordine fatto» without the dots.
+- **No Home badge to hand the closes to.** Mise 2's Home has no orders badge (its «Da fare» card is something else) and the bell
+  leaves the «order today» notice out; the strip and the kiosk lines are the readers here. A Home orders badge, when it comes,
+  must pass `skipped` to `suppliersStillToOrder`.
+- **The buttons wait for the records and the draft**: before the records arrive a supplier placed this morning would offer the
+  close; the current app's sheet asks the same question of its own state.
+- **After the close, back to the list by walking the history back** (the summary may sit over the supplier's screen), or by
+  replacing itself with the list when opened by its address; the focus is handed back to the summary's opener.
+- **After «Reopen» the focus goes to the button that took its place** («Close as not ordered», or «Order placed…»).
+
