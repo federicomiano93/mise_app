@@ -1,6 +1,7 @@
 import { useCallback, useId, useMemo, useRef, useState } from 'react';
 import { ToggleButton } from 'react-aria-components';
-import { consumption, isClosed, productsOfMonth, progressOf } from '@mise/shared/inventory-model';
+import { LIST_STATUS, consumption, isClosed, productsOfMonth, progressOf } from '@mise/shared/inventory-model';
+import type { ListStatus } from '@mise/shared/inventory-model';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { groupProducts, matches, stillToCount } from './countListModel';
@@ -29,7 +30,7 @@ const NO_STAY: ReadonlySet<string> = new Set();
 export function CountList({ monthId, openProductId, onOpenProduct, onCarry, onPurchases }: Props) {
   const { t, locale } = useT();
   const snapshot = useStocktake();
-  const { month, ingredients, ingredientsLoaded, monthLoaded } = snapshot;
+  const { month, ingredients, monthLoaded, listStatus } = snapshot;
   const headings = useId();
 
   const [query, setQuery] = useState('');
@@ -55,6 +56,10 @@ export function CountList({ monthId, openProductId, onOpenProduct, onCarry, onPu
   if (!ready) return <p className={styles.loading}>{t('session.loading')}</p>;
 
   const closed = isClosed(month);
+  // ⚠️ NO PRODUCTS ON SCREEN, AND NOTHING HAS PROVED THERE ARE NONE (listStatus): no «No products yet», no «0 of 0», no
+  // «Nothing matches.» about a list that has not arrived. `products` is the rows of this month (productsOfMonth), so a
+  // closed month with frozen rows is not empty and draws at once, while the ingredients are still on their way.
+  const noWordYet = products.length === 0 && listStatus !== LIST_STATUS.answered;
   const progress = progressOf(month, products.map(product => product.id));
 
   const matching = products.filter(product => matches(product, query));
@@ -93,13 +98,14 @@ export function CountList({ monthId, openProductId, onOpenProduct, onCarry, onPu
 
   return (
     <div className={styles.list}>
-      <div className={styles.summary}>
-        <p className={styles.summaryLabel}>{t('stock.counted')}</p>
-        <p className={styles.summaryValue}>
-          {ingredientsLoaded ? t('stock.countedOf', { counted: progress.counted, total: progress.total }) : '—'}
-        </p>
-        <p className={styles.summaryNote}>{closed ? t('stock.monthClosedNote') : t('stock.emptyIsNotZero')}</p>
-      </div>
+      {noWordYet ? null : (
+        // A venue that has really answered with nothing keeps its summary, «0 of 0» and all.
+        <div className={styles.summary}>
+          <p className={styles.summaryLabel}>{t('stock.counted')}</p>
+          <p className={styles.summaryValue}>{t('stock.countedOf', { counted: progress.counted, total: progress.total })}</p>
+          <p className={styles.summaryNote}>{closed ? t('stock.monthClosedNote') : t('stock.emptyIsNotZero')}</p>
+        </div>
+      )}
 
       {closed ? null : (
         // Dimmed, not disabled, while the month is not ready: a tap says why (useMonthActions).
@@ -124,8 +130,9 @@ export function CountList({ monthId, openProductId, onOpenProduct, onCarry, onPu
         </ToggleButton>
       </div>
 
-      {!ingredientsLoaded ? (
-        <p className={styles.loading}>{t('session.loading')}</p>
+      {noWordYet ? (
+        // FIRST, because «Nothing matches.» is also a claim about a list that has not arrived.
+        <NoAnswerYet status={listStatus} />
       ) : groups.length === 0 ? (
         // A search or the filter that matches nothing stays a small line; a venue with NO products
         // at all is the empty state, with no button: the products come from Suppliers.
@@ -165,4 +172,26 @@ export function CountList({ monthId, openProductId, onOpenProduct, onCarry, onPu
       )}
     </div>
   );
+}
+
+// What stands in for the rows until the list has really answered (the current app's noAnswerYet in inventory-list.js).
+// Nothing at all while no venue is open: the language is not known yet (a store is made inside a venue, so Mise 2 never
+// gets there, but the word is the model's).
+function NoAnswerYet({ status }: { status: ListStatus }) {
+  const { t } = useT();
+  switch (status) {
+    case LIST_STATUS.waiting:
+      return <p role="status" className={styles.loading}>{t('stock.loading')}</p>;
+    case LIST_STATUS.unreachable:
+      return (
+        <div role="status" className={styles.empty}>
+          <p className={styles.emptyTitle}>{t('stock.notArrived.title')}</p>
+          <p className={styles.emptySub}>{t('stock.notArrived.sub')}</p>
+        </div>
+      );
+    case LIST_STATUS.failed:
+      return <p role="alert" className={styles.loading}>{t('stock.loadFailed')}</p>;
+    default:
+      return null;
+  }
 }

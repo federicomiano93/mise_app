@@ -192,27 +192,82 @@ describe('the counting list: the summary', () => {
 });
 
 describe('the counting list: loading and empty', () => {
-  it('says «Loading…» until the ingredients have answered, not «No products yet»', async () => {
+  // ⚠️ «NO PRODUCTS» ONLY WHEN BOTH ANSWERS PROVE IT (the current app's PR #440, tests/inventory-empty-flash.test.mjs).
+  it('says the products are loading until the ingredients have answered, never «No products yet»', async () => {
     const fake = source();
     vi.mocked(fake.watchIngredients).mockImplementation(() => () => undefined);
     renderStocktake('/stocktake/2026-10', { source: fake });
 
-    expect(await screen.findByText('Loading…', undefined, LOAD)).toBeInTheDocument();
+    const word = await screen.findByText('Loading the products…', undefined, LOAD);
+    expect(word).toHaveAttribute('role', 'status');
     expect(screen.queryByText('No products yet')).not.toBeInTheDocument();
     expect(screen.queryByRole('heading', { level: 3 })).not.toBeInTheDocument();
-    // The summary does not claim «0 of 0» while the products are not known.
+    // The summary does not claim «0 of 0», nor the note about boxes, while the products are not known.
     expect(screen.queryByText('0 of 0')).not.toBeInTheDocument();
+    expect(screen.queryByText('Counted')).not.toBeInTheDocument();
   });
 
-  it('stops saying «Loading…» when the ingredients fail, instead of for ever', async () => {
+  it('⚠️ waits for the month too: the ingredients alone prove nothing about a closed month’s rows', async () => {
+    const fake = source([monthDoc('2026-10')], []);
+    fake.hold();
+    renderStocktake('/stocktake/2026-10', { source: fake });
+    expect(await screen.findByText('Loading the products…', undefined, LOAD)).toBeInTheDocument();
+    expect(screen.queryByText('No products yet')).not.toBeInTheDocument();
+    fake.release();
+    expect(await screen.findByText('No products yet', undefined, LOAD)).toBeInTheDocument();
+  });
+
+  it('a failed ingredients read says it could not load, as an alert — not «No products yet», not «Loading» for ever', async () => {
     const fake = source();
     vi.mocked(fake.watchIngredients).mockImplementation((_onChange, onError) => {
-      queueMicrotask(() => { onError(new Error('permission-denied')); });
+      queueMicrotask(() => { onError(new Error('unavailable')); });
       return () => undefined;
     });
     renderStocktake('/stocktake/2026-10', { source: fake });
-    expect(await screen.findByText('No products yet', undefined, LOAD)).toBeInTheDocument();
-    expect(screen.queryByText('Loading…')).not.toBeInTheDocument();
+    expect(await screen.findByRole('alert', undefined, LOAD))
+      .toHaveTextContent('Could not load the products. Check your connection and reload the page.');
+    expect(screen.queryByText('No products yet')).not.toBeInTheDocument();
+    expect(screen.queryByText('Loading the products…')).not.toBeInTheDocument();
+  });
+
+  it('offline with an empty copy says the products have not arrived, at once, and the rows come with the signal', async () => {
+    const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      const fake = source([monthDoc('2026-10')], []);
+      fake.noSignal();
+      renderStocktake('/stocktake/2026-10', { source: fake });
+      expect(await screen.findByText('The products have not arrived yet', undefined, LOAD)).toBeInTheDocument();
+      expect(screen.getByText('Check your connection: they will appear here as soon as they arrive.')).toBeInTheDocument();
+      expect(screen.queryByText('No products yet')).not.toBeInTheDocument();
+
+      fake.ingredients.set('flour', INGREDIENTS[0] ?? ingredient('flour'));
+      fake.signal();
+      expect(await screen.findByRole('button', { name: 'Open Farina 25kg' }, LOAD)).toBeInTheDocument();
+      expect(screen.queryByText('The products have not arrived yet')).not.toBeInTheDocument();
+    } finally {
+      online.mockRestore();
+    }
+  });
+
+  it('⚠️ a search typed while waiting does NOT say nothing matches; after the answer it does', async () => {
+    const fake = source([monthDoc('2026-10')], []);
+    fake.hold();
+    const { user } = renderStocktake('/stocktake/2026-10', { source: fake });
+    await screen.findByText('Loading the products…', undefined, LOAD);
+    await user.type(search(), 'zzz');
+    expect(screen.queryByText('Nothing matches.')).not.toBeInTheDocument();
+    expect(screen.getByText('Loading the products…')).toBeInTheDocument();
+    fake.release();
+    expect(await screen.findByText('Nothing matches.', undefined, LOAD)).toBeInTheDocument();
+  });
+
+  it('⚠️ a closed month whose frozen names give rows draws them at once, while the ingredients are still on their way', async () => {
+    const fake = source([monthDoc('2026-10', { closedAt: '2026-11-01T09:00:00.000Z', names: { flour: 'Farina 25kg' }, closing: { flour: 2 } })]);
+    vi.mocked(fake.watchIngredients).mockImplementation(() => () => undefined);
+    renderStocktake('/stocktake/2026-10', { source: fake });
+    expect(await screen.findByRole('button', { name: 'Open Farina 25kg' }, LOAD)).toBeInTheDocument();
+    expect(screen.getByText('1 of 1')).toBeInTheDocument();
+    expect(screen.queryByText('Loading the products…')).not.toBeInTheDocument();
   });
 
   it('says «No products yet» for a venue with none, with no button to add one', async () => {
@@ -220,6 +275,8 @@ describe('the counting list: loading and empty', () => {
     expect(await screen.findByText('No products yet', undefined, LOAD)).toBeInTheDocument();
     expect(screen.getByText('They come from Ingredients & suppliers.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /add/i })).not.toBeInTheDocument();
+    // A venue that has really answered with nothing keeps its summary.
+    expect(screen.getByText('0 of 0')).toBeInTheDocument();
   });
 
   it('draws the ingredients that arrive after the first paint', async () => {
