@@ -170,6 +170,7 @@ function writeKit(server: Record<string, unknown> | null) {
   const tx = {
     get: vi.fn(async (ref: Ref) => docSnap(ref.path.split('/').pop()!, server)),
     set: vi.fn((_ref: Ref, _data: Record<string, unknown>, _options?: unknown) => {}),
+    update: vi.fn((_ref: Ref, _data: Record<string, unknown>) => {}),
   };
   const fs = Object.assign(base.fs, {
     runTransaction: vi.fn(async (_db: unknown, body: (t: typeof tx) => Promise<unknown>) => body(tx)),
@@ -196,6 +197,38 @@ describe('saving the configuration and linking a recipe, as firestore.rules expe
     expect(ref.path).toBe('locations/bakery/config/calculator');
     expect(data).toEqual({ clients: [], recipes: [{ id: 'own' }], configRev: 4, configModel: 4, bakery: 'bakery' });
     expect(fs.setDoc).not.toHaveBeenCalled();
+  });
+
+  test('⚠️ the clients are saved ALONE, with an UPDATE (never a set): exactly clients, configRev, configModel and the venue', async () => {
+    const { kit, fs, tx } = writeKit({ clients: [{ id: 'old' }], configRev: 3, recipes: [{ id: 'own' }] });
+    const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'bakery');
+    const mine = { clients: [{ id: 'new' }], recipes: [{ id: 'stale' }], configRev: 1, configModel: 1, bakery: 'elsewhere' } as never;
+    await expect(source.saveClients(mine)).resolves.toBe(4);
+    expect(fs.runTransaction).toHaveBeenCalledTimes(1);
+    const [ref, data] = tx.update.mock.calls[0]!;
+    expect(ref.path).toBe('locations/bakery/config/calculator');
+    expect(data).toEqual({ clients: [{ id: 'new' }], configRev: 4, configModel: 4, bakery: 'bakery' });
+    expect(Object.keys(data).sort()).toStrictEqual(['bakery', 'clients', 'configModel', 'configRev']);
+    expect(tx.set).not.toHaveBeenCalled();
+    expect(fs.setDoc).not.toHaveBeenCalled();
+  });
+
+  test('⚠️ a missing document, or one still in a retired shape, is refused BEFORE any write', async () => {
+    for (const server of [null, { products: [], clients: [] }, { focaccia: {} }]) {
+      const { kit, tx } = writeKit(server);
+      const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'bakery');
+      await expect(source.saveClients({ clients: [] } as never), JSON.stringify(server))
+        .rejects.toMatchObject({ code: 'needs-calculator-save' });
+      expect(tx.update).not.toHaveBeenCalled();
+      expect(tx.set).not.toHaveBeenCalled();
+    }
+  });
+
+  test('a configuration without a clients list is never sent (an empty list would wipe the address book)', async () => {
+    const { kit, tx } = writeKit({ clients: [], configRev: 1 });
+    const source = createFirestoreCalculatorSource(() => Promise.resolve(kit), 'bakery');
+    await expect(source.saveClients({ recipes: [] } as never)).rejects.toBeInstanceOf(TypeError);
+    expect(tx.update).not.toHaveBeenCalled();
   });
 
   test('⚠️ a Catalogue import that landed meanwhile (another revision) is kept, never overwritten', async () => {

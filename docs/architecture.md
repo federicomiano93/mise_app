@@ -205,7 +205,7 @@ Aria does not support Preact. The numbers are below.
   be calculated). Since 8 Nov 2026 (port of the current app's #424) every `RecipePanel` STARTS with a status line saying
   why a linked tab cannot be calculated (`showsSourceProblem`: linked, a problem, not still loading), shown before anything
   is typed, and a tab with a problem closes its `ResultCard`; Settings › Recipes counts a linked recipe's own rows
-  (`ingredientCount`). `docs/parity/calculator.md`, «Linked recipes with litres, the problem line and the row count as built». Addresses, in `calculatorPath.ts` (ids split before they are decoded): `/calculator` and
+  (`ingredientCount`). `docs/parity/calculator.md`, «Linked recipes with litres, the problem line and the row count as built». Since 9 Nov 2026 `calculatorSource.saveClients` and the store option `clientsOnly` (`CalculatorProvider clientsOnly`) save ONLY the clients (a transaction with `update`, refused before any write by `needsCalculatorSave`) and watch no logs, for the sales owner; no screen uses them until the Clients section (`docs/parity/calculator.md`, «Clients-only save as built»). Addresses, in `calculatorPath.ts` (ids split before they are decoded): `/calculator` and
   `/calculator/<recipeId>`; an unknown or hidden recipe goes to the first visible one by replacing the
   address, and picking a tab REPLACES the entry too. The usage record names one screen, `calculator`. From
   1000px the entries are on the left and the recipe on the right, sticking to the top (`RecipePanel.module.css`).

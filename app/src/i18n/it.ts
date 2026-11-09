@@ -636,6 +636,7 @@ export const it: Messages = {
   'calc.saveTheseLogSettings': 'Vuoi salvare queste impostazioni dello storico impasti?',
   'calc.youHaveUnsavedChanges': 'Hai modifiche non salvate. Vuoi uscire senza salvare? Le modifiche andranno perse.',
   'calc.savedLocallyOnly': 'Salvato solo su questo telefono. L’app non è riuscita a raggiungere le impostazioni salvate online, quindi non ha mandato la modifica — così protegge i clienti e le ricette già salvati lì. Controlla la connessione e ricarica la pagina.',
+  'calc.notSavedNoConfig': 'Non salvato: il Calcolatore di questo locale va salvato una prima volta. Chiedi al titolare di salvare una qualsiasi impostazione del Calcolatore, poi riprova.',
   'calc.notSavedOutOfDate': 'Non salvato: l’app su questo dispositivo è da aggiornare. Ricaricala e riprova.',
   'calc.notSavedCheckConnection': 'Non salvato: controlla la connessione e riprova.',
   'calc.addARecipe': 'Aggiungi una ricetta',

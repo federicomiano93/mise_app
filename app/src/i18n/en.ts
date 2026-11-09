@@ -710,6 +710,7 @@ export const en = {
   'calc.saveTheseLogSettings': 'Save these dough history settings?',
   'calc.youHaveUnsavedChanges': 'You have unsaved changes. Leave without saving? Your changes will be lost.',
   'calc.savedLocallyOnly': 'Saved on this phone only. The app could not reach the settings stored online, so it has not sent the change — this protects the clients and recipes already saved there. Check your connection and reload the page.',
+  'calc.notSavedNoConfig': 'Not saved: the Calculator of this venue has to be saved once first. Ask the owner to save any Calculator setting, then try again.',
   'calc.notSavedOutOfDate': 'Not saved: this app is out of date. Reload it and try again.',
   'calc.notSavedCheckConnection': 'Not saved: check the connection and try again.',
   'calc.addARecipe': 'Add a recipe',

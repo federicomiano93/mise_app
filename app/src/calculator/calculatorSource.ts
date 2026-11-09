@@ -25,7 +25,7 @@
 // store can decide whether to believe that. Without includeMetadataChanges the server's answer that is
 // identical to the cached one is never reported, and a cached «nothing» would never be confirmed.
 
-import { CONFIG_MODEL, reconcileConfigWrite } from '@mise/shared/calculator-config';
+import { CONFIG_MODEL, NEEDS_CALCULATOR_SAVE, clientsOnlyWrite, needsCalculatorSave, reconcileConfigWrite } from '@mise/shared/calculator-config';
 import type { CalculatorConfig } from '@mise/shared/calculator-config';
 import { withRowIds } from '@mise/shared/guided-model';
 import { buildPath } from '@mise/shared/location-id';
@@ -73,6 +73,10 @@ export interface CalculatorSource {
   // the server has it; rejects when it is refused or cannot be reached (a transaction needs the server: offline
   // it fails, it never queues).
   saveConfig(config: CalculatorConfig): Promise<number>;
+  // ONLY the address book (`clients`) and the next revision, for the owner of the sales side (the rules let that
+  // role change nothing else). Rejects with code NEEDS_CALCULATOR_SAVE when there is no document or it is still in a
+  // retired shape; otherwise resolves with the revision written.
+  saveClients(config: CalculatorConfig): Promise<number>;
   // Every catalogue recipe, read ONCE from the SERVER (the link picker). Rejects when it cannot be read —
   // offline included: the browser's own database would answer with whatever this phone happened to see.
   listCatalogueRecipes(): Promise<StoredDoc[]>;
@@ -206,6 +210,25 @@ export function createFirestoreCalculatorSource(
         versions: fs.arrayUnion(version),
         ...(forDay ? { forDay } : {}),
         bakery: locationId,
+      });
+    },
+
+    // ⚠️ THE ADDRESS BOOK ALONE, AN UPDATE AND NEVER A SET (js/firebase.js `saveCalculatorClients`): the recipes and
+    // every Calculator setting stay out of the request, so the rules can let the sales owner through
+    // (writesCalculatorConfigAs) and a stale copy on this phone cannot undo them. A missing document or a retired
+    // shape is refused BEFORE any write (needsCalculatorSave): saved clients would lose their products on every phone.
+    async saveClients(config) {
+      const { fs, db } = await firestore();
+      const ref = fs.doc(db, configPath, CONFIG_DOC);
+      return fs.runTransaction(db, async tx => {
+        const snap = await tx.get(ref);
+        const server = snap.exists() ? snap.data() : null;
+        if (needsCalculatorSave(server)) {
+          throw Object.assign(new Error(NEEDS_CALCULATOR_SAVE), { code: NEEDS_CALCULATOR_SAVE });
+        }
+        const write = clientsOnlyWrite(config, server);
+        tx.update(ref, { ...write, configModel: CONFIG_MODEL, bakery: locationId });
+        return write.configRev;
       });
     },
 

@@ -1007,3 +1007,18 @@ Port of the current app's #424 (`e7f3dac0`, `6713adab`, `1342cb79`) and `535bcdb
   read («0 ingredients» before).
 - Still owed in this group: items 36, 37 (`catalogueChoices`, `rowsToStamp`: the parity markers of calculator-recipe-source stay),
   39 and 40.
+
+## Clients-only save as built (9 Nov 2026, slice 3 of the partial-owner roles, invisible: no screen uses it yet)
+
+The machinery under the sales owner's Clients page (item 10; the screen is slice 4). The rules (`writesCalculatorConfigAs`) let that role
+change only `clients`, `configModel`, `configRev` and `whatsappClients` on `config/calculator`, so the Calculator's whole save cannot be theirs.
+- `shared/src/calculator-config.ts`: `NEEDS_CALCULATOR_SAVE`, `needsCalculatorSave(server)` (no document, or a retired top-level `products[]`, or
+  the oldest per-tab shape without `clients[]`: refused before any write, or saved clients would lose their products on every phone) and
+  `clientsOnlyWrite(config, server)` (`{clients, configRev: server + 1}`; no list of clients throws, never an empty list). `saveFailureKey`
+  answers `calc.notSavedNoConfig` for that code. Parity-tested against `js/calculator-config.js`; the constants test lost its `.fails`, the
+  names test stays `.fails` for `moveIngredient` (item 36).
+- `calculatorSource.saveClients(config)`: a transaction, `tx.update` with exactly `clients`, `configRev`, `configModel`, `bakery`; never `set`.
+- `calculatorStore` option `clientsOnly` (passed by `CalculatorProvider clientsOnly`): `start()` watches only the configuration (no logs listener,
+  the rules refuse logs to this role) and follows no linked recipe; `saveConfig` goes through `saveClients` with the same «server has answered
+  once» guard and the same rollback. Menus still republish (`onConfigSaved`).
+- `calc.notSavedNoConfig` in `en.ts`/`it.ts`, the words of the current app.
