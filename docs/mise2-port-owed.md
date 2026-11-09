@@ -58,6 +58,12 @@ Before the switch, not ports:
 - [x] His OK on what the switch leaves out until later: staff and join screens, kiosk, reminder notifications, `order.html` kept as it is — given 8 Nov 2026 («switch with the minimum»), with every item of «Deferred until AFTER the switch»
 - [x] His OK on the TTL policy on `todos.expireAt` — given for the switch; the command is run at the switch hour (`docs/switch-runbook.md`)
 
+At the switch hour, not gated here (they cannot be done before it; `docs/switch-runbook.md`, written with the service
+worker's rollback, has the exact order):
+- The rules deployed FIRST, from the release branch (it contains the latest main: the stack alone lacks the
+  partial-owner roles), and read back identical (`firestore-rules` skill, `node scripts/rules-live-diff.mjs`).
+- The TTL command on `todos.expireAt` (his OK above); «Uova in vassoi» retyped as 50 g (item 20).
+
 ## A. Data-loss risks (port BEFORE the switch)
 
 1. **Pastries row notes + «Copy day»** — PR #446 (v1.133.0), also `ae7a415a` (a discarded copy must not leave a recorded day locked).

@@ -64,14 +64,18 @@ function markers() {
   return found;
 }
 
-// "8-11, 18" → [8, 9, 10, 11, 18]
+// "8-11, 18" → [8, 9, 10, 11, 18]. ⚠️ null for anything malformed («1-», «11-8», «,», «»): a tag that names no item
+// must never count as deferred (an empty list would pass every() — review of PR #502).
 function expandItems(list) {
   const out = [];
-  for (const part of list.split(',').map(p => p.trim()).filter(Boolean)) {
-    const [from, to] = part.split('-').map(Number);
-    for (let n = from; n <= (Number.isFinite(to) ? to : from); n++) out.push(n);
+  const parts = list.split(',').map(p => p.trim());
+  if (!parts.length || parts.some(p => !/^\d+(-\d+)?$/.test(p))) return null;
+  for (const part of parts) {
+    const [from, to = from] = part.split('-').map(Number);
+    if (!(from >= 1) || to < from) return null;
+    for (let n = from; n <= to; n++) out.push(n);
   }
-  return out;
+  return out.length ? out : null;
 }
 
 function section(text, heading) {
@@ -87,7 +91,7 @@ function deferredItems() {
   const items = new Set();
   for (const line of section(text, 'Deferred until AFTER the switch').split('\n')) {
     const m = line.match(/^- (\d+(?:-\d+)?(?:, \d+(?:-\d+)?)*)\. /);
-    if (m) for (const n of expandItems(m[1])) items.add(n);
+    if (m) for (const n of expandItems(m[1]) ?? []) items.add(n);
   }
   return items;
 }
@@ -180,7 +184,7 @@ test('the deferred list names real items, and none of them is also on the switch
   assert.deepEqual([...deferred].filter(n => !numbered.has(n)), [], 'deferred numbers with no item of that number');
   // A deferred item cannot also be a line of the switch checklist: it would be both «wait» and «before».
   const checklist = section(text, 'Switch checklist');
-  const listed = [...checklist.matchAll(/^- \[[ x]\] (\d+(?:-\d+)?(?:, \d+(?:-\d+)?)*)\. /gm)].flatMap(m => expandItems(m[1]));
+  const listed = [...checklist.matchAll(/^- \[[ x]\] (\d+(?:-\d+)?(?:, \d+(?:-\d+)?)*)\. /gm)].flatMap(m => expandItems(m[1]) ?? []);
   assert.deepEqual(listed.filter(n => deferred.has(n)), [], 'items both deferred and on the switch checklist');
 });
 
@@ -191,11 +195,18 @@ test('a marker that names an item names it the one way the switch check reads', 
   for (const dir of ['app/src', 'shared/src']) {
     for (const file of sources(join(ROOT, dir))) {
       readFileSync(file, 'utf8').split('\n').forEach((line, i) => {
-        if (line.includes(MARKER) && /defer/i.test(line) && !/deferred until after the switch, items? [\d ,-]+\)/.test(line)) {
+        const tag = line.match(/deferred until after the switch, items? ([\d ,-]+)\)/);
+        if (line.includes(MARKER) && /defer/i.test(line) && (!tag || !expandItems(tag[1]))) {
           malformed.push(`${file.slice(ROOT.length + 1).replace(/\\/g, '/')}:${i + 1}`);
         }
       });
     }
   }
   assert.deepEqual(malformed, []);
+});
+
+test('a tag that names no real range is never a deferral: «1-», «11-8», «,» are refused', () => {
+  for (const bad of ['1-', '11-8', ',', '', '0', '3, ', 'a']) assert.equal(expandItems(bad), null, JSON.stringify(bad));
+  assert.deepEqual(expandItems('21-22, 24-26, 28'), [21, 22, 24, 25, 26, 28]);
+  assert.deepEqual(expandItems('8'), [8]);
 });
