@@ -55,6 +55,20 @@ describe.each([
     expect(m.mayOpenOrders({ sections: { orders: false } }, true)).toBe(false);
     expect(m.mayOpenOrders({ sections: {} }, 'true')).toBe(m.mayOpenOrders({ sections: {} }, false));
   });
+
+  // ⚠️ The role is the third question. A partial owner can manage, so without it the sales owner would be offered
+  // Orders and the kitchen owner Food cost: doors that bounce their user straight back Home.
+  test('⚠️ the role narrows the doors: sales has Food cost not Orders, the kitchen the other way round', () => {
+    const venue = { sections: {} };
+    expect(m.mayOpenFoodCost(venue, true, 'owner-sales')).toBe(true);
+    expect(m.mayOpenOrders(venue, true, 'owner-sales')).toBe(false);
+    expect(m.mayOpenFoodCost(venue, true, 'owner-kitchen')).toBe(false);
+    expect(m.mayOpenOrders(venue, true, 'owner-kitchen')).toBe(true);
+    for (const role of ['owner', 'manager']) {
+      expect(m.mayOpenFoodCost(venue, true, role), role).toBe(true);
+      expect(m.mayOpenOrders(venue, true, role), role).toBe(true);
+    }
+  });
 });
 
 describe('the new builders and the parameter reader (Mise 2 only)', () => {
@@ -119,7 +133,7 @@ describe('the port against the original', () => {
     expect(Object.keys(port).sort()).toStrictEqual([...shared, ...ADDED].sort());
   });
 
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 8): main changed js/recipe-link.js (mayOpenFoodCost takes a role argument), the port has not — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, items 23, 32): the arity check reads every export of js/recipe-link.js and the port lacks orderIngredientFromHash, ordersIngredientHref and recipeSpotFromHash — remove .fails when ported
   test.fails('every function has the same name and the same number of required parameters', () => {
     for (const name of shared) {
       expect((port[name] as { name: string }).name, name).toBe((original[name] as { name: string }).name);

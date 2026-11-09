@@ -588,17 +588,19 @@ describe('sections: odd inputs', () => {
 
   const NAMES = [...ODD, ...m.SECTIONS, 'invoices', 'toString', '__proto__', 'constructor', 'Orders', ' orders', 'orders '];
   const ROLES = [...ODD, 'owner', 'manager', 'staff', 'Owner', 'MANAGER', 'admin', 'head-chef', 'toString', '__proto__',
-    ' manager', 'owner '];
+    ' manager', 'owner ', 'owner-sales', 'owner-kitchen', 'Owner-sales', 'owner-sales ', ' owner-kitchen', 'OWNER-KITCHEN', 'owner_sales'];
 
   agree('allowedSections', m.allowedSections, l.allowedSections, product(LOCATION_DOCS));
   agree('isSectionAllowed', m.isSectionAllowed, l.isSectionAllowed, product(LOCATION_DOCS, NAMES));
   agree('sectionsFor', m.sectionsFor, l.sectionsFor, product(LOCATION_DOCS, ROLES));
   agree('isSectionAllowedFor', m.isSectionAllowedFor, l.isSectionAllowedFor, product(SMALL_DOCS, ROLES, NAMES));
+  agree('pageWhenRefused', m.pageWhenRefused, l.pageWhenRefused, product(ROLES, [...NAMES, 'clients', 'suppliers', 'inventory']));
 
   // `locations.<id>` values and ids nobody planned for: near-misses of the three accepted values, a
   // stray space or a slash in the id, an id one character past the limit, ids that sort oddly.
   const ACCESS_ODD = [true, false, 'manager', 'owner', 'Owner', 'owner ', ' manager', 'staff', 'admin', 'head-chef', 'true',
-    0, 1, null, undefined, {}, [], ['owner'], NaN];
+    'owner-sales', 'owner-kitchen', 'Owner-sales', 'owner-sales ', ' owner-kitchen', 'OWNER-KITCHEN', 'owner_sales', 'owner-sales\n',
+    0, 1, null, undefined, {}, [], ['owner'], ['owner-sales'], NaN];
   const LOCATIONS_FIELDS = [...ODD, 'owner', 42, { bakery: 'owner' },
     ...ACCESS_ODD.map(value => ({ bakery: value })),
     { 'bakery ': 'owner' }, { ' bakery': true }, { 'bak ery': true }, { 'bakery/x': 'owner' }, { '': true },
@@ -3072,8 +3074,9 @@ describe('recipe-link: odd inputs', () => {
   agree('recipeIdFromHash', recipeLink.recipeIdFromHash, l.recipeIdFromHash, product(HASHES));
   const LOCS: readonly unknown[] = [...ODD, 'bakery', { sections: {} }, { sections: { foodcost: false, orders: false } }, { sections: { foodcost: true } }, { staffShownCards: { foodcost: true, orders: true } }, { sections: {}, staffShownCards: { foodcost: false } }];
   const MANAGE: readonly unknown[] = [...ODD, true, 'true'];
-  agree('mayOpenFoodCost', recipeLink.mayOpenFoodCost, l.mayOpenFoodCost, product(LOCS, MANAGE));
-  agree('mayOpenOrders', recipeLink.mayOpenOrders, l.mayOpenOrders, product(LOCS, MANAGE));
+  const ROLE_ARGS: readonly unknown[] = [undefined, 'owner', 'manager', 'staff', 'owner-sales', 'owner-kitchen', 'Owner-sales', 'toString', 5, null];
+  agree('mayOpenFoodCost', recipeLink.mayOpenFoodCost, l.mayOpenFoodCost, product(LOCS, MANAGE, ROLE_ARGS));
+  agree('mayOpenOrders', recipeLink.mayOpenOrders, l.mayOpenOrders, product(LOCS, MANAGE, ROLE_ARGS));
 });
 
 describe('records: odd inputs', () => {
@@ -3082,7 +3085,8 @@ describe('records: odd inputs', () => {
     { staffHiddenCards: { suppliers: true } }, { sections: {}, staffHiddenCards: { suppliers: 'true' } }, { sections: {}, staffHiddenCards: null },
     { sections: null, staffHiddenCards: { orders: true } }];
   const MANAGE: readonly unknown[] = [...ODD, true, 'true', 1];
-  agree('mayEditRecords', records.mayEditRecords, l.mayEditRecords, product(LOCS, MANAGE));
+  const ROLE_ARGS: readonly unknown[] = [undefined, 'owner', 'manager', 'staff', 'owner-sales', 'owner-kitchen', 'Owner-kitchen', 'toString', 5, null];
+  agree('mayEditRecords', records.mayEditRecords, l.mayEditRecords, product(LOCS, MANAGE, ROLE_ARGS));
 });
 
 describe('log-model: odd inputs', () => {
