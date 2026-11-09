@@ -143,6 +143,14 @@ describe('SettingsPage: cards by who a row is about', () => {
     expect(cardTitles()).toEqual(['You', 'The venue', 'Account']);
   });
 
+  // ⚠️ A PARTIAL OWNER canManage BUT DOES NOT MANAGE THE VENUE: its language and what its employees are shown are refused to them.
+  it.each([['sales', 'owner-sales'], ['kitchen', 'owner-kitchen']] as const)('shows the %s owner You and Account only, like an employee', (_who, role) => {
+    renderApp('/settings', { session: { role, canManage: true, canManageVenue: false, isOwner: false } });
+    expect(cardTitles()).toEqual(['You', 'Account']);
+    expect(main().queryByRole('link', { name: 'App language' })).not.toBeInTheDocument();
+    expect(main().queryByRole('link', { name: 'Sections for employees' })).not.toBeInTheDocument();
+  });
+
   it('has no «This device» card yet — the app version and the kiosk have their own steps', () => {
     renderApp('/settings');
     expect(main().queryByRole('heading', { name: /device/i })).not.toBeInTheDocument();

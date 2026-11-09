@@ -88,6 +88,17 @@ describe('the door and the address', () => {
 });
 
 describe('the ingredient card', () => {
+  // ⚠️ canManageVenue, not canManage: the two switches are the venue's, and the server refuses them to a partial owner, who can
+  // still open this screen (the kitchen owner has the Suppliers card) for its categories.
+  it('is not drawn for the kitchen owner, who keeps the categories', async () => {
+    const { region } = await openSettings(sourceWith(), {
+      session: { location: GB, role: 'owner-kitchen', canManage: true, canManageVenue: false, isOwner: false },
+    });
+    expect(region.queryByRole('region', { name: 'The ingredient card' })).not.toBeInTheDocument();
+    expect(region.queryByRole('switch', { name: 'Track allergens' })).not.toBeInTheDocument();
+    expect(region.getByRole('region', { name: /categories/i })).toBeInTheDocument();
+  });
+
   it('has the two switches, named, with their notes, and no pack-photo switch (that is step 3e-8)', async () => {
     const { region } = await openSettings();
     const card = within(region.getByRole('region', { name: 'The ingredient card' }));

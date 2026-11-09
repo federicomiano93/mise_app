@@ -70,6 +70,9 @@ export function LabelSettings({ titleRef, onBack }: Props) {
 
 function Controls() {
   const { t } = useT();
+  // ⚠️ canManageVenue, not canManage: a partial owner has canManage but the photo switch is the venue's, and the server refuses it to
+  // them (main: catalogue-main.js showPhoto). Not drawn rather than drawn and refused.
+  const { canManageVenue } = useSession();
   const store = useRecipesStore();
   const say = useStatusMessage();
   const { labelConfig } = useRecipes();
@@ -142,7 +145,7 @@ function Controls() {
 
   return (
     <div className={styles.body}>
-      <PhotoCard />
+      {canManageVenue ? <PhotoCard /> : null}
 
       <RecipeCategoriesCard
         onAdd={word => saveCategories(() => store.addRecipeCategory(word))}

@@ -104,7 +104,7 @@ describe('who is signed in', () => {
     await settle();
     const snap = s.store.getSnapshot();
     expect(snap.status).toBe('signed-out');
-    expect([snap.canManage, snap.isOwner, snap.isAppAdmin]).toEqual([false, false, false]);
+    expect([snap.canManage, snap.canManageVenue, snap.isOwner, snap.isAppAdmin]).toEqual([false, false, false, false]);
   });
 
   test('a leftover anonymous session is dropped, never treated as a person', async () => {
@@ -222,7 +222,7 @@ describe('somebody else\'s offline copy', () => {
     s.auth(ALICE);
     await settle();
     expect(s.store.getSnapshot()).toMatchObject({
-      status: 'no-access', locationId: null, location: null, role: 'staff', canManage: false, isOwner: false, name: '', language: null,
+      status: 'no-access', locationId: null, location: null, role: 'staff', canManage: false, canManageVenue: false, isOwner: false, name: '', language: null,
     });
   });
 
@@ -330,13 +330,25 @@ describe('roles', () => {
     const s = setup(world({ 'users/alice': { locations: { bakery: value } }, 'locations/bakery': {} }));
     s.auth(ALICE);
     await settle();
-    const { role, canManage, isOwner } = s.store.getSnapshot();
-    return { role, canManage, isOwner };
+    const { status, role, canManage, canManageVenue, isOwner } = s.store.getSnapshot();
+    return { status, role, canManage, canManageVenue, isOwner };
   }
   test('owner, manager and employee', async () => {
-    expect(await as('owner')).toEqual({ role: 'owner', canManage: true, isOwner: true });
-    expect(await as('manager')).toEqual({ role: 'manager', canManage: true, isOwner: false });
-    expect(await as(true)).toEqual({ role: 'staff', canManage: false, isOwner: false });
+    expect(await as('owner')).toEqual({ status: 'ready', role: 'owner', canManage: true, canManageVenue: true, isOwner: true });
+    expect(await as('manager')).toEqual({ status: 'ready', role: 'manager', canManage: true, canManageVenue: true, isOwner: false });
+    expect(await as(true)).toEqual({ status: 'ready', role: 'staff', canManage: false, canManageVenue: false, isOwner: false });
+  });
+
+  // ⚠️ THE LOCKOUT OF THE FIRST PORT: with three access values Mise 2 opened these two on «no venue yet».
+  test('⚠️ the two partial owners ENTER the venue, manage their side and not the venue', async () => {
+    expect(await as('owner-sales')).toEqual({ status: 'ready', role: 'owner-sales', canManage: true, canManageVenue: false, isOwner: false });
+    expect(await as('owner-kitchen')).toEqual({ status: 'ready', role: 'owner-kitchen', canManage: true, canManageVenue: false, isOwner: false });
+  });
+
+  test('a near miss of a partial role is no access at all', async () => {
+    for (const bad of ['Owner-sales', 'owner-sales ', 'owner_kitchen']) {
+      expect((await as(bad)).status, bad).toBe('no-access');
+    }
   });
 });
 

@@ -20,7 +20,7 @@
 // everybody else does.)
 
 import { locationsOf, pickStart } from '@mise/shared/sections';
-import { roleOf, canManage, isOwner, DEFAULT_ROLE, type Role } from '@mise/shared/membership';
+import { roleOf, canManage, canManageVenue, isOwner, DEFAULT_ROLE, type Role } from '@mise/shared/membership';
 import {
   offlineCacheVerdict, shouldClearLocalData, keysToClear, OFFLINE_CACHE_OWNER_KEY,
 } from '@mise/shared/local-data';
@@ -48,6 +48,10 @@ export interface Session {
   // "May take things away" (owner AND manager) vs "may invite people and set roles" (owner
   // alone): two questions, never one.
   readonly canManage: boolean;
+  // ⚠️ A THIRD QUESTION, for the two partial owners: they canManage (every screen they can open is
+  // on their own side) but do not manage the VENUE — its language, its Home cards, what its
+  // employees are shown. Owner and manager only (js/roles.js canManageVenue).
+  readonly canManageVenue: boolean;
   readonly isOwner: boolean;
   // "May create a new customer's venue" — the app's own administrator, above every venue.
   readonly isAppAdmin: boolean;
@@ -56,11 +60,11 @@ export interface Session {
   readonly language: Language | null;
 }
 
-// ⚠️ canManage, isOwner and isAppAdmin START false AND MUST: every screen draws from this object
+// ⚠️ canManage, canManageVenue, isOwner and isAppAdmin START false AND MUST: every screen draws from this object
 // before a venue is open, and the safe starting answer is "no powers".
 export const INITIAL_SESSION: Session = Object.freeze({
   status: 'loading', user: null, locationId: null, location: null, options: [], optionNames: {},
-  name: '', role: DEFAULT_ROLE, canManage: false, isOwner: false, isAppAdmin: false, language: null,
+  name: '', role: DEFAULT_ROLE, canManage: false, canManageVenue: false, isOwner: false, isAppAdmin: false, language: null,
 });
 
 // Keys shared with the current app (js/firebase.js), same meaning.
@@ -203,6 +207,7 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       name: typeof location?.name === 'string' && location.name ? location.name : locationId,
       role: roleOf(userDoc, locationId),
       canManage: canManage(userDoc, locationId),
+      canManageVenue: canManageVenue(userDoc, locationId),
       isOwner: isOwner(userDoc, locationId),
       isAppAdmin,
       language,

@@ -120,7 +120,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const { pathname, state } = location;
   const navigationType = useNavigationType();
   const split = useMediaQuery(SPLIT_QUERY);
-  const { canManage, location: venue } = useSession();
+  const { canManage, location: venue, role } = useSession();
   // ⚠️ WHICH LIST IS IN THE LIST COLUMN comes from the HISTORY ENTRY (ordersNav.ts `column`), not from anything this component remembers: it
   // survives a remount (the trip to a card) and a reload. The flat view is in the column at its own address and beside/behind every screen
   // that was opened from it (History, the send screen, the settings, a supplier from the bell), so its search text, its frozen «Ordering»
@@ -226,7 +226,7 @@ function OrdersLayout({ view }: { view: ShownView }) {
   const cardDoors = {
     // The same question as the Suppliers section's gate, asked on every render so it follows the venue's switch live — except that with no
     // venue document it says no (the safe direction: a door that is not drawn cannot bounce).
-    may: mayEditRecords(venue, canManage),
+    may: mayEditRecords(venue, canManage, role),
     open: (door: CardDoor) => {
       carryTrip({
         key: location.key,

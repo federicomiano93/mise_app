@@ -9,9 +9,9 @@ import { arrangeSections } from './sections';
 // ⚠️ UX ONLY, NEVER A PERMISSION (see session/visibility.ts): the data of a hidden section is
 // still refused by firestore.rules.
 export function useVisibleSections() {
-  const { location, canManage } = useSession();
+  const { location, canManage, role } = useSession();
   return useMemo(() => {
-    const visible = visibleSectionIds(location, canManage);
+    const visible = visibleSectionIds(location, canManage, role);
     return { visible, ...arrangeSections(visible) };
-  }, [location, canManage]);
+  }, [location, canManage, role]);
 }

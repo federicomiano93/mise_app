@@ -92,6 +92,9 @@ describe('the Food cost source, as firestore.rules expect it', () => {
     const [ref, data] = fs.updateDoc.mock.calls[0]!;
     expect(ref.path).toBe('locations/bakery/recipes/r1');
     expect(data).toEqual({ lossPct: 12, rawGrams: 1000, cookedGrams: 880, bakery: 'bakery' });
+    // ⚠️ EXACTLY THESE FOUR KEYS: the owner of the sales side may write the three numbers and `bakery`
+    // (weighsRecipeLoss in firestore.rules), and a fifth key would be a refused save for them.
+    expect(Object.keys(data).sort()).toEqual(['bakery', 'cookedGrams', 'lossPct', 'rawGrams']);
   });
 
   test('a product is deleted by its own path', async () => {

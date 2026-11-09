@@ -30,12 +30,15 @@ type Props = {
 // off must be possible there (parity S105).
 export function SuppliersSettings({ titleRef, onBack }: Props) {
   const { t } = useT();
+  // ⚠️ canManageVenue, not canManage: the two panel switches are the venue's, and a partial owner (who can open this screen for its
+  // categories) is refused them by the server (main: registry-main.js mayChangeVenue). Not drawn rather than drawn and refused.
+  const { canManageVenue } = useSession();
   const titleId = useId();
   return (
     <section className={styles.screen} aria-labelledby={titleId}>
       <FormBar backLabel={t('ui.back')} onBack={onBack} title={t('ui.settings')} titleId={titleId} titleRef={titleRef} />
       <div className={styles.body}>
-        <IngredientCard />
+        {canManageVenue ? <IngredientCard /> : null}
         <CategoriesCard />
       </div>
     </section>

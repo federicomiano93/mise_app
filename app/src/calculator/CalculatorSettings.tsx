@@ -2,7 +2,9 @@ import { useEffect, useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { asksDoughDay, cloneConfig, showsClientOrdersButton } from '@mise/shared/calculator-config';
 import type { CalculatorConfig } from '@mise/shared/calculator-config';
+import { worksOnClients } from '@mise/shared/membership';
 import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
 import { useCalculator, useCalculatorStore } from './CalculatorContext';
 import { Door } from './Door';
 import {
@@ -66,6 +68,7 @@ type SwitchKey = 'showClientOrdersButton' | 'askDoughDay';
 // where it was by itself, and the sentence says why.
 function VenueSwitches() {
   const { t } = useT();
+  const { role } = useSession();
   const store = useCalculatorStore();
   const { config, configFromServer } = useCalculator();
   const [save, saveDialog] = useSaveConfig();
@@ -108,9 +111,16 @@ function VenueSwitches() {
       title={t('settings.calc.clients')}
       tag={<span role="status" className={styles.saved}>{tagged ? t('settings.saved') : ''}</span>}
     >
-      <Door opener={CLIENTS_OPENER} to={clientsPath} title={t('ui.clients')} sub={t('ui.clientsAndTheProducts')} />
-      <Door opener={WHATSAPP_OPENER} to={whatsappPath} title={t('ui.whatsapp')} sub={t('ui.buildOrderListsPick')} />
-      <Door opener={ORDERING_OPENER} to={orderingPath} title={t('ui.clientOrdering')} sub={t('ui.whenOrdersSentFrom')} />
+      {/* ⚠️ THE KITCHEN'S OWNER HAS NO CLIENTS TO RUN (worksOnClients, the list of worksOnClientsAs in firestore.rules): the three
+          doors are not drawn for them, and their addresses send them back here (SettingsScreens). The switches under them stay:
+          they are the venue's own. */}
+      {worksOnClients(role) ? (
+        <>
+          <Door opener={CLIENTS_OPENER} to={clientsPath} title={t('ui.clients')} sub={t('ui.clientsAndTheProducts')} />
+          <Door opener={WHATSAPP_OPENER} to={whatsappPath} title={t('ui.whatsapp')} sub={t('ui.buildOrderListsPick')} />
+          <Door opener={ORDERING_OPENER} to={orderingPath} title={t('ui.clientOrdering')} sub={t('ui.whenOrdersSentFrom')} />
+        </>
+      ) : null}
       <SwitchRow
         title={t('settings.calc.ordersButton')}
         sub={t('settings.calc.ordersButton.sub')}

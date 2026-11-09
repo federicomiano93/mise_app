@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useState, useSyncExternalStore } 
 import type { ReactNode } from 'react';
 import { useDataServices } from '../data/DataContext';
 import { useSession } from '../session/SessionContext';
-import { visibleSectionIds } from '../session/visibility';
+import { readsPurchasePrices } from '../session/visibility';
 import { createOrdersStore } from './ordersStore';
 import type { OrdersDeps, OrdersSnapshot, OrdersStore } from './ordersStore';
 
@@ -26,11 +26,12 @@ export function OrdersProvider({ children, deps }: { children: ReactNode; deps?:
     return () => store.stop();
   }, [store]);
 
-  // ⚠️ WHO MAY READ PRICES, asked as firestore.rules ask it (ingredient-prices: cardAccess(lid, 'foodcost', 'foodcost') != 'none'):
-  // whoever is shown Food cost — an owner or a manager, an employee only where the venue showed them the card. UX only (P2): the
+  // ⚠️ WHO MAY READ PRICES, asked as firestore.rules ask it (ingredient-prices: cardAccess(lid, 'foodcost', 'prices') != 'none'):
+  // the venue has Food cost, and the person runs a side (an owner, a manager, the kitchen owner who orders the goods and has no
+  // Food cost screen) or the venue showed their employees the card (session/visibility.ts readsPurchasePrices). UX only (P2): the
   // rules decide, and a refused read draws no money. Anybody else never opens the listener (step 3f-8c, parity L20). Declared
   // after the start, so React runs it after the start too.
-  const readsPrices = visibleSectionIds(location, canManage).has('foodcost');
+  const readsPrices = readsPurchasePrices(location, canManage);
   useEffect(() => {
     store.setPriceReader(readsPrices);
   }, [store, readsPrices]);
