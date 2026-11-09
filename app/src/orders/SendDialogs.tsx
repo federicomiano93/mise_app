@@ -8,7 +8,9 @@ import { Dialog } from '../ui/Dialog';
 import { sharePhoto } from './orderImage';
 import type { OpenQuestion, TextOutcome } from './sendFlow';
 
-// «Photo or text?» — the order as a picture (first, focused) or as the plain text. Escape and Cancel back out of the whole send.
+// «Photo or text?» — the order as the plain text (first, focused) or as a picture. Escape and Cancel back out of the whole send.
+// ⚠️ TEXT IS THE DEFAULT (his decision, 9 Nov 2026): one tap on the focused button sends the text; the photo is the second
+// choice. The current app still offers the photo first — a deliberate Mise 2 change, not a port defect.
 export function FormatDialog({ answer }: { answer: (format: 'photo' | 'text' | null) => void }) {
   const { t } = useT();
   return (
@@ -18,8 +20,8 @@ export function FormatDialog({ answer }: { answer: (format: 'photo' | 'text' | n
       onClose={() => { answer(null); }}
       actions={<Button onPress={() => { answer(null); }}>{t('common.cancel')}</Button>}
     >
-      <Button variant="primary" block autoFocus onPress={() => { answer('photo'); }}>{t('ord.sendFormat.photo')}</Button>
-      <Button block onPress={() => { answer('text'); }}>{t('ord.sendFormat.text')}</Button>
+      <Button variant="primary" block autoFocus onPress={() => { answer('text'); }}>{t('ord.sendFormat.text')}</Button>
+      <Button block onPress={() => { answer('photo'); }}>{t('ord.sendFormat.photo')}</Button>
     </Dialog>
   );
 }

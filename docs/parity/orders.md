@@ -313,6 +313,7 @@ X22. **Photo or text** for the WhatsApp roads when the browser can share a PNG (
 the share; Cancel / Escape sends and counts nothing (`runPhotoBatch` `send-chooser.js:230`, `photoDialog` `316`).
 The picture: 1080 px wide, Manrope, ink on white (`order-image.js:18-25`, `layoutOrder` `56`). ⚠️ `navigator.share`
 only for a FILE (the order picture), never for text. **spec** `order-image`, `send-chooser`, `one-send-arrow`.
+⚠️ **Mise 2 differs on purpose (his decision, 9 Nov 2026): Text is the first, focused button and the photo the second**; the current app keeps the photo first (`SendDialogs.tsx` `FormatDialog`, pinned in `OrdersSection.send.spec.tsx`).
 X23. **Email** opens the mail app with a subject and the text (`mailto` `send-chooser.js:364`, `emailSubject`
 `order-text.js:137`); the Settings note says plainly that it opens the app and does not send (`management.js:331-335`).
 Finding F-3.
