@@ -1,5 +1,6 @@
 import { createContext, useContext } from 'react';
 import type { ReactNode } from 'react';
+import { OWNER_KITCHEN } from '@mise/shared/sections';
 import type { FirestoreKit } from '../session/firebaseBackend';
 import { createFirestoreCalculatorSource } from '../calculator/calculatorSource';
 import type { CalculatorSource } from '../calculator/calculatorSource';
@@ -72,7 +73,13 @@ export interface AuthServices {
   callFunction(name: string, data: unknown, timeoutMs: number): Promise<unknown>;
 }
 
-export function createDataServices(firestore: () => Promise<FirestoreKit>, auth: AuthServices): DataServices {
+// `currentRole` is asked when a check is made, not when the services are built (the role changes with the venue): the kitchen
+// owner's merge asks a Cloud Function where everybody else reads `products`.
+export function createDataServices(
+  firestore: () => Promise<FirestoreKit>,
+  auth: AuthServices,
+  currentRole: () => unknown,
+): DataServices {
   return {
     pastries: locationId => createFirestorePastriesSource(firestore, locationId),
     stocktake: locationId => createFirestoreStocktakeSource(firestore, locationId),
@@ -89,7 +96,10 @@ export function createDataServices(firestore: () => Promise<FirestoreKit>, auth:
       (name, data, timeoutMs) => auth.callFunction(name, data, timeoutMs), locationId),
     invoiceImport: locationId => createLazyImportSource(firestore, locationId),
     priceChanges: locationId => createFirestorePriceChangesSource(firestore, locationId),
-    merge: locationId => createLazyMergeSource(firestore, locationId),
+    merge: locationId => createLazyMergeSource(firestore, locationId, {
+      isKitchen: () => currentRole() === OWNER_KITCHEN,
+      callFunction: (name, data, timeoutMs) => auth.callFunction(name, data, timeoutMs),
+    }),
     orders: locationId => createFirestoreOrdersSource(firestore, locationId),
     todos: locationId => createFirestoreTodosSource(firestore, locationId),
     settings: locationId => createFirestoreSettingsSource(firestore,

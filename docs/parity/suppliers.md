@@ -1218,3 +1218,21 @@ typed as 50 was saved as fifty kilos, which priced eggs at 0,0033 €/kg in ever
   visibly — «Uova in vassoi» (Panificio Miano) holds 50 kg and will read 50000 g; retype 50.
 - Not run against `js/ingredient-record-form.js` itself (the whole ingredient screen, DOM and session): `pieceWeight.spec.ts`
   copies every case of `tests/piece-weight-grams.test.mjs`.
+
+## Kitchen owner's merge as built (9 Nov 2026, `feature/mise2-next-roles-2`)
+
+Port of `js/orders/ingredient-merge-data.js` `productsSource` and `js/orders/ingredient-merge.js` `findUsage` (`productNames`).
+
+- `shared/src/ingredient-merge.ts` `findUsage` also reads `productNames` (a list of names, each one a «product» usage); a value that is not a
+  list is ignored. Pinned on both files in `ingredient-merge.spec.ts`.
+- `merge/mergeSource.ts` takes a fourth argument, `KitchenUsage { isKitchen(), callFunction }`. When `isKitchen()` is true at the moment of a check,
+  the products come from the callable `productsUsingIngredient({ locationId, ingredientId })` (`functions/product-usage.js`, region us-central1,
+  through the backend's `callFunction`, which goes to the functions emulator on a local address) and the `products` collection is NOT read; everybody
+  else reads it as before. The call is bounded by `MERGE_TIMEOUT_MS` and a failed call, a timeout or an answer that is not `{ names: string[] }`
+  REJECTS (`MergeError`, the function's own code or `unknown`) — «could not check», never «free». The check before the first write asks again.
+- `createDataServices(firestore, auth, currentRole)` takes the role getter (main.tsx: the session's `role`); `createLazyMergeSource` passes it on.
+- Not changed: `suppliersSource.readUsage` (deleting an ingredient): the kitchen gets `products: null` = «could not count». Known gap, as in the
+  current app: the kitchen may delete an ingredient without seeing the products that use it.
+- The preview link has no functions: there the kitchen's merge stops at «could not check».
+
+- Stricter than the current app, on purpose: `js/orders/ingredient-merge-data.js` passes `res.data.names` straight on, so an answer with no list would read the ingredient as free; Mise 2 refuses any answer that is not `{ names: string[] }`.

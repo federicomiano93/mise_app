@@ -22,8 +22,9 @@
 // cleared (logged, never awaited by the person). Stopping anywhere loses nothing; a second try finishes the job.
 //
 // ⚠️ FIRESTORE COMES FROM THE SESSION'S BACKEND (`firestore()`), never from getFirestore() (src/firestore-access.spec.ts).
-// ⚠️ NO ROLE IS READ HERE: the door is courtesy; firestore.rules decide (canManage Food cost for prices and price changes,
-// canManage Orders for deleting an ingredient).
+// ⚠️ THE ONLY ROLE QUESTION IS WHERE THE PRODUCTS COME FROM (KitchenUsage, asked at each check): the owner of the kitchen cannot
+// read them. The door is courtesy; firestore.rules decide (canManage Food cost for prices and price changes, canManage Orders
+// for deleting an ingredient).
 
 import { dropNotedLine } from '@mise/shared/draft-journal';
 import { deletePlan } from '@mise/shared/ingredient-edit-model';
@@ -86,6 +87,17 @@ export interface MergeSource {
   mergeIngredients(aId: string, bId: string): Promise<MergePlan['counts']>;
 }
 
+// ⚠️ THE OWNER OF THE KITCHEN MAY NOT READ `products` (selling prices and margins): for them the server answers "which products use
+// B" with the NAMES alone (the callable productsUsingIngredient, functions/product-usage.js; js/orders/ingredient-merge-data.js
+// productsSource). Everybody else reads the products as before. The role is asked at the moment of the check, not at construction.
+export interface KitchenUsage {
+  readonly isKitchen: () => boolean;
+  readonly callFunction: (name: string, data: unknown, timeoutMs: number) => Promise<unknown>;
+}
+
+const NO_KITCHEN: KitchenUsage = { isKitchen: () => false, callFunction: () => Promise.reject(new Error('no function caller')) };
+export const PRODUCT_USAGE_FUNCTION = 'productsUsingIngredient';
+
 export interface MergeEnvironment {
   // Whether the browser says it is offline now (navigator.onLine === false). A spec passes its own.
   readonly isOffline: () => boolean;
@@ -119,6 +131,7 @@ export function createFirestoreMergeSource(
   firestore: () => Promise<FirestoreKit>,
   locationId: string,
   env: MergeEnvironment = BROWSER,
+  kitchen: KitchenUsage = NO_KITCHEN,
 ): MergeSource {
   // Throws on a venue id that could point a read anywhere else (@mise/shared/location-id).
   const pathOf = (folder: string) => buildPath(locationId, folder);
@@ -143,18 +156,31 @@ export function createFirestoreMergeSource(
     return bounded(firestore());
   }
 
-  async function usage({ fs, db }: FirestoreKit, bId: string): Promise<UsageFound[]> {
+  // What the products say about B: the documents, or — for the kitchen — the names the server answers with. ⚠️ A failed or
+  // malformed answer REJECTS: «could not check» must never read as «not used». The call is bounded like every read.
+  async function productsSource({ fs, db }: FirestoreKit, bId: string): Promise<{ products: unknown[] } | { productNames: string[] }> {
+    if (kitchen.isKitchen()) {
+      const answer = await bounded(kitchen.callFunction(PRODUCT_USAGE_FUNCTION, { locationId, ingredientId: bId }, MERGE_TIMEOUT_MS));
+      const names = answer && typeof answer === 'object' ? (answer as { names?: unknown }).names : undefined;
+      if (!Array.isArray(names) || names.some(n => typeof n !== 'string')) throw new MergeError('unknown');
+      return { productNames: names as string[] };
+    }
+    return { products: docsOf(await bounded(fs.getDocsFromServer(fs.collection(db, pathOf(PRODUCTS)) as Query)) as Snapshot) };
+  }
+
+  async function usage(k: FirestoreKit, bId: string): Promise<UsageFound[]> {
+    const { fs, db } = k;
     const nowMs = env.now();
     const months = [monthKeyOf(nowMs), previousMonthKeyOf(nowMs)].filter((m): m is string => Boolean(m));
     const [products, recipes, draft, requests, ...inventories] = await Promise.all([
-      bounded(fs.getDocsFromServer(fs.collection(db, pathOf(PRODUCTS)) as Query)),
+      productsSource(k, bId),
       bounded(fs.getDocsFromServer(fs.collection(db, pathOf(RECIPES)) as Query)),
       bounded(fs.getDocFromServer(fs.doc(db, pathOf(DRAFTS), CURRENT_DRAFT))),
       bounded(fs.getDocsFromServer(fs.collection(db, pathOf(ORDER_REQUESTS)) as Query)),
       ...months.map(month => bounded(fs.getDocFromServer(fs.doc(db, pathOf(INVENTORY), month)))),
     ]);
     return findUsage(bId, {
-      products: docsOf(products as Snapshot),
+      ...products,
       recipes: docsOf(recipes as Snapshot),
       inventories: months.map((month, i) => ({ month, data: inventories[i] ? dataOf(inventories[i] as DocSnapshot) : null })),
       draft: dataOf(draft as DocSnapshot),
