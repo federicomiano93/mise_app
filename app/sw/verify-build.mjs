@@ -57,6 +57,10 @@ if (!PAGE_NEEDS.some(url => url.endsWith('.js'))) say('the worker knows no scrip
 // GitHub Pages' own Jekyll build drops files whose name starts with «_»: a precached one would fail every install.
 for (const entry of PRECACHE) if (entry.url.split('/').some(part => part.startsWith('_'))) say(`a name Jekyll would drop: ${entry.url}`);
 if (!/<link rel="manifest" href="[^"]*manifest\.json">/.test(index)) say('index.html links no manifest');
+// The page's Content-Security-Policy (csp-plugin.ts): written by the first script, before anything that loads.
+const csp = index.indexOf('Content-Security-Policy');
+const firstLoad = index.search(/<script type="module"|<link /);
+if (csp < 0 || firstLoad < 0 || csp > firstLoad) say('index.html does not write its Content-Security-Policy before anything loads');
 
 if (problems.length) {
   console.error(`sw.js does not match the build:\n  ${problems.join('\n  ')}`);
