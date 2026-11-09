@@ -37,11 +37,13 @@ type Options = {
   cutoff?: string | null;
   lang?: 'en' | 'it';
   held?: boolean;
+  streamBroken?: boolean;
   role?: 'owner-sales' | 'owner' | 'owner-kitchen';
 };
 
-function open(path: string, { config = configOf(), orders = [], cutoff = '18:00', lang = 'en', held = false, role = 'owner-sales' }: Options = {}) {
+function open(path: string, { config = configOf(), orders = [], cutoff = '18:00', lang = 'en', held = false, streamBroken = false, role = 'owner-sales' }: Options = {}) {
   const source = fakeCalculatorSource({ config });
+  if (streamBroken) source.refuse.config = true;
   const clientOrders: FakeClientOrdersSource = fakeClientOrdersSource({ orders, cutoff });
   if (held) source.hold();
   const view = renderApp(path, {
@@ -92,6 +94,13 @@ describe('the page', () => {
     expect(door).toHaveTextContent('Loading…');
     source.release();
     await waitFor(() => { expect(main().getByRole('button', { name: /^Clients/ })).toBeEnabled(); }, LOAD);
+  });
+
+  it('says the clients could not be loaded, and keeps the door shut, when the configuration stream breaks before the server answers', async () => {
+    open('/clients', { streamBroken: true });
+    const door = await main().findByRole('button', { name: /^Clients/ }, LOAD);
+    await waitFor(() => { expect(door).toHaveTextContent('The clients could not be loaded.'); }, LOAD);
+    expect(door).toBeDisabled();
   });
 
   it('says the venue is not ready when the server has no Calculator document, and the door stays shut', async () => {
@@ -278,5 +287,11 @@ describe('who is shown the page', () => {
   it('is « not available » to the kitchen owner, and the Calculator\'s address is not redirected for them', async () => {
     open('/clients', { role: 'owner-kitchen' });
     expect(await main().findByText('This section is not on for you at this venue.', undefined, LOAD)).toBeInTheDocument();
+  });
+
+  it('opens the Calculator at its own address for the kitchen owner, with no redirect to Clients', async () => {
+    const view = open('/calculator', { role: 'owner-kitchen' });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Calculator' }, LOAD)).toBeInTheDocument();
+    expect(pathOf(view)).toBe('/calculator');
   });
 });

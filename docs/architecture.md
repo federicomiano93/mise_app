@@ -402,7 +402,7 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   `SuppliersSettings` has the two panel switches (allergens asks before OFF; the Cloud Function is called through the store, then
   `sessionStore.refreshLocation()`, and the new value is held until the session shows it) and the categories card (every bin disabled
   until `configLoaded`). `copyWait.ts`, `handBack.ts`, `suppliersNav.ts` and `supplierDeletions.ts` are copies of the recipes'/Food cost's
-  files: a feature never imports from another feature's folder.
+  files: a feature never imports from another feature's folder. The deliberate exception: `clients/` reuses `calculator/`'s client screens over `CalculatorProvider clientsOnly` (decided in the roles plan: reuse, do not copy), so lifting the Calculator takes Clients with it.
   Step 3e-2 adds the ingredient card's PRODUCT DATA (no price, allergen or nutrition yet: those keys are never sent, so a merge
   leaves them as stored). Addresses, in `suppliersPath.ts`: `/suppliers/ingredient/<id>`, `/suppliers/ingredient/new`,
   `?kind=packaging` for a new packaging item and `?supplier=<id>` to start a NEW item on a supplier (never an existing one);

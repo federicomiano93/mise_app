@@ -18,16 +18,17 @@ import styles from './ClientsHub.module.css';
 export function ClientsHub() {
   const { t } = useT();
   const handBack = useHandBack();
-  const { configFromServer, configShape } = useCalculator();
+  const { configFromServer, configShape, configFailed } = useCalculator();
   const headId = useId();
   // The root of the section: whatever screen was open below it hands the focus to the door that opened it.
   useLayoutEffect(() => { handBack.deliver(true); }, [handBack]);
 
   const waiting = configFromServer && (configShape === 'missing' || configShape === 'retired');
   const ready = configFromServer && configShape === 'ready';
+  // A stream that broke before the server's first answer would leave «Loading…» for ever: say it could not load.
   const clientsSub = waiting
     ? t('clients.noConfigYet')
-    : ready ? t('ui.clientsAndTheProducts') : t('calc.loading');
+    : ready ? t('ui.clientsAndTheProducts') : !configFromServer && configFailed ? t('clients.couldNotLoad') : t('calc.loading');
 
   return (
     <div className={styles.hub}>
