@@ -134,7 +134,7 @@ test('pages.yml: deploys only from main, builds where no credential exists, and 
   assert.doesNotMatch(build, /id-token|pages: write/);
   assert.match(build, /npm run build -- --base=\/mise_app\//);
   assert.match(build, /node sw\/verify-build\.mjs dist/);
-  assert.match(build, /node scripts\/build-pages-site\.mjs _site app\/dist/);
+  assert.match(build, /set -o pipefail\n\s+node scripts\/build-pages-site\.mjs _site app\/dist/);
   assert.match(deploy, /if: github\.ref == 'refs\/heads\/main' && github\.event_name != 'pull_request'/);
   assert.doesNotMatch(deploy, /checkout|npm |run:/, 'the deploy job runs nothing but GitHub\'s deploy action');
   assert.match(wf, /push:\n {4}branches: \[main\]/);

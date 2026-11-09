@@ -57,8 +57,11 @@ jobs:
       - name: The service worker matches the build
         run: node sw/verify-build.mjs dist
         working-directory: app
+      # ⚠️ pipefail: without it the step's result is tee's (always success), and a site the script refused would deploy.
       - name: Assemble the site
-        run: node scripts/build-pages-site.mjs _site app/dist | tee "$RUNNER_TEMP/site-listing.txt"
+        run: |
+          set -o pipefail
+          node scripts/build-pages-site.mjs _site app/dist | tee "$RUNNER_TEMP/site-listing.txt"
       # ⚠️ Nothing internal, no symlink: what is published is public at once.
       - name: Prove nothing internal is in the site
         run: |
