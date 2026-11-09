@@ -40,6 +40,13 @@ describe.each([
   ['shared/ (TypeScript)', ported],
   ['js/ (current app)', legacy],
 ] as const)('%s', (_name, m) => {
+  test('the kitchen owner’s product NAMES (from the server) count like products read directly', () => {
+    expect(m.findUsage('b', { ...free, productNames: ['Pane', 'Torta'] })).toStrictEqual([{ kind: 'product', name: 'Pane' }, { kind: 'product', name: 'Torta' }]);
+    expect(m.findUsage('b', { ...free, productNames: [] })).toStrictEqual([]);
+    expect(m.findUsage('b', { ...free, productNames: 'Pane' }), 'not a list: ignored').toStrictEqual([]);
+    expect(m.findUsage('b', { ...free, productNames: [7, ' Torta '] }).map(u => u.kind)).toStrictEqual(['product', 'product']);
+  });
+
   test('a free ingredient is used nowhere', () => {
     expect(m.findUsage('b', free)).toStrictEqual([]);
     expect(m.findUsage('b', undefined)).toStrictEqual([]);

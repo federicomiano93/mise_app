@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 import type { FirestoreKit } from '../../session/firebaseBackend';
 import { MERGE_TIMEOUT_MS, MergeError, createFirestoreMergeSource } from './mergeSource';
+import type { KitchenUsage } from './mergeSource';
 
 // The ONLY code in Mise 2 that merges two ingredients in the real database, against a recording fake of the Firestore SDK
 // (the shape of importSource.spec.ts). @mise/shared/ingredient-merge's spec pins WHAT is planned; this file pins WHERE it
@@ -62,10 +63,10 @@ function fakeKit() {
   return { kit, fs, batches, served, docs, order, failOn: (f: (index: number) => unknown) => { failCommit = f; } };
 }
 
-function make() {
+function make(kitchen?: KitchenUsage) {
   const parts = fakeKit();
   let offline = false;
-  const source = createFirestoreMergeSource(() => Promise.resolve(parts.kit), VENUE, { isOffline: () => offline, now: () => NOW });
+  const source = createFirestoreMergeSource(() => Promise.resolve(parts.kit), VENUE, { isOffline: () => offline, now: () => NOW }, kitchen);
   return { ...parts, source, goOffline: () => { offline = true; } };
 }
 
@@ -111,6 +112,75 @@ describe('where B is still used', () => {
     parts.goOffline();
     await expect(parts.source.checkUsage('b')).rejects.toMatchObject({ code: 'offline' });
     expect(parts.order).toEqual([]);
+  });
+});
+
+describe('the owner of the kitchen (may not read products)', () => {
+  const asKitchen = (callFunction: KitchenUsage['callFunction']) => ({ isKitchen: () => true, callFunction });
+
+  test('⚠️ asks the function, names the products from its answer and NEVER reads the products collection', async () => {
+    const callFunction = vi.fn(async (..._args: unknown[]) => ({ names: ['Pane', 'Torta'] }));
+    const parts = make(asKitchen(callFunction));
+    const used = await parts.source.checkUsage('b');
+    expect(used).toEqual([{ kind: 'product', name: 'Pane' }, { kind: 'product', name: 'Torta' }]);
+    expect(callFunction).toHaveBeenCalledWith('productsUsingIngredient', { locationId: VENUE, ingredientId: 'b' }, MERGE_TIMEOUT_MS);
+    expect(parts.order).not.toContain(`read ${at('products')}`);
+    expect(parts.order).toContain(`read ${at('recipes')}`);
+  });
+
+  test('an empty answer is free; the other sources still count', async () => {
+    const parts = make(asKitchen(async () => ({ names: [] })));
+    parts.served[at('recipes')] = [snap('r1', { name: 'Impasto', ingredients: [{ refId: 'b', kind: 'ingredient' }] })];
+    expect(await parts.source.checkUsage('b')).toEqual([{ kind: 'recipe', name: 'Impasto' }]);
+  });
+
+  test('⚠️ a failed call REJECTS («could not check»), never «free»; so does an answer that is not a list of names', async () => {
+    const denied = make(asKitchen(async () => { throw Object.assign(new Error('no'), { code: 'functions/unavailable' }); }));
+    await expect(denied.source.checkUsage('b')).rejects.toMatchObject({ code: 'functions/unavailable', committed: false });
+    for (const answer of [undefined, null, {}, { names: 'Pane' }, { names: [1] }]) {
+      const odd = make(asKitchen(async () => answer));
+      await expect(odd.source.checkUsage('b')).rejects.toMatchObject({ code: 'unknown' });
+    }
+  });
+
+  test('a call that never answers is a stop («timeout»)', async () => {
+    vi.useFakeTimers();
+    const parts = make(asKitchen(() => new Promise(() => undefined)));
+    const result = parts.source.checkUsage('b');
+    const expectation = expect(result).rejects.toMatchObject({ code: 'timeout' });
+    await vi.advanceTimersByTimeAsync(MERGE_TIMEOUT_MS + 1);
+    await expectation;
+  });
+
+  test('the merge asks the function right before the first write, and stops with «used» when it names a product', async () => {
+    const callFunction = vi.fn(async (..._args: unknown[]) => ({ names: [] as string[] }));
+    const parts = make(asKitchen(callFunction));
+    seed(parts);
+    callFunction.mockResolvedValueOnce({ names: ['Pane'] });
+    await expect(parts.source.mergeIngredients('a', 'b')).rejects.toMatchObject({ code: 'used', committed: false, used: [{ kind: 'product', name: 'Pane' }] });
+    expect(parts.batches).toHaveLength(0);
+  });
+
+  test('everybody else (isKitchen false, or no kitchen at all) reads the products and never calls the function', async () => {
+    const callFunction = vi.fn(async (..._args: unknown[]) => ({ names: ['x'] }));
+    const parts = make({ isKitchen: () => false, callFunction });
+    parts.served[at('products')] = [snap('p1', { name: 'Pane', components: [{ ingredientId: 'b' }] })];
+    expect(await parts.source.checkUsage('b')).toEqual([{ kind: 'product', name: 'Pane' }]);
+    expect(callFunction).not.toHaveBeenCalled();
+    const bare = make();
+    bare.served[at('products')] = [snap('p1', { name: 'Pane', packaging: [{ ingredientId: 'b' }] })];
+    expect(await bare.source.checkUsage('b')).toEqual([{ kind: 'product', name: 'Pane' }]);
+  });
+
+  test('the role is asked at each check, not when the source is made', async () => {
+    let kitchen = false;
+    const callFunction = vi.fn(async (..._args: unknown[]) => ({ names: [] as string[] }));
+    const parts = make({ isKitchen: () => kitchen, callFunction });
+    await parts.source.checkUsage('b');
+    expect(callFunction).not.toHaveBeenCalled();
+    kitchen = true;
+    await parts.source.checkUsage('b');
+    expect(callFunction).toHaveBeenCalledTimes(1);
   });
 });
 

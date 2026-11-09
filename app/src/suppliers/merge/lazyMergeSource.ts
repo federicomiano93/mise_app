@@ -6,14 +6,18 @@
 // code is already there, and a load that failed is forgotten so the next call tries again.
 
 import type { FirestoreKit } from '../../session/firebaseBackend';
-import type { MergeSource } from './mergeSource';
+import type { KitchenUsage, MergeSource } from './mergeSource';
 
-export function createLazyMergeSource(firestore: () => Promise<FirestoreKit>, locationId: string): MergeSource {
+export function createLazyMergeSource(
+  firestore: () => Promise<FirestoreKit>,
+  locationId: string,
+  kitchen: KitchenUsage,
+): MergeSource {
   let real: Promise<MergeSource> | null = null;
 
   function load(): Promise<MergeSource> {
     real ??= import('./mergeSource')
-      .then(module => module.createFirestoreMergeSource(firestore, locationId))
+      .then(module => module.createFirestoreMergeSource(firestore, locationId, undefined, kitchen))
       .catch((error: unknown) => {
         real = null;
         throw error;

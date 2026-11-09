@@ -105,7 +105,7 @@ export interface UsageFound {
   month?: string;
 }
 
-// sources = { products: [{ name, components, packaging }], recipes: [{ name, ingredients }],
+// sources = { products: [{ name, components, packaging }] | productNames: [name] (the kitchen's), recipes: [{ name, ingredients }],
 //             inventories: [{ month: '2026-10', data: { closedAt, opening, purchased, closing } | null }]  (this month AND
 //             last month), draft: { entries } | null, requests: [order-requests documents] }
 // → [{ kind: 'product' | 'recipe' | 'inventory' | 'draft' | 'request', name?, month? }], empty when B is free.
@@ -119,6 +119,10 @@ export function findUsage(id: unknown, sources?: unknown): UsageFound[] {
   (Array.isArray(s.products) ? s.products : []).forEach(p => {
     const parts = [...(Array.isArray(p?.components) ? p.components : []), ...(Array.isArray(p?.packaging) ? p.packaging : [])];
     if (parts.some(c => c && c.ingredientId === id)) found.push({ kind: 'product', name: text(p.name) });
+  });
+  // The owner of the kitchen may not read products, so the server answers with their names (functions/product-usage.js).
+  (Array.isArray(s.productNames) ? s.productNames : []).forEach(name => {
+    found.push({ kind: 'product', name: text(name) });
   });
   (Array.isArray(s.recipes) ? s.recipes : []).forEach(r => {
     const rows: Array<Record<string, unknown> | null | undefined> = Array.isArray(r?.ingredients) ? r.ingredients : [];
