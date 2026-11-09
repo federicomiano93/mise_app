@@ -1,0 +1,12 @@
+{
+  "//": "The current app's pages, and the Mise 2 screen (hash route) each one opens after the switch. Read by app/sw-plugin.ts (into the service worker) and by scripts/build-pages-site.mjs (the stub pages served when no worker answers). An empty route is Mise 2's Home. index.html is not here: it IS Mise 2. order.html, reset-password.html and install-guide.html are not here: they stay the current app's own pages.",
+  "home.html": "",
+  "orders.html": "/orders",
+  "suppliers.html": "/suppliers",
+  "catalogue.html": "/recipes",
+  "calculator.html": "/calculator",
+  "pastries.html": "/pastries",
+  "inventory.html": "/stocktake",
+  "foodcost.html": "/food-cost",
+  "clients.html": ""
+}

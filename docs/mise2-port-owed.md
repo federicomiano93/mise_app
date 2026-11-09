@@ -12,12 +12,12 @@ the `PORT_OWED` sets in `shared/src/parity.spec.ts` (sections, inventory-model, 
 calculator-recipe-source, log-time, records, invoice-zip/classify, reminders) and `shared/src/odd-inputs.spec.ts`, plus
 single tests in the per-module specs and `app/src/suppliers/invoiceImport/buildImport.spec.ts`. Each fails again by itself
 once its port lands: remove the marker then. `tests/mise2-port-owed.test.mjs` prints how many are left on every root
-`npm test` and FAILS the switch (a Mise 2 service worker, or `MISE2_SWITCH=1`) while any is left. Modules no spec pairs
+`npm test` and FAILS the switch build (`MISE2_SWITCH=1`, which CI sets on the release PR into `main` and on `main` itself) while any is left. Modules no spec pairs
 (pastries-model, price-model, the recipe book, usage) have no marker: those items below come from reading diffs.
 
 ## Switch checklist
 
-`tests/mise2-port-owed.test.mjs` FAILS the switch build (`MISE2_SWITCH=1`, or a Mise 2 service worker) while any line
+`tests/mise2-port-owed.test.mjs` FAILS the switch build (`MISE2_SWITCH=1`, set by CI on the release PR into `main` and on `main`) while any line
 below is unticked (`- [ ]`). Tick a line (`- [x]`) when its port lands, or when Federico decides to ship without it (write
 his decision beside it). The numbers point at the items below, which say what and where.
 
@@ -152,7 +152,8 @@ worker's rollback, has the exact order):
     **switch an ingredient off from its row, fold unused, mark hand-made** (`4de37fec`, `89fad957`, `d2dad140`, `c20f812b`, `a9e55262`,
     `2bd4e58e`, `c2b95402`) — «Not in use» group DONE in Orders (`564980cd`, branch `feature/mise2-ingredient-not-in-use`); NOT verified: the
     empty-flash fixes, the scroll/focus keep on Deactivate/Reactivate, «hand-made» mark, the card stopping resending `active`. Size S (verification).
-17. **Update gate held on invoice import / Pastries editor** (`7fe1b955`, `2ae76d58`) — N/A until Mise 2 has a service worker (step 5): remember
+17. **Update gate held on invoice import / Pastries editor** (`7fe1b955`, `2ae76d58`) — DONE with the service worker (8 Nov 2026):
+    the invoice import and the Pastries editor hold `markBusy()`, and so does every editor (`app/src/session/busy.ts` lists them). Before: remember
     `markBusy()` in every editor (already in piano-mise-2).
 
 ## D. Suppliers / invoice import

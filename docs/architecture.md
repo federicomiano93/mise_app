@@ -49,8 +49,18 @@ both, and the switch keeps the address) and it has consequences that every chang
   `orders-draft-claims` (the current app's key and shape; `shared/src/draft-journal.ts`, F-15) is NOT kept either, for the same
   reason: one venue's typed Orders quantities that have not reached Firestore's queue yet, wiped by sign-out and a venue switch
   with Firestore's own queue of unsent writes (`draft-journal.spec.ts` pins it through both files' `keysToClear`).
-- **One service worker scope.** The current `sw.js` controls `/mise2/` too. Mise 2 registers no
-  service worker until step 5, when it takes over at the same path and name.
+- **One service worker, at one address.** Mise 2's worker is built as `sw.js` at the root of its build
+  (`app/sw-plugin.ts` writes the build's constants above `app/sw/worker.js`; hand-written, not Workbox — the
+  plugin's header says why), so at the switch it answers at the current app's own address and every installed
+  phone updates to it through the current app's own update banner (`{action: 'skipWaiting'}`, honoured
+  unchanged). It precaches the whole build but jsPDF's never-loaded optional parts, takes over the current
+  app's caches (`theitalianclub-v…`, `firebase-sdk-…`) and touches nothing else: IndexedDB and localStorage are
+  the person's (Auth, the offline copy, unsent writes) and only `KEEP_PREFIXES` decides what a sign-out keeps.
+  The page (`shell/serviceWorker.ts`) lets ANY waiting worker in when `isBusy()` is false — which is also the
+  rollback: the current app's `sw.js` with a higher `CACHE_NAME` takes every phone back. The current app's
+  pages answer with their Mise 2 screen (`app/sw/legacy-routes.json`), `order.html` and `reset-password.html`
+  go to the network untouched. Built at `/mise2/` beside the current app (the old preview), it leaves the
+  current app's caches alone.
 - **No App Check, no reCAPTCHA** (his decision, PR #212) — in either app.
 - **The preview publishes only what is allowed.** `build-mise2` (`.github/workflows/preview.yml`)
   builds Mise 2 in a job that holds no Google credential and hands the built files to the deploy
@@ -328,10 +338,10 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   model from the very rows they draw (`recipes/recipeExportModel.ts` for the catalogue). ⚠️ `jspdf` and
   `write-excel-file` are npm dependencies loaded ONLY by `import()` inside the two builders, so each is a chunk of
   its own that no page preloads; `recipeExport.spec.ts` fails on a static import anywhere in `app/src`. ⚠️ There is
-  no service worker yet (step 5), so the FIRST export needs a connection (offline it says so); the service worker
-  will have to precache those two chunks. ⚠️ jsPDF's optional dependencies (html2canvas, canvg, dompurify) are
-  installed and Vite emits them as chunks (~380 KB) that are never loaded: step 5's service worker must precache
-  the jsPDF and write-excel-file chunks BY NAME, never by a glob that would make every phone download those three. ⚠️ Excel is always a download: Chrome's Web Share has no Office types, so
+  precached by the service worker with the rest of the build, so the export works offline. ⚠️ jsPDF's optional
+  dependencies (html2canvas, canvg, dompurify) are installed and Vite emits them as chunks (~380 KB) that are never
+  loaded: the worker leaves out every chunk made only of those packages, by the modules it holds
+  (`sw-plugin.ts`, `NEVER_LOADED_PACKAGES`), and `sw/verify-build.mjs` fails if a precached file imports one. ⚠️ Excel is always a download: Chrome's Web Share has no Office types, so
   Share is offered for the PDF only, and only when `navigator.canShare` accepts the real file. A failure is
   reported with fixed words only (`Recipe export failed:`, the file kind, `library` or `build`), never the recipe.
 - `suppliers/` — Ingredients & suppliers (section id `suppliers`, step 3e, built in slices; its parity list is

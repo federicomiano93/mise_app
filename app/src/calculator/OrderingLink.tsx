@@ -4,6 +4,7 @@ import { isValidOrderClientId } from '@mise/shared/client-order-model';
 import type { Client } from '@mise/shared/calculator-config';
 import { countryOf } from '@mise/shared/market';
 import { useT } from '../i18n/useT';
+import { markBusy } from '../session/busy';
 import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { useSendSheet } from '../ui/SendSheet';
@@ -39,6 +40,9 @@ export function OrderingLink({ client, dirty }: { client: Client; dirty: boolean
   const [confirm, confirmDialog] = useConfirm();
   const [send, sendSheet] = useSendSheet();
   const [working, setWorking] = useState(false);
+  // A link being made or turned off is several writes in a row (the account, its grant, the older links revoked): an
+  // update's reload in the middle would leave half of them done. Held until the answer (session/busy.ts).
+  useEffect(() => (working ? markBusy() : undefined), [working]);
   const labelId = useId();
 
   // The links are read when the client's screen opens, and again when the editor's save completes, so a client that was

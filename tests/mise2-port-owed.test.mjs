@@ -10,14 +10,14 @@
 // ⚠️ AN EXPECTED FAILURE IS A KNOWN DIFFERENCE BETWEEN THE TWO APPS. Shipped, it is a behaviour the
 // current app has and Mise 2 does not — some of them lose data a current-app phone wrote. So:
 // - every run prints how many markers are left (look for «port owed» in the output);
-// - the moment Mise 2 gains a service worker — which is what the switch is (step 4) — or the run is
-//   told it is the switch build (MISE2_SWITCH=1), ONE marker left is a failure.
+// - when the run is the switch build (MISE2_SWITCH=1: CI sets it on everything that goes to main, see SWITCH_LINE),
+//   ONE owed marker left is a failure.
 //
 // ⚠️ MANY GAPS HAVE NO SPEC TO MARK (modules no spec pairs with its original: the recipe categories
 // written whole, usage hours, the Orders draft journal, the piece weight in grams…). Those live as
 // unticked `- [ ]` lines in docs/mise2-port-owed.md («Switch checklist»), and the same switch check
-// refuses any of them left unticked. The switch PR sets MISE2_SWITCH=1 in CI (the go-live steps say so):
-// the service-worker sniffing below is only a second net.
+// refuses any of them left unticked. CI sets MISE2_SWITCH=1 on the release PR and on main (SWITCH_LINE below), and
+// once Mise 2 has a service worker a test refuses a workflow that has lost that line.
 //
 // ⚠️ DEFERRED IS NOT DONE (his decision, 8 Nov 2026: switch with the minimum). The checklist's «Deferred until AFTER the
 // switch» section lists, by item number, what he put off until after the switch. A marker that names one of those numbers
@@ -102,19 +102,26 @@ function owedMarkers() {
   return markers().filter(m => !m.items || !m.items.every(n => deferred.has(n))).map(m => m.where);
 }
 
-// What the switch adds to Mise 2: a service worker of its own (registered from app/src, a worker
-// file, or a PWA/Workbox build plugin).
+// What the switch adds to Mise 2: a service worker of its own (its source app/sw/worker.js, a worker file, a registration
+// in app/src, or a PWA/Workbox build plugin).
 function mise2HasServiceWorker() {
   const pkg = join(ROOT, 'app/package.json');
   if (existsSync(pkg) && /workbox|vite-plugin-pwa/i.test(readFileSync(pkg, 'utf8'))) return true;
-  for (const name of ['app/public/sw.js', 'app/src/sw.ts', 'app/src/service-worker.ts']) {
+  for (const name of ['app/sw/worker.js', 'app/public/sw.js', 'app/src/sw.ts', 'app/src/service-worker.ts']) {
     if (existsSync(join(ROOT, name))) return true;
   }
-  const registers = /serviceWorker\s*\??\.\s*register\s*\(|registerSW\s*\(|VitePWA\s*\(/;
+  const registers = /serviceWorker\s*\??\.\s*register\s*\(|\.register\(\s*env\.scriptUrl|registerSW\s*\(|VitePWA\s*\(/;
   const files = [...sources(join(ROOT, 'app/src')).filter((f) => !/\.spec\.tsx?$/.test(f)),
                  join(ROOT, 'app/index.html'), join(ROOT, 'app/vite.config.ts')].filter((f) => existsSync(f));
   return files.some((f) => registers.test(readFileSync(f, 'utf8')));
 }
+
+// ⚠️ WHERE THE SWITCH IS DECIDED: CI, ON EVERY RUN THAT GOES TO main. Mise 2's service worker lives on the release branch
+// for weeks before the switch, and nothing on that branch reaches a phone — so «a worker exists» can no longer mean «this is
+// the switch»: it would turn every PR into the release branch red for items only the switch hour can tick. What reaches
+// phones is main. So the `test` job of .github/workflows/test.yml sets MISE2_SWITCH=1 on a pull request INTO main (the
+// release PR, #491) and on a push to main, and the check below makes sure that line stays as long as Mise 2 has a worker.
+const SWITCH_LINE = "MISE2_SWITCH: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && '1' || '0' }}";
 
 // The `- [ ]` lines of the checklist's «Switch checklist» section: what no spec can mark.
 function unticked() {
@@ -150,9 +157,16 @@ test('mise2: port owed — the count of Mise 2 specs still waiting for a port of
   t.diagnostic(`port owed: ${open.length} unticked line(s) in ${CHECKLIST} — must be 0 before the switch`);
 });
 
-test('⚠️ mise2: no port owed survives the switch (a Mise 2 service worker, or MISE2_SWITCH=1)', () => {
-  const switching = process.env.MISE2_SWITCH === '1' || mise2HasServiceWorker();
-  if (!switching) return;
+test('⚠️ once Mise 2 has a service worker, CI runs the switch check on everything that goes to main', () => {
+  if (!mise2HasServiceWorker()) return;
+  const workflow = readFileSync(join(ROOT, '.github/workflows/test.yml'), 'utf8');
+  const job = workflow.slice(workflow.indexOf('\n  test:'), workflow.indexOf('\n  rules:'));
+  assert.ok(job.includes(SWITCH_LINE), `the \`test\` job of test.yml must carry, in its env: ${SWITCH_LINE}`);
+  assert.match(job, /\n    env:\n(?:      .*\n)*      MISE2_SWITCH: /, 'MISE2_SWITCH must be in the env of the whole `test` job');
+});
+
+test('⚠️ mise2: no port owed survives the switch (MISE2_SWITCH=1)', () => {
+  if (process.env.MISE2_SWITCH !== '1') return;
   const found = owedMarkers();
   assert.deepEqual(found, [],
     `Mise 2 is about to take over with ${found.length} difference(s) from the current app still marked «PORT OWED» and not deferred by him: port them first`);
