@@ -56,8 +56,25 @@ function parse(file) {
 
 const workflows = files.map(parse);
 const lines = (text) => code(text).split('\n');
+// ⚠️ THE ONE id-token THAT IS NOT GOOGLE'S: GitHub Pages' own deploy (pages.yml, the Mise 2 switch) proves to GitHub who
+// it is with the same `id-token: write`, and never signs in to Google. It is held to a stricter rule below instead: no
+// step but GitHub's deploy action — nothing checked out, nothing installed, nothing run.
+const GITHUB_TOKEN_ONLY = ['pages.yml: deploy'];
 const signingJobs = workflows.flatMap((w) => w.jobs)
-  .filter((job) => lines(job.text).some((line) => SIGN_IN.test(line) || ID_TOKEN.test(line)));
+  .filter((job) => lines(job.text).some((line) => SIGN_IN.test(line) || (ID_TOKEN.test(line) && !GITHUB_TOKEN_ONLY.includes(job.id))));
+
+test('the Pages deploy holds GitHub\'s token only, and runs nothing but GitHub\'s deploy action', () => {
+  const jobs = workflows.flatMap((w) => w.jobs).filter((job) => GITHUB_TOKEN_ONLY.includes(job.id));
+  assert.deepEqual(jobs.map((job) => job.id), GITHUB_TOKEN_ONLY, 'the Pages deploy job is gone or renamed: has pages.yml changed shape?');
+  for (const job of jobs) {
+    const all = lines(job.text);
+    assert.equal(all.filter((line) => ID_TOKEN.test(line)).length, 1, `${job.id}: one id-token permission`);
+    assert.deepEqual(all.filter((line) => SIGN_IN.test(line)), [], `${job.id}: no Google sign-in`);
+    assert.deepEqual(all.filter((line) => /^\s*(- )?run:/.test(line) || PACKAGE_TOOL.test(line)), [], `${job.id}: runs or installs something`);
+    assert.deepEqual(all.filter((line) => /^\s*(- )?uses:/.test(line)).map((line) => line.trim().replace(/@[0-9a-f]{40}.*$/, '')),
+      ['uses: actions/deploy-pages'], `${job.id}: one action, GitHub's own deploy`);
+  }
+});
 
 test('no workflow grants a Google identity outside a job', () => {
   for (const w of workflows) {
