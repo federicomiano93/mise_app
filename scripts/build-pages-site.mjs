@@ -80,7 +80,7 @@ export function buildSite(outDir, mise2Dist, repo = ROOT) {
   mkdirSync(outDir, { recursive: true });
   const routes = legacyRoutes();
 
-  // 1. The current app's files, from git (never the workspace).
+  // 1. The current app's files: the ones git tracks under the allowlist, as checked out (never an untracked file).
   const tracked = execFileSync('git', ['ls-files', '-z', '--', ...CURRENT_APP_PATHS], { cwd: repo, encoding: 'utf8' })
     .split('\0').filter(Boolean);
   for (const file of tracked) {
@@ -115,7 +115,7 @@ export function buildSite(outDir, mise2Dist, repo = ROOT) {
   return { files, problems };
 }
 
-const invoked = process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const invoked = process.argv[1] && resolve(process.argv[1]).toLowerCase() === fileURLToPath(import.meta.url).toLowerCase();
 if (invoked) {
   const [outDir, mise2Dist] = process.argv.slice(2);
   if (!outDir || !mise2Dist) {

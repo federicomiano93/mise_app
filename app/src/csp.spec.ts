@@ -6,7 +6,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import vm from 'node:vm';
 import { describe, expect, test } from 'vitest';
-import { bootstrapScript, EMULATORS, FUNCTIONS_HOST, POLICY, REACT_ARIA_PRESS_STYLE, withPolicy } from '../csp-plugin';
+import { readdirSync, statSync } from 'node:fs';
+import { bootstrapScript, EMULATORS, FUNCTIONS_HOST, POLICY, REACT_ARIA_STYLES, withPolicy } from '../csp-plugin';
 
 function policyOn(hostname: string): string {
   const written: string[] = [];
@@ -39,20 +40,28 @@ describe('the CSP of Mise 2\'s page', () => {
 
   test('img-src allows data: (label previews, photos, logos); styles and fonts only from the site', () => {
     expect(directive(POLICY, 'img-src')).toBe("img-src 'self' data:");
-    expect(directive(POLICY, 'style-src')).toBe(`style-src 'self' ${REACT_ARIA_PRESS_STYLE}`);
+    expect(directive(POLICY, 'style-src')).toBe(`style-src 'self' ${REACT_ARIA_STYLES.join(' ')}`);
     expect(directive(POLICY, 'font-src')).toBe("font-src 'self'");
     expect(POLICY).not.toMatch(/unsafe-inline|unsafe-eval|\*;|\s\*\s/);
   });
 
-  test('⚠️ the one inline style allowed is React Aria\'s pressable rule, by the hash of the text it injects TODAY', () => {
-    // If react-aria changes the text (an upgrade), the browser refuses it silently and a double tap zooms the page:
-    // this spec reads the installed library and turns red instead. Recompute the hash, check what the rule does, update.
-    const source = readFileSync(join(__dirname, '..', 'node_modules/react-aria/dist/private/interactions/usePress.mjs'), 'utf8');
-    const template = source.match(/style\.textContent = `([\s\S]*?)`\.trim\(\)/);
-    expect(template, 'usePress no longer injects its style this way: look again').not.toBeNull();
-    const text = template![1]!.replace(/\$\{[^}]*PRESSABLE_ATTRIBUTE\}/g, 'data-react-aria-pressable').trim();
-    expect(text).toContain('touch-action: pan-x pan-y pinch-zoom;');
-    expect(`'sha256-${createHash('sha256').update(text).digest('base64')}'`).toBe(REACT_ARIA_PRESS_STYLE);
+  test('⚠️ the inline styles allowed are EXACTLY the ones React Aria injects TODAY, by the hash of each text', () => {
+    // If react-aria changes a text or adds one (an upgrade), the browser refuses it silently — a double tap zooms the
+    // page, a dialog's scroll moves the page behind it on iOS: this spec reads the installed library and turns red.
+    const dir = join(__dirname, '..', 'node_modules/react-aria/dist/private');
+    const files: string[] = [];
+    const walk = (d: string) => { for (const n of readdirSync(d)) { const f = join(d, n); if (statSync(f).isDirectory()) walk(f); else if (f.endsWith('.mjs')) files.push(f); } };
+    walk(dir);
+    const hashes: string[] = [];
+    for (const file of files) {
+      for (const m of readFileSync(file, 'utf8').matchAll(/\.textContent = `([\s\S]*?)`\.trim\(\)/g)) {
+        const text = m[1]!.replace(/\$\{[^}]*PRESSABLE_ATTRIBUTE\}/g, 'data-react-aria-pressable').trim();
+        expect(text, `${file}: a style built from a value this spec does not know — look again`).not.toContain('${');
+        hashes.push(`'sha256-${createHash('sha256').update(text).digest('base64')}'`);
+      }
+    }
+    expect(hashes.length, 'react-aria injects no style this way any more: look again').toBeGreaterThan(0);
+    expect([...new Set(hashes)].sort()).toEqual([...REACT_ARIA_STYLES].sort());
   });
 
   test('on localhost only, the emulators are allowed too — the Functions one at 127.0.0.1:5001 included', () => {

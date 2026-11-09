@@ -14,7 +14,7 @@
 // few minutes: wait and run it again before calling anything broken. Plain Node 18+, no dependency.
 
 import { readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 
@@ -74,7 +74,7 @@ export async function verifySite(base, fetchImpl = fetch) {
   await Promise.all(precache.map(e => must(new URL(e.url, base).href, 'precached by sw.js')));
   const index = await must(`${base}index.html`, 'Mise 2');
   for (const url of pageNeeds) if (!index.text.includes(url)) problems.push(`index.html does not name ${url}: the previous release?`);
-  if (index.status === 200 && !index.text.includes("Content-Security-Policy")) problems.push('index.html writes no Content-Security-Policy');
+  if (index.status === 200 && !/<meta http-equiv="Content-Security-Policy" content="/.test(index.text)) problems.push('index.html writes no Content-Security-Policy');
 
   // The current app's pages that outside links open, and everything they load.
   const seen = new Set();
@@ -88,8 +88,9 @@ export async function verifySite(base, fetchImpl = fetch) {
     if (clean.endsWith('.html')) {
       for (const m of r.text.matchAll(/<(?:script|link|img)\b[^>]*?\s(?:src|href)="([^"]+)"/g)) refs.push(m[1]);
     } else if (clean.endsWith('.js')) {
-      // Comments name files too (`// import './firebase.js' for init`): whole comment lines and blocks are left out.
-      const code = r.text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+      // Comments name files too (`// import './firebase.js' for init`): whole comment LINES are left out. Never blocks:
+      // in a minified bundle a «/*» inside a string would swallow real code up to the next «*/» — a missed import.
+      const code = r.text.replace(/^\s*\/\/.*$/gm, '');
       for (const m of code.matchAll(/(?:\bfrom\s*|\bimport\s*\(?\s*)["'](\.{1,2}\/[^"']+)["']/g)) refs.push(m[1]);
     } else if (clean.endsWith('.css')) {
       for (const m of r.text.matchAll(/url\(\s*["']?([^"')]+)["']?\s*\)/g)) refs.push(m[1]);
@@ -114,7 +115,9 @@ export async function verifySite(base, fetchImpl = fetch) {
   return { base, cacheName, precached: precache.length, keptPagesFiles: seen.size, checked: answered.size, problems };
 }
 
-const invoked = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+// Compared resolved and lower-cased, as scripts/sw-hashes.mjs does: on Windows a drive letter of another case would
+// otherwise make the check silently do nothing and exit 0 — a false pass at the switch hour.
+const invoked = process.argv[1] && resolve(process.argv[1]).toLowerCase() === fileURLToPath(import.meta.url).toLowerCase();
 if (invoked) {
   const base = (process.argv[2] ?? 'https://federicomiano93.github.io/mise_app/').replace(/\/?$/, '/');
   const result = await verifySite(base);
