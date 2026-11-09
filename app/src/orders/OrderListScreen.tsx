@@ -6,7 +6,9 @@ import { dayLabel } from '@mise/shared/day';
 import { mergeHistory } from '@mise/shared/history-window';
 import { groupRequest,isRequestDone, liveDifference, remainingIds, supplierIdsOf } from '@mise/shared/order-request-model';
 import { indexById } from '@mise/shared/order-text';
+import { outputLanguage } from '@mise/shared/market';
 import { entryUnit, qtyWithUnit, recordUnit, sameUnit } from '@mise/shared/order-unit';
+import { shownQty } from '@mise/shared/pack-type';
 import { orderedToday } from '@mise/shared/untold-changes';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
@@ -81,7 +83,8 @@ function Open({ request, lens, leave, left, titleId }: OpenProps) {
   const navigate = useNavigate();
   const store = useOrdersStore();
   const say = useStatusMessage();
-  const { canManage } = useSession();
+  const { canManage, location } = useSession();
+  const language = outputLanguage(location) ?? 'en';
   const { history, olderHistory, draft } = useOrders();
   const [confirm, confirmDialog] = useConfirm();
   const title = useRef<HTMLHeadingElement>(null);
@@ -260,7 +263,7 @@ function Open({ request, lens, leave, left, titleId }: OpenProps) {
                             </span>
                           ) : null}
                         </span>
-                        <span className={styles.lineQty}>{qtyWithUnit(item.qty, item.unit)}</span>
+                        <span className={styles.lineQty}>{shownQty(item.qty, item.unit, card, language)}</span>
                       </label>
                     </li>
                   );

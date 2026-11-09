@@ -1749,3 +1749,20 @@ that adds nothing. Nothing #495 has and #496 lacked is a defect.
 Specs: `ordersStore.skipped.spec.ts` (the busy marker, the kiosk waiting for the draft, a dead draft, a refused close taking back
 only its own key) and
 `OrdersSection.closeNotOrdered.spec.tsx` («the second port's extras»).
+
+## The package word in the order as built (9 Nov 2026)
+
+New in Mise 2. A line of an ingredient whose card says what its single pack is (`unit = packUnit = word`, no `packCount`; `pack-type.ts packTypeOf`) reads
+**«2 bottiglie» / «1 secchiello»** (a word the small plural tables do not know: «2 × damigiana») instead of the bare «2». The word follows the venue's
+COUNTRY (`outputLanguage(location) ?? 'en'`), like the title of the message.
+- `order-text.ts`: `OrderItem.pack`, set by `orderedItems` (via `linePackWord`: only when the line shows no unit of its own) and by `itemsFromQuantities`
+  (no frozen unit: the live card's CURRENT word, so a re-send from History reads «2 bottiglie» even for an order placed before the type existed);
+  `summaryLines` carries it; the flat list groups on label + unit + word. `order-summary.ts` carries `pack` on `SummaryLine` / `SummaryCostLine`.
+  An ingredient without a word produces the same bytes as the current app. This is the **second intended difference** of `order-text` (the first is F-5, the flat list's order):
+  no new export in any paired port; `parity.spec` / `odd-inputs.spec` stay green unchanged.
+- Screens: `SupplierSummaryScreen` (the line's `pack`), `OrderListScreen` and `ReorderScreen` and `IncomingMissingScreen` (`shownQty`: the line's own unit, else the card's word),
+  `HistoryCard` (a frozen unit as before, else the card's word). The order photo is the message's text, so it follows. Labels that show a unit
+  (`OrderLine`, stocktake rows, `PlaceConfirmScreen`, `HistoryEditScreen`) now show the singular word where they showed a blank or «conf.».
+- While both apps live the current app sends «- Panna: 2» for the same order.
+- Specs: `order-text.spec.ts` («the package word»), `order-summary.spec.ts`, `pack-format.spec.ts` («Cartone da 4 secchielli da 5 kg (20 kg)»),
+  `OrdersSection.supplier` / `summary` / `send` / `history` specs.

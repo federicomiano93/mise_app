@@ -2,7 +2,9 @@ import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Check } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { todayISO } from '@mise/shared/day';
+import { outputLanguage } from '@mise/shared/market';
 import { qtyWithUnit } from '@mise/shared/order-unit';
+import { qtyWithPack } from '@mise/shared/pack-type';
 import { closeOffer } from '@mise/shared/reminders';
 import type { PlacedRecord } from '@mise/shared/reminders';
 import { supplierLabel } from '@mise/shared/supplier-label';
@@ -12,6 +14,7 @@ import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
+import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
 import { OrderTotals } from './OrderTotals';
 import { useOrders, useOrdersStore } from './OrdersContext';
@@ -44,6 +47,7 @@ import styles from './SupplierSummaryScreen.module.css';
 export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLens }) {
   const { t } = useT();
   const money = useMoney();
+  const { location } = useSession();
   const { state } = useLocation();
   const { draft, prices, pricesReadable, history, historyLoaded, historyBroken, draftLoaded, draftBroken, placing } = useOrders();
   const store = useOrdersStore();
@@ -98,6 +102,8 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
 
   const summary = summaryFor(lens, id, draft, prices, pricesReadable);
   const lines = summary.costLines;
+  // The package word of a line (Mise 2 only) is read in the venue's country language, like the message the supplier gets.
+  const language = outputLanguage(location) ?? 'en';
   const name = supplierLabel(supplier);
   const today = todayISO();
   const offer = historyLoaded && !historyBroken && draftLoaded && !draftBroken
@@ -205,7 +211,7 @@ export function SupplierSummaryScreen({ id, lens }: { id: string; lens: OrdersLe
                 return (
                   <li key={`${line.label}:${index}`} className={styles.row}>
                     <span className={styles.label}>{line.label}</span>
-                    <span className={styles.qty}>{qtyWithUnit(line.qty, line.unit)}</span>
+                    <span className={styles.qty}>{line.pack ? qtyWithPack(line.qty, line.pack, language) : qtyWithUnit(line.qty, line.unit)}</span>
                     {cost ? <span className={cost.warn ? `${styles.cost} ${styles.warn}` : styles.cost}>{cost.text}</span> : null}
                   </li>
                 );

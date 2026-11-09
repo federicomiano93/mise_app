@@ -503,3 +503,14 @@ describe('«What they sell» from the supplier screen', () => {
     expect(screen.queryByRole('button', { name: 'What they sell' })).not.toBeInTheDocument();
   });
 });
+
+describe('a typed card (the package word, Mise 2 only)', () => {
+  const CREAM = ingredient('i-cream', { name: 'Cream', supplierId: 's-alp', unit: 'bottle', packUnit: 'bottle' });
+
+  it('⚠️ offers NO unit selector: unit and package are the same word, so there is nothing to choose', async () => {
+    await opened('s-alp', seeded({ ingredients: [...ITEMS, CREAM] }));
+    expect(screen.queryByRole('combobox', { name: 'Unit to order for Cream' })).not.toBeInTheDocument();
+    expect(screen.getByRole('combobox', { name: 'Unit to order for Cake box' })).toBeInTheDocument();
+    expect(qtyBox('Cream')).toBeInTheDocument();
+  });
+});

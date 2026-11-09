@@ -603,3 +603,22 @@ describe('in Italian', () => {
     expect(box.getByRole('checkbox', { name: 'Seleziona tutti i fornitori' })).toBeInTheDocument();
   });
 });
+
+describe('the package word (Mise 2 only)', () => {
+  it('⚠️ the message the supplier gets says «- Cream: 2 bottles», and the plain lines stay plain', async () => {
+    const open = spyOpen();
+    const source = fakeOrdersSource({
+      suppliers: SUPPLIERS,
+      ingredients: [...ITEMS, ingredient('i-cream', { name: 'Cream', supplierId: 's-alp', unit: 'bottle', packUnit: 'bottle' })],
+      draft: { entries: { ...DRAFT.entries, 'i-cream': { qty: 2 } }, days: DRAFT.days },
+      ordersConfig: WHATSAPP_ONLY,
+    });
+    const view = await atList(source, STAFF);
+    await toSend(view, 'Alpine Mills');
+    act(() => { sendButton().click(); });
+    const text = textOf(pressed(open)[0] ?? '');
+    expect(text).toContain('- Cream: 2 bottles');
+    expect(text).toContain('- Flour 00: 2');
+    await orderSent();
+  });
+});

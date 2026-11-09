@@ -22,12 +22,15 @@ import { ingredientDisplayName } from './ingredient-name';
 import { lineUnitCost, orderCost, type OrderCostResult } from './order-cost';
 import { entryUnit } from './order-unit';
 
-export interface SummaryLine { label: string; qty: number; unit?: string }
+// ⚠️ MISE 2 ONLY: `pack` is the package word of a line that shows no unit of its own («bottiglia»), carried from order-text's
+// summaryLines so the sheet can say «2 bottiglie» like the message does. Absent for every line the current app also draws alike.
+export interface SummaryLine { label: string; qty: number; unit?: string; pack?: string }
 
 export interface SummaryCostLine {
   label: string;
   qty: number;
   unit?: string;
+  pack?: string;
   unitCost: number | null;
   vatRate: number | null;
 }
@@ -69,7 +72,7 @@ export function supplierSummary(supplier?: unknown, ingredients?: readonly unkno
     byLabel.set(itemLabel(ing.name, ing.weight || ''), ing);
   });
 
-  const costLines = lines.map(({ label, qty, unit }): SummaryCostLine => {
+  const costLines = lines.map(({ label, qty, unit, pack }): SummaryCostLine => {
     const ing = byLabel.get(label);
     // The price of ONE of THIS line's unit; lineUnitCost() says «no price» rather than guess
     // when the chosen unit cannot be priced from the card.
@@ -79,6 +82,7 @@ export function supplierSummary(supplier?: unknown, ingredients?: readonly unkno
       label: ing ? itemLabel(ingredientDisplayName(ing), ing.weight || '') : label,
       qty,
       ...(unit ? { unit } : {}),
+      ...(pack ? { pack } : {}),
       unitCost: ing ? lineUnitCost(ing, ing, entryUnit(byId?.[ing.id], ing)) : null,
       vatRate: ing && ing.vatRate != null ? Number(ing.vatRate) : null,
     };
