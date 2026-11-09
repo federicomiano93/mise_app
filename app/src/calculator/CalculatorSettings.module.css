@@ -1,0 +1,57 @@
+/* The Settings hub: a card per subject, each a list of rows. The rows with a switch are drawn here; the doors
+   (a button with a chevron) are Door.tsx. Both are as tall as a thumb's target and end on the same right edge. */
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+}
+
+.headTitle {
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+/* «Saved ✓»: a quiet tag, there (empty) before it speaks so a screen reader announces it. */
+.saved {
+  color: var(--ok-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s3) var(--s4);
+  border-top: 1px solid var(--line);
+}
+
+.text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.title {
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: break-word;
+}

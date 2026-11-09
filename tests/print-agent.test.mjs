@@ -247,3 +247,43 @@ test('⚠️⚠️ no letter can turn into a printer command on the wire', async
   assert.equal(bytes.filter(b => b === 0x7E).length, 0, 'a ~ appeared on the wire');
   assert.equal(bytes.filter(b => b === 0x5E).length, 6, 'only the six ^ the label really has');
 });
+
+// ── The darkness (image labels 1b, 26 Oct 2026) ──────────────────────────────
+//
+// ⚠️⚠️ IT COMES FROM THIS COMPUTER'S SETTINGS, NEVER FROM A JOB: a tilde in the queue is
+// refused by the rules and by isSingleLabel, so `printer.darkness` is the one road.
+
+test('⚠️⚠️ the darkness is the agent s own setting, sent in front of the job', async () => {
+  const { darknessOf, jobText } = await import('../print-agent/agent.mjs');
+  const label = '^XA^FDPane^FS^XZ\n';
+  assert.equal(jobText({ darkness: 28 }, label), `~SD28\n${label}`);
+  assert.equal(jobText({ darkness: 5 }, label), `~SD05\n${label}`, 'Zebra reads two digits');
+  assert.equal(jobText({ darkness: 0 }, label), `~SD00\n${label}`, 'zero is a darkness, not «unset»');
+  assert.equal(jobText({}, label), label, 'left out, nothing is sent and the printer keeps its own');
+  assert.equal(jobText({ darkness: null }, label), label);
+  for (const bad of [31, -1, 2.5, '28', true, '~JR']) {
+    assert.equal(darknessOf({ darkness: bad }), undefined, `${JSON.stringify(bad)} is not a darkness`);
+  }
+});
+
+test('⚠️ a darkness that is not one stops the program at start, and the job never carries it', () => {
+  const src = codeOf(read(AGENT));
+  const load = src.slice(src.indexOf('function loadConfig'), src.indexOf('function readAppConfig'));
+  assert.match(load, /darknessOf\(cfg\.printer\) === undefined\) die\(/,
+    'a wrong darkness must stop the agent before it prints, not print at the printer s whim');
+  const print = src.slice(src.indexOf('async function printJob'), src.indexOf('function die'));
+  assert.match(print, /jobText\(cfg\.printer, payload\)/, 'both roads must go through jobText');
+  const loop = src.slice(src.indexOf('async function main'), src.indexOf('export {'))
+    .replace(/console\.log\([^\n]*darknessOf\(cfg\.printer\)[^\n]*\n/, '');
+  assert.ok(loop.length > 500, 'the agent no longer has the shape this test reads');
+  assert.ok(!/darkness/i.test(loop), 'the loop must never take a darkness from a job');
+});
+
+test('the agent says it can print the image label, and the example shows the darkness', async () => {
+  const { VERSION } = await import('../print-agent/agent.mjs');
+  const [major, minor] = VERSION.split('.').map(Number);
+  assert.ok(major > 1 || (major === 1 && minor >= 1),
+    'Mise 2 queues an image label only for an agent at 1.1.0 or later (shared/src/image-label-print.ts)');
+  const example = JSON.parse(read('print-agent/print-agent.example.json'));
+  assert.equal(example.printer.darkness, 28);
+});

@@ -4,15 +4,89 @@ import './styles/tokens.css';
 import './styles/base.css';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Foundations } from './Foundations';
+import { RouterProvider } from 'react-router/dom';
+import { createDataServices, DataProvider } from './data/DataContext';
+import { AppBoundary } from './errors/AppBoundary';
+import { onRouteError } from './errors/routeErrors';
+import { I18nProvider } from './i18n/I18nProvider';
+import { loadLanguage, pickLanguage } from './i18n/i18n';
+import { router } from './router';
+import { createBrowserEnv } from './session/browserEnv';
+import { createFirebaseBackend } from './session/firebaseBackend';
+import { createSession } from './session/session';
+import { SessionGate } from './session/SessionGate';
+import { SessionProvider } from './session/SessionContext';
+import { browserServiceWorkerEnv, watchServiceWorker } from './shell/serviceWorker';
+import { installViewportHeight } from './shell/viewportHeight';
+import { createTelemetrySinks } from './telemetry/sinks';
+import { startTelemetry } from './telemetry/startTelemetry';
 
 const container = document.getElementById('root');
 if (!container) {
   throw new Error('Mise 2 cannot start: index.html has no element with id="root".');
 }
 
-createRoot(container).render(
-  <StrictMode>
-    <Foundations />
-  </StrictMode>,
-);
+// ONE backend: the session reads through it, and the telemetry writes through the same Firestore
+// and Auth (a second one would be a second connection and a second offline cache).
+const backend = createFirebaseBackend(location.hostname);
+const store = createSession(backend, createBrowserEnv());
+const sinks = createTelemetrySinks(backend, () => {
+  const session = store.getSnapshot();
+  return session.status === 'ready' ? session.locationId : null;
+});
+
+// ⚠️ THE TELEMETRY STARTS BEFORE THE SESSION (main.spec.ts pins the order). Its error
+// listeners must be on before anything else runs, or an error during boot is lost: the reporter
+// keeps it in memory and sends it once a venue is open.
+startTelemetry({ store, sinks });
+
+// Every section's data, on the same backend: Firestore is loaded by the first section that reads.
+const services = createDataServices(backend.firestore, backend);
+
+// Nobody signed in: the sign-in form needs no Firestore (firebaseBackend.ts loads it lazily), so
+// it is fetched while the password is being typed. Signed in, the session's first read loads it.
+store.subscribe(() => {
+  if (store.getSnapshot().status === 'signed-out') backend.preloadFirestore();
+});
+
+// The session starts listening NOW, in parallel with the language loading below: by the time
+// the first screen is drawn the session has often already answered who is signed in.
+store.start();
+
+// The screens above a venue follow the phone's language (his decision, 1 Oct 2026); the
+// venue's own language takes over once one is opened (SessionGate). The messages are loaded
+// BEFORE the first render, so an Italian phone never flashes English.
+const wanted = pickLanguage(navigator.language);
+
+// ⚠️ SAID AT ONCE, NOT AFTER THE MESSAGES LOAD. Chrome decides whether to offer a translation from <html lang> early,
+// and index.html says "en": on the lab tablet (13 Oct 2026) an Italian screen was offered «translate from English».
+// I18nProvider keeps it up to date from here on (the venue's language, a change of language).
+document.documentElement.lang = wanted;
+
+// Where the browser has no dvh (the lab tablet's Chrome 101), the stylesheets read the visible height from here.
+installViewportHeight();
+
+// The service worker (step 5): same address and name as the current app's, so installed phones update to Mise 2
+// and, after a revert, back. Built app only — `npm run dev` and the specs register nothing. After the page has
+// loaded, so its own files come first; a new release is let in only when nobody is editing (shell/serviceWorker.ts).
+if (import.meta.env.PROD) {
+  window.addEventListener('load', () => { void watchServiceWorker(browserServiceWorkerEnv(import.meta.env.BASE_URL)); });
+}
+
+void loadLanguage(wanted).then(({ lang, messages }) => {
+  createRoot(container).render(
+    <StrictMode>
+      <AppBoundary>
+        <I18nProvider initialLanguage={lang} initialMessages={messages}>
+          <SessionProvider store={store}>
+            <DataProvider services={services}>
+              <SessionGate>
+                <RouterProvider router={router} onError={onRouteError} />
+              </SessionGate>
+            </DataProvider>
+          </SessionProvider>
+        </I18nProvider>
+      </AppBoundary>
+    </StrictMode>,
+  );
+});

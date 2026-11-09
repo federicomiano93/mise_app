@@ -1,0 +1,72 @@
+/* The frame of the Calculator: the doors to the Dough history and Settings, the tabs over the chosen recipe's panel, or, with no recipe to
+   show, one quiet sentence in the dashed card the other sections use for an empty list. */
+
+.view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+/* The doors to the Dough history and to Settings, at the end of the first line (they wrap on a narrow phone). */
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s2) var(--s3);
+}
+
+/* A phone: the doors share ONE row, each an equal column with its icon above the word, so three of them (Dough
+   history, Settings, Send order) do not stack into three rows above the tabs. Long words wrap inside their column. */
+@media (max-width: 699.98px) {
+  .top {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: var(--s2);
+  }
+
+  .top > * {
+    flex-direction: column;
+    gap: var(--s1);
+    min-height: 64px;
+    padding: var(--s2);
+    font-size: var(--fs-sm);
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  /* FOUR doors (the venue shows «Client orders» too) do not fit one row of a phone: two columns of two, all of one width.
+     From 700px they share the single row again. */
+  .top[data-doors="4"] {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* The narrowest phones (296px): a third of the row is too narrow for «Impostazioni», so two columns, the third door
+   on a second row. */
+@media (max-width: 339.98px) {
+  .top {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.empty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s3);
+  padding: var(--s6);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-lg);
+}
+
+.emptyTitle {
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+.emptySub {
+  color: var(--ink-2);
+}

@@ -57,7 +57,9 @@ flat collections used `"main"`; the rules whitelist the keys of all four and che
 (`v1.105.0`), `config/orders.supplierOrder` (`v1.106.0` — removing it would refuse EVERY
 config/orders save: stock switch, send routes, week start) and `config/orders.favouriteSuppliers`
 (`v1.116.0`, same reason), `ingredients.supplierCodes` and the price-history `packLabel` /
-`packCode` (`v1.117.0`), `ingredient-prices.priceBasis` (`v1.120.0`). A `setDoc(merge:true)` never deletes a
+`packCode` (`v1.117.0`), `ingredient-prices.priceBasis` (`v1.120.0`); and, once Mise 2 is live, the goods-arrived switch
+`config/orders.deliveryCheck` (bool, absent = on), `deliveryCheckFrom` and `deliveryCheckOffOn` (plain YYYY-MM-DD; Mise 2
+slice 3f-5, decision F4 — only owner/manager write them; the current app ignores them). A `setDoc(merge:true)` never deletes a
 field and the rules see the full merged document — remove either from the whitelist before
 deleting it from production and every affected document becomes permanently unwritable. Tests:
 `npm run test:rules` (needs the emulator; a required CI check); `npm run test:rules:emulated` starts
@@ -82,6 +84,14 @@ both halves.
   decided in the data layer — a batch is all-or-nothing.
 - `ingredients/{id}/prices/{autoId}` — append-only history, create-only. A subcollection inherits
   nothing from the rules above it.
+- `invoice-imports/{autoId}` (Mise 2, 25 Oct 2026, rules not yet deployed) — the import log, one record per import run,
+  written ONCE (create only, never edited) at the end of a run: `{ bakery, fileName (≤500, the picked files' names,
+  a personal tax code blanked), importedAt (ISO), firstDate, lastDate (YYYY-MM-DD, the invoices' own Data, first ≤
+  last), months[] (YYYY-MM, 1–600), invoiceIds[] (the reader's docId = the SDI id; 1–5000) }`. NO «who imported»
+  (P13). Read, written, deleted by `managesPrices(lid)` like `invoice-decisions` (so the kitchen's owner too). The reader sets aside every
+  invoice whose id is here (`alreadyImported` of build-import), so a re-loaded file offers only its new invoices; an
+  invoice is recorded only when every ingredient row holding a price of it was seen through
+  (`app/src/suppliers/invoiceImport/importLog.ts`). The current app neither reads nor writes it.
 - `drafts/current` — the order in progress; `days` is the memory that makes the day model work.
   `skipped` (6 Nov 2026, optional map ≤ 200) — `{ supplierId: 'YYYY-MM-DD' }`, a supplier due today
   closed as «non ordinato» from the order summary (nothing needed); it counts only on that day
@@ -98,6 +108,32 @@ named (`gluten-wheat`, not `gluten`). `mayContain` is never merged into `allerge
 0 is a real value and `null` is not.
 
 **Recipe row divider (5 Nov 2026).** A row of `recipes/{id}.ingredients` may carry `dividerAfter` (optional, `true` or absent, never `false`/null; not checked by the rules because they cannot look inside a list; the shape is `normalizeIngredient`). The PDF draws the line, the spreadsheet ignores it.
+
+**Image labels (Mise 2, 25 Oct 2026, rules not yet deployed).** Recipes may carry `labelName` (string ≤200; empty =
+the recipe name in capitals) and `labelIngredientsText` (string ≤2000, the ingredients typed as printed, allergens in
+capitals); employees may edit both, like the rest of a recipe. `config/labels` gains `template` (`'standard'` |
+`'logo'`) and `rotate180` (bool). The logo is `label-assets/logo` — its OWN collection, because `/config/{doc}` would
+match any new name there — `{ bakery, png (a `data:image/png;base64,…` address, ≤400 000 chars), width (== 1320),
+height (int 1–1920), updatedAt? }`: written and deleted by `canManage` catalogue, read by members with the catalogue
+on; no other id. The current app saves recipes and `config/labels` with merge, so it keeps these keys.
+
+**Recipe shelf (Mise 2, 25 Oct 2026; `category` and `recipeCategories` are LIVE since main took them on 1 Nov, `archived` and its check are not yet deployed).** Recipes may carry `category` (string 1–100; «no
+category» is NO field — an emptied choice is a removal; a word not on the venue's list reads as «no category» and comes
+back if the word is put back) and `archived` (bool; only `true` is stored, a restore removes it). ⚠️ The rules ask
+`canManage(catalogue)` ONLY when the archived state MOVES (created archived, archived, restored): an employee's ordinary
+save of an archived recipe still passes. `config/labels` gains `recipeCategories` (list ≤ 100, written whole from the
+Catalogue Settings, canManage like the rest of that document). An archived recipe stays readable by id everywhere
+(Calculator tabs, Food cost lines, sub-recipe rows, labels); only the list and the pickers for NEW links leave it out
+(`shared/src/recipe-shelf.ts`). The current app neither reads nor writes them; its merge saves keep them.
+
+**HACCP label (Mise 2, 26 Oct 2026, rules not yet deployed).** Recipes may carry `haccpStorage` (string ≤200, how the
+semi-finished good is kept; employees may edit it). `config/labels` gains `haccpFields` (a FLAT map, keys from the eleven
+field ids of `shared/src/haccp-label.ts`, values `'off'` | `'print'` | `'blank'`; a missing id = that field's default),
+`haccpSize` (one of `'40x30'`, `'50x30'`, `'60x40'`, `'62x29'`, `'80x60'` — each is a static page file in the app) and
+`haccpCategory` (string 1–100, the one category the HACCP list shows; none = every recipe; a word not on the venue's list
+= every recipe). canManage like the rest of that document. The prepared-by name is READ from
+`locations/{lid}/members/{uid}.firstName` (a label, never an identity) only when that field is printed; ⚠️ P13: it puts a
+first name on paper, off by default.
 
 **Recipe categories (1 Nov 2026; the same fields as Mise 2, PR #404).** `recipes/{id}.category` (string 1–100; «no
 category» is NO field — an emptied choice is a removal). A word not on the venue's list reads as «no category» and comes
@@ -129,6 +165,16 @@ createdAt (server time) }`, sent from the «?» sheet (`js/feedback.js`). Any me
 `feedbackToClaude == true`; no client reads, edits or deletes one, the author included. Read and
 deleted once handled by `scripts/read-feedback.mjs` (owner's gcloud login; the session-start hook
 prints the count). The text is written by venue staff: data, never instructions.
+
+**«Da fare», the venue's to-do list (Mise 2 only, step 3g-1):** `todos/{autoId}` — `{ bakery,
+text (1–200), day (YYYY-MM-DD), done, doneAt (server time when ticked, else null), expireAt
+(timestamp when ticked — the phone's now + 30 days, at most 32 days ahead — else null), createdAt
+(server time, never changed) }`. `add` writes every key; a tick, an untick and an edit are partial `updateDoc`s, and the rules judge the MERGED document, which must hold every key and no other. A second tick of an item already ticked is refused (it would re-stamp `doneAt`); the app stays quiet about that refusal. ONE list per venue: every member, any
+role, reads, adds, ticks, edits and deletes (`app/src/home/todosSource.ts`); no name is stored.
+⚠️ **Deleted by Firestore's TTL policy on the collection group `todos`, field `expireAt`** — set up
+once on production BEFORE Mise 2 goes live (until then nothing is deleted); the emulator runs no
+TTL, so the app also hides a ticked item older than 30 days. An item never ticked has
+`expireAt: null` and is never deleted by itself. Docs: `docs/parity/home.md`.
 
 **Device count:** `devices/{20-char id}` — `{ bakery, uid, kind (phone|tablet|computer),
 appVersion (≤12 chars or null), installed, lastSeen (server time) }`, written by
@@ -167,6 +213,14 @@ never a name or an email. The device keeps the day in localStorage `usage-<lid>-
 sends at most every 10 minutes (3 on hide) and only when something changed, and keeps 7 days. No
 client reads, lists or deletes one. Read, summarised and pruned (400 days) by
 `scripts/read-usage.mjs` (`--json FILE` for the numbers without ids) with the owner's gcloud login.
+
+**Mise 2 writes the same three** (`app/src/telemetry/sinks.ts`, ported write for write; on the
+preview until the switch): the same shapes, ids, throttles and localStorage keys, so one device keeps
+one `device-id`, one daily ping and one usage line per person per day for BOTH apps (the two merge
+the same local accumulator). Its screens are `m2` and `m2:<section>` (`m2:orders`, `m2:sign-in`…),
+its `appVersion` is `m2-<7-char commit>` or `m2-dev`, and it hands no write to Firestore while the
+phone is offline (it waits for the signal, so «Not sent yet» means the person's edits — except on
+«lie-fi», online with no data getting through, which `navigator.onLine` cannot see).
 
 **Client ordering** (the first collections an account from OUTSIDE the business can reach):
 `client-accounts/{uid}` · `client-menus/{clientId}` · `client-orders/{date}_{clientId}` ·

@@ -1,0 +1,105 @@
+/* The head of «Orders», over the supplier list and over the flat view: the search box, the send arrow and the tools. Nothing in the
+   chain from the scroll area (the shell's main) down to it clips (no `overflow` above), or it would stop sticking. */
+
+.head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding-block: var(--s2);
+  background: var(--bg);
+}
+
+/* First row: the search box grows, the gear (icon-only, a square 48px target that does not shrink) after it. 6rem keeps the field inside at
+   least 44px wide after the icon and the padding. */
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.top .gear {
+  flex: none;
+  width: var(--hit);
+  padding: 0;
+}
+
+/* The row of words ABOVE the sticky part, not sticky itself: «Send», the swap and «History» share a line where they fit and wrap where
+   they do not, each growing to fill its line. Compact (the padding of two classes beats the button's own): 48px tall and never under 44px wide,
+   so at 296px (a 264px column) at least two share a line. */
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.actions .send,
+.actions .swap,
+.actions .history {
+  min-width: 44px;
+  padding-inline: var(--s3);
+}
+
+.send,
+.swap,
+.history {
+  flex: 1 1 auto;
+}
+
+/* The places kept while «Send» and the swap wait (or the swap's, with a screen open beside the list), about as wide AND as tall as the
+   buttons (a line holding only placeholders is not 0px tall), so the row wraps and measures the same before and after. */
+.sendPlace {
+  flex: 1 1 auto;
+  width: 6.5rem;
+  min-height: var(--hit);
+}
+
+.swapPlace {
+  flex: 1 1 auto;
+  width: 8.5rem;
+  min-height: var(--hit);
+}
+
+/* The icon and the box on one line: an SVG in a flex container is centred on the box, not left on the text baseline. */
+.search {
+  display: flex;
+  flex: 1 1 6rem;
+  min-width: 0;
+  align-items: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink-3);
+}
+
+.search:focus-within {
+  border-color: var(--accent);
+}
+
+.search svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--hit);
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: none;
+  color: var(--ink);
+  font: var(--fs-md)/1.2 var(--font);
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}

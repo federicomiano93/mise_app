@@ -1,0 +1,1361 @@
+import { describe, expect, test, vi } from 'vitest';
+import { SCALED_TTL_MS, normalizeCatalogueRecipe } from '@mise/shared/catalogue-model';
+import { PRICE_FIELDS } from '@mise/shared/price-model';
+import type { KeyValueStorage } from '../session/backend';
+import type { RecipesMeta, RecipesSource, StoredDoc } from './recipesSource';
+import {
+  INGREDIENTS_KEY, LABEL_CONFIG_KEY, RECIPES_KEY, SCALED_KEY, SUPPLIERS_KEY, USAGE_KEY, createRecipesStore,
+} from './recipesStore';
+
+// The Recipe catalogue's store against a hand-driven source and an in-memory localStorage. The keys
+// are the CURRENT app's (one origin): what this store writes, js/catalogue/catalogue-store.js reads.
+
+function memoryStorage(seed: Record<string, string> = {}) {
+  const data = new Map(Object.entries(seed));
+  const storage = {
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => { data.set(key, value); },
+    removeItem: (key: string) => { data.delete(key); },
+  };
+  return { data, storage: storage as unknown as KeyValueStorage };
+}
+
+function handSource() {
+  let onChange: ((list: StoredDoc[], meta: RecipesMeta) => void) | null = null;
+  let onError: ((err: unknown) => void) | null = null;
+  const stop = vi.fn();
+  const watchRecipes = vi.fn<RecipesSource['watchRecipes']>((change, error) => {
+    onChange = change;
+    onError = error;
+    return stop;
+  });
+  let onIngredients: ((list: StoredDoc[], meta: RecipesMeta) => void) | null = null;
+  let onIngredientsError: ((err: unknown) => void) | null = null;
+  const stopIngredients = vi.fn();
+  const watchIngredients = vi.fn<RecipesSource['watchIngredients']>((change, error) => {
+    onIngredients = change;
+    onIngredientsError = error;
+    return stopIngredients;
+  });
+  let onLabel: ((data: Record<string, unknown> | null, meta: RecipesMeta) => void) | null = null;
+  let onLabelError: ((err: unknown) => void) | null = null;
+  const stopLabel = vi.fn();
+  const watchLabelConfig = vi.fn<RecipesSource['watchLabelConfig']>((change, error) => {
+    onLabel = change;
+    onLabelError = error;
+    return stopLabel;
+  });
+  let onAgents: ((list: StoredDoc[]) => void) | null = null;
+  let onAgentsError: ((err: unknown) => void) | null = null;
+  const stopAgents = vi.fn();
+  const watchPrintAgents = vi.fn<RecipesSource['watchPrintAgents']>((change, error) => {
+    onAgents = change;
+    onAgentsError = error;
+    return stopAgents;
+  });
+  const queuePrintJob = vi.fn<RecipesSource['queuePrintJob']>(() => Promise.resolve());
+  const saveLabelConfig = vi.fn<RecipesSource['saveLabelConfig']>(() => Promise.resolve());
+  let onSuppliers: ((list: StoredDoc[], meta: RecipesMeta) => void) | null = null;
+  let onSuppliersError: ((err: unknown) => void) | null = null;
+  const stopSuppliers = vi.fn();
+  const watchSuppliers = vi.fn<RecipesSource['watchSuppliers']>((change, error) => {
+    onSuppliers = change;
+    onSuppliersError = error;
+    return stopSuppliers;
+  });
+  const saveRecipeDoc = vi.fn<RecipesSource['saveRecipeDoc']>(() => Promise.resolve());
+  const removeRecipeDoc = vi.fn<RecipesSource['removeRecipeDoc']>(() => Promise.resolve());
+  const getCalculatorConfig = vi.fn<RecipesSource['getCalculatorConfig']>(() => Promise.resolve(null));
+  const importIntoCalculator = vi.fn<RecipesSource['importIntoCalculator']>(() => Promise.resolve('added'));
+  const watchLabelLogo = vi.fn<RecipesSource['watchLabelLogo']>(() => () => undefined);
+  const saveLabelLogo = vi.fn<RecipesSource['saveLabelLogo']>(() => Promise.resolve());
+  const removeLabelLogo = vi.fn<RecipesSource['removeLabelLogo']>(() => Promise.resolve());
+  const readMember = vi.fn<RecipesSource['readMember']>(() => Promise.resolve(null));
+  const addRecipeCategoryWord = vi.fn<RecipesSource['addRecipeCategoryWord']>(() => Promise.resolve());
+  const removeRecipeCategoryWords = vi.fn<RecipesSource['removeRecipeCategoryWords']>(() => Promise.resolve());
+  const source: RecipesSource = {
+    watchRecipes, watchIngredients, watchLabelConfig, watchPrintAgents, queuePrintJob, saveLabelConfig, watchSuppliers,
+    saveRecipeDoc, removeRecipeDoc, getCalculatorConfig, importIntoCalculator, watchLabelLogo, saveLabelLogo, removeLabelLogo,
+    readMember, addRecipeCategoryWord, removeRecipeCategoryWords,
+  };
+  return {
+    source,
+    addRecipeCategoryWord,
+    removeRecipeCategoryWords,
+    watchSuppliers,
+    stopSuppliers,
+    saveRecipeDoc,
+    removeRecipeDoc,
+    getCalculatorConfig,
+    importIntoCalculator,
+    supServer: (list: StoredDoc[]) => onSuppliers!(list, { fromServer: true }),
+    supCache: (list: StoredDoc[]) => onSuppliers!(list, { fromServer: false }),
+    supFail: () => onSuppliersError!(new Error('permission-denied')),
+    watchPrintAgents,
+    queuePrintJob,
+    saveLabelConfig,
+    stopAgents,
+    agents: (list: StoredDoc[]) => onAgents!(list),
+    agentsFail: () => onAgentsError!(new Error('permission-denied')),
+    watchRecipes,
+    watchIngredients,
+    watchLabelConfig,
+    stop,
+    stopIngredients,
+    stopLabel,
+    labelServer: (data: Record<string, unknown> | null) => onLabel!(data, { fromServer: true }),
+    labelCache: (data: Record<string, unknown> | null) => onLabel!(data, { fromServer: false }),
+    labelFail: () => onLabelError!(new Error('permission-denied')),
+    ingServer: (list: StoredDoc[]) => onIngredients!(list, { fromServer: true }),
+    ingCache: (list: StoredDoc[]) => onIngredients!(list, { fromServer: false }),
+    ingFail: () => onIngredientsError!(new Error('permission-denied')),
+    server: (list: StoredDoc[]) => onChange!(list, { fromServer: true }),
+    cache: (list: StoredDoc[]) => onChange!(list, { fromServer: false }),
+    fail: () => onError!(new Error('permission-denied')),
+  };
+}
+
+const NOW = Date.UTC(2026, 9, 13, 9, 0);
+
+function makeStore(seed: Record<string, string> = {}, now = () => NOW) {
+  const { data, storage } = memoryStorage(seed);
+  const hand = handSource();
+  const warn = vi.fn();
+  const store = createRecipesStore(hand.source, { storage, now, warn });
+  return { store, data, warn, ...hand };
+}
+
+const FOCACCIA: StoredDoc = { id: 'r1', name: ' Focaccia ', ingredients: [{ label: 'Flour', grams: 1000, unit: 'g', kind: 'ingredient', refId: 'i1', rid: 'a1' }] };
+const BREAD: StoredDoc = { id: 'r2', name: 'Bread', ingredients: [] };
+const FLOUR: StoredDoc = { id: 'i1', name: 'Flour 00', allergens: ['gluten-wheat'], allergensCheckedAt: '2026-09-01' };
+const BUTTER: StoredDoc = { id: 'i2', name: 'Butter', allergens: ['milk'], allergensCheckedAt: '2026-09-01' };
+
+describe('the Recipe catalogue store', () => {
+  test('paints the local copy at once, and waits («not loaded») when there is none', () => {
+    const cold = makeStore();
+    expect(cold.store.getSnapshot().recipesLoaded).toBe(false);
+    expect(cold.store.getSnapshot().recipes).toEqual([]);
+    const warm = makeStore({ [RECIPES_KEY]: JSON.stringify([BREAD]) });
+    expect(warm.store.getSnapshot().recipesLoaded).toBe(true);
+    expect(warm.store.getSnapshot().recipes.map(r => r.name)).toEqual(['Bread']);
+  });
+
+  test('⚠️ the copy is stored NORMALISED, links and row ids kept — the current app reads it', () => {
+    const { store, data, server } = makeStore();
+    store.start();
+    server([FOCACCIA]);
+    const stored = JSON.parse(data.get(RECIPES_KEY)!);
+    expect(stored[0].name).toBe('Focaccia');
+    expect(stored[0].lossPct).toBe(0);
+    expect(stored[0].ingredients[0]).toEqual({ label: 'Flour', grams: 1000, unit: 'g', kind: 'ingredient', refId: 'i1', rid: 'a1' });
+    expect(store.getSnapshot().recipesFromServer).toBe(true);
+  });
+
+  test('⚠️ an EMPTY answer from the browser’s own database does not wipe a copy that had recipes', () => {
+    const { store, cache, server } = makeStore({ [RECIPES_KEY]: JSON.stringify([BREAD]) });
+    store.start();
+    cache([]);
+    expect(store.getSnapshot().recipes).toHaveLength(1);
+    expect(store.getSnapshot().recipesFromServer).toBe(false);
+    server([]);
+    expect(store.getSnapshot().recipes).toHaveLength(0);
+  });
+
+  test('⚠️ before the server speaks, a cached answer that LACKS a held recipe is not believed (nor saved)', () => {
+    const { store, data, cache, server } = makeStore({ [RECIPES_KEY]: JSON.stringify([FOCACCIA, BREAD]) });
+    store.start();
+    cache([BREAD]);
+    expect(store.getSnapshot().recipes.map(r => r.id)).toEqual(['r1', 'r2']);
+    expect(JSON.parse(data.get(RECIPES_KEY)!)).toHaveLength(2);
+    // A cached answer that holds every recipe (and more) is believed.
+    cache([FOCACCIA, BREAD, { id: 'r3', name: 'Pizza' }]);
+    expect(store.getSnapshot().recipes).toHaveLength(3);
+    // The server's word is believed whatever it lacks; after it, the browser's own copy follows it.
+    server([BREAD]);
+    expect(store.getSnapshot().recipes.map(r => r.id)).toEqual(['r2']);
+    cache([BREAD]);
+    expect(store.getSnapshot().recipes.map(r => r.id)).toEqual(['r2']);
+  });
+
+  test('an empty cached answer stands when the copy itself said «no recipes»; a cold one keeps waiting', () => {
+    const none = makeStore({ [RECIPES_KEY]: '[]' });
+    none.store.start();
+    none.cache([]);
+    expect(none.store.getSnapshot().recipesLoaded).toBe(true);
+    const cold = makeStore();
+    cold.store.start();
+    cold.cache([]);
+    expect(cold.store.getSnapshot().recipesLoaded).toBe(false);
+    cold.cache([BREAD]);
+    expect(cold.store.getSnapshot().recipesLoaded).toBe(true);
+  });
+
+  test('a corrupt copy reads as none, and blocked storage never throws', () => {
+    const corrupt = makeStore({ [RECIPES_KEY]: '{not json', [USAGE_KEY]: '[1,2]', [SCALED_KEY]: 'nope' });
+    expect(corrupt.store.getSnapshot().recipesLoaded).toBe(false);
+    expect(corrupt.store.getSnapshot().usage).toEqual({});
+    expect(corrupt.store.getSnapshot().scaled).toEqual({});
+    const throwing = {
+      getItem: () => { throw new Error('blocked'); },
+      setItem: () => { throw new Error('full'); },
+      removeItem: () => undefined,
+    } as unknown as KeyValueStorage;
+    const hand = handSource();
+    const store = createRecipesStore(hand.source, { storage: throwing, now: () => NOW, warn: vi.fn() });
+    store.start();
+    expect(() => hand.server([BREAD])).not.toThrow();
+    expect(() => store.bumpUsage('r2')).not.toThrow();
+    expect(store.getSnapshot().usage).toEqual({ r2: 1 });
+  });
+
+  test('a dead stream ends the wait and is said once; the copy stays on screen', () => {
+    const { store, fail, warn } = makeStore({ [RECIPES_KEY]: JSON.stringify([BREAD]) });
+    const said = vi.fn();
+    store.onMessage(said);
+    store.start();
+    fail();
+    expect(store.getSnapshot()).toMatchObject({ recipesLoaded: true, streamBroken: true });
+    expect(store.getSnapshot().recipes).toHaveLength(1);
+    expect(said).toHaveBeenCalledTimes(1);
+    expect(said).toHaveBeenCalledWith({ kind: 'recipes-stream-broken' });
+    expect(warn).toHaveBeenCalled();
+  });
+
+  test('the shop computers are watched while the store runs and let go of when it stops', () => {
+    const { store, watchPrintAgents, stopAgents, agents } = makeStore();
+    expect(store.getSnapshot().printAgents).toEqual([]);
+    store.start();
+    expect(watchPrintAgents).toHaveBeenCalledTimes(1);
+    agents([{ id: 'pc', lastSeenAt: '2026-10-13T09:00:00.000Z' }]);
+    expect(store.getSnapshot().printAgents).toEqual([{ id: 'pc', lastSeenAt: '2026-10-13T09:00:00.000Z' }]);
+    store.stop();
+    expect(stopAgents).toHaveBeenCalledTimes(1);
+  });
+
+  test('⚠️ the heartbeats are NEVER written to storage, and a stored one is never read back', () => {
+    const { store, data, agents } = makeStore({ 'catalogue-print-agents': JSON.stringify([{ id: 'old', lastSeenAt: '2026-10-13T09:00:00.000Z' }]) });
+    expect(store.getSnapshot().printAgents).toEqual([]);
+    const before = new Map(data);
+    store.start();
+    agents([{ id: 'pc', lastSeenAt: '2026-10-13T09:00:00.000Z' }]);
+    expect(new Map(data)).toEqual(before);
+    expect([...data.values()].filter(value => value.includes('"pc"'))).toEqual([]);
+  });
+
+  test('a failed agents watch leaves «nobody is listening» and says so only in a warning', () => {
+    const { store, agents, agentsFail, warn } = makeStore();
+    store.start();
+    agents([{ id: 'pc', lastSeenAt: '2026-10-13T09:00:00.000Z' }]);
+    agentsFail();
+    expect(store.getSnapshot().printAgents).toEqual([]);
+    expect(warn).toHaveBeenCalled();
+  });
+
+  test('a job goes to the source as it is, and a refusal reaches the caller (it is not local-first)', async () => {
+    const { store, queuePrintJob } = makeStore();
+    await store.queuePrintJob({ payload: '^XA^XZ' });
+    expect(queuePrintJob).toHaveBeenCalledWith({ payload: '^XA^XZ' });
+    queuePrintJob.mockRejectedValueOnce(new Error('offline'));
+    await expect(store.queuePrintJob({ payload: '^XA^XZ' })).rejects.toThrow('offline');
+  });
+
+  test('opening counts one more, written to the shared key', () => {
+    const { store, data } = makeStore({ [USAGE_KEY]: JSON.stringify({ r1: 2 }) });
+    store.bumpUsage('r1');
+    store.bumpUsage('r2');
+    store.bumpUsage('');
+    expect(store.getSnapshot().usage).toEqual({ r1: 3, r2: 1 });
+    expect(JSON.parse(data.get(USAGE_KEY)!)).toEqual({ r1: 3, r2: 1 });
+  });
+
+  test('a batch is remembered for 12 hours, then reads as none; Clear forgets it', () => {
+    let now = NOW;
+    const { store, data } = makeStore({}, () => now);
+    store.setScaledTarget('r1', 2500);
+    expect(store.scaledTarget('r1')).toBe(2500);
+    expect(JSON.parse(data.get(SCALED_KEY)!)).toEqual({ r1: { target: 2500, ts: NOW } });
+    now = NOW + SCALED_TTL_MS + 1;
+    expect(store.scaledTarget('r1')).toBeNull();
+    now = NOW;
+    store.clearScaledTarget('r1');
+    expect(store.scaledTarget('r1')).toBeNull();
+    expect(JSON.parse(data.get(SCALED_KEY)!)).toEqual({});
+  });
+
+  test('a batch of nothing, of a negative or of junk is not remembered', () => {
+    const { store } = makeStore();
+    store.setScaledTarget('r1', 0);
+    store.setScaledTarget('r1', -5);
+    store.setScaledTarget('r1', Number.NaN);
+    store.setScaledTarget('r1', Number.POSITIVE_INFINITY);
+    store.setScaledTarget('', 100);
+    expect(store.getSnapshot().scaled).toEqual({});
+  });
+
+  test('⚠️ counts and batches of deleted recipes are pruned on the SERVER’s word only', () => {
+    const { store, data, cache, server } = makeStore({
+      [RECIPES_KEY]: JSON.stringify([FOCACCIA, BREAD]),
+      [USAGE_KEY]: JSON.stringify({ r1: 4, r2: 1, gone: 9 }),
+      [SCALED_KEY]: JSON.stringify({
+        r1: { target: 900, ts: NOW },
+        r2: { target: 50, ts: NOW - SCALED_TTL_MS - 1 },
+        gone: { target: 1, ts: NOW },
+      }),
+    });
+    store.start();
+    // The browser's own database holds only the recipe the Calculator once read.
+    cache([BREAD]);
+    expect(store.getSnapshot().usage).toEqual({ r1: 4, r2: 1, gone: 9 });
+    expect(store.getSnapshot().recipes).toHaveLength(2);
+    server([FOCACCIA, BREAD]);
+    expect(store.getSnapshot().usage).toEqual({ r1: 4, r2: 1 });
+    expect(store.getSnapshot().scaled).toEqual({ r1: { target: 900, ts: NOW } });
+    expect(JSON.parse(data.get(USAGE_KEY)!)).toEqual({ r1: 4, r2: 1 });
+  });
+
+  test('start → stop → start listens once at a time; stop ends the listener', () => {
+    const { store, watchRecipes, stop } = makeStore();
+    store.start();
+    store.start();
+    expect(watchRecipes).toHaveBeenCalledTimes(1);
+    store.stop();
+    expect(stop).toHaveBeenCalledTimes(1);
+    store.start();
+    expect(watchRecipes).toHaveBeenCalledTimes(2);
+  });
+
+  test('the ingredients are watched with the recipes, and both listeners end on stop', () => {
+    const { store, watchIngredients, stopIngredients } = makeStore();
+    store.start();
+    store.start();
+    expect(watchIngredients).toHaveBeenCalledTimes(1);
+    store.stop();
+    expect(stopIngredients).toHaveBeenCalledTimes(1);
+  });
+
+  test('the ingredients paint from the shared copy at once (by id), and wait when there is none', () => {
+    const cold = makeStore();
+    expect(cold.store.getSnapshot().ingredientsLoaded).toBe(false);
+    expect(cold.store.getSnapshot().ingredients).toEqual({});
+    const warm = makeStore({ [INGREDIENTS_KEY]: JSON.stringify([FLOUR, { name: 'no id' }, null]) });
+    expect(warm.store.getSnapshot().ingredientsLoaded).toBe(true);
+    expect(warm.store.getSnapshot().ingredients).toEqual({ i1: FLOUR });
+  });
+
+  test('a server answer replaces the ingredients and is stored as the current app’s ARRAY', () => {
+    const { store, data, ingServer } = makeStore();
+    store.start();
+    ingServer([FLOUR, BUTTER]);
+    expect(store.getSnapshot().ingredientsLoaded).toBe(true);
+    expect(Object.keys(store.getSnapshot().ingredients)).toEqual(['i1', 'i2']);
+    expect(JSON.parse(data.get(INGREDIENTS_KEY)!)).toEqual([FLOUR, BUTTER]);
+  });
+
+  test('⚠️ NO PRICE is kept or stored, from the server or from an older copy', () => {
+    const priced: Record<string, unknown> = { ...BUTTER };
+    for (const key of PRICE_FIELDS) priced[key] = 3;
+    const { store, data, ingServer } = makeStore({ [INGREDIENTS_KEY]: JSON.stringify([priced]) });
+    for (const key of PRICE_FIELDS) expect(Object.keys(store.getSnapshot().ingredients.i2!), key).not.toContain(key);
+    store.start();
+    ingServer([priced as StoredDoc]);
+    const stored = data.get(INGREDIENTS_KEY)!;
+    for (const key of PRICE_FIELDS) {
+      expect(stored, key).not.toContain(`"${key}"`);
+      expect(Object.keys(store.getSnapshot().ingredients.i2!), key).not.toContain(key);
+    }
+  });
+
+  test('⚠️ an EMPTY or SHRUNKEN cached ingredient answer is not believed before the server speaks', () => {
+    const { store, data, ingCache, ingServer } = makeStore({ [INGREDIENTS_KEY]: JSON.stringify([FLOUR, BUTTER]) });
+    store.start();
+    ingCache([]);
+    ingCache([FLOUR]);
+    expect(Object.keys(store.getSnapshot().ingredients)).toEqual(['i1', 'i2']);
+    expect(JSON.parse(data.get(INGREDIENTS_KEY)!)).toHaveLength(2);
+    ingServer([FLOUR]);
+    expect(Object.keys(store.getSnapshot().ingredients)).toEqual(['i1']);
+    // After the server's word a cached answer may shrink the list (a deletion seen offline) — not empty it.
+    ingCache([]);
+    expect(Object.keys(store.getSnapshot().ingredients)).toEqual(['i1']);
+  });
+
+  test('a cold phone believes a cached answer that holds ingredients; a copy that said «none» lets an empty one stand', () => {
+    const cold = makeStore();
+    cold.store.start();
+    cold.ingCache([]);
+    expect(cold.store.getSnapshot().ingredientsLoaded).toBe(false);
+    cold.ingCache([FLOUR]);
+    expect(cold.store.getSnapshot().ingredientsLoaded).toBe(true);
+    const none = makeStore({ [INGREDIENTS_KEY]: '[]' });
+    none.store.start();
+    none.ingCache([]);
+    expect(none.store.getSnapshot().ingredientsLoaded).toBe(true);
+  });
+
+  test('⚠️ a refused ingredients stream is QUIET: a warning, no message, and the wait ends', () => {
+    const { store, warn, ingFail } = makeStore();
+    const said = vi.fn();
+    store.onMessage(said);
+    store.start();
+    ingFail();
+    expect(store.getSnapshot().ingredientsLoaded).toBe(true);
+    expect(store.getSnapshot().ingredients).toEqual({});
+    expect(store.getSnapshot().ingredientsUnreadable).toBe(true);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(said).not.toHaveBeenCalled();
+  });
+
+  test('a refused stream over a held copy (or after an answer) is NOT «unreadable»: the copy is the data', () => {
+    const warm = makeStore({ [INGREDIENTS_KEY]: JSON.stringify([FLOUR]) });
+    warm.store.start();
+    warm.ingFail();
+    expect(warm.store.getSnapshot().ingredientsUnreadable).toBe(false);
+    expect(Object.keys(warm.store.getSnapshot().ingredients)).toEqual(['i1']);
+    const answered = makeStore();
+    answered.store.start();
+    answered.ingServer([FLOUR]);
+    answered.ingFail();
+    expect(answered.store.getSnapshot().ingredientsUnreadable).toBe(false);
+  });
+
+  test('a corrupt ingredient copy reads as none and waits for the answer', () => {
+    const { store } = makeStore({ [INGREDIENTS_KEY]: '{not json' });
+    expect(store.getSnapshot().ingredientsLoaded).toBe(false);
+    expect(store.getSnapshot().ingredients).toEqual({});
+  });
+
+  describe('the label profile (config/labels)', () => {
+    const SMALL = { labelSize: '57x32', fontMm: 2.5 };
+
+    test('is watched with the recipes, and the listener ends on stop', () => {
+      const { store, watchLabelConfig, stopLabel } = makeStore();
+      store.start();
+      store.start();
+      expect(watchLabelConfig).toHaveBeenCalledTimes(1);
+      store.stop();
+      expect(stopLabel).toHaveBeenCalledTimes(1);
+    });
+
+    test('a cold phone does not know the paper; a server answer (a document or none) is stored RAW', () => {
+      const { store, data, labelServer } = makeStore();
+      expect(store.getSnapshot().labelConfigKnown).toBe(false);
+      expect(store.getSnapshot().labelConfig).toBeNull();
+      store.start();
+      labelServer({ ...SMALL, junk: 'kept as stored' });
+      expect(store.getSnapshot().labelConfigKnown).toBe(true);
+      expect(store.getSnapshot().labelConfig).toEqual({ ...SMALL, junk: 'kept as stored' });
+      expect(JSON.parse(data.get(LABEL_CONFIG_KEY)!)).toEqual({ ...SMALL, junk: 'kept as stored' });
+      labelServer(null);
+      expect(store.getSnapshot().labelConfig).toBeNull();
+      expect(data.get(LABEL_CONFIG_KEY)).toBe('null');
+    });
+
+    test('⚠️ the copy is two answers: «null» = the venue has none (known), no key = never told', () => {
+      expect(makeStore({ [LABEL_CONFIG_KEY]: 'null' }).store.getSnapshot().labelConfigKnown).toBe(true);
+      const held = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(SMALL) }).store.getSnapshot();
+      expect(held.labelConfigKnown).toBe(true);
+      expect(held.labelConfig).toEqual(SMALL);
+      for (const junk of ['{not json', '[1,2]', '"text"', '7']) {
+        expect(makeStore({ [LABEL_CONFIG_KEY]: junk }).store.getSnapshot().labelConfigKnown, junk).toBe(false);
+      }
+    });
+
+    test('⚠️ «no document» from the browser’s own database is not believed unless the copy said so too', () => {
+      const cold = makeStore();
+      cold.store.start();
+      cold.labelCache(null);
+      expect(cold.store.getSnapshot().labelConfigKnown).toBe(false);
+      expect(cold.data.has(LABEL_CONFIG_KEY)).toBe(false);
+      // A held profile is not wiped by it either.
+      const held = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(SMALL) });
+      held.store.start();
+      held.labelCache(null);
+      expect(held.store.getSnapshot().labelConfig).toEqual(SMALL);
+      // The copy that said «none» lets it stand.
+      const none = makeStore({ [LABEL_CONFIG_KEY]: 'null' });
+      none.store.start();
+      none.labelCache(null);
+      expect(none.store.getSnapshot().labelConfigKnown).toBe(true);
+    });
+
+    test('a cached document that exists is believed (the venue’s own); after the server, cache answers count', () => {
+      const cold = makeStore();
+      cold.store.start();
+      cold.labelCache(SMALL);
+      expect(cold.store.getSnapshot().labelConfigKnown).toBe(true);
+      expect(cold.store.getSnapshot().labelConfig).toEqual(SMALL);
+      const later = makeStore();
+      later.store.start();
+      later.labelServer(SMALL);
+      later.labelCache(null);
+      expect(later.store.getSnapshot().labelConfig).toBeNull();
+    });
+
+    test('⚠️ a refused read is quiet and ends the wait (defaults), keeping a held profile', () => {
+      const cold = makeStore();
+      const said = vi.fn();
+      cold.store.onMessage(said);
+      cold.store.start();
+      cold.labelFail();
+      expect(cold.store.getSnapshot().labelConfigKnown).toBe(true);
+      expect(cold.store.getSnapshot().labelConfig).toBeNull();
+      expect(cold.warn).toHaveBeenCalledTimes(1);
+      expect(said).not.toHaveBeenCalled();
+      const held = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(SMALL) });
+      held.store.start();
+      held.labelFail();
+      expect(held.store.getSnapshot().labelConfig).toEqual(SMALL);
+    });
+
+    test('blocked storage never throws', () => {
+      const throwing = {
+        getItem: () => { throw new Error('blocked'); },
+        setItem: () => { throw new Error('blocked'); },
+        removeItem: () => { throw new Error('blocked'); },
+      } as unknown as KeyValueStorage;
+      const hand = handSource();
+      const store = createRecipesStore(hand.source, { storage: throwing, now: () => NOW, warn: vi.fn() });
+      expect(store.getSnapshot().labelConfigKnown).toBe(false);
+      store.start();
+      expect(() => hand.labelServer(SMALL)).not.toThrow();
+      expect(store.getSnapshot().labelConfig).toEqual(SMALL);
+    });
+  });
+
+  describe('saving the label profile (step 3d-5)', () => {
+    const HELD = { widthMm: 76, heightMm: 51, dpi: 203 };
+    const deferred = () => {
+      let resolve: () => void = () => undefined;
+      let reject: (err: unknown) => void = () => undefined;
+      const promise = new Promise<void>((res, rej) => { resolve = res; reject = rej; });
+      return { promise, resolve, reject };
+    };
+
+    test('⚠️ is LOCAL-FIRST: the store and the phone’s copy change at once, before the source answers', async () => {
+      const { store, data, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      const gate = deferred();
+      saveLabelConfig.mockReturnValueOnce(gate.promise);
+      const heard = vi.fn();
+      store.subscribe(heard);
+      const saving = store.saveLabelProfile({ dpi: 300 });
+      expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, dpi: 300 });
+      expect(JSON.parse(data.get(LABEL_CONFIG_KEY)!)).toEqual({ ...HELD, dpi: 300 });
+      expect(heard).toHaveBeenCalledTimes(1);
+      expect(saveLabelConfig).toHaveBeenCalledWith({ dpi: 300 });
+      gate.resolve();
+      await saving;
+      expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, dpi: 300 });
+    });
+
+    test('a venue with no document gets one made of the patch', async () => {
+      const { store, labelServer } = makeStore();
+      store.start();
+      labelServer(null);
+      await store.saveLabelProfile({ showDate: true });
+      expect(store.getSnapshot().labelConfig).toEqual({ showDate: true });
+    });
+
+    test('⚠️ two quick saves reach the source in the order they were made, NOT chained behind each other', async () => {
+      const { store, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      const first = deferred();
+      saveLabelConfig.mockReturnValueOnce(first.promise);
+      const a = store.saveLabelProfile({ widthMm: 25 });
+      const b = store.saveLabelProfile({ heightMm: 40 });
+      // The second was handed over while the first was still in the air.
+      expect(saveLabelConfig.mock.calls.map(call => call[0])).toEqual([{ widthMm: 25 }, { heightMm: 40 }]);
+      first.resolve();
+      await Promise.all([a, b]);
+      expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, widthMm: 25, heightMm: 40 });
+    });
+
+    test('the final local value is the LAST tap even when the first rejects after the second resolved', async () => {
+      const { store, data, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      const first = deferred();
+      saveLabelConfig.mockReturnValueOnce(first.promise);
+      const a = store.saveLabelProfile({ dpi: 300 });
+      const b = store.saveLabelProfile({ dpi: 600 });
+      await b;
+      first.reject(new Error('permission-denied'));
+      await expect(a).rejects.toThrow('permission-denied');
+      expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, dpi: 600 });
+      expect(JSON.parse(data.get(LABEL_CONFIG_KEY)!)).toEqual({ ...HELD, dpi: 600 });
+    });
+
+    test('⚠️ a rejected patch puts back ONLY its own keys, and not a key a later patch has set', async () => {
+      const { store, data, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      const first = deferred();
+      saveLabelConfig.mockReturnValueOnce(first.promise);
+      const a = store.saveLabelProfile({ widthMm: 25, heightMm: 40, showWeight: true });
+      const b = store.saveLabelProfile({ heightMm: 99 });
+      first.reject(new Error('offline'));
+      await expect(a).rejects.toThrow('offline');
+      await b;
+      // width and showWeight are as they were (showWeight did not exist at all); height keeps the LATER 99.
+      expect(store.getSnapshot().labelConfig).toEqual({ widthMm: 76, heightMm: 99, dpi: 203 });
+      expect(JSON.parse(data.get(LABEL_CONFIG_KEY)!)).toEqual({ widthMm: 76, heightMm: 99, dpi: 203 });
+    });
+
+    test.each([
+      ['the first refused first', true],
+      ['the second refused first', false],
+    ])('⚠️ two refused patches on one key never leave the first one’s refused value behind (%s)', async (_order, firstFirst) => {
+      const { store, data, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      const one = deferred();
+      const two = deferred();
+      saveLabelConfig.mockReturnValueOnce(one.promise).mockReturnValueOnce(two.promise);
+      const a = store.saveLabelProfile({ widthMm: 10 });
+      const b = store.saveLabelProfile({ widthMm: 5 });
+      expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, widthMm: 5 });
+      const refuse = (d: ReturnType<typeof deferred>, p: Promise<void>) => { d.reject(new Error('no')); return expect(p).rejects.toThrow('no'); };
+      if (firstFirst) {
+        await refuse(one, a);
+        // The second is still in the air and owns the key.
+        expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, widthMm: 5 });
+        await refuse(two, b);
+      } else {
+        await refuse(two, b);
+        // The first is still in the air: its value is what the key holds meanwhile.
+        expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, widthMm: 10 });
+        await refuse(one, a);
+      }
+      expect(store.getSnapshot().labelConfig).toEqual(HELD);
+      expect(JSON.parse(data.get(LABEL_CONFIG_KEY)!)).toEqual(HELD);
+    });
+
+    test('a refused patch gives the key back to an earlier accepted one, not to the confirmed value before it', async () => {
+      const { store, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      const two = deferred();
+      saveLabelConfig.mockReturnValueOnce(Promise.resolve()).mockReturnValueOnce(two.promise);
+      const a = store.saveLabelProfile({ dpi: 300 });
+      const b = store.saveLabelProfile({ dpi: 600 });
+      await a;
+      two.reject(new Error('no'));
+      await expect(b).rejects.toThrow('no');
+      expect(store.getSnapshot().labelConfig).toEqual({ ...HELD, dpi: 300 });
+    });
+
+    test('a rejected save on a venue that had no document goes back to having none', async () => {
+      const { store, data, saveLabelConfig, labelServer } = makeStore();
+      store.start();
+      labelServer(null);
+      saveLabelConfig.mockRejectedValueOnce(new Error('permission-denied'));
+      await expect(store.saveLabelProfile({ showDate: true })).rejects.toThrow('permission-denied');
+      expect(store.getSnapshot().labelConfig).toBeNull();
+      expect(data.get(LABEL_CONFIG_KEY)).toBe('null');
+    });
+
+    test('a source that throws at once is a rejection too, and the change is put back', async () => {
+      const { store, saveLabelConfig, labelServer } = makeStore({ [LABEL_CONFIG_KEY]: JSON.stringify(HELD) });
+      store.start();
+      labelServer(HELD);
+      saveLabelConfig.mockImplementationOnce(() => { throw new Error('sync'); });
+      await expect(store.saveLabelProfile({ dpi: 300 })).rejects.toThrow('sync');
+      expect(store.getSnapshot().labelConfig).toEqual(HELD);
+    });
+  });
+
+  // ── Writing recipes (step 3d-6) ──────────────────────────────────────────────
+
+  describe('saving and deleting a recipe, local-first', () => {
+    const FOCACCIA: StoredDoc = {
+      id: 'R1', name: 'Focaccia', lossPct: 12, rawGrams: 1000, cookedGrams: 880,
+      steps: [{ id: 's1', text: 'Mix', rows: ['rflour001'] }], endNote: 'Done', shelfLifeDays: 3,
+      ingredients: [{ label: 'Flour', grams: 1000, unit: 'g', rid: 'rflour001', kind: 'ingredient', refId: 'I1' }],
+    };
+    const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+
+    test('⚠️ the document is the hand-listed fields only: never the id, the oven loss, the steps or the closing message', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([FOCACCIA]);
+      store.saveRecipe({
+        id: 'R1', name: 'Focaccia alta', netWeightG: 250, shelfLifeDays: null,
+        ingredients: [
+          { label: 'Flour', grams: 1000, unit: 'g', rid: 'rflour001', kind: 'ingredient', refId: 'I1' },
+          { label: 'Salt', grams: 20, unit: 'g' },
+        ],
+      });
+      expect(saveRecipeDoc).toHaveBeenCalledTimes(1);
+      const [id, doc] = saveRecipeDoc.mock.calls[0]!;
+      expect(id).toBe('R1');
+      expect(Object.keys(doc).sort()).toEqual(['ingredients', 'name', 'netWeightG', 'shelfLifeDays']);
+      // An emptied shelf life travels as null, which the source turns into a removal.
+      expect(doc.shelfLifeDays).toBeNull();
+      expect(doc.netWeightG).toBe(250);
+    });
+
+    test('⚠️ a row that has an id keeps it (the SAME row), and a row without one gets a fresh random one', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([FOCACCIA]);
+      const flour = { label: 'Flour', grams: 1000, unit: 'g', rid: 'rflour001', kind: 'ingredient', refId: 'I1' };
+      store.saveRecipe({ id: 'R1', name: 'Focaccia', ingredients: [flour, { label: 'Salt', grams: 20, unit: 'g' }] });
+      const rows = saveRecipeDoc.mock.calls[0]![1].ingredients as Array<Record<string, unknown>>;
+      expect(rows[0]).toEqual(flour);
+      expect(rows[1]!.rid).toMatch(/^r[a-z0-9]{8}$/);
+      expect(rows[1]!.rid).not.toBe('rflour001');
+    });
+
+    test('a key holding undefined is left out of a row (Firestore would refuse the whole write)', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([]);
+      store.saveRecipe({ name: 'Pane', ingredients: [{ label: 'Flour', grams: 500, unit: 'g', kind: undefined, refId: undefined }] });
+      const row = (saveRecipeDoc.mock.calls[0]![1].ingredients as Array<Record<string, unknown>>)[0]!;
+      expect('kind' in row).toBe(false);
+      expect('refId' in row).toBe(false);
+    });
+
+    test('the list changes AT ONCE and the local copy keeps the loss, the steps and the closing message', () => {
+      const { store, server, data } = makeStore();
+      store.start();
+      server([FOCACCIA]);
+      store.saveRecipe({ id: 'R1', name: 'Focaccia alta', ingredients: FOCACCIA.ingredients as Array<Record<string, unknown>> });
+      const held = store.getSnapshot().recipes.find(r => r.id === 'R1') as unknown as Record<string, unknown>;
+      expect(held.name).toBe('Focaccia alta');
+      expect(held.lossPct).toBe(12);
+      expect(held.rawGrams).toBe(1000);
+      expect(held.cookedGrams).toBe(880);
+      expect(held.steps).toEqual(FOCACCIA.steps);
+      expect(held.endNote).toBe('Done');
+      // Not handed a shelf life: the box was emptied, so the local copy has none either.
+      expect('shelfLifeDays' in held).toBe(false);
+      expect(JSON.parse(data.get(RECIPES_KEY)!)[0].name).toBe('Focaccia alta');
+    });
+
+    test('a new recipe gets an id made on the phone (Firestore shape) and is in the list before the network answers', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([]);
+      saveRecipeDoc.mockReturnValueOnce(new Promise(() => undefined)); // offline: never answers
+      const id = store.saveRecipe({ id: null, name: 'Pane', ingredients: [{ label: 'Flour', grams: 500, unit: 'g' }] });
+      expect(id).toMatch(/^[A-Za-z0-9]{20}$/);
+      expect(store.getSnapshot().recipes.map(r => r.id)).toEqual([id]);
+    });
+
+    test('⚠️ a NEW recipe that carries a procedure (a duplicate) is created WITH it, shaped as saveProcedure shapes it', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([]);
+      const id = store.saveRecipe({
+        name: 'Focaccia (copy)',
+        ingredients: [{ label: 'Flour', grams: 1000, unit: 'g', rid: 'rflour001' }, { label: 'Salt', grams: 20, unit: 'g' }],
+        steps: [
+          { text: ' Mix ', rows: ['rflour001', 'rflour001', 'rgone0001'], seconds: '240', speed: '1' },
+          { text: '', rows: ['rgone0001'] },
+        ],
+        endNote: ' Rest ',
+      });
+      expect(saveRecipeDoc).toHaveBeenCalledTimes(1);
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect(Object.keys(doc).sort()).toEqual(['endNote', 'ingredients', 'name', 'netWeightG', 'shelfLifeDays', 'steps']);
+      // Trimmed, the row named twice named once, the row the copy no longer has taken out, the step left empty dropped.
+      expect(doc.steps).toEqual([{ text: 'Mix', rows: ['rflour001'], seconds: 240, speed: '1' }]);
+      expect(doc.endNote).toBe('Rest');
+      const held = store.getSnapshot().recipes.find(r => r.id === id) as unknown as Record<string, unknown>;
+      expect(held.steps).toEqual(doc.steps);
+    });
+
+    test('a step may point at a row that only got its id at this very save (the ids are minted first)', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([]);
+      store.saveRecipe({ name: 'Pane', ingredients: [{ label: 'Flour', grams: 500, unit: 'g' }], steps: [{ text: 'Mix', rows: ['rnothere1'] }], endNote: '' });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect(doc.steps).toEqual([{ text: 'Mix', rows: [], seconds: 0, speed: '' }]);
+    });
+
+    test('⚠️ an EXISTING recipe never has its procedure rewritten by a save, whatever the working copy carries', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([FOCACCIA]);
+      store.saveRecipe({
+        id: 'R1', name: 'Focaccia alta', ingredients: FOCACCIA.ingredients as Array<Record<string, unknown>>,
+        steps: [{ text: 'Something else' }], endNote: 'Other',
+      });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect(doc).not.toHaveProperty('steps');
+      expect(doc).not.toHaveProperty('endNote');
+      const held = store.getSnapshot().recipes.find(r => r.id === 'R1') as unknown as Record<string, unknown>;
+      expect(held.steps).toEqual(FOCACCIA.steps);
+    });
+
+    test('a new recipe that carries no procedure sends none (nothing empty is written)', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([]);
+      store.saveRecipe({ name: 'Pane', ingredients: [{ label: 'Flour', grams: 500, unit: 'g' }] });
+      expect(Object.keys(saveRecipeDoc.mock.calls[0]![1]).sort()).toEqual(['ingredients', 'name', 'netWeightG', 'shelfLifeDays']);
+    });
+
+    test('⚠️ a REFUSED save puts the version before it back, and says so with the typed name', async () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      const said = vi.fn();
+      store.onMessage(said);
+      store.start();
+      server([FOCACCIA]);
+      saveRecipeDoc.mockRejectedValueOnce(new Error('permission-denied'));
+      store.saveRecipe({ id: 'R1', name: 'Focaccia alta', ingredients: FOCACCIA.ingredients as Array<Record<string, unknown>> });
+      expect(store.getSnapshot().recipes[0]!.name).toBe('Focaccia alta');
+      await settle();
+      expect(store.getSnapshot().recipes[0]!.name).toBe('Focaccia');
+      expect(said).toHaveBeenCalledWith({ kind: 'recipe-not-saved', name: 'Focaccia alta' });
+    });
+
+    test('⚠️ a REFUSED new recipe leaves the list (it never existed), and a source that throws at once is a refusal too', async () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      const said = vi.fn();
+      store.onMessage(said);
+      store.start();
+      server([]);
+      saveRecipeDoc.mockImplementationOnce(() => { throw new Error('sync'); });
+      store.saveRecipe({ name: 'Pane', ingredients: [{ label: 'Flour', grams: 500, unit: 'g' }] });
+      await settle();
+      expect(store.getSnapshot().recipes).toEqual([]);
+      expect(said).toHaveBeenCalledWith({ kind: 'recipe-not-saved', name: 'Pane' });
+    });
+
+    test('a delete takes the recipe, its open count and its remembered batch away at once', () => {
+      const { store, server, removeRecipeDoc, data } = makeStore({
+        [USAGE_KEY]: JSON.stringify({ R1: 4, R2: 1 }),
+        [SCALED_KEY]: JSON.stringify({ R1: { target: 5000, ts: NOW } }),
+      });
+      store.start();
+      server([FOCACCIA, { id: 'R2', name: 'Pane', ingredients: [] }]);
+      store.deleteRecipe('R1');
+      expect(removeRecipeDoc).toHaveBeenCalledWith('R1');
+      expect(store.getSnapshot().recipes.map(r => r.id)).toEqual(['R2']);
+      expect(store.getSnapshot().usage).toEqual({ R2: 1 });
+      expect(store.getSnapshot().scaled).toEqual({});
+      expect(JSON.parse(data.get(RECIPES_KEY)!).map((r: { id: string }) => r.id)).toEqual(['R2']);
+    });
+
+    test('⚠️ a REFUSED delete puts the recipe back and says so', async () => {
+      const { store, server, removeRecipeDoc } = makeStore();
+      const said = vi.fn();
+      store.onMessage(said);
+      store.start();
+      server([FOCACCIA]);
+      removeRecipeDoc.mockRejectedValueOnce(new Error('permission-denied'));
+      store.deleteRecipe('R1');
+      expect(store.getSnapshot().recipes).toEqual([]);
+      await settle();
+      expect(store.getSnapshot().recipes.map(r => r.id)).toEqual(['R1']);
+      expect(said).toHaveBeenCalledWith({ kind: 'recipe-not-deleted' });
+    });
+
+    // ── The mixing procedure (step 3d-8) ──
+
+    const STEPS = [{ text: 'Mix', rows: ['rflour001'], seconds: 240, speed: '1' }];
+
+    test('⚠️ a procedure travels as steps + closing message ONLY when every row has an id, normalised, local-first', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([FOCACCIA]);
+      const ok = store.saveProcedure({
+        id: 'R1', name: 'Focaccia', endNote: '  24 °C  ',
+        steps: [{ text: ' Mix ', rows: ['rflour001', 'rflour001'], seconds: '240', speed: '1' }, { text: '', rows: [] }],
+        rows: FOCACCIA.ingredients as Array<Record<string, unknown>>,
+      });
+      expect(ok).toBe(true);
+      const [id, doc] = saveRecipeDoc.mock.calls[0]!;
+      expect(id).toBe('R1');
+      expect(Object.keys(doc).sort()).toEqual(['endNote', 'steps']);
+      expect(doc.steps).toEqual(STEPS);
+      expect(doc.endNote).toBe('24 °C');
+      const held = store.getSnapshot().recipes[0] as unknown as Record<string, unknown>;
+      expect(held.steps).toEqual(STEPS);
+      expect(held.endNote).toBe('24 °C');
+      // The rest of the recipe is untouched on the phone.
+      expect(held.lossPct).toBe(12);
+      expect(held.name).toBe('Focaccia');
+    });
+
+    test('⚠️ an EMPTY procedure is written as empty (a merge would otherwise keep the old steps)', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([FOCACCIA]);
+      store.saveProcedure({ id: 'R1', name: 'Focaccia', steps: [], endNote: '', rows: [] });
+      expect(saveRecipeDoc.mock.calls[0]![1]).toEqual({ steps: [], endNote: '' });
+      const held = store.getSnapshot().recipes[0] as unknown as Record<string, unknown>;
+      expect('steps' in held).toBe(false);
+      expect('endNote' in held).toBe(false);
+    });
+
+    test('⚠️ a row with no id takes the id the editor minted for it (same place, same name); a mismatch gets a fresh one', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([{
+        id: 'R2', name: 'Pane', ingredients: [
+          { label: 'Flour', grams: 1000, unit: 'g' },
+          { label: 'Water', grams: 600, unit: 'g', rid: 'rwater001' },
+          { label: 'Salt', grams: 20, unit: 'g' },
+        ],
+      }]);
+      store.saveProcedure({
+        id: 'R2', name: 'Pane', endNote: '',
+        steps: [{ text: 'Mix', rows: ['rnew00001', 'rnew00003'] }],
+        rows: [
+          { label: 'Flour', grams: 1000, unit: 'g', rid: 'rnew00001' },
+          { label: 'Water', grams: 600, unit: 'g', rid: 'rwater001' },
+          // Renamed on another phone since the editor opened: not matched.
+          { label: 'Sea salt', grams: 20, unit: 'g', rid: 'rnew00003' },
+        ],
+      });
+      const rows = saveRecipeDoc.mock.calls[0]![1].ingredients as Array<Record<string, unknown>>;
+      expect(rows.map(row => row.label)).toEqual(['Flour', 'Water', 'Salt']);
+      expect(rows[0]!.rid).toBe('rnew00001');
+      expect(rows[1]!.rid).toBe('rwater001');
+      expect(rows[2]!.rid).toMatch(/^r[a-z0-9]{8}$/);
+      expect(rows[2]!.rid).not.toBe('rnew00003');
+    });
+
+    test('⚠️ rows that GAINED ids since the editor opened (another phone): the steps are pointed at those ids, no rows sent', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([{
+        id: 'R3', name: 'Pane', ingredients: [
+          { label: 'Flour', grams: 1000, unit: 'g', rid: 'rserver01' },
+          { label: 'Water', grams: 600, unit: 'g', rid: 'rserver02' },
+        ],
+      }]);
+      store.saveProcedure({
+        id: 'R3', name: 'Pane', endNote: '',
+        steps: [{ text: 'Mix', rows: ['rlocal001', 'rlocal002', 'rserver01'] }],
+        rows: [
+          { label: 'Flour', grams: 1000, unit: 'g', rid: 'rlocal001' },
+          { label: 'Water', grams: 600, unit: 'g', rid: 'rlocal002' },
+        ],
+      });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect('ingredients' in doc).toBe(false);
+      // Flour named twice after the remap is named once.
+      expect((doc.steps as Array<{ rows: string[] }>)[0]!.rows).toEqual(['rserver01', 'rserver02']);
+    });
+
+    test('⚠️ a row sharing an earlier row id counts as a row with no id: it takes the editor id and the rows are sent', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([{
+        id: 'R4', name: 'Pane', ingredients: [
+          { label: 'Flour', grams: 1000, unit: 'g', rid: 'rsame0001' },
+          { label: 'Water', grams: 600, unit: 'g', rid: 'rsame0001' },
+        ],
+      }]);
+      store.saveProcedure({
+        id: 'R4', name: 'Pane', endNote: '',
+        steps: [{ text: 'Mix', rows: ['rsame0001', 'rfresh001'] }],
+        rows: [
+          { label: 'Flour', grams: 1000, unit: 'g', rid: 'rsame0001' },
+          { label: 'Water', grams: 600, unit: 'g', rid: 'rfresh001' },
+        ],
+      });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect((doc.ingredients as Array<Record<string, unknown>>).map(row => row.rid)).toEqual(['rsame0001', 'rfresh001']);
+      expect((doc.steps as Array<{ rows: string[] }>)[0]!.rows).toEqual(['rsame0001', 'rfresh001']);
+    });
+
+    test('⚠️ a refused procedure puts the version before it back and says so; a recipe not held writes nothing', async () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      const said = vi.fn();
+      store.onMessage(said);
+      store.start();
+      server([FOCACCIA]);
+      expect(store.saveProcedure({ id: 'GONE', name: 'X', steps: STEPS, endNote: '', rows: [] })).toBe(false);
+      expect(saveRecipeDoc).not.toHaveBeenCalled();
+      saveRecipeDoc.mockRejectedValueOnce(new Error('permission-denied'));
+      store.saveProcedure({ id: 'R1', name: 'Focaccia', steps: [], endNote: '', rows: [] });
+      await settle();
+      const held = store.getSnapshot().recipes[0] as unknown as Record<string, unknown>;
+      expect(held.steps).toEqual(FOCACCIA.steps);
+      expect(held.endNote).toBe('Done');
+      expect(said).toHaveBeenCalledWith({ kind: 'recipe-not-saved', name: 'Focaccia' });
+    });
+
+    test('the Calculator check: a linked tab → linked; an old cat-<id> copy → copy; nothing, no document or a refused read → null', async () => {
+      const { store, getCalculatorConfig } = makeStore();
+      getCalculatorConfig.mockResolvedValueOnce({ recipes: [{ id: 'cat-R1', name: 'Focaccia' }] });
+      await expect(store.calculatorImportOf('R1')).resolves.toBe('copy');
+      getCalculatorConfig.mockResolvedValueOnce({ recipes: [{ id: 'cat-R1', catalogueId: 'R1' }] });
+      await expect(store.calculatorImportOf('R1')).resolves.toBe('linked');
+      getCalculatorConfig.mockResolvedValueOnce({ recipes: [{ id: 'my-tab', catalogueId: 'R1' }] });
+      await expect(store.calculatorImportOf('R1')).resolves.toBe('linked');
+      getCalculatorConfig.mockResolvedValueOnce({ recipes: [{ id: 'cat-R2' }, { id: 'other', catalogueId: 'R2' }] });
+      await expect(store.calculatorImportOf('R1')).resolves.toBeNull();
+      getCalculatorConfig.mockResolvedValueOnce(null);
+      await expect(store.calculatorImportOf('R1')).resolves.toBeNull();
+      getCalculatorConfig.mockRejectedValueOnce(new Error('permission-denied'));
+      await expect(store.calculatorImportOf('R1')).resolves.toBeNull();
+      getCalculatorConfig.mockImplementationOnce(() => { throw new Error('sync'); });
+      await expect(store.calculatorImportOf('R1')).resolves.toBeNull();
+    });
+
+    test('importing into the Calculator asks the source, hands back its answer, and counts the recipe as used', async () => {
+      const { store, importIntoCalculator } = makeStore();
+      const recipe = normalizeCatalogueRecipe({ id: 'r1', name: 'Focaccia', ingredients: [{ label: 'Flour', grams: 100 }] })!;
+      importIntoCalculator.mockResolvedValueOnce('updated');
+      await expect(store.importIntoCalculator(recipe, 'Market order')).resolves.toBe('updated');
+      expect(importIntoCalculator).toHaveBeenCalledWith(recipe, 'Market order');
+      expect(store.getSnapshot().usage).toEqual({ r1: 1 });
+    });
+
+    test('⚠️ a refused import rejects with the very error and counts nothing', async () => {
+      const { store, importIntoCalculator } = makeStore();
+      const refusal = Object.assign(new Error('no'), { code: 'permission-denied' });
+      importIntoCalculator.mockRejectedValueOnce(refusal);
+      const recipe = normalizeCatalogueRecipe({ id: 'r1', name: 'Focaccia', ingredients: [] })!;
+      await expect(store.importIntoCalculator(recipe, 'Market order')).rejects.toBe(refusal);
+      expect(store.getSnapshot().usage).toEqual({});
+    });
+
+    test('⚠️ a read slower than 2.5 s never blocks the delete: it answers «not imported»', async () => {
+      vi.useFakeTimers();
+      try {
+        const { store, getCalculatorConfig } = makeStore();
+        getCalculatorConfig.mockReturnValueOnce(new Promise(() => undefined));
+        const answer = store.calculatorImportOf('R1');
+        await vi.advanceTimersByTimeAsync(2499);
+        let settled = false;
+        void answer.then(() => { settled = true; });
+        await vi.advanceTimersByTimeAsync(0);
+        expect(settled).toBe(false);
+        await vi.advanceTimersByTimeAsync(1);
+        await expect(answer).resolves.toBeNull();
+      } finally {
+        vi.useRealTimers();
+      }
+    });
+  });
+
+  describe('the image label’s two texts (labelName, labelIngredientsText — Mise 2 only)', () => {
+    const TORTA: StoredDoc = {
+      id: 'R1', name: 'Torta', ingredients: [{ label: 'Farina', grams: 500, unit: 'g', rid: 'rfarina01' }],
+      labelName: 'TORTA DI|PROVA', labelIngredientsText: 'INGREDIENTI: farina di GRANO, BURRO.',
+    };
+
+    test('⚠️ the store keeps them (the shared normaliser drops them), in the list and in the phone’s copy', () => {
+      const { store, server, data } = makeStore();
+      store.start();
+      server([TORTA, { id: 'R2', name: 'Pane', ingredients: [], labelName: '   ', labelIngredientsText: 7 }]);
+      const held = store.getSnapshot().recipes as unknown as Array<Record<string, unknown>>;
+      expect(held[0]!.labelName).toBe('TORTA DI|PROVA');
+      expect(held[0]!.labelIngredientsText).toBe('INGREDIENTI: farina di GRANO, BURRO.');
+      // Blank or not a string: no field.
+      expect('labelName' in held[1]!).toBe(false);
+      expect('labelIngredientsText' in held[1]!).toBe(false);
+      expect(JSON.parse(data.get(RECIPES_KEY)!)[0].labelName).toBe('TORTA DI|PROVA');
+    });
+
+    test('a save sends them trimmed when handed over, and an emptied one as null (the source removes it)', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([TORTA]);
+      store.saveRecipe({ id: 'R1', name: 'Torta', ingredients: TORTA.ingredients as Array<Record<string, unknown>>, labelName: '  TORTA  ', labelIngredientsText: '   ' });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect(doc.labelName).toBe('TORTA');
+      expect(doc.labelIngredientsText).toBeNull();
+      const held = store.getSnapshot().recipes.find(r => r.id === 'R1') as unknown as Record<string, unknown>;
+      expect(held.labelName).toBe('TORTA');
+      expect('labelIngredientsText' in held).toBe(false);
+    });
+
+    test('⚠️ a save that does not hand them over sends neither, and the phone’s copy keeps them', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([TORTA]);
+      store.saveRecipe({ id: 'R1', name: 'Torta alta', ingredients: TORTA.ingredients as Array<Record<string, unknown>> });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect('labelName' in doc).toBe(false);
+      expect('labelIngredientsText' in doc).toBe(false);
+      const held = store.getSnapshot().recipes.find(r => r.id === 'R1') as unknown as Record<string, unknown>;
+      expect(held.name).toBe('Torta alta');
+      expect(held.labelName).toBe('TORTA DI|PROVA');
+      expect(held.labelIngredientsText).toBe('INGREDIENTI: farina di GRANO, BURRO.');
+    });
+
+    test('the texts are cut to the rules’ bounds, so a save is never refused for their length', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([]);
+      store.saveRecipe({ name: 'Pane', ingredients: [], labelName: 'A'.repeat(250), labelIngredientsText: 'b'.repeat(2500) });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect((doc.labelName as string).length).toBe(200);
+      expect((doc.labelIngredientsText as string).length).toBe(2000);
+    });
+
+    test('the logo goes straight through to the source, and nothing of it is kept in the snapshot or in storage', async () => {
+      const { store, source, data } = makeStore();
+      const stop = vi.fn();
+      vi.mocked(source.watchLabelLogo).mockImplementation(() => stop);
+      const onChange = vi.fn();
+      const onError = vi.fn();
+      store.watchLabelLogo(onChange, onError)();
+      expect(source.watchLabelLogo).toHaveBeenCalledWith(onChange, onError);
+      expect(stop).toHaveBeenCalledTimes(1);
+      await store.saveLabelLogo({ png: 'data:image/png;base64,AAAA', width: 1320, height: 300 });
+      expect(source.saveLabelLogo).toHaveBeenCalledWith({ png: 'data:image/png;base64,AAAA', width: 1320, height: 300 });
+      await store.removeLabelLogo();
+      expect(source.removeLabelLogo).toHaveBeenCalledTimes(1);
+      expect(Object.keys(store.getSnapshot())).not.toContain('logo');
+      expect([...data.keys()].filter(key => /logo/i.test(key))).toEqual([]);
+    });
+  });
+
+  describe('the recipe shelf: a category and the archive (Mise 2 only, 25 Oct 2026)', () => {
+    const PANETTONE: StoredDoc = {
+      id: 'R1', name: 'Panettone', ingredients: [{ label: 'Farina', grams: 500, unit: 'g', rid: 'rfarina01' }],
+      category: ' Natale ', archived: true,
+    };
+
+    test('⚠️ the store keeps both fields (the shared normaliser drops them), in the list and in the phone’s copy', () => {
+      const { store, server, data } = makeStore();
+      store.start();
+      server([PANETTONE, { id: 'R2', name: 'Pane', ingredients: [], category: '  ', archived: 'yes' }]);
+      const held = store.getSnapshot().recipes as unknown as Array<Record<string, unknown>>;
+      expect(held[0]!.category).toBe('Natale');
+      expect(held[0]!.archived).toBe(true);
+      // Blank, or not a literal true: no field.
+      expect('category' in held[1]!).toBe(false);
+      expect('archived' in held[1]!).toBe(false);
+      const copy = JSON.parse(data.get(RECIPES_KEY)!);
+      expect(copy[0].category).toBe('Natale');
+      expect(copy[0].archived).toBe(true);
+    });
+
+    test('a save sends the category only when handed over: a word trimmed, «none» as null (the source removes it)', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([PANETTONE]);
+      const rows = PANETTONE.ingredients as Array<Record<string, unknown>>;
+      store.saveRecipe({ id: 'R1', name: 'Panettone', ingredients: rows, category: '  Dolci ' });
+      expect(saveRecipeDoc.mock.calls[0]![1].category).toBe('Dolci');
+      store.saveRecipe({ id: 'R1', name: 'Panettone', ingredients: rows, category: '' });
+      expect(saveRecipeDoc.mock.calls[1]![1].category).toBeNull();
+      const held = store.getSnapshot().recipes.find(r => r.id === 'R1') as unknown as Record<string, unknown>;
+      expect('category' in held).toBe(false);
+      // A word longer than the rules' bound is cut, so the save is never refused for it.
+      store.saveRecipe({ id: 'R1', name: 'Panettone', ingredients: rows, category: 'x'.repeat(150) });
+      expect((saveRecipeDoc.mock.calls[2]![1].category as string).length).toBe(100);
+    });
+
+    test('⚠️ a save that does not hand the category over sends neither field, and the copy keeps both (archived stays archived)', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([PANETTONE]);
+      store.saveRecipe({ id: 'R1', name: 'Panettone alto', ingredients: PANETTONE.ingredients as Array<Record<string, unknown>> });
+      const doc = saveRecipeDoc.mock.calls[0]![1];
+      expect('category' in doc).toBe(false);
+      expect('archived' in doc).toBe(false);
+      const held = store.getSnapshot().recipes.find(r => r.id === 'R1') as unknown as Record<string, unknown>;
+      expect(held.name).toBe('Panettone alto');
+      expect(held.category).toBe('Natale');
+      expect(held.archived).toBe(true);
+    });
+
+    test('⚠️ a save never sends the archived flag, whatever the caller hands over', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([]);
+      store.saveRecipe({ name: 'Pane', ingredients: [], archived: true } as unknown as Parameters<typeof store.saveRecipe>[0]);
+      expect('archived' in saveRecipeDoc.mock.calls[0]![1]).toBe(false);
+    });
+
+    test('archiving sends the flag ALONE, local-first; restoring sends a removal', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([{ ...PANETTONE, archived: undefined }]);
+      expect(store.setArchived('R1', true)).toBe(true);
+      expect(saveRecipeDoc).toHaveBeenLastCalledWith('R1', { archived: true });
+      expect((store.getSnapshot().recipes[0] as unknown as Record<string, unknown>).archived).toBe(true);
+      expect(store.setArchived('R1', false)).toBe(true);
+      expect(saveRecipeDoc).toHaveBeenLastCalledWith('R1', { archived: null });
+      expect('archived' in (store.getSnapshot().recipes[0] as unknown as Record<string, unknown>)).toBe(false);
+    });
+
+    test('nothing is written for a recipe not held, nor one already where it was asked to go', () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      store.start();
+      server([PANETTONE]);
+      expect(store.setArchived('nope', true)).toBe(false);
+      expect(store.setArchived('R1', true)).toBe(false);
+      expect(saveRecipeDoc).not.toHaveBeenCalled();
+    });
+
+    test('a refused archive puts the recipe back and says so, naming it', async () => {
+      const { store, server, saveRecipeDoc, warn } = makeStore();
+      saveRecipeDoc.mockImplementationOnce(() => Promise.reject(new Error('permission-denied')));
+      const said = vi.fn();
+      store.onMessage(said);
+      store.start();
+      server([{ ...PANETTONE, archived: undefined }]);
+      store.setArchived('R1', true);
+      await Promise.resolve();
+      await Promise.resolve();
+      expect('archived' in (store.getSnapshot().recipes[0] as unknown as Record<string, unknown>)).toBe(false);
+      expect(said).toHaveBeenCalledWith({ kind: 'recipe-not-archived', name: 'Panettone', archived: true });
+      expect(warn).toHaveBeenCalled();
+    });
+
+    test('⚠️ a refused archive does not undo a restore made after it', async () => {
+      const { store, server, saveRecipeDoc } = makeStore();
+      let refuse: (err: unknown) => void = () => undefined;
+      saveRecipeDoc.mockImplementationOnce(() => new Promise((_, reject) => { refuse = reject; }));
+      store.start();
+      server([{ ...PANETTONE, archived: undefined }]);
+      store.setArchived('R1', true);
+      store.setArchived('R1', false);
+      refuse(new Error('offline too long'));
+      await Promise.resolve();
+      await Promise.resolve();
+      expect('archived' in (store.getSnapshot().recipes[0] as unknown as Record<string, unknown>)).toBe(false);
+    });
+
+    test('the venue’s categories come from the label profile, normalised, the same list until the profile changes', () => {
+      const { store, labelServer } = makeStore();
+      store.start();
+      expect(store.getSnapshot().categories).toEqual([]);
+      labelServer({ widthMm: 57, recipeCategories: [' Natale', 'natale', 'Estate', 3] });
+      const first = store.getSnapshot().categories;
+      expect(first).toEqual(['Natale', 'Estate']);
+      store.bumpUsage('R1');
+      expect(store.getSnapshot().categories).toBe(first);
+    });
+
+    test('⚠️ the snapshot says when the server has answered about the profile (a cached list is not enough to write over)', () => {
+      const { store, labelCache, labelServer } = makeStore();
+      store.start();
+      labelCache({ widthMm: 57, recipeCategories: ['Natale'] });
+      expect(store.getSnapshot().labelConfigKnown).toBe(true);
+      expect(store.getSnapshot().labelConfigFromServer).toBe(false);
+      labelServer({ widthMm: 57, recipeCategories: ['Natale', 'Estate'] });
+      expect(store.getSnapshot().labelConfigFromServer).toBe(true);
+    });
+
+    test('adding a word is local-first and sends that word alone (arrayUnion), never the list', async () => {
+      const { store, labelServer, addRecipeCategoryWord, saveLabelConfig, data } = makeStore();
+      store.start();
+      labelServer({ widthMm: 57, recipeCategories: ['Natale'] });
+      const saved = store.addRecipeCategory('Estate');
+      expect(store.getSnapshot().categories).toEqual(['Natale', 'Estate']);
+      expect(JSON.parse(data.get(LABEL_CONFIG_KEY)!).recipeCategories).toEqual(['Natale', 'Estate']);
+      expect(addRecipeCategoryWord).toHaveBeenCalledWith('Estate');
+      expect(saveLabelConfig).not.toHaveBeenCalled();
+      await saved;
+      expect(store.getSnapshot().categories).toEqual(['Natale', 'Estate']);
+    });
+
+    test('a word can be added before the server has answered, and on a venue with no label profile', async () => {
+      const { store, labelCache, addRecipeCategoryWord } = makeStore();
+      store.start();
+      labelCache(null);
+      void store.addRecipeCategory('Estate');
+      expect(store.getSnapshot().categories).toEqual(['Estate']);
+      expect(addRecipeCategoryWord).toHaveBeenCalledWith('Estate');
+    });
+
+    test('⚠️ taking a word off sends every stored spelling of it, and the screen changes at once', async () => {
+      const { store, labelServer, removeRecipeCategoryWords } = makeStore();
+      store.start();
+      labelServer({ widthMm: 57, recipeCategories: ['Natale', 'Estate', 'natale '] });
+      const saved = store.removeRecipeCategory('NATALE');
+      expect(store.getSnapshot().categories).toEqual(['Estate']);
+      expect(removeRecipeCategoryWords).toHaveBeenCalledWith(['Natale', 'natale ']);
+      await saved;
+    });
+
+    test('⚠️ a refused add takes back ONLY that word: a word added meanwhile stays', async () => {
+      const { store, labelServer, addRecipeCategoryWord } = makeStore();
+      let refuse: (err: unknown) => void = () => undefined;
+      addRecipeCategoryWord.mockImplementationOnce(() => new Promise((_, reject) => { refuse = reject; }));
+      store.start();
+      labelServer({ widthMm: 57, recipeCategories: ['Natale'] });
+      const first = store.addRecipeCategory('Estate');
+      void store.addRecipeCategory('Pasqua');
+      expect(store.getSnapshot().categories).toEqual(['Natale', 'Estate', 'Pasqua']);
+      refuse(new Error('permission-denied'));
+      await expect(first).rejects.toThrow('permission-denied');
+      expect(store.getSnapshot().categories).toEqual(['Natale', 'Pasqua']);
+    });
+
+    test('⚠️ a refused remove puts back only that word', async () => {
+      const { store, labelServer, removeRecipeCategoryWords } = makeStore();
+      removeRecipeCategoryWords.mockImplementationOnce(() => Promise.reject(new Error('permission-denied')));
+      store.start();
+      labelServer({ widthMm: 57, recipeCategories: ['Natale', 'Estate'] });
+      await expect(store.removeRecipeCategory('Natale')).rejects.toThrow();
+      expect(store.getSnapshot().categories).toEqual(['Estate', 'Natale']);
+    });
+
+    test('⚠️ the categories are outside the label profile’s log: a refused label patch leaves a word, a refused word leaves a label setting', async () => {
+      const { store, labelServer, saveLabelConfig, addRecipeCategoryWord } = makeStore();
+      let refuseLabel: (err: unknown) => void = () => undefined;
+      saveLabelConfig.mockImplementationOnce(() => new Promise((_, reject) => { refuseLabel = reject; }));
+      store.start();
+      labelServer({ widthMm: 57 });
+      const label = store.saveLabelProfile({ widthMm: 40 });
+      void store.addRecipeCategory('Estate');
+      refuseLabel(new Error('permission-denied'));
+      await expect(label).rejects.toThrow();
+      expect(store.getSnapshot().categories).toEqual(['Estate']);
+      expect(store.getSnapshot().labelConfig).toMatchObject({ widthMm: 57, recipeCategories: ['Estate'] });
+
+      addRecipeCategoryWord.mockImplementationOnce(() => Promise.reject(new Error('permission-denied')));
+      await store.saveLabelProfile({ widthMm: 30 });
+      await expect(store.addRecipeCategory('Pasqua')).rejects.toThrow();
+      expect(store.getSnapshot().labelConfig).toMatchObject({ widthMm: 30, recipeCategories: ['Estate'] });
+    });
+  });
+
+  describe('the suppliers (names for the link chooser)', () => {
+    test('are watched, kept by id, and written to the current app\'s key as an array', () => {
+      const { store, supServer, data, watchSuppliers } = makeStore();
+      store.start();
+      expect(watchSuppliers).toHaveBeenCalledTimes(1);
+      supServer([{ id: 'S1', name: 'Brava Fresh' }]);
+      expect(store.getSnapshot().suppliers).toEqual({ S1: { id: 'S1', name: 'Brava Fresh' } });
+      expect(JSON.parse(data.get(SUPPLIERS_KEY)!)).toEqual([{ id: 'S1', name: 'Brava Fresh' }]);
+    });
+
+    test('the copy paints first; an empty answer from the browser\'s own database does not wipe it', () => {
+      const { store, supCache, supServer } = makeStore({ [SUPPLIERS_KEY]: JSON.stringify([{ id: 'S1', name: 'Latteria' }]) });
+      expect(store.getSnapshot().suppliers.S1?.name).toBe('Latteria');
+      store.start();
+      supCache([]);
+      expect(store.getSnapshot().suppliers.S1?.name).toBe('Latteria');
+      supServer([]);
+      expect(store.getSnapshot().suppliers).toEqual({});
+    });
+
+    test('a refused read is quiet (a warning, no message) and stop() ends the watch', () => {
+      const { store, supFail, warn, stopSuppliers } = makeStore();
+      const said = vi.fn();
+      store.onMessage(said);
+      store.start();
+      supFail();
+      expect(warn).toHaveBeenCalled();
+      expect(said).not.toHaveBeenCalled();
+      store.stop();
+      expect(stopSuppliers).toHaveBeenCalled();
+    });
+  });
+
+  test('the snapshot is the SAME object until something changes', () => {
+    const { store } = makeStore();
+    const first = store.getSnapshot();
+    expect(store.getSnapshot()).toBe(first);
+    store.bumpUsage('r1');
+    expect(store.getSnapshot()).not.toBe(first);
+  });
+});

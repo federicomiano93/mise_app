@@ -1,0 +1,30 @@
+/* The frame of Pastries. A phone, or a tablet held upright: the days on top, the chosen day under
+   them. From 1000px (the lab tablet held sideways is 1024 wide): the design's split, the days as
+   a list on the left (`--list-w`) and the day, the editor or Records on the right. */
+
+.layout {
+  display: grid;
+  gap: var(--s4);
+}
+
+.days,
+.detail {
+  min-width: 0;
+}
+
+/* The editor and Records take the whole screen of a phone and Back is the way out, so the days
+   are not left live above a form. On the split they stay, as the design draws it. */
+@media (max-width: 999.98px) {
+  .layout[data-view="editor"] .days,
+  .layout[data-view="records"] .days {
+    display: none;
+  }
+}
+
+@media (min-width: 1000px) {
+  .layout {
+    grid-template-columns: var(--list-w) minmax(0, 1fr);
+    gap: var(--s6);
+    align-items: start;
+  }
+}

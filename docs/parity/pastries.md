@@ -1,0 +1,255 @@
+# Parity list — Pastries
+
+What Mise 2's Pastries must do because the current app does it. Built from
+`tests/pastries-*.test.mjs`, `js/pastries/`, `firestore.rules` (the `pastries` and `pastry-logs`
+blocks), the smoke test and the release history. Each line is a requirement; the ones marked
+**spec** are pinned by a test in Mise 2 (a port runs the current app's tests against both files).
+Differences from the current app are listed at the end, each with its reason.
+
+## Data
+
+1. **Seven documents for ever**: `locations/{lid}/pastries/{Monday…Sunday}`. The ids are the
+   capitalised English weekday names — the same words suppliers store in `orderDays` — and are
+   DATA: never translated. A screen shows the translated label, looked up by id. **spec**
+2. **A day is written whole** (`setDoc`, no merge): `{ bakery, day, items: [{ name, qty }], note,
+   updatedAt }`. `bakery` is the open venue's id, stamped by the data layer, never by a caller;
+   `day` repeats the id; `updatedAt` is an ISO string. The rules refuse any other key and more
+   than 100 rows. There is no delete: emptying a day is `items: []`.
+3. **A save that omits the note keeps the note already there**; an explicit `''` clears it.
+4. **Reading is forgiving and never throws** (`normalizeDays`): all seven days always present;
+   a document whose id is not a weekday is ignored; where id and `day` disagree the id wins; at
+   most 100 rows are read (what you see is always something you can save); names trimmed, blank
+   rows dropped, names over 80 characters cut; a quantity is a whole number ≥ 0 (`1e999` → 0). **spec**
+5. **Local copy for the first paint**: localStorage `pastries-days`, shared with the current app
+   (same key, same shape `{ Monday: { items, note }, … }`). It also reads the older shape where
+   each day was the bare items array. It is painted before the network answers, and it is wiped
+   on a venue switch (it is not under `KEEP_PREFIXES`). **spec**
+6. **Saving is local-first**: the screen changes at once; if the server refuses, the day is put
+   back as it was and «Couldn't save {day} — check your connection.» is shown.
+7. **One live listener on the seven days**, started when Pastries opens (seven reads per opening).
+   If the stream dies: «Live sync interrupted — this list may be out of date.» An EMPTY answer
+   from Firestore's own offline copy is not believed, unless the phone's local copy said the venue
+   never had a pastry (PR #341); the listener asks for metadata changes, so the server's answer
+   still arrives. **spec**
+8. **Records** are `pastry-logs/{YYYY-MM-DD}_{Weekday}`, at most one per work date per day. They
+   are read only while the Records screen is open (`orderBy('date','desc')`, `limit(120)`), and the
+   listener is stopped on leaving it. Stream error: «Live sync interrupted — these records may be
+   out of date.»
+9. **Which days are confirmed tonight**: one equality query on `date == workDate`. A failure
+   leaves nothing confirmed, so nothing is locked (the safe direction). **spec**
+10. **Confirm writes the record in a transaction** that keeps the first `createdAt` of the night;
+    `id` is never sent as a field. Not optimistic: nothing shows as recorded until the write has
+    landed; once it has, the day shows as confirmed at once without waiting for the listener.
+    Failure: «Couldn't record {day} — check your connection.» **spec** (buildLog)
+11. **A record is removed only by a person**: the bin on Records, after a danger confirm. Nothing
+    in the app deletes a record by itself. Failure: «Couldn't remove that record — check your
+    connection.»
+
+## Time
+
+12. **The work day rolls at 4am**, computed with `setHours` on the local calendar (right on both
+    clock-change Sundays and in a zone with no daylight saving). **spec**
+13. **The opening day** is the day after the work day under way («tomorrow»), computed once when
+    Pastries is opened, so it never jumps under a finger at 4am (Mise 2 also recomputes it when the
+    app comes back to the foreground: see the differences). **spec** (`provingDayFor`)
+14. **The lock follows the clock**: at 4am the confirmations are asked again for the new work
+    date (a timer to the next 4am, plus a check when the app comes back to the foreground,
+    because a phone in a pocket throttles timers). **spec** (`msUntilWorkDayEnd`)
+15. **Records show the last 15 days** — a display window only. A record nobody can date is shown,
+    one dated ahead of this clock is shown. **spec**
+
+## The day
+
+16. Each row: the name on the left, the quantity on the right in same-width digits. Nothing is a
+    field until the row is tapped.
+17. **Correcting one number**: tapping a row opens an EMPTY box (placeholder 0) under it and
+    closes any other open row. The tick appears only for a usable number (1–9999 and different
+    from the current one); the hint says «type a number» / «same as now» / «must be at least 1» /
+    «too many». Enter confirms. The write is composed from the live list at that moment and
+    refused if the row is no longer the one typed into (index AND name, case-insensitive):
+    «That row has changed — check the list.» On success: «{name}: {n}.» **spec** (`setQuantityAt`)
+18. **What this phone has typed survives a snapshot** from another phone (kept by pastry name),
+    as do the scroll position and the focus in the box.
+19. Empty day: «Nothing to prove for {day} yet.» / «Tap the pencil to add.» Before the first answer
+    of the days, an empty list says «The list hasn’t arrived yet.» instead. **spec**
+20. The day's standing note is shown under the list when there is one.
+21. The opening day is subtitled «Tomorrow · to prove», every other day «To prove».
+22. **Confirm** reads tonight's record once, then asks «Confirm {day}?» with «Keep this list as a
+    record for {day}?» (or «{day} has nothing to prove. Record that?»), followed by «Tonight's
+    record for {day} will be replaced.» when one exists, else «{day} will show as done. You can
+    still change it — it will ask first.» After it: «{day} recorded.», the «Confirmed» mark and
+    an Edit button replace Confirm. A second tap while the dialog is open does nothing.
+23. **A confirmed day is locked until 4am.** Tapping a row, Edit or the pencil asks «Edit
+    {day}?» / «{day} is already recorded for tonight. Edit these quantities?». Yes stores a
+    permission in localStorage `pastries-edit-{Weekday}` = tonight's work date, then opens the
+    row that was tapped. A Confirm spends the permission; 4am spends it too. Uncertain answers
+    (no record, unreadable clock) never lock. **spec**
+24. A colleague's Confirm locks the day here too and closes any open row.
+
+## The days (strip on a phone, list on a tablet)
+
+25. Seven days, Monday first. The short label is its own dictionary entry, never the first three
+    letters of the full name (a translated word cannot be cut safely); the full name is the
+    accessible name.
+26. A tablist: arrows (both pairs), Home and End move the selection, only the selected day is in
+    the Tab order, focus follows the selection. Phone: a row; tablet: a column.
+27. The opening day carries a marker; a day with nothing in it is drawn quieter; each day shows
+    how many pastries (kinds, not pieces) it holds.
+
+## The editor
+
+28. A working copy; nothing is stored until Save. It always has at least one row; quantities are
+    held as text while typed (an empty box stays empty).
+29. Name suggestions: the names on the other six days, sorted.
+30. «Add pastry» adds an empty row and puts the cursor in it.
+31. Removing a row: no question for an untouched row; otherwise «Remove this pastry?» / «Remove
+    {name} from {day}?» (danger).
+32. **Save is blocked**, the offending field highlighted and the person taken to it, by: the same
+    name twice (case-insensitive) «{name} is on this list twice.»; a name with no number «How many
+    {name}?»; a name over 80 characters «That name is too long.»; a quantity over 9999 «9999 is
+    the most this can hold.»; more than 100 rows «That is more pastries than one day can hold.»
+    A blank row is dropped, never an error; an empty list is valid. **spec**
+33. Save asks «Save {day}?» with «Save these {n} pastries for {day}?» (or «{day} will have nothing
+    to prove. Save that?»), stores, says «{day} saved.» and returns to the day.
+34. Leaving with unsaved changes (rows or note) asks «Discard changes?» / «You have unsaved
+    changes to {day}. Discard them?» (danger).
+35. The note: a text area of up to 500 characters, labelled «Note — stays on {day} until you
+    change it», placeholder «Anything worth remembering about this day…». Line breaks are kept.
+    **spec**
+
+## Records
+
+36. Newest first; two records on one date keep the weekday order. **spec**
+37. Each card: the date spelled «Wed 5 Aug» in the interface language, a badge with the list's
+    weekday (a Wednesday list is confirmed on Tuesday night), the rows, «Nothing was proved.» when
+    empty, the note as it was that night, and a bin labelled «Remove the record for {day},
+    {date}». Removing asks «Remove this record?» / «… This cannot be undone.» and says «Record
+    removed.»
+38. Empty: «No records yet.» / «Tap Confirm at the bottom of a day to keep one.» Under the list:
+    the line saying older records are kept and only the last 15 days are shown. Subtitle «Last 15
+    days».
+
+## Everywhere
+
+39. Interface words follow the interface language; a weekday shown is its label, never its id.
+    Pastry names are what people typed.
+40. Usage record: the day, the editor and Records are separate screens; Confirm is the action
+    `pastry-day-confirmed`.
+41. Pastries exists only for those the venue shows it to; the rules decide (`canUse(lid,
+    'pastries')`).
+42. A screen that fails to draw never stops the data: one part failing leaves the others working.
+
+## Differences from the current app, on purpose
+
+- **Tablet**: the days are a list on the left and the chosen day, the editor and Records open on
+  the right. Tapping another day with unsaved edits asks «Discard changes?» — the same question as
+  Back — instead of hiding the days while editing.
+- **Errors in the editor**: a notice at the top and the field outlined in red with the sentence
+  under it, instead of a message that disappears (the design's form pattern). Save stays blocked.
+- **Translated**: the editor's pastry count and the labels of the quantity box and of the bin were
+  English on every venue.
+- **Messages** are announced in a status region that exists before it changes, instead of a toast
+  inserted already filled.
+- **The editor asks the lock question itself when it is opened by its address.** The current app's
+  editor has no address, so its only doors are the pencil and the Edit button, and each asks. Mise 2's
+  editor can be reached by a reload or a bookmark, which comes through no door: once the seven days
+  AND tonight's confirmations have answered, a recorded day asks «Edit {day}?» once (the words of 23).
+  Edit grants the permission and the form opens; Cancel goes to the day, replacing the editor in the
+  history. Until both answers are in it never shows the form: «The list hasn’t arrived yet — it opens as
+  soon as it does.» while the days are missing, «Loading…» after. It is not asked
+  again while editing (a colleague confirming meanwhile changes nothing, as in the current app), and
+  not at all from the pencil, whose door has already asked.
+- **Quick edit and Confirm wait for BOTH first answers: the seven days and tonight's
+  confirmations.** Until they come (the device's own cache counts, so working offline is
+  unaffected) the list on screen is only the phone's old copy, possibly days old, and «not
+  confirmed» only means «nobody has said yet». It is drawn at once, but a row ignores a tap (it is
+  `aria-disabled`, not removed from the keyboard's path) and Confirm is disabled, so nothing can be
+  written or recorded from a stale list, and a recorded day cannot be edited without its question.
+  Once in, they stay in: a 4am refresh does not turn the rows off again. Since PR #341 the current
+  app does the same; the difference left is that Mise 2's pencil opens the editor, which waits, where
+  the current app's pencil waits on the day with a message. **spec**
+- **The opening day follows a return to the app.** Line 13 stands: the day is worked out when
+  Pastries opens and does not move while the app is on screen. But Mise 2 never reloads by itself, so
+  a tablet left open across 4am would keep saying «Tomorrow» of the day it was opened on. When the
+  app comes back to the foreground and the work date has moved on, «Tomorrow» and the address
+  `/pastries` follow it. A day named in the address stays where it is.
+- **A failed download of the section reloads the page.** «This part didn't load» with «Reload» is as
+  in every part, but for a section whose code could not be downloaded «Reload» reloads the whole page:
+  the browser remembers a failed import until the page is loaded again, so drawing the part again
+  would only fail again. Any other failure is still drawn again.
+- **The focus follows the bottom buttons and the days.** When Confirm lands, the «Confirmed» row takes
+  Confirm's place and the focus goes to its Edit button; when Edit unlocks the day, it goes to
+  Confirm. Only when the focus was on the button that goes (or nowhere): a colleague's Confirm moves
+  nobody's focus. After an arrow key or a tap on a day is refused («Discard changes?» → Cancel), the
+  focus goes back to the day being edited. A number being typed keeps the box and its focus when
+  another phone removes a row above it.
+- **Italian sentences reworded so they read right with «Domenica»** (a feminine day; the other six
+  are masculine). Only in Mise 2's dictionary; the current app's copy is fixed separately. A
+  spec reads every Italian Pastries sentence that names a day.
+  - `past.daySaved`: «{day} salvato.» becomes «Salvato: {day}.»
+  - `past.alreadyRecordedTonight`: «{day} è già registrato per stanotte. Modificare queste quantità?»
+    becomes «La lista di {day} è già registrata per stanotte. Modificare queste quantità?»
+  - `past.willShowAsDone`: «{day} risulterà fatto. Puoi ancora cambiarlo — te lo chiederà prima.»
+    becomes «La lista di {day} risulterà fatta. Puoi ancora cambiarla — te lo chiederà prima.»
+- **Italian quantity prompts reworded so they fit any pastry name** (a name can be feminine or
+  plural: «Quanti Sfogliatelle?» is wrong). Only in Mise 2's dictionary, like the line above.
+  - `past.howMany`: «Quanti {name}?» becomes «Manca la quantità di {name}.»
+  - `past.howManyOf` (the quantity box's name, Mise 2 only): «Quantità di {name}»
+
+## Row notes as built (8 Nov 2026)
+
+Port of the notes half of the current app's PR #446 (item 1 of `docs/mise2-port-owed.md`). Before it Mise 2 rebuilt each row as
+`{name, qty}` and its first save of a day erased every note of that day.
+- Shared model: `MAX_ITEM_NOTE_LENGTH` (40), `cleanItemNote` (one line), `otherWeekdays`; a row carries `note` only when there is
+  one (no empty key), a corrected quantity keeps it, and the record frozen in `pastry-logs` keeps it too.
+- Editor: a third box per row, «Note, e.g. 9x3», on a line of its own under name and quantity at every width (DIFFERENCE: the current app
+  puts it beside them on a tablet; here the focus order would then differ from the one drawn, and the lab tablet's split
+  has no room for four boxes); a row holding only a note asks before it goes. The day list and the records show the whole
+  note beside the number (it wraps, never cut short).
+- «Copy day», the other half, is below («Copy day as built»).
+
+## Copy day as built (8 Nov 2026)
+
+Port of the «Copia giorno» half of the current app's PR #446 and of `ae7a415a` (`js/pastries/pastries-main.js`,
+`copyShownDay`; pinned there by `tests/pastries-copy-day.test.mjs`, here by `app/src/pastries/PastriesSection.copy.spec.tsx`).
+With it, item 1 of `docs/mise2-port-owed.md` is done.
+
+What it does, as the current app does:
+- «Copy day» sits under the day's bottom row, beside Records, on every day (also an empty one, and before the first answers).
+- Until the seven days AND tonight's confirmations have answered it only says «The list hasn’t arrived yet — try again in a
+  moment.» and opens nothing (it does not open by itself later). An empty day says there is nothing to copy.
+- The picker «Copy the list of {day}?»: the six other days as radio rows, the next day first and already chosen, each with
+  its count or «Nothing». Cancel writes nothing and goes nowhere; a second tap while it is open adds nothing.
+- A target that has rows asks «Replace the list of {day}?» (with the count, singular or plural, and the source); a recorded
+  target asks the lock question «Edit {day}?». Everything is looked at again after every answer (the source emptied, the
+  target filled or confirmed by another phone meanwhile, the person gone to another day), each question at most once.
+- NOTHING IS WRITTEN BY THE COPY. It opens the TARGET's editor pre-filled with the source's rows — names, quantities and
+  row notes — and the target's OWN standing note (the source's is not brought across). The editor is unsaved from the
+  start (Back and every way out through the router's blocker ask; a browser reload asks nothing, as in the current
+  app), and says «The list of {day} has been copied here. Check it, then tap
+  Save to keep it.» Only its Save writes, the same payload as any save (`day`, `items` with `note` only where there is one,
+  `note`, `bakery`, `updatedAt`: nothing the current app writes is dropped).
+- ⚠️ The permission to change a recorded target comes with the copy's SAVE, never with opening it (`ae7a415a`): a copy
+  thrown away leaves the recorded day locked; a permission the day already had survives.
+- Back returns to the source day; Save lands on the target day.
+
+Differences, on purpose:
+- **The copied editor has its own address** (`/pastries/{target}/edit`, as every editor here), so on a tablet the days list
+  shows the TARGET selected while it is open; the current app hides the strip and leaves the source's tab selected (and
+  removes the panel's label for that reason). Save replaces the editor's history entry with the target day, so Back
+  from there goes to the source day the copy started on (one step, never through the editor again).
+- **The copy goes from the day to its editor in the history entry's state** (`copyOf` in `pastriesNav.ts`, read as
+  untrusted), and the opening that reads it SPENDS it: the editor takes it out of the entry at once (same address,
+  replaced). So a reload, or the browser's Forward after a Discard, opens an ordinary edit of the target with its own
+  questions, never the copy again without «Replace the list of {day}?» (code review, 8 Nov 2026). As in the current app, a
+  reload loses an unsaved copy. A source emptied before the editor opens, or a state that is not exactly a copy request,
+  makes it an ordinary edit too (an empty copy would only wipe the target). The «Edit» already said on the day carries
+  tonight's work date and is honoured only on that work date.
+- **The focus goes back to «Copy day»** when a copy is thrown away, as it goes back to the pencil after an ordinary edit.
+- **Messages in the status region**, not toasts (as everywhere in Mise 2). The «copied here» line is its own live region,
+  on the page empty and filled right after (the project's rule for live regions); a screen reader check on the real
+  tablet is still owed, as for every live region.
+- **The day strip's tabs are at least 44px wide** (with a 2px gap; 7 x 44 + 6 x 2 = 320 fits a 360px phone's 328px strip,
+  and below that the strip scrolls inside itself), up from 40px, so every day is a full touch target
+  (`pastriesCss.spec.ts`).
+- **Not ported: the help line** `help.copyDay`. Mise 2 has no help screen for Pastries yet; it comes with that screen.

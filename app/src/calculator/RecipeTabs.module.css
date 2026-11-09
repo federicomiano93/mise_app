@@ -1,0 +1,50 @@
+/* The recipes as tabs: a strip of up to four chips that scrolls sideways rather than squeezing a name
+   into a sliver. The selected tab is a frame and a tint, never a solid fill. */
+
+.list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  padding: 2px;
+}
+
+/* ⚠️ THE TABS WRAP ONTO A SECOND ROW; THEY DO NOT SCROLL SIDEWAYS. At 296px the three names of a real venue need
+   289px and the strip has 264: a tab cut off at the edge is a tab nobody knows is there. The order in the
+   document (and so the keyboard's) is the order on screen, row by row. */
+.tab {
+  flex: 1 1 auto;
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Inside the chip: the list clips whatever sticks out of it. */
+.tab:focus-visible {
+  outline-offset: -3px;
+}
+
+.tab[aria-selected="true"] {
+  border-color: var(--accent);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+@media (hover: hover) {
+  .tab:hover:not([aria-selected="true"]) {
+    background: var(--sunken);
+  }
+}
+
+/* A lone recipe: its name, as a title. */
+.title {
+  font-size: var(--fs-xl);
+  font-weight: 650;
+}

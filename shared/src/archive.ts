@@ -1,0 +1,635 @@
+// archive.ts — turning a draft into history records, the pure half that the Orders list and the draft
+// writer need. No Firestore here.
+//
+// TypeScript port of js/orders/archive.js for Mise 2. PORTED, identical input for input: wholeNumber, historyDocId,
+// isLegacyRecord, recordDate, ingredientsOf, supplierHasItems, buildSupplierArchive, ingredientLabel,
+// ingredientDisplayLabel, compareByLabel, sortByLabel, quantityPathsFor, changedEntries, changedDays, mergeArchives
+// (with its private carriedMissing and sendsBefore), sendIdFor, MAX_SENDS, capSends, unitConflicts, unitConflictList
+// and — since slice 3f-4, History — withCorrection, recordSends, sendSections, splitHistoryByAge, countRecords and
+// groupHistoryByDay. archive.spec.ts compares them with the js/ file's own exports and runs the matching tests;
+// odd-inputs.spec.ts feeds both the same strange values.
+//
+// ⚠️ ADAPTED, SO parity.spec.ts DOES NOT PAIR IT: recordedName takes the word for a deleted ingredient as a fourth
+// argument (the original reads it from the dictionary, and shared/ never imports the dictionary).
+//
+// ONE ADDITION with no original: isUnitConflict, the type guard for the error mergeArchives throws
+// (the original's callers read `err.code` on an untyped catch).
+//
+// An order is one DAY and one SUPPLIER: orders-history/{YYYY-MM-DD}_{supplierId}.
+// Marking a supplier as placed must not touch the quantities already typed for the
+// supplier you order on Thursday, so every function below works on ONE supplier's
+// slice of the shared draft.
+//
+// The field names `quantities` and `stock` are deliberately unchanged from the
+// old weekly model: the legacy weekly documents (one per ISO week, all suppliers
+// merged) stay readable by both the history view and the suggestion engine, so
+// nothing had to be migrated.
+
+import { ingredientDisplayName } from './ingredient-name';
+import { supplierLabel } from './supplier-label';
+import { compareLabels } from './order-text';
+import {
+  cleanUnit, sameUnit, lineUnit, entryUnit, recordUnit, inPackages, addableInPackages, hasUnitChoice,
+} from './order-unit';
+import { overrideOf, cleanSupplierId } from './line-supplier';
+import { toISODate, addDays, isBefore } from './day';
+
+// A quantity, made safe: whole, never negative, never NaN — and never Infinity.
+//
+// THE ONE definition, shared by every screen that reads a typed number (the order
+// rows, the History editor). `Number(v) || 0` alone let Infinity through: a number
+// field accepts `1e999`, and Firestore refuses to store a non-finite number, so
+// every save afterwards failed while the row on screen looked perfectly normal.
+export function wholeNumber(v?: unknown): number {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+const num = wholeNumber;
+
+export function historyDocId(date: unknown, supplierId: unknown): string {
+  return `${date}_${supplierId}`;
+}
+
+// A record written by the old weekly model has no supplierId.
+export function isLegacyRecord(record?: unknown): boolean {
+  return !(record as { supplierId?: unknown } | null | undefined)?.supplierId;
+}
+
+// The day a record belongs to, whichever model wrote it.
+export function recordDate(record?: unknown): string {
+  const r = record as { date?: string; weekStart?: string } | null | undefined;
+  return r?.date || r?.weekStart || '';
+}
+
+interface Row { id?: unknown; supplierId?: unknown; active?: unknown; name?: unknown; weight?: unknown }
+
+// This supplier's ingredients. activeOnly is the right lens for anything the
+// operator SEES (counting, nagging); pass false when CLEARING the draft, or a
+// quantity left on a since-deactivated ingredient would sit there forever,
+// invisible and unclearable.
+export function ingredientsOf<T>(supplierId: unknown, ingredients?: readonly T[] | null, { activeOnly = true }: { activeOnly?: boolean } = {}): T[] {
+  return (ingredients || []).filter(i =>
+    (i as Row).supplierId === supplierId && (!activeOnly || (i as Row).active !== false));
+}
+
+// Does this supplier have anything worth recording? (Stock on its own is not an
+// order — see the note in buildSupplierArchive of the original.)
+export function supplierHasItems(supplierId: unknown, ingredients?: readonly unknown[] | null, entries?: unknown): boolean {
+  const byId = entries as Record<string, { qty?: unknown } | undefined> | null | undefined;
+  return ingredientsOf(supplierId, ingredients).some(i => num(byId?.[(i as { id: string }).id]?.qty) > 0);
+}
+
+// One send inside a record's `sends`: this order as it was placed, with its time.
+export interface SupplierSend { at: string; quantities: Record<string, number>; units?: Record<string, string>; kind?: string }
+
+// A history record, as buildSupplierArchive writes it. The optional fields are written later by
+// other screens (the delivery answer) and are carried through mergeArchives.
+export interface SupplierRecord {
+  date: string;
+  supplierId: string;
+  supplierName: string;
+  quantities: Record<string, number>;
+  stock: Record<string, number>;
+  sends: Record<string, SupplierSend>;
+  names: Record<string, string>;
+  units?: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+  missing?: Record<string, boolean>;
+  missingResolved?: Record<string, string>;
+  deliveredAt?: string;
+}
+
+// Build the history payload for ONE supplier out of the shared draft entries.
+// Returns null when nothing was ordered — there is no such thing as an empty order.
+//
+// `quantities` holds ONLY rows with qty > 0, and that is load-bearing: it is the
+// map the suggestion engine averages over. A "stock was full so I ordered 0" row
+// has a HIGH level (stock + 0) and there is no matching downward pull, so
+// recording it would ratchet the par level up week after week. `stock` may hold
+// the reading for any filled-in row; the engine ignores rows absent from
+// `quantities`, so it costs nothing and keeps the raw reading for later.
+export function buildSupplierArchive(
+  { supplier, ingredients, entries, date, now = new Date() }:
+  { supplier: { id: string }; ingredients?: readonly unknown[] | null; entries?: unknown; date: string; now?: Date },
+): SupplierRecord | null {
+  const quantities: Record<string, number> = {};
+  const stock: Record<string, number> = {};
+  const names: Record<string, string> = {};
+  const units: Record<string, string> = {};
+  const byId = entries as Record<string, { qty?: unknown; stock?: unknown } | undefined> | null | undefined;
+
+  ingredientsOf(supplier.id, ingredients).forEach(ing => {
+    const id = (ing as { id: string }).id;
+    const entry = byId?.[id];
+    if (!entry) return;
+    const qty = num(entry.qty);
+    const onHand = num(entry.stock);
+    if (qty > 0) {
+      quantities[id] = qty;
+      names[id] = ingredientLabel(ing);
+      // Frozen for every line that HAD a choice (even the default one: «1 cartone» and
+      // «1 busta» are different orders) and for any non-default unit. A line with no
+      // choice stays out, so an ordinary record keeps its old shape.
+      const unit = lineUnit(ing, entry);
+      if (unit) units[id] = unit;
+    }
+    if (qty > 0 || onHand > 0) stock[id] = onHand;
+  });
+
+  if (!Object.keys(quantities).length) return null;
+
+  const timestamp = now.toISOString();
+  return {
+    date,
+    supplierId: supplier.id,
+    supplierName: supplierLabel(supplier),
+    quantities,
+    stock,
+    // This order as it was placed, with its time (see sendIdFor / mergeArchives). A second
+    // order the same day adds its own entry here while `quantities` becomes the day's total.
+    sends: {
+      [sendIdFor(timestamp)]: {
+        at: timestamp,
+        quantities: { ...quantities },
+        ...(Object.keys(units).length ? { units: { ...units } } : {}),
+      },
+    },
+    // What each item was CALLED on the day. The screen prefers the live ingredient
+    // (a rename should show through everywhere), so this is only read once the
+    // ingredient is gone — and then it is the only thing standing between a past
+    // order and a row of raw document ids. Same reasoning as supplierName, which has
+    // been frozen into the record since the per-day model.
+    names,
+    ...(Object.keys(units).length ? { units } : {}),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+}
+
+// The label an order shows for an ingredient: "Bacon 2.27kg". One definition, so a
+// name frozen into a record matches what the live row would have shown.
+//
+// ⚠️ THIS IS THE LABEL OF WHAT WAS SENT: it keeps the INVOICE name on purpose, and it is what is
+// frozen into `names`. To put an ingredient on a SCREEN use ingredientDisplayLabel below.
+export function ingredientLabel(ing?: unknown): string {
+  const r = ing as Row | null | undefined;
+  return [r?.name, r?.weight].filter(Boolean).join(' ');
+}
+
+// The label a SCREEN shows for an ingredient: the «name to show» when there is one (ingredient-name.ts),
+// else the name, then the weight. Never written into a record and never sent to a supplier.
+export function ingredientDisplayLabel(ing?: unknown): string {
+  return [ingredientDisplayName(ing), (ing as Row | null | undefined)?.weight].filter(Boolean).join(' ');
+}
+
+// The order every list of a supplier's products is read in: by the label a person reads,
+// numerically («Flour 5kg» before «Flour 25kg» — the message's own compareLabels), then by
+// id, so two identical labels cannot swap places between repaints and make the rows jump
+// under the eye. A nameless item has an empty label and so sorts first — it stays visible
+// at the top instead of hiding.
+export function compareByLabel(a?: unknown, b?: unknown): number {
+  return compareLabels(ingredientDisplayLabel(a), ingredientDisplayLabel(b))
+    || String((a as Row | null | undefined)?.id).localeCompare(String((b as Row | null | undefined)?.id));
+}
+
+// A sorted COPY — the caller's list is the shared state and is never reordered.
+export function sortByLabel<T>(list?: readonly T[] | null): T[] {
+  return (list || []).filter(Boolean).slice().sort(compareByLabel);
+}
+
+// The draft fields to delete when the operator throws away what they have typed
+// for one or more suppliers, WITHOUT recording an order.
+//
+// Two things make this different from clearSupplier, and both were asked for:
+//   * only `entries.<id>.qty` goes, never the whole row — so the STOCK reading
+//     survives. Counting the shelves is work already done, and starting the order
+//     again should not mean counting them again.
+//   * several suppliers in one list, so the whole thing is ONE Firestore write with
+//     no half-cleared state in between (P14 as well: one operation, not N).
+//
+// The day stamp goes with the quantities: `days.<supplierId>` records when those
+// rows were typed, and with nothing left to order it would describe nothing.
+//
+// ⚠️ NOTHING HERE TOUCHES orders-history. Clearing the draft is not the same as
+// deleting an order: anything already recorded stays recorded, and the suggestion
+// engine — which reads only the history — is unaffected.
+//
+// ⚠️ Uses the UNFILTERED ingredient list, exactly like clearSupplier: a quantity
+// left on a since-deactivated product is invisible on screen but still in the
+// document, and skipping it would leave a row nobody can see or clear.
+export function quantityPathsFor(supplierIds?: readonly unknown[] | null, ingredients?: readonly unknown[] | null): string[] {
+  const ids = (supplierIds || []).filter(Boolean);
+  const paths: string[] = [];
+  ids.forEach(supplierId => {
+    ingredientsOf(supplierId, ingredients, { activeOnly: false })
+      .forEach(ing => {
+        const id = (ing as { id?: unknown }).id;
+        paths.push(`entries.${id}.qty`);
+        // The unit goes with the quantity: a cleared row starts again in the card's own
+        // unit (the default), never in whatever the last order happened to use.
+        paths.push(`entries.${id}.unit`);
+        // ⚠️ AND THE OVERRIDE (line-supplier.ts): it never outlives the quantity it
+        // redirects, or the next quantity typed for this ingredient would go to a supplier
+        // nobody chose this time.
+        paths.push(`entries.${id}.supplierId`);
+      });
+    paths.push(`days.${supplierId}`);
+  });
+  return paths;
+}
+
+export interface EntryChange { qty: number; stock: number; unit?: string; supplierId?: string }
+
+// The slice of the draft that actually CHANGED since the copy we last agreed on
+// with the server — the only thing an autosave has any business sending.
+//
+// ⚠️ THIS IS A CONCURRENCY FIX, not a saving of bytes. The autosave used to send
+// the WHOLE entries map. Firestore merges a map key by key, so every save also
+// re-asserted every OTHER row at the value this phone happened to hold — and a
+// quantity a colleague had typed seconds earlier, not yet arrived here, was
+// silently rewritten back to its old value. Two people ordering at once is
+// normal in a kitchen, and nothing on either screen showed what had happened.
+//
+// Sending only the changed keys makes the merge do what it looks like it does:
+// untouched rows are not mentioned, so nobody else's work is overwritten.
+//
+// A key with no counterpart in `known` counts as changed (it is new), and both
+// fields are compared through the same clamp the UI applies, so "" and 0 are not
+// mistaken for a change.
+export function changedEntries(next?: unknown, known?: unknown): Record<string, EntryChange> {
+  const out: Record<string, EntryChange> = {};
+  type Entry = { qty?: unknown; stock?: unknown; unit?: unknown; supplierId?: unknown } | null | undefined;
+  Object.entries((next || {}) as Record<string, Entry>).forEach(([id, entry]) => {
+    const before = ((known || {}) as Record<string, Entry>)[id];
+    const qty = num(entry?.qty);
+    const stock = num(entry?.stock);
+    const unit = cleanUnit(entry?.unit);
+    const beforeUnit = cleanUnit(before?.unit);
+    // The override only exists while there is a quantity (overrideOf), so a line taken to
+    // zero loses it in this same write.
+    const supplierTo = overrideOf(entry);
+    // ⚠️ THE STORED VALUE, RAW — not overrideOf(before), which is '' whenever the stored row has
+    // no quantity. A leftover {qty: 0, supplierId: 'X'} (an older phone typing 0 or running
+    // «start again», or a two-phone race) must still be seen and cleared, or the next quantity
+    // typed for this ingredient would revive it and file the line under X.
+    const beforeSupplierRaw = cleanSupplierId(before?.supplierId);
+    // Merely LOOKING at a supplier materialises a blank row in memory, and an
+    // all-zero row that the document never had says nothing worth storing.
+    // (A row that EXISTS and is taken down to zero is a real change: `before`
+    // is there, so it still goes.) A row that carries a unit is not blank.
+    if (!before && qty === 0 && stock === 0 && !unit) return;
+    if (!before || num(before.qty) !== qty || num(before.stock) !== stock || beforeUnit !== unit
+      || beforeSupplierRaw !== supplierTo) {
+      const row: EntryChange = { qty, stock };
+      // ⚠️ `unit: ''` IS SENT ON PURPOSE when a row goes back to the card's unit: a merge
+      // write never deletes a nested key, so omitting it would leave the old unit in the
+      // document and the row would come back as «busta» on the next snapshot. An
+      // ordinary entry (no unit on either side) keeps exactly {qty, stock}.
+      if (unit || beforeUnit) row.unit = unit;
+      // ⚠️ THE SAME FOR THE OVERRIDE: `supplierId: ''` is sent when a line goes back to its
+      // usual supplier or to zero, because a merge write cannot delete a nested key. An
+      // ordinary line (no override on either side) keeps exactly {qty, stock}.
+      if (supplierTo || beforeSupplierRaw) row.supplierId = supplierTo;
+      out[id] = row;
+    }
+  });
+  return out;
+}
+
+// The same idea for the per-supplier day stamps: sending the whole map would
+// re-assert another phone's day for a supplier this one never touched.
+export function changedDays(next?: unknown, known?: unknown): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  Object.entries((next || {}) as Record<string, unknown>).forEach(([supplierId, day]) => {
+    if (((known || {}) as Record<string, unknown>)[supplierId] !== day) out[supplierId] = day;
+  });
+  return out;
+}
+
+// The records below are typed as SupplierRecord for the callers' sake, but every function reads each
+// field defensively, as the original did (its tests hand it a bare {quantities, stock}).
+export type ArchiveRecord = Partial<SupplierRecord>;
+
+// What mergeArchives throws when one ingredient meets itself in two units that cannot be added.
+export interface UnitConflictError extends Error { code: 'orders/unit-conflict'; ids: string[] }
+
+export function isUnitConflict(err: unknown): err is UnitConflictError {
+  return err instanceof Error && (err as { code?: unknown }).code === 'orders/unit-conflict';
+}
+
+interface Card { unit?: unknown; packUnit?: unknown; packCount?: unknown }
+
+// Two orders to the same supplier on the same day are ONE order: the second is
+// "I forgot a couple of things", so quantities ADD UP rather than replace (which
+// would silently destroy the first order — the rows are cleared after archiving,
+// so the second payload only ever carries the forgotten items). The stock reading
+// is a measurement, not a total: the newer one wins.
+//
+// ⚠️ NEVER ADD TWO DIFFERENT UNITS. 2 cartoni + 3 buste is neither 5 of anything nor a
+// number we may convert (we do not know the case size here), so the same ingredient
+// ordered twice in one day in different units THROWS `orders/unit-conflict` and nothing
+// is written. `cardUnitOf(id)` supplies the unit of a record that froze none (every
+// record from before the choice existed is in the card's own unit).
+export function mergeArchives(
+  existing: ArchiveRecord | null | undefined,
+  incoming: ArchiveRecord,
+  { cardUnitOf, cardOf }: { cardUnitOf?: (id: string) => unknown; cardOf?: (id: string) => unknown } = {},
+): SupplierRecord {
+  if (!existing) return incoming as SupplierRecord;
+
+  const card = (id: string): Card => (cardOf?.(id) as Card | undefined) || { unit: cardUnitOf?.(id) };
+  const effectiveUnit = (record: ArchiveRecord, id: string): string => recordUnit(record, id, card(id));
+  // Lines in two different units: added up IN PACKAGES when the card says how many one case
+  // holds (order-unit.ts inPackages), refused otherwise.
+  const mixed = Object.keys(incoming.quantities || {}).filter(id =>
+    num(existing.quantities?.[id]) > 0 && num(incoming.quantities?.[id]) > 0 &&
+    !sameUnit(effectiveUnit(existing, id), effectiveUnit(incoming, id)));
+  const conflicts = mixed.filter(id =>
+    !addableInPackages(effectiveUnit(existing, id), effectiveUnit(incoming, id), card(id)));
+  if (conflicts.length) {
+    // The message is the code itself: never shown (placeOrder says it through t()), and a
+    // sentence here would be a phrase that reaches a screen without the dictionary.
+    const err = new Error('orders/unit-conflict') as UnitConflictError;
+    err.code = 'orders/unit-conflict';
+    err.ids = conflicts;
+    throw err;
+  }
+
+  const quantities: Record<string, number> = { ...(existing.quantities || {}) };
+  const units: Record<string, string> = { ...(existing.units || {}), ...(incoming.units || {}) };
+  Object.entries(incoming.quantities || {}).forEach(([id, qty]) => {
+    if (mixed.includes(id)) {
+      // 1 cartone (of 4) this morning + 2 buste now = 6 buste for the day. Both sides are numbers
+      // here: a mixed line that got this far passed addableInPackages.
+      const ing = card(id);
+      quantities[id] = (inPackages(num(quantities[id]), effectiveUnit(existing, id), ing) as number)
+        + (inPackages(num(qty), effectiveUnit(incoming, id), ing) as number);
+      units[id] = cleanUnit(ing.packUnit);
+      return;
+    }
+    quantities[id] = num(quantities[id]) + num(qty);
+  });
+  const missing = carriedMissing(existing, incoming);
+  // «Risolto» marks travel with the marks they answer, and only with them.
+  const resolved = Object.fromEntries(Object.entries(existing.missingResolved || {})
+    .filter(([id, at]) => missing?.[id] === true && typeof at === 'string' && at));
+
+  return {
+    ...incoming,
+    // ⚠️ THE WRITE IS A WHOLE REPLACEMENT (transactDoc → tx.set), so whatever this object
+    // leaves out is DELETED from the record. `missing` used to be left out: a second order
+    // the same day after the delivery had been answered wiped «the flour never came» — the
+    // re-order reminder vanished and the stocktake counted the flour as bought.
+    // `deliveredAt` IS left out on purpose: the lines just added have not arrived, so the
+    // order goes back to «still to answer» (js/orders/deliveries-view.js re-asks with the
+    // carried marks already unticked).
+    ...(missing ? { missing } : {}),
+    ...(Object.keys(resolved).length ? { missingResolved: resolved } : {}),
+    quantities,
+    stock: { ...(existing.stock || {}), ...(incoming.stock || {}) },
+    // Keep every name the record has ever carried. The incoming write only names the
+    // items IT adds, so replacing rather than merging would strip the names off the
+    // rows placed earlier in the day — and a phone still on the previous version
+    // sends no names at all, which must not erase the ones already stored.
+    names: { ...(existing.names || {}), ...(incoming.names || {}) },
+    // Same reasoning as names: keep the units of the rows placed earlier in the day.
+    ...(Object.keys(units).length ? { units } : {}),
+    // Every order of the day, each as it was placed. A record written before sends existed
+    // (or by a phone on the previous version) first becomes ONE send of what it held, at the
+    // time it was created, so the morning order is not lost from the list.
+    sends: capSends({ ...sendsBefore(existing), ...(incoming.sends || {}) }),
+    createdAt: (existing.createdAt || incoming.createdAt) as string,
+    updatedAt: incoming.updatedAt as string,
+  } as SupplierRecord;
+}
+
+// The «did not arrive» marks a record keeps when a second order the same day is merged into
+// it, or null when none are left. A line ordered AGAIN in the second order is dropped from
+// the marks: it has just been re-ordered, so it must leave the re-order list. The price, a
+// known one: its quantity is now both orders added up, and one true/false mark cannot say
+// «half of it came» — if the second van brings it, the stocktake proposes the sum as bought.
+// Rare (answered AND re-ordered on the order day), and the stocktake figure is editable.
+function carriedMissing(existing: ArchiveRecord, incoming: ArchiveRecord): Record<string, boolean> | null {
+  const out: Record<string, boolean> = {};
+  Object.entries(existing.missing || {}).forEach(([id, value]) => {
+    if (value === true && !(num(incoming.quantities?.[id]) > 0)) out[id] = true;
+  });
+  return Object.keys(out).length ? out : null;
+}
+
+// The id of one send in `sends`: its time, digits only («s20261003091200123»), so the keys
+// sort in the order the sends were placed and two sends a millisecond apart do not collide.
+export function sendIdFor(iso?: unknown): string {
+  return `s${String(iso || '').replace(/\D/g, '')}`;
+}
+
+// The sends a record already holds, or — for a record from before sends existed — one send
+// made of what it held. A record with nothing in it has nothing to show.
+//
+// ⚠️ THAT SEND GETS A TIME ONLY WHEN THE RECORD WAS NEVER TOUCHED AFTER IT WAS CREATED.
+// A phone on the previous version adds a second order by rewriting the record without
+// `sends`: its quantities are then two orders, and stamping them with the first one's time
+// would tell a lie in the very list that exists to trace orders. No time reads «Ordini
+// precedenti» (history.js) — true whatever happened.
+function sendsBefore(record: ArchiveRecord): Record<string, SupplierSend> {
+  if (record.sends && typeof record.sends === 'object') return record.sends;
+  if (!Object.keys(record.quantities || {}).length) return {};
+  const at = typeof record.createdAt === 'string' && record.createdAt === record.updatedAt
+    ? record.createdAt : '';
+  return {
+    [at ? sendIdFor(at) : 's0']: {
+      at,
+      quantities: { ...record.quantities },
+      ...(record.units && Object.keys(record.units).length ? { units: { ...record.units } } : {}),
+    },
+  };
+}
+
+// The rules hold one day's sends to 50 (firestore.rules). Past that the FIRST send and the
+// latest 49 are kept — the total in `quantities` is unaffected — instead of a refused write
+// that would read as a network failure. Keys sort by time (sendIdFor).
+export const MAX_SENDS = 50;
+export function capSends<T>(sends: Record<string, T>): Record<string, T> {
+  const keys = Object.keys(sends || {}).sort();
+  if (keys.length <= MAX_SENDS) return sends;
+  const kept = [keys[0] as string, ...keys.slice(keys.length - (MAX_SENDS - 1))];
+  return Object.fromEntries(kept.map(k => [k, sends[k] as T]));
+}
+
+export interface UnitConflict { id: string; name: string; unit: string; fixable: boolean }
+
+// ⚠️ THE SAME QUESTION mergeArchives ANSWERS, asked BEFORE anything leaves the app: which of
+// the draft's lines would meet today's record of this supplier in a DIFFERENT unit? The
+// merge throws on these, but by then a WhatsApp message may already have gone to the
+// supplier, so the screens ask this first. Both use recordUnit() and sameUnit(), so «the
+// same unit» has one meaning.
+//
+// existingRecord: today's history record for this supplier, or null/undefined.
+// -> [{ id, name, unit }] — `unit` is the one ALREADY RECORDED, what the person must stay in.
+export function unitConflicts(
+  existingRecord: ArchiveRecord | null | undefined,
+  entries?: unknown,
+  ingredients?: readonly unknown[] | null,
+  supplierId?: unknown,
+): UnitConflict[] {
+  if (!existingRecord) return [];
+  const out: UnitConflict[] = [];
+  const byId = entries as Record<string, { qty?: unknown } | undefined> | null | undefined;
+  ingredientsOf(supplierId, ingredients).forEach(ing => {
+    const id = (ing as { id: string }).id;
+    const entry = byId?.[id];
+    if (!entry || num(entry.qty) <= 0 || num(existingRecord.quantities?.[id]) <= 0) return;
+    const recorded = recordUnit(existingRecord, id, ing);
+    const typed = entryUnit(entry, ing);
+    if (!sameUnit(typed, recorded) && !addableInPackages(typed, recorded, ing)) {
+      const card = ing as Card;
+      out.push({
+        id, name: ingredientDisplayLabel(ing), unit: recorded,
+        // Would writing «how many packages one case holds» on the card make the two addable?
+        // Only for a card that offers exactly these two units — the message says so then.
+        fixable: hasUnitChoice(ing) && [typed, recorded].every(u => sameUnit(u, card.unit) || sameUnit(u, card.packUnit)),
+      });
+    }
+  });
+  return out;
+}
+
+// «Flour 25kg — cartone, Yeast — busta»: each clashing line with the unit it must stay in,
+// joined with commas (no singular/plural agreement to get wrong in either language).
+export function unitConflictList(conflicts?: readonly { name: string; unit: string }[] | null): string {
+  return (conflicts || []).map(c => `${c.name} — ${c.unit}`).join(', ');
+}
+
+// ── History (slice 3f-4) ─────────────────────────────────────────────────────
+
+// What a PAST order calls one of its items, in order of preference:
+//   1. the ingredient as it is called NOW — a rename must show through everywhere;
+//   2. the name frozen into the record when the order was placed;
+//   3. an honest placeholder.
+// Never the raw document id: an order reading "Fdx92kQ1: 4" tells nobody what was bought.
+//
+// ADAPTED: the original reads the placeholder from the dictionary (`orders.deletedIngredient`); here the caller hands
+// the word in as the fourth argument, so shared/ never imports the dictionary.
+export function recordedName(id: string, ingredientsById: Record<string, unknown> | null | undefined,
+  names: unknown, deletedWord: string): string {
+  const live = ingredientDisplayLabel(ingredientsById?.[id]);
+  if (live) return live;
+  const stored = (names as Record<string, unknown> | null | undefined)?.[id];
+  return typeof stored === 'string' && stored.trim() ? stored.trim() : deletedWord;
+}
+
+// A correction made in History, kept as its own entry with its time, so the list of sends never contradicts the
+// corrected total: «Corretto · ore 16:20» shows what the order became. Only for a record that already has sends — an
+// old record keeps its old look.
+export function withCorrection(record: ArchiveRecord | null | undefined, quantities: Record<string, number>,
+  units: Record<string, string> | null | undefined, at: string): Record<string, SupplierSend> | null {
+  if (!record || !record.sends || typeof record.sends !== 'object') return null;
+  return capSends({
+    ...record.sends,
+    [sendIdFor(at)]: {
+      at, kind: 'edit',
+      quantities: { ...quantities },
+      ...(units && Object.keys(units).length ? { units: { ...units } } : {}),
+    },
+  });
+}
+
+export interface RecordSend { at: string; kind: 'edit' | 'order'; quantities: Record<string, number>; units: Record<string, string> }
+
+// The sends of a record, oldest first. A send with no time (see sendsBefore) comes first. Anything malformed (a
+// phone's bug, a hand edit) is skipped rather than drawn as nonsense.
+export function recordSends(record?: unknown): RecordSend[] {
+  const r = record as { sends?: unknown } | null | undefined;
+  const sends = r && typeof r.sends === 'object' && r.sends ? r.sends as Record<string, unknown> : {};
+  return Object.values(sends)
+    .filter((s): s is { at?: unknown; kind?: unknown; quantities: Record<string, number>; units?: unknown } =>
+      Boolean(s) && typeof s === 'object'
+      && Boolean((s as { quantities?: unknown }).quantities) && typeof (s as { quantities?: unknown }).quantities === 'object')
+    .map(s => ({
+      at: typeof s.at === 'string' ? s.at : '',
+      kind: s.kind === 'edit' ? 'edit' as const : 'order' as const,
+      quantities: s.quantities,
+      units: s.units && typeof s.units === 'object' ? s.units as Record<string, string> : {},
+    }))
+    .sort((a, b) => (a.at < b.at ? -1 : a.at > b.at ? 1 : 0));
+}
+
+export interface SendSection {
+  heading: 'first' | 'later' | 'edit' | 'earlier';
+  time: string;
+  quantities: Record<string, number> | null;
+  units: Record<string, string> | null;
+}
+
+// What History draws for one record. Two or more sends: one section each, then the day's total. One send with a
+// time: just its heading above the total. Otherwise (a record from before sends, or one untimed send): nothing extra.
+export function sendSections(record?: unknown): { sections: SendSection[]; total: boolean } {
+  const sends = recordSends(record);
+  const only = sends[0];
+  if (sends.length === 1 && only && only.at) {
+    return { sections: [{ heading: 'first', time: only.at, quantities: null, units: null }], total: false };
+  }
+  if (sends.length < 2) return { sections: [], total: false };
+  return {
+    sections: sends.map((send, i) => ({
+      heading: !send.at ? 'earlier' : send.kind === 'edit' ? 'edit' : i === 0 ? 'first' : 'later',
+      time: send.at,
+      quantities: send.quantities,
+      units: send.units,
+    })),
+    total: true,
+  };
+}
+
+export interface HistoryDay<R> { date: string; records: R[] }
+
+// Split day sections (the output of groupHistoryByDay) into the ones History shows straight away and the ones parked
+// behind «Show older orders». This HIDES, it never deletes: `older` is returned, not dropped, and the suggestion
+// engine reads the raw records, so narrowing the window can never change a suggested quantity.
+//
+// The window INCLUDES today: 15 days means today and the 14 before it, counted in calendar days (DST-safe). An
+// unusable window shows EVERYTHING: the safe failure is a long list, never an empty one.
+export function splitHistoryByAge<D extends { date: string }>(days: readonly D[] | null | undefined, historyDays: unknown,
+  now: Date = new Date()): { recent: D[]; older: D[] } {
+  const list = (days || []) as D[];
+  const window = Math.floor(Number(historyDays));
+  if (!Number.isFinite(window) || window < 1) return { recent: list, older: [] };
+
+  const cutoff = toISODate(addDays(now, -(window - 1)));
+  return {
+    recent: list.filter(d => !isBefore(d.date, cutoff)),
+    older: list.filter(d => isBefore(d.date, cutoff)),
+  };
+}
+
+// How many ORDERS sit in a set of day sections — what «Show older orders (N)» counts.
+export function countRecords(days?: readonly { records?: readonly unknown[] }[] | null): number {
+  return (days || []).reduce((total, d) => total + (d.records?.length || 0), 0);
+}
+
+// Group history records into day sections, most recent day first, and within a day by supplier name. Legacy weekly
+// records land under their weekStart; a record with no date at all is dropped.
+//
+// ⚠️ KEPT AS THE ORIGINAL: both sorts use localeCompare (the days are ISO strings, where it agrees with a plain
+// comparison; the supplier names follow the phone's collation).
+export function groupHistoryByDay<R>(history?: readonly R[] | null): HistoryDay<R>[] {
+  const byDay = new Map<string, R[]>();
+
+  (history || []).forEach(record => {
+    const date = recordDate(record);
+    if (!date) return;
+    const list = byDay.get(date);
+    if (list) list.push(record); else byDay.set(date, [record]);
+  });
+
+  return [...byDay.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([date, records]) => ({
+      date,
+      records: records.slice().sort((a, b) =>
+        String((a as { supplierName?: unknown }).supplierName || '')
+          .localeCompare(String((b as { supplierName?: unknown }).supplierName || ''))),
+    }));
+}

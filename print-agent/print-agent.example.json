@@ -10,8 +10,11 @@
   "_printer_share": "mode 'share' is a printer plugged into THIS computer. Share it in Windows first, then put the share's full name here. Raw bytes are copied to the share, which bypasses the driver's rendering — that is the whole point, because a driver would print the ZPL codes as text instead of the label.",
   "printer": {
     "mode": "share",
-    "target": "\\\\THIS-PC\\ZEBRA"
+    "target": "\\\\THIS-PC\\ZEBRA",
+    "darkness": 28
   },
+
+  "_printer_darkness": "Optional, 0 to 30 (Zebra's scale). When it is there, the agent sends it to the printer before EVERY label — the «with logo» label was tuned at 28. The printer keeps it until it is switched off, so every label after that prints at the same darkness. Leave it out to keep the printer's own setting. It lives here and never in a label: the print queue refuses every printer setting.",
 
   "_printer_tcp": "mode 'tcp' is a printer with its own address on the network. Replace the whole `printer` block above with this one: { \"mode\": \"tcp\", \"host\": \"192.168.1.50\", \"port\": 9100 }"
 }

@@ -1,0 +1,102 @@
+/* One product on the counting list: the name and what the month says about it on the left, the box
+   the count is typed into and its unit on the right. */
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: 72px;
+  padding: var(--s2) var(--s3);
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+/* The product whose figures are open beside the list (the tablet's split). */
+.row[data-open="true"] {
+  background: var(--accent-tint);
+}
+
+@media (hover: hover) {
+  .row[data-open="false"]:hover {
+    background: var(--sunken);
+  }
+}
+
+/* The left side. The button is stretched over all of it (the line under the name is a sibling of
+   the button, not inside it, so the button's name stays «Open {name}»): a tap anywhere here opens
+   the product, and the box on the right is never under it. */
+.main {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--s2) 0;
+}
+
+.open {
+  align-self: flex-start;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.open::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--r-sm);
+}
+
+/* The ring goes around the whole side the button covers, not around the name alone. */
+.open:focus-visible {
+  outline: none;
+}
+
+.open:focus-visible::after {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.name {
+  display: block;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
+.sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* A row nobody has counted: the to-do colour (amber, the app's «to check»), with the words saying it
+   too. */
+.sub[data-todo="true"] {
+  color: var(--warn-ink);
+}
+
+.count {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.unit {
+  max-width: 64px;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}

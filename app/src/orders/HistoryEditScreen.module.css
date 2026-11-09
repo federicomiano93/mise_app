@@ -1,0 +1,146 @@
+/* «Correct order»: what is being corrected, the column names, a row per line with its two boxes, a hint and — small and quiet at
+   the foot — «Delete this order». The card does not clip (no `overflow`), so the bar above keeps sticking. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.loading,
+.empty {
+  padding: var(--s6) var(--s3);
+  color: var(--ink-2);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s3);
+}
+
+.what {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+/* The same columns on the column names and on a row: the name takes what is left, the two boxes a fixed width. */
+.columns,
+.row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px 64px;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.columns {
+  padding: 0 var(--s2);
+}
+
+@media (min-width: 480px) {
+  .columns,
+  .row {
+    grid-template-columns: minmax(0, 1fr) 96px 88px;
+  }
+}
+
+.columnName {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  text-align: center;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  list-style: none;
+}
+
+.row {
+  padding: var(--s2);
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.main {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-weight: 600;
+}
+
+.unit {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.box {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--hit);
+  padding: 0 var(--s1);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: var(--fs-lg)/1 var(--font);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.box:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.hint {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* Small and low-key: it never competes with Save (P20), but it is still a 48px target. */
+.delete {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  align-self: flex-start;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--danger-ink);
+  font: 600 var(--fs-sm)/1 var(--font);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.delete svg {
+  flex: none;
+  width: 18px;
+  height: 18px;
+}
+
+.delete[data-pressed] {
+  background: var(--danger-tint);
+}
+
+.delete[data-disabled] {
+  color: var(--ink-3);
+  cursor: default;
+}

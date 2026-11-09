@@ -1,0 +1,157 @@
+/* The photo screen: a card holding the form bar and the photographs, drawn like the recipe editor. On the split it is the
+   right-hand pane; below 1000px it replaces the list.
+
+   ⚠️ NOTHING ON THE SCREEN MAY CLIP (no `overflow`): the form bar sticks to the top of the scrolling area, and a clipping
+   ancestor would turn it into an ordinary row. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}
+
+.lead,
+.note {
+  margin: 0;
+  overflow-wrap: break-word;
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+/* The photographs, as many to a row as fit: a thumbnail is never narrower than its remove button. */
+.thumbs {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--s3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.thumb {
+  position: relative;
+  min-width: 0;
+  aspect-ratio: 1 / 1;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--r-md);
+  object-fit: cover;
+}
+
+/* The remove button sits in the corner of its photograph, as tall and wide as a thumb needs. */
+.remove {
+  position: absolute;
+  top: var(--s1);
+  right: var(--s1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--danger-ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.remove svg {
+  width: 20px;
+  height: 20px;
+}
+
+.remove[data-focus-visible="true"] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Empty it takes no room; the sentence appears in a region that was already on the page. */
+.status {
+  margin: 0;
+}
+
+.statusBad {
+  padding: var(--s3);
+  border-radius: var(--r-md);
+  background: var(--danger-tint);
+  color: var(--danger-ink);
+  font-weight: 600;
+  overflow-wrap: break-word;
+}
+
+.statusBusy {
+  color: var(--ink-2);
+  overflow-wrap: break-word;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+}
+
+/* «Take a photo» is a label around the real file input, drawn as a secondary button. Icon and words on one flex row. */
+.take {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0 var(--s5);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 600 var(--fs-md)/1 var(--font);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.take svg {
+  flex: none;
+}
+
+@media (hover: hover) {
+  .take:hover {
+    background: var(--bg);
+  }
+}
+
+.take[data-focus-visible="true"] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.take[data-disabled="true"] {
+  border-color: var(--line);
+  color: var(--ink-3);
+  cursor: default;
+}

@@ -1,0 +1,167 @@
+/* The «Da fare» card: a head with the one primary action, then the groups of days. No `overflow` on the card or
+   anything inside it that a sticky bar would need to look through; long words wrap instead of widening the page. */
+
+.card {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-1);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.title {
+  min-width: 0;
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+.notice {
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+}
+
+.notice p {
+  margin-top: var(--s3);
+}
+
+.quiet {
+  margin-top: var(--s4);
+  color: var(--ink-2);
+  font-size: var(--fs-md);
+}
+
+.group {
+  margin-top: var(--s4);
+}
+
+.groupTitle {
+  padding: 0 var(--s1);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+/* Overdue says so in words; the colour only backs it up. */
+.late {
+  color: var(--danger-ink);
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+/* The checkbox is a 48px target; React Aria hides the real input inside it, so the box is positioned. */
+.check {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.box {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--ink-3);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--on-accent);
+}
+
+.box svg {
+  width: 16px;
+  height: 16px;
+  opacity: 0;
+}
+
+.check[data-selected] .box {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.check[data-selected] .box svg {
+  opacity: 1;
+}
+
+.check[data-focus-visible] .box {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The words are a button that opens the form: the whole line is the target. */
+.text {
+  display: flex;
+  flex: 1 1 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: var(--s1);
+  min-width: 0;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s1);
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: var(--fs-md)/1.35 var(--font);
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.text[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+  border-radius: var(--r-md);
+}
+
+.words {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+/* A ticked item stays where it is, struck through and quieter: --ink-3 still reads at 4.5:1 on the card. */
+.ticked {
+  color: var(--ink-3);
+}
+
+.ticked .words {
+  text-decoration: line-through;
+}
+
+.tag {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.ticked .tag {
+  color: var(--ink-3);
+}

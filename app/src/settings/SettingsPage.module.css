@@ -1,0 +1,72 @@
+/* Settings: cards by who a row is about — You, The venue, Account. */
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  width: 100%;
+  max-width: 560px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.title {
+  padding: var(--s4) var(--s4) var(--s2);
+  font-size: var(--fs-lg);
+  font-weight: 650;
+}
+
+/* Rows run edge to edge, told apart by a line; the card's rounded corners are kept by the last row. */
+.rows {
+  display: flex;
+  flex-direction: column;
+}
+
+.rows > * + * {
+  border-top: 1px solid var(--line);
+}
+
+.rows > :last-child {
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+}
+
+/* The Account card's own text, which is not a row. */
+.padded {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s2) var(--s4) var(--s4);
+}
+
+.account {
+  overflow-wrap: anywhere;
+}
+
+/* The venue's name on the left, the way to another on the right; they wrap on a narrow screen. */
+.venueRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.venue {
+  min-width: 0;
+}
+
+.label {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}

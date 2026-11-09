@@ -1,0 +1,70 @@
+/* The orders of a recipe: a card per client, a row per product. The name takes what is left and wraps; the
+   box and its unit keep their width and end every row on the same right edge. */
+
+.cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.card {
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.client {
+  margin-bottom: var(--s2);
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s1) 0;
+}
+
+.row + .row {
+  border-top: 1px solid var(--line);
+}
+
+.label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.weight {
+  color: var(--ink-2);
+}
+
+.group {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* «pz» / «kg» keeps one width, so the boxes end on the same edge whichever unit is beside them. */
+.unit {
+  width: 2.2em;
+  color: var(--ink-2);
+}
+
+.hint {
+  padding: var(--s4);
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-lg);
+  color: var(--ink-2);
+}

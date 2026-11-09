@@ -1,0 +1,46 @@
+/* The body of the question asked before a client's order goes into the Calculator: the rows that already hold a
+   different number, then what stays as it is. The dialog's own paragraphs are grey; these sit under them. */
+
+.clashes {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--bg);
+}
+
+.clash {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  font-variant-numeric: tabular-nums;
+}
+
+.clash + .clash {
+  border-top: 1px solid var(--line);
+}
+
+.product {
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.change {
+  flex: none;
+  color: var(--danger-ink);
+  font-weight: 650;
+}
+
+.paragraph {
+  color: var(--ink-2);
+}
+
+.ask {
+  font-weight: 600;
+}

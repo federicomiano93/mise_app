@@ -1,0 +1,28 @@
+/* A number box: 48px tall and 18px type, or iOS zooms the page in when it is focused. */
+
+.box {
+  width: 100%;
+  max-width: 240px;
+  min-height: var(--hit);
+  padding: 0 var(--s3);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.box::placeholder {
+  color: var(--ink-3);
+}
+
+.box:focus {
+  border-color: var(--accent);
+}
+
+.box[data-invalid="true"],
+.box[data-invalid="true"]:focus {
+  border-color: var(--danger);
+  background: var(--danger-tint);
+}

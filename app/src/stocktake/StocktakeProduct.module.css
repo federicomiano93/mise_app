@@ -1,0 +1,122 @@
+/* One product: a card holding the form bar (Back · the name · the month), the answer, the three
+   numbers it is made of and, for whoever runs the place, the weight of a pack. On the split it is the
+   right-hand pane; below 1000px it replaces the list.
+
+   ⚠️ NOTHING ON THE CARD MAY CLIP (no `overflow`): the form bar sticks to the top of the shell's
+   scrolling area, and a clipping ancestor would turn it into an ordinary row. */
+
+.product {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.loading {
+  padding: var(--s6);
+  color: var(--ink-2);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+  padding: var(--s4);
+}
+
+/* A month the rules keep from an employee: the one sentence, in place of everything else. */
+.unavailable {
+  padding: var(--s4);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+/* The answer: the number the month used and how it was worked out. Quiet while it is not known,
+   in the warning colours when it cannot be right. The state is a data attribute, so the words say
+   it too and colour is never the only signal. */
+.answer {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.answer[data-state="unknown"] {
+  background: var(--surface);
+  border-style: dashed;
+  border-color: var(--line-2);
+}
+
+.answer[data-state="negative"] {
+  border-color: var(--warn);
+  background: var(--warn-tint);
+}
+
+.answerLabel {
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.answerValue {
+  font-size: var(--fs-2xl);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.answer[data-state="unknown"] .answerValue {
+  color: var(--ink-2);
+}
+
+.answerWhy,
+.answerBasis {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.answerMoney {
+  font-size: var(--fs-lg);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.answerWarn {
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* A box with its label above and its hint under. */
+.field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s2);
+}
+
+.label {
+  font-weight: 600;
+}
+
+.hint,
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+@media (min-width: 1000px) {
+  .body {
+    padding: var(--s6);
+  }
+}

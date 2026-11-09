@@ -1,0 +1,26 @@
+/* A product to tick: the whole row is the label, so the target is the row. */
+
+.tick {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: var(--s2) var(--s4);
+  border-top: 1px solid var(--line);
+  cursor: pointer;
+}
+
+.tick:first-child {
+  border-top: 0;
+}
+
+.tick input {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  accent-color: var(--accent);
+}
+
+.clear {
+  align-self: flex-start;
+}

@@ -36,6 +36,7 @@
 // .github/workflows/test.yml. Keep the naming as it is.
 
 import { toFields, wipe, seedDoc, readDoc, requireEmulators, PROJECT, FIXTURE } from './seed-emulator.mjs';
+import { deflateSync } from 'node:zlib';
 
 // PROJECT is imported, never re-declared: two independent defaults for the same id
 // would drift, and the day they did, this file and the seeder would be writing into
@@ -1107,6 +1108,14 @@ async function neighbours() {
         { id: 's2', text: 'Mix', rows: [], seconds: 240, speed: '1' },
       ],
     }));
+  // Mise 2's «Duplicate» CREATES a recipe that already carries its procedure, in one write (a document that does not exist yet).
+  await expectAllowed('a NEW recipe may be created with its steps, closing message and label fields in the same write', () =>
+    wholeWrite('locations/main/recipes/duplicate-of-r1', {
+      bakery: 'main', name: 'Croissant (copy)', netWeightG: 250, shelfLifeDays: 3,
+      ingredients: [{ label: 'Flour', grams: 1000, unit: 'g', rid: 'rflour001' }],
+      steps: [{ text: 'Mix', rows: ['rflour001'], seconds: 240, speed: '1' }],
+      endNote: 'Let it rest',
+    }));
   await expectAllowed('…and a procedure that has been emptied again', () =>
     wholeWrite('locations/main/recipes/r1',
       { bakery: 'main', name: 'Croissant', ingredients: [], steps: [] }));
@@ -1651,6 +1660,177 @@ async function configAndLogs() {
       bakery: 'main', name: 'Pane', ingredients: [], netWeightG: 0,
     }));
 
+  // ── Mise 2's image label («with logo», 25 Oct 2026) ──────────────────────
+  //
+  // The two recipe texts it prints, the model and the rotation in the label
+  // profile, and the logo in a collection of its own.
+  await expectAllowed('recipes: the title and the ingredients text of the image label', () =>
+    wholeWrite(`${A}/recipes/R_LOGO`, {
+      bakery: 'main', name: 'Biscotti', ingredients: [],
+      labelName: 'BISCOTTI|AL CACAO', labelIngredientsText: 'INGREDIENTI: farina di GRANO tenero, BURRO.',
+    }));
+  // ⚠️ AN EMPLOYEE TOO: the recipe is canUse, and typing a recipe's label text is work
+  // the people at the bench do.
+  await expectAllowed('recipes: an employee can save the label texts', () =>
+    mergeWrite(`${A}/recipes/R_LOGO`, { bakery: 'main', name: 'Biscotti', ingredients: [], labelName: '' },
+      asAccount(SAM)));
+  await expectDenied('recipes: a label title longer than any label',
+    () => wholeWrite(`${A}/recipes/R_BAD`, {
+      bakery: 'main', name: 'Pane', ingredients: [], labelName: 'x'.repeat(201),
+    }));
+  await expectDenied('recipes: an ingredients text of a whole page',
+    () => wholeWrite(`${A}/recipes/R_BAD`, {
+      bakery: 'main', name: 'Pane', ingredients: [], labelIngredientsText: 'x'.repeat(2001),
+    }));
+  await expectDenied('recipes: an ingredients text sent as a list',
+    () => wholeWrite(`${A}/recipes/R_BAD`, {
+      bakery: 'main', name: 'Pane', ingredients: [], labelIngredientsText: ['farina'],
+    }));
+
+  // ── Mise 2's recipe shelf: a category and the archive (25 Oct 2026) ───────
+  //
+  // Filing a recipe under a category is everybody's work, like the rest of the
+  // recipe; archiving and restoring it are for whoever runs the place — but an
+  // employee must still be able to save an archived recipe that stays archived.
+  await expectAllowed('recipes: a recipe filed under a category', () =>
+    wholeWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', name: 'Panettone', ingredients: [], category: 'Natale' }));
+  await expectAllowed('recipes: an employee files a recipe under a category', () =>
+    mergeWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', name: 'Panettone', ingredients: [], category: 'Dolci' },
+      asAccount(SAM)));
+  await expectAllowed('recipes: an employee takes the category away (the field removed)', () =>
+    clearWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', name: 'Panettone', ingredients: [] }, ['category'],
+      asAccount(SAM)));
+  await expectDenied('recipes: an empty category (no category is no field)',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], category: '' }));
+  await expectDenied('recipes: a category longer than any word on a list',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], category: 'x'.repeat(101) }));
+  await expectDenied('recipes: a category sent as a list',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], category: ['Natale'] }));
+  await expectDenied('recipes: an archived flag sent as a word',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], archived: 'yes' }));
+  await expectDenied('recipes: an employee cannot archive a recipe',
+    () => mergeWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', archived: true }, asAccount(SAM)));
+  await expectDenied('recipes: an employee cannot create a recipe already archived',
+    () => wholeWrite(`${A}/recipes/R_STAFF_NEW`, { bakery: 'main', name: 'Pane', ingredients: [], archived: true },
+      asAccount(SAM)));
+  await expectAllowed('recipes: …but may send «not archived» on a new one', () =>
+    wholeWrite(`${A}/recipes/R_STAFF_NEW`, { bakery: 'main', name: 'Pane', ingredients: [], archived: false },
+      asAccount(SAM)));
+  await expectAllowed('recipes: the manager archives it', () =>
+    mergeWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', archived: true }, asAccount(MAYA)));
+  await expectAllowed('recipes: an employee still edits the archived recipe (the flag untouched)', () =>
+    mergeWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', name: 'Panettone classico', ingredients: [] }, asAccount(SAM)));
+  await expectAllowed('recipes: …even when the save carries the flag as it is', () =>
+    mergeWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', name: 'Panettone classico', archived: true }, asAccount(SAM)));
+  await expectDenied('recipes: an employee cannot restore it (the flag removed)',
+    () => clearWrite(`${A}/recipes/R_SHELF`, { bakery: 'main' }, ['archived'], asAccount(SAM)));
+  await expectDenied('recipes: …nor by sending false',
+    () => mergeWrite(`${A}/recipes/R_SHELF`, { bakery: 'main', archived: false }, asAccount(SAM)));
+  await expectAllowed('recipes: the owner restores it', () =>
+    clearWrite(`${A}/recipes/R_SHELF`, { bakery: 'main' }, ['archived']));
+  const shelf = await fetch(`${FS}/${A}/recipes/R_SHELF`, { headers: asUser() }).then(r => r.json());
+  check('recipes: the restored recipe holds no archived flag and keeps its name',
+    !('archived' in (shelf.fields ?? {})) && shelf.fields?.name?.stringValue === 'Panettone classico');
+
+  await expectAllowed('labels: the venue\'s list of recipe categories', () =>
+    mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: ['Natale', 'Estate', 'Pane'] }));
+  await expectAllowed('labels: …and an empty one', () =>
+    mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: [] }, asAccount(MAYA)));
+  await expectDenied('labels: a list of categories used as free storage',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: Array.from({ length: 101 }, (_, i) => `c${i}`) }));
+  await expectDenied('labels: the categories sent as one word',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: 'Natale' }));
+  await expectDenied('labels: an employee cannot change the categories',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', recipeCategories: ['Natale'] }, asAccount(SAM)));
+
+  await expectAllowed('labels: the model and the rotation of the image label', () =>
+    mergeWrite(`${A}/config/labels`, { bakery: 'main', template: 'logo', rotate180: true }));
+  await expectDenied('labels: a model the app has never heard of',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', template: 'fancy' }));
+  await expectDenied('labels: a rotation sent as a word',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', rotate180: 'yes' }));
+  await expectDenied('labels: an employee cannot switch the model',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', template: 'standard' }, asAccount(SAM)));
+
+  // ── Mise 2's HACCP label (image labels step 2, 26 Oct 2026) ──────────────
+  await expectAllowed('labels: the HACCP fields, size and list category', () =>
+    mergeWrite(`${A}/config/labels`, {
+      bakery: 'main',
+      haccpFields: {
+        name: 'print', preparedOn: 'print', useBy: 'print', lot: 'blank', preparedBy: 'off', storage: 'print',
+        blastChilledOn: 'blank', frozenOn: 'off', openedOn: 'off', quantity: 'blank', allergens: 'print',
+      },
+      haccpSize: '60x40', haccpCategory: 'Semilavorati',
+    }));
+  await expectAllowed('labels: the manager changes the HACCP fields', () =>
+    mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpFields: { lot: 'print', allergens: 'blank' } }, asAccount(MAYA)));
+  await expectAllowed('labels: the HACCP list category taken away (every recipe)', () =>
+    clearWrite(`${A}/config/labels`, { bakery: 'main' }, ['haccpCategory']));
+  await expectDenied('labels: a HACCP field the app does not know',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpFields: { colour: 'print' } }));
+  await expectDenied('labels: a HACCP state the app does not know',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpFields: { lot: 'maybe' } }));
+  await expectDenied('labels: the last HACCP field with a state the app does not know',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpFields: { allergens: 'never' } }));
+  await expectDenied('labels: the HACCP fields sent as a list',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpFields: ['name'] }));
+  await expectDenied('labels: a HACCP size the app has no page for',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpSize: '100x100' }));
+  await expectDenied('labels: an empty HACCP list category (none is no field)',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpCategory: '' }));
+  await expectDenied('labels: an employee cannot change the HACCP label',
+    () => mergeWrite(`${A}/config/labels`, { bakery: 'main', haccpSize: '50x30' }, asAccount(SAM)));
+  await expectAllowed('recipes: an employee writes how a semi-finished good is kept', () =>
+    mergeWrite(`${A}/recipes/R_LOGO`, { bakery: 'main', name: 'Biscotti', ingredients: [], haccpStorage: 'In frigorifero a +4 °C' },
+      asAccount(SAM)));
+  await expectDenied('recipes: a storage text of a whole page',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], haccpStorage: 'x'.repeat(201) }));
+  await expectDenied('recipes: a storage text sent as a list',
+    () => wholeWrite(`${A}/recipes/R_BAD`, { bakery: 'main', name: 'Pane', ingredients: [], haccpStorage: ['frigo'] }));
+
+  const logo = (over = {}) => ({
+    bakery: 'main', png: 'data:image/png;base64,iVBORw0KGgo=', width: 1320, height: 364,
+    updatedAt: '2026-10-25T10:00:00.000Z', ...over,
+  });
+  await expectAllowed('logo: whoever runs the place uploads it',
+    () => wholeWrite(`${A}/label-assets/logo`, logo()));
+  await expectAllowed('logo: the manager too',
+    () => wholeWrite(`${A}/label-assets/logo`, logo(), asAccount(MAYA)));
+  await expectDenied('logo: an employee cannot change it',
+    () => wholeWrite(`${A}/label-assets/logo`, logo(), asAccount(SAM)));
+  await expectAllowed('logo: …but can read it, or no label could be printed',
+    readAs(SAM, `${A}/label-assets/logo`));
+  await expectDenied('logo: any other document in that collection',
+    () => wholeWrite(`${A}/label-assets/banner`, logo()));
+  await expectDenied('logo: another venue\'s member reads nothing here',
+    readAs(BOB, `${A}/label-assets/logo`));
+  await seedDoc('locations/trattoria-x/label-assets/logo', logo({ bakery: 'trattoria-x' }));
+  await expectDenied('logo: a venue with the catalogue off shows it to nobody',
+    readAs(BOB, 'locations/trattoria-x/label-assets/logo'));
+  const big = 'data:image/png;base64,' + 'A'.repeat(400000 - 'data:image/png;base64,'.length);
+  await expectAllowed('logo: a picture exactly at the ceiling',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ png: big })));
+  await expectDenied('logo: a picture bigger than the ceiling',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ png: big + 'A' })));
+  await expectDenied('logo: an address elsewhere instead of the picture itself',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ png: 'https://example.test/logo.png' })));
+  await expectDenied('logo: a picture that is not a PNG',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ png: 'data:image/svg+xml;base64,PHN2Zz4=' })));
+  await expectDenied('logo: drawn at a width the label does not use',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ width: 2400 })));
+  await expectDenied('logo: taller than the label',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ height: 5000 })));
+  await expectDenied('logo: a key nobody put in the whitelist',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ url: 'http://example.test/x.png' })));
+  await expectDenied('logo: stamped with another venue',
+    () => wholeWrite(`${A}/label-assets/logo`, logo({ bakery: 'trattoria-x' })));
+  await expectDenied('logo: an employee cannot take it away',
+    () => deleteWrite(`${A}/label-assets/logo`, asAccount(SAM)));
+  await expectAllowed('logo: whoever runs the place can',
+    () => deleteWrite(`${A}/label-assets/logo`));
+  await expectDenied('logo: not readable by a signed-out visitor',
+    () => fetch(`${FS}/${A}/label-assets/logo`, { headers: noAuth() }));
+
   // ── The print queue ───────────────────────────────────────────────────────
   //
   // ⚠️ THE TRANSITIONS ARE THE POINT. Two agents running at once both see a queued
@@ -1691,6 +1871,23 @@ async function configAndLogs() {
     () => wholeWrite(`${A}/print-jobs/J_RESET`, job({ payload: '~JR' })));
   await expectDenied('queue: a control command tucked inside a label, past a line break',
     () => wholeWrite(`${A}/print-jobs/J_HIDDEN`, job({ payload: '^XA\n^FDPane^FS\n~JR\n^XZ' })));
+
+  // ⚠️ THE «WITH LOGO» LABEL (Mise 2, image labels 1b): a picture as ^GFA Z64, through the
+  // same door and under the same limit — measured far under it, so the limit was kept.
+  // Its darkness (the owner's ~SD28) belongs to the agent's own settings, never to a job.
+  const z64 = deflateSync(Buffer.alloc(80 * 480, 0x0f)).toString('base64');
+  const imageLabel = ['^XA', '^PW640', '^LL480', '^LH0,0', '^POI', '^PR2', '^PQ2',
+    `^FO0,0^GFA,38400,38400,80,:Z64:${z64}:1A2B^FS`, '^XZ', ''].join('\n');
+  await expectAllowed('queue: the «with logo» label, a picture, as the app writes it',
+    () => wholeWrite(`${A}/print-jobs/J_IMAGE`, job({ payload: imageLabel, copies: 2 })));
+  await expectAllowed('queue: …up to the limit itself, 20 000 characters',
+    () => wholeWrite(`${A}/print-jobs/J_EDGE`, job({ payload: `^XA^FD${'x'.repeat(20000 - 12)}^FS^XZ` })));
+  await expectDenied('queue: the darkness sent from a phone instead of the agent’s settings',
+    () => wholeWrite(`${A}/print-jobs/J_DARK`, job({ payload: `~SD28\n${imageLabel}` })));
+  await expectDenied('queue: a darkness key beside the job',
+    () => wholeWrite(`${A}/print-jobs/J_DARKKEY`, { ...job({ payload: imageLabel }), darkness: 28 }));
+  await expectDenied('queue: an employee cannot queue a picture in somebody else s name either',
+    () => wholeWrite(`${A}/print-jobs/J_IMG_FAKE`, job({ payload: imageLabel, createdBy: ALICE.uid }), asAccount(SAM)));
 
   // Claiming it.
   await expectAllowed('queue: an agent claims a waiting job', () =>
@@ -2732,6 +2929,29 @@ async function roles() {
   await expectDenied('order lists must be a true/false, not text',
     () => mergeWrite(`${L}/config/orders`, { ...stamp, orderLists: 'off' }, asAccount(MAYA)));
 
+  // ── The goods-arrived switch (Mise 2, decision F4, 29 Oct 2026): an owner's or a
+  // manager's switch, a boolean, and the day it was turned on as a plain YYYY-MM-DD.
+  await expectDenied('staff cannot turn the goods-arrived check off',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheck: false }, asAccount(SAM)));
+  await expectDenied('staff cannot move the day it counts from either',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheckFrom: '2026-10-29' }, asAccount(SAM)));
+  await expectAllowed('a manager can turn the goods-arrived check off',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheck: false, deliveryCheckOffOn: '2026-10-29' }, asAccount(MAYA)));
+  await expectDenied('staff cannot stamp the day it went off',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheckOffOn: '2026-10-29' }, asAccount(SAM)));
+  await expectDenied('the day it went off must be a plain day',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheckOffOn: 'yesterday' }, asAccount(MAYA)));
+  await expectAllowed('…and an owner on again, from today',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheck: true, deliveryCheckFrom: '2026-10-29' }, asAccount(ALICE)));
+  await expectDenied('the goods-arrived check must be a true/false, not text',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheck: 'off' }, asAccount(MAYA)));
+  await expectDenied('the day it counts from must be a plain day, not a time',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheckFrom: '2026-10-29T10:00:00Z' }, asAccount(MAYA)));
+  await expectDenied('…nor a number',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheckFrom: 20261029 }, asAccount(MAYA)));
+  await expectDenied('a member of another venue cannot touch it',
+    () => mergeWrite(`${L}/config/orders`, { ...stamp, deliveryCheck: false }, asAccount(BOB)));
+
   // ── The order of the supplier list (4 Oct 2026): a manager's setting, a capped list.
   await expectAllowed('a manager sets the supplier order',
     () => mergeWrite(`${L}/config/orders`, { ...stamp, supplierOrder: ['s2', 's1'] }, asAccount(MAYA)));
@@ -2886,6 +3106,47 @@ async function roles() {
     mergeWrite(`${L}/config/calculator`, { ...stamp, clients: [] }, asAccount(SAM)));
   await expectAllowed('staff can still type quantities into the draft', () =>
     mergeWrite(`${L}/drafts/current`, { ...stamp, updatedAt: 'now' }, asAccount(SAM)));
+
+  // ── Mise 2's recipe save (step 3d-6, app/src/recipes/recipesSource.ts saveRecipeDoc) ──
+  // It writes the catalogue's hand-listed fields by MERGE — name, ingredients (rows with
+  // their links and row ids), the label's net weight — and an emptied shelf life as a
+  // REMOVAL (deleteField: the path in the mask, not in the body). It never sends the
+  // oven loss Food cost weighed, nor the mixing steps (their editor is a later step):
+  // the merge must leave all of them standing, and the whitelist must still pass with
+  // them in the stored document.
+  await seedDoc(`${L}/recipes/R3`, {
+    ...stamp, name: 'Focaccia', ingredients: [{ label: 'Flour', grams: 1000, unit: 'g', rid: 'rabc12345' }],
+    lossPct: 12, rawGrams: 1000, cookedGrams: 880,
+    steps: [{ id: 's1', text: 'Mix', rows: ['rabc12345'], seconds: 60, speed: '1' }], endNote: 'Done', shelfLifeDays: 3,
+  });
+  await expectAllowed('⚠️ Mise 2: staff save a recipe Food cost has weighed, emptying its shelf life', () =>
+    clearWrite(`${L}/recipes/R3`, {
+      ...stamp, name: 'Focaccia alta',
+      ingredients: [
+        { label: 'Flour', grams: 1000, unit: 'g', rid: 'rabc12345', kind: 'ingredient', refId: 'I1' },
+        { label: 'Salt', grams: 0, unit: 'pinch', rid: 'rdef67890' },
+      ],
+      netWeightG: 250,
+    }, ['shelfLifeDays'], asAccount(SAM)));
+  const r3 = await readDoc(`${L}/recipes/R3`);
+  check('…and the weighing, the steps and the closing message are still there, the shelf life gone',
+    r3 && r3.fields.lossPct?.integerValue === '12' && r3.fields.rawGrams?.integerValue === '1000'
+      && r3.fields.cookedGrams?.integerValue === '880' && Array.isArray(r3.fields.steps?.arrayValue?.values)
+      && r3.fields.endNote?.stringValue === 'Done' && !('shelfLifeDays' in r3.fields)
+      && r3.fields.netWeightG?.integerValue === '250' && r3.fields.name?.stringValue === 'Focaccia alta');
+  await expectAllowed('Mise 2: staff create a new recipe by the same merge', () =>
+    clearWrite(`${L}/recipes/R_NEW_M2`, {
+      ...stamp, name: 'Pane', ingredients: [{ label: 'Flour', grams: 500, unit: 'g', rid: 'rxyz00001' }],
+    }, ['netWeightG', 'shelfLifeDays'], asAccount(SAM)));
+  // The editor's box stops at 199 (maxLength counts UTF-16 units; an accented letter is one of them, and one
+  // character for the rules too), so the longest name it lets through must still land.
+  await expectAllowed('Mise 2: a name of 199 characters is accepted, the most the editor allows', () =>
+    mergeWrite(`${L}/recipes/R3`, { ...stamp, name: bigString(199), ingredients: [] }, asAccount(SAM)));
+  await expectAllowed('…and so is one of 199 accented letters', () =>
+    mergeWrite(`${L}/recipes/R3`, { ...stamp, name: 'à'.repeat(199), ingredients: [] }, asAccount(SAM)));
+  await expectDenied('Mise 2: a name of 200 characters is refused (the editor caps the box at 199)', () =>
+    mergeWrite(`${L}/recipes/R3`, { ...stamp, name: bigString(200), ingredients: [] }, asAccount(SAM)));
+  await expectDenied('…and staff still cannot delete it', () => deleteWrite(`${L}/recipes/R3`, asAccount(SAM)));
 
   // ── And the owner is still the owner ──
   await expectAllowed('the owner can delete a supplier',
@@ -3049,6 +3310,74 @@ async function roles() {
     () => deleteWrite(`${L}/invoice-decisions/${DEC}`, asAccount(SAM)));
   await expectAllowed('a manager undoes one',
     () => deleteWrite(`${L}/invoice-decisions/${DEC}`, asAccount(MAYA)));
+
+  // ── Which invoices were imported, and from which file (25 Oct 2026, Mise 2) ──
+  // One record per import run, written once (whole) and never edited; no person named in it.
+  const IMP = `${L}/invoice-imports`;
+  const imported = {
+    ...stamp, fileName: 'fatture-settembre.zip', importedAt: '2026-10-25T10:00:00.000Z',
+    firstDate: '2026-09-01', lastDate: '2026-09-30', months: ['2026-09'],
+    invoiceIds: ['18000000001', '18000000002'],
+  };
+  await expectAllowed('a manager records an import',
+    () => wholeWrite(`${IMP}/imp1`, imported, asAccount(MAYA)));
+  await expectAllowed('the owner records one too',
+    () => wholeWrite(`${IMP}/imp2`, imported, asAccount(ALICE)));
+  await expectAllowed('a manager reads the record',
+    readAs(MAYA, `${IMP}/imp1`));
+  // The screen reads the whole list (a collection query), not one record.
+  await expectAllowed('a manager LISTS the records (what the import screen reads)',
+    () => fetch(`${FS}/${IMP}`, { headers: asAccount(MAYA) }));
+  await expectDenied('an employee cannot list them',
+    () => fetch(`${FS}/${IMP}`, { headers: asAccount(SAM) }));
+  await expectDenied('a member of ANOTHER venue cannot list them',
+    () => fetch(`${FS}/${IMP}`, { headers: asAccount(BOB) }));
+  await expectDenied('an employee cannot read it',
+    readAs(SAM, `${IMP}/imp1`));
+  await expectDenied('a member of ANOTHER venue cannot read it',
+    readAs(BOB, `${IMP}/imp1`));
+  await expectDenied('a signed-out device cannot read it',
+    () => fetch(`${FS}/${IMP}/imp1`, { headers: noAuth() }));
+  await expectDenied('an employee cannot write one',
+    () => wholeWrite(`${IMP}/imp3`, imported, asAccount(SAM)));
+  await expectDenied('a member of ANOTHER venue cannot write one here',
+    () => wholeWrite(`${IMP}/imp3`, imported, asAccount(BOB)));
+  await expectDenied('a signed-out device cannot write one',
+    () => wholeWrite(`${IMP}/imp3`, imported, noAuth()));
+  await expectDenied('a record is never edited',
+    () => mergeWrite(`${IMP}/imp1`, { ...imported, fileName: 'other.zip' }, asAccount(MAYA)));
+  await expectDenied('…not even by the owner',
+    () => mergeWrite(`${IMP}/imp1`, { ...imported, invoiceIds: ['1'] }, asAccount(ALICE)));
+  await expectDenied('no «who imported» or any other key',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, importedBy: 'maya@example.com' }, asAccount(MAYA)));
+  await expectDenied('stamped with another venue',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, bakery: 'trattoria-x' }, asAccount(MAYA)));
+  await expectDenied('a record without invoices',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, invoiceIds: [] }, asAccount(MAYA)));
+  await expectDenied('more than 5000 invoice ids',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, invoiceIds: Array.from({ length: 5001 }, (_, i) => String(i)) }, asAccount(MAYA)));
+  await expectAllowed('…5000 are fine',
+    () => wholeWrite(`${IMP}/imp5000`, { ...imported, invoiceIds: Array.from({ length: 5000 }, (_, i) => String(i)) }, asAccount(MAYA)));
+  await expectDenied('the invoice ids must be a list',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, invoiceIds: '18000000001' }, asAccount(MAYA)));
+  await expectDenied('a record without months',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, months: [] }, asAccount(MAYA)));
+  await expectDenied('a date that is not YYYY-MM-DD',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, firstDate: '01/09/2026' }, asAccount(MAYA)));
+  await expectDenied('the first date after the last',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, firstDate: '2026-10-01' }, asAccount(MAYA)));
+  await expectDenied('a missing last date',
+    () => wholeWrite(`${IMP}/imp4`, (({ lastDate, ...rest }) => rest)(imported), asAccount(MAYA)));
+  await expectDenied('an import date that is not a moment',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, importedAt: 'yesterday' }, asAccount(MAYA)));
+  await expectDenied('an empty file name',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, fileName: '' }, asAccount(MAYA)));
+  await expectDenied('a file name longer than 500',
+    () => wholeWrite(`${IMP}/imp4`, { ...imported, fileName: bigString(501) }, asAccount(MAYA)));
+  await expectDenied('an employee cannot delete one',
+    () => deleteWrite(`${IMP}/imp2`, asAccount(SAM)));
+  await expectAllowed('a manager may delete one',
+    () => deleteWrite(`${IMP}/imp2`, asAccount(MAYA)));
 
   // ── How a price moved from one invoice to the next (5 Oct 2026) ──
   const change = {
@@ -3576,6 +3905,103 @@ async function feedbackNotes() {
   await expectDenied('a note cannot be deleted from a phone', () => deleteWrite(`${L}/feedback/N1`, asAccount(ALICE)));
 }
 
+
+// ── «Da fare», the venue's to-do list (Mise 2, app/src/home/todosSource.ts) ─────
+// Every member, any role; the server's clock on createdAt and doneAt; expireAt only on a
+// ticked item, at most 32 days ahead (Firestore's TTL deletes by it).
+async function todos() {
+  await wipe();
+  await seedAccess();
+  const T = 'locations/main/todos';
+  const item = { bakery: 'main', text: 'Call the flour mill', day: '2026-11-06', done: false, doneAt: null, expireAt: null };
+  const inDays = n => new Date(Date.now() + n * 86400000).toISOString();
+  // A phone's clock an hour behind the server's: a real timestamp (so a rule weakened to `is timestamp`
+  // is still caught), but never the same millisecond as request.time — new Date() could be, and then
+  // the emulator allowed the write and the check failed at random (CI, 9 Nov 2026).
+  const phoneClock = () => new Date(Date.now() - 3600000).toISOString();
+  // The writes the app makes, as the SDK sends them: addDoc / setDoc with serverTimestamp()
+  // (a REQUEST_TIME transform), updateDoc (an update mask).
+  const commit = (id, data, headers, { server = [], stamps = {}, mask = null, exists } = {}) => fetch(
+    `${FS.replace(/\/documents$/, '')}/documents:commit`, {
+      method: 'POST', headers,
+      body: JSON.stringify({ writes: [{
+        update: {
+          name: `projects/${PROJECT}/databases/(default)/documents/${T}/${id}`,
+          fields: { ...toFields(data), ...Object.fromEntries(Object.entries(stamps).map(([k, v]) => [k, { timestampValue: v }])) },
+        },
+        ...(mask ? { updateMask: { fieldPaths: mask } } : {}),
+        ...(exists === undefined ? {} : { currentDocument: { exists } }),
+        ...(server.length ? { updateTransforms: server.map(f => ({ fieldPath: f, setToServerValue: 'REQUEST_TIME' })) } : {}),
+      }] }),
+    });
+  const create = (id, data, who, opts = {}) => commit(id, data, asAccount(who), { server: ['createdAt'], exists: false, ...opts });
+  const tick = (id, who, expireAt = inDays(30), opts = {}) =>
+    commit(id, { done: true }, asAccount(who), { server: ['doneAt'], stamps: { expireAt }, mask: ['done', 'doneAt', 'expireAt'], ...opts });
+  const edit = (id, patch, who, opts = {}) => commit(id, patch, asAccount(who), { mask: Object.keys(patch), ...opts });
+
+  // ── Adding ──
+  await expectAllowed('an employee adds an item', () => create('A', item, SAM));
+  await expectAllowed('…so does the manager', () => create('B', item, MAYA));
+  await expectAllowed('…and the owner', () => create('C', item, ALICE));
+  await expectAllowed('a past day is allowed', () => create('D', { ...item, day: '2026-10-01' }, SAM));
+  await expectAllowed('200 characters is fine', () => create('E', { ...item, text: 'x'.repeat(200) }, SAM));
+  await expectDenied('201 characters is not', () => create('F', { ...item, text: 'x'.repeat(201) }, SAM));
+  // The app's maxLength counts UTF-16 units; the rules count characters. An accented text of 200 must pass.
+  await expectAllowed('200 accented characters is fine', () => create('G', { ...item, text: 'è'.repeat(200) }, SAM));
+  await expectDenied('an empty item', () => create('F', { ...item, text: '' }, SAM));
+  await expectDenied('a day that is not YYYY-MM-DD', () => create('F', { ...item, day: '6 Nov' }, SAM));
+  await expectDenied('a stray key (a name on the item)', () => create('F', { ...item, who: 'Sam' }, SAM));
+  const { expireAt: _e, ...noExpire } = item;
+  await expectDenied('a key missing', () => create('F', noExpire, SAM));
+  await expectDenied('stamped for another venue', () => create('F', { ...item, bakery: 'trattoria-x' }, SAM));
+  await expectDenied('born ticked', () => create('F', { ...item, done: true }, SAM, { server: ['createdAt', 'doneAt'], stamps: { expireAt: inDays(30) } }));
+  await expectDenied('dated by the phone, not the server', () => create('F', item, SAM, { server: [], stamps: { createdAt: phoneClock() } }));
+  await expectDenied('done that is not a yes/no', () => create('F', { ...item, done: 'no' }, SAM));
+  await expectDenied('a deletion date on an item not ticked', () => create('F', item, SAM, { stamps: { expireAt: inDays(30) } }));
+
+  // ── Ticking, editing, unticking ──
+  await expectAllowed('an employee ticks an item', () => tick('A', SAM));
+  await expectAllowed('…and edits its words once ticked', () => edit('A', { text: 'Called the mill' }, SAM));
+  await expectDenied('…but cannot push its deletion further away', () =>
+    commit('A', {}, asAccount(SAM), { stamps: { expireAt: inDays(31) }, mask: ['expireAt'] }));
+  await expectDenied('…nor re-stamp the tick', () =>
+    commit('A', {}, asAccount(SAM), { server: ['doneAt'], mask: ['doneAt'] }));
+  // ⚠️ Two phones ticking the same item: the second tick is refused (it would re-stamp doneAt). The app stays quiet
+  // about it because its own copy already shows the item ticked (todosStore.ts).
+  await expectDenied('a second tick of an item already ticked', () => tick('A', MAYA));
+  await expectDenied('an edit that moves the item to another venue', () => edit('A', { bakery: 'trattoria-x' }, SAM));
+  await expectAllowed('the manager unticks it', () => edit('A', { done: false, doneAt: null, expireAt: null }, MAYA));
+  await expectDenied('an untick that keeps the deletion date', () => {
+    return tick('B', SAM).then(() => edit('B', { done: false, doneAt: null }, SAM));
+  });
+  await expectDenied('a tick dated by the phone', () =>
+    commit('C', { done: true }, asAccount(SAM), { stamps: { doneAt: phoneClock(), expireAt: inDays(30) }, mask: ['done', 'doneAt', 'expireAt'] }));
+  await expectDenied('a tick with no deletion date', () =>
+    commit('C', { done: true, expireAt: null }, asAccount(SAM), { server: ['doneAt'], mask: ['done', 'doneAt', 'expireAt'] }));
+  await expectDenied('a tick kept for 60 days', () => tick('C', SAM, inDays(60)));
+  await expectAllowed('a tick kept 31 days (a phone a day fast)', () => tick('C', SAM, inDays(31)));
+  await expectAllowed('an item moved to another day', () => edit('D', { day: '2026-11-20' }, SAM));
+  await expectDenied('an edit that rewrites when it was added', () => edit('D', {}, SAM, { server: ['createdAt'], mask: ['createdAt'] }));
+  await expectDenied('an edit that empties the words', () => edit('D', { text: '' }, SAM));
+  await expectDenied('an edit that adds a stray key', () => edit('D', { who: 'Sam' }, SAM));
+
+  // ── Reading and deleting ──
+  await expectAllowed('an employee reads an item', () => fetch(`${FS}/${T}/D`, { headers: asAccount(SAM) }));
+  await expectAllowed('…and lists them', () => fetch(`${FS}/${T}`, { headers: asAccount(SAM) }));
+  await expectAllowed('an employee deletes an item', () => deleteWrite(`${T}/E`, asAccount(SAM)));
+
+  // ── Nobody outside the venue ──
+  await expectDenied('another venue\'s employee reads nothing here', () => fetch(`${FS}/${T}/D`, { headers: asAccount(BOB) }));
+  await expectDenied('…lists nothing', () => fetch(`${FS}/${T}`, { headers: asAccount(BOB) }));
+  await expectDenied('…adds nothing', () => create('G', item, BOB));
+  await expectDenied('…ticks nothing', () => tick('D', BOB));
+  await expectDenied('…deletes nothing', () => deleteWrite(`${T}/D`, asAccount(BOB)));
+  await seedDoc(`locations/main/client-accounts/${CLIENT_A.uid}`,
+    { bakery: 'main', clientId: 'c-one', clientName: 'CLIENT A', createdAt: '2026-08-10T09:00:00.000Z' });
+  await expectDenied('a client ordering account reads nothing', () => fetch(`${FS}/${T}/D`, { headers: asAccount(CLIENT_A) }));
+  await expectDenied('an account with no access adds nothing', () => create('G', item, NOBODY));
+  await expectDenied('signed out, nothing', () => fetch(`${FS}/${T}/D`, { headers: noAuth() }));
+}
 
 // ── The device count (js/device-ping.js) ─────────────────────────────────────
 // Write-only, any member, at most the six keys; the uid is always the writer's own.
@@ -4230,6 +4656,10 @@ async function partialOwners() {
     wholeWrite(`${L}/price-changes/inv-1-1-flour`, change('1'), asAccount(KITCHEN)));
   await expectAllowed('…remembers an invoice decision', () =>
     mergeWrite(`${L}/invoice-decisions/${'a'.repeat(64)}`, DECISION, asAccount(KITCHEN)));
+  // Mise 2's import log follows invoice-decisions (managesPrices): the kitchen loads the invoices.
+  await expectAllowed('…records an invoice import (Mise 2)', () =>
+    wholeWrite(`${L}/invoice-imports/impk`, { ...stamp, fileName: 'fatture.zip', importedAt: '2026-11-08T10:00:00.000Z', firstDate: '2026-10-01', lastDate: '2026-10-31', months: ['2026-10'], invoiceIds: ['18000000001'] }, asAccount(KITCHEN)));
+  await expectAllowed('…lists the invoice imports (Mise 2)', readAs(KITCHEN, `${L}/invoice-imports`));
   await expectAllowed('…and removes a price', () => deleteWrite(`${L}/ingredient-prices/flour`, asAccount(KITCHEN)));
 
   // ── …the Stocktake, whole, though it shares a section with Food cost ──
@@ -4296,6 +4726,8 @@ async function partialOwners() {
     wholeWrite(`${L}/price-changes/inv-2-1-flour`, change('2'), asAccount(SALES)));
   await expectAllowed('…remembers an invoice decision', () =>
     mergeWrite(`${L}/invoice-decisions/${'b'.repeat(64)}`, DECISION, asAccount(SALES)));
+  await expectAllowed('…records an invoice import (Mise 2)', () =>
+    wholeWrite(`${L}/invoice-imports/imps`, { ...stamp, fileName: 'fatture.zip', importedAt: '2026-11-08T10:00:00.000Z', firstDate: '2026-10-01', lastDate: '2026-10-31', months: ['2026-10'], invoiceIds: ['18000000001'] }, asAccount(SALES)));
   await expectAllowed('…sets the labour cost', () =>
     mergeWrite(`${L}/foodcost-settings/main`, { ...stamp, labourCostPerHour: 15, updatedAt: '2026-11-01' }, asAccount(SALES)));
   await expectAllowed('…mints an ordering link', () =>
@@ -4449,7 +4881,7 @@ async function partialOwners() {
 for (const scenario of [suppliers, ingredients, ingredientPrices, drafts, history, neighbours,
                         locationTree, isolation, configAndLogs, pastries, pastryLogs,
                         products, stocktake, staffCards, clientOrders, orderRequests, awayDays,
-                        pushNotifications, feedbackNotes, deviceCount, errorReports, usageStats,
+                        pushNotifications, feedbackNotes, todos, deviceCount, errorReports, usageStats,
                         roles, partialOwners, onboardingCollections]) {
   await scenario();
 }

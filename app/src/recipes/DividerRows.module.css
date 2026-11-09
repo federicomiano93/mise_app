@@ -1,0 +1,101 @@
+/* The rows of a recipe in divider mode: name and amount, one line each, at least a thumb's height, down to a 296px phone.
+   The same geometry as reorder mode (ReorderRows.module.css) so the numbers end where the Total's end. It sits in the
+   editor's frame, which draws the outer borders. A row that is pressed has a line under it. */
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  border-top: 1px solid var(--line);
+}
+
+.item:first-child {
+  border-top: 0;
+}
+
+/* The line under a row: 2px in the ink, in place of the 1px separator the next row would draw. Two classes, so they
+   outweigh .item whichever order the rules are in. */
+.item.divided {
+  border-bottom: 2px solid var(--ink-2);
+}
+
+.item.belowDivided {
+  border-top: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: var(--hit);
+  margin: 0;
+  /* The right padding is the bin's place (and reorder mode's grip), so the amounts end on the Total's edge. */
+  padding: var(--s1) calc(var(--hit) + var(--s1)) var(--s1) 0;
+  border: 0;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+}
+
+button.row {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button.row:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+@media (hover: hover) {
+  button.row:hover {
+    background: var(--sunken);
+  }
+}
+
+.name {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* The right side has the geometry of the Total row and of reorder mode: a cell as wide as the editor's amount box, the
+   number right-aligned in 52px, the unit word after it, then the bin's place (the row's right padding). */
+.amount {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 116px;
+  padding-left: 1px;
+}
+
+.number {
+  flex: none;
+  width: 52px;
+  padding: 0 var(--s1);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.unit {
+  flex: 1;
+  min-width: 0;
+  padding-left: var(--s2);
+  overflow: hidden;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+
+/* Under 340px the cell is 8px narrower, as the editor's amount box and the Total's cell are. */
+@media (max-width: 339px) {
+  .amount {
+    width: 108px;
+  }
+}

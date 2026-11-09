@@ -1,0 +1,6 @@
+.note {
+  margin-top: var(--s2);
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+  font-weight: 550;
+}

@@ -1,0 +1,1155 @@
+// ordersStore.ts — what the order list shows for one venue, and what it writes: the shared order in progress (step 3f-1)
+// and, from step 3f-2, the order records.
+//
+// The page half of js/orders/orders-main.js that the order list needs, decision for decision, as plain TypeScript with no
+// React and no Firebase in it: the source (ordersSource.ts) is injected, so every trap below is a spec with a fake
+// (ordersStore.spec.ts). Screens read it through OrdersContext.tsx. It says nothing in words: a failure is an
+// OrdersMessage or an outcome, and the screen puts it in the person's language.
+//
+// LOCAL-FIRST (P20, decision T3): a typed quantity is on screen at once and saved through Firestore's own offline database
+// a moment later (draftSync.ts, 800 ms); a refused save is said and the typing stays on screen, sent again with the next
+// change (parity L37).
+//
+// PLACING AN ORDER (step 3f-2, decision T5): `place` is the whole sequence of the current app's placeOrder, in the data layer
+// and not in a screen — flush the typing → write the record in a transaction → forget the lines here → clear them in the
+// draft — with ONE point of no return (placeOne). The screens only confirm and ask; they never write.
+//
+// HISTORY (step 3f-4): the live window above is what History lists first; older orders are fetched on demand, page by page,
+// FROM THE SERVER (`loadOlderHistory`, the shared createOlderLoader), and kept only while the section is open. A correction or
+// a delete of one record goes through ONE transaction that refuses when the record changed since the editor opened it
+// (historyEdit.ts sameOrder).
+//
+// INCOMING (step 3f-5): «did it all arrive?» is one patch of the record (`confirmDelivery`), «Resolved» one merge into it
+// (`resolveMissing`); «Put back» and «Another supplier» are changes to the shared order like typing, sent at once (`putBack`,
+// `orderElsewhere`). The goods-arrived switch (decision F4) is read beside config/orders (`deliveryCheck`) and written by
+// `setDeliveryCheck`. What Incoming SHOWS is derived by the screens from the records (@mise/shared/deliveries).
+//
+// ORDER LISTS (step 3f-7): a list is frozen from the shared order (`sendList`) and never clears it; the ticks are one merge each and
+// show at once through Firestore's own local view, so no screen holds a tick of its own. What a list SAYS is derived by the screens
+// (@mise/shared/order-request-model). The warning before a send (`whoIsAway`) can never stop it: any failure answers «go ahead».
+//
+// ⚠️ NO COPY OF ITS OWN IN localStorage (decision T14): the current app cached config/orders in `orders-config` so the
+// Stock column did not flash before the snapshot (parity M11); Firestore's offline database answers from this phone (not at
+// once behind 302 ingredients: parity CP6), and a key outside KEEP_PREFIXES would be one more thing a venue switch must wipe. T14 still holds for
+// config/orders and for the orders. The supplier and ingredient LIST COPY (`orders-list-copy`, shared/src/list-copy.ts) is a
+// separate thing: it lives OUTSIDE this store (useListCopy.ts), is never in the snapshot, and only draws the rows of the
+// supplier list while the live lists have not landed (a supplier tapped meanwhile is held in OrdersSection.tsx until they do).
+
+import { awayNames, awayUids, nobodyWillBeTold } from '@mise/shared/away-model';
+import { MAX_LINES, buildOrderRequest, senderName } from '@mise/shared/order-request-model';
+import { stampFor } from '@mise/shared/order-day';
+import { parseISODate, todayISO } from '@mise/shared/day';
+import { createOlderLoader, liveHistoryStart } from '@mise/shared/history-window';
+import { normalizeOrdersConfig } from '@mise/shared/orders-config';
+import { deliveryCheckOf, deliveryCheckPatch } from '@mise/shared/delivery-check';
+import type { DeliveryCheck } from '@mise/shared/delivery-check';
+import { applyReorder } from '@mise/shared/deliveries';
+import type { ReorderItem } from '@mise/shared/deliveries';
+import { storedUnitFor } from '@mise/shared/order-unit';
+import {
+  buildSupplierArchive, historyDocId, isUnitConflict, mergeArchives, quantityPathsFor, unitConflicts, wholeNumber,
+} from '@mise/shared/archive';
+import type { SupplierRecord } from '@mise/shared/archive';
+import type { JournalStorage } from '@mise/shared/draft-journal';
+import { confirmedEntries } from '@mise/shared/untold-changes';
+import { markBusy as markBusyOfSession } from '../session/busy';
+import { createDraftSync, EMPTY_DRAFT } from './draftSync';
+import { watchPageHidden } from './pageHidden';
+import type { DraftDays, DraftEntries, DraftEntry, DraftSync, DraftSyncDeps, DraftView } from './draftSync';
+import { buildOrdersLens } from './ordersLens';
+import { correctedRecord, sameOrder } from './historyEdit';
+import type { RecordEdits } from './historyEdit';
+import { createSuggester, NO_SUGGESTIONS } from './suggester';
+import type { Suggester } from './suggester';
+import type { LensIngredient, OrdersLens } from './ordersLens';
+import type { OrdersMeta, OrdersSource, StoredDoc } from './ordersSource';
+import { settingPatch, withPatch } from './settingsPatch';
+import type { SettingChange, SettingRefusal } from './settingsPatch';
+import { kioskSectionsFor } from './kioskFeed';
+import type { KioskSection } from '@mise/shared/kiosk-lines';
+
+export type OrdersConfig = ReturnType<typeof normalizeOrdersConfig>;
+
+export type OrdersMessage =
+  // An autosave of the order was refused (or failed): what was typed is still on screen and goes out with the next change.
+  | { readonly kind: 'draft-not-saved' }
+  // A later autosave landed: a «not saved» message still on screen can go.
+  | { readonly kind: 'draft-saved' }
+  // The day chosen on a supplier's day line was refused: the line is back on the day that is stored (parity D7).
+  | { readonly kind: 'day-not-saved' }
+  // «Close as not ordered» or «Reopen» was refused: Firestore has already put the supplier back as it was on screen.
+  | { readonly kind: 'close-not-saved' };
+
+export interface OrdersSnapshot {
+  // Every supplier, as stored (the lens keeps the active ones and sorts them).
+  readonly suppliers: readonly StoredDoc[];
+  // Whether the suppliers can be shown: the server answered, the copy held some, or the stream failed.
+  readonly suppliersLoaded: boolean;
+  // The live stream died (no resubscribe): the page says the order no longer updates (parity L5).
+  readonly suppliersBroken: boolean;
+  readonly ingredients: readonly StoredDoc[];
+  readonly ingredientsLoaded: boolean;
+  readonly ingredientsBroken: boolean;
+  // config/orders through normalizeOrdersConfig (defaults while it has not arrived: the Stock box shown, parity M10).
+  readonly config: OrdersConfig;
+  readonly configLoaded: boolean;
+  // Any first word about config/orders, even «none» from this phone's own database, or a refusal. `configLoaded` says the document
+  // can be believed; this says only that the wait is over, which is all the list copy needs (a venue with no document has no order
+  // to reshuffle the rows).
+  readonly configAnswered: boolean;
+  // The goods-arrived switch of config/orders (decision F4), read beside it: absent = on, asking about every order.
+  readonly deliveryCheck: DeliveryCheck;
+  // The order in progress: the server's document with this phone's unsent typing on top (draftSync.ts).
+  readonly draft: DraftView;
+  readonly draftLoaded: boolean;
+  // Whether the SERVER has answered for the suppliers, the ingredients and the draft (not only this phone's own database): the
+  // pending check looks once, and a look at a copy days old would miss an order typed on another phone (step 3f-6, review).
+  readonly serverSeen: { readonly suppliers: boolean; readonly ingredients: boolean; readonly draft: boolean };
+  readonly draftBroken: boolean;
+  // The last autosave was refused and no later one has landed (parity L37).
+  readonly draftSaveFailed: boolean;
+  // How many times quantities left by the last page came back from this device's note (F-15): the section then looks again
+  // for orders typed on an earlier day and never placed (the current app's `cameBack`).
+  readonly draftCameBack: number;
+  // The suppliers whose order is being recorded right now: their «Order placed…» is off (parity X1).
+  readonly placing: readonly string[];
+  // The order records of the live window (the last two months, step 3f-2b), as stored. Empty until they arrive.
+  readonly history: readonly StoredDoc[];
+  // The live window has answered once (or its stream died): until then an empty `history` means «not here yet», and History's
+  // editor, opened by its address, waits instead of saying the order is not there (step 3f-4).
+  readonly historyLoaded: boolean;
+  // The live stream of the records died (no resubscribe): the suggestions may be counting from a list that no longer
+  // updates, and the page says so like the other streams (parity L5; the current app's «past orders»).
+  readonly historyBroken: boolean;
+  // The suggestion engine over `history` and `ingredients` — ONE per snapshot of those two, asked by every row, the Stock
+  // box and the confirm screen alike (suggester.ts).
+  readonly suggester: Suggester;
+  // The orders older than the live window that History fetched on demand (step 3f-4), as stored, and where that paging stands:
+  // `done` once every page and the legacy record are in, `error` when the last attempt failed (the same button retries).
+  readonly olderHistory: readonly StoredDoc[];
+  readonly older: { readonly loading: boolean; readonly done: boolean; readonly error: boolean };
+  // The last 120 order lists, newest first, as stored (step 3f-7). Empty until they arrive.
+  readonly requests: readonly StoredDoc[];
+  // The lists have answered once (or their stream died): until then «nobody was told» and an empty screen would be guesses.
+  readonly requestsLoaded: boolean;
+  // The live stream of the lists died (no resubscribe): the page says so like the other streams (parity L5).
+  readonly requestsBroken: boolean;
+  // ingredient-prices by ingredient id (step 3f-8c), held ONLY while this person may read prices (setPriceReader); else {}.
+  readonly prices: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+  // ⚠️ THE ONE GATE OF EVERY AMOUNT ON SCREEN (parity L20): true only once the read of ingredient-prices has SUCCEEDED. An
+  // empty map alone is not enough — a refused read gives one too, and it would draw «no price» and a total in front of an
+  // employee (js/orders/order-cost-view.js).
+  readonly pricesReadable: boolean;
+}
+
+// How a correction or a delete from History ended (step 3f-4).
+//   'saved' / 'deleted' — written; 'changed' — the record is no longer the order the editor opened (a colleague added to it or
+//   corrected it meanwhile): NOTHING written; 'gone' — the record is no longer there: nothing written; 'empty' — every line was
+//   set to 0 (a correction cannot leave an empty order: delete it instead); 'offline' — refused before trying (a transaction
+//   needs the server); 'failed' — refused or failed: nothing written.
+export type RecordWriteOutcome = 'saved' | 'deleted' | 'changed' | 'gone' | 'empty' | 'offline' | 'failed';
+
+// How a delivery answer, a «Resolved» or the switch ended (step 3f-5): 'saved' once the server took it; 'refused' when the rules
+// said no (the switch, for a person who is not an owner or a manager); 'failed' otherwise. ⚠️ Offline the promise simply waits:
+// Firestore shows the change on this phone at once and sends it when the connection comes back (local-first), so a screen never
+// waits for it before moving on.
+export type DeliveryWriteOutcome = 'saved' | 'refused' | 'failed';
+
+// How a change on Orders → Settings ended (step 3f-8): written, refused by the rules, failed, or one of settingsPatch.ts's refusals.
+export type SettingOutcome = DeliveryWriteOutcome | SettingRefusal;
+
+// How «Put back» / «Another supplier» ended: 'applied' — the line is in the order (sent at once; a refusal is said like any
+// typing, 'draft-not-saved', and the line stays on this phone to go again with the next change); 'skipped' — the row already has
+// a quantity, typed by a person, and is never overwritten (parity V9): nothing changed; 'gone' — the ingredient, or the supplier
+// it would go to, is not there or not in use any more: nothing changed.
+export type ReorderOutcome = 'applied' | 'skipped' | 'gone';
+
+// How sending an order list ended (step 3f-7): 'sent' — the server has it; 'queued' — this phone is offline: the list is safe in its
+// own database and goes when the connection comes back; 'nothing' — no line left to send (nothing written); 'too-many' — more
+// lines than a list can hold (nothing written, said before the rules would refuse it); 'failed' — refused or failed: the order is
+// as it was and nothing was sent.
+export type ListSendOutcome = 'sent' | 'queued' | 'nothing' | 'too-many' | 'failed';
+
+// How long a screen waits for the server's answer to a list before it says «it goes when the connection comes back».
+// ⚠️ 5 s, not 8: with the two 3 s limits below the worst wait is about 11 s, and «Sending…» (8 s, told at the tap and again right
+// before the write) then stays on screen the whole time.
+export const LIST_ANSWER_MS = 5000;
+
+// How long the reads before the write may take (who is away; the sender's name). On a kitchen's bad Wi-Fi each takes over ten
+// seconds, and a tap that waits for them gets tapped again. Past the limit the send goes ahead without what they would have said.
+export const LIST_READ_MS = 3000;
+
+// The warning before a list is sent: everybody who would be told is away, and who they are ('' for somebody with no name: the screen
+// has the word).
+export interface AwayAnswer {
+  readonly nobody: boolean;
+  readonly names: readonly string[];
+}
+
+// One change to one line, as a row makes it.
+export type LineEdit =
+  // The Order box, the − / + steppers: a whole number, never below 0 (parity L26).
+  | { readonly qty: number }
+  // The Stock box: a reading of the shelf. ⚠️ It never moves the supplier's day (parity L28) — unless it fills the Order box
+  // with the suggestion (suggester.ts fillFor), which is ordering and stamps the day like typing the number would.
+  | { readonly stock: number }
+  // The unit menu, only for a card that offers a choice (parity L25): stored as `storedUnitFor` says ('' = the card's).
+  | { readonly unit: string }
+  // The ×: back to the card's unit and no quantity, in ONE autosave (parity L25).
+  | { readonly clear: true };
+
+// One supplier's order as the confirm screen confirmed it (parity X2): the quantities above zero, by ingredient id, and the
+// unit each line SHOWED, frozen when the screen opened.
+export interface PlaceItem {
+  readonly supplierId: string;
+  // The day it is recorded under: recordDay(stamp, today), never later than today (decision F3).
+  readonly date: string;
+  readonly quantities: Readonly<Record<string, number>>;
+  readonly units: Readonly<Record<string, string>>;
+}
+
+// How one supplier's order ended.
+export type PlaceOutcome =
+  // Recorded and cleared from the order.
+  | { readonly supplierId: string; readonly kind: 'saved' }
+  // Recorded, but the clear was refused: the lines are back on screen, and must NOT be placed again (they would add up).
+  | { readonly supplierId: string; readonly kind: 'not-cleared' }
+  // Nothing was written: the order is as it was.
+  | { readonly supplierId: string; readonly kind: 'failed' }
+  // Nothing was written: today's record holds these lines in a unit the new ones cannot be added to (parity H2).
+  | { readonly supplierId: string; readonly kind: 'unit-conflict'; readonly ids: readonly string[] }
+  // Every line was set to 0 on the confirm screen, or the supplier is gone: not an order, nothing written.
+  | { readonly supplierId: string; readonly kind: 'nothing' }
+  // This supplier's order is already being recorded (a second tap).
+  | { readonly supplierId: string; readonly kind: 'busy' };
+
+export type PlaceReport =
+  | { readonly offline: true }
+  | { readonly offline: false; readonly outcomes: readonly PlaceOutcome[] };
+
+export type ClearOutcome = 'cleared' | 'failed' | 'offline';
+
+// What the confirm screen needs to know about today's record of one supplier.
+export interface RecordCheck {
+  readonly supplierId: string;
+  readonly date: string;
+  // Whether the record already exists: the screen then says the order ADDS to it (parity X2).
+  readonly exists: boolean;
+  // The lines it holds in a unit the new order cannot be added to (archive.ts unitConflicts, parity X7).
+  readonly conflicts: ReturnType<typeof unitConflicts>;
+}
+
+export interface OrdersDeps {
+  // The busy marker of the session (session/busy.ts); a spec passes its own to count.
+  markBusy(): () => void;
+  // Today, 'YYYY-MM-DD' in the phone's own time zone (day.js todayISO).
+  today(): string;
+  // The draft's write clock and debounce; a spec passes its own.
+  draft: Pick<DraftSyncDeps, 'nowIso' | 'setTimer' | 'clearTimer'>;
+  // Whether the phone believes it is connected. ⚠️ Placing and clearing are refused offline (parity X3): Firestore would
+  // keep the record and the clear waiting, to land in two different moments of connectivity — how an order gets lost.
+  online(): boolean;
+  // The note of typed quantities that outlives the page (F-15, @mise/shared/draft-journal), with the clock it ages by, a
+  // later try when the orders could not be read, and the page going out of sight. Absent: nothing is noted (a spec that is
+  // not about it).
+  journal?: {
+    storage(): JournalStorage | null;
+    now(): number;
+    retryLater(run: () => void, ms: number): void;
+    onPageHidden(run: () => void): () => void;
+  };
+}
+
+export interface OrdersStore {
+  getSnapshot(): OrdersSnapshot;
+  subscribe(listener: () => void): () => void;
+  onMessage(listener: (message: OrdersMessage) => void): () => void;
+  // Whether this person may read prices (the session's word, UX only — firestore.rules decide, P2): on, and while the section
+  // is started, the listener on ingredient-prices is open; off, it is closed and the prices are forgotten. An employee the venue
+  // never showed Food cost is never on, so nothing about money is even loaded (step 3f-8c). Safe before start().
+  setPriceReader(on: boolean): void;
+  // Starts the six listeners (and the price listener for a price reader, setPriceReader); stop() ends them and sends a change still waiting for the autosave at once, so leaving the
+  // section within 800 ms of a keystroke loses nothing. Safe to call start → stop → start (React's development mode does).
+  start(): void;
+  stop(): void;
+  // Changes one line of the order, LOCAL-FIRST. `supplier` is the supplier whose screen the row is on (the pseudo
+  // «No supplier» included); `ingredient` is the row's line as the lens filed it.
+  editLine(supplier: StoredDoc, ingredient: LensIngredient, edit: LineEdit): void;
+  // The day line (parity D7): the supplier's lines are for `day` ('YYYY-MM-DD'). Written at once, LOCAL-FIRST; a refusal
+  // puts the stored day back and says 'day-not-saved'. Resolves once the server answered: true = saved (or nothing to change),
+  // false = refused. ⚠️ Offline it waits for the connection, so no screen may wait on it before showing the change (step 3f-6:
+  // the pending banner goes at once and comes back on false).
+  setDay(supplier: StoredDoc, day: string): Promise<boolean>;
+  // «Close as not ordered» on the order summary (the current app's PR #470): today's close of this supplier, in
+  // drafts/current.skipped. LOCAL-FIRST like Firestore makes it (the listeners see it at once, offline too); a refusal is said
+  // ('close-not-saved') and Firestore takes it back. Resolves true once saved, false when refused. ⚠️ No screen waits on it.
+  closeNotOrdered(supplierId: string): Promise<boolean>;
+  // «Reopen»: the undo of the line above, the same promise.
+  reopenToday(supplierId: string): Promise<boolean>;
+  // What the confirm screen needs before it opens, read once from the server (parity X2, X7). A record that cannot be read
+  // counts as none: the transaction inside `place` still refuses a real clash.
+  checkRecords(items: ReadonlyArray<{ readonly supplierId: string; readonly date: string }>, noSupplierName: string): Promise<RecordCheck[]>;
+  // The same check at the moment of SENDING (parity X7, step 3f-3), answered at once from the live window of the records:
+  // the send road opens a window that must stay inside the tap, so nothing may be awaited before it. It mirrors the current
+  // app's refuseOnUnitConflict, which reads its live history too; a record outside the window is today's at the latest
+  // (decision F3), so it is always inside. A check that throws reports no clash: the write still refuses a real one.
+  conflictsNow(items: ReadonlyArray<{ readonly supplierId: string; readonly date: string }>, noSupplierName: string): RecordCheck[];
+  // Records these orders, one supplier after the other (parity X5, X8). `noSupplierName` names the pseudo-supplier.
+  place(items: readonly PlaceItem[], noSupplierName: string): Promise<PlaceReport>;
+  // «Clear quantities» (parity X11): these suppliers' quantities, units and overrides go, in ONE write; the stock readings
+  // stay; nothing recorded is touched.
+  clearQuantities(supplierIds: readonly string[], noSupplierName: string): Promise<ClearOutcome>;
+  // History's «Load older orders» (parity H8): the next page from before the live window, then the legacy record. A failure
+  // keeps what was loaded and sets `older.error`; a second call while one is on its way does nothing.
+  loadOlderHistory(): Promise<void>;
+  // History's editor (parity H12). `opened` is the record as the editor opened it; the write happens only if the stored record
+  // is still that order (historyEdit.ts sameOrder).
+  correctRecord(opened: StoredDoc, edits: RecordEdits): Promise<RecordWriteOutcome>;
+  deleteRecord(opened: StoredDoc): Promise<RecordWriteOutcome>;
+  // «Did it all arrive?» (parity V4, V5): `missingIds` are the lines ticked as NOT arrived ([] = all arrived); `missing` is
+  // replaced whole and `deliveredAt` stamped now.
+  confirmDelivery(record: StoredDoc, missingIds: readonly string[]): Promise<DeliveryWriteOutcome>;
+  // «Resolved» on one line of «To re-order» (parity V9, V11): bought elsewhere, it leaves the list for good.
+  resolveMissing(item: ReorderItem): Promise<DeliveryWriteOutcome>;
+  // «Put back» (parity V9): the line goes into its CURRENT supplier's order with the missed quantity, in the unit it was ordered.
+  putBack(item: ReorderItem): ReorderOutcome;
+  // «Another supplier» (parity V10, L38's writer): the line goes into `supplierId`'s order THIS TIME, with the missed quantity.
+  orderElsewhere(item: ReorderItem, supplierId: string): ReorderOutcome;
+  // The goods-arrived switch for the whole venue (decision F4).
+  setDeliveryCheck(on: boolean): Promise<DeliveryWriteOutcome>;
+  // One change on Orders → Settings (step 3f-8, parity M3–M8): the Stock box, order lists, a road, the week start, the days of
+  // History, the supplier order. Decided by settingsPatch.ts — a refusal ('only-road', 'last-road', 'invalid', 'unchanged') writes
+  // nothing — then ONE merge into config/orders, which the rules let only an owner or a manager write ('refused' otherwise).
+  saveSetting(change: SettingChange): Promise<SettingOutcome>;
+  // The kiosk rest screen's Orders lines from what is held now (parity M14, decision T13), the goods-arrived switch honoured
+  // (kioskFeed.ts). No read. null while the suppliers, the records or config/orders have not arrived: «nothing to show» and «not
+  // known yet» are told apart. The kiosk that draws them is step 3g.
+  kioskSections(): KioskSection[] | null;
+  // Would anybody hear a list sent now (parity R17)? ⚠️ NEVER REJECTS AND NEVER STOPS A SEND: an unreadable roster, a refused read or
+  // a phone that is offline is no evidence that nobody is listening, and answers «go ahead».
+  whoIsAway(senderUid: string): Promise<AwayAnswer>;
+  // Starts reading the sender's own roster row (their name), so the read has had time by the tap. Fire-and-forget and once per uid:
+  // a read that failed is forgotten, so the next call may try again.
+  prepareSender(senderUid: string): void;
+  // Sends the ticked suppliers' part of the shared order as a list (parity R14, R15). ⚠️ THE ORDER IS NOT CLEARED (his choice, 14 Aug
+  // 2026). The sender's name is read here (3 s at most), and a read that fails or is late can never stop the send: the list goes
+  // with no name. ⚠️ `stillWanted` is asked right after that read, before anything is written: a screen that was left in the
+  // meantime answers false and nothing is written ('nothing').
+  sendList(supplierIds: readonly string[], senderUid: string, noSupplierName: string, stillWanted: () => boolean): Promise<ListSendOutcome>;
+  // A tick on one line (parity R19), or «Finish» on all the lines still open (R20): shown at once, taken back by Firestore when refused.
+  tickRequestLine(id: string, ingredientId: string, done: boolean): Promise<DeliveryWriteOutcome>;
+  finishRequest(id: string, ingredientIds: readonly string[]): Promise<DeliveryWriteOutcome>;
+  // Deletes one list (parity R21; the rules let only an owner or a manager).
+  deleteRequest(id: string): Promise<DeliveryWriteOutcome>;
+  // «Do not buzz this phone about order lists» (parity M7), on the token document of `token`.
+  setPhoneMute(token: string, mute: boolean): Promise<DeliveryWriteOutcome>;
+}
+
+export function browserOrdersDeps(): OrdersDeps {
+  return {
+    markBusy: markBusyOfSession,
+    today: () => todayISO(),
+    draft: {
+      nowIso: () => new Date().toISOString(),
+      setTimer: (run, ms) => setTimeout(run, ms),
+      clearTimer: handle => clearTimeout(handle as ReturnType<typeof setTimeout>),
+    },
+    online: () => navigator.onLine,
+    journal: {
+      storage: () => {
+        try {
+          return window.localStorage;
+        } catch {
+          return null;
+        }
+      },
+      now: () => Date.now(),
+      retryLater: (run, ms) => { setTimeout(run, ms); },
+      onPageHidden: run => watchPageHidden(run),
+    },
+  };
+}
+
+// A switched-off line with a quantity is ordered, recorded and cleared like any other (decision T10): the record's own lens
+// (ingredientsOf, active only — kept as the current app has it) must see every line of the order as in use. The reminders read
+// the order through it too (step 3f-6: an order not placed, or an addition nobody was told about, may be a «Non in uso» line).
+export function orderable(lines: readonly LensIngredient[]): LensIngredient[] {
+  return lines.map(line => ((line as { active?: unknown }).active === false ? { ...line, active: true } : line));
+}
+
+// `venue` is the open venue's id: the note of typed quantities is one venue's (F-15). '' keeps no note.
+export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = browserOrdersDeps(), venue = ''): OrdersStore {
+  let snapshot: OrdersSnapshot = {
+    suppliers: [], suppliersLoaded: false, suppliersBroken: false,
+    ingredients: [], ingredientsLoaded: false, ingredientsBroken: false,
+    config: normalizeOrdersConfig(null), configLoaded: false, configAnswered: false, deliveryCheck: deliveryCheckOf(null),
+    draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false, draftCameBack: 0,
+    serverSeen: { suppliers: false, ingredients: false, draft: false },
+    placing: [],
+    history: [], historyLoaded: false, historyBroken: false, suggester: NO_SUGGESTIONS,
+    olderHistory: [], older: { loading: false, done: false, error: false },
+    requests: [], requestsLoaded: false, requestsBroken: false,
+    prices: {}, pricesReadable: false,
+  };
+  const listeners = new Set<() => void>();
+  const messageListeners = new Set<(message: OrdersMessage) => void>();
+  let stops: Array<() => void> = [];
+  let releaseBusy: (() => void) | null = null;
+  // The section was left: nothing can be typed any more, so the marker waits only for the writes still in the air.
+  let stopped = false;
+  // The page-hidden listener (F-15), while the section is started.
+  let stopHidden: (() => void) | null = null;
+  // The first day of the live window, fixed when the listeners start: the older pages are fetched from BEFORE it, so the two
+  // never overlap and never leave a gap.
+  let windowStart = liveHistoryStart(parseISODate(deps.today()));
+  // The price listener (step 3f-8c): open only while the section is started AND this person may read prices.
+  let priceReader = false;
+  let stopPrices: (() => void) | null = null;
+  type OlderLoader = ReturnType<typeof createOlderLoader<StoredDoc>>;
+  let olderLoader: OlderLoader | null = null;
+
+  function set(patch: Partial<OrdersSnapshot>) {
+    snapshot = { ...snapshot, ...patch };
+    // A new engine only when what it reads changed: a keystroke keeps the one the rows already asked.
+    if (patch.history || patch.ingredients) snapshot = { ...snapshot, suggester: createSuggester(snapshot.history, snapshot.ingredients) };
+    for (const listener of listeners) listener();
+  }
+
+  function openPrices() {
+    if (stopPrices || !priceReader || !stops.length) return;
+    stopPrices = source.watchPrices((map, readable) => set({ prices: map, pricesReadable: readable }));
+  }
+  function closePrices() {
+    stopPrices?.();
+    stopPrices = null;
+    if (snapshot.pricesReadable || Object.keys(snapshot.prices).length > 0) set({ prices: {}, pricesReadable: false });
+  }
+
+  function say(message: OrdersMessage) {
+    for (const listener of messageListeners) listener(message);
+  }
+
+  // ⚠️ RULE 2 OF EVERY SCREEN: while typing has not reached Firestore, a self-started reload must not throw it away. Held
+  // from the keystroke until the save has settled (offline, until the connection comes back).
+  function holdBusy() {
+    if (!releaseBusy) releaseBusy = deps.markBusy();
+  }
+  function dropBusyWhenSaved() {
+    // ⚠️ After stop() a refused change can never be sent again from here (it was said, and the section is gone): holding
+    // the marker for it blocked every self-started reload of the phone for good (found in the third review of 3f-1).
+    if (releaseBusy && (stopped ? !sync.saving() : !sync.hasUnsaved())) {
+      releaseBusy();
+      releaseBusy = null;
+    }
+  }
+
+  const sync: DraftSync = createDraftSync({
+    save: payload => source.mergeDraft(payload),
+    nowIso: deps.draft.nowIso,
+    setTimer: deps.draft.setTimer,
+    clearTimer: deps.draft.clearTimer,
+    onResult: ok => {
+      if (ok && snapshot.draftSaveFailed) {
+        set({ draftSaveFailed: false });
+        say({ kind: 'draft-saved' });
+      } else if (!ok) {
+        // The refusal handed the typing back to the sync: drawn again now, in case Firestore took its copy back first.
+        set({ draftSaveFailed: true, draft: sync.view() });
+        say({ kind: 'draft-not-saved' });
+      }
+      dropBusyWhenSaved();
+    },
+    journal: deps.journal && venue ? {
+      venue,
+      storage: deps.journal.storage,
+      now: deps.journal.now,
+      ordersSince: fromDay => source.getRecentHistoryFromServer(fromDay),
+      retryLater: deps.journal.retryLater,
+      // Lines this device typed on an earlier page are back (the server has answered, and no order has named them since): on
+      // screen now, and unsaved until their write lands, so a self-started reload waits (rule 2). The sync sends them.
+      onCameBack: view => {
+        holdBusy();
+        set({ draft: view, draftCameBack: snapshot.draftCameBack + 1 });
+      },
+    } : undefined,
+  });
+
+  // ⚠️ A QUANTITY TYPED FOR A SUPPLIER CLOSED TODAY REOPENS IT (the current app's reopenIfTyped). «Nothing needed» stopped being
+  // true, and a close left standing would silence the «Order today» strip and the kiosk for the rest of the day — the very
+  // reminder that catches an order typed and then forgotten. Once: Firestore shows the reopen at once, so the next keystroke finds
+  // nothing to undo. Not awaited, and only logged on failure, as there.
+  function reopenIfTyped(supplierId: string) {
+    if (snapshot.draft.skipped[supplierId] !== deps.today()) return;
+    const entries = snapshot.draft.entries;
+    if (!lensNow('').linesOf(supplierId).some(line => wholeNumber(entries[line.id]?.qty) > 0)) return;
+    busyUntilAnswered(source.clearSupplierSkipped(supplierId)).catch((err: unknown) => {
+      console.error('Reopening a closed supplier after typing failed:', err);
+    });
+  }
+
+  // ⚠️ RULE 2 FOR A CLOSE OR A REOPEN (drafts/current.skipped): written on its own, outside the autosave and its busy hold, and
+  // only once the Firestore module has loaded (ordersSource). Held busy until the server answers, so a self-started reload in the
+  // first moments cannot throw the tap away before Firestore's queue has it (F-15). Offline it waits for the connection, as
+  // setDay's hold does.
+  function busyUntilAnswered(write: Promise<void>): Promise<void> {
+    const release = deps.markBusy();
+    return write.finally(release);
+  }
+
+  // The lens as it is NOW, from the latest data: what an order records and clears is decided by the one lens the screens
+  // draw (ordersLens.ts), never by a list taken before the confirm screen opened — a line another phone moved meanwhile
+  // belongs to the other order.
+  function lensNow(noSupplierName: string): OrdersLens {
+    return buildOrdersLens({
+      suppliers: snapshot.suppliers,
+      suppliersLoaded: snapshot.suppliersLoaded,
+      ingredients: snapshot.ingredients,
+      entries: snapshot.draft.entries,
+      supplierOrder: snapshot.config.supplierOrder,
+      noSupplierName,
+    });
+  }
+
+  // Each card by id, for the merge of two orders the same day (its unit, its package, how many a case holds).
+  const cardOf = (id: string): unknown => snapshot.ingredients.find(i => i.id === id);
+
+  function setPlacing(id: string, on: boolean) {
+    const others = snapshot.placing.filter(p => p !== id);
+    set({ placing: on ? [...others, id] : others });
+  }
+
+  // One supplier's order: the current app's placeOrder from the confirm screen on.
+  async function placeOne(item: PlaceItem, noSupplierName: string): Promise<PlaceOutcome> {
+    const { supplierId, date, quantities, units } = item;
+    // ⚠️ A SECOND TAP IN THE SECOND THE WRITE TAKES would pass every check and record the same lines again — and the merge
+    // ADDS by design, doubling them.
+    if (snapshot.placing.includes(supplierId)) return { supplierId, kind: 'busy' };
+    if (Object.keys(quantities).length === 0) return { supplierId, kind: 'nothing' };
+    // A supplier gone since the screen opened (switched off on another phone) is NOT recorded, and is said so: its lines
+    // stay in the order (the current app's placeOrder counts it as failed).
+    const supplier = lensNow(noSupplierName).supplierById(supplierId);
+    if (!supplier) return { supplierId, kind: 'failed' };
+    setPlacing(supplierId, true);
+    try {
+      // A keystroke from the last 800 ms may still wait for the autosave — possibly for ANOTHER supplier. It goes now, or
+      // the clear's snapshot would arrive before it and it would be lost; and an autosave already in the air is answered
+      // first, so nothing lands after the lines are forgotten.
+      await sync.settle();
+      // ⚠️⚠️ WHAT IS RECORDED IS WHAT WAS CONFIRMED, NEVER THE SHARED ORDER AS IT IS NOW (Federico's rule, 24 Aug 2026):
+      // the order is live on every phone, and a colleague may have typed since the screen opened. confirmedEntries rewrites
+      // EVERY line of this supplier from the confirmed numbers (a line left out was set to 0 and is not ordered) with the
+      // units the screen showed; the stock readings ride along untouched. A copy: the draft itself is never changed by it.
+      const lines = orderable(lensNow(noSupplierName).linesOf(supplierId));
+      const entries = confirmedEntries(snapshot.draft.entries as Record<string, Record<string, unknown> | undefined>, lines, quantities, units);
+      const incoming = buildSupplierArchive({ supplier, ingredients: lines, entries, date, now: new Date(deps.draft.nowIso()) });
+      if (!incoming) {
+        setPlacing(supplierId, false);
+        return { supplierId, kind: 'nothing' };
+      }
+      await source.recordOrder(historyDocId(date, supplierId), existing =>
+        mergeArchives(existing as SupplierRecord | null, incoming, { cardOf }) as unknown as Record<string, unknown>);
+    } catch (err) {
+      // Before the point of no return: nothing was recorded and the order is as it was.
+      console.error('Recording the order failed:', err);
+      setPlacing(supplierId, false);
+      if (isUnitConflict(err)) {
+        return { supplierId, kind: 'unit-conflict', ids: [...err.ids] };
+      }
+      return { supplierId, kind: 'failed' };
+    }
+
+    // ⚠️⚠️ PAST THE POINT OF NO RETURN: the order IS in the record. Nothing below may ever say «could not save» — whoever
+    // placed it would place it again, and the merge would ADD the same lines to the record a second time.
+    //
+    // The lines leave this phone first (the screen clears at once, and nothing waiting to be sent can write them back), by
+    // the lens AS IT IS NOW: a line another phone moved to another supplier while the record was written is that
+    // supplier's, and clearing by the old list would wipe it. The whole line goes, overrides included (parity X6).
+    // ⚠️ EXCEPT A LINE THAT WAS NOT ON THE CONFIRM SCREEN AND HAS A QUANTITY NOW: a colleague typed it (or moved it here)
+    // while the screen was open. It was not recorded, so it stays for the next order instead of vanishing from both
+    // (the current app clears it; found in the review of 3f-2). The screen's rows are the confirmed quantities and, for a
+    // row set to 0 there, its unit (`units` holds every row the screen showed).
+    const typedSince = (id: string) => !(id in quantities) && !(id in units) && Number(snapshot.draft.entries[id]?.qty) > 0;
+    const cleared = lensNow(noSupplierName).linesOf(supplierId).map(line => line.id).filter(id => !typedSince(id));
+    set({ draft: sync.forget(cleared, [supplierId]) });
+    // Forgetting may have taken away the last unsaved change (a refused one among those lines): the marker goes with it.
+    dropBusyWhenSaved();
+    try {
+      await source.clearDraft([...cleared.map(id => `entries.${id}`), `days.${supplierId}`], deps.draft.nowIso());
+      return { supplierId, kind: 'saved' };
+    } catch (err) {
+      console.error('Clearing the draft after recording the order failed:', err);
+      return { supplierId, kind: 'not-cleared' };
+    } finally {
+      setPlacing(supplierId, false);
+    }
+  }
+
+  function loader(): OlderLoader {
+    if (!olderLoader) {
+      const made: OlderLoader = createOlderLoader<StoredDoc>({
+        fetchPage: ({ before, cursor }) => source.getOlderHistory({ before, cursor }),
+        fetchLegacy: () => source.getLegacyHistory(),
+        before: windowStart,
+        onChange: () => {
+          const { loading, done, error, records } = made.state();
+          set({ olderHistory: records, older: { loading, done, error } });
+        },
+      });
+      olderLoader = made;
+    }
+    return olderLoader;
+  }
+
+  // ⚠️ A RECORD IN AN OLDER PAGE IS NOT WATCHED: after a write that SUCCEEDED, the loaded copy is brought in step by hand
+  // (the live window's listener tells the rest). `next` null = deleted.
+  function patchOlder(id: string, next: Record<string, unknown> | null) {
+    olderLoader?.patch(id, next ? { ...next, id } as StoredDoc : null);
+  }
+
+  // The one write of History's editor: online only, the decision taken inside the transaction.
+  async function rewrite(opened: StoredDoc, decide: (stored: Record<string, unknown>) => Record<string, unknown> | null,
+    done: RecordWriteOutcome): Promise<RecordWriteOutcome> {
+    if (!deps.online()) return 'offline';
+    let refused: RecordWriteOutcome | null = null;
+    const release = deps.markBusy();
+    try {
+      const written = await source.rewriteRecord(opened.id, stored => {
+        // A transaction may run its function more than once: the answer is the LAST run's.
+        refused = null;
+        if (!stored) { refused = 'gone'; throw new Error('orders/record-gone'); }
+        if (!sameOrder(stored, opened)) { refused = 'changed'; throw new Error('orders/record-changed'); }
+        return decide(stored);
+      });
+      patchOlder(opened.id, written);
+      return done;
+    } catch (err) {
+      if (refused) return refused;
+      console.error('Writing the order record failed:', err);
+      return 'failed';
+    } finally {
+      release();
+    }
+  }
+
+  // A write of step 3f-5 (Incoming): the marker held until the server answers (offline, until the connection is back), so a
+  // self-started reload never drops it; a refusal by the rules is told apart from the rest.
+  // `promise`'s answer, or `fallback` once `ms` have passed, whichever is first. The timer never rejects and is cleared as soon as the
+  // promise settles; a promise that rejects rejects here too (the caller decides what a failure means).
+  function within<T, F>(promise: Promise<T>, ms: number, fallback: F): Promise<T | F> {
+    return new Promise<T | F>((resolve, reject) => {
+      const timer = deps.draft.setTimer(() => { resolve(fallback); }, ms);
+      promise.then(
+        value => { deps.draft.clearTimer(timer); resolve(value); },
+        (err: unknown) => { deps.draft.clearTimer(timer); reject(err instanceof Error ? err : new Error(String(err))); },
+      );
+    });
+  }
+
+  // The sender's roster row, one read per uid. ⚠️ NEVER REJECTS: a failure answers null (logged) and is forgotten, so the next call
+  // tries again. Started when the send screen opens (prepareSender), so on a bad connection it has had the time the person spends
+  // ticking suppliers, and somebody with a name is not turned into «Someone» by a slow tap.
+  const senderReads = new Map<string, Promise<Record<string, unknown> | null>>();
+  function senderRead(senderUid: string): Promise<Record<string, unknown> | null> {
+    const known = senderReads.get(senderUid);
+    if (known) return known;
+    const read = Promise.resolve().then(() => source.readOwnMember(senderUid)).catch((err: unknown) => {
+      console.warn('Could not read the roster row for the sender’s name:', err);
+      senderReads.delete(senderUid);
+      return null;
+    });
+    senderReads.set(senderUid, read);
+    return read;
+  }
+
+  // The Orders settings' patches still on their way to the server, oldest first (saveSetting): the next change is judged on them too.
+  let settingWrites: Readonly<Record<string, unknown>>[] = [];
+
+  async function deliveryWrite(label: string, write: () => Promise<void>): Promise<DeliveryWriteOutcome> {
+    const release = deps.markBusy();
+    try {
+      await write();
+      return 'saved';
+    } catch (err) {
+      console.error(`${label} failed:`, err);
+      const e = err as { code?: unknown; message?: unknown } | null;
+      return /permission-denied/.test(`${String(e?.code ?? '')} ${String(e?.message ?? '')}`) ? 'refused' : 'failed';
+    } finally {
+      release();
+    }
+  }
+
+  const activeSupplier = (id: unknown): StoredDoc | null => {
+    const supplier = snapshot.suppliers.find(s => s.id === id);
+    return supplier && supplier.active !== false ? supplier : null;
+  };
+
+  // One missing line back into an order, LOCAL-FIRST like typing it (the current app's onReorder / onOtherSupplier), and sent at
+  // once (its saveDraftNow). `to` is the supplier whose order it goes into; `override` its id when that is not the line's usual
+  // supplier (parity L38), '' to clear one. The day those lines are for is stamped as typing would (order-day.js stampFor).
+  function lineBack(item: ReorderItem, to: StoredDoc, override: string): ReorderOutcome {
+    const card = snapshot.ingredients.find(i => i.id === item.id);
+    if (!card) return 'gone';
+    // ⚠️ A ROW THAT ALREADY HAS A QUANTITY IS NEVER OVERWRITTEN (deliveries.ts applyReorder): asked of the order AS IT IS NOW.
+    const line = applyReorder([item], snapshot.draft.entries).applied[0];
+    if (!line) return 'skipped';
+    const current: DraftEntry = snapshot.draft.entries[item.id] ?? {};
+    // The missed line comes back in the unit it was ordered in; the card's own unit is stored as '' (order-unit storedUnitFor).
+    const next = { ...current, qty: line.qty, unit: storedUnitFor(line.unit ?? '', card), supplierId: override };
+    const entries: DraftEntries = { ...snapshot.draft.entries, [item.id]: next };
+    let days: DraftDays = snapshot.draft.days;
+    const stamp = stampFor({ current: days[to.id], supplier: to, today: deps.today() });
+    if (stamp && stamp !== days[to.id]) days = { ...days, [to.id]: stamp };
+    set({ draft: { ...snapshot.draft, entries, days } });
+    holdBusy();
+    sync.change(entries, days);
+    sync.flush().then(dropBusyWhenSaved, () => { /* said through onResult ('draft-not-saved'), which also frees the marker */ });
+    return 'applied';
+  }
+
+  // A snapshot that came from the browser's own database and holds nothing proves nothing (that database can be empty
+  // because this phone never synced the collection): until the server speaks, or the copy holds something, «Loading…».
+  const loadedBy = (list: readonly unknown[], meta: OrdersMeta) => meta.fromServer || list.length > 0;
+
+  return {
+    getSnapshot: () => snapshot,
+
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => { listeners.delete(listener); };
+    },
+
+    onMessage(listener) {
+      messageListeners.add(listener);
+      return () => { messageListeners.delete(listener); };
+    },
+
+    start() {
+      if (stops.length) return;
+      stopped = false;
+      // This opening owns the note again: it is read afresh at the first snapshot or keystroke (draftSync.ts, journalLive).
+      sync.startJournal();
+      // Switching app or locking the screen: what waits for its pause goes now, while the page is still alive (pageHidden.ts).
+      stopHidden = deps.journal?.onPageHidden(() => { sync.sendWaiting(); }) ?? null;
+      // Fixed before the first older page is asked for; once a page is in, the window it was cut from stays.
+      if (!olderLoader) windowStart = liveHistoryStart(parseISODate(deps.today()));
+      stops = [
+        // ⚠️ FIRST ON PURPOSE. Firestore answers its listeners in the order they start, and the list copy waits for this one
+        // document (the supplier order and the favourites decide the rows): behind the 302 ingredients it lands a second later.
+        // ⚠️ A config missing from the browser's own database is only «none» once the server says so: until then the
+        // defaults stand (the Stock box shown — only an explicit false hides it, parity M3).
+        source.watchOrdersConfig(
+          (data, meta) => set({
+            config: normalizeOrdersConfig(data),
+            deliveryCheck: deliveryCheckOf(data),
+            configLoaded: snapshot.configLoaded || data !== null || meta.fromServer,
+            configAnswered: true,
+          }),
+          () => set({ configLoaded: true, configAnswered: true }),
+        ),
+        source.watchSuppliers(
+          (list, meta) => set({
+            suppliers: list,
+            suppliersLoaded: snapshot.suppliersLoaded || loadedBy(list, meta),
+            suppliersBroken: false,
+            serverSeen: meta.fromServer && !snapshot.serverSeen.suppliers ? { ...snapshot.serverSeen, suppliers: true } : snapshot.serverSeen,
+          }),
+          () => set({ suppliersBroken: true, suppliersLoaded: true }),
+        ),
+        source.watchIngredients(
+          (list, meta) => set({
+            ingredients: list,
+            ingredientsLoaded: snapshot.ingredientsLoaded || loadedBy(list, meta),
+            ingredientsBroken: false,
+            serverSeen: meta.fromServer && !snapshot.serverSeen.ingredients ? { ...snapshot.serverSeen, ingredients: true } : snapshot.serverSeen,
+          }),
+          () => set({ ingredientsBroken: true, ingredientsLoaded: true }),
+        ),
+        // ⚠️ A DRAFT MISSING FROM THE BROWSER'S OWN DATABASE IS NOT AN EMPTY ORDER: a phone that never opened Orders has
+        // no copy of it. The lines are drawn only once the server has answered or the copy holds the document.
+        source.watchDraft(
+          (data, meta) => set({
+            draft: sync.receive(data, meta.fromServer),
+            draftLoaded: snapshot.draftLoaded || data !== null || meta.fromServer,
+            draftBroken: false,
+            serverSeen: meta.fromServer && !snapshot.serverSeen.draft ? { ...snapshot.serverSeen, draft: true } : snapshot.serverSeen,
+          }),
+          () => set({ draftBroken: true, draftLoaded: true }),
+        ),
+        // The window starts two calendar months before TODAY when the section opens (the current app's liveHistoryStart).
+        source.watchRecentHistory(
+          windowStart,
+          (list, meta) => set({ history: list, historyLoaded: snapshot.historyLoaded || loadedBy(list, meta), historyBroken: false }),
+          () => set({ historyBroken: true, historyLoaded: true }),
+        ),
+        source.watchOrderRequests(
+          (list, meta) => set({ requests: list, requestsLoaded: snapshot.requestsLoaded || loadedBy(list, meta), requestsBroken: false }),
+          () => set({ requestsBroken: true, requestsLoaded: true }),
+        ),
+      ];
+      openPrices();
+    },
+
+    setPriceReader(on) {
+      priceReader = on;
+      if (on) openPrices();
+      else closePrices();
+    },
+
+    stop() {
+      closePrices();
+      for (const stop of stops) stop();
+      stops = [];
+      stopHidden?.();
+      stopHidden = null;
+      // ⚠️ BEFORE THE FLUSH: from now on this sync judges nothing and never rewrites the note (a new opening owns it); its
+      // writes still in the air only take their own fields out of it when answered.
+      sync.stopJournal();
+      // The write is handed to Firestore now; it carries on without the listeners and lands when it can.
+      stopped = true;
+      sync.flush().then(dropBusyWhenSaved, () => { /* said through onResult, which also releases the busy marker */ });
+    },
+
+    editLine(supplier, ingredient, edit) {
+      const id = ingredient.id;
+      const current: DraftEntry = snapshot.draft.entries[id] ?? {};
+      const next: { qty?: number; stock?: number; unit?: string; supplierId?: string } = { ...current };
+      let stockOnly = false;
+
+      const setQty = (value: number) => {
+        const qty = wholeNumber(value);
+        next.qty = qty;
+        // ⚠️ WHOSE ORDER THIS LINE IS IN (js/orders/ingredients.js claimLine). One ingredient is in ONE order at a time,
+        // so a quantity typed on a row settles it:
+        //   • a line SENT HERE from its usual supplier stays here while it has a quantity, and goes back at zero;
+        //   • a line of this supplier's ordered elsewhere this time is taken back (override cleared, same write);
+        //   • any other line never carries an override — a stale one is cleared on the way.
+        // The key is sent as '' (never left behind) by changedEntries when it goes.
+        if (ingredient.usualSupplierId) next.supplierId = qty > 0 ? supplier.id : '';
+        else if (next.supplierId) next.supplierId = '';
+      };
+
+      if ('qty' in edit) setQty(edit.qty);
+      else if ('stock' in edit) {
+        next.stock = wholeNumber(edit.stock);
+        stockOnly = true;
+        // The Stock box fills the Order box with the suggestion (parity L28, decision 1 of 3f-2b in suggester.ts) — never on a
+        // row whose line is in another supplier's order this time: that box is empty on purpose, and its number is theirs.
+        // Asked of the lens as it is NOW, the one the screen draws.
+        const rows = lensNow('').rowsFor(supplier.id);
+        const elsewhere = [...rows.active, ...rows.inactive].some(r => r.ingredient.id === id && r.elsewhere);
+        const fill = elsewhere ? null : snapshot.suggester.fillFor(ingredient, current, next.stock);
+        if (fill !== null) {
+          setQty(fill);
+          stockOnly = false;
+        }
+      } else if ('unit' in edit) {
+        next.unit = storedUnitFor(edit.unit, ingredient);
+      } else {
+        // The unit goes first so the one autosave carries both (js/orders/ingredients.js, the ×).
+        next.unit = '';
+        setQty(0);
+      }
+
+      const entries: DraftEntries = { ...snapshot.draft.entries, [id]: next };
+      let days: DraftDays = snapshot.draft.days;
+      // Stamp the day these lines are FOR (order-day.js stampFor): next week's quantities typed early are for the
+      // supplier's next order day. ⚠️ A stock-only edit never moves the day: counting the shelves is not ordering
+      // (parity L28, D2).
+      if (!stockOnly) {
+        const stamp = stampFor({ current: days[supplier.id], supplier, today: deps.today() });
+        if (stamp && stamp !== days[supplier.id]) days = { ...days, [supplier.id]: stamp };
+      }
+
+      set({ draft: { ...snapshot.draft, entries, days } });
+      holdBusy();
+      sync.change(entries, days);
+      if (!stockOnly) reopenIfTyped(supplier.id);
+    },
+
+    closeNotOrdered(supplierId) {
+      return busyUntilAnswered(source.setSupplierSkipped(supplierId, deps.today())).then(() => true, (err: unknown) => {
+        console.error('Closing the supplier as not ordered failed:', err);
+        say({ kind: 'close-not-saved' });
+        return false;
+      });
+    },
+
+    reopenToday(supplierId) {
+      if (!snapshot.draft.skipped[supplierId]) return Promise.resolve(true);
+      return busyUntilAnswered(source.clearSupplierSkipped(supplierId)).then(() => true, (err: unknown) => {
+        console.error('Reopening the supplier failed:', err);
+        say({ kind: 'close-not-saved' });
+        return false;
+      });
+    },
+
+    // The current app's setSupplierDay + restamp: written at once rather than after the pause, rolled back when refused.
+    // Offline the write simply waits, and the line shows the chosen day meanwhile (local-first).
+    setDay(supplier, day) {
+      const id = supplier.id;
+      const previous = snapshot.draft.days[id];
+      if (previous === day) return Promise.resolve(true);
+      const days: DraftDays = { ...snapshot.draft.days, [id]: day };
+      set({ draft: { ...snapshot.draft, days } });
+      holdBusy();
+      sync.change(snapshot.draft.entries, days);
+      return sync.flush().then(() => { dropBusyWhenSaved(); return true; }, () => {
+        // ⚠️ THE LINE NEVER SHOWS A DAY THAT WAS NOT SAVED: back to the one stored — unless another day was chosen since,
+        // which is newer than this refusal.
+        if (snapshot.draft.days[id] === day) {
+          const back: Record<string, string> = { ...snapshot.draft.days };
+          if (previous === undefined) delete back[id];
+          else back[id] = previous;
+          set({ draft: { ...snapshot.draft, days: back } });
+          sync.change(snapshot.draft.entries, back);
+        }
+        say({ kind: 'day-not-saved' });
+        dropBusyWhenSaved();
+        return false;
+      });
+    },
+
+    async checkRecords(items, noSupplierName) {
+      const lens = lensNow(noSupplierName);
+      return Promise.all(items.map(async ({ supplierId, date }) => {
+        // ⚠️ A CHECK THAT FAILS MUST NEVER STOP THE ORDER: logged, and the merge inside the write still refuses a real
+        // clash (js/orders/orders-main.js refuseOnUnitConflict).
+        let record: Record<string, unknown> | null = null;
+        try {
+          record = await source.readRecord(historyDocId(date, supplierId));
+        } catch (err) {
+          console.error('Reading the day\'s record failed, carrying on:', err);
+        }
+        let conflicts: ReturnType<typeof unitConflicts> = [];
+        try {
+          conflicts = unitConflicts(record, snapshot.draft.entries, orderable(lens.linesOf(supplierId)), supplierId);
+        } catch (err) {
+          console.error('Unit check failed, carrying on:', err);
+        }
+        return { supplierId, date, exists: record !== null, conflicts };
+      }));
+    },
+
+    conflictsNow(items, noSupplierName) {
+      const lens = lensNow(noSupplierName);
+      return items.map(({ supplierId, date }) => {
+        const id = historyDocId(date, supplierId);
+        const record: Record<string, unknown> | null = snapshot.history.find(doc => doc.id === id) ?? null;
+        let conflicts: ReturnType<typeof unitConflicts> = [];
+        try {
+          conflicts = unitConflicts(record, snapshot.draft.entries, orderable(lens.linesOf(supplierId)), supplierId);
+        } catch (err) {
+          console.error('Unit check failed, carrying on:', err);
+        }
+        return { supplierId, date, exists: record !== null, conflicts };
+      });
+    },
+
+    async place(items, noSupplierName) {
+      if (!deps.online()) return { offline: true };
+      // A self-started reload in the middle would cut the sequence between the record and the clear.
+      const release = deps.markBusy();
+      try {
+        // ONE AFTER THE OTHER: each writes its record and then clears its own lines of the ONE shared draft, and
+        // overlapping writes would race on it.
+        const outcomes: PlaceOutcome[] = [];
+        for (const item of items) outcomes.push(await placeOne(item, noSupplierName));
+        return { offline: false, outcomes };
+      } finally {
+        release();
+      }
+    },
+
+    async clearQuantities(supplierIds, noSupplierName) {
+      const ids = supplierIds.filter(Boolean);
+      if (ids.length === 0) return 'cleared';
+      if (!deps.online()) return 'offline';
+      const release = deps.markBusy();
+      try {
+        // A keystroke from the last 800 ms goes first, or it comes back with the next snapshot. A refusal is said by the
+        // status line and does not stop the clear.
+        try {
+          await sync.settle();
+        } catch (err) {
+          console.error('Flushing the draft before clearing failed:', err);
+        }
+        const lens = lensNow(noSupplierName);
+        // The lines as the lens files them, switched-off ones included (quantityPathsFor reads them unfiltered).
+        const lines = ids.flatMap(id => lens.linesOf(id));
+        set({ draft: sync.forget(lines.map(line => line.id), ids, { quantitiesOnly: true }) });
+        dropBusyWhenSaved();
+        try {
+          await source.clearDraft(quantityPathsFor(ids, lines), deps.draft.nowIso());
+          return 'cleared';
+        } catch (err) {
+          // The screen is clear and the database is not: Firestore's take-back puts the lines back, and the caller says so.
+          console.error('Clearing quantities failed:', err);
+          return 'failed';
+        }
+      } finally {
+        release();
+      }
+    },
+
+    loadOlderHistory: () => loader().load(),
+
+    correctRecord(opened, edits) {
+      // Checked before the write too, so «nothing left» is said without a round trip; the transaction decides on the stored
+      // record, where the answer is the same (the lines are the opened ones, or it refuses as 'changed').
+      if (correctedRecord(opened, edits, deps.draft.nowIso()) === null) return Promise.resolve('empty');
+      return rewrite(opened, stored => {
+        const next = correctedRecord(stored, edits, deps.draft.nowIso());
+        // ⚠️ null from `decide` DELETES the record: a correction must never reach that, whatever happens upstream.
+        if (next === null) throw new Error('orders/record-empty');
+        return next;
+      }, 'saved');
+    },
+
+    deleteRecord(opened) {
+      return rewrite(opened, () => null, 'deleted');
+    },
+
+    confirmDelivery(record, missingIds) {
+      const missing: Record<string, true> = {};
+      for (const id of missingIds) missing[id] = true;
+      const now = deps.draft.nowIso();
+      const id = record.id || historyDocId(record.date, record.supplierId);
+      return deliveryWrite('Confirming the delivery', () => source.confirmDelivery(id, { deliveredAt: now, missing, updatedAt: now }));
+    },
+
+    resolveMissing(item) {
+      return deliveryWrite('Resolving the missing line', () => source.resolveMissing(item.recordId, item.id, deps.draft.nowIso()));
+    },
+
+    putBack(item) {
+      // Its OWN supplier's order, never one an old override pointed at: the override is cleared in the same write. A line whose
+      // ingredient is switched off, or whose supplier is not active, has no row anybody can see (the screen offers no button).
+      const card = snapshot.ingredients.find(i => i.id === item.id);
+      const to = card && card.active !== false ? activeSupplier(card.supplierId) : null;
+      return to ? lineBack(item, to, '') : 'gone';
+    },
+
+    orderElsewhere(item, supplierId) {
+      const card = snapshot.ingredients.find(i => i.id === item.id);
+      const to = card && card.active !== false ? activeSupplier(supplierId) : null;
+      // ⚠️ NOTHING IS MARKED RESOLVED: if that order is never placed the line must come back on «To re-order».
+      return to ? lineBack(item, to, to.id === card?.supplierId ? '' : to.id) : 'gone';
+    },
+
+    setDeliveryCheck(on) {
+      return deliveryWrite('Saving the goods-arrived switch', () => source.mergeOrdersConfig(deliveryCheckPatch(on, deps.today(), snapshot.deliveryCheck)));
+    },
+
+    saveSetting(change) {
+      // ⚠️ JUDGED ON THE CONFIG AS IT WILL BE: the snapshot with every setting write still on its way laid over it (settingsPatch.ts
+      // withPatch), so a road closed a moment ago already counts even before Firestore's own copy shows it.
+      const decided = settingPatch(change, settingWrites.reduce(withPatch, snapshot.config));
+      if ('refused' in decided) return Promise.resolve(decided.refused);
+      const patch = decided.patch;
+      settingWrites.push(patch);
+      const settled = () => { settingWrites = settingWrites.filter(p => p !== patch); };
+      return deliveryWrite(`Saving the Orders setting ${change.kind}`, () => source.mergeOrdersConfig(patch))
+        .then(outcome => { settled(); return outcome; });
+    },
+
+    kioskSections() {
+      // ⚠️ NOTHING UNTIL THE DATA IS HERE (review of 3f-8a; the current app answers only once suppliers and records are loaded): with
+      // the records missing every order day reads «to order», and with config/orders missing the switch reads ON.
+      // …and with the draft missing, a supplier closed as not ordered this morning would read «to order». A DEAD draft stream counts
+      // as arrived (draftLoaded), and its closes are read as NONE, even those it delivered before it died: the line errs on the side
+      // of the reminder, as the current app's kiosk does when its read of the draft fails (and as «Order today» does).
+      if (!snapshot.suppliersLoaded || !snapshot.historyLoaded || !snapshot.configLoaded || !snapshot.draftLoaded) return null;
+      return kioskSectionsFor({
+        suppliers: snapshot.suppliers,
+        history: snapshot.history,
+        today: deps.today(),
+        weekStartsOn: snapshot.config.weekStartsOn,
+        deliveryCheck: snapshot.deliveryCheck,
+        // A supplier closed as not ordered today is not «to order» (the current app's PR #470).
+        skipped: snapshot.draftBroken ? null : snapshot.draft.skipped,
+      });
+    },
+
+    async whoIsAway(senderUid) {
+      const silent: AwayAnswer = { nobody: false, names: [] };
+      // Offline both reads would answer from a copy that may be days old, or wait: the list goes when the connection is back.
+      if (!deps.online()) return silent;
+      try {
+        // ⚠️ THE WARNING IS ADVICE: a read that is slow gives up and says «go ahead».
+        const read = await within(Promise.all([source.getRoster(), source.getAwayDays()]), LIST_READ_MS, null);
+        if (read === null) return silent;
+        const [roster, days] = read;
+        const away = awayUids(days.map(day => ({ ...day, uid: typeof day.uid === 'string' && day.uid !== '' ? day.uid : day.id })) as never);
+        if (!nobodyWillBeTold(roster, away, senderUid)) return silent;
+        return { nobody: true, names: awayNames(roster, away, senderUid) };
+      } catch (err) {
+        console.warn('Could not check who is listening; sending anyway:', err);
+        return silent;
+      }
+    },
+
+    prepareSender(senderUid) {
+      void senderRead(senderUid);
+    },
+
+    async sendList(supplierIds, senderUid, noSupplierName, stillWanted) {
+      // senderRead never rejects (a failure answers null), so a late read is simply \u00abno name\u00bb.
+      const member = await within(senderRead(senderUid), LIST_READ_MS, null);
+      // \u26a0\ufe0f AFTER THE WAIT, BEFORE ANYTHING IS WRITTEN: the person may have left the screen while the read was on its way, and sending
+      // again would then make two identical lists.
+      if (!stillWanted()) return 'nothing';
+      // ⚠️ THE ORDER AS IT IS NOW, after the question and the read: what the person sees when the list leaves. The lines the lens files
+      // under each supplier, the switched-off ones with a quantity included (decision T10), exactly as a record takes them.
+      const lens = lensNow(noSupplierName);
+      const suppliers = supplierIds.map(id => lens.supplierById(id)).filter((s): s is StoredDoc => s !== undefined);
+      const lines = suppliers.flatMap(supplier => orderable(lens.linesOf(supplier.id)));
+      const wanted = lines.filter(line => wholeNumber(snapshot.draft.entries[line.id]?.qty) > 0).length;
+      if (wanted > MAX_LINES) return 'too-many';
+      const payload = buildOrderRequest({
+        suppliers,
+        ingredients: lines,
+        entries: snapshot.draft.entries,
+        date: deps.today(),
+        from: { uid: senderUid, name: senderName(member) },
+        now: new Date(deps.draft.nowIso()),
+      });
+      if (!payload) return 'nothing';
+      const release = deps.markBusy();
+      const write = source.createOrderRequest(payload as unknown as Record<string, unknown>).then((): ListSendOutcome => 'sent', (err: unknown) => {
+        console.error('Sending the order list failed:', err);
+        return 'failed' as const;
+      }).finally(release);
+      // ⚠️ OFFLINE THE WRITE WAITS FOR THE CONNECTION, and no screen may wait with it (P20): the list is in this phone's own database
+      // now, the marker stays held until it lands, and the person is told it goes when the connection is back.
+      if (!deps.online()) return 'queued';
+      // ⚠️ AND A PHONE THAT BELIEVES IT IS CONNECTED WHILE NOTHING ANSWERS (a kitchen's bad Wi-Fi: driven, 3 Nov 2026) gets the same answer
+      // after a few seconds, rather than a screen waiting for ever. The list is just as safe, and it goes by itself.
+      return new Promise<ListSendOutcome>(resolve => {
+        const timer = deps.draft.setTimer(() => { resolve('queued'); }, LIST_ANSWER_MS);
+        void write.then(outcome => {
+          deps.draft.clearTimer(timer);
+          resolve(outcome);
+        });
+      });
+    },
+
+    tickRequestLine(id, ingredientId, done) {
+      return deliveryWrite('Saving the tick', () => source.setRequestDone(id, { [ingredientId]: done }, deps.draft.nowIso()));
+    },
+
+    // ONE write for every line still open.
+    finishRequest(id, ingredientIds) {
+      const done: Record<string, boolean> = {};
+      for (const ingredientId of ingredientIds) done[ingredientId] = true;
+      return deliveryWrite('Finishing the list', () => source.setRequestDone(id, done, deps.draft.nowIso()));
+    },
+
+    deleteRequest(id) {
+      return deliveryWrite('Deleting the list', () => source.deleteOrderRequest(id));
+    },
+
+    setPhoneMute(token, mute) {
+      return deliveryWrite('Saving the order-list alert switch', () => source.setPhoneMute(token, mute));
+    },
+  };
+}

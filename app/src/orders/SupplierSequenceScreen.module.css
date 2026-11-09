@@ -1,0 +1,121 @@
+/* The supplier order: the active suppliers, a grip and a name each, at least a thumb's height. The screen does not clip (no
+   `overflow`), so the bar above keeps sticking. Names wrap anywhere, so a 296px phone never scrolls sideways. The drag state comes
+   from React Aria's data attributes. */
+
+.screen {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s3);
+}
+
+.hint {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.empty {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+/* «Saving…» then «Saved ✓»: there (empty) before it speaks so a screen reader announces it. */
+.state {
+  margin: 0;
+  color: var(--ok-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.state:empty {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  clip-path: inset(50%);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  min-height: var(--hit);
+  padding: var(--s1) 0 var(--s1) var(--s4);
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+}
+
+.row:first-child {
+  border-top: 0;
+}
+
+.row[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.row[data-dragging] {
+  opacity: 0.6;
+}
+
+.name {
+  flex: 1 1 0;
+  min-width: 0;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* The grip is a target of its own, 48px square, at the end of the row. */
+.grip {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: var(--hit);
+  height: var(--hit);
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink-3);
+  cursor: grab;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.grip:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 1px;
+}
+
+@media (hover: hover) {
+  .grip:hover {
+    background: var(--sunken);
+  }
+}
+
+/* Where the dragged row would land. */
+.indicator {
+  height: 0;
+}
+
+.indicator[data-drop-target] {
+  border-top: 3px solid var(--accent);
+}

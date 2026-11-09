@@ -1,0 +1,112 @@
+// The addresses of the Recipe catalogue, in one place so the section, the list's rows and the screens
+// one level down cannot disagree.
+//
+//   /recipes          the list of recipes
+//   /recipes/<id>     one recipe (the id percent-encoded)
+//   /recipes/allergens  the Allergen sheet (step 3d-2)
+//   /recipes/<id>/label the label of one recipe (step 3d-3), one level below the recipe
+//   /recipes/haccp      the HACCP list (image labels step 2), drawn like the Allergen sheet
+//   /recipes/<id>/haccp the HACCP label of one recipe, one level below the HACCP list
+//   /recipes/settings   the label Settings (step 3d-5), for whoever runs the place
+//   /recipes/new        a new recipe (step 3d-6), the editor on an empty copy
+//   /recipes/photo      reading a recipe from photographs (step 3d-9), for a venue that has the reader on
+//   /recipes/<id>/edit  one recipe's editor (step 3d-6), one level below the recipe
+//   /recipes/<id>/steps one recipe's mixing steps editor (step 3d-8), one level below the recipe
+//   /recipes/<id>/mix   one recipe's guided mix, the run (step 3d-8, slice B), one level below the recipe, full width
+//   anything else     unknown: the section goes back to /recipes
+//
+// ⚠️ THE WORDS A LATER STEP WILL TAKE AS ITS OWN ARE NEVER A RECIPE'S ID (`new`, `allergens`,
+// `settings`, `photo`, `haccp`): a Firestore auto id is 20 characters, so none of them can be one, and a recipe
+// address that happens to be one of them must not be taken for a recipe that does not exist.
+// recipesPath.spec.ts pins the list.
+export const RECIPES_PATH = '/recipes';
+export const ALLERGENS_PATH = '/recipes/allergens';
+export const SETTINGS_PATH = '/recipes/settings';
+export const NEW_PATH = '/recipes/new';
+export const PHOTO_PATH = '/recipes/photo';
+export const HACCP_PATH = '/recipes/haccp';
+
+const RESERVED = ['new', 'allergens', 'settings', 'photo', 'haccp'] as const;
+
+export type RecipesView =
+  | { readonly kind: 'list' }
+  | { readonly kind: 'recipe'; readonly id: string }
+  | { readonly kind: 'allergens' }
+  | { readonly kind: 'settings' }
+  | { readonly kind: 'label'; readonly id: string }
+  | { readonly kind: 'new' }
+  | { readonly kind: 'photo' }
+  | { readonly kind: 'haccp' }
+  | { readonly kind: 'haccpLabel'; readonly id: string }
+  | { readonly kind: 'edit'; readonly id: string }
+  | { readonly kind: 'steps'; readonly id: string }
+  | { readonly kind: 'mix'; readonly id: string }
+  | { readonly kind: 'unknown' };
+
+export const recipePath = (id: string): string => `${RECIPES_PATH}/${encodeURIComponent(id)}`;
+export const labelPath = (id: string): string => `${recipePath(id)}/label`;
+export const haccpPath = (id: string): string => `${recipePath(id)}/haccp`;
+export const editPath = (id: string): string => `${recipePath(id)}/edit`;
+export const stepsPath = (id: string): string => `${recipePath(id)}/steps`;
+export const mixPath = (id: string): string => `${recipePath(id)}/mix`;
+
+// Whether an id (already decoded) can be a recipe's: not empty, and not a word a step has taken for its own.
+const isRecipeId = (id: string | null): id is string => id !== null && id !== '' && !(RESERVED as readonly string[]).includes(id);
+
+// A segment as it was typed, back to the id it stands for; null when it is not valid percent-
+// encoding («%», «%E0%A4%A»).
+function decoded(segment: string): string | null {
+  try {
+    return decodeURIComponent(segment);
+  } catch {
+    return null;
+  }
+}
+
+// `rest` is what follows /recipes in the address AS IT IS WRITTEN: each segment is split first and
+// decoded after, so an id with a slash, a percent sign or a space in it comes back whole (React
+// Router's own «*» parameter has already decoded the address once).
+export function parseRecipesPath(rest: string | undefined): RecipesView {
+  const parts = (rest ?? '').split('/').filter(part => part !== '');
+  if (parts.length === 0) return { kind: 'list' };
+  const [first] = parts;
+  if (parts.length === 1 && first !== undefined) {
+    const id = decoded(first);
+    // The Allergen sheet (step 3d-2) is one of the reserved words: never a recipe whose id is «allergens».
+    if (id === 'allergens') return { kind: 'allergens' };
+    // The label Settings (step 3d-5) likewise: whether the person may see it is the section's question, not the address's.
+    if (id === 'settings') return { kind: 'settings' };
+    // A new recipe (step 3d-6): «new» is one of the reserved words, never a recipe's id.
+    if (id === 'new') return { kind: 'new' };
+    // The photo screen (step 3d-9) likewise: whether the venue has the reader on is the section's question.
+    if (id === 'photo') return { kind: 'photo' };
+    // The HACCP list (image labels step 2) likewise: open to everybody the section is open to.
+    if (id === 'haccp') return { kind: 'haccp' };
+    // An empty id is not a recipe (and not a Firestore document id either).
+    if (isRecipeId(id)) return { kind: 'recipe', id };
+  }
+  // `<id>/label`: the label of that recipe. The id is read by the same rule as a recipe's own, so a reserved word
+  // before «label», «edit» or «steps» (`/allergens/label`, `/new/edit`, `/settings/steps`) is no recipe's label, editor or steps.
+  const second = parts[1];
+  if (parts.length === 2 && first !== undefined && (second === 'label' || second === 'edit' || second === 'steps' || second === 'mix')) {
+    const id = decoded(first);
+    if (isRecipeId(id)) return { kind: second, id };
+  }
+  // `<id>/haccp`: the HACCP label of that recipe, read by the same rule (so `/haccp/haccp` is no recipe's).
+  if (parts.length === 2 && first !== undefined && second === 'haccp') {
+    const id = decoded(first);
+    if (isRecipeId(id)) return { kind: 'haccpLabel', id };
+  }
+  return { kind: 'unknown' };
+}
+
+// The views that are drawn: an unknown address is only ever a redirect.
+export type ShownView = Exclude<RecipesView, { readonly kind: 'unknown' }>;
+
+export type Resolved = { readonly redirect: string } | { readonly view: ShownView };
+
+export function resolveRecipesPath(rest: string | undefined): Resolved {
+  const view = parseRecipesPath(rest);
+  if (view.kind === 'unknown') return { redirect: RECIPES_PATH };
+  return { view };
+}
