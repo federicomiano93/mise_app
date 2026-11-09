@@ -1421,6 +1421,8 @@ export const it: Messages = {
   'sup.packagingTag': 'Imballaggio',
   'sup.switchedOff': 'Disattivato',
   'sup.fromInvoice': 'Da fattura',
+  // The tag on a supplier still to be ordered today (the same words as the Orders list's `ord.dueToday`).
+  'sup.dueToday': 'Da ordinare oggi',
   'sup.notInUseGroup': 'Non in uso ({n})',
   'sup.loadFailed': 'Non è stato possibile caricare i fornitori. Controlla la connessione e riprova.',
   'sup.pane.suppliers.title': 'Scegli un fornitore',
@@ -2282,6 +2284,8 @@ export const it: Messages = {
   'ord.reorder.lineGone': 'Questa riga non si può più rimettere: l’ingrediente o il fornitore non è più in uso.',
   'ord.today.label': 'Ordina oggi',
   'ord.today.allPlaced': 'Gli ordini di oggi sono tutti fatti',
+  // The tag on a supplier's row in the list: its order day is today and nothing is recorded or closed (reminders dueTodayIds).
+  'ord.dueToday': 'Da ordinare oggi',
   'ord.today.placed': 'fatto',
   'ord.today.notOrdered': 'non ordinato',
   'ord.notices.title': 'Avvisi',

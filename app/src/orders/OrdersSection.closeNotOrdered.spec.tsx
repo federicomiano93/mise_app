@@ -222,7 +222,7 @@ describe('«Order today» with a supplier closed as not ordered', () => {
     renderOrders('/orders', { source: seeded({ draft: { entries: {}, days: {}, skipped: { 's-alp': LAST_WEEK } } }) });
     await screen.findByText('Order today', undefined, LOAD);
     expect(screen.queryByRole('button', { name: 'Alpine Mills not ordered' })).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Alpine Mills' }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getAllByRole('button', { name: /^Alpine Mills/ }).length).toBeGreaterThanOrEqual(2);
   });
 
   it('in Italian', async () => {

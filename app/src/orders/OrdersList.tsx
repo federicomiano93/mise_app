@@ -2,9 +2,13 @@ import { useCallback, useMemo, useState } from 'react';
 import { Check, ChevronRight, ClipboardList, List } from 'lucide-react';
 import { spellShortDate, todayISO } from '@mise/shared/day';
 import { isFutureDay, nextDeliveryAfter } from '@mise/shared/order-day';
+import { dueFirst } from '@mise/shared/due-first';
+import type { PlacedRecord } from '@mise/shared/reminders';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import type { MessageKey } from '../i18n/en';
 import { PartBoundary } from '../errors/PartBoundary';
+import { useDueSuppliers } from '../shell/useDueSuppliers';
+import { useKeepFocus } from '../shell/useKeepFocus';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { SPLIT_QUERY } from '../ui/split';
@@ -72,7 +76,7 @@ const HEADING_KEY = {
 // snapshot never remounts the box (see OrdersHead).
 export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onOpenSummary, onOpenClosed, onPlaceAll, onClearAll, swapOpen, onSwap, onSend, onSettings, onHistory, onIncoming, onReorder, onLists, onOpenPending }: Props) {
   const { t } = useT();
-  const { config, draft, suppliersBroken, ingredientsBroken } = useOrders();
+  const { config, draft, suppliers, suppliersLoaded, history, historyLoaded, historyBroken, draftLoaded, draftBroken, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
   const [orderingOnly, setOrderingOnly] = useState(false);
   const handBack = useHandBack();
@@ -87,9 +91,23 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
   // sent or recorded from an old list, and «No suppliers yet» is never said from it.
   const drawn = earlyLens ?? lens;
   const ordering = orderingCount(drawn);
+  // ⚠️ THE SUPPLIERS STILL TO ORDER TODAY (reminders dueTodayIds, the rule of the «Order today» strip), lit and put first ONLY once
+  // the suppliers, the records and the draft have all arrived — as TodayOrders waits: before that, nobody is lit and the order is
+  // the usual one. A dead records stream says nothing (nothing to read them from); a dead draft counts as arrived with no closes.
+  const dueReady = suppliersLoaded && historyLoaded && !historyBroken && draftLoaded;
+  const due = useDueSuppliers({
+    suppliers,
+    records: history as readonly PlacedRecord[],
+    skipped: draftBroken ? null : draft.skipped,
+    ready: dueReady,
+  });
+  useKeepFocus(due);
+  // Due first WITHIN each group (Favourites keep their heading), each part in its usual order. Rows are keyed by id, so the row
+  // open beside the list keeps its node, its `aria-current` and its focus when the order changes.
   const groups = useMemo(
-    () => supplierListGroups(drawn, { query, orderingOnly, favourites: config.favouriteSuppliers }),
-    [drawn, query, orderingOnly, config.favouriteSuppliers],
+    () => supplierListGroups(drawn, { query, orderingOnly, favourites: config.favouriteSuppliers })
+      .map(group => ({ ...group, suppliers: dueFirst(group.suppliers, due) })),
+    [drawn, query, orderingOnly, config.favouriteSuppliers, due],
   );
   const shown = groups.reduce((n, group) => n + group.suppliers.length, 0);
   const broken = suppliersBroken || ingredientsBroken;
@@ -173,6 +191,7 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
                       .filter(part => part !== '').join(' · ')}
                     count={filled}
                     tag={tag}
+                    due={due.has(supplier.id)}
                     isOpen={supplier.id === openId}
                     isWaiting={supplier.id === heldId}
                     onOpenSupplier={onOpenSupplier}
@@ -207,6 +226,7 @@ type RowProps = {
   meta: string;
   count: number;
   tag: string;
+  due: boolean;
   isOpen: boolean;
   isWaiting: boolean;
   onOpenSupplier: (id: string) => void;
@@ -219,7 +239,7 @@ type RowProps = {
 // the outer one's handler too. The row is a plain container holding siblings: the wide one opens the order, a narrow one opens the
 // read-only list of what the supplier sells, and on the split a third opens the order summary beside the list (only while the
 // supplier has quantities; an invisible spacer of the same width keeps the rows aligned).
-function SupplierRow({ supplier, meta, count, tag, isOpen, isWaiting, onOpenSupplier, onOpenItems, onOpenSummary }: RowProps) {
+function SupplierRow({ supplier, meta, count, tag, due, isOpen, isWaiting, onOpenSupplier, onOpenItems, onOpenSummary }: RowProps) {
   const { t } = useT();
   const handBack = useHandBack();
   const id = supplier.id;
@@ -229,7 +249,7 @@ function SupplierRow({ supplier, meta, count, tag, isOpen, isWaiting, onOpenSupp
   const itemsNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(itemsOpener(id), node); }, [handBack, id]);
   const summaryNode = useCallback((node: HTMLButtonElement | null) => { handBack.register(summaryOpener(id), node); }, [handBack, id]);
   return (
-    <li className={styles.item} data-open={isOpen} data-waiting={isWaiting ? 'true' : undefined}>
+    <li className={styles.item} data-open={isOpen} data-due={due ? 'true' : undefined} data-waiting={isWaiting ? 'true' : undefined}>
       <button
         ref={openNode}
         type="button"
@@ -242,6 +262,8 @@ function SupplierRow({ supplier, meta, count, tag, isOpen, isWaiting, onOpenSupp
           <span className={styles.name}>{label}</span>
           {meta !== '' ? <span className={styles.meta}>{meta}</span> : null}
           {tag !== '' ? <span className={styles.tag}>{tag}</span> : null}
+          {/* ⚠️ A REAL SPACE before the tag: without it the name read out is «Bee FarmTo order today». */}
+          {due ? <>{' '}<span className={styles.dueTag}>{t('ord.dueToday')}</span></> : null}
         </span>
         {count > 0 ? <span className={styles.count}>{t('ord.itemsCount', { n: count })}</span> : null}
         <ChevronRight aria-hidden="true" className={styles.chevron} />

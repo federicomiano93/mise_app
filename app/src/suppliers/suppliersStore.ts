@@ -22,9 +22,11 @@ import { normalizeFavourites } from '@mise/shared/favourite-suppliers';
 import { INGREDIENT_DRAINED_FIELDS, PRICE_FIELDS, withPrices } from '@mise/shared/price-model';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { DEFAULT_WEEK_START, weekStartOf } from '@mise/shared/work-week';
+import { todayISO } from '@mise/shared/day';
 import { markBusy as markBusyOfSession } from '../session/busy';
 import { priceWriteOf } from './priceSave';
 import type { PricePatch } from '@mise/shared/price-model';
+import type { PlacedRecord } from '@mise/shared/reminders';
 import type { IngredientUsage, PanelKey, StoredDoc, SuppliersMeta, SuppliersSource } from './suppliersSource';
 
 export type SuppliersMessage =
@@ -81,11 +83,23 @@ export interface SuppliersSnapshot {
   // The day a week starts on (config/orders.weekStartsOn through weekStartOf: "Sunday" when missing or unreadable). «Price
   // changes» cuts its weeks there (parity I107), as the current app's page listener does.
   readonly weekStartsOn: string;
+  // What «To order today» needs besides the suppliers (@mise/shared/reminders dueTodayIds): the order records from the day the
+  // screen opened (only their date and supplier are kept), the draft's `skipped` map (supplierId → the day it was closed as not
+  // ordered), and whether each has arrived. ⚠️ THE SAME OBJECTS COME BACK WHILE THEIR CONTENT DOES NOT CHANGE: the draft changes
+  // on every keystroke on another phone, and the snapshot must not move for it.
+  readonly placed: readonly PlacedRecord[];
+  readonly placedLoaded: boolean;
+  readonly placedBroken: boolean;
+  readonly closed: Readonly<Record<string, string>>;
+  readonly draftLoaded: boolean;
+  readonly draftBroken: boolean;
 }
 
 export interface SuppliersDeps {
   // The busy marker of the session (session/busy.ts); a spec passes its own to count.
   markBusy(): () => void;
+  // The local day as 'YYYY-MM-DD' when the screen starts watching (a spec passes its own); defaults to the device's.
+  today?(): string;
 }
 
 // What the supplier card saves (parity S82), as the card builds it.
@@ -201,6 +215,12 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
   let favourites: readonly string[] = [];
   let configLoaded = false;
   let weekStartsOn = DEFAULT_WEEK_START;
+  let placed: readonly PlacedRecord[] = [];
+  let placedLoaded = false;
+  let placedBroken = false;
+  let closed: Readonly<Record<string, string>> = {};
+  let draftLoaded = false;
+  let draftBroken = false;
 
   const listeners = new Set<() => void>();
   const messageListeners = new Set<(message: SuppliersMessage) => void>();
@@ -213,6 +233,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
     return {
       suppliers, suppliersLoaded, suppliersFromServer, suppliersBroken, ingredients, ingredientsLoaded, ingredientsFromServer, ingredientsBroken, pricesReadable, pricesFromServer, prices,
       storedCategories, favourites, configLoaded, weekStartsOn,
+      placed, placedLoaded, placedBroken, closed, draftLoaded, draftBroken,
     };
   }
 
@@ -247,6 +268,14 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
 
   // ⚠️ THE SERVER'S WORD, OR A COPY THAT HOLDS SOMETHING (header). A cached copy that holds documents is the venue's
   // own, maybe a little old; the server's answer follows it in a moment.
+  // Only what the due rule reads, and the same array back while it is the same content.
+  const sameEntries = (a: Readonly<Record<string, string>>, b: Readonly<Record<string, string>>) => {
+    const keys = Object.keys(a);
+    return keys.length === Object.keys(b).length && keys.every(key => a[key] === b[key]);
+  };
+  const sameRecords = (a: readonly PlacedRecord[], b: readonly PlacedRecord[]) =>
+    a.length === b.length && a.every((row, index) => row.date === b[index]?.date && row.supplierId === b[index]?.supplierId);
+
   const believable = (list: readonly StoredDoc[], meta: SuppliersMeta) => meta.fromServer || list.length > 0;
 
   function relayIngredients(): void {
@@ -328,6 +357,42 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
           if (!readable) pricesFromServer = false;
           else if (meta?.fromServer) pricesFromServer = true;
           relayIngredients();
+          changed();
+        }),
+        // ⚠️ «TO ORDER TODAY» (his request, item 12 of docs/mise2-port-owed.md): ONE listener on today's records and ONE on the draft.
+        // Neither failure is shown on the page; the list simply lights nobody (a dead draft counts as arrived, with no closes).
+        // The store tells the screen only when what the due rule reads changed.
+        source.watchPlaced((deps.today ?? todayISO)(), (list, meta) => {
+          const next = list.map(row => ({ date: typeof row.date === 'string' ? row.date : undefined, supplierId: typeof row.supplierId === 'string' ? row.supplierId : undefined }));
+          const wasLoaded = placedLoaded;
+          const wasBroken = placedBroken;
+          if (believable(list, meta)) placedLoaded = true;
+          placedBroken = false;
+          if (sameRecords(placed, next) && wasLoaded === placedLoaded && !wasBroken) return;
+          if (!sameRecords(placed, next)) placed = next;
+          changed();
+        }, () => {
+          placedBroken = true;
+          placedLoaded = true;
+          changed();
+        }),
+        source.watchDraft((data, meta) => {
+          const skipped = data?.skipped;
+          const next: Record<string, string> = {};
+          if (skipped && typeof skipped === 'object') {
+            for (const [id, day] of Object.entries(skipped as Record<string, unknown>)) if (typeof day === 'string') next[id] = day;
+          }
+          const wasLoaded = draftLoaded;
+          const wasBroken = draftBroken;
+          if (data !== null || meta.fromServer) draftLoaded = true;
+          draftBroken = false;
+          if (sameEntries(closed, next) && wasLoaded === draftLoaded && !wasBroken) return;
+          if (!sameEntries(closed, next)) closed = next;
+          changed();
+        }, () => {
+          draftBroken = true;
+          draftLoaded = true;
+          closed = {};
           changed();
         }),
         // ⚠️ A FAILURE HERE IS NOT SHOWN ON THE PAGE (parity S71): the categories fall back to the defaults plus those in

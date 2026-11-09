@@ -10,6 +10,9 @@ type Listener = { onChange: (list: StoredDoc[], meta: SuppliersMeta) => void; on
 type PriceListener = (map: Record<string, Record<string, unknown>>, readable: boolean, meta: SuppliersMeta) => void;
 type ConfigListener = { onChange: (data: Record<string, unknown> | null, meta: SuppliersMeta) => void; onError: (err: unknown) => void };
 
+type PlacedListener = { onChange: (list: StoredDoc[], meta: SuppliersMeta) => void; onError: (err: unknown) => void };
+type DraftListener = { onChange: (data: Record<string, unknown> | null, meta: SuppliersMeta) => void; onError: (err: unknown) => void };
+
 export type SupplierWrite =
   | { readonly op: 'save'; readonly id: string; readonly data: Record<string, unknown> }
   | { readonly op: 'active'; readonly id: string; readonly active: boolean }
@@ -44,7 +47,18 @@ export type FakeSuppliersSource = SuppliersSource & {
   // config/orders as stored (null = none).
   ordersConfig: Record<string, unknown> | null;
   // The next watches fail (the rules refused them, or the stream died).
-  refuse: { suppliers: boolean; ingredients: boolean; config: boolean };
+  refuse: { suppliers: boolean; ingredients: boolean; config: boolean; placed: boolean; draftDoc: boolean };
+  // «To order today»: the order records the live window holds (orders-history), and drafts/current AS STORED (null = none; its
+  // `skipped` map is what the list reads). `setPlaced` / `setDraftDoc` change them and tell the watchers at once, as another phone's
+  // write would. `placedWatches` counts the listeners opened on the records (one per screen, never one per row).
+  placedRecords: StoredDoc[];
+  draftDoc: Record<string, unknown> | null;
+  setPlaced(list: StoredDoc[]): void;
+  setDraftDoc(data: Record<string, unknown> | null): void;
+  placedWatches: number;
+  draftWatches: number;
+  // The `fromDate` each records watch was opened with.
+  placedFrom: string[];
   // Every write the store sent, in order (refused ones included: they are taken back afterwards).
   writes: SupplierWrite[];
   // The next writes of these kinds are refused (the rules said no).
@@ -75,6 +89,9 @@ export type FakeSuppliersSource = SuppliersSource & {
   // Holds back the first answers until release() (Firestore still loading).
   hold(): void;
   release(): void;
+  // Holds back only the answers of the records and the draft (the «To order today» data) until releaseDue().
+  holdDue(): void;
+  releaseDue(): void;
   // Tells every watcher again (as another phone's write would).
   push(): void;
   // Kills the live suppliers / ingredients streams, as a lost permission would.
@@ -100,7 +117,10 @@ export function fakeSuppliersSource(
   const ingredientWatchers = new Set<Listener>();
   const priceWatchers = new Set<PriceListener>();
   const configWatchers = new Set<ConfigListener>();
+  const placedWatchers = new Set<PlacedListener>();
+  const draftWatchers = new Set<DraftListener>();
   let held = false;
+  let dueHeld = false;
   let writeHold: Promise<void> | null = null;
   let panelHold: Promise<void> | null = null;
   let usageHold: Promise<void> | null = null;
@@ -115,7 +135,9 @@ export function fakeSuppliersSource(
   const priceMeta = (): SuppliersMeta => ({ fromServer: !fake.pricesFromCache && !fake.fromCache });
   function tellPrices() { for (const w of [...priceWatchers]) w(fake.refusePrices ? {} : priceMap(), !fake.refusePrices, priceMeta()); }
   function tellConfig() { for (const w of [...configWatchers]) w.onChange(fake.ordersConfig ? { ...fake.ordersConfig } : null, meta()); }
-  function tellAll() { tellSuppliers(); tellIngredients(); tellPrices(); tellConfig(); }
+  function tellPlaced() { if (dueHeld) return; for (const w of [...placedWatchers]) w.onChange(fake.placedRecords.map(row => ({ ...row })), meta()); }
+  function tellDraftDoc() { if (dueHeld) return; for (const w of [...draftWatchers]) w.onChange(fake.draftDoc ? { ...fake.draftDoc } : null, meta()); }
+  function tellAll() { tellSuppliers(); tellIngredients(); tellPrices(); tellConfig(); tellPlaced(); tellDraftDoc(); }
 
   // Like onSnapshot: the first answer arrives after the call returns.
   function watch(set: Set<Listener>, refusedNow: () => boolean) {
@@ -168,7 +190,14 @@ export function fakeSuppliersSource(
     historyReads: [],
     pricesFromCache: false,
     ordersConfig: seed.ordersConfig ?? null,
-    refuse: { suppliers: false, ingredients: false, config: false },
+    refuse: { suppliers: false, ingredients: false, config: false, placed: false, draftDoc: false },
+    placedRecords: [],
+    draftDoc: null,
+    placedWatches: 0,
+    draftWatches: 0,
+    placedFrom: [],
+    setPlaced(list) { fake.placedRecords = list; tellPlaced(); },
+    setDraftDoc(data) { fake.draftDoc = data; tellDraftDoc(); },
     writes: [],
     refuseWrites: {
       save: false, active: false, delete: false, favourite: false, category: false, ingredientSave: false, ingredientDelete: false,
@@ -197,6 +226,39 @@ export function fakeSuppliersSource(
         onChange(fake.refusePrices ? {} : priceMap(), !fake.refusePrices, priceMeta());
       });
       return () => { priceWatchers.delete(onChange); };
+    },
+
+    watchPlaced(fromDate, onChange, onError) {
+      fake.placedWatches += 1;
+      fake.placedFrom.push(fromDate);
+      const listener: PlacedListener = { onChange, onError };
+      placedWatchers.add(listener);
+      queueMicrotask(() => {
+        if (!placedWatchers.has(listener)) return;
+        if (fake.refuse.placed) {
+          placedWatchers.delete(listener);
+          onError(refused());
+        } else if (!held && !dueHeld) {
+          onChange(fake.placedRecords.map(row => ({ ...row })), meta());
+        }
+      });
+      return () => { placedWatchers.delete(listener); };
+    },
+
+    watchDraft(onChange, onError) {
+      fake.draftWatches += 1;
+      const listener: DraftListener = { onChange, onError };
+      draftWatchers.add(listener);
+      queueMicrotask(() => {
+        if (!draftWatchers.has(listener)) return;
+        if (fake.refuse.draftDoc) {
+          draftWatchers.delete(listener);
+          onError(refused());
+        } else if (!held && !dueHeld) {
+          onChange(fake.draftDoc ? { ...fake.draftDoc } : null, meta());
+        }
+      });
+      return () => { draftWatchers.delete(listener); };
     },
 
     watchOrdersConfig(onChange, onError) {
@@ -366,6 +428,8 @@ export function fakeSuppliersSource(
       return () => { panelHold = null; release(); };
     },
     hold() { held = true; },
+    holdDue() { dueHeld = true; },
+    releaseDue() { dueHeld = false; tellPlaced(); tellDraftDoc(); },
     release() {
       held = false;
       tellAll();

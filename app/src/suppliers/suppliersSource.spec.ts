@@ -17,6 +17,9 @@ function fakeKit() {
   const fs = {
     collection: (_db: unknown, ...segments: string[]): Ref => ({ kind: 'collection', path: segments.join('/') }),
     doc: (_db: unknown, ...segments: string[]): Ref => ({ kind: 'doc', path: segments.join('/') }),
+    // A query is its collection plus the conditions it was given, so a spec can read both.
+    query: (ref: Ref, ...conditions: unknown[]) => ({ ...ref, kind: 'query', conditions }),
+    where: (field: string, op: string, value: unknown) => ({ field, op, value }),
     onSnapshot: vi.fn((target: Ref, ...rest: unknown[]) => {
       const options = typeof rest[0] === 'function' ? undefined : rest.shift();
       const [next, error] = rest as [(snap: unknown) => void, (err: unknown) => void];
@@ -185,6 +188,35 @@ describe('the suppliers source, as firestore.rules expect it', () => {
     entry!.next({ exists: () => false, data: () => undefined, metadata: { fromCache: true } });
     entry!.next({ exists: () => true, data: () => ({ ingredientCategories: [] }), metadata: { fromCache: false } });
     expect(seen).toEqual([[null, false], [{ ingredientCategories: [] }, true]]);
+  });
+
+  test('«To order today»: ONE query on the records from today on (one field), and the draft document, both with metadata changes', async () => {
+    const { listeners, live, source } = make();
+    const records: unknown[] = [];
+    const drafts: unknown[] = [];
+    source.watchPlaced('2026-11-10', (list, meta) => { records.push([list, meta.fromServer]); }, () => undefined);
+    source.watchDraft((data, meta) => { drafts.push([data, meta.fromServer]); }, () => undefined);
+    await settle();
+    expect(listeners).toHaveLength(2);
+    const [history] = live(`locations/${VENUE}/orders-history`);
+    expect((history!.target as unknown as { conditions: unknown[] }).conditions).toEqual([{ field: 'date', op: '>=', value: '2026-11-10' }]);
+    expect(history!.options).toEqual({ includeMetadataChanges: true });
+    const doc = { id: 'r1', data: () => ({ date: '2026-11-10', supplierId: 's1' }) };
+    const snap = (fromCache: boolean, changes: number) => ({ docs: [doc], metadata: { fromCache }, docChanges: () => new Array(changes) });
+    history!.next(snap(true, 1));
+    history!.next(snap(true, 0));
+    history!.next(snap(false, 0));
+    history!.next(snap(false, 0));
+    // The copy's first word, then the server's first word even though nothing changed; a quiet metadata report after it is dropped.
+    expect(records).toEqual([
+      [[{ date: '2026-11-10', supplierId: 's1', id: 'r1' }], false],
+      [[{ date: '2026-11-10', supplierId: 's1', id: 'r1' }], true],
+    ]);
+    const [draft] = live(`locations/${VENUE}/drafts/current`);
+    expect(draft!.options).toEqual({ includeMetadataChanges: true });
+    draft!.next({ exists: () => false, data: () => undefined, metadata: { fromCache: false } });
+    draft!.next({ exists: () => true, data: () => ({ skipped: { s1: '2026-11-10' } }), metadata: { fromCache: false } });
+    expect(drafts).toEqual([[null, true], [{ skipped: { s1: '2026-11-10' } }, true]]);
   });
 
   test('stop works before Firestore has loaded', async () => {

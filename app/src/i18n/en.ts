@@ -1545,6 +1545,8 @@ export const en = {
   // NEW: the word beside a switched-off supplier or ingredient, so it is never told apart by being dimmed alone.
   'sup.switchedOff': 'Switched off',
   'sup.fromInvoice': 'From invoice',
+  // The tag on a supplier still to be ordered today (the same words as the Orders list's `ord.dueToday`).
+  'sup.dueToday': 'To order today',
   'sup.notInUseGroup': 'Not in use ({n})',
   'sup.loadFailed': 'Could not load the suppliers. Check your connection and try again.',
   'sup.pane.suppliers.title': 'Choose a supplier',
@@ -2482,6 +2484,8 @@ export const en = {
   'ord.reorder.lineGone': 'This line cannot be put back any more: the ingredient or the supplier is no longer in use.',
   'ord.today.label': 'Order today',
   'ord.today.allPlaced': 'Today’s orders are all placed',
+  // The tag on a supplier's row in the list: its order day is today and nothing is recorded or closed (reminders dueTodayIds).
+  'ord.dueToday': 'To order today',
   'ord.today.placed': 'placed',
   'ord.today.notOrdered': 'not ordered',
   'ord.notices.title': 'Notices',

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { ChevronRight, FileUp, Plus, Search, Settings, TrendingUp } from 'lucide-react';
+import { dueFirst } from '@mise/shared/due-first';
 import { favouriteGroups } from '@mise/shared/favourite-suppliers';
 import { ingredientDisplayName, ingredientNameMatches } from '@mise/shared/ingredient-name';
 import { isPackaging } from '@mise/shared/ingredient-kind';
@@ -9,6 +10,8 @@ import { supplierLabel, supplierMatches } from '@mise/shared/supplier-label';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
+import { useDueSuppliers } from '../shell/useDueSuppliers';
+import { useKeepFocus } from '../shell/useKeepFocus';
 import { Button } from '../ui/Button';
 import { ItemRow, ItemRows } from './ItemRow';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
@@ -18,6 +21,7 @@ import { IMPORT_OPENER, NEW_OPENER, PRICE_CHANGES_OPENER, SEARCH_OPENER, SETTING
 import type { SuppliersTab } from './suppliersPath';
 import { useSuppliers } from './SuppliersContext';
 import type { StoredDoc } from './suppliersSource';
+import type { SuppliersSnapshot } from './suppliersStore';
 import styles from './SuppliersList.module.css';
 
 // The current app's debounce: the box tells the list what is typed on every keystroke, and the rows are repainted
@@ -226,6 +230,9 @@ export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, open
             items={snapshot.ingredients}
             countsReady={snapshot.ingredientsLoaded}
             favourites={snapshot.favourites}
+            placed={snapshot.placed}
+            closed={snapshot.closed}
+            dueReady={snapshot.placedLoaded && !snapshot.placedBroken && snapshot.draftLoaded}
             query={query}
             broken={broken}
             openSupplierId={openSupplierId}
@@ -302,11 +309,17 @@ function EmptyState({ tab }: { tab: SuppliersTab }) {
   );
 }
 
+type SnapshotPlaced = SuppliersSnapshot['placed'];
+
 type SupplierRowsProps = {
   suppliers: readonly StoredDoc[];
   items: readonly StoredDoc[];
   countsReady: boolean;
   favourites: readonly string[];
+  // «To order today»: today's order records and the draft's closes, and whether both have arrived (the suppliers have, to be here).
+  placed: SnapshotPlaced;
+  closed: SuppliersSnapshot['closed'];
+  dueReady: boolean;
   query: string;
   broken: boolean;
   openSupplierId: string | null;
@@ -315,7 +328,7 @@ type SupplierRowsProps = {
 
 // The Suppliers tab: every supplier, switched off ones too, A–Z by the label the app shows, the starred ones first under
 // their own heading when any is in view (parity S54–S56).
-function SupplierRows({ suppliers, items, countsReady, favourites, query, broken, openSupplierId, onOpenSupplier }: SupplierRowsProps) {
+function SupplierRows({ suppliers, items, countsReady, favourites, placed, closed, dueReady, query, broken, openSupplierId, onOpenSupplier }: SupplierRowsProps) {
   const { t } = useT();
   const handBack = useHandBack();
 
@@ -337,11 +350,17 @@ function SupplierRows({ suppliers, items, countsReady, favourites, query, broken
     return out;
   }, [items]);
   const fromInvoices = useMemo(() => suppliersFromInvoices(items), [items]);
+  // ⚠️ The suppliers still to order today (reminders dueTodayIds), lit and put first only once the records and the draft have
+  // arrived; a dead draft is read as «nobody closed», dead records light nobody.
+  const due = useDueSuppliers({ suppliers, records: placed, skipped: closed, ready: dueReady });
+  useKeepFocus(due);
 
   if (suppliers.length === 0) return broken ? null : <EmptyState tab="suppliers" />;
   if (visible.length === 0) return <p className={styles.nothing}>{t(NO_MATCH_KEY.suppliers)}</p>;
 
-  const groups = favouriteGroups(visible, favourites);
+  // Due first WITHIN each group (Favourites keep their heading), each part in its usual A–Z order. Rows are keyed by id, so the
+  // row open beside the list keeps its node, its `aria-current` and its focus when the order changes.
+  const groups = favouriteGroups(visible, favourites).map(group => ({ ...group, suppliers: dueFirst(group.suppliers, due) }));
   return (
     <>
       {groups.map(group => (
@@ -366,6 +385,7 @@ function SupplierRows({ suppliers, items, countsReady, favourites, query, broken
                   name={supplierLabel(supplier)}
                   meta={meta}
                   off={supplier.active === false}
+                  due={due.has(supplier.id)}
                   fromInvoice={fromInvoices.has(supplier.id)}
                   isOpen={supplier.id === openSupplierId}
                   // The supplier that is already open stays as it is: nothing to open.
@@ -449,6 +469,7 @@ type RowProps = {
   name: string;
   meta: string;
   off: boolean;
+  due: boolean;
   fromInvoice: boolean;
   isOpen: boolean;
   onPress: (id: string) => void;
@@ -456,7 +477,7 @@ type RowProps = {
 };
 
 // One supplier: its name, a line under it and a chevron. The whole row is the button.
-function SupplierRow({ id, name, meta, off, fromInvoice, isOpen, onPress, register }: RowProps) {
+function SupplierRow({ id, name, meta, off, due, fromInvoice, isOpen, onPress, register }: RowProps) {
   const { t } = useT();
   // Back from this supplier's screen hands the focus back to this button.
   const opener = useCallback((node: HTMLButtonElement | null) => { register(supplierOpener(id), node); }, [register, id]);
@@ -469,13 +490,15 @@ function SupplierRow({ id, name, meta, off, fromInvoice, isOpen, onPress, regist
         aria-current={isOpen ? 'true' : undefined}
         data-open={isOpen}
         data-off={off}
+        data-due={due ? 'true' : undefined}
         onClick={() => { onPress(id); }}
       >
         <span className={styles.main}>
           <span className={styles.name}>{name}</span>
           {meta !== '' ? <span className={styles.meta}>{meta}</span> : null}
-          {fromInvoice || off ? (
+          {fromInvoice || off || due ? (
             <span className={styles.tags}>
+              {due ? <span className={styles.dueTag}>{t('sup.dueToday')}</span> : null}
               {fromInvoice ? <span className={styles.tag}>{t('sup.fromInvoice')}</span> : null}
               {off ? <span className={styles.tag}>{t('sup.switchedOff')}</span> : null}
             </span>

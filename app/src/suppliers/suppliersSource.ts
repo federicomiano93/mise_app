@@ -77,6 +77,12 @@ export interface SuppliersSource {
   watchPrices(
     onChange: (map: Record<string, Record<string, unknown>>, readable: boolean, meta: SuppliersMeta) => void,
   ): () => void;
+  // orders-history from `fromDate` ('YYYY-MM-DD') onwards, live (`date >= fromDate`, one field, no composite index): ONE listener for
+  // the whole screen, read only to know which suppliers were already ordered TODAY (the «To order today» tag and order of the
+  // list; the Orders section watches a longer window with its own source, a feature never imports another). Same contract.
+  watchPlaced(fromDate: string, onChange: (list: StoredDoc[], meta: SuppliersMeta) => void, onError: (err: unknown) => void): () => void;
+  // drafts/current as stored (null when there is none), live: only its `skipped` map is read («closed as not ordered»). Same contract.
+  watchDraft(onChange: (data: Record<string, unknown> | null, meta: SuppliersMeta) => void, onError: (err: unknown) => void): () => void;
   // config/orders as stored (null when there is none), live. Same contract as watchSuppliers.
   watchOrdersConfig(
     onChange: (data: Record<string, unknown> | null, meta: SuppliersMeta) => void,
@@ -137,6 +143,7 @@ const PRICE_HISTORY = 'prices';
 const CONFIG = 'config';
 const DRAFTS = 'drafts';
 const DRAFT_ID = 'current';
+const HISTORY = 'orders-history';
 const RECIPES = 'recipes';
 const PRODUCTS = 'products';
 const ORDERS_DOC = 'orders';
@@ -190,6 +197,7 @@ export function createFirestoreSuppliersSource(
   const pricesPath = buildPath(locationId, INGREDIENT_PRICES);
   const configPath = buildPath(locationId, CONFIG);
   const draftsPath = buildPath(locationId, DRAFTS);
+  const historyPath = buildPath(locationId, HISTORY);
   const recipesPath = buildPath(locationId, RECIPES);
   const productsPath = buildPath(locationId, PRODUCTS);
   const collectionPaths: Record<string, string> = { ingredients: ingredientsPath, 'ingredient-prices': pricesPath };
@@ -265,6 +273,42 @@ export function createFirestoreSuppliersSource(
         onChange({}, false, { fromServer: false });
       },
     ), () => onChange({}, false, { fromServer: false })),
+
+    // Today's order records (and any later day's), for the list's «To order today» tag. The server's first word is reported even when
+    // it is identical to the copy (the store waits for it); every other metadata-only answer is dropped, so a quiet collection
+    // does not redraw the list.
+    watchPlaced(fromDate, onChange, onError) {
+      let told = false;
+      let toldServer = false;
+      return listen(kit => kit.fs.onSnapshot(
+        kit.fs.query(kit.fs.collection(kit.db, historyPath), kit.fs.where('date', '>=', fromDate)),
+        { includeMetadataChanges: true },
+        snap => {
+          const fromServer = !snap.metadata.fromCache;
+          if (told && snap.docChanges().length === 0 && (toldServer || !fromServer)) return;
+          told = true;
+          toldServer = toldServer || fromServer;
+          onChange(docsOf(snap), { fromServer });
+        },
+        err => {
+          console.error('watch(orders-history) failed:', err);
+          onError(err);
+        },
+      ), onError);
+    },
+
+    watchDraft: (onChange, onError) => listen(kit => kit.fs.onSnapshot(
+      kit.fs.doc(kit.db, draftsPath, DRAFT_ID),
+      { includeMetadataChanges: true },
+      snap => onChange(
+        snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null,
+        { fromServer: !snap.metadata.fromCache },
+      ),
+      err => {
+        console.error('watch(drafts/current) failed:', err);
+        onError(err);
+      },
+    ), onError),
 
     // ⚠️ includeMetadataChanges, for the same reason as the suppliers: a «missing» from the browser's own database is
     // confirmed only by a later report that the server said so (parity S28), and that report changes no document.
