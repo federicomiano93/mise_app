@@ -20,12 +20,17 @@ describe('AppShell: the frame', () => {
   // The shell is a grid of the rail, the screen and the tab bar: anything else straight under it
   // takes a cell and pushes them. The holiday reminder's boundary did (an empty <div tabindex=-1>):
   // the rail and the screen sat 28-72px low and jumped when the holiday data landed (9 Nov 2026).
-  it('puts no part boundary straight under the grid', () => {
+  it('holds only the skip link, the rail, the main column and the tab bar', () => {
     renderApp('/orders');
-    const shell = document.getElementById('main')?.parentElement?.parentElement;
+    const column = document.getElementById('main')?.parentElement;
+    const shell = column?.parentElement;
     expect(shell).toBeTruthy();
-    const loose = Array.from(shell!.children).filter(child => child.getAttribute('tabindex') === '-1');
-    expect(loose).toEqual([]);
+    const children = Array.from(shell!.children);
+    expect(children).toHaveLength(4);
+    expect(children[0]).toHaveAttribute('href', '#main');
+    expect(children[1]).toContainElement(screen.getByRole('navigation', { name: 'All sections' }));
+    expect(children[2]).toBe(column);
+    expect(children[3]).toContainElement(screen.getByRole('navigation', { name: 'Main sections' }));
   });
 });
 

@@ -9,16 +9,6 @@
   background: var(--bg);
 }
 
-/* The holiday reminder and refusal: out of the grid (AppShell.tsx says why). Empty, so 0px tall;
-   a part that fails to draw shows its notice across the top instead of vanishing. */
-.overlays {
-  position: fixed;
-  top: 0;
-  right: 0;
-  left: 0;
-  z-index: 50;
-}
-
 /* The skip link: out of sight until the keyboard reaches it, then on top of everything. */
 .skip {
   position: absolute;

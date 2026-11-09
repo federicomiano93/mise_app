@@ -49,8 +49,8 @@
 .door {
   display: block;
   /* At least a finger wide too: as wide as its text, a short name («Sale») or the narrow name column of the folded
-     «Not in use» group at 296px left it 36-38px (drive of 9 Nov 2026). Past a 38px column it reaches into the 8px gap,
-     never the Order column. */
+     «Not in use» group at 296px left it 36-38px (drive of 9 Nov 2026). 44px, not the 48px of --hit, ON PURPOSE: from
+     296px up the column is at least 36px and the gap 8px, so 44px stays out of the Order box; 48px would reach under it. */
   min-width: 44px;
   margin-top: calc(-1 * var(--s4));
   padding: var(--s4) 0 var(--s2);
