@@ -19,6 +19,10 @@ describe('the name door', () => {
     expect(door).not.toMatch(/margin-bottom/);
   });
 
+  it('is at least a finger wide, whatever the name or the column', () => {
+    expect(rule('.door')).toMatch(/min-width:\s*44px/);
+  });
+
   it('is matched by the plain name’s bottom space, so a row does not move', () => {
     expect(rule('.plain')).toMatch(/padding-bottom:\s*var\(--s2\)/);
   });

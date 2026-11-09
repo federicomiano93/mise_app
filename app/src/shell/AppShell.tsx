@@ -75,18 +75,23 @@ function ShellFrame() {
     <AriaRouterProvider navigate={to => navigate(to)} useHref={useHref}>
       <div className={styles.shell}>
         <SkipLink target={contentRef} />
-        <PartBoundary>
-          <AwayReminder />
-        </PartBoundary>
-        {/* Its own boundary: a reminder that fails to draw must not take the one «Not saved» of the holiday with it. */}
-        <PartBoundary>
-          <AwayRefusalAlert />
-        </PartBoundary>
         <Rail />
         <div className={styles.main}>
           <TopBar />
           <main id="main" ref={contentRef} tabIndex={-1} className={styles.content}>
             {/* The phone's «no connection» notice; the tablet's top bar says it with a dot. */}
+            {/* ⚠️ The holiday reminder and refusal live HERE, not straight under the shell: each boundary is a <div>, and
+                a <div> under the shell's grid takes a cell — the rail and the screen sat low and jumped when the holiday
+                data landed (drive of 9 Nov 2026). Both only open dialogs, drawn over the page from <body>, so here they are
+                0px tall; a part that fails to draw shows its notice at the top of the content, covering nothing. Outside the
+                section's boundary, so moving section does not ask again. */}
+            <PartBoundary>
+              <AwayReminder />
+            </PartBoundary>
+            {/* Its own boundary: a reminder that fails to draw must not take the one «Not saved» of the holiday with it. */}
+            <PartBoundary>
+              <AwayRefusalAlert />
+            </PartBoundary>
             <OfflineBanner />
             {/* Keyed on the section, so moving to another one clears a failure. A section that
                 fails never got to print its own title, so the shell names it from the address:
