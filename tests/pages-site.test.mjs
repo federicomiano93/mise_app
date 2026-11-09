@@ -24,7 +24,7 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 // A Mise 2 build as app/sw-plugin.ts leaves it: index.html, a generated sw.js listing what it precaches, assets.
 function fakeMise2(dir, extra = {}) {
   const files = {
-    'index.html': '<!doctype html><script type="module" src="/mise_app/assets/index-abc.js"></script><link rel="stylesheet" href="/mise_app/assets/index-abc.css">',
+    'index.html': '<!doctype html><meta charset="utf-8"><script>document.write(\'<meta http-equiv="Content-Security-Policy" content="default-src \\\'self\\\'">\')</script><script type="module" src="/mise_app/assets/index-abc.js"></script><link rel="stylesheet" href="/mise_app/assets/index-abc.css">',
     'assets/index-abc.js': 'console.log(1)',
     'assets/index-abc.css': 'body{}',
     'favicon.svg': '<svg/>',

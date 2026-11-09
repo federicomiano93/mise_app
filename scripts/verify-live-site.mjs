@@ -74,6 +74,7 @@ export async function verifySite(base, fetchImpl = fetch) {
   await Promise.all(precache.map(e => must(new URL(e.url, base).href, 'precached by sw.js')));
   const index = await must(`${base}index.html`, 'Mise 2');
   for (const url of pageNeeds) if (!index.text.includes(url)) problems.push(`index.html does not name ${url}: the previous release?`);
+  if (index.status === 200 && !index.text.includes("Content-Security-Policy")) problems.push('index.html writes no Content-Security-Policy');
 
   // The current app's pages that outside links open, and everything they load.
   const seen = new Set();

@@ -62,6 +62,12 @@ both, and the switch keeps the address) and it has consequences that every chang
   go to the network untouched. Built at `/mise2/` beside the current app (the old preview), it leaves the
   current app's caches alone.
 - **No App Check, no reCAPTCHA** (his decision, PR #212) — in either app.
+- **The same kind of Content-Security-Policy** (`app/csp-plugin.ts`): a classic script right after `<meta charset>`
+  writes the `<meta>` policy, byte-identical on every host but localhost, where the emulators (9099, 8080, 5001) are
+  added — as the current app's pages do. `script-src 'self'` (the SDK is bundled, no gstatic), `connect-src` Firestore,
+  Auth, the production functions host and `https://www.gov.uk` (bank holidays), `img-src 'self' data:`, and `style-src
+  'self'` plus the hash of React Aria's one injected rule (`touch-action` on pressables; `csp.spec.ts` recomputes it
+  from the installed library). No `www.google.com`. Loaded in Chromium with the policy: no violation.
 - **The preview publishes only what is allowed.** `build-mise2` (`.github/workflows/preview.yml`)
   builds Mise 2 in a job that holds no Google credential and hands the built files to the deploy
   job, which builds nothing (`tests/preview-hosting.test.mjs`).

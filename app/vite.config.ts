@@ -1,6 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { miseVersion } from './build-version.ts';
+import { miseCsp } from './csp-plugin.ts';
 import { miseServiceWorker } from './sw-plugin.ts';
 
 // The address the app is served under is given at build time (`vite build --base=/mise2/`
@@ -9,7 +10,8 @@ import { miseServiceWorker } from './sw-plugin.ts';
 export default defineConfig({
   // miseServiceWorker: the build's sw.js, its precache list, and the manifest and icons the current app shares
   // (sw-plugin.ts says why it is not Workbox). Build only: the dev server and the specs register no worker.
-  plugins: [react(), miseServiceWorker()],
+  // miseCsp: the page's Content-Security-Policy, written first in <head> (csp-plugin.ts).
+  plugins: [react(), miseCsp(), miseServiceWorker()],
   // The release stamp the telemetry carries (src/telemetry/version.ts). Computed once, when the
   // config loads; Vitest reads this same file, so specs see the same constant.
   define: {
