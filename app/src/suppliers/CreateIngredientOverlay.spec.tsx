@@ -122,6 +122,7 @@ describe('the hosted ingredient card', () => {
   it('saves one ingredient write with the name, and hands back its id and the name to show', async () => {
     const { handles, user, source } = setup();
     const region = await card();
+    await user.selectOptions(region.getByRole('combobox', { name: 'Comes as' }), 'single');
     await user.click(region.getByRole('button', { name: 'Save' }));
     await user.click(within(await screen.findByRole('alertdialog', { name: 'Save ingredient?' })).getByRole('button', { name: 'Save' }));
     const writes = source.writes.filter(write => write.op === 'ingredient-save');

@@ -109,7 +109,7 @@ describe('the refusals', () => {
 
   it('⚠️ a Case being written needs a whole count, then a word', async () => {
     const { region, user, source } = await open('/suppliers/ingredient/i-flour');
-    await user.click(region.getByRole('button', { name: 'Case' }));
+    await user.selectOptions(region.getByRole('combobox', { name: 'Comes as' }), 'carton');
     const count = region.getByRole('textbox', { name: 'How many in the case' });
     await user.click(region.getByRole('button', { name: 'Save' }));
     expect(count).toHaveAttribute('aria-invalid', 'true');
@@ -141,7 +141,7 @@ describe('the refusals', () => {
   it('⚠️ a Case nobody touched is not refused: an old product with no count saves as it was', async () => {
     const source = fakeSuppliersSource({ suppliers: SUPPLIERS, ingredients: [item('i-old', { name: 'Old cartons', unit: 'cartone', packUnit: 'busta' })] });
     const view = await open('/suppliers/ingredient/i-old', source);
-    expect(view.region.getByRole('button', { name: 'Case' })).toHaveAttribute('aria-pressed', 'true');
+    expect(view.region.getByRole('combobox', { name: 'Comes as' })).toHaveValue('carton');
     await view.user.type(view.region.getByRole('textbox', { name: 'Brand' }), 'X');
     await saveAndConfirm(view);
     await waitFor(() => { expect(source.writes).toHaveLength(1); });
@@ -230,7 +230,7 @@ describe('the question and the payload', () => {
     const source = seeded();
     source.draft = { 'i-flour': { qty: 3 } };
     const view = await open('/suppliers/ingredient/i-flour', source);
-    await view.user.click(view.region.getByRole('button', { name: 'Case' }));
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'carton');
     await view.user.type(view.region.getByRole('textbox', { name: 'How many in the case' }), '4');
     expect(view.region.getByText('Case of 4 bags of 25 kg (100 kg)')).toBeInTheDocument();
     await saveAndConfirm(view);
@@ -243,7 +243,7 @@ describe('the question and the payload', () => {
     const source = seeded();
     source.draft = { 'i-case': { qty: 2 } };
     const view = await open('/suppliers/ingredient/i-case', source);
-    await view.user.click(view.region.getByRole('button', { name: 'Single' }));
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
     await saveAndConfirm(view);
     await waitFor(() => { expect(source.writes.some(write => write.op === 'draft-unit')).toBe(true); });
     expect(source.writes[0]).toMatchObject({ op: 'ingredient-save', data: { packCount: null, unit: 'bag' } });
@@ -253,7 +253,7 @@ describe('the question and the payload', () => {
   it('a Case in an Italian venue writes the Italian words, whatever the screen says', async () => {
     const view = await open('/suppliers/ingredient/new', seeded(), { session: { location: { country: 'IT' }, language: 'en' } });
     await view.user.type(nameBox(view.region), 'Passata');
-    await view.user.click(view.region.getByRole('button', { name: 'Case' }));
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'carton');
     await view.user.type(view.region.getByRole('textbox', { name: 'How many in the case' }), '6');
     expect(view.region.getByRole('combobox', { name: 'What is inside the case' })).toHaveValue('busta');
     await saveAndConfirm(view);
@@ -264,6 +264,7 @@ describe('the question and the payload', () => {
   it('a NEW ingredient', async () => {
     const view = await open('/suppliers/ingredient/new');
     await view.user.type(nameBox(view.region), 'Salt');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
     await saveAndConfirm(view);
     await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
     expect(view.source.writes[0]).toEqual({
@@ -283,6 +284,7 @@ describe('the question and the payload', () => {
     const view = await open('/suppliers/ingredient/new?kind=packaging&supplier=s-zed');
     expect(view.region.getByRole('combobox', { name: 'Supplier' })).toHaveValue('s-zed');
     await view.user.type(nameBox(view.region), 'Box 30x40');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
     await view.user.click(view.region.getByRole('button', { name: 'Save' }));
     await view.user.click(within(await dialogOf('Save packaging?')).getByRole('button', { name: 'Save' }));
     await waitFor(() => { expect(view.source.writes).toHaveLength(1); });
@@ -308,6 +310,7 @@ describe('the question and the payload', () => {
   it('goes back to the list, says it was saved, and the row owes the focus', async () => {
     const view = await open('/suppliers/ingredient/new');
     await view.user.type(nameBox(view.region), 'Salt');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
     await saveAndConfirm(view);
     await waitFor(() => { expect(view.router.state.location.pathname).toBe('/suppliers'); });
     expect(await screen.findByText('Ingredient saved.')).toBeInTheDocument();
@@ -375,6 +378,7 @@ describe('«+ New supplier…» in a dialog above the card', () => {
     const made = [...view.source.suppliers.keys()].find(key => key.startsWith('new-supplier-'));
     expect(menu).toHaveValue(made);
 
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
     await saveAndConfirm(view);
     await waitFor(() => { expect(view.source.writes.some(write => write.op === 'ingredient-save')).toBe(true); });
     const saved = view.source.writes.find(write => write.op === 'ingredient-save');
@@ -420,8 +424,8 @@ describe('leaving the card', () => {
 
   it('⚠️ choosing a menu word and choosing it back is not a change', async () => {
     const view = await open('/suppliers/ingredient/i-flour');
-    await view.user.click(view.region.getByRole('button', { name: 'Case' }));
-    await view.user.click(view.region.getByRole('button', { name: 'Single' }));
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'carton');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
     await view.user.click(view.region.getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(view.router.state.location.pathname).toBe('/suppliers'); });
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();

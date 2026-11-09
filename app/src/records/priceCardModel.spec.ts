@@ -47,13 +47,15 @@ interface OpenOptions {
   country?: string;
   t?: T;
   locale?: string;
+  // A new card starts with the format chosen unless a test asks for the empty state.
+  formatChosen?: boolean;
 }
 
 function openCard({
-  item = null, mayPrice = true, kind = 'ingredient', money = MONEY, country = 'IT', t = tEn, locale = 'en-GB',
+  item = null, mayPrice = true, kind = 'ingredient', money = MONEY, country = 'IT', t = tEn, locale = 'en-GB', formatChosen = true,
 }: OpenOptions = {}) {
   const lang = 'it';
-  const baseline = workingFrom(item, { supplierIds: SUPPLIERS, preset: null, mayPrice, lang });
+  const baseline: Working = { ...workingFrom(item, { supplierIds: SUPPLIERS, preset: null, mayPrice, lang }), formatChosen: item !== null || formatChosen };
   let working: Working = baseline;
   const facts: PriceFacts = {
     item, lang, money, locale, country, openedKind: baseline.format, initialWeight: weightText(baseline),
@@ -971,6 +973,20 @@ describe('price-basis-card', () => {
     expect(card.pressed()).toEqual(['per pack']);
     expect(card.view().box.label).toBe('Pack price (€)');
     expect(card.view().box.value).toBe('9.6');
+  });
+
+  test('the basis menu is locked exactly while the format is not chosen, and the segments are the same either way', () => {
+    const card = openCard({ item: null, formatChosen: false });
+    expect(card.working.formatChosen).toBe(false);
+    expect(card.view().basisLocked).toBe(true);
+    const before = card.view().segments;
+    card.single();
+    expect(card.working.formatChosen).toBe(true);
+    expect(card.view().basisLocked).toBe(false);
+    expect(card.view().segments.map(one => one.value)).toEqual(before.map(one => one.value));
+    expect(openCard({ item: SACK }).view().basisLocked).toBe(false);
+    // A context that says nothing about it (the older spec contexts) counts as chosen.
+    expect(priceView(card.price, { ...card.ctx(), formatChosen: undefined }, tEn).basisLocked).toBe(false);
   });
 
   test('a litre weight says «per litre», and its price label follows', () => {

@@ -124,6 +124,7 @@ describe('Save and the money', () => {
     await view.user.type(view.region.getByRole('textbox', { name: 'Name in the message' }), 'Butter');
     await view.user.selectOptions(view.region.getByRole('combobox', { name: 'How it is bought' }), 'kg');
     await view.user.type(rate(view.region), '8');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
     await saveAndConfirm(view);
     await waitFor(() => { expect(view.source.writes.some(w => w.op === 'ingredient-save')).toBe(true); });
     const write = lastSave(view.source);
@@ -156,34 +157,31 @@ describe('the basis and the format', () => {
     return view;
   }
 
-  it('the segments are a labelled group of toggle buttons; a tap converts a typed figure', async () => {
+  it('the basis is a menu «The price is»; choosing another converts a typed figure', async () => {
     const view = await sugar();
-    const group = view.region.getByRole('group', { name: /^(Case|Pack) price/ });
-    const buttons = within(group).getAllByRole('button');
-    expect(buttons.length).toBeGreaterThanOrEqual(2);
-    expect(buttons.filter(b => b.getAttribute('aria-pressed') === 'true')).toHaveLength(1);
+    const menu = view.region.getByRole('combobox', { name: 'The price is' });
+    expect(menu).toBeEnabled();
+    expect(within(menu).getAllByRole('option').length).toBeGreaterThanOrEqual(2);
     const box = view.region.getByRole('textbox', { name: /^(Case|Pack) price/ });
     await view.user.clear(box);
     await view.user.type(box, '20');
-    const perKg = within(group).getByRole('button', { name: 'per kg' });
-    await view.user.click(perKg);
-    expect(perKg).toHaveAttribute('aria-pressed', 'true');
+    await view.user.selectOptions(menu, 'rate');
+    expect(menu).toHaveDisplayValue('per kg');
     expect(view.region.getByRole('textbox', { name: /^Price per kg/ })).toHaveValue('2');
   });
 
-  it('⚠️ a tap that cannot convert does nothing: the number and the segment stay', async () => {
+  it('⚠️ a choice that cannot convert does nothing: the number and the menu stay', async () => {
     const view = await sugar();
     const count = view.region.getByRole('textbox', { name: 'How many in the case' });
-    const group = () => view.region.getByRole('group', { name: /^(Case|Pack) price/ });
+    const menu = () => view.region.getByRole('combobox', { name: 'The price is' });
     const box = view.region.getByRole('textbox', { name: /^(Case|Pack) price/ });
     await view.user.clear(box);
     await view.user.type(box, '20');
     await view.user.clear(count);
-    const pressed = () => within(group()).getAllByRole('button').find(b => b.getAttribute('aria-pressed') === 'true')!.textContent;
-    const before = pressed();
-    const other = within(group()).getAllByRole('button').find(b => b.getAttribute('aria-pressed') === 'false')!;
-    await view.user.click(other);
-    expect(pressed()).toBe(before);
+    const before = (menu() as HTMLSelectElement).value;
+    const other = within(menu()).getAllByRole('option').map(o => (o as HTMLOptionElement).value).find(v => v !== before)!;
+    await view.user.selectOptions(menu(), other);
+    expect(menu()).toHaveValue(before);
     expect(view.region.getByRole('textbox', { name: /^(Case|Pack) price/ })).toHaveValue('20');
   });
 
@@ -255,14 +253,13 @@ describe('the card of before (3e-5)', () => {
     return lastSave(view.source);
   };
 
-  it('opens with «Order unit» and «How it is bought» offering «By the case», and no Single / Case buttons', async () => {
+  it('opens with «Order unit» and «How it is bought» offering «By the case», and no Comes as menu', async () => {
     const bag = await open('/suppliers/ingredient/i-bag', legacySource());
     expect(orderUnit(bag.region)).toHaveValue('sacco');
     expect(howBought(bag.region)).toHaveValue('kg');
     expect(within(howBought(bag.region)).getByRole('option', { name: 'By the case' })).toBeInTheDocument();
     expect(rate(bag.region)).toHaveValue('2');
-    expect(bag.region.queryByRole('button', { name: 'Single' })).not.toBeInTheDocument();
-    expect(bag.region.queryByRole('button', { name: 'Case' })).not.toBeInTheDocument();
+    expect(bag.region.queryByRole('combobox', { name: 'Comes as' })).not.toBeInTheDocument();
     expect(bag.region.getByRole('combobox', { name: 'Package' })).toBeInTheDocument();
   });
 
@@ -273,7 +270,7 @@ describe('the card of before (3e-5)', () => {
     expect(kgCase.region.getByRole('textbox', { name: 'How many in the case' })).toHaveValue('4');
     expect(kgCase.region.getByRole('textbox', { name: 'Size of each one' })).toHaveValue('2.5');
     expect(kgCase.region.getByRole('combobox', { name: 'Unit of each one' })).toHaveValue('kg');
-    expect(kgCase.region.queryByRole('button', { name: 'Single' })).not.toBeInTheDocument();
+    expect(kgCase.region.queryByRole('combobox', { name: 'Comes as' })).not.toBeInTheDocument();
   });
 
   it('⚠️ an untouched Save writes the ingredient and NO price document and no history', async () => {
@@ -360,7 +357,7 @@ describe('the card of before (3e-5)', () => {
     const view = await open('/suppliers/ingredient/i-kgcase', legacySource(), { session: { canManage: false, role: 'employee' } });
     expect(view.region.queryByRole('combobox', { name: 'How it is bought' })).not.toBeInTheDocument();
     expect(view.region.queryByRole('combobox', { name: 'Order unit' })).not.toBeInTheDocument();
-    expect(view.region.getByRole('button', { name: 'Single' })).toBeInTheDocument();
+    expect(view.region.getByRole('combobox', { name: 'Comes as' })).toBeInTheDocument();
   });
 });
 

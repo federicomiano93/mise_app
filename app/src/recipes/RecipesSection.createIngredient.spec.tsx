@@ -299,6 +299,7 @@ describe('Back with the card open', () => {
 
 describe('Save in the card', () => {
   async function saveCard(view: Awaited<ReturnType<typeof open>>, region: ReturnType<typeof within>) {
+    await view.user.selectOptions(region.getByRole('combobox', { name: 'Comes as' }), 'single');
     await view.user.click(region.getByRole('button', { name: 'Save' }));
     await view.user.click(within(await screen.findByRole('alertdialog', { name: 'Save ingredient?' })).getByRole('button', { name: 'Save' }));
     await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'New ingredient' })).not.toBeInTheDocument(); });
@@ -464,6 +465,7 @@ describe('no money', () => {
   it('⚠️ opening the card and saving read no price, no history and watch nothing of the suppliers source', async () => {
     const view = await open('/recipes/new', { session: { ...MANAGER, location: { sections: { foodcost: true } } } });
     const region = await openCard(view);
+    await view.user.selectOptions(region.getByRole('combobox', { name: 'Comes as' }), 'single');
     await view.user.click(region.getByRole('button', { name: 'Save' }));
     await view.user.click(within(await screen.findByRole('alertdialog', { name: 'Save ingredient?' })).getByRole('button', { name: 'Save' }));
     await waitFor(() => { expect(view.suppliers.writes.some(write => write.op === 'ingredient-save')).toBe(true); });

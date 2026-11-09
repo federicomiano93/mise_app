@@ -1236,3 +1236,21 @@ Port of `js/orders/ingredient-merge-data.js` `productsSource` and `js/orders/ing
 - The preview link has no functions: there the kitchen's merge stops at «could not check».
 
 - Stricter than the current app, on purpose: `js/orders/ingredient-merge-data.js` passes `res.data.names` straight on, so an answer with no list would read the ingredient as free; Mise 2 refuses any answer that is not `{ names: string[] }`.
+
+## Ingredient card: format and price basis as menus, format required as built (9 Nov 2026)
+
+His decision (9 Nov 2026), Mise 2 only: the current app (`js/ingredient-record-form.js`) is unchanged.
+- The two segment buttons «Singola / Cartone» became a native menu labelled «Comes as» / «Formato», its options «Single pack» /
+  «Confezione» and «Case» / «Cartone». `sup.ing.formatSingle` changed in both languages; the menu is drawn for everybody on the new card.
+- A NEW ingredient opens with the menu empty («Choose…» / «Scegli…», not a selectable option) and Save is refused until it is chosen:
+  `Working.formatChosen` (false only for a new item, `format` then holds `'single'` as a placeholder so `formState`, `formatPatch`
+  and `orderNow` never see an invalid kind), `RefusedField` `'format'`, checked right after the category and before the case checks;
+  `buildSave` throws if it is ever called without it. The refusal reuses `show()`: the menu is marked, focused, scrolled to, and the
+  sentence is said in its `role="status"` line. Choosing a format clears it.
+- An existing item opens exactly as before (`formatChosen: true`) and an untouched Save writes no `unit`, `packUnit` or `packCount`.
+- The price basis segments («per pack / per case / per kg») became a menu «The price is» / «Il prezzo è». It keeps the same options,
+  default, stored values (`basisToStore`) and `tapBasis` conversion; a choice that cannot convert leaves the old value showing.
+  While the format is not chosen it is disabled, empty (`—`), with the hint «Choose the format first…» (`PriceView.basisLocked`,
+  from `PriceCtx.formatChosen`; a context that says nothing counts as chosen).
+- The card of before (`legacyCard`) is untouched: it only ever opens for existing items.
+- CSS: `.segments` / `.segment` of `IngredientCard.module.css` deleted (nothing else used them); `.box:disabled` added.

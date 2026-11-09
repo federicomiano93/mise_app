@@ -276,8 +276,8 @@ describe('the fields open from what is stored', () => {
     expect(region.getByRole('textbox', { name: 'Weight amount' })).toHaveValue('25');
     expect(region.getByRole('combobox', { name: 'Weight unit' })).toHaveValue('kg');
     expect(region.getByRole('combobox', { name: 'Category' })).toHaveValue('Bakery');
-    expect(region.getByRole('button', { name: 'Single' })).toHaveAttribute('aria-pressed', 'true');
-    expect(region.getByRole('button', { name: 'Case' })).toHaveAttribute('aria-pressed', 'false');
+    expect(region.getByRole('combobox', { name: 'Comes as' })).toHaveValue('single');
+    expect(region.getByRole('combobox', { name: 'Comes as' })).not.toHaveValue('carton');
     // Read-only: text, never a box.
     const invoice = region.getByRole('group', { name: 'Name on the invoice' });
     expect(within(invoice).getByText('FARINA 00 25KG')).toBeInTheDocument();
@@ -331,7 +331,7 @@ describe('the fields open from what is stored', () => {
 
   it('a stored case opens as a Case with its count, its word, and the summary line', async () => {
     const { region } = await open('i-case');
-    expect(region.getByRole('button', { name: 'Case' })).toHaveAttribute('aria-pressed', 'true');
+    expect(region.getByRole('combobox', { name: 'Comes as' })).toHaveValue('carton');
     expect(region.getByRole('textbox', { name: 'How many in the case' })).toHaveValue('4');
     expect(region.getByRole('combobox', { name: 'What is inside the case' })).toHaveValue('bag');
     expect(region.getByText('Case of 4 bags of 2.5 kg (10 kg)')).toBeInTheDocument();
@@ -339,7 +339,7 @@ describe('the fields open from what is stored', () => {
 
   it('a carton word as the unit with a package word opens as a Case with an empty count', async () => {
     const { region } = await open('i-carton');
-    expect(region.getByRole('button', { name: 'Case' })).toHaveAttribute('aria-pressed', 'true');
+    expect(region.getByRole('combobox', { name: 'Comes as' })).toHaveValue('carton');
     expect(region.getByRole('textbox', { name: 'How many in the case' })).toHaveValue('');
   });
 
@@ -347,19 +347,19 @@ describe('the fields open from what is stored', () => {
     const { region } = await open('i-case', 'Modifica ingrediente', { lang: 'it', session: { language: 'it', location: { country: 'IT' } } });
     // The stored word is «bag»; the plural table is the venue's (Italian), which does not know it: «4 × bag».
     expect(region.getByText('Cartone da 4 × bag da 2,5 kg (10 kg)', { exact: false })).toBeInTheDocument();
-    expect(region.getByRole('button', { name: 'Cartone' })).toBeInTheDocument();
+    expect(region.getByRole('combobox', { name: 'Formato' })).toHaveValue('carton');
   });
 
   it('Case picks the venue\'s default package word, and Single takes it back', async () => {
     const { region, user } = await open('i-flour');
-    await user.click(region.getByRole('button', { name: 'Case' }));
+    await user.selectOptions(region.getByRole('combobox', { name: 'Comes as' }), 'carton');
     expect(region.getByRole('combobox', { name: 'What is inside the case' })).toHaveValue('bag');
-    await user.click(region.getByRole('button', { name: 'Single' }));
+    await user.selectOptions(region.getByRole('combobox', { name: 'Comes as' }), 'single');
     expect(region.queryByRole('combobox', { name: 'What is inside the case' })).not.toBeInTheDocument();
-    await user.click(region.getByRole('button', { name: 'Case' }));
+    await user.selectOptions(region.getByRole('combobox', { name: 'Comes as' }), 'carton');
     await user.selectOptions(region.getByRole('combobox', { name: 'What is inside the case' }), 'sack');
-    await user.click(region.getByRole('button', { name: 'Single' }));
-    await user.click(region.getByRole('button', { name: 'Case' }));
+    await user.selectOptions(region.getByRole('combobox', { name: 'Comes as' }), 'single');
+    await user.selectOptions(region.getByRole('combobox', { name: 'Comes as' }), 'carton');
     expect(region.getByRole('combobox', { name: 'What is inside the case' })).toHaveValue('sack');
   });
 });
