@@ -327,6 +327,7 @@ export function IngredientCard({
   const innerBox = useRef<HTMLInputElement>(null);
   const countBox = useRef<HTMLInputElement>(null);
   const innerMenu = useRef<HTMLSelectElement>(null);
+  const formatMenu = useRef<HTMLSelectElement>(null);
   const rateBox = useRef<HTMLInputElement>(null);
   const priceBox = useRef<HTMLInputElement>(null);
   const pieceBox = useRef<HTMLInputElement>(null);
@@ -339,7 +340,7 @@ export function IngredientCard({
   function show(field: Refused) {
     setRefused(field);
     const target = {
-      name: nameBox, weight: weightBox, priceWeight: weightBox, legacyPackWeight: weightBox, category: categoryBox, inner: innerBox,
+      name: nameBox, weight: weightBox, priceWeight: weightBox, legacyPackWeight: weightBox, category: categoryBox, format: formatMenu, inner: innerBox,
       count: countBox, innerEmpty: innerMenu, rate: rateBox, box: priceBox, pieceKg: pieceBox, casePrice: casePriceBox,
       caseCount: caseCountBox, caseSize: caseSizeBox, legacyPack: legacyPackBox, legacyUnit: legacyUnitBox,
     }[field].current;
@@ -769,25 +770,31 @@ export function IngredientCard({
 
           {legacyCard ? legacyMenu('pack') : (
             <div className={styles.field}>
-              <span id={id('pack-label')} className={styles.label}>{t('sup.ing.pack')}</span>
-              {/* ⚠️ NOT A <label>: a label around two buttons would press the first one when its text is tapped. */}
-              <div role="group" aria-labelledby={id('pack-label')} className={styles.segments}>
-                {(['single', 'carton'] as const).map(format => (
-                  <button
-                    key={format}
-                    type="button"
-                    className={styles.segment}
-                    aria-pressed={working.format === format}
-                    onClick={() => {
-                      update(withFormat(working, format, language));
-                      // A sentence about the case's count or word means nothing once the case is gone, and must not come back.
-                      if (format === 'single' && (refused === 'count' || refused === 'inner' || refused === 'innerEmpty')) setRefused(null);
-                    }}
-                  >
-                    {t(format === 'single' ? 'sup.ing.formatSingle' : 'sup.ing.formatCarton')}
-                  </button>
-                ))}
-              </div>
+              <label htmlFor={id('format')} className={styles.label}>{t('sup.ing.formatLabel')}</label>
+              <select
+                ref={formatMenu}
+                id={id('format')}
+                className={styles.box}
+                aria-required="true"
+                {...aria('format', id('format-error'))}
+                value={working.formatChosen ? working.format : ''}
+                onChange={event => {
+                  const next = event.target.value;
+                  if (next !== 'single' && next !== 'carton') return;
+                  update(withFormat(working, next, language), 'format');
+                  // A sentence about the case's count or word means nothing once the case is gone, and must not come back.
+                  if (next === 'single' && (refused === 'count' || refused === 'inner' || refused === 'innerEmpty')) setRefused(null);
+                }}
+              >
+                {/* Selectable on purpose: on iOS the wheel picker can commit the first ENABLED option on Done, which would choose a format nobody
+                    chose. onChange ignores the empty value, so picking it again changes nothing. */}
+                {working.formatChosen ? null : <option value="">{t('sup.ing.formatChoose')}</option>}
+                <option value="single">{t('sup.ing.formatSingle')}</option>
+                <option value="carton">{t('sup.ing.formatCarton')}</option>
+              </select>
+              <p id={id('format-error')} role="status" className={refused === 'format' ? styles.error : styles.quiet}>
+                {refused === 'format' ? t('sup.ing.formatRequired') : ''}
+              </p>
             </div>
           )}
         </div>

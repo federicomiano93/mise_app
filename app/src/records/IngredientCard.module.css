@@ -71,6 +71,12 @@
   background: var(--danger-tint);
 }
 
+.box:disabled {
+  border-color: var(--line);
+  background: var(--sunken);
+  color: var(--ink-2);
+}
+
 .hint {
   color: var(--ink-2);
   font-size: var(--fs-sm);
@@ -146,45 +152,6 @@
   color: var(--ink-2);
   font-size: var(--fs-sm);
   overflow-wrap: anywhere;
-}
-
-/* Single | Case: two toggle buttons of a segmented control, each a 48px target. */
-.segments {
-  display: flex;
-  gap: var(--s1);
-}
-
-.segment {
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: var(--hit);
-  padding: 0 var(--s2);
-  border: 1px solid var(--line-2);
-  border-radius: var(--r-md);
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.segment[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--accent-tint);
-  color: var(--accent-ink);
-}
-
-.segment:focus-visible {
-  outline: 3px solid var(--accent);
-  outline-offset: 1px;
-}
-
-@media (hover: hover) {
-  .segment[aria-pressed="false"]:hover {
-    background: var(--sunken);
-  }
 }
 
 /* «Contains [4] × [bag ▾]»: the count is narrow, the word takes the rest. */

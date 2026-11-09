@@ -93,21 +93,27 @@ export function PriceSection({
         )}
       </div>
 
-      {view.segments.length === 0 ? null : (
-        <div role="group" aria-labelledby={id('box-label')} className={styles.segments}>
-          {view.segments.map(segment => (
-            <button
-              key={segment.value}
-              type="button"
-              className={styles.segment}
-              aria-pressed={segment.pressed}
-              onClick={() => { onBasis(segment.value); }}
-            >
-              {segment.label}
-            </button>
-          ))}
+      {view.basisLocked || view.segments.length > 0 ? (
+        <div className={styles.field}>
+          <label htmlFor={id('basis')} className={styles.label}>{t('sup.price.basis.label')}</label>
+          <select
+            id={id('basis')}
+            className={styles.box}
+            disabled={view.basisLocked}
+            aria-describedby={view.basisLocked ? id('basis-hint') : undefined}
+            value={view.basisLocked ? '' : (view.segments.find(segment => segment.pressed)?.value ?? '')}
+            onChange={event => {
+              const next = event.target.value;
+              if (next === 'pack' || next === 'case' || next === 'rate') onBasis(next);
+            }}
+          >
+            {view.basisLocked
+              ? <option value="">{t('sup.price.basis.empty')}</option>
+              : view.segments.map(segment => <option key={segment.value} value={segment.value}>{segment.label}</option>)}
+          </select>
+          {view.basisLocked ? <p id={id('basis-hint')} className={styles.hint}>{t('sup.price.basis.formatFirst')}</p> : null}
         </div>
-      )}
+      ) : null}
 
       {view.changedNote === null ? null : (
         <div className={styles.priceNote}>

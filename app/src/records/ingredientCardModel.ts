@@ -59,6 +59,9 @@ export interface Working {
   readonly category: ChoiceState;
   readonly weight: WeightState;
   readonly format: 'single' | 'carton';
+  // Mise 2 only: false while a NEW item has no format chosen yet (`format` then holds 'single' as a placeholder, so nothing
+  // downstream ever sees an invalid kind); Save is refused until it is true.
+  readonly formatChosen: boolean;
   // The count box as typed.
   readonly count: string;
   readonly inner: ChoiceState;
@@ -132,6 +135,7 @@ export function workingFrom(item: ItemLike | null, { supplierIds, preset, mayPri
     category: { choice: categoryValue(item?.category), typed: '' },
     weight: { amount: weight.amount, unit: weight.unit, legacy: weight.legacy ?? '' },
     format: opened.kind,
+    formatChosen: item !== null,
     count: opened.count === null ? '' : String(opened.count),
     inner: { choice: opened.inner, typed: '' },
     innerAutoSet: false,
@@ -142,14 +146,14 @@ export function workingFrom(item: ItemLike | null, { supplierIds, preset, mayPri
 // «Single» or «Case» pressed. Picking «Case» with no inner word picks the venue's default one, so the normal path is never
 // refused; returning to «Single» un-picks it only when the person chose nothing (C51).
 export function withFormat(working: Working, next: 'single' | 'carton', lang: unknown): Working {
-  if (next === working.format) return working;
+  if (next === working.format && working.formatChosen) return working;
   if (next === 'carton' && readChoice(working.inner) === '') {
-    return { ...working, format: next, inner: { choice: defaultPackFor(lang), typed: '' }, innerAutoSet: true };
+    return { ...working, format: next, formatChosen: true, inner: { choice: defaultPackFor(lang), typed: '' }, innerAutoSet: true };
   }
   if (next === 'single' && working.innerAutoSet) {
-    return { ...working, format: next, inner: { choice: '', typed: '' }, innerAutoSet: false };
+    return { ...working, format: next, formatChosen: true, inner: { choice: '', typed: '' }, innerAutoSet: false };
   }
-  return { ...working, format: next };
+  return { ...working, format: next, formatChosen: true };
 }
 
 // Anything the person does to the inner-word menu makes its value theirs.
@@ -179,16 +183,17 @@ function comparable(working: Working) {
   return [
     working.name, working.shortName, working.supplierId, working.brand, choice(working.category),
     working.weight.amount, working.weight.unit, working.weight.legacy,
-    working.format, working.count, choice(working.inner), working.notInUse,
+    working.format, working.formatChosen, working.count, choice(working.inner), working.notInUse,
   ];
 }
 
 // Where Save was refused, and so where the sentence goes and the focus.
-export type RefusedField = 'name' | 'weight' | 'category' | 'inner' | 'count' | 'innerEmpty';
+export type RefusedField = 'name' | 'weight' | 'category' | 'format' | 'inner' | 'count' | 'innerEmpty';
 
-// The first reason Save cannot go on, in the card's order (parity C84):
+// The first reason Save cannot go on, in the card's order (parity C84, plus one step only Mise 2 has: the format must be chosen):
 //  - an empty name;
-//  - the first of weight / category / the inner word's «+ New …» box (only while «Case» is showing) that is unusable;
+//  - the first of weight / category that is unusable, then (Mise 2 only) a format nobody chose, then the inner word's «+ New …» box
+//    (only while «Case» is showing) if it is unusable;
 //  - a Case being WRITTEN (the format moved, or a price was typed under it) with a count that is not a whole 1..10000 — checked
 //    before the inner word;
 //  - the same with no inner word.
@@ -202,6 +207,7 @@ export function firstRefusal(
   if (working.name.trim() === '') return 'name';
   if (isUnusableWeight(working.weight.amount, working.weight.unit)) return 'weight';
   if (choiceIsBlankNew(working.category)) return 'category';
+  if (!working.formatChosen) return 'format';
   if (working.format === 'carton' && choiceIsBlankNew(working.inner)) return 'inner';
   const state = formState(working);
   if (state.kind === 'carton' && (formatTouched(openedFormat(item, options), state) || options.priceDirty === true)) {
@@ -255,6 +261,7 @@ export interface SaveBuilt {
 // What Save sends, EXACTLY (parity C87). No price key, no allergen key, no nutrition key, never `invoiceName` or the supplier
 // codes: the write is a merge, so everything not named here stays as stored.
 export function buildSave({ working, item, kind, lang, startSupplierId, mayPrice, priceDirty, pricePatch }: SaveInput): SaveBuilt {
+  if (!working.formatChosen) throw new Error('buildSave: the format was never chosen');
   const state = formState(working);
   const cartonWord = cartonWordFor(lang);
   const options = { mayPrice, lang };

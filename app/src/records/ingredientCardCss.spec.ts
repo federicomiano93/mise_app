@@ -35,7 +35,6 @@ describe('the ingredient card keeps its bar in reach', () => {
 describe('every target is a thumb-sized one', () => {
   it.each([
     ['.box', cardCss, 'min-height'],
-    ['.segment', cardCss, 'min-height'],
     ['.deleteIcon', cardCss, 'height'],
     ['.deleteIcon', cardCss, 'width'],
   ] as const)('IngredientCard %s %s is at least 48px (--hit)', (selector, css, property) => {

@@ -332,6 +332,7 @@ describe('the verification stamp and what a save writes', () => {
   it('a NEW ingredient writes all five, still undeclared', async () => {
     const view = await open('/suppliers/ingredient/new');
     await view.user.type(view.region.getByRole('textbox', { name: 'Name in the message' }), 'Salt');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
     await saveAndConfirm(view);
     expect(saved(view.source)).toMatchObject({
       allergens: [], mayContain: [], allergensCheckedAt: '', packIngredients: '',

@@ -238,12 +238,12 @@ describe('the packaging words and the case sentences', () => {
 
   it('⚠️ Case → Single clears a pending count refusal: it does not come back when Case is picked again', async () => {
     const view = await open('/suppliers/ingredient/i-flour');
-    await view.user.click(view.region.getByRole('button', { name: 'Case' }));
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'carton');
     await view.user.click(view.region.getByRole('button', { name: 'Save' }));
     const count = view.region.getByRole('textbox', { name: 'How many in the case' });
     expect(count).toHaveAttribute('aria-invalid', 'true');
-    await view.user.click(view.region.getByRole('button', { name: 'Single' }));
-    await view.user.click(view.region.getByRole('button', { name: 'Case' }));
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'carton');
     const again = view.region.getByRole('textbox', { name: 'How many in the case' });
     expect(again).not.toHaveAttribute('aria-invalid');
     expect(view.region.queryByText('Write a whole number, e.g. 4')).not.toBeInTheDocument();
@@ -251,13 +251,13 @@ describe('the packaging words and the case sentences', () => {
 
   it('⚠️ Case → Single clears a pending new-package-name refusal too', async () => {
     const view = await open('/suppliers/ingredient/i-flour');
-    await view.user.click(view.region.getByRole('button', { name: 'Case' }));
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'carton');
     await view.user.type(view.region.getByRole('textbox', { name: 'How many in the case' }), '3');
     await view.user.selectOptions(view.region.getByRole('combobox', { name: 'What is inside the case' }), '+ New…');
     await view.user.click(view.region.getByRole('button', { name: 'Save' }));
     expect(view.region.getByRole('textbox', { name: 'New package name' })).toHaveAttribute('aria-invalid', 'true');
-    await view.user.click(view.region.getByRole('button', { name: 'Single' }));
-    await view.user.click(view.region.getByRole('button', { name: 'Case' }));
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'single');
+    await view.user.selectOptions(view.region.getByRole('combobox', { name: 'Comes as' }), 'carton');
     expect(view.region.queryByText('Write the new package’s name')).not.toBeInTheDocument();
   });
 });

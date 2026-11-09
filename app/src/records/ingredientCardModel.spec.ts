@@ -10,6 +10,8 @@ const SUPPLIERS = ['s-alp', 's-bru'];
 const open = (item: ItemLike | null, preset: string | null = null) => workingFrom(item, { supplierIds: SUPPLIERS, preset });
 const save = (working: Working, item: ItemLike | null, kind: 'ingredient' | 'packaging' = 'ingredient', lang = 'en') =>
   buildSave({ working, item, kind, lang, startSupplierId: workingFrom(item, { supplierIds: SUPPLIERS, preset: null }).supplierId });
+// A NEW item whose format the person has already picked (Save refuses one that has not chosen).
+const chosen = (item: ItemLike | null, preset: string | null = null) => withFormat(open(item, preset), 'single', 'en');
 const typed = (working: Working, change: Partial<Working>): Working => ({ ...working, ...change });
 
 const FLOUR: ItemLike = { id: 'i-1', name: 'Flour 00', shortName: 'Flour', supplierId: 's-alp', brand: 'Caputo', weight: '25 kg', category: 'Bakery', unit: 'kg' };
@@ -19,14 +21,14 @@ describe('opening: the copy a card is made from', () => {
     expect(open(FLOUR)).toEqual({
       name: 'Flour 00', shortName: 'Flour', supplierId: 's-alp', brand: 'Caputo',
       category: { choice: 'Bakery', typed: '' }, weight: { amount: '25', unit: 'kg', legacy: '' },
-      format: 'single', count: '', inner: { choice: '', typed: '' }, innerAutoSet: false, notInUse: false,
+      format: 'single', formatChosen: true, count: '', inner: { choice: '', typed: '' }, innerAutoSet: false, notInUse: false,
     });
   });
 
   test('a new item starts empty, on «No supplier», in kilos', () => {
     expect(open(null)).toEqual({
       name: '', shortName: '', supplierId: NO_SUPPLIER_ID, brand: '', category: { choice: '', typed: '' },
-      weight: { amount: '', unit: 'kg', legacy: '' }, format: 'single', count: '', inner: { choice: '', typed: '' }, innerAutoSet: false, notInUse: false,
+      weight: { amount: '', unit: 'kg', legacy: '' }, format: 'single', formatChosen: false, count: '', inner: { choice: '', typed: '' }, innerAutoSet: false, notInUse: false,
     });
   });
 
@@ -92,8 +94,15 @@ describe('the format buttons', () => {
   });
 
   test('the same format again changes nothing', () => {
-    const working = open(null);
+    const working = open(FLOUR);
     expect(withFormat(working, 'single', 'en')).toBe(working);
+  });
+
+  test('⚠️ from the empty state any choice counts, picking «Single» included', () => {
+    const empty = open(null);
+    expect(empty.formatChosen).toBe(false);
+    expect(withFormat(empty, 'single', 'en')).toMatchObject({ format: 'single', formatChosen: true });
+    expect(withFormat(empty, 'carton', 'en')).toMatchObject({ format: 'carton', formatChosen: true });
   });
 });
 
@@ -145,6 +154,19 @@ describe('the refusals, in the card\'s order (parity C84)', () => {
     expect(firstRefusal(typed(ok, { inner, format: 'single' }), FLOUR)).toBeNull();
   });
 
+  test('a new item with no format chosen is refused right after the category, before the case checks', () => {
+    const fresh = typed(open(null), { name: 'Salt' });
+    expect(firstRefusal(fresh, null)).toBe('format');
+    expect(firstRefusal(typed(fresh, { category: { choice: NEW_CHOICE, typed: '' } }), null)).toBe('category');
+    expect(firstRefusal(withFormat(fresh, 'single', 'en'), null)).toBeNull();
+    expect(() => save(fresh, null)).toThrow('the format was never chosen');
+  });
+
+  test('an existing item is never refused for the format', () => {
+    expect(open(FLOUR).formatChosen).toBe(true);
+    expect(firstRefusal(open(FLOUR), FLOUR)).toBeNull();
+  });
+
   test('an unusable weight is refused: abc, 0, a unit typed in the box; an empty box is «no weight»', () => {
     for (const amount of ['abc', '0', '-2', '2.27kg']) {
       expect(firstRefusal(typed(ok, { weight: { amount, unit: 'kg', legacy: '' } }), FLOUR)).toBe('weight');
@@ -189,6 +211,11 @@ describe('the payload, key for key (parity C87)', () => {
     }
   });
 
+  test('an untouched existing card writes no format key', () => {
+    const built = save(open(FLOUR), FLOUR);
+    for (const key of ['unit', 'packUnit', 'packCount']) expect(key in built.payload, key).toBe(false);
+  });
+
   test('a blank short name is sent as an empty string (a merge can then clear it), a blank category as «Other»', () => {
     const built = save(typed(open(FLOUR), { shortName: '  ', category: { choice: '', typed: '' } }), FLOUR);
     expect(built.payload.shortName).toBe('');
@@ -218,7 +245,7 @@ describe('the payload, key for key (parity C87)', () => {
     expect('active' in save(open(on), on).payload).toBe(false);
     expect(save(typed(open(on), { notInUse: true }), on).payload.active, 'switched off').toBe(false);
     expect(save(typed(open(off), { notInUse: false }), off).payload.active, 'switched back on').toBe(true);
-    expect(save(typed(open(null), { name: 'Salt' }), null).payload.active).toBe(true);
+    expect(save(typed(chosen(null), { name: 'Salt' }), null).payload.active).toBe(true);
     expect(activePatch(typed(open(null), { notInUse: true }), null)).toEqual({ active: false });
   });
 
@@ -238,7 +265,7 @@ describe('the payload, key for key (parity C87)', () => {
   });
 
   test('a NEW ingredient: an empty unit, active, no format keys while it is a Single', () => {
-    const built = save(typed(open(null), { name: 'Salt' }), null);
+    const built = save(typed(chosen(null), { name: 'Salt' }), null);
     expect(built.payload).toEqual({
       name: 'Salt', shortName: '', supplierId: NO_SUPPLIER_ID, brand: '', weight: '', category: 'Other', unit: '', active: true, kind: 'ingredient',
     });
@@ -246,7 +273,7 @@ describe('the payload, key for key (parity C87)', () => {
   });
 
   test('a NEW packaging item is filed as packaging', () => {
-    const built = save(typed(open(null, 's-bru'), { name: 'Box 30x40' }), null, 'packaging');
+    const built = save(typed(chosen(null, 's-bru'), { name: 'Box 30x40' }), null, 'packaging');
     expect(built.payload).toMatchObject({ name: 'Box 30x40', supplierId: 's-bru', unit: '', active: true, kind: 'packaging' });
   });
 
@@ -403,7 +430,7 @@ describe('what a typed price writes beside the price (parity C54, C55)', () => {
   });
 
   test('a NEW Single with no readable weight priced by the kilo / litre / piece gets the venue\'s word as its order unit', () => {
-    const working = { ...open(null), name: 'Zucchine' };
+    const working = { ...chosen(null), name: 'Zucchine' };
     for (const [priceUnit, word] of [['kg', 'kg'], ['l', 'l'], ['pcs', 'pz']] as const) {
       expect(saveWith(working, null, { pricePatch: priceFor(priceUnit, 3) }).payload.unit, priceUnit).toBe(word);
     }
@@ -411,7 +438,7 @@ describe('what a typed price writes beside the price (parity C54, C55)', () => {
   });
 
   test('…but not with a weight that reads, a Case, no price, or an existing item', () => {
-    const named = { ...open(null), name: 'Farina' };
+    const named = { ...chosen(null), name: 'Farina' };
     expect(saveWith({ ...named, weight: { amount: '25', unit: 'kg', legacy: '' } }, null, { pricePatch: priceFor('pcs', 20) }).payload.unit).toBe('');
     expect(saveWith(withFormat(named, 'carton', 'it'), null, { pricePatch: priceFor('kg', 3) }).payload.unit).toBe('cartone');
     expect(saveWith(named, null, { pricePatch: priceFor('kg', null) }).payload.unit).toBe('');
