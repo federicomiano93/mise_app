@@ -16,6 +16,19 @@ const tabs = (name = 'Main sections') => within(screen.getByRole('navigation', {
 const linkNames = (scope: { getAllByRole: (role: string) => HTMLElement[] }) =>
   scope.getAllByRole('link').map(link => link.textContent);
 
+describe('AppShell: the frame', () => {
+  // The shell is a grid of the rail, the screen and the tab bar: anything else straight under it
+  // takes a cell and pushes them. The holiday reminder's boundary did (an empty <div tabindex=-1>):
+  // the rail and the screen sat 28-72px low and jumped when the holiday data landed (9 Nov 2026).
+  it('puts no part boundary straight under the grid', () => {
+    renderApp('/orders');
+    const shell = document.getElementById('main')?.parentElement?.parentElement;
+    expect(shell).toBeTruthy();
+    const loose = Array.from(shell!.children).filter(child => child.getAttribute('tabindex') === '-1');
+    expect(loose).toEqual([]);
+  });
+});
+
 describe('AppShell: navigation', () => {
   it('sends / to Home, current in both navigations', async () => {
     renderApp('/');

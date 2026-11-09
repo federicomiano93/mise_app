@@ -75,13 +75,19 @@ function ShellFrame() {
     <AriaRouterProvider navigate={to => navigate(to)} useHref={useHref}>
       <div className={styles.shell}>
         <SkipLink target={contentRef} />
-        <PartBoundary>
-          <AwayReminder />
-        </PartBoundary>
-        {/* Its own boundary: a reminder that fails to draw must not take the one «Not saved» of the holiday with it. */}
-        <PartBoundary>
-          <AwayRefusalAlert />
-        </PartBoundary>
+        {/* ⚠️ Out of the shell's grid: each boundary is a <div>, and a <div> straight under the
+            shell takes a cell of its rows and columns — the rail and the screen were pushed down
+            and jumped when the holiday data landed (drive of 9 Nov 2026). Both only open dialogs,
+            which draw over the page from <body>, so their box sits fixed and empty at the top. */}
+        <div className={styles.overlays}>
+          <PartBoundary>
+            <AwayReminder />
+          </PartBoundary>
+          {/* Its own boundary: a reminder that fails to draw must not take the one «Not saved» of the holiday with it. */}
+          <PartBoundary>
+            <AwayRefusalAlert />
+          </PartBoundary>
+        </div>
         <Rail />
         <div className={styles.main}>
           <TopBar />
