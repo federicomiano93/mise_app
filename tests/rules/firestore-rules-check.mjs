@@ -3915,6 +3915,10 @@ async function todos() {
   const T = 'locations/main/todos';
   const item = { bakery: 'main', text: 'Call the flour mill', day: '2026-11-06', done: false, doneAt: null, expireAt: null };
   const inDays = n => new Date(Date.now() + n * 86400000).toISOString();
+  // A phone's clock an hour behind the server's: a real timestamp (so a rule weakened to `is timestamp`
+  // is still caught), but never the same millisecond as request.time — new Date() could be, and then
+  // the emulator allowed the write and the check failed at random (CI, 9 Nov 2026).
+  const phoneClock = () => new Date(Date.now() - 3600000).toISOString();
   // The writes the app makes, as the SDK sends them: addDoc / setDoc with serverTimestamp()
   // (a REQUEST_TIME transform), updateDoc (an update mask).
   const commit = (id, data, headers, { server = [], stamps = {}, mask = null, exists } = {}) => fetch(
@@ -3951,7 +3955,7 @@ async function todos() {
   await expectDenied('a key missing', () => create('F', noExpire, SAM));
   await expectDenied('stamped for another venue', () => create('F', { ...item, bakery: 'trattoria-x' }, SAM));
   await expectDenied('born ticked', () => create('F', { ...item, done: true }, SAM, { server: ['createdAt', 'doneAt'], stamps: { expireAt: inDays(30) } }));
-  await expectDenied('dated by the phone, not the server', () => create('F', item, SAM, { server: [], stamps: { createdAt: new Date().toISOString() } }));
+  await expectDenied('dated by the phone, not the server', () => create('F', item, SAM, { server: [], stamps: { createdAt: phoneClock() } }));
   await expectDenied('done that is not a yes/no', () => create('F', { ...item, done: 'no' }, SAM));
   await expectDenied('a deletion date on an item not ticked', () => create('F', item, SAM, { stamps: { expireAt: inDays(30) } }));
 
@@ -3971,7 +3975,7 @@ async function todos() {
     return tick('B', SAM).then(() => edit('B', { done: false, doneAt: null }, SAM));
   });
   await expectDenied('a tick dated by the phone', () =>
-    commit('C', { done: true }, asAccount(SAM), { stamps: { doneAt: new Date().toISOString(), expireAt: inDays(30) }, mask: ['done', 'doneAt', 'expireAt'] }));
+    commit('C', { done: true }, asAccount(SAM), { stamps: { doneAt: phoneClock(), expireAt: inDays(30) }, mask: ['done', 'doneAt', 'expireAt'] }));
   await expectDenied('a tick with no deletion date', () =>
     commit('C', { done: true, expireAt: null }, asAccount(SAM), { server: ['doneAt'], mask: ['done', 'doneAt', 'expireAt'] }));
   await expectDenied('a tick kept for 60 days', () => tick('C', SAM, inDays(60)));
