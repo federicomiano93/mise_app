@@ -30,6 +30,10 @@
 // wrong one is a different order. The item carries `unit` only for those lines
 // (order-unit.ts decides), so every other line stays byte-identical.
 //
+// ⚠️ MISE 2 SAYS TWO THINGS THE CURRENT APP DOES NOT (both intended, both pinned in order-text.spec.ts «what only the port can
+// say»): the flat list's numeric order (finding F-5), and the PACKAGE WORD — a line of an ingredient whose card says what its
+// single pack is reads «- Panna: 2 bottiglie» (pack-type.ts). The word follows the venue's country, like the title.
+//
 // The name in the title is the LOCATION PLACING THE ORDER, passed in by the caller
 // from the session. It used to be the constant 'The Italian Club', which was harmless
 // with one location and wrong the moment there were two: a supplier would receive
@@ -38,10 +42,15 @@
 
 import { lineUnit, cleanUnit, qtyWithUnit } from './order-unit';
 import { labelWord } from './market';
+import { linePackWord, packTypeOf, qtyWithPack } from './pack-type';
 
 // One line of a message: a name, its weight, a quantity and, only for an ingredient that can be ordered in more
 // than one unit, the unit.
-export interface OrderItem { name: unknown; weight: unknown; qty: unknown; unit?: string }
+// ⚠️ MISE 2 ONLY (the second intended difference from js/orders/order-text.js, after the flat list's order, F-5): `pack` is the
+// package word of an ingredient whose card says what its single pack is («bottiglia»), set only on a line that shows no unit of
+// its own. The line then reads «- Panna: 2 bottiglie» where the current app sends «- Panna: 2». Nothing else about a line changes,
+// and an ingredient with no such word produces the same bytes as before (pack-type.ts says what the word is and who may set it).
+export interface OrderItem { name: unknown; weight: unknown; qty: unknown; unit?: string; pack?: string }
 
 // ⚠️ THE TITLE WORD FOLLOWS THE VENUE'S COUNTRY, NOT THE SCREEN. The supplier reads this
 // message in the language of the place the food is bought in, whatever language the owner's
@@ -84,7 +93,9 @@ export function orderedItems(ingredients?: readonly unknown[] | null, entries?: 
       const i = ing as { id: string; name?: unknown; weight?: unknown };
       const item: OrderItem = { name: i.name, weight: i.weight || '', qty: byId![i.id]!.qty };
       const unit = lineUnit(ing, byId![i.id]);
-      return unit ? { ...item, unit } : item;
+      if (unit) return { ...item, unit };
+      const pack = linePackWord(ing, byId![i.id]);
+      return pack ? { ...item, pack } : item;
     });
 }
 
@@ -92,12 +103,22 @@ export function orderedItems(ingredients?: readonly unknown[] | null, entries?: 
 // order the message's own lines are built from. The tablet summary sheet
 // calls this too, so a supplier's summary can never
 // show something different from what the message they receive actually says.
-export function summaryLines(items?: readonly OrderItem[] | null): { label: string; qty: number; unit?: string }[] {
+export function summaryLines(items?: readonly OrderItem[] | null): { label: string; qty: number; unit?: string; pack?: string }[] {
   return sortItems(items).map(it => {
     const line = { label: itemLabel(it.name, it.weight), qty: num(it.qty) };
     const unit = cleanUnit(it.unit);
-    return unit ? { ...line, unit } : line;
+    if (unit) return { ...line, unit };
+    const pack = cleanUnit(it.pack);
+    return pack ? { ...line, pack } : line;
   });
+}
+
+// How one line's quantity reads in the message: «2 × busta» for a unit, «2 bottiglie» for a package word (Mise 2 only, see
+// OrderItem), else the bare number. A unit wins: the two never come together from orderedItems.
+function quantityText(qty: number, item: { unit?: unknown; pack?: unknown }, language: unknown): string {
+  const unit = cleanUnit(item.unit);
+  if (unit) return qtyWithUnit(qty, unit);
+  return qtyWithPack(qty, item.pack, language);
 }
 
 // The label each line of ONE block carries in the MESSAGE a supplier receives: the name
@@ -129,7 +150,7 @@ export function messageLabels(entries: readonly { name?: unknown; weight?: unkno
 function sectionFor({ supplierName, items }: OrderGroup, heading = true, language: unknown = null): string {
   const sorted = sortItems(items);
   const labels = messageLabels(sorted);
-  const lines = sorted.map((it, i) => `- ${labels[i]}: ${qtyWithUnit(num(it.qty), cleanUnit(it.unit))}`).join('\n');
+  const lines = sorted.map((it, i) => `- ${labels[i]}: ${quantityText(num(it.qty), it, language)}`).join('\n');
   return heading ? `*${supplierName || fallbackSupplierName(language)}*\n${lines}` : lines;
 }
 
@@ -163,26 +184,30 @@ export interface OrderGroup { supplierName?: unknown; items?: readonly OrderItem
 //
 // Rows adding up to nothing are dropped: this format is read as "what to buy", and
 // "- Bacon: 0" is not something to buy.
-function flatLines(groups: readonly OrderGroup[]): string[] {
-  interface Total { label: string; name: unknown; weight: unknown; unit: string; qty: number }
+function flatLines(groups: readonly OrderGroup[], language: unknown = null): string[] {
+  interface Total { label: string; name: unknown; weight: unknown; unit: string; pack: string; qty: number }
   const totals = new Map<string, Total>();
   groups.forEach(group => (group.items || []).forEach(item => {
     const label = itemLabel(item.name, item.weight);
     const unit = cleanUnit(item.unit);
+    // Mise 2 only: a line with a unit has no package word (a unit wins), so two lines are one only when both agree on both.
+    const pack = unit ? '' : cleanUnit(item.pack);
     // Keyed on the lower-cased unit so «Busta» and «busta» are one line; the text shown
     // is the first spelling met. A NUL separator cannot occur in a typed label.
-    const key = `${label}\u0000${unit.toLowerCase()}`;
+    const key = `${label}\u0000${unit.toLowerCase()}\u0000${pack.toLowerCase()}`;
     const seen = totals.get(key);
-    totals.set(key, { label, name: item.name, weight: item.weight, unit: seen ? seen.unit : unit, qty: (seen?.qty || 0) + num(item.qty) });
+    totals.set(key, {
+      label, name: item.name, weight: item.weight, unit: seen ? seen.unit : unit, pack: seen ? seen.pack : pack, qty: (seen?.qty || 0) + num(item.qty),
+    });
   }));
 
   // ⚠️ NUMERIC, like every other list of labels (finding F-5, fixed here only, decision T7): the current app sorts this one
   // with a plain localeCompare and puts «Flour 25kg» before «Flour 5kg». order-text.spec.ts shows where the two differ.
   const sorted = [...totals.values()]
     .filter(line => line.qty > 0)
-    .sort((a, b) => compareLabels(a.label, b.label) || a.unit.localeCompare(b.unit));
+    .sort((a, b) => compareLabels(a.label, b.label) || a.unit.localeCompare(b.unit) || a.pack.localeCompare(b.pack));
   const labels = messageLabels(sorted);
-  return sorted.map(({ unit, qty }, i) => `- ${labels[i]}: ${qtyWithUnit(qty, unit)}`);
+  return sorted.map(({ unit, pack, qty }, i) => `- ${labels[i]}: ${quantityText(qty, { unit, pack }, language)}`);
 }
 
 // The whole message, in one of two formats.
@@ -214,7 +239,7 @@ export function buildOrderMessage(
     return `${title}\n\n` + withItems.map(g => sectionFor(g, heading, language)).join('\n\n');
   }
 
-  const lines = flatLines(withItems);
+  const lines = flatLines(withItems, language);
   if (!lines.length) return '';
   return `${title}\n\n` + lines.join('\n');
 }
@@ -247,7 +272,7 @@ export function itemsFromQuantities(
   language: unknown = null,
 ): OrderItem[] {
   const qs = (quantities || {}) as Record<string, unknown>;
-  const live = ingredientsById as Record<string, { name?: unknown; weight?: unknown } | undefined> | null | undefined;
+  const live = ingredientsById as Record<string, { name?: unknown; weight?: unknown; unit?: unknown; packUnit?: unknown; packCount?: unknown } | undefined> | null | undefined;
   const frozen = names as Record<string, unknown> | null | undefined;
   const unitOf = units as Record<string, unknown> | null | undefined;
   return Object.keys(qs)
@@ -259,7 +284,10 @@ export function itemsFromQuantities(
         qty: num(qs[id]),
       };
       const unit = cleanUnit(unitOf?.[id]);
-      return unit ? { ...item, unit } : item;
+      if (unit) return { ...item, unit };
+      // Mise 2 only: no unit was frozen into the record, so the line reads as the card's CURRENT package word, if it has one.
+      const pack = l ? packTypeOf(l) : '';
+      return pack ? { ...item, pack } : item;
     })
     .filter(it => (it.qty as number) > 0)
     .sort((a, b) => compareLabels(itemLabel(a.name, a.weight), itemLabel(b.name, b.weight)));

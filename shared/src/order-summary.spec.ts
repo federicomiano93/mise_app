@@ -137,3 +137,21 @@ describe.each([
     expect(s.costLines.map(l => l.vatRate)).toStrictEqual([22, 22]);
   });
 });
+
+// Mise 2 only: the package word of a typed card travels on the lines and the cost lines (the current app has no such field).
+describe('order-summary: the package word (Mise 2 only)', () => {
+  const typed = [{ id: 'p', name: 'Panna', weight: '', unit: 'bottiglia', packUnit: 'bottiglia' }, { id: 'f', name: 'Flour', weight: '25kg' }];
+
+  test('lines and cost lines carry `pack` for the typed card only', () => {
+    const s = ported.supplierSummary(SUPPLIER, typed, { p: { qty: 2 }, f: { qty: 1 } });
+    expect(s.lines).toStrictEqual([{ label: 'Flour 25kg', qty: 1 }, { label: 'Panna', qty: 2, pack: 'bottiglia' }]);
+    expect(s.costLines.map(line => line.pack)).toStrictEqual([undefined, 'bottiglia']);
+    expect('pack' in (s.costLines[0] as object)).toBe(false);
+  });
+
+  test('a line with its own unit has the unit and no word', () => {
+    const s = ported.supplierSummary(SUPPLIER, typed, { p: { qty: 2, unit: 'cartone' } });
+    expect(s.costLines[0]).toMatchObject({ label: 'Panna', qty: 2, unit: 'cartone' });
+    expect('pack' in (s.costLines[0] as object)).toBe(false);
+  });
+});

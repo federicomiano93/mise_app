@@ -1675,6 +1675,9 @@ export const en = {
   'sup.ing.packPlaceholder': 'New package, e.g. bag',
   'sup.ing.packBlank': 'Write the new package’s name',
   'sup.ing.packNewAria': 'New package name',
+  'sup.ing.packType': 'What kind of pack?',
+  'sup.ing.packTypeHint': 'Optional. The order then says, for example, “2 bottles”.',
+  'sup.ing.packTypeNotPack': 'Write the name of a package (e.g. bottle), not a unit such as kg or pcs',
   'sup.ing.summary': 'Case of {items} of {size} ({total})',
   'sup.ing.summaryNoWeight': 'Case of {items}',
   // NEW: the current app only moved the cursor to an empty name (parity C37); Mise 2 says it, as the supplier card does.

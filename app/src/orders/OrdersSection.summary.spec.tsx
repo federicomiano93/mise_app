@@ -322,3 +322,34 @@ describe('on the split', () => {
     expect(source.priceWatches).toBe(0);
   });
 });
+
+describe('the package word (Mise 2 only)', () => {
+  it('⚠️ follows the venue’s COUNTRY, not the screen: an Italian venue on an English interface reads «2 bottiglie»', async () => {
+    const source = seeded({
+      ingredients: [...ITEMS, ingredient('i-cream', { name: 'Panna', supplierId: 's-alp', unit: 'bottiglia', packUnit: 'bottiglia' })],
+      draft: { entries: { 'i-cream': { qty: 2 } }, days: {} },
+    });
+    await onSummary(source, { session: { location: { country: 'IT' } } });
+    const row = (await screen.findByText('Panna')).closest('li') as HTMLElement;
+    expect(within(row).getByText('2 bottiglie')).toBeInTheDocument();
+    expect(within(row).queryByText('2 bottles')).not.toBeInTheDocument();
+  });
+
+  it('⚠️ the sheet reads «2 bottles» for a typed card, «1 bucket» for the singular, and the bare number for the rest', async () => {
+    const source = seeded({
+      ingredients: [
+        ...ITEMS,
+        ingredient('i-cream', { name: 'Cream', supplierId: 's-alp', unit: 'bottle', packUnit: 'bottle' }),
+        ingredient('i-lard', { name: 'Lard', supplierId: 's-alp', unit: 'bucket', packUnit: 'bucket' }),
+      ],
+      draft: { entries: { ...ENTRIES, 'i-cream': { qty: 2 }, 'i-lard': { qty: 1 } }, days: {} },
+    });
+    await onSummary(source);
+    const cream = (await screen.findByText('Cream')).closest('li') as HTMLElement;
+    expect(within(cream).getByText('2 bottles')).toBeInTheDocument();
+    const lard = screen.getByText('Lard').closest('li') as HTMLElement;
+    expect(within(lard).getByText('1 bucket')).toBeInTheDocument();
+    const flour = screen.getByText(/^Flour 00/).closest('li') as HTMLElement;
+    expect(within(flour).getByText('3')).toBeInTheDocument();
+  });
+});

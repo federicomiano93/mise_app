@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef } from 'react';
 import type { MutableRefObject } from 'react';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { outputLanguage } from '@mise/shared/market';
-import { packChoices, categoryChoices } from '@mise/shared/record-choices';
+import { categoryChoices } from '@mise/shared/record-choices';
+import { packChoicesWithExtras } from '@mise/shared/pack-words';
 import { useT } from '../i18n/useT';
 import { IngredientCard } from '../records/IngredientCard';
 import type { ItemLike } from '../records/ingredientCardModel';
@@ -57,7 +58,7 @@ export function CreateIngredientOverlay({ name, open, onDone, ingredients, suppl
     () => categoryChoices({ stored: undefined, ingredients, language }),
     [ingredients, language],
   );
-  const packs = useMemo(() => packChoices({ ingredients, language }), [ingredients, language]);
+  const packs = useMemo(() => packChoicesWithExtras({ ingredients, language }), [ingredients, language]);
   const host = useMemo(() => ({ backRef, onDirty: (dirty: boolean) => { onDirty?.(dirty); } }), [backRef, onDirty]);
 
   // The cursor starts on the card's title, as it does when the same card opens on its own screen.

@@ -17,7 +17,7 @@
 
 import { categoryChoices, countInCategory } from '@mise/shared/record-choices';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
-import { cleanUnit, storedUnitFor } from '@mise/shared/order-unit';
+import { cleanUnit, sameUnit, storedUnitFor } from '@mise/shared/order-unit';
 import { normalizeFavourites } from '@mise/shared/favourite-suppliers';
 import { INGREDIENT_DRAINED_FIELDS, PRICE_FIELDS, withPrices } from '@mise/shared/price-model';
 import { supplierLabel } from '@mise/shared/supplier-label';
@@ -99,6 +99,9 @@ export interface IngredientSaveOptions {
   // The order unit the card has just replaced (Cartone / Singola rewrote `unit`): the open line of the order in progress
   // is frozen in it, so a quantity keeps its meaning (parity C35). '' or absent = nothing to freeze.
   readonly unitChangedFrom?: string;
+  // Mise 2 only: the word this save replaced (a package type renamed or cleared, or a package word a type was added over). The open draft line whose explicit unit is that word goes back to the
+  // card's unit (no explicit unit): the word is no longer the card's, and the line would be orphaned.
+  readonly typeReplacedFrom?: string;
   // The money (step 3e-3), ONLY for a person who may write prices (canManage AND the venue's Food cost section — parity
   // C4, C5, C22: a price write the rules refuse fails the whole batch, and an ordinary rename with it). `before` is the
   // ingredient as the card OPENED it, its price laid on (null for a new one); `patch` is the card's pricePatch.
@@ -259,11 +262,15 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
   // only logged. Rules of js/orders/draft.js freezeUnitInDraft: only a line with a quantity and NO unit of its own (it
   // meant «the card's unit, whatever it is now»), frozen in the replaced unit unless that is the new unit anyway.
   // Firestore keeps one client's writes in order, so the freeze lands after the save it follows.
-  function freezeDraftLine(id: string, from: string, saved: Readonly<Record<string, unknown>>): void {
-    const frozen = storedUnitFor(from, saved);
-    if (!frozen) return;
+  // ⚠️ TWO ADJUSTMENTS, ONE READ OF THE ENTRY, so they cannot touch the same line twice: a RENAMED type resets a line whose explicit unit is
+  // the old word (it needed one only while the word was a package beside another unit; now it is the card's own, or gone); the freeze above
+  // applies to a line with no unit of its own. The two conditions exclude each other, and the entry is read once.
+  function adjustDraftLine(id: string, from: string, renamedFrom: string, saved: Readonly<Record<string, unknown>>): void {
+    const frozen = from ? storedUnitFor(from, saved) : '';
+    if (!frozen && !renamedFrom) return;
     attempt(() => source.readDraftEntry(id).then(entry => {
-      if (!(Number(entry?.qty) > 0) || cleanUnit(entry?.unit)) return;
+      if (renamedFrom && cleanUnit(entry?.unit) && sameUnit(entry?.unit, renamedFrom)) return source.setDraftEntryUnit(id, '');
+      if (!frozen || !(Number(entry?.qty) > 0) || cleanUnit(entry?.unit)) return;
       return source.setDraftEntryUnit(id, frozen);
     })).catch((err: unknown) => console.error('The draft line kept an old unit:', err));
   }
@@ -399,7 +406,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
       track(attempt(() => source.saveIngredient(ingredientId, doc, money)), {
         kind: 'ingredient-not-saved', name: ingredientDisplayName(payload),
       });
-      if (options.unitChangedFrom) freezeDraftLine(ingredientId, options.unitChangedFrom, payload);
+      adjustDraftLine(ingredientId, options.unitChangedFrom ?? '', options.typeReplacedFrom ?? '', payload);
       return { id: ingredientId, priceRecorded: Boolean(money?.history) };
     },
 

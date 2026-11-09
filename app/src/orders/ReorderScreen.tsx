@@ -4,10 +4,12 @@ import { recordedName } from '@mise/shared/archive';
 import { spellDay } from '@mise/shared/day';
 import type { ReorderItem } from '@mise/shared/deliveries';
 import { NO_SUPPLIER_ID } from '@mise/shared/no-supplier';
+import { outputLanguage } from '@mise/shared/market';
 import { indexById } from '@mise/shared/order-text';
-import { qtyWithUnit } from '@mise/shared/order-unit';
+import { shownQty } from '@mise/shared/pack-type';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { FormBar } from '../ui/FormBar';
@@ -64,6 +66,7 @@ export function ReorderScreen() {
   const hush = (): void => { quietUntil.current = Date.now() + QUIET_MS; };
 
   const ingredientsById = useMemo(() => indexById(ingredients), [ingredients]);
+  const language = outputLanguage(useSession().location) ?? 'en';
   const suppliersById = useMemo(() => indexById(suppliers), [suppliers]);
   const recordsById = useMemo(() => indexById(history), [history]);
 
@@ -186,7 +189,7 @@ export function ReorderScreen() {
                 <li key={key} className={styles.card} data-keep={key}>
                   <div className={styles.main}>
                     <span className={styles.name}>{name}</span>
-                    <span className={styles.qty}>{qtyWithUnit(item.qty, item.unit)}</span>
+                    <span className={styles.qty}>{shownQty(item.qty, item.unit, ingredientsById[item.id], language)}</span>
                   </div>
                   <p className={styles.meta}>{t('ord.reorder.rowMeta', { supplier: supplierName, day: spellDay(item.missedOn, dt) })}</p>
                   {target === null ? null : (

@@ -1256,3 +1256,28 @@ His decision (9 Nov 2026), Mise 2 only: the current app (`js/ingredient-record-f
 - The locked basis menu shows only when the single form would offer a basis (a weight reads); with no weight there is no menu until Case is chosen.
 - The card of before (`legacyCard`) is untouched: it only ever opens for existing items.
 - CSS: `.segments` / `.segment` of `IngredientCard.module.css` deleted (nothing else used them); `.box:disabled` added.
+
+## Ingredient card: «Che confezione è?» as built (9 Nov 2026)
+
+New in Mise 2 (no counterpart in the current app; while both live the current app ignores it, and the stored shape is one it already reads).
+When the format is «Confezione» (a single pack) the card offers an optional menu **«Che confezione è?» / «What kind of pack?»**: the venue's
+package words (the defaults plus `secchiello`, `latta` / `bucket`, `tin`, from `shared/src/pack-words.ts`) and «+ New…». The choice is stored as
+**`unit = packUnit = word`** (both, never one alone) with no `packCount`: the shape the card already leaves behind when an employee turns a Cartone into a
+Singola, which every reader prices as ONE item. No unit selector appears on the order line, and no price, count or stored history changes.
+- **The money guard** (`pack-type.ts`, `ingredientCardModel.typeMayRewrite`): moving between «no type» and «a type» changes the unit, and an empty
+  unit on a stored case of more than one reads «the whole case» (225 would become 217, or null for pieces). So it happens only for a NEW item, or for
+  somebody who writes prices on an item whose opened price has no stored case of more than one, and whose cleared form would not open the card of before
+  (a pieces case of one with an empty unit does: found by the guard grid). A rename (one type to another) is always allowed. Employees can rename a type, not add or remove one.
+- **Where the menu is not drawn**: a Case, the card of before, an item that already offers a unit choice (it would be lost), a unit that is a weight, volume,
+  piece or carton word, an employee on an untyped item, a stored case of more than one. A word that is a unit (kg, pcs…) is refused when typed
+  (`packTypeWord`), a blank «+ New…» box too (`packType`).
+- ⚠️ `unitChangedFrom` is computed on the payload WITHOUT the type keys (`replacedUnit(item, payloadNoType…)`): choosing a type is not a format change and must not
+  freeze the open order lines in a stale unit.
+- Reused words: `sup.ing.choiceNone`, `newPack`, `packPlaceholder`, `packNewAria`, `packBlank`. New keys: `sup.ing.packType`, `packTypeHint`, `packTypeNotPack`.
+- Specs: `pack-words.spec.ts`, `pack-type.spec.ts` (the GUARD GRID: nine price shapes × three units × six words, nothing the readers compute may differ),
+  `ingredientCardModel.spec.ts` («the package type»), `SuppliersSection.ingredient.packType.spec.tsx`.
+- **A rename, a CLEAR, or a type added over an existing package word all reset the open lines in the replaced word** (same mechanism; money-safe because the guard allows a clear or an add only on a stored case of at most one). Original bullet for the rename:
+- **A rename resets the open lines in the old word** (`typeReplacedFrom` → `suppliersStore.adjustDraftLine`, one read together with the unit freeze): a draft line whose explicit unit is the old word (e.g. a Cartone of busta, "3 buste", then a Single typed busta renamed to secchiello) goes back to the card's unit and keeps its quantity and price. ACCEPTED, not fixed: `orders-history` records already frozen in the old word keep it; this month's «Fill from purchases» may list such lines as not counted.
+- The legacy-card flip is checked on the fields that will be SAVED (`typeMayRewrite(item, mayPrice, saved)`), both ways (with and without a type): a Cartone → Single edit cannot add or clear a type if the card would reopen as the card of before. A type picked on a NEW item that a per-kilo / per-piece price then makes loose is dropped at Save (the loose unit wins).
+- Defaults taken (his to change): an existing item already shaped unit = packUnit = package word (an employee's Cartone → Singola) now reads «2 buste» without
+  anybody choosing; the legacy card's «Package» menu also gains the two words; «2 latte» (tins) may read as milk.

@@ -502,3 +502,18 @@ describe('shared/ (TypeScript): the adapted functions use only what they are han
     expect(ported.formatChanged(PACK_CASE, { kind: 'carton', count: 5, inner: 'busta' }, '2.5kg', 'de')).toStrictEqual({ old: '4 × 2,5 kg', new: '5 × 2,5 kg' });
   });
 });
+
+// ── Mise 2 only: the two package words «Che confezione è?» adds are pluralised too ──
+describe('shared/ (TypeScript): the summary knows the added package words', () => {
+  test('«Cartone da 4 secchielli da 5 kg (20 kg)»', () => {
+    const echo = (key: string, params?: Readonly<Record<string, string | number>>): string =>
+      (key === 'orders.format.summary'
+        ? `Cartone da ${String(params?.items)} da ${String(params?.size)} (${String(params?.total)})`
+        : `Cartone da ${String(params?.items)}`);
+    expect(ported.formatSummary({ kind: 'carton', count: 4, inner: 'secchiello' }, '5kg', 'it', echo, 'it')).toBe('Cartone da 4 secchielli da 5 kg (20 kg)');
+    expect(ported.formatSummary({ kind: 'carton', count: 3, inner: 'latta' }, '', 'it', echo, 'it')).toBe('Cartone da 3 latte');
+    expect(ported.formatSummary({ kind: 'carton', count: 1, inner: 'secchiello' }, '', 'it', echo, 'it')).toBe('Cartone da 1 secchiello');
+    expect(ported.formatSummary({ kind: 'carton', count: 2, inner: 'bucket' }, '', 'en', echo, 'en')).toBe('Cartone da 2 buckets');
+    expect(ported.formatSummary({ kind: 'carton', count: 2, inner: 'bucket' }, '', 'it', echo, 'it')).toBe('Cartone da 2 × bucket');
+  });
+});

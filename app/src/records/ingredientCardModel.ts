@@ -1,10 +1,11 @@
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { kindOf } from '@mise/shared/ingredient-kind';
 import { cleanUnit, sameUnit } from '@mise/shared/order-unit';
-import { formatOf, formatPatch, formatTouched, isCartonWord, looseUnit, parseCount } from '@mise/shared/pack-format';
+import { formatOf, formatPatch, formatTouched, isCartonWord, looseUnit, parseCount, usesLegacyCard } from '@mise/shared/pack-format';
 import type { FormatBefore, FormatForm, PackFormat } from '@mise/shared/pack-format';
 import { isUnusableWeight, joinWeight, splitWeight } from '@mise/shared/pack-size';
 import type { WeightUnit } from '@mise/shared/pack-size';
+import { isPackTypeWord, packTypeOf, packTypePatch, packTypeShown } from '@mise/shared/pack-type';
 import { packBaseOf, storedCaseOf } from '@mise/shared/price-model';
 import {
   cartonWordFor, categoryValue, defaultPackFor, isBlankNewChoice, pieceWordFor, supplierToSave,
@@ -67,6 +68,10 @@ export interface Working {
   readonly inner: ChoiceState;
   // The package word «Case» picked for itself, taken back when the person returns to «Single» having chosen nothing (C51).
   readonly innerAutoSet: boolean;
+  // Mise 2 only: «Che confezione è?», the package word of a single pack (pack-type.ts). `choice` opens on the item's own type; `touched`
+  // is true once the person used the menu — only then can a save move the item between «no type» and «a type».
+  readonly packType: ChoiceState;
+  readonly packTypeTouched: boolean;
   // «Not in use at the moment» (3e-5b): the switch is ON when the item is stored with `active: false`.
   readonly notInUse: boolean;
 }
@@ -139,6 +144,8 @@ export function workingFrom(item: ItemLike | null, { supplierIds, preset, mayPri
     count: opened.count === null ? '' : String(opened.count),
     inner: { choice: opened.inner, typed: '' },
     innerAutoSet: false,
+    packType: { choice: packTypeOf(item), typed: '' },
+    packTypeTouched: false,
     notInUse: item?.active === false,
   };
 }
@@ -159,6 +166,11 @@ export function withFormat(working: Working, next: 'single' | 'carton', lang: un
 // Anything the person does to the inner-word menu makes its value theirs.
 export function withInner(working: Working, inner: ChoiceState): Working {
   return { ...working, inner, innerAutoSet: false };
+}
+
+// Anything the person does to the «Che confezione è?» menu.
+export function withPackType(working: Working, packType: ChoiceState): Working {
+  return { ...working, packType, packTypeTouched: true };
 }
 
 // The weight as it would be STORED: the joined text, or the kept legacy text when no usable number is typed.
@@ -183,12 +195,12 @@ function comparable(working: Working) {
   return [
     working.name, working.shortName, working.supplierId, working.brand, choice(working.category),
     working.weight.amount, working.weight.unit, working.weight.legacy,
-    working.format, working.formatChosen, working.count, choice(working.inner), working.notInUse,
+    working.format, working.formatChosen, working.count, choice(working.inner), choice(working.packType), working.notInUse,
   ];
 }
 
 // Where Save was refused, and so where the sentence goes and the focus.
-export type RefusedField = 'name' | 'weight' | 'category' | 'format' | 'inner' | 'count' | 'innerEmpty';
+export type RefusedField = 'name' | 'weight' | 'category' | 'format' | 'inner' | 'count' | 'innerEmpty' | 'packType' | 'packTypeWord';
 
 // The first reason Save cannot go on, in the card's order (parity C84, plus one step only Mise 2 has: the format must be chosen):
 //  - an empty name;
@@ -202,7 +214,8 @@ export type RefusedField = 'name' | 'weight' | 'category' | 'format' | 'inner' |
 // ⚠️ A CASE NOTHING MOVED IS NEVER REFUSED (C85): an old product that opens as a carton with no count saves untouched. But typing
 // a price under a carton with an empty count IS refused (`priceDirty`): it would erase the price.
 export function firstRefusal(
-  working: Working, item: ItemLike | null, options: FormatOptions & { readonly priceDirty?: boolean } = {},
+  working: Working, item: ItemLike | null,
+  options: FormatOptions & { readonly priceDirty?: boolean; readonly packTypeShown?: boolean } = {},
 ): RefusedField | null {
   if (working.name.trim() === '') return 'name';
   if (isUnusableWeight(working.weight.amount, working.weight.unit)) return 'weight';
@@ -214,11 +227,85 @@ export function firstRefusal(
     if (parseCount(working.count) === null) return 'count';
     if (readChoice(working.inner) === '') return 'innerEmpty';
   }
+  // Mise 2 only: «Che confezione è?» with a new word typed (only while the menu is drawn and the person used it).
+  if (options.packTypeShown === true && working.format === 'single' && working.packTypeTouched && working.packType.choice === NEW_CHOICE) {
+    if (choiceIsBlankNew(working.packType)) return 'packType';
+    if (!isPackTypeWord(working.packType.typed)) return 'packTypeWord';
+  }
   return null;
+}
+
+// The order unit a NEW item gets from the way it is priced (parity C55): the loose word (kg / l / pz) when it is priced by weight, volume or
+// piece with no readable weight, else ''. ⚠️ ONLY EVER FOR A NEW ITEM: the caller checks that.
+export function newItemUnit(
+  working: Working, pricePatch: { readonly priceUnit: unknown; readonly pricePerUnit: unknown } | null | undefined, lang: unknown,
+): string {
+  return pricePatch && pricePatch.pricePerUnit !== null
+    ? looseUnit({ kind: formState(working).kind, weightReadable: packBaseOf(weightText(working)) !== null, priceUnit: pricePatch.priceUnit, lang })
+    : '';
+}
+
+// What the type menu depends on besides the format: whether the price is typed and what it would send.
+export interface TypeOptions extends FormatOptions {
+  readonly priceDirty?: boolean;
+  readonly pricePatch?: { readonly priceUnit: unknown; readonly pricePerUnit: unknown } | null;
+}
+
+// ⚠️ MAY THE ITEM MOVE BETWEEN «NO TYPE» AND «A TYPE»? That changes its order unit, and an empty unit on a stored case of more than one
+// reads «the whole case» (order-cost.ts): 225 would become 217. So: a NEW item, or somebody who writes prices on an item whose opened
+// price has no case of more than one. A rename (one type to another) never asks. And never when clearing the type would turn the item
+// into one the card of before opens (a pieces case of one with an empty unit is such a shape): the card must not flip on reopening.
+// ⚠️ THE FLIP IS CHECKED ON THE FIELDS THAT WILL BE SAVED (`saved`, savedOrderFields), not on the opened item: in a Cartone → Single edit the
+// opened item still has its packCount, so the card would not read as flipping while the saved shape does. Both directions: the shape with a
+// type (any word) and the one without must read as the same kind of card as the saved fields do.
+export function typeMayRewrite(
+  item: ItemLike | null, mayPrice: boolean | undefined, saved?: { unit: string; packUnit: string; packCount: unknown },
+): boolean {
+  if (!item) return true;
+  if (mayPrice !== true) return false;
+  if ((storedCaseOf(item)?.caseCount ?? 0) > 1) return false;
+  const now = usesLegacyCard({ ...item, ...(saved ?? {}), packCount: null });
+  const shaped = (word: string) => usesLegacyCard({ ...item, packCount: null, unit: word, packUnit: word });
+  return shaped('') === now && shaped('x') === now;
+}
+
+// The guard of this card's type menu, on the fields it would save.
+export function typeGuardOf(working: Working, item: ItemLike | null, options: TypeOptions = {}): { mayRewrite: boolean } {
+  return { mayRewrite: typeMayRewrite(item, options.mayPrice, savedOrderFields(working, item, options)) };
+}
+
+// The unit, the package word and the count the card would SAVE if the type menu did nothing: what the format moved, else what is stored
+// (a new item: the loose word its price gives it).
+export function savedOrderFields(
+  working: Working, item: ItemLike | null, options: TypeOptions = {},
+): { unit: string; packUnit: string; packCount: unknown } {
+  const patch = formatPatch(
+    formatBeforeOf(item, options), { ...formState(working), cartonWord: cartonWordFor(options.lang) }, { force: options.priceDirty === true },
+  );
+  const stored = item
+    ? { unit: text(item.unit), packUnit: text(item.packUnit), packCount: item.packCount ?? null }
+    : { unit: newItemUnit(working, options.pricePatch, options.lang), packUnit: '', packCount: null };
+  return {
+    unit: patch.unit ?? stored.unit,
+    packUnit: (patch.packUnit ?? stored.packUnit).slice(0, PACK_WORD_MAX),
+    packCount: 'packCount' in patch ? patch.packCount : stored.packCount,
+  };
+}
+
+// Is «Che confezione è?» drawn? Only for a Single that was chosen, and when pack-type.ts says the item may have one.
+export function packTypeVisible(working: Working, item: ItemLike | null, options: TypeOptions = {}): boolean {
+  return working.formatChosen && working.format === 'single'
+    && packTypeShown(savedOrderFields(working, item, options), typeGuardOf(working, item, options));
+}
+
+// What the menu shows: the person's choice once they used it, else the item's own type (as it would be saved).
+export function packTypeChoiceOf(working: Working, item: ItemLike | null, options: TypeOptions = {}): ChoiceState {
+  return working.packTypeTouched ? working.packType : { choice: packTypeOf(savedOrderFields(working, item, options)), typed: '' };
 }
 
 // What the card would SAVE for the order unit, the package, the count and the weight, so the VAT line prices the right unit
 // (parity C78, the original's orderNow). ⚠️ A price never moves the order unit: with the format untouched `unit` is as stored.
+// (Mise 2: the package type is left out on purpose — it changes no figure, see typeMayRewrite.)
 export function orderNow(
   working: Working, item: ItemLike | null, options: FormatOptions & { readonly priceDirty?: boolean } = {},
 ): { unit: unknown; weight: string; packUnit: unknown; packCount: unknown } {
@@ -256,6 +343,9 @@ export interface SaveBuilt {
   readonly payload: Readonly<Record<string, unknown>> & { readonly name: string };
   // The order unit the format has just replaced, to freeze in the open order line ('' = nothing to freeze).
   readonly unitChangedFrom: string;
+  // Mise 2 only: the word this save REPLACED (a type renamed or cleared, or a package word a type was added over), '' otherwise. The store
+  // resets the open order lines whose explicit unit is that word, or they would be orphaned (no longer the card's unit, nor its package).
+  readonly typeReplacedFrom: string;
 }
 
 // What Save sends, EXACTLY (parity C87). No price key, no allergen key, no nutrition key, never `invoiceName` or the supplier
@@ -269,10 +359,8 @@ export function buildSave({ working, item, kind, lang, startSupplierId, mayPrice
   // ⚠️ THE RULES CAP THE PACKAGE WORD AT 40: cut it here rather than have the whole save refused.
   if (formatKeys.packUnit) formatKeys.packUnit = formatKeys.packUnit.slice(0, PACK_WORD_MAX);
   // ⚠️ ONLY EVER FOR A NEW ITEM: an existing one keeps the order unit it has, whatever its price is edited to.
-  const looseWord = !item && pricePatch && pricePatch.pricePerUnit !== null
-    ? looseUnit({ kind: state.kind, weightReadable: packBaseOf(weightText(working)) !== null, priceUnit: pricePatch.priceUnit, lang })
-    : '';
-  const payload = {
+  const looseWord = item ? '' : newItemUnit(working, pricePatch, lang);
+  const payloadNoType = {
     name: working.name.trim(),
     // '' when blank, never omitted: a merge write must be able to CLEAR a display name.
     shortName: working.shortName.trim(),
@@ -287,7 +375,25 @@ export function buildSave({ working, item, kind, lang, startSupplierId, mayPrice
     ...activePatch(working, item),
     kind,
   };
-  return { payload, unitChangedFrom: replacedUnit(item, payload, state, cartonWord, options) };
+  // Mise 2 only: «Che confezione è?». ⚠️ `unitChangedFrom` IS COMPUTED ON THE PAYLOAD WITHOUT THE TYPE KEYS: choosing a type is not a
+  // format change, and the open order lines must not be frozen in a unit it replaced (they would keep a stale unit for ever).
+  const typeOptions: TypeOptions = { mayPrice, lang, priceDirty, pricePatch };
+  // A type already picked on a NEW item that a per-kilo or per-piece price then makes loose is hidden here, and so dropped: the loose unit wins.
+  const savedFields = savedOrderFields(working, item, typeOptions);
+  const typeKeys = packTypeVisible(working, item, typeOptions)
+    ? packTypePatch(savedFields, readChoice(packTypeChoiceOf(working, item, typeOptions)), typeGuardOf(working, item, typeOptions))
+    : {};
+  const payload = { ...payloadNoType, ...typeKeys };
+  // ⚠️ A RENAME (a type to another word) leaves open lines whose explicit unit is the old word orphaned; the store resets them. Accepted and
+  // documented: orders already frozen in the old word in History keep it (suppliers.md, «Che confezione è?» as built).
+  // Clearing a type replaces it too (unit ''), and so does a type added over a package word the item already had (packUnit overwritten).
+  // Money-safe in each: the guard allows a clear or an add only on a stored case of at most one, where the line costs the same either way.
+  const oldType = packTypeOf(savedFields);
+  const storedPack = cleanUnit(savedFields.packUnit);
+  const typeReplacedFrom = 'unit' in typeKeys && oldType !== '' && !sameUnit(typeKeys.unit, oldType)
+    ? oldType
+    : (oldType === '' && typeKeys.packUnit && storedPack !== '' && !sameUnit(typeKeys.packUnit, storedPack) ? storedPack : '');
+  return { payload, unitChangedFrom: replacedUnit(item, payloadNoType, state, cartonWord, options), typeReplacedFrom };
 }
 
 // The order unit a format change REPLACED, told to the store, which freezes the open order line in it (parity C35, the

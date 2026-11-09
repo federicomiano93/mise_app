@@ -1,7 +1,8 @@
 // Unit tests for the Orders WhatsApp message builder (P15), run against BOTH implementations: the TypeScript
 // port in shared/ and js/orders/order-text.js, which the live app uses today. Ported from
 // tests/order-text.test.mjs; the module is a FULL port, so parity.spec.ts also compares its exports. It differs from the
-// original in ONE place, on purpose: the flat list's order (finding F-5), shown by the last test.
+// original in TWO places, on purpose: the flat list's order (finding F-5, «what only the port can say») and the package word
+// of a card that says what its single pack is («- Panna: 2 bottiglie», the last describe).
 //
 // PORTED: 42 of 42 tests of tests/order-text.test.mjs. (tests/order-cost-message.test.mjs and
 // tests/same-day-sends.test.mjs are left out: they exercise order-cost, the sends and the archive, which are not
@@ -443,5 +444,81 @@ describe('order-text: what only the port can say', () => {
     const lines = (m: typeof ported) => m.buildOrderMessage(groups, { grouped: false, ...CLUB }).split('\n').filter(l => l.startsWith('- '));
     expect(lines(ported)).toStrictEqual(['- Flour 5kg: 2', '- Flour 25kg: 1']);
     expect(lines(legacy)).toStrictEqual(['- Flour 25kg: 1', '- Flour 5kg: 2']);
+  });
+});
+
+// ⚠️ THE SECOND INTENDED DIFFERENCE: the package word. A line of an ingredient whose card says what its single pack is reads
+// «- Panna: 2 bottiglie»; the current app sends «- Panna: 2». Every ingredient without such a word reads the same in both.
+describe('order-text: the package word (Mise 2 only)', () => {
+  const typed = (name: string, word: string, id = name) => ({ id, name, weight: '', unit: word, packUnit: word });
+  const BOTTLES = [typed('Panna', 'bottiglia'), typed('Yogurt', 'secchiello'), typed('X', 'damigiana'), { id: 'm', name: 'Milk', weight: '' }];
+  const entries = { Panna: { qty: 2 }, Yogurt: { qty: 1 }, X: { qty: 2 }, m: { qty: 3 } };
+  const groupsFor = (items: readonly ported.OrderItem[]) => [{ supplierName: 'Etna', items }];
+
+  test('orderedItems carries the word for a typed card, and nothing for any other', () => {
+    expect(ported.orderedItems(BOTTLES, entries)).toStrictEqual([
+      { name: 'Panna', weight: '', qty: 2, pack: 'bottiglia' },
+      { name: 'Yogurt', weight: '', qty: 1, pack: 'secchiello' },
+      { name: 'X', weight: '', qty: 2, pack: 'damigiana' },
+      { name: 'Milk', weight: '', qty: 3 },
+    ]);
+    expect(legacy.orderedItems(BOTTLES, entries).every(item => !('pack' in item))).toBe(true);
+  });
+
+  test('a line with its own unit carries the unit, never the word', () => {
+    const items = ported.orderedItems([typed('Panna', 'bottiglia')], { Panna: { qty: 2, unit: 'cartone' } });
+    expect(items).toStrictEqual([{ name: 'Panna', weight: '', qty: 2, unit: 'cartone' }]);
+  });
+
+  test('the message says «2 bottiglie», «1 secchiello», «2 × damigiana»', () => {
+    const items = ported.orderedItems(BOTTLES, entries);
+    const message = ported.buildOrderMessage(groupsFor(items), { ...CLUB, language: 'it' });
+    expect(message).toBe('*Ordine — The Italian Club*\n\n- Milk: 3\n- Panna: 2 bottiglie\n- X: 2 × damigiana\n- Yogurt: 1 secchiello');
+  });
+
+  test('in English: «- Milk: 3 bottles»', () => {
+    const items = ported.orderedItems([typed('Milk', 'bottle'), typed('Ice', 'tin')], { Milk: { qty: 3 }, Ice: { qty: 1 } });
+    expect(ported.buildOrderMessage(groupsFor(items), { ...CLUB, language: 'en' })).toBe('*Order — The Italian Club*\n\n- Ice: 1 tin\n- Milk: 3 bottles');
+  });
+
+  test('several suppliers keep their headings, each line with the word', () => {
+    const items = ported.orderedItems([typed('Panna', 'bottiglia')], { Panna: { qty: 2 } });
+    const two = ported.buildOrderMessage([{ supplierName: 'A', items }, { supplierName: 'B', items }], { ...CLUB, language: 'it' });
+    expect(two).toBe('*Ordine — The Italian Club*\n\n*A*\n- Panna: 2 bottiglie\n\n*B*\n- Panna: 2 bottiglie');
+  });
+
+  test('the flat list adds up the same word and keeps different words apart', () => {
+    const groups = [
+      { supplierName: 'A', items: [{ name: 'Panna', weight: '', qty: 2, pack: 'bottiglia' }, { name: 'Panna', weight: '', qty: 1, pack: 'Bottiglia' }] },
+      { supplierName: 'B', items: [{ name: 'Panna', weight: '', qty: 1 }, { name: 'Panna', weight: '', qty: 4, unit: 'cartone' }] },
+    ];
+    const lines = ported.buildOrderMessage(groups, { grouped: false, ...CLUB, language: 'it' }).split('\n').filter(l => l.startsWith('- '));
+    expect([...lines].sort()).toStrictEqual(['- Panna: 1', '- Panna: 3 bottiglie', '- Panna: 4 × cartone'].sort());
+  });
+
+  test('itemsFromQuantities: no frozen unit reads as the live card’s word; a frozen unit wins; a deleted card has none', () => {
+    const live = ported.indexById([typed('Panna', 'bottiglia', 'p')]);
+    expect(ported.itemsFromQuantities({ p: 2 }, live, {}, {}, 'it')).toStrictEqual([{ name: 'Panna', weight: '', qty: 2, pack: 'bottiglia' }]);
+    expect(ported.itemsFromQuantities({ p: 2 }, live, {}, { p: 'cartone' }, 'it')).toStrictEqual([{ name: 'Panna', weight: '', qty: 2, unit: 'cartone' }]);
+    expect(ported.itemsFromQuantities({ gone: 2 }, live, { gone: 'Old' }, {}, 'it')).toStrictEqual([{ name: 'Old', weight: '', qty: 2 }]);
+    const sent = ported.buildOrderMessage(groupsFor(ported.itemsFromQuantities({ p: 2 }, live, {}, {}, 'it')), { ...CLUB, language: 'it' });
+    expect(sent).toContain('- Panna: 2 bottiglie');
+  });
+
+  test('summaryLines carries the word, and nothing else changes shape', () => {
+    expect(ported.summaryLines([{ name: 'Panna', weight: '', qty: 2, pack: 'bottiglia' }, { name: 'Milk', weight: '', qty: 3 }])).toStrictEqual([
+      { label: 'Milk', qty: 3 },
+      { label: 'Panna', qty: 2, pack: 'bottiglia' },
+    ]);
+    expect(ported.summaryLines([{ name: 'Panna', weight: '', qty: 2, unit: 'cartone', pack: 'bottiglia' }])).toStrictEqual([
+      { label: 'Panna', qty: 2, unit: 'cartone' },
+    ]);
+  });
+
+  test('an ingredient without a word is byte-identical in the two files', () => {
+    const plain = [{ id: 'a', name: 'Flour', weight: '25kg', unit: 'sacco' }, { id: 'b', name: 'Eggs', weight: '' }];
+    const q = { a: { qty: 2 }, b: { qty: 12 } };
+    expect(ported.buildOrderMessage(groupsFor(ported.orderedItems(plain, q)), { ...CLUB, language: 'it' }))
+      .toBe(legacy.buildOrderMessage(groupsFor(legacy.orderedItems(plain, q)), { ...CLUB, language: 'it' }));
   });
 });

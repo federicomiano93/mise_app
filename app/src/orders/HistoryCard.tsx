@@ -3,11 +3,14 @@ import { ChevronDown, Pencil, Share } from 'lucide-react';
 import { isLegacyRecord, recordedName, sendSections } from '@mise/shared/archive';
 import type { SendSection } from '@mise/shared/archive';
 import { isNoSupplier } from '@mise/shared/no-supplier';
+import { outputLanguage } from '@mise/shared/market';
 import { compareLabels } from '@mise/shared/order-text';
 import { recordUnit } from '@mise/shared/order-unit';
+import { packTypeOf, qtyWithPack } from '@mise/shared/pack-type';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { correctOpener, useHandBack } from './handBack';
 import type { StoredDoc } from './ordersSource';
@@ -43,6 +46,7 @@ type Line = { readonly id: string; readonly name: string; readonly qty: string }
 // under TODAY, so nothing that was recorded is lost or reinterpreted.
 export function HistoryCard({ record, ingredientsById, suppliersById, firstOlder, onSendAgain, onCorrect }: Props) {
   const { t, locale } = useT();
+  const { location } = useSession();
   const handBack = useHandBack();
   const [open, setOpen] = useState(false);
   const bodyId = useId();
@@ -52,11 +56,21 @@ export function HistoryCard({ record, ingredientsById, suppliersById, firstOlder
   const deletedWord = t('ord.deletedIngredient');
   const correct = useCallback((node: HTMLButtonElement | null) => { handBack.register(correctOpener(record.id), node); }, [handBack, record.id]);
 
+  // A line's quantity: the unit frozen into the record as it was; else (Mise 2 only) the card's package word read as a plural («2 bottiglie»,
+  // in the venue's country language); else the card's unit, as before.
+  const quantityOf = (id: string, quantity: unknown, unitsOf: unknown): string => {
+    const card = ingredientsById[id];
+    const frozen = recordUnit({ units: unitsOf }, id, undefined);
+    const word = frozen === '' ? packTypeOf(card) : '';
+    if (word !== '') return qtyWithPack(String(quantity), word, outputLanguage(location) ?? 'en');
+    return `${String(quantity)} ${recordUnit({ units: unitsOf }, id, card)}`.trim();
+  };
+
   const linesOf = (quantitiesOf: Record<string, unknown>, unitsOf: unknown): Line[] => Object.keys(quantitiesOf)
     .map(id => ({
       id,
       name: recordedName(id, ingredientsById, record.names, deletedWord),
-      qty: `${String(quantitiesOf[id])} ${recordUnit({ units: unitsOf }, id, ingredientsById[id])}`.trim(),
+      qty: quantityOf(id, quantitiesOf[id], unitsOf),
     }))
     .sort((a, b) => compareLabels(a.name, b.name));
 

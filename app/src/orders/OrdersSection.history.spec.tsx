@@ -342,6 +342,32 @@ describe('older orders', () => {
   });
 });
 
+describe('the package word of a typed card (Mise 2 only)', () => {
+  const CREAM = ingredient('i-cream', { name: 'Cream', supplierId: 's-alp', unit: 'bottle', packUnit: 'bottle' });
+  const typedSource = (units: Record<string, string> = {}) => fakeOrdersSource({
+    suppliers: SUPPLIERS,
+    ingredients: [...ITEMS, CREAM],
+    records: { [idOf(TODAY, 's-alp')]: record(TODAY, 's-alp', 'Alpine Mills', { 'i-cream': 2, 'i-flour': 1 }, { units, names: { 'i-cream': 'Cream' } }) },
+  });
+
+  it('⚠️ the card reads «2 bottles» for a line with no frozen unit, and «Send again» says the same', async () => {
+    const open = spyOpen();
+    const view = await atHistory(typedSource(), STAFF);
+    const head = await openCard(view, 'Alpine Mills');
+    expect(within(bodyOf(head)).getByText('2 bottles')).toBeInTheDocument();
+    await pressThenMicrotasks(history().getByRole('button', { name: 'Send again' }));
+    expect(decodeURIComponent(String(open.mock.calls[0]?.[0]))).toContain('- Cream: 2 bottles');
+  });
+
+  it('a unit frozen into the record wins: the line reads as it did when it was sent', async () => {
+    const open = spyOpen();
+    const view = await atHistory(typedSource({ 'i-cream': 'carton' }), STAFF);
+    await openCard(view, 'Alpine Mills');
+    await pressThenMicrotasks(history().getByRole('button', { name: 'Send again' }));
+    expect(decodeURIComponent(String(open.mock.calls[0]?.[0]))).toContain('- Cream: 2 × carton');
+  });
+});
+
 describe('«Send again»', () => {
   it('opens the one road in the very tick of the press, with no unit check against today’s record, and records nothing', async () => {
     const open = spyOpen();

@@ -32,7 +32,8 @@
 
 import { cleanUnit, sameUnit, hasUnitChoice } from './order-unit';
 import { storedCaseOf, packBaseOf, packWeightOf, roundTo } from './price-model';
-import { packWordFor, looseUnitFor } from './record-choices';
+import { looseUnitFor } from './record-choices';
+import { packPlural } from './pack-words';
 
 // What the card shows for «Confezione»: kind, how many items, and the inner (package) word.
 export interface PackFormat {
@@ -267,6 +268,8 @@ const numberTextIn = (locale: string) => (n: unknown): string =>
 // «Cartone da 4 buste da 2,5 kg (10 kg)» — and without a weight that can be read, «Cartone da 4
 // buste». '' when there is no carton, no count or no word to say. `lang` is the OUTPUT language:
 // the plural of «busta» is the venue's word. A word the table does not know is «4 × parola».
+// Mise 2 only: the plural comes from pack-words.ts packPlural, which also knows the two words the card's menu adds
+// (secchiello, latta); for every other word it answers as record-choices.packWordFor does.
 // ADAPTED: `t` is the translate function and `locale` the locale tag the numbers are written in.
 export function formatSummary(
   fmt: Partial<PackFormat> | null | undefined,
@@ -279,7 +282,7 @@ export function formatSummary(
   const inner = cleanUnit(fmt && fmt.inner);
   const count = fmt && fmt.kind === 'carton' ? wholeCount(fmt.count) : null;
   if (count === null || !inner) return '';
-  const plural = packWordFor(inner, count, lang);
+  const plural = packPlural(inner, count, lang);
   const items = plural ? `${count} ${plural}` : `${count} × ${inner}`;
   const w = packWeightOf(weight);
   if (!w) return t('orders.format.summaryNoWeight', { items });

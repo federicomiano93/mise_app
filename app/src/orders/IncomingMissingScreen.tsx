@@ -2,8 +2,10 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import { recordedName, wholeNumber } from '@mise/shared/archive';
 import { compareLabels, indexById } from '@mise/shared/order-text';
-import { qtyWithUnit } from '@mise/shared/order-unit';
+import { outputLanguage } from '@mise/shared/market';
+import { shownQty } from '@mise/shared/pack-type';
 import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
 import { markBusy } from '../session/busy';
 import { KEEP_FOCUS } from '../shell/Page';
 import { Button } from '../ui/Button';
@@ -60,6 +62,7 @@ export function IncomingMissingScreen({ id }: { id: string }) {
 
 function Picker({ opened, leave }: { opened: StoredDoc; leave: () => void }) {
   const { t } = useT();
+  const language = outputLanguage(useSession().location) ?? 'en';
   const { state } = useLocation();
   const store = useOrdersStore();
   const say = useStatusMessage();
@@ -78,10 +81,10 @@ function Picker({ opened, leave }: { opened: StoredDoc; leave: () => void }) {
       .map(rowId => ({
         id: rowId,
         name: recordedName(rowId, ingredientsById, opened.names, deletedWord),
-        qty: qtyWithUnit(wholeNumber(quantities[rowId]), units[rowId]),
+        qty: shownQty(wholeNumber(quantities[rowId]), units[rowId], ingredientsById[rowId], language),
       }))
       .sort((a, b) => compareLabels(a.name, b.name));
-  }, [opened, ingredientsById, t]);
+  }, [opened, ingredientsById, language, t]);
 
   // The lines already marked as missing start unticked (and so in the set); every other line is considered arrived. The two must
   // agree, or a line shown as arrived would still be saved as missing.
