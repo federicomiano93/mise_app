@@ -32,10 +32,13 @@ export interface World {
   opened: string[];
   // Any touch of these fails the test: a worker must never reach the person's data.
   storageTouched: string[];
+  // What the workers warned (a fingerprint that did not match is stored «as received» with a warning: a spec that
+  // claims the check passed asserts this is empty).
+  warnings: string[];
 }
 
 export function createWorld(): World {
-  return { server: new Map(), caches: new Map(), fetched: [], fetchInits: [], deleted: [], skipWaiting: 0, notifications: [], opened: [], storageTouched: [] };
+  return { server: new Map(), caches: new Map(), fetched: [], fetchInits: [], deleted: [], skipWaiting: 0, notifications: [], opened: [], storageTouched: [], warnings: [] };
 }
 
 const bytesOf = (body: Uint8Array<ArrayBuffer> | string): Uint8Array<ArrayBuffer> => (typeof body === 'string' ? new TextEncoder().encode(body) : body);
@@ -76,7 +79,7 @@ export function loadWorker(world: World, source: string, swPath = `${BASE}sw.js`
     }
   }
   const context = vm.createContext({
-    console: { warn: () => {}, log: () => {}, error: () => {}, info: () => {} },
+    console: { warn: (...args: unknown[]) => { world.warnings.push(args.map(String).join(' ')); }, log: () => {}, error: () => {}, info: () => {} },
     URL, Request: WorkerRequest, Response, Headers, TextEncoder, TextDecoder, AbortController, Uint8Array, Array, Promise, Map, Set, JSON, Object, Error, TypeError, Number, String,
     crypto: globalThis.crypto,
     setTimeout: (fn: () => void) => setTimeout(fn, 0),
