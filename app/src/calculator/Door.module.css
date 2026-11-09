@@ -61,3 +61,11 @@
 .door > svg {
   color: var(--ink-3);
 }
+
+/* Not pressable yet: dimmed, no press or hover shade. AFTER the hover and press rules, which weigh the same. */
+.door[data-disabled],
+.door[data-disabled] .sub {
+  background: none;
+  color: var(--ink-3);
+  cursor: default;
+}

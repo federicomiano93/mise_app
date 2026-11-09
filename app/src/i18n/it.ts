@@ -22,6 +22,10 @@ export const it: Messages = {
   'section.settings': 'Impostazioni',
   'section.more': 'Altro',
   'section.home': 'Home',
+  'section.clients': 'Clienti',
+  'clients.received.sub': 'Cosa hanno chiesto i clienti, da leggere',
+  'clients.couldNotLoad': 'Non è stato possibile caricare i clienti. Controlla la connessione e riapri questa pagina.',
+  'clients.noConfigYet': 'Non ancora pronto: chiedi al titolare di salvare una volta un’impostazione del Calcolatore.',
 
   'common.cancel': 'Annulla',
   'common.ok': 'OK',

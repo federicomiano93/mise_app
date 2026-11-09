@@ -1,0 +1,27 @@
+/* The Clients page: the waiting-orders line (when there is one), then a card of three doors. Same card as the
+   Calculator's Settings hub, so the two read alike. */
+
+.hub {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+.card {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s3) var(--s4);
+}
+
+.headTitle {
+  font-size: var(--fs-md);
+  font-weight: 650;
+}

@@ -8,7 +8,7 @@ import { ClientsSaveButton } from './ClientsSaveButton';
 import { useClientsEditor } from './clientsEditorContext';
 import { isBlank, isEmptyClient } from './clientsModel';
 import { PartBoundary } from '../errors/PartBoundary';
-import { clientsPath } from './calculatorPath';
+import { useClientsPaths } from './clientsPaths';
 import { ADD_CLIENT_OPENER, clientOpener, useHandBack } from './handBack';
 import { OrderingLink } from './OrderingLink';
 import { ProductCard } from './ProductCard';
@@ -25,6 +25,7 @@ export function ClientScreen({ clientId }: { clientId: string }) {
   const { t } = useT();
   const editor = useClientsEditor();
   const handBack = useHandBack();
+  const paths = useClientsPaths();
   const nameId = useId();
   const productsId = useId();
   const form = useRef<HTMLDivElement>(null);
@@ -78,7 +79,7 @@ export function ClientScreen({ clientId }: { clientId: string }) {
     editor.leaveToList();
   }
 
-  if (!client) return editor.wasDropped(clientId) ? null : <Navigate to={clientsPath} replace state={KEEP_FOCUS} />;
+  if (!client) return editor.wasDropped(clientId) ? null : <Navigate to={paths.list} replace state={KEEP_FOCUS} />;
 
   const products = client.products ?? [];
   const nameInvalid = editor.showErrors && isBlank(client.name);
@@ -87,7 +88,7 @@ export function ClientScreen({ clientId }: { clientId: string }) {
   return (
     <SettingsPage
       title={title}
-      fallback={clientsPath}
+      fallback={paths.list}
       onBack={() => { void back(); }}
       action={<ClientsSaveButton />}
     >

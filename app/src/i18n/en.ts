@@ -36,6 +36,11 @@ export const en = {
   'section.settings': 'Settings',
   'section.more': 'More',
   'section.home': 'Home',
+  'section.clients': 'Clients',
+  'clients.received.sub': 'What your clients asked for, to read',
+  // new: the Clients door's line when the configuration stream broke before the server answered.
+  'clients.couldNotLoad': 'The clients could not be loaded. Check your connection and reopen this page.',
+  'clients.noConfigYet': 'Not ready yet: ask the owner to save any Calculator setting once.',
 
   'common.cancel': 'Cancel',
   // new: the one button of a message dialog (the current app's alert), such as the Stocktake's

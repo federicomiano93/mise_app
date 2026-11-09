@@ -167,6 +167,7 @@ describe('fetch', () => {
       'calculator.html?tab=2': `${SCOPE}#/calculator`,
       'catalogue.html': `${SCOPE}#/recipes`,
       'inventory.html?month=2026-10': `${SCOPE}#/stocktake`,
+      'clients.html': `${SCOPE}#/clients`,
       'foodcost.html': `${SCOPE}#/food-cost`,
       'home.html': SCOPE,
     };

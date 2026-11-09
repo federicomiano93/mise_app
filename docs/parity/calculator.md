@@ -1022,3 +1022,36 @@ change only `clients`, `configModel`, `configRev` and `whatsappClients` on `conf
   the rules refuse logs to this role) and follows no linked recipe; `saveConfig` goes through `saveClients` with the same «server has answered
   once» guard and the same rollback. Menus still republish (`onConfigSaved`).
 - `calc.notSavedNoConfig` in `en.ts`/`it.ts`, the words of the current app.
+
+## Clients page for the sales owner as built (9 Nov 2026, slice 4 of the partial-owner roles; closes item 10)
+
+The sales owner (`owner-sales`, «Titolare vendita») runs the clients but has no Calculator, so the current app gave them `clients.html`
+(PR #449). Mise 2 gives them the section `clients`, path `/clients` (`app/src/clients/`).
+- **The page** (`ClientsHub`): the waiting-orders line (the Calculator's `OrdersBanner`, linking to `/clients/orders`; no badge on the navigation, decision D2),
+  then a card «Clients and orders» with three doors: Clients, Orders received, Client ordering. No WhatsApp door and no WhatsApp address (the rules refuse
+  that role its lists): `/clients/whatsapp` typed is replaced by the page.
+- **The Clients door is shut** while the server has not answered («Loading…») and, once it has, when the Calculator document is missing or still in a retired
+  shape (`configShape` of the store: `missing` or `retired`): the sentence is `clients.noConfigYet` (the current app's words), because a clients-only save
+  cannot start or migrate that document. A typed `/clients/list` gets the same sentence (`ConfigGate`), never an editor.
+- **Reused, not copied:** `ClientsEditor` (list and client), `OrdersReceived`, `CutoffEditor`, `OrderingLink`, `OrdersBanner`, drawn over
+  `CalculatorProvider clientsOnly`. Their addresses come from a context (`calculator/clientsPaths.tsx`); the Calculator's constants are its default, so its
+  specs are untouched. Save goes through `saveClients` (slice 3): only `clients`, `configRev` (+1), `configModel`, `bakery`; the client's ordering menu is
+  republished as in the Calculator.
+- **Read-only received orders:** `OrdersReceived readOnly` never mounts `useApplyOrder`, and `OrderCard` without `onApply` draws no «Put in the
+  calculator» button (the history was always read-only). Nothing in this section reads or writes the dough logs, lists the catalogue or stamps a
+  recipe row; `ClientsSection.spec.tsx` pins it with the fake source (no logs listener, no catalogue read, no stamp, no log saved).
+- **Addresses:** `/clients`, `/clients/list[/<id>]` (`new` goes to the list), `/clients/orders[/history]`, `/clients/ordering`. Usage names: `clients`,
+  `clients-editor`, `clients-orders`, `clients-ordering`.
+- **Navigation:** a phone tab (decision D1): the sales owner's tab bar is Home, Clients, More (Food cost, Settings); the rail Home, Clients, Food cost,
+  Settings. The card gate is `{ clients, section calculator, card clients }`: only that role is ever shown it.
+- **The notification tap:** the push opens `calculator.html` (one notification for everybody). `SectionRoute`: a section hidden from the person whose
+  `pageWhenRefused(role, card)` is `clients.html#orders` is REPLACED by `/clients/orders`. `app/sw/legacy-routes.json` maps `clients.html` to `/clients`.
+- **Not built (D3):** the «tell me when a client orders» notification switch. Mise 2 has no push registration yet (deferred with the reminders); phones
+  already registered keep receiving, and the tap lands on Orders received.
+- **Choices a person sees that the plan did not settle:** the Clients door says «Loading…» (not a failure sentence) until the server has answered; a failed
+  configuration read on the typed address book says `clients.couldNotLoad` (new text: «The clients could not be loaded. Check your connection and reopen
+  this page.»); the page's card heading is an h2 under the section's h1; the icon is lucide `Users`; the Home has NO Clients card (Mise 2's Home shows the
+  to-do list, not a card per section; Clients is on the rail and the tab bar).
+- **Driven:** `algprobe/mise-drive/drive-mise2-clients.mjs` (the sales owner in both languages at 1024/360/296: edit, save and read back, link made and
+  turned off, discard question, read-only orders, history, deadline, `/calculator` landing, no-document, empty and offline walks; the manager and the
+  kitchen owner as non-regression).

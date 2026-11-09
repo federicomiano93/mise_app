@@ -18,7 +18,7 @@ import type { SectionId } from './sections';
 describe('the section list', () => {
   it('is in the order the rail shows it', () => {
     expect(SECTIONS.map(section => section.id)).toEqual([
-      'home', 'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'stocktake', 'foodcost', 'settings',
+      'home', 'orders', 'suppliers', 'recipes', 'calculator', 'clients', 'pastries', 'stocktake', 'foodcost', 'settings',
     ]);
   });
 
@@ -35,12 +35,25 @@ describe('the section list', () => {
   it('splits the sections between the rail, the tabs and «More»', () => {
     const arranged = arrangeSections(new Set(SECTIONS.map(section => section.id)));
     expect(arranged.railTop.map(section => section.id)).toEqual([
-      'home', 'orders', 'suppliers', 'recipes', 'calculator', 'pastries', 'stocktake', 'foodcost',
+      'home', 'orders', 'suppliers', 'recipes', 'calculator', 'clients', 'pastries', 'stocktake', 'foodcost',
     ]);
     expect(arranged.railBottom.map(section => section.id)).toEqual(['settings']);
-    expect(arranged.tabs.map(section => section.id)).toEqual(['home', 'orders', 'recipes', 'calculator']);
+    // Nobody is shown both the Calculator and Clients (session/visibility.ts), so no real tab bar holds five.
+    expect(arranged.tabs.map(section => section.id)).toEqual(['home', 'orders', 'recipes', 'calculator', 'clients']);
     expect(arranged.more.map(section => section.id)).toEqual(['suppliers', 'pastries', 'stocktake', 'foodcost', 'settings']);
     expect(arranged.first.id).toBe('home');
+  });
+
+  // D1 (the roles plan): Clients is a phone tab. The sales owner's tab bar is Home, Clients and «More» (Food cost, Settings), the rail
+  // Home, Clients, Food cost, Settings.
+  it('gives the sales owner Home and Clients as tabs, and Clients on the rail after Home', () => {
+    const sales = arrangeSections(new Set<SectionId>(['home', 'clients', 'foodcost', 'settings']));
+    expect(ids(sales.railTop)).toEqual(['home', 'clients', 'foodcost']);
+    expect(ids(sales.tabs)).toEqual(['home', 'clients']);
+    expect(ids(sales.more)).toEqual(['foodcost', 'settings']);
+    expect(sectionById('clients').path).toBe('/clients');
+    expect(moreIsCurrent('/clients/orders', sales.more)).toBe(false);
+    expect(moreIsCurrent('/food-cost', sales.more)).toBe(true);
   });
 
   it('finds a section by id', () => {
@@ -102,6 +115,7 @@ describe('moreIsCurrent', () => {
     ['/orders', false],
     ['/recipes', false],
     ['/calculator', false],
+    ['/clients', false],
     ['/home', false],
     ['/', false],
     ['/no-such-section', false],
@@ -273,6 +287,7 @@ describe('screenNameFor', () => {
       ...SECTIONS.map(section => section.id), 'pastries-records', 'pastries-editor', 'more', 'not-found',
       'stocktake-product', 'stocktake-cost', STOCKTAKE_UNAVAILABLE_SCREEN,
       'foodcost-product', 'foodcost-history', 'foodcost-settings', 'client-orders',
+      'clients-editor', 'clients-orders', 'clients-ordering',
     ];
     for (const name of names) expect(`m2:${name}`).toMatch(SCREEN_RE);
   });

@@ -18,8 +18,8 @@ import {
 } from './clientsModel';
 import { useCalculator, useCalculatorStore } from './CalculatorContext';
 import { FROM_PARENT, useLeave } from './calculatorNav';
-import { SETTINGS_PATH, clientPath, clientsPath, inClientsEditor } from './calculatorPath';
 import type { SettingsTarget } from './calculatorPath';
+import { useClientsPaths } from './clientsPaths';
 import { useTabState } from './TabStateContext';
 import { useSaveConfig } from './useSaveConfig';
 
@@ -49,8 +49,9 @@ export function ClientsEditor({ target }: { target: SettingsTarget }) {
   const [confirm, confirmDialog] = useConfirm();
   const [alert, alertDialog] = useAlert();
   const [saveConfig, saveDialog] = useSaveConfig();
-  const leaveToHub = useLeave(SETTINGS_PATH);
-  const leaveToList = useLeave(clientsPath);
+  const paths = useClientsPaths();
+  const leaveToHub = useLeave(paths.hub);
+  const leaveToList = useLeave(paths.list);
   const recipes = getRecipes(config);
 
   // The address book as the editor opened with it (or as it was last saved), and the copy being edited.
@@ -128,9 +129,9 @@ export function ClientsEditor({ target }: { target: SettingsTarget }) {
   // outcome (a refusal is said on THIS screen). The person stays; the save settles; they leave again if they still want.
   const shouldBlock = useCallback<BlockerFunction>(({ currentLocation, nextLocation }) => {
     if (leavingClean.current) return false;
-    if (!inClientsEditor(nextLocation.pathname)) return dirtyRef.current || sending.current;
+    if (!paths.inEditor(nextLocation.pathname)) return dirtyRef.current || sending.current;
     return !quiet.current && freshEmptyRef.current && nextLocation.pathname !== currentLocation.pathname;
-  }, []);
+  }, [paths]);
   const blocker = useBlocker(shouldBlock);
   const latestBlocker = useRef(blocker);
   useEffect(() => {
@@ -148,7 +149,7 @@ export function ClientsEditor({ target }: { target: SettingsTarget }) {
       return;
     }
     askingLeave.current = true;
-    const leavingEditor = !inClientsEditor(blocker.location.pathname);
+    const leavingEditor = !paths.inEditor(blocker.location.pathname);
     void (async () => {
       try {
         const discard = await (leavingEditor ? discardQuestion() : askDiscardNewClient());
@@ -196,7 +197,7 @@ export function ClientsEditor({ target }: { target: SettingsTarget }) {
   function open(clientId: string) {
     if (target.kind === 'one' && target.id === clientId) return;
     quietly(() => {
-      void navigate(clientPath(clientId), {
+      void navigate(paths.client(clientId), {
         replace: target.kind === 'one',
         state: target.kind === 'one' ? state : FROM_PARENT,
       });

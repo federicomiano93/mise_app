@@ -15,19 +15,25 @@ const itemAt = (maxHeight: number): string | undefined =>
   new RegExp(`@media\\s*\\(max-height:\\s*${maxHeight}px\\)\\s*\\{\\s*\\.railItem\\s*\\{([^}]*)\\}`).exec(css)?.[1];
 const minHeight = (block: string | undefined): number => px(/min-height:\s*([^;]+);/.exec(block ?? '')?.[1]);
 
+// ⚠️ NOBODY IS SHOWN THE CALCULATOR AND CLIENTS TOGETHER: Clients is the sales owner's, who has no Calculator (session/visibility.ts),
+// so the fullest rail is every section but that one.
+const mostItems = (): number => SECTIONS.filter(section => section.id !== 'clients').length;
+
 // The rail's own padding (top + bottom), the brand (44) and its margin below (read from .mark), the items with the 4px
 // gaps of the main nav (one more gap than items, counted generously), the gap to the account nav, and the account nav (56).
 function railNeeds(itemHeight: number): number {
   const s4 = token('--s4');
   const mark = /\.mark\s*\{([^}]*)\}/.exec(css)?.[1] ?? '';
   const markMargin = token(/margin-bottom:\s*var\((--[\w-]+)\)/.exec(mark)?.[1] ?? '');
-  const items = SECTIONS.length; // every section, Settings included: the most anybody is shown
+  const items = mostItems(); // every section anybody is shown together, Settings included
   return 2 * s4 + 44 + markMargin + items * itemHeight + (items + 1) * 4 + 4 + 56;
 }
 
 describe('the rail on a short window', () => {
   it('has nine items at most (the sum below counts that many)', () => {
-    expect(SECTIONS.length).toBe(9);
+    expect(mostItems()).toBe(9);
+    // …and the sales owner's rail, with Clients, is shorter than that: Home, Clients, Food cost, Settings.
+    expect(SECTIONS.length).toBe(10);
   });
 
   it('gives each item 48px up to 720px of height — the touch target of every other control', () => {
