@@ -264,9 +264,9 @@ function show(value: unknown): string {
 }
 
 const PORT_OWED = new Set<string>([
-  // PORT OWED (release branch, 8 Nov 2026): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings), the port has not — remove its keys when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 21): main changed js/foodcost/foodcost-weighing.js (g/kg on recipe lines, empty raw box, kept wrong weighings), the port has not — remove its keys when ported
   'startWeighing', 'typeRaw', 'readWeighing', 'weighingPatches', 'restoreAfterRefusal',
-  // PORT OWED (release branch, 8 Nov 2026): main changed js/foodcost/foodcost-model.js (Which? names deleted lines, line money guard, two decimals), the port has not — remove its keys when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, items 26, 28): main changed js/foodcost/foodcost-model.js (Which? names deleted lines, line money guard, two decimals), the port has not — remove its keys when ported
   'batchTotals', 'productionCost', 'costProduct', 'sortByMargin',
 ]);
 

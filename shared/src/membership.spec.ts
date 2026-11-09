@@ -132,7 +132,7 @@ describe.each([
 
   // ── The small pieces ───────────────────────────────────────────────────────
 
-  // PORT OWED (release branch, 8 Nov 2026): main added the partial-owner roles (owner-sales, owner-kitchen) to js/roles.js and js/sections.js, the port still has three — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 8): main added the partial-owner roles (owner-sales, owner-kitchen) to js/roles.js and js/sections.js, the port still has three — remove .fails when ported
   (_name === 'js/ (current app)' ? test.fails : test)('there are three roles and no more', () => {
     expect([...m.ROLES]).toStrictEqual(['owner', 'manager', 'staff']);
   });

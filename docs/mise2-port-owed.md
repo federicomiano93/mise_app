@@ -17,9 +17,15 @@ once its port lands: remove the marker then. `tests/mise2-port-owed.test.mjs` pr
 
 ## Switch checklist
 
-`tests/mise2-port-owed.test.mjs` FAILS the switch build while any line below is unticked (`- [ ]`). Tick a line
-(`- [x]`) when its port lands, or when Federico decides to ship without it (write his decision beside it). The numbers
-point at the items below, which say what and where.
+`tests/mise2-port-owed.test.mjs` FAILS the switch build (`MISE2_SWITCH=1`, or a Mise 2 service worker) while any line
+below is unticked (`- [ ]`). Tick a line (`- [x]`) when its port lands, or when Federico decides to ship without it (write
+his decision beside it). The numbers point at the items below, which say what and where.
+
+Since 8 Nov 2026 (his decision: switch with the minimum) this list holds ONLY what must be done BEFORE the switch. What he
+put off until after it is in «Deferred until AFTER the switch» at the end, by item number; a `PORT OWED` marker in a spec
+that names one of those numbers (`deferred until after the switch, item N`) counts as deferred, any other marker still
+fails the switch. What is done AT the switch hour (rules deploy, the TTL command, retyping one price) is in
+`docs/switch-runbook.md`, not here: it cannot be ticked before the switch, so it cannot gate it.
 
 Data loss first:
 - [x] 1. Pastries row notes and «Copy day» (a Mise 2 day save erases the notes) — notes ported 8 Nov (PR #492); «Copy day» ported 8 Nov (`feature/mise2-copy-day`, PR into the release branch; `docs/parity/pastries.md`, «Copy day as built»)
@@ -32,35 +38,31 @@ Data loss first:
       payload carries them (`app/src/telemetry/usage.spec.ts`, «the hours reach the stored day and the line…»)
 - [x] 7. Stocktake «Close month» guard moved into shared/ (`LIST_STATUS`, wording) — ported 8 Nov (`feature/mise2-stocktake-guard`, PR into the release branch; `docs/parity/stocktake.md`, «Close guard in shared/ as built»)
 
-Roles, Orders, Suppliers:
-- [ ] 8-11. Partial owners (owner-sales, owner-kitchen): sections, records, price gate, Clients page, weighing door
-- [ ] 12. «Order today» tag in both supplier lists
-- [ ] 16. Suppliers empty-flash, scroll and focus fixes, «hand-made» mark (verify)
-- [ ] 18. Invoice import: goods counted in pieces priced per piece
+Number ports (wrong numbers otherwise):
 - [x] 20. Piece weight typed in grams — ported 8 Nov (`feature/mise2-number-ports`, PR into the release branch; `docs/parity/suppliers.md`, «Piece weight in grams as built»)
-
-Food cost, Recipe book, Calculator:
 - [x] 27. Food cost recipe line in grams (with the g/kg select of step 1 it needs) — ported 8 Nov (`feature/mise2-number-ports`; `docs/parity/foodcost.md`, «Recipe line in grams as built»)
-- [ ] 21-22, 24-26, 28. Food cost steps 1 (all but the g/kg select on recipe lines, ported with 27), 2, 4, A, B, two decimals
-- [ ] 23. Food cost recipe link with several products (check)
-- [ ] 29. Create products from the recipe book
-- [ ] 30. Crossed-out euro on rows Food cost cannot price
-- [ ] 31. Recipe book renamed-row warning
-- [ ] 32. Recipe row menu, full screen from a button, Back from Orders keeps the quantity
 - [x] 38. Calculator: linked recipes with litres and ml, the problem line, the row count — ported 8 Nov (`feature/mise2-number-ports`; `docs/parity/calculator.md`, «Linked recipes with litres, the problem line and the row count as built»)
-- [ ] 36-37, 39-40. Calculator: reorder, «Add a recipe» from the book, dough history dates, cached «no config»
-- [ ] 44. Chrome 101 visible height (check on the lab tablet)
-- [ ] 47. `order-sent` usage statistic
 
 Before the switch, not ports:
+- [x] `feature/mise2-3g-2` (Settings: holidays, app language, sections for staff) finished and merged — 8 Nov 2026, PR #500 (and its review fix, PR #501)
+- [ ] The Mise 2 service worker at the same path and name as today's (`sw.js`, step 5), every editor holding `markBusy()` (item 17), the rollback to the current app proved by a test
+- [ ] GitHub Pages built by CI: Mise 2 at the same address, `order.html`, `reset-password.html` and the rest kept (the Pages source setting is switched at the switch hour, `docs/switch-runbook.md`)
+- [ ] CSP of Mise 2's page (functions host, `https://www.gov.uk`, no App Check hosts), Auth persistence and the Firebase version as the current app's
+- [ ] The release PR's preview shows Mise 2 as it will be live (fake data, `mise-app-preview`)
+- [ ] The switch PR's CI runs the root suite with `MISE2_SWITCH=1`
+- [ ] 44. Tablet fits the visible height on Chrome 101 — checked by him on the lab tablet (SM-T550) during his drive
 - [ ] Every shop computer running the Zebra print agent pulled and restarted (agent 1.1.0) BEFORE the switch: the branch's
       `js/catalogue/label-zpl.js` adds `^PON` to every standard label, which agent 1.0.1 refuses («not a single label made
       by the app»). No venue printing through the Zebra queue = nothing to do; say which.
-- [ ] Rules deployed from a branch that contains the latest main (`firestore-rules` skill), read back identical
-- [ ] The switch PR's CI runs the root suite with `MISE2_SWITCH=1`
-- [ ] TTL policy on `todos.expireAt` (his OK), CSP (functions host, `https://www.gov.uk`)
-- [x] `feature/mise2-3g-2` (Settings: holidays, app language, sections for staff) finished, 8 Nov 2026: review fixes done, PR into `feature/mise2-release` (merge with the release branch)
-- [ ] His OK on what the switch leaves out until later: staff and join screens, kiosk, reminder notifications, `order.html` kept as it is
+- [ ] The Italian Club warned that order reminders stop arriving with the switch (reminder notifications are deferred)
+- [x] His OK on what the switch leaves out until later: staff and join screens, kiosk, reminder notifications, `order.html` kept as it is — given 8 Nov 2026 («switch with the minimum»), with every item of «Deferred until AFTER the switch»
+- [x] His OK on the TTL policy on `todos.expireAt` — given for the switch; the command is run at the switch hour (`docs/switch-runbook.md`)
+
+At the switch hour, not gated here (they cannot be done before it; `docs/switch-runbook.md`, written with the service
+worker's rollback, has the exact order):
+- The rules deployed FIRST, from the release branch (it contains the latest main: the stack alone lacks the
+  partial-owner roles), and read back identical (`firestore-rules` skill, `node scripts/rules-live-diff.mjs`).
+- The TTL command on `todos.expireAt` (his OK above); «Uova in vassoi» retyped as 50 g (item 20).
 
 ## A. Data-loss risks (port BEFORE the switch)
 
@@ -231,26 +233,44 @@ log-model}.ts`, `app/src/calculator/*`. Size M for the group.
 46. **Tooling only (no port)**: #480 session-start hook, #441/#340/#423 firebase-tools/node 24/CI, #379, #403, #451.
 47. **Orders flag**: `order-sent` usage statistic still missing in Mise 2 (parity orders.md:1363).
 
-## Deferred until AFTER the switch (his decision, 8 Nov; `mise2-go-live-presto.md`)
+## Deferred until AFTER the switch (his decision, 8 Nov 2026; `mise2-go-live-presto.md`)
 
-- Staff / join codes / roles screens in Mise 2 (people, invitations incl. #475 role-first invite, the join form). Until built: new people cannot join;
-  existing accounts work. Keep the current staff pages reachable, or ship them as-is.
-- Kiosk (and #406 keep-screen-on, the kiosk lines already in shared), reminder notifications (order reminders stop arriving, also for The Italian
-  Club: warn them first), `order.html` stays served as it is (client links already sent).
-- Owed before the switch but not ports: TTL policy on `todos.expireAt` (one gcloud command, his OK), rules deploy from a ruleset that contains main
-  (the stack alone lacks partial-owner roles), CSP (functions host, `https://www.gov.uk`), service worker at the same path (step 5), 3-month order-list
-  clean-up function (F9, separate task).
+He decided on 8 Nov 2026 to switch with the minimum: everything except the data-loss items (1, 3, 6, 7, with 2, 4 and 5
+already done), the three number ports (20, 27, 38), Settings 3g-2 and the switch itself waits until after it. Each line
+that starts with item numbers is read by `tests/mise2-port-owed.test.mjs`: a spec's `PORT OWED` marker naming one of these
+numbers is a known, accepted difference until then (it is still counted and printed on every run), and a number here must
+not be ticked above. To bring one forward, delete its number here and port it; to defer another, add its number here AND
+to its markers, with his decision in the line.
 
-## WIP branch left out of the release branch
+What each one means for the people using Mise 2 until it is ported:
+- 8-11. Partial owners (`owner-sales`, `owner-kitchen`): Mise 2 does not know the two roles, so a person holding one is
+  treated as a plain role or refused (no data at risk: the rules already judge them). Includes the Orders price gate (9),
+  the Clients page (10) and the weighing door (11).
+- 12. The «Order today» tag in both supplier lists is not drawn.
+- 16. Suppliers: the empty-flash, scroll and focus fixes and the «hand-made» mark are not verified in Mise 2.
+- 18. Invoice import: a carton of pieces is priced per kilo instead of per piece on NEW imports (check every imported
+  price of goods sold by the piece until it is ported).
+- 21-22, 24-26, 28. Food cost steps 1 (all but the g/kg select of item 27), 2, 4, A, B and the two decimals: Mise 2's Food
+  cost keeps its own older screens.
+- 23. Food cost recipe link with several products (a check).
+- 29-32. Recipe book: create products from it, the crossed-out euro, the renamed-row warning, the row menu.
+- 36-37, 39-40. Calculator: reorder a recipe's ingredients, «Add a recipe» from the book, the dough history's dates and
+  totals, the cached «no config».
+- 41-43. Staff / join codes / roles screens (people, invitations incl. #475 role-first invite, the join form) and the
+  kiosk (#406 keep-screen-on, the kiosk lines already in shared). Until built: new people cannot join; existing accounts work.
+- 47. The `order-sent` usage statistic.
 
-✅ Finished 8 Nov 2026: the review fixes are done and the branch is in a PR into `feature/mise2-release` (see `docs/parity/home.md`,
-«Review fixes, 8 Nov 2026»). What follows is the state it was left in on 7 Nov.
+Deferred too, with no item number:
+- Reminder notifications: order reminders stop arriving with the switch, also for The Italian Club (warn them first: a
+  line of the checklist above).
+- `order.html` stays served as it is (client links already sent): the Pages build keeps it, see `docs/switch-runbook.md`.
+- The 3-month order-list clean-up function (F9, a separate task): until it exists nothing is deleted, as today.
 
-`feature/mise2-3g-2` (origin too), head 06e1f3dc `wip(mise2-settings): 3g-2 in progress, stopped on his request`, 13 commits + 1 WIP commit,
-stacked on #477 `feature/mise2-home-todos`, NO PR. Content: Settings screen with Holidays, App language, «Sections for staff» (staffShownCards),
-fixed section order, review fixes partly done (Back one level up, language reload waits for typing, session venue refreshed, focus). Left to do:
-finish the review fixes, `mise2-check`, open the PR on #477. Consequence of leaving it out: Mise 2 has no screen to change the venue's holidays, app
-language or which cards staff see (these can only be changed in the current app until it ships).
+## Settings 3g-2 (was the WIP branch left out of the release branch)
+
+Merged into `feature/mise2-release` on 8 Nov 2026 as PR #500 (Settings: Holidays, App language, «Sections for staff»;
+what was built: `docs/parity/home.md`, the 3g-2 «as built»), with its review fix PR #501 (a holiday change in the air
+holds `markBusy()`). The old branch `feature/mise2-3g-2` (head 06e1f3dc, the 7 Nov WIP) is superseded by them.
 
 ## Suggested order
 

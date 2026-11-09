@@ -361,23 +361,23 @@ function frozenTree(value: unknown, seen: WeakSet<object> = new WeakSet()): Froz
 }
 
 const PORT_OWED = new Set<string>([
-  // PORT OWED (release branch, 8 Nov 2026): main added NOT_FOR_ROLE and more exports to js/sections.js (partial-owner roles), not yet in the port — remove its key when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 8): main added NOT_FOR_ROLE and more exports to js/sections.js (partial-owner roles), not yet in the port — remove its key when ported
   'sections :: exports exactly the same names',
   'sections :: every export is a function in both or a value in both',
   'sections :: every non-function export is strictly equal',
   'sections :: frozen-ness matches for every object and array export, all the way down',
-  // PORT OWED (release branch, 8 Nov 2026): main added weighingsChangeCost to js/foodcost/foodcost-weighing.js, not yet in the port — remove its key when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 21): main added weighingsChangeCost to js/foodcost/foodcost-weighing.js, not yet in the port — remove its key when ported
   'foodcost-weighing :: exports exactly the same names',
   'foodcost-weighing :: every export is a function in both or a value in both',
-  // PORT OWED (release branch, 8 Nov 2026): main added catalogueChoices and more exports to js/calculator-recipe-source.js, not yet in the port — remove its key when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 37): main added catalogueChoices and more exports to js/calculator-recipe-source.js, not yet in the port — remove its key when ported
   'calculator-recipe-source :: exports exactly the same names',
   'calculator-recipe-source :: every export is a function in both or a value in both',
-  // PORT OWED (release branch, 8 Nov 2026): main added localLogDate and more exports to js/log-time.js, not yet in the port — remove its key when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 39): main added localLogDate and more exports to js/log-time.js, not yet in the port — remove its key when ported
   'log-time :: exports exactly the same names',
   'log-time :: every export is a function in both or a value in both',
-  // PORT OWED (release branch, 8 Nov 2026): main made js/records.js mayEditRecords take a role argument (partial-owner roles), the port has not — remove its key when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 8): main made js/records.js mayEditRecords take a role argument (partial-owner roles), the port has not — remove its key when ported
   'records :: every function has the same name and the same number of required parameters',
-  // PORT OWED (release branch, 8 Nov 2026): main added MAX_PIECE_G and more exports to js/orders/invoice-zip/classify.js (invoice per-piece pricing), not yet in the port — remove its key when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 18): main added MAX_PIECE_G and more exports to js/orders/invoice-zip/classify.js (invoice per-piece pricing), not yet in the port — remove its key when ported
   'invoice-zip/classify :: exports exactly the same names',
   'invoice-zip/classify :: every export is a function in both or a value in both',
   'invoice-zip/classify :: every non-function export is strictly equal',

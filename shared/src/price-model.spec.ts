@@ -523,7 +523,7 @@ describe('the port against the original', () => {
   const port = ported as unknown as Record<string, unknown>;
   const shared = Object.keys(original).sort();
 
-  // PORT OWED (release branch, 8 Nov 2026): keepPriceDate now exists in js/price-model.js (main, price date kept): pair it in price-write.spec.ts and empty AHEAD — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 16): keepPriceDate now exists in js/price-model.js (main, price date kept): pair it in price-write.spec.ts and empty AHEAD — remove .fails when ported
   test.fails('the original has not gained the names this port is ahead with: pair them in the specs, then empty AHEAD', () => {
     // If it had, the exclusion would be hiding a name that now has an original to be compared with.
     for (const name of AHEAD) {
@@ -532,7 +532,7 @@ describe('the port against the original', () => {
     }
   });
 
-  // PORT OWED (release branch, 8 Nov 2026): main added keepPriceDate and more to js/price-model.js, not yet in the port — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 16): main added keepPriceDate and more to js/price-model.js, not yet in the port — remove .fails when ported
   test.fails('exports exactly the same names, plus those it is ahead with', () => {
     expect(Object.keys(port).sort()).toStrictEqual([...shared, ...AHEAD].sort());
   });
