@@ -182,7 +182,7 @@ export interface CalculatorStore {
   restoreLog(logId: string, index: number, meta: { calculatedBy: string; at: { date: string; time: string } }): LogChange;
   // Deletes a whole log. A log that is not in the list is left alone.
   deleteLog(logId: string): void;
-  // Saves the whole configuration LOCAL-FIRST: memory, the local copy and the screen change at once; then it is
+  // Saves the whole configuration (with `clientsOnly`, only its clients — `saveClients`) LOCAL-FIRST: memory, the local copy and the screen change at once; then it is
   // sent, unless the database has never answered (see ConfigSaveResult). A refused or failed write is taken back
   // here if nothing newer replaced it. Never rejects.
   saveConfig(next: CalculatorConfig): Promise<ConfigSaveResult>;
