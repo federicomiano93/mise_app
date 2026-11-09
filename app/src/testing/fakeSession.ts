@@ -32,7 +32,8 @@ export function fakeStore(partial: Partial<Session> = {}): FakeStore {
     role: 'owner',
     canManage: true,
     isOwner: true,
-    canManageVenue: partial.canManageVenue ?? partial.canManage ?? true,
+    // A partial owner never runs the venue: forgetting `canManageVenue` in their spec must not hand it over.
+    canManageVenue: partial.canManageVenue ?? (partial.role === 'owner-sales' || partial.role === 'owner-kitchen' ? false : partial.canManage ?? true),
     language: 'en',
     ...partial,
   });

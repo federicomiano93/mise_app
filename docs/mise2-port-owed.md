@@ -130,7 +130,8 @@ worker's rollback, has the exact order):
    opened on «no venue yet» for anybody holding one. Now `shared/` has the five values, `NOT_FOR_ROLE`, `sectionsFor` narrowed by it,
    `pageWhenRefused`, `canManageVenue`, `worksOnClients`, and the role argument of `mayEditRecords`, `mayOpenOrders`, `mayOpenFoodCost`;
    `app/` passes the role to every card gate and draws the venue-wide controls (Settings «The venue», the ingredient panel switches, the recipe
-   photo switch) only for `canManageVenue`. Nobody may hold `owner-sales` until item 10 is done.
+   photo switch) only for `canManageVenue`. Nobody may hold `owner-sales` until item 10 is done, and an `owner-kitchen`'s
+   «Merge another pack…» stops at «could not check» (it reads `products`, refused to them) until slice 2 of the roles work.
 9. **Orders price gate** — DONE 9 Nov 2026 with 8: `readsPurchasePrices` (`session/visibility.ts`) = the rules' `cardAccess(lid,'foodcost','prices')`;
    `OrdersContext` and `useMayWritePrices` ask it, so the kitchen owner sees and writes the money without having Food cost on their rail.
 10. **Clients page (#449, `a694100e`, `clients.html`)** — page for the sales owner: only `clients` is sent; the editor lives in the Calculator

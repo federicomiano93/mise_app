@@ -126,7 +126,8 @@ export function isSectionAllowedFor(locationDoc: unknown, role: unknown, name: u
 // notifies the owner of the sales side and its tap opens calculator.html, because one notification
 // goes to everybody (js/push-model.js targetPage) and the service worker cannot know a role. Home
 // would lose the order they tapped, so they land on the orders received. (Mise 2 answers with the
-// current app's page names too: its legacy routes and `SectionRoute` translate them.)
+// current app's page names too, for parity; nothing in app/ reads it yet — slice 4 of the roles work
+// sends the sales owner to `/clients/orders` from `SectionRoute`.)
 export function pageWhenRefused(role: unknown, pageCard: unknown): string {
   return role === OWNER_SALES && pageCard === 'calculator' ? 'clients.html#orders' : 'index.html';
 }
