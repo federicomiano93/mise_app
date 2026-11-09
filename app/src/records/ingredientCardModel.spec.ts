@@ -631,13 +631,28 @@ describe('the package type (pack-type.ts) in the card model', () => {
 
   test('a rename tells the store which word to reset; nothing else does', () => {
     const item: ItemLike = { id: 't', name: 'Cream', unit: 'busta', packUnit: 'busta' };
-    expect(saveAs(withType(open(item), 'secchiello'), item).typeRenamedFrom).toBe('busta');
-    expect(saveAs(withType(open(item), 'BUSTA'), item).typeRenamedFrom).toBe('');
-    expect(saveAs(open(item), item).typeRenamedFrom).toBe('');
-    expect(saveAs(withType(chosen(null), 'bottiglia'), null).typeRenamedFrom).toBe('');
+    expect(saveAs(withType(open(item), 'secchiello'), item).typeReplacedFrom).toBe('busta');
+    expect(saveAs(withType(open(item), 'BUSTA'), item).typeReplacedFrom).toBe('');
+    expect(saveAs(open(item), item).typeReplacedFrom).toBe('');
+    expect(saveAs(withType(chosen(null), 'bottiglia'), null).typeReplacedFrom).toBe('');
     // Cartone → Single then renamed: the old word is the package the carton had.
     const carton: ItemLike = { id: 'x', name: 'x', packCount: 4, packUnit: 'busta', unit: 'cartone' };
-    expect(saveAs(withType(withFormat(open(carton), 'single', 'it'), 'secchiello'), carton).typeRenamedFrom).toBe('busta');
+    expect(saveAs(withType(withFormat(open(carton), 'single', 'it'), 'secchiello'), carton).typeReplacedFrom).toBe('busta');
+  });
+
+  test('⚠️ CLEARING a type, or adding one over a package word, also names the word to reset', () => {
+    const typedItem: ItemLike = { id: 'p', name: 'Cream', weight: '1 l', unit: 'busta', packUnit: 'busta', priceUnit: 'l', pricePerUnit: 3 };
+    const cleared = saveAs(withType(openPriced(typedItem), ''), typedItem, { mayPrice: true });
+    expect(cleared.payload).toMatchObject({ unit: '', packUnit: '' });
+    expect(cleared.typeReplacedFrom).toBe('busta');
+    // Not allowed (an employee): nothing is written, so nothing is reset.
+    expect(saveAs(withType(open(typedItem), ''), typedItem).typeReplacedFrom).toBe('');
+    const packOnly: ItemLike = { id: 'q', name: 'Cream', weight: '1 l', unit: '', packUnit: 'busta', priceUnit: 'l', pricePerUnit: 3 };
+    const added = saveAs(withType(openPriced(packOnly), 'bottiglia'), packOnly, { mayPrice: true });
+    expect(added.payload).toMatchObject({ unit: 'bottiglia', packUnit: 'bottiglia' });
+    expect(added.typeReplacedFrom).toBe('busta');
+    // The same word added over itself replaces nothing.
+    expect(saveAs(withType(openPriced(packOnly), 'Busta'), packOnly, { mayPrice: true }).typeReplacedFrom).toBe('');
   });
 
   test('a type picked on a new item and then made loose by a per-kilo price is dropped at Save: nothing is written for it', () => {
@@ -645,7 +660,7 @@ describe('the package type (pack-type.ts) in the card model', () => {
     const built = saveAs(working, null, { pricePatch: priceFor('kg', 4) });
     expect(built.payload.unit).toBe('kg');
     expect(built.payload).not.toHaveProperty('packUnit');
-    expect(built.typeRenamedFrom).toBe('');
+    expect(built.typeReplacedFrom).toBe('');
   });
 
   describe('⚠️ the card must not flip to the card of before (typeMayRewrite on the fields that will be saved)', () => {

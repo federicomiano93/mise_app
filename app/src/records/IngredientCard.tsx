@@ -94,7 +94,7 @@ type Props = {
   // `onLeave` right after, without asking.
   onSave(
     payload: Readonly<Record<string, unknown>> & { readonly name: string },
-    options: { unitChangedFrom: string; typeRenamedFrom?: string; price?: { before: ItemLike | null; patch: PricePatch } },
+    options: { unitChangedFrom: string; typeReplacedFrom?: string; price?: { before: ItemLike | null; patch: PricePatch } },
   ): void;
   // One level up (to the list, or to the supplier's screen the card was opened from).
   onLeave(): void;
@@ -422,7 +422,7 @@ export function IngredientCard({
         : null)
       : (state && ctx ? pricePatchOf(readPrice(state, ctx), new Date().toISOString(), weightText(current)) : null);
     const built = legacyNow && opened
-      ? { payload: buildLegacySave({ working: current, product: menus, item: opened, kind, startSupplierId: baseline.supplierId }), unitChangedFrom: '', typeRenamedFrom: '' }
+      ? { payload: buildLegacySave({ working: current, product: menus, item: opened, kind, startSupplierId: baseline.supplierId }), unitChangedFrom: '', typeReplacedFrom: '' }
       : buildSave({
         working: current, item: opened, kind, lang: language, startSupplierId: baseline.supplierId,
         mayPrice: priceActive, priceDirty, pricePatch: patch,
@@ -447,7 +447,7 @@ export function IngredientCard({
     // Saved: nothing is unsaved any more, so leaving asks nothing. Local-first: the list changes at once and the database
     // follows; a refused write is taken back and said by the store.
     leavingClean.current = true;
-    onSave(payload, { unitChangedFrom: built.unitChangedFrom, typeRenamedFrom: built.typeRenamedFrom, ...(patch ? { price: { before: opened, patch } } : {}) });
+    onSave(payload, { unitChangedFrom: built.unitChangedFrom, typeReplacedFrom: built.typeReplacedFrom, ...(patch ? { price: { before: opened, patch } } : {}) });
     onLeave();
   }
 

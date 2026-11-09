@@ -343,9 +343,9 @@ export interface SaveBuilt {
   readonly payload: Readonly<Record<string, unknown>> & { readonly name: string };
   // The order unit the format has just replaced, to freeze in the open order line ('' = nothing to freeze).
   readonly unitChangedFrom: string;
-  // Mise 2 only: the type word this save RENAMED (old → new, both non-empty), '' otherwise. The store resets the open order lines whose
-  // explicit unit is the old word, or they would be orphaned (no longer the card's unit, nor its package).
-  readonly typeRenamedFrom: string;
+  // Mise 2 only: the word this save REPLACED (a type renamed or cleared, or a package word a type was added over), '' otherwise. The store
+  // resets the open order lines whose explicit unit is that word, or they would be orphaned (no longer the card's unit, nor its package).
+  readonly typeReplacedFrom: string;
 }
 
 // What Save sends, EXACTLY (parity C87). No price key, no allergen key, no nutrition key, never `invoiceName` or the supplier
@@ -386,9 +386,14 @@ export function buildSave({ working, item, kind, lang, startSupplierId, mayPrice
   const payload = { ...payloadNoType, ...typeKeys };
   // ⚠️ A RENAME (a type to another word) leaves open lines whose explicit unit is the old word orphaned; the store resets them. Accepted and
   // documented: orders already frozen in the old word in History keep it (suppliers.md, «Che confezione è?» as built).
+  // Clearing a type replaces it too (unit ''), and so does a type added over a package word the item already had (packUnit overwritten).
+  // Money-safe in each: the guard allows a clear or an add only on a stored case of at most one, where the line costs the same either way.
   const oldType = packTypeOf(savedFields);
-  const typeRenamedFrom = typeKeys.unit && oldType !== '' && !sameUnit(typeKeys.unit, oldType) ? oldType : '';
-  return { payload, unitChangedFrom: replacedUnit(item, payloadNoType, state, cartonWord, options), typeRenamedFrom };
+  const storedPack = cleanUnit(savedFields.packUnit);
+  const typeReplacedFrom = 'unit' in typeKeys && oldType !== '' && !sameUnit(typeKeys.unit, oldType)
+    ? oldType
+    : (oldType === '' && typeKeys.packUnit && storedPack !== '' && !sameUnit(typeKeys.packUnit, storedPack) ? storedPack : '');
+  return { payload, unitChangedFrom: replacedUnit(item, payloadNoType, state, cartonWord, options), typeReplacedFrom };
 }
 
 // The order unit a format change REPLACED, told to the store, which freezes the open order line in it (parity C35, the

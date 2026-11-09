@@ -99,9 +99,9 @@ export interface IngredientSaveOptions {
   // The order unit the card has just replaced (Cartone / Singola rewrote `unit`): the open line of the order in progress
   // is frozen in it, so a quantity keeps its meaning (parity C35). '' or absent = nothing to freeze.
   readonly unitChangedFrom?: string;
-  // Mise 2 only: the package type this save renamed away from. The open draft line whose explicit unit is that word goes back to the
+  // Mise 2 only: the word this save replaced (a package type renamed or cleared, or a package word a type was added over). The open draft line whose explicit unit is that word goes back to the
   // card's unit (no explicit unit): the word is no longer the card's, and the line would be orphaned.
-  readonly typeRenamedFrom?: string;
+  readonly typeReplacedFrom?: string;
   // The money (step 3e-3), ONLY for a person who may write prices (canManage AND the venue's Food cost section — parity
   // C4, C5, C22: a price write the rules refuse fails the whole batch, and an ordinary rename with it). `before` is the
   // ingredient as the card OPENED it, its price laid on (null for a new one); `patch` is the card's pricePatch.
@@ -406,7 +406,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
       track(attempt(() => source.saveIngredient(ingredientId, doc, money)), {
         kind: 'ingredient-not-saved', name: ingredientDisplayName(payload),
       });
-      adjustDraftLine(ingredientId, options.unitChangedFrom ?? '', options.typeRenamedFrom ?? '', payload);
+      adjustDraftLine(ingredientId, options.unitChangedFrom ?? '', options.typeReplacedFrom ?? '', payload);
       return { id: ingredientId, priceRecorded: Boolean(money?.history) };
     },
 

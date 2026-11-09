@@ -269,6 +269,13 @@ describe('⚠️ the guard grid: a type never changes money, a count or how the 
     expect(linePackWord(renamed, { qty: 3 })).toBe('secchiello');
   });
 
+  test('a CLEARED type leaves the explicit «busta» line orphaned as well (the store resets it), and the reset line costs the same', () => {
+    const typed = { ...prices[1]![1], id: 'i1', unit: 'busta', packUnit: 'busta' };
+    const cleared = { ...typed, unit: '', packUnit: '' };
+    expect(lineUnitCost(cleared, cleared, 'busta')).toBeNull();
+    expect(lineUnitCost(cleared, cleared, '')).toBe(lineUnitCost(typed, typed, ''));
+  });
+
   test('a rename on a stored case of 4 is allowed and changes nothing', () => {
     const before = { ...base, ...prices[5]![1], unit: 'busta', packUnit: 'busta' };
     const patch = packTypePatch(before, 'secchiello', { mayRewrite: false });
