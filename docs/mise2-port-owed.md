@@ -144,7 +144,9 @@ worker's rollback, has the exact order):
 
 ## C. Orders
 
-12. **Suppliers «Order today» tag** — #474 (in #487). `dueTodayIds` (`js/orders/reminders.js:80`) missing in `shared/src/reminders.ts`
+12. **Suppliers «Order today» tag** — #474 (in #487). DONE 10 Nov 2026 (`feature/mise2-next-due-today`; what was built and every
+    difference: `docs/parity/orders.md` and `docs/parity/suppliers.md`, «Order today in both supplier lists — as built»; the
+    due-first order is NEW, his note of 9 Nov). The description below is how it stood before. `dueTodayIds` (`js/orders/reminders.js:80`) missing in `shared/src/reminders.ts`
     (parity marked PORT OWED: reminders). Both supplier lists (Orders and Suppliers), needs today's orders and the draft `skipped`, redraw only when the lit set
     changes, midnight re-check. Mise 2: NONE. Depends on item 3. Files: `shared/src/reminders.ts`, `app/src/orders/IngredientsList`, `SuppliersList.tsx`. Size S.
 13. **Order summary «Order done» / «Close as not ordered»** — #470, see item 3.
@@ -248,7 +250,6 @@ not be ticked above. To bring one forward, delete its number here and port it; t
 to its markers, with his decision in the line.
 
 What each one means for the people using Mise 2 until it is ported:
-- 12. The «Order today» tag in both supplier lists is not drawn.
 - 16. Suppliers: the empty-flash, scroll and focus fixes and the «hand-made» mark are not verified in Mise 2.
 - 18. Invoice import: a carton of pieces is priced per kilo instead of per piece on NEW imports (check every imported
   price of goods sold by the piece until it is ported).
