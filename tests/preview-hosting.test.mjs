@@ -228,3 +228,27 @@ test('a failed channel deploy prints Google\'s answer in the log', () => {
   assert.match(deploy, /--json > "\$RUNNER_TEMP\/fixed\.json" \|\| failed anteprima "\$RUNNER_TEMP\/fixed\.json"\n/);
   assert.match(job('comment'), /scade dopo 14 giorni, o appena la PR si chiude/);
 });
+
+// ⚠️ THE PREVIEW SHOWS THE SITE THE BRANCH WOULD PUT LIVE (the Mise 2 switch, step 5). A branch carrying
+// scripts/build-pages-site.mjs previews Mise 2 exactly as GitHub Pages will serve it — at /mise_app/, built by the same
+// script, with its service worker and its CSP — so he tries on his phone what will go live. Built where no credential
+// exists like the rest of Mise 2, the whole staging replaced only in that layout, before the symlink check; every
+// other branch keeps the current app at the root and Mise 2 at /mise2/.
+test('a branch with the switch\'s Pages build previews that site, at /mise_app/', () => {
+  const buildJob = job('build-mise2');
+  const deployJob = job('preview');
+  assert.match(buildJob, /if \[ -f scripts\/build-pages-site\.mjs \]; then echo "layout=switch" >> "\$GITHUB_OUTPUT"; else echo "layout=beside" >> "\$GITHUB_OUTPUT"; fi/);
+  assert.match(buildJob, /- if: steps\.layout\.outputs\.layout == 'beside'\n\s+run: npm run build -- --base=\/mise2\//);
+  assert.match(buildJob, /- if: steps\.layout\.outputs\.layout == 'switch'\n[^\n]*\n\s+run: \|\n\s+\(cd app && npm run build -- --base=\/mise_app\/ && node sw\/verify-build\.mjs dist\)\n\s+node scripts\/build-pages-site\.mjs "\$RUNNER_TEMP\/site\/mise_app" app\/dist/);
+  assert.match(buildJob, /outputs:\n\s+layout: \$\{\{ steps\.layout\.outputs\.layout \}\}/);
+  const stage = deployJob.slice(deployJob.indexOf('Stage only the app\'s files'));
+  const replace = stage.indexOf('rm -rf _site && mv "$RUNNER_TEMP/mise2-site" _site');
+  assert.ok(replace > 0 && replace < stage.indexOf('find _site -type l'), 'the site replaces the staging BEFORE the symlink check');
+  assert.match(stage, /if \[ -d "\$RUNNER_TEMP\/mise2-site" \] && \[ "\$LAYOUT" = switch \]; then/);
+  const check = workflow.slice(workflow.indexOf('Prove nothing internal is being served'));
+  for (const path of ['mise_app/firestore.rules', 'mise_app/package.json', 'mise_app/app/src/main.tsx', 'mise_app/.git/config']) {
+    assert.ok(check.includes(path), path);
+  }
+  assert.match(check, /for page in mise_app\/index\.html mise_app\/sw\.js mise_app\/order\.html; do/);
+  assert.match(job('comment'), /\$FIXED_URL\/mise_app\//);
+});
