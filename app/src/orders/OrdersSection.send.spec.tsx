@@ -304,7 +304,7 @@ describe('several roads', () => {
 });
 
 describe('the order picture', () => {
-  it('asks Photo or Text, shares one picture per supplier and names the one that was skipped', async () => {
+  it('asks Text or Photo (Text focused), shares one picture per supplier and names the one that was skipped', async () => {
     const share = allowShare();
     const open = spyOpen();
     const source = seeded({ ordersConfig: DIRECT_ONLY });
@@ -312,7 +312,9 @@ describe('the order picture', () => {
     await toSend(view, 'Zed', 'Café');
     await view.user.click(sendButton());
     const format = within(await screen.findByRole('dialog', { name: 'How do you want to send it?' }, LOAD));
-    expect(format.getByRole('button', { name: 'Order photo' })).toHaveFocus();
+    // Text is the focused first choice (his decision, 9 Nov 2026); the photo is the second button.
+    expect(format.getByRole('button', { name: 'Text' })).toHaveFocus();
+    expect(format.getAllByRole('button').map(button => button.textContent)).toEqual(['Text', 'Order photo', 'Cancel']);
     await view.user.click(format.getByRole('button', { name: 'Order photo' }));
 
     const first = within(await screen.findByRole('dialog', { name: 'Photo for Café Bar Srl (1 of 2)' }, LOAD));
