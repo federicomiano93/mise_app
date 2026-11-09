@@ -1234,3 +1234,5 @@ Port of `js/orders/ingredient-merge-data.js` `productsSource` and `js/orders/ing
 - Not changed: `suppliersSource.readUsage` (deleting an ingredient): the kitchen gets `products: null` = «could not count». Known gap, as in the
   current app: the kitchen may delete an ingredient without seeing the products that use it.
 - The preview link has no functions: there the kitchen's merge stops at «could not check».
+
+- Stricter than the current app, on purpose: `js/orders/ingredient-merge-data.js` passes `res.data.names` straight on, so an answer with no list would read the ingredient as free; Mise 2 refuses any answer that is not `{ names: string[] }`.
