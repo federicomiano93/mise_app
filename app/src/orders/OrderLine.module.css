@@ -48,7 +48,10 @@
    button and plain text. */
 .door {
   display: block;
-  min-width: 0;
+  /* At least a finger wide too: as wide as its text, a short name («Sale») or the narrow name column of the folded
+     «Not in use» group at 296px left it 36-38px (drive of 9 Nov 2026). Past a 38px column it reaches into the 8px gap,
+     never the Order column. */
+  min-width: 44px;
   margin-top: calc(-1 * var(--s4));
   padding: var(--s4) 0 var(--s2);
   border: 0;
