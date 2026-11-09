@@ -13,10 +13,12 @@ type Props = {
   title: string;
   // A line under the title, when the row needs to say what is behind it.
   sub?: string;
+  // Not pressable yet (the Clients door while the address book has not been read from the server).
+  disabled?: boolean;
 };
 
 // A row that opens a screen one level down.
-export function Door({ opener, to, title, sub }: Props) {
+export function Door({ opener, to, title, sub, disabled = false }: Props) {
   const navigate = useNavigate();
   const handBack = useHandBack();
   const register = useCallback((node: HTMLButtonElement | null) => { handBack.register(opener, node); }, [handBack, opener]);
@@ -25,6 +27,7 @@ export function Door({ opener, to, title, sub }: Props) {
       ref={register}
       variant="bare"
       className={styles.door}
+      isDisabled={disabled}
       onPress={() => {
         handBack.expect(opener);
         void navigate(to, { state: FROM_PARENT });

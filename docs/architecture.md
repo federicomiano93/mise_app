@@ -125,7 +125,9 @@ Aria does not support Preact. The numbers are below.
   `away/` (`awayStore.ts` + `AwayContext.tsx`'s `AwayProvider`, wrapped round the shell by `AppShell`; `useAskComeBack.tsx`,
   `useFocusOnBack.ts`, `awayWords.ts`, and `AwayRefusalAlert.tsx`, the ONE place a refused holiday write is said, in a dialog,
   wherever the person is when the answer lands), `AwayReminder.tsx` (the once-a-day question, mounted once) and `useTodayKey.ts`
-  (the device's local day, moved here from `home/`).
+  (the device's local day, moved here from `home/`). The `clients` section (the sales owner's, a phone tab, the rail after the Calculator) is in `sections.ts`
+  with `screenNameFor` names `clients`, `clients-editor`, `clients-orders`, `clients-ordering`; `SectionRoute` sends that role from a hidden Calculator
+  address to `/clients/orders` (`pageWhenRefused`), and `app/sw/legacy-routes.json` maps `clients.html` to `/clients`.
 - `errors/` — `PartBoundary` (a part that fails shows «This part didn't load / Reload», the rest
   keeps working), `RootError` and `AppBoundary` (the whole app).
 - `telemetry/` — error reports, the daily device line, the usage record: ports of
@@ -308,6 +310,22 @@ Aria does not support Preact. The numbers are below.
   for everybody, Create/Replace/Turn off only for `canManage`, no Create when the read failed); both share
   `ClientOrdering.module.css`. `applied-not-recorded` is an alert dialog (`clientOrdersMessageDelivery`), `cutoff-not-saved` a
   status message; the work view's door is «Client orders». Its parity list is `docs/parity/calculator.md` (the section for slice C1).
+  Roles slice 4: the client screens (`ClientsEditor`, `ClientList`, `ClientScreen`, `OrdersReceived`, `CutoffEditor`, `OrdersBanner`) read their
+  addresses from `clientsPaths.tsx` (`useClientsPaths`; the DEFAULT is this section's own constants, so inside the Calculator nothing changes) and
+  are also drawn by `clients/`; `OrdersReceived readOnly` skips `useApplyOrder` and `OrderCard` without `onApply` has no button; the snapshot
+  gained `configShape` (`unknown | missing | retired | ready`, from the SERVER's document and `needsCalculatorSave`); `Door` takes `disabled`;
+  `StoreMessages.tsx` is the stores' messages, shared by both sections.
+- `clients/` — the Clients section (id `clients`, path `/clients`, roles plan slice 4, 9 Nov 2026; `docs/parity/calculator.md`, «Clients page
+  for the sales owner as built»): the page of the sales owner (`owner-sales`), who runs the clients but has no Calculator. It draws the
+  Calculator's OWN client screens (`ClientsEditor`, `OrdersReceived`, `CutoffEditor`, `OrdersBanner`) over a `CalculatorProvider clientsOnly`,
+  never copies. `ClientsSection.tsx` resolves the address (`clientsPath.ts`: `/clients`, `/clients/list[/<id>]`, `/clients/orders[/history]`,
+  `/clients/ordering`; anything else, WhatsApp included, goes back to the page) and holds the providers (`ClientsPathsProvider`, `TabStateProvider`,
+  `StatusMessageProvider`, `StoreMessages`); `ClientsHub.tsx` is the page: the waiting-orders line and a card of three doors, the Clients door
+  disabled until the SERVER has answered and the document can take a clients-only save (`configShape`), saying `clients.noConfigYet` when it cannot;
+  `ConfigGate` gives a typed address the same answer. ⚠️ Nothing drawn here may call what the clientsOnly store still exposes (`confirmDough`,
+  `addLog`, `editLog`, `deleteLog`, `listCatalogueRecipes`, `stampRowIds`) or wait for the logs: the rules refuse them to this role.
+  `ClientsSection.spec.tsx` pins it (no logs listener, no catalogue read, no stamp, no log written). The notification tap is `SectionRoute`
+  (a hidden section whose `pageWhenRefused` is `clients.html#orders` is replaced by `/clients/orders`).
 - `recipes/` — the Recipe catalogue (section id `recipes`, step 3d, built in slices; its parity list is
   `docs/parity/catalogue.md`). The data layer: `recipesSource.ts` (the Firestore half, read-only so far: the
   recipes, live, while the section is open), `recipesStore.ts` (plain TypeScript: the recipes stored NORMALISED

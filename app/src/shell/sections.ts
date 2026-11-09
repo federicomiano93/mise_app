@@ -8,11 +8,13 @@ import {
   Settings,
   ShoppingCart,
   Truck,
+  Users,
   Warehouse,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { isMonthId } from '@mise/shared/inventory-model';
 import { isWeekday } from '@mise/shared/pastries-model';
+import { clientsScreenName } from '../clients/clientsPath';
 import type { MessageKey } from '../i18n/en';
 import { ordersScreenName } from '../orders/ordersPath';
 import { parseRecipesPath } from '../recipes/recipesPath';
@@ -25,6 +27,7 @@ export type SectionId =
   | 'suppliers'
   | 'recipes'
   | 'calculator'
+  | 'clients'
   | 'pastries'
   | 'stocktake'
   | 'foodcost'
@@ -52,6 +55,10 @@ export const SECTIONS: readonly Section[] = [
   { id: 'suppliers', path: '/suppliers', label: 'section.suppliers', icon: Truck, inRail: 'top', inTabs: false },
   { id: 'recipes', path: '/recipes', label: 'section.recipes', icon: BookOpen, inRail: 'top', inTabs: true },
   { id: 'calculator', path: '/calculator', label: 'section.calculator', icon: Calculator, inRail: 'top', inTabs: true },
+  // The sales owner's page (Titolare vendita): the address book, the orders clients sent and their deadline. Shown to nobody
+  // else (session/visibility.ts), so no other person's tab bar or rail ever holds it. A tab, because with no Calculator
+  // it is the one place that owner works in (their tab bar is Home, Clients, More).
+  { id: 'clients', path: '/clients', label: 'section.clients', icon: Users, inRail: 'top', inTabs: true },
   { id: 'pastries', path: '/pastries', label: 'section.pastries', icon: Croissant, inRail: 'top', inTabs: false },
   { id: 'stocktake', path: '/stocktake', label: 'section.stocktake', icon: Warehouse, inRail: 'top', inTabs: false },
   { id: 'foodcost', path: '/food-cost', label: 'section.foodcost', icon: ChartPie, inRail: 'top', inTabs: false },
@@ -129,6 +136,7 @@ export function screenNameFor(pathname: string): string | null {
   if (section.id === 'stocktake') return stocktakeScreenName(pathname, section.path);
   if (section.id === 'foodcost') return foodcostScreenName(pathname, section.path);
   if (section.id === 'calculator') return calculatorScreenName(pathname, section.path);
+  if (section.id === 'clients') return clientsScreenName(pathname.slice(section.path.length));
   if (section.id === 'recipes') return recipesScreenName(pathname, section.path);
   // «Ingredients & suppliers» (step 3e): the names of docs/parity/suppliers.md, decision T1.
   if (section.id === 'suppliers') return suppliersScreenName(pathname.slice(section.path.length));

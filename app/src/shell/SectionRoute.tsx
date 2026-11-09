@@ -1,6 +1,10 @@
 import { Suspense } from 'react';
 import { Navigate } from 'react-router';
+import { pageWhenRefused } from '@mise/shared/sections';
+import { CLIENTS_ORDERS_PATH } from '../clients/clientsPath';
 import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
+import { cardOfSection } from '../session/visibility';
 import { NotAvailable } from './NotAvailable';
 import { KEEP_FOCUS, Page } from './Page';
 import { SectionPlaceholder } from './SectionPlaceholder';
@@ -15,9 +19,21 @@ import { useVisibleSections } from './useVisibleSections';
 // ⚠️ A SHOWN SECTION IS A GATE ON EVERYTHING LATER PUT BEHIND IT: the real screens of step 3
 // replace SectionPlaceholder here, and they only ever exist behind this check. A built section is
 // fetched when it is first drawn (sectionScreens.ts), so a hidden one never loads its code.
+//
+// ⚠️ ONE HIDDEN SECTION IS NOT A DEAD END: a client's order notifies the owner of the sales side and its tap opens the
+// Calculator's address, which that role is not shown (one notification goes to everybody and the worker cannot know a role).
+// Home would lose the order they tapped, so they are sent on to the orders received, as the current app's page gate does
+// (`pageWhenRefused`). A replace, so Back does not return to the address that refuses them.
 export function SectionRoute({ sectionId }: { sectionId: SectionId }) {
   const { visible } = useVisibleSections();
-  if (!visible.has(sectionId)) return <NotAvailable sectionId={sectionId} />;
+  const { role } = useSession();
+  if (!visible.has(sectionId)) {
+    const card = cardOfSection(sectionId);
+    if (card !== null && pageWhenRefused(role, card) === 'clients.html#orders') {
+      return <Navigate to={CLIENTS_ORDERS_PATH} replace state={KEEP_FOCUS} />;
+    }
+    return <NotAvailable sectionId={sectionId} />;
+  }
 
   const Screen = SECTION_SCREENS[sectionId];
   if (!Screen) return <SectionPlaceholder sectionId={sectionId} />;

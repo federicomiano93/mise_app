@@ -39,7 +39,7 @@
 //   • the store says nothing about a save kept local («the server has not answered»): it returns the reason,
 //     and the screen says it in the person's language.
 
-import { normalizeConfig, cloneConfig, DEFAULT_CONFIG, getRecipes } from '@mise/shared/calculator-config';
+import { normalizeConfig, cloneConfig, DEFAULT_CONFIG, getRecipes, needsCalculatorSave } from '@mise/shared/calculator-config';
 import type { CalculatorConfig } from '@mise/shared/calculator-config';
 import { linkedRecipeIds } from '@mise/shared/calculator-recipe-source';
 import { addVersion, confirmTarget, createLog, restoreVersion, setForDay } from '@mise/shared/log-model';
@@ -97,6 +97,11 @@ export interface CalculatorSnapshot {
   // reopens straight onto the Clients editor — and a Save from that copy would write it over what other phones
   // added since. The work view may paint from it; a writer may not.
   readonly configFromServer: boolean;
+  // What the SERVER's document is, for the Clients page, which says so before anybody types an address book it could
+  // not save (`clients.noConfigYet`): 'unknown' until the server has answered; 'missing' (no document: the owner of the
+  // sales side may change it, never start it); 'retired' (still in an old shape, which needs the Calculator's own whole
+  // save first, `needsCalculatorSave`); otherwise 'ready'.
+  readonly configShape: 'unknown' | 'missing' | 'retired' | 'ready';
   // id → the linked catalogue recipe, or null when it is gone or cannot be read. A MISSING KEY means «not
   // answered yet» — a different sentence from «gone» (js/calculator-catalogue-link.js).
   readonly linked: Readonly<Record<string, StoredDoc | null>>;
@@ -249,6 +254,7 @@ export function createCalculatorStore(
   let configAnswered = false;
   let configFailed = false;
   let configFromServer = false;
+  let configShape: CalculatorSnapshot['configShape'] = 'unknown';
   let linked: Readonly<Record<string, StoredDoc | null>> = {};
   // What the stream last said, and the logs written here that the stream may not show yet.
   let streamLogs: readonly Log[] = Array.isArray(bootLogs) ? bootLogs.filter(isLog) : [];
@@ -278,7 +284,7 @@ export function createCalculatorStore(
 
   function build(): CalculatorSnapshot {
     return {
-      config, configAnswered, configFailed, configFromServer, linked, logs, logsLoaded, logsFromServer,
+      config, configAnswered, configFailed, configFromServer, configShape, linked, logs, logsLoaded, logsFromServer,
       unsent: inFlight > 0 || configSaving > 0,
     };
   }
@@ -369,8 +375,14 @@ export function createCalculatorStore(
     // The first answer from the server is news even when nothing else changes (an editor is waiting for it).
     const firstFromServer = fromServer && !configFromServer;
     if (fromServer) configFromServer = true;
+    let shapeMoved = false;
+    if (fromServer) {
+      const shape = data === null ? 'missing' : needsCalculatorSave(data) ? 'retired' : 'ready';
+      shapeMoved = shape !== configShape;
+      configShape = shape;
+    }
     readConfig(data, fromServer);
-    if (firstFromServer) changed();
+    if (firstFromServer || shapeMoved) changed();
   }
 
   function readConfig(data: Record<string, unknown> | null, fromServer: boolean): void {

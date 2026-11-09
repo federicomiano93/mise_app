@@ -18,15 +18,23 @@ import type { DocData } from './backend';
 // section `orders` but are separate cards, so a venue can hide one from its employees and not
 // the other; and Food cost and Stocktake share `foodcost`, each its own card, both hidden from
 // employees until the venue shows them (shared/src/home-cards.ts).
-const GATES: ReadonlyArray<{ id: SectionId; section: SectionName; card: CardId }> = [
+const GATES: ReadonlyArray<{ id: SectionId; section: SectionName; card: CardId | 'clients' }> = [
   { id: 'orders', section: 'orders', card: 'orders' },
   { id: 'suppliers', section: 'orders', card: 'suppliers' },
   { id: 'recipes', section: 'catalogue', card: 'catalogue' },
   { id: 'calculator', section: 'calculator', card: 'calculator' },
+  // The sales owner's page lives in config/calculator, so it is the Calculator's SECTION (a venue without the Calculator has
+  // no clients to run) behind a card of its own that only that role is shown (ROLE_ONLY_CARDS).
+  { id: 'clients', section: 'calculator', card: 'clients' },
   { id: 'pastries', section: 'pastries', card: 'pastries' },
   { id: 'stocktake', section: 'foodcost', card: 'inventory' },
   { id: 'foodcost', section: 'foodcost', card: 'foodcost' },
 ];
+
+// The card that leads to a section, as the page gate asks it (null for Home and Settings, which have none).
+export function cardOfSection(id: SectionId): CardId | 'clients' | null {
+  return GATES.find(gate => gate.id === id)?.card ?? null;
+}
 
 // `location` is the venue's own document (null while it has none: the shared rules then default
 // to everything on). `canManage` is the session's: true for an owner, a manager and the two partial

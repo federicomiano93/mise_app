@@ -101,9 +101,9 @@ describe('visibleSectionIds', () => {
 // ⚠️ THE TWO PARTIAL OWNERS (Federico, 1 Nov 2026). They canManage, so the role is the only thing that tells them apart from
 // an owner: a call without it would show the sales owner the kitchen and the kitchen owner the prices.
 describe('visibleSectionIds for the partial owners', () => {
-  it('shows the sales owner Home, Food cost and Settings, and nothing of the kitchen', () => {
-    expect(ids({}, true, 'owner-sales')).toEqual(sorted(['home', 'foodcost', 'settings']));
-    expect(ids(null, true, 'owner-sales')).toEqual(sorted(['home', 'foodcost', 'settings']));
+  it('shows the sales owner Home, Clients, Food cost and Settings, and nothing of the kitchen', () => {
+    expect(ids({}, true, 'owner-sales')).toEqual(sorted(['home', 'clients', 'foodcost', 'settings']));
+    expect(ids(null, true, 'owner-sales')).toEqual(sorted(['home', 'clients', 'foodcost', 'settings']));
   });
 
   it('shows the kitchen owner everything but Food cost, Stocktake kept', () => {
@@ -112,8 +112,17 @@ describe('visibleSectionIds for the partial owners', () => {
   });
 
   it('never shows a partial owner what the venue switched off', () => {
-    expect(ids({ sections: { foodcost: false } }, true, 'owner-sales')).toEqual(['home', 'settings']);
+    expect(ids({ sections: { foodcost: false } }, true, 'owner-sales')).toEqual(['clients', 'home', 'settings']);
     expect(ids({ sections: { orders: false } }, true, 'owner-kitchen')).not.toContain('orders');
+  });
+
+  // The Clients page is the sales owner's ONLY (ROLE_ONLY_CARDS): the card is behind the Calculator's SECTION, so a venue that
+  // did not buy the Calculator has no clients to run either.
+  it('shows Clients to the sales owner and to nobody else, whatever the venue hides', () => {
+    for (const role of ['owner', 'manager', 'owner-kitchen']) expect(ids({}, true, role)).not.toContain('clients');
+    expect(ids({}, false, 'staff')).not.toContain('clients');
+    expect(ids({ staffShownCards: { clients: true } }, false, 'staff')).not.toContain('clients');
+    expect(ids({ sections: { calculator: false } }, true, 'owner-sales')).not.toContain('clients');
   });
 
   it('is not narrowed for an owner and a manager, and a hidden card still hides from staff only', () => {

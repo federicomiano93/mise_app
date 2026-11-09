@@ -399,6 +399,43 @@ describe('saving the configuration', () => {
     store.stop();
   });
 
+  test('⚠️ configShape tells the Clients page what the SERVER holds: unknown, missing, retired or ready — the browser\'s own database proves nothing', () => {
+    const shapeOf = (config: Record<string, unknown> | null, fromServer = true) => {
+      const source = fakeCalculatorSource({ config });
+      source.hold();
+      const store = createCalculatorStore(source, { clientsOnly: true }, {
+        storage: memoryStorage(), now: () => NOW, newLogId: () => 'log-1', warn: vi.fn(),
+      });
+      store.start();
+      expect(store.getSnapshot().configShape).toBe('unknown');
+      source.push({ fromServer });
+      const shape = store.getSnapshot().configShape;
+      store.stop();
+      return shape;
+    };
+    expect(shapeOf(CONFIG, false)).toBe('unknown');
+    expect(shapeOf(CONFIG)).toBe('ready');
+    expect(shapeOf(null)).toBe('missing');
+    // A top-level products list is the retired shape: a clients-only save would lose every client's products.
+    expect(shapeOf({ ...CONFIG, products: [] })).toBe('retired');
+  });
+
+  test('configShape follows the server: a document that appears, or is saved out of its old shape, opens the Clients page', () => {
+    const source = fakeCalculatorSource({ config: null });
+    const store = createCalculatorStore(source, { clientsOnly: true }, {
+      storage: memoryStorage(), now: () => NOW, newLogId: () => 'log-1', warn: vi.fn(),
+    });
+    store.start();
+    expect(store.getSnapshot().configShape).toBe('missing');
+    source.config = { ...CONFIG, products: [] };
+    source.push();
+    expect(store.getSnapshot().configShape).toBe('retired');
+    source.config = { ...CONFIG, configRev: 7 };
+    source.push();
+    expect(store.getSnapshot().configShape).toBe('ready');
+    store.stop();
+  });
+
   test('clientsOnly: nothing is sent before the server has answered once', async () => {
     const source = fakeCalculatorSource({ config: CONFIG });
     source.hold();

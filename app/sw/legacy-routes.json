@@ -8,5 +8,5 @@
   "pastries.html": "/pastries",
   "inventory.html": "/stocktake",
   "foodcost.html": "/food-cost",
-  "clients.html": ""
+  "clients.html": "/clients"
 }

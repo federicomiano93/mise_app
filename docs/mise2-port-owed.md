@@ -125,18 +125,19 @@ worker's rollback, has the exact order):
 
 8. **Partial owners step 4** (`owner-sales`, `owner-kitchen`) — PRs #430 #432 #449 (v1.129.0, v1.132.0, v1.134.0).
    DONE 9 Nov 2026 (`feature/mise2-next-roles-1`; `docs/parity/home.md`, «Partial owners as built»; the kitchen's ingredient merge:
-   `feature/mise2-next-roles-2`, `docs/parity/suppliers.md`, «Kitchen owner's merge as built»), except the sales owner's Clients page and narrow save (item 10, slices 3-4, still deferred). ⚠️ CORRECTION OF THE FIRST WORDING: this WAS a
+   `feature/mise2-next-roles-2`, `docs/parity/suppliers.md`, «Kitchen owner's merge as built»), and the sales owner's Clients page and narrow save (item 10, slices 3-4: DONE 9 Nov 2026). ⚠️ CORRECTION OF THE FIRST WORDING: this WAS a
    LOCK-OUT, not «no»: `shared/src/sections.ts` had `ACCESS_VALUES = [true, MANAGER, OWNER]`, so `locationsOf` dropped the two values and Mise 2
    opened on «no venue yet» for anybody holding one. Now `shared/` has the five values, `NOT_FOR_ROLE`, `sectionsFor` narrowed by it,
    `pageWhenRefused`, `canManageVenue`, `worksOnClients`, and the role argument of `mayEditRecords`, `mayOpenOrders`, `mayOpenFoodCost`;
    `app/` passes the role to every card gate and draws the venue-wide controls (Settings «The venue», the ingredient panel switches, the recipe
-   photo switch) only for `canManageVenue`. Nobody may hold `owner-sales` until item 10 is done.
+   photo switch) only for `canManageVenue`. The sales owner's Clients page is done too (item 10), so both roles are safe to give out in a venue that runs Mise 2.
 9. **Orders price gate** — DONE 9 Nov 2026 with 8: `readsPurchasePrices` (`session/visibility.ts`) = the rules' `cardAccess(lid,'foodcost','prices')`;
    `OrdersContext` and `useMayWritePrices` ask it, so the kitchen owner sees and writes the money without having Food cost on their rail.
-10. **Clients page (#449, `a694100e`, `clients.html`)** — page for the sales owner: only `clients` is sent; the editor lives in the Calculator
-    settings of Mise 2 already (`app/src/calculator/ClientsEditor.tsx`). Mise 2: NONE as a role-only page/route; whole-document calculator
-    save by a sales owner would be refused by rules (`writesCalculatorConfig`: only `clients`, `configModel`, `configRev`, `whatsappClients`).
-    Needs `saveCalculatorClients`-style narrow write, read-only received orders, waiting-orders badge, push switch door. Size M.
+10. **Clients page (#449, `a694100e`, `clients.html`)** — page for the sales owner: only `clients` is sent.
+    DONE 9 Nov 2026 in two slices (`feature/mise2-next-roles-3`, `-4`; `docs/parity/calculator.md`, «Clients-only save as built» and «Clients page for the sales owner as built»):
+    the narrow save (`calculatorSource.saveClients`, store option `clientsOnly`), the section `/clients` (`app/src/clients/`) drawing the Calculator's own
+    client screens read-only where they must be, the waiting-orders line, and a tap on a client-order notification landing on `/clients/orders`.
+    The push switch door is NOT built (see «Deferred», reminders): phones already registered keep receiving.
 11. **Weighing door for the sales owner** (`weighsRecipeLoss`: update only `lossPct/rawGrams/cookedGrams` on a recipe) — DONE 9 Nov 2026 with 8:
     `foodcostSource.saveRecipeLoss` already sent exactly those three keys and `bakery` through `updateDoc` (a spec now pins the key list);
     the boxes are offered by the VENUE's catalogue switch (`ProductForm`), not the role's sections, which hid them from the sales owner.
@@ -247,9 +248,6 @@ not be ticked above. To bring one forward, delete its number here and port it; t
 to its markers, with his decision in the line.
 
 What each one means for the people using Mise 2 until it is ported:
-- 10. The Clients page for the sales owner and the narrow clients save (slices 3 and 4 of the roles plan): until they land
-  nobody may hold `owner-sales` in a venue that runs Mise 2 — their Home would have no Clients door and a client save would be
-  refused by the rules. (Items 8, 9 and 11 are done: Mise 2 knows both roles.)
 - 12. The «Order today» tag in both supplier lists is not drawn.
 - 16. Suppliers: the empty-flash, scroll and focus fixes and the «hand-made» mark are not verified in Mise 2.
 - 18. Invoice import: a carton of pieces is priced per kilo instead of per piece on NEW imports (check every imported
@@ -267,6 +265,10 @@ What each one means for the people using Mise 2 until it is ported:
 Deferred too, with no item number:
 - Reminder notifications: order reminders stop arriving with the switch, also for The Italian Club (warn them first: a
   line of the checklist above).
+- The sales owner's «tell me when a client orders» notification switch (the current app's Clients page has it): Mise 2 has no
+  push switch yet, deferred with the reminders above. A phone that already registered in the current app keeps receiving the
+  pushes, and the tap lands on Orders received (`/calculator` is replaced for that role by `/clients/orders`, `SectionRoute`); a
+  phone that did not register cannot do it from Mise 2 until the switch exists.
 - `order.html` stays served as it is (client links already sent): the Pages build keeps it, see `docs/switch-runbook.md`.
 - The 3-month order-list clean-up function (F9, a separate task): until it exists nothing is deleted, as today.
 
