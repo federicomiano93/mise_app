@@ -233,6 +233,13 @@ describe('App language', () => {
       expect(router.state.historyAction).toBe('REPLACE');
     });
 
+    it.each(['owner-sales', 'owner-kitchen'] as const)('sends the %s owner back to Settings: they canManage but do not manage the venue', async role => {
+      const { router } = renderApp('/settings/language', { session: { role, canManage: true, canManageVenue: false, isOwner: false } });
+      await waitFor(() => { expect(router.state.location.pathname).toBe('/settings'); });
+      expect(router.state.historyAction).toBe('REPLACE');
+      expect(main().queryByRole('button', { name: 'English In use' })).not.toBeInTheDocument();
+    });
+
     it('sends any other address under Settings back to the page', async () => {
       const { router } = renderApp('/settings/people');
       await waitFor(() => { expect(router.state.location.pathname).toBe('/settings'); });

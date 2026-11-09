@@ -29,9 +29,9 @@ const VENUES: ReadonlyArray<readonly [string, DocData]> = [
 
 describe('the Food cost door agrees with the gate behind it', () => {
   for (const [name, venue] of VENUES) {
-    for (const canManage of [true, false]) {
-      test(`${name}, ${canManage ? 'owner or manager' : 'employee'}`, () => {
-        expect(mayOpenFoodCost(venue, canManage)).toBe(visibleSectionIds(venue, canManage).has('foodcost'));
+    for (const [who, canManage, role] of [['owner or manager', true, 'owner'], ['employee', false, 'staff'], ['sales owner', true, 'owner-sales'], ['kitchen owner', true, 'owner-kitchen']] as const) {
+      test(`${name}, ${who}`, () => {
+        expect(mayOpenFoodCost(venue, canManage, role)).toBe(visibleSectionIds(venue, canManage, role).has('foodcost'));
       });
     }
   }

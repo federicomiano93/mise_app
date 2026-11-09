@@ -169,17 +169,23 @@ describe.each([
   // ⚠️ THE ROLE LIVES IN THIS VALUE (it is what firestore.rules member() reads). A value not in the
   // list is no access at all, never a lesser access.
 
-  test('accessValue gives back exactly the three values the rules accept', () => {
+  test('accessValue gives back exactly the five values the rules accept', () => {
     expect(m.accessValue({ locations: { bakery: true } }, 'bakery')).toBe(true);
     expect(m.accessValue({ locations: { bakery: 'manager' } }, 'bakery')).toBe('manager');
     expect(m.accessValue({ locations: { bakery: 'owner' } }, 'bakery')).toBe('owner');
+    expect(m.accessValue({ locations: { bakery: 'owner-sales' } }, 'bakery')).toBe('owner-sales');
+    expect(m.accessValue({ locations: { bakery: 'owner-kitchen' } }, 'bakery')).toBe('owner-kitchen');
     expect(m.OWNER).toBe('owner');
     expect(m.MANAGER).toBe('manager');
+    expect(m.OWNER_SALES).toBe('owner-sales');
+    expect(m.OWNER_KITCHEN).toBe('owner-kitchen');
   });
 
   test('accessValue refuses Owner, "owner " and every other near miss', () => {
     const NEAR_MISSES = ['Owner', 'OWNER', 'owner ', ' owner', 'owner\n', 'Manager', 'MANAGER', 'manager ', ' manager',
-      'head-chef', 'staff', 'admin', 'true', 'yes', false, 0, 1, null, {}, ['owner'], ['manager']];
+      'head-chef', 'staff', 'admin', 'true', 'yes', false, 0, 1, null, {}, ['owner'], ['manager'],
+      'Owner-sales', 'OWNER-SALES', 'owner-sales ', ' owner-sales', 'owner_sales', 'owner-sales\n',
+      'Owner-kitchen', 'owner-kitchen ', ' owner-kitchen', 'owner_kitchen', 'owner-kitchen\n', ['owner-sales'], ['owner-kitchen']];
     for (const bad of NEAR_MISSES) {
       expect(m.accessValue({ locations: { bakery: bad } }, 'bakery'), JSON.stringify(bad)).toBe(false);
     }
@@ -412,6 +418,68 @@ describe.each([
     }
     for (const role of ['staff', undefined, 'admin', null, true, 'Owner', 'owner ']) {
       expect(m.sectionsFor(venue(), role).foodcost, String(role)).toBe(false);
+    }
+  });
+
+  // ── The two partial owners (Federico, 1 Nov 2026) ───────────────────────────
+  // ⚠️ A NEW VALUE IS A LOCKOUT UNLESS locationsOf() KNOWS IT: this is what Mise 2 got wrong first.
+
+  test('both partial owners can enter the venue they hold', () => {
+    for (const value of ['owner-sales', 'owner-kitchen']) {
+      expect(m.locationsOf({ locations: { bakery: value } }), value).toStrictEqual(['bakery']);
+      expect(m.pickLocation({ locations: { bakery: value } }), value).toStrictEqual(
+        { status: 'ready', locationId: 'bakery', options: ['bakery'] });
+    }
+  });
+
+  test('the sales owner sees Food cost and Home, never the kitchen sections', () => {
+    expect(m.sectionsFor(venue(), 'owner-sales')).toStrictEqual(
+      { orders: false, calculator: false, catalogue: false, pastries: false, foodcost: true });
+  });
+
+  test('the kitchen owner sees everything but Food cost', () => {
+    expect(m.sectionsFor(venue(), 'owner-kitchen')).toStrictEqual(
+      { orders: true, calculator: true, catalogue: true, pastries: true, foodcost: false });
+  });
+
+  test('a partial owner never gets a section the venue has switched off', () => {
+    const off = venue({ foodcost: false, orders: false });
+    expect(m.sectionsFor(off, 'owner-sales').foodcost).toBe(false);
+    expect(m.sectionsFor(off, 'owner-kitchen').orders).toBe(false);
+  });
+
+  test('NOT_FOR_ROLE is the list the rules narrow by, and it is frozen all the way down', () => {
+    expect(m.NOT_FOR_ROLE).toStrictEqual({
+      'owner-sales': ['calculator', 'catalogue', 'orders', 'pastries'],
+      'owner-kitchen': ['foodcost'],
+    });
+    expect(Object.isFrozen(m.NOT_FOR_ROLE)).toBe(true);
+    expect(Object.isFrozen(m.NOT_FOR_ROLE['owner-sales'])).toBe(true);
+    expect(Object.isFrozen(m.NOT_FOR_ROLE['owner-kitchen'])).toBe(true);
+  });
+
+  test('a role named like an object property is not narrowed by it', () => {
+    for (const role of ['toString', '__proto__', 'constructor', 'hasOwnProperty']) {
+      expect(m.sectionsFor(venue(), role), role).toStrictEqual(
+        { orders: true, calculator: true, catalogue: true, pastries: true, foodcost: false });
+    }
+  });
+
+  test('the role table is re-exported from home-cards', () => {
+    expect(m.roleHasCard('owner-sales', 'clients')).toBe(true);
+    expect(m.roleHasCard('owner-kitchen', 'clients')).toBe(false);
+    expect(m.roleHasCard('owner-kitchen', 'orders')).toBe(true);
+    expect(m.ROLE_CARDS['owner-sales']).toBeDefined();
+  });
+
+  // Where a page sends somebody whose card it is not: Home, except the sales owner's orders.
+  test('pageWhenRefused sends the sales owner from the Calculator to the orders received', () => {
+    expect(m.pageWhenRefused('owner-sales', 'calculator')).toBe('clients.html#orders');
+    for (const role of ['owner', 'manager', 'staff', 'owner-kitchen', undefined, null, 'Owner-sales']) {
+      expect(m.pageWhenRefused(role, 'calculator'), String(role)).toBe('index.html');
+    }
+    for (const card of ['orders', 'foodcost', 'catalogue', 'clients', undefined]) {
+      expect(m.pageWhenRefused('owner-sales', card), String(card)).toBe('index.html');
     }
   });
 

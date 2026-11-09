@@ -65,7 +65,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   const { t, locale } = useT();
   const store = useRecipesStore();
   const { labelConfig, ingredients, recipes, suppliers, categories } = useRecipes();
-  const { canManage, location: venue, user, locationId } = useSession();
+  const { canManage, location: venue, user, locationId, role } = useSession();
   // Who typed what this editor may carry, and where (photoCarry.ts).
   const owner = carryOwner(user?.uid, locationId);
   const say = useStatusMessage();
@@ -276,7 +276,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
   const tokens = useRef(0);
   const workingRef = useRef(working);
   workingRef.current = working;
-  const mayCreate = mayEditRecords(venue, canManage);
+  const mayCreate = mayEditRecords(venue, canManage, role);
   const knownIngredients = useMemo(() => Object.values(ingredients), [ingredients]);
   const knownSuppliers = useMemo(() => Object.values(suppliers), [suppliers]);
   // Where the focus is owed after the card closes without an ingredient: the name box (it was opened from the suggestions) or the

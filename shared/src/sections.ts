@@ -11,6 +11,10 @@
 
 import { isValidLocationId } from './location-id';
 
+// ⚠️ THE ROLE TABLE LIVES IN home-cards.ts, because the server asks it through that file's byte
+// copy and the copy may import nothing.
+export { ROLE_CARDS, roleHasCard } from './home-cards';
+
 export type SectionName = 'orders' | 'calculator' | 'catalogue' | 'pastries' | 'foodcost';
 export type SectionMap = Record<SectionName, boolean>;
 
@@ -55,17 +59,23 @@ export function isSectionAllowed(locationDoc: unknown, name: unknown): boolean {
 //   true       → a member of this location, an ordinary employee
 //   'manager'  → a member who runs this location: deletes too, but hires nobody
 //   'owner'    → a member, and the person whose business it is
+//   'owner-sales'   → runs the sales side only: Food cost and the clients
+//   'owner-kitchen' → runs the kitchen side only: everything but those two
 //   anything else (false, missing, a typo) → no access at all
-// ⚠️ A NEW VALUE GOES IN THREE PLACES OR IT IS A LOCKOUT: js/sections.js (and this port),
+// ⚠️ A NEW VALUE GOES IN FOUR PLACES OR IT IS A LOCKOUT: js/sections.js (and this port),
 // firestore.rules member(), functions/onboarding.js accessValue().
 export const OWNER = 'owner';
 export const MANAGER = 'manager';
+// Federico, 1 Nov 2026. ⚠️ Same deployment order as above: rules first, then the app, and only
+// then may anybody be given one of these.
+export const OWNER_SALES = 'owner-sales';
+export const OWNER_KITCHEN = 'owner-kitchen';
 
-export type AccessValue = true | typeof MANAGER | typeof OWNER;
+export type AccessValue = true | typeof MANAGER | typeof OWNER | typeof OWNER_SALES | typeof OWNER_KITCHEN;
 
 // ⚠️ A value NOT in here is no access at all, never a lesser access. A role from a later version
 // of the app, a typo, a string with a stray space: all refused.
-const ACCESS_VALUES: readonly unknown[] = Object.freeze([true, MANAGER, OWNER]);
+const ACCESS_VALUES: readonly unknown[] = Object.freeze([true, OWNER_KITCHEN, OWNER_SALES, MANAGER, OWNER]);
 
 function locationsField(userDoc: unknown): Record<string, unknown> | null {
   const raw = userDoc && typeof userDoc === 'object' ? (userDoc as Record<string, unknown>).locations : null;
@@ -84,21 +94,42 @@ export function accessValue(userDoc: unknown, locationId: unknown): AccessValue 
 // Food Cost is the screen that says what the business PAYS and EARNS. ⚠️ THE DEFAULT IS THE
 // OPPOSITE WAY ROUND FROM allowedSections: a role nobody recognises is not on the list, so it is
 // REFUSED — power nobody granted does not exist.
-const ROLE_ONLY: Readonly<Partial<Record<SectionName, readonly string[]>>> = Object.freeze({ foodcost: [OWNER, MANAGER] });
+const ROLE_ONLY: Readonly<Partial<Record<SectionName, readonly string[]>>> = Object.freeze({ foodcost: [OWNER, MANAGER, OWNER_SALES] });
+
+// The other direction: the sections a partial owner is kept out of, the same list
+// firestore.rules narrowedOut() refuses (tests/partial-owner-roles.test.mjs compares them).
+// ⚠️ The rules decide; this only stops a screen collecting their refusals.
+export const NOT_FOR_ROLE: Readonly<Record<string, readonly SectionName[]>> = Object.freeze({
+  [OWNER_SALES]: Object.freeze(['calculator', 'catalogue', 'orders', 'pastries'] as const),
+  [OWNER_KITCHEN]: Object.freeze(['foodcost'] as const),
+});
 
 // The location's set NARROWED by the role, never widened.
 export function sectionsFor(locationDoc: unknown, role: unknown): SectionMap {
   const fromLocation = allowedSections(locationDoc);
+  const kept: readonly SectionName[] = Object.prototype.hasOwnProperty.call(NOT_FOR_ROLE, String(role))
+    ? NOT_FOR_ROLE[role as string] ?? []
+    : [];
   const out = {} as SectionMap;
   SECTIONS.forEach(name => {
     const roles = ROLE_ONLY[name];
-    out[name] = fromLocation[name] === true && (!roles || roles.includes(role as string));
+    out[name] = fromLocation[name] === true && (!roles || roles.includes(role as string)) && !kept.includes(name);
   });
   return out;
 }
 
 export function isSectionAllowedFor(locationDoc: unknown, role: unknown, name: unknown): boolean {
   return (sectionsFor(locationDoc, role) as Record<string, boolean>)[name as string] === true;
+}
+
+// Where a page sends somebody whose card it is not. Home, except for one person: a client's order
+// notifies the owner of the sales side and its tap opens calculator.html, because one notification
+// goes to everybody (js/push-model.js targetPage) and the service worker cannot know a role. Home
+// would lose the order they tapped, so they land on the orders received. (Mise 2 answers with the
+// current app's page names too, for parity; nothing in app/ reads it yet — slice 4 of the roles work
+// sends the sales owner to `/clients/orders` from `SectionRoute`.)
+export function pageWhenRefused(role: unknown, pageCard: unknown): string {
+  return role === OWNER_SALES && pageCard === 'calculator' ? 'clients.html#orders' : 'index.html';
 }
 
 // Which locations this person may enter, in a stable order.

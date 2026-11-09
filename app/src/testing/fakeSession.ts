@@ -32,6 +32,8 @@ export function fakeStore(partial: Partial<Session> = {}): FakeStore {
     role: 'owner',
     canManage: true,
     isOwner: true,
+    // A partial owner never runs the venue: forgetting `canManageVenue` in their spec must not hand it over.
+    canManageVenue: partial.canManageVenue ?? (partial.role === 'owner-sales' || partial.role === 'owner-kitchen' ? false : partial.canManage ?? true),
     language: 'en',
     ...partial,
   });
@@ -52,7 +54,10 @@ export function fakeStore(partial: Partial<Session> = {}): FakeStore {
     changesStillWaiting: vi.fn<SessionStore['changesStillWaiting']>(() => Promise.resolve(false)),
     refreshLocation: vi.fn<SessionStore['refreshLocation']>(() => Promise.resolve()),
     set(next) {
-      snapshot = Object.freeze({ ...snapshot, ...next });
+      // A spec that moves `canManage` alone means the venue's powers moved with it; a partial owner
+      // says `canManageVenue` out loud.
+      const venuePower = next.canManageVenue ?? next.canManage;
+      snapshot = Object.freeze({ ...snapshot, ...next, ...(venuePower === undefined ? {} : { canManageVenue: venuePower }) });
       listeners.forEach(listener => { listener(); });
     },
   };

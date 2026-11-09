@@ -14,7 +14,7 @@ import type { WeighingState } from '@mise/shared/foodcost-weighing';
 import type { KiloLineUnit } from '@mise/shared/line-quantity';
 import { countryOf } from '@mise/shared/market';
 import { firstInvalidNumber } from '@mise/shared/product-limits';
-import { isSectionAllowedFor } from '@mise/shared/sections';
+import { isSectionAllowed } from '@mise/shared/sections';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { markBusy } from '../session/busy';
@@ -112,7 +112,7 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
   const { t, locale } = useT();
   const store = useFoodcostStore();
   const snap = useFoodcost();
-  const { canManage, location, role } = useSession();
+  const { canManage, location } = useSession();
   const money = useMoney();
   const say = useStatusMessage();
   const handBack = useHandBack();
@@ -127,8 +127,10 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
   // session. The country decides the VAT menu; the section switch decides whether the weighing boxes
   // are offered at all (a venue with Food cost on and the catalogue off can read its recipes but not
   // write them, and a weighing whose save is always refused would still record a margin point).
+  // ⚠️ THE VENUE'S SECTION, NOT THE ROLE'S: the owner of the sales side has no catalogue and may still write these three
+  // numbers (weighsRecipeLoss in firestore.rules). Asking the role's sections hid the boxes from the very person meant to use them.
   const country = countryOf(location);
-  const canWeigh = isSectionAllowedFor(location, role, 'catalogue');
+  const canWeigh = isSectionAllowed(location, 'catalogue');
 
   // What the product was when this form opened: what a margin point is compared with.
   const [initial] = useState(product);

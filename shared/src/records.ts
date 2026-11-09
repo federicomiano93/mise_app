@@ -22,8 +22,8 @@ export const NO_SUPPLIER_ID = 'no-supplier';
 // catalogue, a screen the venue has hidden from its employees.
 //
 // ⚠️ NO VENUE, NO. Before the session has opened a venue there is nothing to judge by.
-export function mayEditRecords(locationDoc: unknown, canManage: unknown): boolean {
+export function mayEditRecords(locationDoc: unknown, canManage: unknown, role?: unknown): boolean {
   if (!locationDoc || typeof locationDoc !== 'object') return false;
   return isSectionAllowed(locationDoc, 'orders')
-    && cardVisibleTo(locationDoc, canManage === true, 'suppliers');
+    && cardVisibleTo(locationDoc, canManage === true, 'suppliers', role);
 }

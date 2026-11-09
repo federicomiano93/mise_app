@@ -201,6 +201,16 @@ describe('who sees the money', () => {
     expect(source.priceWatches).toBe(1);
   });
 
+  // ⚠️ THE KITCHEN OWNER BUYS THE GOODS AND HAS NO FOOD COST SCREEN: the rules still give them the purchase prices
+  // (cardAccess(lid, 'foodcost', 'prices')), so the price reader turns on — it used to ask «is Food cost on my rail».
+  it('the owner of the kitchen is shown the money, although Food cost is not on their rail', async () => {
+    const source = seeded();
+    await onSummary(source, { session: { role: 'owner-kitchen', canManage: true, canManageVenue: false, isOwner: false, location: GB } });
+    expect(await screen.findByText('3 × £2.00 = £6.00 · VAT 4%')).toBeInTheDocument();
+    expect(totals()).toBeInTheDocument();
+    expect(source.priceWatches).toBe(1);
+  });
+
   it('⚠️ an owner whose read of the prices is refused sees no money either, not «no price»', async () => {
     const source = seeded();
     source.refusePrices = true;

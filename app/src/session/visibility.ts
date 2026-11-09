@@ -1,6 +1,6 @@
 import { isSectionAllowed } from '@mise/shared/sections';
 import type { SectionName } from '@mise/shared/sections';
-import { cardVisibleTo } from '@mise/shared/home-cards';
+import { cardVisibleTo, isHiddenForStaff } from '@mise/shared/home-cards';
 import type { CardId } from '@mise/shared/home-cards';
 import type { SectionId } from '../shell/sections';
 import type { DocData } from './backend';
@@ -29,19 +29,31 @@ const GATES: ReadonlyArray<{ id: SectionId; section: SectionName; card: CardId }
 ];
 
 // `location` is the venue's own document (null while it has none: the shared rules then default
-// to everything on). `canManage` is the session's: true for an owner and for a manager.
+// to everything on). `canManage` is the session's: true for an owner, a manager and the two partial
+// owners. `role` is the session's too, and it is NOT optional in practice: a partial owner is told
+// apart from the others by it alone, and a call without it would show the sales owner the kitchen
+// (tests/partial-owner-roles.test.mjs walks every caller of cardVisibleTo).
 //
 // Home (the venue's to-do list, step 3g-1) is always visible too: every member of the venue may read and write it
 // (firestore.rules, `todos`), and it is where the app opens.
 //
 // Settings is always visible: it holds the person's own account and the way to sign out, and a
 // screen with nothing in it must never be the end of the road.
-export function visibleSectionIds(location: DocData | null, canManage: boolean): ReadonlySet<SectionId> {
+export function visibleSectionIds(location: DocData | null, canManage: boolean, role: unknown): ReadonlySet<SectionId> {
   const visible = new Set<SectionId>(['home', 'settings']);
   for (const gate of GATES) {
-    if (isSectionAllowed(location, gate.section) && cardVisibleTo(location, canManage, gate.card)) {
+    if (isSectionAllowed(location, gate.section) && cardVisibleTo(location, canManage, gate.card, role)) {
       visible.add(gate.id);
     }
   }
   return visible;
+}
+
+// May this person read what the business PAYS for its ingredients — the purchase prices the Orders summary
+// and the supplier screens total? The rules' cardAccess(lid, 'foodcost', 'prices'): the venue has Food
+// cost, and the person either runs a side (canManage: an owner, a manager, the kitchen owner who orders
+// the goods) or the venue shows Food cost to its employees. ⚠️ By the VENUE's section and card, never by
+// the role's cards: the kitchen owner has no Food cost card and still reads the prices, as the rules say.
+export function readsPurchasePrices(location: DocData | null, canManage: boolean): boolean {
+  return isSectionAllowed(location, 'foodcost') && (canManage || !isHiddenForStaff(location, 'foodcost'));
 }

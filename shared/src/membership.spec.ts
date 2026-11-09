@@ -132,17 +132,65 @@ describe.each([
 
   // ── The small pieces ───────────────────────────────────────────────────────
 
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 8): main added the partial-owner roles (owner-sales, owner-kitchen) to js/roles.js and js/sections.js, the port still has three — remove .fails when ported
-  (_name === 'js/ (current app)' ? test.fails : test)('there are three roles and no more', () => {
-    expect([...m.ROLES]).toStrictEqual(['owner', 'manager', 'staff']);
+  test('there are five roles and no more', () => {
+    expect([...m.ROLES]).toStrictEqual(['owner', 'owner-sales', 'owner-kitchen', 'manager', 'staff']);
   });
 
-  test('isValidRole refuses everything that is not one of the three', () => {
+  test('isValidRole refuses everything that is not one of the five', () => {
     expect(m.isValidRole('owner')).toBe(true);
+    expect(m.isValidRole('owner-sales')).toBe(true);
+    expect(m.isValidRole('owner-kitchen')).toBe(true);
     expect(m.isValidRole('manager')).toBe(true);
     expect(m.isValidRole('staff')).toBe(true);
-    for (const bad of ['head-chef', 'Owner', 'Manager', '', ' staff', null, undefined, 1, {}, true]) {
+    for (const bad of ['head-chef', 'Owner', 'Manager', 'Owner-sales', 'owner-sales ', '', ' staff', null, undefined, 1, {}, true]) {
       expect(m.isValidRole(bad), String(bad)).toBe(false);
+    }
+  });
+
+  // ── The partial owners: one side each, and they hire nobody ────────────────
+
+  // ⚠️ THE LOCKOUT OF THE FIRST PORT: with three values in ACCESS_VALUES, Mise 2 dropped these two
+  // from locationsOf() and opened on "no venue yet" while the database said they were members.
+  test('an owner of one side is a member, can enter, and holds exactly their role', () => {
+    for (const value of ['owner-sales', 'owner-kitchen']) {
+      const doc = { locations: { bakery: value } };
+      expect(s.locationsOf(doc), value).toStrictEqual(['bakery']);
+      expect(s.accessValue(doc, 'bakery'), value).toBe(value);
+      expect(m.roleOf(doc, 'bakery'), value).toBe(value);
+      expect(m.isOwner(doc, 'bakery'), value).toBe(false);
+    }
+  });
+
+  test('a partial owner manages their own side but not the venue', () => {
+    for (const value of ['owner-sales', 'owner-kitchen']) {
+      const doc = { locations: { bakery: value } };
+      expect(m.canManage(doc, 'bakery'), value).toBe(true);
+      expect(m.canManageVenue(doc, 'bakery'), value).toBe(false);
+    }
+  });
+
+  test('canManageVenue is the owner and the manager only', () => {
+    const answers = new Map<unknown, boolean>([
+      ['owner', true], ['manager', true], [true, false], ['owner-sales', false], ['owner-kitchen', false],
+      [false, false], ['Owner-sales', false], ['owner-sales ', false], ['head-chef', false],
+    ]);
+    for (const [value, expected] of answers) {
+      expect(m.canManageVenue({ locations: { bakery: value } }, 'bakery'), JSON.stringify(value)).toBe(expected);
+    }
+    expect(m.canManageVenue(null, 'bakery')).toBe(false);
+  });
+
+  test('worksOnClients is everybody but the owner of the kitchen', () => {
+    for (const role of ['owner', 'owner-sales', 'manager', 'staff']) expect(m.worksOnClients(role), role).toBe(true);
+    expect(m.worksOnClients('owner-kitchen')).toBe(false);
+  });
+
+  test('near misses of the partial roles grant nothing', () => {
+    for (const bad of ['Owner-sales', 'OWNER-SALES', 'owner-sales ', ' owner-kitchen', 'owner_kitchen', 'owner-kitchen\n']) {
+      const doc = { locations: { bakery: bad } };
+      expect(s.locationsOf(doc), bad).toStrictEqual([]);
+      expect(m.canManage(doc, 'bakery'), bad).toBe(false);
+      expect(m.roleOf(doc, 'bakery'), bad).toBe('staff');
     }
   });
 
@@ -217,10 +265,10 @@ describe.each([
     expect(m.isOwner(chef, 'bakery')).toBe(false);
   });
 
-  // ── Added: the answers always stay inside the three roles ──────────────────
+  // ── Added: the answers always stay inside the five roles ──────────────────
 
-  test('roleOf only ever answers one of the three roles, whatever the document says', () => {
-    const VALUES = [true, false, 'owner', 'manager', 'staff', 'Owner', 'owner ', 'admin', 'head-chef', 0, 1, null, {}, []];
+  test('roleOf only ever answers one of the five roles, whatever the document says', () => {
+    const VALUES = [true, false, 'owner', 'owner-sales', 'owner-kitchen', 'manager', 'staff', 'Owner', 'owner ', 'admin', 'head-chef', 0, 1, null, {}, []];
     for (const value of VALUES) {
       const doc = { locations: { bakery: value } };
       expect(m.isValidRole(m.roleOf(doc, 'bakery')), JSON.stringify(value)).toBe(true);
@@ -230,16 +278,17 @@ describe.each([
     }
   });
 
-  test('the list of roles is frozen, so nobody can add a fourth at run time', () => {
+  test('the list of roles is frozen, so nobody can add a sixth at run time', () => {
     expect(Object.isFrozen(m.ROLES)).toBe(true);
   });
 
   test('canManage and isOwner agree with roleOf for every access value', () => {
-    for (const value of [true, 'manager', 'owner', false, 'Owner', null]) {
+    for (const value of [true, 'manager', 'owner', 'owner-sales', 'owner-kitchen', false, 'Owner', null]) {
       const doc = { locations: { bakery: value } };
       const role = m.roleOf(doc, 'bakery');
       expect(m.isOwner(doc, 'bakery'), JSON.stringify(value)).toBe(role === 'owner');
-      expect(m.canManage(doc, 'bakery'), JSON.stringify(value)).toBe(role === 'owner' || role === 'manager');
+      expect(m.canManage(doc, 'bakery'), JSON.stringify(value)).toBe(role !== 'staff');
+      expect(m.canManageVenue(doc, 'bakery'), JSON.stringify(value)).toBe(role === 'owner' || role === 'manager');
     }
   });
 });

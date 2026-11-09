@@ -50,4 +50,21 @@ describe.each([
   test('another card hidden from staff changes nothing here', () => {
     expect(m.mayEditRecords({ sections: {}, staffHiddenCards: { orders: true } }, false)).toBe(true);
   });
+
+  // ⚠️ The role is the third question: the card is asked of the role first, so a partial owner is judged by their own
+  // cards even though they can manage.
+  test('the owner of the kitchen has the card, the owner of the sales side has not', () => {
+    const venue = { sections: {}, staffHiddenCards: { suppliers: true } };
+    expect(m.mayEditRecords(venue, true, 'owner-kitchen')).toBe(true);
+    expect(m.mayEditRecords(venue, true, 'owner-sales')).toBe(false);
+    expect(m.mayEditRecords({ sections: {} }, true, 'owner-sales')).toBe(false);
+  });
+
+  test('an owner, a manager and staff are judged as before when the role is passed', () => {
+    const venue = { sections: {}, staffHiddenCards: { suppliers: true } };
+    expect(m.mayEditRecords(venue, true, 'owner')).toBe(true);
+    expect(m.mayEditRecords(venue, true, 'manager')).toBe(true);
+    expect(m.mayEditRecords(venue, false, 'staff')).toBe(false);
+    expect(m.mayEditRecords({ sections: {} }, false, 'staff')).toBe(true);
+  });
 });

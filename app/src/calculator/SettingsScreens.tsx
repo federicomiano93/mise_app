@@ -1,5 +1,9 @@
 import type { ReactNode } from 'react';
+import { Navigate } from 'react-router';
+import { worksOnClients } from '@mise/shared/membership';
 import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
+import { KEEP_FOCUS } from '../shell/Page';
 import { useCalculator } from './CalculatorContext';
 import { CalculatorSettings } from './CalculatorSettings';
 import { ClientsEditor } from './ClientsEditor';
@@ -16,6 +20,12 @@ import { WhatsappEditor } from './WhatsappEditor';
 
 // The screen of Settings an address names (calculatorPath.ts).
 export function SettingsScreens({ view }: { view: DrawnSettingsView }) {
+  const { role } = useSession();
+  // ⚠️ THE KITCHEN'S OWNER HAS NO CLIENTS TO RUN: a typed address or an old history entry to one of the three client screens is
+  // REPLACED by the Settings hub, where the doors are not drawn. UX only (P2): the rules refuse the data to them as well.
+  if (!worksOnClients(role) && (view.kind === 'clients' || view.kind === 'whatsapp' || view.kind === 'ordering')) {
+    return <Navigate to={SETTINGS_PATH} replace state={KEEP_FOCUS} />;
+  }
   switch (view.kind) {
     case 'hub':
       return <CalculatorSettings />;

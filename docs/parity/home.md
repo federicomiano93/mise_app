@@ -327,3 +327,31 @@ Left as they are, on purpose:
 - On waking on a new day the reminder judges with the holiday known before the wake's re-read: if another phone ended it, the question
   can be asked once more; either answer is safe.
 - «In ferie fino al 1/8/11 novembre» wants «all'»: the words are the current app's own (`js/i18n.js`), so the fix belongs to both apps.
+
+## Partial owners as built (roles slice 1, 9 Nov 2026: `owner-sales`, `owner-kitchen`; closes checklist items 8, 9 and 11)
+
+Plan: `piano-ruoli-mise2.md` (slice 1 of 4). Branch `feature/mise2-next-roles-1`, PR into `feature/mise2-next`. The rules were NOT touched: the release `firestore.rules` already judge both roles.
+
+**What was wrong.** Not «no lock-out» as the checklist said: `shared/src/sections.ts` had `ACCESS_VALUES = [true, MANAGER, OWNER]`, so `locationsOf` dropped the two values and Mise 2 opened on «no venue yet» for anybody holding one. The checklist item is corrected.
+
+**Ported into `shared/` (each spec runs against both files):** `sections.ts` (`OWNER_SALES`, `OWNER_KITCHEN`, the five-value `ACCESS_VALUES`, `ROLE_ONLY.foodcost` gains the sales owner, the frozen `NOT_FOR_ROLE`, `sectionsFor` narrowed by it, `pageWhenRefused`, the `ROLE_CARDS` / `roleHasCard` re-export); `membership.ts` (`ROLES` in the current app's order, `roleOf` answers any recognised value, `canManage` includes both partial owners, `canManageVenue` = owner and manager, `worksOnClients(role)` = everybody but the kitchen owner); `records.mayEditRecords`, `recipe-link.mayOpenOrders` and `mayOpenFoodCost` take the `role` (written `role?: unknown`, never a default, so `Function.length` still matches). The PORT OWED markers of items 8-9 are gone from `parity.spec.ts`, `membership.spec.ts`; the arity marker of `recipe-link.spec.ts` stays, re-tagged «items 23, 32» (the port still lacks `orderIngredientFromHash`, `ordersIngredientHref`, `recipeSpotFromHash`).
+
+**Behaviour per role in Mise 2 now (as the current app):**
+
+| | owner / manager | staff | owner-sales | owner-kitchen |
+|---|---|---|---|---|
+| Enters the venue | yes | yes | yes (was refused) | yes (was refused) |
+| Sections | as before | as before | Home, Food cost, Settings | all but Food cost (Stocktake kept) |
+| `canManage` / `canManageVenue` | T / T | F / F | T / F | T / F |
+| Settings «The venue», the ingredient panel switches, the recipe photo switch | yes | no | no | no |
+| Purchase prices in Orders, and writing them | as before | only where the venue shows Food cost / no | n/a (no Orders) | yes / yes |
+| Calculator → Clients, WhatsApp, Client ordering | yes | yes | n/a (no Calculator) | NOT drawn; their addresses go back to the hub |
+| Weighing boxes in Food cost | catalogue on | n/a | catalogue on (the VENUE's switch) | n/a |
+
+**In `app/`:** `Session` carries `canManageVenue` (`false` before a venue opens; the fake store derives it from `canManage` unless a spec says otherwise). `visibleSectionIds(location, canManage, role)` passes the role (a required argument; `useVisibleSections` reads it from the session). `readsPurchasePrices(location, canManage)` is the rules' `cardAccess(lid, 'foodcost', 'prices')`: the venue has Food cost and the person runs a side or is shown the card. `OrdersContext` asks it instead of «is Food cost on my rail», and `useMayWritePrices` asks the VENUE's section (`isSectionAllowed`), not the role's: the kitchen owner has no Food cost screen and does buy and load the invoices. `ProductForm` offers the weighing boxes by the VENUE's catalogue switch for the same reason in the other direction (the sales owner has no catalogue). `foodcostSource.saveRecipeLoss` already sent exactly `lossPct`, `rawGrams`, `cookedGrams` and `bakery` through `updateDoc`: unchanged, a spec now pins the key list. The role is passed to `mayEditRecords` (`OrdersSection`, `RecipeEditor`) and `mayOpenFoodCost` (`RecipeView`). Settings «The venue» and its two screens, the Suppliers settings ingredient card and the recipe photo card need `canManageVenue`; the Calculator's Settings draws the three client doors only when `worksOnClients(role)`, and `SettingsScreens` REPLACES the three addresses with the hub for the kitchen owner.
+
+**Left on `canManage` on purpose** (a partial owner holds it, as in the current app): everything inside Food cost (the labour rate of Settings, the labour warning, the cost lines: the sales owner's side), Stocktake (money, carry forward, the cost screen: the kitchen's), Orders (settings, supplier sequence, the notices panel, send routes: the kitchen's), Suppliers (delete, favourite, the screen's Settings door for the categories), the recipe card (duplicate, archive, delete, restore) and the label Settings screen. The venue-wide switches are the only ones the server refuses to them.
+
+**Not in this slice (the plan's slices 2-4, still deferred):** the kitchen owner's ingredient merge (the server-side count of products using an ingredient, `productsUsingIngredient`); the narrow clients save; the Clients section and its notification landing for the sales owner. ⚠️ **Nobody may hold `owner-sales` until slice 4 is merged**: their Home has no Clients door and the Calculator, where clients live, is not on their rail.
+
+**Tests:** `shared/` `sections`, `membership`, `records`, `recipe-link` and `odd-inputs` specs (five values enter, near misses such as `'owner-sales '` and `'Owner-sales'` are refused, the odd-input product with and without a role); `app/` `visibility.spec.ts` (every role, `readsPurchasePrices`), `session.spec.ts` (`canManageVenue`, a partial owner enters), the specs of Orders (the kitchen owner sees the money), Food cost (the sales owner's boxes), Settings, the ingredient card, the photo switch, and a new `CalculatorSettings.kitchen.spec.tsx`; the root `tests/partial-owner-roles.test.mjs` names `shared/src/sections.ts` as the fourth `ACCESS_VALUES` and walks `shared/src` and `app/src` for every card-gate call that forgets the role. Driven on the emulator: `algprobe/mise-drive/drive-mise2-partial-owners.mjs`.

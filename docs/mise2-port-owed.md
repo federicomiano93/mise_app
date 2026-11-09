@@ -124,19 +124,23 @@ worker's rollback, has the exact order):
 ## B. Roles and access (partial owners): rules already live, Mise 2 UI blind
 
 8. **Partial owners step 4** (`owner-sales`, `owner-kitchen`) — PRs #430 #432 #449 (v1.129.0, v1.132.0, v1.134.0).
-   DATA LOSS: no, but LOCK-OUT: no. Mise 2 does not know the values (`shared/src/sections.ts` lacks `OWNER_SALES`, `OWNER_KITCHEN`,
-   `NOT_FOR_ROLE`, `pageWhenRefused`, `roleHasCard`/`ROLE_CARDS` named exports differ; `records.mayEditRecords` takes 2 args, main 3 with `role`;
-   parity marked PORT OWED: sections, records). A sales or kitchen owner would be treated as a plain role or refused on every screen. Rules are on the
-   branch. Mise 2: NONE (only `shared/src/home-cards.ts` and `away-model.ts` came over in `d73b3a9e`). Files: `shared/src/{sections,membership,
-   records}.ts`, `app/src/session/visibility.ts`, section gates, Home cards. Size M.
-9. **Orders price gate** — card pseudo-name `prices` (`cardAccess(lid,'foodcost','prices')`). `app/src/orders/OrdersContext.tsx` still asks Food
-   cost: a kitchen owner would simply miss the money (flagged in piano-mise-2). Part of item 8. Size S.
+   DONE 9 Nov 2026 (`feature/mise2-next-roles-1`; `docs/parity/home.md`, «Partial owners as built»), except the kitchen's ingredient merge
+   (slice 2) and the sales owner's Clients page and narrow save (item 10, slices 3-4, still deferred). ⚠️ CORRECTION OF THE FIRST WORDING: this WAS a
+   LOCK-OUT, not «no»: `shared/src/sections.ts` had `ACCESS_VALUES = [true, MANAGER, OWNER]`, so `locationsOf` dropped the two values and Mise 2
+   opened on «no venue yet» for anybody holding one. Now `shared/` has the five values, `NOT_FOR_ROLE`, `sectionsFor` narrowed by it,
+   `pageWhenRefused`, `canManageVenue`, `worksOnClients`, and the role argument of `mayEditRecords`, `mayOpenOrders`, `mayOpenFoodCost`;
+   `app/` passes the role to every card gate and draws the venue-wide controls (Settings «The venue», the ingredient panel switches, the recipe
+   photo switch) only for `canManageVenue`. Nobody may hold `owner-sales` until item 10 is done, and an `owner-kitchen`'s
+   «Merge another pack…» stops at «could not check» (it reads `products`, refused to them) until slice 2 of the roles work.
+9. **Orders price gate** — DONE 9 Nov 2026 with 8: `readsPurchasePrices` (`session/visibility.ts`) = the rules' `cardAccess(lid,'foodcost','prices')`;
+   `OrdersContext` and `useMayWritePrices` ask it, so the kitchen owner sees and writes the money without having Food cost on their rail.
 10. **Clients page (#449, `a694100e`, `clients.html`)** — page for the sales owner: only `clients` is sent; the editor lives in the Calculator
     settings of Mise 2 already (`app/src/calculator/ClientsEditor.tsx`). Mise 2: NONE as a role-only page/route; whole-document calculator
     save by a sales owner would be refused by rules (`writesCalculatorConfig`: only `clients`, `configModel`, `configRev`, `whatsappClients`).
     Needs `saveCalculatorClients`-style narrow write, read-only received orders, waiting-orders badge, push switch door. Size M.
-11. **Weighing door for the sales owner** (`weighsRecipeLoss`: update only `lossPct/rawGrams/cookedGrams` on a recipe) — Mise 2 weighing saves must
-    send only those keys for that role. Mise 2: NONE (check `WeighingPair` save). Size S, part of 8.
+11. **Weighing door for the sales owner** (`weighsRecipeLoss`: update only `lossPct/rawGrams/cookedGrams` on a recipe) — DONE 9 Nov 2026 with 8:
+    `foodcostSource.saveRecipeLoss` already sent exactly those three keys and `bakery` through `updateDoc` (a spec now pins the key list);
+    the boxes are offered by the VENUE's catalogue switch (`ProductForm`), not the role's sections, which hid them from the sales owner.
 
 ## C. Orders
 
@@ -244,9 +248,9 @@ not be ticked above. To bring one forward, delete its number here and port it; t
 to its markers, with his decision in the line.
 
 What each one means for the people using Mise 2 until it is ported:
-- 8-11. Partial owners (`owner-sales`, `owner-kitchen`): Mise 2 does not know the two roles, so a person holding one is
-  treated as a plain role or refused (no data at risk: the rules already judge them). Includes the Orders price gate (9),
-  the Clients page (10) and the weighing door (11).
+- 10. The Clients page for the sales owner and the narrow clients save (slices 3 and 4 of the roles plan): until they land
+  nobody may hold `owner-sales` in a venue that runs Mise 2 — their Home would have no Clients door and a client save would be
+  refused by the rules. (Items 8, 9 and 11 are done: Mise 2 knows both roles.)
 - 12. The «Order today» tag in both supplier lists is not drawn.
 - 16. Suppliers: the empty-flash, scroll and focus fixes and the «hand-made» mark are not verified in Mise 2.
 - 18. Invoice import: a carton of pieces is priced per kilo instead of per piece on NEW imports (check every imported

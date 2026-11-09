@@ -86,6 +86,21 @@ describe('the switch as the venue shows it', () => {
   });
 });
 
+// ⚠️ canManageVenue, not canManage: the switch is the venue's, and the server refuses it to a partial owner.
+describe('the kitchen owner', () => {
+  it('canManage, yet is not shown the photo switch: it is not drawn rather than drawn and refused', async () => {
+    const photo = photoSource();
+    renderRecipes('/recipes/settings', {
+      source: fakeRecipesSource({ recipes: [recipe('r1')] }),
+      session: { location: GB, role: 'owner-kitchen', canManage: true, canManageVenue: false, isOwner: false },
+      data: { photo: () => photo },
+    });
+    await screen.findByRole('region', { name: 'Recipe categories' }, LOAD);
+    expect(screen.queryByRole('region', { name: 'Photos' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('switch', { name: 'Read recipes from a photo' })).not.toBeInTheDocument();
+  });
+});
+
 describe('turning it on', () => {
   it('asks first, with the cost; Cancel does nothing at all', async () => {
     const { user, photo, photoSwitch, store } = await openSettings();

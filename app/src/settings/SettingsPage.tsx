@@ -27,7 +27,7 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 
 // Settings, in cards by who a row is about:
 //   You        — the holiday (everybody);
-//   The venue  — the app language and the sections for employees (an owner, a manager or a head chef — `canManage`);
+//   The venue  — the app language and the sections for employees (an owner, a manager or a head chef — `canManageVenue`, which a partial owner does not have);
 //   Account    — who is signed in, which venue, the way to another.
 // There is no «This device» card yet: the app's version waits for the service worker (step 5) and the kiosk for its own slice.
 // The way out, «Log out», is a small quiet button at the far right of the title line (the owner's choice, 15 Oct 2026).
@@ -36,7 +36,7 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 // here, but the Cloud Functions behind them refuse a non-manager as well.
 export function SettingsPage() {
   const { t } = useT();
-  const { user, name, options, canManage } = useSession();
+  const { user, name, options, canManageVenue } = useSession();
   const pending = usePendingDoor();
   const arrival = useNavigationType();
   const { state } = useLocation();
@@ -66,7 +66,7 @@ export function SettingsPage() {
             </PartBoundary>
           </Card>
 
-          {canManage ? (
+          {canManageVenue ? (
             <Card title={t('settings.venue')}>
               <PartBoundary>
                 <div className={styles.rows}>

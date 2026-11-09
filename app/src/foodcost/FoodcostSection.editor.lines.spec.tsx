@@ -361,6 +361,23 @@ describe('the weighings', () => {
     expect(within(madeOf()).queryByRole('textbox', { name: 'Raw dough' })).not.toBeInTheDocument();
   });
 
+  // ⚠️ THE VENUE'S SECTION, NOT THE ROLE'S: the owner of the sales side has no catalogue of their own and may still write the three
+  // numbers (weighsRecipeLoss in firestore.rules).
+  it('are offered to the owner of the sales side, who has no catalogue screen, where the venue has the catalogue on', async () => {
+    await open('/food-cost/product/Loaf', editorSource([DOUGH_PRODUCT], { recipes: [recipe('Dough')] }), {
+      session: { role: 'owner-sales', canManage: true, canManageVenue: false, isOwner: false },
+    });
+    expect(within(madeOf()).getByRole('textbox', { name: 'Raw dough' })).toBeInTheDocument();
+    expect(within(madeOf()).getByRole('textbox', { name: 'Cooked dough' })).toBeInTheDocument();
+  });
+
+  it('are not offered to the owner of the sales side either where the venue switched the catalogue off', async () => {
+    await open('/food-cost/product/Loaf', editorSource([DOUGH_PRODUCT], { recipes: [recipe('Dough')] }), {
+      session: { role: 'owner-sales', canManage: true, canManageVenue: false, isOwner: false, location: { sections: { catalogue: false } } },
+    });
+    expect(within(madeOf()).queryByRole('textbox', { name: 'Raw dough' })).not.toBeInTheDocument();
+  });
+
   it('name the recipe when there are several, one pair each however many lines carry it', async () => {
     await open('/food-cost/product/Both', editorSource([product('Both', { components: [
       { recipeId: 'Dough', qtyKg: 1 },

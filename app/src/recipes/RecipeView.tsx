@@ -59,7 +59,7 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
   const titleId = useId();
   const target = store.scaledTarget(recipe.id);
   const hasWeight = weighableTotalGrams(recipe) > 0;
-  const { canManage, location } = useSession();
+  const { canManage, location, role } = useSession();
   const navigate = useNavigate();
   const { state } = useLocation();
   const recipeReturn = useRecipeReturn();
@@ -152,7 +152,7 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         {hasWeight ? <BatchCard recipe={recipe} target={target} /> : null}
         {/* ⚠️ A DOOR: drawn only for whoever Food cost lets in — the very question its own gate asks (shared recipe-link), asked on
             every draw, so a session that arrives late or changes venue redraws it. Absent, not disabled, for anyone else. */}
-        {mayOpenFoodCost(location, canManage) ? <FoodCostCard recipe={recipe} /> : null}
+        {mayOpenFoodCost(location, canManage, role) ? <FoodCostCard recipe={recipe} /> : null}
         <AllergenCard recipe={recipe} />
         <DeclarationCard recipe={recipe} />
         {/* The mixing procedure (step 3d-8): after the declaration and before Export, the current app's order. */}

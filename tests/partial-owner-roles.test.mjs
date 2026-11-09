@@ -39,9 +39,19 @@ test('⚠️ the rules, the server and the app open a location to the same value
   const inServer = SERVER.match(/const ACCESS_VALUES = \[([^\]]+)\]/);
   assert.ok(inServer, 'functions/onboarding.js no longer lists the values');
 
+  // Mise 2's port is the fourth place. It names the values by constant, so the constants are resolved first.
+  const inMise2 = read('shared/src/sections.ts').match(/const ACCESS_VALUES: readonly unknown\[\] = Object\.freeze\(\[([^\]]+)\]\)/);
+  assert.ok(inMise2, 'shared/src/sections.ts no longer lists the values');
+  const constants = { OWNER: 'owner', MANAGER: 'manager', OWNER_SALES: 'owner-sales', OWNER_KITCHEN: 'owner-kitchen', true: 'true' };
+  for (const [name, word] of Object.entries(constants)) {
+    if (name === 'true') continue;
+    assert.match(read('shared/src/sections.ts'), new RegExp(`export const ${name} = '${word}';`), `shared/src/sections.ts: ${name} is not '${word}'`);
+  }
+
   const wanted = sorted(['true', 'manager', 'owner', 'owner-sales', 'owner-kitchen']);
   assert.deepEqual(sorted(values(inRules[1])), wanted);
   assert.deepEqual(sorted(values(inServer[1])), wanted);
+  assert.deepEqual(sorted(values(inMise2[1]).map(name => constants[name])), wanted, 'shared/src/sections.ts ACCESS_VALUES');
   for (const value of [true, 'manager', 'owner', 'owner-sales', 'owner-kitchen']) {
     assert.equal(accessValue(doc(value), 'main'), value, `js/sections.js refuses ${value}`);
     assert.deepEqual(locationsOf(doc(value)), ['main'], `locationsOf drops ${value}`);
@@ -316,6 +326,41 @@ test('⚠️ every caller of the four card gates passes the role', () => {
       // ⚠️ mayBeTold() is the one deliberate exception: it applies the role itself (toldAboutCard) and passes
       // `canManage` for the four roles that run a place, so the 3-argument call inside it is right.
       if (file === 'js/home-cards.js') continue;
+      calls.forEach(n => assert.equal(n, args, `${file} calls ${name}() with ${n} arguments, not ${args}: the role is missing`));
+    }
+    for (const file of known[name]) assert.ok(seenIn.has(file), `the walk no longer finds ${name}() in ${file}`);
+  }
+});
+
+// Mise 2 (app/ and shared/): the same walk over the TypeScript files, specs left out. A call that forgets the role shows the
+// sales owner the kitchen, and no type error says so because the role is optional.
+function tsFiles(dir) {
+  const out = [];
+  for (const entry of readdirSync(new URL(`../${dir}`, import.meta.url), { withFileTypes: true })) {
+    if (entry.isDirectory()) { if (entry.name !== 'node_modules' && entry.name !== 'fixtures') out.push(...tsFiles(`${dir}/${entry.name}`)); }
+    else if (/\.tsx?$/.test(entry.name) && !/\.spec\.tsx?$/.test(entry.name) && !entry.name.endsWith('.d.ts')) out.push(`${dir}/${entry.name}`);
+  }
+  return out;
+}
+
+test('⚠️ Mise 2: every caller of the card gates passes the role', () => {
+  const wanted = { cardVisibleTo: 4, mayOpenFoodCost: 3, mayOpenOrders: 3, mayEditRecords: 3, visibleSectionIds: 3 };
+  const known = {
+    cardVisibleTo: ['shared/src/records.ts', 'shared/src/recipe-link.ts', 'app/src/session/visibility.ts'],
+    mayOpenFoodCost: ['app/src/recipes/RecipeView.tsx'],
+    mayOpenOrders: [],
+    mayEditRecords: ['app/src/orders/OrdersSection.tsx', 'app/src/recipes/RecipeEditor.tsx'],
+    visibleSectionIds: ['app/src/shell/useVisibleSections.ts'],
+  };
+  const files = [...tsFiles('shared/src'), ...tsFiles('app/src')];
+  assert.ok(files.length > 300, 'the walk found no files');
+  for (const [name, args] of Object.entries(wanted)) {
+    const seenIn = new Set();
+    for (const file of files) {
+      const calls = callsOf(text(file), name);
+      if (calls.length) seenIn.add(file);
+      // mayBeTold() applies the role itself (toldAboutCard) and passes canManage for the four roles that run a place.
+      if (file === 'shared/src/home-cards.ts') continue;
       calls.forEach(n => assert.equal(n, args, `${file} calls ${name}() with ${n} arguments, not ${args}: the role is missing`));
     }
     for (const file of known[name]) assert.ok(seenIn.has(file), `the walk no longer finds ${name}() in ${file}`);
