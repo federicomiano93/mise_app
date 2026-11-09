@@ -33,6 +33,8 @@ import zplZ64Source from './zpl-z64.ts?raw';
 import haccpLabelSource from './haccp-label.ts?raw';
 import orderTextSource from './order-text.ts?raw';
 import orderImageSource from './order-image.ts?raw';
+import packWordsSource from './pack-words.ts?raw';
+import packTypeSource from './pack-type.ts?raw';
 import { stringsIn } from '../../tests/helpers/strings-in.mjs';
 
 // The glob is typed by Vite's client types, which this package does not load (it has no DOM).
@@ -69,6 +71,9 @@ const LABEL_FILES: Readonly<Record<string, string>> = {
   'order-text.ts': orderTextSource,
   // Step 3f-3: the order picture. Its file name is the order word of the venue's country (labelWord), never the screen's.
   'order-image.ts': orderImageSource,
+  // Mise 2: the package word an order line is counted in («2 bottiglie»). A word that names a thing the supplier reads: by the country.
+  'pack-words.ts': packWordsSource,
+  'pack-type.ts': packTypeSource,
 };
 
 // The pure drawing files that need nothing from any other module.
