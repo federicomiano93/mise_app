@@ -786,7 +786,9 @@ export function IngredientCard({
                   if (next === 'single' && (refused === 'count' || refused === 'inner' || refused === 'innerEmpty')) setRefused(null);
                 }}
               >
-                {working.formatChosen ? null : <option value="" disabled>{t('sup.ing.formatChoose')}</option>}
+                {/* Selectable on purpose: on iOS the wheel picker can commit the first ENABLED option on Done, which would choose a format nobody
+                    chose. onChange ignores the empty value, so picking it again changes nothing. */}
+                {working.formatChosen ? null : <option value="">{t('sup.ing.formatChoose')}</option>}
                 <option value="single">{t('sup.ing.formatSingle')}</option>
                 <option value="carton">{t('sup.ing.formatCarton')}</option>
               </select>

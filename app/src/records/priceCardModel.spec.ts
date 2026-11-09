@@ -978,6 +978,9 @@ describe('price-basis-card', () => {
   test('the basis menu is locked exactly while the format is not chosen, and the segments are the same either way', () => {
     const card = openCard({ item: null, formatChosen: false });
     expect(card.working.formatChosen).toBe(false);
+    // No weight reads: the single form offers no basis, so there is nothing to lock.
+    expect(card.view().basisLocked).toBe(false);
+    card.weight('5');
     expect(card.view().basisLocked).toBe(true);
     const before = card.view().segments;
     card.single();

@@ -1662,6 +1662,10 @@ export const en = {
   'sup.ing.formatCarton': 'Case',
   'sup.ing.formatChoose': 'Choose…',
   'sup.ing.formatRequired': 'Choose whether it comes as a single pack or a case',
+  // Mise 2 only: the price-basis menu (the current app has segment buttons).
+  'sup.price.basis.label': 'The price is',
+  'sup.price.basis.empty': '—',
+  'sup.price.basis.formatFirst': 'Choose the format first: what the price refers to depends on it',
   'sup.ing.contains': 'Contains',
   'sup.ing.count': 'How many in the case',
   'sup.ing.countInvalid': 'Write a whole number, e.g. 4',
@@ -1734,9 +1738,6 @@ export const en = {
   // orders.format.priceAgain
   'sup.price.priceAgain': 'This format has no price yet: type the price',
   // orders.basis.*
-  'sup.price.basis.label': 'The price is',
-  'sup.price.basis.empty': '—',
-  'sup.price.basis.formatFirst': 'Choose the format first: what the price refers to depends on it',
   'sup.price.basis.pack': 'per pack',
   'sup.price.basis.case': 'per case',
   'sup.price.basis.perKg': 'per kg',

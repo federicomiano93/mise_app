@@ -1252,5 +1252,7 @@ His decision (9 Nov 2026), Mise 2 only: the current app (`js/ingredient-record-f
   default, stored values (`basisToStore`) and `tapBasis` conversion; a choice that cannot convert leaves the old value showing.
   While the format is not chosen it is disabled, empty (`—`), with the hint «Choose the format first…» (`PriceView.basisLocked`,
   from `PriceCtx.formatChosen`; a context that says nothing counts as chosen).
+- A new PACKAGING item follows the same rule (decided): it also starts with the format empty and must choose it.
+- The locked basis menu shows only when the single form would offer a basis (a weight reads); with no weight there is no menu until Case is chosen.
 - The card of before (`legacyCard`) is untouched: it only ever opens for existing items.
 - CSS: `.segments` / `.segment` of `IngredientCard.module.css` deleted (nothing else used them); `.box:disabled` added.

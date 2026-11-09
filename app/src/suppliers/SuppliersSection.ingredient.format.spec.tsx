@@ -36,6 +36,7 @@ describe('a new card, format not chosen', () => {
     expect(menu).toHaveAttribute('aria-invalid', 'true');
     expect(menu).toHaveFocus();
     expect(region.getByText('Choose whether it comes as a single pack or a case')).toBeInTheDocument();
+    expect(menu).toHaveAccessibleDescription('Choose whether it comes as a single pack or a case');
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(source.writes).toEqual([]);
   });
@@ -56,6 +57,7 @@ describe('a new card, format not chosen', () => {
     const { region, user } = await open('/suppliers/ingredient/new');
     await user.type(region.getByRole('textbox', { name: 'Weight amount' }), '5');
     expect(basisMenu(region)).toBeDisabled();
+    expect(basisMenu(region)).toHaveAccessibleDescription('Choose the format first: what the price refers to depends on it');
     expect(region.getByText('Choose the format first: what the price refers to depends on it')).toBeInTheDocument();
     await user.selectOptions(formatMenu(region), 'single');
     expect(basisMenu(region)).toBeEnabled();
@@ -63,6 +65,17 @@ describe('a new card, format not chosen', () => {
     expect(region.queryByText('Choose the format first: what the price refers to depends on it')).not.toBeInTheDocument();
     await user.selectOptions(formatMenu(region), 'carton');
     expect(optionNames(basisMenu(region))).toEqual(['per case', 'per pack', 'per kg']);
+  });
+});
+
+describe('a new card with no readable weight', () => {
+  it('shows no basis menu while the format is empty, none after Single pack, and one after Case', async () => {
+    const { region, user } = await open('/suppliers/ingredient/new');
+    expect(region.queryByRole('combobox', { name: 'The price is' })).not.toBeInTheDocument();
+    await user.selectOptions(formatMenu(region), 'single');
+    expect(region.queryByRole('combobox', { name: 'The price is' })).not.toBeInTheDocument();
+    await user.selectOptions(formatMenu(region), 'carton');
+    expect(basisMenu(region)).toBeEnabled();
   });
 });
 

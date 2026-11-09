@@ -395,7 +395,8 @@ export interface PriceView {
   readonly box: { readonly value: string; readonly label: string; readonly placeholder: string };
   // The segments (nothing for a form with no basis), labelled by the box's label; `pressed` is the one in force.
   readonly segments: readonly SegmentView[];
-  // True while the format is not chosen yet: the basis menu is shown disabled, since what a price refers to depends on the format.
+  // True while the format is not chosen yet AND the single form would offer a basis (a weight reads): the menu is shown disabled, since
+  // what a price refers to depends on the format. With nothing to offer there is no menu at all until a format makes one appear.
   readonly basisLocked: boolean;
   // The format-changed note and whether «Recalculate» shows with it; null when nothing changed.
   readonly changedNote: { readonly text: string; readonly showRecompute: boolean } | null;
@@ -526,7 +527,7 @@ export function priceView(state: PriceState, ctx: PriceCtx, t: PriceT): PriceVie
     },
     box: { value: state.box, label: boxLabel, placeholder: state.boxHint },
     segments,
-    basisLocked: ctx.formatChosen === false,
+    basisLocked: ctx.formatChosen === false && options.length > 0,
     changedNote,
     keepsNote,
     priceAgainNote,
