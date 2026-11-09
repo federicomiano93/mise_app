@@ -94,7 +94,7 @@ jobs:
           node scripts/build-pages-site.mjs "$RUNNER_TEMP/site/mise_app" app/dist > /dev/null
           printf '%s\n' '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">' \
             '<meta http-equiv="Content-Security-Policy" content="default-src '"'self'"'; base-uri '"'self'"'; form-action '"'self'"'">' \
-            '<meta http-equiv="refresh" content="0; url=mise_app/"><title>Mise</title></head>' \
+            '<meta name="robots" content="noindex"><meta http-equiv="refresh" content="0; url=mise_app/"><title>Mise</title></head>' \
             '<body><p><a href="mise_app/">Open Mise</a></p></body></html>' > "$RUNNER_TEMP/site/index.html"
           rm -rf app/dist && mv "$RUNNER_TEMP/site" app/dist
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
@@ -255,6 +255,7 @@ jobs:
                         scripts/seed-preview.mjs tests/firebase-target.test.mjs README.md \
                         app/package.json app/src/main.tsx shared/package.json \
                         mise_app/firestore.rules mise_app/package.json mise_app/app/src/main.tsx mise_app/.git/config \
+                        mise_app/functions/index.js mise_app/README.md mise_app/app/package.json mise_app/tests/pages-site.test.mjs \
                         mise2/package.json mise2/src/main.tsx ci/firebase-tools/package.json; do
               [ "$(code "$path")" = 404 ] || leaked="$leaked $path"
             done
@@ -299,7 +300,7 @@ jobs:
           LAYOUT: ${{ needs.build-mise2.outputs.layout }}
         run: |
           if [ "$MISE2" = success ] && [ "$LAYOUT" = switch ]; then
-            mise2="**Mise 2 come sarà live** (stesse pagine, stesso indirizzo /mise_app/, dati di prova): $FIXED_URL/mise_app/ — questa PR porta Mise 2 al posto dell'app di oggi, quindi qui l'app di oggi non c'è; restano la pagina degli ordini dei clienti e quella dell'email per cambiare la parola d'accesso, come sul sito vero."
+            mise2="**Il sito come sarebbe online con questa PR** (Mise 2 a /mise_app/, stesse pagine del sito vero, dati di prova): $FIXED_URL/mise_app/ — con Mise 2 l'app di oggi non c'è più; restano la pagina degli ordini dei clienti e quella dell'email per cambiare la parola d'accesso, come sul sito vero."
           elif [ "$MISE2" = success ]; then
             mise2="**Mise 2**, la nuova app in costruzione (le sezioni arrivano una alla volta): $FIXED_URL/mise2/"
           else
