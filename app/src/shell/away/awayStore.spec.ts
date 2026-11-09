@@ -397,3 +397,25 @@ describe('the holiday store', () => {
     expect(INERT_AWAY_STORE.comeBack()).toEqual({ accepted: false });
   });
 });
+
+describe('a holiday change in the air holds the busy mark (no self-started reload under it)', () => {
+  it('holds from the write until the server answers — accepted or refused', async () => {
+    let held = 0;
+    const hold = () => { held += 1; return () => { held -= 1; }; };
+    const source = fakeSettingsSource();
+    const store = createAwayStore(source, 'u1', () => Date.UTC(2026, 10, 8, 12), hold);
+    store.start();
+    const change = store.set('2026-11-20');
+    expect(change.accepted).toBe(true);
+    expect(held).toBe(1);
+    if (change.accepted) await change.saved;
+    expect(held).toBe(0);
+
+    source.refuseWith = Object.assign(new Error('no'), { code: 'permission-denied' });
+    const refused = store.comeBack();
+    expect(held).toBe(1);
+    if (refused.accepted) expect(await refused.saved).toBe(false);
+    expect(held).toBe(0);
+  });
+});
+
