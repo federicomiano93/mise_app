@@ -14,19 +14,26 @@
 //                         UK bank holidays (shared/src/holidays.ts). ⚠️ NO www.google.com: there is no App Check and no
 //                         reCAPTCHA (his decision, PR #212).
 //   img-src 'self' data: — the label previews, recipe photos and logos are data: URLs.
-//   style-src 'self' + ONE hash — every style is a built stylesheet (React writes element styles through the CSSOM,
-//                         which a policy does not govern), but React Aria's usePress injects one <style> element of its
-//                         own: `touch-action: pan-x pan-y pinch-zoom` on every pressable, so a double tap on a button does
-//                         not zoom the page (found by loading the built app in Chromium with this policy, 8 Nov 2026).
-//                         Allowed by the hash of exactly that text, never by 'unsafe-inline'; csp.spec.ts recomputes it
-//                         from the installed react-aria, so an upgrade that changes the text turns red.
+//   style-src 'self' + TWO hashes — every style is a built stylesheet (React writes element styles through the
+//                         CSSOM, which a policy does not govern), but React Aria injects two <style> elements of its own:
+//                         usePress's `touch-action: pan-x pan-y pinch-zoom` on every pressable (a double tap on a button
+//                         does not zoom the page; found by loading the built app in Chromium with this policy), and, on
+//                         iOS/iPadOS only when a modal opens, usePreventScroll's `overscroll-behavior: contain` (scrolling a
+//                         dialog past its end does not move the page behind it; found by the code review — no Chromium
+//                         run takes that path). Allowed by the hashes of exactly those texts, never 'unsafe-inline';
+//                         csp.spec.ts finds EVERY such text in the installed react-aria and requires exactly these hashes,
+//                         so an upgrade that changes or adds one turns red.
 //   frame-src 'self', base-uri 'self', form-action 'self' — as the current app.
 
 import type { Plugin } from 'vite';
 
 export const FUNCTIONS_HOST = 'https://us-central1-bakery-app-ebf90.cloudfunctions.net';
-// The SHA-256 of React Aria's pressable style (react-aria/dist/private/interactions/usePress, `style.textContent`).
-export const REACT_ARIA_PRESS_STYLE = "'sha256-38RhXrc7EdReTKsOm23ZPOCUgniTUUcjky8QOOrQx6o='";
+// The SHA-256 of each <style> React Aria injects (`style.textContent` in react-aria/dist/private): usePress's, then
+// usePreventScroll's (iOS).
+export const REACT_ARIA_STYLES = [
+  "'sha256-38RhXrc7EdReTKsOm23ZPOCUgniTUUcjky8QOOrQx6o='",
+  "'sha256-gYiS/BvZvRcK27JIXTuwhZ3hs2+VJ1X+2gUlE+farlg='",
+] as const;
 
 export const POLICY = [
   "default-src 'self'",
@@ -34,7 +41,7 @@ export const POLICY = [
   `connect-src 'self' https://*.googleapis.com https://firestore.googleapis.com ${FUNCTIONS_HOST} https://www.gov.uk`,
   "frame-src 'self'",
   "img-src 'self' data:",
-  `style-src 'self' ${REACT_ARIA_PRESS_STYLE}`,
+  `style-src 'self' ${REACT_ARIA_STYLES.join(' ')}`,
   "font-src 'self'",
   "base-uri 'self'",
   "form-action 'self'",
@@ -63,9 +70,11 @@ export function withPolicy(html: string): string {
   return html.replace(charset, match => `${match}\n    <script>\n${bootstrapScript()}\n    </script>`);
 }
 
+// Build only: the dev server injects its own inline preamble and <style> tags, which this policy would refuse.
 export function miseCsp(): Plugin {
   return {
     name: 'mise2-csp',
+    apply: 'build',
     transformIndexHtml: { order: 'post', handler: html => withPolicy(html) },
   };
 }
