@@ -4,7 +4,7 @@ import { Button } from '../ui/Button';
 import { useAlert } from '../ui/useAlert';
 import { useClientOrders, useClientOrdersStore } from './CalculatorContext';
 import { isAcceptableCutoff } from './clientOrdersModel';
-import { SETTINGS_PATH } from './calculatorPath';
+import { useClientsPaths } from './clientsPaths';
 import { SettingsEditor } from './SettingsEditor';
 import { SettingsPage } from './SettingsPage';
 import { Empty, Help } from './SettingsParts';
@@ -20,9 +20,10 @@ import styles from './ClientOrdering.module.css';
 export function CutoffEditor() {
   const { t } = useT();
   const { cutoffFromServer } = useClientOrders();
+  const paths = useClientsPaths();
   if (cutoffFromServer) return <CutoffForm />;
   return (
-    <SettingsPage title={t('ui.clientOrdering')} fallback={SETTINGS_PATH}>
+    <SettingsPage title={t('ui.clientOrdering')} fallback={paths.hub}>
       <Empty>{t('calc.loading')}</Empty>
     </SettingsPage>
   );
@@ -35,6 +36,7 @@ function CutoffForm() {
   const [alert, alertDialog] = useAlert();
   const inputId = useId();
   const input = useRef<HTMLInputElement>(null);
+  const paths = useClientsPaths();
   // '' is a real answer: no deadline. The copy is made ONCE, when the editor opens.
   const [opening] = useState(cutoff);
   const [value, setValue] = useState(opening);
@@ -42,7 +44,7 @@ function CutoffForm() {
   return (
     <SettingsEditor
       title={t('ui.clientOrdering')}
-      fallback={SETTINGS_PATH}
+      fallback={paths.hub}
       dirty={value !== opening}
       saveAnyway={!cutoffStored}
       // ⚠️ The deadline is handed to the browser's own database and the screen moves on (P20); a refusal that arrives

@@ -7,14 +7,11 @@ import { PartBoundary } from '../errors/PartBoundary';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS, Page } from '../shell/Page';
-import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
-import { useAlert } from '../ui/useAlert';
-import { CalculatorProvider, useCalculator, useCalculatorStore, useClientOrdersStore } from './CalculatorContext';
+import { StatusMessageProvider } from '../ui/StatusMessage';
+import { CalculatorProvider, useCalculator } from './CalculatorContext';
 import {
   CALCULATOR_PATH, LOG_PATH, ORDERS_PATH, SETTINGS_PATH, newRecipePath, recipePath, recipesPath, resolveCalculatorPath,
 } from './calculatorPath';
-import { messageText } from './calculatorMessages';
-import { clientOrdersMessageDelivery, clientOrdersMessageText } from './clientOrdersMessages';
 import {
   ADD_RECIPE_OPENER, CHOOSE_RECIPES_OPENER, CLIENT_ORDERS_OPENER, DOUGH_HISTORY_OPENER, HandBackProvider, SETTINGS_OPENER, useHandBack,
   useHandBackState,
@@ -27,6 +24,7 @@ import { RecipePanel } from './RecipePanel';
 import { RecipeTabs } from './RecipeTabs';
 import { SendOrderDoor } from './SendOrder';
 import { SettingsScreens } from './SettingsScreens';
+import { StoreMessages } from './StoreMessages';
 import { TabStateProvider } from './TabStateContext';
 import styles from './CalculatorSection.module.css';
 
@@ -47,27 +45,6 @@ export default function CalculatorSection() {
       </TabStateProvider>
     </CalculatorProvider>
   );
-}
-
-// What the stores report (a dough the database refused, a log that is full, an order that could not be recorded as used,
-// a deadline that was not saved) goes to the status message, on whatever Calculator screen is open.
-function StoreMessages() {
-  const { t } = useT();
-  const store = useCalculatorStore();
-  const clientOrders = useClientOrdersStore();
-  const say = useStatusMessage();
-  useEffect(() => store.onMessage(message => {
-    const text = messageText(t, message);
-    if (text !== null) say(text);
-  }), [store, say, t]);
-  // ⚠️ A message that is a warning (an order used but not recorded) stays on screen until it is dismissed.
-  const [alert, alertDialog] = useAlert();
-  useEffect(() => clientOrders.onMessage(message => {
-    const text = clientOrdersMessageText(t, message);
-    if (clientOrdersMessageDelivery(message) === 'alert') void alert({ message: text, okLabel: t('common.ok') });
-    else say(text);
-  }), [clientOrders, say, alert, t]);
-  return alertDialog;
 }
 
 function CalculatorScreen() {

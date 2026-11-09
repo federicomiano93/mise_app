@@ -4,7 +4,7 @@ import { Link } from 'react-router';
 import { useT } from '../i18n/useT';
 import { useClientOrders } from './CalculatorContext';
 import { FROM_PARENT } from './calculatorNav';
-import { ORDERS_PATH } from './calculatorPath';
+import { useClientsPaths } from './clientsPaths';
 import { stillComing } from './clientOrdersStore';
 import { bannerCounts } from './clientOrdersView';
 import { ORDERS_BANNER_OPENER, useHandBack } from './handBack';
@@ -22,6 +22,7 @@ export function OrdersBanner() {
   const { orders } = useClientOrders();
   const today = useTodayISO();
   const handBack = useHandBack();
+  const paths = useClientsPaths();
   const register = useCallback((node: HTMLAnchorElement | null) => { handBack.register(ORDERS_BANNER_OPENER, node); }, [handBack]);
   const { waiting, changed } = bannerCounts(stillComing(orders, today));
   if (waiting === 0) return null;
@@ -29,7 +30,7 @@ export function OrdersBanner() {
   return (
     <Link
       ref={register}
-      to={ORDERS_PATH}
+      to={paths.orders}
       state={FROM_PARENT}
       className={styles.banner}
       data-tone={changed > 0 ? 'danger' : 'info'}

@@ -59,8 +59,9 @@ function ClientNote({ order }: { order: ClientOrder }) {
   );
 }
 
-// An order still to come.
-export function OrderCard({ order, onApply }: { order: ClientOrder; onApply: (order: ClientOrder) => void }) {
+// An order still to come. ⚠️ WITHOUT `onApply` THERE IS NO BUTTON: the Clients section (the owner of the sales side, who has
+// no Calculator to put an order into) shows the order to read.
+export function OrderCard({ order, onApply }: { order: ClientOrder; onApply?: (order: ClientOrder) => void }) {
   const { t, locale } = useT();
   const { cutoff } = useClientOrders();
   const nameId = useId();
@@ -115,14 +116,16 @@ export function OrderCard({ order, onApply }: { order: ClientOrder; onApply: (or
 
       <ClientNote order={order} />
 
-      <Button
-        className={styles.apply}
-        variant={used ? 'secondary' : 'primary'}
-        aria-describedby={nameId}
-        onPress={() => { onApply(order); }}
-      >
-        {t(label)}
-      </Button>
+      {onApply ? (
+        <Button
+          className={styles.apply}
+          variant={used ? 'secondary' : 'primary'}
+          aria-describedby={nameId}
+          onPress={() => { onApply(order); }}
+        >
+          {t(label)}
+        </Button>
+      ) : null}
     </article>
   );
 }

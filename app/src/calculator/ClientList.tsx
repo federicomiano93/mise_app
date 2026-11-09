@@ -7,7 +7,7 @@ import { Button as UiButton } from '../ui/Button';
 import { ClientsSaveButton } from './ClientsSaveButton';
 import { useClientsEditor } from './clientsEditorContext';
 import { FROM_PARENT } from './calculatorNav';
-import { SETTINGS_PATH, clientPath } from './calculatorPath';
+import { useClientsPaths } from './clientsPaths';
 import { ADD_CLIENT_OPENER, clientOpener, useHandBack } from './handBack';
 import { SettingsPage } from './SettingsPage';
 import { Help } from './SettingsParts';
@@ -21,6 +21,7 @@ export function ClientList() {
   const editor = useClientsEditor();
   const navigate = useNavigate();
   const handBack = useHandBack();
+  const paths = useClientsPaths();
   const { clients } = editor;
   const reorderable = clients.length > 1;
   const nameOf = (name: string): string => (name.trim() === '' ? t('calc.unnamedClient') : name);
@@ -38,12 +39,12 @@ export function ClientList() {
   const openClient = (id: string) => {
     editor.keep();
     handBack.expect(clientOpener(id));
-    void navigate(clientPath(id), { state: FROM_PARENT });
+    void navigate(paths.client(id), { state: FROM_PARENT });
   };
 
   const addClient = () => {
     const id = editor.addClient();
-    void navigate(clientPath(id), { state: FROM_PARENT });
+    void navigate(paths.client(id), { state: FROM_PARENT });
   };
 
   // ⚠️ THE ROWS OF A GridList ARE BUILT AFTER THE FIRST LAYOUT (React Aria collects them in a hidden pass), so the
@@ -68,7 +69,7 @@ export function ClientList() {
   return (
     <SettingsPage
       title={t('ui.clients')}
-      fallback={SETTINGS_PATH}
+      fallback={paths.hub}
       onBack={() => { void editor.leaveEditor(); }}
       action={<ClientsSaveButton />}
     >
