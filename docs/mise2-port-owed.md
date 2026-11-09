@@ -124,14 +124,13 @@ worker's rollback, has the exact order):
 ## B. Roles and access (partial owners): rules already live, Mise 2 UI blind
 
 8. **Partial owners step 4** (`owner-sales`, `owner-kitchen`) — PRs #430 #432 #449 (v1.129.0, v1.132.0, v1.134.0).
-   DONE 9 Nov 2026 (`feature/mise2-next-roles-1`; `docs/parity/home.md`, «Partial owners as built»), except the kitchen's ingredient merge
-   (slice 2) and the sales owner's Clients page and narrow save (item 10, slices 3-4, still deferred). ⚠️ CORRECTION OF THE FIRST WORDING: this WAS a
+   DONE 9 Nov 2026 (`feature/mise2-next-roles-1`; `docs/parity/home.md`, «Partial owners as built»; the kitchen's ingredient merge:
+   `feature/mise2-next-roles-2`, `docs/parity/suppliers.md`, «Kitchen owner's merge as built»), except the sales owner's Clients page and narrow save (item 10, slices 3-4, still deferred). ⚠️ CORRECTION OF THE FIRST WORDING: this WAS a
    LOCK-OUT, not «no»: `shared/src/sections.ts` had `ACCESS_VALUES = [true, MANAGER, OWNER]`, so `locationsOf` dropped the two values and Mise 2
    opened on «no venue yet» for anybody holding one. Now `shared/` has the five values, `NOT_FOR_ROLE`, `sectionsFor` narrowed by it,
    `pageWhenRefused`, `canManageVenue`, `worksOnClients`, and the role argument of `mayEditRecords`, `mayOpenOrders`, `mayOpenFoodCost`;
    `app/` passes the role to every card gate and draws the venue-wide controls (Settings «The venue», the ingredient panel switches, the recipe
-   photo switch) only for `canManageVenue`. Nobody may hold `owner-sales` until item 10 is done, and an `owner-kitchen`'s
-   «Merge another pack…» stops at «could not check» (it reads `products`, refused to them) until slice 2 of the roles work.
+   photo switch) only for `canManageVenue`. Nobody may hold `owner-sales` until item 10 is done.
 9. **Orders price gate** — DONE 9 Nov 2026 with 8: `readsPurchasePrices` (`session/visibility.ts`) = the rules' `cardAccess(lid,'foodcost','prices')`;
    `OrdersContext` and `useMayWritePrices` ask it, so the kitchen owner sees and writes the money without having Food cost on their rail.
 10. **Clients page (#449, `a694100e`, `clients.html`)** — page for the sales owner: only `clients` is sent; the editor lives in the Calculator

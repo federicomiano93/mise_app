@@ -427,7 +427,8 @@ queue and the other roads arrive in 3d-4. The usage record names the screen `rec
   full width at `/suppliers/price-changes`, behind the import's gate (`useMayImport`), its weeks cut at the store's `weekStartsOn`.
   `merge/mergeSource.ts` (lazy through `lazyMergeSource.ts`) is the network-only port of `ingredient-merge-data.js`: server reads after
   `waitForPendingWrites`, refused offline, every call bounded, the usage checked again before the first write, B deleted last, a
-  `MergeError` with `code` and `committed` (the honest words). `merge/MergeScreen` is one level below A's card
+  `MergeError` with `code` and `committed` (the honest words); for `owner-kitchen` (who may not read `products`) the usage asks the callable
+  `productsUsingIngredient` through `KitchenUsage` (role asked at each check, from `createDataServices(…, currentRole)`). `merge/MergeScreen` is one level below A's card
   (`/suppliers/ingredient/<id>/merge`), reached from the card's `onMerge` door (price writers, an existing ingredient, refused with
   unsaved edits); while it writes it holds `markBusy` and a router blocker, and a finished merge steps back onto A's card with the
   focus on its door (`MERGE_OPENER` in `handBack.ts`). Details and the differences: `docs/parity/suppliers.md`,
