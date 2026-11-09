@@ -1282,12 +1282,45 @@ export function reconcileConfigWrite(config: unknown, server: unknown): { recipe
   return { recipes, configRev: serverRev + 1 };
 }
 
+// The code of the error a clients-only save throws when the document needs the Calculator's whole save first
+// (see needsCalculatorSave).
+export const NEEDS_CALCULATOR_SAVE = 'needs-calculator-save';
+
+// Can this server document take a clients-only save? Two cases where it cannot:
+// - it does not exist: the rules let the owner of the sales side change it, never start it.
+// - ⚠️ IT IS STILL IN A RETIRED SHAPE. normalizeConfig asks the old keys before `clients`, and a clients-only
+//   save cannot delete them as the whole save does (the rules refuse this role those keys). So next to a
+//   top-level products[] the saved clients are read through migrateCatalogue, which looks only at
+//   clients[].items: every client would come back with no products, on every phone. And on the oldest per-tab
+//   shape a new clients[] would hide the clients and recipes still migrated from it.
+export function needsCalculatorSave(server: unknown): boolean {
+  if (!server || typeof server !== 'object') return true;
+  const s = server as any;
+  if (Array.isArray(s.products)) return true;
+  return !Array.isArray(s.clients) && !!(s.focaccia || s.brioche || s.sourdough || s.market);
+}
+
+// What the Clients page writes: the address book and the next revision, nothing else. ⚠️ THE RULES JUDGE THE KEYS
+// A SAVE CHANGES, and the Calculator's whole save re-normalises the recipes, so the owner of the sales side could
+// never send it (writesCalculatorConfigAs in firestore.rules). Leaving the recipes out also means this save
+// cannot overwrite one, so there is nothing for reconcileConfigWrite to rescue.
+// ⚠️ NO LIST OF CLIENTS IS AN ERROR, NEVER AN EMPTY LIST: an empty one would wipe the address book.
+export function clientsOnlyWrite(config: unknown, server: unknown): { clients: unknown[]; configRev: number } {
+  const c = config as any;
+  if (!c || !Array.isArray(c.clients)) throw new TypeError('clientsOnlyWrite: no clients');
+  return {
+    clients: c.clients,
+    configRev: (Number((server as any) && (server as any).configRev) || 0) + 1,
+  };
+}
+
 // Which sentence tells a person that a config save did NOT reach the server (a key of the interface dictionary,
 // the same in both apps), or null when it did. permission-denied is the server REFUSING: since the configModel
 // guard that means this device runs an older app than the data. Anything else (offline, network, timeout) is
 // the connection. 'no-server-answer' explains itself where it happens, so it has no key here.
-export function saveFailureKey(result: unknown): 'calc.notSavedOutOfDate' | 'calc.notSavedCheckConnection' | null {
+export function saveFailureKey(result: unknown): 'calc.notSavedNoConfig' | 'calc.notSavedOutOfDate' | 'calc.notSavedCheckConnection' | null {
   const r = result as any;
   if (!r || r.reason !== 'write-failed') return null;
+  if (r.code === NEEDS_CALCULATOR_SAVE) return 'calc.notSavedNoConfig';
   return r.code === 'permission-denied' ? 'calc.notSavedOutOfDate' : 'calc.notSavedCheckConnection';
 }

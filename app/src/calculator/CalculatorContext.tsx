@@ -26,8 +26,10 @@ const browserClientOrdersDeps = (): ClientOrdersDepsLite => ({
   warn: (message, detail) => console.warn(message, detail),
 });
 
-export function CalculatorProvider({ children, deps, clientOrdersDeps }: {
+export function CalculatorProvider({ children, deps, clientOrdersDeps, clientsOnly }: {
   children: ReactNode;
+  // The owner of the sales side: no logs, no linked recipes, only the clients are saved (CalculatorOptions).
+  clientsOnly?: boolean;
   deps?: CalculatorDeps;
   clientOrdersDeps?: ClientOrdersDepsLite;
 }) {
@@ -50,6 +52,7 @@ export function CalculatorProvider({ children, deps, clientOrdersDeps }: {
     services.calculator(locationId),
     {
       marketOrderTitle: t('calc.marketOrderTitle'),
+      clientsOnly: clientsOnly === true,
       // ⚠️ THE CLIENTS' MENUS FOLLOW THE ADDRESS BOOK (item 69): a client cannot order a product whose menu was
       // never published, and nothing on the bakery's side would show it. Only when some client's published list
       // would read differently: a save of recipes, WhatsApp lists or log settings costs no menu read.

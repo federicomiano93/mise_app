@@ -943,7 +943,7 @@ describe.each([
   ['shared/ (TypeScript)', ported],
   ['js/ (current app)', legacy],
 ] as const)('%s — the save path', (_name, m) => {
-  const { reconcileConfigWrite, saveFailureKey } = m as unknown as Record<string, Loose>;
+  const { reconcileConfigWrite, saveFailureKey, needsCalculatorSave, clientsOnlyWrite, NEEDS_CALCULATOR_SAVE } = m as unknown as Record<string, Loose>;
   const ids = (out: Loose) => out.recipes.map((r: Loose) => r.id);
 
   test('no concurrent writer (revs match): recipes pass through, rev climbs', () => {
@@ -999,6 +999,30 @@ describe.each([
     }
   });
 
+  test('saveFailureKey: a clients-only save that found no usable document says the Calculator must be saved once', () => {
+    expect(NEEDS_CALCULATOR_SAVE).toBe('needs-calculator-save');
+    expect(saveFailureKey({ synced: false, reason: 'write-failed', code: NEEDS_CALCULATOR_SAVE })).toBe('calc.notSavedNoConfig');
+  });
+
+  test('⚠️ needsCalculatorSave: no document or a retired shape needs the whole save first', () => {
+    for (const server of [null, undefined, 'x', 0]) expect(needsCalculatorSave(server), String(server)).toBe(true);
+    expect(needsCalculatorSave({ products: [], clients: [] })).toBe(true);
+    expect(needsCalculatorSave({ focaccia: {} })).toBe(true);
+    expect(needsCalculatorSave({ market: {} })).toBe(true);
+    expect(needsCalculatorSave({ clients: [], focaccia: {} })).toBe(false);
+    expect(needsCalculatorSave({ clients: [], recipes: [] })).toBe(false);
+    expect(needsCalculatorSave({})).toBe(false);
+  });
+
+  test('⚠️ clientsOnlyWrite: only the clients and the next revision; no list of clients is an error, never an empty list', () => {
+    const clients = [{ id: 'c1' }];
+    expect(clientsOnlyWrite({ clients, recipes: [{ id: 'r' }] }, { configRev: 6 })).toStrictEqual({ clients, configRev: 7 });
+    expect(clientsOnlyWrite({ clients: [] }, null)).toStrictEqual({ clients: [], configRev: 1 });
+    expect(() => clientsOnlyWrite({}, { configRev: 1 })).toThrow(TypeError);
+    expect(() => clientsOnlyWrite(null, null)).toThrow(TypeError);
+    expect(() => clientsOnlyWrite({ clients: 'x' }, null)).toThrow(TypeError);
+  });
+
   test('saveFailureKey: a stored change, no answer yet (already explained) and junk say nothing', () => {
     expect(saveFailureKey({ synced: true })).toBeNull();
     expect(saveFailureKey({ synced: false, reason: 'no-server-answer' })).toBeNull();
@@ -1036,13 +1060,12 @@ describe('the port against the original', () => {
     for (const name of LEFT_OUT) expect(original[name] !== undefined, name).toBe(true);
   });
 
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, items 10, 36): main added exports to js/calculator-config.js (the lab-format export, the Clients owner), not yet in the port — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 36): main added `moveIngredient` (the lab-format export) to js/calculator-config.js, not yet in the port — remove .fails when ported
   test.fails('exports exactly the same names, except those', () => {
     expect(Object.keys(port).sort()).toStrictEqual(shared);
   });
 
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 10): main added exports to js/calculator-config.js (NEEDS_CALCULATOR_SAVE and more), not yet in the port — remove .fails when ported
-  test.fails('every non-function export is strictly equal and frozen the same way', () => {
+  test('every non-function export is strictly equal and frozen the same way', () => {
     for (const name of shared) {
       if (typeof original[name] === 'function') continue;
       expect(port[name], name).toStrictEqual(original[name]);

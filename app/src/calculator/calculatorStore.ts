@@ -45,7 +45,7 @@ import { linkedRecipeIds } from '@mise/shared/calculator-recipe-source';
 import { addVersion, confirmTarget, createLog, restoreVersion, setForDay } from '@mise/shared/log-model';
 import type { ForDay, Log, LogVersion } from '@mise/shared/log-model';
 import type { KeyValueStorage } from '../session/backend';
-import type { CalculatorSource, StoredDoc } from './calculatorSource';
+import type { AnswerMeta, CalculatorSource, StoredDoc } from './calculatorSource';
 
 export const CONFIG_KEY = 'calculator-config';
 export const LOGS_KEY = 'logs-cache';
@@ -153,6 +153,9 @@ export interface CalculatorDeps {
 export interface CalculatorOptions {
   // The default title of a WhatsApp list, in the interface language (normalizeConfig's second argument).
   readonly marketOrderTitle?: string;
+  // The owner of the sales side: the store watches ONLY the configuration (the rules refuse that role the logs, and
+  // it has no linked recipes to follow) and saves ONLY the clients (source.saveClients).
+  readonly clientsOnly?: boolean;
   // Told after every configuration save the SERVER has stored, with the configuration before and after: the
   // clients' ordering menus are republished from here (js/calculator-config-store.js `saveConfig`). It must not
   // throw; whatever it starts must never fail the save.
@@ -179,7 +182,7 @@ export interface CalculatorStore {
   restoreLog(logId: string, index: number, meta: { calculatedBy: string; at: { date: string; time: string } }): LogChange;
   // Deletes a whole log. A log that is not in the list is left alone.
   deleteLog(logId: string): void;
-  // Saves the whole configuration LOCAL-FIRST: memory, the local copy and the screen change at once; then it is
+  // Saves the whole configuration (with `clientsOnly`, only its clients — `saveClients`) LOCAL-FIRST: memory, the local copy and the screen change at once; then it is
   // sent, unless the database has never answered (see ConfigSaveResult). A refused or failed write is taken back
   // here if nothing newer replaced it. Never rejects.
   saveConfig(next: CalculatorConfig): Promise<ConfigSaveResult>;
@@ -325,7 +328,8 @@ export function createCalculatorStore(
 
   // Starts a listener for every newly linked recipe and stops the ones nothing points at any more.
   function syncLinked(): void {
-    if (!started) return;
+    // The sales owner's store follows no recipe: the Catalogue is not that role's to read.
+    if (!started || options.clientsOnly) return;
     const wanted = new Set(linkedRecipeIds(getRecipes(config)));
     let dropped = false;
     for (const [id, stop] of linkedStops) {
@@ -518,16 +522,16 @@ export function createCalculatorStore(
             say({ kind: 'config-stream-broken' });
           },
         ),
-        source.watchLogs(
+        ...(options.clientsOnly ? [] : [source.watchLogs(
           deps.now() - LOG_WINDOW_DAYS * 24 * 60 * 60 * 1000,
-          (list, meta) => onLogs(list, meta.fromServer),
+          (list: StoredDoc[], meta: AnswerMeta) => onLogs(list, meta.fromServer),
           () => {
             // The local copy stays the best guess; Confirm can still decide create or update from it.
             logsLoaded = true;
             changed();
             say({ kind: 'logs-stream-broken' });
           },
-        ),
+        )]),
       ];
       syncLinked();
     },
@@ -637,7 +641,7 @@ export function createCalculatorStore(
       }
       configSaving += 1;
       changed();
-      return source.saveConfig(mine).then(
+      return (options.clientsOnly ? source.saveClients(mine) : source.saveConfig(mine)).then(
         (rev): ConfigSaveResult => {
           configSaving -= 1;
           writtenRev = Math.max(writtenRev, Number(rev) || 0);

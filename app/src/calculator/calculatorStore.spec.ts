@@ -1,4 +1,5 @@
 import { describe, expect, test, vi } from 'vitest';
+import { saveFailureKey } from '@mise/shared/calculator-config';
 import { fakeCalculatorSource } from '../testing/fakeCalculatorSource';
 import type { StoredDoc } from './calculatorSource';
 import { CONFIG_KEY, LOGS_KEY, LOG_WINDOW_DAYS, MAX_LOG_VERSIONS, createCalculatorStore, genLogId } from './calculatorStore';
@@ -362,6 +363,52 @@ describe('saving the configuration', () => {
     expect(source.savedConfigs).toHaveLength(1);
     expect((source.config as { configRev: number }).configRev).toBe(1);
     expect(names(store)).toEqual(['Pizza bianca']);
+  });
+
+  test('⚠️ clientsOnly: only the configuration is watched (no logs listener, no linked recipes) and only the clients are saved', async () => {
+    const source = fakeCalculatorSource({ config: { ...CONFIG, configRev: 2 } });
+    const store = createCalculatorStore(source, { marketOrderTitle: 'Market order', clientsOnly: true }, {
+      storage: memoryStorage(), now: () => NOW, newLogId: () => 'log-1', warn: vi.fn(),
+    });
+    store.start();
+    expect(source.logWatcherCount()).toBe(0);
+    expect(source.watchedRecipes()).toEqual([]);
+    const edited = { ...CONFIG, clients: [{ id: 'c1', name: 'Cafe' }], recipes: [] };
+    await expect(store.saveConfig(edited as never)).resolves.toEqual({ synced: true });
+    expect(source.savedConfigs).toHaveLength(0);
+    expect(source.savedClients).toHaveLength(1);
+    const stored = source.config as { recipes: { id: string }[]; clients: { id: string }[]; configRev: number };
+    expect(stored.recipes.map(r => r.id)).toEqual(['r1']);
+    expect(stored.clients.map(c => c.id)).toEqual(['c1']);
+    expect(stored.configRev).toBe(3);
+    store.stop();
+  });
+
+  test('clientsOnly: no document yet is said as «the Calculator must be saved once», and the change is taken back', async () => {
+    const source = fakeCalculatorSource({ config: null });
+    const store = createCalculatorStore(source, { clientsOnly: true }, {
+      storage: memoryStorage(), now: () => NOW, newLogId: () => 'log-1', warn: vi.fn(),
+    });
+    store.start();
+    const before = store.getSnapshot().config;
+    const result = await store.saveConfig({ ...before, clients: [{ id: 'c1' }] } as never);
+    expect(result).toEqual({ synced: false, reason: 'write-failed', code: 'needs-calculator-save' });
+    expect(saveFailureKey(result)).toBe('calc.notSavedNoConfig');
+    expect(store.getSnapshot().config.clients).toEqual(before.clients);
+    expect(source.config).toBeNull();
+    store.stop();
+  });
+
+  test('clientsOnly: nothing is sent before the server has answered once', async () => {
+    const source = fakeCalculatorSource({ config: CONFIG });
+    source.hold();
+    const store = createCalculatorStore(source, { clientsOnly: true }, {
+      storage: memoryStorage(), now: () => NOW, newLogId: () => 'log-1', warn: vi.fn(),
+    });
+    store.start();
+    await expect(store.saveConfig({ ...CONFIG, clients: [{ id: 'c1' }] } as never)).resolves.toEqual({ synced: false, reason: 'no-server-answer' });
+    expect(source.savedClients).toHaveLength(0);
+    store.stop();
   });
 
   test('⚠️ NOTHING is sent before the database has answered once: the empty default must never overwrite a venue', async () => {

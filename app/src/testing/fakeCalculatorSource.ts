@@ -1,4 +1,4 @@
-import { reconcileConfigWrite } from '@mise/shared/calculator-config';
+import { NEEDS_CALCULATOR_SAVE, clientsOnlyWrite, needsCalculatorSave, reconcileConfigWrite } from '@mise/shared/calculator-config';
 import { withRowIds } from '@mise/shared/guided-model';
 import type { AnswerMeta, CalculatorSource, StoredDoc } from '../calculator/calculatorSource';
 
@@ -28,6 +28,10 @@ export type FakeCalculatorSource = CalculatorSource & {
   saved: StoredDoc[];
   // Every configuration that reached the source, in order, as handed over.
   savedConfigs: Record<string, unknown>[];
+  // Every clients-only save that reached the source, in order: the address book handed over.
+  savedClients: unknown[][];
+  // How many log listeners are open right now (a clients-only store opens none).
+  logWatcherCount(): number;
   // Every row-id stamp that WROTE: the recipe and the rows written.
   stamps: { id: string; ingredients: unknown[] }[];
   // How many times the whole catalogue was read.
@@ -59,6 +63,7 @@ export function fakeCalculatorSource(seed: {
   const recipeWatchers = new Set<RecipeListener>();
   const refuse = { save: false, remove: false, config: false, logs: false, configSave: false, catalogue: false, stamp: false };
   const saved: StoredDoc[] = [];
+  const savedClients: unknown[][] = [];
   const deletedIds: string[] = [];
   const appended: { id: string; version: Record<string, unknown>; forDay: string | null }[] = [];
   const savedConfigs: Record<string, unknown>[] = [];
@@ -87,7 +92,7 @@ export function fakeCalculatorSource(seed: {
 
   const fake: FakeCalculatorSource = {
     config: seed.config === undefined ? null : seed.config,
-    recipes, logs, refuse, saved, deletedIds, appended, savedConfigs, stamps,
+    recipes, logs, refuse, saved, deletedIds, appended, savedConfigs, savedClients, stamps,
     catalogueReads: () => catalogueReads,
 
     watchConfig(onChange, onError) {
@@ -180,6 +185,27 @@ export function fakeCalculatorSource(seed: {
       return land();
     },
 
+    // Like the real transaction: refused before any write when there is no usable document; otherwise ONLY the
+    // clients and the next revision change, everything else stays as stored.
+    saveClients(config) {
+      const handed = JSON.parse(JSON.stringify(config)) as Record<string, unknown>;
+      savedClients.push(handed.clients as unknown[]);
+      const land = (): Promise<number> => {
+        if (refuse.configSave) return Promise.reject(refused());
+        if (needsCalculatorSave(fake.config)) {
+          return Promise.reject(Object.assign(new Error(NEEDS_CALCULATOR_SAVE), { code: NEEDS_CALCULATOR_SAVE }));
+        }
+        const write = clientsOnlyWrite(handed, fake.config);
+        fake.config = { ...fake.config, ...write, configModel: 4 };
+        for (const listener of configWatchers) tellConfig(listener, FROM_SERVER);
+        return Promise.resolve(write.configRev);
+      };
+      if (configSavesHeld) {
+        return new Promise<number>((resolve, reject) => { heldConfigSaves.push(() => { land().then(resolve, reject); }); });
+      }
+      return land();
+    },
+
     listCatalogueRecipes() {
       catalogueReads += 1;
       if (refuse.catalogue) return Promise.reject(refused());
@@ -200,6 +226,8 @@ export function fakeCalculatorSource(seed: {
       }
       return Promise.resolve(stamped);
     },
+
+    logWatcherCount: () => logWatchers.size,
 
     holdConfigSaves() { configSavesHeld = true; },
     settleConfigSaves() {
