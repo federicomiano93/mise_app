@@ -13,9 +13,11 @@
 // answered by the database (calculator/CalculatorContext.tsx, BusyWhileUnsent), and its Settings editors hold it while dirty
 // (calculator/SettingsEditor.tsx), and so does the market order form while quantities were changed by hand
 // (calculator/OrderForm.tsx). Orders holds it while typing has not reached Firestore, while a day line is saved, and while a close
-// as not ordered or a reopen is answered (orders/ordersStore.ts). Added with the service worker (step 5): a client's
-// ordering link while it is made or turned off (calculator/OrderingLink.tsx), a WhatsApp line typed and not added yet
-// (calculator/WhatsappPicker.tsx) and what was typed on a HACCP label until it is printed (recipes/HaccpLabelBody.tsx).
+// as not ordered or a reopen is answered (orders/ordersStore.ts). The holiday holds it while a picked day is not set yet
+// (settings/AwayRow.tsx) and while a holiday change has not been answered by the server (shell/away/awayStore.ts). Added
+// with the service worker (step 5): a client's ordering link while it is made or turned off (calculator/OrderingLink.tsx),
+// a WhatsApp line typed and not added yet (calculator/WhatsappPicker.tsx) and what was typed on a HACCP label until it is
+// printed (recipes/HaccpLabelBody.tsx).
 // ⚠️ A HOLD MUST END: a screen left open with a hold that never lets go keeps that device off every update, and off the
 // way back after a revert. (Not the sign-in form for that reason: a browser's autofill or a half-typed address left on
 // a shared tablet would block it for days, for a box that takes seconds to retype.) Each new editor adds itself here.
