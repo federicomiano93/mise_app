@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import {
-  NEW_CHOICE, NO_SUPPLIER_ID, activePatch, buildSave, firstRefusal, formState, isDirty, kindFor, orderNow, packTypeChoiceOf, packTypeVisible, readChoice, weightText, withFormat, withInner, withPackType,
+  NEW_CHOICE, NO_SUPPLIER_ID, activePatch, buildSave, firstRefusal, formState, isDirty, kindFor, orderNow, packTypeChoiceOf, packTypeVisible, readChoice, typeGuardOf, weightText, withFormat, withInner, withPackType,
   workingFrom,
 } from './ingredientCardModel';
 import type { ItemLike, Working } from './ingredientCardModel';
@@ -627,6 +627,57 @@ describe('the package type (pack-type.ts) in the card model', () => {
     const built = saveAs(withType(chosen(null), NEW_CHOICE, 'x'.repeat(60)), null);
     expect(String(built.payload.packUnit)).toHaveLength(40);
     expect(String(built.payload.unit)).toHaveLength(40);
+  });
+
+  test('a rename tells the store which word to reset; nothing else does', () => {
+    const item: ItemLike = { id: 't', name: 'Cream', unit: 'busta', packUnit: 'busta' };
+    expect(saveAs(withType(open(item), 'secchiello'), item).typeRenamedFrom).toBe('busta');
+    expect(saveAs(withType(open(item), 'BUSTA'), item).typeRenamedFrom).toBe('');
+    expect(saveAs(open(item), item).typeRenamedFrom).toBe('');
+    expect(saveAs(withType(chosen(null), 'bottiglia'), null).typeRenamedFrom).toBe('');
+    // Cartone → Single then renamed: the old word is the package the carton had.
+    const carton: ItemLike = { id: 'x', name: 'x', packCount: 4, packUnit: 'busta', unit: 'cartone' };
+    expect(saveAs(withType(withFormat(open(carton), 'single', 'it'), 'secchiello'), carton).typeRenamedFrom).toBe('busta');
+  });
+
+  test('a type picked on a new item and then made loose by a per-kilo price is dropped at Save: nothing is written for it', () => {
+    const working = withType(chosen(null), 'bottiglia');
+    const built = saveAs(working, null, { pricePatch: priceFor('kg', 4) });
+    expect(built.payload.unit).toBe('kg');
+    expect(built.payload).not.toHaveProperty('packUnit');
+    expect(built.typeRenamedFrom).toBe('');
+  });
+
+  describe('⚠️ the card must not flip to the card of before (typeMayRewrite on the fields that will be saved)', () => {
+    // A carton of 1 whose price is a pieces case of one and whose piece IS the item: with an empty unit that case is a legacy shape.
+    const PIECES_CARTON: ItemLike = {
+      id: 'pc', name: 'Eggs', weight: '60 g', packCount: 1, unit: 'cartone', packUnit: 'uovo',
+      priceUnit: 'pcs', pricePerUnit: 0.3, casePrice: 0.3, caseCount: 1, caseItemUnit: 'pcs', unitWeightKg: 0.06,
+    };
+    const single = () => withFormat(openPriced(PIECES_CARTON), 'single', 'it');
+
+    test('the saved shape without a type would be legacy: the guard refuses (a deleted legacy line makes this fail)', () => {
+      expect(typeGuardOf(single(), PIECES_CARTON, { mayPrice: true, lang: 'it' }).mayRewrite).toBe(false);
+    });
+
+    test('Cartone → Single → «— none —» writes no empty unit: it would reopen on the card of before', () => {
+      const cleared = saveAs(withType(single(), ''), PIECES_CARTON, { mayPrice: true });
+      expect(cleared.payload).toMatchObject({ packCount: null, unit: 'uovo' });
+    });
+
+    test('a rename still goes', () => {
+      const renamed = saveAs(withType(single(), 'barattolo'), PIECES_CARTON, { mayPrice: true }).payload;
+      expect(renamed).toMatchObject({ unit: 'barattolo', packUnit: 'barattolo' });
+    });
+  });
+
+  test('⚠️ Cartone → Single with no package word, over a stored case of more than one: a type cannot be added', () => {
+    const carton: ItemLike = { ...CASE_OF_4, packCount: 4, unit: 'cartone', packUnit: '' };
+    const toSingle = withFormat(openPriced(carton), 'single', 'it');
+    expect(packTypeVisible(toSingle, carton, { mayPrice: true, lang: 'it' })).toBe(false);
+    const built = saveAs(withType(toSingle, 'bottiglia'), carton, { mayPrice: true });
+    expect(built.payload).not.toHaveProperty('packUnit', 'bottiglia');
+    expect(built.payload.unit).not.toBe('bottiglia');
   });
 
   test('the VAT line prices the order as before: the type is not part of orderNow', () => {

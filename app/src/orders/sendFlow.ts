@@ -68,7 +68,8 @@ export function confirmedSendRows(lens: OrdersLens, items: readonly PlaceItem[],
 
 // Sending a RECORDED order again, from History (parity H11, step 3f-4): one row per record, in the order given, with the lines
 // as they were recorded — the names live where the ingredient still exists, frozen otherwise, and only the units frozen into
-// the record (itemsFromQuantities: the message reads as it did the first time). The row's id is the record's SUPPLIER, so the
+// the record (itemsFromQuantities). Mise 2 only: a line with no frozen unit reads with the card's CURRENT package word («2 bottiglie»), even for
+// an order placed before the type existed (docs/parity/orders.md). The row's id is the record's SUPPLIER, so the
 // roads to a supplier find its phone and email by id; the legacy weekly record has none and goes only by the chat. A record
 // with nothing left in it is left out. `language` is the venue's output language (the supplier reads the stand-in word).
 export function recordSendRows(records: readonly StoredDoc[], ingredients: readonly StoredDoc[], language: unknown): SendRow[] {

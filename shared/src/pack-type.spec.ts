@@ -257,6 +257,18 @@ describe('⚠️ the guard grid: a type never changes money, a count or how the 
     expect(packTypePatch(before, 'bottiglia', { mayRewrite: true })).not.toStrictEqual({});
   });
 
+  test('⚠️ the stale explicit unit: a draft line still in the OLD word is orphaned after a rename (why the store resets it)', () => {
+    const renamed = { ...prices[5]![1], id: 'i1', unit: 'secchiello', packUnit: 'secchiello' };
+    // The line carries «busta»: not the card's unit any more, not its package either, so it shows a unit and has no price.
+    expect(lineUnit(renamed, { qty: 3, unit: 'busta' })).toBe('busta');
+    expect(lineUnitCost(renamed, renamed, 'busta')).toBeNull();
+    // Reset to the card's unit (no explicit unit), the line is priced again and reads with the new word.
+    expect(lineUnit(renamed, { qty: 3 })).toBe('');
+    expect(lineUnitCost(renamed, renamed, '')).toBe(unitCost(renamed, renamed));
+    expect(unitCost(renamed, renamed)).not.toBeNull();
+    expect(linePackWord(renamed, { qty: 3 })).toBe('secchiello');
+  });
+
   test('a rename on a stored case of 4 is allowed and changes nothing', () => {
     const before = { ...base, ...prices[5]![1], unit: 'busta', packUnit: 'busta' };
     const patch = packTypePatch(before, 'secchiello', { mayRewrite: false });

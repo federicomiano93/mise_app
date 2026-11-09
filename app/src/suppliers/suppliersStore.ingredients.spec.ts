@@ -115,6 +115,53 @@ describe('the suppliers store: the order line when the card replaced the order u
   });
 });
 
+describe('the suppliers store: a renamed package type resets the open lines in the old word (Mise 2 only)', () => {
+  const withLine = (entry: Record<string, unknown>) => {
+    const source = fakeSuppliersSource({ ingredients: [{ id: 'i1', name: 'Cream', unit: 'busta', packUnit: 'busta' }], prices: { i1: { priceUnit: 'kg', pricePerUnit: 4 } } });
+    source.draft = { i1: entry };
+    return started(source);
+  };
+  const unitWrites = (source: ReturnType<typeof fakeSuppliersSource>) => source.writes.filter(w => w.op === 'draft-unit');
+  const rename = { name: 'Cream', unit: 'secchiello', packUnit: 'secchiello' };
+
+  test('⚠️ a line with an explicit «busta» goes back to the card’s unit and keeps its quantity; the price is not touched', async () => {
+    const { store, source } = withLine({ qty: 3, unit: 'Busta' });
+    await tick();
+    store.saveIngredient('i1', rename, { typeRenamedFrom: 'busta' });
+    await tick();
+    await tick();
+    expect(unitWrites(source)).toEqual([{ op: 'draft-unit', id: 'i1', unit: '' }]);
+    expect(source.draft?.i1).toEqual({ qty: 3, unit: '' });
+    expect(source.prices.get('i1')).toEqual({ priceUnit: 'kg', pricePerUnit: 4 });
+  });
+
+  test('a line with another unit, or none, is left alone by the rename', async () => {
+    for (const entry of [{ qty: 3, unit: 'cartone' }, { qty: 3 }]) {
+      const { store, source } = withLine(entry);
+      await tick();
+      store.saveIngredient('i1', rename, { typeRenamedFrom: 'busta' });
+      await tick();
+      await tick();
+      expect(unitWrites(source), JSON.stringify(entry)).toEqual([]);
+    }
+  });
+
+  test('the freeze and the rename compose: one read, and a line is touched by one of them only', async () => {
+    const frozen = withLine({ qty: 3 });
+    await tick();
+    frozen.store.saveIngredient('i1', rename, { unitChangedFrom: 'cartone', typeRenamedFrom: 'busta' });
+    await tick();
+    await tick();
+    expect(unitWrites(frozen.source)).toEqual([{ op: 'draft-unit', id: 'i1', unit: 'cartone' }]);
+    const explicit = withLine({ qty: 3, unit: 'busta' });
+    await tick();
+    explicit.store.saveIngredient('i1', rename, { unitChangedFrom: 'busta', typeRenamedFrom: 'busta' });
+    await tick();
+    await tick();
+    expect(unitWrites(explicit.source)).toEqual([{ op: 'draft-unit', id: 'i1', unit: '' }]);
+  });
+});
+
 describe('the suppliers store: deleting an ingredient', () => {
   test('the ingredient goes, with its price only when asked, and its order line goes too', async () => {
     const source = fakeSuppliersSource({ ingredients: [{ id: 'i1', name: 'Flour' }], prices: { i1: { pricePerUnit: 2 } } });

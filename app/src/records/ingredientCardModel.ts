@@ -255,11 +255,23 @@ export interface TypeOptions extends FormatOptions {
 // reads «the whole case» (order-cost.ts): 225 would become 217. So: a NEW item, or somebody who writes prices on an item whose opened
 // price has no case of more than one. A rename (one type to another) never asks. And never when clearing the type would turn the item
 // into one the card of before opens (a pieces case of one with an empty unit is such a shape): the card must not flip on reopening.
-export function typeMayRewrite(item: ItemLike | null, mayPrice: boolean | undefined): boolean {
+// ⚠️ THE FLIP IS CHECKED ON THE FIELDS THAT WILL BE SAVED (`saved`, savedOrderFields), not on the opened item: in a Cartone → Single edit the
+// opened item still has its packCount, so the card would not read as flipping while the saved shape does. Both directions: the shape with a
+// type (any word) and the one without must read as the same kind of card as the saved fields do.
+export function typeMayRewrite(
+  item: ItemLike | null, mayPrice: boolean | undefined, saved?: { unit: string; packUnit: string; packCount: unknown },
+): boolean {
   if (!item) return true;
   if (mayPrice !== true) return false;
   if ((storedCaseOf(item)?.caseCount ?? 0) > 1) return false;
-  return !usesLegacyCard({ ...item, unit: '', packUnit: '' });
+  const now = usesLegacyCard({ ...item, ...(saved ?? {}), packCount: null });
+  const shaped = (word: string) => usesLegacyCard({ ...item, packCount: null, unit: word, packUnit: word });
+  return shaped('') === now && shaped('x') === now;
+}
+
+// The guard of this card's type menu, on the fields it would save.
+export function typeGuardOf(working: Working, item: ItemLike | null, options: TypeOptions = {}): { mayRewrite: boolean } {
+  return { mayRewrite: typeMayRewrite(item, options.mayPrice, savedOrderFields(working, item, options)) };
 }
 
 // The unit, the package word and the count the card would SAVE if the type menu did nothing: what the format moved, else what is stored
@@ -283,7 +295,7 @@ export function savedOrderFields(
 // Is «Che confezione è?» drawn? Only for a Single that was chosen, and when pack-type.ts says the item may have one.
 export function packTypeVisible(working: Working, item: ItemLike | null, options: TypeOptions = {}): boolean {
   return working.formatChosen && working.format === 'single'
-    && packTypeShown(savedOrderFields(working, item, options), { mayRewrite: typeMayRewrite(item, options.mayPrice) });
+    && packTypeShown(savedOrderFields(working, item, options), typeGuardOf(working, item, options));
 }
 
 // What the menu shows: the person's choice once they used it, else the item's own type (as it would be saved).
@@ -331,6 +343,9 @@ export interface SaveBuilt {
   readonly payload: Readonly<Record<string, unknown>> & { readonly name: string };
   // The order unit the format has just replaced, to freeze in the open order line ('' = nothing to freeze).
   readonly unitChangedFrom: string;
+  // Mise 2 only: the type word this save RENAMED (old → new, both non-empty), '' otherwise. The store resets the open order lines whose
+  // explicit unit is the old word, or they would be orphaned (no longer the card's unit, nor its package).
+  readonly typeRenamedFrom: string;
 }
 
 // What Save sends, EXACTLY (parity C87). No price key, no allergen key, no nutrition key, never `invoiceName` or the supplier
@@ -363,13 +378,17 @@ export function buildSave({ working, item, kind, lang, startSupplierId, mayPrice
   // Mise 2 only: «Che confezione è?». ⚠️ `unitChangedFrom` IS COMPUTED ON THE PAYLOAD WITHOUT THE TYPE KEYS: choosing a type is not a
   // format change, and the open order lines must not be frozen in a unit it replaced (they would keep a stale unit for ever).
   const typeOptions: TypeOptions = { mayPrice, lang, priceDirty, pricePatch };
+  // A type already picked on a NEW item that a per-kilo or per-piece price then makes loose is hidden here, and so dropped: the loose unit wins.
+  const savedFields = savedOrderFields(working, item, typeOptions);
   const typeKeys = packTypeVisible(working, item, typeOptions)
-    ? packTypePatch(
-      savedOrderFields(working, item, typeOptions), readChoice(packTypeChoiceOf(working, item, typeOptions)), { mayRewrite: typeMayRewrite(item, mayPrice) },
-    )
+    ? packTypePatch(savedFields, readChoice(packTypeChoiceOf(working, item, typeOptions)), typeGuardOf(working, item, typeOptions))
     : {};
   const payload = { ...payloadNoType, ...typeKeys };
-  return { payload, unitChangedFrom: replacedUnit(item, payloadNoType, state, cartonWord, options) };
+  // ⚠️ A RENAME (a type to another word) leaves open lines whose explicit unit is the old word orphaned; the store resets them. Accepted and
+  // documented: orders already frozen in the old word in History keep it (suppliers.md, «Che confezione è?» as built).
+  const oldType = packTypeOf(savedFields);
+  const typeRenamedFrom = typeKeys.unit && oldType !== '' && !sameUnit(typeKeys.unit, oldType) ? oldType : '';
+  return { payload, unitChangedFrom: replacedUnit(item, payloadNoType, state, cartonWord, options), typeRenamedFrom };
 }
 
 // The order unit a format change REPLACED, told to the store, which freezes the open order line in it (parity C35, the

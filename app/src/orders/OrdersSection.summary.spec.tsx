@@ -324,6 +324,17 @@ describe('on the split', () => {
 });
 
 describe('the package word (Mise 2 only)', () => {
+  it('⚠️ follows the venue’s COUNTRY, not the screen: an Italian venue on an English interface reads «2 bottiglie»', async () => {
+    const source = seeded({
+      ingredients: [...ITEMS, ingredient('i-cream', { name: 'Panna', supplierId: 's-alp', unit: 'bottiglia', packUnit: 'bottiglia' })],
+      draft: { entries: { 'i-cream': { qty: 2 } }, days: {} },
+    });
+    await onSummary(source, { session: { location: { country: 'IT' } } });
+    const row = (await screen.findByText('Panna')).closest('li') as HTMLElement;
+    expect(within(row).getByText('2 bottiglie')).toBeInTheDocument();
+    expect(within(row).queryByText('2 bottles')).not.toBeInTheDocument();
+  });
+
   it('⚠️ the sheet reads «2 bottles» for a typed card, «1 bucket» for the singular, and the bare number for the rest', async () => {
     const source = seeded({
       ingredients: [
