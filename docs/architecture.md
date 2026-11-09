@@ -566,6 +566,14 @@ lightningcss lowers oklch, nesting and media ranges; it does not lower everythin
 - Driving it: build with `--base=/mise2/` (from Git Bash: `MSYS_NO_PATHCONV=1`, or the path is
   rewritten), serve with `vite preview`, and on localhost it talks to the emulator. The full
   procedure is the local `drive-app` skill, «Mise 2».
+- **GitHub Pages after the switch** (`.github/workflows/pages.yml`, not a required check): today Pages publishes
+  the committed files of `main`; from the switch it publishes the site `scripts/build-pages-site.mjs` assembles —
+  Mise 2 built with `--base=/mise_app/` at the root (its `sw.js` at the current app's address), the current app's
+  `order.html`, `reset-password.html` and `install-guide.html` with every file they load, a stub at every other old
+  page (`app/sw/legacy-routes.json`), nothing internal. Built where no credential exists, deployed only from `main`
+  by a job that installs nothing; on every PR the site is built and its file list kept (`site-listing`). It takes
+  effect only when the release PR merges AND his Pages source is «GitHub Actions» (`docs/switch-runbook.md`);
+  `scripts/verify-live-site.mjs` checks the live result, and `tests/pages-site.test.mjs` runs both scripts.
 - **The gates before a PR are the `mise2-check` skill**, not `smoke-test` or `ui-check`, which know
   only the current app.
 
