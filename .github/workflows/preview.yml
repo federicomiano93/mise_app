@@ -21,6 +21,12 @@ name: Preview
 # persisted credentials, the deploy output kept in $RUNNER_TEMP, and a check after every deploy
 # that fails — and takes the channel down — if anything internal answers.
 #
+# ⚠️ THE PREVIEW SHOWS THE SITE THIS BRANCH WOULD PUT LIVE. A branch that carries the switch's Pages build
+# (scripts/build-pages-site.mjs: the Mise 2 release branch and the PRs into it) previews exactly that site at
+# /mise_app/ — Mise 2 at the root of it with its service worker and its CSP, the current app's order.html and the
+# page the reset email opens, the stubs — built by the same script as .github/workflows/pages.yml. Every other branch (the
+# current-app fixes into main) keeps the current app at the channel's root and Mise 2 beside it at /mise2/.
+#
 # This job is NOT a required check: a broken preview must never block a fix from shipping.
 #
 # Every `uses:` is pinned to a commit, never a tag (why: the top of test.yml).
@@ -55,6 +61,8 @@ jobs:
     if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository && !startsWith(github.head_ref, 'dependabot/github_actions/')
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      layout: ${{ steps.layout.outputs.layout }}
     permissions:
       contents: read
     steps:
@@ -69,9 +77,26 @@ jobs:
         working-directory: shared
       - run: npm ci --ignore-scripts
         working-directory: app
+      # `switch`: this branch carries the switch's Pages build, so it previews the site it would put live (see the top).
+      - id: layout
+        run: |
+          if [ -f scripts/build-pages-site.mjs ]; then echo "layout=switch" >> "$GITHUB_OUTPUT"; else echo "layout=beside" >> "$GITHUB_OUTPUT"; fi
       # Served at /mise2/ on the preview, beside the current app at the root.
-      - run: npm run build -- --base=/mise2/
+      - if: steps.layout.outputs.layout == 'beside'
+        run: npm run build -- --base=/mise2/
         working-directory: app
+      # The live site's own layout, at /mise_app/ (the same steps as pages.yml), handed on as app/dist so the upload
+      # below is the same. The channel's root holds only a page that opens /mise_app/.
+      - if: steps.layout.outputs.layout == 'switch'
+        name: Build the site as it will be live, at /mise_app/
+        run: |
+          (cd app && npm run build -- --base=/mise_app/ && node sw/verify-build.mjs dist)
+          node scripts/build-pages-site.mjs "$RUNNER_TEMP/site/mise_app" app/dist > /dev/null
+          printf '%s\n' '<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">' \
+            '<meta http-equiv="Content-Security-Policy" content="default-src '"'self'"'; base-uri '"'self'"'; form-action '"'self'"'">' \
+            '<meta http-equiv="refresh" content="0; url=mise_app/"><title>Mise</title></head>' \
+            '<body><p><a href="mise_app/">Open Mise</a></p></body></html>' > "$RUNNER_TEMP/site/index.html"
+          rm -rf app/dist && mv "$RUNNER_TEMP/site" app/dist
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mise2-site
@@ -120,12 +145,18 @@ jobs:
       # (the bundles every page loads: without it each page's script is a 404) and the static folders — exactly what GitHub Pages serves the app from. `:(glob)` keeps
       # `*.html` / `*.css` to the top level. Then Mise 2's BUILT files (never its source) at /mise2/.
       - name: Stage only the app's files
+        env:
+          LAYOUT: ${{ needs.build-mise2.outputs.layout }}
         run: |
           rm -rf _site && mkdir _site
           git archive --format=tar HEAD -- \
             ':(glob)*.html' ':(glob)*.css' sw.js manifest.json qr.png js dist icons fonts sounds \
             | tar -x -C _site
-          if [ -d "$RUNNER_TEMP/mise2-site" ]; then
+          if [ -d "$RUNNER_TEMP/mise2-site" ] && [ "$LAYOUT" = switch ]; then
+            # The site as it will be live (built from git by the same allowlist, in the job above): it replaces this
+            # staging whole.
+            rm -rf _site && mv "$RUNNER_TEMP/mise2-site" _site
+          elif [ -d "$RUNNER_TEMP/mise2-site" ]; then
             mv "$RUNNER_TEMP/mise2-site" _site/mise2
           fi
           # ⚠️ No symlinks: firebase-tools FOLLOWS them when it uploads, so a committed
@@ -209,6 +240,7 @@ jobs:
           PR_URL: ${{ steps.deploy.outputs.url }}
           FIXED_URL: ${{ steps.deploy.outputs.fixed_url }}
           MISE2_BUILT: ${{ needs.build-mise2.result == 'success' }}
+          LAYOUT: ${{ needs.build-mise2.outputs.layout }}
         # Every path is checked BEFORE any verdict, so nothing can skip the leak check; a curl
         # that fails answers 000, which counts as served — the safe direction. BOTH channels are
         # checked (they carry the same files, but each is its own upload), and the one that
@@ -222,6 +254,7 @@ jobs:
                         firebase.json firestore.rules package.json functions/index.js \
                         scripts/seed-preview.mjs tests/firebase-target.test.mjs README.md \
                         app/package.json app/src/main.tsx shared/package.json \
+                        mise_app/firestore.rules mise_app/package.json mise_app/app/src/main.tsx mise_app/.git/config \
                         mise2/package.json mise2/src/main.tsx ci/firebase-tools/package.json; do
               [ "$(code "$path")" = 404 ] || leaked="$leaked $path"
             done
@@ -234,7 +267,11 @@ jobs:
               exit 1
             fi
             [ "$(code index.html)" = 200 ] || { echo "::error::index.html is not served on $CHANNEL"; exit 1; }
-            if [ "$MISE2_BUILT" = true ]; then
+            if [ "$MISE2_BUILT" = true ] && [ "$LAYOUT" = switch ]; then
+              for page in mise_app/index.html mise_app/sw.js mise_app/order.html; do
+                [ "$(code "$page")" = 200 ] || { echo "::error::$page is not served on $CHANNEL"; exit 1; }
+              done
+            elif [ "$MISE2_BUILT" = true ]; then
               [ "$(code mise2/index.html)" = 200 ] || { echo "::error::Mise 2 is not served on $CHANNEL"; exit 1; }
             fi
           }
@@ -259,8 +296,11 @@ jobs:
           URL: ${{ needs.preview.outputs.url }}
           FIXED_URL: ${{ needs.preview.outputs.fixed_url }}
           MISE2: ${{ needs.build-mise2.result }}
+          LAYOUT: ${{ needs.build-mise2.outputs.layout }}
         run: |
-          if [ "$MISE2" = success ]; then
+          if [ "$MISE2" = success ] && [ "$LAYOUT" = switch ]; then
+            mise2="**Mise 2 come sarà live** (stesse pagine, stesso indirizzo /mise_app/, dati di prova): $FIXED_URL/mise_app/ — questa PR porta Mise 2 al posto dell'app di oggi, quindi qui l'app di oggi non c'è; restano la pagina degli ordini dei clienti e quella dell'email per cambiare la parola d'accesso, come sul sito vero."
+          elif [ "$MISE2" = success ]; then
             mise2="**Mise 2**, la nuova app in costruzione (le sezioni arrivano una alla volta): $FIXED_URL/mise2/"
           else
             mise2="**Mise 2**: in questa PR la nuova app non si è costruita, quindi manca dall'anteprima. L'app di oggi qui sopra non ne risente."

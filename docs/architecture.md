@@ -70,7 +70,11 @@ both, and the switch keeps the address) and it has consequences that every chang
   from the installed library). No `www.google.com`. Loaded in Chromium with the policy: no violation.
 - **The preview publishes only what is allowed.** `build-mise2` (`.github/workflows/preview.yml`)
   builds Mise 2 in a job that holds no Google credential and hands the built files to the deploy
-  job, which builds nothing (`tests/preview-hosting.test.mjs`).
+  job, which builds nothing (`tests/preview-hosting.test.mjs`). A branch that carries the switch's Pages build
+  (`scripts/build-pages-site.mjs`: the release branch and the PRs into it) previews the site it would put live, at
+  `<preview>/mise_app/` — Mise 2 with its service worker and CSP, the current app's `order.html` and reset page, the
+  stubs — built by the same script as `pages.yml`; every other branch keeps the current app at the root and Mise 2
+  at `/mise2/`. Mise 2 draws no «test data» ribbon there: it is the live page, on the preview project's fake data.
 
 ## The stack, and why
 
