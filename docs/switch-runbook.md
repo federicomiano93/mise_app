@@ -24,8 +24,8 @@ accesso: nessuno deve rientrare). Il link degli ordini dei clienti (`order.html`
 5. Tu entri, fai **un salvataggio vero** e mi dici se qualcosa non si salva. Poi riscrivi **50** nel «Peso di un
    pezzo» di «Uova in vassoi» (oggi c'è un valore in chili che Mise 2 legge come 50000 g).
 
-**Se qualcosa va storto:** mi dici «torna indietro». Io preparo la PR che rimette l'app di oggi, tu rimetti
-Settings → Pages → Source su **Deploy from a branch** (`main`, cartella `/ (root)`), io faccio il merge. Ogni
+**Se qualcosa va storto:** mi dici «torna indietro». Io preparo la PR che rimette l'app di oggi e faccio il merge;
+**subito dopo** tu rimetti Settings → Pages → Source su **Deploy from a branch** (`main`, cartella `/ (root)`). Ogni
 telefono torna da solo all'app di oggi alla prima apertura, appena nessuno sta scrivendo. I dati non si toccano. Le
 regole del database restano quelle nuove (vanno bene anche per l'app di oggi).
 
@@ -50,7 +50,8 @@ And from the session that runs it (go-live «Before asking him», with these dif
 
 ## At the hour, in this order
 
-1. **Rules first, with read-back.** Mise 2 writes keys the live rules (main's) refuse, and the release rules still
+1. **Rules first, with read-back** — the one deploy before the merge, at his word in his session (go-live's
+   rules-first rule). Mise 2 writes keys the live rules (main's) refuse, and the release rules still
    accept everything the current app writes (`rules` runs the current app's suite against them on the release branch).
    ```bash
    git fetch origin && git switch feature/mise2-release && git pull --ff-only
@@ -109,27 +110,38 @@ model number the rules refuse to lower, or a key became required on a whole-docu
 forward. The Mise 2 release itself raises none (the rules accept both apps' writes), but read the release's
 `firestore.rules` diff again if a fix was added after this was written.
 
-1. On a branch, the revert, keeping the live rules, and the current app's `sw.js` one release higher:
+1. On a branch from main's tip, the revert, keeping the live rules, and the current app's `sw.js` above every number
+   this address has served:
    ```bash
    git switch main && git pull --ff-only
    git switch -c fix/revert-mise2-switch
    git revert -m 1 <merge-sha-of-491>
-   git checkout <merge-sha-of-491> -- firestore.rules
+   git checkout main -- firestore.rules
    node scripts/sw-hashes.mjs --bump
+   git show <merge-sha-of-491>:sw.js | head -1
+   head -1 sw.js
+   ```
+   The second number must be HIGHER than the first; if not, run `node scripts/sw-hashes.mjs --bump` again (the release
+   carries the current app's `sw.js` one above main's, and the revert restores main's). Then:
+   ```bash
    git commit -am "revert: back to the current app (Mise 2 switch reverted)"
    git push -u origin fix/revert-mise2-switch
    ```
-   - ⚠️ **Keep the live rules** (`git checkout … -- firestore.rules`): main must keep saying what is live, and an older
-     rules file must never be deployed (phones have saved the new keys). The current app works under them.
-   - ⚠️ **`--bump` is required**: the revert restores files identical to the last release, so nothing else would give
-     the current app's `sw.js` a new `CACHE_NAME` (`tests/sw-hashes-bump.test.mjs`).
+   - ⚠️ **Keep the live rules — main's tip, not the merge's** (`git checkout main -- firestore.rules`): a rules fix
+     deployed after the switch is in main's tip, and main must keep saying what is live; an older rules file must never
+     be deployed (phones have saved the new keys). The current app works under them.
+   - ⚠️ **`--bump` is required**: the revert restores files identical to main's last release, so nothing else would
+     give the current app's `sw.js` a new `CACHE_NAME` (`tests/sw-hashes-bump.test.mjs`).
 2. PR into `main` → `test`, `rules`, `mise2` green (the revert's `test` runs without the switch check: the release's
    workflow change is reverted too).
-3. **His click: Pages source back to «Deploy from a branch»**, branch `main`, folder `/ (root)`. The revert removes
-   `.github/workflows/pages.yml` with the rest of the release, so nothing would publish the site otherwise; from the
-   branch, Pages publishes main's committed files, as before the switch.
-4. **Merge** the revert PR (`--merge`), watch main, then `node scripts/verify-live-assets.mjs` (the current app's own
-   check) → `sameRelease: true`, `problems: []`. If the site still shows Mise 2 after a few minutes, kick a build:
+3. **Merge** the revert PR (`--merge`) FIRST. While Pages' source is still «GitHub Actions» nothing is published by
+   that merge (the revert removes `.github/workflows/pages.yml`), so the site stays Mise 2 for these minutes.
+4. **Then his click: Pages source back to «Deploy from a branch»**, branch `main`, folder `/ (root)`. Pages then
+   builds main as it now is — the reverted tree, the current app with the bumped `sw.js`. ⚠️ Never the other way
+   round: flipped before the revert is merged, Pages would publish main as the release left it (the current app's
+   files at the release's cache number), and phones could take that in between.
+5. Watch main, then `node scripts/verify-live-assets.mjs` (the current app's own check) → `sameRelease: true`,
+   `problems: []`. If the site still shows Mise 2 after a few minutes, kick a build:
    `gh api -X POST repos/federicomiano93/mise_app/pages/builds`.
 
 **What each device does then.** Mise 2's page checks `sw.js` when it opens, comes back to the front and every 15

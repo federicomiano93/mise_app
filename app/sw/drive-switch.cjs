@@ -12,6 +12,9 @@
 // point Firebase at the local emulator — nothing reaches a real project, and neither app needs to sign in: only the
 // workers and the pages are driven. (On 127.0.0.1 both workers skip their fingerprint check, by design.) The
 // Firebase SDK the current app loads from gstatic is answered from app/node_modules/firebase (the same 12.19.0).
+// ⚠️ WHAT IT DOES NOT PROVE: on 127.0.0.1 both workers skip their fingerprint check (rollback.spec.ts runs it, on the
+// real files); and the Mise 2 site here is its build plus order.html and reset-password.html, not the whole Pages site
+// (scripts/build-pages-site.mjs and tests/pages-site.test.mjs prove that one).
 // Prints one PASS/FAIL line per check; exits 1 on any FAIL.
 const http = require('http');
 const fs = require('fs');

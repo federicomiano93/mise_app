@@ -86,14 +86,27 @@ describe('rollback: the current app takes every phone back', () => {
     expect(await home!.text()).toBe(readFileSync(join(ROOT, 'index.html'), 'utf8'));
     // Nothing on the way reached IndexedDB or localStorage: who is signed in, the offline copy, unsent writes.
     expect(world.storageTouched).toEqual([]);
+    // ⚠️ AND THE FINGERPRINT CHECK REALLY PASSED: the current app's sw.js stores a mismatching file «as received»
+    // with a warning instead of failing, so a pass here is only a pass if nobody warned.
+    expect(world.warnings).toEqual([]);
+    expect(back.constant('VERIFY_FINGERPRINTS')).toBe(true);
   });
 
-  test('⚠️ a revert WITHOUT a new CACHE_NAME would not be a release to the phones: the bump is what makes it one', () => {
-    expect(REVERTED_SW).not.toBe(CURRENT_SW);
+  test('the fingerprint check is live in this harness: a file served with other bytes is warned about', async () => {
+    const world = createWorld();
+    serveCurrentApp(world);
+    world.server.set(`${SCOPE}home.html`, { body: 'not the committed home.html' });
+    const today = loadWorker(world, CURRENT_SW);
+    await today.install();
+    expect(world.warnings.some(w => w.includes('./home.html'))).toBe(true);
+  });
+
+  test('⚠️ the revert\'s CACHE_NAME must be above every one this address has served — the runbook bumps past the merge\'s', () => {
+    // The release itself carries the current app's sw.js one higher than main had (it changed label-zpl.js), and that
+    // file sits in main after the switch. The revert restores main's older number, so a single --bump only reaches the
+    // release's number again: the runbook bumps until the revert's number is above the merge's.
+    expect(Number(REVERTED_CACHE.match(/\d+$/)![0])).toBeGreaterThan(Number(CURRENT_CACHE[2]));
     expect(REVERTED_SW).toContain(`const CACHE_NAME = '${REVERTED_CACHE}'`);
-    // The worker the revert brings back is byte-different from Mise 2's at the same address: the browser's
-    // update check (byte comparison of sw.js) is what starts the way back on every phone.
-    expect(REVERTED_SW).not.toBe(serveMise2(createWorld()));
   });
 
   test('the origin and path are the ones the phones use', () => {
