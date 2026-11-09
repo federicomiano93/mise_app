@@ -3,7 +3,8 @@ import { useLocation, useNavigate, useNavigationType } from 'react-router';
 import { itemWithPrice } from '@mise/shared/ingredient-edit-model';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { outputLanguage } from '@mise/shared/market';
-import { packChoices, unitChoices } from '@mise/shared/record-choices';
+import { unitChoices } from '@mise/shared/record-choices';
+import { packChoicesWithExtras } from '@mise/shared/pack-words';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { IngredientCard } from '../records/IngredientCard';
@@ -148,7 +149,7 @@ export function IngredientCardScreen({ id, packaging, preset }: Props) {
   const mergeDoor = useCallback((node: HTMLButtonElement | null) => { handBack.register(MERGE_OPENER, node); }, [handBack]);
 
   const packs = useMemo(
-    () => packChoices({ ingredients: snapshot.ingredients, language, current: item?.packUnit }),
+    () => packChoicesWithExtras({ ingredients: snapshot.ingredients, language, current: item?.packUnit }),
     [snapshot.ingredients, language, item],
   );
   // The card of before's «Order unit» menu: the venue's order units, and the one this item holds.

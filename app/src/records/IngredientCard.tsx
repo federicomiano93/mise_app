@@ -10,6 +10,7 @@ import { allergensOn, nutritionOn } from '@mise/shared/venue-features';
 import type { Money } from '@mise/shared/currency';
 import { formatSummary, usesLegacyCard } from '@mise/shared/pack-format';
 import type { PackTranslate } from '@mise/shared/pack-format';
+import { isPackTypeWord } from '@mise/shared/pack-type';
 import { pricePatch as pricePatchOf } from '@mise/shared/price-model';
 import type { PriceBasis, PricePatch } from '@mise/shared/price-model';
 import { WEIGHT_UNIT_CHOICES } from '@mise/shared/pack-size';
@@ -28,9 +29,10 @@ import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
 import {
   BRAND_MAX, CATEGORY_MAX, NAME_MAX, NEW_CHOICE, NO_SUPPLIER_ID, PACK_WORD_MAX, SHORT_NAME_MAX,
-  buildSave, firstRefusal, formState, isDirty, labelOf, readChoice, weightText, withFormat, withInner, workingFrom,
+  buildSave, firstRefusal, formState, isDirty, labelOf, packTypeChoiceOf, packTypeVisible, readChoice, typeMayRewrite, weightText, withFormat,
+  withInner, withPackType, workingFrom,
 } from './ingredientCardModel';
-import type { CardKind, ChoiceState, ItemLike, RefusedField, Working } from './ingredientCardModel';
+import type { CardKind, ChoiceState, ItemLike, RefusedField, TypeOptions, Working } from './ingredientCardModel';
 import { AllergenSections } from './AllergenSections';
 import type { AllergenControls, NutrientBoxes } from './AllergenSections';
 import { allergenDirty, allergenPayload, allergenWorkingFrom, nutritionRefusal } from './allergenCardModel';
@@ -328,6 +330,8 @@ export function IngredientCard({
   const countBox = useRef<HTMLInputElement>(null);
   const innerMenu = useRef<HTMLSelectElement>(null);
   const formatMenu = useRef<HTMLSelectElement>(null);
+  const packTypeMenu = useRef<HTMLSelectElement>(null);
+  const packTypeBox = useRef<HTMLInputElement>(null);
   const rateBox = useRef<HTMLInputElement>(null);
   const priceBox = useRef<HTMLInputElement>(null);
   const pieceBox = useRef<HTMLInputElement>(null);
@@ -341,7 +345,7 @@ export function IngredientCard({
     setRefused(field);
     const target = {
       name: nameBox, weight: weightBox, priceWeight: weightBox, legacyPackWeight: weightBox, category: categoryBox, format: formatMenu, inner: innerBox,
-      count: countBox, innerEmpty: innerMenu, rate: rateBox, box: priceBox, pieceKg: pieceBox, casePrice: casePriceBox,
+      count: countBox, innerEmpty: innerMenu, packType: packTypeBox, packTypeWord: packTypeBox, rate: rateBox, box: priceBox, pieceKg: pieceBox, casePrice: casePriceBox,
       caseCount: caseCountBox, caseSize: caseSizeBox, legacyPack: legacyPackBox, legacyUnit: legacyUnitBox,
     }[field].current;
     // Save is at the top, so the box can be far above the fold on a phone.
@@ -376,7 +380,16 @@ export function IngredientCard({
     // The card of before (C83): its own product refusals, then — only while the right to write prices still stands — the price's.
     const menus = productRef.current;
     const legacyNow = legacyCard && opened ? legacyRef.current : null;
-    const wrong = legacyNow ? legacyProductRefusal(current, menus) : firstRefusal(current, opened, { mayPrice: priceActive, lang: language, priceDirty });
+    // Mise 2 only: what «Che confezione è?» depends on (a NEW item's loose unit comes from the price it would send).
+    const typeOpts: TypeOptions = {
+      mayPrice: priceActive,
+      lang: language,
+      priceDirty,
+      pricePatch: !opened && state ? pricePatchOf(readPrice(state, ctxOf(current, state)), '', weightText(current)) : null,
+    };
+    const wrong = legacyNow
+      ? legacyProductRefusal(current, menus)
+      : firstRefusal(current, opened, { mayPrice: priceActive, lang: language, priceDirty, packTypeShown: packTypeVisible(current, opened, typeOpts) });
     if (wrong) {
       show(wrong);
       return;
@@ -513,6 +526,7 @@ export function IngredientCard({
     ? (opened ? 'sup.editPackaging' : 'sup.newPackaging')
     : (opened ? 'sup.editIngredient' : 'sup.newIngredient');
   const carton = working.format === 'carton' && !legacyCard;
+  const typeRefused = refused === 'packType' || refused === 'packTypeWord';
   const weightRefused = refused === 'weight' || refused === 'priceWeight' || refused === 'legacyPackWeight';
   const legacyDrawn = legacyCard && mayPrice;
   const legacyViewNow = legacyDrawn ? buildLegacyView(legacy, legacyCtxOf(working, product), t, legacyOpened) : null;
@@ -539,6 +553,23 @@ export function IngredientCard({
   };
   const categoryWords = lists(working.category, categories);
   const packWords = lists(working.inner, packs);
+
+  // «Che confezione è?» (Mise 2 only): drawn for a Single the item may have a type for (pack-type.ts says when).
+  const priceDirtyNow = price ? isPriceDirty(price, opened) : false;
+  const typeOpts: TypeOptions = {
+    mayPrice: priceActive,
+    lang: language,
+    priceDirty: priceDirtyNow,
+    pricePatch: !opened && price ? pricePatchOf(readPrice(price, ctxOf(working, price)), '', weightText(working)) : null,
+  };
+  const typeShown = !legacyCard && packTypeVisible(working, opened, typeOpts);
+  const typeValue = packTypeChoiceOf(working, opened, typeOpts);
+  const typeMayClear = typeMayRewrite(opened, priceActive);
+  const typeWords = lists(typeValue, packs.filter(isPackTypeWord));
+  function changeType(next: ChoiceState) {
+    update(withPackType(working, next));
+    if (typeRefused) setRefused(null);
+  }
 
   // The card of before's two «+ New …» menus: «Package» (the venue's package words) and «Order unit» (its order units).
   const legacyMenu = (which: 'pack' | 'unit') => {
@@ -784,6 +815,7 @@ export function IngredientCard({
                   update(withFormat(working, next, language), 'format');
                   // A sentence about the case's count or word means nothing once the case is gone, and must not come back.
                   if (next === 'single' && (refused === 'count' || refused === 'inner' || refused === 'innerEmpty')) setRefused(null);
+                  if (next === 'carton' && typeRefused) setRefused(null);
                 }}
               >
                 {/* Selectable on purpose: on iOS the wheel picker can commit the first ENABLED option on Done, which would choose a format nobody
@@ -860,6 +892,44 @@ export function IngredientCard({
               {refused === 'inner' ? t('sup.ing.packBlank') : ''}
             </p>
             {summary === '' ? null : <p className={styles.hint}>{summary}</p>}
+          </div>
+        ) : null}
+
+        {typeShown ? (
+          <div className={styles.field}>
+            <label htmlFor={id('pack-type')} className={styles.label}>{t('sup.ing.packType')}</label>
+            <select
+              ref={packTypeMenu}
+              id={id('pack-type')}
+              className={styles.box}
+              aria-describedby={id('pack-type-hint')}
+              value={typeValue.choice}
+              onChange={event => { changeType({ choice: event.target.value, typed: typeValue.typed }); }}
+            >
+              {/* Taking a type away is a change of the order unit: offered only where that cannot move a price (pack-type.ts). */}
+              {typeMayClear || typeValue.choice === '' ? <option value="">{t('sup.ing.choiceNone')}</option> : null}
+              {typeWords.map(word => <option key={word} value={word}>{word}</option>)}
+              <option value={NEW_CHOICE}>{t('sup.ing.newPack')}</option>
+            </select>
+            {typeValue.choice === NEW_CHOICE ? (
+              <input
+                ref={packTypeBox}
+                type="text"
+                autoComplete="off"
+                autoFocus
+                className={styles.box}
+                maxLength={PACK_WORD_MAX}
+                placeholder={t('sup.ing.packPlaceholder')}
+                aria-label={t('sup.ing.packNewAria')}
+                {...aria(refused === 'packTypeWord' ? 'packTypeWord' : 'packType', id('pack-type-error'))}
+                value={typeValue.typed}
+                onChange={event => { changeType({ choice: NEW_CHOICE, typed: event.target.value }); }}
+              />
+            ) : null}
+            <p id={id('pack-type-hint')} className={styles.hint}>{t('sup.ing.packTypeHint')}</p>
+            <p id={id('pack-type-error')} role="status" className={typeRefused ? styles.error : styles.quiet}>
+              {refused === 'packType' ? t('sup.ing.packBlank') : (refused === 'packTypeWord' ? t('sup.ing.packTypeNotPack') : '')}
+            </p>
           </div>
         ) : null}
 
