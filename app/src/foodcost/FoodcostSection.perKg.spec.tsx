@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { editorSource, recipe } from '../testing/foodcostEditorFixtures';
+import { editorSource, intoForm, recipe } from '../testing/foodcostEditorFixtures';
 import { bareProduct, LOAD, product, renderFoodcost } from '../testing/renderFoodcost';
 
 // The «Cost per 1 kg» block of the product editor (current app f0735d88, 9af66dd5; tests/foodcost-per-kg-screen.test.mjs,
@@ -26,7 +26,7 @@ const rowOf = (name: string) => within(block()).getByText(name).closest('li') as
 
 async function open(path: string, fake: ReturnType<typeof editorSource>, options = {}) {
   const view = renderFoodcost(path, { source: fake, ...options });
-  await screen.findByRole('combobox', { name: /^(Name|Nome)$/ }, LOAD);
+  await intoForm(view.user);
   return { ...view, fake };
 }
 
@@ -34,16 +34,17 @@ const FLOUR_LINE = { kind: 'ingredient', ingredientId: 'flour', qty: 1000, unit:
 const SALT_LINE = { kind: 'ingredient', ingredientId: 'salt', qty: 20, unit: 'g' };
 
 describe('the block', () => {
-  it('sits under the answer and before the form, closed, with the cost of a kilo on its summary', async () => {
+  it('sits under the answer in the Calculated costs card, closed, with the cost of a kilo on its summary', async () => {
     await open('/food-cost/product/Green', editorSource([product('Green')]));
     const details = block();
     expect(details.open).toBe(false);
     expect(within(details).getByText('Cost per 1 kg', { selector: 'summary span' })).toBeInTheDocument();
     expect(details.querySelector('summary')).toHaveTextContent('£2.00');
-    // After the production cost, before the name box, and never inside «Made of».
+    // After the production cost and the food cost, in the last card of the box (results last), and never inside «Made of».
     const production = screen.getByRole('group', { name: 'Production cost' });
     expect(production.compareDocumentPosition(details) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(details.compareDocumentPosition(screen.getByRole('combobox', { name: 'Name' })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.getByRole('region', { name: 'Calculated costs' })).toContainElement(details);
+    expect(screen.getByRole('region', { name: 'Calculated costs' })).toContainElement(production);
     expect(screen.getByRole('region', { name: 'Made of' })).not.toContainElement(details);
   });
 

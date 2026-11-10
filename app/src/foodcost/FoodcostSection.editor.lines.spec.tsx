@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
-import { halfPricedRecipe, editorSource, recipe, unpricedRecipe, SALT, INACTIVE } from '../testing/foodcostEditorFixtures';
+import { halfPricedRecipe, editorSource, intoForm, recipe, unpricedRecipe, SALT, INACTIVE } from '../testing/foodcostEditorFixtures';
 import { bareProduct, FLOUR, LOAD, product, renderFoodcost } from '../testing/renderFoodcost';
 
 // The lines of a product: the chooser, the notes under each line, the name's suggestions, packaging and
@@ -31,7 +31,7 @@ async function confirmSave(user: UserEvent) {
 
 async function open(path: string, fake: ReturnType<typeof editorSource>, options = {}) {
   const view = renderFoodcost(path, { source: fake, ...options });
-  await screen.findByRole('combobox', { name: 'Name' }, LOAD);
+  await intoForm(view.user);
   return { ...view, fake };
 }
 
@@ -707,10 +707,10 @@ describe('a recipe line in grams', () => {
   });
 
   it('the warning in Italian, with the venue\'s decimal comma', async () => {
-    renderFoodcost('/food-cost/product/Dough', {
+    const { user } = renderFoodcost('/food-cost/product/Dough', {
       source: doughWith(522), lang: 'it', session: { language: 'it', location: { country: 'IT' } },
     });
-    await screen.findByRole('combobox', { name: 'Nome' }, LOAD);
+    await intoForm(user);
     expect(within(screen.getByRole('region', { name: 'Composto da' }))
       .getByText('522,00 kg, ma la ricetta ne fa 1,00 kg: intendevi 522,00 g?')).toBeInTheDocument();
   });

@@ -130,7 +130,9 @@ export function ProductAnswer({ product, tables }: Figures) {
 type SuggestionProps = Figures & {
   // The price typed now, or null: «This is the selling price» when it already equals the suggestion.
   sellingPrice: number | null;
-  onUse: (price: number) => void;
+  // Null in the read view: nothing there can be changed, so there is no «Use this price» (the note that it is already the selling
+  // price stays).
+  onUse: ((price: number) => void) | null;
 };
 
 // The price to sell it at, from the cost per unit, the VAT rate and the target: on the SAME screen as
@@ -173,7 +175,7 @@ export function SuggestedPrice({ product, tables, sellingPrice, onUse }: Suggest
           {cost.partial ? <p className={styles.partial}>{t('fc.suggestedPricePartial')}</p> : null}
           {inUse ? (
             <p className={styles.note}>{t('fc.suggestedPriceInUse')}</p>
-          ) : (
+          ) : onUse === null ? null : (
             <Button
               className={styles.use}
               onPress={() => {

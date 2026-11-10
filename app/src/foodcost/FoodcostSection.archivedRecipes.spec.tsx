@@ -1,6 +1,6 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
-import { editorSource, recipe } from '../testing/foodcostEditorFixtures';
+import { editorSource, intoForm, recipe } from '../testing/foodcostEditorFixtures';
 import { LOAD, product, renderFoodcost } from '../testing/renderFoodcost';
 
 // An archived recipe (slice «recipe categories + archive», docs/parity/catalogue.md, choice 7) is left out of what Food cost
@@ -23,7 +23,7 @@ const RECIPES = [recipe('Dough'), recipe('Donut', { archived: true })];
 
 async function open(path: string, fake: ReturnType<typeof editorSource>) {
   const view = renderFoodcost(path, { source: fake });
-  await screen.findByRole('combobox', { name: 'Name' }, LOAD);
+  await intoForm(view.user);
   return { ...view, fake };
 }
 

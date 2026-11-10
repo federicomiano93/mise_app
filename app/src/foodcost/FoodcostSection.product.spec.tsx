@@ -63,8 +63,9 @@ describe('a product by its address', () => {
 
     act(() => { fake.release(); });
     expect(await screen.findByRole('heading', { level: 2, name: 'Cornetto' }, LOAD)).toBeInTheDocument();
-    expect(screen.getByDisplayValue('2.4')).toBeInTheDocument();
-    expect(screen.queryByDisplayValue('1.2')).not.toBeInTheDocument();
+    // Opened to READ: the server's price is the one written in it (a form would have copied last week's).
+    expect(screen.getAllByText('£2.40').length).toBeGreaterThan(0);
+    expect(screen.queryByText('£1.20')).not.toBeInTheDocument();
   });
 
   it('with no signal, a product in the local copy opens from it — nothing better will come', async () => {

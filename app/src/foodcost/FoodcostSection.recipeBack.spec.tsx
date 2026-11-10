@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { FROM_RECIPE_LINK } from '@mise/shared/recipe-link';
-import { editorSource, recipe } from '../testing/foodcostEditorFixtures';
+import { editorSource, intoForm, recipe } from '../testing/foodcostEditorFixtures';
 import { LOAD, product, renderFoodcost, split } from '../testing/renderFoodcost';
 import { entriesBehind, madeWith } from '../testing/recipeLinkHelpers';
 
@@ -84,11 +84,16 @@ describe('⚠️ Back to the recipe', () => {
   it('from a product something was typed on: asks first as well', async () => {
     const { router, user } = renderFoodcost('/food-cost', { entries: fromRecipe(), source: editorSource([LOAF], { recipes: [DOUGH] }) });
     await screen.findByRole('heading', { level: 2, name: 'Loaf' }, LOAD);
+    await intoForm(user);
     await user.type(screen.getByRole('combobox', { name: 'Name' }), '!');
     await user.click(productRegion('Loaf').getByRole('button', { name: 'Back' }));
     const question = await confirmQuestion();
     expect(where(router)).toBe('/food-cost/product/Loaf?recipe=dough');
     await user.click(within(question).getByRole('button', { name: 'Discard' }));
+    // One level up first: the read view of the product, nothing typed kept — and the next Back goes on to the recipe.
+    expect(await screen.findByRole('button', { name: 'Edit product' })).toBeInTheDocument();
+    expect(where(router)).toBe('/food-cost/product/Loaf?recipe=dough');
+    await user.click(productRegion('Loaf').getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(where(router)).toBe('/recipes/dough'); });
   });
 

@@ -1,0 +1,95 @@
+/* «Full card»: one box holding the product's sections as framed cards. Read: a native details (closed until pressed, the
+   whole row is the target); form: the same box with a plain label, never collapsible. Nothing here clips (no `overflow`):
+   the form bar above sticks to the top of the scroll area. */
+
+.full {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  list-style: none;
+  color: var(--ink);
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  min-height: var(--hit);
+  margin: 0;
+  padding: 0 var(--s4);
+  color: var(--ink);
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.chevron {
+  flex: none;
+  color: var(--ink-2);
+}
+
+/* ⚠️ ONLY THE BOX'S OWN CHEVRON: «Cost per 1 kg» inside it has a chevron of its own, which must not turn while that box
+   is still closed. */
+.full[open] > .summary .chevron {
+  transform: rotate(180deg);
+}
+
+.body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s3);
+  border-top: 1px solid var(--line);
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--s3);
+  min-width: 0;
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.cardTitle {
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.subTitle {
+  margin: var(--s1) 0 0;
+  font-size: var(--fs-sm);
+  font-weight: 650;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  align-self: stretch;
+  gap: var(--s3);
+  min-width: 0;
+}

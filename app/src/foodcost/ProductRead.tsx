@@ -1,0 +1,180 @@
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import type { Ref } from 'react';
+import { Pencil } from 'lucide-react';
+import { useLocation, useNavigate } from 'react-router';
+import { productionCost } from '@mise/shared/foodcost-model';
+import type { CostTables, Product } from '@mise/shared/foodcost-model';
+import { countryOf } from '@mise/shared/market';
+import { useT } from '../i18n/useT';
+import { useSession } from '../session/SessionContext';
+import { Button } from '../ui/Button';
+import { FormBar } from '../ui/FormBar';
+import { SPLIT_QUERY } from '../ui/split';
+import { useStatusMessage } from '../ui/StatusMessage';
+import { useConfirm } from '../ui/useConfirm';
+import { useMediaQuery } from '../ui/useMediaQuery';
+import { useFoodcost, useFoodcostStore } from './FoodcostContext';
+import { CardSection, CardStack, FullCard, SubHeading } from './FullCard';
+import { historyPath } from './foodcostPath';
+import type { Origin } from './foodcostPath';
+import { FROM_PRODUCT, pushDepth } from './foodcostNav';
+import { PerKgBlock } from './PerKgBlock';
+import { ProductActions } from './ProductActions';
+import { ProductAnswer, SuggestedPrice } from './ProductAnswer';
+import { recipeIdsOn, workingFrom } from './productEditorModel';
+import { ProductSummary } from './ProductSummary';
+import { ReadLabour, ReadMadeOf, ReadPackaging, ReadPrice, ReadProduct, ReadWeighings } from './ReadSections';
+import { useProductExit } from './useProductExit';
+import shell from './ProductEditor.module.css';
+
+type Props = {
+  id: string;
+  // The product as the list holds it now — or, once it has left the list, the last version seen (`gone`).
+  product: Product;
+  // The product was deleted elsewhere while this screen was open: say so and leave.
+  gone: boolean;
+  origin: Origin;
+  titleRef: Ref<HTMLHeadingElement>;
+  // The pencil: the SAME product, as the form.
+  onEdit: () => void;
+};
+
+// Whether the summary has anything to show: something is costed. A fault in the cost model counts as «nothing».
+export function summaryShows(product: unknown, tables: CostTables): boolean {
+  try {
+    return productionCost(product, tables).batchCost !== null;
+  } catch {
+    return false;
+  }
+}
+
+// A product opened to READ (Federico, 7 Nov 2026; current app 18679a38): the summary, then «Full card» — a closed box of framed
+// cards, every section as plain text — and the pencil in the bar turns the same product into the form.
+//
+// ⚠️ IT FOLLOWS THE STORED PRODUCT, LIVE (f8770132): a read view holds nothing typed, so a price, a recipe or the product itself
+// changing elsewhere simply redraws it — no copy, no question. A product deleted elsewhere closes it, on a phone and on the
+// split alike.
+// ⚠️ NOTHING IN IT IS A CONTROL BUT THE BAR'S BUTTONS, THE BOX'S SUMMARY, «DETAILS», «COST PER 1 KG», HISTORY AND DELETE: a box
+// sneaking in would be a form that looks like text.
+export function ProductRead({ id, product, gone, origin, titleRef, onEdit }: Props) {
+  const { t } = useT();
+  const store = useFoodcostStore();
+  const snap = useFoodcost();
+  const { canManage, location } = useSession();
+  const say = useStatusMessage();
+  const navigate = useNavigate();
+  const { state } = useLocation();
+  const split = useMediaQuery(SPLIT_QUERY);
+  const [confirm, confirmDialog] = useConfirm();
+  const { leave, goBack } = useProductExit(id, origin);
+  const titleId = useId();
+  const country = countryOf(location);
+
+  // The product as the form would open it: it gives each line the name and the note the form shows under it.
+  const working = useMemo(() => workingFrom(product, country), [product, country]);
+  const recipeIds = recipeIdsOn(working);
+  const loaded = { recipes: snap.recipesLoaded, ingredients: snap.ingredientsLoaded };
+  // The box starts open only when there is no summary above it (nothing else to show). Decided once, when the screen mounts.
+  const [startOpen] = useState(() => !summaryShows(product, snap.tables));
+
+  const leaving = useRef(false);
+  const asking = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  useEffect(() => {
+    if (!gone || leaving.current) return;
+    leaving.current = true;
+    say(t('fc.productDeleted'));
+    leave();
+  }, [gone, say, t, leave]);
+
+  async function remove() {
+    if (asking.current || leaving.current) return;
+    asking.current = true;
+    try {
+      const ok = await confirm({
+        title: t('fc.deleteProduct'),
+        message: t('fc.deleteProductQ', { name: product.name || t('fc.thisProduct') }),
+        okLabel: t('ui.delete'),
+        cancelLabel: t('common.cancel'),
+        danger: true,
+      });
+      if (!ok || !mounted.current) return;
+    } finally {
+      asking.current = false;
+    }
+    leaving.current = true;
+    store.deleteProduct(id);
+    say(t('fc.productDeleted'));
+    leave();
+  }
+
+  // Minutes typed but no rate to turn them into money: say where the rate is set — and only to somebody who can set it.
+  const labourNeedsRate = (product.labourMinutes ?? 0) > 0 && canManage && snap.settingsLoaded && !(Number(snap.tables.labourCostPerHour) > 0);
+
+  return (
+    <section className={shell.editor} aria-labelledby={titleId}>
+      <FormBar
+        backLabel={t('ui.back')}
+        onBack={goBack}
+        title={product.name || t('fc.untitledProduct')}
+        titleId={titleId}
+        titleRef={titleRef}
+        action={
+          <Button variant="primary" aria-label={t('fc.editProduct')} onPress={onEdit}>
+            <Pencil aria-hidden="true" />
+          </Button>
+        }
+      />
+
+      <div className={shell.body}>
+        <ProductSummary product={product} tables={snap.tables} />
+        <FullCard read startOpen={startOpen}>
+          <CardSection title={t('fc.section.product')}>
+            <ReadProduct product={product} working={working} />
+          </CardSection>
+          <CardSection title={t('fc.madeOf')}>
+            <ReadMadeOf product={product} working={working} tables={snap.tables} loaded={loaded} />
+            {recipeIds.length === 0 ? null : (
+              <>
+                <SubHeading>{t('fc.section.weighing')}</SubHeading>
+                <ReadWeighings product={product} recipes={snap.recipes} recipeIds={recipeIds} />
+              </>
+            )}
+          </CardSection>
+          <CardSection title={t('fc.packaging')}>
+            <ReadPackaging product={product} working={working} tables={snap.tables} loaded={loaded} />
+          </CardSection>
+          <CardSection title={t('fc.labour')}>
+            <ReadLabour product={product} note={labourNeedsRate ? t('fc.labourSetRate') : ''} />
+          </CardSection>
+          <CardSection title={t('fc.section.price')}>
+            <CardStack>
+              <ReadPrice product={product} />
+              <SuggestedPrice product={product} tables={snap.tables} sellingPrice={product.sellingPrice} onUse={null} />
+            </CardStack>
+          </CardSection>
+          <CardSection title={t('fc.section.results')}>
+            <CardStack>
+              <ProductAnswer product={product} tables={snap.tables} />
+              <PerKgBlock product={product} tables={snap.tables} />
+            </CardStack>
+          </CardSection>
+          <ProductActions
+            onHistory={() => {
+              // On the split the history takes the product's place (so the list's rows still mean «replace what is open»); on a
+              // phone it is one level down and Back is the browser's.
+              void navigate(historyPath(id, origin), split ? { replace: true, state } : { state: { ...FROM_PRODUCT, ...pushDepth(state) } });
+            }}
+            onDelete={canManage ? () => { void remove(); } : null}
+          />
+        </FullCard>
+      </div>
+      {confirmDialog}
+    </section>
+  );
+}
