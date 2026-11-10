@@ -25,9 +25,9 @@
 // the pure `dayLabelParts` instead), guided-model.ts (whole, but `stepRows`, `overdueText` and `progressText` take their words / the translator as an argument) and zoom-steps.ts (the storage and DOM halves); their
 // specs (calculator-config.spec.ts, log-model.spec.ts, guided-model via calculator-recipe-source.spec.ts,
 // zoom-steps.spec.ts) compare what they do port. calculator-tab-keys.ts is new in Mise 2 and has no original.
-// fc-number.ts and from-recipes.ts are partial ports too (8 Nov 2026, the Food cost recipe line in grams): only `fcNumber`
-// and `fcWeight` (adapted: they take the money), and only `wholeRecipeKg`; fc-number.spec.ts and from-recipes.spec.ts run
-// what they port against both files.
+// fc-number.ts is an adapted port (8 Nov 2026, widened 10 Nov): `fcNumber`, `fcWeight`, `fcMoney` and `weighingParams` take the
+// money; fc-number.spec.ts runs what it ports against both files. from-recipes.ts WAS a partial port (only `wholeRecipeKg`)
+// and is FULL and paired since item 29 (10 Nov 2026, the products made from the recipe book).
 // recipe-link.ts is a partial port too (step 3d-7): it leaves out the page addresses of the current app (`recipeHash`,
 // `foodCostHref`, `recipeHref`, `ordersHref`, `catalogueOriginFromHash`) and adds four things with no original; its spec
 // compares names and shapes itself.
@@ -183,6 +183,7 @@ import * as draftJournal from './draft-journal';
 import * as lineQuantity from './line-quantity';
 import * as perKgModel from './per-kg-model';
 import * as unpricedRows from './unpriced-rows';
+import * as fromRecipes from './from-recipes';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -264,6 +265,7 @@ import * as legacyDraftJournal from '../../js/orders/draft-journal.js';
 import * as legacyLineQuantity from '../../js/foodcost/line-quantity.js';
 import * as legacyPerKgModel from '../../js/foodcost/per-kg-model.js';
 import * as legacyUnpricedRows from '../../js/catalogue/unpriced-rows.js';
+import * as legacyFromRecipes from '../../js/foodcost/from-recipes.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -347,6 +349,7 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['line-quantity', lineQuantity, legacyLineQuantity],
   ['per-kg-model', perKgModel, legacyPerKgModel],
   ['unpriced-rows', unpricedRows, legacyUnpricedRows],
+  ['from-recipes', fromRecipes, legacyFromRecipes],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -420,7 +423,7 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all eighty-one models are compared', () => {
+test('all eighty-two models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'away-reminder', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
@@ -432,5 +435,5 @@ test('all eighty-one models are compared', () => {
       'invoice-zip/classify', 'invoice-zip/pricing', 'invoice-zip/fatturapa', 'invoice-zip/products', 'invoice-zip/selection',
       'work-week', 'price-changes-model', 'invoice-import-model', 'invoice-import-plan', 'ingredient-merge', 'send-routes', 'supplier-order', 'orders-config', 'line-supplier', 'order-text', 'ingredient-search', 'order-day', 'sent-check', 'suggestions',
       'history-window', 'deliveries', 'reminders', 'untold-changes', 'alert-dismissal', 'holidays-it', 'kiosk-lines', 'order-summary', 'draft-journal',
-      'line-quantity', 'per-kg-model', 'unpriced-rows']);
+      'line-quantity', 'per-kg-model', 'unpriced-rows', 'from-recipes']);
 });

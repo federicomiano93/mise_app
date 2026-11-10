@@ -11,7 +11,8 @@
 //
 // ⚠️ WRITES ARE LOCAL-FIRST (P20): memory, the local copy and the screen move at once — offline too,
 // where a write waits rather than fails — and a write the database REFUSES is rolled back and said
-// out loud, so the screen never shows a save that did not happen.
+// out loud, so the screen never shows a save that did not happen. ONE EXCEPTION, on purpose: the products made from the recipe
+// book (createProductsFromRecipes) wait for the server and fail offline, because their id is fixed by the recipe.
 //
 // ⚠️ TWO DIFFERENCES FROM THE ORIGINAL, ON PURPOSE (docs/parity/foodcost.md):
 //   • an EMPTY answer from the browser's own database is not believed over a local copy that had
@@ -20,6 +21,7 @@
 //     otherwise the rollback would put back a version older than what is now on screen.
 
 import { PRODUCT_MODEL, normalizeProduct, normalizeProducts } from '@mise/shared/foodcost-model';
+import { productFromRecipe } from '@mise/shared/from-recipes';
 import type { CostTables, Product } from '@mise/shared/foodcost-model';
 import { restoreAfterRefusal } from '@mise/shared/foodcost-weighing';
 import { positiveNumber } from '@mise/shared/price-model';
@@ -82,6 +84,14 @@ export interface ProductSave {
   readonly lossPatches: Readonly<Record<string, RecipeLossPatch>>;
 }
 
+// What creating products from the recipe book came to: each product was created, or was already there (this phone's copy or the
+// server's), or could not be created (offline, refused). Nothing is written for the last two.
+export interface CreatedFromRecipes {
+  readonly made: number;
+  readonly skipped: number;
+  readonly failed: number;
+}
+
 export interface FoodcostDeps {
   // localStorage, or null when the browser will not give it (then nothing is remembered).
   readonly storage: KeyValueStorage | null;
@@ -108,6 +118,10 @@ export interface FoodcostStore {
   // Saves a product LOCAL-FIRST and returns its id at once.
   saveProduct(save: ProductSave): string;
   deleteProduct(id: string): void;
+  // The products for the recipes he ticked (item 29, current app f8d54f35). ⚠️ NOT LOCAL-FIRST, AND DELIBERATELY: each one is
+  // created only after the SERVER says no product is at its id, so offline it FAILS (counted, nothing queued) and a product made
+  // on another phone is never overwritten. The live list brings the new products in; no local copy is touched.
+  createProductsFromRecipes(recipes: readonly unknown[]): Promise<CreatedFromRecipes>;
   // The state of this product's first save: 'sending' (in the air — a snapshot lacking the product may only be a stale one, so a screen
   // WAITS), 'refused' (the product is going or gone, the refusal has its own message — a screen leaves without saying it was deleted)
   // or null (settled: a product that disappears was deleted).
@@ -408,6 +422,41 @@ export function createFoodcostStore(
         say({ kind: 'product-not-saved', name: product.name });
       });
       return id;
+    },
+
+    // ⚠️⚠️ THE LINK IS THE ID (shared/from-recipes.ts), so the only way a create goes wrong is by landing on a product that already
+    // exists — made on another device since this phone's copy was taken, and filled in there. Hence the transaction that asks the
+    // server (source.createProductIfAbsent), never saveProduct. Nothing he ticked is lost by a failure: the recipes stay in the
+    // list and he tries again online. One transaction per product, so one refused costs only itself.
+    // ⚠️ A recipe given twice is created once: two transactions racing for one id would both be answered «created».
+    async createProductsFromRecipes(recipeList) {
+      const wanted = new Map<string, Product>();
+      for (const recipe of Array.isArray(recipeList) ? recipeList : []) {
+        const made = productFromRecipe(recipe) as unknown as Product | null;
+        if (made && !wanted.has(made.id)) wanted.set(made.id, made);
+      }
+      // Counted as unsent while it runs, so the app does not reload by itself in the middle of it.
+      inFlight += 1;
+      changed();
+      try {
+        const results = await Promise.allSettled([...wanted.values()].map(product => {
+          // Already on this phone: there is nothing to ask the server.
+          if (products.some(p => p.id === product.id)) return Promise.resolve(false);
+          return source.createProductIfAbsent(product.id, toProductDocument(product));
+        }));
+        const out = { made: 0, skipped: 0, failed: 0 };
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            out.failed += 1;
+            deps.warn('Product from a recipe was not created:', result.reason);
+          } else if (result.value) out.made += 1;
+          else out.skipped += 1;
+        }
+        return out;
+      } finally {
+        inFlight -= 1;
+        changed();
+      }
     },
 
     firstSave: id => firstSaves.get(id) ?? null,

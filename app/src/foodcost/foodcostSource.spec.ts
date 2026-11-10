@@ -256,3 +256,56 @@ describe('the Food cost source, as firestore.rules expect it', () => {
     expect(id).toBe('9'.repeat(20));
   });
 });
+
+// A product made from the recipe book (item 29, current app f8d54f35): created by a transaction that reads the SERVER first.
+function transactionKit(serverHas: string[]) {
+  const base = fakeKit();
+  const tx = {
+    get: vi.fn(async (ref: Ref) => ({ exists: () => serverHas.includes(ref.path) })),
+    set: vi.fn((_ref: Ref, _data: Record<string, unknown>) => {}),
+  };
+  const runTransaction = vi.fn(async (_db: unknown, body: (t: typeof tx) => Promise<unknown>) => body(tx));
+  const fs = Object.assign(base.fs, { runTransaction });
+  return { ...base, kit: { fs, db: {} } as unknown as FirestoreKit, fs, tx };
+}
+
+describe('creating a product from the recipe book, as firestore.rules expect it', () => {
+  test('⚠️⚠️ the SERVER is asked first, and only an absent product is written — whole, stamped for the venue, in no batch and no margin point', async () => {
+    const { kit, fs, tx, batches } = transactionKit([]);
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'panificio-miano');
+    const data = { name: 'Brioche', components: [{ recipeId: 'r1', qtyKg: 1 }], packaging: [], sellingMode: null, model: 2 };
+    await expect(source.createProductIfAbsent('recipe-r1', data)).resolves.toBe(true);
+    expect(fs.runTransaction).toHaveBeenCalledTimes(1);
+    expect(tx.get.mock.calls[0]![0].path).toBe('locations/panificio-miano/products/recipe-r1');
+    const [ref, written] = tx.set.mock.calls[0]!;
+    expect(ref.path).toBe('locations/panificio-miano/products/recipe-r1');
+    expect(written).toEqual({ ...data, bakery: 'panificio-miano' });
+    // Never a plain set, a batch or a snapshot: nothing is priced yet, and a set would not have asked the server.
+    expect(fs.setDoc).not.toHaveBeenCalled();
+    expect(fs.writeBatch).not.toHaveBeenCalled();
+    expect(batches).toHaveLength(0);
+  });
+
+  test('⚠️ a product the server already has is left exactly as it is: false, and nothing written', async () => {
+    const { kit, tx, fs } = transactionKit(['locations/bakery/products/recipe-r1']);
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
+    await expect(source.createProductIfAbsent('recipe-r1', { name: 'Filled in elsewhere', model: 2 })).resolves.toBe(false);
+    expect(tx.get).toHaveBeenCalledTimes(1);
+    expect(tx.set).not.toHaveBeenCalled();
+    expect(fs.setDoc).not.toHaveBeenCalled();
+  });
+
+  test('⚠️ offline or refused, the transaction rejects, so the store counts it as not created (nothing is queued)', async () => {
+    const { kit, fs } = transactionKit([]);
+    fs.runTransaction.mockRejectedValueOnce(Object.assign(new Error('offline'), { code: 'unavailable' }));
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
+    await expect(source.createProductIfAbsent('recipe-r1', { name: 'Brioche', model: 2 })).rejects.toMatchObject({ code: 'unavailable' });
+  });
+
+  test('an id that could name another path never reaches Firestore', async () => {
+    const { kit, fs } = transactionKit([]);
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
+    for (const id of ['', 'a/b', '..']) await expect(source.createProductIfAbsent(id, { name: 'x' }), id).rejects.toThrow('Not a document id');
+    expect(fs.runTransaction).not.toHaveBeenCalled();
+  });
+});

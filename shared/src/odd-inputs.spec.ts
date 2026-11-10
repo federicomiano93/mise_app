@@ -48,6 +48,7 @@ import * as records from './records';
 import * as recipeCostModel from './recipe-cost-model';
 import * as foodcostWeighing from './foodcost-weighing';
 import * as perKgModel from './per-kg-model';
+import * as fromRecipes from './from-recipes';
 import * as foodcostModel from './foodcost-model';
 import * as calculatorConfig from './calculator-config';
 import * as calculatorDoughMath from './calculator-dough-math';
@@ -127,6 +128,7 @@ import { nameTaken as legacyNameTaken } from '../../js/catalogue/ingredient-sugg
 import * as legacyRecipeCostModelJs from '../../js/catalogue/recipe-cost-model.js';
 import * as legacyFoodcostWeighingJs from '../../js/foodcost/foodcost-weighing.js';
 import * as legacyPerKgModelJs from '../../js/foodcost/per-kg-model.js';
+import * as legacyFromRecipesJs from '../../js/foodcost/from-recipes.js';
 import * as legacyFoodcostModelJs from '../../js/foodcost/foodcost-model.js';
 import * as legacySupplierLabelJs from '../../js/supplier-label.js';
 import * as legacyVatNumberJs from '../../js/vat-number.js';
@@ -202,6 +204,7 @@ const legacyCatalogueModel = legacyCatalogueModelJs as unknown as typeof catalog
 const legacyRecipeCostModel = legacyRecipeCostModelJs as unknown as typeof recipeCostModel;
 const legacyFoodcostWeighing = legacyFoodcostWeighingJs as unknown as typeof foodcostWeighing;
 const legacyPerKgModel = legacyPerKgModelJs as unknown as typeof perKgModel;
+const legacyFromRecipes = legacyFromRecipesJs as unknown as typeof fromRecipes;
 const legacyFoodcostModel = legacyFoodcostModelJs as unknown as typeof foodcostModel;
 const legacyCalculatorConfig = legacyCalculatorConfigJs as unknown as typeof calculatorConfig;
 const legacyCalculatorDoughMath = legacyCalculatorDoughMathJs as unknown as typeof calculatorDoughMath;
@@ -2776,6 +2779,24 @@ describe('foodcost-model: odd inputs', () => {
   agree('draftFromRecipe', m.draftFromRecipe, l.draftFromRecipe, product([...ODD, 'recipe', 42, { id: 'DOUGH', name: '  Brioche dough ', ingredients: [] }, { name: 'no id' },
     { id: '  ' }, { id: 5, name: 5 }, { id: 'X' }, { id: 'X', name: null }, { id: ['X'] }, { id: { toString: () => 'T' }, name: { toString: () => 'N' } }, Object.create({ id: 'P' }),
     { get id(): unknown { throw new Error('boom'); } }]));
+
+  // The products made from the recipe book (item 29): the link in the id, the product a recipe starts, and which recipes are missing.
+  const BOOK_RECIPES: readonly unknown[] = [...ODD, 'recipe', 42, { id: 'DOUGH', name: 'Dough', ingredients: [{ label: 'Flour', grams: 1000, unit: 'g' }] },
+    { id: 'CREAM', name: '  Cream ', lossPct: 10, ingredients: [{ label: 'Milk', grams: 1, unit: 'kg' }, { label: 'Eggs', grams: 3, unit: 'pcs' }] },
+    { id: 'EGGS', name: 'Eggs only', ingredients: [{ label: 'Eggs', grams: 3, unit: 'pcs' }] }, { id: 'a/b', name: 'Slash' }, { id: 'X', name: '   ' },
+    { id: 'X', name: 'x'.repeat(260) }, { id: 5, name: 5 }, { id: ' DOUGH ', name: 'Padded' }, { name: 'No id' }, { id: ['X'], name: ['N'] },
+    { id: { toString: () => 'T' }, name: { toString: () => 'N' } }, Object.create({ id: 'P', name: 'Inherited' }),
+    { get id(): unknown { throw new Error('boom'); } }, { id: 'G', get name(): unknown { throw new Error('boom'); } }];
+  agree('recipeProductId', fromRecipes.recipeProductId, legacyFromRecipes.recipeProductId, product([...ODD, ...RECIPE_IDS, 'a/b', '/', ' x/y ', 'recipe-x', 'with space', { toString: () => 'a/b' }]));
+  agree('recipeIdOfProduct', fromRecipes.recipeIdOfProduct, legacyFromRecipes.recipeIdOfProduct, product([...ODD, ...RECIPE_IDS, 'recipe-', 'recipe-x', ' recipe-x ', 'recipe-recipe-x', 'Recipe-x', { toString: () => 'recipe-t' }]));
+  agree('wholeRecipeKg', fromRecipes.wholeRecipeKg, legacyFromRecipes.wholeRecipeKg, product(BOOK_RECIPES));
+  agree('productFromRecipe', fromRecipes.productFromRecipe, legacyFromRecipes.productFromRecipe, product(BOOK_RECIPES));
+  const BOOK_LISTS: readonly unknown[] = [undefined, null, [], 'abc', 5, {}, BOOK_RECIPES, BOOK_RECIPES.slice(0, 30), [BOOK_RECIPES[22], null, 5], new Set(BOOK_RECIPES.slice(20, 24)),
+    { a: BOOK_RECIPES[22], b: BOOK_RECIPES[23], c: BOOK_RECIPES[24] }, Object.freeze([BOOK_RECIPES[22]])];
+  const BOOK_PRODUCTS: readonly unknown[] = [...PRODUCT_LISTS, [{ id: 'recipe-DOUGH', name: 'Anything' }], [{ id: 'recipe-CREAM' }, null, 7],
+    [{ id: 'p1', name: 'Eggs ONLY' }], [{ id: 'p2', name: 'Cake', components: [{ recipeId: 'CREAM', qtyKg: 1 }] }, { id: 'p3', name: 'dough' }],
+    [{ id: ' recipe-DOUGH ', name: 'Padded id' }], [{ id: 5, name: 5 }, { name: { toString: () => 'obj' } }]];
+  agree('recipesWithoutProducts', fromRecipes.recipesWithoutProducts as AnyFn, legacyFromRecipes.recipesWithoutProducts as AnyFn, product(BOOK_LISTS, BOOK_PRODUCTS));
 
   agree('snapshotWorthTaking', m.snapshotWorthTaking, l.snapshotWorthTaking, [...product(PRODUCTS.slice(0, 70), PRODUCTS.slice(0, 70)),
     ...product([BASE], PRODUCTS), ...product(PRODUCTS, [BASE])]);

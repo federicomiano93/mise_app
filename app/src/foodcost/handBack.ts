@@ -15,6 +15,7 @@ import { createContext, useContext, useMemo, useRef } from 'react';
 // The names the openers register under.
 export const NEW_OPENER = 'new';
 export const SETTINGS_OPENER = 'settings';
+export const FROM_BOOK_OPENER = 'from-book';
 export const productOpener = (id: string): string => `product:${id}`;
 
 export interface HandBack {
