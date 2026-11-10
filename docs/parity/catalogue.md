@@ -1958,3 +1958,12 @@ Ports of the current app's PR #481: `70325def` (full screen from a button, a men
 `app/src/recipes/RecipesSection.rowMenu.spec.tsx` (menu on a tap and on Enter, the arrows, Escape and the focus back, the full screen from its
 button only, split and its reasons, «Order» absent / disabled with its reasons, Italian, the CSS); `app/src/orders/OrdersSection.fromRecipe.spec.tsx`
 (the trip: the address, the focused box, Back with no second entry, the recipe as left, the quantity kept, reload, not found, a bad recipe id, Italian).
+
+**Driven on the emulator (11 Nov 2026,** `algprobe/mise-drive/drive-mise2-recipe-row-menu.mjs`, IT 1024/360/296 and EN 360): every check passes —
+the menu by tap and by Enter, the arrows skipping a disabled «Order», Escape back to the row, the split saving nothing, the full screen only from
+its button, «Order» landing on the focused box, Back with no second entry and the focus on the row, the typed quantity kept, the focus back on the
+Summary / «What they sell» door after the review fix, ≥ 44px, no sideways scroll at 296, no console error. **One axe flag, accepted as an
+artefact:** with the menu OPEN, `scrollable-region-focusable` on `#main`. The menu is React Aria's first modal popover in Mise 2: while it is
+open the page behind it is hidden from assistive technology and the keyboard (the modal pattern), so axe sees a scrolling `#main` with
+nothing focusable in it. With the menu closed the same page passes. A later driver that runs axe with a React Aria popover open will see
+the same flag.
