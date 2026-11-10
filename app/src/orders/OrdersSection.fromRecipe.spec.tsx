@@ -141,8 +141,30 @@ describe('«Order» on a recipe row', () => {
     const view = show('/orders/supplier/s-alp?recipe=r1&ingredient=i-ghost');
     await quantityBox();
     expect(await screen.findByText('This ingredient is not in any order list')).toBeInTheDocument();
+    // The focus is on the screen's title, not left on the body: the sentence and the title are announced.
+    await waitFor(() => { expect(screen.getByRole('heading', { level: 2, name: 'Alpine Mills' })).toHaveFocus(); });
     await view.user.click(backButton());
     await waitFor(() => { expect(where(view.router)).toBe('/recipes/r1'); });
+  });
+
+  it('⚠️ coming back from «Summary» or «What they sell», the focus returns to that button, not to the quantity box again', async () => {
+    const view = show('/recipes/r1');
+    await orderFlour(view);
+    const box = await quantityBox();
+    await waitFor(() => { expect(box).toHaveFocus(); });
+    for (const name of [/^Summary/, 'What they sell']) {
+      await view.user.click(screen.getByRole('button', { name }));
+      await waitFor(() => { expect(where(view.router)).not.toContain('/orders/supplier/s-alp?'); });
+      await view.user.click(within(screen.getByRole('main')).getByRole('button', { name: 'Back' }));
+      await waitFor(() => { expect(where(view.router)).toBe('/orders/supplier/s-alp?recipe=r1&ingredient=i-flour'); });
+      const door = await screen.findByRole('button', { name });
+      await waitFor(() => { expect(door).toHaveFocus(); });
+      expect(await quantityBox()).not.toHaveFocus();
+    }
+    // No extra history entry: Back still returns to the recipe, with nothing left behind it.
+    await view.user.click(backButton());
+    await waitFor(() => { expect(where(view.router)).toBe('/recipes/r1'); });
+    expect(await entriesBehind(view.router)).toBe(0);
   });
 
   it('⚠️ a recipe that cannot be one is no recipe: an ordinary supplier screen, Back goes to the list', async () => {

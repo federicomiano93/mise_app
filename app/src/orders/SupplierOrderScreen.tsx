@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { fromOrdersList, fromOrdersSupplier, ingredientCardAddress, newIngredientAddress, supplierScreenAddress } from '@mise/shared/records-link';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { useT } from '../i18n/useT';
+import { KEEP_FOCUS } from '../shell/Page';
 import { Button } from '../ui/Button';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { FormBar } from '../ui/FormBar';
@@ -35,7 +36,7 @@ import styles from './SupplierOrderScreen.module.css';
 // draft is local-first, and leaving Orders sends what waits at once (ordersStore `stop()`), see docs/parity/orders.md.
 export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens }) {
   const { t } = useT();
-  const { state, search } = useLocation();
+  const { state, search, pathname } = useLocation();
   const navigate = useNavigate();
   const origin = useMemo(() => recipeOriginOf(search), [search]);
   const store = useOrdersStore();
@@ -88,21 +89,35 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
     if (shown && cameFromList(state) && !screen.current?.contains(document.activeElement)) title.current?.focus();
   }, [shown]);
 
-  // The ingredient a recipe row asked for: its quantity box takes the focus, once, when the supplier first shows. ⚠️ Looked for in the
-  // rows as drawn, so a line switched off and folded away is not found; the screen then says so instead of leaving the focus nowhere.
+  // The ingredient a recipe row asked for: its quantity box takes the focus, once, when the supplier first shows.
+  // ⚠️ Looked for in the rows as drawn: a line switched off and folded away (a closed «Not in use» group) is not found, and neither is
+  // an ingredient that is on no list. The screen then says so and puts the focus on its title, so the sentence and the title are announced
+  // (the recipe navigated here with KEEP_FOCUS, which would leave the focus on the body).
+  // ⚠️ ONCE PER TRIP, NOT PER MOUNT: a sub-screen («What they sell», the summary, «Order placed…», a card) unmounts this one, and coming
+  // back is a POP to the same address, ?recipe=…&ingredient=… still in it. The trip is marked done in this entry's own state (a REPLACE,
+  // so no entry is added), and the section has by then handed the focus back to the door that was pressed.
   const wanted = origin?.ingredientId ?? null;
   const asked = useRef(false);
+  const tripDone = typeof state === 'object' && state !== null && 'recipeFocusDone' in state;
   useEffect(() => {
-    if (!shown || wanted === null || asked.current) return;
+    if (origin === null || wanted === null || asked.current || tripDone) return;
     asked.current = true;
-    const line = [...(screen.current?.querySelectorAll('li[data-ingredient]') ?? [])].find(node => node.getAttribute('data-ingredient') === wanted);
-    const box = line?.querySelector('input');
-    if (box === null || box === undefined) {
-      say(t('ord.fromRecipe.notFound'), LONG_MS);
+    const markDone = () => { void navigate({ pathname, search }, { replace: true, state: { ...(typeof state === 'object' && state !== null ? state : {}), ...KEEP_FOCUS, recipeFocusDone: true } }); };
+    if (!shown) {
+      title.current?.focus();
+      markDone();
       return;
     }
-    if (typeof box.scrollIntoView === 'function') box.scrollIntoView({ block: 'center' });
-    box.focus({ preventScroll: true });
+    const line = [...(screen.current?.querySelectorAll('li[data-ingredient]') ?? [])].find(node => node.getAttribute('data-ingredient') === wanted);
+    const box = line?.querySelector('input');
+    if (box === null || box === undefined || box.closest('details:not([open])') !== null) {
+      say(t('ord.fromRecipe.notFound'), LONG_MS);
+      title.current?.focus();
+    } else {
+      if (typeof box.scrollIntoView === 'function') box.scrollIntoView({ block: 'center' });
+      box.focus({ preventScroll: true });
+    }
+    markDone();
   }, [shown]);
 
   // The column names stick right under the bar, whose height changes with the title's lines and the width.
