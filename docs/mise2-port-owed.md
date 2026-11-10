@@ -169,6 +169,11 @@ worker's rollback, has the exact order):
     «TO PORT». Mise 2: NONE (`MAX_PIECE_G`, `piecesOf` absent from `shared/src/invoice-zip/classify.ts`; parity marked PORT OWED: invoice-zip/classify). Needs
     `classify`, `products` (`proposeParams`, `proposePackWord`, `pieceWordFor`), `pricing`, `parsePack` («2000x4g» count first),
     `shared/src/invoice-import-model.ts`, plus `invoice-import/*.py` is shared server code (already on branch). Specs listed in the parity doc. Size M.
+    **DONE 10 Nov 2026** (`feature/mise2-next-invoice-per-piece`; `docs/parity/suppliers.md`, «Invoice reader per piece — as built»):
+    `shared/src/invoice-zip/classify.ts` (`MAX_PIECE_G`, `piecesOf`, `parsePack` count first), `shared/src/invoice-zip/products.ts`
+    (`proposeParams`, `proposePackWord`), `shared/src/invoice-import-model.ts` (`pieceWordFor` for a piece product);
+    specs `classify.spec.ts`, `invoice-import-model.spec.ts`, `invoice-pieces-cost.spec.ts`, `app/src/suppliers/invoiceImport/buildImport.spec.ts`;
+    the parity marker is gone.
 19. **#435 ready-made food, carton weights, free goods, returns, VAT from the newest paid line** — DONE (`bd79eb57`, PR #437).
     Still owed from memory: the wrong cartons already saved (a data script, not a port).
 20. **Piece weight typed in grams** — #489 (`aa28e3f7`): «Peso di un pezzo» typed in grams, stored in kilos (`gramsOfKg`, `kgTextOfGrams`,
@@ -251,8 +256,6 @@ to its markers, with his decision in the line.
 
 What each one means for the people using Mise 2 until it is ported:
 - 16. Suppliers: the empty-flash, scroll and focus fixes and the «hand-made» mark are not verified in Mise 2.
-- 18. Invoice import: a carton of pieces is priced per kilo instead of per piece on NEW imports (check every imported
-  price of goods sold by the piece until it is ported).
 - 21-22, 24-26, 28. Food cost steps 1 (all but the g/kg select of item 27), 2, 4, A, B and the two decimals: Mise 2's Food
   cost keeps its own older screens.
 - 23. Food cost recipe link with several products (a check).

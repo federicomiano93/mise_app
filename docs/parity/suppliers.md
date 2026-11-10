@@ -877,11 +877,7 @@ themselves.
   is outside it). Measured after: `probe-mise2-fold-heads.mjs` 36/36 (was 32/36) at 1024/360/296 in IT and EN.
 - Not changed: the recipe screen's allergen card (`recipes/AllergenCard`) has the same one-row head; it is not measured here.
 
-## Invoice reader: goods counted in pieces priced per piece — TO PORT
-
-⚠️ **Not in Mise 2 yet.** The current app's fix on branch `fix/invoice-import-per-piece` (5 Nov 2026, his rule) must be ported
-to `shared/src/invoice-zip/` and `shared/src/invoice-import-model.ts` before the switch, with its specs, or Mise 2 goes back to
-pricing cornetti «per kilo of 50 bags».
+## Invoice reader: goods counted in pieces priced per piece — PORTED
 
 - **His rule:** a product counted in PIECES (cornetti, panzerotti, arancini, graffe…) carries its price per piece, with the piece
   weight beside it (Chiaragel «85gr* 50pz» at 23.20 € a carton = 0.464 €/pz, 85 g). Goods sold BY WEIGHT stay per kilo («DR
@@ -1293,3 +1289,20 @@ Item 12 of `docs/mise2-port-owed.md` (the current app's PR #474, `feature/mise2-
 - **Lights only on the server's word (a difference from the current app, on purpose):** the tag and the reorder wait for the SERVER's answer for today's records and the draft (Orders: `serverSeen.history` and `serverSeen.draft`; Suppliers: `meta.fromServer`), not for the phone's saved copy. A copy can lack an order placed this morning on another phone, and the supplier would flash as due and jump to the top. Offline with no server answer nobody is lit and the usual order stays (the safe side); a dead draft stream still counts as arrived with no closes. The «Order today» strip is left as it was.
 - **Known effect:** the list is drawn first in the usual order (from the saved copy or the first snapshot), so the due rows move up ONCE when the server answers.
 - Specs: `shared/src/due-first.spec.ts`, `OrdersSection.dueToday.spec.tsx`, `SuppliersSection.dueToday.spec.tsx`, the source and store specs of Suppliers. The two old Orders specs that counted buttons by the exact name «Alpine Mills» now match the name's start, because a lit row's name ends with the tag.
+
+## Invoice reader per piece — as built (10 Nov 2026)
+
+Branch `feature/mise2-next-invoice-per-piece`, a 1:1 port of the current app's `6f2173fe` (JS only; the Python was already on the branch).
+- **Files:** `shared/src/invoice-zip/classify.ts` (`MAX_PIECE_G` = 500, `piecesOf`, the `withFractions` helper shared with `parsePack`, the
+  count-first rule «2000x4g» for grams only, placed after `P_GR_X` and before `P_KG`, and the 55-piece carton shared out to 0.1 g);
+  `shared/src/invoice-zip/products.ts` (`proposeParams` proposes `pcs`, one piece as the pack and the count as `packCount`; `proposePackWord`
+  gives `''` for a piece product); `shared/src/invoice-import-model.ts` (`newIngredientData` names the inner item with `pieceWordFor`, «pezzo» /
+  «piece», for a `pcs` product; a word the file gives still wins). `pieceWordFor` already existed in `shared/src/record-choices.ts`.
+  `shared/src/invoice-zip/pricing.ts` needed no change: it already prices `pcs` with `piece-weight-from-description` and no `fromPack`.
+- **Specs:** `classify.spec.ts` (count first; `piecesOf`), `invoice-import-model.spec.ts` (50 × pezzo / piece), `invoice-pieces-cost.spec.ts` (new: a
+  recipe or a Food cost line in grams costs the same before and after), `app/src/suppliers/invoiceImport/buildImport.spec.ts` (the 55-piece carton,
+  pieces per piece, goods by weight stay per kilo, sugar sachets). The `parity.spec.ts` classify pair has no marker left. The `test.fails` on the
+  current-app side of the carton spec is gone.
+- **Differences:** none in behaviour or numbers. `invoice-pieces-cost.spec.ts` does not repeat the check of the printed «0,464» (`formatPricePerUnit`
+  takes a translator in `shared/`; the «each» / «al pezzo» text of a per-piece rate is pinned in `price-write.spec.ts`, its three decimals in `price-model.spec.ts`). No UI change: the import screen shows no
+  new text.

@@ -6,7 +6,7 @@
 // zip reader of app/ joined to `buildImportFromRead` of shared/) and js/orders/invoice-zip/build-import.js, which the
 // live app runs today. Ported from tests/invoice-zip-build.test.mjs. Invented invoices only.
 //
-// PORTED: 30 of 30 tests of tests/invoice-zip-build.test.mjs. Two of them ('parseImportFile accepts…') hand the file that
+// PORTED: 33 of 33 tests of tests/invoice-zip-build.test.mjs (the three per-piece ones of 10 Nov 2026 included). Two of them ('parseImportFile accepts…') hand the file that
 // was built to the CURRENT app's model of the import file (js/orders/invoice-import-model.js), for both implementations:
 // Mise 2's own model of that file comes with its screen. The zip reader's pre-check on forged archives is in
 // zipRead.spec.ts.
@@ -121,13 +121,79 @@ describe.each(implementations)('%s', (_name, impl) => {
     expect(ingredient(c.build({ eggWeightG: 52 }), 'uova').unitWeightKg).toBe(0.052);
   });
 
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 18): main changed js/orders/invoice-zip (invoice per-piece pricing: a carton of pieces is priced per kg), the port has not — remove .fails when ported
-  (_name === 'js/ (current app)' ? test.fails : test)('a carton of 55 pieces weighing 2 kg is priced per kg of the carton, not of 55 cartons', () => {
+  test('a carton of 55 pieces weighing 2 kg is 55 pieces of 36.4 g, priced per piece, not 55 cartons', () => {
     const c = newCase();
     c.add([{ desc: 'BRIOCHE MIGNON 35/40gr 2Kg* 55pz', code: 'BR1', qty: 1, unit: 'CT', total: 14.5 }]);
     const brioche = ingredient(c.build(), 'BR1');
-    expect(brioche.priceUnit).toBe('kg');
-    expect((brioche.prices[0] as { pricePerUnit: number }).pricePerUnit).toBe(7.25);
+    expect([brioche.priceUnit, brioche.weight, brioche.packCount, brioche.unitWeightKg]).toStrictEqual(['pcs', '36.4 g', 55, 0.0364]);
+    const price = (brioche.prices[0] as { pricePerUnit: number }).pricePerUnit;
+    expect(price).toBe(0.2636); // 14.5 / 55
+    // Per kilo it is still the carton's price per kilo (14.5 / 2 kg = 7.25), to within the rounding of a piece.
+    expect(Math.abs(price / (brioche.unitWeightKg as number) - 7.25)).toBeLessThan(0.02);
+  });
+
+  // HIS RULE (5 Nov 2026): goods counted in pieces are priced per piece with the piece weight beside it; goods sold
+  // by weight stay per kilo. Invented invoices shaped like the real ones.
+  test('a product counted in pieces is priced per piece, with the piece weight and no «busta»', () => {
+    const c = newCase();
+    c.add([
+      { desc: 'SG.CR.1980 PF VUOTO 85gr* 50pz', code: 'CR1', qty: 1, unit: 'CT', total: 23.2 },
+      { desc: 'CORNETTO ESEMPIO PZ.50 GR.85', code: 'CR2', qty: 2, unit: 'CT', total: 57 },
+      { desc: 'CORNETTO CEREALI GR.85X50P', code: 'CR3', qty: 1, unit: 'CT', total: 35 },
+      { desc: 'PANZEROTTI CREMA PZ.25 GR.170', code: 'PZ1', qty: 1, unit: 'PZ', total: 24.5 },
+    ]);
+    const result = c.build();
+    const cornetti = ingredient(result, 'CR1');
+    // The app names the piece with the venue's own word for it (invoice-import-model), never the default «busta».
+    expect([cornetti.priceUnit, cornetti.unitWeightKg, cornetti.weight, cornetti.packCount, cornetti.packUnit])
+      .toStrictEqual(['pcs', 0.085, '85 g', 50, '']);
+    const first = cornetti.prices[0] as { pricePerUnit: number; qty: number; fromPack?: unknown };
+    expect([first.pricePerUnit, first.qty]).toStrictEqual([0.464, 50]);
+    expect(first.fromPack, 'a price per piece is never re-read with a stored pack weight').toBe(undefined);
+    expect(product(result, 'CR1').reliability).toBe('media');
+    const priceOf = (part: string) => [ingredient(result, part).priceUnit, (ingredient(result, part).prices[0] as { pricePerUnit: number }).pricePerUnit];
+    expect(priceOf('CR2')).toStrictEqual(['pcs', 0.57]);
+    expect([ingredient(result, 'CR3').priceUnit, ingredient(result, 'CR3').unitWeightKg]).toStrictEqual(['pcs', 0.085]);
+    expect(priceOf('PZ1')).toStrictEqual(['pcs', 0.98]);
+    // The file the app reads accepts them: a price per piece always carries its piece weight.
+    const parsed = legacyImportModel.parseImportFile(JSON.stringify(result.importFile));
+    expect(parsed.ok).toBe(true);
+    expect(parsed.file.ingredients.filter((i) => i.invalid)).toStrictEqual([]);
+  });
+
+  test('goods sold by weight stay per kilo, even in a carton counted in «pz»', () => {
+    const c = newCase();
+    c.add([
+      { desc: 'DR CIPOLLE FETTE 2,5kg* 4pz', code: 'CI', qty: 1, unit: 'CT', total: 22.8 },
+      { desc: 'PATATE DIPPING KG.2.5X4', code: 'PA', qty: 1, unit: 'CT', total: 40.5 },
+      { desc: 'MOZZARELLA TRIS G 100X3', code: 'MO', qty: 2, unit: 'PZ', total: 5.58 },
+      { desc: 'DETERGENTE POLVERE G 570 (X12PZ)', code: 'DE', qty: 1, unit: 'CT', total: 9.74 },
+    ]);
+    const result = c.build();
+    const onion = ingredient(result, 'CI');
+    expect([onion.priceUnit, onion.weight, onion.packCount, onion.unitWeightKg]).toStrictEqual(['kg', '2.5 kg', 4, null]);
+    const priceOf = (part: string) => [ingredient(result, part).priceUnit, (ingredient(result, part).prices[0] as { pricePerUnit: number }).pricePerUnit];
+    expect((onion.prices[0] as { pricePerUnit: number }).pricePerUnit).toBe(2.28);
+    expect(priceOf('PA')).toStrictEqual(['kg', 4.05]);
+    expect(priceOf('MO')).toStrictEqual(['kg', 9.3]);
+    expect(ingredient(result, 'DE').priceUnit, 'a 570 g box is not a piece of pastry').toBe('kg');
+  });
+
+  test('sugar sachets «2000x4g» are 8 kg, «1000x4g» 4 kg — not one 4 g pack at 4,032 €/kg', () => {
+    const c = newCase();
+    c.add([
+      { desc: '9014 Vergn zucchero bianco bustina 2000x4g', code: '9014', qty: 1, unit: 'PZ', total: 16.13 },
+      { desc: '9164 Vergn zucchero grezzo bustina 1000x4g', code: '9164', qty: 1, unit: 'PZ', total: 14.34 },
+    ]);
+    const result = c.build();
+    const white = ingredient(result, '9014');
+    expect([white.priceUnit, white.weight, white.packCount]).toStrictEqual(['kg', '4 g', 2000]);
+    const w = white.prices[0] as { pricePerUnit: number; qty: number };
+    expect([w.pricePerUnit, w.qty]).toStrictEqual([2.0163, 8]);
+    expect(product(result, '9014').reliability).toBe('media');
+    const raw = ingredient(result, '9164');
+    const r = raw.prices[0] as { pricePerUnit: number; qty: number };
+    expect([raw.packCount, r.pricePerUnit, r.qty]).toStrictEqual([1000, 3.585, 4]);
   });
 
   test('six trays of ten eggs is a pack count of sixty', () => {

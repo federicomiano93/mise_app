@@ -3,7 +3,7 @@
 // tests/invoice-import-model.test.mjs; the module is a FULL port, so parity.spec.ts also compares its exports.
 // Every name, VAT number and invoice id below is INVENTED. Real invoices never go in this repository.
 //
-// PORTED: 115 of 115 tests of tests/invoice-import-model.test.mjs. Three of them read a file as TEXT in the original
+// PORTED: 116 of 116 tests of tests/invoice-import-model.test.mjs. Three of them read a file as TEXT in the original
 // and still do, through Vite's `?raw` (shared/ has no `node:fs`): the lists of keys each collection's rule accepts
 // (firestore.rules), the keys the supplier card saves (js/supplier-record-form.js), and 'the model imports no
 // Firebase, no DOM and nothing from another feature's folder' — which reads the source of BOTH files, each against
@@ -847,6 +847,17 @@ describe.each([
     expect(it.packUnit).toBe('busta');
     const en = writesFor(oneIngredient({ packUnit: '', packCount: 6 }), ctxOf(), { language: 'en' }).batches[0]![0].data;
     expect(en.packUnit).toBe('bag');
+  });
+
+  test('a carton of pieces priced per piece is «50 × pezzo», never «50 × busta», in the venue\'s word', () => {
+    const pieces = { priceUnit: 'pcs', unitWeightKg: 0.085, weight: '85 g', packUnit: '', packCount: 50 };
+    const it = writesFor(oneIngredient(pieces)).batches[0]![0].data;
+    expect([it.packUnit, it.packCount, it.unit, it.weight]).toStrictEqual(['pezzo', 50, 'cartone', '85 g']);
+    const en = writesFor(oneIngredient(pieces), ctxOf(), { language: 'en' }).batches[0]![0].data;
+    expect(en.packUnit).toBe('piece');
+    // A word the file does give still wins (eggs: «uovo»).
+    const eggs = writesFor(oneIngredient({ ...pieces, weight: '', unitWeightKg: 0.05, packUnit: 'uovo', packCount: 30 })).batches[0]![0].data;
+    expect(eggs.packUnit).toBe('uovo');
   });
 
   test('the file\'s own brand and category are kept', () => {
