@@ -1,0 +1,379 @@
+// Unit tests for «Cost per 1 kg»: one kilo of a product, line by line (P15 — the owner cannot read code, so these tests are the
+// safety net), run against BOTH implementations: the TypeScript port in shared/ and js/foodcost/per-kg-model.js, which the live app
+// uses today. Ported from tests/foodcost-per-kg.test.mjs (all 19). Each side is run with its OWN foodcost-model, as the app is. The
+// module is a FULL port, so parity.spec.ts also compares its exports name by name; the last block here compares the two on every
+// case of this file, row by row.
+//
+// Federico, 4 Nov 2026: every ingredient's weight scaled to one kilo of the product, with its price per kilo and what the line
+// costs; recipes opened into their own ingredients; an unpriced row shown as not counted; the total = the card's own cost. These
+// tests pin the arithmetic, the one-row-per-ingredient merge, the inherited unlinked-row quirk, and that the total is the card's
+// figure rather than a second sum. Fake data only.
+
+import { describe, expect, test } from 'vitest';
+import * as ported from './per-kg-model';
+import * as portedCard from './foodcost-model';
+import * as legacyJs from '../../js/foodcost/per-kg-model.js';
+import * as legacyCardJs from '../../js/foodcost/foodcost-model.js';
+
+const legacy = legacyJs as unknown as typeof ported;
+const legacyCard = legacyCardJs as unknown as typeof portedCard;
+
+type Doc = Record<string, unknown>;
+
+const near = (actual: number | null, expected: number, eps = 1e-3): void => {
+  expect(actual).not.toBeNull();
+  expect(Math.abs((actual as number) - expected), `${actual} is not ${expected}`).toBeLessThan(eps);
+};
+const sumOf = (rows: ported.PerKgRow[], field: 'kg' | 'pcs' | 'cost'): number => rows.reduce((s, r) => s + (r[field] || 0), 0);
+const counted = (result: ported.PerKgResult): ported.PerKgRow[] => result.rows.filter(r => !r.reason);
+const named = (result: ported.PerKgResult, name: string): ported.PerKgRow | undefined => result.rows.find(r => r.name === name);
+const row = (result: ported.PerKgResult, name: string): ported.PerKgRow => {
+  const found = named(result, name);
+  expect(found, `a row named ${name}`).toBeDefined();
+  return found as ported.PerKgRow;
+};
+
+const INGREDIENTS: Record<string, Doc> = {
+  FLOUR: { id: 'FLOUR', name: 'Flour', priceUnit: 'kg', pricePerUnit: 2 },
+  BUTTER: { id: 'BUTTER', name: 'Butter', priceUnit: 'kg', pricePerUnit: 8 },
+  SUGAR: { id: 'SUGAR', name: 'Sugar', shortName: 'Icing sugar', priceUnit: 'kg', pricePerUnit: 3 },
+  MILK: { id: 'MILK', name: 'Milk', priceUnit: 'l', pricePerUnit: 1.5 },
+  EGG: { id: 'EGG', name: 'Egg', priceUnit: 'pcs', pricePerUnit: 0.3, unitWeightKg: 0.06 },
+  CHERRY: { id: 'CHERRY', name: 'Cherry', priceUnit: 'pcs', pricePerUnit: 0.05 },
+  BAG: { id: 'BAG', name: 'Paper bag', priceUnit: 'pcs', pricePerUnit: 0.1 },
+  FILM: { id: 'FILM', name: 'Film', priceUnit: 'kg', pricePerUnit: 4 },
+  NOPRICE: { id: 'NOPRICE', name: 'Vanilla' },
+};
+// 3.20 per kilo with no loss.
+const DOUGH: Doc = {
+  id: 'DOUGH', name: 'Dough', lossPct: 0,
+  ingredients: [
+    { label: 'Flour', grams: 800, unit: 'g', kind: 'ingredient', refId: 'FLOUR' },
+    { label: 'Butter', grams: 200, unit: 'g', kind: 'ingredient', refId: 'BUTTER' },
+  ],
+};
+const LOSSY: Doc = { ...DOUGH, id: 'LOSSY', name: 'Lossy dough', lossPct: 20 };
+// Water not linked to anything: the inherited quirk.
+const WET: Doc = {
+  id: 'WET', name: 'Wet dough', lossPct: 0,
+  ingredients: [
+    { label: 'Flour', grams: 600, unit: 'g', kind: 'ingredient', refId: 'FLOUR' },
+    { label: 'Water', grams: 400, unit: 'g' },
+  ],
+};
+// A cream, used INSIDE the filled dough below: flour again, milk, and a pinch of nothing.
+const CREAM: Doc = {
+  id: 'CREAM', name: 'Cream', lossPct: 0,
+  ingredients: [
+    { label: 'Milk', grams: 800, unit: 'g', kind: 'ingredient', refId: 'MILK' },
+    { label: 'Flour', grams: 200, unit: 'g', kind: 'ingredient', refId: 'FLOUR' },
+    { label: 'Salt', grams: 1, unit: 'pinch' },
+    { label: '', grams: 0, unit: 'g' },
+  ],
+};
+const FILLED: Doc = {
+  id: 'FILLED', name: 'Filled dough', lossPct: 0,
+  ingredients: [
+    { label: 'Flour', grams: 500, unit: 'g', kind: 'ingredient', refId: 'FLOUR' },
+    { label: 'Cream', grams: 500, unit: 'g', kind: 'recipe', refId: 'CREAM' },
+  ],
+};
+const UNPRICED: Doc = { id: 'UNPRICED', name: 'Mystery', lossPct: 0, ingredients: [{ label: 'Something', grams: 500, unit: 'g' }] };
+const LOOP: Doc = {
+  id: 'LOOP', name: 'Loop', lossPct: 0,
+  ingredients: [
+    { label: 'Flour', grams: 500, unit: 'g', kind: 'ingredient', refId: 'FLOUR' },
+    { label: 'Itself', grams: 500, unit: 'g', kind: 'recipe', refId: 'LOOP' },
+  ],
+};
+const TABLES = {
+  ingredients: INGREDIENTS,
+  recipes: { DOUGH, LOSSY, WET, CREAM, FILLED, UNPRICED, LOOP } as Record<string, Doc>,
+};
+
+const product = (over: Doc = {}): Doc => ({
+  id: 'P1', name: 'Test product',
+  components: [{ recipeId: 'DOUGH', qtyKg: 10 }],
+  packaging: [],
+  sellingMode: 'piece', piecesPerBatch: 100,
+  sellingPrice: 1.2, vatRate: 20, foodCostTarget: 30,
+  ...over,
+});
+
+const depthChain = (): Record<string, Doc> => {
+  const chain: Record<string, Doc> = {};
+  for (let i = 1; i <= 5; i++) {
+    chain[`C${i}`] = { id: `C${i}`, name: `Level ${i}`, lossPct: 10, ingredients: [
+      { label: 'Flour', grams: 500, unit: 'g', kind: 'ingredient', refId: 'FLOUR' },
+      ...(i < 5 ? [{ label: `Level ${i + 1}`, grams: 500, unit: 'g', kind: 'recipe', refId: `C${i + 1}` }] : []),
+    ] };
+  }
+  return chain;
+};
+
+describe.each([
+  ['shared/ (TypeScript)', ported, portedCard],
+  ['js/ (current app)', legacy, legacyCard],
+] as const)('%s', (_name, m, card) => {
+  // The total is the card's figure: its batch cost over its batch kilos.
+  function cardPerKg(p: Doc, tables = TABLES): number {
+    const cost = card.productionCost(p, tables);
+    return (cost.batchCost as number) / cost.batch.kg;
+  }
+
+  test('one recipe: each ingredient scaled to one kilo, its price per kilo and its cost', () => {
+    const result = m.costPerKg(product(), TABLES);
+    expect(result.kg).toBe(10);
+    expect(result.rows.length).toBe(2);
+    expect(row(result, 'Flour')).toStrictEqual({
+      key: 'ing:FLOUR', kind: 'ingredient', name: 'Flour',
+      kg: 0.8, pcs: null, pricePerKg: 2, priceEach: null, cost: 1.6, reason: null,
+    });
+    expect(row(result, 'Butter').kg).toBe(0.2);
+    expect(row(result, 'Butter').cost).toBe(1.6);
+    expect(result.total).toBe(3.2);
+    expect(result.partial).toBe(false);
+  });
+
+  test('the total is the card\'s own cost per kilo, and the lines add up to it', () => {
+    const cases = [
+      product(),
+      product({ components: [{ recipeId: 'LOSSY', qtyKg: 3.7 }] }),
+      product({ components: [{ recipeId: 'FILLED', qtyKg: 2.3 }, { recipeId: 'DOUGH', qtyKg: 1.1 }] }),
+      product({ components: [{ recipeId: 'WET', qtyKg: 5 }, { kind: 'ingredient', ingredientId: 'SUGAR', qty: 150, unit: 'g' }] }),
+      product({ sellingMode: 'weight', packaging: [{ ingredientId: 'BAG', qtyPcs: 2 }] }),
+      product({ packaging: [{ ingredientId: 'BAG', qtyPcs: 1 }] }),
+    ];
+    for (const p of cases) {
+      const result = m.costPerKg(p, TABLES);
+      near(result.total, cardPerKg(p));
+      near(sumOf(counted(result), 'cost'), result.total as number);
+    }
+  });
+
+  test('sold by the kilo, the total is exactly the cost per kilo the card shows', () => {
+    const p = product({ sellingMode: 'weight', packaging: [{ ingredientId: 'BAG', qtyPcs: 2 }] });
+    const cost = card.productionCost(p, TABLES);
+    expect(cost.unit).toBe('kg');
+    expect(m.costPerKg(p, TABLES).total).toBe(cost.unitCost);
+  });
+
+  test('an oven loss: more than a kilo of ingredients for a kilo of product', () => {
+    const result = m.costPerKg(product({ components: [{ recipeId: 'LOSSY', qtyKg: 10 }] }), TABLES);
+    // 1 kg out of a recipe that loses 20% takes 1.25 kg in.
+    near(sumOf(result.rows, 'kg'), 1.25, 1e-6);
+    near(row(result, 'Flour').kg, 1.0, 1e-6);
+    near(result.total, 4.0);
+    expect(result.lossy).toBe(true);
+    expect(m.costPerKg(product(), TABLES).lossy).toBe(false);
+  });
+
+  test('a finished product (no weight loss) lays the loss aside, as the card does', () => {
+    const p = product({ components: [{ recipeId: 'LOSSY', qtyKg: 10 }], noWeightLoss: true });
+    const result = m.costPerKg(p, TABLES);
+    near(sumOf(result.rows, 'kg'), 1, 1e-6);
+    expect(result.total).toBe(3.2);
+    expect(result.lossy).toBe(false);
+    near(result.total, cardPerKg(p));
+  });
+
+  test('a recipe inside a recipe is opened into its own ingredients, one row per ingredient', () => {
+    const result = m.costPerKg(product({ components: [{ recipeId: 'FILLED', qtyKg: 4 }] }), TABLES);
+    // Flour: 500 g of the dough plus 200 g of the cream's 1000 g in the other 500 g.
+    near(row(result, 'Flour').kg, 0.6, 1e-6);
+    near(row(result, 'Milk').kg, 0.4, 1e-6);
+    expect(result.rows.filter(r => r.name === 'Flour').length).toBe(1);
+    expect(named(result, 'Cream'), 'the recipe is opened, never a line of its own').toBeUndefined();
+    // The pinch of salt cannot be weighed: shown, not counted, no weight; the blank line not at all.
+    const salt = row(result, 'Salt');
+    expect(salt.reason).toBe('not-weighed');
+    expect(salt.kg).toBeNull();
+    expect(salt.cost).toBeNull();
+    expect(result.rows.some(r => r.name === '')).toBe(false);
+  });
+
+  test('an unlinked row (water) is shown with its weight and NOT counted — the inherited quirk', () => {
+    const result = m.costPerKg(product({ components: [{ recipeId: 'WET', qtyKg: 10 }] }), TABLES);
+    const water = row(result, 'Water');
+    expect(water.reason).toBe('no-price');
+    expect(water.cost).toBeNull();
+    expect(water.pricePerKg).toBeNull();
+    // ⚠️ The cost model gives the water no weight, so the recipe's price per kilo is that of its flour alone (2.00 instead of 1.20)
+    // and every row is scaled as if the flour were the whole kilo. Pinned so the day it is corrected, it is corrected on purpose.
+    near(row(result, 'Flour').kg, 1, 1e-6);
+    near(water.kg, 400 / 600, 1e-6);
+    expect(result.total).toBe(2);
+    expect(result.partial).toBe(true);
+  });
+
+  test('an ingredient with no price on it is shown and not counted', () => {
+    const result = m.costPerKg(product({ components: [
+      { recipeId: 'DOUGH', qtyKg: 10 },
+      { kind: 'ingredient', ingredientId: 'NOPRICE', qty: 50, unit: 'g' },
+    ] }), TABLES);
+    const vanilla = row(result, 'Vanilla');
+    expect(vanilla.reason).toBe('no-price');
+    near(vanilla.kg, 0.005, 1e-9);
+    expect(result.partial).toBe(true);
+    expect(result.total).toBe(3.2);
+  });
+
+  test('an ingredient straight on the product: its own name, by weight or by the piece', () => {
+    const result = m.costPerKg(product({ components: [
+      { recipeId: 'DOUGH', qtyKg: 9.8 },
+      { kind: 'ingredient', ingredientId: 'SUGAR', qty: 200, unit: 'g' },
+      { kind: 'ingredient', ingredientId: 'CHERRY', qty: 100, unit: 'pcs' },
+      { kind: 'ingredient', ingredientId: 'EGG', qty: 10, unit: 'pcs' },
+    ] }), TABLES);
+    // Batch: 9.8 kg dough + 0.2 kg sugar + 0.6 kg of eggs (the cherries weigh nothing known).
+    expect(result.kg).toBe(10.6);
+    const sugar = row(result, 'Icing sugar');
+    near(sugar.kg, 0.2 / 10.6, 1e-6);
+    expect(sugar.pricePerKg).toBe(3);
+    const cherry = row(result, 'Cherry');
+    expect(cherry.kind).toBe('piece');
+    near(cherry.pcs, 100 / 10.6, 1e-3);
+    expect(cherry.priceEach).toBe(0.05);
+    expect(cherry.kg).toBeNull();
+    const egg = row(result, 'Egg');
+    expect(egg.kind).toBe('piece');
+    near(egg.kg, 0.6 / 10.6, 1e-6);
+    near(sumOf(counted(result), 'cost'), result.total as number);
+  });
+
+  test('a recipe with no price on the product is one line, not counted', () => {
+    const result = m.costPerKg(product({ components: [{ recipeId: 'DOUGH', qtyKg: 8 }, { recipeId: 'UNPRICED', qtyKg: 2 }] }), TABLES);
+    const mystery = row(result, 'Mystery');
+    expect(mystery.reason).toBe('no-recipe');
+    // The cost model gives an unpriced recipe no weight: the kilo is the dough's alone.
+    expect(result.kg).toBe(8);
+    near(mystery.kg, 0.25, 1e-6);
+    expect(result.partial).toBe(true);
+  });
+
+  test('a recipe that contains itself is not counted, and nothing hangs', () => {
+    const p = product({ components: [{ recipeId: 'DOUGH', qtyKg: 10 }, { recipeId: 'LOOP', qtyKg: 1 }] });
+    const result = m.costPerKg(p, TABLES);
+    // The loop's flour is costed; the row pointing back at itself is shown, not counted.
+    near(result.total, cardPerKg(p));
+    expect(row(result, 'Itself').reason).toBe('no-recipe');
+    expect(result.partial).toBe(true);
+  });
+
+  test('packaging: so many pieces per kilo, once the way of selling says how many units', () => {
+    const byPiece = m.costPerKg(product({ packaging: [{ ingredientId: 'BAG', qtyPcs: 1 }] }), TABLES);
+    const bag = row(byPiece, 'Paper bag');
+    expect(bag.kind).toBe('packaging');
+    // 100 pieces from 10 kg: 10 bags in a kilo, 0.10 each.
+    expect(bag.pcs).toBe(10);
+    expect(bag.cost).toBe(1);
+    expect(bag.kg).toBeNull();
+    expect(byPiece.total).toBe(4.2);
+
+    const notSold = m.costPerKg(product({ sellingMode: null, packaging: [{ ingredientId: 'BAG', qtyPcs: 1 }] }), TABLES);
+    expect(notSold.packagingLeftOut).toBe(true);
+    expect(notSold.partial).toBe(true);
+    expect(named(notSold, 'Paper bag')).toBeUndefined();
+    expect(notSold.total).toBe(3.2);
+
+    const byWeight = m.costPerKg(product({ packaging: [{ ingredientId: 'FILM', qtyPcs: 1 }] }), TABLES);
+    expect(row(byWeight, 'Film').reason).toBe('no-piece-price');
+  });
+
+  test('nothing costed, or nothing weighed: no total — never a kilo that reads as free', () => {
+    expect(m.costPerKg(product({ components: [] }), TABLES).total).toBeNull();
+    expect(m.costPerKg(product({ components: [{ recipeId: 'UNPRICED', qtyKg: 5 }] }), TABLES).total).toBeNull();
+    expect(m.costPerKg(product({ components: [{ recipeId: 'DOUGH', qtyKg: 0 }] }), TABLES).total).toBeNull();
+    // Only pieces of unknown weight: a cost, but no kilo to divide it by.
+    expect(m.costPerKg(product({ components: [{ kind: 'ingredient', ingredientId: 'CHERRY', qty: 10, unit: 'pcs' }] }), TABLES).total).toBeNull();
+    expect(m.costPerKg(null, TABLES).total).toBeNull();
+    expect(m.costPerKg(undefined).rows).toStrictEqual([]);
+  });
+
+  test('the weighings typed on the card count: the tables it is given are the tables used', () => {
+    const live = { ...TABLES, recipes: { ...TABLES.recipes, DOUGH: { ...DOUGH, lossPct: 20 } } };
+    const result = m.costPerKg(product(), live);
+    near(sumOf(result.rows, 'kg'), 1.25, 1e-6);
+    near(result.total, 4);
+  });
+
+  test('an ingredient that HAS a price is never called «no price»: the piece weight or price is named', () => {
+    const ing = {
+      ...INGREDIENTS,
+      TOPPING: { id: 'TOPPING', name: 'Topping', priceUnit: 'pcs', pricePerUnit: 0.2 },
+      NUT: { id: 'NUT', name: 'Nut', priceUnit: 'kg', pricePerUnit: 12 },
+    };
+    const result = m.costPerKg(product({ components: [
+      { recipeId: 'DOUGH', qtyKg: 10 },
+      { kind: 'ingredient', ingredientId: 'TOPPING', qty: 50, unit: 'g' },
+      { kind: 'ingredient', ingredientId: 'NUT', qty: 5, unit: 'pcs' },
+    ], packaging: [{ ingredientId: 'FILM', qtyPcs: 1 }] }), { ...TABLES, ingredients: ing });
+    expect(row(result, 'Topping').reason).toBe('no-piece-weight');
+    expect(row(result, 'Nut').reason).toBe('no-piece-price');
+    expect(row(result, 'Film').reason).toBe('no-piece-price');
+  });
+
+  test('a line with no amount yet is not a row', () => {
+    const result = m.costPerKg(product({ components: [
+      { recipeId: 'DOUGH', qtyKg: 10 },
+      { kind: 'ingredient', ingredientId: 'SUGAR', qty: 0, unit: 'g' },
+    ], packaging: [{ ingredientId: 'BAG', qtyPcs: 0 }] }), TABLES);
+    expect(named(result, 'Icing sugar')).toBeUndefined();
+    expect(named(result, 'Paper bag')).toBeUndefined();
+  });
+
+  test('a chain past the depth limit ends in a row not counted, and the total is still the card\'s', () => {
+    const tables = { ...TABLES, recipes: { ...TABLES.recipes, ...depthChain() } };
+    const p = product({ components: [{ recipeId: 'C1', qtyKg: 3 }] });
+    const result = m.costPerKg(p, tables);
+    expect(row(result, 'Level 5').reason).toBe('no-recipe');
+    near(result.total, cardPerKg(p, tables));
+    near(sumOf(counted(result), 'cost'), result.total as number);
+  });
+
+  test('Map tables work as well as plain objects', () => {
+    const tables = { ingredients: new Map(Object.entries(INGREDIENTS)), recipes: new Map(Object.entries(TABLES.recipes)) };
+    const result = m.costPerKg(product({ components: [{ recipeId: 'FILLED', qtyKg: 4 }] }), tables);
+    near(row(result, 'Flour').kg, 0.6, 1e-6);
+    near(sumOf(counted(result), 'cost'), result.total as number);
+  });
+
+  test('the reasons the block can give are frozen and exactly these five', () => {
+    expect([...m.PER_KG_REASONS]).toStrictEqual(['no-price', 'not-weighed', 'no-recipe', 'no-piece-weight', 'no-piece-price']);
+    expect(Object.isFrozen(m.PER_KG_REASONS)).toBe(true);
+  });
+});
+
+describe('the port and the original answer the same, row by row', () => {
+  const tables = { ...TABLES, recipes: { ...TABLES.recipes, ...depthChain() } };
+  const cases: [string, unknown][] = [
+    ['one recipe', product()],
+    ['lossy', product({ components: [{ recipeId: 'LOSSY', qtyKg: 3.7 }] })],
+    ['finished product', product({ components: [{ recipeId: 'LOSSY', qtyKg: 10 }], noWeightLoss: true })],
+    ['nested', product({ components: [{ recipeId: 'FILLED', qtyKg: 2.3 }, { recipeId: 'DOUGH', qtyKg: 1.1 }] })],
+    ['unlinked water', product({ components: [{ recipeId: 'WET', qtyKg: 5 }, { kind: 'ingredient', ingredientId: 'SUGAR', qty: 150, unit: 'g' }] })],
+    ['pieces', product({ components: [
+      { recipeId: 'DOUGH', qtyKg: 9.8 },
+      { kind: 'ingredient', ingredientId: 'CHERRY', qty: 100, unit: 'pcs' },
+      { kind: 'ingredient', ingredientId: 'EGG', qty: 10, unit: 'pcs' },
+      { kind: 'ingredient', ingredientId: 'NOPRICE', qty: 50, unit: 'g' },
+      { kind: 'ingredient', ingredientId: 'GONE', qty: 50, unit: 'g' },
+    ] })],
+    ['packaging', product({ packaging: [{ ingredientId: 'BAG', qtyPcs: 1 }, { ingredientId: 'FILM', qtyPcs: 1 }, { ingredientId: 'NOPRICE', qtyPcs: 1 }] })],
+    ['packaging not sold', product({ sellingMode: null, packaging: [{ ingredientId: 'BAG', qtyPcs: 1 }] })],
+    ['loop and unpriced', product({ components: [{ recipeId: 'LOOP', qtyKg: 1 }, { recipeId: 'UNPRICED', qtyKg: 2 }, { recipeId: 'GONE', qtyKg: 2 }] })],
+    ['too deep', product({ components: [{ recipeId: 'C1', qtyKg: 3 }] })],
+    ['empty', product({ components: [] })],
+    ['junk', 42],
+    ['null', null],
+    ['undefined', undefined],
+  ];
+
+  test.each(cases)('%s', (_label, input) => {
+    expect(ported.costPerKg(input, tables as never)).toStrictEqual(legacy.costPerKg(input, tables as never));
+  });
+
+  test('without tables', () => {
+    expect(ported.costPerKg(product())).toStrictEqual(legacy.costPerKg(product()));
+  });
+});

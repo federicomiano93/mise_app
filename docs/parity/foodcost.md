@@ -296,6 +296,44 @@ now in; items 22-26 are still not).
 - `foodcost-model.js`'s marker in `odd-inputs.spec.ts` named items 26 and 28; the commit of item 28 never touched that file (the
   changes are the preview model, "Which?" and the money guard), so the marker now says items 24 and 26.
 
-**Still owed (later slices, they must use `fc-number` from the first day):** the per-kg block (item 22), the list preview (24), the
+**Still owed (later slices, they must use `fc-number` from the first day):** the list preview (24), the
 read sections and the card layout (25), the cost on every line and "Which?" (26), and the kilos in the "create from the recipe book"
 dialog (29, `from-recipes-view`).
+
+## Cost per 1 kg as built (10 Nov 2026)
+
+Item 22 of `docs/mise2-port-owed.md` (current app `574a0e3c`, `f0735d88`, `9af66dd5`; the figures as `151ea191` draws them). Branch
+`feature/mise2-next-foodcost-per-kg`.
+
+- **The model**: `shared/src/per-kg-model.ts` is a FULL port of `js/foodcost/per-kg-model.js` (`costPerKg`, `PER_KG_REASONS`, plus the types
+  `PerKgRow`, `PerKgResult`, `PerKgReason`), paired in `parity.spec.ts` and run against both files by `per-kg-model.spec.ts` (the 19
+  tests of `tests/foodcost-per-kg.test.mjs`, each against its own `foodcost-model`, plus a row-by-row comparison of the two on fourteen
+  products). It reuses `foodcost-model`, `recipe-cost-model`, `catalogue-model`, `price-model` and `ingredient-name`; no calculation is copied.
+  The total is the card's own cost (`productionCost`'s batch cost over the batch kilos), never a second sum.
+- **The block**: `app/src/foodcost/PerKgBlock.tsx` + `PerKgBlock.module.css`, drawn in `ProductForm.tsx` right under the answer panel
+  (production cost, food cost) and above the name: the current app puts it after the answer in the results card, and Mise 2's answer panel is
+  the top of the page. Never inside «Made of». A native `<details>` with its `<summary>` (keyboard and screen reader for free): «Cost per
+  1 kg» and the figure; closed by default. It is ONE element that stays mounted, `hidden` while there is no total (nothing costed, nothing
+  weighed, never «0,00»), so it keeps open/closed through every repaint and a focused summary keeps its focus while the figures follow the
+  boxes typed on the card. A fault in `costPerKg` hides the block and nothing else (P17).
+- **Inside**: one line per ingredient (flour in the dough and in the cream is one line): its name, what the line costs, then `weight · price
+  per kilo` (`1,25 kg · 2,00 € / kg`), or for pieces `10,00 pz · 0,25 € al pezzo`; a line not counted has no cost and says why
+  («nessun prezzo, non conteggiato», «non pesato…», «ricetta senza prezzo…», «manca il peso di un pezzo…», «manca il prezzo al pezzo…»). The
+  total «Totale per 1 kg», then the notes: «Alcune righe non sono conteggiate: il costo di 1 kg non è ancora esatto.» (neutral, never «more»: the
+  kilo can read too HIGH as well as too low), «Confezione non conteggiata: scegli come si vende.», and the oven-loss note when the weights pass 1 kg.
+- **Two decimals from the first day**: every figure goes through `fc-number` with the venue's `Money` (`fcMoney`, `fcWeight`, `fcNumber`); a
+  weight under a kilo is in grams (`19,61 g`), from a kilo in kilos; a real cost under a cent reads «< 0,01 €». Rows and total are both in cents, so
+  the rows may differ from the total by a cent (accepted, 8 Nov 2026).
+- **Texts**: eleven keys `fc.perKg.title`, `.total`, `.pieces`, `.noPrice`, `.notWeighed`, `.noRecipe`, `.noPieceWeight`, `.noPiecePrice`, `.partial`,
+  `.packagingLeftOut`, `.lossNote` in `en.ts` and `it.ts`, word for word from `js/i18n.js`; the price each reuses `sup.perEach` (the current app's
+  `price.perEach`, same text).
+- **Specs**: `FoodcostSection.perKg.spec.tsx` (position, closed by default, the rows, hidden while nothing is costed and back on the first line,
+  the unpriced row and its neutral note, live following with the open state kept, packaging by the kilo and left out, the oven-loss note, Italy).
+
+**Differences from the current app, on purpose or by necessity**
+- The current app pins the block by reading the editor's source (`tests/foodcost-per-kg-screen.test.mjs`); Mise 2 pins what the screen DOES. The
+  one-element, never-rebuilt-summary rule is kept by React's identity instead of by `replaceChildren`.
+- The look is Mise 2's own (tokens, `--sunken` ground like the answer panels, a lucide chevron), not `foodcost.css`.
+- `odd-inputs.spec.ts` marks `costPerKg` as PORT OWED together with `productionCost`: the original lets a null table through, the port's
+  `batchTotals` throws. Items 24 and 26 port that change; remove the key then.
+- Not in Mise 2 yet, so not drawn there: the read-first card (item 25), where the current app draws the same block a second time in the read view.

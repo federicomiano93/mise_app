@@ -197,6 +197,11 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     `foodcostSource.ts` (`saveRecipeLoss` leaves `lossPct` out when absent), the `ch`-sized boxes in `LineRow.module.css` / `WeighingPair.module.css`, five keys in i18n.
     The g/kg select and the switch were already there (items 27 and 4); the item-21 `PORT OWED` keys are gone from `parity.spec.ts` and `odd-inputs.spec.ts`.
 22. **Step 2 «Cost per 1 kg» block** (#462, `574a0e3c`, `f0735d88`, `9af66dd5`): `costPerKg`, sub-recipes opened, partial notes. NONE. Size S-M.
+    **DONE 10 Nov 2026** (`feature/mise2-next-foodcost-per-kg`; `docs/parity/foodcost.md`, «Cost per 1 kg as built»): `shared/src/per-kg-model.ts` (full, paired:
+    `costPerKg`, `PER_KG_REASONS`), `app/src/foodcost/PerKgBlock.tsx` + `.module.css` drawn in `ProductForm.tsx` under the answer panel, never inside «Made of»
+    (a native `<details>`, always mounted, `hidden` while nothing is costed), eleven `fc.perKg.*` keys in `en.ts` / `it.ts`, every figure through `fc-number` from
+    the first day. Differs from the current app only in the look (Mise 2 tokens) and in the read-first card, which Mise 2 does not have yet (item 25). `costPerKg` is
+    marked PORT OWED in `odd-inputs.spec.ts` with `productionCost` (a null table), until items 24 and 26.
 23. **Step 3 recipe link both ways** (#478, `35b1f3e0`, `942dab6e`) — Mise 2 has its own entry `?recipe=` / `?using=` design (catalogue.md
     «Back counts the depth»): treat as DONE by design; re-check that the multi-product case opens the top product on tablet/PC. Size S (check).
 24. **Step 4 list preview** (#482): search bar, phone preview dialog, panel at the top of the card, eight figures, net ideal price. NONE. Size M.
@@ -212,7 +217,7 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     **DONE 10 Nov 2026** (`feature/mise2-next-foodcost-units`; same parity section) on every Food cost screen Mise 2 HAS: `shared/src/fc-number.ts` is now a full, adapted port
     (`fcNumber`, `fcMoney`, `fcWeight`, `weighingParams`, each handed the money; not paired because of that argument, its spec runs both files), used by `productRowModel.ts` (the list row),
     `ProductAnswer.tsx` (production cost, answer, labour line, suggested price and its basis), `WeighingPair.tsx` (the oven-loss sentences), `MarginHistory.tsx`, `PickDialog.tsx`
-    (price each) and `lineNotes.ts` (the packaging note). ⚠️ STILL OWED with the items that build the screens: the per-kg block (22), the list preview (24), the read sections and
+    (price each) and `lineNotes.ts` (the packaging note). ⚠️ STILL OWED with the items that build the screens: the list preview (24), the read sections and
     the card layout (25), the cost on every line and «Which?» (26) must draw their figures through `fc-number` from the first day; `from-recipes-view`'s kilos (item 29) too.
 29. **Create products from the recipe book** (#415, `b5cf999e`, `5f2fcb67`, `f8d54f35`, `f8e64a6a`): box and choice screen, only after the
     server says the product does not exist. NONE (`recipesWithoutProducts`, `productFromRecipe` absent). Size M.
@@ -267,9 +272,9 @@ to its markers, with his decision in the line.
 
 What each one means for the people using Mise 2 until it is ported:
 - 16. Suppliers: the empty-flash, scroll and focus fixes and the «hand-made» mark are not verified in Mise 2.
-- 22, 24-26. Food cost steps 2, 4, A and B (the «Cost per 1 kg» block, the list preview, the read-first card layout, the cost on every
+- 24-26. Food cost steps 4, A and B (the list preview, the read-first card layout, the cost on every
   line and «Which?»), and the two decimals on those screens when they are built: Mise 2's Food cost keeps its own older screens.
-  (Items 21 and 28 are done: weighing units and two decimals on the screens Mise 2 has.)
+  (Items 21, 22 and 28 are done: weighing units, the «Cost per 1 kg» block and two decimals on the screens Mise 2 has.)
 - 23. Food cost recipe link with several products (a check).
 - 29-32. Recipe book: create products from it, the crossed-out euro, the renamed-row warning, the row menu.
 - 36-37, 39-40. Calculator: reorder a recipe's ingredients, «Add a recipe» from the book, the dough history's dates and

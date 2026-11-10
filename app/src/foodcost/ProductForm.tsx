@@ -41,6 +41,7 @@ import { NumberBox } from './NumberBox';
 import { PickDialog } from './PickDialog';
 import type { Choice, PickMode } from './PickDialog';
 import { ProductAnswer, SuggestedPrice } from './ProductAnswer';
+import { PerKgBlock } from './PerKgBlock';
 import {
   NUMBER_KEY, RECIPE_LINE_OPENS_IN, clearNumber, costable, emptyWorking, isNumberField, isShown, newLineKey, packSizeShown,
   piecesShown, plainNumber, recipeIdsOn, recipeLineKg, toProduct, vatRateOf, workingFrom, workingFromDraft,
@@ -676,6 +677,7 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
 
       <div className={shell.body}>
         <ProductAnswer product={costed} tables={live} />
+        <PerKgBlock product={costed} tables={live} />
 
         <div className={styles.field}>
           <label htmlFor={`${ids}-name`} className={styles.label}>{t('fc.name')}</label>
