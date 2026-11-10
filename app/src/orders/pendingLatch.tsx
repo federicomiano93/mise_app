@@ -39,7 +39,7 @@ export const LATCH_GRACE_MS = 5000;
 // snapshot is often the copy kept on this phone, which may still hold an order another phone placed this morning — latched from
 // it, the banner would ask about an order already placed, and stay for the whole opening. Offline, or after LATCH_GRACE_MS on a
 // slow line, the copy is all there is, and it is used: a reminder from it is better than none.
-export function latchCanLook(seen: OrdersSnapshot['serverSeen'], online: boolean, graceOver: boolean): boolean {
+export function latchCanLook(seen: Pick<OrdersSnapshot['serverSeen'], 'suppliers' | 'ingredients' | 'draft'>, online: boolean, graceOver: boolean): boolean {
   return (seen.suppliers && seen.ingredients && seen.draft) || !online || graceOver;
 }
 

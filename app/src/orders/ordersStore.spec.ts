@@ -75,22 +75,23 @@ describe('ordersStore — loading', () => {
     expect(h.store.getSnapshot().draftBroken).toBe(true);
   });
 
-  it('⚠️ says when the SERVER has answered for the suppliers, the ingredients and the draft, apart from the copy on the phone (the reminders wait for it)', async () => {
+  it('⚠️ says when the SERVER has answered for the suppliers, the ingredients, the draft and the order records, apart from the copy on the phone (the reminders and «To order today» wait for it)', async () => {
     const replay: Array<() => void> = [];
     const h = setup({ suppliers: [mill], ingredients: [flour], draft: { entries: { flour: { qty: 1 } }, days: { mill: TODAY } } }, base => ({
       ...base,
       watchSuppliers: (onChange, onError) => base.watchSuppliers((list, meta) => { onChange(list, { fromServer: false }); replay.push(() => onChange(list, meta)); }, onError),
       watchIngredients: (onChange, onError) => base.watchIngredients((list, meta) => { onChange(list, { fromServer: false }); replay.push(() => onChange(list, meta)); }, onError),
       watchDraft: (onChange, onError) => base.watchDraft((data, meta) => { onChange(data, { fromServer: false }); replay.push(() => onChange(data, meta)); }, onError),
+      watchRecentHistory: (from, onChange, onError) => base.watchRecentHistory(from, (list, meta) => { onChange(list, { fromServer: false }); replay.push(() => onChange(list, meta)); }, onError),
     }));
     h.store.start();
     stops.push(() => h.store.stop());
     await h.settle();
     const cached = h.store.getSnapshot();
     expect(cached.suppliersLoaded && cached.ingredientsLoaded && cached.draftLoaded).toBe(true);
-    expect(cached.serverSeen).toEqual({ suppliers: false, ingredients: false, draft: false });
+    expect(cached.serverSeen).toEqual({ suppliers: false, ingredients: false, draft: false, history: false });
     replay.forEach(run => run());
-    expect(h.store.getSnapshot().serverSeen).toEqual({ suppliers: true, ingredients: true, draft: true });
+    expect(h.store.getSnapshot().serverSeen).toEqual({ suppliers: true, ingredients: true, draft: true, history: true });
   });
 
   it('stop() closes every listener (P14)', async () => {

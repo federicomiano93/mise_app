@@ -96,8 +96,8 @@ describe('«Order today» over the list', () => {
     ];
     await atList(seeded({ suppliers, records: { [`${TODAY}_s-bee`]: record(TODAY, 's-bee', { 'i-flour': 1 }) } }));
     expect(await screen.findByText('Order today', undefined, LOAD)).toBeInTheDocument();
-    // Two buttons carry the name: the chip (first, over the list) and the supplier's row.
-    expect(screen.getAllByRole('button', { name: 'Alpine Mills' })).toHaveLength(2);
+    // Two buttons carry the name: the chip (first, over the list) and the supplier's row, which also says «To order today».
+    expect(screen.getAllByRole('button', { name: /^Alpine Mills/ })).toHaveLength(2);
     // Placed: its name and a word for a screen reader, but nothing to press.
     expect(screen.getAllByText('Bee Farm')).toHaveLength(2);
     // Its row is the only button with its name.

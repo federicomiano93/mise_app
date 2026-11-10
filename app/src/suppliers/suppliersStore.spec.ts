@@ -328,3 +328,79 @@ describe('the suppliers store: writes', () => {
     expect(store.getSnapshot().suppliers).toHaveLength(1);
   });
 });
+
+describe('the suppliers store: «To order today» data', () => {
+  test('keeps only the date and the supplier of each record, and the closes that are days', async () => {
+    const source = fakeSuppliersSource();
+    source.placedRecords = [{ id: 'a', date: '2026-11-10', supplierId: 's1', quantities: { x: 1 } }];
+    source.draftDoc = { entries: { x: { qty: 1 } }, skipped: { s1: '2026-11-10', s2: 5 } };
+    const { store } = started(source);
+    await tick();
+    const snap = store.getSnapshot();
+    expect(snap.placed).toEqual([{ date: '2026-11-10', supplierId: 's1' }]);
+    expect(snap.closed).toEqual({ s1: '2026-11-10' });
+    expect([snap.placedLoaded, snap.draftLoaded, snap.placedBroken, snap.draftBroken]).toEqual([true, true, false, false]);
+  });
+
+  test('⚠️ the snapshot does not move when the draft changes but the closes do not (a keystroke on another phone)', async () => {
+    const source = fakeSuppliersSource();
+    source.draftDoc = { skipped: { s1: '2026-11-10' } };
+    const { store } = started(source);
+    await tick();
+    const before = store.getSnapshot();
+    const seen = vi.fn();
+    store.subscribe(seen);
+    source.setDraftDoc({ skipped: { s1: '2026-11-10' }, entries: { x: { qty: 2 } }, updatedAt: 'later' });
+    source.setPlaced([]);
+    expect(seen).not.toHaveBeenCalled();
+    expect(store.getSnapshot()).toBe(before);
+    source.setDraftDoc({ skipped: {} });
+    expect(seen).toHaveBeenCalledTimes(1);
+    expect(store.getSnapshot().closed).toEqual({});
+  });
+
+  test('a browser copy that has no draft is not an answer; the server’s word that there is none is', async () => {
+    const source = fakeSuppliersSource();
+    source.fromCache = true;
+    const { store } = started(source);
+    await tick();
+    expect([store.getSnapshot().placedLoaded, store.getSnapshot().draftLoaded]).toEqual([false, false]);
+    source.fromCache = false;
+    source.push();
+    expect([store.getSnapshot().placedLoaded, store.getSnapshot().draftLoaded]).toEqual([true, true]);
+  });
+
+  test('a dead stream ends the wait: records say broken, a dead draft counts as arrived with no closes', async () => {
+    const source = fakeSuppliersSource();
+    source.refuse.placed = true;
+    source.refuse.draftDoc = true;
+    const { store } = started(source);
+    await tick();
+    const snap = store.getSnapshot();
+    expect([snap.placedLoaded, snap.placedBroken, snap.draftLoaded, snap.draftBroken]).toEqual([true, true, true, true]);
+    expect(snap.closed).toEqual({});
+  });
+
+  test('watches the records from the day it starts, the clock a spec hands it', async () => {
+    const source = fakeSuppliersSource();
+    const store = createSuppliersStore(source, { ...counted().deps, today: () => '2026-01-02' });
+    store.start();
+    await tick();
+    expect(source.placedFrom).toEqual(['2026-01-02']);
+  });
+});
+
+describe('the suppliers store: «To order today» waits for the server', () => {
+  test('⚠️ a saved copy that HOLDS records and a draft is still not an answer', async () => {
+    const source = fakeSuppliersSource();
+    source.placedRecords = [{ id: 'a', date: '2026-11-10', supplierId: 's1' }];
+    source.draftDoc = { skipped: { s2: '2026-11-10' } };
+    source.fromCache = true;
+    const { store } = started(source);
+    await tick();
+    expect([store.getSnapshot().placedLoaded, store.getSnapshot().draftLoaded]).toEqual([false, false]);
+    source.fromCache = false;
+    source.push();
+    expect([store.getSnapshot().placedLoaded, store.getSnapshot().draftLoaded]).toEqual([true, true]);
+  });
+});

@@ -6,7 +6,7 @@ import { createSuppliersStore } from './suppliersStore';
 import type { SuppliersDeps, SuppliersSnapshot, SuppliersStore } from './suppliersStore';
 
 // One «Ingredients & suppliers» store for as long as the section is on screen: created from the open venue's source,
-// started on mount and stopped on unmount — so the four listeners exist only while somebody is on the page (P14).
+// started on mount and stopped on unmount — so the six listeners exist only while somebody is on the page (P14).
 //
 // The venue cannot change under it: a venue switch reloads the whole app (session.ts).
 const SuppliersContext = createContext<SuppliersStore | null>(null);

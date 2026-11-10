@@ -207,6 +207,12 @@
   outline-offset: -3px;
 }
 
+/* «To order today»: the warm family, deliberately NOT the accent: the accent tint already means «the row open beside the list»
+   (below, which wins when a row is both). The WORD in the tag is the signal; the colour only supports it (P18). */
+.row[data-due="true"] {
+  background: var(--warn-tint);
+}
+
 /* The supplier open beside the list (the tablet's split). */
 .row[data-open="true"] {
   background: var(--accent-tint);
@@ -265,6 +271,20 @@
   color: var(--ink-2);
   font-size: var(--fs-xs);
   font-weight: 600;
+}
+
+.dueTag {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  margin-top: 2px;
+  padding: 0 var(--s2);
+  border: 1px solid var(--warn);
+  border-radius: var(--r-sm);
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+  font-size: var(--fs-xs);
+  font-weight: 650;
 }
 
 .chevron {
