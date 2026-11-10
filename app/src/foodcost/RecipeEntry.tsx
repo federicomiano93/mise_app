@@ -33,8 +33,9 @@ export function RecipeEntry({ recipeId }: { recipeId: string }) {
   // the first tap from a recipe the tables were still empty, every product ranked by name, and the split opened a product
   // that was not the list's first. So it also waits for what the list waits for before it draws (all the recipes, the
   // ingredients); not for the labour rate, which never enters the food cost % the list ranks by. COPY_WAIT_MS stays the
-  // offline fallback. Known and harmless: the ingredients answer with whatever prices have come (a separate stream), and a
-  // local copy answers at once with yesterday's — the product opened may then not be the top row a moment later.
+  // offline fallback. The ingredients are «loaded» only with their prices (foodcostSource.ts waits for both streams). Known
+  // and harmless: a local copy answers at once with yesterday's prices — the product opened may then not be the top row a
+  // moment later.
   const priced = recipesLoaded && ingredientsLoaded;
   const ready = useCopyWait(productsFromServer && (recipes[recipeId] !== undefined || recipesFromServer) && priced);
   // StrictMode runs the effect twice with the same refs: the move is made once.

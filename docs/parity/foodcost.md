@@ -519,7 +519,7 @@ Item 26 of `docs/mise2-port-owed.md` (current-app PR #485: `02839278`, `ec896ccf
   the narrowed list. Mise 2: `RecipeEntry.tsx` decides it once, on the server's word, and REPLACES the entry with `/food-cost/product/<id>?using=<recipe>` when
   the split query matches (the list ranks with `sortByMargin`, so the same product is on top), else `/food-cost?using=<recipe>` as before. It waits for the
   recipes and ingredients first (an emulator drive found the first tap ranking with empty tables, by name), not for the labour rate (it never enters the
-  food cost %); known and harmless: prices are a separate stream and a local copy answers at once, so the product opened may briefly not be the top row.
+  food cost %); the source passes the ingredients on only once their prices have answered too (`foodcostSource.ts`); known and harmless: a local copy answers at once, with yesterday's prices.
   That product sits at depth 1 and not «from the list»: its own Back / Save / Delete replace it with the narrowed list CARRYING the depth (`useLeave`,
   code review), so the list's Back still reaches the recipe in one step, by a POP. Spec: `FoodcostSection.recipe.spec.tsx`, «on the split, opens the product the narrowed list shows first beside it».
 - Back landing on the recipe's Food cost card (35b1f3e0's `&at=foodcost`) needs nothing here: the recipe screen restores its place on a POP from Food cost
