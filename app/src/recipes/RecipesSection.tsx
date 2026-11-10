@@ -119,11 +119,13 @@ function RecipesLayout({ view }: { view: ShownView }) {
   const place = useRef<Place | null>(useNavigationType() === 'POP' ? carriedPlace() : null);
   useEffect(() => { forgetCarriedPlace(); }, []);
   const recipeReturn = useMemo<RecipeReturn>(() => ({
-    remember(recipeId, origin = 'label') {
-      place.current = { id: recipeId, origin, area: scrollArea()?.scrollTop ?? null, detail: detail.current?.scrollTop ?? null, delivered: false };
-      if (origin === 'cost') carryPlace(place.current);
+    remember(recipeId, origin = 'label', trip) {
+      place.current = { id: recipeId, origin, area: scrollArea()?.scrollTop ?? null, detail: detail.current?.scrollTop ?? null, delivered: false, ...(trip === undefined ? {} : { trip }) };
+      // Food cost and Orders are other SECTIONS: this one is unmounted while the person is there.
+      if (origin === 'cost' || origin === 'order') carryPlace(place.current);
     },
     pendingCost: recipeId => place.current !== null && place.current.id === recipeId && place.current.origin === 'cost',
+    pendingOrder: recipeId => (place.current !== null && place.current.id === recipeId && place.current.origin === 'order' ? place.current.trip ?? null : null),
     restoreScroll(recipeId) {
       const written = place.current;
       if (written === null || written.id !== recipeId) return;

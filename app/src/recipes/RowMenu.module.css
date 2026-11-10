@@ -1,0 +1,87 @@
+/* A recipe row's menu: the ingredient's name is a button, and a press opens a small menu under it (RowMenu.tsx). */
+
+/* The name looks like the text it replaces; the button fills the label cell so the whole name is the target, and a row is at
+   least a thumb tall. */
+.name {
+  display: block;
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s2) 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.name:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+/* A row whose menu is open stays marked. */
+.name[aria-expanded="true"] {
+  background: var(--sunken);
+}
+
+@media (hover: hover) {
+  .name:hover {
+    background: var(--sunken);
+  }
+}
+
+/* The popover is placed by React Aria's script (it sets its own z-index), over everything of the recipe page. */
+.popover {
+  min-width: 220px;
+  max-width: calc(100vw - var(--s4) - var(--s4));
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-2);
+}
+
+.menu {
+  display: flex;
+  flex-direction: column;
+  padding: var(--s1);
+  outline: none;
+}
+
+.item {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-sm);
+  color: var(--ink);
+  font-size: var(--fs-md);
+  cursor: pointer;
+  outline: none;
+}
+
+.item[data-focused] {
+  background: var(--accent-tint);
+}
+
+.item[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.item[data-disabled] {
+  color: var(--ink-2);
+  cursor: default;
+}
+
+.itemText {
+  font-weight: 500;
+}
+
+.why {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}

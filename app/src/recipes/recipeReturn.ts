@@ -14,10 +14,15 @@ import { createContext, useContext } from 'react';
 // unmounted while the person is away and the place written down would die with it. For that origin ('cost') the place is
 // also kept in this module, and the next recipes screen that appears by a Back (a POP) picks it up; the recipe screen
 // then puts the focus on the button and the scroll back once its page is drawn (the data arrives after the section does).
+//
+// «Order» on an ingredient row (item 32, 10 Nov 2026) is the same trip to ANOTHER section, so it is carried the same way, and the
+// place also remembers WHICH ROW opened the menu and which rows were split in two (display only, kept by their row keys): the
+// recipe comes back with the focus on that row, the scroll where it was and the splits still shown.
 
 export interface RecipeReturn {
   // «Make a label» (or «Edit», `origin` 'edit') of this recipe is about to open: write down where the screen is.
-  remember(recipeId: string, origin?: Origin): void;
+  // `trip`: only for 'order' — the row key that opened the menu and the keys of the rows split in two.
+  remember(recipeId: string, origin?: Origin, trip?: OrderTrip): void;
   // Is this recipe being returned to from its label? Read while drawing; it changes nothing.
   pending(recipeId: string): boolean;
   // Is this recipe being returned to from its editor? Read while drawing; it changes nothing.
@@ -30,6 +35,9 @@ export interface RecipeReturn {
   pendingMix(recipeId: string): boolean;
   // Is this recipe being returned to from Food cost? Read while drawing; it changes nothing.
   pendingCost(recipeId: string): boolean;
+  // Is this recipe being returned to from Orders (a row's «Order»)? The row that opened the menu and the rows split in two, or null.
+  // Read while drawing; it changes nothing.
+  pendingOrder(recipeId: string): OrderTrip | null;
   // Put the scroll area (and the split's right-hand side) back where `remember` found them. The recipe screen asks once its
   // page is drawn, because a scroll box cannot be scrolled past the content that is not there yet.
   restoreScroll(recipeId: string): void;
@@ -39,7 +47,13 @@ export interface RecipeReturn {
 }
 
 // What the person pressed to leave the recipe.
-export type Origin = 'label' | 'edit' | 'steps' | 'mix' | 'cost' | 'duplicate';
+export type Origin = 'label' | 'edit' | 'steps' | 'mix' | 'cost' | 'duplicate' | 'order';
+
+// What a trip to Orders must bring back: the row (shared/row-actions-model `rowKeysOf`) whose menu was opened, and the rows split in two.
+export interface OrderTrip {
+  readonly row: string;
+  readonly split: readonly string[];
+}
 
 const NOTHING: RecipeReturn = {
   remember() { /* no section around: nothing to come back to */ },
@@ -49,6 +63,7 @@ const NOTHING: RecipeReturn = {
   pendingSteps: () => false,
   pendingMix: () => false,
   pendingCost: () => false,
+  pendingOrder: () => null,
   restoreScroll() { /* ditto */ },
   markDelivered() { /* ditto */ },
   wasDelivered: () => false,
@@ -74,5 +89,7 @@ export interface Place {
   readonly origin: Origin;
   readonly area: number | null;
   readonly detail: number | null;
+  // Only on an 'order' place.
+  readonly trip?: OrderTrip;
   delivered: boolean;
 }

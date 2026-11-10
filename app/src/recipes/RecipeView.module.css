@@ -54,7 +54,7 @@
   margin-bottom: 0;
 }
 
-/* The way into the full-screen view for a keyboard and a screen reader. */
+/* The way into the full-screen view: the only way (a tap on a row opens the row's menu). */
 .fullScreen {
   display: flex;
   flex: none;
@@ -84,6 +84,10 @@
 .table {
   width: 100%;
   border-collapse: collapse;
+}
+
+/* A tap anywhere on a row presses its name (RecipeView). */
+.table tbody tr {
   cursor: pointer;
 }
 
@@ -99,6 +103,13 @@
    border is the one drawn between its cells and the next row. Never under the last ingredient row (the model never says so). */
 .table tbody tr.divided {
   border-bottom: 2px solid var(--ink-2);
+}
+
+/* The name of an ingredient is a button (RowMenu) that fills the cell and brings its own height and padding. */
+.rowHead {
+  padding: 0 var(--s3) 0 0;
+  font-weight: 500;
+  text-align: left;
 }
 
 .label {
@@ -122,6 +133,21 @@
   padding: var(--s2) 0 var(--s2) var(--s2);
   color: var(--ink-2);
   text-align: left;
+  white-space: nowrap;
+}
+
+/* A row split in two parts (display only): its first line has no rule, the second line carries it. */
+.table tbody tr.noRule {
+  border-bottom: 0;
+}
+
+.splitLine {
+  padding: 0 0 var(--s2);
+  color: var(--accent-ink);
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: right;
   white-space: nowrap;
 }
 

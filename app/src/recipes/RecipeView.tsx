@@ -1,10 +1,11 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { Archive, ArchiveRestore, ChartPie, Copy, Download, Import, Maximize2, Pencil, Trash2 } from 'lucide-react';
-import { calculatorRefusal, hasDividerAfter, importFailureKey, weighableTotalGrams } from '@mise/shared/catalogue-model';
+import { calculatorRefusal, hasDividerAfter, importFailureKey, unitOf, weighableTotalGrams } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
-import { FROM_RECIPE_LINK, foodCostForRecipePath, mayOpenFoodCost } from '@mise/shared/recipe-link';
+import { FROM_RECIPE_LINK, foodCostForRecipePath, mayOpenFoodCost, mayOpenOrders, ordersForIngredientPath } from '@mise/shared/recipe-link';
+import { orderTargetOf, rowKeysOf, splitAmount, splitBlockReason } from '@mise/shared/row-actions-model';
 import { isArchivedRecipe } from '@mise/shared/recipe-shelf';
 import { isSectionAllowed } from '@mise/shared/sections';
 import { useT } from '../i18n/useT';
@@ -14,6 +15,7 @@ import { Button } from '../ui/Button';
 import { useExportSheet } from '../ui/ExportSheet';
 import { FormBar } from '../ui/FormBar';
 import { RecipeFullScreen } from '../ui/RecipeFullScreen';
+import { KEEP_FOCUS } from '../shell/Page';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { CATALOGUE_ZOOM_KEY } from '../ui/zoomStorage';
@@ -22,10 +24,12 @@ import { BatchCard } from './BatchCard';
 import { DeclarationCard } from './DeclarationCard';
 import { ProcedureCard } from './ProcedureCard';
 import { useRecipes, useRecipesStore } from './RecipesContext';
-import { amountText, recipeAmounts } from './recipeAmounts';
+import { amountNumber, amountText, recipeAmounts } from './recipeAmounts';
 import { recipeExportModel } from './recipeExportModel';
 import { useRecipeReturn } from './recipeReturn';
 import { duplicateWorking } from './editorModel';
+import { RowMenu } from './RowMenu';
+import type { RowMenuItem } from './RowMenu';
 import { FROM_DUPLICATE, carryOwner, handOver } from './photoCarry';
 import { FROM_RECIPE, cameFromList, cameFromSheet } from './recipesNav';
 import { NEW_PATH, editPath } from './recipesPath';
@@ -423,16 +427,47 @@ function DuplicateAction({ recipe }: { recipe: CatalogueRecipe }) {
 // units left-aligned), whole numbers, «to taste» with no number, and a Total of the weighable rows.
 // A batch applied shows the SCALED amounts.
 //
-// A tap anywhere on the list opens it full screen, as in the current app; the button in the head is
-// the way in for a keyboard and a screen reader (the list itself stays readable as a table, which a
-// list made into one big button would not be).
+// ⚠️ A TAP ON A ROW OPENS THE ROW'S MENU, NEVER THE FULL SCREEN (Federico, 31 Oct and 6 Nov 2026: a tap anywhere on the recipe
+// zoomed it, and he wants to split an ingredient that does not fit the bowl and to order it from the recipe; the current app's
+// 70325def). The full screen opens from the button in the card's head ONLY. The ingredient's name is the button (RowMenu) and a
+// tap anywhere else on the row presses it, so the table stays a table for a screen reader.
+//
+// «Split into 2 parts» is DISPLAY ONLY: nothing is saved, the export is made from the same amounts, and the rows split are kept by
+// their row key (shared/row-actions-model), so a live change that adds a row above one leaves it split.
+// «Order» opens Orders on that ingredient's supplier (the Orders section, with the recipe in the address), and Back there returns
+// here with the same row focused, the scroll where it was and the splits still shown (recipeReturn.ts, origin 'order').
 function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: number | null }) {
   const { t, locale } = useT();
+  const { canManage, location, role } = useSession();
+  const { ingredients, suppliers } = useRecipes();
+  const navigate = useNavigate();
+  const recipeReturn = useRecipeReturn();
   const headingId = useId();
   const opener = useRef<HTMLButtonElement>(null);
   const [fullScreen, setFullScreen] = useState(false);
+  // What a trip to Orders left behind, read once when the card is first drawn.
+  const [back] = useState(() => recipeReturn.pendingOrder(recipe.id));
+  const [splitKeys, setSplitKeys] = useState<ReadonlySet<string>>(() => new Set(back?.split ?? []));
+  const buttons = useRef(new Map<string, HTMLButtonElement>());
   const amounts = recipeAmounts(recipe, target, t, locale);
   const { rows, total } = amounts;
+  const keys = rowKeysOf(recipe.ingredients);
+  // ⚠️ Asked on every draw (the venue and the role can arrive late), the very question Orders' own gate asks.
+  const mayOrder = mayOpenOrders(location, canManage, role);
+
+  // ⚠️ BACK FROM ORDERS the recipe comes back as it was left: the focus on the row that opened the menu and the scroll where it was
+  // (recipeReturn.ts); the recipe screen then has nothing left to focus.
+  useLayoutEffect(() => {
+    if (back === null) return;
+    recipeReturn.restoreScroll(recipe.id);
+    buttons.current.get(back.row)?.focus({ preventScroll: true });
+    recipeReturn.markDelivered();
+  }, []);
+  // ⚠️ AGAIN AFTER THE SHELL'S OWN RESET, as the Food cost card does (the shell puts its scroll area at the top in an effect that
+  // runs after this card's).
+  useEffect(() => {
+    if (back !== null) queueMicrotask(() => { recipeReturn.restoreScroll(recipe.id); });
+  }, []);
 
   // ⚠️ THE FOCUS GOES BACK ONLY ONCE THE DIALOG IS CLOSED. While a modal <dialog> is open everything
   // outside it is inert and focus() on the opener does nothing; the dialog closes itself first
@@ -443,6 +478,65 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
     wasOpen.current = fullScreen;
   }, [fullScreen]);
 
+  // The things a row's menu can do. The «Order» judgement is asked again when the item is chosen, not only when the menu was
+  // drawn: the ingredients and suppliers may have changed meanwhile.
+  function itemsFor(index: number): RowMenuItem[] {
+    const ing = recipe.ingredients[index];
+    const isSplit = splitKeys.has(keys[index] ?? '');
+    const blocked = splitBlockReason(amounts.values[index], unitOf(ing));
+    // A row that is already split can always be put back, whatever its amount has become.
+    const canToggle = isSplit || blocked === null;
+    const items: RowMenuItem[] = [{
+      id: 'split',
+      text: t(isSplit ? 'cat.split.undo' : 'cat.split.do'),
+      disabled: !canToggle,
+      ...(canToggle ? {} : { why: t(blocked === 'toTaste' ? 'cat.split.toTaste' : 'cat.split.tooSmall') }),
+    }];
+    if (mayOrder) {
+      const order = orderTargetOf(ing, ingredients, suppliers);
+      items.push({
+        id: 'order',
+        text: t('cat.order.do'),
+        disabled: !order.ok,
+        ...(order.ok ? {} : { why: t(ORDER_WHY[order.reason]) }),
+      });
+    }
+    return items;
+  }
+
+  function act(index: number, id: string) {
+    const key = keys[index] ?? '';
+    if (id === 'split') {
+      setSplitKeys(prev => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key); else next.add(key);
+        return next;
+      });
+      return;
+    }
+    if (id !== 'order' || !mayOrder) return;
+    const order = orderTargetOf(recipe.ingredients[index], ingredients, suppliers);
+    if (!order.ok) return;
+    const path = ordersForIngredientPath(ingredients[order.ingredientId]?.supplierId, recipe.id, order.ingredientId);
+    if (path === null) return;
+    recipeReturn.remember(recipe.id, 'order', { row: key, split: [...splitKeys] });
+    // KEEP_FOCUS: Orders puts the focus on the quantity box itself, once its lists are in; the page must not take it to its title.
+    void navigate(path, { state: { ...FROM_RECIPE_LINK, ...KEEP_FOCUS } });
+  }
+
+  const setButton = (key: string) => (node: HTMLButtonElement | null) => {
+    if (node === null) buttons.current.delete(key);
+    else buttons.current.set(key, node);
+  };
+
+  // The two parts of a split row, each written with the row's own number format.
+  const partsOf = (index: number): { a: string; b: string } | null => {
+    if (!splitKeys.has(keys[index] ?? '')) return null;
+    const unit = unitOf(recipe.ingredients[index]);
+    const parts = splitAmount(amounts.values[index], unit);
+    return parts === null ? null : { a: amountNumber(parts.a, unit, locale), b: amountNumber(parts.b, unit, locale) };
+  };
+
   return (
     <section className={styles.card} aria-labelledby={headingId}>
       <header className={styles.cardHeadRow}>
@@ -451,28 +545,58 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
           ref={opener}
           type="button"
           className={styles.fullScreen}
-          aria-label={t('cat.viewRecipeFullScreen')}
-          title={t('cat.viewRecipeFullScreen')}
+          aria-label={t('cat.fullScreen')}
+          title={t('cat.fullScreen')}
           onClick={() => { setFullScreen(true); }}
         >
           <Maximize2 aria-hidden="true" />
         </button>
       </header>
 
-      {/* The table is tapped as a whole; the button above is the keyboard's way in. */}
-      <table className={styles.table} aria-labelledby={headingId} onClick={() => { setFullScreen(true); }}>
+      <table className={styles.table} aria-labelledby={headingId}>
         <tbody>
-          {rows.map((row, index) => (
-            <tr
-              key={index}
-              className={hasDividerAfter(recipe.ingredients, index) ? styles.divided : undefined}
-              data-divider-after={hasDividerAfter(recipe.ingredients, index) ? 'true' : undefined}
-            >
-              <th scope="row" className={styles.label}>{row.label}</th>
-              <td className={styles.num}>{row.num}</td>
-              <td className={styles.unit}>{row.unit}</td>
-            </tr>
-          ))}
+          {rows.map((row, index) => {
+            const key = keys[index] ?? String(index);
+            const parts = partsOf(index);
+            const divided = hasDividerAfter(recipe.ingredients, index);
+            const name = row.label === '' ? t('cat.noName') : row.label;
+            return (
+              <Fragment key={index}>
+                <tr
+                  // A split row's rule goes under its second line, not between the two.
+                  className={parts !== null ? styles.noRule : divided ? styles.divided : undefined}
+                  data-divider-after={divided ? 'true' : undefined}
+                  // A tap anywhere on the row presses the name's button. ⚠️ Only a press INSIDE the row: the menu is drawn in a portal,
+                  // and its events still bubble up the React tree to here.
+                  onClick={event => {
+                    if (!event.currentTarget.contains(event.target as Node)) return;
+                    const button = buttons.current.get(key);
+                    if (button !== undefined && !button.contains(event.target as Node)) button.click();
+                  }}
+                >
+                  <th scope="row" className={styles.rowHead}>
+                    <RowMenu
+                      label={name}
+                      menuLabel={t('cat.rowMenu.label', { name })}
+                      items={itemsFor(index)}
+                      onAction={id => { act(index, id); }}
+                      buttonRef={setButton(key)}
+                    />
+                  </th>
+                  <td className={styles.num}>{row.num}</td>
+                  <td className={styles.unit}>{row.unit}</td>
+                </tr>
+                {parts === null ? null : (
+                  <tr className={divided ? styles.divided : undefined}>
+                    <td colSpan={2} className={styles.splitLine}>
+                      {t('cat.split.line', { a: amountText({ num: parts.a, unit: row.unit }), b: parts.b })}
+                    </td>
+                    <td className={styles.unit}>{row.unit}</td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
         </tbody>
         <tfoot>
           <tr className={styles.totalRow}>
@@ -486,7 +610,12 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
       {fullScreen ? (
         <RecipeFullScreen
           name={recipe.name === '' ? t('cat.noName') : recipe.name}
-          rows={rows.map((row, index) => ({ name: row.label, amount: amountText(row), dividerAfter: hasDividerAfter(recipe.ingredients, index) }))}
+          rows={rows.map((row, index) => {
+            const parts = partsOf(index);
+            // The full screen writes the units out on both parts.
+            const note = parts === null ? undefined : t('cat.split.line', { a: amountText({ num: parts.a, unit: row.unit }), b: amountText({ num: parts.b, unit: row.unit }) });
+            return { name: row.label, amount: amountText(row), dividerAfter: hasDividerAfter(recipe.ingredients, index), ...(note === undefined ? {} : { note }) };
+          })}
           total={{ name: t('cat.total'), amount: amountText(total) }}
           storageKey={CATALOGUE_ZOOM_KEY}
           onClose={() => { setFullScreen(false); }}
@@ -495,3 +624,10 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
     </section>
   );
 }
+
+// Why «Order» is greyed out, by the reason shared/row-actions-model gives.
+const ORDER_WHY = {
+  recipe: 'cat.order.isRecipe',
+  notInUse: 'cat.order.notInUse',
+  noSupplier: 'cat.order.noSupplier',
+} as const;
