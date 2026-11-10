@@ -2,14 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigationType } from 'react-router';
 import { Plus, Search, Settings } from 'lucide-react';
 import { nameMatches, productsUsingRecipe, sortByMargin } from '@mise/shared/foodcost-model';
+import { recipesWithoutProducts } from '@mise/shared/from-recipes';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { wantsTitleFocus } from './foodcostNav';
-import { NEW_OPENER, SETTINGS_OPENER, useHandBack } from './handBack';
+import { FROM_BOOK_OPENER, NEW_OPENER, SETTINGS_OPENER, useHandBack } from './handBack';
 import { useFoodcost } from './FoodcostContext';
+import { FromBookBox } from './FromBookBox';
+import { FromBookDialog } from './FromBookDialog';
 import { ProductRow } from './ProductRow';
 import styles from './FoodcostList.module.css';
 
@@ -61,7 +64,37 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
 
   const recipeName = using === null ? '' : String(recipes[using]?.name ?? '').trim();
 
+  // ⚠️ THE BOX IS NEVER DECIDED ON A LIST THAT HAS NOT ARRIVED (current app b5cf999e): a product's id comes from its recipe and a
+  // save writes the WHOLE document, so a list still empty would offer every recipe. Both lists must have answered; only the people
+  // who run the place see it (they are the ones who may create a product from the book), and not while the list is narrowed to a
+  // recipe. The create itself asks the server again (foodcostStore.createProductsFromRecipes), whatever this count says.
+  const missing = useMemo(
+    () => (canManage && productsLoaded && recipesLoaded && using === null ? recipesWithoutProducts(recipes, products).create.length : 0),
+    [canManage, productsLoaded, recipesLoaded, using, recipes, products],
+  );
+  // The choice screen is a dialog, mounted only while it is open, so its lists are a snapshot taken at the tap.
+  const [choosing, setChoosing] = useState(false);
+  const closing = useRef(false);
+  const openFromBook = () => {
+    handBack.expect(FROM_BOOK_OPENER);
+    setChoosing(true);
+  };
+  // Closed unused: the box's button takes the focus back. After products were made the box goes (the live list brings them in),
+  // so the focus goes to «New product», which is always there.
+  const closeFromBook = (made: boolean) => {
+    if (made) handBack.expect(NEW_OPENER);
+    closing.current = true;
+    setChoosing(false);
+  };
+  useEffect(() => {
+    if (choosing || !closing.current) return;
+    closing.current = false;
+    // After the dialog's own focus restore, which runs on the next frame: the last word is ours.
+    requestAnimationFrame(() => { handBack.deliver(); });
+  }, [choosing, handBack]);
+
   const newRef = useCallback((node: HTMLButtonElement | null) => { handBack.register(NEW_OPENER, node); }, [handBack]);
+  const fromBookRef = useCallback((node: HTMLButtonElement | null) => { handBack.register(FROM_BOOK_OPENER, node); }, [handBack]);
   const settingsRef = useCallback((node: HTMLButtonElement | null) => { handBack.register(SETTINGS_OPENER, node); }, [handBack]);
 
   return (
@@ -87,6 +120,9 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
           </Button>
         ) : null}
       </div>
+
+      {missing > 0 ? <FromBookBox count={missing} onOpen={openFromBook} buttonRef={fromBookRef} /> : null}
+      {choosing ? <FromBookDialog onClose={closeFromBook} /> : null}
 
       {/* ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a part that stays mounted,
           and only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard

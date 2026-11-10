@@ -1,0 +1,46 @@
+/* The box above the list of products: the recipes that have no product yet, and the button that opens the choice. A card of
+   its own (the rows below are one card too), the button as tall as a thumb needs. */
+
+.box {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: var(--surface);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.icon {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  color: var(--accent);
+}
+
+.text {
+  min-width: 0;
+}
+
+.title {
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.sub {
+  margin-top: 2px;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
+.action {
+  width: 100%;
+  min-height: var(--hit);
+}
