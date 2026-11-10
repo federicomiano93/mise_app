@@ -362,9 +362,6 @@ function frozenTree(value: unknown, seen: WeakSet<object> = new WeakSet()): Froz
 }
 
 const PORT_OWED = new Set<string>([
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 21): main added weighingsChangeCost to js/foodcost/foodcost-weighing.js, not yet in the port — remove its key when ported
-  'foodcost-weighing :: exports exactly the same names',
-  'foodcost-weighing :: every export is a function in both or a value in both',
   // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 37): main added catalogueChoices and more exports to js/calculator-recipe-source.js, not yet in the port — remove its key when ported
   'calculator-recipe-source :: exports exactly the same names',
   'calculator-recipe-source :: every export is a function in both or a value in both',
