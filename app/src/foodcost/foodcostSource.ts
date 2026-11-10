@@ -36,9 +36,10 @@ export interface ProductsMeta {
   readonly fromServer: boolean;
 }
 
-// The three fields a weighing writes onto a recipe.
+// The fields a weighing writes onto a recipe. A KEPT WRONG PAIR (cooked heavier than raw) carries NO lossPct: only the two
+// numbers a person typed travel (current app df7e6313).
 export interface RecipeLossPatch {
-  readonly lossPct: number;
+  readonly lossPct?: number;
   readonly rawGrams: number;
   readonly cookedGrams: number;
 }
@@ -244,17 +245,18 @@ export function createFirestoreFoodcostSource(
       await batch.commit();
     },
 
-    // ⚠️ THREE FIELDS, NEVER THE WHOLE RECIPE: the catalogue owns its name, rows and steps, and a
+    // ⚠️ UP TO THREE FIELDS, NEVER THE WHOLE RECIPE: the catalogue owns its name, rows and steps, and a
     // whole write from a copy read minutes ago would put back whatever it changed since.
     // ⚠️ updateDoc, NOT setDoc: a recipe deleted meanwhile must fail, not come back nameless.
     // ⚠️ `bakery` TRAVELS WITH IT: the rules judge the merged document and want it to name the venue.
+    // ⚠️ A KEPT WRONG PAIR CARRIES NO lossPct, and none is sent: it would be the loss as this phone last saw it, and could
+    // overwrite a correct weighing another phone saved meanwhile. An absent field is left OUT, never sent as undefined:
+    // updateDoc throws on undefined.
     async saveRecipeLoss(id, patch) {
       const { fs, db } = await firestore();
-      await fs.updateDoc(fs.doc(db, recipesPath, checkId(id)), withBakery({
-        lossPct: patch.lossPct,
-        rawGrams: patch.rawGrams,
-        cookedGrams: patch.cookedGrams,
-      }));
+      const fields: Record<string, number> = { rawGrams: patch.rawGrams, cookedGrams: patch.cookedGrams };
+      if (patch.lossPct !== undefined) fields['lossPct'] = patch.lossPct;
+      await fs.updateDoc(fs.doc(db, recipesPath, checkId(id)), withBakery(fields));
     },
 
     async removeProduct(id) {

@@ -8,9 +8,10 @@ import {
 } from '@mise/shared/foodcost-model';
 import type { LineUnit, PackUnit, Product, ProductDraft, SellingMode } from '@mise/shared/foodcost-model';
 import {
-  startWeighing, typeCooked, typeRaw, weighingPatches, withWeighings, otherProductsUsing,
+  startWeighing, typeCooked, typeRaw, weighingPatches, weighingsChangeCost, withWeighings, otherProductsUsing, readWeighing,
 } from '@mise/shared/foodcost-weighing';
 import type { WeighingState } from '@mise/shared/foodcost-weighing';
+import { weighingParams } from '@mise/shared/fc-number';
 import type { KiloLineUnit } from '@mise/shared/line-quantity';
 import { countryOf } from '@mise/shared/market';
 import { firstInvalidNumber } from '@mise/shared/product-limits';
@@ -304,6 +305,8 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
   const nameBox = useRef<HTMLInputElement>(null);
   const numberBoxes = useRef<Partial<Record<NumberField, HTMLInputElement | null>>>({});
   const boxRef = (field: NumberField) => (node: HTMLInputElement | null) => { numberBoxes.current[field] = node; };
+  // The cooked box of each weighing on screen, for Save to point at when its warning stands.
+  const cookedBoxes = useRef(new Map<string, HTMLInputElement>());
   const qtyBoxes = useRef(new Map<string, HTMLInputElement>());
   const registerQty = useCallback((key: string, node: HTMLInputElement | null) => {
     if (node) qtyBoxes.current.set(key, node); else qtyBoxes.current.delete(key);
@@ -473,6 +476,20 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
     });
   };
 
+  // The weighings on screen whose boxes carry a warning, with the sentence to say. A finished product has no boxes, so none.
+  const weighWarnings = () => {
+    const out: { recipeId: string; name: string; warning: string }[] = [];
+    if (working.noWeightLoss || !canWeigh) return out;
+    for (const recipeId of recipeIds) {
+      const recipe = snap.recipes[recipeId];
+      const weighing = states[recipeId];
+      if (!recipe || !weighing) continue;
+      const { warning } = readWeighing(recipe, weighing);
+      if (warning) out.push({ recipeId, name: String(recipe.name ?? '').trim(), warning: t(warning.key, weighingParams(warning.params, money)) });
+    }
+    return out;
+  };
+
   const leaveWeighingBox = (recipeId: string, box: 'raw' | 'cooked') => {
     setTypedWeights(current => {
       const { [box]: dropped, ...kept } = current[recipeId] ?? noExtra;
@@ -515,11 +532,26 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
     }
     if (next !== working) setWorking(next);
 
+    // ⚠️ A WRONG WEIGHING NEVER BLOCKS THE SAVE (owner, Nov 2026: «in ogni caso posso salvare lo stesso»; current app df7e6313). It is
+    // pointed at — scrolled to, focused, named — and then the usual question says so in its own words, so one tap on Save keeps the
+    // numbers as typed. Both warnings (cooked heavier than raw, a loss past the cap) are about the cooked weight.
+    const weighIssues = weighWarnings();
+    const [firstIssue] = weighIssues;
+    if (firstIssue) {
+      reveal(cookedBoxes.current.get(firstIssue.recipeId));
+      say(t('fc.checkWeighing', { name: firstIssue.name }));
+    }
+    const question = weighIssues.length > 0
+      ? t('fc.saveWithWeightWarnings', {
+        lines: weighIssues.map(issue => t('fc.weightWarningLine', { name: issue.name, warning: issue.warning })).join('\n'),
+      }).split('\n')
+      : t('fc.saveTheseChanges');
+
     asking.current = true;
     try {
       const ok = await confirm({
         title: t('fc.saveProduct'),
-        message: t('fc.saveTheseChanges'),
+        message: question,
         okLabel: t('ui.save'),
         cancelLabel: t('common.cancel'),
       });
@@ -537,7 +569,9 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
     // an ingredient price drifting.
     const result = costProduct(clean, live);
     // Switching «no weight loss» on or off moves the cost, so it is a change worth a point as well.
-    const worthRecording = snapshotWorthTaking(initial, clean) || Object.keys(patches).length > 0
+    // ⚠️ …BUT NOT A KEPT WRONG PAIR: it writes two numbers and leaves the loss alone, so nothing the product costs moved.
+    const weighedIds = working.noWeightLoss ? [] : recipeIds;
+    const worthRecording = snapshotWorthTaking(initial, clean) || weighingsChangeCost(snap.recipes, states, weighedIds)
       || (!!initial && !!initial.noWeightLoss !== !!clean.noWeightLoss);
     const point = result.foodCostPct !== null && worthRecording
       ? productSnapshot(clean, result, new Date().toISOString(), live) as unknown as Record<string, unknown>
@@ -699,6 +733,9 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
                 onRaw={text => { typeWeighing(recipeId, 'raw', text); }}
                 onCooked={text => { typeWeighing(recipeId, 'cooked', text); }}
                 onBlur={box => { leaveWeighingBox(recipeId, box); }}
+                cookedRef={node => {
+                  if (node) cookedBoxes.current.set(recipeId, node); else cookedBoxes.current.delete(recipeId);
+                }}
               />
             );
           }) : null}
