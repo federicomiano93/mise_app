@@ -113,6 +113,10 @@ worker's rollback, has the exact order):
    DONE 8 Nov 2026 (what was built and every difference: `docs/parity/orders.md`, «Draft journal and corrections in flight as
    built»). #410 was already in Mise 2 (the current app took its claim logic from `draftSync.ts`); its two stock-count cases are
    pinned too. The description above is how it stood before.
+   **STILL OPEN (found 10 Nov 2026 by item 32):** a draft write the SERVER refuses after the person has left Orders (any exit: the bottom
+   bar, Back to a recipe, Home) is lost without a word — `draftSync.ts` reports the refusal after `stopJournal()`, to listeners already gone. The current
+   app asks «Quantità non salvata» (`orders.fromRecipe.refusedTitle`, `js/orders/orders-main.js`). Rare (access revoked mid-send) and older than item 32. Owed: keep the
+   refused change in the local journal and say so on the next Orders screen (or Home). Size S-M. DATA LOSS: yes, one quantity.
 7. **Stocktake «Close month» guard** — PR #442/#440 (`6538e1db`, `2e4ee2a1`, `5df661d3`). Core data fix ported on the stack (PR #443,
    `app/src/stocktake/stocktakeModel.ts` has `withoutEmptyMaps`, `monthReady`). Mise 2: PARTIAL. Owed: move both plus `LIST_STATUS` /
    `listStatus` into `shared/src/inventory-model.ts` (parity marked PORT OWED: inventory-model), the «No products» wording only when both answers prove
