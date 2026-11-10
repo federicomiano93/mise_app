@@ -1,7 +1,11 @@
-import { useCallback } from 'react';
+import { createContext, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { recipeAddress } from '@mise/shared/recipe-link';
 import { KEEP_FOCUS } from '../shell/Page';
+
+// Puts the section's scroll back at the top: a product's screen calls it when it turns from read to form or back, which change no
+// address (the section resets the scroll only when the address does). The section provides it; outside one it does nothing.
+export const ScrollTopContext = createContext<() => void>(() => undefined);
 
 // What the list puts in the navigation `state` when it opens a screen one level down (a product, a
 // new product, Settings): «you came from the list, so Back is the browser's Back». KEEP_FOCUS comes

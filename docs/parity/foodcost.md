@@ -419,6 +419,14 @@ Branch `feature/mise2-next-foodcost-card`, on top of item 24. NOT in this slice:
   asks nothing. (On the split the history also replaces the product, so the same question comes there, where the current app keeps its editor alive instead: Mise 2 asks, the current app does
   not need to. Safe, and not changed.)
 
+**Review fixes (10 Nov 2026)**
+- A NEW product made from a recipe keeps the recipe in its address once saved (`/food-cost/product/<id>?recipe=<rid>`), so Back from its read view goes to the recipe in one step, as the current app's `entryEditor`/`fromRecipe` do.
+- A first save the database refuses is not 'Product deleted.': the store tells whether a product's latest save is still in the air or was refused (`saveIsUnsettled`), the read view then leaves without saying it was deleted, and a save refused before its read view was ever drawn leaves from `ProductEditor`. The store's «… wasn't saved» stays on screen and the person lands on the list (the current app shows the list too).
+- Read to form, form to read and Save each put the scroll back at the top (the phone's page, or the split's right-hand side; the list keeps its place), through `ScrollTopContext` provided by the section — the address does not change in those moves, so the section's own reset never saw them.
+- «Full card» opens when a product stops being costed while it is read (`openNow`, current app `refreshRead`); a person who closed it while a summary showed is not argued with.
+- `justSaved` is cleared when another product is picked, so on the split a product saved with nothing costed opens to its form again later.
+- Specs: `FoodcostSection.readFixes.spec.tsx`.
+
 **The summary** (`PreviewPanel.tsx`, shared by the phone's dialog and the top of the card through `ProductSummary.tsx`): five rows in sight — selling price, cost (materials and
 packaging, plus the work where there is a figure), margin (the app's margin: net price less materials and packaging; «before labour» where a labour row exists), food cost against
 its target (a dot AND a word), ideal price — with the same price without VAT and its target underneath («0,80 € senza IVA, per un food cost del 25,00%»); raw materials, packaging and labour

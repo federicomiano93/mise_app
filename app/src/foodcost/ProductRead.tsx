@@ -74,8 +74,9 @@ export function ProductRead({ id, product, gone, origin, titleRef, onEdit }: Pro
   const working = useMemo(() => workingFrom(product, country), [product, country]);
   const recipeIds = recipeIdsOn(working);
   const loaded = { recipes: snap.recipesLoaded, ingredients: snap.ingredientsLoaded };
-  // The box starts open only when there is no summary above it (nothing else to show). Decided once, when the screen mounts.
-  const [startOpen] = useState(() => !summaryShows(product, snap.tables));
+  // The box is open while there is no summary above it (nothing else to show): from the start, and again when the product stops
+  // being costed while it is read (refreshRead of the current app). A person who closed it while a summary shows is not argued with.
+  const noSummary = !summaryShows(product, snap.tables);
 
   const leaving = useRef(false);
   const asking = useRef(false);
@@ -88,9 +89,11 @@ export function ProductRead({ id, product, gone, origin, titleRef, onEdit }: Pro
   useEffect(() => {
     if (!gone || leaving.current) return;
     leaving.current = true;
-    say(t('fc.productDeleted'));
+    // ⚠️ A PRODUCT THAT LEFT BECAUSE ITS OWN SAVE WAS REFUSED was not deleted: the store has already said (or is about to say)
+    // «… wasn't saved», and «Product deleted.» would overwrite it. The person still lands on the list, like the current app.
+    if (!store.saveIsUnsettled(id)) say(t('fc.productDeleted'));
     leave();
-  }, [gone, say, t, leave]);
+  }, [gone, say, t, leave, store, id]);
 
   async function remove() {
     if (asking.current || leaving.current) return;
@@ -133,7 +136,7 @@ export function ProductRead({ id, product, gone, origin, titleRef, onEdit }: Pro
 
       <div className={shell.body}>
         <ProductSummary product={product} tables={snap.tables} />
-        <FullCard read startOpen={startOpen}>
+        <FullCard read openNow={noSummary}>
           <CardSection title={t('fc.section.product')}>
             <ReadProduct product={product} working={working} />
           </CardSection>

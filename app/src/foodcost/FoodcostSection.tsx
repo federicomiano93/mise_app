@@ -11,7 +11,7 @@ import { FoodcostProvider, useFoodcostStore } from './FoodcostContext';
 import { FoodcostDetail } from './FoodcostDetail';
 import { FoodcostList } from './FoodcostList';
 import { messageText } from './foodcostMessages';
-import { FROM_LIST, cameFromList, keepDepth, pushDepth, useBackToRecipe, withoutKeepFocus } from './foodcostNav';
+import { FROM_LIST, ScrollTopContext, cameFromList, keepDepth, pushDepth, useBackToRecipe, withoutKeepFocus } from './foodcostNav';
 import {
   FOODCOST_PATH, historyPath, newPath, productPath, resolveFoodcostPath, settingsPath,
 } from './foodcostPath';
@@ -188,8 +188,19 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
     if (detail.current) detail.current.scrollTop = 0;
   }, [place]);
 
+  // Read to form and back change no address, so the effects above never see them: the product's screen asks for the top itself.
+  // On a phone the page scrolls (the shell's area); on the split only the right-hand side does, and the list keeps its place.
+  const scrollToTop = () => {
+    if (!split) {
+      const area = scrollArea();
+      if (area !== null) area.scrollTop = 0;
+    }
+    if (detail.current) detail.current.scrollTop = 0;
+  };
+
   return (
     <HandBackProvider value={handBack}>
+      <ScrollTopContext value={scrollToTop}>
       <Page title={t('section.foodcost')}>
         <div className={styles.layout} data-view={view.kind === 'list' ? 'list' : 'detail'}>
           <div className={styles.list}>
@@ -222,6 +233,7 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
           </PartBoundary>
         )}
       </Page>
+      </ScrollTopContext>
     </HandBackProvider>
   );
 }

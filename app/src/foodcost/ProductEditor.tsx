@@ -1,18 +1,19 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useContext, useEffect, useId, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { useLocation, useNavigate } from 'react-router';
 import { draftFromRecipe } from '@mise/shared/foodcost-model';
 import type { Product } from '@mise/shared/foodcost-model';
 import { useT } from '../i18n/useT';
 import { FormBar } from '../ui/FormBar';
-import { useFoodcost } from './FoodcostContext';
+import { useFoodcost, useFoodcostStore } from './FoodcostContext';
 import { useCopyWait } from './copyWait';
 import { FOODCOST_PATH, productPath, usingPath } from './foodcostPath';
 import type { Origin } from './foodcostPath';
-import { useBackToRecipe, useLeave, wantsTitleFocus } from './foodcostNav';
+import { ScrollTopContext, useBackToRecipe, useLeave, wantsTitleFocus } from './foodcostNav';
 import { NEW_OPENER, productOpener, useHandBack } from './handBack';
 import { ProductForm } from './ProductForm';
 import { ProductRead, summaryShows } from './ProductRead';
+import { useProductExit } from './useProductExit';
 import styles from './ProductEditor.module.css';
 
 // What is on screen for one product: its READ view or the FORM. `fromRead`: the form was opened with the pencil from the read view
@@ -57,6 +58,8 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
   const answered = useCopyWait(id === null ? draftFor === null || recipeHere || recipesFromServer : productsFromServer);
   // A product just saved from the form of a NEW one is on screen at once: it was written here, nothing older can be on this phone.
   const [justSaved, setJustSaved] = useState<string | null>(null);
+  // Another product picked (the split keeps this component): the one just saved is no longer forced to read when it comes back.
+  if (justSaved !== null && id !== null && justSaved !== id) setJustSaved(null);
   const canOpen = product !== null && (answered || justSaved === id);
   const draftWaiting = draftFor !== null && !answered;
   // ⚠️ DECIDED ONCE: a recipe that arrives after the form opened plain must not swap the form for a
@@ -94,9 +97,12 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
 
   // The focus follows a switch the person made (the pencil, Save, Back from the form): to the new view's own title.
   const switched = useRef(false);
+  const scrollToTop = useContext(ScrollTopContext);
   useEffect(() => {
     if (!switched.current) return;
     switched.current = false;
+    // The other view starts at the top (the current app's swap()), whatever the one before was scrolled to.
+    scrollToTop();
     title.current?.focus();
   }, [mode?.edit, mode?.id]);
   const edit = () => {
@@ -113,10 +119,23 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
   const saved = (savedId: string) => {
     switched.current = true;
     setJustSaved(savedId);
-    if (id === null) void navigate(productPath(savedId, { recipe: null, using: formOrigin.using }), { replace: true, state });
+    if (id === null) void navigate(productPath(savedId, formOrigin), { replace: true, state });
     else setChosen({ id, edit: false, fromRead: false });
   };
   const gone = !hasForm && product === null && productsFromServer;
+
+  // ⚠️ A FIRST SAVE REFUSED BEFORE ITS PRODUCT WAS EVER DRAWN (the store took it back, or the stream did, in the render between the
+  // save and the new address): there is no read view to say so and nothing to wait for. The store has said «… wasn't saved»; the
+  // person goes to the list, like the current app.
+  const store = useFoodcostStore();
+  const { leave } = useProductExit(id, formOrigin);
+  const refusedBeforeShown = justSaved !== null && justSaved === id && !hasForm && product === null && store.saveIsUnsettled(id);
+  const left = useRef(false);
+  useEffect(() => {
+    if (!refusedBeforeShown || left.current) return;
+    left.current = true;
+    leave();
+  }, [refusedBeforeShown, leave]);
   const waiting = draftWaiting || (!hasForm && !gone);
   const shown = !waiting;
 

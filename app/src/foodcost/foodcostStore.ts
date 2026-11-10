@@ -106,6 +106,9 @@ export interface FoodcostStore {
   // Saves a product LOCAL-FIRST and returns its id at once.
   saveProduct(save: ProductSave): string;
   deleteProduct(id: string): void;
+  // Whether the latest save of this product is still in the air or was refused. A product that disappears while this is true
+  // is a save that did not hold, never a deletion: the refusal has its own message.
+  saveIsUnsettled(id: string): boolean;
   // The hourly labour cost (null clears it), local-first.
   saveLabourRate(rate: number | null): void;
   // A product's margin history, read once.
@@ -192,6 +195,9 @@ export function createFoodcostStore(
   // Which save of each product is the latest: a refusal rolls back only its own save.
   const saveSeq = new Map<string, number>();
   let seq = 0;
+  // Products whose latest save is still in the air or was refused: a product that leaves the list in that state left because its
+  // OWN save failed (rolled back, or taken away by the stream), not because somebody deleted it (saveIsUnsettled).
+  const unsettled = new Set<string>();
 
   const listeners = new Set<() => void>();
   const messageListeners = new Set<(message: FoodcostMessage) => void>();
@@ -385,8 +391,11 @@ export function createFoodcostStore(
       const prev = products.find(p => p.id === id) ?? null;
       const mine = ++seq;
       saveSeq.set(id, mine);
+      unsettled.add(id);
       upsertLocal(normalizeProduct({ id, ...data }) as Product);
-      track(source.saveProduct(id, data, point), err => {
+      const write = source.saveProduct(id, data, point);
+      void write.then(() => { if (saveSeq.get(id) === mine) unsettled.delete(id); }, () => undefined);
+      track(write, err => {
         deps.warn('Product did not sync to Firestore:', err);
         if (saveSeq.get(id) === mine && !listenerWillRevert()) {
           if (prev) upsertLocal(prev); else removeLocal(id);
@@ -395,6 +404,8 @@ export function createFoodcostStore(
       });
       return id;
     },
+
+    saveIsUnsettled: id => unsettled.has(id),
 
     deleteProduct(id) {
       const prev = products.find(p => p.id === id) ?? null;
