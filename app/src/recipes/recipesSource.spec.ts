@@ -301,6 +301,33 @@ describe('the Recipe catalogue source', () => {
     warn.mockRestore();
   });
 
+  test('⚠️ the ingredient prices are read ONCE (getDocs, no listener) from the open venue; a refusal is null and logs the code only', async () => {
+    const { kit, fs, listeners } = fakeKit();
+    const getDocs = vi.fn(async () => snapOf([
+      { id: 'FLOUR', priceUnit: 'kg', pricePerUnit: 2 },
+      { id: 'SALT', priceUnit: 'kg', pricePerUnit: 1 },
+    ]));
+    Object.assign(fs, { getDocs });
+    const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'panificio-miano');
+    expect(await source.readIngredientPrices()).toEqual({
+      FLOUR: { priceUnit: 'kg', pricePerUnit: 2 },
+      SALT: { priceUnit: 'kg', pricePerUnit: 1 },
+    });
+    expect(getDocs).toHaveBeenCalledTimes(1);
+    expect(getDocs).toHaveBeenCalledWith({ kind: 'collection', path: 'locations/panificio-miano/ingredient-prices' });
+    expect(listeners, 'no listener was opened').toHaveLength(0);
+    getDocs.mockRejectedValueOnce(Object.assign(new Error('Missing or insufficient permissions for a secret name'), { code: 'permission-denied' }));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(await source.readIngredientPrices()).toBeNull();
+    expect(warn).toHaveBeenCalledWith('readIngredientPrices failed:', 'permission-denied');
+    expect(JSON.stringify(warn.mock.calls), 'no message text in the log').not.toContain('secret name');
+    warn.mockRestore();
+    const broken = createFirestoreRecipesSource(() => Promise.reject(new Error('chunk')), 'bakery');
+    const quiet = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    expect(await broken.readIngredientPrices()).toBeNull();
+    quiet.mockRestore();
+  });
+
   // ── Writing recipes (step 3d-6) ──
 
   test('⚠️ a recipe save is a MERGE at its id, stamped with the venue last, never sending `id`; a null box is a removal', async () => {

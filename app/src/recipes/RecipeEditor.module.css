@@ -152,6 +152,19 @@
   border-bottom: 1px solid var(--line);
 }
 
+/* Visually hidden, still read aloud: the polite live region that announces a stale link. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .rows {
   margin: 0;
   padding: 0;

@@ -117,6 +117,13 @@
   color: var(--accent-ink);
 }
 
+/* The name was retyped but the row is still linked: an amber note, not an error (current app 7 Nov 2026). --warn-ink on --warn-tint
+   is well above 4.5:1. The text wraps (overflow-wrap above); the same padding, so nothing jumps. */
+.link[data-stale="true"] {
+  background: var(--warn-tint);
+  color: var(--warn-ink);
+}
+
 .link:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 1px;

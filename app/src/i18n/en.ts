@@ -1203,6 +1203,8 @@ export const en = {
   'cat.linkToAnIngredient': '+ Link to an ingredient',
   'cat.aRecipeThatNo': '→ a recipe that no longer exists',
   'cat.anIngredientThatNo': '→ an ingredient that no longer exists',
+  'cat.noPriceMark': 'no price',
+  'cat.nameChangedStillLinked': 'The name changed, but this row is still linked to “{name}” — tap to change',
   'cat.nothingMatchesYourSearch': 'Nothing matches your search.',
   'cat.noIngredientsYetAdd': 'No ingredients yet — add them in Orders, under Settings.',
   'cat.linkTo': 'Link to',

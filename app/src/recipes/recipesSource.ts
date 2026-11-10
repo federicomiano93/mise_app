@@ -105,6 +105,12 @@ export interface RecipesSource {
   // null when there is none or it cannot be read now (offline and not in the phone's copy). Read only by the HACCP label,
   // for the first name it prints when the venue prints «prepared by». A label, never an identity: nothing decides on it.
   readMember(uid: string): Promise<Record<string, unknown> | null>;
+  // The venue's ingredient PRICES (ingredient-prices: id -> price document), read ONCE, or null when they cannot be read. Read only
+  // while a recipe editor is open and only for somebody who may read Food cost (the editor asks `mayOpenFoodCost` first), to mark the
+  // rows Food cost cannot price (current app ff1a2d38, item 30). ⚠️ NEVER A LISTENER AND NEVER KEPT: the section's own data layer
+  // strips every price on purpose (withoutPrice), and the map this returns is held by the editor for as long as it is open, then gone.
+  // QUIET: a refused or failed read is null and the editor simply draws no marks.
+  readIngredientPrices(): Promise<Record<string, Record<string, unknown>> | null>;
   // LINKS a recipe to the Calculator (config/calculator) in ONE transaction on the document as the server holds it: a tab
   // linked to it is added at the end, or the tab that already stands for it (an old copy 'cat-<id>', or one linked by hand)
   // is refreshed in place and linked (owner's decision, 18 Oct 2026; the current app copies). NOT local-first —
@@ -154,6 +160,7 @@ const PRINT_JOBS = 'print-jobs';
 const SUPPLIERS = 'suppliers';
 const MEMBERS = 'members';
 const CALCULATOR_DOC = 'calculator';
+const INGREDIENT_PRICES = 'ingredient-prices';
 
 // A copy of the document without any of the price keys (header).
 export function withoutPrice(doc: StoredDoc): StoredDoc {
@@ -175,6 +182,7 @@ export function createFirestoreRecipesSource(
   const printJobsPath = buildPath(locationId, PRINT_JOBS);
   const suppliersPath = buildPath(locationId, SUPPLIERS);
   const membersPath = buildPath(locationId, MEMBERS);
+  const pricesPath = buildPath(locationId, INGREDIENT_PRICES);
 
   // A live listener whose Firestore may not be loaded yet. The returned stop works at any moment.
   function listen(subscribe: (kit: FirestoreKit) => () => void, onError: (err: unknown) => void): () => void {
@@ -389,6 +397,22 @@ export function createFirestoreRecipesSource(
         return snap.exists() ? { ...(snap.data() as Record<string, unknown>) } : null;
       } catch (err) {
         console.warn('readMember failed:', err);
+        return null;
+      }
+    },
+
+    // ⚠️ ONE-SHOT getDocs, NOT A LISTENER (js/catalogue/editor-prices.js): the editor is open for minutes, and a listener opened here
+    // would have to be closed by somebody. COST (P14): one read per priced ingredient each time a recipe editor is opened — nothing
+    // while the catalogue is merely browsed. The log carries the error code only: no data, no message text.
+    readIngredientPrices: async () => {
+      try {
+        const kit = await firestore();
+        const snap = await kit.fs.getDocs(kit.fs.collection(kit.db, pricesPath) as Query);
+        const prices: Record<string, Record<string, unknown>> = {};
+        snap.docs.forEach(d => { prices[d.id] = { ...(d.data() as Record<string, unknown>) }; });
+        return prices;
+      } catch (err) {
+        console.warn('readIngredientPrices failed:', (err as { code?: unknown } | null)?.code ?? 'unknown');
         return null;
       }
     },

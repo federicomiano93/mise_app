@@ -3,10 +3,12 @@ import type { Ref } from 'react';
 import { Camera, Check, ChevronDown, Trash2 } from 'lucide-react';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
-import { findInvalidRecipe, linkOf } from '@mise/shared/catalogue-model';
+import { findInvalidRecipe, linkOf, staleLinkName } from '@mise/shared/catalogue-model';
 import type { CatalogueRecipe, InvalidRecipeProblem } from '@mise/shared/catalogue-model';
 import { normalizeLabelProfile } from '@mise/shared/label-template-model';
 import { mayEditRecords } from '@mise/shared/records';
+import { mayOpenFoodCost } from '@mise/shared/recipe-link';
+import { unpricedRowFlags } from '@mise/shared/unpriced-rows';
 import { haccpSettingsOf } from '@mise/shared/haccp-label';
 import { categoryOf, sortedCategories } from '@mise/shared/recipe-shelf';
 import { useT } from '../i18n/useT';
@@ -294,6 +296,67 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
     setCreating({ token: tokens.current, key, name, from });
   };
 
+  // ── The crossed-out euro on a row Food cost cannot price (current app ff1a2d38, 28 Oct 2026; item 30) ─────────
+  //
+  // ⚠️ HELD IN THIS STATE ONLY. null until the read answers, and null for good when it is refused or this person may not read Food
+  // cost: no marks, no error. The map is never stored anywhere and no money is shown — unpricedRowFlags answers with booleans.
+  // ⚠️ ASKED WHEN THE EDITOR OPENS, from the session as it is NOW (a manager can show Food cost to employees from another phone),
+  // and only for somebody who may read Food cost: for anyone else the rules would refuse, so no request is made at all.
+  // ⚠️ ONE-SHOT, NOT A LISTENER: prices that change while the editor is open are not followed; the next editor opens afresh.
+  const mayReadPrices = mayOpenFoodCost(venue, canManage, role);
+  const [prices, setPrices] = useState<Readonly<Record<string, Record<string, unknown>>> | null>(null);
+  useEffect(() => {
+    if (!mayReadPrices) return undefined;
+    let current = true;
+    store.readIngredientPrices().then(
+      answer => { if (current && answer !== null) setPrices(answer); },
+      () => undefined,
+    );
+    return () => { current = false; };
+  }, [mayReadPrices, store]);
+  // Re-worked at every keystroke, amount and unit, as the current app does: the mark follows what is typed.
+  const unpricedFlags = useMemo(() => (
+    prices === null ? null : unpricedRowFlags({ id: id ?? undefined, ingredients: working.rows.map(({ row }) => row) }, { ingredients, recipes, prices })
+  ), [prices, working.rows, ingredients, recipes, id]);
+
+  // ── A retyped name on a still-linked row (current app a84fa1ab, 94e0514e; PR #486, 7 Nov 2026) ─────────────
+  //
+  // Federico: «quando cambio ingrediente il prezzo non si aggiorna». THE TRAP: retyping the name box of a linked row changes only
+  // `label`; the row keeps its link, and the link is what recipe cost and every Food cost product built on it read. «Farina» retyped as
+  // «Burro» kept costing FLOUR while the line under the row still said «→ Farina …» and nobody looked.
+  // ⚠️ A WARNING, NEVER AN AUTOMATIC UNLINK: fixing a typo («Farinna») must not lose the link. Only a pick relinks (linkTo).
+  // ⚠️ ONLY A NAME CHANGED IN THIS SESSION WARNS: old rows whose typed name differs from the linked item («Farina» on «Farina 0
+  // Caputo», English invoice names) must not light up on opening. So each row remembers the name it had when the editor opened — or
+  // when it was last linked by a pick. ⚠️ The memory is a Map by the row's own number in THIS component, NEVER a field of the row: the
+  // row is what Save writes and the rules whitelist its keys. A row added later has none yet, and compares with itself until a pick.
+  const openedLabels = useRef<Map<number, string> | null>(null);
+  if (openedLabels.current === null) {
+    openedLabels.current = new Map(working.rows.map(({ key, row }) => [key, String(row.label ?? '')] as const));
+  }
+  const staleLinks = useMemo(() => {
+    const stale = new Map<number, string>();
+    for (const { key, row } of working.rows) {
+      const name = staleLinkName({
+        label: row.label, openedLabel: openedLabels.current?.get(key) ?? row.label, link: linkOf(row), ingredients, recipes,
+      });
+      if (name !== '') stale.set(key, name);
+    }
+    return stale;
+  }, [working.rows, ingredients, recipes]);
+  // ⚠️ ONE POLITE LIVE REGION for the editor, rendered EMPTY and outside the rows (which are rebuilt by modes): a screen reader hears
+  // the warning when a row TURNS stale, not on every keystroke, and nothing when it clears. Not the section's status toast: that is a
+  // visible message for 2.6 s over the bottom of the form, and the amber line under the row is already the visible half.
+  const [staleAnnouncement, setStaleAnnouncement] = useState('');
+  const wasStale = useRef(new Set<number>());
+  useEffect(() => {
+    const now = new Set(staleLinks.keys());
+    let turned: number | null = null;
+    for (const key of now) if (!wasStale.current.has(key)) turned = key;
+    if (turned !== null) setStaleAnnouncement(t('cat.nameChangedStillLinked', { name: staleLinks.get(turned) ?? '' }));
+    else if ([...wasStale.current].some(key => !now.has(key))) setStaleAnnouncement('');
+    wasStale.current = now;
+  }, [staleLinks, t]);
+
   // ── Reordering ───────────────────────────────────────────────────────────────────────────────────────────────
   // A MODE (the current app's, item 92): the rows are grips, names and amounts with nothing to type in. Turning it on or off
   // is not an edit; a move is (it goes through edit(), so dirty, markBusy and the leave guard follow).
@@ -346,7 +409,11 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
 
   // ⚠️ THE ONE PLACE A ROW'S LINK IS WRITTEN (editorModel.linkRowTo → applyLink): the suggestion list and the chooser both
   // come here. `null` removes the link. Re-validation needs no call: what is wrong is derived from the copy at every render.
+  // ⚠️ EVERY PICK MOVES THE STALE WARNING'S BASELINE to the name the row has after it, the SAME link too: a person choosing what is
+  // already there is saying «yes, this one», so the warning clears (94e0514e). A removed link (null) has nothing to warn about.
   const linkTo = (key: number, chosen: Chosen | null) => {
+    const after = linkRowTo(workingRef.current, key, chosen, ingredients, recipes).rows.find(item => item.key === key);
+    if (after) openedLabels.current?.set(key, String(after.row.label ?? ''));
     edit(current => linkRowTo(current, key, chosen, ingredients, recipes));
     if (chosen !== null) setAmountFor({ key });
   };
@@ -606,6 +673,8 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
                     register={register}
                     onChange={(key: number, fields: Row) => { edit(current => setRowFields(current, key, fields)); }}
                     onRemove={key => { edit(current => removeRow(current, key)); }}
+                    unpriced={unpricedFlags?.[index] ?? false}
+                    staleLink={staleLinks.get(item.key) ?? ''}
                     linking={{
                       ingredients,
                       recipes,
@@ -621,6 +690,7 @@ export function RecipeEditor({ id, recipe, titleRef, onTyped }: Props) {
                 ))}
               </ul>
             )}
+            <div className={styles.srOnly} role="status" aria-live="polite">{staleAnnouncement}</div>
             {/* ⚠️ THE TOTAL SITS IN THE SAME CELL SHAPE AS THE AMOUNTS ABOVE IT: «Total 8380 g» stops lining up with the column of
                 numbers it is the sum of, which is the one thing it exists to do. */}
             <div className={styles.total}>

@@ -70,6 +70,11 @@ export type FakeRecipesSource = RecipesSource & {
   calculatorConfig: Record<string, unknown> | null;
   // The venue's roster lines by uid (readMember).
   members: Record<string, Record<string, unknown>>;
+  // The ingredient prices (ingredient-prices) the recipe editor reads once, by ingredient id; the real source strips them from
+  // the ingredients on purpose. `refusePrices` makes the read answer null (the rules said no); `priceReads` counts the reads.
+  prices: Record<string, Record<string, unknown>>;
+  refusePrices: boolean;
+  priceReads: number;
   holdCalculatorRead(): () => void;
   // Every import into the Calculator, in order, as it was handed over (refused ones are not here), and what the next
   // ones answer. `refuseImport` makes the next imports reject with that error (null = they succeed); `holdImport`
@@ -85,6 +90,7 @@ export function fakeRecipesSource(
     recipes?: StoredDoc[]; ingredients?: StoredDoc[]; labelConfig?: Record<string, unknown> | null; printAgents?: StoredDoc[];
     suppliers?: StoredDoc[]; calculatorConfig?: Record<string, unknown> | null;
     members?: Record<string, Record<string, unknown>>; logo?: Record<string, unknown> | null;
+    prices?: Record<string, Record<string, unknown>>;
   } = {},
 ): FakeRecipesSource {
   const recipes = new Map((seed.recipes ?? []).map(doc => [doc.id, doc] as const));
@@ -144,6 +150,9 @@ export function fakeRecipesSource(
     refuseRecipeWrites: { save: false, remove: false },
     calculatorConfig: seed.calculatorConfig ?? null,
     members: seed.members ?? {},
+    prices: seed.prices ?? {},
+    refusePrices: false,
+    priceReads: 0,
     logo: seed.logo ?? null,
     refuseLogo: false,
     refuseLogoWrites: false,
@@ -328,6 +337,12 @@ export function fakeRecipesSource(
       return fake.calculatorConfig;
     }),
     readMember: vi.fn<RecipesSource['readMember']>(async uid => fake.members[uid] ?? null),
+    readIngredientPrices: vi.fn<RecipesSource['readIngredientPrices']>(async () => {
+      fake.priceReads += 1;
+      // ⚠️ NO PRICES SEEDED = THE READ ANSWERS NULL (as a refused one): a spec that never mentions prices must not see every linked row
+      // crossed out. A spec about the marks seeds at least one price document.
+      return fake.refusePrices || Object.keys(fake.prices).length === 0 ? null : { ...fake.prices };
+    }),
   };
   return fake;
 }
