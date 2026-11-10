@@ -242,3 +242,60 @@ opened on kilos: every one of those costs ×1000.
   a decimal mark (Mise 2's `readQty`); the current app's number box takes no comma.
 - Not ported (deferred until after the switch): the rest of item 21 (empty raw box, kept wrong weighings in red, wider boxes) and
   items 22–26 and 28.
+
+## Weighing units and two decimals as built (10 Nov 2026)
+
+Items 21 and 28 of `docs/mise2-port-owed.md` (current app `df7e6313` and `151ea191`), branch `feature/mise2-next-foodcost-units`. This
+SUPERSEDES the "not ported" lines of the two sections above (the empty raw box, the kept wrong weighings in red and the wider boxes are
+now in; items 22-26 are still not).
+
+**Item 21: the weighing boxes.**
+- `shared/src/foodcost-weighing.ts` is a full port again and paired in `parity.spec.ts` (the item-21 `PORT OWED` keys are gone, also from
+  `odd-inputs.spec.ts`). The raw box no longer follows the recipe's ingredient total (`rawTyped` and `rawShown` are gone): both boxes open
+  EMPTY unless the recipe was weighed, and a loss is worked out only when BOTH weights hold a number. One box alone says
+  `fc.lossNeedBoth`. A cooked weight above the raw one is KEPT: `readWeighing` returns `keepsOnly: true` and a patch with only
+  `rawGrams` and `cookedGrams` - no `lossPct` at all, because this phone's copy of the loss could overwrite another phone's weighing.
+  `weighingsChangeCost` is true only for a patch that moves the cost, so a kept pair records no margin point. An untouched kept pair
+  opens red again with its numbers in the boxes.
+  `restoreAfterRefusal` rolls back only the fields the patch carried; `otherProductsUsing` does not count finished products.
+- `foodcostSource.saveRecipeLoss` leaves `lossPct` out of the `updateDoc` when the patch has none (never `undefined`: `updateDoc`
+  throws on it); `RecipeLossPatch.lossPct` is optional. No rules change: the three keys were already allowed one by one.
+- `WeighingPair.tsx`: placeholder `0` in both boxes; the cooked box is framed in red and `aria-invalid` while its warning stands (both
+  warnings, "cooked heavier" and "capped", are about the cooked weight); the warning text is `--danger-ink` (above 4.5:1 on the card,
+  pinned in `foodcostCss.spec.ts`); the sentences go through `weighingParams`, so the percentage reads "12,00%".
+- `ProductForm.tsx` Save: a wrong weighing never blocks. It focuses the cooked box (`reveal`), says `fc.checkWeighing`, and the usual
+  question becomes `fc.saveWithWeightWarnings` (one paragraph per line, "Save anyway?"); one tap on Save keeps the numbers as typed.
+  The margin point is taken for `snapshotWorthTaking || weighingsChangeCost || a changed noWeightLoss`. A finished product has no
+  boxes, so no warnings and no patches.
+- Boxes: `LineRow.module.css .qty` is `calc(9ch + 2 * var(--s3) + 3px)` (it was 120px) and `WeighingPair.module.css .input` has
+  `min-width: calc(9ch + 2 * var(--s2) + 3px)` with `--s2` padding; the pair wraps under itself rather than cut a weight. The current
+  app's `-webkit-appearance` rules for spin buttons are not needed: Mise 2's boxes are `type="text"`.
+
+**Item 28: two decimals.**
+- `shared/src/fc-number.ts` is a full, ADAPTED port: `fcNumber`, `fcMoney`, `fcWeight`, `weighingParams`, each handed the venue's
+  `Money` as the last argument (the original reads `js/currency.js`). So it is not paired; `fc-number.spec.ts` runs each export against
+  both files in Italy, Britain and a layout without grouping.
+- Drawn through it, in the venue's layout and not the interface language's: the list row (`productRowModel.ts`: "40,00%", "0,20 €",
+  `percentText` now takes the `Money`), the answer panel (production cost, whole batch, materials/labour split, total, food cost, net
+  price, margin, the labour line "120,00% ... 140,00%"), the suggested price and its basis (VAT and target as percentages), the
+  weighing sentences, the margin history (percentage, cost, price, VAT) and its date line unchanged, the chooser's "price each", and the
+  packaging note under a line ("£0.25 each · £0.50"). A real cost under a cent reads "< 0,01 €", never "0,00 €". Totals stay exact.
+- `price-model` is untouched: the Suppliers and the Stocktake keep their decimals (pinned in `fc-number.spec.ts`).
+- The VAT menu's option words (`fc.vat.standard` with its rate) are menu labels, not figures; they are not changed, as in the current app.
+- Specs: existing ones updated for the new text (`FoodcostSection.*.spec.tsx`, `productRowModel.spec.ts`); new
+  `FoodcostSection.twoDecimals.spec.tsx` (list row, answer, labour line, suggested price, weighing sentence, packaging note in
+  Italy and Britain), the weighing cases in `FoodcostSection.editor.lines.spec.tsx` (empty boxes, one box alone, red box, kept pair
+  Save with the question and no `lossPct`, no margin point) and `foodcostSource.spec.ts`.
+
+**Differences from the current app, on purpose or by necessity**
+- Mise 2 draws the percentage of the VAT/target basis and the history with the venue's layout through the same `fcNumber`; the current
+  app does exactly that, so no difference there. The difference is the Save question: Mise 2's `useConfirm` takes paragraphs, so the
+  dictionary text with its `\n` is split into paragraphs instead of one multi-line string.
+- The packaging note is Mise 2's own (the current app draws a line-cost view instead, item 26). It now uses `fcMoney`; item 26 will
+  replace it.
+- `foodcost-model.js`'s marker in `odd-inputs.spec.ts` named items 26 and 28; the commit of item 28 never touched that file (the
+  changes are the preview model, "Which?" and the money guard), so the marker now says items 24 and 26.
+
+**Still owed (later slices, they must use `fc-number` from the first day):** the per-kg block (item 22), the list preview (24), the
+read sections and the card layout (25), the cost on every line and "Which?" (26), and the kilos in the "create from the recipe book"
+dialog (29, `from-recipes-view`).

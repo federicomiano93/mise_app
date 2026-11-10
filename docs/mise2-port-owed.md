@@ -189,7 +189,13 @@ equivalents (grep in app/ and shared/ finds none). Parity: foodcost-weighing mar
 foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost models, `app/src/foodcost/*`, i18n, `docs/parity/foodcost.md`.
 
 21. **Step 1 weighing units** (#455, `df7e6313`, `bb1e0ede`): g/kg select on recipe lines (stored kilos), raw box empty, loss only with both
-    weights, kept wrong weighings (red), wider boxes, `noWeightLoss` switch (see item 4). Mise 2: NONE except `WeighingPair`. Size M with 22-26.
+    weights, kept wrong weighings (red), wider boxes, `noWeightLoss` switch (see item 4). Size M with 22-26.
+    **DONE 10 Nov 2026** (`feature/mise2-next-foodcost-units`; `docs/parity/foodcost.md`, «Weighing units and two decimals as built»): `shared/src/foodcost-weighing.ts`
+    (full again and paired: both boxes empty, the loss only with both weights, a cooked weight above the raw one KEPT with a patch that has no `lossPct`,
+    `weighingsChangeCost`, `restoreAfterRefusal` over the fields the patch carried, `otherProductsUsing` without finished products), `app/src/foodcost/WeighingPair.tsx` (red box,
+    `aria-invalid`, placeholder 0) and `ProductForm.tsx` (Save points at the wrong box, names it in the question and still saves; a kept pair records no margin point),
+    `foodcostSource.ts` (`saveRecipeLoss` leaves `lossPct` out when absent), the `ch`-sized boxes in `LineRow.module.css` / `WeighingPair.module.css`, five keys in i18n.
+    The g/kg select and the switch were already there (items 27 and 4); the item-21 `PORT OWED` keys are gone from `parity.spec.ts` and `odd-inputs.spec.ts`.
 22. **Step 2 «Cost per 1 kg» block** (#462, `574a0e3c`, `f0735d88`, `9af66dd5`): `costPerKg`, sub-recipes opened, partial notes. NONE. Size S-M.
 23. **Step 3 recipe link both ways** (#478, `35b1f3e0`, `942dab6e`) — Mise 2 has its own entry `?recipe=` / `?using=` design (catalogue.md
     «Back counts the depth»): treat as DONE by design; re-check that the multi-product case opens the top product on tablet/PC. Size S (check).
@@ -202,7 +208,12 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     **DONE 8 Nov 2026** (`feature/mise2-number-ports`), with the g/kg select of item 21 it needs: `shared/src/line-quantity.ts` (full),
     `fc-number.ts` (`fcNumber`, `fcWeight` only) and `from-recipes.ts` (`wholeRecipeKg` only), `app/src/foodcost/productEditorModel.ts`.
 28. **Two decimals everywhere on Food cost** (#490, `151ea191`): `fcNumber/fcMoney/fcWeight`, «< 0,01 €», percentages where drawn; price-model
-    untouched (Fornitori/Stocktake keep 6 decimals). NONE. Size S (do together with 24-27).
+    untouched (Fornitori/Stocktake keep 6 decimals). Size S (do together with 24-27).
+    **DONE 10 Nov 2026** (`feature/mise2-next-foodcost-units`; same parity section) on every Food cost screen Mise 2 HAS: `shared/src/fc-number.ts` is now a full, adapted port
+    (`fcNumber`, `fcMoney`, `fcWeight`, `weighingParams`, each handed the money; not paired because of that argument, its spec runs both files), used by `productRowModel.ts` (the list row),
+    `ProductAnswer.tsx` (production cost, answer, labour line, suggested price and its basis), `WeighingPair.tsx` (the oven-loss sentences), `MarginHistory.tsx`, `PickDialog.tsx`
+    (price each) and `lineNotes.ts` (the packaging note). ⚠️ STILL OWED with the items that build the screens: the per-kg block (22), the list preview (24), the read sections and
+    the card layout (25), the cost on every line and «Which?» (26) must draw their figures through `fc-number` from the first day; `from-recipes-view`'s kilos (item 29) too.
 29. **Create products from the recipe book** (#415, `b5cf999e`, `5f2fcb67`, `f8d54f35`, `f8e64a6a`): box and choice screen, only after the
     server says the product does not exist. NONE (`recipesWithoutProducts`, `productFromRecipe` absent). Size M.
 30. **Catalogue: crossed-out euro on rows Food cost cannot price** (`ff1a2d38`, `js/catalogue/unpriced-rows.js`). NONE. Size S.
@@ -256,8 +267,9 @@ to its markers, with his decision in the line.
 
 What each one means for the people using Mise 2 until it is ported:
 - 16. Suppliers: the empty-flash, scroll and focus fixes and the «hand-made» mark are not verified in Mise 2.
-- 21-22, 24-26, 28. Food cost steps 1 (all but the g/kg select of item 27), 2, 4, A, B and the two decimals: Mise 2's Food
-  cost keeps its own older screens.
+- 22, 24-26. Food cost steps 2, 4, A and B (the «Cost per 1 kg» block, the list preview, the read-first card layout, the cost on every
+  line and «Which?»), and the two decimals on those screens when they are built: Mise 2's Food cost keeps its own older screens.
+  (Items 21 and 28 are done: weighing units and two decimals on the screens Mise 2 has.)
 - 23. Food cost recipe link with several products (a check).
 - 29-32. Recipe book: create products from it, the crossed-out euro, the renamed-row warning, the row menu.
 - 36-37, 39-40. Calculator: reorder a recipe's ingredients, «Add a recipe» from the book, the dough history's dates and
