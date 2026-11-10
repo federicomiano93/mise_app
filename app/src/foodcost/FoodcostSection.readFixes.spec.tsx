@@ -96,6 +96,76 @@ describe('a first save the database refuses', () => {
     });
   }
 
+  it('a new product saved fine and deleted elsewhere afterwards is announced (a settled save hides nothing)', async () => {
+    const fake = editorSource([]);
+    const { router, user } = renderFoodcost('/food-cost/new', { source: fake });
+    await user.type(await screen.findByRole('combobox', { name: 'Name' }, LOAD), 'Cornetto');
+    await user.click(saveBar());
+    await confirmSave(user);
+    await screen.findByRole('button', { name: 'Edit product' }, LOAD);
+    await act(async () => { fake.products.delete('fake-1'); fake.push(); });
+    expect(await screen.findByText('Product deleted.', undefined, LOAD)).toBeInTheDocument();
+    await waitFor(() => { expect(where(router)).toBe('/food-cost'); });
+  });
+
+  it('a stale snapshot lacking a first save still in the air does not bounce the person: the product comes back', async () => {
+    const fake = editorSource([]);
+    let finish: () => void = () => undefined;
+    const gate = new Promise<void>(resolve => { finish = resolve; });
+    vi.mocked(fake.saveProduct).mockImplementationOnce(async (id, data) => {
+      await gate;
+      fake.products.set(id, { ...data, id });
+      fake.push();
+    });
+    const { router, user } = renderFoodcost('/food-cost/new', { source: fake });
+    await user.type(await screen.findByRole('combobox', { name: 'Name' }, LOAD), 'Cornetto');
+    await user.click(saveBar());
+    await confirmSave(user);
+    await screen.findByRole('button', { name: 'Edit product' }, LOAD);
+    // A snapshot queued before the write: it lacks the product.
+    await act(async () => { fake.push(); });
+    expect(where(router)).toBe('/food-cost/product/fake-1');
+    expect(screen.queryByText('Product deleted.')).not.toBeInTheDocument();
+    await act(async () => { finish(); await gate; });
+    expect(await screen.findByRole('button', { name: 'Edit product' }, LOAD)).toBeInTheDocument();
+    expect(where(router)).toBe('/food-cost/product/fake-1');
+  });
+
+  it("a new product's first save refused while its FORM is open says «not saved», not «Product deleted.»", async () => {
+    const fake = editorSource([]);
+    let refuse: () => void = () => undefined;
+    const gate = new Promise<void>(resolve => { refuse = resolve; });
+    vi.mocked(fake.saveProduct).mockImplementationOnce(async () => {
+      await gate;
+      fake.push();
+      throw Object.assign(new Error('permission-denied'), { code: 'permission-denied' });
+    });
+    const { router, user } = renderFoodcost('/food-cost/new', { source: fake });
+    await user.type(await screen.findByRole('combobox', { name: 'Name' }, LOAD), 'Cornetto');
+    await user.click(saveBar());
+    await confirmSave(user);
+    await user.click(await screen.findByRole('button', { name: 'Edit product' }, LOAD));
+    await screen.findByRole('combobox', { name: 'Name' }, LOAD);
+    await act(async () => { refuse(); await gate; });
+    expect(await screen.findByText('Couldn’t save “Cornetto” — check your connection.', undefined, LOAD)).toBeInTheDocument();
+    await waitFor(() => { expect(where(router)).toBe('/food-cost'); });
+    expect(screen.queryByText('Product deleted.')).not.toBeInTheDocument();
+  });
+
+  it('a product saved with nothing costed is read only once: New then its row again on the split opens it to its form', async () => {
+    split();
+    const { user } = renderFoodcost('/food-cost', { source: editorSource([bareProduct('Bare'), product('Green')]) });
+    await user.click(await screen.findByRole('button', { name: /^Bare/ }, LOAD));
+    await user.type(await screen.findByRole('combobox', { name: 'Name' }, LOAD), '!');
+    await user.click(saveBar());
+    await confirmSave(user);
+    await screen.findByRole('button', { name: 'Edit product' }, LOAD);
+    await user.click(screen.getByRole('button', { name: /New product/ }));
+    await screen.findByRole('heading', { level: 2, name: 'New product' }, LOAD);
+    await user.click(screen.getByRole('button', { name: /^Bare!/ }));
+    expect(await screen.findByRole('combobox', { name: 'Name' }, LOAD)).toHaveValue('Bare!');
+  });
+
   it('a product really deleted elsewhere is still announced', async () => {
     const fake = editorSource([product('Green')]);
     const { router } = renderFoodcost('/food-cost/product/Green', { source: fake });

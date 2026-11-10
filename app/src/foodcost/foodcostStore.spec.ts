@@ -330,6 +330,63 @@ describe('the Food cost store', () => {
     expect(store.getSnapshot().products).toEqual([]);
   });
 
+  describe("firstSave: a new product's first save, in the air or refused", () => {
+    const loaf = (fields: object = {}) => ({ product: product({ id: 'p1', name: 'Loaf', ...fields } as Product & { name: string }), snapshot: null, lossPatches: {} });
+
+    test('is sending while the write is in the air and cleared when it succeeds', async () => {
+      const { fake, store } = setup();
+      store.start();
+      expect(store.firstSave('p1')).toBeNull();
+      store.saveProduct(loaf());
+      expect(store.firstSave('p1')).toBe('sending');
+      fake.writes[0]!.pending.resolve();
+      await settle();
+      expect(store.firstSave('p1')).toBeNull();
+    });
+
+    test('stays refused after a refused first save, with the product taken back', async () => {
+      const { fake, store } = setup();
+      store.start();
+      store.saveProduct(loaf());
+      fake.writes[0]!.pending.reject(new Error('refused'));
+      await settle();
+      expect(store.firstSave('p1')).toBe('refused');
+    });
+
+    test('a second save in the air keeps it sending when the first one lands; the second one clears it', async () => {
+      const { fake, store } = setup();
+      store.start();
+      store.saveProduct(loaf());
+      store.saveProduct(loaf({ sellingPrice: 3 }));
+      fake.writes[0]!.pending.resolve();
+      await settle();
+      expect(store.firstSave('p1')).toBe('sending');
+      fake.writes[1]!.pending.resolve();
+      await settle();
+      expect(store.firstSave('p1')).toBeNull();
+    });
+
+    test('a delete after the save clears it', async () => {
+      const { fake, store } = setup();
+      store.start();
+      store.saveProduct(loaf());
+      fake.writes[0]!.pending.reject(new Error('refused'));
+      await settle();
+      store.deleteProduct('p1');
+      expect(store.firstSave('p1')).toBeNull();
+    });
+
+    test('⚠️ the refused save of an EXISTING product does not flag it (it rolls back; a later remote delete is a real one)', async () => {
+      const { fake, store } = setup({ storage: fakeStorage({ [PRODUCTS_KEY]: [{ id: 'p1', name: 'Loaf', sellingPrice: 2 }] }) });
+      store.start();
+      store.saveProduct(loaf({ sellingPrice: 3 }));
+      expect(store.firstSave('p1')).toBeNull();
+      fake.writes[0]!.pending.reject(new Error('refused'));
+      await settle();
+      expect(store.firstSave('p1')).toBeNull();
+    });
+  });
+
   test('⚠️ offline, a «missing» settings document from the phone’s own database is not an answer', () => {
     const { fake, store } = setup();
     store.start();

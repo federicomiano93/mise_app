@@ -86,14 +86,16 @@ export function ProductRead({ id, product, gone, origin, titleRef, onEdit }: Pro
     return () => { mounted.current = false; };
   }, []);
 
+  // ⚠️ A PRODUCT THAT LEFT BECAUSE ITS OWN FIRST SAVE WAS REFUSED was not deleted: the store has already said (or is about to say)
+  // «… wasn't saved», and «Product deleted.» would overwrite it; the person still lands on the list, like the current app. While that
+  // save is still in the air the product may only be missing from a stale snapshot: wait, the next one puts it back.
+  const firstSave = store.firstSave(id);
   useEffect(() => {
-    if (!gone || leaving.current) return;
+    if (!gone || leaving.current || firstSave === 'sending') return;
     leaving.current = true;
-    // ⚠️ A PRODUCT THAT LEFT BECAUSE ITS OWN SAVE WAS REFUSED was not deleted: the store has already said (or is about to say)
-    // «… wasn't saved», and «Product deleted.» would overwrite it. The person still lands on the list, like the current app.
-    if (!store.saveIsUnsettled(id)) say(t('fc.productDeleted'));
+    if (firstSave === null) say(t('fc.productDeleted'));
     leave();
-  }, [gone, say, t, leave, store, id]);
+  }, [gone, say, t, leave, firstSave]);
 
   async function remove() {
     if (asking.current || leaving.current) return;

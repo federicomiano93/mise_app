@@ -59,7 +59,12 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
   // A product just saved from the form of a NEW one is on screen at once: it was written here, nothing older can be on this phone.
   const [justSaved, setJustSaved] = useState<string | null>(null);
   // Another product picked (the split keeps this component): the one just saved is no longer forced to read when it comes back.
-  if (justSaved !== null && id !== null && justSaved !== id) setJustSaved(null);
+  // (Also New → Back: the id changes to anything but the product just saved.)
+  const [lastId, setLastId] = useState<string | null>(id);
+  if (id !== lastId) {
+    setLastId(id);
+    if (justSaved !== null && justSaved !== id) setJustSaved(null);
+  }
   const canOpen = product !== null && (answered || justSaved === id);
   const draftWaiting = draftFor !== null && !answered;
   // ⚠️ DECIDED ONCE: a recipe that arrives after the form opened plain must not swap the form for a
@@ -122,14 +127,17 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
     if (id === null) void navigate(productPath(savedId, formOrigin), { replace: true, state });
     else setChosen({ id, edit: false, fromRead: false });
   };
-  const gone = !hasForm && product === null && productsFromServer;
+  // ⚠️ A FIRST SAVE STILL IN THE AIR keeps a product that is missing from the list «loading», never «gone»: a stale snapshot (a cold
+  // start queued one before the write) lacks it for a moment and the next one puts it back.
+  const store = useFoodcostStore();
+  const firstSave = id === null ? null : store.firstSave(id);
+  const gone = !hasForm && product === null && productsFromServer && firstSave !== 'sending';
 
   // ⚠️ A FIRST SAVE REFUSED BEFORE ITS PRODUCT WAS EVER DRAWN (the store took it back, or the stream did, in the render between the
   // save and the new address): there is no read view to say so and nothing to wait for. The store has said «… wasn't saved»; the
   // person goes to the list, like the current app.
-  const store = useFoodcostStore();
   const { leave } = useProductExit(id, formOrigin);
-  const refusedBeforeShown = justSaved !== null && justSaved === id && !hasForm && product === null && store.saveIsUnsettled(id);
+  const refusedBeforeShown = justSaved !== null && justSaved === id && !hasForm && product === null && firstSave === 'refused';
   const left = useRef(false);
   useEffect(() => {
     if (!refusedBeforeShown || left.current) return;

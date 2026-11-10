@@ -74,6 +74,8 @@ export interface FoodcostSnapshot {
 
 // What saving a product needs from the editor: the product as typed (normalised fields), its margin
 // point or null, and the weighings to write onto recipes.
+export type FirstSaveState = 'sending' | 'refused';
+
 export interface ProductSave {
   readonly product: Product;
   readonly snapshot: Readonly<Record<string, unknown>> | null;
@@ -106,9 +108,10 @@ export interface FoodcostStore {
   // Saves a product LOCAL-FIRST and returns its id at once.
   saveProduct(save: ProductSave): string;
   deleteProduct(id: string): void;
-  // Whether the latest save of this product is still in the air or was refused. A product that disappears while this is true
-  // is a save that did not hold, never a deletion: the refusal has its own message.
-  saveIsUnsettled(id: string): boolean;
+  // The state of this product's first save: 'sending' (in the air — a snapshot lacking the product may only be a stale one, so a screen
+  // WAITS), 'refused' (the product is going or gone, the refusal has its own message — a screen leaves without saying it was deleted)
+  // or null (settled: a product that disappears was deleted).
+  firstSave(id: string): FirstSaveState | null;
   // The hourly labour cost (null clears it), local-first.
   saveLabourRate(rate: number | null): void;
   // A product's margin history, read once.
@@ -195,9 +198,10 @@ export function createFoodcostStore(
   // Which save of each product is the latest: a refusal rolls back only its own save.
   const saveSeq = new Map<string, number>();
   let seq = 0;
-  // Products whose latest save is still in the air or was refused: a product that leaves the list in that state left because its
-  // OWN save failed (rolled back, or taken away by the stream), not because somebody deleted it (saveIsUnsettled).
-  const unsettled = new Set<string>();
+  // A product's FIRST save (the only one whose refusal makes the product vanish): in the air, or refused. A product that leaves the
+  // list in that state left because its OWN save failed, not because somebody deleted it (firstSave). Cleared by the save's success
+  // and by a delete; a refused save of a product that already holds a state keeps it as refused.
+  const firstSaves = new Map<string, FirstSaveState>();
 
   const listeners = new Set<() => void>();
   const messageListeners = new Set<(message: FoodcostMessage) => void>();
@@ -391,12 +395,13 @@ export function createFoodcostStore(
       const prev = products.find(p => p.id === id) ?? null;
       const mine = ++seq;
       saveSeq.set(id, mine);
-      unsettled.add(id);
+      if (prev === null) firstSaves.set(id, 'sending');
       upsertLocal(normalizeProduct({ id, ...data }) as Product);
       const write = source.saveProduct(id, data, point);
-      void write.then(() => { if (saveSeq.get(id) === mine) unsettled.delete(id); }, () => undefined);
+      void write.then(() => { if (saveSeq.get(id) === mine) firstSaves.delete(id); }, () => undefined);
       track(write, err => {
         deps.warn('Product did not sync to Firestore:', err);
+        if (prev === null || firstSaves.has(id)) firstSaves.set(id, 'refused');
         if (saveSeq.get(id) === mine && !listenerWillRevert()) {
           if (prev) upsertLocal(prev); else removeLocal(id);
         }
@@ -405,12 +410,13 @@ export function createFoodcostStore(
       return id;
     },
 
-    saveIsUnsettled: id => unsettled.has(id),
+    firstSave: id => firstSaves.get(id) ?? null,
 
     deleteProduct(id) {
       const prev = products.find(p => p.id === id) ?? null;
       const mine = ++seq;
       saveSeq.set(id, mine);
+      firstSaves.delete(id);
       removeLocal(id);
       track(source.removeProduct(id), err => {
         deps.warn('Product delete did not sync to Firestore:', err);

@@ -226,12 +226,15 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
 
   // A product deleted on another phone while this screen is open and nobody has typed on it: say so
   // and go back to the list. With typing on it, it is kept (Save would put it back).
+  // ⚠️ NOT WHEN IT IS A NEW PRODUCT'S OWN FIRST SAVE that went wrong: still in the air it waits (a stale snapshot may only lack it for
+  // a moment), refused it leaves without a word — the store has said «… wasn't saved», and «Product deleted.» would overwrite it.
+  const firstSave = id === null ? null : store.firstSave(id);
   useEffect(() => {
-    if (id === null || product !== null || touched.current || leaving.current) return;
+    if (id === null || product !== null || touched.current || leaving.current || firstSave === 'sending') return;
     leaving.current = true;
-    say(t('fc.productDeleted'));
+    if (firstSave === null) say(t('fc.productDeleted'));
     leave();
-  }, [id, product, say, t, leave]);
+  }, [id, product, firstSave, say, t, leave]);
 
   // ⚠️ THE DRAFT GIVES WAY (the current app's reconsiderDraft). A product made with the recipe that was not
   // known when this draft opened (a slow first load, another phone) must win: saving the draft would be a
