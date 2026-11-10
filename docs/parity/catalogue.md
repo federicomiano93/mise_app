@@ -1860,3 +1860,29 @@ row count as built»; the current app's `e7f3dac0`). `calculatorRefusal` asks th
 l, dl, cl, ml (1 ml = 1 g) and mg rows, so the recipe book's «Import into Calculator» ACCEPTS a recipe written in them — as the
 current app's own import does. The refusal above (around line 1619) now applies to pieces, spoons, a pinch and «to taste» only; a
 row in any weighable unit with nothing in it (0 ml, 0 l, 0 g…) is «has no amount», never «not by weight».
+
+## Two marks on the recipe row as built (10 Nov 2026, items 30 and 31 of `docs/mise2-port-owed.md`)
+
+Ports of the current app's `ff1a2d38` (crossed-out euro) and `a84fa1ab` + `94e0514e` (renamed-row warning, PR #486). Both live on the
+row's LINK LINE in the recipe editor (`IngredientRow.tsx`).
+
+- **Crossed-out euro.** `shared/src/unpriced-rows.ts` is a full port of `js/catalogue/unpriced-rows.js` (booleans only; paired in
+  `parity.spec.ts`, cases run against both files in `unpriced-rows.spec.ts`). The prices come from the new
+  `RecipesSource.readIngredientPrices`: a ONE-SHOT `getDocs` of `ingredient-prices` (no listener; the section's own data layer still
+  strips every price), asked when the editor opens and only when `mayOpenFoodCost(venue, canManage, role)`; the map lives in the editor's
+  state, never in the store. A refusal or failure is `null` (code logged only) and the editor draws no marks. The icon (`NoPriceMark.tsx`)
+  is the current app's drawing, named `cat.noPriceMark` («no price» / «senza prezzo»), `aria-hidden` svg inside a `role="img"` span,
+  colour `--warn-ink` (the amber fill `--warn` is far below 3:1).
+- **Renamed-row warning.** `staleLinkName`, `namesResemble`, `labelResemblesLink`, `linkedItemNames`, `normalizeNameForCompare` ported
+  into `shared/src/catalogue-model.ts` (whole-word match, invoice name counts, a correction of the opened name never warns); the
+  `PORT OWED` marker is gone. The opened name is a `Map` by row key in the editor (the current app's `WeakMap` by row object); every pick,
+  the same link too, moves it. The link line turns `--warn-tint` / `--warn-ink` and says `cat.nameChangedStillLinked`.
+
+Deliberate differences from the current app:
+- **A space before the mark** in the button, so its name reads «→ Sale fino no price», not «…finono price».
+- **The announcement uses its own hidden polite live region** (rendered empty, outside the rows), as the current app, and NOT the
+  section's `useStatusMessage` toast: that one is a visible 2.6 s message over the form and the amber line is already the visible half.
+  Announced once when a row turns stale, emptied when one clears.
+- **No baseline problem after the photo screen:** the current app's «known edge» (rows come back as new objects) does not exist here,
+  rows keep their number.
+- **Fake source:** `fakeRecipesSource` answers `null` to the price read when no price is seeded, so older specs never see every linked row crossed out.
