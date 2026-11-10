@@ -181,6 +181,7 @@ import * as kioskLines from './kiosk-lines';
 import * as orderSummary from './order-summary';
 import * as draftJournal from './draft-journal';
 import * as lineQuantity from './line-quantity';
+import * as perKgModel from './per-kg-model';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
@@ -260,6 +261,7 @@ import * as legacyKioskLines from '../../js/orders/kiosk-lines.js';
 import * as legacyOrderSummary from '../../js/orders/order-summary.js';
 import * as legacyDraftJournal from '../../js/orders/draft-journal.js';
 import * as legacyLineQuantity from '../../js/foodcost/line-quantity.js';
+import * as legacyPerKgModel from '../../js/foodcost/per-kg-model.js';
 
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
@@ -341,6 +343,7 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['order-summary', orderSummary, legacyOrderSummary],
   ['draft-journal', draftJournal, legacyDraftJournal],
   ['line-quantity', lineQuantity, legacyLineQuantity],
+  ['per-kg-model', perKgModel, legacyPerKgModel],
 ];
 
 const exportsOf = (module: object): Record<string, unknown> => module as Record<string, unknown>;
@@ -414,7 +417,7 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all seventy-nine models are compared', () => {
+test('all eighty models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
     ['join-code', 'push-model', 'home-cards', 'away-model', 'away-reminder', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
@@ -426,5 +429,5 @@ test('all seventy-nine models are compared', () => {
       'invoice-zip/classify', 'invoice-zip/pricing', 'invoice-zip/fatturapa', 'invoice-zip/products', 'invoice-zip/selection',
       'work-week', 'price-changes-model', 'invoice-import-model', 'invoice-import-plan', 'ingredient-merge', 'send-routes', 'supplier-order', 'orders-config', 'line-supplier', 'order-text', 'ingredient-search', 'order-day', 'sent-check', 'suggestions',
       'history-window', 'deliveries', 'reminders', 'untold-changes', 'alert-dismissal', 'holidays-it', 'kiosk-lines', 'order-summary', 'draft-journal',
-      'line-quantity']);
+      'line-quantity', 'per-kg-model']);
 });

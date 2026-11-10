@@ -47,6 +47,7 @@ import * as recipeLink from './recipe-link';
 import * as records from './records';
 import * as recipeCostModel from './recipe-cost-model';
 import * as foodcostWeighing from './foodcost-weighing';
+import * as perKgModel from './per-kg-model';
 import * as foodcostModel from './foodcost-model';
 import * as calculatorConfig from './calculator-config';
 import * as calculatorDoughMath from './calculator-dough-math';
@@ -125,6 +126,7 @@ import * as legacyRecordsJs from '../../js/records.js';
 import { nameTaken as legacyNameTaken } from '../../js/catalogue/ingredient-suggest.js';
 import * as legacyRecipeCostModelJs from '../../js/catalogue/recipe-cost-model.js';
 import * as legacyFoodcostWeighingJs from '../../js/foodcost/foodcost-weighing.js';
+import * as legacyPerKgModelJs from '../../js/foodcost/per-kg-model.js';
 import * as legacyFoodcostModelJs from '../../js/foodcost/foodcost-model.js';
 import * as legacySupplierLabelJs from '../../js/supplier-label.js';
 import * as legacyVatNumberJs from '../../js/vat-number.js';
@@ -199,6 +201,7 @@ const legacyVatGuide = legacyVatGuideJs as unknown as typeof vatGuide;
 const legacyCatalogueModel = legacyCatalogueModelJs as unknown as typeof catalogueModel;
 const legacyRecipeCostModel = legacyRecipeCostModelJs as unknown as typeof recipeCostModel;
 const legacyFoodcostWeighing = legacyFoodcostWeighingJs as unknown as typeof foodcostWeighing;
+const legacyPerKgModel = legacyPerKgModelJs as unknown as typeof perKgModel;
 const legacyFoodcostModel = legacyFoodcostModelJs as unknown as typeof foodcostModel;
 const legacyCalculatorConfig = legacyCalculatorConfigJs as unknown as typeof calculatorConfig;
 const legacyCalculatorDoughMath = legacyCalculatorDoughMathJs as unknown as typeof calculatorDoughMath;
@@ -266,6 +269,8 @@ function show(value: unknown): string {
 const PORT_OWED = new Set<string>([
   // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, items 24, 26): main changed js/foodcost/foodcost-model.js (the preview model, Which? names deleted lines, line money guard), the port has not — remove its keys when ported
   'batchTotals', 'productionCost', 'costProduct', 'sortByMargin',
+  // costPerKg (item 22) calls productionCost, so it inherits the same gap: the original lets a null table through, the port's batchTotals throws — remove with the line above when items 24, 26 are ported.
+  'costPerKg',
 ]);
 
 // Calls both functions with every argument list and reports every disagreement at once.
@@ -2731,6 +2736,7 @@ describe('foodcost-model: odd inputs', () => {
   agree('packagingPerUnit', m.packagingPerUnit as AnyFn, l.packagingPerUnit as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
   agree('productionCost', m.productionCost as AnyFn, l.productionCost as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
   agree('costProduct', m.costProduct as AnyFn, l.costProduct as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
+  agree('costPerKg', perKgModel.costPerKg as AnyFn, legacyPerKgModel.costPerKg as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
   agree('labourBatchCost', m.labourBatchCost as AnyFn, l.labourBatchCost as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
 
   // unitsPerBatch is handed the product as the screen holds it: raw documents and normalised ones, with every kind of batch.
