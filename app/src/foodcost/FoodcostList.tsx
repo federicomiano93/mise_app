@@ -39,7 +39,7 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
   const { canManage } = useSession();
   const money = useMoney();
   const handBack = useHandBack();
-  const { products, productsLoaded, recipes, recipesLoaded, ingredientsLoaded, tables } = useFoodcost();
+  const { products, productsLoaded, productsFromServer, recipes, recipesLoaded, recipesFromServer, ingredientsLoaded, tables } = useFoodcost();
   const { state } = useLocation();
   const navigationType = useNavigationType();
   const title = useRef<HTMLHeadingElement>(null);
@@ -65,12 +65,14 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
   const recipeName = using === null ? '' : String(recipes[using]?.name ?? '').trim();
 
   // ⚠️ THE BOX IS NEVER DECIDED ON A LIST THAT HAS NOT ARRIVED (current app b5cf999e): a product's id comes from its recipe and a
-  // save writes the WHOLE document, so a list still empty would offer every recipe. Both lists must have answered; only the people
+  // save writes the WHOLE document, so a list still empty would offer every recipe. BOTH LISTS MUST HAVE COME FROM THE SERVER:
+  // `productsLoaded` is already true at start-up from the phone's own copy, which is older than the current app's «live» test
+  // (hasLiveProducts / hasLiveRecipes) allows. This also hides the box offline, where Create is certain to fail. Only the people
   // who run the place see it (they are the ones who may create a product from the book), and not while the list is narrowed to a
   // recipe. The create itself asks the server again (foodcostStore.createProductsFromRecipes), whatever this count says.
   const missing = useMemo(
-    () => (canManage && productsLoaded && recipesLoaded && using === null ? recipesWithoutProducts(recipes, products).create.length : 0),
-    [canManage, productsLoaded, recipesLoaded, using, recipes, products],
+    () => (canManage && productsFromServer && recipesFromServer && using === null ? recipesWithoutProducts(recipes, products).create.length : 0),
+    [canManage, productsFromServer, recipesFromServer, using, recipes, products],
   );
   // The choice screen is a dialog, mounted only while it is open, so its lists are a snapshot taken at the tap.
   const [choosing, setChoosing] = useState(false);

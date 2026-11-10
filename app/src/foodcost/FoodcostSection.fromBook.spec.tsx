@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
 import dialogCss from './FromBookDialog.module.css?raw';
+import { PRODUCTS_KEY, RECIPES_KEY } from './foodcostStore';
 import { EMPLOYEE, LOAD, MANAGER, product, renderFoodcost, sourceWith } from '../testing/renderFoodcost';
 
 // Products made from the recipe book (item 29; current app b5cf999e, f8d54f35, f8e64a6a): the box on the list, the choice and the
@@ -100,6 +101,20 @@ describe('the box on the list', () => {
     fake.release();
     expect(await screen.findByRole('region', { name: /without a product/ }, LOAD)).toBeInTheDocument();
   });
+
+  it('⚠️ waits for the SERVER: the phone’s own copy of the lists is not enough to offer the recipes', async () => {
+    // A copy from an earlier visit: it makes the list «loaded» at start-up, before any listener has answered.
+    window.localStorage.setItem(PRODUCTS_KEY, JSON.stringify([product('Green')]));
+    window.localStorage.setItem(RECIPES_KEY, JSON.stringify([BRIOCHE]));
+    const fake = sourceWith([product('Green')], { recipes: [BRIOCHE] as never });
+    fake.hold();
+    renderFoodcost('/food-cost', { source: fake });
+    await screen.findAllByRole('listitem', undefined, LOAD);
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(box()).not.toBeInTheDocument();
+    fake.release();
+    expect(await screen.findByRole('region', { name: /without a product/ }, LOAD)).toBeInTheDocument();
+  });
 });
 
 describe('the choice', () => {
@@ -123,6 +138,14 @@ describe('the choice', () => {
     expect(tick(/^Focaccia/)).not.toBeChecked();
     expect(tick(/^Focaccia/)).toHaveAccessibleName('Focaccia There is already a product with this name');
     expect(createButton()).toHaveTextContent('Create 2 products');
+  });
+
+  it('keeps the heading levels in order: the dialog’s title above the groups, each group one level below', async () => {
+    await opened([BRIOCHE, CREAM], [product('Cornetto', { components: [{ recipeId: 'r4', qtyKg: 1 }] })]);
+    const dialog = choice();
+    expect(within(dialog).getByRole('heading', { name: 'Products from the recipe book', level: 2 })).toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: 'To create · 1', level: 3 })).toBeInTheDocument();
+    expect(within(dialog).getByRole('heading', { name: 'Maybe already in Food cost · 1', level: 3 })).toBeInTheDocument();
   });
 
   it('puts the recipes in alphabetical order', async () => {
@@ -290,6 +313,9 @@ describe('creating', () => {
     expect(tick(/^Pizza/)).not.toBeChecked();
     expect(createButton()).toHaveTextContent('Create 1 product');
     expect(createButton()).toBeEnabled();
+    // The button was disabled while the server answered: the focus is put back on it, not left to the browser.
+    await waitFor(() => { expect(createButton()).toHaveFocus(); });
+    expect(document.activeElement).not.toBe(document.body);
     expect(screen.queryByText(/products? created/)).not.toBeInTheDocument();
 
     // Online again: the same screen, the same ticks, another try.

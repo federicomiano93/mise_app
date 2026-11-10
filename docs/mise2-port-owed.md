@@ -257,7 +257,7 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     link stays the document id (`products/recipe-<recipeId>`), a hand-made product is only a «maybe». `foodcostSource.createProductIfAbsent` is a TRANSACTION that reads the server first
     (offline it fails, it does not queue) and `foodcostStore.createProductsFromRecipes` writes each product with the same `toProductDocument` as a save and counts made / skipped /
     failed. On the list `FromBookBox.tsx` (whoever runs the place, once products and recipes have answered, not while narrowed to a recipe) opens `FromBookDialog.tsx`: ticks (24px box,
-    48px row), «Tick all / Untick all», a confirm, then «N products created» or «N products were not created: this needs an internet connection…» with the choice left open. Twenty-one
+    48px row), «Tick all / Untick all», a confirm, then «N products created» or «N products were not created: this needs an internet connection…» with the choice left open. Twenty-two
     `fc.fromBook.*` keys worded as the current app's; the kilos draw through `fc-number`. The deferred line below now names item 32 only.
 30. **Catalogue: crossed-out euro on rows Food cost cannot price** (`ff1a2d38`, `js/catalogue/unpriced-rows.js`). **DONE 10 Nov 2026** (`feature/mise2-next-recipes-rows`;
     `docs/parity/catalogue.md`, «Two marks on the recipe row as built»): `shared/src/unpriced-rows.ts` (full, paired in `parity.spec.ts`), `recipesSource.readIngredientPrices`

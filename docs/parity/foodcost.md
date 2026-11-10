@@ -545,7 +545,7 @@ Item 29 of `docs/mise2-port-owed.md` (current-app PR #415: `5f2fcb67` the model,
   Confirm (`useConfirm`, «Create N products?», Cancel the safe default), then «N products created» in the status region, or «They were already in Food cost», or an alert («N products were not created: this needs an
   internet connection…») with the choice left open and its ticks as they were. While the server answers, the ticks, Back and Escape are off.
 - `FoodcostList.tsx` owns the dialog's state (the box goes when the last product lands, the dialog must not go with it) and the focus: closed unused → the box's button, after creating → «New product».
-- i18n: twenty-one `fc.fromBook.*` keys in `en.ts` / `it.ts`, worded exactly as `js/i18n.js` (`boxTitle`, `boxSub`, `boxAction`, `title`, `intro`, `toCreate`, `maybe`, `untickAll`, `tickAll`, `wholeRecipe`, `noWeight`, `usedIn`,
+- i18n: twenty-two `fc.fromBook.*` keys in `en.ts` / `it.ts`, worded exactly as `js/i18n.js` (`boxTitle`, `boxSub`, `boxAction`, `title`, `intro`, `toCreate`, `maybe`, `untickAll`, `tickAll`, `wholeRecipe`, `noWeight`, `usedIn`,
   `sameName`, `create`, `none`, `confirmTitle`, `confirmMsg`, `confirmOk`, `done`, `creating`, `already`, `failed`).
 
 **The rule that accepts the write** (`firestore.rules`, `match /products/{id}`, `allow create, update`): `cardAccess(lid, 'foodcost', 'foodcost') != 'none'`, `stampedFor(lid)` (the source stamps `bakery`),
@@ -556,8 +556,9 @@ guard's `resource == null` branch applies. `foodcostStore.spec.ts` reads the whi
 **Differences from the current app**
 - The choice is a dialog (the app's `ui/Dialog`, like the VAT guide and the chooser), not a full-screen overlay with its own header; the current app's was not an address either, so neither is this. The lists scroll
   inside it and Back / Create stay in its footer, where the overlay had a sticky bar.
-- The box asks `productsLoaded && recipesLoaded` (a believable local copy or the server's answer, as the current app's `hasLiveProducts` / `hasLiveRecipes`), whoever runs the place (`session.canManage`, as
-  `canManageHere()`), and a list that is not narrowed to a recipe. A box decided on an old copy can only over-offer: the transaction then answers «already there» and nothing is written.
+- The box asks `productsFromServer && recipesFromServer` (the server's own answer on both lists, never the phone's local copy, which `productsLoaded` already counts at start-up; this is the current app's
+  `hasLiveProducts` / `hasLiveRecipes`, and it also hides the box offline, where Create is certain to fail), whoever runs the place (`session.canManage`, as `canManageHere()`), and a list that is not narrowed to a
+  recipe. Even so the create asks the server again: the transaction answers «already there» and writes nothing for a product that exists.
 - ADDED: the store holds the busy marker while the transactions run (a self-started reload in the middle would cut them off); a recipe handed over twice is created once; anything that goes wrong that is not a counted
   refusal reads as «none created» and keeps the screen open, never as a silent close.
 - The «done» message is the section's status region (a live region), not a toast.

@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { fcNumber } from '@mise/shared/fc-number';
 import { recipeProductId, recipesWithoutProducts } from '@mise/shared/from-recipes';
 import type { MaybeProduct, MissingProduct } from '@mise/shared/from-recipes';
@@ -45,6 +45,8 @@ export function FromBookDialog({ onClose }: Props) {
   const { create, maybe } = lists;
   const [ticked, setTicked] = useState<ReadonlySet<string>>(() => new Set(create.map(keyOf)));
   const [busy, setBusy] = useState(false);
+  const createRef = useRef<HTMLButtonElement>(null);
+  const refocus = useRef(false);
   const createId = useId();
   const maybeId = useId();
 
@@ -118,10 +120,22 @@ export function FromBookDialog({ onClose }: Props) {
     else if (result.failed === 0 && result.skipped > 0) say(t('fc.fromBook.already'));
     // Offline, or refused: say so, and how many — the rest were created.
     if (result.failed > 0) await alert({ message: t('fc.fromBook.failed', { n: result.failed }), okLabel: t('common.ok') });
+    // The dialog stays open after a failure, and its focused button was disabled while the server answered: the browser may have
+    // dropped the focus on <body>. It is put back on Create explicitly, once busy has ended and the button is enabled again.
+    const stays = result.failed > 0 && result.made === 0;
+    if (stays) refocus.current = true;
     setBusy(false);
-    if (result.failed > 0 && result.made === 0) return;
+    if (stays) return;
     onClose(result.made > 0);
   };
+
+  useEffect(() => {
+    if (busy || !refocus.current) return;
+    refocus.current = false;
+    // After the alert's own focus restore, which runs on the next frame: the last word is ours.
+    const frame = requestAnimationFrame(() => { createRef.current?.focus(); });
+    return () => { cancelAnimationFrame(frame); };
+  }, [busy]);
 
   return (
     <>
@@ -135,7 +149,7 @@ export function FromBookDialog({ onClose }: Props) {
         actions={
           <>
             <Button isDisabled={busy} onPress={() => { onClose(false); }}>{t('ui.back')}</Button>
-            <Button variant="primary" isDisabled={busy || chosen.length === 0} onPress={() => { void createChosen(); }}>
+            <Button ref={createRef} variant="primary" isDisabled={busy || chosen.length === 0} onPress={() => { void createChosen(); }}>
               {busy ? t('fc.fromBook.creating') : chosen.length === 0 ? t('fc.fromBook.none') : t('fc.fromBook.create', { n: chosen.length })}
             </Button>
           </>
