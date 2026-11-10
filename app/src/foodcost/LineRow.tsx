@@ -15,6 +15,8 @@ type Props = {
   rowKey: string;
   kind: LineKind;
   name: LineName;
+  // The line's rate and what its amount costs (lineCost.ts), above the note; '' draws nothing.
+  cost: string;
   note: string;
   qty: string;
   // Ingredient lines (g, kg, pieces) and recipe lines (g, kg); packaging has none.
@@ -44,7 +46,7 @@ const REMOVE_LABEL = {
 //
 // ⚠️ A QUANTITY TYPED IN IT NEVER REBUILDS THE ROW: the row is keyed by its own id, so the box under
 // the finger is the same box after every digit.
-export function LineRow({ rowKey, kind, name, note, qty, unit, registerQty, onPick, onQty, onUnit, onRecipeUnit, onRemove }: Props) {
+export function LineRow({ rowKey, kind, name, cost, note, qty, unit, registerQty, onPick, onQty, onUnit, onRecipeUnit, onRemove }: Props) {
   const { t } = useT();
 
   return (
@@ -101,7 +103,9 @@ export function LineRow({ rowKey, kind, name, note, qty, unit, registerQty, onPi
           <span className={styles.fixedUnit}>{t('fc.unit.pieces')}</span>
         )}
       </div>
-      {note === '' ? null : <p className={styles.note} data-kind={kind}>{note}</p>}
+      {/* The money, in its own element above the note (Federico, 7 Nov 2026): the note says what to DO. */}
+      {cost === '' ? null : <p className={styles.cost}>{cost}</p>}
+      {note === '' ? null : <p className={styles.note}>{note}</p>}
     </li>
   );
 }

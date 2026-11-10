@@ -49,8 +49,10 @@
   color: var(--danger-ink);
 }
 
-/* A line's own words (not priced, no longer exists, price each) under its row. */
-.row dd.note {
+/* A line's own words (only part priced, no longer exists, priced by weight) under its row, and above them its money: the rate and
+   what the amount costs (lineCost.ts). Both left-aligned on a line of their own; they wrap at 296px. */
+.row dd.note,
+.row dd.cost {
   flex: 1 0 100%;
   color: var(--ink-2);
   font-size: var(--fs-sm);

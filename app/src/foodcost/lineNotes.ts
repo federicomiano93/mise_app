@@ -1,15 +1,17 @@
-import { ingredientLineCost } from '@mise/shared/foodcost-model';
+import { ingredientLineCost, packagingLineCost } from '@mise/shared/foodcost-model';
 import type { CostTables, IngredientLineReason, Table } from '@mise/shared/foodcost-model';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import type { Money } from '@mise/shared/currency';
 import { costRecipe } from '@mise/shared/recipe-cost-model';
-import { fcMoney, fcWeight } from '@mise/shared/fc-number';
+import { fcWeight } from '@mise/shared/fc-number';
 import { wholeRecipeKg } from '@mise/shared/from-recipes';
 import { tooMuchOfRecipe } from '@mise/shared/line-quantity';
 import type { MessageKey } from '../i18n/en';
 import type { MessageParams } from '../i18n/i18n';
 import type { WorkingComponent, WorkingPackaging } from './productEditorModel';
 import { readQty, recipeLineKg } from './productEditorModel';
+import { lineCostView } from './lineCost';
+import type { LineCost } from './lineCost';
 
 type Translate = (key: MessageKey, params?: MessageParams) => string;
 
@@ -58,10 +60,30 @@ export function lineName(
     : { text: t('session.loading'), missing: false };
 }
 
-// ⚠️ NO MONEY UNDER A RECIPE OR AN INGREDIENT LINE (his decision, 13 Sep 2026: the price is not shown
-// in «made of»). What stays is what a person must ACT on — a recipe with no price, or only part of
-// one — because a silent gap is a cost too low. Packaging is the exception: it is counted in pieces,
-// and its price each and the line total are what says whether it was counted right.
+// The money under a line (lineCost.ts): its rate and what the amount typed costs. ⚠️ A FAULT HERE MUST NOT TAKE THE LINES
+// DOWN (P17): the money is a reading aid drawn inside every row; on a fault the line simply shows none, like the summary and
+// the per-kilo box. `noWeightLoss` lays the recipes' oven loss aside, as the batch total does.
+export function lineMoney(
+  t: Translate, money: Money, line: WorkingComponent | WorkingPackaging, tables: CostTables, noWeightLoss: boolean,
+): LineCost {
+  try {
+    if ('kind' in line && line.kind === 'recipe') {
+      return lineCostView(t, money, { recipeId: line.recipeId, qtyKg: recipeLineKg(line) }, 'recipe', tables, { noWeightLoss });
+    }
+    if ('kind' in line) {
+      return lineCostView(t, money, { kind: 'ingredient', ingredientId: line.ingredientId, qty: readQty(line.qty), unit: line.unit }, 'ingredient', tables, { noWeightLoss });
+    }
+    return lineCostView(t, money, { ingredientId: line.ingredientId, qtyPcs: readQty(line.qty) }, 'packaging', tables, { noWeightLoss });
+  } catch {
+    return { text: '', noPrice: false };
+  }
+}
+
+// What a person must ACT on, under the money (current app PR #485). THE MONEY IS NOT DRAWN HERE — it used to be none (his
+// decision, 13 Sep 2026: «nella sezione "composto da" non mostrare il prezzo»), reversed by him on 7 Nov 2026 («il costo
+// dell'ingrediente al kg e il costo della quantità selezionata»). Where the money line already says «No price» the note that
+// said the same thing is left out: one sentence, not two. What stays is a recipe priced in part, because a silent gap is a cost
+// too low, and what stops an ingredient or a packaging item from being counted.
 export function lineNote(
   t: Translate, money: Money, line: WorkingComponent | WorkingPackaging, tables: CostTables, loaded: Loaded,
 ): string {
@@ -69,7 +91,7 @@ export function lineNote(
     const recipe = lookup(tables.recipes, line.recipeId);
     if (!recipe) return line.recipeId && loaded.recipes ? t('fc.thisRecipeNoLonger') : '';
     const costed = costRecipe(recipe, tables);
-    const priced = costed.pricePerKg === null ? t('fc.thisRecipeIsNot') : costed.partial ? t('fc.thisRecipePartlyPriced') : '';
+    const priced = costed.pricePerKg !== null && costed.partial ? t('fc.thisRecipePartlyPriced') : '';
     // ⚠️ A NOTE only, never a block, and FIRST (current app a7f4c75d, 8 Nov 2026): more than 20 whole batches is almost
     // surely grams typed as kilos — production had 16 such lines in 11 products, every cost ×1000.
     const qtyKg = recipeLineKg(line as Extract<WorkingComponent, { kind: 'recipe' }>);
@@ -85,14 +107,11 @@ export function lineNote(
   if (!ingredient) return ingredientId && loaded.ingredients ? t('fc.thisItemNoLonger') : '';
 
   if ('kind' in line && line.kind === 'ingredient') {
-    // No money here either — only what stops the line from being costed.
     const cost = ingredientLineCost({ kind: 'ingredient', ingredientId, qty: readQty(line.qty), unit: line.unit }, ingredient);
-    return cost.reason === null ? '' : t(REASON_TEXT[cost.reason]);
+    return cost.reason === null || cost.reason === 'no-ingredient-price' ? '' : t(REASON_TEXT[cost.reason]);
   }
 
-  // Packaging, counted in pieces, so it has to be BOUGHT by the piece. Said plainly rather than
-  // silently costing nothing.
-  if (ingredient.priceUnit !== 'pcs') return t('fc.pricedByWeightSet');
-  const each = Number(ingredient.pricePerUnit) || 0;
-  return `${t('fc.priceEach', { price: fcMoney(each, money) })}  ·  ${fcMoney(readQty((line as WorkingPackaging).qty) * each, money)}`;
+  // Packaging, counted in pieces, so it has to be BOUGHT by the piece. Said plainly rather than silently costing nothing; a
+  // packaging item with no price at all is «No price» above instead, and one priced each says its money there.
+  return packagingLineCost(line, ingredient).reason === 'no-piece-price' ? t('fc.pricedByWeightSet') : '';
 }

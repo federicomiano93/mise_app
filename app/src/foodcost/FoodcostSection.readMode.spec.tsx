@@ -304,11 +304,13 @@ describe('the read view is text, not a form', () => {
     expect(within(cardNamed('Made of')).queryByText('Raw dough')).not.toBeInTheDocument();
   });
 
-  it('draws the notes the form draws under a line: a recipe nobody priced is said, never costed', async () => {
+  it('draws the notes the form draws under a line: a recipe nobody priced says «No price», never a cost', async () => {
     const ghost = recipe('Ghost', { ingredients: [{ kind: 'ingredient', refId: 'nothing', unit: 'g', grams: 500, label: 'Nothing' }] });
     const odd = product('Odd', { components: [{ kind: 'ingredient', ingredientId: 'flour', qty: 1000, unit: 'g' }, { recipeId: 'Ghost', qtyKg: 1 }] });
     await read('Odd', editorSource([odd], { recipes: [ghost] }));
-    expect(cardNamed('Made of')).toHaveTextContent('This recipe is not priced yet');
+    // The money line says it («— No price»); the note that said the same thing is gone.
+    expect(cardNamed('Made of')).toHaveTextContent('— No price');
+    expect(cardNamed('Made of')).not.toHaveTextContent('This recipe is not priced yet');
   });
 
   it('says where to set the hourly cost, to whoever can set it — and only to them', async () => {

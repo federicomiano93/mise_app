@@ -35,7 +35,7 @@ import { FROM_PRODUCT, entryState, pushDepth } from './foodcostNav';
 import { useHandBack } from './handBack';
 import { LineRow } from './LineRow';
 import type { LineKind } from './LineRow';
-import { lineName, lineNote } from './lineNotes';
+import { lineMoney, lineName, lineNote } from './lineNotes';
 import { NameSuggest } from './NameSuggest';
 import { NumberBox } from './NumberBox';
 import { PickDialog } from './PickDialog';
@@ -638,6 +638,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
       rowKey={line.key}
       kind={kind}
       name={lineName(t, line, live, loaded)}
+      cost={lineMoney(t, money, line, live, working.noWeightLoss).text}
       note={lineNote(t, money, line, live, loaded)}
       qty={line.qty}
       unit={'unit' in line ? line.unit : undefined}

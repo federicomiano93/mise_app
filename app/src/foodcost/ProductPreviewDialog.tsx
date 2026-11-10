@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { productPreview } from '@mise/shared/foodcost-model';
 import { useT } from '../i18n/useT';
+import { foodcostTranslate } from './foodcostWords';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
@@ -33,7 +34,7 @@ export function ProductPreviewDialog({ id, onOpen, onClose }: Props) {
   const say = useStatusMessage();
   const { products, tables } = useFoodcost();
   const product = useMemo(() => products.find(candidate => candidate.id === id) ?? null, [products, id]);
-  const preview = useMemo(() => (product === null ? null : productPreview(product, tables)), [product, tables]);
+  const preview = useMemo(() => (product === null ? null : productPreview(product, tables, foodcostTranslate(t))), [product, tables, t]);
 
   const gone = product === null;
   useEffect(() => {
