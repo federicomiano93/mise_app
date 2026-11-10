@@ -20,9 +20,9 @@ export type FakeFoodcostSource = FoodcostSource & {
   settings: Record<string, unknown> | null;
   history: Map<string, StoredDoc[]>;
   // The next calls of this kind fail.
-  refuse: { save: boolean; loss: boolean; remove: boolean; rate: boolean; history: boolean; products: boolean };
+  refuse: { save: boolean; create: boolean; loss: boolean; remove: boolean; rate: boolean; history: boolean; products: boolean };
   // Every write that reached the source, in order.
-  saved: { kind: 'product' | 'loss' | 'remove' | 'rate'; id?: string; data?: unknown; snapshot?: unknown }[];
+  saved: { kind: 'product' | 'create' | 'loss' | 'remove' | 'rate'; id?: string; data?: unknown; snapshot?: unknown }[];
   // Tells every watcher again (as another phone's write would).
   push(): void;
   // Holds back the first answer of the products until release() (Firestore still loading).
@@ -50,7 +50,7 @@ export function fakeFoodcostSource(seed: {
   const recipeWatchers = new Set<RecipesListener>();
   const ingredientWatchers = new Set<ListListener>();
   const settingsWatchers = new Set<(data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void>();
-  const refuse = { save: false, loss: false, remove: false, rate: false, history: false, products: false };
+  const refuse = { save: false, create: false, loss: false, remove: false, rate: false, history: false, products: false };
   const saved: FakeFoodcostSource['saved'] = [];
   let held = false;
   let ingredientsHeld = false;
@@ -118,6 +118,18 @@ export function fakeFoodcostSource(seed: {
       products.set(id, { ...data, id });
       if (snapshot) history.set(id, [{ ...snapshot, id: `h${saved.length}` }, ...(history.get(id) ?? [])]);
       fake.push();
+    }),
+
+    // Asks the SERVER (the map) and writes only when nothing is there, like the transaction. `refuse.create` is the server being
+    // unreachable or refusing (offline, permission-denied): it throws and nothing is written. A product put straight into `products`
+    // without push() is one the store's list has not heard of yet, so a create over it must answer «already there».
+    createProductIfAbsent: vi.fn<FoodcostSource['createProductIfAbsent']>(async (id, data) => {
+      if (refuse.create) throw refused();
+      if (products.has(id)) return false;
+      saved.push({ kind: 'create', id, data });
+      products.set(id, { ...data, id });
+      fake.push();
+      return true;
     }),
 
     saveRecipeLoss: vi.fn<FoodcostSource['saveRecipeLoss']>(async (id: string, patch: RecipeLossPatch) => {

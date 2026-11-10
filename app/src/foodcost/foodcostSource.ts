@@ -6,7 +6,8 @@
 // a fake source and never needs a database to be tested.
 //
 // Under the open venue:
-//   • products/{id} — a finished product. Its own. Written WHOLE.
+//   • products/{id} — a finished product. Its own. Written WHOLE (and, for the ones made from the recipe book, created
+//     by a transaction that reads the server first: `createProductIfAbsent`).
 //   • products/{id}/snapshots/{auto} — its margin history, append-only, written in the SAME batch.
 //   • foodcost-settings/main — what an hour of work costs. Read and written only by whoever runs the
 //     place (the rules say so; the store never even listens for anybody else).
@@ -68,6 +69,10 @@ export interface FoodcostSource {
   // A product, WHOLE, and when given its margin point, in ONE batch. Resolves when the server has
   // both (offline: never); rejects when either is refused.
   saveProduct(id: string, data: Readonly<Record<string, unknown>>, snapshot: Readonly<Record<string, unknown>> | null): Promise<void>;
+  // A product made from the recipe book (item 29, current app f8d54f35): written WHOLE at its id, but only if the SERVER says no
+  // product is there. Resolves true when created and false when it already existed (nothing written); rejects when the server
+  // cannot be reached (offline: it FAILS, it does not queue) or when the write is refused. No margin point: nothing is priced yet.
+  createProductIfAbsent(id: string, data: Readonly<Record<string, unknown>>): Promise<boolean>;
   // The oven loss onto a recipe: three fields, never the whole recipe.
   saveRecipeLoss(id: string, patch: RecipeLossPatch): Promise<void>;
   removeProduct(id: string): Promise<void>;
@@ -249,6 +254,22 @@ export function createFirestoreFoodcostSource(
       batch.set(ref, withBakery(data));
       if (snapshot) batch.set(fs.doc(fs.collection(db, productsPath, id, SNAPSHOTS)), withBakery(snapshot));
       await batch.commit();
+    },
+
+    // ⚠️ A TRANSACTION, NOT A SET (current app f8d54f35). The list on this phone can be an old offline copy (the browser's own
+    // database answers first, and offline it is the only answer), and a set at a fixed id would overwrite a product another device
+    // has filled in since — price, pieces, VAT, all gone, with no margin point to show it. A transaction reads the SERVER first;
+    // offline it fails instead of queueing, which is the right answer for a bulk create: nothing lands later on top of anybody's
+    // work. The document is exactly what saveProduct writes for the same product (the store builds it), stamped for the venue here.
+    async createProductIfAbsent(id, data) {
+      const { fs, db } = await firestore();
+      const ref: DocumentReference = fs.doc(db, productsPath, checkId(id));
+      return fs.runTransaction(db, async tx => {
+        const snap = await tx.get(ref);
+        if (snap.exists()) return false;
+        tx.set(ref, withBakery(data));
+        return true;
+      });
     },
 
     // ⚠️ UP TO THREE FIELDS, NEVER THE WHOLE RECIPE: the catalogue owns its name, rows and steps, and a

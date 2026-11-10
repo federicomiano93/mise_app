@@ -1,5 +1,9 @@
 import { describe, expect, test, vi } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { normalizeProduct } from '@mise/shared/foodcost-model';
+import { productFromRecipe } from '@mise/shared/from-recipes';
 import type { Product } from '@mise/shared/foodcost-model';
 import type { KeyValueStorage } from '../session/backend';
 import type { FoodcostSource, ProductsMeta, RecipeLossPatch, StoredDoc } from './foodcostSource';
@@ -19,6 +23,8 @@ function fakeSource() {
   let settings: ((data: Record<string, unknown> | null, meta: { fromServer: boolean }) => void) | null = null;
   const stopped: string[] = [];
   const writes: { kind: string; args: unknown[]; pending: Pending }[] = [];
+  // The transactions that create a product from the recipe book, each waiting for the test to answer it.
+  const creates: { id: string; data: Readonly<Record<string, unknown>>; resolve: (created: boolean) => void; reject: (err: unknown) => void }[] = [];
   let ids = 0;
 
   function write(kind: string, ...args: unknown[]): Promise<void> {
@@ -32,13 +38,14 @@ function fakeSource() {
     watchIngredients: vi.fn((onChange, onError) => { ingredients = { onChange, onError }; return () => stopped.push('ingredients'); }),
     watchSettings: vi.fn(onChange => { settings = onChange; return () => stopped.push('settings'); }),
     saveProduct: (id, data, snapshot) => write('product', id, data, snapshot),
+    createProductIfAbsent: (id, data) => new Promise<boolean>((resolve, reject) => { creates.push({ id, data, resolve, reject }); }),
     saveRecipeLoss: (id: string, patch: RecipeLossPatch) => write('loss', id, patch),
     removeProduct: id => write('remove', id),
     getProductHistory: vi.fn(async () => [{ id: 'h1', foodCostPct: 30 }]),
     saveLabourCostPerHour: (rate, updatedAt) => write('rate', rate, updatedAt),
   };
   return {
-    source, writes, stopped,
+    source, writes, stopped, creates,
     products: (list: StoredDoc[], fromServer = true) => products!.onChange(list, { fromServer }),
     productsFail: () => products!.onError(new Error('permission-denied')),
     recipes: (list: StoredDoc[], fromServer?: boolean) => recipes!.onChange(list, fromServer === undefined ? undefined : { fromServer }),
@@ -507,5 +514,87 @@ describe('the Food cost store', () => {
     unsubscribe();
     fake.ingredients([]);
     expect(seen).toHaveBeenCalledTimes(1);
+  });
+
+  describe('products made from the recipe book (item 29)', () => {
+    const recipe = (id: string, name: string, extra: Record<string, unknown> = {}): StoredDoc =>
+      ({ id, name, ingredients: [{ label: 'Flour', grams: 1000, unit: 'g' }], ...extra });
+    // Answers every create waiting, in order: true = created, false = the server already had it, an Error = refused / offline.
+    const answer = (fake: ReturnType<typeof setup>['fake'], ...answers: (boolean | Error)[]) => {
+      answers.forEach((a, i) => (a instanceof Error ? fake.creates[i]!.reject(a) : fake.creates[i]!.resolve(a)));
+    };
+
+    test('⚠️⚠️ each product is created through the SERVER-checked create, never saveProduct, with the document saveProduct would write', async () => {
+      const { fake, store } = setup();
+      store.start();
+      fake.products([]);
+      const done = store.createProductsFromRecipes([recipe('r1', ' Brioche ', { lossPct: 10 })]);
+      await settle();
+      expect(fake.writes.filter(w => w.kind === 'product')).toHaveLength(0);
+      expect(fake.creates).toHaveLength(1);
+      expect(fake.creates[0]!.id).toBe('recipe-r1');
+      expect(fake.creates[0]!.data).toEqual(toProductDocument(product({ id: 'recipe-r1', name: 'Brioche', components: [{ recipeId: 'r1', qtyKg: 0.9 }] })));
+      expect(fake.creates[0]!.data).toMatchObject({ name: 'Brioche', model: 2, sellingMode: null, sellingPrice: null, vatRate: null, packaging: [] });
+      answer(fake, true);
+      expect(await done).toEqual({ made: 1, skipped: 0, failed: 0 });
+    });
+
+    test('⚠️ the fields written are all in the rules whitelist of products (firestore.rules, allow create, update)', () => {
+      const rules = readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'firestore.rules'), 'utf8').replace(/\r\n/g, '\n');
+      const block = rules.slice(rules.indexOf('match /products/{id}'));
+      const list = block.slice(block.indexOf('hasOnly(['), block.indexOf('])'));
+      const made = productFromRecipe(recipe('r1', 'Pane')) as unknown as Product;
+      for (const key of Object.keys(toProductDocument(made))) expect(list, key).toContain("'" + key + "'");
+    });
+
+    test('a product this phone already has is not asked about; one the server already has is skipped; the rest are made', async () => {
+      const { fake, store } = setup();
+      store.start();
+      fake.products([{ id: 'recipe-r1', name: 'Brioche', components: [], packaging: [], model: 2 }]);
+      const done = store.createProductsFromRecipes([recipe('r1', 'Brioche'), recipe('r2', 'Focaccia'), recipe('r3', 'Pizza')]);
+      await settle();
+      expect(fake.creates.map(c => c.id)).toEqual(['recipe-r2', 'recipe-r3']);
+      answer(fake, false, true);
+      expect(await done).toEqual({ made: 1, skipped: 2, failed: 0 });
+    });
+
+    test('⚠️ offline or refused: counted as failed, said in the log, NOTHING queued — and the others are still made', async () => {
+      const { fake, store } = setup();
+      store.start();
+      fake.products([]);
+      const done = store.createProductsFromRecipes([recipe('r1', 'A'), recipe('r2', 'B'), recipe('r3', 'C')]);
+      await settle();
+      answer(fake, true, new Error('unavailable'), new Error('permission-denied'));
+      expect(await done).toEqual({ made: 1, skipped: 0, failed: 2 });
+      expect(fake.writes).toHaveLength(0);
+    });
+
+    test('⚠️ a recipe given twice, a recipe with no name or an id Firestore refuses make one product, or none', async () => {
+      const { fake, store } = setup();
+      store.start();
+      fake.products([]);
+      const done = store.createProductsFromRecipes([recipe('r1', 'Brioche'), recipe('r1', 'Brioche'), recipe('r2', '  '), recipe('a/b', 'Slash'), null, 'x']);
+      await settle();
+      expect(fake.creates.map(c => c.id)).toEqual(['recipe-r1']);
+      answer(fake, true);
+      expect(await done).toEqual({ made: 1, skipped: 0, failed: 0 });
+      expect(await store.createProductsFromRecipes([])).toEqual({ made: 0, skipped: 0, failed: 0 });
+      expect(await store.createProductsFromRecipes(undefined as unknown as unknown[])).toEqual({ made: 0, skipped: 0, failed: 0 });
+    });
+
+    test('no local copy is touched (the live list brings the products in) and the section counts it as unsent while it runs', async () => {
+      const { fake, store } = setup();
+      store.start();
+      fake.products([]);
+      const seen: boolean[] = [];
+      store.subscribe(() => seen.push(store.getSnapshot().unsent));
+      const done = store.createProductsFromRecipes([recipe('r1', 'Brioche')]);
+      await settle();
+      expect(store.getSnapshot().unsent).toBe(true);
+      answer(fake, true);
+      await done;
+      expect(store.getSnapshot().unsent).toBe(false);
+      expect(store.getSnapshot().products).toEqual([]);
+    });
   });
 });
