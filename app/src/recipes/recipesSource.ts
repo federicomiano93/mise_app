@@ -408,6 +408,9 @@ export function createFirestoreRecipesSource(
       try {
         const kit = await firestore();
         const snap = await kit.fs.getDocs(kit.fs.collection(kit.db, pricesPath) as Query);
+        // ⚠️ MISE 2 IMPROVEMENT over the current app (frozen): an answer served from the local cache is «no answer». Offline, an empty
+        // or stale cache would read as «no price anywhere» and cross out every linked row; no marks at all is the honest picture.
+        if (snap.metadata.fromCache === true) return null;
         const prices: Record<string, Record<string, unknown>> = {};
         snap.docs.forEach(d => { prices[d.id] = { ...(d.data() as Record<string, unknown>) }; });
         return prices;

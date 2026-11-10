@@ -135,6 +135,13 @@
   }
 }
 
+/* After the rule above and more specific: the amber note keeps its tint under the pointer. */
+@media (hover: hover) {
+  .link[data-stale="true"]:hover {
+    background: var(--warn-tint);
+  }
+}
+
 .name:focus-visible,
 .grams:focus-visible,
 .unit:focus-visible,

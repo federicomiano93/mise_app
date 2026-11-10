@@ -3,7 +3,7 @@ import styles from './NoPriceMark.module.css';
 
 // The crossed-out euro at the END of a recipe row's link line: Food cost cannot price this row (current app ff1a2d38, 28 Oct 2026;
 // item 30). No words and no amount on screen — the name is for a screen reader. It sits INSIDE the link button, so the button reads
-// «→ Salt · no price».
+// «→ Salt no price».
 //
 // ⚠️ THE NAME IS READ NOW, in the language of the moment (never frozen at load). The svg is `aria-hidden` and the name sits on the
 // wrapper, which is a role="img": a screen reader says it once, whichever way it walks the button.

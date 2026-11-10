@@ -126,6 +126,13 @@ describe('the crossed-out euro on a row Food cost cannot price', () => {
     expect(within(region).getByRole('button', { name: 'Save' })).toBeInTheDocument();
   });
 
+  it('an owner on a venue with zero price documents (`prices: {}`) sees every costable linked row crossed out, as the current app', async () => {
+    const { region, source } = await openEditor({ recipes: [MIXED], ingredients: [FLOUR, SALT], prices: {} });
+    await waitFor(() => { expect(marksOf(linkLines(region)[0]!)).toHaveLength(1); });
+    expect(linkLines(region).map(line => marksOf(line).length)).toEqual([1, 1, 1, 0, 0]);
+    expect(source.priceReads).toBe(1);
+  });
+
   it('⚠️ shows no money: the editor draws no amount the prices stand for', async () => {
     const { region } = await openEditor({ recipes: [MIXED], ingredients: [FLOUR, SALT], prices: PRICES });
     await waitFor(() => { expect(marksOf(linkLines(region)[1]!)).toHaveLength(1); });
@@ -277,7 +284,7 @@ describe('the amber note on a linked row whose name was retyped', () => {
   });
 
   it('the crossed-out euro survives the warning: both ride in the same link line', async () => {
-    const { region, user } = await openEditor({ ...seed(), prices: { 'ing-other': PRICES['ing-flour'] } });
+    const { region, user } = await openEditor({ ...seed(), prices: {} });
     await waitFor(() => { expect(marksOf(linkLines(region)[0]!)).toHaveLength(1); });
     await user.clear(nameBoxes(region)[0]!);
     await user.type(nameBoxes(region)[0]!, 'Margarine');

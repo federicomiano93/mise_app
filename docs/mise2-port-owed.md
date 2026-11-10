@@ -313,7 +313,7 @@ What each one means for the people using Mise 2 until it is ported:
   (Items 21, 22, 24, 25 and 28 are done: weighing units, the «Cost per 1 kg» block, the list search and the phone preview, the
   read-first card with four figures and «Details», and two decimals on the screens Mise 2 has.)
 - 23. Food cost recipe link with several products (a check).
-- 29-32. Recipe book: create products from it, the crossed-out euro, the renamed-row warning, the row menu.
+- 29, 32. Recipe book: create products from it, the row menu.
 - 36-37, 39-40. Calculator: reorder a recipe's ingredients, «Add a recipe» from the book, the dough history's dates and
   totals, the cached «no config».
 - 41-43. Staff / join codes / roles screens (people, invitations incl. #475 role-first invite, the join form) and the

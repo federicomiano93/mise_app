@@ -1883,6 +1883,13 @@ Deliberate differences from the current app:
 - **The announcement uses its own hidden polite live region** (rendered empty, outside the rows), as the current app, and NOT the
   section's `useStatusMessage` toast: that one is a visible 2.6 s message over the form and the amber line is already the visible half.
   Announced once when a row turns stale, emptied when one clears.
-- **No baseline problem after the photo screen:** the current app's «known edge» (rows come back as new objects) does not exist here,
-  rows keep their number.
-- **Fake source:** `fakeRecipesSource` answers `null` to the price read when no price is seeded, so older specs never see every linked row crossed out.
+- **The photo screen restarts the opened-name memory (parity, not a difference):** «Fill from a photo» unmounts the editor, and
+  `restoreWorking` (`editorModel.ts`) gives every row a fresh `nextKey()`, so the memory restarts from the labels as they are then —
+  the same known edge as the current app (rows come back as new objects there).
+- **Offline, no marks (deliberate difference, a Mise 2 improvement):** `readIngredientPrices` treats an answer served from the local
+  cache (`snap.metadata.fromCache === true`) as «no answer» (null), so an offline manager sees NO marks instead of every row crossed
+  out. The current app (frozen) crosses them all out in that case.
+- **Fake source:** `fakeRecipesSource` answers `null` to the price read only when the seed has no `prices` key at all, so older specs never
+  see every linked row crossed out; a seeded `prices: {}` is a venue with zero price documents and answers `{}`.
+- **Isolation guard:** `app/src/recipes/unpricedMarks.spec.ts` reads the sources (the intent of `tests/catalogue-no-money.test.mjs`): no
+  recipes file imports a price or cost model except through `unpriced-rows`, and the store keeps no prices.

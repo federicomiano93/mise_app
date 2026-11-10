@@ -328,6 +328,13 @@ describe('the Recipe catalogue source', () => {
     quiet.mockRestore();
   });
 
+  test('⚠️ an ingredient-price answer served from the local cache (offline) is «no answer»: null, so no row is crossed out', async () => {
+    const { kit, fs } = fakeKit();
+    Object.assign(fs, { getDocs: vi.fn(async () => snapOf([{ id: 'FLOUR', priceUnit: 'kg', pricePerUnit: 2 }], true)) });
+    const source = createFirestoreRecipesSource(() => Promise.resolve(kit), 'panificio-miano');
+    expect(await source.readIngredientPrices()).toBeNull();
+  });
+
   // ── Writing recipes (step 3d-6) ──
 
   test('⚠️ a recipe save is a MERGE at its id, stamped with the venue last, never sending `id`; a null box is a removal', async () => {
