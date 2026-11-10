@@ -7,6 +7,7 @@ import { renderApp } from '../testing/renderApp';
 import { entriesBehind } from '../testing/recipeLinkHelpers';
 import { LOAD, ingredient, supplier } from '../testing/renderOrders';
 import { recipe } from '../testing/renderRecipes';
+import { carriedPlace, carryPlace } from '../recipes/recipeReturn';
 import { parseOrdersPath, supplierPath } from './ordersPath';
 import { recipeOriginOf } from './recipeOrigin';
 
@@ -94,6 +95,22 @@ describe('«Order» on a recipe row', () => {
     await screen.findByRole('table', undefined, LOAD);
     await waitFor(() => { expect(rowButton('Flour')).toHaveFocus(); });
     expect(await entriesBehind(view.router)).toBe(0);
+  });
+
+  it('⚠️ the row that opened the menu was deleted on another phone: Back leaves the focus on the recipe’s title, not on the body', async () => {
+    // Opened from the list, as a person does: that is what makes the recipe's title the fallback for the focus.
+    const view = show('/recipes');
+    await view.user.click(await screen.findByRole('button', { name: /Focaccia/ }, LOAD));
+    await orderFlour(view);
+    await quantityBox();
+    // The row's key is no longer in the recipe (what a deletion on another phone during the trip leaves).
+    const place = carriedPlace();
+    expect(place?.trip).toBeDefined();
+    carryPlace({ ...(place as NonNullable<typeof place>), trip: { row: 'ingredient:i-ghost#1', split: [] } });
+    await view.user.click(backButton());
+    await waitFor(() => { expect(where(view.router)).toBe('/recipes/r1'); });
+    await screen.findByRole('table', undefined, LOAD);
+    await waitFor(() => { expect(screen.getByRole('heading', { level: 2, name: 'Focaccia' })).toHaveFocus(); });
   });
 
   it('Back brings the recipe as it was left: the rows split in two are still split', async () => {

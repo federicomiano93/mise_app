@@ -460,7 +460,11 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
   useLayoutEffect(() => {
     if (back === null) return;
     recipeReturn.restoreScroll(recipe.id);
-    buttons.current.get(back.row)?.focus({ preventScroll: true });
+    // ⚠️ Delivered only when a button took the focus: the row may be gone (deleted on another phone during the trip), and then the
+    // screen's own title must still take it.
+    const button = buttons.current.get(back.row);
+    if (button === undefined) return;
+    button.focus({ preventScroll: true });
     recipeReturn.markDelivered();
   }, []);
   // ⚠️ AGAIN AFTER THE SHELL'S OWN RESET, as the Food cost card does (the shell puts its scroll area at the top in an effect that
