@@ -3,7 +3,7 @@
 // tests/invoice-zip-classify.test.mjs (itself a port of invoice-import/tests/test_classify.py); the two must stay
 // equal until the switch to Mise 2. The module is a FULL port, so parity.spec.ts also compares its exports.
 //
-// PORTED: 26 of 26 tests of tests/invoice-zip-classify.test.mjs. Added: the «Nome in fattura» (invoiceNameOf).
+// PORTED: 28 of 28 tests of tests/invoice-zip-classify.test.mjs. Added: the «Nome in fattura» (invoiceNameOf).
 // The keyword lists themselves are pinned against invoice-import/classify.py by keywords.spec.ts.
 
 import { describe, expect, test } from 'vitest';
@@ -160,6 +160,32 @@ describe.each([
   });
 
   // Mirrored word for word in invoice-import/tests/test_classify.py.
+  test('pack parsing: the count first, then grams each — sachets, never one 4 g pack', () => {
+    checkPack('9014 Vergn zucchero bianco bustina 2000x4g', 4, 'g', 2000);
+    checkPack('9164 Vergn zucchero grezzo bustina 1000x4g', 4, 'g', 1000);
+    checkPack('542 Vergn caps FAP ginseng dolce 50x6,5g', 6.5, 'g', 50);
+    checkPack('SO-FOR P.FIL SOL 5X 1KG', 1, 'kg', null); // kilos are not read count first
+    checkPack('ZUCCHERO BUSTINA 1x4g', 4, 'g', null);
+  });
+
+  test('pieces: a count written as pieces next to grams of one piece', () => {
+    const pieces = (text: string) => m.piecesOf(text);
+    expect(pieces('SG.CR.1980 PF VUOTO 85gr* 50pz')).toStrictEqual({ count: 50, size: 85 });
+    expect(pieces('CORNETTO RE BORBONE PZ.50 GR.85')).toStrictEqual({ count: 50, size: 85 });
+    expect(pieces('CORNETTO RE BORBONE CEREALI GR.85X50P')).toStrictEqual({ count: 50, size: 85 });
+    expect(pieces("PA Arancini BUFFET Ragu' 50gr* 150pz")).toStrictEqual({ count: 150, size: 50 });
+    // The carton whose pieces add up to its weight: each piece is the carton shared out.
+    expect(pieces('MI GRAFFA mignon 35/40gr 2Kg* 55pz')).toStrictEqual({ count: 55, size: 36.4 });
+    expect(pieces('BRIOCHE mignon 35/40gr 2k* 55pz')).toStrictEqual({ count: 55, size: 36.4 });
+    expect(pieces('ESEMPIO 85gr 5Kg* 60pz')).toStrictEqual({ count: 60, size: 83.3 });
+    // Not pieces: kilos, no «pz», too heavy, no count, eggs.
+    for (const text of [
+      'DR CIPOLLE FETTE 2,5kg* 4pz', 'PATATE DIPPING STREEPS LW KG.2.5X4', 'SANTA LUCIA TRIS G 100X3 FLASH',
+      'TONNO gr.60X6 OO MARE APERTO', '9014 Vergn zucchero bianco bustina 2000x4g', '99715 PULY CAF PLUS POLVERE G 570 (X12PZ)',
+      'ESEMPIO 35/40gr 2Kg* 6pz', 'BRIOCHE 37,5gr 2Kg* 55pz', 'CORNETTI SFUSI 10 PZ', 'UOVA FRESCHE DA 30 PZ', 'PASTA 85gr* 1pz', '',
+    ]) expect(pieces(text), text).toBe(null);
+  });
+
   test('pack parsing: a bare K before the star is a kilo, nowhere else', () => {
     checkPack('PATATE FETTE 4X2,5k*    4pz', 2.5, 'kg', 4);
     checkPack('PANZEROTTI MIGNON2.5k*    1pz', 2.5, 'kg', 1);

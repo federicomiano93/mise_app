@@ -371,10 +371,6 @@ const PORT_OWED = new Set<string>([
   // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 39): main added localLogDate and more exports to js/log-time.js, not yet in the port — remove its key when ported
   'log-time :: exports exactly the same names',
   'log-time :: every export is a function in both or a value in both',
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 18): main added MAX_PIECE_G and more exports to js/orders/invoice-zip/classify.js (invoice per-piece pricing), not yet in the port — remove its key when ported
-  'invoice-zip/classify :: exports exactly the same names',
-  'invoice-zip/classify :: every export is a function in both or a value in both',
-  'invoice-zip/classify :: every non-function export is strictly equal',
 ]);
 
 describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
