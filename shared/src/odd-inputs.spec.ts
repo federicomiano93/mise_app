@@ -266,12 +266,8 @@ function show(value: unknown): string {
   }
 }
 
-const PORT_OWED = new Set<string>([
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 26): main changed js/foodcost/foodcost-model.js (batchTotals now costs each line through componentLineCost and packagingLineCost: Which? names deleted lines, line money guard), the port has not — remove its keys when ported
-  'batchTotals', 'productionCost', 'costProduct', 'sortByMargin',
-  // productionCost and costProduct feed these two, so they inherit the same gap: the original lets a null table through, the port's batchTotals throws — remove with the line above when item 26 is ported. (The preview model, item 24, is ported and agrees field for field on every other input.)
-  'productPreview', 'costPerKg',
-]);
+// Nothing is owed any more: item 26 (the cost on every line and «Which?») was the last, ported on 10 Nov 2026.
+const PORT_OWED = new Set<string>([]);
 
 // Calls both functions with every argument list and reports every disagreement at once.
 function agree(name: string, mine: AnyFn, theirs: AnyFn, argLists: readonly (readonly unknown[])[]): void {
@@ -2741,13 +2737,21 @@ describe('foodcost-model: odd inputs', () => {
   agree('packagingPerUnit', m.packagingPerUnit as AnyFn, l.packagingPerUnit as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
   agree('productionCost', m.productionCost as AnyFn, l.productionCost as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
   agree('costProduct', m.costProduct as AnyFn, l.costProduct as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
-  // The original also returns `unpriced` (the «Which?» list, item 26): every other field is compared.
-  const previewWithoutUnpriced: AnyFn = (...args) => {
-    const out = (l.productPreview as AnyFn)(...args) as Record<string, unknown>;
-    const { unpriced: _unpriced, ...rest } = out;
-    return rest;
-  };
-  agree('productPreview', m.productPreview as AnyFn, previewWithoutUnpriced, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
+  // productPreview and unpricedParts look a word up (a line that no longer exists): the port is handed the
+  // same `t` the original reads, last. `unpriced` (the «Which?» list) is compared field for field.
+  const withT = (fn: AnyFn): AnyFn => (...args) => fn(args[0], args[1], t);
+  agree('productPreview', withT(m.productPreview as AnyFn), l.productPreview as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
+  agree('unpricedParts', withT(m.unpricedParts as AnyFn), l.unpricedParts as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
+  agree('unpricedReasonText', (reason: unknown) => m.unpricedReasonText(reason, t), l.unpricedReasonText as AnyFn,
+    [...ODD, 'no-ingredient-price', 'packaging-no-price', 'no-piece-weight', 'no-piece-price', 'packaging-no-mode', 'packaging-no-units', 'recipe-no-price', 'gone',
+      'not-weighable', 'no-amount', 'not-linked', 'missing-ingredient', 'missing-recipe', 'no-price', 'sub-not-costable', 'cycle', 'too-deep', 'toString', '__proto__'].map(x => [x]));
+  agree('componentLineCost', m.componentLineCost as AnyFn, l.componentLineCost as AnyFn, [
+    ...product(LINES.slice(0, 40), FC_TABLES.slice(0, 8), [undefined, { noWeightLoss: true }]),
+    ...product([...ODD, { recipeId: 'DOUGH', qtyKg: 2 }, { recipeId: 'CREAM', qtyKg: 1 }, { recipeId: 'GONE', qtyKg: 1 }, { recipeId: 'DOUGH', qtyKg: '3' }, { recipeId: 'DOUGH', qtyKg: -1 },
+      { kind: 'ingredient', ingredientId: 'FLOUR', qty: 500, unit: 'g' }, { kind: 'ingredient', ingredientId: 'GONE', qty: 5, unit: 'kg' }], FC_TABLES, [undefined, { noWeightLoss: true }, { noWeightLoss: false }]),
+  ]);
+  agree('packagingLineCost', m.packagingLineCost as AnyFn, l.packagingLineCost as AnyFn, product(
+    [...ODD, { qtyPcs: 3 }, { qtyPcs: '2' }, { qtyPcs: -1 }, { qtyPcs: NaN }, { ingredientId: 'BOX', qtyPcs: 2 }], [...ODD, ...Object.values(FC_ING), ...ING_CARDS.slice(0, 40)]));
   agree('costPerKg', perKgModel.costPerKg as AnyFn, legacyPerKgModel.costPerKg as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
   agree('labourBatchCost', m.labourBatchCost as AnyFn, l.labourBatchCost as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
 

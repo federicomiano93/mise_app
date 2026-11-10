@@ -34,10 +34,17 @@ import { describe, expect, test } from 'vitest';
 import * as ported from './foodcost-model';
 import { COUNTRIES } from './market';
 import * as legacyJs from '../../js/foodcost/foodcost-model.js';
+import { t } from '../../js/i18n.js';
 
 const legacy = legacyJs as unknown as typeof ported;
 
 type Doc = Record<string, unknown>;
+
+// productPreview and unpricedParts look a word up (the names of a line that no longer exists). The original
+// reads js/i18n.js itself; the port is handed that same `t` last, so both say the same words.
+const previewOf = (m: typeof ported, raw: unknown, tables: ported.CostTables): ported.ProductPreview => (m === ported
+  ? ported.productPreview(raw, tables, t)
+  : (legacyJs.productPreview as unknown as (raw: unknown, tables: ported.CostTables) => ported.ProductPreview)(raw, tables));
 
 const AT = '2026-08-10T09:00:00.000Z';
 const AT_PACKS = '2026-09-13T09:00:00.000Z';
@@ -878,8 +885,8 @@ describe.each([
   // its selling price, raw materials, packaging, labour (only where time and rate are known), total cost, food
   // cost against its target, margin on the net price and the ideal price with and without VAT.
 
-  // The preview's own tables: flour, butter and a bag at 5p. (The original adds `unpriced`, the «Which?» list
-  // of item 26; no test here reads it.)
+  // The preview's own tables: flour, butter and a bag at 5p. (`unpriced`, the «Which?» list, is tested in
+  // foodcost-line-costs.spec.ts.)
   const PV_INGREDIENTS: Record<string, Doc> = {
     FLOUR: { id: 'FLOUR', priceUnit: 'kg', pricePerUnit: 2 },
     BUTTER: { id: 'BUTTER', priceUnit: 'kg', pricePerUnit: 8 },
@@ -913,7 +920,7 @@ describe.each([
 
   test('the preview shows his eight figures, from the same sums as the card', () => {
     const t = pvTables();
-    const pv = m.productPreview(product(), t);
+    const pv = previewOf(m, product(), t);
     const cost = m.productionCost(product(), t);
     const answer = m.costProduct(product(), t);
     expect(pv.unit).toBe('piece');
@@ -937,7 +944,7 @@ describe.each([
 
   test('packaging is shown apart from the raw materials, and the total holds both', () => {
     const p = product({ packaging: [{ ingredientId: 'BAG', qtyPcs: 2 }] });
-    const pv = m.productPreview(p, pvTables());
+    const pv = previewOf(m, p, pvTables());
     expect(pv.materialsUnitCost).toBe(0.32);
     expect(pv.packagingUnitCost, 'two bags at 0.05 a piece').toBe(0.1);
     expect(pv.hasPackaging).toBe(true);
@@ -948,32 +955,32 @@ describe.each([
 
   test('⚠️ an unpriced box is NOT a free box: no packaging figure, and it is named', () => {
     const t = pvTables({ ingredients: { ...PV_INGREDIENTS, BOX: { id: 'BOX', priceUnit: 'kg', pricePerUnit: 3 } } });
-    const pv = m.productPreview(product({ packaging: [{ ingredientId: 'BOX', qtyPcs: 1 }] }), t);
+    const pv = previewOf(m, product({ packaging: [{ ingredientId: 'BOX', qtyPcs: 1 }] }), t);
     expect(pv.packagingUnitCost, 'a box priced by the kilo cannot be counted per piece').toBe(null);
     expect(pv.missing).toContain('no-packaging-price');
     expect(pv.partial).toBe(true);
-    const gone = m.productPreview(product({ packaging: [{ ingredientId: 'DELETED', qtyPcs: 1 }] }), pvTables());
+    const gone = previewOf(m, product({ packaging: [{ ingredientId: 'DELETED', qtyPcs: 1 }] }), pvTables());
     expect(gone.packagingUnitCost, 'a box deleted from Suppliers').toBe(null);
     expect(gone.missing).toContain('no-packaging-price');
   });
 
   test('labour appears only with minutes AND a rate, and goes into the total, never the food cost', () => {
     const p = product({ labourMinutes: 90, labourPeople: 2 });
-    const rated = m.productPreview(p, pvTables({ labourCostPerHour: 14 }));
+    const rated = previewOf(m, p, pvTables({ labourCostPerHour: 14 }));
     expect(rated.labourUnitCost, '£42 over 100 pieces').toBe(0.42);
     expect(rated.totalUnitCost, 'materials + packaging + labour').toBe(0.74);
-    expect(rated.foodCostPct, 'labour never moves the food cost').toBe(m.productPreview(p, pvTables()).foodCostPct);
+    expect(rated.foodCostPct, 'labour never moves the food cost').toBe(previewOf(m, p, pvTables()).foodCostPct);
     expect(rated.idealNet, 'the ideal price hits the FOOD COST target, so labour is not in it').toBe(1.07);
-    const noRate = m.productPreview(p, pvTables());
+    const noRate = previewOf(m, p, pvTables());
     expect(noRate.labourUnitCost, 'an employee is sent no rate: no labour figure at all').toBe(null);
     expect(noRate.totalUnitCost).toBe(0.32);
   });
 
   test('by weight and by the pack, the figures are per kg and per pack', () => {
-    const kilo = m.productPreview(product({ sellingMode: 'weight', piecesPerBatch: null, sellingPrice: 12 }), pvTables());
+    const kilo = previewOf(m, product({ sellingMode: 'weight', piecesPerBatch: null, sellingPrice: 12 }), pvTables());
     expect(kilo.unit).toBe('kg');
     expect(kilo.materialsUnitCost).toBe(3.2);
-    const pack = m.productPreview(product({
+    const pack = previewOf(m, product({
       sellingMode: 'pack', packSize: 500, packUnit: 'g', piecesPerBatch: null, sellingPrice: 5,
     }), pvTables());
     expect(pack.unit).toBe('pack');
@@ -981,26 +988,26 @@ describe.each([
   });
 
   test('⚠️⚠️ missing data names what is missing and gives no number', () => {
-    const noTarget = m.productPreview(product({ foodCostTarget: null }), pvTables());
+    const noTarget = previewOf(m, product({ foodCostTarget: null }), pvTables());
     expect(noTarget.idealGross).toBe(null);
     expect(noTarget.idealNet).toBe(null);
     expect(noTarget.missing).toStrictEqual(['no-target']);
     expect(noTarget.foodCostPct, 'the food cost itself needs no target').not.toBe(null);
 
-    const noVat = m.productPreview(product({ vatRate: null }), pvTables());
+    const noVat = previewOf(m, product({ vatRate: null }), pvTables());
     expect(noVat.idealGross, 'no VAT: no shelf price').toBe(null);
     expect(noVat.idealNet, '…but what it must earn net is still known').toBe(1.07);
     expect(noVat.foodCostPct).toBe(null);
     expect(noVat.margin).toBe(null);
     expect(noVat.missing).toContain('no-vat');
 
-    const noPrice = m.productPreview(product({ sellingPrice: null }), pvTables());
+    const noPrice = previewOf(m, product({ sellingPrice: null }), pvTables());
     expect(noPrice.sellingPrice).toBe(null);
     expect(noPrice.foodCostPct).toBe(null);
     expect(noPrice.idealNet, 'the ideal price is exactly what a product with no price needs').toBe(1.07);
     expect(noPrice.missing).toContain('no-price');
 
-    const noPieces = m.productPreview(product({ piecesPerBatch: null }), pvTables());
+    const noPieces = previewOf(m, product({ piecesPerBatch: null }), pvTables());
     expect(noPieces.materialsUnitCost).toBe(null);
     expect(noPieces.packagingUnitCost).toBe(null);
     expect(noPieces.totalUnitCost).toBe(null);
@@ -1008,7 +1015,7 @@ describe.each([
     expect(noPieces.unit, 'the unit is still the one it is sold by').toBe('piece');
     expect(noPieces.missing).toContain('no-pieces');
 
-    const empty = m.productPreview({ id: 'X', name: 'New' }, pvTables()) as unknown as Record<string, unknown>;
+    const empty = previewOf(m, { id: 'X', name: 'New' }, pvTables()) as unknown as Record<string, unknown>;
     for (const key of ['sellingPrice', 'materialsUnitCost', 'packagingUnitCost', 'labourUnitCost',
       'totalUnitCost', 'foodCostPct', 'targetPct', 'margin', 'idealGross', 'idealNet', 'unit']) {
       expect(empty[key], key).toBe(null);
@@ -1020,12 +1027,12 @@ describe.each([
   test('a partly priced product says so in the preview too', () => {
     const t = pvTables({ recipes: { DOUGH: { ...PV_DOUGH, ingredients: [...(PV_DOUGH.ingredients as Doc[]),
       { label: 'Salt', grams: 10, unit: 'g', kind: 'ingredient', refId: 'NOPE' }] } } });
-    expect(m.productPreview(product(), t).partial).toBe(true);
+    expect(previewOf(m, product(), t).partial).toBe(true);
   });
 
   test('junk never throws and never yields NaN', () => {
     for (const raw of [null, undefined, 'x', 42, {}, { components: 'no' }]) {
-      const pv = m.productPreview(raw, {});
+      const pv = previewOf(m, raw, {});
       for (const [key, value] of Object.entries(pv)) {
         if (typeof value === 'number') expect(Number.isFinite(value), `${key} of ${JSON.stringify(raw)}`).toBe(true);
       }
@@ -1107,6 +1114,9 @@ describe.each([
 describe('the port against the original', () => {
   // The one function that looks a word up in the interface dictionary.
   const LEFT_OUT = ['blockerText'];
+  // Paired, but handed the translator last (item 26): productPreview and unpricedParts name a line that no
+  // longer exists, unpricedReasonText is the one place a reason becomes words.
+  const ADAPTED = ['productPreview', 'unpricedParts', 'unpricedReasonText'];
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;
   const shared = Object.keys(original).filter(name => !LEFT_OUT.includes(name)).sort();
@@ -1115,8 +1125,7 @@ describe('the port against the original', () => {
     for (const name of LEFT_OUT) expect(typeof original[name], name).toBe('function');
   });
 
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 26): main added exports to js/foodcost/foodcost-model.js (componentLineCost, packagingLineCost, unpricedParts, unpricedReasonText: the cost on every line and «Which?»), not yet in the port — remove .fails when ported
-  test.fails('exports exactly the same names, except those', () => {
+  test('exports exactly the same names, except those', () => {
     expect(Object.keys(port).sort()).toStrictEqual(shared);
   });
 
@@ -1140,14 +1149,9 @@ describe('the port against the original', () => {
       product({ components: [{ recipeId: 'GONE', qtyKg: 1 }] }),
       { id: 'X', name: 'New' }, null, undefined, 'x', 42, {},
     ];
-    // The original also returns `unpriced` (item 26): every other field must agree.
-    const withoutUnpriced = (out: unknown): unknown => {
-      const { unpriced: _unpriced, ...rest } = out as Record<string, unknown>;
-      return rest;
-    };
+    // `unpriced` (the «Which?» list, item 26) included: the port is handed the same `t` as the original reads.
     for (const raw of products) {
-      expect(ported.productPreview(raw, tables), JSON.stringify(raw))
-        .toStrictEqual(withoutUnpriced(legacy.productPreview(raw, tables)));
+      expect(previewOf(ported, raw, tables), JSON.stringify(raw)).toStrictEqual(previewOf(legacy, raw, tables));
     }
     for (const args of [{ unitCost: 0.5, targetPct: 30 }, { unitCost: 0.72, targetPct: 30 }, { unitCost: 0, targetPct: 30 },
       { unitCost: 'x', targetPct: 30 }, { unitCost: 1, targetPct: 120 }, {}, undefined]) {
@@ -1166,7 +1170,9 @@ describe('the port against the original', () => {
       const theirs = original[name];
       if (typeof mine !== 'function' || typeof theirs !== 'function') continue;
       expect(mine.name, name).toBe(theirs.name);
-      expect(mine.length, `${name}: arity`).toBe(theirs.length);
+      // ADAPTED: the translator is the port's LAST argument (see price-model.ts), so it takes one more.
+      if (ADAPTED.includes(name)) expect(mine.length, `${name}: arity`).toBeGreaterThan(theirs.length);
+      else expect(mine.length, `${name}: arity`).toBe(theirs.length);
     }
   });
 });
