@@ -103,6 +103,23 @@ describe('the entry: several products are made with the recipe', () => {
     expect(screen.queryByRole('button', { name: /^Tart/ })).not.toBeInTheDocument();
   });
 
+  // Found by the emulator drive: the section's listeners start when it mounts, so the prices came after the products, the
+  // entry ranked with empty tables (by name) and opened a product that was not the list's first.
+  it('on the split, waits for the prices before choosing: the worst food cost opens, not the first name', async () => {
+    split();
+    // Roll sells far too cheap (the worst food cost, ranked first); by name Loaf would come first.
+    const cheapRoll = product('Roll', { name: 'Roll', components: madeWith('dough'), sellingPrice: 0.3 });
+    const dearLoaf = product('Loaf', { name: 'Loaf', components: madeWith('dough'), sellingPrice: 10 });
+    const fake = editorSource([dearLoaf, cheapRoll, TART], { recipes: [DOUGH] });
+    fake.holdIngredients();
+    const { router } = renderFoodcost('/food-cost', { entries: fromRecipe(), source: fake });
+    await wait(300);
+    expect(where(router)).toBe('/food-cost?recipe=dough');
+    act(() => { fake.releaseIngredients(); });
+    expect(await screen.findByRole('heading', { level: 2, name: 'Roll' }, LOAD)).toBeInTheDocument();
+    expect(where(router)).toBe('/food-cost/product/Roll?using=dough');
+  });
+
   it('«Show all» REPLACES the narrowed list with the plain one, and every product is listed', async () => {
     const { router, user } = open();
     await screen.findByRole('heading', { level: 2, name: 'Products with “Dough”' }, LOAD);
