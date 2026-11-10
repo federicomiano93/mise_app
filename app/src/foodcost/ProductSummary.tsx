@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { productPreview, productionCost } from '@mise/shared/foodcost-model';
 import type { CostTables, ProductPreview } from '@mise/shared/foodcost-model';
 import { useT } from '../i18n/useT';
+import { foodcostTranslate } from './foodcostWords';
 import { useMoney } from '../session/useMoney';
 import { PreviewPanel, previewCaption } from './PreviewPanel';
 import styles from './ProductSummary.module.css';
@@ -23,13 +24,15 @@ export function ProductSummary({ product, tables }: Props) {
   const { t } = useT();
   const money = useMoney();
   const [detailsOpen, setDetailsOpen] = useState(false);
+  // …and whether its «Which?» list is: the panel is drawn again whenever the product changes, this is not.
+  const [whichOpen, setWhichOpen] = useState(false);
   const preview = useMemo((): ProductPreview | null => {
     try {
-      return productionCost(product, tables).batchCost === null ? null : productPreview(product, tables);
+      return productionCost(product, tables).batchCost === null ? null : productPreview(product, tables, foodcostTranslate(t));
     } catch {
       return null;
     }
-  }, [product, tables]);
+  }, [product, tables, t]);
 
   if (preview === null) return null;
   return (
@@ -41,6 +44,8 @@ export function ProductSummary({ product, tables }: Props) {
         showMissing={false}
         detailsOpen={detailsOpen}
         onDetailsToggle={setDetailsOpen}
+        whichOpen={whichOpen}
+        onWhichToggle={setWhichOpen}
       />
     </div>
   );

@@ -1,12 +1,13 @@
 import { useId, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
-import { BLOCKER_TEXT } from '@mise/shared/foodcost-model';
+import { BLOCKER_TEXT, unpricedReasonText } from '@mise/shared/foodcost-model';
 import type { ProductPreview, SaleUnit } from '@mise/shared/foodcost-model';
 import { fcMoney, fcNumber } from '@mise/shared/fc-number';
 import type { Money } from '@mise/shared/currency';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
+import { foodcostTranslate } from './foodcostWords';
 import { statusWord } from './productRowModel';
 import styles from './PreviewPanel.module.css';
 
@@ -40,6 +41,9 @@ type Props = {
   // panel keeps it itself.
   detailsOpen?: boolean;
   onDetailsToggle?: (open: boolean) => void;
+  // The same for the «Which?» list under the partial-price warning (current app PR #485).
+  whichOpen?: boolean;
+  onWhichToggle?: (open: boolean) => void;
 };
 
 // The figures of one product at a glance (Federico, 7 Nov 2026; current app preview-view.js after 39080577 and
@@ -60,7 +64,7 @@ type Props = {
 // walks buttons, fields and links — a <summary> there could not be reached from a keyboard. aria-expanded tells a
 // screen reader whether it is open.
 export function PreviewPanel({
-  preview, money, caption = false, showMissing = true, detailsOpen, onDetailsToggle,
+  preview, money, caption = false, showMissing = true, detailsOpen, onDetailsToggle, whichOpen, onWhichToggle,
 }: Props) {
   const { t } = useT();
   const moreId = useId();
@@ -70,6 +74,15 @@ export function PreviewPanel({
     setOwnOpen(!open);
     onDetailsToggle?.(!open);
   };
+  const whichId = useId();
+  const [ownWhich, setOwnWhich] = useState(false);
+  const whichShown = whichOpen ?? ownWhich;
+  const toggleWhich = () => {
+    setOwnWhich(!whichShown);
+    onWhichToggle?.(!whichShown);
+  };
+  // What has no price, only under the warning that says something has none, and only with something to name.
+  const unpriced = preview.partial ? preview.unpriced : [];
   const hasLabour = preview.labourUnitCost !== null;
   const shown = (value: number | null): string => (value === null ? DASH : fcMoney(value, money));
 
@@ -110,6 +123,28 @@ export function PreviewPanel({
       ) : null}
       {/* ⚠️ A PARTIAL COST MUST NEVER LOOK COMPLETE: every figure above is too LOW. */}
       {preview.partial ? <p className={styles.partial}>{t('fc.costPartial')}</p> : null}
+      {/* «Which?»: what has no price, closed until pressed (Federico, 7 Nov 2026). The list is the model's (preview.unpriced); this
+          only words it. A BUTTON for the same reason as «Details» below, and it keeps its state the same way. */}
+      {unpriced.length > 0 ? (
+        <div className={styles.which}>
+          <Button variant="bare" className={styles.whichButton} aria-expanded={whichShown} aria-controls={whichId} onPress={toggleWhich}>
+            {t('fc.preview.which')}
+          </Button>
+          <ul id={whichId} className={styles.whichList} hidden={!whichShown}>
+            {unpriced.map(item => {
+              const reason = unpricedReasonText(item.reason, foodcostTranslate(t));
+              return (
+                <li key={`${item.name}|${item.inRecipe}|${item.reason}`}>
+                  <span className={styles.whichName}>{item.name}</span>
+                  <span className={styles.whichWhy}>
+                    {item.inRecipe ? t('fc.unpriced.reasonIn', { reason, name: item.inRecipe }) : t('fc.unpriced.reason', { reason })}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
       {showMissing && preview.missing.length > 0 ? (
         <>
           <p className={styles.missingTitle}>{t('fc.preview.missing')}</p>

@@ -10,6 +10,8 @@ import rowCss from './ProductRow.module.css?raw';
 import sectionCss from './FoodcostSection.module.css?raw';
 import lineCss from './LineRow.module.css?raw';
 import weighCss from './WeighingPair.module.css?raw';
+import previewCss from './PreviewPanel.module.css?raw';
+import readCss from './ReadSections.module.css?raw';
 
 // What a stylesheet decides and jsdom cannot see: jsdom applies no layout, so a row too short to
 // tap, a card that clips the bar stuck to its top or a pane that does not scroll on its own is
@@ -183,5 +185,34 @@ describe('a wrong dough weighing', () => {
     const framed = rule(weighCss, '.input[data-invalid="true"]');
     expect(declaration(framed, 'border-color')).toBe('var(--danger)');
     expect(declaration(framed, 'box-shadow')).toContain('var(--danger)');
+  });
+});
+
+describe('the money under a line and the «Which?» list', () => {
+  it('the money is quiet secondary text that wraps at 296px (muted token, small size), never a warning colour', () => {
+    const body = rule(lineCss, '.cost');
+    expect(declaration(body, 'color')).toBe('var(--ink-2)');
+    expect(declaration(body, 'font-size')).toBe('var(--fs-sm)');
+    expect(declaration(body, 'overflow-wrap')).toBe('anywhere');
+    expect(contrast('--ink-2', '--surface')).toBeGreaterThanOrEqual(4.5);
+    const read = rule(readCss, '.row dd.cost');
+    expect(declaration(read, 'flex')).toBe('1 0 100%');
+    expect(declaration(read, 'color')).toBe('var(--ink-2)');
+  });
+
+  it('«Which?» is a target as tall and wide as a thumb, quiet text with a visible focus ring', () => {
+    const button = rule(previewCss, '.whichButton');
+    expect(declaration(button, 'min-height')).toBe('var(--hit)');
+    expect(declaration(button, 'min-width')).toBe('var(--hit)');
+    expect(token('--hit')).toBeGreaterThanOrEqual(44);
+    expect(declaration(rule(previewCss, '.whichButton[data-focus-visible]'), 'outline')).toContain('var(--accent)');
+    expect(declaration(rule(previewCss, '.whichList'), 'font-size')).toBe('var(--fs-sm)');
+    expect(declaration(rule(previewCss, '.whichList li'), 'overflow-wrap')).toBe('anywhere');
+  });
+
+  it('use nothing the lab tablet (Chrome 101) lacks', () => {
+    for (const css of [lineCss, previewCss, readCss]) {
+      expect(withoutComments(css)).not.toMatch(/:has\(|color-mix|@container|container-type/);
+    }
   });
 });

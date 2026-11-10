@@ -71,7 +71,7 @@ describe('a venue in Britain', () => {
     renderFoodcost('/food-cost/product/Green', { source: fake });
     const packaging = await screen.findByRole('region', { name: 'Packaging' }, LOAD);
     // 3 boxes at 0.004 each is 0.012 in all: «£0.01», while one box alone is under a cent.
-    expect(within(packaging).getByText(`< £0.01 each · £0.01`)).toBeInTheDocument();
+    expect(within(packaging).getByText(`< £0.01 each · this amount £0.01`)).toBeInTheDocument();
   });
 
   it('writes the oven loss as «12.00%» and the answer as «20.00%»', async () => {

@@ -114,7 +114,12 @@
   overflow-wrap: anywhere;
 }
 
-/* A packaging line's note is mostly its price each and its total, not a warning. */
-.note[data-kind="packaging"] {
+/* The rate and what the amount typed costs (Federico, 7 Nov 2026): secondary text, quiet like the note but not a warning.
+   It wraps at 296px, never sideways; the figures keep their width (tabular). The gap above the note comes from the line's. */
+.cost {
+  margin: 0;
   color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }

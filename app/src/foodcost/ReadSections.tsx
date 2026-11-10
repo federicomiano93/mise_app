@@ -4,7 +4,7 @@ import { readWeighing, startWeighing } from '@mise/shared/foodcost-weighing';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
-import { lineName, lineNote } from './lineNotes';
+import { lineMoney, lineName, lineNote } from './lineNotes';
 import type { Loaded } from './lineNotes';
 import { piecesShown } from './productEditorModel';
 import type { Working } from './productEditorModel';
@@ -31,7 +31,9 @@ type Row = {
   label: string;
   // null → «Not set».
   value: string | null;
-  // The cost-model's words about the line («this recipe is not priced»), under the row.
+  // The line's rate and what its amount costs (lineCost.ts), under the row and above the note.
+  cost?: string;
+  // The cost-model's words about the line («this recipe is only part priced»), under the row.
   note?: string;
   missing?: boolean;
   invalid?: boolean;
@@ -47,6 +49,7 @@ function ReadList({ rows }: { rows: Row[] }) {
           <dd className={row.invalid ? styles.invalid : undefined}>
             {row.value === null || row.value === '' ? <span className={styles.empty}>{t('fc.notSet')}</span> : row.value}
           </dd>
+          {row.cost ? <dd className={styles.cost}>{row.cost}</dd> : null}
           {row.note ? <dd className={styles.note}>{row.note}</dd> : null}
         </div>
       ))}
@@ -96,7 +99,13 @@ export function ReadMadeOf({ product, working, tables, loaded }: Lines) {
         const value = line.kind === 'ingredient'
           ? (positive(line.qty) ? amountText(t, money, line.qty, line.unit) : null)
           : (positive(line.qtyKg) ? fcWeight(line.qtyKg, money) : null);
-        return { label: name.text, value, note: lineNote(t, money, shown, tables, loaded), missing: name.missing };
+        return {
+          label: name.text,
+          value,
+          cost: lineMoney(t, money, shown, tables, product.noWeightLoss).text,
+          note: lineNote(t, money, shown, tables, loaded),
+          missing: name.missing,
+        };
       })}
     />
   );
@@ -154,6 +163,7 @@ export function ReadPackaging({ product, working, tables, loaded }: Lines) {
         return {
           label: name.text,
           value: positive(line.qtyPcs) ? amountText(t, money, line.qtyPcs, 'pcs') : null,
+          cost: lineMoney(t, money, shown, tables, product.noWeightLoss).text,
           note: lineNote(t, money, shown, tables, loaded),
           missing: name.missing,
         };

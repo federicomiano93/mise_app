@@ -166,7 +166,7 @@ describe('packaging', () => {
     expect(pieces).toHaveFocus();
     expect(within(packaging()).getByText('Quantity per piece')).toBeInTheDocument();
     await user.type(pieces, '2');
-    expect(within(packaging()).getByText('£0.25 each · £0.50')).toBeInTheDocument();
+    expect(within(packaging()).getByText('£0.25 each · this amount £0.50')).toBeInTheDocument();
     // The packaging adds to the cost of every piece sold: £0.20 + 2 × £0.25.
     expect(screen.getByRole('group', { name: 'Production cost' })).toHaveTextContent('£0.70per piece');
   });
@@ -189,12 +189,14 @@ describe('packaging', () => {
 });
 
 describe('the notes under a line', () => {
-  it('carry no money under a recipe or an ingredient', async () => {
+  it('keep their money out: it has its own line above the note (the rate and what the amount costs)', async () => {
     await open('/food-cost/product/Mixed', editorSource([product('Mixed', { components: [
       { recipeId: 'Dough', qtyKg: 1 },
       { kind: 'ingredient', ingredientId: 'flour', qty: 200, unit: 'g' },
     ] })], { recipes: [recipe('Dough')] }));
-    expect(madeOf()).not.toHaveTextContent('£');
+    // A kilo of Dough is £2.00 a kilo, 200 g of flour £0.40: both fully priced, so no note stands under them.
+    expect(within(madeOf()).getByText('£2.00/kg · this amount £2.00')).toBeInTheDocument();
+    expect(within(madeOf()).getByText('£2.00/kg · this amount £0.40')).toBeInTheDocument();
     expect(madeOf()).not.toHaveTextContent(/priced|exist/i);
   });
 
@@ -207,9 +209,12 @@ describe('the notes under a line', () => {
       { kind: 'ingredient', ingredientId: 'nothing', qty: 10, unit: 'g' },
     ] })], { recipes: [unpricedRecipe('Ghost'), halfPricedRecipe('Half')] }));
     const region = madeOf();
-    expect(within(region).getByText('This recipe is not priced yet')).toBeInTheDocument();
+    // «No price» is said ONCE, in the money line: the note that said the same thing is gone.
+    expect(within(region).getAllByText('— No price')).toHaveLength(2);
+    expect(within(region).queryByText('This recipe is not priced yet')).not.toBeInTheDocument();
+    expect(within(region).queryByText('This ingredient has no price yet')).not.toBeInTheDocument();
     expect(within(region).getByText('Only part of this recipe has a price')).toBeInTheDocument();
-    expect(within(region).getByText('This ingredient has no price yet')).toBeInTheDocument();
+    expect(within(region).getByText('£2.00/kg · this amount £2.00 · not exact yet')).toBeInTheDocument();
     // A recipe and an item that are gone name themselves so, on the button and in the note.
     expect(within(region).getByRole('button', { name: 'Change: This recipe no longer exists' })).toBeInTheDocument();
     expect(within(region).getByRole('button', { name: 'Change: This item no longer exists' })).toBeInTheDocument();
