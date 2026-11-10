@@ -322,3 +322,25 @@ describe('a venue in Italy', () => {
     expect(within(dialog).getByText('Scrivi un obiettivo di food cost')).toBeInTheDocument();
   });
 });
+
+describe('the top of the card gets the one figure it lacked: the ideal price without VAT', () => {
+  it('sits in the suggested-price box under the price with VAT, in the venue’s layout', async () => {
+    renderFoodcost('/food-cost/product/Green', { source: editorSource([GREEN]) });
+    const box = await screen.findByRole('group', { name: 'Suggested price' }, LOAD);
+    expect(box).toHaveTextContent('£0.96');
+    expect(within(box).getByText('Ideal price, without VAT').parentElement).toHaveTextContent('£0.80');
+  });
+
+  it('is told even before a VAT rate is chosen', async () => {
+    renderFoodcost('/food-cost/product/NoVat', { source: editorSource([product('NoVat', { vatRate: null })]), ...ITALY });
+    const box = await screen.findByRole('group', { name: 'Prezzo consigliato' }, LOAD);
+    expect(box).toHaveTextContent('Scegli l’aliquota IVA');
+    expect(within(box).getByText('Prezzo ideale, senza IVA').parentElement).toHaveTextContent('0,80 €');
+  });
+
+  it('is not drawn while there is no target to hit', async () => {
+    renderFoodcost('/food-cost/product/Free', { source: editorSource([product('Free', { foodCostTarget: null })]) });
+    const box = await screen.findByRole('group', { name: 'Suggested price' }, LOAD);
+    expect(within(box).queryByText('Ideal price, without VAT')).not.toBeInTheDocument();
+  });
+});
