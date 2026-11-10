@@ -2524,7 +2524,9 @@ service cloud.firestore {
       // the one number here that may legitimately be zero.
       //
       // ⚠️ THE COMPONENT ROWS ARE NOT VALIDATED AND CANNOT BE — rules cannot look
-      // inside a list. Their shape is guaranteed by js/foodcost/foodcost-model.js.
+      // inside a list. Their shape is guaranteed by js/foodcost/foodcost-model.js
+      // (Mise 2: shared/src/foodcost-model.ts — from model 3 a recipe line's qtyKg is
+      // the RAW dough, and the product carries its own raw and cooked weights).
       // What is enforced here is the LIST SIZE, which keeps the document far from
       // the 1MB ceiling. Same division of labour as recipes and pastries.
       // ⚠️⚠️ canManage AND NOT canUse — READ INCLUDED, WHICH IS THE UNUSUAL PART.
@@ -2578,7 +2580,8 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly([
                'bakery', 'name', 'components', 'packaging', 'sellingMode',
                'piecesPerBatch', 'packSize', 'packUnit', 'sellingPrice', 'vatRate',
-               'foodCostTarget', 'model', 'labourMinutes', 'labourPeople', 'noWeightLoss'
+               'foodCostTarget', 'model', 'labourMinutes', 'labourPeople', 'noWeightLoss',
+               'rawGrams', 'cookedGrams'
              ])
           && request.resource.data.name is string
           && request.resource.data.name.size() > 0
@@ -2604,13 +2607,19 @@ service cloud.firestore {
           && (!('packUnit' in request.resource.data)
               || request.resource.data.packUnit == null
               || request.resource.data.packUnit in ['g', 'kg', 'pcs'])
-          // ⚠️ The ceiling is the app's PRODUCT_MODEL exactly (js/foodcost/foodcost-model.js,
-          // pinned by tests/model-ceiling.test.mjs): a higher number saved by hand would make
-          // the product unsaveable by every phone. Raising PRODUCT_MODEL = raise this first.
+          // ⚠️ The ceiling is the app's PRODUCT_MODEL exactly — Mise 2's, 3 since 10 Nov 2026
+          // (shared/src/foodcost-model.ts; the current app's js/foodcost/foodcost-model.js
+          // still writes 2), pinned by tests/model-ceiling.test.mjs and
+          // shared/src/model-ceiling.spec.ts: a higher number saved by hand would make the
+          // product unsaveable by every phone. Raising PRODUCT_MODEL = raise this first.
+          // ⚠️⚠️ 3 = the recipe lines hold RAW kilos and the product owns its oven loss. With
+          // the old-phone guard below, the current app can no longer save over a product Mise 2
+          // has saved — it would write raw kilos back as finished ones — and nothing can lower a
+          // product back to 2: reverting the app does not undo it.
           && (!('model' in request.resource.data)
               || (request.resource.data.model is int
                   && request.resource.data.model >= 1
-                  && request.resource.data.model <= 2))
+                  && request.resource.data.model <= 3))
           && (!('labourMinutes' in request.resource.data)
               || request.resource.data.labourMinutes == null
               || (request.resource.data.labourMinutes is number
@@ -2624,8 +2633,24 @@ service cloud.firestore {
           // «Finished product, no weight loss» (Nov 2026): the oven loss of the recipes on
           // THIS product is ignored in its cost. Absent = false; the app writes it only when
           // true. A boolean and nothing else — never a number a screen could mistake for a loss.
+          // ⚠️ Mise 2 never writes it (model 3 has its own weights, below) — it stays listed
+          // because products in production carry it, and a key they carry must never leave
+          // the list.
           && (!('noWeightLoss' in request.resource.data)
               || request.resource.data.noWeightLoss is bool)
+          // Mise 2 (model 3, 10 Nov 2026: «il calo è del prodotto»): the product's own weighing,
+          // in grams — `rawGrams` a raw weight typed apart from the lines' total, `cookedGrams`
+          // the batch weighed out of the oven. Absent = not said (the lines' total; no loss).
+          // Never 0, never above ten tonnes (a recipe's own bound). A cooked weight heavier
+          // than the raw one IS accepted: a wrong pair is kept, in red, and costs nothing new.
+          && (!('rawGrams' in request.resource.data)
+              || (request.resource.data.rawGrams is number
+                  && request.resource.data.rawGrams > 0
+                  && request.resource.data.rawGrams <= 10000000))
+          && (!('cookedGrams' in request.resource.data)
+              || (request.resource.data.cookedGrams is number
+                  && request.resource.data.cookedGrams > 0
+                  && request.resource.data.cookedGrams <= 10000000))
           // ⚠️⚠️ THE OLD-PHONE GUARD, AND IT COSTS NO READ. A product is written WHOLE, so a
           // phone still on the version before ingredient lines and packs would save it back
           // without them and delete them in silence. Once a product carries `model`, a save

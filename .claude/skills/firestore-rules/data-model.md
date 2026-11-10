@@ -238,8 +238,17 @@ the only other one is `client-accounts` (managers, or the account itself — aud
   the stored one — an out-of-date phone gets «could not save» instead of deleting lines. Labour is
   not frozen into snapshots. `noWeightLoss` (bool, Nov 2026, written only when `true`): a finished
   product — the oven loss of the recipes on ITS lines is ignored in ITS cost; the recipe's
-  `lossPct` is untouched and other products keep paying it. ⚠️ Mise 2's `normalizeProduct` must
-  carry it, or its next save of such a product drops it.
+  `lossPct` is untouched and other products keep paying it.
+  ⚠️⚠️ **Mise 2 writes `model: 3` (10 Nov 2026, «il calo è del prodotto»)**: a recipe line's
+  `qtyKg` is the RAW dough, costed at the recipe's raw price, and the PRODUCT owns its loss —
+  `rawGrams` (a raw weight typed apart from the lines' total; absent = the total) and
+  `cookedGrams` (the batch out of the oven; absent = not weighed, no loss), both numbers > 0 and
+  ≤ 10 000 000, a cooked weight heavier than the raw one kept (shown red). Mise 2 never writes
+  `noWeightLoss`; it stays whitelisted because production carries it. A product below 3 is
+  converted ON READ (`fromLegacyProduct`, same cost to the last stored decimal) and written as 3
+  at its next Save — never rewritten in bulk. The rules ceiling is 3, so the current app (2) can
+  no longer save over a product Mise 2 has saved, and nothing lowers it back: reverting the app
+  does not undo it.
 - `foodcost-settings/main` — `{ bakery, labourCostPerHour, updatedAt }`; read and write
   `canManage(lid,'foodcost')` only, never deleted: an employee shown Food cost must not learn the
   rate.

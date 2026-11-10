@@ -76,11 +76,32 @@ describe.each([
       'vatRate', 'foodCostTarget', 'labourMinutes', 'labourPeople']) {
       expect(made[key], key).toBeNull();
     }
-    expect(made['model']).toBe(PRODUCT_MODEL);
+    // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change D. The port writes model 3 (PRODUCT_MODEL); the original
+    // still writes 2, so the comparison with the port's constant no longer holds for js/.
+    expect(made['model']).toBe(m === ported ? PRODUCT_MODEL : 2);
     // It survives the normaliser the store runs every product through, unchanged.
     const norm = normalise(made);
     expect(norm.name).toBe(made['name']);
     expect(norm.components).toEqual(made['components']);
+  });
+
+  test('a recipe that loses weight in the oven: the line and the kilos offered', () => {
+    const lossy = recipe('r2', 'Pane', [{ label: 'Farina', grams: 1000, unit: 'g' }], { lossPct: 10 });
+    const made = m.productFromRecipe(lossy) as unknown as Record<string, unknown>;
+    const offered = m.recipesWithoutProducts<{ id: string }>([lossy], []).create[0]?.kg;
+    // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change E. The line is the whole recipe RAW (1000 g = 1 kg) and
+    // the product keeps the loss as its cooked weight: 1 kg × 1000 × (1 − 10/100) = 900 g; the kilos offered are the raw
+    // ones. js/ writes the finished 0.9 kg on the line (the recipe's own loss still applied) and has no cooked weight.
+    if (m === ported) {
+      expect(made['components']).toEqual([{ recipeId: 'r2', qtyKg: 1 }]);
+      expect(made['rawGrams']).toBeNull();
+      expect(made['cookedGrams']).toBe(900);
+      expect(offered).toBe(1);
+    } else {
+      expect(made['components']).toEqual([{ recipeId: 'r2', qtyKg: 0.9 }]);
+      expect(made['cookedGrams']).toBeUndefined();
+      expect(offered).toBe(0.9);
+    }
   });
 
   test('a recipe without a name makes no product; a long one is cut to what the rules take', () => {

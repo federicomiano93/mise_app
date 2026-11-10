@@ -213,9 +213,12 @@ describe.each([
     ] }), TABLES);
     const vanilla = row(result, 'Vanilla');
     expect(vanilla.reason).toBe('no-price');
-    near(vanilla.kg, 0.005, 1e-9);
+    // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change C moves it. The vanilla has no price but a known weight,
+    // so the batch weighs 10 + 0.05 = 10.05 kg (js/: 10) and everything divided by it moves: the same 32 of dough over
+    // 10.05 kg is 3.1841 a kilo (js/: 3.2), and the vanilla is 0.05 / 10.05 = 0.004975 kg of it (js/: 0.005).
+    near(vanilla.kg, m === ported ? 0.05 / 10.05 : 0.005, m === ported ? 1e-6 : 1e-9);
     expect(result.partial).toBe(true);
-    expect(result.total).toBe(3.2);
+    expect(result.total).toBe(m === ported ? 3.1841 : 3.2);
   });
 
   test('an ingredient straight on the product: its own name, by weight or by the piece', () => {
@@ -245,9 +248,11 @@ describe.each([
     const result = m.costPerKg(product({ components: [{ recipeId: 'DOUGH', qtyKg: 8 }, { recipeId: 'UNPRICED', qtyKg: 2 }] }), TABLES);
     const mystery = row(result, 'Mystery');
     expect(mystery.reason).toBe('no-recipe');
-    // The cost model gives an unpriced recipe no weight: the kilo is the dough's alone.
-    expect(result.kg).toBe(8);
-    near(mystery.kg, 0.25, 1e-6);
+    // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change C moves it. The unpriced recipe still weighs what it
+    // weighs, so the batch is 8 + 2 = 10 kg (js/: the dough's 8 alone) and the Mystery is 2 / 10 = 0.2 kg of a kilo (js/:
+    // 2 / 8 = 0.25).
+    expect(result.kg).toBe(m === ported ? 10 : 8);
+    near(mystery.kg, m === ported ? 0.2 : 0.25, 1e-6);
     expect(result.partial).toBe(true);
   });
 
@@ -369,11 +374,67 @@ describe('the port and the original answer the same, row by row', () => {
     ['undefined', undefined],
   ];
 
-  test.each(cases)('%s', (_label, input) => {
+  // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): four of these cases part from the original on purpose; each is
+  // pinned below to the port's own answer. foodcost-product-loss.spec.ts proves what must not move (the cost of every product).
+  const POST_SWITCH = ['pieces', 'loop and unpriced', 'too deep'];
+
+  test.each(cases.filter(([label]) => !POST_SWITCH.includes(label)))('%s', (_label, input) => {
     expect(ported.costPerKg(input, tables as never)).toStrictEqual(legacy.costPerKg(input, tables as never));
   });
 
+  // Change C: the batch weighs every line whose weight is known. Unlisted rows are still the original's.
+  test('POST-SWITCH pieces: the unpriced and gone ingredients weigh 0.05 kg each, so the batch is 10.5 kg and not 10.4', () => {
+    const input = cases.find(([label]) => label === 'pieces')?.[1];
+    // 9.8 kg dough (31.36) + 100 cherries (5) + 10 eggs (3) = 39.36 over 10.5 kg = 3.7486 (js/: over 10.4 = 3.7846).
+    const row = (key: string, kind: ported.PerKgKind, name: string, kg: number | null, pcs: number | null, pricePerKg: number | null,
+      priceEach: number | null, cost: number | null, reason: ported.PerKgReason | null): ported.PerKgRow =>
+      ({ key, kind, name, kg, pcs, pricePerKg, priceEach, cost, reason });
+    expect(ported.costPerKg(input, tables as never)).toStrictEqual({
+      kg: 10.5, total: 3.7486, partial: true, packagingLeftOut: false, lossy: false,
+      rows: [
+        row('ing:FLOUR', 'ingredient', 'Flour', 0.746667, null, 2, null, 1.4933, null),
+        row('ing:BUTTER', 'ingredient', 'Butter', 0.186667, null, 8, null, 1.4933, null),
+        row('ing:CHERRY:pcs', 'piece', 'Cherry', null, 9.5238, null, 0.05, 0.4762, null),
+        row('ing:EGG:pcs', 'piece', 'Egg', 0.057143, 0.9524, null, 0.3, 0.2857, null),
+        row('ing:NOPRICE:no-price', 'ingredient', 'Vanilla', 0.004762, null, null, null, null, 'no-price'),
+      ],
+    });
+  });
+
+  test('POST-SWITCH loop and unpriced: a recipe that is gone or unpriced still weighs, so the batch is 5 kg and not 1', () => {
+    const input = cases.find(([label]) => label === 'loop and unpriced')?.[1];
+    // Loop 1 kg + Mystery 2 kg + the gone recipe 2 kg = 5 kg (js/: only the Loop's 1 kg). Its flour costs 2 for 5 kg: 0.4 a kilo.
+    const row = (key: string, name: string, kg: number, cost: number | null, pricePerKg: number | null, reason: ported.PerKgReason | null): ported.PerKgRow =>
+      ({ key, kind: 'ingredient', name, kg, pcs: null, pricePerKg, priceEach: null, cost, reason });
+    expect(ported.costPerKg(input, tables as never)).toStrictEqual({
+      kg: 5, total: 0.4, partial: true, packagingLeftOut: false, lossy: false,
+      rows: [
+        row('ing:FLOUR', 'Flour', 0.2, 0.4, 2, null),
+        row('label:itself:no-recipe', 'Itself', 0.2, null, null, 'no-recipe'),
+        row('recipe:UNPRICED:no-recipe', 'Mystery', 0.4, null, null, 'no-recipe'),
+      ],
+    });
+  });
+
+  test('POST-SWITCH too deep: the same cost and the same rows, the weights a hair apart from the conversion of the old kilos', () => {
+    const input = cases.find(([label]) => label === 'too deep')?.[1];
+    const old = legacy.costPerKg(input, tables as never);
+    // Change B: 3 kg finished of a recipe that loses 10% become q × finished price ÷ raw price raw kilos, not q ÷ 0.9. The
+    // prices are rounded to four decimals, so those kilos differ from q ÷ 0.9 by ~2 in 100 000, and so does every row cut
+    // from them (the total, the batch cost over 3 kg, is the original's to the last decimal).
+    const moved: Record<string, Partial<ported.PerKgRow>> = {
+      'ing:FLOUR': { kg: 1.226163, cost: 2.4523 },
+      'label:level 5:no-recipe': { kg: 0.190516 },
+    };
+    expect(ported.costPerKg(input, tables as never)).toStrictEqual({
+      ...old, rows: old.rows.map(r => ({ ...r, ...moved[r.key] })),
+    });
+    expect(Object.keys(moved).every(key => old.rows.some(r => r.key === key))).toBe(true);
+  });
+
   test('without tables', () => {
-    expect(ported.costPerKg(product())).toStrictEqual(legacy.costPerKg(product()));
+    // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change C. Nothing is known about the recipe, but the line still
+    // says 10 kg, which is what the batch weighs: kg 10 (js/: null, nothing priced so nothing weighed). Still no total.
+    expect(ported.costPerKg(product())).toStrictEqual({ ...legacy.costPerKg(product()), kg: 10 });
   });
 });

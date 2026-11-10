@@ -88,11 +88,18 @@ describe.each([
 
   test('a recipe line: its price per kilo of what comes out, and the amount on the line', () => {
     const line = m.componentLineCost(recLine('DOUGH', 2), TABLES);
-    expect([line.rate, line.rateUnit, line.cost, line.partial, line.reason]).toStrictEqual([2.5, 'kg', 5, false, null]);
+    // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change A moves it. The line holds RAW kilos, priced at the
+    // recipe's RAW price per kilo (1 kg of flour at 2/kg = 2/kg, the 20% loss laid aside): 2 kg raw × 2 = 4.
+    // js/ prices the same line at the price of what comes out, 2.5/kg, so 2 kg finished are 5.
+    expect([line.rate, line.rateUnit, line.cost, line.partial, line.reason])
+      .toStrictEqual(m === ported ? [2, 'kg', 4, false, null] : [2.5, 'kg', 5, false, null]);
   });
 
-  test('«no weight loss» lays the oven loss aside, as the batch total does', () => {
-    const line = m.componentLineCost(recLine('DOUGH', 2), TABLES, { noWeightLoss: true });
+  // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change A. The third argument is gone from the port, because a
+  // recipe line is always costed raw now; the subject of this test exists in js/ only.
+  test.runIf(m !== ported)('«no weight loss» lays the oven loss aside, as the batch total does', () => {
+    const costOf = m.componentLineCost as unknown as (...args: unknown[]) => ported.ComponentLineCost;
+    const line = costOf(recLine('DOUGH', 2), TABLES, { noWeightLoss: true });
     expect([line.rate, line.cost]).toStrictEqual([2, 4]);
   });
 
@@ -138,15 +145,29 @@ describe.each([
     const components = [recLine('DOUGH', 2), recLine('CREAM', 1), recLine('MYSTERY', 1), recLine('GONE', 1),
       ingLine('SALT', 2, 'g'), ingLine('EGG', 4, 'pcs'), ingLine('SPRINKLE', 5, 'g'), ingLine('GONE', 1, 'kg')];
     const batch = m.batchTotals(product(components), TABLES);
-    components.forEach((component, i) => {
+    // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change B. A product with no model holds FINISHED kilos, and
+    // the batch converts it on read; componentLineCost prices a CURRENT line (raw kilos). So the port compares each
+    // batch row with componentLineCost of the CONVERTED product's component. js/ costs the line as it is.
+    const costed = m === ported
+      ? (ported.currentProduct(product(components), TABLES) as ported.Product).components
+      : components;
+    costed.forEach((component, i) => {
       const line = m.componentLineCost(component, TABLES);
       expect(batch.rows[i]?.cost, `row ${i} cost`).toBe(line.cost);
       expect(batch.rows[i]?.reason, `row ${i} reason`).toBe(line.reason);
     });
     // 5 + 2 (Cream: 1 kg × 2) + 0.003 + 1 — the lines that could be costed, and only those.
-    expect([batch.cost, batch.kg, batch.partial]).toStrictEqual([8.003, 3.242, true]);
+    // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): the cost is the same money (B), but the weight moves (C): the
+    // batch weighs what comes out. The old kilos are 2 + 1 + 1 + 1 of recipes and 0.002 + 0.24 + 0.005 + 1 of
+    // ingredients = 6.247, below the raw total 6.747 (the dough is 2.5 raw), so cookedGrams is 6247 and that is the weight:
+    // every line with a known weight counts, priced or not. js/ counts only the costed lines: 2 + 1 + 0.002 + 0.24.
+    expect([batch.cost, batch.kg, batch.partial]).toStrictEqual(m === ported ? [8.003, 6.247, true] : [8.003, 3.242, true]);
     expect(batch.rows[3]).toStrictEqual({ kind: 'recipe', id: 'GONE', name: '', qty: 1, cost: null, reason: 'missing-recipe' });
-    expect(batch.rows[0]).toStrictEqual({ kind: 'recipe', id: 'DOUGH', name: 'Dough', qty: 2, cost: 5, reason: null });
+    // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change B. The row carries the converted RAW kilos: 2 kg finished
+    // at 2.5/kg are 2 × 2.5 ÷ 2 = 2.5 kg raw, costed at 2/kg raw = 5, the same money.
+    expect(batch.rows[0]).toStrictEqual(m === ported
+      ? { kind: 'recipe', id: 'DOUGH', name: 'Dough', qty: 2.5, cost: 5, reason: null }
+      : { kind: 'recipe', id: 'DOUGH', name: 'Dough', qty: 2, cost: 5, reason: null });
     expect(batch.rows[4]).toStrictEqual({ kind: 'ingredient', id: 'SALT', name: 'Salt', qty: 2, unit: 'g', cost: 0.003, reason: null });
   });
 
