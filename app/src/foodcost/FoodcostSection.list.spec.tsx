@@ -42,10 +42,10 @@ describe('the list of products', () => {
   });
 
   it.each([
-    [/^Red/, 'Over target  ·  £0.20 cost  ·  £0.30 margin', '40%'],
+    [/^Red/, 'Over target  ·  £0.20 cost  ·  £0.30 margin', '40.00%'],
     [/^Amber/, 'Slightly over  ·  £0.20 cost  ·  £0.57 margin', '25.97%'],
-    [/^Green/, 'On target  ·  £0.20 cost  ·  £0.80 margin', '20%'],
-    [/^NoTarget/, 'No target set  ·  £0.20 cost  ·  £0.80 margin', '20%'],
+    [/^Green/, 'On target  ·  £0.20 cost  ·  £0.80 margin', '20.00%'],
+    [/^NoTarget/, 'No target set  ·  £0.20 cost  ·  £0.80 margin', '20.00%'],
   ])('says, for a product that can be costed, its status in words, its cost, its margin and its food cost', async (name, line, figure) => {
     await loaded();
     const row = rowOf(name);
@@ -206,14 +206,14 @@ describe('the list in Italian', () => {
     expect(row).toHaveTextContent('Sopra l’obiettivo');
     expect(row).toHaveTextContent(/0,20\s€ di costo/);
     expect(row).toHaveTextContent(/0,30\s€ di margine/);
-    expect(row).toHaveTextContent('40%');
+    expect(row).toHaveTextContent('40,00%');
     expect(screen.getByRole('button', { name: /^Prodotto senza nome/ })).toHaveTextContent('Aggiungi almeno una ricetta o un ingrediente a questo prodotto');
     expect(screen.getByRole('button', { name: 'Nuovo prodotto' })).toBeInTheDocument();
   });
 
-  it('writes the food cost with the comma Italian uses', async () => {
+  it('writes the food cost in the venue layout: the comma of an Italian venue', async () => {
     const fake = sourceWith([product('Misto', { sellingPrice: 0.77, vatRate: 0 })]);
-    renderFoodcost('/food-cost', { source: fake, lang: 'it', session: { language: 'it' } });
+    renderFoodcost('/food-cost', { source: fake, lang: 'it', session: { language: 'it', location: { country: 'IT' } } });
     expect(await screen.findByRole('button', { name: /^Misto/ }, LOAD)).toHaveTextContent('25,97%');
   });
 });

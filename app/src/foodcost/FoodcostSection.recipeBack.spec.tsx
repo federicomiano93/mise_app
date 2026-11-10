@@ -216,7 +216,7 @@ describe('the margin history of a product opened from a recipe', () => {
     await screen.findByRole('heading', { level: 2, name: 'Loaf' }, LOAD);
     await user.click(screen.getByRole('button', { name: 'Margin history' }));
     expect(where(router)).toBe(`/food-cost/product/Loaf/history${query}`);
-    expect(await screen.findByText('30%', undefined, LOAD)).toBeInTheDocument();
+    expect(await screen.findByText('30.00%', undefined, LOAD)).toBeInTheDocument();
 
     await user.click(within(screen.getByRole('region', { name: 'Margin history' })).getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(where(router)).toBe(`/food-cost/product/Loaf${query}`); });
@@ -227,7 +227,7 @@ describe('the margin history of a product opened from a recipe', () => {
     const { router, user } = renderFoodcost('/food-cost/product/Loaf/history?recipe=dough', {
       source: editorSource([LOAF], { recipes: [DOUGH], history: { Loaf: [POINT] } }),
     });
-    await screen.findByText('30%', undefined, LOAD);
+    await screen.findByText('30.00%', undefined, LOAD);
     await user.click(within(screen.getByRole('region', { name: 'Margin history' })).getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(where(router)).toBe('/food-cost/product/Loaf?recipe=dough'); });
     expect(router.state.historyAction).toBe('REPLACE');

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router';
-import { formatMoney, formatRate } from '@mise/shared/price-model';
+import { fcMoney, fcNumber } from '@mise/shared/fc-number';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { KEEP_FOCUS } from '../shell/Page';
@@ -90,13 +90,13 @@ export function MarginHistory({ id, origin }: { id: string; origin: Origin }) {
               {current.entries.map(entry => (
                 <li key={entry.id} className={styles.row}>
                   <span className={styles.pct}>
-                    {typeof entry.foodCostPct === 'number' ? percentText(entry.foodCostPct, locale) : '—'}
+                    {typeof entry.foodCostPct === 'number' ? percentText(entry.foodCostPct, money) : '—'}
                   </span>
                   <span className={styles.detail}>
                     {t('fc.histDetail', {
-                      cost: typeof entry.unitCost === 'number' ? formatRate(entry.unitCost, money) : '—',
-                      price: typeof entry.sellingPrice === 'number' ? formatMoney(entry.sellingPrice, money) : '—',
-                      vat: typeof entry.vatRate === 'number' ? new Intl.NumberFormat(locale, { maximumFractionDigits: 2, useGrouping: false }).format(entry.vatRate) : '—',
+                      cost: typeof entry.unitCost === 'number' ? fcMoney(entry.unitCost, money) : '—',
+                      price: typeof entry.sellingPrice === 'number' ? fcMoney(entry.sellingPrice, money) : '—',
+                      vat: typeof entry.vatRate === 'number' ? fcNumber(entry.vatRate, money) : '—',
                     })}
                   </span>
                   <span className={styles.when}>{dateText(entry.recordedAt, locale)}</span>

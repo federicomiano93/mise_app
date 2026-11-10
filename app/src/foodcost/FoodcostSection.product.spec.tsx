@@ -20,7 +20,7 @@ describe('a product by its address', () => {
     renderFoodcost('/food-cost/product/Green', { source: sourceWith([product('Green', { name: 'Cornetto' })]) });
     expect(await screen.findByRole('heading', { level: 2, name: 'Cornetto' }, LOAD)).toBeInTheDocument();
     const region = screen.getByRole('region', { name: 'Cornetto' });
-    expect(within(region).getByRole('group', { name: 'Food cost' })).toHaveTextContent(/20%.*On target/);
+    expect(within(region).getByRole('group', { name: 'Food cost' })).toHaveTextContent(/20\.00%.*On target/);
   });
 
   it('says what is missing when the product cannot be costed', async () => {

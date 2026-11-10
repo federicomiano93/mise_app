@@ -45,7 +45,7 @@ describe('under StrictMode: Food cost', () => {
   it('reads the history once for the product', async () => {
     const fake = sourceWith([product('Green')], { history: { Green: [{ id: 'h1', recordedAt: '2026-10-14T09:00:00.000Z', foodCostPct: 30, unitCost: 0.3, sellingPrice: 1, vatRate: 0 }] } });
     renderFoodcost('/food-cost/product/Green/history', { source: fake });
-    expect(await screen.findByText('30%', undefined, LOAD)).toBeInTheDocument();
+    expect(await screen.findByText('30.00%', undefined, LOAD)).toBeInTheDocument();
     // The simulated remount asks twice; each answer belongs to its own call and only one lands.
     expect(within(screen.getByRole('region', { name: 'Margin history' })).getAllByRole('listitem')).toHaveLength(1);
   });

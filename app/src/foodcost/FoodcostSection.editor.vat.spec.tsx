@@ -264,7 +264,7 @@ describe('the suggested price', () => {
     await open({ sellingPrice: null });
     // £0.20 a piece at a 25% target is £0.80 net, £0.96 with 20% VAT.
     expect(suggestion()).toHaveTextContent('£0.96per piece');
-    expect(suggestion()).toHaveTextContent('With VAT at 20%, for a 25% food cost.');
+    expect(suggestion()).toHaveTextContent('With VAT at 20.00%, for a 25.00% food cost.');
   });
 
   it('says a partly priced product needs a higher price than this', async () => {
@@ -279,7 +279,7 @@ describe('the suggested price', () => {
     const { user } = await open({ sellingPrice: 1.2 });
     await user.click(within(suggestion() as HTMLElement).getByRole('button', { name: 'Use this price' }));
     expect(priceBox()).toHaveValue('0.96');
-    expect(screen.getByRole('group', { name: 'Food cost' })).toHaveTextContent('25%');
+    expect(screen.getByRole('group', { name: 'Food cost' })).toHaveTextContent('25.00%');
     expect(within(suggestion() as HTMLElement).getByText('This is the selling price.')).toBeInTheDocument();
     expect(within(suggestion() as HTMLElement).queryByRole('button')).not.toBeInTheDocument();
     // The button has just gone: the focus stays in the box that says so, not lost to the page.

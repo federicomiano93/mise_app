@@ -138,7 +138,7 @@ describe('the food cost answer', () => {
   it('shows the percentage, the figures and the traffic light as a word', async () => {
     await openProduct();
     const box = answer();
-    expect(box).toHaveTextContent('20%');
+    expect(box).toHaveTextContent('20.00%');
     expect(box).toHaveTextContent('£0.20 to make per piece · £1.00 net · £0.80 margin');
     expect(box).toHaveTextContent('On target');
     expect(box).toHaveAttribute('data-status', 'green');
@@ -170,7 +170,7 @@ describe('the food cost answer', () => {
     const { user } = await openProduct();
     await user.clear(priceBox());
     await user.type(priceBox(), '2,4');
-    expect(answer()).toHaveTextContent('10%');
+    expect(answer()).toHaveTextContent('10.00%');
   });
 
   it('says a partly priced product is really higher than it looks', async () => {
@@ -485,7 +485,7 @@ describe('the work time', () => {
     const box = await screen.findByRole('group', { name: 'Production cost' });
     await vi.waitFor(() => { expect(box).toHaveTextContent('£0.20 ingredients and packaging · £1.20 labour'); });
     expect(box).toHaveTextContent('With labour: £1.40 per piece');
-    expect(answer()).toHaveTextContent('Labour 120% · everything 140% of the net price');
+    expect(answer()).toHaveTextContent('Labour 120.00% · everything 140.00% of the net price');
     expect(screen.queryByText('Set the hourly labour cost in Settings to see what the work costs.')).not.toBeInTheDocument();
   });
 

@@ -2,13 +2,12 @@ import { useRef } from 'react';
 import { flushSync } from 'react-dom';
 import { BLOCKER_TEXT, costProduct, productionCost, suggestedGrossPrice } from '@mise/shared/foodcost-model';
 import type { CostTables, FoodCostStatus, Product, SaleUnit, SellingMode } from '@mise/shared/foodcost-model';
-import { formatMoney, formatRate } from '@mise/shared/price-model';
+import { fcMoney, fcNumber } from '@mise/shared/fc-number';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { percentText } from './productRowModel';
-import { plainNumber } from './productEditorModel';
 import styles from './ProductAnswer.module.css';
 
 // Keys, resolved when the answer is drawn: a `t()` here at module load would freeze the language the
@@ -43,7 +42,7 @@ type Figures = {
 // What it costs to make (no price needed) over the food cost it answers to (a price and a VAT rate
 // needed). Together they are the top of the page.
 export function ProductAnswer({ product, tables }: Figures) {
-  const { t, locale } = useT();
+  const { t } = useT();
   const money = useMoney();
   const cost = productionCost(product, tables);
   const result = costProduct(product, tables);
@@ -57,7 +56,7 @@ export function ProductAnswer({ product, tables }: Figures) {
             <span className={styles.label}>{t('fc.productionCost')}</span>
             <span className={styles.value}>
               <span className={styles.num}>
-                {cost.unitCost !== null ? formatRate(cost.unitCost, money) : formatMoney(cost.batchCost, money)}
+                {cost.unitCost !== null ? fcMoney(cost.unitCost, money) : fcMoney(cost.batchCost, money)}
               </span>
               <span className={styles.unit}>
                 {cost.unit !== null ? t(UNIT_TEXT[cost.unit]) : t('fc.wholeBatchWord')}
@@ -65,17 +64,17 @@ export function ProductAnswer({ product, tables }: Figures) {
             </span>
           </div>
           {cost.unitCost === null ? null : (
-            <p className={styles.basis}>{t('fc.wholeBatch', { cost: formatMoney(cost.batchCost, money) })}</p>
+            <p className={styles.basis}>{t('fc.wholeBatch', { cost: fcMoney(cost.batchCost, money) })}</p>
           )}
           {/* The work, beside the materials — only when there is a figure, which needs the hourly
               rate, which only whoever runs the place is ever sent. */}
           {cost.labourUnitCost === null || cost.unit === null ? null : (
             <>
               <p className={styles.basis}>
-                {t('fc.costSplit', { materials: formatRate(cost.unitCost, money), labour: formatRate(cost.labourUnitCost, money) })}
+                {t('fc.costSplit', { materials: fcMoney(cost.unitCost, money), labour: fcMoney(cost.labourUnitCost, money) })}
               </p>
               <p className={styles.basis}>
-                {t('fc.costTotal', { total: formatRate(cost.totalUnitCost, money), unit: t(UNIT_TEXT[cost.unit]) })}
+                {t('fc.costTotal', { total: fcMoney(cost.totalUnitCost, money), unit: t(UNIT_TEXT[cost.unit]) })}
               </p>
             </>
           )}
@@ -98,14 +97,14 @@ export function ProductAnswer({ product, tables }: Figures) {
         <div className={styles.answer} role="group" aria-label={t('fc.foodCost')} data-status={result.status ?? 'none'}>
           <div className={styles.head}>
             <span className={styles.label}>{t('fc.foodCost')}</span>
-            <span className={styles.figure}>{percentText(result.foodCostPct, locale)}</span>
+            <span className={styles.figure}>{percentText(result.foodCostPct, money)}</span>
           </div>
           <p className={styles.basis}>
             {t('fc.answerBasis', {
-              cost: formatRate(result.unitCost, money),
+              cost: fcMoney(result.unitCost, money),
               unit: t(unitWord(product.sellingMode)),
-              net: formatMoney(result.netUnitPrice, money),
-              margin: formatMoney(result.margin, money),
+              net: fcMoney(result.netUnitPrice, money),
+              margin: fcMoney(result.margin, money),
             })}
           </p>
           {result.status === null ? null : <p className={styles.status}>{t(STATUS_TEXT[result.status])}</p>}
@@ -114,8 +113,8 @@ export function ProductAnswer({ product, tables }: Figures) {
           {result.labourPct === null || result.totalCostPct === null ? null : (
             <p className={styles.basis}>
               {t('fc.labourPctLine', {
-                labour: plainNumber(result.labourPct, locale),
-                total: plainNumber(result.totalCostPct, locale),
+                labour: fcNumber(result.labourPct, money),
+                total: fcNumber(result.totalCostPct, money),
               })}
             </p>
           )}
@@ -137,7 +136,7 @@ type SuggestionProps = Figures & {
 // The price to sell it at, from the cost per unit, the VAT rate and the target: on the SAME screen as
 // the food cost of the price typed (his choice, 13 Sep 2026, over a switch between two modes).
 export function SuggestedPrice({ product, tables, sellingPrice, onUse }: SuggestionProps) {
-  const { t, locale } = useT();
+  const { t } = useT();
   const money = useMoney();
   const box = useRef<HTMLDivElement>(null);
   const cost = productionCost(product, tables);
@@ -160,14 +159,14 @@ export function SuggestedPrice({ product, tables, sellingPrice, onUse }: Suggest
           <div className={styles.head}>
             <span className={styles.label}>{t('fc.suggestedPrice')}</span>
             <span className={styles.value}>
-              <span className={styles.num}>{formatMoney(price, money)}</span>
+              <span className={styles.num}>{fcMoney(price, money)}</span>
               <span className={styles.unit}>{cost.unit === null ? '' : t(UNIT_TEXT[cost.unit])}</span>
             </span>
           </div>
           <p className={styles.basis}>
             {t('fc.suggestedPriceBasis', {
-              vat: plainNumber(Number(product.vatRate), locale),
-              target: plainNumber(Number(product.foodCostTarget), locale),
+              vat: fcNumber(Number(product.vatRate), money),
+              target: fcNumber(Number(product.foodCostTarget), money),
             })}
           </p>
           {/* ⚠️ THE SAME RULE AS THE COST ABOVE: a partly priced product costs more than it says, so the

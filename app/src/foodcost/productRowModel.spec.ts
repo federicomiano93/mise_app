@@ -43,15 +43,16 @@ describe('the traffic light\'s words', () => {
 });
 
 describe('the figure', () => {
-  it('is the food cost, in the interface language\'s numbers', () => {
-    expect(figureText(made({ sellingPrice: 1.2 }), 'en-GB')).toBe('20%');
-    expect(figureText(made({ sellingPrice: 0.7692, vatRate: 0 }), 'en-GB')).toBe('26%');
-    expect(percentText(31.5, 'en-GB')).toBe('31.5%');
-    expect(percentText(31.5, 'it-IT')).toBe('31,5%');
+  it('is the food cost with ALWAYS two decimals, in the venue\'s own layout', () => {
+    expect(figureText(made({ sellingPrice: 1.2 }), pounds)).toBe('20.00%');
+    expect(figureText(made({ sellingPrice: 0.7692, vatRate: 0 }), pounds)).toBe('26.00%');
+    expect(percentText(31.5, pounds)).toBe('31.50%');
+    expect(percentText(31.5, euros)).toBe('31,50%');
+    expect(percentText(1234.5, euros)).toBe('1.234,50%');
   });
 
   it('is a dash while the product cannot be costed, never 0%', () => {
-    expect(figureText(made({ sellingPrice: null }), 'en-GB')).toBe('—');
+    expect(figureText(made({ sellingPrice: null }), pounds)).toBe('—');
   });
 });
 
@@ -59,6 +60,14 @@ describe('the line under the name', () => {
   it('says the status, the cost and the margin of a costed product, in the venue\'s money', () => {
     expect(subLine(english, made({ foodCostTarget: 25 }), pounds)).toBe('On target  ·  £0.20 cost  ·  £0.80 margin');
     expect(subLine(italiano, made({ foodCostTarget: 25 }), euros).replaceAll(' ', ' ')).toBe('In linea con l’obiettivo  ·  0,20 € di costo  ·  0,80 € di margine');
+  });
+
+  it('a real cost under a cent reads «< 0,01 €», never «0,00 €»', () => {
+    const cheap = costProduct({
+      id: 'p', name: 'P', components: [{ kind: 'ingredient', ingredientId: 'flour', qty: 1, unit: 'g' }],
+      sellingMode: 'piece', piecesPerBatch: 1, sellingPrice: 1, vatRate: 0, foodCostTarget: 25,
+    }, tables);
+    expect(subLine(italiano, cheap, euros).replaceAll('\u00a0', ' ')).toBe('In linea con l’obiettivo  ·  < 0,01 € di costo  ·  1,00 € di margine');
   });
 
   it('says there is no target when none is set', () => {

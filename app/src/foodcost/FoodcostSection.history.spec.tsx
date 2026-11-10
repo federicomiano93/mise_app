@@ -33,12 +33,12 @@ describe('the margin history', () => {
 
     const rows = await within(await screen.findByRole('region', { name: 'Margin history' }, LOAD)).findAllByRole('listitem', undefined, LOAD);
     expect(rows).toHaveLength(2);
-    expect(rows[0]).toHaveTextContent('31.5%');
-    expect(rows[0]).toHaveTextContent('£0.35 cost · £1.50 at 20% VAT');
+    expect(rows[0]).toHaveTextContent('31.50%');
+    expect(rows[0]).toHaveTextContent('£0.35 cost · £1.50 at 20.00% VAT');
     expect(rows[0]).toHaveTextContent('14 Oct 2026');
-    // A cost per unit keeps the decimals a small number needs; a total has two.
-    expect(rows[1]).toHaveTextContent('28%');
-    expect(rows[1]).toHaveTextContent('£0.0345 cost · £1.40 at 5% VAT');
+    // Two decimals for everything (8 Nov 2026): a cost of 3.45 cents reads 0.03.
+    expect(rows[1]).toHaveTextContent('28.00%');
+    expect(rows[1]).toHaveTextContent('£0.03 cost · £1.40 at 5.00% VAT');
     expect(rows[1]).toHaveTextContent('2 Sept 2026');
     expect(screen.getByText(/^A point is recorded when the price or the recipe changes/)).toBeInTheDocument();
   });
@@ -59,7 +59,7 @@ describe('the margin history', () => {
     expect(region).toHaveAttribute('aria-busy', 'true');
 
     await act(async () => { answer(POINTS); });
-    expect(await within(region).findByText('31.5%')).toBeInTheDocument();
+    expect(await within(region).findByText('31.50%')).toBeInTheDocument();
     expect(within(region).queryByText('Loading…')).not.toBeInTheDocument();
   });
 
@@ -81,7 +81,7 @@ describe('the margin history', () => {
   it('reads the history once, even when the products change meanwhile', async () => {
     const fake = source();
     renderFoodcost('/food-cost/product/Green/history', { source: fake });
-    await screen.findByText('31.5%', undefined, LOAD);
+    await screen.findByText('31.50%', undefined, LOAD);
     act(() => { fake.push(); });
     expect(fake.getProductHistory).toHaveBeenCalledTimes(1);
     expect(fake.getProductHistory).toHaveBeenCalledWith('Green');
@@ -90,7 +90,7 @@ describe('the margin history', () => {
   it('reads the history of the product in the address, id decoded', async () => {
     const fake = sourceWith([product('a/b c')], { history: { 'a/b c': POINTS } });
     renderFoodcost('/food-cost/product/a%2Fb%20c/history', { source: fake });
-    expect(await screen.findByText('31.5%', undefined, LOAD)).toBeInTheDocument();
+    expect(await screen.findByText('31.50%', undefined, LOAD)).toBeInTheDocument();
     expect(fake.getProductHistory).toHaveBeenCalledWith('a/b c');
   });
 });
@@ -121,7 +121,7 @@ describe('the way to the history and back', () => {
     const { router, user } = renderFoodcost('/food-cost', { source: fake });
     await user.click(await screen.findByRole('button', { name: /^Green/ }, LOAD));
     await user.click(await screen.findByRole('button', { name: 'Margin history' }, LOAD));
-    await screen.findByText('31.5%', undefined, LOAD);
+    await screen.findByText('31.50%', undefined, LOAD);
     expect(router.state.historyAction).toBe('REPLACE');
 
     await user.click(screen.getByRole('button', { name: 'Back' }));
@@ -138,8 +138,8 @@ describe('the margin history in Italian', () => {
     });
     await heading('Storico dei margini');
     const rows = await within(screen.getByRole('region', { name: 'Storico dei margini' })).findAllByRole('listitem', undefined, LOAD);
-    expect(rows[0]).toHaveTextContent('31,5%');
-    expect(rows[0]).toHaveTextContent(/0,35\s€ di costo · 1,50\s€ con IVA al 20%/);
+    expect(rows[0]).toHaveTextContent('31,50%');
+    expect(rows[0]).toHaveTextContent(/0,35\s€ di costo · 1,50\s€ con IVA al 20,00%/);
     expect(rows[0]).toHaveTextContent('14 ott 2026');
     expect(screen.getByText(/^Un punto viene registrato quando cambia il prezzo o la ricetta/)).toBeInTheDocument();
   });
