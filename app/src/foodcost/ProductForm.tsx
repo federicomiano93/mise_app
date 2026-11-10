@@ -42,6 +42,7 @@ import { PickDialog } from './PickDialog';
 import type { Choice, PickMode } from './PickDialog';
 import { ProductAnswer, SuggestedPrice } from './ProductAnswer';
 import { PerKgBlock } from './PerKgBlock';
+import { ProductSummary } from './ProductSummary';
 import {
   NUMBER_KEY, RECIPE_LINE_OPENS_IN, clearNumber, costable, emptyWorking, isNumberField, isShown, newLineKey, packSizeShown,
   piecesShown, plainNumber, recipeIdsOn, recipeLineKg, toProduct, vatRateOf, workingFrom, workingFromDraft,
@@ -676,6 +677,7 @@ export function ProductForm({ id, product, draft, origin, titleRef }: Props) {
       />
 
       <div className={shell.body}>
+        <ProductSummary product={costed} tables={live} />
         <ProductAnswer product={costed} tables={live} />
         <PerKgBlock product={costed} tables={live} />
 

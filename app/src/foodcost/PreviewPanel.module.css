@@ -115,3 +115,55 @@
   color: var(--warn-ink);
   font-size: var(--fs-sm);
 }
+
+/* The caption: what the figures are per. */
+.caption {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+/* Under the ideal price: the same price without VAT, and the target it is for. */
+.sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  text-align: right;
+}
+
+/* «Details»: the rest of the figures, closed until pressed. A real button, so the dialog's focus trap reaches it; the
+   whole row is the target. */
+.more {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--line);
+}
+
+.moreButton {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  min-height: var(--hit);
+  padding: 0;
+  color: var(--ink);
+  font: 600 var(--fs-sm)/1.3 var(--font);
+  text-align: left;
+}
+
+.moreButton[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.chevron {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.moreButton[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+.more > dl[hidden] {
+  display: none;
+}
