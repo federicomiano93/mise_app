@@ -338,6 +338,17 @@ describe('the top of the card gets the one figure it lacked: the ideal price wit
     expect(within(box).getByText('Prezzo ideale, senza IVA').parentElement).toHaveTextContent('0,80 €');
   });
 
+  it('says the right price is higher on a partly priced product, before a VAT rate is chosen too', async () => {
+    const partial = product('Half', { vatRate: null, components: [
+      { kind: 'ingredient', ingredientId: 'flour', qty: 1000, unit: 'g' },
+      { kind: 'ingredient', ingredientId: 'salt', qty: 10, unit: 'g' },
+    ] });
+    renderFoodcost('/food-cost/product/Half', { source: editorSource([partial]) });
+    const box = await screen.findByRole('group', { name: 'Suggested price' }, LOAD);
+    expect(within(box).getByText('Ideal price, without VAT')).toBeInTheDocument();
+    expect(box).toHaveTextContent('Part of this product is not priced yet, so the right price is higher than this.');
+  });
+
   it('is not drawn while there is no target to hit', async () => {
     renderFoodcost('/food-cost/product/Free', { source: editorSource([product('Free', { foodCostTarget: null })]) });
     const box = await screen.findByRole('group', { name: 'Suggested price' }, LOAD);

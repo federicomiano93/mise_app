@@ -201,7 +201,7 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     `costPerKg`, `PER_KG_REASONS`), `app/src/foodcost/PerKgBlock.tsx` + `.module.css` drawn in `ProductForm.tsx` under the answer panel, never inside «Made of»
     (a native `<details>`, always mounted, `hidden` while nothing is costed), eleven `fc.perKg.*` keys in `en.ts` / `it.ts`, every figure through `fc-number` from
     the first day. Differs from the current app only in the look (Mise 2 tokens) and in the read-first card, which Mise 2 does not have yet (item 25). `costPerKg` is
-    marked PORT OWED in `odd-inputs.spec.ts` with `productionCost` (a null table), until items 24 and 26.
+    marked PORT OWED in `odd-inputs.spec.ts` with `productionCost` (a null table), until item 26.
 23. **Step 3 recipe link both ways** (#478, `35b1f3e0`, `942dab6e`) — Mise 2 has its own entry `?recipe=` / `?using=` design (catalogue.md
     «Back counts the depth»): treat as DONE by design; re-check that the multi-product case opens the top product on tablet/PC. Size S (check).
 24. **Step 4 list preview** (#482): search bar, phone preview dialog, panel at the top of the card, eight figures, net ideal price. NONE. Size M.
@@ -209,7 +209,7 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     gains `productPreview` (the original also returns `unpriced`, item 26), `suggestedNetPrice`, `nameMatches` and the blockers `no-target` / `no-packaging-price`
     (paired in `foodcost-model.spec.ts` and `odd-inputs.spec.ts`); `app/src/foodcost/`: the search box in `FoodcostList.tsx`, `PreviewPanel.tsx` (the eight figures, every one
     through `fc-number`), `ProductPreviewDialog.tsx` (what a tap on a row shows below 1000px; from 1000px the card opens beside the list as before), the wiring in
-    `FoodcostSection.tsx`, twenty-three keys in `en.ts` / `it.ts` worded as the current app's first-half dictionary (before #483 renamed four of them). Differences: a status word
+    `FoodcostSection.tsx`, twenty-three keys in `en.ts` / `it.ts` worded as the current app's first-half dictionary (before #483 added four, deleted four and reworded `fc.preview.price` under its key — item 25 owes all of it). Differences: a status word
     beside the dot, the dialog focuses itself and not a button, a product deleted while it is open closes it, the card's top gets only the net ideal price (see the parity section).
     Two `PORT OWED` markers that named item 24 alone are gone; the two that named 24 and 26 now name 26 only.
 25. **Step A card layout** (#483): read mode first, pencil edits, Save returns to read, four figures + «Details», margin under cost, history asks

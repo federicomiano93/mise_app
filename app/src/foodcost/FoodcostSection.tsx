@@ -212,7 +212,8 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
           </div>
         </div>
         {previewing === null ? null : (
-          <PartBoundary>
+          // Keyed on the product: a panel that failed to draw must not stay failed for the next row tapped.
+          <PartBoundary resetKey={previewing}>
             <ProductPreviewDialog
               id={previewing}
               onOpen={() => { setPreviewId(null); goToProduct(previewing); }}

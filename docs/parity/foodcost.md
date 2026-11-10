@@ -365,8 +365,10 @@ the cost on every line and «Which?» (#485) are item 26.
   labour» when the labour row is there), ideal price with VAT and without, «For a 25,00% food cost.», the partial warning, and «Still missing:» with the blockers.
   Every money figure is `fcMoney` in the venue's layout, unknown is «—». Caption «Summary per piece / per kg / per pack» is the dialog's description.
 - **Texts**: twenty-three keys `fc.search`, `fc.searchNone`, `fc.preview.*` in `en.ts` and `it.ts`, worded as the current app had them when the preview shipped
-  (`e81a2617` with the Italian names of `39f192ac`: «Imballaggio», «Lavoro»). `39080577` later renamed four of them for the four-figure summary (`cost`, `ideal`,
-  `idealSub`, `details`): item 25 does that.
+  (`e81a2617` with the Italian names of `39f192ac`: «Imballaggio», «Lavoro»). `39080577` later changed them for the four-figure summary: it ADDED `fc.preview.cost`,
+  `.ideal`, `.idealSub` and `.details`, DELETED `.total`, `.idealGross`, `.idealNet` and `.idealBasis`, and ⚠️ REWORDED `fc.preview.price` under the same key
+  («Selling price» / «Prezzo di vendita», without «(VAT incl.)»): item 25 must do all three, the rewording included — no test compares `app/src/i18n` with
+  `js/i18n.js`.
 - **Specs**: `FoodcostSection.preview.spec.tsx` (the search: names, order, the empty line, no box without products, the same box through a data update, the text
   through a product and Back; the dialog: figures, open the card, close and its focus, Escape, a price that arrives, a product deleted, the tablet turned; the
   split opens the card; dashes and the checklist, no target, no VAT, an unpriced and a priced box, a partial product; labour for a manager; Italy; the net ideal price in the

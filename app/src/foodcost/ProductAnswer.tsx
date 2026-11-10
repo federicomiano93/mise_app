@@ -163,6 +163,9 @@ export function SuggestedPrice({ product, tables, sellingPrice, onUse }: Suggest
         <div className={styles.suggestion} role="group" aria-label={t('fc.suggestedPrice')}>
           <p className={styles.note}>{t('fc.suggestedPriceNeeds')}</p>
           {netRow}
+          {/* A net price drawn before the VAT rate is chosen follows the same rule as the one below (preview-view.js draws the
+              partial line under the ideal prices always). */}
+          {net !== null && cost.partial ? <p className={styles.partial}>{t('fc.suggestedPricePartial')}</p> : null}
         </div>
       ) : (
         <div className={styles.suggestion} role="group" aria-label={t('fc.suggestedPrice')}>
@@ -179,9 +182,9 @@ export function SuggestedPrice({ product, tables, sellingPrice, onUse }: Suggest
               target: fcNumber(Number(product.foodCostTarget), money),
             })}
           </p>
+          {netRow}
           {/* ⚠️ THE SAME RULE AS THE COST ABOVE: a partly priced product costs more than it says, so the
               price that would hit the target is HIGHER than this one — say so. */}
-          {netRow}
           {cost.partial ? <p className={styles.partial}>{t('fc.suggestedPricePartial')}</p> : null}
           {inUse ? (
             <p className={styles.note}>{t('fc.suggestedPriceInUse')}</p>
