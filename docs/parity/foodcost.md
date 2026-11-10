@@ -296,7 +296,7 @@ now in; items 22-26 are still not).
 - `foodcost-model.js`'s marker in `odd-inputs.spec.ts` named items 26 and 28; the commit of item 28 never touched that file (the
   changes are the preview model, "Which?" and the money guard), so the marker now says items 24 and 26.
 
-**Still owed (later slices, they must use `fc-number` from the first day):** the list preview (24), the
+**Still owed (later slices, they must use `fc-number` from the first day):** (the list preview, 24, is built: see the section at the end), the
 read sections and the card layout (25), the cost on every line and "Which?" (26), and the kilos in the "create from the recipe book"
 dialog (29, `from-recipes-view`).
 
@@ -337,3 +337,51 @@ Item 22 of `docs/mise2-port-owed.md` (current app `574a0e3c`, `f0735d88`, `9af66
 - `odd-inputs.spec.ts` marks `costPerKg` as PORT OWED together with `productionCost`: the original lets a null table through, the port's
   `batchTotals` throws. Items 24 and 26 port that change; remove the key then.
 - Not in Mise 2 yet, so not drawn there: the read-first card (item 25), where the current app draws the same block a second time in the read view.
+
+## List search and product preview as built (10 Nov 2026)
+
+Item 24 of `docs/mise2-port-owed.md` (current app PR #482: `beb1adfd`, `e81a2617`, `39f192ac`; the figures as `151ea191` draws them). Branch
+`feature/mise2-next-foodcost-preview`. This is the FIRST half of the current app's preview: the eight-figure panel. The four-figure summary with
+«Details» (`39080577`), the margin moved under the cost (`56b2c90c`) and the read-first card (`18679a38`, `d491c7ca`, `f8770132`) are item 25;
+the cost on every line and «Which?» (#485) are item 26.
+
+- **The model** (`shared/src/foodcost-model.ts`, paired against `js/` in `foodcost-model.spec.ts` and `odd-inputs.spec.ts`): `suggestedNetPrice` (the
+  price WITHOUT VAT, rounded up to the cent on its own), `productPreview` (the eight figures from `productionCost`, `costProduct` and the two
+  suggested prices: nothing is added up a second time), `nameMatches` (accents, capitals and outer spaces do not count; nothing typed matches
+  everything) and two more blockers, `no-target` and `no-packaging-price`, whose keys `fc.preview.needTarget` / `fc.preview.needPackagingPrice` sit in
+  `BLOCKER_TEXT`. `normalizeSearchText` is the catalogue's own. An unpriced box is unknown, never «0,00 €» (`39f192ac`): its figure is `null` and the line
+  to fix is named. The original also returns `unpriced` (the «Which?» list, item 26): the port does not, and the specs compare every other field.
+- **The search**: `FoodcostList.tsx`, a `type="search"` box (name «Search products», 48px) between the buttons and the rows, drawn only once the list has
+  products. It filters AFTER `sortByMargin`, so the rows that stay keep the worst-first order; nothing is debounced (the sort is memoised, the filter is a
+  string compare). The box is a controlled input in a part that stays mounted, so a data update never replaces it or the text; the text lives in the list,
+  which stays mounted while a product is open on a phone, so Back finds the same search. «No product name contains “x”.» is a small line in a `role="status"`
+  region that is there before it speaks. Applies to the list narrowed to a recipe's products too.
+- **When the preview appears**: below 1000px (`SPLIT_QUERY`, the section's own split), a tap on a row opens `ProductPreviewDialog` (the app's `Dialog`: focus kept
+  inside, Escape and a press on the backdrop close it) instead of the card; its main button «Open the card» does what the tap did before, «Close» (or Escape)
+  returns the focus to the row. From 1000px the card opens beside the list as it always did (the pane IS the preview there). The preview is over by itself when
+  the page moves on (Back, the tablet turned to the split). On a phone the products of a narrowed list behave the same.
+- **The panel** (`PreviewPanel.tsx`): price (VAT included, as typed), raw materials, packaging («None» without a line), labour (only when the figure exists, which
+  needs the hourly rate only whoever runs the place is sent), total cost, food cost against its target (the percentages through `fcNumber`), margin («before
+  labour» when the labour row is there), ideal price with VAT and without, «For a 25,00% food cost.», the partial warning, and «Still missing:» with the blockers.
+  Every money figure is `fcMoney` in the venue's layout, unknown is «—». Caption «Summary per piece / per kg / per pack» is the dialog's description.
+- **Texts**: twenty-three keys `fc.search`, `fc.searchNone`, `fc.preview.*` in `en.ts` and `it.ts`, worded as the current app had them when the preview shipped
+  (`e81a2617` with the Italian names of `39f192ac`: «Imballaggio», «Lavoro»). `39080577` later renamed four of them for the four-figure summary (`cost`, `ideal`,
+  `idealSub`, `details`): item 25 does that.
+- **Specs**: `FoodcostSection.preview.spec.tsx` (the search: names, order, the empty line, no box without products, the same box through a data update, the text
+  through a product and Back; the dialog: figures, open the card, close and its focus, Escape, a price that arrives, a product deleted, the tablet turned; the
+  split opens the card; dashes and the checklist, no target, no VAT, an unpriced and a priced box, a partial product; labour for a manager; Italy; the net ideal price in the
+  suggested-price box of the card, with and without a VAT rate, and not without a target). Existing specs
+  that tap a row on a PHONE now press «Open the card» first (`list`, `recipeBack`, `recipeFixes`, `recipeTrip`, `scroll`, `strict`): that is the ported behaviour.
+
+**Differences from the current app, on purpose or by necessity**
+- The light is a dot AND a word (the list's rule, P18): the status word («On target») follows the food cost line; the current app draws the dot alone.
+- The dialog focuses itself, not a button: the current app focused the last button and had to scroll its box back to the top; here a tall preview simply opens at
+  its top.
+- The figures follow the data while the dialog is open (computed on every draw), and a product deleted elsewhere closes it saying «Product deleted.» — the current
+  app froze the figures and said «Product deleted» only on «Open the card».
+- The caption is the dialog's description, not a separate line.
+- **The top of the card**: the current app drew the same panel as a summary above the card (`e81a2617`). Mise 2's top of the product already says the production
+  cost, the food cost with the net price and the margin, and the suggested price with VAT; the one figure it lacked was the ideal price WITHOUT VAT, which now
+  sits in the suggested-price box (a single line, also when no VAT rate is chosen yet). The panel itself waits for item 25's four-figure summary.
+- `productPreview`'s `partial`, `missing` and the null-tables gap of `batchTotals` (item 26) still differ from the original on a null table: `productPreview` joins
+  `productionCost` and `costProduct` in the `PORT OWED` keys of `odd-inputs.spec.ts`, now naming item 26 only.
