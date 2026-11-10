@@ -1104,6 +1104,8 @@ export const it: Messages = {
   'cat.linkToAnIngredient': '+ Collega a un ingrediente',
   'cat.aRecipeThatNo': '→ una ricetta che non esiste più',
   'cat.anIngredientThatNo': '→ un ingrediente che non esiste più',
+  'cat.noPriceMark': 'senza prezzo',
+  'cat.nameChangedStillLinked': 'Il nome è cambiato, ma questa riga è ancora collegata a «{name}» — tocca per cambiare',
   'cat.nothingMatchesYourSearch': 'Niente corrisponde alla ricerca.',
   'cat.noIngredientsYetAdd': 'Ancora nessun ingrediente — aggiungili negli Ordini, sotto Impostazioni.',
   'cat.linkTo': 'Collega a',

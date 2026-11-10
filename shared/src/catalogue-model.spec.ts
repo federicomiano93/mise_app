@@ -745,6 +745,77 @@ describe.each([
     expect(m.isSameLink({ kind: 'ingredient', refId: 7 }, { kind: 'ingredient', refId: '7' }), 'a number id is read as text').toBe(true);
   });
 
+  // ── A retyped name on a still-linked row (a84fa1ab, 94e0514e) ──────────────
+
+  describe('the stale-link warning', () => {
+    const items = {
+      f1: { id: 'f1', name: 'Farina 0 Caputo', shortName: 'Farina' },
+      b1: { id: 'b1', name: 'Unsalted Butter 250g', invoiceName: 'BURRO 82% 1KG' },
+      t1: { id: 't1', name: 'Crème fraîche', shortName: '' },
+    };
+    const recipes = [{ id: 'r1', name: 'Crema pasticcera' }];
+    const link = (kind: string, refId: string) => ({ kind, refId });
+    const stale = (label: unknown, openedLabel: unknown, l: unknown): string =>
+      m.staleLinkName({ label, openedLabel, link: l, ingredients: items, recipes });
+
+    test('⚠️ names resemble by WHOLE words, in order — never a piece of a word', () => {
+      expect(m.namesResemble('Salt', 'Unsalted Butter 250g'), '«salt» inside «unsalted» is not a match').toBe(false);
+      expect(m.namesResemble('Drv farina', 'Drv farina trap')).toBe(true);
+      expect(m.namesResemble('Drv farina', 'Drv farinata')).toBe(false);
+      expect(m.namesResemble('Farina', 'Farina 0 Caputo')).toBe(true);
+      expect(m.namesResemble('Farina, 0', 'farina 0 caputo'), 'punctuation is a separator').toBe(true);
+      expect(m.namesResemble('', 'Farina')).toBe(false);
+      expect(m.namesResemble('Latte di cocco', 'Latte'), 'the accepted limit: a name that only extends the other').toBe(true);
+    });
+
+    test('labelResemblesLink: any of the names counts; accents and spacing do not matter; an empty name never resembles', () => {
+      expect(m.labelResemblesLink('farina', ['Farina 0 Caputo'])).toBe(true);
+      expect(m.labelResemblesLink('  FARINA  0 ', ['farina 0 caputo'])).toBe(true);
+      expect(m.labelResemblesLink('Burro', ['Farina 0 Caputo'])).toBe(false);
+      expect(m.labelResemblesLink('creme   fraiche', ['Crème fraîche'])).toBe(true);
+      expect(m.labelResemblesLink('Caputo', ['Farina', 'Farina 0 Caputo'])).toBe(true);
+      expect(m.labelResemblesLink('', ['Farina'])).toBe(false);
+      expect(m.labelResemblesLink('Farina', [])).toBe(false);
+      expect(m.labelResemblesLink('Farina', 'not a list')).toBe(false);
+      expect(m.normalizeNameForCompare('  Crème\t FRAÎCHE ')).toBe('creme fraiche');
+    });
+
+    test('linkedItemNames: display, full, short and invoice name of an ingredient; the name of a recipe', () => {
+      expect(m.linkedItemNames(link('ingredient', 'f1'), items, recipes)).toStrictEqual(['Farina', 'Farina 0 Caputo']);
+      expect(m.linkedItemNames(link('recipe', 'r1'), items, recipes)).toStrictEqual(['Crema pasticcera']);
+      expect(m.linkedItemNames(link('ingredient', 'gone'), items, recipes)).toStrictEqual([]);
+      expect(m.linkedItemNames(link('ingredient', 'b1'), items, recipes)).toContain('BURRO 82% 1KG');
+    });
+
+    test('it warns when the retyped name moved to something else, with the linked name to show', () => {
+      expect(stale('Burro', 'Farina', link('ingredient', 'f1'))).toBe('Farina');
+      expect(stale('Burro', 'Crema pasticcera', link('recipe', 'r1'))).toBe('Crema pasticcera');
+    });
+
+    test('no warning: unlinked, empty, the original name typed back, or a name that still resembles', () => {
+      expect(stale('Burro', 'Farina', null)).toBe('');
+      expect(stale('  ', 'Farina', link('ingredient', 'f1'))).toBe('');
+      expect(stale('farina', 'Farina', link('ingredient', 'f1'))).toBe('');
+      expect(stale('Caputo', 'Farina', link('ingredient', 'f1'))).toBe('');
+    });
+
+    test('no warning while the new name still resembles the OPENED one: the same thing, more precisely', () => {
+      expect(stale('Burro 82%', 'Burro', link('ingredient', 'b1'))).toBe('');
+      expect(stale('Margarina', 'Burro', link('ingredient', 'b1'))).toBe('Unsalted Butter 250g');
+      expect(stale('Salt', 'Burro', link('ingredient', 'b1')), 'a half-typed word is not the old name').toBe('Unsalted Butter 250g');
+    });
+
+    test('the invoice description counts as one of the linked item’s names', () => {
+      expect(stale('Burro 82%', 'Unsalted butter', link('ingredient', 'b1'))).toBe('');
+    });
+
+    test('no warning on opening, and none when the linked item cannot be named', () => {
+      expect(stale('Unsalted butter', 'Unsalted butter', link('ingredient', 'f1'))).toBe('');
+      expect(stale('Burro', 'Burro', link('ingredient', 'b1'))).toBe('');
+      expect(stale('Burro', 'Farina', link('ingredient', 'gone'))).toBe('');
+    });
+  });
+
   // ── moveRow ────────────────────────────────────────────────────────────────
 
   test('a row moves to its new place, and the others close up around it', () => {
@@ -1289,8 +1360,7 @@ describe('the port against the original', () => {
     for (const name of LEFT_OUT) expect(original[name] !== undefined, name).toBe(true);
   });
 
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 31): main added exports to js/catalogue-model.js, not yet in the port — remove .fails when ported
-  test.fails('exports exactly the same names, except those', () => {
+  test('exports exactly the same names, except those', () => {
     expect(Object.keys(port).sort()).toStrictEqual([...shared, ...ADDED].sort());
   });
 

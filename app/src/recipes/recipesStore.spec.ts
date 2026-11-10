@@ -71,12 +71,13 @@ function handSource() {
   const saveLabelLogo = vi.fn<RecipesSource['saveLabelLogo']>(() => Promise.resolve());
   const removeLabelLogo = vi.fn<RecipesSource['removeLabelLogo']>(() => Promise.resolve());
   const readMember = vi.fn<RecipesSource['readMember']>(() => Promise.resolve(null));
+  const readIngredientPrices = vi.fn<RecipesSource['readIngredientPrices']>(() => Promise.resolve(null));
   const addRecipeCategoryWord = vi.fn<RecipesSource['addRecipeCategoryWord']>(() => Promise.resolve());
   const removeRecipeCategoryWords = vi.fn<RecipesSource['removeRecipeCategoryWords']>(() => Promise.resolve());
   const source: RecipesSource = {
     watchRecipes, watchIngredients, watchLabelConfig, watchPrintAgents, queuePrintJob, saveLabelConfig, watchSuppliers,
     saveRecipeDoc, removeRecipeDoc, getCalculatorConfig, importIntoCalculator, watchLabelLogo, saveLabelLogo, removeLabelLogo,
-    readMember, addRecipeCategoryWord, removeRecipeCategoryWords,
+    readMember, readIngredientPrices, addRecipeCategoryWord, removeRecipeCategoryWords,
   };
   return {
     source,

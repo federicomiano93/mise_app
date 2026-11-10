@@ -5,6 +5,7 @@ import { useT } from '../i18n/useT';
 import type { Chosen, EditRow, Row } from './editorModel';
 import { useLinkSuggest } from './LinkSuggest';
 import { linkText } from './linkModel';
+import { NoPriceMark } from './NoPriceMark';
 import type { StoredDoc } from './recipesSource';
 import styles from './IngredientRow.module.css';
 
@@ -37,6 +38,11 @@ type Props = {
   // A line is drawn under this row (a divider between two groups of ingredients).
   divider?: boolean;
   linking: Linking;
+  // Food cost cannot price this row (a crossed-out euro ends the link line). Always false for somebody who may not read Food cost.
+  unpriced?: boolean;
+  // The name of the item this row is still linked to when its typed name has moved away from it ('' = nothing to say): the link
+  // line then turns amber and says so instead of describing the link.
+  staleLink?: string;
 };
 
 // One ingredient: name · amount · unit · remove, all on ONE line down to a 296px phone.
@@ -47,7 +53,7 @@ type Props = {
 // ⚠️ «TO TASTE» IS THE ONE UNIT THAT CARRIES NO NUMBER, so its amount box is not drawn — but the number stays in the
 // editor's copy: switching back to a weight gives it back, and nothing counts it meanwhile (a non-weighable unit is 0
 // grams to every total, cost and label).
-export function IngredientRow({ item, nameInvalid, amountInvalid, register, onChange, onRemove, divider = false, linking }: Props) {
+export function IngredientRow({ item, nameInvalid, amountInvalid, register, onChange, onRemove, divider = false, linking, unpriced = false, staleLink = '' }: Props) {
   const { t } = useT();
   const { key, row } = item;
   const unit = unitOf(row);
@@ -125,9 +131,13 @@ export function IngredientRow({ item, nameInvalid, amountInvalid, register, onCh
         type="button"
         className={styles.link}
         data-linked={link !== null}
+        data-stale={staleLink !== '' ? 'true' : undefined}
         onClick={() => { linking.onOpen(key); }}
       >
-        {linkText(row, linking.ingredients, linking.recipes, linking.suppliers, t)}
+        <span>{staleLink !== '' ? t('cat.nameChangedStillLinked', { name: staleLink }) : linkText(row, linking.ingredients, linking.recipes, linking.suppliers, t)}</span>
+        {/* ⚠️ A SPACE BEFORE THE MARK: the button's name is its text and the mark's name side by side, and without it a screen reader
+            reads «Caputono price» as one word. */}
+        {unpriced ? <>{' '}<NoPriceMark /></> : null}
       </button>
     </li>
   );

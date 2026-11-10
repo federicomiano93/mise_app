@@ -214,6 +214,9 @@ export interface RecipesStore {
   // One person's line of the venue's roster, straight through to the source (never rejects, null when unreadable). Read once by
   // the HACCP label for the first name it prints; nothing is remembered here.
   readMember: RecipesSource['readMember'];
+  // The ingredient prices, read once, straight through to the source (never rejects, null when unreadable). ⚠️ NEVER REMEMBERED HERE:
+  // the store's own copy has no price in it, by design; the recipe editor holds the answer while it is open and no longer.
+  readIngredientPrices: RecipesSource['readIngredientPrices'];
   // Changes some fields of the label profile (config/labels), LOCAL-FIRST: the store's copy and the phone's copy
   // change at once and the snapshot is announced, then the source is asked. Resolves when the database has taken
   // the change. On a refusal the keys of THIS patch are put back to what they were just before it (except a key a
@@ -635,6 +638,7 @@ export function createRecipesStore(source: RecipesSource, deps: RecipesDeps): Re
 
     queuePrintJob: job => source.queuePrintJob(job),
     readMember: uid => source.readMember(uid),
+    readIngredientPrices: () => source.readIngredientPrices(),
     watchLabelLogo: (onChange, onError) => source.watchLabelLogo(onChange, onError),
     saveLabelLogo: logo => source.saveLabelLogo(logo),
     removeLabelLogo: () => source.removeLabelLogo(),

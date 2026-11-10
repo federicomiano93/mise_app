@@ -253,9 +253,12 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     «Which?», 26, do: 10 Nov 2026).
 29. **Create products from the recipe book** (#415, `b5cf999e`, `5f2fcb67`, `f8d54f35`, `f8e64a6a`): box and choice screen, only after the
     server says the product does not exist. NONE (`recipesWithoutProducts`, `productFromRecipe` absent). Size M.
-30. **Catalogue: crossed-out euro on rows Food cost cannot price** (`ff1a2d38`, `js/catalogue/unpriced-rows.js`). NONE. Size S.
+30. **Catalogue: crossed-out euro on rows Food cost cannot price** (`ff1a2d38`, `js/catalogue/unpriced-rows.js`). **DONE 10 Nov 2026** (`feature/mise2-next-recipes-rows`;
+    `docs/parity/catalogue.md`, «Two marks on the recipe row as built»): `shared/src/unpriced-rows.ts` (full, paired in `parity.spec.ts`), `recipesSource.readIngredientPrices`
+    (one-shot read), `app/src/recipes/NoPriceMark.tsx`, wired in `RecipeEditor.tsx` / `IngredientRow.tsx`; keys `cat.noPriceMark`.
 31. **Ricettario renamed-row warning** (#486, `a84fa1ab`, `94e0514e`): amber warning when a row is renamed but keeps its old link (whole-word
-    match, same pick clears, announced). NONE in `app/src/recipes/`. Size S.
+    match, same pick clears, announced). **DONE 10 Nov 2026** (`feature/mise2-next-recipes-rows`; `docs/parity/catalogue.md`, «Two marks on the recipe row as built»):
+    the five exports in `shared/src/catalogue-model.ts` (the `PORT OWED` marker of its spec is gone), the amber link line and the hidden live region in the editor; key `cat.nameChangedStillLinked`.
 
 ## F. Recipe book (Catalogue)
 
@@ -310,7 +313,7 @@ What each one means for the people using Mise 2 until it is ported:
   (Items 21, 22, 24, 25 and 28 are done: weighing units, the «Cost per 1 kg» block, the list search and the phone preview, the
   read-first card with four figures and «Details», and two decimals on the screens Mise 2 has.)
 - 23. Food cost recipe link with several products (a check).
-- 29-32. Recipe book: create products from it, the crossed-out euro, the renamed-row warning, the row menu.
+- 29, 32. Recipe book: create products from it, the row menu.
 - 36-37, 39-40. Calculator: reorder a recipe's ingredients, «Add a recipe» from the book, the dough history's dates and
   totals, the cached «no config».
 - 41-43. Staff / join codes / roles screens (people, invitations incl. #475 role-first invite, the join form) and the
