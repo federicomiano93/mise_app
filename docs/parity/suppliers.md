@@ -1304,5 +1304,5 @@ Branch `feature/mise2-next-invoice-per-piece`, a 1:1 port of the current app's `
   pieces per piece, goods by weight stay per kilo, sugar sachets). The `parity.spec.ts` classify pair has no marker left. The `test.fails` on the
   current-app side of the carton spec is gone.
 - **Differences:** none in behaviour or numbers. `invoice-pieces-cost.spec.ts` does not repeat the check of the printed «0,464» (`formatPricePerUnit`
-  takes a translator in `shared/`; the price text of a per-piece rate is pinned in `price-model.spec.ts`). No UI change: the import screen shows no
+  takes a translator in `shared/`; the «each» / «al pezzo» text of a per-piece rate is pinned in `price-write.spec.ts`, its three decimals in `price-model.spec.ts`). No UI change: the import screen shows no
   new text.

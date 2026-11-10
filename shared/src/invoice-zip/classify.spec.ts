@@ -168,6 +168,7 @@ describe.each([
     checkPack('ZUCCHERO BUSTINA 1x4g', 4, 'g', null);
   });
 
+  // Mirrored word for word in invoice-import/tests/test_classify.py.
   test('pieces: a count written as pieces next to grams of one piece', () => {
     const pieces = (text: string) => m.piecesOf(text);
     expect(pieces('SG.CR.1980 PF VUOTO 85gr* 50pz')).toStrictEqual({ count: 50, size: 85 });
@@ -186,6 +187,7 @@ describe.each([
     ]) expect(pieces(text), text).toBe(null);
   });
 
+  // Mirrored word for word in invoice-import/tests/test_classify.py.
   test('pack parsing: a bare K before the star is a kilo, nowhere else', () => {
     checkPack('PATATE FETTE 4X2,5k*    4pz', 2.5, 'kg', 4);
     checkPack('PANZEROTTI MIGNON2.5k*    1pz', 2.5, 'kg', 1);

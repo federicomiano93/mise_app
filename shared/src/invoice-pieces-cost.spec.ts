@@ -7,7 +7,7 @@
 //
 // NOT PORTED: the check that `formatPricePerUnit` prints «0,464». In shared/ it takes the translator and the money
 // formatter as arguments, so it is a screen-level check (the price text of a per-piece rate is pinned in
-// price-model.spec.ts).
+// price-write.spec.ts — «each» / «al pezzo», both apps — and its three decimals in price-model.spec.ts).
 
 import { describe, expect, test } from 'vitest';
 import { costRecipe } from './recipe-cost-model';

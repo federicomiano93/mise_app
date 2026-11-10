@@ -3,7 +3,7 @@
 // tests/invoice-import-model.test.mjs; the module is a FULL port, so parity.spec.ts also compares its exports.
 // Every name, VAT number and invoice id below is INVENTED. Real invoices never go in this repository.
 //
-// PORTED: 115 of 115 tests of tests/invoice-import-model.test.mjs. Three of them read a file as TEXT in the original
+// PORTED: 116 of 116 tests of tests/invoice-import-model.test.mjs. Three of them read a file as TEXT in the original
 // and still do, through Vite's `?raw` (shared/ has no `node:fs`): the lists of keys each collection's rule accepts
 // (firestore.rules), the keys the supplier card saves (js/supplier-record-form.js), and 'the model imports no
 // Firebase, no DOM and nothing from another feature's folder' — which reads the source of BOTH files, each against
