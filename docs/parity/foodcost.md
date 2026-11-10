@@ -296,9 +296,8 @@ now in; items 22-26 are still not).
 - `foodcost-model.js`'s marker in `odd-inputs.spec.ts` named items 26 and 28; the commit of item 28 never touched that file (the
   changes are the preview model, "Which?" and the money guard), so the marker now says items 24 and 26.
 
-**Still owed (later slices, they must use `fc-number` from the first day):** (the list preview, 24, and the read sections with the card
-layout, 25, are built: see the sections at the end), the cost on every line and "Which?" (26), and the kilos in the "create from the
-recipe book" dialog (29, `from-recipes-view`).
+**Later slices drew through `fc-number` from the first day:** the list preview (24), the read sections with the card layout (25), the cost on every line and
+"Which?" (26) and the kilos in the "create from the recipe book" dialog (29, `from-recipes-view`): see the sections at the end.
 
 ## Cost per 1 kg as built (10 Nov 2026)
 
@@ -524,3 +523,48 @@ Item 26 of `docs/mise2-port-owed.md` (current-app PR #485: `02839278`, `ec896ccf
   code review), so the list's Back still reaches the recipe in one step, by a POP. Spec: `FoodcostSection.recipe.spec.tsx`, «on the split, opens the product the narrowed list shows first beside it».
 - Back landing on the recipe's Food cost card (35b1f3e0's `&at=foodcost`) needs nothing here: the recipe screen restores its place on a POP from Food cost
   (`recipes/recipeReturn.ts`, origin 'cost').
+
+## Products from the recipe book as built (item 29, 10 Nov 2026)
+
+Item 29 of `docs/mise2-port-owed.md` (current-app PR #415: `5f2fcb67` the model, `b5cf999e` the box and the choice, `f8d54f35` «only after the server says they are not there»,
+`f8e64a6a` readable rows and 24px ticks; `js/foodcost/from-recipes.js`, `from-recipes-view.js`, `createProductsFromRecipes` / `createProductIfAbsent`). Branch
+`feature/mise2-next-foodcost-from-recipes`, cut from the items 30-31 branch.
+
+**Ported**
+- `shared/src/from-recipes.ts`: FULL (it held only `wholeRecipeKg`): `recipeProductId`, `recipeIdOfProduct`, `productFromRecipe`, `recipesWithoutProducts` beside it. Paired in `parity.spec.ts`
+  («all eighty-two models»; the «partial» note is gone) and fed the same junk as the original in `odd-inputs.spec.ts`; `from-recipes.spec.ts` mirrors
+  `tests/foodcost-cards-from-recipes.test.mjs` against both files. ⚠️ THE LINK IS THE DOCUMENT ID (`products/recipe-<recipeId>`), never a field; a hand-made product that uses the recipe or bears
+  its name is only a «maybe», unticked; a recipe without a name or with a `/` in its id makes no product.
+- Data layer: `FoodcostSource.createProductIfAbsent(id, data)` (a `runTransaction`: read the SERVER, `tx.set` only when absent, stamped with the venue; offline it rejects instead of queueing) and
+  `FoodcostStore.createProductsFromRecipes(recipes)` → `{ made, skipped, failed }`. Each product is built by the store's own `toProductDocument` (the same fields and the same `model` as a normal
+  save), one transaction per product (so one refusal costs only itself, and each has its own rules read budget), nothing in the local copy is touched (the live list brings the new products in).
+  `productsFromServer`/`recipesFromServer` are NOT what decides the box (see the differences); the transaction is the guard.
+- Screen: `FromBookBox.tsx` (the box above the list: icon, «N recipes without a product», the sub line, a full-width button of `--hit` height) and `FromBookDialog.tsx` (a `ui/Dialog`: the intro, «To create · N»
+  with «Tick all» / «Untick all», «Maybe already in Food cost · N», the Create button with its count, Back). Each row is a `<label>` of at least `--hit` (48px) around a 24px checkbox, the recipe's name and a
+  line saying what it would start as (`Whole recipe: 1.53 kg` through `fcNumber`, `Whole recipe: weight to fill in`, `Already used in “…”`, `There is already a product with this name`).
+  Confirm (`useConfirm`, «Create N products?», Cancel the safe default), then «N products created» in the status region, or «They were already in Food cost», or an alert («N products were not created: this needs an
+  internet connection…») with the choice left open and its ticks as they were. While the server answers, the ticks, Back and Escape are off.
+- `FoodcostList.tsx` owns the dialog's state (the box goes when the last product lands, the dialog must not go with it) and the focus: closed unused → the box's button, after creating → «New product».
+- i18n: twenty-one `fc.fromBook.*` keys in `en.ts` / `it.ts`, worded exactly as `js/i18n.js` (`boxTitle`, `boxSub`, `boxAction`, `title`, `intro`, `toCreate`, `maybe`, `untickAll`, `tickAll`, `wholeRecipe`, `noWeight`, `usedIn`,
+  `sameName`, `create`, `none`, `confirmTitle`, `confirmMsg`, `confirmOk`, `done`, `creating`, `already`, `failed`).
+
+**The rule that accepts the write** (`firestore.rules`, `match /products/{id}`, `allow create, update`): `cardAccess(lid, 'foodcost', 'foodcost') != 'none'`, `stampedFor(lid)` (the source stamps `bakery`),
+`keys().hasOnly([bakery, name, components, packaging, sellingMode, piecesPerBatch, packSize, packUnit, sellingPrice, vatRate, foodCostTarget, model, labourMinutes, labourPeople, noWeightLoss])`, `name` a string of
+1 to 200 characters, the lists at most 100 long, every optional number `null` (accepted), `model` an int from 1 to 2 (the app writes 2). A transaction's `set` on a missing document is a `create`, so the old-phone
+guard's `resource == null` branch applies. `foodcostStore.spec.ts` reads the whitelist from `firestore.rules` and checks every key the store writes is in it. `firestore.rules` is untouched.
+
+**Differences from the current app**
+- The choice is a dialog (the app's `ui/Dialog`, like the VAT guide and the chooser), not a full-screen overlay with its own header; the current app's was not an address either, so neither is this. The lists scroll
+  inside it and Back / Create stay in its footer, where the overlay had a sticky bar.
+- The box asks `productsLoaded && recipesLoaded` (a believable local copy or the server's answer, as the current app's `hasLiveProducts` / `hasLiveRecipes`), whoever runs the place (`session.canManage`, as
+  `canManageHere()`), and a list that is not narrowed to a recipe. A box decided on an old copy can only over-offer: the transaction then answers «already there» and nothing is written.
+- ADDED: the store holds the busy marker while the transactions run (a self-started reload in the middle would cut them off); a recipe handed over twice is created once; anything that goes wrong that is not a counted
+  refusal reads as «none created» and keeps the screen open, never as a silent close.
+- The «done» message is the section's status region (a live region), not a toast.
+- f8e64a6a's dashed border for an incomplete row has nothing to port: Mise 2's `ProductRow` never faded a row (the rows are one card with dividers), so the «what is missing» line was never taken below 4.5:1.
+- The tick's accessible name carries a space between the recipe's name and its line (a flex item adds none).
+
+**Specs**: `shared/src/from-recipes.spec.ts`, the `parity.spec.ts` / `odd-inputs.spec.ts` entries; `foodcostSource.spec.ts` (the transaction: server read first, write whole and stamped, nothing in a batch or a snapshot,
+offline rejects), `foodcostStore.spec.ts` (made / skipped / failed, the whitelist, a recipe twice, busy while running, no local copy touched); `FoodcostSection.fromBook.spec.tsx` (the box: shown, singular, who sees it,
+hidden when narrowed or before the products arrive; the choice: ticks, maybes, order, tick all, Back and Escape, keyboard, snapshot, 24px / 48px from the CSS; creating: the confirm, Cancel, Escape taken by the confirm,
+what is written, the new rows and the box following, focus, no duplicate, offline and refused with a retry, holding still; Italian). Fakes: `fakeFoodcostSource.createProductIfAbsent` (`refuse.create`).

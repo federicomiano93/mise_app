@@ -248,11 +248,17 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     **DONE 10 Nov 2026** (`feature/mise2-next-foodcost-units`; same parity section) on every Food cost screen Mise 2 HAS: `shared/src/fc-number.ts` is now a full, adapted port
     (`fcNumber`, `fcMoney`, `fcWeight`, `weighingParams`, each handed the money; not paired because of that argument, its spec runs both files), used by `productRowModel.ts` (the list row),
     `ProductAnswer.tsx` (production cost, answer, labour line, suggested price and its basis), `WeighingPair.tsx` (the oven-loss sentences), `MarginHistory.tsx`, `PickDialog.tsx`
-    (price each) and `lineNotes.ts` (the packaging note). The list preview (24) is built and draws through `fc-number` (10 Nov 2026). ⚠️ STILL OWED with the items that build
-    the screens: `from-recipes-view`'s kilos (item 29) must draw through `fc-number` from the first day (the read sections and the card layout, 25, and the cost on every line and
-    «Which?», 26, do: 10 Nov 2026).
+    (price each) and `lineNotes.ts` (the packaging note). The list preview (24) is built and draws through `fc-number` (10 Nov 2026). Every screen built since draws through it from
+    the first day: the read sections and the card layout (25), the cost on every line and «Which?» (26) and `from-recipes-view`'s kilos (29) — all 10 Nov 2026.
 29. **Create products from the recipe book** (#415, `b5cf999e`, `5f2fcb67`, `f8d54f35`, `f8e64a6a`): box and choice screen, only after the
     server says the product does not exist. NONE (`recipesWithoutProducts`, `productFromRecipe` absent). Size M.
+    **DONE 10 Nov 2026** (`feature/mise2-next-foodcost-from-recipes`; `docs/parity/foodcost.md`, «Products from the recipe book as built»): `shared/src/from-recipes.ts` is now a FULL port
+    (`recipeProductId`, `recipeIdOfProduct`, `wholeRecipeKg`, `productFromRecipe`, `recipesWithoutProducts`), paired in `parity.spec.ts` and fed odd inputs in `odd-inputs.spec.ts`; the
+    link stays the document id (`products/recipe-<recipeId>`), a hand-made product is only a «maybe». `foodcostSource.createProductIfAbsent` is a TRANSACTION that reads the server first
+    (offline it fails, it does not queue) and `foodcostStore.createProductsFromRecipes` writes each product with the same `toProductDocument` as a save and counts made / skipped /
+    failed. On the list `FromBookBox.tsx` (whoever runs the place, once products and recipes have answered, not while narrowed to a recipe) opens `FromBookDialog.tsx`: ticks (24px box,
+    48px row), «Tick all / Untick all», a confirm, then «N products created» or «N products were not created: this needs an internet connection…» with the choice left open. Twenty-one
+    `fc.fromBook.*` keys worded as the current app's; the kilos draw through `fc-number`. The deferred line below now names item 32 only.
 30. **Catalogue: crossed-out euro on rows Food cost cannot price** (`ff1a2d38`, `js/catalogue/unpriced-rows.js`). **DONE 10 Nov 2026** (`feature/mise2-next-recipes-rows`;
     `docs/parity/catalogue.md`, «Two marks on the recipe row as built»): `shared/src/unpriced-rows.ts` (full, paired in `parity.spec.ts`), `recipesSource.readIngredientPrices`
     (one-shot read), `app/src/recipes/NoPriceMark.tsx`, wired in `RecipeEditor.tsx` / `IngredientRow.tsx`; keys `cat.noPriceMark`.
@@ -313,7 +319,7 @@ What each one means for the people using Mise 2 until it is ported:
   (Items 21, 22, 24, 25 and 28 are done: weighing units, the «Cost per 1 kg» block, the list search and the phone preview, the
   read-first card with four figures and «Details», and two decimals on the screens Mise 2 has.)
 - 23. Food cost recipe link with several products (a check).
-- 29, 32. Recipe book: create products from it, the row menu.
+- 32. Recipe book: the row menu.
 - 36-37, 39-40. Calculator: reorder a recipe's ingredients, «Add a recipe» from the book, the dough history's dates and
   totals, the cached «no config».
 - 41-43. Staff / join codes / roles screens (people, invitations incl. #475 role-first invite, the join form) and the
