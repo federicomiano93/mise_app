@@ -70,6 +70,7 @@ describe('the scroll on a phone', () => {
     const main = scrolledTo(700);
 
     await user.click(rowOf(/^Red/));
+    await user.click(await screen.findByRole('button', { name: 'Open the card' }, LOAD));
     await screen.findByRole('region', { name: 'Red' }, LOAD);
     expect(main.scrollTop).toBe(0);
 
@@ -122,6 +123,7 @@ describe('the focus when Food cost comes back to its list', () => {
   it('goes back to the row when the phone\'s own Back leaves a product', async () => {
     const { router, user } = await loaded();
     await user.click(rowOf(/^Red/));
+    await user.click(await screen.findByRole('button', { name: 'Open the card' }, LOAD));
     await screen.findByRole('region', { name: 'Red' }, LOAD);
 
     await act(async () => { await router.navigate(-1); });

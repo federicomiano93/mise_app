@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
@@ -17,6 +17,7 @@ import {
 } from './foodcostPath';
 import type { Origin, ShownView } from './foodcostPath';
 import { HandBackProvider, NEW_OPENER, SETTINGS_OPENER, productOpener, useHandBackState } from './handBack';
+import { ProductPreviewDialog } from './ProductPreviewDialog';
 import styles from './FoodcostSection.module.css';
 
 // Food cost: the products worst food cost first and, beside them from 1000px, the chosen product,
@@ -98,11 +99,37 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
       void navigate(to, { state: { ...FROM_LIST, ...pushDepth(state) } });
     }
   };
-  const openProduct = (id: string) => {
+  const goToProduct = (id: string) => {
     handBack.expect(productOpener(id));
     // A product picked from a narrowed list keeps the list narrowed; anything else drops the recipe.
     openScreen(productPath(id, { recipe: null, using: listUsing }));
   };
+  // ⚠️ ON A PHONE A TAP ON A ROW SHOWS THE PREVIEW FIRST (Federico, 7 Nov 2026), in a dialog whose main button opens the card; from 1000px
+  // the card opens beside the list as it always did (the pane IS the preview there). Same breakpoint as the split itself.
+  const [previewId, setPreviewId] = useState<string | null>(null);
+  const previewing = !split && view.kind === 'list' ? previewId : null;
+  // The page moved on (Back, a rotation to the split, another address): the preview is over, not waiting to come back.
+  useEffect(() => {
+    if (previewing === null && previewId !== null) setPreviewId(null);
+  }, [previewing, previewId]);
+  const openProduct = (id: string) => {
+    if (split) { goToProduct(id); return; }
+    handBack.expect(productOpener(id));
+    setPreviewId(id);
+  };
+  // «Close»: the row that opened the preview takes the focus again (or «New product» if it is gone), once the dialog has gone —
+  // a focus given while the dialog still holds it would be pulled back into it.
+  const closed = useRef(false);
+  const closePreview = () => {
+    closed.current = true;
+    setPreviewId(null);
+  };
+  useEffect(() => {
+    if (previewing === null && closed.current) {
+      closed.current = false;
+      handBack.deliver();
+    }
+  }, [previewing, handBack]);
   const openNew = () => {
     handBack.expect(NEW_OPENER);
     openScreen(newPath);
@@ -184,6 +211,16 @@ function FoodcostLayout({ view, origin }: { view: ShownView; origin: Origin }) {
             </PartBoundary>
           </div>
         </div>
+        {previewing === null ? null : (
+          // Keyed on the product: a panel that failed to draw must not stay failed for the next row tapped.
+          <PartBoundary resetKey={previewing}>
+            <ProductPreviewDialog
+              id={previewing}
+              onOpen={() => { setPreviewId(null); goToProduct(previewing); }}
+              onClose={closePreview}
+            />
+          </PartBoundary>
+        )}
       </Page>
     </HandBackProvider>
   );

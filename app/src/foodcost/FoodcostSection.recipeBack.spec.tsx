@@ -146,6 +146,7 @@ describe('a product picked from the narrowed list', () => {
     const { router, user } = open();
     await screen.findByRole('heading', { level: 2, name: 'Products with “Dough”' }, LOAD);
     await user.click(screen.getByRole('button', { name: /^Loaf/ }));
+    await user.click(await screen.findByRole('button', { name: 'Open the card' }, LOAD));
     expect(where(router)).toBe('/food-cost/product/Loaf?using=dough');
     expect(router.state.historyAction).toBe('PUSH');
 
@@ -198,6 +199,7 @@ describe('a product picked from the narrowed list', () => {
   it('a product picked from the PLAIN list does not carry the recipe', async () => {
     const { router, user } = renderFoodcost('/food-cost', { source: editorSource([LOAF, TART], { recipes: [DOUGH] }) });
     await user.click(await screen.findByRole('button', { name: /^Tart/ }, LOAD));
+    await user.click(await screen.findByRole('button', { name: 'Open the card' }, LOAD));
     expect(where(router)).toBe('/food-cost/product/Tart');
   });
 });

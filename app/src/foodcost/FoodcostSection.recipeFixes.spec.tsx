@@ -74,6 +74,7 @@ describe('⚠️ a rotation from the phone to the split keeps «came from the re
     const { router, user } = open();
     await screen.findByRole('heading', { level: 2, name: 'Products with “Dough”' }, LOAD);
     await user.click(screen.getByRole('button', { name: /^Loaf/ }));
+    await user.click(await screen.findByRole('button', { name: 'Open the card' }, LOAD));
     await user.click(within(await screen.findByRole('region', { name: 'Loaf' }, LOAD)).getByRole('button', { name: 'Margin history' }));
     await screen.findByRole('region', { name: 'Margin history' }, LOAD);
     expect(where(router)).toBe('/food-cost/product/Loaf/history?using=dough');

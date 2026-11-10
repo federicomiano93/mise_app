@@ -123,3 +123,17 @@
   align-self: flex-start;
   margin-top: var(--s2);
 }
+
+/* The suggested price without VAT, a quiet line under the one with VAT. */
+.netRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.netFigure {
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}

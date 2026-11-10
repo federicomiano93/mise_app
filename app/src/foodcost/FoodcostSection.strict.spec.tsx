@@ -22,6 +22,7 @@ describe('under StrictMode: Food cost', () => {
   it('draws the list, opens a product and steps back', async () => {
     const { router, user } = renderFoodcost('/food-cost', { source: sourceWith([product('Green')]) });
     await user.click(await screen.findByRole('button', { name: /^Green/ }, LOAD));
+    await user.click(await screen.findByRole('button', { name: 'Open the card' }, LOAD));
     expect(await screen.findByRole('heading', { level: 2, name: 'Green' }, LOAD)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Back' }));
     expect(router.state.location.pathname).toBe('/food-cost');

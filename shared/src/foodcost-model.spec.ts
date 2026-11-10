@@ -873,11 +873,192 @@ describe.each([
     }
   });
 
+  // ── The preview, the net ideal price and the name search (tests/foodcost-preview.test.mjs) ────────────────
+  // Federico, 7 Nov 2026: a search bar in the Food cost list; tapping a product shows, before the whole card,
+  // its selling price, raw materials, packaging, labour (only where time and rate are known), total cost, food
+  // cost against its target, margin on the net price and the ideal price with and without VAT.
+
+  // The preview's own tables: flour, butter and a bag at 5p. (The original adds `unpriced`, the «Which?» list
+  // of item 26; no test here reads it.)
+  const PV_INGREDIENTS: Record<string, Doc> = {
+    FLOUR: { id: 'FLOUR', priceUnit: 'kg', pricePerUnit: 2 },
+    BUTTER: { id: 'BUTTER', priceUnit: 'kg', pricePerUnit: 8 },
+    BAG: { id: 'BAG', priceUnit: 'pcs', pricePerUnit: 0.05 },
+  };
+  const PV_DOUGH: Doc = {
+    id: 'DOUGH', name: 'Dough', lossPct: 0,
+    ingredients: [
+      { label: 'Flour', grams: 800, unit: 'g', kind: 'ingredient', refId: 'FLOUR' },
+      { label: 'Butter', grams: 200, unit: 'g', kind: 'ingredient', refId: 'BUTTER' },
+    ],
+  };
+  const pvTables = (over: Doc = {}): ported.CostTables => ({ ingredients: PV_INGREDIENTS, recipes: { DOUGH: PV_DOUGH }, ...over });
+
+  test('the net ideal price puts the food cost exactly at its target, without VAT', () => {
+    expect(m.suggestedNetPrice({ unitCost: 0.6, targetPct: 30 })).toBe(2);
+    expect(m.suggestedNetPrice({ unitCost: 1.25, targetPct: 25 })).toBe(5);
+    // 0.50 / 0.30 = 1.6666… → 1.67, never 1.66: a price asked for a target must hit it.
+    expect(m.suggestedNetPrice({ unitCost: 0.5, targetPct: 30 })).toBe(1.67);
+    // A whole number of cents stays put (floating-point dust is not a cent).
+    expect(m.suggestedNetPrice({ unitCost: 0.72, targetPct: 30 })).toBe(2.4);
+  });
+
+  test('⚠️ no cost or no target is NO ideal price — never 0, never NaN', () => {
+    for (const args of [{ unitCost: null, targetPct: 30 }, { unitCost: 0.6, targetPct: null },
+      { unitCost: 0, targetPct: 30 }, { unitCost: 'x', targetPct: 30 }, { unitCost: 0.6, targetPct: 0 },
+      { unitCost: 0.6, targetPct: 120 }, {}, undefined]) {
+      expect(m.suggestedNetPrice(args), JSON.stringify(args)).toBe(null);
+    }
+  });
+
+  test('the preview shows his eight figures, from the same sums as the card', () => {
+    const t = pvTables();
+    const pv = m.productPreview(product(), t);
+    const cost = m.productionCost(product(), t);
+    const answer = m.costProduct(product(), t);
+    expect(pv.unit).toBe('piece');
+    expect(pv.sellingPrice, '1 — the price as typed, VAT included').toBe(1.2);
+    expect(pv.materialsUnitCost, '2 — raw materials only').toBe(0.32);
+    expect(pv.packagingUnitCost, '3 — no packaging lines: nothing, and it says so').toBe(0);
+    expect(pv.hasPackaging).toBe(false);
+    expect(pv.labourUnitCost, '4 — no rate: no labour row').toBe(null);
+    expect(pv.totalUnitCost, '5 — the total is the card’s cost').toBe(cost.unitCost);
+    expect(pv.foodCostPct, '6 — the food cost is the card’s').toBe(answer.foodCostPct);
+    expect(pv.targetPct).toBe(30);
+    expect(pv.status).toBe(answer.status);
+    expect(pv.margin, '7 — the margin on the net price, the card’s').toBe(answer.margin);
+    expect(pv.idealGross, '8 — with VAT, the card’s suggested price')
+      .toBe(m.suggestedGrossPrice({ unitCost: 0.32, vatRate: 20, targetPct: 30 }));
+    expect(pv.idealGross).toBe(1.28);
+    expect(pv.idealNet, '8 — and without VAT: 0.32 / 30%').toBe(1.07);
+    expect(pv.missing).toStrictEqual([]);
+    expect(pv.partial).toBe(false);
+  });
+
+  test('packaging is shown apart from the raw materials, and the total holds both', () => {
+    const p = product({ packaging: [{ ingredientId: 'BAG', qtyPcs: 2 }] });
+    const pv = m.productPreview(p, pvTables());
+    expect(pv.materialsUnitCost).toBe(0.32);
+    expect(pv.packagingUnitCost, 'two bags at 0.05 a piece').toBe(0.1);
+    expect(pv.hasPackaging).toBe(true);
+    expect(pv.totalUnitCost).toBe(0.42);
+    expect(pv.totalUnitCost).toBe(m.productionCost(p, pvTables()).unitCost);
+    expect(pv.idealNet, '0.42 / 30%: the food cost counts the packaging, so the price does').toBe(1.4);
+  });
+
+  test('⚠️ an unpriced box is NOT a free box: no packaging figure, and it is named', () => {
+    const t = pvTables({ ingredients: { ...PV_INGREDIENTS, BOX: { id: 'BOX', priceUnit: 'kg', pricePerUnit: 3 } } });
+    const pv = m.productPreview(product({ packaging: [{ ingredientId: 'BOX', qtyPcs: 1 }] }), t);
+    expect(pv.packagingUnitCost, 'a box priced by the kilo cannot be counted per piece').toBe(null);
+    expect(pv.missing).toContain('no-packaging-price');
+    expect(pv.partial).toBe(true);
+    const gone = m.productPreview(product({ packaging: [{ ingredientId: 'DELETED', qtyPcs: 1 }] }), pvTables());
+    expect(gone.packagingUnitCost, 'a box deleted from Suppliers').toBe(null);
+    expect(gone.missing).toContain('no-packaging-price');
+  });
+
+  test('labour appears only with minutes AND a rate, and goes into the total, never the food cost', () => {
+    const p = product({ labourMinutes: 90, labourPeople: 2 });
+    const rated = m.productPreview(p, pvTables({ labourCostPerHour: 14 }));
+    expect(rated.labourUnitCost, '£42 over 100 pieces').toBe(0.42);
+    expect(rated.totalUnitCost, 'materials + packaging + labour').toBe(0.74);
+    expect(rated.foodCostPct, 'labour never moves the food cost').toBe(m.productPreview(p, pvTables()).foodCostPct);
+    expect(rated.idealNet, 'the ideal price hits the FOOD COST target, so labour is not in it').toBe(1.07);
+    const noRate = m.productPreview(p, pvTables());
+    expect(noRate.labourUnitCost, 'an employee is sent no rate: no labour figure at all').toBe(null);
+    expect(noRate.totalUnitCost).toBe(0.32);
+  });
+
+  test('by weight and by the pack, the figures are per kg and per pack', () => {
+    const kilo = m.productPreview(product({ sellingMode: 'weight', piecesPerBatch: null, sellingPrice: 12 }), pvTables());
+    expect(kilo.unit).toBe('kg');
+    expect(kilo.materialsUnitCost).toBe(3.2);
+    const pack = m.productPreview(product({
+      sellingMode: 'pack', packSize: 500, packUnit: 'g', piecesPerBatch: null, sellingPrice: 5,
+    }), pvTables());
+    expect(pack.unit).toBe('pack');
+    expect(pack.materialsUnitCost, '32.00 over 20 packs of 500 g').toBe(1.6);
+  });
+
+  test('⚠️⚠️ missing data names what is missing and gives no number', () => {
+    const noTarget = m.productPreview(product({ foodCostTarget: null }), pvTables());
+    expect(noTarget.idealGross).toBe(null);
+    expect(noTarget.idealNet).toBe(null);
+    expect(noTarget.missing).toStrictEqual(['no-target']);
+    expect(noTarget.foodCostPct, 'the food cost itself needs no target').not.toBe(null);
+
+    const noVat = m.productPreview(product({ vatRate: null }), pvTables());
+    expect(noVat.idealGross, 'no VAT: no shelf price').toBe(null);
+    expect(noVat.idealNet, '…but what it must earn net is still known').toBe(1.07);
+    expect(noVat.foodCostPct).toBe(null);
+    expect(noVat.margin).toBe(null);
+    expect(noVat.missing).toContain('no-vat');
+
+    const noPrice = m.productPreview(product({ sellingPrice: null }), pvTables());
+    expect(noPrice.sellingPrice).toBe(null);
+    expect(noPrice.foodCostPct).toBe(null);
+    expect(noPrice.idealNet, 'the ideal price is exactly what a product with no price needs').toBe(1.07);
+    expect(noPrice.missing).toContain('no-price');
+
+    const noPieces = m.productPreview(product({ piecesPerBatch: null }), pvTables());
+    expect(noPieces.materialsUnitCost).toBe(null);
+    expect(noPieces.packagingUnitCost).toBe(null);
+    expect(noPieces.totalUnitCost).toBe(null);
+    expect(noPieces.idealNet).toBe(null);
+    expect(noPieces.unit, 'the unit is still the one it is sold by').toBe('piece');
+    expect(noPieces.missing).toContain('no-pieces');
+
+    const empty = m.productPreview({ id: 'X', name: 'New' }, pvTables()) as unknown as Record<string, unknown>;
+    for (const key of ['sellingPrice', 'materialsUnitCost', 'packagingUnitCost', 'labourUnitCost',
+      'totalUnitCost', 'foodCostPct', 'targetPct', 'margin', 'idealGross', 'idealNet', 'unit']) {
+      expect(empty[key], key).toBe(null);
+    }
+    expect((empty.missing as string[]).slice(0, 2), 'in the order a person fills them in')
+      .toStrictEqual(['no-components', 'no-selling-mode']);
+  });
+
+  test('a partly priced product says so in the preview too', () => {
+    const t = pvTables({ recipes: { DOUGH: { ...PV_DOUGH, ingredients: [...(PV_DOUGH.ingredients as Doc[]),
+      { label: 'Salt', grams: 10, unit: 'g', kind: 'ingredient', refId: 'NOPE' }] } } });
+    expect(m.productPreview(product(), t).partial).toBe(true);
+  });
+
+  test('junk never throws and never yields NaN', () => {
+    for (const raw of [null, undefined, 'x', 42, {}, { components: 'no' }]) {
+      const pv = m.productPreview(raw, {});
+      for (const [key, value] of Object.entries(pv)) {
+        if (typeof value === 'number') expect(Number.isFinite(value), `${key} of ${JSON.stringify(raw)}`).toBe(true);
+      }
+    }
+  });
+
+  test('the search finds a name whatever the accents, capitals and spaces', () => {
+    const caffe = { name: 'Cornetto al Caffè' };
+    expect(m.nameMatches(caffe, 'caffe')).toBe(true);
+    expect(m.nameMatches(caffe, '  CAFFÈ ')).toBe(true);
+    expect(m.nameMatches(caffe, 'tto al'), 'any part of the name').toBe(true);
+    expect(m.nameMatches(caffe, 'crema')).toBe(false);
+    expect(m.nameMatches(caffe, ''), 'nothing typed: the whole list').toBe(true);
+    expect(m.nameMatches(caffe, '   ')).toBe(true);
+    expect(m.nameMatches({}, 'x'), 'no name never throws').toBe(false);
+    expect(m.nameMatches(null, 'x')).toBe(false);
+  });
+
+  test('⚠️ the search keeps the worst-margin-first order of the rows it leaves', () => {
+    const products = [
+      product({ id: 'A', name: 'Cornetto vuoto', sellingPrice: 2 }),
+      product({ id: 'B', name: 'Brioche', sellingPrice: 1 }),
+      product({ id: 'C', name: 'Cornetto crema', sellingPrice: 0.9 }),
+    ];
+    const ids = m.sortByMargin(products, pvTables())
+      .filter(({ product: p }) => m.nameMatches(p, 'cornetto')).map(r => (r.product as Doc).id);
+    expect(ids, 'the worse margin still first').toStrictEqual(['C', 'A']);
+  });
+
   // ── Added ──────────────────────────────────────────────────────────────────
   // Not in the original tests: the shapes the rest of Mise 2 relies on.
 
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 24): main added two blockers to BLOCKER_TEXT in js/foodcost/foodcost-model.js, the port has not — remove .fails when ported
-  (_name === 'js/ (current app)' ? test.fails : test)('the blockers’ dictionary keys are the current app’s, frozen', () => {
+  test('the blockers’ dictionary keys are the current app’s, frozen', () => {
     expect({ ...m.BLOCKER_TEXT }).toStrictEqual({
       'no-components': 'fc.addAtLeastOne',
       'no-selling-mode': 'fc.chooseWhetherThisIs',
@@ -887,6 +1068,8 @@ describe.each([
       'no-price': 'fc.enterTheSellingPrice',
       'no-recipe-cost': 'fc.theRecipesInThis',
       'no-weight': 'fc.theRecipesInThis2',
+      'no-target': 'fc.preview.needTarget',
+      'no-packaging-price': 'fc.preview.needPackagingPrice',
     });
     expect(Object.isFrozen(m.BLOCKER_TEXT)).toBe(true);
   });
@@ -932,17 +1115,48 @@ describe('the port against the original', () => {
     for (const name of LEFT_OUT) expect(typeof original[name], name).toBe('function');
   });
 
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, items 24, 26): main added exports to js/foodcost/foodcost-model.js (Which? names deleted lines, line money guard), not yet in the port — remove .fails when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 26): main added exports to js/foodcost/foodcost-model.js (componentLineCost, packagingLineCost, unpricedParts, unpricedReasonText: the cost on every line and «Which?»), not yet in the port — remove .fails when ported
   test.fails('exports exactly the same names, except those', () => {
     expect(Object.keys(port).sort()).toStrictEqual(shared);
   });
 
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 24): main changed js/foodcost/foodcost-model.js (BLOCKER_TEXT has two more blockers), the port has not — remove .fails when ported
-  test.fails('every non-function export is strictly equal and frozen the same way', () => {
+  test('every non-function export is strictly equal and frozen the same way', () => {
     for (const name of shared) {
       if (typeof original[name] === 'function') continue;
       expect(port[name], name).toStrictEqual(original[name]);
       expect(Object.isFrozen(port[name]), `${name}: frozen`).toBe(Object.isFrozen(original[name]));
+    }
+  });
+
+  test('the preview, the net ideal price and the search answer as the original does, junk included', () => {
+    const tables = { ingredients: INGREDIENTS, recipes: { DOUGH, MYSTERY: UNPRICED_RECIPE, HALF }, labourCostPerHour: 14 };
+    const products: unknown[] = [
+      product(), product({ packaging: [{ ingredientId: 'BOX', qtyPcs: 2 }] }),
+      product({ packaging: [{ ingredientId: 'BAGS', qtyPcs: 1 }, { ingredientId: 'GONE', qtyPcs: 1 }] }),
+      labourProduct(), product({ foodCostTarget: null }), product({ vatRate: null }), product({ sellingPrice: null }),
+      product({ piecesPerBatch: null }), product({ sellingMode: 'weight', piecesPerBatch: null, sellingPrice: 12 }),
+      product({ sellingMode: 'pack', packSize: 500, packUnit: 'g', piecesPerBatch: null, sellingPrice: 5 }),
+      product({ components: [{ recipeId: 'DOUGH', qtyKg: 10 }, { recipeId: 'MYSTERY', qtyKg: 5 }] }),
+      product({ components: [{ recipeId: 'GONE', qtyKg: 1 }] }),
+      { id: 'X', name: 'New' }, null, undefined, 'x', 42, {},
+    ];
+    // The original also returns `unpriced` (item 26): every other field must agree.
+    const withoutUnpriced = (out: unknown): unknown => {
+      const { unpriced: _unpriced, ...rest } = out as Record<string, unknown>;
+      return rest;
+    };
+    for (const raw of products) {
+      expect(ported.productPreview(raw, tables), JSON.stringify(raw))
+        .toStrictEqual(withoutUnpriced(legacy.productPreview(raw, tables)));
+    }
+    for (const args of [{ unitCost: 0.5, targetPct: 30 }, { unitCost: 0.72, targetPct: 30 }, { unitCost: 0, targetPct: 30 },
+      { unitCost: 'x', targetPct: 30 }, { unitCost: 1, targetPct: 120 }, {}, undefined]) {
+      expect(ported.suggestedNetPrice(args), JSON.stringify(args)).toBe(legacy.suggestedNetPrice(args));
+    }
+    for (const name of [undefined, null, 'Caffè', 'caffe', 'Cornetto al Caffè', 5]) {
+      for (const query of [undefined, null, '', ' ', 'caffe', 'CAFFÈ', 'x', 5]) {
+        expect(ported.nameMatches({ name }, query), `${name}/${query}`).toBe(legacy.nameMatches({ name }, query));
+      }
     }
   });
 

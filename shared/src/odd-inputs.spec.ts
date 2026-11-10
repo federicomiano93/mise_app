@@ -267,10 +267,10 @@ function show(value: unknown): string {
 }
 
 const PORT_OWED = new Set<string>([
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, items 24, 26): main changed js/foodcost/foodcost-model.js (the preview model, Which? names deleted lines, line money guard), the port has not — remove its keys when ported
+  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 26): main changed js/foodcost/foodcost-model.js (batchTotals now costs each line through componentLineCost and packagingLineCost: Which? names deleted lines, line money guard), the port has not — remove its keys when ported
   'batchTotals', 'productionCost', 'costProduct', 'sortByMargin',
-  // costPerKg (item 22) calls productionCost, so it inherits the same gap: the original lets a null table through, the port's batchTotals throws — remove with the line above when items 24, 26 are ported.
-  'costPerKg',
+  // productionCost and costProduct feed these two, so they inherit the same gap: the original lets a null table through, the port's batchTotals throws — remove with the line above when item 26 is ported. (The preview model, item 24, is ported and agrees field for field on every other input.)
+  'productPreview', 'costPerKg',
 ]);
 
 // Calls both functions with every argument list and reports every disagreement at once.
@@ -2724,6 +2724,11 @@ describe('foodcost-model: odd inputs', () => {
   agree('suggestedGrossPrice', m.suggestedGrossPrice as AnyFn, l.suggestedGrossPrice as AnyFn, [[], [undefined], [null], [5], ['abc'], [{}],
     ...varying({ unitCost: 0.6, vatRate: 10, targetPct: 30 }, { unitCost: NUMS, vatRate: NUMS, targetPct: NUMS }).map(input => [input]),
     [{ unitCost: 0.72, vatRate: 0, targetPct: 30 }], [{ unitCost: 0.5, vatRate: 10, targetPct: 30 }], [{ unitCost: 1.25, vatRate: 20, targetPct: 25 }]]);
+  agree('suggestedNetPrice', m.suggestedNetPrice as AnyFn, l.suggestedNetPrice as AnyFn, [[], [undefined], [null], [5], ['abc'], [{}],
+    ...varying({ unitCost: 0.6, targetPct: 30 }, { unitCost: NUMS, targetPct: NUMS }).map(input => [input]),
+    [{ unitCost: 0.72, targetPct: 30 }], [{ unitCost: 0.5, targetPct: 30 }], [{ unitCost: 1.25, targetPct: 25 }]]);
+  agree('nameMatches', m.nameMatches, l.nameMatches, product([...ODD, { name: 'Cornetto al Caffè' }, { name: 5 }, { name: { toString: () => 'obj' } }, { id: 'n' }],
+    [...ODD, 'caffe', ' CAFFÈ ', 'tto al', 'crema', '   ', { toString: () => 'cor' }]));
 
   const LINES: readonly unknown[] = [...ODD, ...INGREDIENT_LINES, ...[200, 0.2, 100, 10, 5, 50, '200', -1, 1e21].flatMap(qty => ['g', 'kg', 'pcs'].map(unit => ({ qty, unit })))];
   const ING_CARDS: readonly unknown[] = [...ODD, ...Object.values(FC_ING), ...varying({ priceUnit: 'pcs', pricePerUnit: 0.05, unitWeightKg: 0.002 }, {
@@ -2736,6 +2741,13 @@ describe('foodcost-model: odd inputs', () => {
   agree('packagingPerUnit', m.packagingPerUnit as AnyFn, l.packagingPerUnit as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
   agree('productionCost', m.productionCost as AnyFn, l.productionCost as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
   agree('costProduct', m.costProduct as AnyFn, l.costProduct as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
+  // The original also returns `unpriced` (the «Which?» list, item 26): every other field is compared.
+  const previewWithoutUnpriced: AnyFn = (...args) => {
+    const out = (l.productPreview as AnyFn)(...args) as Record<string, unknown>;
+    const { unpriced: _unpriced, ...rest } = out;
+    return rest;
+  };
+  agree('productPreview', m.productPreview as AnyFn, previewWithoutUnpriced, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
   agree('costPerKg', perKgModel.costPerKg as AnyFn, legacyPerKgModel.costPerKg as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
   agree('labourBatchCost', m.labourBatchCost as AnyFn, l.labourBatchCost as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
 

@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigationType } from 'react-router';
-import { Plus, Settings } from 'lucide-react';
-import { productsUsingRecipe, sortByMargin } from '@mise/shared/foodcost-model';
+import { Plus, Search, Settings } from 'lucide-react';
+import { nameMatches, productsUsingRecipe, sortByMargin } from '@mise/shared/foodcost-model';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
@@ -48,6 +48,11 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
   const shown = useMemo(() => (using === null ? products : productsUsingRecipe(products, using)), [products, using]);
   const ranked = useMemo(() => sortByMargin(shown, tables), [shown, tables]);
 
+  // The search over the NAMES (Federico, 7 Nov 2026), applied AFTER the sort so the rows that stay keep the worst-first order. Its text lives
+  // here, in a part that stays mounted from one address to the next, so Back from a product finds the same search.
+  const [query, setQuery] = useState('');
+  const found = useMemo(() => ranked.filter(({ product }) => nameMatches(product, query)), [ranked, query]);
+
   // The entry's decision lands here by a replace: the narrowed list's title takes the focus (the page
   // itself keeps it, KEEP_FOCUS). Not on Back to it (a POP): the row that opened a product is owed it.
   useEffect(() => {
@@ -83,6 +88,24 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
         ) : null}
       </div>
 
+      {/* ⚠️ THE SEARCH BOX IS NEVER REMOUNTED BY A DATA SNAPSHOT: it is a controlled input in a part that stays mounted,
+          and only the rows below it are redrawn, so a snapshot landing mid-keystroke finds the text and the keyboard
+          where the person left them. Not drawn while there is nothing to search. */}
+      {ready && ranked.length > 0 ? (
+        <div className={styles.search}>
+          <Search aria-hidden="true" />
+          <input
+            type="search"
+            autoComplete="off"
+            className={styles.input}
+            aria-label={t('fc.search')}
+            placeholder={t('fc.search')}
+            value={query}
+            onChange={event => { setQuery(event.target.value); }}
+          />
+        </div>
+      ) : null}
+
       {!ready ? (
         <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>
       ) : ranked.length === 0 ? (using !== null ? null : (
@@ -91,9 +114,9 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
           <p className={styles.emptySub}>{t('fc.empty.sub')}</p>
           <Button onPress={onOpenNew}>{t('fc.empty.action')}</Button>
         </div>
-      )) : (
+      )) : found.length === 0 ? null : (
         <ul className={styles.rows}>
-          {ranked.map(({ product, result }) => (
+          {found.map(({ product, result }) => (
             <ProductRow
               key={product.id}
               id={product.id}
@@ -106,6 +129,14 @@ export function FoodcostList({ openProductId, onOpenProduct, onOpenNew, onOpenSe
           ))}
         </ul>
       )}
+
+      {/* A search that matches nothing stays a small line under the box. The region is drawn before it speaks, so the line is
+          announced when it arrives. */}
+      <div role="status">
+        {ready && ranked.length > 0 && found.length === 0
+          ? <p className={styles.nothing}>{t('fc.searchNone', { q: query.trim() })}</p>
+          : null}
+      </div>
     </div>
   );
 }
