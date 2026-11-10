@@ -1,0 +1,126 @@
+/* «Cost per 1 kg»: a closed box under the answer, one line per ingredient. Native details/summary, so it opens
+   and closes from the keyboard with no script. */
+
+.block {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--sunken);
+}
+
+.block[hidden] {
+  display: none;
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  list-style: none;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.summary::-webkit-details-marker {
+  display: none;
+}
+
+.summary:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.sum {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.num {
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.chevron {
+  flex: none;
+  color: var(--ink-2);
+}
+
+.block[open] .chevron {
+  transform: rotate(180deg);
+}
+
+.body {
+  padding: 0 var(--s4) var(--s3);
+}
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+  padding: var(--s2) 0;
+  border-top: 1px solid var(--line);
+}
+
+.name {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+}
+
+.cost {
+  color: var(--ink);
+  font-size: var(--fs-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.detail {
+  flex: 1 0 100%;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  font-size: var(--fs-xs);
+}
+
+.total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--line);
+  color: var(--ink);
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.partial,
+.note {
+  margin-top: var(--s2);
+  font-size: var(--fs-sm);
+}
+
+.partial {
+  color: var(--warn-ink);
+  font-weight: 600;
+}
+
+.note {
+  color: var(--ink-2);
+}
