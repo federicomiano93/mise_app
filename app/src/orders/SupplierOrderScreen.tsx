@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Check, ClipboardList, List, Plus } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
 import { fromOrdersList, fromOrdersSupplier, ingredientCardAddress, newIngredientAddress, supplierScreenAddress } from '@mise/shared/records-link';
@@ -18,6 +18,7 @@ import { useOrders, useOrdersStore } from './OrdersContext';
 import { ADD_DOOR, ITEMS_DOOR, PLACE_DOOR, SUMMARY_DOOR, SUPPLIER_DOOR, SUPPLIER_TITLE, supplierOpener, useHandBack } from './handBack';
 import { ORDERS_PATH, supplierConfirmPath, supplierItemsPath, supplierSummaryPath } from './ordersPath';
 import { cameFromList, confirmState, fromSupplierState, useLeave } from './ordersNav';
+import { recipeOriginOf, useBackToRecipe } from './recipeOrigin';
 import { LONG_MS, useClearQuantities } from './useClearQuantities';
 import { NO_SUPPLIER_ID } from './ordersLens';
 import { summaryFor } from './orderMoney';
@@ -27,10 +28,16 @@ import styles from './SupplierOrderScreen.module.css';
 // One supplier's order: the quantities to type, A→Z, and under them the lines switched off.
 //
 // Back is one level up (P20): the browser's Back when the list is the entry behind, else it replaces itself with the list.
+//
+// ⚠️ OPENED FROM A RECIPE ROW'S «Order» (item 32; the address names the recipe and the ingredient, recipeOrigin.ts) it is the same screen with
+// two differences: the ingredient's quantity box takes the focus once, nothing prefilled, and Back returns to THAT RECIPE (the
+// history entry behind it). It never waits for a typed quantity to be sent first, as the current app's Back does (its 8ed7a0ad): this
+// draft is local-first, and leaving Orders sends what waits at once (ordersStore `stop()`), see docs/parity/orders.md.
 export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens }) {
   const { t } = useT();
-  const { state } = useLocation();
+  const { state, search } = useLocation();
   const navigate = useNavigate();
+  const origin = useMemo(() => recipeOriginOf(search), [search]);
   const store = useOrdersStore();
   const snapshot = useOrders();
   const handBack = useHandBack();
@@ -41,7 +48,9 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
     title.current = node;
     handBack.register(SUPPLIER_TITLE, node);
   }, [handBack]);
-  const leave = useLeave(ORDERS_PATH, () => { handBack.expect(supplierOpener(id)); });
+  const leaveToList = useLeave(ORDERS_PATH, () => { handBack.expect(supplierOpener(id)); });
+  const leaveToRecipe = useBackToRecipe(origin);
+  const leave = origin === null ? leaveToList : leaveToRecipe;
   const say = useStatusMessage();
   const [clearQuantities, clearDialog] = useClearQuantities(lens);
   // The totals box above «Order placed» is for the split only (his choice C4, 6 Nov 2026).
@@ -77,6 +86,23 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   const shown = supplier !== undefined;
   useEffect(() => {
     if (shown && cameFromList(state) && !screen.current?.contains(document.activeElement)) title.current?.focus();
+  }, [shown]);
+
+  // The ingredient a recipe row asked for: its quantity box takes the focus, once, when the supplier first shows. ⚠️ Looked for in the
+  // rows as drawn, so a line switched off and folded away is not found; the screen then says so instead of leaving the focus nowhere.
+  const wanted = origin?.ingredientId ?? null;
+  const asked = useRef(false);
+  useEffect(() => {
+    if (!shown || wanted === null || asked.current) return;
+    asked.current = true;
+    const line = [...(screen.current?.querySelectorAll('li[data-ingredient]') ?? [])].find(node => node.getAttribute('data-ingredient') === wanted);
+    const box = line?.querySelector('input');
+    if (box === null || box === undefined) {
+      say(t('ord.fromRecipe.notFound'), LONG_MS);
+      return;
+    }
+    if (typeof box.scrollIntoView === 'function') box.scrollIntoView({ block: 'center' });
+    box.focus({ preventScroll: true });
   }, [shown]);
 
   // The column names stick right under the bar, whose height changes with the title's lines and the width.
