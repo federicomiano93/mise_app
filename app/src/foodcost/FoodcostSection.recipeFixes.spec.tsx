@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { FROM_RECIPE_LINK } from '@mise/shared/recipe-link';
-import { editorSource, recipe } from '../testing/foodcostEditorFixtures';
+import { editorSource, intoForm, recipe } from '../testing/foodcostEditorFixtures';
 import { LOAD, product, renderFoodcost, split } from '../testing/renderFoodcost';
 import { entriesBehind, madeWith } from '../testing/recipeLinkHelpers';
 
@@ -102,6 +102,7 @@ describe('⚠️ a dirty product beside the narrowed list, on the split', () => 
     await screen.findByRole('heading', { level: 2, name: 'Products with “Dough”' }, LOAD);
     await trip.user.click(screen.getByRole('button', { name: /^Loaf/ }));
     await screen.findByRole('region', { name: 'Loaf' }, LOAD);
+    await intoForm(trip.user);
     await trip.user.type(screen.getByRole('combobox', { name: 'Name' }), '!');
     await trip.user.click(within(screen.getByRole('main')).getAllByRole('button', { name: 'Back' })[0]!);
     return trip;

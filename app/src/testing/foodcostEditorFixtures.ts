@@ -1,3 +1,6 @@
+import { screen, waitFor } from '@testing-library/react';
+import type { UserEvent } from '@testing-library/user-event';
+import { expect } from 'vitest';
 import type { StoredDoc } from '../foodcost/foodcostSource';
 import { FLOUR, FLOUR_PRICES, sourceWith } from './renderFoodcost';
 import type { FakeFoodcostSource } from './fakeFoodcostSource';
@@ -50,4 +53,18 @@ export function editorSource(
     prices: { ...FLOUR_PRICES, ...PACKAGING_PRICES },
     ...extra,
   });
+}
+
+// A product opens to READ when something is costed (the pencil in the bar turns it into the form) and straight into the form when
+// nothing is: wait for whichever came, and get to the form. A new product is already there.
+const PENCIL = /^(Edit product|Modifica il prodotto)$/;
+const NAME_BOX = /^(Name|Nome)$/;
+
+export async function intoForm(user: UserEvent): Promise<void> {
+  await waitFor(() => {
+    expect(screen.queryByRole('combobox', { name: NAME_BOX }) ?? screen.queryByRole('button', { name: PENCIL })).not.toBeNull();
+  }, { timeout: 10_000 });
+  const pencil = screen.queryByRole('button', { name: PENCIL });
+  if (pencil) await user.click(pencil);
+  await screen.findByRole('combobox', { name: NAME_BOX }, { timeout: 10_000 });
 }

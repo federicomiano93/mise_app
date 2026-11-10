@@ -35,6 +35,8 @@ const figure = (label: string): HTMLElement => {
   const row = within(preview()).getByText(label, { selector: 'dt' }).parentElement as HTMLElement;
   return row.querySelector('dd') as HTMLElement;
 };
+// «Details» is closed until pressed (the rest of the figures: raw materials, packaging, labour).
+const detailsButton = (scope: HTMLElement = preview()) => within(scope).getByRole('button', { name: 'Details' });
 
 async function loaded(path = '/food-cost', fake = editorSource([GREEN]), options = {}) {
   const view = renderFoodcost(path, { source: fake, ...options });
@@ -103,22 +105,32 @@ describe('the search over the list', () => {
 });
 
 describe('on a phone, a tap on a product shows its preview', () => {
-  it('opens a dialog named by the product, with his eight figures, two decimals, and no card yet', async () => {
+  it('opens a dialog named by the product, with his five figures in sight, two decimals, and no card yet', async () => {
     const { user, router } = await loaded();
     await user.click(screen.getByRole('button', { name: /^Green/ }));
     const dialog = await screen.findByRole('dialog', { name: 'Green' }, LOAD);
     expect(router.state.location.pathname).toBe('/food-cost');
     expect(within(dialog).getByText('Summary per piece')).toBeInTheDocument();
-    expect(figure('Selling price (VAT incl.)')).toHaveTextContent('£1.20');
-    expect(figure('Raw materials')).toHaveTextContent('£0.20');
-    expect(figure('Packaging')).toHaveTextContent('None');
-    expect(figure('Total cost')).toHaveTextContent('£0.20');
+    expect(figure('Selling price')).toHaveTextContent('£1.20');
+    expect(figure('Cost')).toHaveTextContent('£0.20');
+    expect(figure('Margin (price without VAT)')).toHaveTextContent('£0.80');
     expect(figure('Food cost')).toHaveTextContent('20.00% · target 25.00%');
     expect(figure('Food cost')).toHaveTextContent('On target');
-    expect(figure('Margin (price without VAT)')).toHaveTextContent('£0.80');
-    expect(figure('Ideal price, VAT incl.')).toHaveTextContent('£0.96');
-    expect(figure('Ideal price, without VAT')).toHaveTextContent('£0.80');
-    expect(within(dialog).getByText('For a 25.00% food cost.')).toBeInTheDocument();
+    expect(figure('Ideal price')).toHaveTextContent('£0.96');
+    expect(within(dialog).getByText('£0.80 without VAT, for a 25.00% food cost')).toBeInTheDocument();
+    // The rest is behind a closed «Details»: a real button that says whether it is open.
+    expect(detailsButton()).toHaveAttribute('aria-expanded', 'false');
+    expect(figure('Raw materials')).not.toBeVisible();
+    await user.click(detailsButton());
+    expect(detailsButton()).toHaveAttribute('aria-expanded', 'true');
+    expect(figure('Raw materials')).toBeVisible();
+    expect(figure('Raw materials')).toHaveTextContent('£0.20');
+    expect(figure('Packaging')).toHaveTextContent('None');
+    // Gone with the four-figure summary: the total, the two ideal prices as rows, their basis line and the «VAT incl.» of the price.
+    expect(within(dialog).queryByText('Total cost')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/^Ideal price, /)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('Selling price (VAT incl.)')).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('For a 25.00% food cost.')).not.toBeInTheDocument();
     // An employee's tablet is sent no hourly rate: no labour row at all.
     expect(within(dialog).queryByText('Labour')).not.toBeInTheDocument();
     expect(within(dialog).queryByText('Still missing:')).not.toBeInTheDocument();
@@ -169,10 +181,10 @@ describe('on a phone, a tap on a product shows its preview', () => {
     const { user, fake } = await loaded();
     await user.click(screen.getByRole('button', { name: /^Green/ }));
     await screen.findByRole('dialog', undefined, LOAD);
-    expect(figure('Raw materials')).toHaveTextContent('£0.20');
+    expect(figure('Cost')).toHaveTextContent('£0.20');
     fake.prices.set('flour', { priceUnit: 'kg', pricePerUnit: 4 });
     await act(async () => { fake.push(); });
-    await waitFor(() => { expect(figure('Raw materials')).toHaveTextContent('£0.40'); });
+    await waitFor(() => { expect(figure('Cost')).toHaveTextContent('£0.40'); });
   });
 
   it('closes by itself, saying «Product deleted.», when the product is deleted elsewhere while it is open', async () => {
@@ -218,7 +230,7 @@ describe('unknown is a dash, never a zero, and what is missing is named', () => 
     const { user } = await loaded('/food-cost', editorSource([bareProduct('Bare')]));
     await user.click(screen.getByRole('button', { name: /^Bare/ }));
     await screen.findByRole('dialog', { name: 'Bare' }, LOAD);
-    for (const label of ['Selling price (VAT incl.)', 'Raw materials', 'Total cost', 'Food cost', 'Margin (price without VAT)', 'Ideal price, VAT incl.', 'Ideal price, without VAT']) {
+    for (const label of ['Selling price', 'Cost', 'Food cost', 'Margin (price without VAT)', 'Ideal price', 'Raw materials']) {
       expect(figure(label), label).toHaveTextContent('—');
       expect(figure(label), label).not.toHaveTextContent('0');
     }
@@ -233,18 +245,17 @@ describe('unknown is a dash, never a zero, and what is missing is named', () => 
     await user.click(screen.getByRole('button', { name: /^Free/ }));
     await screen.findByRole('dialog', { name: 'Free' }, LOAD);
     expect(figure('Food cost')).toHaveTextContent('20.00% · no target');
-    expect(figure('Ideal price, VAT incl.')).toHaveTextContent('—');
-    expect(figure('Ideal price, without VAT')).toHaveTextContent('—');
+    expect(figure('Ideal price')).toHaveTextContent('—');
     expect(within(preview()).getByText('Enter a food cost target')).toBeInTheDocument();
-    expect(within(preview()).queryByText(/^For a /)).not.toBeInTheDocument();
+    expect(within(preview()).queryByText(/without VAT, for a/)).not.toBeInTheDocument();
   });
 
   it('no VAT: no shelf price, but the net price it must earn is still told', async () => {
     const { user } = await loaded('/food-cost', editorSource([product('NoVat', { vatRate: null })]));
     await user.click(screen.getByRole('button', { name: /^NoVat/ }));
     await screen.findByRole('dialog', { name: 'NoVat' }, LOAD);
-    expect(figure('Ideal price, VAT incl.')).toHaveTextContent('—');
-    expect(figure('Ideal price, without VAT')).toHaveTextContent('£0.80');
+    expect(figure('Ideal price')).toHaveTextContent('—');
+    expect(within(preview()).getByText('£0.80 without VAT, for a 25.00% food cost')).toBeInTheDocument();
   });
 
   it('⚠️ a packaging line with no price per piece is NOT free: a dash, and the line to fix is named', async () => {
@@ -252,6 +263,7 @@ describe('unknown is a dash, never a zero, and what is missing is named', () => 
     const { user } = await loaded('/food-cost', editorSource([wrapped]));
     await user.click(screen.getByRole('button', { name: /^Wrapped/ }));
     await screen.findByRole('dialog', { name: 'Wrapped' }, LOAD);
+    await user.click(detailsButton());
     expect(figure('Packaging')).toHaveTextContent('—');
     expect(figure('Packaging')).not.toHaveTextContent('£0.00');
     expect(within(preview()).getByText('Give every packaging item a price per piece')).toBeInTheDocument();
@@ -263,9 +275,10 @@ describe('unknown is a dash, never a zero, and what is missing is named', () => 
     const { user } = await loaded('/food-cost', editorSource([boxed]));
     await user.click(screen.getByRole('button', { name: /^Boxed/ }));
     await screen.findByRole('dialog', { name: 'Boxed' }, LOAD);
+    await user.click(detailsButton());
     expect(figure('Raw materials')).toHaveTextContent('£0.20');
     expect(figure('Packaging')).toHaveTextContent('£0.50');
-    expect(figure('Total cost')).toHaveTextContent('£0.70');
+    expect(figure('Cost')).toHaveTextContent('£0.70');
   });
 
   it('a partly priced product says its figures are too low', async () => {
@@ -284,9 +297,10 @@ describe('whoever runs the place also sees the work', () => {
     const { user } = await loaded('/food-cost', fake, { session: MANAGER });
     await user.click(screen.getByRole('button', { name: /^Worked/ }));
     await screen.findByRole('dialog', { name: 'Worked' }, LOAD);
+    await user.click(detailsButton());
     // £10 over ten pieces.
     await waitFor(() => { expect(figure('Labour')).toHaveTextContent('£1.00'); });
-    expect(figure('Total cost')).toHaveTextContent('£1.20');
+    expect(figure('Cost')).toHaveTextContent('£1.20');
     expect(figure('Margin (without VAT, before labour)')).toHaveTextContent('£0.80');
     // The food cost is the ingredients' share only.
     expect(figure('Food cost')).toHaveTextContent('20.00% · target 25.00%');
@@ -299,15 +313,15 @@ describe('a venue in Italy', () => {
     await user.click(screen.getByRole('button', { name: /^Green/ }));
     const dialog = await screen.findByRole('dialog', { name: 'Green' }, LOAD);
     expect(within(dialog).getByText('Riepilogo al pezzo')).toBeInTheDocument();
-    expect(figure('Prezzo di vendita (IVA inclusa)')).toHaveTextContent('1,20 €');
+    expect(figure('Prezzo di vendita')).toHaveTextContent('1,20 €');
+    expect(figure('Costo')).toHaveTextContent('0,20 €');
+    expect(figure('Margine (prezzo senza IVA)')).toHaveTextContent('0,80 €');
+    expect(figure('Food cost')).toHaveTextContent('20,00% · obiettivo 25,00%');
+    expect(figure('Prezzo ideale')).toHaveTextContent('0,96 €');
+    expect(within(dialog).getByText('0,80 € senza IVA, per un food cost del 25,00%')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Dettagli' }));
     expect(figure('Materie prime')).toHaveTextContent('0,20 €');
     expect(figure('Imballaggio')).toHaveTextContent('Nessuno');
-    expect(figure('Costo totale')).toHaveTextContent('0,20 €');
-    expect(figure('Food cost')).toHaveTextContent('20,00% · obiettivo 25,00%');
-    expect(figure('Margine (prezzo senza IVA)')).toHaveTextContent('0,80 €');
-    expect(figure('Prezzo ideale, IVA inclusa')).toHaveTextContent('0,96 €');
-    expect(figure('Prezzo ideale, senza IVA')).toHaveTextContent('0,80 €');
-    expect(within(dialog).getByText('Per un food cost del 25,00%.')).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Apri la scheda' })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Chiudi' })).toBeInTheDocument();
   });
@@ -323,35 +337,73 @@ describe('a venue in Italy', () => {
   });
 });
 
-describe('the top of the card gets the one figure it lacked: the ideal price without VAT', () => {
-  it('sits in the suggested-price box under the price with VAT, in the venue’s layout', async () => {
+describe('the summary at the top of the card', () => {
+  const summary = async (name: string) => screen.findByRole('group', { name }, LOAD);
+  const row = (scope: HTMLElement, label: string): HTMLElement =>
+    within(scope).getByText(label, { selector: 'dt' }).parentElement as HTMLElement;
+
+  it('says the price, the cost, the margin, the food cost and the ideal price with its net underneath, in the venue’s layout', async () => {
+    renderFoodcost('/food-cost/product/Green', { source: editorSource([GREEN]) });
+    const box = await summary('Summary per piece');
+    expect(within(box).getByText('Summary per piece')).toBeInTheDocument();
+    expect(row(box, 'Selling price')).toHaveTextContent('£1.20');
+    expect(row(box, 'Cost')).toHaveTextContent('£0.20');
+    expect(row(box, 'Margin (price without VAT)')).toHaveTextContent('£0.80');
+    expect(row(box, 'Food cost')).toHaveTextContent('20.00% · target 25.00%');
+    expect(row(box, 'Ideal price')).toHaveTextContent('£0.96');
+    expect(within(box).getByText('£0.80 without VAT, for a 25.00% food cost')).toBeInTheDocument();
+    // The checklist is the answer panel's, not repeated here.
+    expect(within(box).queryByText('Still missing:')).not.toBeInTheDocument();
+  });
+
+  it('is told even before a VAT rate is chosen: no price with VAT, but the net price it must earn', async () => {
+    renderFoodcost('/food-cost/product/NoVat', { source: editorSource([product('NoVat', { vatRate: null })]), ...ITALY });
+    const box = await summary('Riepilogo al pezzo');
+    expect(row(box, 'Prezzo ideale')).toHaveTextContent('—');
+    expect(within(box).getByText('0,80 € senza IVA, per un food cost del 25,00%')).toBeInTheDocument();
+  });
+
+  it('says a partly priced product costs more than it says', async () => {
+    const partial = product('Half', { vatRate: null, components: [FLOUR_LINE, { kind: 'ingredient', ingredientId: 'salt', qty: 10, unit: 'g' }] });
+    renderFoodcost('/food-cost/product/Half', { source: editorSource([partial]) });
+    const box = await summary('Summary per piece');
+    expect(within(box).getByText('Part of this product is not priced yet, so it really costs more than this.')).toBeInTheDocument();
+  });
+
+  it('asks for a target in one line when there is none, and gives no net price', async () => {
+    renderFoodcost('/food-cost/product/Free', { source: editorSource([product('Free', { foodCostTarget: null })]) });
+    const box = await summary('Summary per piece');
+    expect(within(box).getByText('Enter a food cost target')).toBeInTheDocument();
+    expect(within(box).queryByText(/without VAT, for a/)).not.toBeInTheDocument();
+  });
+
+  it('has the rest behind «Details», closed, and keeps it open while the figures move', async () => {
+    const { user, fake } = await (async () => {
+      const fake = editorSource([GREEN]);
+      const view = renderFoodcost('/food-cost/product/Green', { source: fake });
+      return { ...view, fake };
+    })();
+    const box = await summary('Summary per piece');
+    expect(row(box, 'Raw materials')).not.toBeVisible();
+    await user.click(within(box).getByRole('button', { name: 'Details' }));
+    expect(row(box, 'Raw materials')).toBeVisible();
+    fake.prices.set('flour', { priceUnit: 'kg', pricePerUnit: 4 });
+    await act(async () => { fake.push(); });
+    await waitFor(() => { expect(row(box, 'Cost')).toHaveTextContent('£0.40'); });
+    expect(within(box).getByRole('button', { name: 'Details' })).toHaveAttribute('aria-expanded', 'true');
+    expect(row(box, 'Raw materials')).toBeVisible();
+  });
+
+  it('is not drawn at all while nothing is costed (never a frame of dashes)', async () => {
+    renderFoodcost('/food-cost/product/Bare', { source: editorSource([bareProduct('Bare')]) });
+    await screen.findByRole('heading', { level: 2, name: 'Bare' }, LOAD);
+    expect(screen.queryByRole('group', { name: /^Summary/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Details' })).not.toBeInTheDocument();
+  });
+
+  it('is not drawn with a suggested-price net row any more: the net price is the summary’s', async () => {
     renderFoodcost('/food-cost/product/Green', { source: editorSource([GREEN]) });
     const box = await screen.findByRole('group', { name: 'Suggested price' }, LOAD);
-    expect(box).toHaveTextContent('£0.96');
-    expect(within(box).getByText('Ideal price, without VAT').parentElement).toHaveTextContent('£0.80');
-  });
-
-  it('is told even before a VAT rate is chosen', async () => {
-    renderFoodcost('/food-cost/product/NoVat', { source: editorSource([product('NoVat', { vatRate: null })]), ...ITALY });
-    const box = await screen.findByRole('group', { name: 'Prezzo consigliato' }, LOAD);
-    expect(box).toHaveTextContent('Scegli l’aliquota IVA');
-    expect(within(box).getByText('Prezzo ideale, senza IVA').parentElement).toHaveTextContent('0,80 €');
-  });
-
-  it('says the right price is higher on a partly priced product, before a VAT rate is chosen too', async () => {
-    const partial = product('Half', { vatRate: null, components: [
-      { kind: 'ingredient', ingredientId: 'flour', qty: 1000, unit: 'g' },
-      { kind: 'ingredient', ingredientId: 'salt', qty: 10, unit: 'g' },
-    ] });
-    renderFoodcost('/food-cost/product/Half', { source: editorSource([partial]) });
-    const box = await screen.findByRole('group', { name: 'Suggested price' }, LOAD);
-    expect(within(box).getByText('Ideal price, without VAT')).toBeInTheDocument();
-    expect(box).toHaveTextContent('Part of this product is not priced yet, so the right price is higher than this.');
-  });
-
-  it('is not drawn while there is no target to hit', async () => {
-    renderFoodcost('/food-cost/product/Free', { source: editorSource([product('Free', { foodCostTarget: null })]) });
-    const box = await screen.findByRole('group', { name: 'Suggested price' }, LOAD);
-    expect(within(box).queryByText('Ideal price, without VAT')).not.toBeInTheDocument();
+    expect(within(box).queryByText(/without VAT/)).not.toBeInTheDocument();
   });
 });

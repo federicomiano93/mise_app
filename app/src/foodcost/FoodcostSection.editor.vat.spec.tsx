@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { screen, within } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
 import { vatGuideFor } from '@mise/shared/vat-guide';
-import { editorSource } from '../testing/foodcostEditorFixtures';
+import { editorSource, intoForm } from '../testing/foodcostEditorFixtures';
 import { LOAD, product, renderFoodcost } from '../testing/renderFoodcost';
 
 // How a product is sold, its VAT (the country's menu and guide), its target and its price, and the
@@ -35,7 +35,7 @@ async function confirmSave(user: UserEvent) {
 async function open(fields: Record<string, unknown> | null = {}, session: Record<string, unknown> = {}) {
   const fake = editorSource(fields === null ? [] : [product('Green', fields)]);
   const view = renderFoodcost(fields === null ? '/food-cost/new' : '/food-cost/product/Green', { source: fake, session });
-  await screen.findByRole('combobox', { name: 'Name' }, LOAD);
+  await intoForm(view.user);
   return { ...view, fake };
 }
 
@@ -217,6 +217,7 @@ describe('the VAT guide', () => {
   it('speaks Italian around the Italian items when the interface is Italian', async () => {
     const fake = editorSource([product('Green', { vatRate: 22 })]);
     const { user } = renderFoodcost('/food-cost/product/Green', { source: fake, lang: 'it', session: { language: 'it', ...IT } });
+    await intoForm(user);
     await user.click(await screen.findByRole('button', { name: 'Quali prodotti hanno quale aliquota IVA' }, LOAD));
     const dialog = await screen.findByRole('dialog', undefined, LOAD);
     expect(within(dialog).getByRole('heading', { level: 2, name: 'Aliquote IVA' })).toBeInTheDocument();

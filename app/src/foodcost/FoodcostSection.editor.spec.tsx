@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { act, screen, within } from '@testing-library/react';
 import type { UserEvent } from '@testing-library/user-event';
 import { costProduct } from '@mise/shared/foodcost-model';
-import { editorSource } from '../testing/foodcostEditorFixtures';
+import { editorSource, intoForm } from '../testing/foodcostEditorFixtures';
 import { bareProduct, EMPLOYEE, LOAD, MANAGER, product, renderFoodcost, split } from '../testing/renderFoodcost';
 
 // The product editor: opening it, the answers at the top, saving, leaving, deleting. The chooser, the
@@ -33,13 +33,13 @@ async function confirmSave(user: UserEvent) {
 
 async function openProduct(id = 'Green', fake = editorSource([product('Green')]), options = {}) {
   const view = renderFoodcost(`/food-cost/product/${id}`, { source: fake, ...options });
-  await screen.findByRole('combobox', { name: 'Name' }, LOAD);
+  await intoForm(view.user);
   return { ...view, fake };
 }
 
 async function openNew(fake = editorSource([]), options = {}) {
   const view = renderFoodcost('/food-cost/new', { source: fake, ...options });
-  await screen.findByRole('combobox', { name: 'Name' }, LOAD);
+  await intoForm(view.user);
   return { ...view, fake };
 }
 
@@ -69,7 +69,7 @@ describe('a new product', () => {
     expect(nameBox()).not.toHaveAttribute('aria-invalid');
   });
 
-  it('saves a named product after the question, says so and returns to the list', async () => {
+  it('saves a named product after the question, says so and shows the saved product to read, at its own address', async () => {
     const actions: string[] = [];
     const listen = (event: Event) => { actions.push(String((event as CustomEvent).detail)); };
     window.addEventListener('mise:action', listen);
@@ -80,7 +80,11 @@ describe('a new product', () => {
       await confirmSave(user);
 
       expect(await screen.findByText('Product added.')).toBeInTheDocument();
-      expect(router.state.location.pathname).toBe('/food-cost');
+      // ⚠️ THE READ VIEW OF THE SAVED PRODUCT, not the list: the new-product entry became the product's own address.
+      expect(router.state.location.pathname).toBe('/food-cost/product/fake-1');
+      expect(await screen.findByRole('button', { name: 'Edit product' }, LOAD)).toBeInTheDocument();
+      expect(screen.getByRole('heading', { level: 2, name: 'Cornetto' })).toBeInTheDocument();
+      expect(screen.queryByRole('combobox', { name: 'Name' })).not.toBeInTheDocument();
       expect(await screen.findByRole('button', { name: /^Cornetto/ }, LOAD)).toBeInTheDocument();
       expect(fake.saved).toHaveLength(1);
       expect(fake.saved[0]).toMatchObject({ kind: 'product', data: { name: 'Cornetto', model: 2 }, snapshot: null });
@@ -292,16 +296,26 @@ describe('leaving with changes', () => {
     expect(nameBox()).toHaveValue('Green!');
   });
 
-  it('leaves when the answer is yes', async () => {
+  it('goes back to the read view when the answer is yes, and one more Back leaves for the list', async () => {
     const { router, user } = await openProduct();
     await user.type(nameBox(), '!');
     await user.click(screen.getByRole('button', { name: 'Back' }));
     await user.click(within(await question()).getByRole('button', { name: 'Discard' }));
+    // One level up: the product as stored, to read — nothing typed survives.
+    expect(router.state.location.pathname).toBe('/food-cost/product/Green');
+    expect(await screen.findByRole('button', { name: 'Edit product' })).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Name' })).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Green' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Back' }));
     expect(router.state.location.pathname).toBe('/food-cost');
   });
 
   it('asks nothing for a product opened and left untouched', async () => {
     const { router, user } = await openProduct();
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Edit product' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/food-cost/product/Green');
     await user.click(screen.getByRole('button', { name: 'Back' }));
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/food-cost');
@@ -324,6 +338,12 @@ describe('leaving with changes', () => {
     await confirmSave(user);
     await screen.findByText('Product saved.');
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    // Back to the read view of the saved product, at the same address.
+    expect(router.state.location.pathname).toBe('/food-cost/product/Green');
+    expect(await screen.findByRole('button', { name: 'Edit product' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 2, name: 'Green!' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/food-cost');
   });
 });
@@ -333,14 +353,16 @@ describe('on the tablet\'s split', () => {
     split();
     const fake = editorSource([product('Green', { name: 'Green' }), product('Red', { name: 'Red', sellingPrice: 0.5, vatRate: 0 })]);
     const { router, user } = renderFoodcost('/food-cost/product/Green', { source: fake });
-    await screen.findByRole('combobox', { name: 'Name' }, LOAD);
+    await intoForm(user);
     expect(nameBox()).toHaveValue('Green');
 
-    // Untouched: no question, the editor follows the address.
+    // Untouched: no question, the screen follows the address — to the other product's READ view.
     await user.click(screen.getByRole('button', { name: /^Red/ }));
-    await vi.waitFor(() => { expect(nameBox()).toHaveValue('Red'); });
+    expect(await screen.findByRole('heading', { level: 2, name: 'Red' }, LOAD)).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/food-cost/product/Red');
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Name' })).not.toBeInTheDocument();
+    await intoForm(user);
 
     // With typing: the question first.
     await user.type(nameBox(), '!');
@@ -352,7 +374,8 @@ describe('on the tablet\'s split', () => {
 
     await user.click(screen.getByRole('button', { name: /^Green/ }));
     await user.click(within(await question()).getByRole('button', { name: 'Discard' }));
-    await vi.waitFor(() => { expect(nameBox()).toHaveValue('Green'); });
+    expect(await screen.findByRole('heading', { level: 2, name: 'Green' }, LOAD)).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/food-cost/product/Green');
   });
 });
 

@@ -200,7 +200,7 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     **DONE 10 Nov 2026** (`feature/mise2-next-foodcost-per-kg`; `docs/parity/foodcost.md`, «Cost per 1 kg as built»): `shared/src/per-kg-model.ts` (full, paired:
     `costPerKg`, `PER_KG_REASONS`), `app/src/foodcost/PerKgBlock.tsx` + `.module.css` drawn in `ProductForm.tsx` under the answer panel, never inside «Made of»
     (a native `<details>`, always mounted, `hidden` while nothing is costed), eleven `fc.perKg.*` keys in `en.ts` / `it.ts`, every figure through `fc-number` from
-    the first day. Differs from the current app only in the look (Mise 2 tokens) and in the read-first card, which Mise 2 does not have yet (item 25). `costPerKg` is
+    the first day. Differs from the current app only in the look (Mise 2 tokens) and in where it sits (item 25 moved it into the «Calculated costs» card, the one place the read view and the form both have it). `costPerKg` is
     marked PORT OWED in `odd-inputs.spec.ts` with `productionCost` (a null table), until item 26.
 23. **Step 3 recipe link both ways** (#478, `35b1f3e0`, `942dab6e`) — Mise 2 has its own entry `?recipe=` / `?using=` design (catalogue.md
     «Back counts the depth»): treat as DONE by design; re-check that the multi-product case opens the top product on tablet/PC. Size S (check).
@@ -209,11 +209,20 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     gains `productPreview` (the original also returns `unpriced`, item 26), `suggestedNetPrice`, `nameMatches` and the blockers `no-target` / `no-packaging-price`
     (paired in `foodcost-model.spec.ts` and `odd-inputs.spec.ts`); `app/src/foodcost/`: the search box in `FoodcostList.tsx`, `PreviewPanel.tsx` (the eight figures, every one
     through `fc-number`), `ProductPreviewDialog.tsx` (what a tap on a row shows below 1000px; from 1000px the card opens beside the list as before), the wiring in
-    `FoodcostSection.tsx`, twenty-three keys in `en.ts` / `it.ts` worded as the current app's first-half dictionary (before #483 added four, deleted four and reworded `fc.preview.price` under its key — item 25 owes all of it). Differences: a status word
-    beside the dot, the dialog focuses itself and not a button, a product deleted while it is open closes it, the card's top gets only the net ideal price (see the parity section).
+    `FoodcostSection.tsx`, twenty-three keys in `en.ts` / `it.ts` worded as the current app's first-half dictionary (before #483 added four, deleted four and reworded `fc.preview.price` under its key — item 25 did all of it). Differences: a status word
+    beside the dot, the dialog focuses itself and not a button, a product deleted while it is open closes it, the card's top got only the net ideal price in the suggested-price box (item 25 replaced that with the summary).
     Two `PORT OWED` markers that named item 24 alone are gone; the two that named 24 and 26 now name 26 only.
 25. **Step A card layout** (#483): read mode first, pencil edits, Save returns to read, four figures + «Details», margin under cost, history asks
     before dropping typed edits (#484). NONE. Size M.
+    **DONE 10 Nov 2026** (`feature/mise2-next-foodcost-card`; `docs/parity/foodcost.md`, «Read-first card and four-figure summary as built»): a product with something
+    costed opens to READ (`ProductRead.tsx`: the summary, a closed «Full card» holding six framed cards of plain text, `ReadSections.tsx`); the pencil turns it
+    into the form on a copy, Save returns to the read view of the saved product (a new one gets its own address), Back from a form opened by the pencil returns
+    to read; a new product and one with nothing costed open straight in the form. `PreviewPanel.tsx` is the four-figure summary (price, cost, margin, food cost
+    against its target, ideal price with the net underneath; raw materials, packaging and labour behind «Details»), used by the phone's dialog and the top of the card
+    (`ProductSummary.tsx`); `FullCard.tsx` lays the form out in the same six cards (Product, Made of with the weighings, Packaging, Work time, Price, Calculated costs).
+    Keys: ADDED `fc.preview.cost` / `.ideal` / `.idealSub` / `.details` and eight read-view keys, DELETED `fc.preview.total` / `.idealGross` / `.idealNet` / `.idealBasis`,
+    REWORDED `fc.preview.price`. #484 (the history asks before dropping typed edits) was already true here through the router's leave guard (specs added).
+    Not 1:1: see the parity section.
 26. **Step B line costs + «Which?»** (#485): cost on every «Composed of» line, «No price», «not exactly yet», «Which?» list of unpriced parts
     (card summary + phone dialog), packaging lines. NONE. Size M.
 27. **Recipe line in grams** (#488, `a7f4c75d`): opens in grams, the g/kg switch keeps the typed number, warning at 20 times a batch.
@@ -225,7 +234,7 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     (`fcNumber`, `fcMoney`, `fcWeight`, `weighingParams`, each handed the money; not paired because of that argument, its spec runs both files), used by `productRowModel.ts` (the list row),
     `ProductAnswer.tsx` (production cost, answer, labour line, suggested price and its basis), `WeighingPair.tsx` (the oven-loss sentences), `MarginHistory.tsx`, `PickDialog.tsx`
     (price each) and `lineNotes.ts` (the packaging note). The list preview (24) is built and draws through `fc-number` (10 Nov 2026). ⚠️ STILL OWED with the items that build
-    the screens: the read sections and the card layout (25), the cost on every line and «Which?» (26) must draw their figures through `fc-number` from the first day;
+    the screens: the cost on every line and «Which?» (26) must draw their figures through `fc-number` from the first day (the read sections and the card layout, 25, do: 10 Nov 2026);
     `from-recipes-view`'s kilos (item 29) too.
 29. **Create products from the recipe book** (#415, `b5cf999e`, `5f2fcb67`, `f8d54f35`, `f8e64a6a`): box and choice screen, only after the
     server says the product does not exist. NONE (`recipesWithoutProducts`, `productFromRecipe` absent). Size M.
@@ -280,10 +289,11 @@ to its markers, with his decision in the line.
 
 What each one means for the people using Mise 2 until it is ported:
 - 16. Suppliers: the empty-flash, scroll and focus fixes and the «hand-made» mark are not verified in Mise 2.
-- 25-26. Food cost steps A and B (the read-first card layout with four figures and «Details», the cost on every
-  line and «Which?»), and the two decimals on those screens when they are built: Mise 2's Food cost keeps its own older card.
-  (Items 21, 22, 24 and 28 are done: weighing units, the «Cost per 1 kg» block, the list search and the phone preview, and two
-  decimals on the screens Mise 2 has.)
+- 26. Food cost step B (the cost on every «Made of» line, «No price», the «Which?» list of what has no price), and the two
+  decimals on those screens when they are built: Mise 2's lines keep their own notes (a recipe or an item with no price is
+  said, no money under a recipe or ingredient line; packaging shows its price each and total).
+  (Items 21, 22, 24, 25 and 28 are done: weighing units, the «Cost per 1 kg» block, the list search and the phone preview, the
+  read-first card with four figures and «Details», and two decimals on the screens Mise 2 has.)
 - 23. Food cost recipe link with several products (a check).
 - 29-32. Recipe book: create products from it, the crossed-out euro, the renamed-row warning, the row menu.
 - 36-37, 39-40. Calculator: reorder a recipe's ingredients, «Add a recipe» from the book, the dough history's dates and

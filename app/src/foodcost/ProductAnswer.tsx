@@ -1,6 +1,6 @@
 import { useRef } from 'react';
 import { flushSync } from 'react-dom';
-import { BLOCKER_TEXT, costProduct, productionCost, suggestedGrossPrice, suggestedNetPrice } from '@mise/shared/foodcost-model';
+import { BLOCKER_TEXT, costProduct, productionCost, suggestedGrossPrice } from '@mise/shared/foodcost-model';
 import type { CostTables, FoodCostStatus, Product, SaleUnit, SellingMode } from '@mise/shared/foodcost-model';
 import { fcMoney, fcNumber } from '@mise/shared/fc-number';
 import type { MessageKey } from '../i18n/en';
@@ -130,7 +130,9 @@ export function ProductAnswer({ product, tables }: Figures) {
 type SuggestionProps = Figures & {
   // The price typed now, or null: «This is the selling price» when it already equals the suggestion.
   sellingPrice: number | null;
-  onUse: (price: number) => void;
+  // Null in the read view: nothing there can be changed, so there is no «Use this price» (the note that it is already the selling
+  // price stays).
+  onUse: ((price: number) => void) | null;
 };
 
 // The price to sell it at, from the cost per unit, the VAT rate and the target: on the SAME screen as
@@ -144,16 +146,6 @@ export function SuggestedPrice({ product, tables, sellingPrice, onUse }: Suggest
     ? null
     : suggestedGrossPrice({ unitCost: cost.unitCost, vatRate: product.vatRate, targetPct: product.foodCostTarget });
   const inUse = price !== null && sellingPrice !== null && Math.abs(sellingPrice - price) < 0.005;
-  // The same price WITHOUT VAT (the list preview's last figure, current app e81a2617): it needs no VAT rate, so a product whose rate nobody
-  // has chosen yet can still be told what it must earn.
-  const net = cost.unitCost === null ? null : suggestedNetPrice({ unitCost: cost.unitCost, targetPct: product.foodCostTarget });
-  const netRow = net === null ? null : (
-    <div className={styles.netRow}>
-      <span className={styles.label}>{t('fc.preview.idealNet')}</span>
-      <span className={styles.netFigure}>{fcMoney(net, money)}</span>
-    </div>
-  );
-
   return (
     // Focusable (not in the tab order) and live: the button below goes away the moment it is used,
     // and the focus must stay in the box that says so, not be lost to the page.
@@ -162,10 +154,6 @@ export function SuggestedPrice({ product, tables, sellingPrice, onUse }: Suggest
       {cost.unitCost === null ? null : price === null ? (
         <div className={styles.suggestion} role="group" aria-label={t('fc.suggestedPrice')}>
           <p className={styles.note}>{t('fc.suggestedPriceNeeds')}</p>
-          {netRow}
-          {/* A net price drawn before the VAT rate is chosen follows the same rule as the one below (preview-view.js draws the
-              partial line under the ideal prices always). */}
-          {net !== null && cost.partial ? <p className={styles.partial}>{t('fc.suggestedPricePartial')}</p> : null}
         </div>
       ) : (
         <div className={styles.suggestion} role="group" aria-label={t('fc.suggestedPrice')}>
@@ -182,13 +170,12 @@ export function SuggestedPrice({ product, tables, sellingPrice, onUse }: Suggest
               target: fcNumber(Number(product.foodCostTarget), money),
             })}
           </p>
-          {netRow}
           {/* ⚠️ THE SAME RULE AS THE COST ABOVE: a partly priced product costs more than it says, so the
               price that would hit the target is HIGHER than this one — say so. */}
           {cost.partial ? <p className={styles.partial}>{t('fc.suggestedPricePartial')}</p> : null}
           {inUse ? (
             <p className={styles.note}>{t('fc.suggestedPriceInUse')}</p>
-          ) : (
+          ) : onUse === null ? null : (
             <Button
               className={styles.use}
               onPress={() => {
