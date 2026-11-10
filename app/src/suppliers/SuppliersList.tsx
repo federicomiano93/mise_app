@@ -11,7 +11,7 @@ import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { useSession } from '../session/SessionContext';
 import { useDueSuppliers } from '../shell/useDueSuppliers';
-import { useKeepFocus } from '../shell/useKeepFocus';
+import { useFocusAcrossReorder } from '../shell/useFocusAcrossReorder';
 import { Button } from '../ui/Button';
 import { ItemRow, ItemRows } from './ItemRow';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
@@ -353,7 +353,7 @@ function SupplierRows({ suppliers, items, countsReady, favourites, placed, close
   // ⚠️ The suppliers still to order today (reminders dueTodayIds), lit and put first only once the records and the draft have
   // arrived; a dead draft is read as «nobody closed», dead records light nobody.
   const due = useDueSuppliers({ suppliers, records: placed, skipped: closed, ready: dueReady });
-  useKeepFocus(due);
+  useFocusAcrossReorder(due);
 
   if (suppliers.length === 0) return broken ? null : <EmptyState tab="suppliers" />;
   if (visible.length === 0) return <p className={styles.nothing}>{t(NO_MATCH_KEY.suppliers)}</p>;

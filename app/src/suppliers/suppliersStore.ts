@@ -148,7 +148,7 @@ export interface SuppliersStore {
   getSnapshot(): SuppliersSnapshot;
   subscribe(listener: () => void): () => void;
   onMessage(listener: (message: SuppliersMessage) => void): () => void;
-  // Starts the four listeners; stop() ends them. Safe to call start → stop → start (React's development mode does).
+  // Starts the six listeners; stop() ends them. Safe to call start → stop → start (React's development mode does).
   start(): void;
   stop(): void;
   // Saves a supplier, LOCAL-FIRST: returns its id at once (a new one is made on the phone) and never waits for the
@@ -266,8 +266,6 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
     }
   }
 
-  // ⚠️ THE SERVER'S WORD, OR A COPY THAT HOLDS SOMETHING (header). A cached copy that holds documents is the venue's
-  // own, maybe a little old; the server's answer follows it in a moment.
   // Only what the due rule reads, and the same array back while it is the same content.
   const sameEntries = (a: Readonly<Record<string, string>>, b: Readonly<Record<string, string>>) => {
     const keys = Object.keys(a);
@@ -276,6 +274,8 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
   const sameRecords = (a: readonly PlacedRecord[], b: readonly PlacedRecord[]) =>
     a.length === b.length && a.every((row, index) => row.date === b[index]?.date && row.supplierId === b[index]?.supplierId);
 
+  // ⚠️ THE SERVER'S WORD, OR A COPY THAT HOLDS SOMETHING (header). A cached copy that holds documents is the venue's
+  // own, maybe a little old; the server's answer follows it in a moment.
   const believable = (list: readonly StoredDoc[], meta: SuppliersMeta) => meta.fromServer || list.length > 0;
 
   function relayIngredients(): void {
@@ -366,7 +366,9 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
           const next = list.map(row => ({ date: typeof row.date === 'string' ? row.date : undefined, supplierId: typeof row.supplierId === 'string' ? row.supplierId : undefined }));
           const wasLoaded = placedLoaded;
           const wasBroken = placedBroken;
-          if (believable(list, meta)) placedLoaded = true;
+          // ⚠️ ONLY THE SERVER'S WORD COUNTS HERE, not `believable`: a saved copy can lack an order placed this morning on another
+          // phone, and the supplier would flash as due and jump first. Offline with no server answer, nobody is lit.
+          if (meta.fromServer) placedLoaded = true;
           placedBroken = false;
           if (sameRecords(placed, next) && wasLoaded === placedLoaded && !wasBroken) return;
           if (!sameRecords(placed, next)) placed = next;
@@ -384,7 +386,8 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
           }
           const wasLoaded = draftLoaded;
           const wasBroken = draftBroken;
-          if (data !== null || meta.fromServer) draftLoaded = true;
+          // ⚠️ The same: a saved copy of the draft may lack this morning's close.
+          if (meta.fromServer) draftLoaded = true;
           draftBroken = false;
           if (sameEntries(closed, next) && wasLoaded === draftLoaded && !wasBroken) return;
           if (!sameEntries(closed, next)) closed = next;

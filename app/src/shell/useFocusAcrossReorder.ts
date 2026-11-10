@@ -7,7 +7,7 @@ import { useLayoutEffect, useRef } from 'react';
 //
 // `key` changes when the order may have: the render that sees it new reads where the focus is BEFORE the page is touched (the
 // render phase runs ahead of the commit), and the layout effect looks again right after the move.
-export function useKeepFocus(key: unknown): void {
+export function useFocusAcrossReorder(key: unknown): void {
   const before = useRef<Element | null>(null);
   before.current = typeof document === 'undefined' ? null : document.activeElement;
   useLayoutEffect(() => {

@@ -143,21 +143,56 @@ describe('the suppliers to order today in the Orders list', () => {
     expect(rowNames().slice(0, 2)).toEqual(['Bee Farm To order today', 'Cat Dairy To order today']);
   });
 
-  it('keeps the row open beside the list, current and focused, when the order changes', async () => {
+  // ⚠️ The FOCUSED row is the one pushed DOWN: [Alpine, Bee, Cat] with nobody due, Alpine focused; Bee becomes due and goes first, so
+  // Alpine's node is the one React moves — and a moved node loses the focus in a browser. useFocusAcrossReorder hands it back (the hook
+  // itself is proved against a simulated loss in shell/useFocusAcrossReorder.spec.tsx; jsdom keeps the focus of a moved node, so this
+  // spec pins the behaviour of the whole list: the same node, still current, still focused).
+  it('keeps the focus and the open row when the order change pushes the focused row down', async () => {
     split();
-    const source = seeded();
+    const suppliers = [
+      supplier('s-alp', { name: 'Alpine Mills', orderDays: [NOT_TODAY] }),
+      supplier('s-bee', { name: 'Bee Farm', orderDays: [NOT_TODAY] }),
+      supplier('s-cat', { name: 'Cat Dairy', orderDays: [NOT_TODAY] }),
+    ];
+    const source = fakeOrdersSource({ suppliers, ingredients: ITEMS });
     const view = renderOrders('/orders/supplier/s-alp', { source });
     await screen.findAllByRole('listitem', undefined, LOAD);
-    await waitFor(() => { expect(screen.getAllByText('To order today')).toHaveLength(2); }, LOAD);
+    await waitFor(() => { expect(rowNames()).toEqual(['Alpine Mills', 'Bee Farm', 'Cat Dairy']); }, LOAD);
     const alpine = rowOf('Alpine Mills').querySelector('button') as HTMLButtonElement;
     expect(alpine).toHaveAttribute('aria-current', 'true');
     act(() => { alpine.focus(); });
-    act(() => { source.remoteMerge({ skipped: { 's-bee': TODAY, 's-cat': TODAY } }); });
-    await waitFor(() => { expect(rowNames()[0]).toBe('Alpine Mills'); });
+    expect(alpine).toHaveFocus();
+    act(() => { source.suppliers.set('s-bee', { ...suppliers[1]!, orderDays: [WEEKDAY] }); source.emit(); });
+    await waitFor(() => { expect(rowNames()).toEqual(['Bee Farm To order today', 'Alpine Mills', 'Cat Dairy']); });
     expect(rowOf('Alpine Mills').querySelector('button')).toBe(alpine);
     expect(alpine).toHaveAttribute('aria-current', 'true');
     expect(alpine).toHaveFocus();
     expect(view.router.state.location.pathname).toBe('/orders/supplier/s-alp');
+  });
+
+  it('⚠️ a saved copy that lacks this morning’s record lights nobody until the SERVER answers (no flash, no jump)', async () => {
+    const source = seeded({ records: {}, draft: null });
+    source.historyCached = true;
+    await atList(source);
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)); });
+    expect(screen.queryByText('To order today')).not.toBeInTheDocument();
+    expect(rowNames()).toEqual(['Alpine Mills', 'Bee Farm', 'Cat Dairy', 'Dee Eggs', 'Eve Fish']);
+    // Bee was ordered this morning on another phone: the server's snapshot has it, and Bee never shows as due.
+    source.records.set(`${TODAY}_s-bee`, { date: TODAY, supplierId: 's-bee', supplierName: 'Bee', quantities: { 'i-flour': 1 }, stock: {}, names: {} });
+    source.historyCached = false;
+    act(() => { source.emitHistory(); });
+    await waitFor(() => { expect(screen.getAllByText('To order today')).not.toHaveLength(0); });
+    expect(rowOf('Bee Farm')).not.toHaveAttribute('data-due');
+    expect(rowNames()[0]).toBe('Cat Dairy To order today');
+  });
+
+  it('offline, with no word from the server for the records: nobody is lit and the usual order stays', async () => {
+    const source = seeded();
+    source.historyCached = true;
+    await atList(source);
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)); });
+    expect(screen.queryByText('To order today')).not.toBeInTheDocument();
+    expect(rowNames()).toEqual(['Alpine Mills', 'Bee Farm', 'Cat Dairy', 'Dee Eggs', 'Eve Fish']);
   });
 
   it('works the lit set out again when the day changes at midnight', async () => {

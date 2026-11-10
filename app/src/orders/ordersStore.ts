@@ -102,9 +102,11 @@ export interface OrdersSnapshot {
   // The order in progress: the server's document with this phone's unsent typing on top (draftSync.ts).
   readonly draft: DraftView;
   readonly draftLoaded: boolean;
-  // Whether the SERVER has answered for the suppliers, the ingredients and the draft (not only this phone's own database): the
-  // pending check looks once, and a look at a copy days old would miss an order typed on another phone (step 3f-6, review).
-  readonly serverSeen: { readonly suppliers: boolean; readonly ingredients: boolean; readonly draft: boolean };
+  // Whether the SERVER has answered for the suppliers, the ingredients, the draft and the order records (not only this phone's own
+  // database): the pending check looks once, and a look at a copy days old would miss an order typed on another phone (step 3f-6,
+  // review). `history` (10 Nov 2026) is what «To order today» in the supplier list waits for: a copy lacking this morning's record
+  // would light a supplier that was already ordered on another phone.
+  readonly serverSeen: { readonly suppliers: boolean; readonly ingredients: boolean; readonly draft: boolean; readonly history: boolean };
   readonly draftBroken: boolean;
   // The last autosave was refused and no later one has landed (parity L37).
   readonly draftSaveFailed: boolean;
@@ -384,7 +386,7 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
     ingredients: [], ingredientsLoaded: false, ingredientsBroken: false,
     config: normalizeOrdersConfig(null), configLoaded: false, configAnswered: false, deliveryCheck: deliveryCheckOf(null),
     draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false, draftCameBack: 0,
-    serverSeen: { suppliers: false, ingredients: false, draft: false },
+    serverSeen: { suppliers: false, ingredients: false, draft: false, history: false },
     placing: [],
     history: [], historyLoaded: false, historyBroken: false, suggester: NO_SUGGESTIONS,
     olderHistory: [], older: { loading: false, done: false, error: false },
@@ -778,7 +780,12 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         // The window starts two calendar months before TODAY when the section opens (the current app's liveHistoryStart).
         source.watchRecentHistory(
           windowStart,
-          (list, meta) => set({ history: list, historyLoaded: snapshot.historyLoaded || loadedBy(list, meta), historyBroken: false }),
+          (list, meta) => set({
+            history: list,
+            historyLoaded: snapshot.historyLoaded || loadedBy(list, meta),
+            historyBroken: false,
+            serverSeen: meta.fromServer && !snapshot.serverSeen.history ? { ...snapshot.serverSeen, history: true } : snapshot.serverSeen,
+          }),
           () => set({ historyBroken: true, historyLoaded: true }),
         ),
         source.watchOrderRequests(

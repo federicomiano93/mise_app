@@ -169,22 +169,59 @@ describe('the suppliers to order today in the Suppliers list', () => {
     expect(rowNames().slice(0, 2)).toEqual(['Bee Farm', 'Cat Dairy']);
   });
 
-  it('keeps the supplier open beside the list current and focused when the order changes', async () => {
+  // ⚠️ The FOCUSED row is the one pushed DOWN: [Alpine, Bee, Cat] with nobody due, Alpine focused; Bee becomes due and goes first, so
+  // Alpine's node is the one React moves — and a moved node loses the focus in a browser. useFocusAcrossReorder hands it back (the hook
+  // itself is proved against a simulated loss in shell/useFocusAcrossReorder.spec.tsx; jsdom keeps the focus of a moved node, so this
+  // spec pins the behaviour of the whole list: the same node, still current, still focused).
+  it('keeps the focus and the open supplier when the order change pushes the focused row down', async () => {
     split();
-    const source = seeded();
+    const suppliers = [
+      supplier('s-alp', { name: 'Alpine Mills', orderDays: [NOT_TODAY] }),
+      supplier('s-bee', { name: 'Bee Farm', orderDays: [NOT_TODAY] }),
+      supplier('s-cat', { name: 'Cat Dairy', orderDays: [NOT_TODAY] }),
+    ];
+    const source = fakeSuppliersSource({ suppliers });
     const { user, router } = await loaded(source);
-    await waitFor(() => { expect(tagged()).toHaveLength(2); }, LOAD);
+    await waitFor(() => { expect(rowNames()).toEqual(['Alpine Mills', 'Bee Farm', 'Cat Dairy']); }, LOAD);
     await user.click(buttonOf('Alpine Mills'));
     await waitFor(() => { expect(buttonOf('Alpine Mills')).toHaveAttribute('aria-current', 'true'); });
     const alpine = buttonOf('Alpine Mills');
     act(() => { alpine.focus(); });
+    expect(alpine).toHaveFocus();
     const path = router.state.location.pathname;
-    act(() => { source.setDraftDoc({ ...CLOSED, skipped: { 's-eve': TODAY, 's-bee': TODAY, 's-cat': TODAY } }); });
-    await waitFor(() => { expect(rowNames()[0]).toBe('Alpine Mills'); });
+    act(() => { source.suppliers.set('s-bee', { ...suppliers[1]!, orderDays: [WEEKDAY] }); source.push(); });
+    await waitFor(() => { expect(rowNames()).toEqual(['Bee Farm', 'Alpine Mills', 'Cat Dairy']); });
     expect(buttonOf('Alpine Mills')).toBe(alpine);
     expect(alpine).toHaveAttribute('aria-current', 'true');
     expect(alpine).toHaveFocus();
     expect(router.state.location.pathname).toBe(path);
+  });
+
+  it('⚠️ a saved copy that lacks this morning’s record lights nobody until the SERVER answers (no flash, no jump)', async () => {
+    const source = seeded();
+    source.placedRecords = [];
+    source.draftDoc = null;
+    source.fromCache = true;
+    await loaded(source);
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)); });
+    expect(tagged()).toHaveLength(0);
+    expect(rowNames()).toEqual(USUAL);
+    // Bee was ordered this morning on another phone: the server's snapshot has it, and Bee never shows as due.
+    source.placedRecords = [...PLACED, { id: `${TODAY}_s-bee`, date: TODAY, supplierId: 's-bee' }];
+    source.fromCache = false;
+    act(() => { source.push(); });
+    await waitFor(() => { expect(tagged()).toHaveLength(2); });
+    expect(buttonOf('Bee Farm')).not.toHaveAttribute('data-due');
+    expect(rowNames().slice(0, 2)).toEqual(['Cat Dairy', 'Eve Fish']);
+  });
+
+  it('offline, with no word from the server for the records and the draft: nobody is lit and the usual order stays', async () => {
+    const source = seeded();
+    source.fromCache = true;
+    await loaded(source);
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 30)); });
+    expect(tagged()).toHaveLength(0);
+    expect(rowNames()).toEqual(USUAL);
   });
 
   it('works the lit set out again when the day changes at midnight', async () => {

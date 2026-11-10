@@ -389,3 +389,18 @@ describe('the suppliers store: «To order today» data', () => {
     expect(source.placedFrom).toEqual(['2026-01-02']);
   });
 });
+
+describe('the suppliers store: «To order today» waits for the server', () => {
+  test('⚠️ a saved copy that HOLDS records and a draft is still not an answer', async () => {
+    const source = fakeSuppliersSource();
+    source.placedRecords = [{ id: 'a', date: '2026-11-10', supplierId: 's1' }];
+    source.draftDoc = { skipped: { s2: '2026-11-10' } };
+    source.fromCache = true;
+    const { store } = started(source);
+    await tick();
+    expect([store.getSnapshot().placedLoaded, store.getSnapshot().draftLoaded]).toEqual([false, false]);
+    source.fromCache = false;
+    source.push();
+    expect([store.getSnapshot().placedLoaded, store.getSnapshot().draftLoaded]).toEqual([true, true]);
+  });
+});

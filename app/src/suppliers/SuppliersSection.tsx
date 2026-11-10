@@ -31,7 +31,7 @@ import styles from './SuppliersSection.module.css';
 // supplier. Loaded only when somebody opens it (shell/sectionScreens.ts), and only for a person the venue shows it to
 // (SectionRoute).
 //
-// Its data lives exactly as long as it is on screen: SuppliersProvider starts the four listeners on mount and stops them
+// Its data lives exactly as long as it is on screen: SuppliersProvider starts the six listeners on mount and stops them
 // on unmount (P14).
 //
 // Step 3e-1 slice A looks: the lists and a supplier's own screen. Slice B writes suppliers (the card, a new one, switching

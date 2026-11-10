@@ -8,7 +8,7 @@ import { supplierLabel } from '@mise/shared/supplier-label';
 import type { MessageKey } from '../i18n/en';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useDueSuppliers } from '../shell/useDueSuppliers';
-import { useKeepFocus } from '../shell/useKeepFocus';
+import { useFocusAcrossReorder } from '../shell/useFocusAcrossReorder';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { SPLIT_QUERY } from '../ui/split';
@@ -76,7 +76,7 @@ const HEADING_KEY = {
 // snapshot never remounts the box (see OrdersHead).
 export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingElsewhere, onOpenSupplier, onOpenItems, onOpenSummary, onOpenClosed, onPlaceAll, onClearAll, swapOpen, onSwap, onSend, onSettings, onHistory, onIncoming, onReorder, onLists, onOpenPending }: Props) {
   const { t } = useT();
-  const { config, draft, suppliers, suppliersLoaded, history, historyLoaded, historyBroken, draftLoaded, draftBroken, suppliersBroken, ingredientsBroken } = useOrders();
+  const { config, draft, suppliers, suppliersLoaded, history, historyBroken, draftBroken, serverSeen, suppliersBroken, ingredientsBroken } = useOrders();
   const [query, setQuery] = useState('');
   const [orderingOnly, setOrderingOnly] = useState(false);
   const handBack = useHandBack();
@@ -92,16 +92,19 @@ export function OrdersList({ lens, earlyLens, ready, openId, heldId, onLookingEl
   const drawn = earlyLens ?? lens;
   const ordering = orderingCount(drawn);
   // ⚠️ THE SUPPLIERS STILL TO ORDER TODAY (reminders dueTodayIds, the rule of the «Order today» strip), lit and put first ONLY once
-  // the suppliers, the records and the draft have all arrived — as TodayOrders waits: before that, nobody is lit and the order is
-  // the usual one. A dead records stream says nothing (nothing to read them from); a dead draft counts as arrived with no closes.
-  const dueReady = suppliersLoaded && historyLoaded && !historyBroken && draftLoaded;
+  // the suppliers have arrived AND THE SERVER has answered for today's records and the draft (not the phone's saved copy, which can
+  // lack an order placed this morning on another phone and would flash that supplier as due, then move it): before that — and
+  // offline with no server answer — nobody is lit and the order is the usual one. (The «Order today» strip above waits less, on
+  // purpose; it is left as it is.) A dead records stream says nothing (nothing to read them from); a dead draft counts as
+  // arrived with no closes.
+  const dueReady = suppliersLoaded && !historyBroken && serverSeen.history && (serverSeen.draft || draftBroken);
   const due = useDueSuppliers({
     suppliers,
     records: history as readonly PlacedRecord[],
     skipped: draftBroken ? null : draft.skipped,
     ready: dueReady,
   });
-  useKeepFocus(due);
+  useFocusAcrossReorder(due);
   // Due first WITHIN each group (Favourites keep their heading), each part in its usual order. Rows are keyed by id, so the row
   // open beside the list keeps its node, its `aria-current` and its focus when the order changes.
   const groups = useMemo(
