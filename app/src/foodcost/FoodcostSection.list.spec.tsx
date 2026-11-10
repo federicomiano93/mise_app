@@ -116,6 +116,7 @@ describe('the way into a product', () => {
   it('opens a product from its row', async () => {
     const { router, user } = await loaded();
     await user.click(rowOf(/^Red/));
+    await user.click(await screen.findByRole('button', { name: 'Open the card' }, LOAD));
     expect(router.state.location.pathname).toBe('/food-cost/product/Red');
     expect(await screen.findByRole('heading', { level: 2, name: 'Red' }, LOAD)).toBeInTheDocument();
   });

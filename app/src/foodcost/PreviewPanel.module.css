@@ -1,0 +1,117 @@
+/* The figures of one product at a glance, inside the preview dialog. A label on the left and its figure on
+   the right; on the narrowest phone the two wrap onto two lines instead of squeezing a word. Nothing clips. */
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row dt {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.row dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* The two prices the target asks for: the answer the panel is for. */
+.row[data-ideal="true"] dd {
+  color: var(--accent-ink);
+}
+
+.foodCost {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s1) var(--s2);
+}
+
+.dot {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--r-pill);
+  background: var(--line-2);
+}
+
+.row[data-status="green"] .dot {
+  background: var(--ok);
+}
+
+.row[data-status="amber"] .dot {
+  background: var(--warn);
+}
+
+.row[data-status="red"] .dot {
+  background: var(--danger);
+}
+
+.word {
+  font-weight: 600;
+}
+
+.row[data-status="green"] .word {
+  color: var(--ok-ink);
+}
+
+.row[data-status="amber"] .word {
+  color: var(--warn-ink);
+}
+
+.row[data-status="red"] .word {
+  color: var(--danger-ink);
+}
+
+.note {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.partial {
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.missingTitle {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.missing {
+  margin: 0;
+  padding-left: var(--s5);
+  color: var(--warn-ink);
+  font-size: var(--fs-sm);
+}

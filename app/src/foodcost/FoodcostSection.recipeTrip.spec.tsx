@@ -65,6 +65,7 @@ describe('⚠️ the trip from the recipe and back', () => {
     const { router, user } = await openTheRecipe([LOAF, ROLL, TART]);
     await screen.findByRole('heading', { level: 2, name: 'Products with “Dough”' }, LOAD);
     await user.click(screen.getByRole('button', { name: /^Loaf/ }));
+    await user.click(await screen.findByRole('button', { name: 'Open the card' }, LOAD));
     await user.click(within(screen.getByRole('region', { name: 'Loaf' })).getByRole('button', { name: 'Back' }));
     await waitFor(() => { expect(where(router)).toBe('/food-cost?using=dough'); });
     await user.click(screen.getByRole('button', { name: 'Back' }));
