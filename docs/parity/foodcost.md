@@ -512,3 +512,12 @@ Item 26 of `docs/mise2-port-owed.md` (current-app PR #485: `02839278`, `ec896ccf
 `odd-inputs.spec.ts` entries for the four new functions and the rewired `batchTotals` / `productPreview`; `app/src/foodcost/lineCost.spec.ts`, `foodcostWords.spec.ts`,
 `FoodcostSection.lineCosts.spec.tsx` (the form, the read view, «Which?» on the card, in the dialog, by click and keyboard, redraws), the CSS spec, and four existing specs reworded for the new notes
 (`editor.lines`, `readMode`, `twoDecimals`).
+
+## Narrowed list on the split as built (item 23, 10 Nov 2026)
+
+- Current app 35b1f3e0 (#478): a recipe used by several products opens, on a tablet or PC, the product the narrowed list shows first beside it; a phone keeps
+  the narrowed list. Mise 2: `RecipeEntry.tsx` decides it once, on the server's word, and REPLACES the entry with `/food-cost/product/<id>?using=<recipe>` when
+  the split query matches (the list ranks with `sortByMargin`, so the same product is on top), else `/food-cost?using=<recipe>` as before. Back still counts
+  the depth to the recipe (one entry). Spec: `FoodcostSection.recipe.spec.tsx`, «on the split, opens the product the narrowed list shows first beside it».
+- Back landing on the recipe's Food cost card (35b1f3e0's `&at=foodcost`) needs nothing here: the recipe screen restores its place on a POP from Food cost
+  (`recipes/recipeReturn.ts`, origin 'cost').
