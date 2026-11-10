@@ -82,7 +82,7 @@ export function foodCostForRecipePath(recipeId: unknown): string | null {
 // A recipe row's «Order» (Federico, 7 Nov 2026): that ingredient's supplier screen in Orders, with the recipe to go back to and the
 // ingredient whose quantity box takes the focus. Null when any of the three ids cannot be one, never half of the longer address.
 // ⚠️ THE SUPPLIER IS THE ONE THE RECIPE'S OWN COPY OF THE INGREDIENT NAMES; Orders re-checks that the ingredient is on that
-// screen and says so when it is not. app/src/orders/ordersPath.spec.ts pins this against `supplierPath`.
+// screen and says so when it is not. app/src/orders/OrdersSection.fromRecipe.spec.tsx («the address») pins this against `supplierPath`.
 export function ordersForIngredientPath(supplierId: unknown, recipeId: unknown, ingredientId: unknown): string | null {
   const supplier = cleanId(supplierId);
   const recipe = cleanId(recipeId);

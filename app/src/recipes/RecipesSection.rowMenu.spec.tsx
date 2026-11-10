@@ -233,4 +233,12 @@ describe('the words and the look', () => {
     expect(withoutComments(viewCss)).not.toMatch(/cursor: zoom/);
     expect(withoutComments(viewCss)).toMatch(/\.table \{[^}]*width: 100%;/);
   });
+
+  it('the menu box shows a ring when it takes the focus itself (every item disabled)', () => {
+    expect(withoutComments(rowMenuCss)).toMatch(/\.menu:focus-visible \{[^}]*outline: 3px solid var\(--accent\)/);
+  });
+
+  it('the pointer is for the row, not for the second line of a split row', () => {
+    expect(withoutComments(viewCss)).toMatch(/\.table tbody tr\.splitSecond \{[^}]*cursor: default/);
+  });
 });

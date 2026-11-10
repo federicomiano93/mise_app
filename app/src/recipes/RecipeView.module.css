@@ -91,6 +91,11 @@
   cursor: pointer;
 }
 
+/* The second line of a split row has no click handler of its own. */
+.table tbody tr.splitSecond {
+  cursor: default;
+}
+
 .table tr {
   border-bottom: 1px solid var(--line);
 }

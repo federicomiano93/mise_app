@@ -591,7 +591,7 @@ function IngredientsCard({ recipe, target }: { recipe: CatalogueRecipe; target: 
                   <td className={styles.unit}>{row.unit}</td>
                 </tr>
                 {parts === null ? null : (
-                  <tr className={divided ? styles.divided : undefined}>
+                  <tr className={divided ? `${styles.splitSecond} ${styles.divided}` : styles.splitSecond}>
                     <td colSpan={2} className={styles.splitLine}>
                       {t('cat.split.line', { a: amountText({ num: parts.a, unit: row.unit }), b: parts.b })}
                     </td>

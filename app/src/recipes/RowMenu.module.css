@@ -50,6 +50,12 @@
   outline: none;
 }
 
+/* When every item is disabled the menu box itself takes the focus: it must show it. */
+.menu:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .item {
   display: flex;
   flex-direction: column;
