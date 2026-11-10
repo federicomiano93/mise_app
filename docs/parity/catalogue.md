@@ -656,7 +656,8 @@ millimetres and the ZPL characters (items 62–80 and «What proves byte-identit
     focus moves to that row's amount. **spec** (`catalogue-model.test.mjs`, `link-suggestions.test.mjs`
     for the shared suggest list, `recipe-weights.test.mjs`)
 92. **Reordering the rows** is a MODE («Reorder» / «Done»), not a grip on every row (at 296 px a row already holds
-    four controls): in it each row is grip + name + amount; drag (held 200 ms on touch) or arrow keys; the SAME
+    four controls): in it each row is name, amount, grip (the grip on the RIGHT since the current app's #476, `1b87d33a`; Mise 2
+    has it there from the start, «Slice B (item 92), as built»); drag (held 200 ms on touch) or arrow keys; the SAME
     row objects move (`moveRow`) so a row keeps its link and its `rid` — **reordering never unhooks a mixing
     step**; focus returns to the grip that moved; Save with a row to fix leaves the mode first so the bad field
     can be shown; no new row while reordering. **spec** (`catalogue-reorder.test.mjs`)
@@ -1893,3 +1894,67 @@ Deliberate differences from the current app:
   see every linked row crossed out; a seeded `prices: {}` is a venue with zero price documents and answers `{}`.
 - **Isolation guard:** `app/src/recipes/unpricedMarks.spec.ts` reads the sources (the intent of `tests/catalogue-no-money.test.mjs`): no
   recipes file imports a price or cost model except through `unpriced-rows`, and the store keeps no prices.
+
+## Row menu and full screen as built (10 Nov 2026, item 32 of `docs/mise2-port-owed.md`)
+
+Ports of the current app's PR #481: `70325def` (full screen from a button, a menu on each ingredient row, «Order»), `8ed7a0ad` and `f0803349`
+(Back from Orders never strands a quantity). The `52061415` WIP is superseded and was not read.
+
+**What it does.**
+- **Full screen opens ONLY from the button** in the Ingredients card's head (`cat.fullScreen`, «Full screen» / «Schermo intero»). A tap on a row no
+  longer opens it. The dialog is `ui/RecipeFullScreen` as before (the Calculator still opens it by a tap on its list too); it gained an optional
+  `note` per row, which draws a split row's second line.
+- **A tap on an ingredient row opens its menu** (`RowMenu.tsx`: React Aria `MenuTrigger` / `Popover` / `Menu`, placed by script, no Popover API
+  for Chrome 101). The ingredient's NAME is the button (in the table's row header, so the table stays a table for a screen reader); a tap anywhere
+  else on the row presses it (`RecipeView.tsx`, `IngredientsCard`; a click that comes from the portal is ignored, it bubbles up the React tree). Arrow
+  keys, Home / End, Escape closes and gives the focus back to the row, a press outside closes. The menu is named «Actions for {name}» by reference to
+  a hidden element: React Aria names a menu by its button, which would have read «Flour». Items are 48px (`--hit`); hover only for a real mouse.
+- **«Split into 2 parts»** (`splitAmount`, `splitBlockReason` of `shared/src/row-actions-model.ts`) is DISPLAY ONLY: a second line `→ 625 g + 625`
+  under the row, in the row's own unit, the unit in the unit column. Nothing is saved; the total, the export and the batch are untouched. The split
+  is kept by the row's key (`rowKeysOf`: the linked record, else the typed name, plus how many came before), so a live change that adds a row above
+  leaves it split. «Remove the split» is always offered on a split row.
+- **«Order»** (`orderTargetOf`): shown only where `mayOpenOrders(location, canManage, role)` says yes (the section AND its card AND the role: the sales
+  owner has no Orders). Disabled, with its reason on the item, for another recipe (`cat.order.isRecipe`), an ingredient marked not in use
+  (`cat.order.notInUse`) and a row with no usable supplier (`cat.order.noSupplier`). It opens
+  `/orders/supplier/<supplier>?recipe=<recipe>&ingredient=<ingredient>` (`ordersForIngredientPath`, state `FROM_RECIPE_LINK` + `KEEP_FOCUS`): the
+  supplier is the one the recipe's copy of the ingredient names. The supplier screen (`SupplierOrderScreen`) reads the address
+  (`orders/recipeOrigin.ts`, strict: an id with a slash, an empty one or over 200 characters is no recipe, so it is an ordinary screen), focuses that
+  ingredient's quantity box ONCE when the supplier first shows (nothing prefilled), or says `ord.fromRecipe.notFound` when the ingredient is not on
+  that screen. `OrderLine` gained `data-ingredient`.
+- **Back from Orders** is the browser's Back (the recipe's entry is right behind): the history after the trip is what it was before it, no second entry
+  for the recipe. Address typed or reloaded (no `fromRecipeLink` in the state) it REPLACES itself with the recipe. The recipe comes back as it was
+  left (`recipeReturn.ts`, origin `'order'`, carried in the module like the Food cost trip's because the recipes section is unmounted meanwhile): the
+  focus on the row that opened the menu, the scroll where it was and the rows split in two still split.
+
+**Deliberate differences from the current app.**
+- ⚠️ **Back does not wait for the typed quantity to be sent** (`sendBeforeLeaving`, `8ed7a0ad`; the «Salvo la quantità…» status, the «Quantità non
+  salvata» question and the delayed leave, `f0803349`). BY DESIGN, and the evidence: the current app's wait existed because leaving Orders was a PAGE
+  LOAD: a quantity typed a moment before was still in the 0.8 s pause or in Firestore's queue of a page about to die, held only by that device's note.
+  In Mise 2 Orders is a section of one page: `ordersStore.stop()` (the section's unmount) sends a change still in its pause AT ONCE
+  (`sync.flush()`, `OrdersSection.fromRecipe.spec.tsx`: «NEVER STRANDS A QUANTITY» types 7, goes Back inside the pause and finds the write already in
+  the source — the spec fails when that flush is removed, checked), the write then lives in Firestore's own queue (IndexedDB, as measured in F-15), which
+  carries on offline, and the F-15 note (`draft-journal`) covers a closed Chrome. So Back never needs to wait, and a second tap or a touch
+  during a wait cannot arise.
+  ⚠️ **THE ONE EDGE THAT IS OPEN: a write the SERVER REFUSES after the screen is gone** (the rules say no, e.g. the person's access was just taken
+  away). Measured with a probe on 10 Nov 2026 (not kept as a spec): with `refuseWrites` on, typing 7 and going Back leaves the draft unchanged,
+  nothing in the journal (a refused write is not noted, F-15) and no message anywhere, because `stop()` says it through `onResult` to listeners that
+  are gone. The current app asks first («Quantità non salvata») for exactly this case. It is the same for EVERY way out of Orders in Mise 2 (the
+  rail, the browser's Back), not only this trip, and needs a decision before the switch: leave it, or have the store tell the shell when a refused
+  change cannot be sent any more. NOT designed here.
+- **A disabled item is not focusable by the arrow keys** (React Aria skips it); the current app kept it focusable. The reason is part of the item's
+  text, so it is read with it. The words are the same.
+- **The row menu is not in the full-screen view.** There the rows are read-only text (`ui/RecipeFullScreen`), the way the Calculator's dialog is; a
+  split already made is drawn there (`note`). The current app's zoomed rows were still buttons.
+- **The ingredient's name is the button, not the whole row**, so the table keeps its semantics; the row's other cells press it with a script click.
+  A row is at least 48px tall now, taller than before: the `--hit` rule (the current app asked 44px).
+- **`recipe-link`: the four new hash functions are LEFT OUT** (`recipeSpotFromHash`, `ordersIngredientHref`, `orderIngredientFromHash` and, with
+  them, `catalogueOriginFromHash` as before): they build and read `orders.html#from=recipe:<id>&order=<id>`. Mise 2's address is a query
+  (`ordersForIngredientPath`, read back with `recipeIdParam`); `recipe-link.spec.ts` pins the round trip, the strictness and that the original
+  still exports what the port leaves out. The two `PORT OWED` markers naming item 32 (item 23's `recipeSpotFromHash` among them) are removed with it.
+- **The Orders-side page changes of `70325def`** (the focus kept on the same box when the supplier screen repaints on a snapshot) are not needed:
+  React keeps the same input mounted across a snapshot.
+
+**Specs.** `shared/src/row-actions-model.spec.ts` (both files), `parity.spec.ts` and `odd-inputs.spec.ts` (the model), `recipe-link.spec.ts`;
+`app/src/recipes/RecipesSection.rowMenu.spec.tsx` (menu on a tap and on Enter, the arrows, Escape and the focus back, the full screen from its
+button only, split and its reasons, «Order» absent / disabled with its reasons, Italian, the CSS); `app/src/orders/OrdersSection.fromRecipe.spec.tsx`
+(the trip: the address, the focused box, Back with no second entry, the recipe as left, the quantity kept, reload, not found, a bad recipe id, Italian).

@@ -29,8 +29,9 @@
 // money; fc-number.spec.ts runs what it ports against both files. from-recipes.ts WAS a partial port (only `wholeRecipeKg`)
 // and is FULL and paired since item 29 (10 Nov 2026, the products made from the recipe book).
 // recipe-link.ts is a partial port too (step 3d-7): it leaves out the page addresses of the current app (`recipeHash`,
-// `foodCostHref`, `recipeHref`, `ordersHref`, `catalogueOriginFromHash`) and adds four things with no original; its spec
-// compares names and shapes itself.
+// `foodCostHref`, `recipeHref`, `recipeSpotFromHash`, `ordersHref`, `ordersIngredientHref`, `catalogueOriginFromHash`,
+// `orderIngredientFromHash`) and adds five things with no original; its spec compares names and shapes itself.
+// row-actions-model.ts (item 32, 10 Nov 2026) is a FULL port and is paired below.
 // recipe-export.ts is a partial port too (new in step "export"): it leaves out `buildPdfBlob` and `buildXlsxBlob`,
 // which `import()` the vendored PDF and spreadsheet libraries that belong to the app, and adds `LIBRARY_ERROR` and
 // `libraryError` (private to the original's loader); its spec compares names, constants, frozen-ness and shapes itself.

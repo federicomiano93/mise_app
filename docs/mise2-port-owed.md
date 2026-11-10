@@ -271,8 +271,17 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
 32. **Recipe row menu + full screen from a button + Back from Orders never strands a quantity** (#481 `70325def`, `8ed7a0ad`, `f0803349`; memory
     «MISE 2 PORT: row menu + split + «Ordina» link + wait-before-leaving + supplier status line»). Mise 2: PARTIAL (tap-to-full-screen exists in
     `RecipeView.tsx:426`; no row menu, no `row-actions-model` in shared). Size M.
+    **DONE 10 Nov 2026** (`feature/mise2-next-recipe-row-menu`; `docs/parity/catalogue.md`, «Row menu and full screen as built»):
+    `shared/src/row-actions-model.ts` (full, paired in `parity.spec.ts`, odd inputs), `ordersForIngredientPath` in `shared/src/recipe-link.ts` (the
+    current app's four new hash functions are page addresses and are LEFT OUT like their siblings: the two item-32 `PORT OWED` markers of
+    `recipe-link.spec.ts` are gone); `app/src/recipes/RowMenu.tsx` (React Aria menu), the ingredient list in `RecipeView.tsx` (full screen from its
+    button only, split in two, «Order»), `recipeReturn.ts` origin `'order'`, and in Orders `recipeOrigin.ts` + `SupplierOrderScreen.tsx` (quantity box
+    focused, Back to the recipe). Twelve `cat.*` / `ord.fromRecipe.notFound` keys worded as the current app's. **Back does NOT wait for the typed
+    quantity to be sent** (8ed7a0ad, f0803349): by design, because the draft is local-first and leaving Orders sends what waits at once — with ONE
+    open edge, a write the SERVER refuses after the screen is gone (see the parity doc).
 33. **Grip on the right** (#476, `1b87d33a`, `5249713b`): DONE in Mise 2 by design (`docs/parity/catalogue.md:1565`, `ReorderRows.tsx`); the
     parity doc lines 92 / calculator.md 78 should say «name, amount, grip». Docs only.
+    **DONE 10 Nov 2026**: `docs/parity/catalogue.md` (item 92) and `docs/parity/calculator.md` (the reorder paragraph) now say «name, amount (grams), grip».
 34. **Recipe dividers** (#458): DONE (`bc5184d4`, `c894d3ae`, `cd6c7e4b`). **Recipe PDF lab format** (#456): DONE (`0341a5c2`, `8f19cf8f`).
 35. **Recipe categories on screens**: DONE (`b2521628`, `7bd878b3`); write path owed (item 2).
 
@@ -319,7 +328,6 @@ What each one means for the people using Mise 2 until it is ported:
   (Items 21, 22, 24, 25 and 28 are done: weighing units, the «Cost per 1 kg» block, the list search and the phone preview, the
   read-first card with four figures and «Details», and two decimals on the screens Mise 2 has.)
 - 23. Food cost recipe link with several products (a check).
-- 32. Recipe book: the row menu.
 - 36-37, 39-40. Calculator: reorder a recipe's ingredients, «Add a recipe» from the book, the dough history's dates and
   totals, the cached «no config».
 - 41-43. Staff / join codes / roles screens (people, invitations incl. #475 role-first invite, the join form) and the
