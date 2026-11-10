@@ -28,6 +28,9 @@ export type FakeFoodcostSource = FoodcostSource & {
   // Holds back the first answer of the products until release() (Firestore still loading).
   hold(): void;
   release(): void;
+  // The same for the ingredients and their prices (the cost tables arrive after the products).
+  holdIngredients(): void;
+  releaseIngredients(): void;
 };
 
 export function fakeFoodcostSource(seed: {
@@ -50,6 +53,7 @@ export function fakeFoodcostSource(seed: {
   const refuse = { save: false, loss: false, remove: false, rate: false, history: false, products: false };
   const saved: FakeFoodcostSource['saved'] = [];
   let held = false;
+  let ingredientsHeld = false;
   let ids = 0;
 
   const refused = () => Object.assign(new Error('permission-denied'), { code: 'permission-denied' });
@@ -62,11 +66,13 @@ export function fakeFoodcostSource(seed: {
     push() {
       if (!held) for (const w of productWatchers) w.onChange([...products.values()], FROM_SERVER);
       for (const w of recipeWatchers) w.onChange([...recipes.values()], FROM_SERVER);
-      for (const w of ingredientWatchers) w.onChange(priced());
+      if (!ingredientsHeld) for (const w of ingredientWatchers) w.onChange(priced());
       for (const w of settingsWatchers) w(fake.settings, { fromServer: true });
     },
     hold() { held = true; },
     release() { held = false; fake.push(); },
+    holdIngredients() { ingredientsHeld = true; },
+    releaseIngredients() { ingredientsHeld = false; fake.push(); },
 
     newProductId: () => `fake-${++ids}`,
 
@@ -96,7 +102,7 @@ export function fakeFoodcostSource(seed: {
     watchIngredients: vi.fn<FoodcostSource['watchIngredients']>((onChange, onError) => {
       const listener: ListListener = { onChange, onError };
       ingredientWatchers.add(listener);
-      queueMicrotask(() => { if (ingredientWatchers.has(listener)) onChange(priced()); });
+      queueMicrotask(() => { if (ingredientWatchers.has(listener) && !ingredientsHeld) onChange(priced()); });
       return () => { ingredientWatchers.delete(listener); };
     }),
 

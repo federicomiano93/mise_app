@@ -180,14 +180,18 @@ export function createFirestoreFoodcostSource(
       },
     ), onError),
 
-    // ⚠️ NOTHING IS EMITTED UNTIL THE INGREDIENTS HAVE ARRIVED: the prices can land first, and
-    // emitting then would paint every line «no longer exists» for a frame.
+    // ⚠️ NOTHING IS EMITTED UNTIL BOTH HALVES HAVE ANSWERED ONCE: the prices can land first, and emitting then would
+    // paint every line «no longer exists» for a frame; the ingredients can land first, and emitting then gave «loaded»
+    // tables with no price at all — every line «— No price» for a moment, and the recipe entry (item 23, found by the
+    // emulator drive) ranking the products by name and opening the wrong one beside the list. The first answer may come
+    // from this phone's own cache (offline included), so the wait cannot hang.
     // ⚠️ THE PRICE HALF FAILS QUIETLY: a venue may have no prices; an unpriced line says so already.
     watchIngredients(onChange, onError) {
       let ingredients: StoredDoc[] | null = null;
       let prices: Record<string, Record<string, unknown>> = {};
+      let pricesAnswered = false;
       const emit = () => {
-        if (ingredients) onChange(withPrices(ingredients, prices) as StoredDoc[]);
+        if (ingredients && pricesAnswered) onChange(withPrices(ingredients, prices) as StoredDoc[]);
       };
       return listen(kit => {
         const { fs, db } = kit;
@@ -208,10 +212,12 @@ export function createFirestoreFoodcostSource(
             const next: Record<string, Record<string, unknown>> = {};
             snap.forEach(d => { next[d.id] = d.data(); });
             prices = next;
+            pricesAnswered = true;
             emit();
           },
           () => {
             prices = {};
+            pricesAnswered = true;
             emit();
           },
         );

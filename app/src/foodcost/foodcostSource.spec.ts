@@ -189,6 +189,23 @@ describe('the Food cost source, as firestore.rules expect it', () => {
     expect(seen[0]![0]).toMatchObject({ id: 'i1', name: 'Flour', priceUnit: 'kg', pricePerUnit: 2 });
   });
 
+  // Item 23 (found by the emulator drive): ingredients emitted before their prices made «loaded» tables with no price at all.
+  test('⚠️ and only once the prices have answered too: ingredients first are held until then', async () => {
+    const { kit, live } = fakeKit();
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
+    const seen: StoredDoc[][] = [];
+    source.watchIngredients(list => seen.push(list), () => {});
+    await settle();
+    live('locations/bakery/ingredients')[0]!.next(collectionSnap([{ id: 'i1', name: 'Flour' }]));
+    expect(seen).toEqual([]);
+    live('locations/bakery/ingredient-prices')[0]!.next(collectionSnap([{ id: 'i1', priceUnit: 'kg', pricePerUnit: 2 }]));
+    expect(seen).toHaveLength(1);
+    expect(seen[0]![0]).toMatchObject({ id: 'i1', name: 'Flour', priceUnit: 'kg', pricePerUnit: 2 });
+    // After that, either half answering again is passed on at once.
+    live('locations/bakery/ingredients')[0]!.next(collectionSnap([{ id: 'i1', name: 'Flour 00' }]));
+    expect(seen).toHaveLength(2);
+  });
+
   test('a refused price read leaves the ingredients unpriced, quietly', async () => {
     const { kit, live } = fakeKit();
     const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');

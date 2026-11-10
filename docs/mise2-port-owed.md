@@ -204,6 +204,11 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     marked PORT OWED in `odd-inputs.spec.ts` with `productionCost` (a null table), until item 26 (done 10 Nov 2026: the marker is gone).
 23. **Step 3 recipe link both ways** (#478, `35b1f3e0`, `942dab6e`) — Mise 2 has its own entry `?recipe=` / `?using=` design (catalogue.md
     «Back counts the depth»): treat as DONE by design; re-check that the multi-product case opens the top product on tablet/PC. Size S (check).
+    **DONE 10 Nov 2026** (`feature/mise2-next-foodcost-narrowed-open`): the check found the tablet half missing — on the split a recipe used by several
+    products landed on the narrowed list with the pane empty («Choose a product»), the defect 35b1f3e0 fixed. `RecipeEntry.tsx` now opens, on the split, the
+    product the narrowed list ranks first (`sortByMargin`, as the list, once the recipes and ingredients have answered) beside it, still one entry from the
+    recipe whichever Back is used (`useLeave` carries the depth on its replace); a phone keeps the list alone. The other half
+    (Back lands on the recipe's Food cost card, `&at=foodcost`) was already true by design (`recipes/recipeReturn.ts`, origin 'cost').
 24. **Step 4 list preview** (#482): search bar, phone preview dialog, panel at the top of the card, eight figures, net ideal price. NONE. Size M.
     **DONE 10 Nov 2026** (`feature/mise2-next-foodcost-preview`; `docs/parity/foodcost.md`, «List search and product preview as built»): `shared/src/foodcost-model.ts`
     gains `productPreview` (the original also returns `unpriced`, item 26), `suggestedNetPrice`, `nameMatches` and the blockers `no-target` / `no-packaging-price`

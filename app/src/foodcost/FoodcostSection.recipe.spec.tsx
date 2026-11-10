@@ -2,7 +2,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { act, screen, within } from '@testing-library/react';
 import { FROM_RECIPE_LINK } from '@mise/shared/recipe-link';
 import { editorSource, recipe } from '../testing/foodcostEditorFixtures';
-import { LOAD, product, renderFoodcost } from '../testing/renderFoodcost';
+import { LOAD, product, renderFoodcost, split } from '../testing/renderFoodcost';
 import { entriesBehind, madeWith } from '../testing/recipeLinkHelpers';
 
 // Step 3d-7, slice B: Food cost opened from a recipe — the ENTRY (`/food-cost?recipe=<id>`) that decides, once, where
@@ -85,6 +85,39 @@ describe('the entry: several products are made with the recipe', () => {
     expect(screen.getByRole('button', { name: /^Roll/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /^Tart/ })).not.toBeInTheDocument();
     await vi.waitFor(() => { expect(title).toHaveFocus(); });
+  });
+
+  // Current app 35b1f3e0: beside the list the pane was left empty («Choose a product»).
+  it('on the split, opens the product the narrowed list shows first beside it, still one entry from the recipe', async () => {
+    split();
+    const { router } = open();
+    const heading = await screen.findByRole('heading', { level: 2, name: /^(Loaf|Roll)$/ }, LOAD);
+    expect(screen.queryByText('Choose a product')).not.toBeInTheDocument();
+    expect(where(router)).toBe(`/food-cost/product/${heading.textContent}?using=dough`);
+    expect(router.state.historyAction).toBe('REPLACE');
+    expect(await entriesBehind(router)).toBe(1);
+    // The narrowed list stays on the left, and its first row is the product open.
+    expect(screen.getByRole('heading', { level: 2, name: 'Products with “Dough”' })).toBeInTheDocument();
+    const rows = screen.getAllByRole('button', { name: /^(Loaf|Roll)/ });
+    expect(rows[0]!.getAttribute('aria-label') ?? rows[0]!.textContent).toMatch(new RegExp(`^${heading.textContent}`));
+    expect(screen.queryByRole('button', { name: /^Tart/ })).not.toBeInTheDocument();
+  });
+
+  // Found by the emulator drive: the section's listeners start when it mounts, so the prices came after the products, the
+  // entry ranked with empty tables (by name) and opened a product that was not the list's first.
+  it('on the split, waits for the prices before choosing: the worst food cost opens, not the first name', async () => {
+    split();
+    // Roll sells far too cheap (the worst food cost, ranked first); by name Loaf would come first.
+    const cheapRoll = product('Roll', { name: 'Roll', components: madeWith('dough'), sellingPrice: 0.3 });
+    const dearLoaf = product('Loaf', { name: 'Loaf', components: madeWith('dough'), sellingPrice: 10 });
+    const fake = editorSource([dearLoaf, cheapRoll, TART], { recipes: [DOUGH] });
+    fake.holdIngredients();
+    const { router } = renderFoodcost('/food-cost', { entries: fromRecipe(), source: fake });
+    await wait(300);
+    expect(where(router)).toBe('/food-cost?recipe=dough');
+    act(() => { fake.releaseIngredients(); });
+    expect(await screen.findByRole('heading', { level: 2, name: 'Roll' }, LOAD)).toBeInTheDocument();
+    expect(where(router)).toBe('/food-cost/product/Roll?using=dough');
   });
 
   it('«Show all» REPLACES the narrowed list with the plain one, and every product is listed', async () => {
