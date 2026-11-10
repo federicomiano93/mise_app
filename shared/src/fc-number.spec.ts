@@ -2,7 +2,7 @@
 // the adapted port in shared/ (it is handed the money) and js/foodcost/fc-number.js (it reads js/currency.js after
 // setCurrency). Every export of the original is covered (item 28 of docs/mise2-port-owed.md, current app 151ea191):
 // ported from tests/foodcost-two-decimals.test.mjs, minus its two source-reading tests (they read js/foodcost/ files, not
-// this module; app/src/foodcost/twoDecimals.spec.tsx pins the Mise 2 screens instead).
+// this module; app/src/foodcost/FoodcostSection.twoDecimals.spec.tsx pins the Mise 2 screens instead).
 
 import { afterEach, describe, expect, test } from 'vitest';
 import { moneyOf } from './currency';

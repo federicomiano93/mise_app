@@ -71,7 +71,7 @@
 
 /* 18px type on purpose: a field under 16px makes iOS zoom the page in when it is focused. */
 /* ⚠️ SIZED IN `ch`, NOT IN PIXELS (owner, Nov 2026: «nella casella composto da il peso non si vede tutto», current app df7e6313): nine digits
-   ("12345.678" plus a margin) are 9ch in the box's own tabular figures, plus its padding and its 2 × 1.5px border. */
+   ("12345.678", exactly nine characters) are 9ch in the box's own tabular figures, plus its padding and its 2 × 1.5px border. */
 .qty {
   flex: none;
   width: calc(9ch + 2 * var(--s3) + 3px);

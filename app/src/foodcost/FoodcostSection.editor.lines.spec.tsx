@@ -500,6 +500,16 @@ describe('the weighings', () => {
     expect(screen.getByText('The loss belongs to the recipe: it changes 1 other product too.')).toBeInTheDocument();
   });
 
+  it('a wrong pair says nothing about other products: the stored loss stays, so their cost does not move', async () => {
+    const { user } = await open('/food-cost/product/Loaf', editorSource([
+      DOUGH_PRODUCT, product('Roll', { components: [{ recipeId: 'Dough', qtyKg: 1 }] }),
+    ], { recipes: [recipe('Dough')] }));
+    await user.type(within(madeOf()).getByRole('textbox', { name: 'Raw dough' }), '1000');
+    await user.type(within(madeOf()).getByRole('textbox', { name: 'Cooked dough' }), '1100');
+    expect(screen.getByText('The cooked dough cannot weigh more than the raw dough.')).toBeInTheDocument();
+    expect(screen.queryByText(/The loss belongs to the recipe/)).not.toBeInTheDocument();
+  });
+
   it('warn when the cooked dough weighs more than the raw — and the cooked box stays RED', async () => {
     const { user } = await open('/food-cost/product/Loaf', editorSource([DOUGH_PRODUCT], { recipes: [recipe('Dough')] }));
     const cooked = within(madeOf()).getByRole('textbox', { name: 'Cooked dough' });
@@ -508,6 +518,8 @@ describe('the weighings', () => {
     await user.type(cooked, '1200');
     expect(screen.getByText('The cooked dough cannot weigh more than the raw dough.')).toBeInTheDocument();
     expect(cooked).toHaveAttribute('aria-invalid', 'true');
+    // The box says WHY it is red, not only that it is: its description is the warning.
+    expect(cooked).toHaveAccessibleDescription('The cooked dough cannot weigh more than the raw dough.');
     expect(cooked).toHaveAttribute('data-invalid', 'true');
     // The raw box is not the wrong one.
     expect(within(madeOf()).getByRole('textbox', { name: 'Raw dough' })).not.toHaveAttribute('aria-invalid');

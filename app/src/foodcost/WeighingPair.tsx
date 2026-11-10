@@ -75,6 +75,7 @@ export function WeighingPair({ recipe, title, state, typed, others, onRaw, onCoo
               className={styles.input}
               placeholder="0"
               aria-invalid={invalid ? true : undefined}
+              aria-describedby={invalid ? `${ids}-warn` : undefined}
               data-invalid={invalid}
               value={cooked}
               onChange={event => { onCooked(event.target.value); }}
@@ -88,12 +89,13 @@ export function WeighingPair({ recipe, title, state, typed, others, onRaw, onCoo
       {/* Present before they speak: text added to a region that was already on the page is announced. */}
       <div className={styles.notes} aria-live="polite">
         {shown.warning === null ? null : (
-          <p className={styles.warn}>{t(shown.warning.key, weighingParams(shown.warning.params, money))}</p>
+          <p id={`${ids}-warn`} className={styles.warn}>{t(shown.warning.key, weighingParams(shown.warning.params, money))}</p>
         )}
         {/* ⚠️ SAID THE MOMENT IT BECOMES TRUE: the loss belongs to the recipe, so a weighing typed on
             this product changes every other product built on it, and nobody opening those would know
-            why their cost moved. */}
-        {shown.patch !== null && others > 0 ? (
+            why their cost moved. A wrong pair only KEEPS the two numbers typed (keepsOnly): the stored loss stays,
+            so no other product moves and the sentence would be false (foodcost-editor.js df7e6313). */}
+        {shown.patch !== null && !shown.keepsOnly && others > 0 ? (
           <p className={styles.shared}>{t('fc.lossSharedWith', { n: others })}</p>
         ) : null}
       </div>
