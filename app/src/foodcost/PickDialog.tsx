@@ -2,7 +2,8 @@ import { useMemo, useState } from 'react';
 import { normalizeSearchText } from '@mise/shared/catalogue-model';
 import { isPackaging } from '@mise/shared/ingredient-kind';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
-import { formatRate, pricePerKg } from '@mise/shared/price-model';
+import { fcMoney } from '@mise/shared/fc-number';
+import { pricePerKg } from '@mise/shared/price-model';
 import { withoutArchived } from '@mise/shared/recipe-shelf';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
@@ -61,7 +62,7 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
     });
     const packagingOption = (item: (typeof ingredients)[string]): Option => {
       const each = item.priceUnit === 'pcs' ? Number(item.pricePerUnit) : null;
-      const meta = each ? t('fc.priceEach', { price: formatRate(each, money) })
+      const meta = each ? t('fc.priceEach', { price: fcMoney(each, money) })
         : pricePerKg(item) !== null ? t('fc.pricedByWeight')
           : t('fc.notPriced');
       return { id: item.id, name: ingredientDisplayName(item).trim(), invoiceName: String(item.name).trim(), meta };

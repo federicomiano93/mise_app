@@ -8,6 +8,8 @@ import listCss from './FoodcostList.module.css?raw';
 import editorCss from './ProductEditor.module.css?raw';
 import rowCss from './ProductRow.module.css?raw';
 import sectionCss from './FoodcostSection.module.css?raw';
+import lineCss from './LineRow.module.css?raw';
+import weighCss from './WeighingPair.module.css?raw';
 
 // What a stylesheet decides and jsdom cannot see: jsdom applies no layout, so a row too short to
 // tap, a card that clips the bar stuck to its top or a pane that does not scroll on its own is
@@ -137,5 +139,49 @@ describe('the labour cost box', () => {
 
   it('shows a refused number in the danger colours, with the message saying it too', () => {
     expect(declaration(rule(settingsCss, '.isError'), 'border-color')).toBe('var(--danger)');
+  });
+});
+
+// ── The weighing boxes and the amount boxes (current app df7e6313, tests/foodcost-line-units-and-switch.test.mjs) ─────────────
+function luminance(name: string): number {
+  const match = new RegExp(`${name}:\\s*oklch\\(([\\d.]+)\\s+([\\d.]+)\\s+([\\d.]+)`).exec(tokensCss);
+  if (!match) throw new Error(`${name} is not an oklch token`);
+  const [L, C, h] = [Number(match[1]), Number(match[2]), (Number(match[3]) * Math.PI) / 180];
+  const a = C * Math.cos(h);
+  const b = C * Math.sin(h);
+  const l = (L + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m = (L - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s = (L - 0.0894841775 * a - 1.2914855480 * b) ** 3;
+  const linear = [
+    4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s,
+    -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s,
+    -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
+  ].map(v => Math.min(1, Math.max(0, v)));
+  return 0.2126 * linear[0]! + 0.7152 * linear[1]! + 0.0722 * linear[2]!;
+}
+
+function contrast(foreground: string, background: string): number {
+  const [a, b] = [luminance(foreground), luminance(background)].sort((x, y) => y - x);
+  return (a! + 0.05) / (b! + 0.05);
+}
+
+describe('the amount boxes', () => {
+  it('are sized in ch for nine characters, not a guessed pixel width, so a weight is never cut', () => {
+    for (const [css, selector] of [[lineCss, '.qty'], [weighCss, '.input']] as const) {
+      const body = rule(css, selector);
+      expect(declaration(body, selector === '.qty' ? 'width' : 'min-width'), selector).toMatch(/^calc\(9ch \+ 2 \* var\(--s[23]\) \+ 3px\)$/);
+    }
+    expect(declaration(rule(lineCss, '.qty'), 'flex')).toBe('none');
+    expect(declaration(rule(lineCss, '.qty'), 'font-variant-numeric')).toBe('tabular-nums');
+  });
+});
+
+describe('a wrong dough weighing', () => {
+  it('keeps its warning in red that reads on the card (4.5:1 for small text), and frames the cooked box', () => {
+    expect(declaration(rule(weighCss, '.warn'), 'color')).toBe('var(--danger-ink)');
+    expect(contrast('--danger-ink', '--surface')).toBeGreaterThanOrEqual(4.5);
+    const framed = rule(weighCss, '.input[data-invalid="true"]');
+    expect(declaration(framed, 'border-color')).toBe('var(--danger)');
+    expect(declaration(framed, 'box-shadow')).toContain('var(--danger)');
   });
 });

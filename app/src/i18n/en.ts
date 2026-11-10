@@ -361,7 +361,9 @@ export const en = {
   'fc.rawDough': 'Raw dough',
   'fc.cookedDough': 'Cooked dough',
   'fc.lossIs': 'Weight lost in the oven: {pct}%',
-  'fc.lossNotYet': 'Weight lost in the oven: weigh the baked dough to work it out',
+  'fc.lossNotYet': 'Oven loss: weigh the dough raw and baked, both, to work it out',
+  // Exactly ONE of the two boxes holds a weight: nothing is worked out until both do.
+  'fc.lossNeedBoth': 'Fill in both weights to work out the loss.',
   'fc.lossStored': 'Weight lost in the oven: {pct}% — weigh the dough to work it out again',
   'fc.lossCookedHeavier': 'The cooked dough cannot weigh more than the raw dough.',
   'fc.lossCapped': 'Stored as {max}% — a full loss would make the cost per kilo infinite.',
@@ -452,6 +454,10 @@ export const en = {
   'fc.ingredientNoPieceWeight': 'Bought by the piece — say what one piece weighs in Ingredients and suppliers, or count it in pieces',
   'fc.ingredientNoPiecePrice': 'Bought by weight — say what one piece weighs in Ingredients and suppliers, or count it in grams',
   'fc.weighFor': 'Dough for «{name}»',
+  // What Save says about a wrong weighing: it is pointed at, then the usual question names it and Save still works.
+  'fc.checkWeighing': 'Check the dough weights of «{name}».',
+  'fc.weightWarningLine': '«{name}»: {warning}',
+  'fc.saveWithWeightWarnings': 'Some dough weights look wrong.\n{lines}\nSave anyway?',
   'fc.noWeightLoss': 'Finished product — no weight loss',
   'fc.noWeightLossHint': 'The oven loss of the recipes is not used for this product.',
   'fc.packHolds': 'One pack holds',

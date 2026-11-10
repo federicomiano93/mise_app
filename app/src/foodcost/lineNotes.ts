@@ -1,10 +1,9 @@
 import { ingredientLineCost } from '@mise/shared/foodcost-model';
 import type { CostTables, IngredientLineReason, Table } from '@mise/shared/foodcost-model';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
-import { formatMoney, formatRate } from '@mise/shared/price-model';
 import type { Money } from '@mise/shared/currency';
 import { costRecipe } from '@mise/shared/recipe-cost-model';
-import { fcWeight } from '@mise/shared/fc-number';
+import { fcMoney, fcWeight } from '@mise/shared/fc-number';
 import { wholeRecipeKg } from '@mise/shared/from-recipes';
 import { tooMuchOfRecipe } from '@mise/shared/line-quantity';
 import type { MessageKey } from '../i18n/en';
@@ -95,5 +94,5 @@ export function lineNote(
   // silently costing nothing.
   if (ingredient.priceUnit !== 'pcs') return t('fc.pricedByWeightSet');
   const each = Number(ingredient.pricePerUnit) || 0;
-  return `${t('fc.priceEach', { price: formatRate(each, money) })}  ·  ${formatMoney(readQty((line as WorkingPackaging).qty) * each, money)}`;
+  return `${t('fc.priceEach', { price: fcMoney(each, money) })}  ·  ${fcMoney(readQty((line as WorkingPackaging).qty) * each, money)}`;
 }

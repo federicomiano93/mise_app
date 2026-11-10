@@ -1,7 +1,7 @@
 import { BLOCKER_TEXT } from '@mise/shared/foodcost-model';
 import type { CostResult, FoodCostStatus } from '@mise/shared/foodcost-model';
 import type { Money } from '@mise/shared/currency';
-import { formatMoney, formatRate } from '@mise/shared/price-model';
+import { fcMoney, fcNumber } from '@mise/shared/fc-number';
 import type { MessageKey } from '../i18n/en';
 import type { MessageParams } from '../i18n/i18n';
 
@@ -20,14 +20,14 @@ export function statusWord(t: Translate, status: FoodCostStatus | null): string 
   return status === null ? t('fc.noTargetSet') : t(STATUS_TEXT[status]);
 }
 
-// «31.5%» in the interface language's own numbers, or «—» while the product cannot be costed
-// (never a 0%: a food cost of nothing would read as a product that costs nothing to make).
-export function figureText(result: CostResult, locale: string): string {
-  return result.foodCostPct === null ? '—' : percentText(result.foodCostPct, locale);
+// «31,50%», ALWAYS two decimals, in the venue's own layout (the owner, 8 Nov 2026; current app 151ea191, shared/fc-number), or «—» while the
+// product cannot be costed (never a 0%: a food cost of nothing would read as a product that costs nothing to make).
+export function figureText(result: CostResult, money: Money): string {
+  return result.foodCostPct === null ? '—' : percentText(result.foodCostPct, money);
 }
 
-export function percentText(value: number, locale: string): string {
-  return `${new Intl.NumberFormat(locale, { maximumFractionDigits: 2, useGrouping: false }).format(value)}%`;
+export function percentText(value: number, money: Money): string {
+  return `${fcNumber(value, money)}%`;
 }
 
 // ONE line under the name, so every row is the same height: what it earns when it can be costed,
@@ -36,8 +36,8 @@ export function subLine(t: Translate, result: CostResult, money: Money): string 
   if (result.foodCostPct !== null) {
     return [
       statusWord(t, result.status),
-      t('fc.listCost', { cost: formatRate(result.unitCost, money) }),
-      t('fc.listMargin', { margin: formatMoney(result.margin, money) }),
+      t('fc.listCost', { cost: fcMoney(result.unitCost, money) }),
+      t('fc.listMargin', { margin: fcMoney(result.margin, money) }),
     ].join('  ·  ');
   }
   const first = result.blockers[0];

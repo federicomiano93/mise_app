@@ -97,6 +97,15 @@ describe('the Food cost source, as firestore.rules expect it', () => {
     expect(Object.keys(data).sort()).toEqual(['bakery', 'cookedGrams', 'lossPct', 'rawGrams']);
   });
 
+  test('⚠️ a kept wrong pair sends the two numbers and NO lossPct — never undefined, which updateDoc throws on', async () => {
+    const { kit, fs } = fakeKit();
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
+    await source.saveRecipeLoss('r1', { rawGrams: 1000, cookedGrams: 1100 });
+    const [, data] = fs.updateDoc.mock.calls[0]!;
+    expect(data).toEqual({ rawGrams: 1000, cookedGrams: 1100, bakery: 'bakery' });
+    expect('lossPct' in data).toBe(false);
+  });
+
   test('a product is deleted by its own path', async () => {
     const { kit, fs } = fakeKit();
     const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');

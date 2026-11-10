@@ -24,7 +24,7 @@ type Props = {
 // screen reader because that word already says it. A product that cannot be costed has no dot
 // colour and no figure («—»): the line says what is missing instead.
 export function ProductRow({ id, name, result, money, isOpen, onOpen }: Props) {
-  const { t, locale } = useT();
+  const { t } = useT();
   const handBack = useHandBack();
   // Back from this product's screen hands the focus back to this button.
   const opener = useCallback((node: HTMLButtonElement | null) => {
@@ -48,7 +48,7 @@ export function ProductRow({ id, name, result, money, isOpen, onOpen }: Props) {
         </span>
         <span className={styles.figure}>
           <span className={styles.dot} data-status={result.status ?? 'none'} aria-hidden="true" />
-          <span className={styles.pct} data-costed={costed}>{figureText(result, locale)}</span>
+          <span className={styles.pct} data-costed={costed}>{figureText(result, money)}</span>
         </span>
       </button>
     </li>

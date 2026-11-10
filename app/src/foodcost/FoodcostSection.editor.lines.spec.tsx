@@ -234,7 +234,7 @@ describe('typing a quantity', () => {
     expect(box).toHaveFocus();
     expect(box).toHaveValue('12.5');
     // …and the answers followed: 12.5 g of flour at £2.00 a kilo is £0.025 a batch of ten.
-    expect(screen.getByRole('group', { name: 'Production cost' })).toHaveTextContent('£0.0025per piece');
+    expect(screen.getByRole('group', { name: 'Production cost' })).toHaveTextContent('< £0.01per piece');
   });
 
   it('keeps the other rows standing when one above them is removed', async () => {
@@ -346,9 +346,12 @@ describe('the weighings', () => {
 
   it('are one raw and cooked pair at the end of «Made of», and only where the catalogue is on', async () => {
     await open('/food-cost/product/Loaf', editorSource([DOUGH_PRODUCT], { recipes: [recipe('Dough')] }));
-    expect(within(madeOf()).getByRole('textbox', { name: 'Raw dough' })).toHaveValue('1000');
+    // ⚠️ BOTH BOXES OPEN EMPTY (df7e6313): the raw box no longer follows the recipe's total.
+    expect(within(madeOf()).getByRole('textbox', { name: 'Raw dough' })).toHaveValue('');
     expect(within(madeOf()).getByRole('textbox', { name: 'Cooked dough' })).toHaveValue('');
-    expect(within(madeOf()).getByText('Weight lost in the oven: weigh the baked dough to work it out')).toBeInTheDocument();
+    expect(within(madeOf()).getByRole('textbox', { name: 'Raw dough' })).toHaveAttribute('placeholder', '0');
+    expect(within(madeOf()).getByRole('textbox', { name: 'Cooked dough' })).toHaveAttribute('placeholder', '0');
+    expect(within(madeOf()).getByText('Oven loss: weigh the dough raw and baked, both, to work it out')).toBeInTheDocument();
     // One recipe: the pair is not titled.
     expect(within(madeOf()).queryByText(/^Dough for/)).not.toBeInTheDocument();
   });
@@ -394,8 +397,12 @@ describe('the weighings', () => {
     // A kilo of dough made of a kilo of flour: £2.00 a kilo, £0.20 a piece.
     expect(screen.getByRole('group', { name: 'Production cost' })).toHaveTextContent('£0.20per piece');
 
+    // One weight alone changes nothing: a loss is worked out only from both.
     await user.type(within(madeOf()).getByRole('textbox', { name: 'Cooked dough' }), '800');
-    expect(within(madeOf()).getByText('Weight lost in the oven: 20%')).toBeInTheDocument();
+    expect(within(madeOf()).getByText('Fill in both weights to work out the loss.')).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Production cost' })).toHaveTextContent('£0.20per piece');
+    await user.type(within(madeOf()).getByRole('textbox', { name: 'Raw dough' }), '1000');
+    expect(within(madeOf()).getByText('Weight lost in the oven: 20.00%')).toBeInTheDocument();
     // 20% lost in the oven: a kilo of flour makes 800 g, so a kilo of dough costs £2.50.
     expect(screen.getByRole('group', { name: 'Production cost' })).toHaveTextContent('£0.25per piece');
     expect(fake.saved).toEqual([]);
@@ -403,6 +410,7 @@ describe('the weighings', () => {
 
   it('are written onto the recipe by Save — and count as a change worth a margin point', async () => {
     const { user, fake } = await open('/food-cost/product/Loaf', editorSource([DOUGH_PRODUCT], { recipes: [recipe('Dough')] }));
+    await user.type(within(madeOf()).getByRole('textbox', { name: 'Raw dough' }), '1000');
     await user.type(within(madeOf()).getByRole('textbox', { name: 'Cooked dough' }), '800');
     await user.click(saveBar());
     await confirmSave(user);
@@ -449,6 +457,7 @@ describe('the weighings', () => {
 
     it('saved on writes the flag and no weighing, even one typed before it was switched on; and takes a margin point', async () => {
       const { user, fake } = await open('/food-cost/product/Loaf', editorSource([DOUGH_PRODUCT], { recipes: [recipe('Dough')] }));
+      await user.type(within(madeOf()).getByRole('textbox', { name: 'Raw dough' }), '1000');
       await user.type(within(madeOf()).getByRole('textbox', { name: 'Cooked dough' }), '800');
       await user.click(screen.getByRole('switch', { name: SWITCH }));
       await user.click(saveBar());
@@ -486,14 +495,94 @@ describe('the weighings', () => {
       DOUGH_PRODUCT, product('Roll', { components: [{ recipeId: 'Dough', qtyKg: 1 }] }),
     ], { recipes: [recipe('Dough')] }));
     expect(screen.queryByText(/The loss belongs to the recipe/)).not.toBeInTheDocument();
+    await user.type(within(madeOf()).getByRole('textbox', { name: 'Raw dough' }), '1000');
     await user.type(within(madeOf()).getByRole('textbox', { name: 'Cooked dough' }), '800');
     expect(screen.getByText('The loss belongs to the recipe: it changes 1 other product too.')).toBeInTheDocument();
   });
 
-  it('warn when the cooked dough weighs more than the raw', async () => {
-    const { user } = await open('/food-cost/product/Loaf', editorSource([DOUGH_PRODUCT], { recipes: [recipe('Dough')] }));
-    await user.type(within(madeOf()).getByRole('textbox', { name: 'Cooked dough' }), '1200');
+  it('a wrong pair says nothing about other products: the stored loss stays, so their cost does not move', async () => {
+    const { user } = await open('/food-cost/product/Loaf', editorSource([
+      DOUGH_PRODUCT, product('Roll', { components: [{ recipeId: 'Dough', qtyKg: 1 }] }),
+    ], { recipes: [recipe('Dough')] }));
+    await user.type(within(madeOf()).getByRole('textbox', { name: 'Raw dough' }), '1000');
+    await user.type(within(madeOf()).getByRole('textbox', { name: 'Cooked dough' }), '1100');
     expect(screen.getByText('The cooked dough cannot weigh more than the raw dough.')).toBeInTheDocument();
+    expect(screen.queryByText(/The loss belongs to the recipe/)).not.toBeInTheDocument();
+  });
+
+  it('warn when the cooked dough weighs more than the raw — and the cooked box stays RED', async () => {
+    const { user } = await open('/food-cost/product/Loaf', editorSource([DOUGH_PRODUCT], { recipes: [recipe('Dough')] }));
+    const cooked = within(madeOf()).getByRole('textbox', { name: 'Cooked dough' });
+    expect(cooked).not.toHaveAttribute('aria-invalid');
+    await user.type(within(madeOf()).getByRole('textbox', { name: 'Raw dough' }), '1000');
+    await user.type(cooked, '1200');
+    expect(screen.getByText('The cooked dough cannot weigh more than the raw dough.')).toBeInTheDocument();
+    expect(cooked).toHaveAttribute('aria-invalid', 'true');
+    // The box says WHY it is red, not only that it is: its description is the warning.
+    expect(cooked).toHaveAccessibleDescription('The cooked dough cannot weigh more than the raw dough.');
+    expect(cooked).toHaveAttribute('data-invalid', 'true');
+    // The raw box is not the wrong one.
+    expect(within(madeOf()).getByRole('textbox', { name: 'Raw dough' })).not.toHaveAttribute('aria-invalid');
+    await user.clear(cooked);
+    await user.type(cooked, '900');
+    expect(cooked).not.toHaveAttribute('aria-invalid');
+  });
+
+  describe('a wrong pair (cooked above raw)', () => {
+    const wrongDough = () => editorSource([DOUGH_PRODUCT], { recipes: [recipe('Dough', { lossPct: 12 })] });
+
+    async function typeWrongPair(user: UserEvent) {
+      await user.type(within(madeOf()).getByRole('textbox', { name: 'Raw dough' }), '1000');
+      await user.type(within(madeOf()).getByRole('textbox', { name: 'Cooked dough' }), '1100');
+    }
+
+    it('is KEPT by Save — it points at the cooked box, names it in the question, and Save still works', async () => {
+      const { user, fake } = await open('/food-cost/product/Loaf', wrongDough());
+      await typeWrongPair(user);
+      await user.click(saveBar());
+      // Pointed at: the status says which dough (the box is revealed, then the question takes the focus).
+      expect(await screen.findByText('Check the dough weights of «Dough».')).toBeInTheDocument();
+      const dialog = await question();
+      expect(within(dialog).getByText('Some dough weights look wrong.')).toBeInTheDocument();
+      expect(within(dialog).getByText('«Dough»: The cooked dough cannot weigh more than the raw dough.')).toBeInTheDocument();
+      expect(within(dialog).getByText('Save anyway?')).toBeInTheDocument();
+      await user.click(within(dialog).getByRole('button', { name: 'Save' }));
+      await screen.findByText('Product saved.');
+
+      // ⚠️ The two numbers are written and the loss is NOT sent at all; and no margin point: nothing the product costs moved.
+      expect(fake.saved.map(write => write.kind)).toEqual(['loss', 'product']);
+      expect(fake.saved[0]).toMatchObject({ kind: 'loss', id: 'Dough', data: { rawGrams: 1000, cookedGrams: 1100 } });
+      expect(fake.saved[0]?.data).not.toHaveProperty('lossPct');
+      expect(fake.saved[1]).toMatchObject({ kind: 'product', snapshot: null });
+    });
+
+    it('does not move the cost: the stored loss is the one costed', async () => {
+      const { user } = await open('/food-cost/product/Loaf', wrongDough());
+      // 12% stored: a kilo of flour makes 880 g, so a kilo of dough costs £2.27 and a piece £0.23.
+      expect(screen.getByRole('group', { name: 'Production cost' })).toHaveTextContent('£0.23per piece');
+      await typeWrongPair(user);
+      expect(screen.getByRole('group', { name: 'Production cost' })).toHaveTextContent('£0.23per piece');
+      expect(within(madeOf()).getByText('Weight lost in the oven: 12.00% — weigh the dough to work it out again')).toBeInTheDocument();
+    });
+
+    it('opens RED again when it comes back, with its numbers in the boxes', async () => {
+      await open('/food-cost/product/Loaf', editorSource([DOUGH_PRODUCT], {
+        recipes: [recipe('Dough', { lossPct: 5, rawGrams: 1000, cookedGrams: 1200 })],
+      }));
+      expect(within(madeOf()).getByRole('textbox', { name: 'Raw dough' })).toHaveValue('1000');
+      const cooked = within(madeOf()).getByRole('textbox', { name: 'Cooked dough' });
+      expect(cooked).toHaveValue('1200');
+      expect(cooked).toHaveAttribute('aria-invalid', 'true');
+      expect(screen.getByText('The cooked dough cannot weigh more than the raw dough.')).toBeInTheDocument();
+    });
+
+    it('asked about and refused: Cancel keeps the form as it was and writes nothing', async () => {
+      const { user, fake } = await open('/food-cost/product/Loaf', wrongDough());
+      await typeWrongPair(user);
+      await user.click(saveBar());
+      await user.click(within(await question()).getByRole('button', { name: 'Cancel' }));
+      expect(fake.saved).toEqual([]);
+    });
   });
 
   it('never rewrite the box being typed in: «12.» keeps its point', async () => {
@@ -511,7 +600,7 @@ describe('the weighings', () => {
     }));
     expect(within(madeOf()).getByRole('textbox', { name: 'Raw dough' })).toHaveValue('1000');
     expect(within(madeOf()).getByRole('textbox', { name: 'Cooked dough' })).toHaveValue('900');
-    expect(within(madeOf()).getByText('Weight lost in the oven: 10%')).toBeInTheDocument();
+    expect(within(madeOf()).getByText('Weight lost in the oven: 10.00%')).toBeInTheDocument();
   });
 
   it('do not appear for a recipe that no longer exists', async () => {
