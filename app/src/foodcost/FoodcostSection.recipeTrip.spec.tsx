@@ -92,37 +92,75 @@ describe('⚠️ the trip from the recipe and back', () => {
 });
 
 describe('⚠️ the same trip on the split: Back counts the entries between the list and the recipe', () => {
-  // The recipe, the narrowed list, and a product beside it: the list's Back must reach the recipe, not push a second one.
-  async function narrowedWithProduct(name: string) {
+  // The recipe, then the narrowed list with the product it ranks first beside it (item 23: the entry opens it — here Loaf,
+  // both being unpriced, by name). Another product picked from the list replaces it beside the list (a lateral move, same
+  // depth); the list's Back must reach the recipe, never push a second one. (A product PUSHED from the list at depth 2 is
+  // the phone turned into the split, FoodcostSection.recipeFixes.spec.tsx.)
+  async function narrowedOnSplit() {
     split();
     const trip = await openTheRecipe([LOAF, ROLL, TART]);
     await screen.findByRole('heading', { level: 2, name: 'Products with “Dough”' }, LOAD);
+    await screen.findByRole('region', { name: 'Loaf' }, LOAD);
+    expect(where(trip.router)).toBe('/food-cost/product/Loaf?using=dough');
+    return trip;
+  }
+  async function narrowedWithProduct(name: string) {
+    const trip = await narrowedOnSplit();
     await trip.user.click(screen.getByRole('button', { name: new RegExp(`^${name}`) }));
     await screen.findByRole('region', { name }, LOAD);
     return trip;
   }
+  const listBack = () => within(screen.getByRole('main')).getAllByRole('button', { name: 'Back' })[0]!;
 
-  it('a product opened beside the narrowed list: the list’s Back is the recipe, with no second entry', async () => {
-    const { router, user } = await narrowedWithProduct('Loaf');
-    await user.click(within(screen.getByRole('main')).getAllByRole('button', { name: 'Back' })[0]!);
+  it('the product the entry opened beside the list: the list’s Back is the recipe, with no second entry', async () => {
+    const { router, user } = await narrowedOnSplit();
+    await user.click(listBack());
+    await waitFor(() => { expect(where(router)).toBe('/recipes/dough'); });
+    expect(await entriesBehind(router)).toBe(0);
+  });
+
+  // Code review of item 23: the entry's product sits at depth 1 and not «from the list»; its own Back replaced it with the
+  // list WITHOUT the depth, and the list's Back then put the recipe in the history a second time.
+  it('⚠️ that product’s OWN Back, then the list’s Back: the recipe, with no second entry', async () => {
+    const { router, user } = await narrowedOnSplit();
+    await user.click(within(screen.getByRole('region', { name: 'Loaf' })).getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(where(router)).toBe('/food-cost?using=dough'); });
+    expect(screen.getByText('Choose a product')).toBeInTheDocument();
+    await user.click(listBack());
+    await waitFor(() => { expect(where(router)).toBe('/recipes/dough'); });
+    expect(await entriesBehind(router)).toBe(0);
+  });
+
+  it('another product picked from the list (a lateral replace): the list’s Back is the recipe, with no second entry', async () => {
+    const { router, user } = await narrowedWithProduct('Roll');
+    await user.click(listBack());
+    await waitFor(() => { expect(where(router)).toBe('/recipes/dough'); });
+    expect(await entriesBehind(router)).toBe(0);
+  });
+
+  it('another product picked from the list, its own Back, then the list’s Back: the recipe, with no second entry', async () => {
+    const { router, user } = await narrowedWithProduct('Roll');
+    await user.click(within(screen.getByRole('region', { name: 'Roll' })).getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(where(router)).toBe('/food-cost?using=dough'); });
+    await user.click(listBack());
     await waitFor(() => { expect(where(router)).toBe('/recipes/dough'); });
     expect(await entriesBehind(router)).toBe(0);
   });
 
   it('its margin history beside the list: the list’s Back is the recipe, with no second entry', async () => {
-    const { router, user } = await narrowedWithProduct('Loaf');
-    await user.click(within(screen.getByRole('region', { name: 'Loaf' })).getByRole('button', { name: 'Margin history' }));
+    const { router, user } = await narrowedWithProduct('Roll');
+    await user.click(within(screen.getByRole('region', { name: 'Roll' })).getByRole('button', { name: 'Margin history' }));
     await screen.findByRole('region', { name: 'Margin history' }, LOAD);
-    await user.click(within(screen.getByRole('main')).getAllByRole('button', { name: 'Back' })[0]!);
+    await user.click(listBack());
     await waitFor(() => { expect(where(router)).toBe('/recipes/dough'); });
     expect(await entriesBehind(router)).toBe(0);
   });
 
-  it('a lateral move to another product: the list’s Back is the recipe, with no second entry', async () => {
-    const { router, user } = await narrowedWithProduct('Loaf');
-    await user.click(screen.getByRole('button', { name: /^Roll/ }));
-    await screen.findByRole('region', { name: 'Roll' }, LOAD);
-    await user.click(within(screen.getByRole('main')).getAllByRole('button', { name: 'Back' })[0]!);
+  it('a second lateral move, back to the first product: the list’s Back is the recipe, with no second entry', async () => {
+    const { router, user } = await narrowedWithProduct('Roll');
+    await user.click(screen.getByRole('button', { name: /^Loaf/ }));
+    await screen.findByRole('region', { name: 'Loaf' }, LOAD);
+    await user.click(listBack());
     await waitFor(() => { expect(where(router)).toBe('/recipes/dough'); });
     expect(await entriesBehind(router)).toBe(0);
   });

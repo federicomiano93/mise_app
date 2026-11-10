@@ -51,8 +51,11 @@ export function useLeave(fallback: string, onLeaving: () => void, narrowed = fal
     onLeaving();
     if (toNarrowed !== null) void navigate(-toNarrowed);
     else if (fromList) void navigate(-1);
-    else void navigate(fallback, { replace: true, state: KEEP_FOCUS });
-  }, [navigate, fromList, toNarrowed, fallback, onLeaving]);
+    // ⚠️ A REPLACE KEEPS THE DISTANCE TO THE RECIPE (code review, item 23): on the split the recipe's entry replaces itself
+    // with the product the narrowed list ranks first, at depth 1 and not «from the list»; leaving it here must hand depth 1
+    // to the list, or the list's Back has no depth and puts the recipe in the history a second time.
+    else void navigate(fallback, { replace: true, state: narrowed ? { ...KEEP_FOCUS, ...keepDepth(state) } : KEEP_FOCUS });
+  }, [navigate, fromList, toNarrowed, fallback, onLeaving, narrowed, state]);
 }
 
 // ── Opened from a recipe ──────────────────────────────────────────────────────────────────────────

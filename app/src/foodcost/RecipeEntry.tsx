@@ -27,13 +27,15 @@ export function RecipeEntry({ recipeId }: { recipeId: string }) {
   const { t } = useT();
   const navigate = useNavigate();
   const { state } = useLocation();
-  const { products, productsFromServer, recipes, recipesFromServer, recipesLoaded, ingredientsLoaded, settingsLoaded, tables } = useFoodcost();
+  const { products, productsFromServer, recipes, recipesFromServer, recipesLoaded, ingredientsLoaded, tables } = useFoodcost();
   const split = useMediaQuery(SPLIT_QUERY);
   // ⚠️ THE RANKING NEEDS THE PRICES (found by the emulator drive): the section starts its listeners when it mounts, so on
   // the first tap from a recipe the tables were still empty, every product ranked by name, and the split opened a product
   // that was not the list's first. So it also waits for what the list waits for before it draws (all the recipes, the
-  // ingredients) and for the labour rate; COPY_WAIT_MS stays the offline fallback.
-  const priced = recipesLoaded && ingredientsLoaded && settingsLoaded;
+  // ingredients); not for the labour rate, which never enters the food cost % the list ranks by. COPY_WAIT_MS stays the
+  // offline fallback. Known and harmless: the ingredients answer with whatever prices have come (a separate stream), and a
+  // local copy answers at once with yesterday's — the product opened may then not be the top row a moment later.
+  const priced = recipesLoaded && ingredientsLoaded;
   const ready = useCopyWait(productsFromServer && (recipes[recipeId] !== undefined || recipesFromServer) && priced);
   // StrictMode runs the effect twice with the same refs: the move is made once.
   const decided = useRef(false);
