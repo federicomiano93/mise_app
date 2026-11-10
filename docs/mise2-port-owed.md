@@ -201,7 +201,7 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     `costPerKg`, `PER_KG_REASONS`), `app/src/foodcost/PerKgBlock.tsx` + `.module.css` drawn in `ProductForm.tsx` under the answer panel, never inside «Made of»
     (a native `<details>`, always mounted, `hidden` while nothing is costed), eleven `fc.perKg.*` keys in `en.ts` / `it.ts`, every figure through `fc-number` from
     the first day. Differs from the current app only in the look (Mise 2 tokens) and in where it sits (item 25 moved it into the «Calculated costs» card, the one place the read view and the form both have it). `costPerKg` is
-    marked PORT OWED in `odd-inputs.spec.ts` with `productionCost` (a null table), until item 26.
+    marked PORT OWED in `odd-inputs.spec.ts` with `productionCost` (a null table), until item 26 (done 10 Nov 2026: the marker is gone).
 23. **Step 3 recipe link both ways** (#478, `35b1f3e0`, `942dab6e`) — Mise 2 has its own entry `?recipe=` / `?using=` design (catalogue.md
     «Back counts the depth»): treat as DONE by design; re-check that the multi-product case opens the top product on tablet/PC. Size S (check).
 24. **Step 4 list preview** (#482): search bar, phone preview dialog, panel at the top of the card, eight figures, net ideal price. NONE. Size M.
@@ -225,6 +225,15 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     Not 1:1: see the parity section.
 26. **Step B line costs + «Which?»** (#485): cost on every «Composed of» line, «No price», «not exactly yet», «Which?» list of unpriced parts
     (card summary + phone dialog), packaging lines. NONE. Size M.
+    **DONE 10 Nov 2026** (`feature/mise2-next-foodcost-line-costs`; `docs/parity/foodcost.md`, «Line costs and «Which?» as built»): `shared/src/foodcost-model.ts` gains
+    `componentLineCost`, `packagingLineCost`, `unpricedParts` and `unpricedReasonText`, and `batchTotals` / `packagingPerUnit` / `productPreview` are rewritten through them exactly as the
+    original (which closes the null-tables gap: `batchTotals`, `productionCost`, `costProduct`, `sortByMargin`, `productPreview` and `costPerKg` agree with the original on a null table again);
+    `unpricedParts` and `productPreview` take the translator LAST (adapted, as `price-model.ts`), paired in `foodcost-model.spec.ts`, `odd-inputs.spec.ts` and the new
+    `foodcost-line-costs.spec.ts`. `app/src/foodcost/lineCost.ts` (`lineCostView`, every figure through `fc-number`) draws the rate and what the amount costs in its own element above the note
+    of every «Made of» line (recipe and ingredient) and packaging line, in the form (`LineRow.tsx`) and the read view (`ReadSections.tsx`); «— No price» replaces the note that said the same
+    thing, «not exact yet» only on a recipe priced in part, «< £0.01» for a pinch of salt. `PreviewPanel.tsx` gains «Which?» under the partial warning (a button with `aria-expanded`
+    / `aria-controls`, closed by default, its open state kept by the card like «Details»), in the card summary and the phone dialog. Sixteen `fc.line.*` / `fc.unpriced.*` /
+    `fc.preview.which` keys, worded as the current app's, plus the nine `cat.cost.*` / `cat.notWeighedPiecesSpoons` keys the recipe-row reasons need. The item-26 `PORT OWED` markers are gone.
 27. **Recipe line in grams** (#488, `a7f4c75d`): opens in grams, the g/kg switch keeps the typed number, warning at 20 times a batch.
     **DONE 8 Nov 2026** (`feature/mise2-number-ports`), with the g/kg select of item 21 it needs: `shared/src/line-quantity.ts` (full),
     `fc-number.ts` (`fcNumber`, `fcWeight` only) and `from-recipes.ts` (`wholeRecipeKg` only), `app/src/foodcost/productEditorModel.ts`.
@@ -234,8 +243,8 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     (`fcNumber`, `fcMoney`, `fcWeight`, `weighingParams`, each handed the money; not paired because of that argument, its spec runs both files), used by `productRowModel.ts` (the list row),
     `ProductAnswer.tsx` (production cost, answer, labour line, suggested price and its basis), `WeighingPair.tsx` (the oven-loss sentences), `MarginHistory.tsx`, `PickDialog.tsx`
     (price each) and `lineNotes.ts` (the packaging note). The list preview (24) is built and draws through `fc-number` (10 Nov 2026). ⚠️ STILL OWED with the items that build
-    the screens: the cost on every line and «Which?» (26) must draw their figures through `fc-number` from the first day (the read sections and the card layout, 25, do: 10 Nov 2026);
-    `from-recipes-view`'s kilos (item 29) too.
+    the screens: `from-recipes-view`'s kilos (item 29) must draw through `fc-number` from the first day (the read sections and the card layout, 25, and the cost on every line and
+    «Which?», 26, do: 10 Nov 2026).
 29. **Create products from the recipe book** (#415, `b5cf999e`, `5f2fcb67`, `f8d54f35`, `f8e64a6a`): box and choice screen, only after the
     server says the product does not exist. NONE (`recipesWithoutProducts`, `productFromRecipe` absent). Size M.
 30. **Catalogue: crossed-out euro on rows Food cost cannot price** (`ff1a2d38`, `js/catalogue/unpriced-rows.js`). NONE. Size S.

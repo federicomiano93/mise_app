@@ -476,3 +476,39 @@ not drawn while nothing is costed). Existing specs changed for the ported behavi
 - The phone's own back gesture from a pencil form goes to the list, not to the read view (see above).
 - The read-or-form choice is made when the product first appears. If a product's recipes and prices have not arrived at that moment (a reload straight at a product address), a costed product can
   open in the form; the current app has the same race. The pencil/Back path is unaffected.
+
+## Line costs and «Which?» as built (10 Nov 2026)
+
+Item 26 of `docs/mise2-port-owed.md` (current-app PR #485: `02839278`, `ec896ccf`, `b38e34cb`; #490's two decimals already in `line-cost.js`). Branch
+`feature/mise2-next-foodcost-line-costs`, cut from the read-first card (item 25).
+
+**Ported**
+- `shared/src/foodcost-model.ts`: `componentLineCost`, `packagingLineCost`, `unpricedParts`, `unpricedReasonText`; `batchTotals` and `packagingPerUnit` now cost each line through the first two,
+  exactly as the original (ONE place a line is costed: the card's money and the batch total cannot disagree). This also closes the old gap where a null table made the port's `batchTotals` throw:
+  `batchTotals`, `productionCost`, `costProduct`, `sortByMargin`, `productPreview` and `costPerKg` agree with the original on every odd input again (the `PORT_OWED` set of `odd-inputs.spec.ts` is
+  empty). `productPreview` gains `unpriced` (the «Which?» list). `productionCost` itself did not change in #485.
+- `app/src/foodcost/lineCost.ts` (`lineCostView`): `{ text, noPrice }`, every figure through `fcMoney`. Drawn in its own element above the note under every «Made of» line (recipe and
+  ingredient) and every packaging line, in the form (`LineRow.tsx`, `lineMoney()` in `lineNotes.ts`, caught to «no money» on a fault like the summary) and in the read view (`ReadSections.tsx`).
+  `lineNote` is #485's: a recipe says only «Only part of this recipe has a price», an ingredient never repeats «no price», a packaging item says only «Priced by weight…» (the old
+  «each · money» note is gone). «— No price» is the money line's, so the note that said the same is left out. The look: `.cost` in `LineRow.module.css` and `ReadSections.module.css`
+  (muted `--ink-2`, `--fs-sm`, wraps).
+- «Which?» in `PreviewPanel.tsx`, under the partial warning: a bare `Button` with `aria-expanded` / `aria-controls`, a ≥ 44px target (`--hit`), closed by default, each item the name plus
+  «reason» or «reason in “recipe”». The card (`ProductSummary.tsx`) keeps its open state across redraws like «Details»; the phone dialog (`ProductPreviewDialog.tsx`) lets the panel keep its own. #485 put the
+  list nowhere else (the answer panel does not list it).
+- i18n: sixteen keys in `en.ts` / `it.ts` worded as `js/i18n.js` today (`fc.preview.which`, `fc.unpriced.*`, `fc.line.perKg/each/withAmount/notExact/noPrice`), plus the nine the recipe-row reasons
+  of «Which?» need and Mise 2 did not have: `cat.cost.*` (eight) and `cat.notWeighedPiecesSpoons` (the catalogue's `COST_REASON_TEXT`, which `costReasonLabel` looks up in the original).
+
+**Differences from the current app**
+- ADAPTED, as `price-model.ts`: the translator is the LAST argument of `unpricedParts(product, tables, t)`, `productPreview(product, tables, t)` and `unpricedReasonText(reason, t)`. The app hands in
+  `foodcostTranslate(t)` (`foodcostWords.ts`), which only narrows the type; `foodcostWords.spec.ts` asks for every key in both languages. `costReasonLabel` is NOT ported: `unpricedReasonText`
+  looks `COST_REASON_TEXT` up itself (the same keys, the same words under the same dictionary). The arity check of `foodcost-model.spec.ts` lets these three take one more argument.
+- `UNPRICED_REASON_TEXT` stays module-private, like the original's (the names-equal check pins the exports).
+- `lineCostView(t, money, entry, kind, tables, options)`: translator and money first (the app's convention), and it also reads a Map of ingredients; the original reads a plain object.
+- The ingredient line's money is no longer refreshed by hand on every keystroke (the original's `refreshLive`): React draws it from the working copy.
+- `.note[data-kind="packaging"]` (muted colour for the old «each · money» note) is gone: the packaging note is now a warning like the others.
+- Item 22's `PerKgBlock` and `per-kg-model.ts` were already in step with #485's per-kg change (a comment only).
+
+**Specs**: `shared/src/foodcost-line-costs.spec.ts` (the model half of `tests/foodcost-line-costs.test.mjs`, both files), the preview test of `foodcost-model.spec.ts` compares `unpriced` too, the
+`odd-inputs.spec.ts` entries for the four new functions and the rewired `batchTotals` / `productPreview`; `app/src/foodcost/lineCost.spec.ts`, `foodcostWords.spec.ts`,
+`FoodcostSection.lineCosts.spec.tsx` (the form, the read view, «Which?» on the card, in the dialog, by click and keyboard, redraws), the CSS spec, and four existing specs reworded for the new notes
+(`editor.lines`, `readMode`, `twoDecimals`).
