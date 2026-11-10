@@ -227,8 +227,9 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     (card summary + phone dialog), packaging lines. NONE. Size M.
     **DONE 10 Nov 2026** (`feature/mise2-next-foodcost-line-costs`; `docs/parity/foodcost.md`, «Line costs and «Which?» as built»): `shared/src/foodcost-model.ts` gains
     `componentLineCost`, `packagingLineCost`, `unpricedParts` and `unpricedReasonText`, and `batchTotals` / `packagingPerUnit` / `productPreview` are rewritten through them exactly as the
-    original (which closes the null-tables gap: `batchTotals`, `productionCost`, `costProduct`, `sortByMargin`, `productPreview` and `costPerKg` agree with the original on a null table again);
-    `unpricedParts` and `productPreview` take the translator LAST (adapted, as `price-model.ts`), paired in `foodcost-model.spec.ts`, `odd-inputs.spec.ts` and the new
+    original (which closes the null-tables gap: `batchTotals`, `productionCost`, `costProduct`, `sortByMargin`, `productPreview` and `costPerKg` agree with the original on a null table again, and so do
+    `productPreview` / `unpricedParts` with no table at all: they keep the original's `tables = {}` default);
+    `unpricedParts`, `unpricedReasonText` and `productPreview` take the translator LAST (adapted, as `price-model.ts`), compared in `foodcost-model.spec.ts`, `odd-inputs.spec.ts` and the new
     `foodcost-line-costs.spec.ts`. `app/src/foodcost/lineCost.ts` (`lineCostView`, every figure through `fc-number`) draws the rate and what the amount costs in its own element above the note
     of every «Made of» line (recipe and ingredient) and packaging line, in the form (`LineRow.tsx`) and the read view (`ReadSections.tsx`); «— No price» replaces the note that said the same
     thing, «not exact yet» only on a recipe priced in part, «< £0.01» for a pinch of salt. `PreviewPanel.tsx` gains «Which?» under the partial warning (a button with `aria-expanded`

@@ -873,7 +873,7 @@ export interface ProductPreview {
 
 // ADAPTED: the translator is the LAST argument (the original reads js/i18n.js itself). It is only used for the
 // two names of a line that no longer exists, inside `unpriced`.
-export function productPreview(product: unknown, tables: CostTables, t: PriceTranslate): ProductPreview {
+export function productPreview(product: unknown, tables: CostTables = {}, t: PriceTranslate): ProductPreview {
   const p = normalizeProduct(product);
   const cost = productionCost(p, tables);
   const result = costProduct(p, tables);
@@ -958,7 +958,7 @@ export function unpricedReasonText(reason: unknown, t: PriceTranslate): string {
   return fallback ? t(fallback) : '';
 }
 
-export function unpricedParts(product: unknown, tables: CostTables, t: PriceTranslate): UnpricedPart[] {
+export function unpricedParts(product: unknown, tables: CostTables = {}, t: PriceTranslate): UnpricedPart[] {
   const p = normalizeProduct(product);
   if (!p) return [];
   const out: UnpricedPart[] = [];

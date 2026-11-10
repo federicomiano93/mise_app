@@ -1115,8 +1115,9 @@ describe('the port against the original', () => {
   // The one function that looks a word up in the interface dictionary.
   const LEFT_OUT = ['blockerText'];
   // Paired, but handed the translator last (item 26): productPreview and unpricedParts name a line that no
-  // longer exists, unpricedReasonText is the one place a reason becomes words.
-  const ADAPTED = ['productPreview', 'unpricedParts', 'unpricedReasonText'];
+  // longer exists, unpricedReasonText is the one place a reason becomes words. The first two keep the original's
+  // `tables = {}` default, which also keeps their counted arity at the original's 1, so only the third counts one more.
+  const ADAPTED = ['unpricedReasonText'];
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;
   const shared = Object.keys(original).filter(name => !LEFT_OUT.includes(name)).sort();

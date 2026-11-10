@@ -2740,8 +2740,8 @@ describe('foodcost-model: odd inputs', () => {
   // productPreview and unpricedParts look a word up (a line that no longer exists): the port is handed the
   // same `t` the original reads, last. `unpriced` (the «Which?» list) is compared field for field.
   const withT = (fn: AnyFn): AnyFn => (...args) => fn(args[0], args[1], t);
-  agree('productPreview', withT(m.productPreview as AnyFn), l.productPreview as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
-  agree('unpricedParts', withT(m.unpricedParts as AnyFn), l.unpricedParts as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
+  agree('productPreview', withT(m.productPreview as AnyFn), l.productPreview as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES), ...product(PRODUCTS, [undefined])]);
+  agree('unpricedParts', withT(m.unpricedParts as AnyFn), l.unpricedParts as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES), ...product(PRODUCTS, [undefined])]);
   agree('unpricedReasonText', (reason: unknown) => m.unpricedReasonText(reason, t), l.unpricedReasonText as AnyFn,
     [...ODD, 'no-ingredient-price', 'packaging-no-price', 'no-piece-weight', 'no-piece-price', 'packaging-no-mode', 'packaging-no-units', 'recipe-no-price', 'gone',
       'not-weighable', 'no-amount', 'not-linked', 'missing-ingredient', 'missing-recipe', 'no-price', 'sub-not-costable', 'cycle', 'too-deep', 'toString', '__proto__'].map(x => [x]));
