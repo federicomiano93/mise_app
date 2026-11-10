@@ -296,9 +296,9 @@ now in; items 22-26 are still not).
 - `foodcost-model.js`'s marker in `odd-inputs.spec.ts` named items 26 and 28; the commit of item 28 never touched that file (the
   changes are the preview model, "Which?" and the money guard), so the marker now says items 24 and 26.
 
-**Still owed (later slices, they must use `fc-number` from the first day):** (the list preview, 24, is built: see the section at the end), the
-read sections and the card layout (25), the cost on every line and "Which?" (26), and the kilos in the "create from the recipe book"
-dialog (29, `from-recipes-view`).
+**Still owed (later slices, they must use `fc-number` from the first day):** (the list preview, 24, and the read sections with the card
+layout, 25, are built: see the sections at the end), the cost on every line and "Which?" (26), and the kilos in the "create from the
+recipe book" dialog (29, `from-recipes-view`).
 
 ## Cost per 1 kg as built (10 Nov 2026)
 
@@ -336,7 +336,9 @@ Item 22 of `docs/mise2-port-owed.md` (current app `574a0e3c`, `f0735d88`, `9af66
 - The look is Mise 2's own (tokens, `--sunken` ground like the answer panels, a lucide chevron), not `foodcost.css`.
 - `odd-inputs.spec.ts` marks `costPerKg` as PORT OWED together with `productionCost`: the original lets a null table through, the port's
   `batchTotals` throws. Items 24 and 26 port that change; remove the key then.
-- Not in Mise 2 yet, so not drawn there: the read-first card (item 25), where the current app draws the same block a second time in the read view.
+- The read-first card (item 25, built later the same day) draws this block once, in its «Calculated costs» card, in the read view and in the form
+  alike (the same component, `PerKgBlock`; no second implementation). The current app does the same: its summary at the top has no per-kilo block, so
+  "a second time" meant "also in the read view".
 
 ## List search and product preview as built (10 Nov 2026)
 
@@ -367,8 +369,8 @@ the cost on every line and «Which?» (#485) are item 26.
 - **Texts**: twenty-three keys `fc.search`, `fc.searchNone`, `fc.preview.*` in `en.ts` and `it.ts`, worded as the current app had them when the preview shipped
   (`e81a2617` with the Italian names of `39f192ac`: «Imballaggio», «Lavoro»). `39080577` later changed them for the four-figure summary: it ADDED `fc.preview.cost`,
   `.ideal`, `.idealSub` and `.details`, DELETED `.total`, `.idealGross`, `.idealNet` and `.idealBasis`, and ⚠️ REWORDED `fc.preview.price` under the same key
-  («Selling price» / «Prezzo di vendita», without «(VAT incl.)»): item 25 must do all three, the rewording included — no test compares `app/src/i18n` with
-  `js/i18n.js`.
+  («Selling price» / «Prezzo di vendita», without «(VAT incl.)»): **DONE by item 25 (10 Nov 2026), all three, the rewording included** — see the last section. No test
+  compares `app/src/i18n` with `js/i18n.js`, so the keys were checked by hand against the current dictionary.
 - **Specs**: `FoodcostSection.preview.spec.tsx` (the search: names, order, the empty line, no box without products, the same box through a data update, the text
   through a product and Back; the dialog: figures, open the card, close and its focus, Escape, a price that arrives, a product deleted, the tablet turned; the
   split opens the card; dashes and the checklist, no target, no VAT, an unpriced and a priced box, a partial product; labour for a manager; Italy; the net ideal price in the
@@ -384,6 +386,85 @@ the cost on every line and «Which?» (#485) are item 26.
 - The caption is the dialog's description, not a separate line.
 - **The top of the card**: the current app drew the same panel as a summary above the card (`e81a2617`). Mise 2's top of the product already says the production
   cost, the food cost with the net price and the margin, and the suggested price with VAT; the one figure it lacked was the ideal price WITHOUT VAT, which now
-  sits in the suggested-price box (a single line, also when no VAT rate is chosen yet). The panel itself waits for item 25's four-figure summary.
+  sat in the suggested-price box (a single line, also when no VAT rate is chosen yet). **Superseded by item 25**: the card's top is now the four-figure summary (which says the
+  net price underneath the ideal price) and the suggested-price box has no net row, as in the current app.
 - `productPreview`'s `partial`, `missing` and the null-tables gap of `batchTotals` (item 26) still differ from the original on a null table: `productPreview` joins
   `productionCost` and `costProduct` in the `PORT OWED` keys of `odd-inputs.spec.ts`, now naming item 26 only.
+
+## Read-first card and four-figure summary as built (10 Nov 2026)
+
+Item 25 of `docs/mise2-port-owed.md` (current app `39080577`, `56b2c90c`, `18679a38`, `d491c7ca`, `f8770132`, #484 `08d00ba9`; every figure as `151ea191` draws it).
+Branch `feature/mise2-next-foodcost-card`, on top of item 24. NOT in this slice: item 26 (#485: the cost on every «Made of» line, «No price», «Which?»).
+
+**What opens, and how the two views switch** (`ProductEditor.tsx` decides, once per product on screen; the choice never changes under somebody's fingers when data arrives):
+- **An existing product with something costed** (the model's batch cost is not null: `summaryShows`) opens to READ: `ProductRead.tsx`.
+- **A NEW product, and an existing one with nothing costed yet**, open straight in the FORM (the current app's `mode: 'auto'`: there is nothing to read). Back from such a
+  form is what it always was (leave).
+- **The pencil** (an icon button named «Edit product» / «Modifica il prodotto», in the bar where Save is in the form) mounts the form on a fresh copy of the stored product.
+  **Back** from a form opened by the pencil returns to the read view after the usual «Discard changes?» question, asked only if something was typed (`onBackToRead`); the next Back leaves.
+- **Save** (after its usual question) returns to the read view of the SAVED product: `onSaved`. For an existing product the address does not change. For a NEW one the new-product
+  entry is REPLACED by the product's own address (`/food-cost/product/<id>`), so Back goes to the list (not to an empty form) and a reload comes back to the product. A product
+  saved this way is read even with nothing costed, as the current app forces it, and its box starts open (`justSaved`).
+- **Addresses chosen**: read and form share the product's address. The current app keeps the mode in the page, not in the address, and so does Mise 2: nothing in `foodcostPath.ts`
+  changed. The consequence: the phone's own back gesture (the browser's Back) from a form opened by the pencil goes to the list, one level further than the Back button; typed edits
+  are still protected (the router's blocker asks first), nothing is lost silently.
+- **Focus**: to the new view's own title (the bar's h2) after the pencil, after Save and after Back from the form, never to the page.
+- **Tablet**: from 1000px the same `ProductEditor` sits beside the list; a row opens the READ view, the pencil edits it there, Save returns to read there. Picking another product
+  while one is in READ shows the other; while a form has typed edits the blocker asks, as before.
+- **The read view follows the STORED product, live** (`f8770132`): it holds nothing typed, so a price, a recipe or the product itself changing elsewhere redraws it with no copy and
+  no question; the open/closed state of «Full card» survives. A product deleted elsewhere says «Product deleted.» and leaves, on a phone and on the split alike. A form keeps its copy
+  (never replaced), as before.
+- **Margin history asks before dropping typed edits (#484)**: Mise 2 already did. The history is another address, so the router's blocker (`shouldBlock`, any move to another
+  pathname while dirty) asks «Discard changes?» first; «Cancel» stays in the form with everything typed, «Discard» goes on. Pinned in `FoodcostSection.readMode.spec.tsx`. The read view is never dirty and
+  asks nothing. (On the split the history also replaces the product, so the same question comes there, where the current app keeps its editor alive instead: Mise 2 asks, the current app does
+  not need to. Safe, and not changed.)
+
+**The summary** (`PreviewPanel.tsx`, shared by the phone's dialog and the top of the card through `ProductSummary.tsx`): five rows in sight — selling price, cost (materials and
+packaging, plus the work where there is a figure), margin (the app's margin: net price less materials and packaging; «before labour» where a labour row exists), food cost against
+its target (a dot AND a word), ideal price — with the same price without VAT and its target underneath («0,80 € senza IVA, per un food cost del 25,00%»); raw materials, packaging and labour
+behind a closed «Details» (a real button with `aria-expanded`, not `<details>`: the dialog's focus trap walks buttons). The card's summary is drawn only while something is costed (never a
+frame of dashes), keeps «Details» open across repaints (`ProductSummary` stays mounted), shows the caption line («Summary per piece») and leaves out «Still missing:» (the answer panel below
+has the checklist), except one line when there is no target. The dialog keeps its title, its description (the caption) and the checklist.
+Every figure goes through `fc-number`; the suggested-price box lost the net-price row item 24 had put there (the current app's has none; the summary says it).
+
+**«Full card»** (`FullCard.tsx`): ONE box under the summary holding six framed cards in the order they are filled in, results last — Product (name, how it is sold, pack, pieces), Made of (the lines
+and, under the sub-heading «Weight and oven loss», the switch and the weighings), Packaging, Work time, Price (VAT, target, price, suggested price), Calculated costs (production cost, food cost,
+«Cost per 1 kg»). History and Delete follow, low-key, in both views. Read: a native `<details>`, closed until pressed — open from the start only when there is no summary above it (decided once,
+at mount). Form: the same box with a plain label, never collapsible, so a field Save checks can never sit hidden inside a closed box. Only the box's own chevron turns.
+This moved the form's old layout: the answer panel and «Cost per 1 kg» used to be at the very top, above the name, and «How it is sold» held the sale mode, the pack, the pieces, the VAT, the target and
+the price; now the summary is at the top and the answer panel is the last card.
+
+**The read sections** (`ReadSections.tsx`, words in `readText.ts`): a description list per card (label left in muted ink, value right). Nothing in it is a control. A missing value is «Not set»
+(«Non inserito») in muted text, never «0» or «0,00 €» (a price of 0 is «Not set»; a VAT of 0 is a real «0,00%»). Quantities: a recipe line through `fcWeight` («12,50 g», «1,25 kg»), an ingredient
+and a pack through `amountText` («2,50 kg», pieces as «3,00 pz» / «3.00 pcs» — never «pezzi» after a 1), minutes and people as the person typed them («7,5»), percentages and money through `fcNumber` /
+`fcMoney`. Each line carries the name and the note the form shows under it (`lineName`, `lineNote`: «This recipe is not priced yet», «no longer exists», the packaging's price each and total — item 26
+will replace the packaging note). The weighings show raw and cooked grams, the sentence the form shows, and the red warning of a wrong pair (cooked heavier), with the cooked value in red;
+«Finished product — no weight loss» replaces the pair. The labour sentence («Set the hourly labour cost in Settings…») is said only to whoever can set the rate. «Nothing yet» («Ancora niente»)
+for an empty list.
+
+**Texts** (`en.ts` / `it.ts`, word for word from the current `js/i18n.js`):
+- ADDED `fc.preview.cost` Cost / Costo, `fc.preview.ideal` Ideal price / Prezzo ideale, `fc.preview.idealSub` «{net} without VAT, for a {target}% food cost» / «{net} senza IVA, per un food cost del {target}%»,
+  `fc.preview.details` Details / Dettagli; `fc.fullCard` Full card / Scheda completa, `fc.editProduct` Edit product / Modifica il prodotto, `fc.section.product` Product / Prodotto,
+  `fc.section.weighing` Weight and oven loss / Peso e calo in cottura, `fc.section.price` Price / Prezzo, `fc.section.results` Calculated costs / Costi calcolati, `fc.notSet` Not set / Non inserito,
+  `fc.read.nothingYet` Nothing yet / Ancora niente.
+- DELETED `fc.preview.total`, `fc.preview.idealGross`, `fc.preview.idealNet`, `fc.preview.idealBasis`.
+- REWORDED `fc.preview.price` under the same key: «Selling price» / «Prezzo di vendita» (was «… (VAT incl.)» / «… (IVA inclusa)»).
+- `fc.howItIsSold` is no longer drawn (the section it titled is split between Product and Price); the key stays in the dictionaries, as in the current app.
+
+**Specs**: new `FoodcostSection.readMode.spec.tsx` (which view opens; the pencil, Back, Save and the focus; the new product's address; the six cards in order in both views; the box's details
+behaviour; no control in the read view; «Not set»; two decimals and the venue's layout in Italy; pieces; the weighing pair and its warning; the line notes; the labour hint; «Cost per 1 kg» once;
+the suggested price without its button; the read view following the store, the deletion on phone and split; the tablet; the history guard and Delete), new `readText.spec.ts`, and the summary tests
+rewritten in `FoodcostSection.preview.spec.tsx` (the dialog's five figures and «Details», dashes, the checklist, Italy; the card's summary: its rows, no VAT, partial, no target, «Details» kept open,
+not drawn while nothing is costed). Existing specs changed for the ported behaviour (a costed product now opens to read, so they press the pencil first through
+`intoForm()` in `testing/foodcostEditorFixtures.ts`): `editor`, `editor.lines`, `editor.vat`, `perKg`, `perKgFault`, `archivedRecipes`, `recipeBack`, `recipeFixes`, `product`.
+
+**Differences from the current app, on purpose or by necessity**
+- The mode lives in the page's state, not in a function-level `activeEditor`; the read view and the form are two components (`ProductRead`, `ProductForm`) under `ProductEditor`, which owns the choice.
+- The pencil and Save are the bar's buttons on a phone and on the split alike (the current app builds a second bar for the tablet's pane).
+- The look is Mise 2's own (tokens, `--sunken` ground for the cards and the summary, lucide icons), not `foodcost.css`.
+- The summary row of the food cost keeps the dot AND the word (item 24's rule); the current app's dot is alone.
+- The old form kept the answer panel and «Cost per 1 kg» at the very top; the current app, after #483, puts them in the last card. Mise 2 now does the same.
+- A weight in the oven-loss pair reads «1000.00 g» (two decimals, grouping per the venue's layout), as `fcNumber` writes every plain number.
+- The phone's own back gesture from a pencil form goes to the list, not to the read view (see above).
+- The read-or-form choice is made when the product first appears. If a product's recipes and prices have not arrived at that moment (a reload straight at a product address), a costed product can
+  open in the form; the current app has the same race. The pencil/Back path is unaffected.

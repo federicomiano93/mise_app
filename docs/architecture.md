@@ -172,11 +172,12 @@ Aria does not support Preact. The numbers are below.
   for whoever runs the place), a context (`FoodcostContext.tsx`) and the screens: `FoodcostSection`
   (the frame, the split from 1000px, the scroll it owns and the hand-back of the focus),
   `FoodcostList` with `ProductRow` (worst food cost first, the light as a dot AND a word; a search box over the names; below 1000px a
-  tap on a row opens `ProductPreviewDialog` with `PreviewPanel` — the eight figures, read-only — and «Open the card» goes on to the product,
+  tap on a row opens `ProductPreviewDialog` with `PreviewPanel` — five figures and the rest behind «Details», read-only — and «Open the card» goes on to the product,
   from 1000px the card opens beside the list),
   `ProductEditor` (the product's own screen: a wrapper that follows the id in the address and waits
-  for the product, around `ProductForm`, keyed on the id, which copies the product once and works on
-  that copy — with `ProductAnswer`, `LineRow`, `WeighingPair`, `NameSuggest`, `NumberBox`, the
+  for the product, and shows it to READ first — `ProductRead`: `ProductSummary`, then a closed «Full card» of plain text from `ReadSections`, following the stored product live; the pencil swaps it for
+  `ProductForm` and Save/Back swap it back, the choice kept in the wrapper's state and not in the address, a new product and one with nothing costed opening straight in the form — around `ProductForm`, keyed on the id, which copies the product once and works on
+  that copy, laid out in the same six `FullCard` cards — with `ProductAnswer`, `LineRow`, `WeighingPair`, `NameSuggest`, `NumberBox`, the
   chooser `PickDialog` and the `VatGuideDialog`; the working copy's rules are in
   `productEditorModel.ts`; ⚠️ a recipe line carries a `unit` (g or kg, memory only, opened on grams) and its `qty` is the text in
   that unit — `recipeLineKg` is the only way to its stored kilos; `docs/parity/foodcost.md`, «Recipe line in grams as built»), `MarginHistory`, `FoodcostSettings` (the hourly labour cost, only for
