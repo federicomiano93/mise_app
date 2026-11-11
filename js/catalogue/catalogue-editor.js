@@ -15,7 +15,8 @@ import { canManageHere } from './firebase-catalogue.js';
 import { el } from './dom.js';
 import {
   findInvalidRecipe, unitOf, unitText, CATALOGUE_UNITS, isWeighableUnit, weighableTotalGrams,
-  linkOf, applyLink, linkedItemName, isSameLink, normalizeWeight, normalizeShelfLifeDays, moveRow,
+  linkOf, applyLink, linkedItemName, staleLinkName, isSameLink, normalizeWeight, normalizeShelfLifeDays, moveRow,
+  hasDividerAfter, removeRow, keepRows, withoutTrailingDivider,
 } from './catalogue-model.js';
 // Drag to reorder the rows — the library the Calculator's clients and the Home cards use,
 // vendored into the repo and precached (P19).
@@ -134,7 +135,8 @@ export function renderEditor({
     totalNote.hidden = !skipped;
     countEl.textContent = String(working.ingredients.length);
     // Nothing to put in order with a single row.
-    reorderBtn.hidden = working.ingredients.length < 2;
+    reorderBtn.hidden = working.ingredients.length < 2 || dividing;
+    dividerBtn.hidden = working.ingredients.length < 2 || reordering;
     // Runs on every amount, unit and name input, and after every redraw of the rows, so
     // the mark follows what is typed. A no-op until the prices have arrived.
     paintPriceMarks();
@@ -152,7 +154,7 @@ export function renderEditor({
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10h12"/><path d="M4 14h9"/><path d="M19 6a7.7 7.7 0 0 0-5.2-2A7.9 7.9 0 0 0 6 12c0 4.4 3.5 8 7.8 8 2 0 3.8-.8 5.2-2"/><path d="M3 3l18 18"/></svg>';
 
   function paintPriceMarks() {
-    if (reordering || !editorPrices) return;
+    if (reordering || dividing || !editorPrices) return;
     const flags = unpricedRowFlags(working, {
       ingredients: app.ingredients(), recipes: app.allRecipes(), prices: editorPrices,
     });
@@ -176,7 +178,7 @@ export function renderEditor({
   // ingredienti già compilati».
   // ⚠️ A MODE, NOT A GRIP ON EVERY ROW. At 296px a row already holds a name, an amount, a
   // unit and a bin; a fifth control would take its width from the NAME. While reordering,
-  // each row is its grip, its name and its amount — nothing to type into, nothing to hit
+  // each row is its name, its amount and its grip — nothing to type into, nothing to hit
   // by accident while a finger is dragging.
   // ⚠️ THE SAME ROW OBJECTS MOVE (moveRow), so a guided mixing step, which points at a row
   // by its `rid`, still points at the right ingredient afterwards.
@@ -184,19 +186,62 @@ export function renderEditor({
   let reordering = false;
   let sortable = null;
 
+  // ── Divider lines (5 Nov 2026) ──────────────────────────────────────────────
+  //
+  // Where a line goes under an ingredient on the recipe screen and in the PDF. ⚠️ A SECOND MODE
+  // BESIDE REORDERING, for the reason written above: a fifth control on every row would take its
+  // width from the name. While it is on, each row is one tap target that toggles its line.
+  // The two modes exclude each other (the other one's button is hidden meanwhile).
+  let dividing = false;
+
+  function renderDividerRows() {
+    const last = working.ingredients.length - 1;
+    working.ingredients.forEach((ing, idx) => {
+      const name = String(ing.label || '').trim() || t('cat.unnamedRow');
+      const unit = unitOf(ing);
+      const qty = ing.grams === '' || ing.grams === undefined || unit === 'to taste' ? '' : String(ing.grams);
+      const inside = [
+        el('span', { class: 'cat-reorder-name', text: name }),
+        el('span', { class: 'cat-reorder-amount', text: [qty, unit].filter(Boolean).join(' ') }),
+      ];
+      // Nothing is below the last row, so it has no line and nothing to tap.
+      if (idx === last) {
+        rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup cat-reorder-row cat-divider-row--last' }, inside));
+        return;
+      }
+      const row = el('button', {
+        type: 'button',
+        class: 'cat-ing-editgroup cat-reorder-row cat-divider-row' + (ing.dividerAfter === true ? ' cat-reorder-row--divider' : ''),
+        'aria-pressed': String(ing.dividerAfter === true),
+        'aria-label': t('cat.dividerUnder', { name }), 'aria-describedby': 'catDividersHint',
+        // Toggled in place, no redraw, so the focus stays on the row that was tapped.
+        onclick: () => {
+          if (ing.dividerAfter === true) delete ing.dividerAfter; else ing.dividerAfter = true;
+          row.classList.toggle('cat-reorder-row--divider', ing.dividerAfter === true);
+          row.setAttribute('aria-pressed', String(ing.dividerAfter === true));
+          markDirty();
+        },
+      }, inside);
+      rowsContainer.appendChild(row);
+    });
+  }
+
   function renderReorderRows() {
     working.ingredients.forEach((ing, idx) => {
       const name = String(ing.label || '').trim() || t('cat.unnamedRow');
       const unit = unitOf(ing);
       const qty = ing.grams === '' || ing.grams === undefined || unit === 'to taste' ? '' : String(ing.grams);
-      rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup cat-reorder-row' }, [
+      // ⚠️ THE GRIP IS THE LAST THING IN THE ROW, on the right (Federico, 3 Nov 2026: «Metti a
+      // destra i punti per trascinare gli ingredienti per riordinare») — under the right thumb
+      // on the lab tablet, and the name now starts where it starts in every other mode.
+      rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup cat-reorder-row' + (hasDividerAfter(working.ingredients, idx) ? ' cat-reorder-row--divider' : '') }, [
+        el('span', { class: 'cat-reorder-name', text: name }),
+        el('span', { class: 'cat-reorder-amount', text: [qty, unit].filter(Boolean).join(' ') }),
         el('button', {
           type: 'button', class: 'home-cards-grip cat-reorder-grip', icon: GRIP_ICON,
           'aria-label': t('cat.moveRow', { name }), 'aria-describedby': 'catReorderHint',
           onkeydown: (event) => moveWithKeys(idx, event),
         }),
-        el('span', { class: 'cat-reorder-name', text: name }),
-        el('span', { class: 'cat-reorder-amount', text: [qty, unit].filter(Boolean).join(' ') }),
       ]));
     });
     // ⚠️ HOLD TO DRAG ON A PHONE (200ms), so scrolling the recipe with a thumb never moves
@@ -245,11 +290,21 @@ export function renderEditor({
       updateTotal();
       return;
     }
+    if (dividing) {
+      renderDividerRows();
+      updateTotal();
+      return;
+    }
     working.ingredients.forEach((ing, idx) => {
       const labelInput = el('input', {
         class: 'cat-lbl', type: 'text', placeholder: t('cat.ingredient'), value: ing.label,
         'aria-label': t('cat.ingredientName'),
-        oninput: (e) => { ing.label = e.target.value; markDirty(); updateTotal(); if (showErrors) validateUI(); },
+        oninput: (e) => {
+          openedLabelOf(ing);          // remember the name before the first keystroke changes it
+          ing.label = e.target.value;
+          paintStaleLink(ing, e.target);
+          markDirty(); updateTotal(); if (showErrors) validateUI();
+        },
       });
       // Under the name, while it is typed: catalogue ingredients to link THIS row to.
       // ⚠️ A tap links the row and SETS its name to the linked item's display name — the
@@ -314,7 +369,14 @@ export function renderEditor({
       const delIcon = el('button', {
         class: 'cat-del-icon', type: 'button', 'aria-label': t('cat.removeIngredient'), icon: TRASH_SVG,
         onclick: () => {
-          working.ingredients.splice(idx, 1);
+          // The line stays between the rows: the row above this one takes this row's line.
+          const before = working.ingredients;
+          working.ingredients = removeRow(working.ingredients, idx);
+          // removeRow copies the row that takes the deleted row's divider line: keep its memory.
+          const survivors = before.filter((_, i) => i !== idx);
+          working.ingredients.forEach((row, i) => {
+            if (survivors[i] && survivors[i] !== row && openedLabels.has(survivors[i])) openedLabels.set(row, openedLabels.get(survivors[i]));
+          });
           if (!working.ingredients.length) working.ingredients.push({ label: '', grams: '', unit: 'g' });
           markDirty();
           renderIngredientRows();
@@ -325,7 +387,7 @@ export function renderEditor({
       // At 296px the row already holds a name, an amount, a unit and a bin; a fifth
       // target takes its width from the ingredient NAME, which is the one thing that
       // has to stay readable. Under it there is room to say what it points at.
-      rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup' }, [
+      rowsContainer.appendChild(el('div', { class: 'cat-ing-editgroup' + (hasDividerAfter(working.ingredients, idx) ? ' cat-ing-editgroup--divider' : '') }, [
         // ⚠️ TWO FRAMES, ONE ROW, and the width to do it was BOUGHT, not found.
         // Federico, 23 Aug: «lo spazio dove scrivere la quantità e la tipologia devono
         // essere ben distinte» — answered then with a single frame divided down the
@@ -355,11 +417,67 @@ export function renderEditor({
   // cannot contribute a cost, and says so.
   function linkRow(ing, idx) {
     const link = linkOf(ing);
+    const stale = staleName(ing);
     const button = el('button', {
-      class: 'cat-ing-link' + (link ? ' linked' : ''), type: 'button',
+      class: 'cat-ing-link' + (link ? ' linked' : '') + (stale ? ' cat-ing-link--stale' : ''), type: 'button',
       onclick: () => pickFromChooser(idx),
-    }, [el('span', { class: 'cat-ing-link-text', text: linkText(ing) })]);
+    }, [el('span', { class: 'cat-ing-link-text', text: stale ? staleText(stale) : linkText(ing) })]);
     return button;
+  }
+
+  // ── A retyped name on a still-linked row (7 Nov 2026) ───────────────────────
+  //
+  // Federico: «quando cambio ingrediente il prezzo non si aggiorna». THE TRAP: retyping the name
+  // box of a linked row changes only `label`; the row keeps its link (`refId`), and the link is
+  // what recipe cost and every Food cost product built on it read. «Farina» retyped as «Burro»
+  // kept costing FLOUR, while the line under the row still said «→ Farina …» and nobody looked.
+  // ⚠️ A WARNING, NEVER AN AUTOMATIC UNLINK: fixing a typo («Farinna») must not lose the link.
+  // Only a pick relinks (linkTo). ⚠️ ONLY A NAME CHANGED IN THIS SESSION WARNS: old rows whose
+  // typed name differs from the linked item («Farina» on «Farina 0 Caputo», English invoice
+  // names) must not light up on opening. So each row remembers the name it had when the editor
+  // opened — or when it was last linked by a pick. ⚠️ The memory is a WeakMap keyed by the row
+  // object, NEVER a field of the row: the row is what Save writes and the rules whitelist its keys.
+  // moveRow keeps the same objects; removeRow copies only a row that takes a deleted row's divider
+  // line (carried over in the bin's handler).
+  // ⚠️ Known edge, left as it is: a NEW recipe's rows come back from the photo screen as fresh
+  // objects, so a warning showing before that visit is not drawn again after it.
+  const openedLabels = new WeakMap();
+  // ONE polite live region for the editor: a screen reader hears the warning when a row TURNS stale,
+  // not on every keystroke. Outside rowsContainer, which is rebuilt.
+  const staleAnnouncer = el('div', { class: 'cat-sr-only', role: 'status', 'aria-live': 'polite' });
+
+  function openedLabelOf(ing) {
+    if (!openedLabels.has(ing)) openedLabels.set(ing, String(ing.label ?? ''));
+    return openedLabels.get(ing);
+  }
+
+  // The linked item's name when the row's name has moved away from it, else ''.
+  function staleName(ing) {
+    return staleLinkName({
+      label: ing.label, openedLabel: openedLabelOf(ing), link: linkOf(ing),
+      ingredients: app.ingredients(), recipes: app.allRecipes(),
+    });
+  }
+
+  function staleText(name) {
+    return t('cat.nameChangedStillLinked', { name });
+  }
+
+  // Live, from the name box: only the one row's link line changes. ⚠️ NO renderIngredientRows —
+  // rebuilding takes the box from under the finger. ⚠️ Only the text span is rewritten: the
+  // crossed-out euro mark (paintPriceMarks) lives in the same button and must survive.
+  function paintStaleLink(ing, input) {
+    const group = input.closest('.cat-ing-editgroup');
+    const button = group && group.querySelector('.cat-ing-link');
+    const text = button && button.querySelector('.cat-ing-link-text');
+    if (!text) return;
+    const stale = staleName(ing);
+    const was = button.classList.contains('cat-ing-link--stale');
+    button.classList.toggle('cat-ing-link--stale', !!stale);
+    text.textContent = stale ? staleText(stale) : linkText(ing);
+    // Announced on the transition only; cleared when it is gone.
+    if (stale && !was) staleAnnouncer.textContent = staleText(stale);
+    else if (!stale && was) staleAnnouncer.textContent = '';
   }
 
   // The full-screen chooser — already searching what was typed, when «See all» under a
@@ -406,6 +524,10 @@ export function renderEditor({
     // is already there, or tapping the ticked suggestion, must not undo a name typed since.
     const same = isSameLink(before, chosen);
     applyLink(row, chosen, same ? {} : { label: linkedItemName(chosen, app.ingredients(), app.allRecipes()) });
+    // A pick (re)starts the comparison: the name now on the row is the one that fits the link.
+    // A pick of the SAME link is the person saying «yes, this one»: the name is kept, but the
+    // warning's baseline moves to it, so the warning clears.
+    openedLabels.set(row, String(row.label ?? ''));
     markDirty();
     renderIngredientRows();
     if (showErrors) validateUI();
@@ -473,9 +595,12 @@ export function renderEditor({
     return {
       ...working,
       name: String(working.name || '').trim(),
-      ingredients: working.ingredients
-        .map(i => ({ ...i, label: String(i.label || '').trim(), grams: Math.max(0, Number(i.grams) || 0), unit: unitOf(i) }))
-        .filter(i => i.label),
+      // keepRows hands a nameless row's line to the row above; a line after the last row is dropped.
+      ingredients: withoutTrailingDivider(keepRows(
+        working.ingredients
+          .map(i => ({ ...i, label: String(i.label || '').trim(), grams: Math.max(0, Number(i.grams) || 0), unit: unitOf(i) })),
+        i => i.label,
+      )),
     };
   }
 
@@ -488,6 +613,7 @@ export function renderEditor({
       // ⚠️ OUT OF REORDER MODE FIRST: its rows have no name or amount box, so the one to fix
       // could be neither highlighted nor reached.
       if (reordering) setReordering(false);
+      if (dividing) setDividing(false);
       renderIngredientRows();
       validateUI();
       revealProblem(problem);
@@ -597,10 +723,30 @@ export function renderEditor({
     reorderBtn.setAttribute('aria-pressed', String(reordering));
     reorderHint.hidden = !reordering;
     // No new row while reordering: it would be a row with nothing to drag by its name.
-    addRowBtn.hidden = reordering;
+    addRowBtn.hidden = reordering || dividing;
     renderIngredientRows();
     if (showErrors && !reordering) validateUI();
     const first = rowsContainer.querySelector(reordering ? '.cat-reorder-grip' : '.cat-lbl');
+    try { first?.focus({ preventScroll: true }); } catch (e) { /* focus is best-effort */ }
+  }
+
+  const dividersHint = el('p', { class: 'cat-reorder-hint', id: 'catDividersHint', text: t('cat.dividersHint') });
+  dividersHint.hidden = true;
+  const dividerBtn = el('button', {
+    class: 'cat-reorder-btn', type: 'button', text: t('cat.dividers'), 'aria-pressed': 'false',
+    onclick: () => setDividing(!dividing),
+  });
+
+  function setDividing(on) {
+    dividing = on;
+    dividerBtn.textContent = dividing ? t('cat.reorderDone') : t('cat.dividers');
+    dividerBtn.setAttribute('aria-pressed', String(dividing));
+    dividersHint.hidden = !dividing;
+    // No new row while placing lines: the list is a fixed set of tap targets.
+    addRowBtn.hidden = dividing;
+    renderIngredientRows();
+    if (showErrors && !dividing) validateUI();
+    const first = rowsContainer.querySelector(dividing ? '.cat-divider-row' : '.cat-lbl');
     try { first?.focus({ preventScroll: true }); } catch (e) { /* focus is best-effort */ }
   }
 
@@ -704,10 +850,12 @@ export function renderEditor({
     el('div', { class: 'cat-ing-head' }, [
       el('label', { class: 'cat-ing-head-label', text: t('cat.ingredients') }),
       countEl,
-      reorderBtn,
+      el('span', { class: 'cat-ing-head-actions' }, [dividerBtn, reorderBtn]),
     ]),
     reorderHint,
+    dividersHint,
     rowsContainer,
+    staleAnnouncer,
     totalNote,
     addRowBtn,
     labelField,

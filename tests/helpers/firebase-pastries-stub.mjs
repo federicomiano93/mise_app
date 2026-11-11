@@ -11,6 +11,7 @@ export const control = {
   dates: [],           // { date, onChange, onError, stopped } per watchPastryLogsForDate
   saves: [],           // { day, items, note } per savePastryDay
   records: [],         // ids written by confirmPastryLog
+  built: [],           // what confirmPastryLog would write, per record
   failDaysStart: false,
   failDatesStart: false,
 };
@@ -45,7 +46,9 @@ export async function getPastryLog() {
 
 export async function confirmPastryLog(id, build) {
   control.records.push(id);
-  return build(null);
+  const record = build(null);
+  control.built.push(record);
+  return record;
 }
 
 export async function deletePastryLog() {}

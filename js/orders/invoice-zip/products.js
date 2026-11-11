@@ -5,7 +5,7 @@
 
 import {
   classify, cleanName, eggsPerPack, isEgg, isUnattributedDiscount, packInfo, packWord, parsePack, parsePackText,
-  productKey,
+  piecesOf, productKey,
 } from './classify.js';
 import { KEPT_TYPES } from './fatturapa.js';
 import {
@@ -116,6 +116,14 @@ export const descriptionOf = (product) => latestOf(product).lines[0].description
 
 // ── proposals and evaluation ─────────────────────────────────────────────────
 
+// A product invoiced by pieces or cartons whose description counts PIECES (classify.js piecesOf): the line the pack is
+// read from — the first that names one, as below — decides. null for anything else, eggs included.
+function piecesOfEntry(entry) {
+  if (unitClass(entry.lines[0].unit)[0] !== PIECES || entry.lines.some((ln) => isEgg(ln.description))) return null;
+  const line = entry.lines.find((ln) => parsePack(ln.description));
+  return line ? piecesOf(line.description) : null;
+}
+
 // Price unit and package, read from the most recent invoice's description.
 export function proposeParams(product, config) {
   const entry = latestOf(product);
@@ -129,6 +137,14 @@ export function proposeParams(product, config) {
       if (found) { n = found; break; }
     }
     return makeParams({ priceUnit: 'pcs', packCount: n && n > 1 ? n : null, egg: true, eggWeightKg: eggWeight });
+  }
+  const pieces = piecesOfEntry(entry);
+  if (pieces) {
+    // One piece is the «pack» and the carton holds `count` of them: pricing.js prices each piece, unitWeightKg is its
+    // weight, and the card shows «Cartone, contiene 50 × pezzo da 85 g» (classify.js piecesOf).
+    return makeParams({
+      priceUnit: 'pcs', pack: packInfo(pieces.size, 'g'), packCount: pieces.count, egg: false, eggWeightKg: eggWeight,
+    });
   }
   let info = null;
   for (const ln of entry.lines) {
@@ -159,6 +175,9 @@ export function proposePackWord(product) {
   if (unitClass(entry.lines[0].unit)[0] === PIECES && entry.lines.some((ln) => isEgg(ln.description))) {
     return EGG_PACK_WORD;
   }
+  // A piece is a piece: «BUSTA» or «CARTONE» in the text is the delivery, not what one cornetto is. The app names it
+  // with the venue's own word for a piece (invoice-import-model.js), never the default «busta».
+  if (piecesOfEntry(entry)) return '';
   return packWord(descriptionOf(product));
 }
 

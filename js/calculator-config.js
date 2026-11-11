@@ -254,9 +254,9 @@ export function usesOrders(logic) { return logic === 'orders' || logic === 'both
 export function usesTypedTotal(logic) { return logic === 'total' || logic === 'both' || logic === 'traysTotal'; }
 // Logics that take a number of trays.
 export function usesTrays(logic) { return logic === 'trays' || logic === 'traysTotal'; }
-// The trays an exported recipe's title may name («Pizza x 3»): only when the dough IS the trays — a
-// trays recipe, or a trays-plus-total one with nothing typed in the total — otherwise 0 and the
-// title says the grams. Shared by the Calculator now and the Recipe catalogue's export next.
+// The trays an exported recipe's FILE NAME may carry («Pizza_x3.pdf»): only when the dough IS the
+// trays — a trays recipe, or a trays-plus-total one with nothing typed in the total — otherwise 0
+// and the file name says the grams. The title on the page is the recipe's name only. Shared by the Calculator now and the Recipe catalogue's export next.
 export function exportTraysFor(logic, trays, typedTotal) {
   const traysOnly = logic === 'trays' || (logic === 'traysTotal' && !(Number(typedTotal) > 0));
   const n = Math.floor(Number(trays));
@@ -1228,6 +1228,40 @@ export function reconcileConfigWrite(config, server) {
   return { recipes, configRev: serverRev + 1 };
 }
 
+// The code of the error a clients-only save throws when the document needs the Calculator's
+// whole save first (see needsCalculatorSave).
+export const NEEDS_CALCULATOR_SAVE = 'needs-calculator-save';
+
+// Can this server document take a clients-only save? Two cases where it cannot:
+// - it does not exist: the rules let the owner of the sales side change it, never start it.
+// - ⚠️ IT IS STILL IN A RETIRED SHAPE. normalizeConfig asks the old keys before `clients`, and a
+//   clients-only save cannot delete them as the whole save does (the rules refuse this role
+//   those keys). So next to a top-level products[] the saved clients are read through
+//   migrateCatalogue, which looks only at clients[].items: every client would come back with no
+//   products, on every phone. And on the oldest per-tab shape a new clients[] would hide the
+//   clients and recipes still migrated from it.
+export function needsCalculatorSave(server) {
+  if (!server || typeof server !== 'object') return true;
+  if (Array.isArray(server.products)) return true;
+  return !Array.isArray(server.clients)
+    && !!(server.focaccia || server.brioche || server.sourdough || server.market);
+}
+
+// What the Clients page (js/clients/clients-main.js) writes: the address book and the next
+// revision, nothing else. ⚠️ THE RULES JUDGE THE KEYS A SAVE CHANGES, and the Calculator's whole
+// save re-normalises the recipes, so the owner of the sales side could never send it
+// (writesCalculatorConfigAs in firestore.rules). Leaving the recipes out also means this save
+// cannot overwrite one, so there is nothing for reconcileConfigWrite to rescue.
+//
+// ⚠️ NO LIST OF CLIENTS IS AN ERROR, NEVER AN EMPTY LIST: an empty one would wipe the address book.
+export function clientsOnlyWrite(config, server) {
+  if (!config || !Array.isArray(config.clients)) throw new TypeError('clientsOnlyWrite: no clients');
+  return {
+    clients: config.clients,
+    configRev: (Number(server && server.configRev) || 0) + 1,
+  };
+}
+
 // Which sentence tells a person that a config save did NOT reach the server (a key of
 // js/i18n.js), or null when it did. `result` is what saveConfig resolves with.
 // permission-denied is the server REFUSING: since the configModel guard that means this
@@ -1235,5 +1269,6 @@ export function reconcileConfigWrite(config, server) {
 // connection. 'no-server-answer' explains itself inside saveConfig, so it has no key here.
 export function saveFailureKey(result) {
   if (!result || result.reason !== 'write-failed') return null;
+  if (result.code === NEEDS_CALCULATOR_SAVE) return 'calc.notSavedNoConfig';
   return result.code === 'permission-denied' ? 'calc.notSavedOutOfDate' : 'calc.notSavedCheckConnection';
 }

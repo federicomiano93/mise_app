@@ -17,7 +17,7 @@
 // own. Deleting the machinery rather than switching it off is the point — code
 // that does not exist cannot be wired back up by accident.
 
-import { WEEKDAYS, isWeekday, MAX_ITEMS } from './pastries-model.js';
+import { WEEKDAYS, isWeekday, MAX_ITEMS, cleanItemNote } from './pastries-model.js';
 
 // How long a record stays on the SCREEN. It is never removed from the database.
 export const LOG_VISIBLE_DAYS = 15;
@@ -95,7 +95,12 @@ function normalizeLogItem(raw) {
   const name = typeof raw.name === 'string' ? raw.name.trim() : '';
   if (!name) return null;
   const qty = Math.round(Number(raw.qty));
-  return { name, qty: Number.isFinite(qty) ? Math.max(0, qty) : 0 };
+  const item = { name, qty: Number.isFinite(qty) ? Math.max(0, qty) : 0 };
+  // The row's note is frozen with it, like the day's note: how the trays were laid
+  // out that night is part of the record. No key when there was none.
+  const note = cleanItemNote(raw.note);
+  if (note) item.note = note;
+  return item;
 }
 
 // One stored record → the shape the screen works with. Never throws.

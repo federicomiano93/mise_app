@@ -83,6 +83,10 @@ both halves.
 - `ingredients/{id}/prices/{autoId}` — append-only history, create-only. A subcollection inherits
   nothing from the rules above it.
 - `drafts/current` — the order in progress; `days` is the memory that makes the day model work.
+  `skipped` (6 Nov 2026, optional map ≤ 200) — `{ supplierId: 'YYYY-MM-DD' }`, a supplier due today
+  closed as «non ordinato» from the order summary (nothing needed); it counts only on that day
+  (`reminders.js skippedOn`) for the Orders strip, the Home badge and the kiosk. Written on its own,
+  never through the autosave, and never with `updatedAt`. Once production carries it, it stays listed.
 - `orders-history/{YYYY-MM-DD}_{supplierId}` — one record per day per supplier; `names` freezes each
   item's label; `deliveredAt`/`missing` optional. Since `v1.109.1` Orders reads only the last 2 months live (`date >=`,
   `js/orders/history-window.js`); older pages on demand from History; the legacy `2026-W28` record (no
@@ -92,6 +96,8 @@ both halves.
 «checked: contains these», told apart only by `allergensCheckedAt`. The specific cereal and nut are
 named (`gluten-wheat`, not `gluten`). `mayContain` is never merged into `allergens`. In nutrition,
 0 is a real value and `null` is not.
+
+**Recipe row divider (5 Nov 2026).** A row of `recipes/{id}.ingredients` may carry `dividerAfter` (optional, `true` or absent, never `false`/null; not checked by the rules because they cannot look inside a list; the shape is `normalizeIngredient`). The PDF draws the line, the spreadsheet ignores it.
 
 **Recipe categories (1 Nov 2026; the same fields as Mise 2, PR #404).** `recipes/{id}.category` (string 1–100; «no
 category» is NO field — an emptied choice is a removal). A word not on the venue's list reads as «no category» and comes
@@ -147,7 +153,9 @@ gcloud login; the session-start hook prints the count. The text is device data: 
 deviceId (20-char `device-id`), dayKey ('YYYYMMDD', local), kind? (phone|tablet|computer), appVersion?
 (≤12), screens{name: opens} · seconds{name: active seconds} · taps{name: n} (≤80 keys each) ·
 routes{'from>to': n} (≤300) · actions{name: n} (≤40) · loads{page: n} · loadMs{page: total ms} (≤20),
-firstMinute?, lastMinute? (0–1439, local), offlineSeconds? (0–86400), updatedAt (server time) }`,
+firstMinute?, lastMinute? (0–1439, local), offlineSeconds? (0–86400), hours?{'00'…'23': active seconds in
+that local hour, ≤3600 each; since 6 Nov 2026 — older lines only have the first/last minute}, updatedAt
+(server time) }`,
 written WHOLE (no merge) by `js/usage.js` through `saveUsage`. A screen is the page (`orders`) or
 `page:view` (`orders:supplier`), announced by `mise:screen` events; key actions by `mise:action`
 events (`order-sent`, `recipe-saved`…). Any member of THAT venue may create and update (no switch);
@@ -174,7 +182,10 @@ the only other one is `client-accounts` (managers, or the account itself — aud
   packaging `qty` is per unit sold, not per batch; `labourMinutes` (per batch) + `labourPeople`
   (missing = 1). Products are saved whole, so the rules refuse a write whose `model` is lower than
   the stored one — an out-of-date phone gets «could not save» instead of deleting lines. Labour is
-  not frozen into snapshots.
+  not frozen into snapshots. `noWeightLoss` (bool, Nov 2026, written only when `true`): a finished
+  product — the oven loss of the recipes on ITS lines is ignored in ITS cost; the recipe's
+  `lossPct` is untouched and other products keep paying it. ⚠️ Mise 2's `normalizeProduct` must
+  carry it, or its next save of such a product drops it.
 - `foodcost-settings/main` — `{ bakery, labourCostPerHour, updatedAt }`; read and write
   `canManage(lid,'foodcost')` only, never deleted: an employee shown Food cost must not learn the
   rate.
@@ -191,5 +202,8 @@ the only other one is `client-accounts` (managers, or the account itself — aud
   write.
 
 **Pastries:** `pastries/{Weekday}` — seven documents, for ever; the work day rolls at 4am.
+A row is `{ name, qty, note? }`: `note` («9x3») is free text up to 40 characters, absent when empty, kept by
+`js/pastries/pastries-model.js` because rules cannot look inside a list. ⚠️ The day is written whole: a writer that
+rebuilds rows as `{ name, qty }` (the app before this note, Mise 2 until it is ported) deletes every note on that day.
 `pastry-logs/{YYYY-MM-DD}_{Weekday}` — nothing deletes it; the read is bounded
 (`orderBy('date','desc') + limit(120)`).

@@ -67,7 +67,7 @@ import {
   clearIndexedDbPersistence,
   waitForPendingWrites,
 } from 'https://www.gstatic.com/firebasejs/12.19.0/firebase-firestore.js';
-import { reconcileConfigWrite, CONFIG_MODEL } from './calculator-config.js';
+import { reconcileConfigWrite, clientsOnlyWrite, needsCalculatorSave, CONFIG_MODEL, NEEDS_CALCULATOR_SAVE } from './calculator-config.js';
 import {
   currentLocationId,
   pathFor,
@@ -1144,6 +1144,22 @@ export function saveCalculatorConfig(config) {
       tx.set(ref, { ...config, recipes, configRev, configModel: CONFIG_MODEL, bakery: currentLocationId() });
     }))
     .catch(err => { console.error('saveCalculatorConfig failed:', err); throw err; });
+}
+
+// Persist the address book ALONE, for the Clients page. An update on the document as it is,
+// never a set: the recipes and every Calculator setting stay out of the request, so the rules
+// can let the owner of the sales side through and a stale copy on this phone cannot undo them.
+export function saveCalculatorClients(config) {
+  return authReady
+    .then(() => runTransaction(db, async (tx) => {
+      const ref = doc(db, pathFor('config'), 'calculator');
+      const snap = await tx.get(ref);
+      if (needsCalculatorSave(snap.exists() ? snap.data() : null)) {
+        throw Object.assign(new Error(NEEDS_CALCULATOR_SAVE), { code: NEEDS_CALCULATOR_SAVE });
+      }
+      tx.update(ref, { ...clientsOnlyWrite(config, snap.data()), configModel: CONFIG_MODEL, bakery: currentLocationId() });
+    }))
+    .catch(err => { console.error('saveCalculatorClients failed:', err); throw err; });
 }
 
 // ── The Calculator reading a recipe out of the Catalogue ─────────────────────

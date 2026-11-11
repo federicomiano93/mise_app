@@ -60,7 +60,7 @@ test('the Orders pack-photo overlay disposes the screen on every way out', () =>
 });
 
 test('the client list Sortable is destroyed before the client detail replaces the content', () => {
-  const src = read('js/calculator-settings.js');
+  const src = read('js/clients-editor.js');
   const detail = src.slice(src.indexOf('function renderClientDetail'));
   const before = detail.slice(0, detail.indexOf("content.textContent = ''"));
   assert.match(before, /if \(clientSortable\) \{ clientSortable\.destroy\(\); clientSortable = null; \}/);

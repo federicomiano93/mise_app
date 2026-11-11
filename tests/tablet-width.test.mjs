@@ -96,12 +96,14 @@ const EXEMPT = new Map([
   ['.fc-screen', 'wraps .fc-view, which is capped'],
   ['.inv-screen', 'wraps .inv-view, which is capped'],
   ['.pas-strip', 'a column of the tablet grid on body[data-card=pastries]: its outer tracks are var(--app-gutter), so it sits inside the cap; on a phone it is an 8px-margin strip'],
+  ['.app-dialog', 'the shared dialog box, capped at 360px by tokens.css; foodcost.css only lets it scroll when tall'],
   ['.inv-side', 'a column of .inv-view--list, which is capped by .inv-view inside .inv-screen'],
   ['.inv-list', 'a column of .inv-view--list on a tablet, inside .inv-view which is capped'],
   ['.recipe-scroll', 'wraps .recipe-content, which is capped'],
   ['.auth-gate', 'wraps .auth-card, capped at 360px'],
   ['.app-dialog-backdrop', 'wraps .app-dialog, capped at 480px'],
   ['.app-dialog-msg', 'inside .app-dialog, capped at 480px'],
+  ['.pas-copy-days', 'the Copy-day picker, passed to the dialog as its node: inside .app-dialog, capped at 480px'],
   ['#loaf-modal-box, #list-select-box, #day-modal-box, #send-who-box', 'capped at 480px'],
   ['#loaf-modal, #list-select-modal, #day-modal, #send-who-modal', 'backdrops; the boxes inside are capped'],
   ['.co-header', 'order.html is the CLIENT page: its body is capped at 560px'],
@@ -133,9 +135,11 @@ const EXEMPT = new Map([
     'positioning shells; they use .scroll-area inside'],
   ['body', 'the app shell itself is full-bleed on purpose; the column is set inside it'],
   ['.cat-zoom-close', 'a floating close button, not a container'],
+  ['.cat-row-menu', 'a small popup menu (min 220px, max viewport minus 32px) placed next to its row, not a container'],
   ['.calc-zoom-scroll', 'the scrolling body of the full-screen recipe (a fixed overlay) with its own clamp() padding; on a tablet its rows are capped at 620px (.calc-zoom-rows, pinned by tests/calculator-work-view.test.mjs)'],
   ['.orders-offline', 'one centred line of text on a full-width ground; nothing to align to a column'],
   ['#sw-update-host', 'a transparent host; #sw-update-banner inside is capped at 480px and centred'],
+  ['.export-sheet .app-dialog', 'a dialog that may scroll on a short screen; .app-dialog caps it at 360px'],
 ]);
 
 test('the shared width token is defined', () => {

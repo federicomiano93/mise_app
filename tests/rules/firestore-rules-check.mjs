@@ -788,6 +788,26 @@ async function drafts() {
   check('weekId survives the clear',
     after?.fields?.weekId?.stringValue === '2026-W28');
 
+  // «Chiudi come non ordinato» (6 Nov 2026): a supplier due today, closed because nothing was
+  // needed. Written by an EMPLOYEE too — closing the day's order is ordinary daily work — with no
+  // updatedAt (the draft's own stamp stands in for undated rows, so the mark must not move it).
+  await expectAllowed('an employee closes a supplier as not ordered today (skipped.<id>)', () =>
+    mergeWrite('locations/main/drafts/current', {
+      skipped: { SUP_LEGACY: '2026-11-06' },
+      bakery: 'main',
+    }, asAccount(SAM)));
+  await expectAllowed('…and reopens it (a surgical clear of skipped.<id>)', () =>
+    clearWrite('locations/main/drafts/current', { bakery: 'main' }, ['skipped.SUP_LEGACY'], asAccount(SAM)));
+  await expectDenied('skipped sent as a string instead of a map',
+    () => mergeWrite('locations/main/drafts/current', { skipped: '2026-11-06', bakery: 'main' }));
+  const manySkipped = {};
+  for (let i = 0; i < 201; i++) manySkipped[`S${i}`] = '2026-11-06';
+  await expectDenied('a draft stuffed with 201 closed suppliers',
+    () => mergeWrite('locations/main/drafts/current', { skipped: manySkipped, bakery: 'main' }));
+  await expectDenied('a member of ANOTHER venue closing a supplier here',
+    () => mergeWrite('locations/main/drafts/current', { skipped: { SUP_LEGACY: '2026-11-06' }, bakery: 'main' },
+      asAccount(BOB)));
+
   await expectDenied('an unknown key on the draft',
     () => mergeWrite('locations/main/drafts/current', { evil: 'x', bakery: 'main' }));
   await expectDenied('entries sent as a string instead of a map',
@@ -988,6 +1008,12 @@ async function neighbours() {
   await expectAllowed('recipes still accepts a recipe', () =>
     wholeWrite('locations/main/recipes/r1', { bakery: 'main', name: 'Focaccia', ingredients: [] }));
 
+  // A divider line under a row is a field INSIDE the ingredients list: rules cannot look in there.
+  await expectAllowed('recipes accepts a row carrying dividerAfter', () =>
+    wholeWrite('locations/main/recipes/r1', {
+      bakery: 'main', name: 'Focaccia', ingredients: [{ label: 'Flour', grams: 100, unit: 'g', dividerAfter: true }],
+    }));
+
   // ── A recipe that knows what it costs ──
   // The link a row carries (kind/refId) is NOT checked here and cannot be: rules
   // cannot look inside a list. Only the recipe's own new field is.
@@ -1057,6 +1083,15 @@ async function neighbours() {
   await expectAllowed('Food cost may write a weighing onto an existing recipe', () =>
     mergeWrite('locations/main/recipes/r1',
       { bakery: 'main', lossPct: 20, rawGrams: 1000, cookedGrams: 800 }));
+  // ⚠️ A KEPT WRONG PAIR (cooked heavier than raw, Nov 2026) sends ONLY the two weights and the
+  // stamp — never the loss, which is whatever that phone last saw. The rules judge the MERGED
+  // document, so a partial write must land.
+  await expectAllowed('…and a kept wrong pair sends only rawGrams and cookedGrams', () =>
+    mergeWrite('locations/main/recipes/r1',
+      { bakery: 'main', rawGrams: 1000, cookedGrams: 1100 }));
+  await expectDenied('…but the two weights alone are still range-checked', () =>
+    mergeWrite('locations/main/recipes/r1',
+      { bakery: 'main', rawGrams: 1000, cookedGrams: 10000001 }));
   await expectDenied('…but that shape cannot conjure a nameless recipe out of nothing', () =>
     mergeWrite('locations/main/recipes/no-such-recipe',
       { bakery: 'main', lossPct: 20, rawGrams: 1000, cookedGrams: 800 }));
@@ -1753,6 +1788,14 @@ async function pastries() {
     await expectAllowed(`the weekday id ${d}`, () => wholeWrite(`${A}/pastries/${d}`, day(d)));
   }
 
+  // The row's own note («9x3»). ⚠️ THE RULES DO NOT JUDGE IT, because they cannot look inside a
+  // list: this pins that the note needs no rules change and reaches the database as it is. Its
+  // length is kept by js/pastries/pastries-model.js, like the length of a name.
+  await expectAllowed('a pastry carrying its own note, next to one without', () =>
+    wholeWrite(`${A}/pastries/Monday`, day('Monday', {
+      items: [{ name: 'Cornetti', qty: 27, note: '9x3' }, { name: 'Bomboloni', qty: 10 }],
+    })));
+
   await expectAllowed('a member reads a day', readAs(ALICE, `${A}/pastries/Monday`));
 
   // ── The standing note ──
@@ -1859,6 +1902,9 @@ async function pastryLogs() {
   await expectAllowed('…carrying the standing note it was proved under', () =>
     wholeWrite(`${A}/pastry-logs/2026-08-05_Wednesday`,
       log('2026-08-05', 'Wednesday', { note: 'Butter is low' })));
+  await expectAllowed('…with a pastry carrying its own note', () =>
+    wholeWrite(`${A}/pastry-logs/2026-08-05_Wednesday`,
+      log('2026-08-05', 'Wednesday', { items: [{ name: 'Cornetti', qty: 27, note: '9x3' }] })));
   await expectAllowed('a night with nothing proved', () =>
     wholeWrite(`${A}/pastry-logs/2026-08-06_Thursday`,
       log('2026-08-06', 'Thursday', { items: [] })));
@@ -2038,6 +2084,16 @@ async function products() {
   await expectDenied('work time of zero minutes', () => wholeWrite(`${P}/P1`, product({ model: 2, labourMinutes: 0 })));
   await expectDenied('work time sent as text', () => wholeWrite(`${P}/P1`, product({ model: 2, labourMinutes: '90' })));
   await expectDenied('nobody working on it', () => wholeWrite(`${P}/P1`, product({ model: 2, labourPeople: 0 })));
+
+  // ── «Finished product, no weight loss» (Nov 2026): a boolean, nothing else ──
+  await expectAllowed('a product marked as losing no weight', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, noWeightLoss: true })));
+  await expectAllowed('…or explicitly not', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, noWeightLoss: false })));
+  await expectDenied('no weight loss sent as text', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, noWeightLoss: 'true' })));
+  await expectDenied('no weight loss sent as a number', () =>
+    wholeWrite(`${P}/P1`, product({ model: 2, noWeightLoss: 1 })));
 
   await expectAllowed('a member may delete a product', () => deleteWrite(`${P}/P2`));
 
@@ -3728,6 +3784,11 @@ async function usageStats() {
     deviceId: 'Dev6ce2Id3Abc4Def5Gh', firstMinute: 0, lastMinute: 1439, offlineSeconds: 86400,
   }), asAccount(SAM)));
   await expectAllowed('a tablet shared by a second person, same device and day', () => save(idFor(MAYA.uid), line(MAYA.uid, { kind: 'tablet' }), asAccount(MAYA)));
+  await expectAllowed('the active seconds of each hour', () => save(idFor(SAM.uid), line(SAM.uid, { hours: { '07': 1800, '08': 3600, 13: 45 } }), asAccount(SAM)));
+  await expectAllowed('all 24 hours, and an empty hours map', () => save(idFor(SAM.uid, 'Dev8ce2Id3Abc4Def5Gh'), line(SAM.uid, {
+    deviceId: 'Dev8ce2Id3Abc4Def5Gh', hours: Object.fromEntries(Array.from({ length: 24 }, (_, h) => [String(h).padStart(2, '0'), 60])),
+  }), asAccount(SAM)).then(r => (r.ok ? save(idFor(SAM.uid, 'Dev8ce2Id3Abc4Def5Gh'), line(SAM.uid, { deviceId: 'Dev8ce2Id3Abc4Def5Gh', hours: {} }), asAccount(SAM)) : r)));
+  await expectAllowed('a line from an older release, with no hours, still goes', () => save(idFor(SAM.uid), line(SAM.uid), asAccount(SAM)));
 
   await expectDenied('an id that names another uid', () => save(idFor(MAYA.uid, 'Dev7ce2Id3Abc4Def5Gh'), line(SAM.uid, { deviceId: 'Dev7ce2Id3Abc4Def5Gh' }), asAccount(SAM)));
   await expectDenied('a line signed with somebody else’s uid (and their id)', () => save(idFor(MAYA.uid, 'Dev7ce2Id3Abc4Def5Gh'), line(MAYA.uid, { deviceId: 'Dev7ce2Id3Abc4Def5Gh' }), asAccount(SAM)));
@@ -3746,6 +3807,10 @@ async function usageStats() {
   await expectDenied('21 loads', () => save(idFor(SAM.uid), line(SAM.uid, { loads: manyKeys(21) }), asAccount(SAM)));
   await expectDenied('21 load times', () => save(idFor(SAM.uid), line(SAM.uid, { loadMs: manyKeys(21) }), asAccount(SAM)));
   await expectDenied('a map that is a list', () => save(idFor(SAM.uid), line(SAM.uid, { routes: ['a>b'] }), asAccount(SAM)));
+  await expectDenied('an hour that does not exist', () => save(idFor(SAM.uid), line(SAM.uid, { hours: { 24: 60 } }), asAccount(SAM)));
+  await expectDenied('an hour written as one digit', () => save(idFor(SAM.uid), line(SAM.uid, { hours: { 7: 60 } }), asAccount(SAM)));
+  await expectDenied('something else hidden in the hours', () => save(idFor(SAM.uid), line(SAM.uid, { hours: { '08': 60, note: 1 } }), asAccount(SAM)));
+  await expectDenied('hours that are a list', () => save(idFor(SAM.uid), line(SAM.uid, { hours: [60, 60] }), asAccount(SAM)));
   await expectDenied('a minute that is not whole', () => save(idFor(SAM.uid), line(SAM.uid, { firstMinute: 90.5 }), asAccount(SAM)));
   await expectDenied('minute 1440', () => save(idFor(SAM.uid), line(SAM.uid, { lastMinute: 1440 }), asAccount(SAM)));
   await expectDenied('a negative minute', () => save(idFor(SAM.uid), line(SAM.uid, { firstMinute: -1 }), asAccount(SAM)));
@@ -3952,6 +4017,8 @@ async function staffCards() {
   await seedDoc(`${L}/recipes/R1`, { ...stamp, name: 'Focaccia', ingredients: [], lossPct: 12 });
   await expectAllowed('⚠️ a shown employee can save a weighing onto the recipe', () =>
     mergeWrite(`${L}/recipes/R1`, { ...stamp, lossPct: 20, rawGrams: 1000, cookedGrams: 800 }, asAccount(SAM)));
+  await expectAllowed('…and a kept wrong pair, which sends only the two weights', () =>
+    mergeWrite(`${L}/recipes/R1`, { ...stamp, rawGrams: 1000, cookedGrams: 1100 }, asAccount(SAM)));
 
   // ── Only the Stocktake shown: COUNTS, and no money ──
   await showMain({ inventory: true });
@@ -4261,6 +4328,8 @@ async function partialOwners() {
   // ⚠️ config/calculator: THE CLIENTS, AND NEVER A RECIPE.
   await expectAllowed('⚠️ sales changes the address book, the one field', () =>
     mergeWrite(CFG, { ...stamp, configRev: 2, clients: [{ id: 'c-one', name: 'RENAMED', products: [] }] }, asAccount(SALES)));
+  await expectAllowed('⚠️ …with exactly what the Clients page sends (js/firebase.js saveCalculatorClients)', () =>
+    mergeWrite(CFG, { ...stamp, configRev: 3, configModel: 4, clients: [{ id: 'c-one', name: 'RENAMED', products: [] }] }, asAccount(SALES)));
   await expectDenied('⚠️ sales cannot change a recipe in the Calculator', () =>
     mergeWrite(CFG, { ...stamp, recipes: [] }, asAccount(SALES)));
   await expectDenied('…nor hide one in a save of the clients', () =>
@@ -4275,6 +4344,8 @@ async function partialOwners() {
   // The oven loss Food cost weighs: those three numbers, on a recipe that exists.
   await expectAllowed('sales records a weighing on a recipe', () =>
     mergeWrite(`${L}/recipes/R1`, { ...stamp, lossPct: 20, rawGrams: 1000, cookedGrams: 800 }, asAccount(SALES)));
+  await expectAllowed('…and a kept wrong pair: only rawGrams and cookedGrams, no loss', () =>
+    mergeWrite(`${L}/recipes/R1`, { ...stamp, rawGrams: 1000, cookedGrams: 1100 }, asAccount(SALES)));
   await expectDenied('⚠️ …but changes nothing else of it', () =>
     mergeWrite(`${L}/recipes/R1`, { ...stamp, lossPct: 21, name: 'Mine now' }, asAccount(SALES)));
   await expectDenied('…not its rows', () =>

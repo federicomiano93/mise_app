@@ -32,7 +32,22 @@ export function recipeHash(recipeId) {
 
 // The recipe's Food cost, and the way back to the recipe.
 export function foodCostHref(recipeId) { return `foodcost.html${recipeHash(recipeId)}`; }
-export function recipeHref(recipeId) { return `catalogue.html${recipeHash(recipeId)}`; }
+// `spot` 'foodcost' adds `&at=foodcost`: Back from Food cost lands on the Food cost card of
+// the recipe, where the tap came from. Any other spot is ignored.
+export function recipeHref(recipeId, spot) {
+  const hash = recipeHash(recipeId);
+  return `catalogue.html${hash && spot === 'foodcost' ? `${hash}&at=foodcost` : hash}`;
+}
+
+// The spot an address names inside the recipe: 'foodcost' or null.
+// ⚠️ STRICT allowlist — nothing else is ever echoed.
+export function recipeSpotFromHash(hash) {
+  const raw = String(hash ?? '').replace(/^#/, '');
+  if (!raw) return null;
+  let params;
+  try { params = new URLSearchParams(raw); } catch (e) { return null; }
+  return params.get('at') === 'foodcost' ? 'foodcost' : null;
+}
 
 // The recipe id an address names, or null.
 export function recipeIdFromHash(hash) {
@@ -52,17 +67,47 @@ export function ordersHref(recipeId) {
   return id ? `orders.html#from=recipe:${encodeURIComponent(id)}` : 'orders.html#from=catalogue';
 }
 
+// A recipe row's «Order» item (Federico, 7 Nov 2026): the same address plus the ingredient to open
+// in Orders, `orders.html#from=recipe:<id>&order=<ingredient id>`. When either id is unusable the
+// plain recipe address is returned (no `&order`), never half of the longer one.
+export function ordersIngredientHref(recipeId, ingredientId) {
+  const recipe = cleanId(recipeId);
+  const ingredient = cleanId(ingredientId);
+  if (!recipe || !ingredient) return ordersHref(recipeId);
+  return `orders.html#from=recipe:${encodeURIComponent(recipe)}&order=${encodeURIComponent(ingredient)}`;
+}
+
+// One decoded id out of a hash piece, or null when it is empty, padded, holds `/ # ?` or is
+// not valid percent-encoding.
+function strictId(piece) {
+  let id;
+  try { id = decodeURIComponent(piece); } catch (e) { return null; }
+  if (!id || id !== id.trim() || /[/#?]/.test(id) || !cleanId(id)) return null;
+  return id;
+}
+
+const ORIGIN_SHAPE = /^#from=(catalogue|recipe:([^&#?]+)(?:&order=([^&#?]+))?)$/;
+
 // Where Orders was opened from: `{ href }` of the Catalogue place to return to, or null.
-// ⚠️ STRICT: only the two shapes above. Anything else — an unknown word, an id with a slash,
+// ⚠️ STRICT: only the shapes above. Anything else — an unknown word, an id with a slash,
 // `#` or `?`, a stray parameter — is «no button», never a guess.
 export function catalogueOriginFromHash(hash) {
-  const match = /^#from=(catalogue|recipe:([^&#?]+))$/.exec(String(hash ?? ''));
+  const match = ORIGIN_SHAPE.exec(String(hash ?? ''));
   if (!match) return null;
   if (match[1] === 'catalogue') return { href: 'catalogue.html' };
-  let id;
-  try { id = decodeURIComponent(match[2]); } catch (e) { return null; }
-  if (!id || id !== id.trim() || /[/#?]/.test(id) || !cleanId(id)) return null;
+  const id = strictId(match[2]);
+  if (id === null) return null;
+  if (match[3] !== undefined && strictId(match[3]) === null) return null;
   return { href: recipeHref(id) };
+}
+
+// The ingredient a recipe row asked Orders to open: the decoded id when the WHOLE hash is a valid
+// `#from=recipe:<id>&order=<id>`, else null.
+export function orderIngredientFromHash(hash) {
+  const match = ORIGIN_SHAPE.exec(String(hash ?? ''));
+  if (!match || match[3] === undefined) return null;
+  if (strictId(match[2]) === null) return null;
+  return strictId(match[3]);
 }
 
 // May this person open Orders in this venue? The same question js/auth-gate.js asks for

@@ -11,11 +11,12 @@ import { currentSession } from '../firebase.js';
 import { isSectionAllowed } from '../sections.js';
 import {
   scaleCatalogue, baseAmounts, weighableTotalGrams, unitOf, unitText, batchWarning, formatWeight, formatAmount,
-  exportModelOf,
+  exportModelOf, hasDividerAfter,
 } from './catalogue-model.js';
 import {
-  getScaledTarget, setScaledTarget, clearScaledTarget, getIngredients, getRecipesById,
+  getScaledTarget, setScaledTarget, clearScaledTarget, getIngredients, getRecipesById, getSuppliers,
 } from './catalogue-store.js';
+import { splitAmount, splitBlockReason, orderTargetOf, rowKeysOf } from './row-actions-model.js';
 import { recipeAllergens, canLabel, incompleteText, ALLERGEN_REASON_TEXT } from './recipe-allergen-model.js';
 // The declaration this screen now shows. ⚠️ NO NEW ARITHMETIC: buildLabel already
 // flattens sub-recipes, sums duplicates, sorts DESCENDING BY WEIGHT (which is the law,
@@ -57,6 +58,10 @@ const TRASH_SVG =
 const CLOSE_SVG =
   '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>';
 
+// Expand (open full screen) button icon. Static SVG only.
+const EXPAND_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>';
+
 // Whole GRAMS only — the Total row and the batch confirm. A row's amount is written by
 // formatAmount (catalogue-model.js), because kg and l keep their decimals («1,846 kg»).
 // useGrouping:false drops the thousands separator (e.g. 1000 g, not 1,000 g) — Federico's preference.
@@ -97,9 +102,13 @@ const amountEl = ({ num, unit }) => el('span', { class: 'cat-ing-amt' }, [
 // renderDetail, declared AFTER the host that now holds the Food cost card — and a const
 // reached before its line is a "Cannot access before initialization" that blanks the
 // recipe screen.
-function catSection(title, children) {
+//
+// An optional `action` (a button) stands at the TOP RIGHT of the head, beside the h3 and not inside
+// it, so the heading's text stays the heading's text.
+function catSection(title, children, action) {
+  const head = el('h3', { class: 'cat-sec-head' }, [el('span', { class: 'cat-sec-label', text: title })]);
   return el('div', { class: 'cat-sec' }, [
-    el('h3', { class: 'cat-sec-head' }, [el('span', { class: 'cat-sec-label', text: title })]),
+    action ? el('div', { class: 'cat-sec-top' }, [head, action]) : head,
     el('div', { class: 'cat-sec-body' }, children),
   ]);
 }
@@ -125,7 +134,7 @@ function foodCostPanel(recipe, app) {
   return catSection(t('cat.fc.title'), [
     el('p', { class: 'cat-fc-note', text: t('cat.fc.note') }),
     el('button', {
-      class: 'cat-import-btn', type: 'button',
+      class: 'cat-import-btn cat-fc-open', type: 'button',
       onclick: () => app.openFoodCost(recipe),
     }, [
       el('span', { icon: FOODCOST_SVG, 'aria-hidden': 'true' }),
@@ -455,40 +464,40 @@ function guidedPanel(recipe, app, getTarget) {
   return panel;
 }
 
-export function renderDetail({ recipe, app }) {
+export function renderDetail({ recipe, app, split }) {
   // Restore a recently calculated batch (kept per device until Clear or 12h), so
   // leaving and reopening the recipe shows the same scaled amounts. 0 = base.
   let displayTarget = getScaledTarget(recipe.id) || 0;
 
   // The rows live in an inner container so re-rendering (renderRows) never wipes
-  // the zoom button that sits alongside them inside .cat-ing-list.
+  // what sits alongside them inside .cat-ing-list (the open row menu).
   const ingRows = el('div', { class: 'cat-ing-rows' });
 
-  // Tap-to-zoom: a tap on the recipe expands it into a full-screen overlay (bigger
-  // figures, readable across the room); tapping again — the × button, or Escape —
-  // returns to normal. A CSS fixed overlay is used, NOT the Fullscreen API, because
-  // iOS Safari blocks that API for non-video elements.
+  // Full screen: the recipe expands into a full-screen overlay (bigger figures, readable
+  // across the room) from the expand button at the top right of the Ingredients card — and
+  // ONLY from there: a tap on a row opens its menu. The × button, or Escape, returns to
+  // normal. A CSS fixed overlay is used, NOT the Fullscreen API, because iOS Safari blocks
+  // that API for non-video elements. While open it is a dialog, like the Calculator's
+  // (js/calc-fullscreen.js): labelled, focus moves in and back, Tab stays inside.
   let zoomed = false;
 
   // Close (×) lives inside the overlay and only shows while zoomed.
   const closeBtn = el('button', {
     class: 'cat-zoom-close', type: 'button', 'aria-label': t('cat.exitFullScreen'),
-    onclick: (e) => { e.stopPropagation(); setZoom(false); },
+    onclick: () => setZoom(false),
     icon: CLOSE_SVG,
   });
 
-  const ingList = el('div', {
-    class: 'cat-ing-list', role: 'button', tabindex: '0', 'aria-pressed': 'false',
-    'aria-label': t('cat.viewRecipeFullScreen'),
-    onclick: () => setZoom(!zoomed),
-    onkeydown: (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setZoom(!zoomed); }
-      else if (e.key === 'Escape' && zoomed) { e.preventDefault(); setZoom(false); }
-    },
-  }, [ingRows, closeBtn]);
+  const openBtn = el('button', {
+    class: 'cat-zoom-open', type: 'button',
+    'aria-label': t('cat.fullScreen'), title: t('cat.fullScreen'),
+    onclick: () => setZoom(true),
+    icon: EXPAND_SVG,
+  });
 
-  // The − / + text size, inside the zoomed view (js/catalogue/zoom-steps.js). Its buttons stop their
-  // own clicks and keys, so sizing the text never closes the view.
+  const ingList = el('div', { class: 'cat-ing-list' }, [ingRows, closeBtn]);
+
+  // The − / + text size, inside the zoomed view (js/catalogue/zoom-steps.js).
   const zoomControls = buildZoomControls({
     storageKey: 'mise.catZoomStep',
     target: ingList,
@@ -496,15 +505,187 @@ export function renderDetail({ recipe, app }) {
   });
   ingList.appendChild(zoomControls.node);
 
+  // Escape closes the view (only the menu, when one is open); Tab cycles through the overlay's
+  // controls, so nothing behind it is reachable.
+  function onZoomKey(e) {
+    // The view was replaced or removed while open (a live redraw, another screen): stop listening.
+    if (!ingList.isConnected) { document.removeEventListener('keydown', onZoomKey); return; }
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      if (menuState) closeMenu(true); else setZoom(false);
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const stops = [...ingList.querySelectorAll('button')];
+    if (!stops.length) return;
+    const at = stops.indexOf(document.activeElement);
+    const next = e.shiftKey ? (at <= 0 ? stops.length - 1 : at - 1) : (at < 0 || at === stops.length - 1 ? 0 : at + 1);
+    e.preventDefault();
+    stops[next].focus();
+  }
+
   function setZoom(on) {
+    if (on === zoomed) return;
+    closeMenu(false);
     zoomed = on;
     if (on) zoomControls.sync();
     ingList.classList.toggle('cat-ing-list--zoom', on);
-    ingList.setAttribute('aria-pressed', on ? 'true' : 'false');
-    ingList.setAttribute('aria-label', on ? t('cat.exitFullScreen') : t('cat.viewRecipeFullScreen'));
+    if (on) {
+      ingList.setAttribute('role', 'dialog');
+      ingList.setAttribute('aria-modal', 'true');
+      ingList.setAttribute('aria-label', recipe.name || t('cat.ingredients'));
+      document.addEventListener('keydown', onZoomKey);
+    } else {
+      ingList.removeAttribute('role');
+      ingList.removeAttribute('aria-modal');
+      ingList.removeAttribute('aria-label');
+      document.removeEventListener('keydown', onZoomKey);
+    }
     // Lock the page behind the overlay so it can't scroll under it.
     document.body.classList.toggle('cat-zoom-lock', on);
-    if (on) { try { ingList.focus({ preventScroll: true }); } catch (e) { /* best-effort */ } }
+    // Focus goes to the × on open and back to the expand button on close (if still on the page:
+    // a live redraw may have replaced it).
+    if (on || openBtn.isConnected) {
+      try { (on ? closeBtn : openBtn).focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
+    }
+  }
+
+  // ── A row's menu: «Split into 2 parts» and «Order» ─────────────────────────────
+  //
+  // ⚠️ NOT THE POPOVER API (the lab tablet's Chrome 101 has none): a plain element appended
+  // INSIDE ingList — it goes away with the view on a live redraw and sits inside the zoom
+  // overlay's stacking context — positioned fixed through the CSSOM (CSP: no style attribute).
+  // The split is DISPLAY ONLY: nothing is saved and the export model is untouched.
+  //
+  // ⚠️ A SPLIT BELONGS TO THE INGREDIENT, NOT TO THE ROW NUMBER: a row added above it on another
+  // phone (a live redraw) must not move the halves onto the next ingredient down. The key is the
+  // linked ingredient (or the typed name), with the occurrence count for a row listed twice.
+  const rowKeys = rowKeysOf(recipe.ingredients);
+  const splitSet = new Set(Array.isArray(split) ? split.filter(key => rowKeys.includes(key)) : []);
+  let lastAmounts = [];
+  let menuState = null; // { index, rowBtn, menu, cleanup }
+
+  const rowButton = (i) => ingRows.querySelectorAll('.cat-ing-row-btn')[i] || null;
+
+  function closeMenu(refocus) {
+    if (!menuState) return;
+    const { rowBtn, menu, cleanup } = menuState;
+    menuState = null;
+    cleanup();
+    menu.remove();
+    rowBtn.setAttribute('aria-expanded', 'false');
+    if (refocus && rowBtn.isConnected) {
+      try { rowBtn.focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
+    }
+  }
+
+  // aria-disabled, NOT the disabled attribute: the item stays focusable so its reason is read.
+  function menuItem(label, why, enabled, onChoose) {
+    const item = el('button', {
+      class: 'cat-row-menu-item', type: 'button', role: 'menuitem',
+      'aria-disabled': enabled ? null : 'true',
+      onclick: () => { if (enabled) onChoose(); },
+    }, [el('span', { class: 'cat-row-menu-label', text: label })]);
+    if (!enabled && why) item.appendChild(el('span', { class: 'cat-row-menu-why', text: why }));
+    return item;
+  }
+
+  // Under the row, right edges aligned; above it when it does not fit below. Never off screen.
+  function placeMenu(menu, row) {
+    const root = document.documentElement;
+    const vw = root.clientWidth;
+    const vh = root.clientHeight;
+    menu.style.top = '0px';
+    menu.style.left = '0px';
+    const w = menu.offsetWidth;
+    const h = menu.offsetHeight;
+    const rect = row.getBoundingClientRect();
+    let top = rect.bottom + 4;
+    if (top + h > vh - 8) top = Math.max(8, rect.top - h - 4);
+    const left = Math.max(8, Math.min(rect.right - w, vw - w - 8));
+    menu.style.top = `${Math.round(top)}px`;
+    menu.style.left = `${Math.round(left)}px`;
+  }
+
+  function openMenu(i, rowBtn) {
+    if (menuState && menuState.index === i) { closeMenu(true); return; }
+    closeMenu(false);
+    const ing = recipe.ingredients[i];
+    const unit = unitOf(ing);
+    const isSplit = splitSet.has(rowKeys[i]);
+    const items = [];
+
+    const blocked = splitBlockReason(lastAmounts[i], unit);
+    // A row that is already split can always be put back, whatever its amount has become.
+    const canToggle = isSplit || blocked === null;
+    items.push(menuItem(
+      isSplit ? t('cat.split.undo') : t('cat.split.do'),
+      canToggle ? '' : t(blocked === 'toTaste' ? 'cat.split.toTaste' : 'cat.split.tooSmall'),
+      canToggle,
+      () => {
+        if (isSplit) splitSet.delete(rowKeys[i]); else splitSet.add(rowKeys[i]);
+        closeMenu(false);
+        renderRows();
+        const again = rowButton(i);
+        if (again) { try { again.focus({ preventScroll: true }); } catch (e) { /* best-effort */ } }
+      },
+    ));
+
+    if (app.mayOpenOrders && app.mayOpenOrders()) {
+      // Asked now, not when the screen was drawn: the ingredient and supplier lists may have
+      // arrived since.
+      const target = orderTargetOf(ing, getIngredients(), getSuppliers());
+      const reasonKey = { recipe: 'cat.order.isRecipe', notInUse: 'cat.order.notInUse', noSupplier: 'cat.order.noSupplier' };
+      items.push(menuItem(
+        t('cat.order.do'),
+        target.ok ? '' : t(reasonKey[target.reason]),
+        target.ok,
+        () => { closeMenu(false); app.orderIngredient(recipe.id, target.ingredientId); },
+      ));
+    }
+
+    const menu = el('div', {
+      class: 'cat-row-menu', role: 'menu', 'aria-label': t('cat.rowMenu.label', { name: ing.label }),
+      onkeydown: (e) => {
+        const stops = [...menu.querySelectorAll('[role="menuitem"]')];
+        const at = stops.indexOf(document.activeElement);
+        const focusAt = (n) => stops[n].focus({ preventScroll: true });
+        if (e.key === 'Escape' || e.key === 'Tab') { e.preventDefault(); e.stopPropagation(); closeMenu(true); }
+        else if (e.key === 'ArrowDown') { e.preventDefault(); focusAt((at + 1) % stops.length); }
+        else if (e.key === 'ArrowUp') { e.preventDefault(); focusAt(at <= 0 ? stops.length - 1 : at - 1); }
+        else if (e.key === 'Home') { e.preventDefault(); focusAt(0); }
+        else if (e.key === 'End') { e.preventDefault(); focusAt(stops.length - 1); }
+      },
+    }, items);
+
+    // Closes without moving focus on a tap outside. A scroll (the page, the tablet pane or the zoom
+    // overlay) or a resize MOVES it with its row, and closes it only once the row has left the
+    // screen: the on-screen keyboard folding away as the row is tapped resizes and scrolls the page,
+    // and closing then made the menu flash and vanish under the finger. Every listener goes with it.
+    const onPointerDown = (e) => {
+      if (!menu.isConnected || (!menu.contains(e.target) && !rowBtn.contains(e.target))) closeMenu(false);
+    };
+    const onAnyScroll = () => {
+      const r = rowBtn.getBoundingClientRect();
+      if (!rowBtn.isConnected || r.bottom < 0 || r.top > document.documentElement.clientHeight) closeMenu(false);
+      else placeMenu(menu, rowBtn);
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('scroll', onAnyScroll, true);
+    window.addEventListener('resize', onAnyScroll);
+    menuState = {
+      index: i, rowBtn, menu,
+      cleanup: () => {
+        document.removeEventListener('pointerdown', onPointerDown, true);
+        document.removeEventListener('scroll', onAnyScroll, true);
+        window.removeEventListener('resize', onAnyScroll);
+      },
+    };
+
+    ingList.appendChild(menu);
+    rowBtn.setAttribute('aria-expanded', 'true');
+    placeMenu(menu, rowBtn);
+    try { items[0].focus({ preventScroll: true }); } catch (e) { /* best-effort */ }
   }
 
   // GRAMS, like the recipe rows and the Total right above it — type 17500 and you get
@@ -530,14 +711,34 @@ export function renderDetail({ recipe, app }) {
   let lastExport = null;
 
   function renderRows() {
+    closeMenu(false);
     ingRows.replaceChildren();
     const scaled = displayTarget > 0;
     const amounts = scaled ? scaleCatalogue(recipe, displayTarget) : baseAmounts(recipe);
+    lastAmounts = amounts;
     recipe.ingredients.forEach((ing, i) => {
-      ingRows.appendChild(el('div', { class: 'cat-ing-row' }, [
+      const unit = unitOf(ing);
+      // A split row also shows the two parts, in the row's own unit. Recomputed from what the row
+      // shows now, so a new batch weight updates it; an amount too small to split shows none.
+      const parts = splitSet.has(rowKeys[i]) ? splitAmount(amounts[i], unit) : null;
+      const part = (v) => `${formatAmount(v, unit)} ${unitText(unit)}`;
+      const row = el('button', {
+        type: 'button',
+        class: 'cat-ing-row cat-ing-row-btn' + (hasDividerAfter(recipe.ingredients, i) ? ' cat-ing-row--divider' : '')
+          + (parts ? ' cat-ing-row--split' : ''),
+        'aria-haspopup': 'menu', 'aria-expanded': 'false',
+        onclick: () => openMenu(i, row),
+      }, [
         el('span', { class: 'cat-ing-name', text: ing.label }),
-        amountEl(amountParts(amounts[i], unitOf(ing))),
-      ]));
+        amountEl(amountParts(amounts[i], unit)),
+        // The second part's unit sits in the same fixed slot as the row's own unit (.cat-ing-unit),
+        // so «→ 625 g + 625 g» ends on the same column as «1250 g» above it.
+        parts ? el('span', { class: 'cat-ing-split' }, [
+          el('span', { text: t('cat.split.line', { a: part(parts.a), b: formatAmount(parts.b, unit) }) }),
+          el('span', { class: 'cat-ing-unit', text: unitText(unit) }),
+        ]) : null,
+      ]);
+      ingRows.appendChild(row);
     });
     // Total = the WEIGHABLE mass in grams (weight + volume rows): when scaled it is
     // the target, at base the recipe's own weighable total. Non-weight rows (pieces /
@@ -700,7 +901,7 @@ export function renderDetail({ recipe, app }) {
     // rewrites. Nothing depends on the order: the host's cards are replaced in place,
     // and the guided panel reads the weight through a closure rather than off the DOM.
     el('div', { class: 'cat-detail-top' }, [
-      catSection(t('cat.ingredients'), [ingList]),
+      catSection(t('cat.ingredients'), [ingList], openBtn),
       // ⚠️ THE WHOLE CARD GOES WHEN THE PANEL DOES. A recipe of pieces and «to taste»
       // has nothing to scale by weight, and a headed card standing empty reads as
       // something broken rather than as something that does not apply.
@@ -742,6 +943,13 @@ export function renderDetail({ recipe, app }) {
     // phone must reach this screen. Leaving the card alone would fix the disappearance
     // and freeze the answer at whatever was known when the screen opened, which on
     // this screen is its own kind of wrong.
+    // The rows split in two, so a live redraw of this same recipe can keep them split.
+    splitRows: () => [...splitSet],
+    // Called before this view is replaced by a fresh one (a live redraw): its listeners go.
+    destroy() {
+      closeMenu(false);
+      document.removeEventListener('keydown', onZoomKey);
+    },
     refreshCost(latest) {
       const fresh = latest || recipe;
       // ⚠️ Carry the disclosure's state across the rebuild. Somebody reading the list

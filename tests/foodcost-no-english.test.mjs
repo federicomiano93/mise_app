@@ -26,8 +26,9 @@ test('⚠️ no English phrase is written into the Food cost screens any more', 
 test('every key they ask for exists in both languages, and the Italian is Italian', () => {
   const { en, it } = _dictionaries();
   const keys = ['fc.vat.standard', 'fc.vat.reduced', 'fc.vat.minimum', 'fc.vat.zero', 'fc.notPriced', 'fc.pricedByWeight',
-    'fc.priceEach', 'fc.thisRecipePartlyPriced', 'fc.aria.changeLine', 'fc.aria.quantity', 'fc.aria.kilos', 'fc.aria.pieces',
-    'fc.aria.unit', 'fc.unit.pieces'];
+    'fc.priceEach', 'fc.thisRecipePartlyPriced', 'fc.aria.changeLine', 'fc.aria.quantity', 'fc.aria.pieces',
+    'fc.aria.unit', 'fc.unit.pieces', 'fc.noWeightLoss', 'fc.noWeightLossHint', 'fc.checkWeighing',
+    'fc.saveWithWeightWarnings'];
   // The VAT words are named in js/vat-rates.js's per-country table (moved out of
   // foodcost-model.js on 29 Sep 2026, which now only re-exports it — see the note
   // there), the rest in the two screens.
@@ -39,5 +40,15 @@ test('every key they ask for exists in both languages, and the Italian is Italia
     assert.notEqual(it[key], en[key], `${key} in Italian must not be the English`);
   }
   assert.match(en['fc.priceEach'], /\{price\}/);
+  assert.ok(used.includes("'fc.weightWarningLine'"), 'the warning line must actually be asked for');
+  for (const lang of [en, it]) {
+    assert.match(lang['fc.weightWarningLine'], /\{name\}.*\{warning\}/);
+    assert.match(lang['fc.saveWithWeightWarnings'], /\{lines\}/);
+    assert.match(lang['fc.checkWeighing'], /\{name\}/);
+  }
+  assert.equal(it['fc.noWeightLoss'], 'Prodotto finito, nessun calo peso');
+  assert.equal(en['fc.noWeightLoss'], 'Finished product — no weight loss');
+  assert.ok(!('fc.aria.kilos' in en) && !('fc.aria.kilos' in it),
+    'a recipe line has a unit select now: its amount box is just «Quantity», like an ingredient\'s');
   assert.match(it['fc.priceEach'], /\{price\}/);
 });

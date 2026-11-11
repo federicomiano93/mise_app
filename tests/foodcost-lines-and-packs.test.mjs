@@ -223,7 +223,9 @@ test('⚠️⚠️ every save carries the product model, and the rules refuse a 
 
 test('«Composto da» is one card: the lines, the add button, and the weighings LAST', () => {
   const editor = codeOf(read('js/foodcost/foodcost-editor.js'));
-  assert.match(editor, /const madeOf = el\('div', \{ class: 'fc-madeof' \}, \[componentRows, addLineBtn, weighRows\]\);/);
+  assert.match(editor, /const madeOf = el\('div', \{ class: 'fc-madeof' \}, \[componentRows, addLineBtn\]\);/);
+  assert.match(editor, /card\('fc\.madeOf', \[madeOf, weighHead, weighRows\]\)/,
+    'the weighings come LAST in the same card, under their own sub-heading');
   assert.match(editor, /addLineBtn\.textContent = working\.components\.length \? t\('fc\.addRecipeOrIngredient'\) : t\('fc\.addRecipe'\);/,
     'empty: add a recipe; after one: a recipe or an ingredient');
   assert.match(editor, /const chosen = await pick\(working\.components\.length \? 'line' : 'recipe'\);/);
@@ -244,7 +246,7 @@ test('⚠️ ingredients offered to a product are never packaging, and packaging
   const main = codeOf(read('js/foodcost/foodcost-main.js'));
   const ing = main.slice(main.indexOf('ingredientOptions()'), main.indexOf('packagingOptions()'));
   assert.match(ing, /!isPackaging\(i\)/);
-  assert.doesNotMatch(ing, /formatRate|priceEach|notPriced/, 'no price on an ingredient offered to «Composto da»');
+  assert.doesNotMatch(ing, /formatRate|fcMoney|fcNumber|priceEach|notPriced/, 'no price on an ingredient offered to «Composto da»');
   const pack = main.slice(main.indexOf('packagingOptions()'));
   assert.match(pack, /isPackaging\(i\)/);
 });

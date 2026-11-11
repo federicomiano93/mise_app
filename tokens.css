@@ -1147,6 +1147,15 @@ body[data-card="foodcost"] .app-header.app-header--save {
   margin: 0;
 }
 
+/* The invite role was left empty: the sentence under the select turns into the
+   error, and the select itself is outlined (same pattern as .fb-area-invalid).
+   Declared after .people-note so it wins at equal specificity. */
+.people-note--error { color: var(--error); font-weight: 600; }
+.set-block .set-select[aria-invalid="true"] { border-color: var(--danger); background: var(--error-bg); }
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  .set-block .set-select[aria-invalid="true"] { background: color-mix(in srgb, var(--danger) 8%, var(--surface)); }
+}
+
 /* Read aloud across a kitchen, so it is the largest thing on the screen and the
    digits line up: tabular-nums stops "111" looking narrower than "888". */
 .people-digits {
@@ -1531,6 +1540,27 @@ body[data-card="foodcost"] .app-header.app-header--save {
    cannot be reached, or that mailto only OPENS the mail app. It has to be readable, so
    it is not --text-4 (which measures 3.6:1 and is an open accessibility item). */
 .send-route-note { font-size: 12px; color: var(--text-3); }
+/* The export dialog's «Round the weights» switch: the settings kit's .set-switch, in a row as tall as
+   a route (56px, past the 44px floor). The text column may shrink and wrap, so Italian fits at 296px. */
+.export-round {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  margin: 0 0 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+/* The switch makes the dialog taller than the base .app-dialog, which caps its height and does not scroll:
+   on a short phone held sideways Cancel would be cut off. */
+.export-sheet .app-dialog { overflow-y: auto; }
+.export-round-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.export-round-name { font-size: 15px; font-weight: 600; }
+.export-round-note { font-size: 12px; color: var(--text-3); }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    PICKING — the list under a field while it is typed (js/pick-suggest.js) and the
@@ -1716,6 +1746,11 @@ body[data-card="foodcost"] .app-header.app-header--save {
 /* Inside a card with overflow: hidden an outside ring is cut off: draw it inside. */
 .set-row:focus-visible { outline: 3px solid var(--accent-2); outline-offset: -3px; }
 .set-door:active { background: var(--surface-2); }
+/* A door that cannot be opened yet (Clients, until the address book has been read). Its sub-line
+   stays at full strength: it is the sentence saying why. */
+.set-door:disabled { cursor: default; }
+.set-door:disabled .set-title, .set-door:disabled::after { opacity: .5; }
+.set-door:disabled:active { background: transparent; }
 .set-door::after {
   content: '';
   flex-shrink: 0;

@@ -505,14 +505,15 @@ test('⚠️ the card you tap and the screen you land on carry the SAME name', (
 // this test used to pin — the SHORT key, because three buttons shared a 320px phone
 // and this bar once shipped a broken release from a tab that wrapped by 3px — has no
 // button left to sit on. What replaces it is the rule that the bar cannot come back
-// crowded without somebody deciding to: it holds exactly one button.
-test('⚠️⚠️ the Orders bottom bar holds ONE button, and no door to suppliers', () => {
+// crowded without somebody deciding to: it holds exactly two buttons (History came
+// back beside Settings on 3 Nov 2026, his decision).
+test('⚠️⚠️ the Orders bottom bar holds TWO buttons, and no door to suppliers', () => {
   const page = read('orders.html');
   // The bar holds a button and nothing nested, so the first closing div is its own.
   const bar = page.match(/<div class="recipe-footer"[\s\S]*?<\/div>/);
   assert.ok(bar, 'orders.html must still have a bottom bar');
   const buttons = bar[0].match(/<(?:button|a)[^>]*class="recipe-footer-btn"/g) || [];
-  assert.equal(buttons.length, 1, 'one button: Settings');
+  assert.equal(buttons.length, 2, 'two buttons: History and Settings');
   assert.match(bar[0], /id="settings-footer-btn"/);
   assert.ok(!/id="suppliers-footer-btn"/.test(page),
     'the second door left with the bar — the Home card is the one that remains');

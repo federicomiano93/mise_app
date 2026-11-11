@@ -96,7 +96,8 @@ export function weighableTotalGrams(recipe) {
 
 // The model js/recipe-export.js turns into a PDF or a spreadsheet. ⚠️ `amounts` is EXACTLY the
 // array the screen drew (renderRows in catalogue-detail.js), never recomputed here, so the file
-// can only say what the screen says. Each row keeps its OWN unit; `factor` is the grams in one of
+// starts from what the screen says; only the PDF's own «round the weights» switch prints a gram row
+// differently. Each row keeps its OWN unit; `factor` is the grams in one of
 // it (0 for pieces, spoons, a pinch, to taste), and `totalGrams` is the Total row's number.
 export function exportModelOf(recipe, amounts, totalGrams) {
   const ings = (recipe && Array.isArray(recipe.ingredients)) ? recipe.ingredients : [];
@@ -113,6 +114,7 @@ export function exportModelOf(recipe, amounts, totalGrams) {
       // kg and l keep their decimals; `text` is the number exactly as the screen writes it.
       decimals: unitDecimals(unitOf(ing)),
       text: amounts[i] === null || amounts[i] === undefined ? null : formatAmount(amounts[i], unitOf(ing)),
+      ...(ing.dividerAfter === true ? { dividerAfter: true } : {}),
     })),
   };
 }
@@ -152,6 +154,11 @@ function normalizeIngredient(raw) {
   // guided-model.js withRowIds() assigns them, and only on save.
   const rid = raw.rid != null ? String(raw.rid).trim() : '';
   if (rid) row.rid = rid;
+
+  // ⚠️ SAME TRAP A THIRD TIME: the divider line the owner put under this row. Strictly `true`
+  // (a stored 'true', 1 or false is no line), absent otherwise, so every recipe written before
+  // dividers existed stays byte-identical.
+  if (raw.dividerAfter === true) row.dividerAfter = true;
   return row;
 }
 
@@ -492,6 +499,64 @@ export function linkedItemName(link, ingredients, recipes) {
   return (ing ? ingredientDisplayName(ing).trim() : '') || fallback;
 }
 
+// Every name the linked item answers to: for an ingredient its display name, its `name` (the name
+// in the order message), its short name and its `invoiceName` (the supplier's invoice description,
+// js/ingredient-name.js); for a recipe its name. Distinct, empty ones left out. [] when the item is
+// not loaded and the link carries no name.
+export function linkedItemNames(link, ingredients, recipes) {
+  const names = [linkedItemName(link, ingredients, recipes)];
+  if (link && link.kind === 'ingredient') {
+    const ing = ingredients && ingredients[String(link.refId)];
+    if (ing) names.push(ing.name, ing.shortName, ing.invoiceName);
+  }
+  return [...new Set(names.map(n => String(n ?? '').trim()).filter(Boolean))];
+}
+
+// Trim, lower-case, no accents, one space between words: the shape two names are compared in.
+export function normalizeNameForCompare(value) {
+  return String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLocaleLowerCase().replace(/\s+/g, ' ').trim();
+}
+
+// A name as its words only: letters and digits, everything else a separator, no accents, lower-case,
+// single spaces. «Unsalted Butter 250g» -> «unsalted butter 250g».
+function nameWords(value) {
+  return String(value ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .toLocaleLowerCase().split(/[^\p{L}\p{N}]+/u).filter(Boolean).join(' ');
+}
+
+// Do two names resemble each other? Yes when the WORDS of one appear, whole and in order, inside the
+// other: «Farina» in «Farina 0 Caputo», but not «Salt» in «Unsalted Butter» and not «Drv farina» in
+// «Drv farinata». ⚠️ Deliberately loose in one way: a name that only EXTENDS the other
+// («Latte» -> «Latte di cocco») still resembles it, so that case does not warn — an accepted limit.
+export function namesResemble(a, b) {
+  const x = nameWords(a);
+  const y = nameWords(b);
+  if (!x || !y) return false;
+  return ` ${y} `.includes(` ${x} `) || ` ${x} `.includes(` ${y} `);
+}
+
+// Does a typed row name still resemble ANY of `names`? An empty typed name never does; the caller
+// decides what that means (the required-field check handles an empty name).
+export function labelResemblesLink(label, names) {
+  return (Array.isArray(names) ? names : []).some(name => namesResemble(label, name));
+}
+
+// Should the link line of a LINKED row warn that its name has moved away from what it is linked
+// to? Only when the name differs from `openedLabel` (the name the row had when the editor opened
+// or was last linked by a pick), does not resemble that opened name either («Burro» -> «Burro 82%»
+// is the same thing, more precisely), AND no longer resembles the link. Unlinked rows, empty names
+// and links that name nothing never warn. Typing the original name back clears it.
+export function staleLinkName({ label, openedLabel, link, ingredients, recipes }) {
+  if (!link) return '';
+  const typed = normalizeNameForCompare(label);
+  if (!typed || typed === normalizeNameForCompare(openedLabel)) return '';
+  if (namesResemble(label, openedLabel)) return '';
+  const names = linkedItemNames(link, ingredients, recipes);
+  if (!names.length || labelResemblesLink(label, names)) return '';
+  return linkedItemName(link, ingredients, recipes);
+}
+
 // Is `chosen` the very link the row already has (same kind, same id)? Choosing it again
 // changes nothing — and so must not rename the row.
 export function isSameLink(current, chosen) {
@@ -533,6 +598,9 @@ export function applyLink(row, chosen, { label } = {}) {
 // mixing step points at, so reordering the ingredients never unhooks a step (13 Sep 2026:
 // «dammi la possibilità di spostare l'ordine degli ingredienti già compilati»).
 // An index outside the list, or a move to where it already is, gives the list back as it was.
+// ⚠️ A DIVIDER LINE STAYS WHERE IT IS BETWEEN THE ROWS: a row that moves leaves its line behind, so
+// the row just above its old place takes it (or it goes, when nothing is above). This mutates the
+// moved row and that one neighbour: the editor's rows are its own working copies.
 export function moveRow(list, from, to) {
   const rows = Array.isArray(list) ? list.slice() : [];
   const a = Math.trunc(Number(from));
@@ -540,8 +608,42 @@ export function moveRow(list, from, to) {
   if (!Number.isInteger(a) || !Number.isInteger(b) || a === b
     || a < 0 || b < 0 || a >= rows.length || b >= rows.length) return rows;
   const [row] = rows.splice(a, 1);
+  if (row?.dividerAfter === true) {
+    delete row.dividerAfter;
+    const above = rows[a - 1];
+    if (above && typeof above === 'object') above.dividerAfter = true;
+  }
   rows.splice(b, 0, row);
+  // A line the move left under the LAST row is taken off now: hidden there, it would come back with the
+  // next row added or moved below it (code review, 5 Nov 2026).
+  const last = rows[rows.length - 1];
+  if (last && typeof last === 'object' && last.dividerAfter === true) delete last.dividerAfter;
   return rows;
+}
+
+// Is a line drawn under row i? Never under the last row: nothing to divide it from.
+export const hasDividerAfter = (rows, i) => Array.isArray(rows) && i < rows.length - 1 && rows[i]?.dividerAfter === true;
+
+// The rows `keep` accepts. A dropped row's line goes to the kept row above it (copied, never mutated: the caller's rows may be the store's), or goes with it when there is none.
+export function keepRows(rows, keep) {
+  const kept = [];
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (keep(row)) { kept.push(row); continue; }
+    if (row?.dividerAfter === true && kept.length) kept[kept.length - 1] = { ...kept[kept.length - 1], dividerAfter: true };
+  }
+  return kept;
+}
+
+// Deleting the last row leaves no hidden line under the new last one (it would reappear with the next row).
+export const removeRow = (rows, index) => withoutTrailingDivider(keepRows(rows, row => row !== rows[index]));
+
+// What is saved: a line after the last row is taken off.
+export function withoutTrailingDivider(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  const last = list[list.length - 1];
+  if (last?.dividerAfter !== true) return list;
+  const { dividerAfter, ...rest } = last;
+  return [...list.slice(0, -1), rest];
 }
 
 // ── kg scaling (pure pro-rata "total" — the catalogue's only calc logic) ──────
@@ -697,7 +799,7 @@ export function toCalculatorRecipe(recipe) {
     logic: 'total',
     // The Calculator is grams-only: convert weighable rows to grams and leave out
     // non-weighable ones (pieces / spoons / pinch / to-taste). The UI warns first
-    // when anything is left out — see nonWeighableLabels.
+    // when anything is left out — see nonWeighableLabels. Divider lines are not carried over (decided).
     ingredients: (recipe.ingredients || [])
       .filter(i => isWeighableUnit(unitOf(i)))
       .map(i => ({ label: i.label, grams: Math.round(ingGrams(i)) })),

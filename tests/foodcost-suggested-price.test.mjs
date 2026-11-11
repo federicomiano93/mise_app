@@ -1,4 +1,5 @@
-// «What do I sell it at?» — the suggested selling price, and no money under a recipe line.
+// «What do I sell it at?» — the suggested selling price, and what the note under a recipe line
+// says (its money moved to its own line on 7 Nov 2026: tests/foodcost-line-costs.test.mjs).
 //
 // Federico, 13 Sep 2026: «la sezione riguardante il prezzo di vendita … un'altra versione
 // dove avendo calcolato sopra il costo … io inserisco … l'iva, il food cost che voglio
@@ -68,17 +69,23 @@ test('⚠️ the editor draws the suggestion from the SAME unit cost as the prod
   assert.match(editor, /paintSuggestion\(tables\);/, 'repainted with every other figure');
 });
 
-test('⚠️⚠️ no money under a recipe line, and none in the recipe chooser', () => {
+// ⚠️ THE OLD RULE «no money under a recipe line» (13 Sep 2026) WAS REVERSED BY FEDERICO ON 7 NOV 2026
+// («il costo dell'ingrediente al kg e il costo della quantità selezionata»). The money now lives in
+// line-cost.js, in its own element above the note; the NOTE under it stays money-free and still
+// says what to do. The recipe chooser still shows no price.
+test('⚠️⚠️ the note under a recipe line holds no money (the money is line-cost.js\'s), and none in the recipe chooser', () => {
   const editor = read('js/foodcost/foodcost-editor.js');
   const start = editor.indexOf('function lineNote(');
   const recipeBranch = editor.slice(start, editor.indexOf('const ingredient = tables.ingredients', start));
   assert.ok(recipeBranch.length > 50, 'the recipe branch of lineNote must be found');
-  assert.doesNotMatch(recipeBranch, /formatRate|formatMoney|\/ kg/, 'a recipe line says nothing about money');
-  assert.match(recipeBranch, /t\('fc\.thisRecipeIsNot'\)/, 'but a recipe with no price still says so');
+  assert.doesNotMatch(recipeBranch, /formatRate|formatMoney|fcMoney|fcNumber|\/ kg/, 'the note itself says nothing about money');
+  assert.match(recipeBranch, /t\('fc\.thisRecipePartlyPriced'\)/, 'a partly priced recipe still says so');
+  assert.doesNotMatch(recipeBranch, /fc\.thisRecipeIsNot/, 'a recipe with no price says it in the money line, not twice');
+  assert.match(read('js/foodcost/line-cost.js'), /t\('fc\.line\.noPrice'\)/, 'the money line says «No price»');
 
   const main = read('js/foodcost/foodcost-main.js');
   const opt = main.slice(main.indexOf('recipeOptions()'), main.indexOf('packagingOptions()'));
-  assert.doesNotMatch(opt, /costRecipe|formatRate|notPriced|\/ kg/, 'the chooser names recipes and nothing else');
+  assert.doesNotMatch(opt, /costRecipe|formatRate|fcMoney|fcNumber|notPriced|\/ kg/, 'the chooser names recipes and nothing else');
 });
 
 test('every new word exists in both languages, and the Italian is Italian', () => {

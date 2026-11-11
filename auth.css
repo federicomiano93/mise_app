@@ -148,6 +148,12 @@ a.auth-btn-link {
   margin-top: 4px;
 }
 
+/* The «different account» link of the code form sits ABOVE the form: air below it, so
+   «Your first name» does not read as belonging to the link. */
+.auth-link--before-form {
+  margin-bottom: 12px;
+}
+
 /* ⚠️ THE THREE LINKS UNDER THE FORM MUST LINE UP WITH EACH OTHER, and they did not:
    .auth-guide-link centred itself (below) while the other two are bare <button>s,
    which sit wherever the flow puts them. Measured on a tablet: "Forgot your password?"

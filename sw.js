@@ -1,4 +1,4 @@
-const CACHE_NAME = 'theitalianclub-v728';
+const CACHE_NAME = 'theitalianclub-v766';
 // Firebase SDK modules (loaded from gstatic) are cached SEPARATELY from CACHE_NAME
 // so they survive the cache-version bump that happens on every deploy — otherwise
 // the offline SDK would be wiped each release until the next online load. The name
@@ -15,7 +15,7 @@ const CACHE_NAME = 'theitalianclub-v728';
 // itself failed.
 // So between activate() and that first load, a phone that is OFFLINE cannot boot:
 // the code asks for the new version and nothing has it. In practice the window is very
-// small — activate() only happens after a successful 70-file precache, i.e.
+// small — activate() only happens after a successful 72-file precache, i.e.
 // online, and tapping the update banner reloads the page immediately — but it is
 // not zero, and it is the reason to bump the SDK deliberately rather than often.
 // Leaving the name unchanged would close the window and cost ~1 MB of dead
@@ -53,6 +53,7 @@ const ASSETS = [
   './index.html',
   './home.html',
   './calculator.html',
+  './clients.html',
   './orders.html',
   './suppliers.html',
   './install-guide.html',
@@ -104,6 +105,7 @@ const ASSETS = [
   './dist/pastries.js',
   './dist/foodcost.js',
   './dist/inventory.js',
+  './dist/clients.js',
   './qr.png',
   './dist/tokens.css',
   './dist/auth.css',
@@ -147,29 +149,30 @@ const ASSETS = [
 // hash (first 16 characters): the phone checks every download against it, and an update
 // copies a file whose hash has not changed out of the previous cache instead of fetching it.
 const ASSET_HASHES = {
-  "./": '9f05ef9ab6042a80',
-  "./index.html": '9f05ef9ab6042a80',
+  "./": '631eac5aea83039c',
+  "./index.html": '631eac5aea83039c',
   "./home.html": 'a4401ab28cb28eb9',
   "./calculator.html": 'd4dd314d40bb7822',
-  "./orders.html": '4e30f965ea7c682b',
+  "./clients.html": '2b9ced34e0331c4e',
+  "./orders.html": 'e4f76c1d684b509e',
   "./suppliers.html": '0f24580d8d5a1e05',
   "./install-guide.html": '322c79acf63896ef',
   "./reset-password.html": '298724d76511df05',
-  "./dist/i18n.js": '3b88397b38b54c20',
-  "./dist/index.js": '0cf72390e322eef7',
-  "./dist/calculator.js": 'ffcfbdbd24e33fac',
-  "./dist/orders.js": 'ff3db284f6de4cbd',
-  "./dist/suppliers.js": 'ef5db9035acac2f1',
+  "./dist/i18n.js": '2a704cde63439177',
+  "./dist/index.js": '45c0ae7dfb53f215',
+  "./dist/calculator.js": '8259c9b4d4ad897e',
+  "./dist/orders.js": 'ff03bb7be050e54c',
+  "./dist/suppliers.js": 'f3a0b1b0663e17a6',
   "./dist/install-guide.js": 'beda437b74a9c6f8',
   "./js/allergen-model.js": 'a9ad7592da832a56',
-  "./js/calculator-config.js": '0608b3c515d18cb3',
-  "./js/credentials.js": 'b805f88d003ea918',
+  "./js/calculator-config.js": '5dd726117544e2d4',
+  "./js/credentials.js": 'b7af17170b879935',
   "./js/currency.js": '241b1dbdf4cc465f',
   "./js/firebase-target.js": 'b3759997e54ddbc3',
-  "./js/firebase.js": 'bc4439829bae8cd2',
-  "./js/home-cards.js": '0b585e1be1830861',
+  "./js/firebase.js": '2acc9652e4f27abf',
+  "./js/home-cards.js": '4e0740cfb8b8e092',
   "./js/i18n-dom.js": '24249af4367511e5',
-  "./js/i18n.js": 'a50313df1bf9e2be',
+  "./js/i18n.js": '21eebca74ec15768',
   "./js/keyboard-done.js": 'de05a6dd1f3aac26',
   "./js/local-data.js": '91aa7f1699c897a1',
   "./js/location.js": '6aaf53615a8739d1',
@@ -179,20 +182,21 @@ const ASSET_HASHES = {
   "./js/reset-password.js": '82c76584ef73d006',
   "./js/roles.js": '73b6b66fdb94b639',
   "./js/same-data.js": '11ff91c9b0192d20',
-  "./js/sections.js": '83c7b5a102004965',
+  "./js/sections.js": '513a10c234064897',
   "./js/sw-update.js": 'a00457e671ba95c6',
   "./js/update-gate.js": '95f4f9f99e1fd1f4',
   "./js/vendor/jspdf.esm.js": 'c59e9f48f24c403f',
   "./js/vendor/write-excel-file.esm.js": '9c9b6920e629cb74',
-  "./dist/catalogue.js": '23e01d243e227324',
-  "./dist/pastries.js": 'ceee070f33b5f4ff',
-  "./dist/foodcost.js": 'c704da7119fba11b',
-  "./dist/inventory.js": '8a0d9a3b9e8f6bd8',
+  "./dist/catalogue.js": 'a603e2229e278e55',
+  "./dist/pastries.js": '9c8c05664872a993',
+  "./dist/foodcost.js": 'e8f71701ac2be5cb',
+  "./dist/inventory.js": 'fd5d06d3d22b997e',
+  "./dist/clients.js": 'e80c57fa1cf2d8b6',
   "./qr.png": '761a95e5bc25e2ba',
-  "./dist/tokens.css": '28075b98b55369ed',
-  "./dist/auth.css": '58cd14bdbf808ecc',
-  "./dist/style.css": 'f6faeb1a5a53aacd',
-  "./dist/orders.css": '3916050fe8d20a57',
+  "./dist/tokens.css": '0b5c4e5f972da711',
+  "./dist/auth.css": 'cf2810b6fbcabb0c',
+  "./dist/style.css": 'cbba0d3b05f9ad31',
+  "./dist/orders.css": 'e9a4545c954bfa26',
   "./sounds/alarm.wav": '0d1465974f5be95b',
   "./fonts/manrope-latin.woff2": '71eb731d55804619',
   "./fonts/manrope-latin-ext.woff2": 'bd24140af06f1b58',
@@ -205,13 +209,13 @@ const ASSET_HASHES = {
   "./fonts/atkinson-next-digits.woff2": '99ffa5b0e9a45a2b',
   "./js/splash-init.js": 'c68474ad53893e48',
   "./catalogue.html": 'd7e133a7e7180865',
-  "./dist/catalogue.css": '7c60b666dad606ad',
+  "./dist/catalogue.css": '1f13f617b7c80e95',
   "./dist/label-print.css": 'c96c56dfef069675',
   "./dist/records.css": '0285e69618b83eed',
-  "./pastries.html": '7f35bf54c3ee54db',
-  "./dist/pastries.css": '636ec96ab272ae23',
-  "./foodcost.html": '59bab773b490ded3',
-  "./dist/foodcost.css": '0f8589065fc5e520',
+  "./pastries.html": 'dabd4d55c68042a1',
+  "./dist/pastries.css": '74fe2f2c2308173d',
+  "./foodcost.html": '235a42117bf8eb99',
+  "./dist/foodcost.css": '41d22f7368b1f381',
   "./inventory.html": '4caee7fc2b8256a8',
   "./dist/inventory.css": 'c77ebe28c5f42fde',
   "./manifest.json": 'b3afdecd54f14f64',
@@ -247,7 +251,7 @@ const ASSET_HASHES = {
 // code against rules that deployed instantly, which is the very thing the gate exists
 // to prevent. Two things stand between that and a release: the test that every ASSETS
 // entry EXISTS (a mistyped path being the likeliest permanent cause), and this
-// project's post-deploy sweep, which already asks the live site for all 70 files.
+// project's post-deploy sweep, which already asks the live site for all 72 files.
 // ⚠️ NEITHER covers a device-specific failure — nobody has yet confirmed an update
 // landing on a real iPhone under this code.
 //

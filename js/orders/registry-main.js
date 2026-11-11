@@ -20,7 +20,10 @@ import {
   COLLECTIONS, watchCollection, watchIngredientPrices, canManageHere, canManageVenueHere,
   saveDoc, removeDoc, saveIngredientWithPrice, saveSupplierRecord, getPriceHistory,
   watchDoc, setCategoryOnMany, deleteIngredientWithPrice, mayWritePrices, setFavouriteSupplier,
+  watchRecentHistory,
 } from './firebase-orders.js';
+import { dueTodayIds } from './reminders.js';
+import { todayISO } from './day.js';
 import { normalizeFavourites } from './favourite-suppliers.js';
 import { readIngredientPrice } from '../record-data.js';
 import { openInvoiceImport } from './invoice-import-screen.js';
@@ -41,7 +44,11 @@ const state = {
   weekStartsOn: weekStartOf(null),
   // The venue's starred suppliers (config/orders.favouriteSuppliers), ids only.
   favouriteSuppliers: [],
-  loaded: { suppliers: false, ingredients: false, config: false },
+  loaded: { suppliers: false, ingredients: false, config: false, todayHistory: false, draft: false },
+  // For the «To order today» highlight only: today's recorded orders, and the draft's
+  // «closed as not ordered» marks (drafts/current.skipped).
+  todayHistory: [],
+  skipped: null,
   // What the screen says about a list that has not answered yet (listStatus in registry.js).
   failed: { suppliers: false, ingredients: false },
   emptyCopy: { suppliers: false, ingredients: false },
@@ -60,11 +67,29 @@ const host = document.getElementById('registry-host');
 // had no gate either (js/orders/registry.js); registry.js says which word it carries.
 const addBtn = document.getElementById('registry-add');
 
+function dueNow() {
+  if (!(state.loaded.suppliers && state.loaded.todayHistory && state.loaded.draft)) return new Set();
+  return dueTodayIds({
+    suppliers: state.suppliers, history: state.todayHistory, today: todayISO(), skipped: state.skipped,
+  });
+}
+const idsSignature = (ids) => [...ids].sort().join('|');
+// What the supplier list was last painted with (see refreshIfDueChanged at the end of the file).
+let paintedDue = '';
+function dueForPaint() {
+  const ids = dueNow();
+  paintedDue = idsSignature(ids);
+  return ids;
+}
+
 const screen = buildRegistry(
   {
     suppliers: () => state.suppliers,
     ingredients: () => state.ingredients,
     favouriteSuppliers: () => state.favouriteSuppliers,
+    // The suppliers still to order today; nothing until suppliers, today's orders and the draft
+    // have all answered, so an order already placed never flashes as due.
+    dueToday: dueForPaint,
     // ⚠️ THE LANGUAGE IS READ HERE, AT CALL TIME: no venue is open when this module loads.
     // The words are the venue's OUTPUT language, not the screen's (js/record-choices.js).
     // `current` is the item being edited, whose own value is always offered.
@@ -337,3 +362,34 @@ watchIngredientPrices((map, readable) => {
     screen.refresh();
   }
 });
+
+// ⚠️ THESE TWO ARE LAST ON PURPOSE: the rows draw without them and the highlight follows.
+// ⚠️ A REDRAW ONLY WHEN THE HIGHLIGHTED SET DIFFERS FROM THE ONE LAST PAINTED (paintedDue, kept by
+// the screen's own dueToday getter): the draft changes on every keystroke typed on another phone,
+// and each refresh rebuilds the whole tab that is showing — 302 ingredient rows, the 1–2 s freeze
+// on the lab tablet described above. Not even on a listener's first answer: until all three lists
+// are in, the set is empty, and whatever arrives last makes it differ.
+function refreshIfDueChanged(apply = () => {}) {
+  apply();
+  const now = idsSignature(dueNow());
+  if (now === paintedDue) return;
+  // ⚠️ SET HERE TOO, not only by the getter: with the Ingredients tab showing the getter is never
+  // asked, and every later keystroke elsewhere would look like a change and redraw again.
+  paintedDue = now;
+  screen.refresh();
+}
+
+// A bounded query (`date >= today`), a handful of documents, never the archive (P14). A failure
+// only means no highlight. The start stays at the day the page opened: past midnight it still
+// covers the new day.
+watchRecentHistory(todayISO(), (list) => {
+  refreshIfDueChanged(() => { state.todayHistory = list; state.loaded.todayHistory = true; });
+}, err => console.error('Live orders of today failed:', err));
+
+watchDoc(COLLECTIONS.drafts, 'current', (doc) => {
+  refreshIfDueChanged(() => { state.skipped = doc?.skipped || null; state.loaded.draft = true; });
+}, err => console.error('Live draft failed:', err));
+
+// ⚠️ A NEW DAY CHANGES THE ANSWER WITH NO DOCUMENT CHANGING: the lab tablet left on this page
+// overnight would keep yesterday's suppliers lit. Asked once a minute; it redraws only at midnight.
+setInterval(() => refreshIfDueChanged(), 60 * 1000);

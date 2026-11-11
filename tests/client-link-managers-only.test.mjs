@@ -19,7 +19,7 @@ const read = f => readFileSync(new URL(`../${f}`, import.meta.url), 'utf8').repl
 const codeOf = src => src.replace(/^\s*\/\/.*$/gm, '');
 
 const RULES = read('firestore.rules');
-const SETTINGS = codeOf(read('js/calculator-settings.js'));
+const SETTINGS = codeOf(read('js/clients-editor.js'));
 
 function body(src, header) {
   const start = src.indexOf(header);

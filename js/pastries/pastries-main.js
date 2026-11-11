@@ -5,7 +5,8 @@
 // only: it reaches js/firebase.js and js/location.js through its own data layer
 // and never imports from js/orders/ or js/catalogue/.
 
-import { weekdayLabel } from './pastries-model.js';
+import { weekdayLabel, otherWeekdays } from './pastries-model.js';
+import { el } from './dom.js';
 import { t, onLanguageChange } from '../i18n.js';
 import {
   initPastries, getDays, getItems, getNote, getCounts, saveDay, setItemQuantity,
@@ -35,6 +36,7 @@ const saveBtn = document.getElementById('pasSave');
 const headerEl = saveBtn.closest('.app-header');
 const footer = document.getElementById('pasFooter');
 const logsBtn = document.getElementById('pasLogs');
+const copyDayBtn = document.getElementById('pasCopyDay');
 
 // The day the screen opened on: worked out ONCE, at boot. Recomputing it later
 // would let the marked day jump under the person's finger at 4am — which is the
@@ -121,18 +123,25 @@ function lockedFor(day) {
 // to catch a change to something already recorded, not to make every edit slower.
 async function requestEdit(day) {
   if (!lockedFor(day)) return true;
-  const ok = await confirmDialog({
+  if (!(await askToEdit(day))) return false;
+  grantEdit(day);
+  return true;
+}
+
+function askToEdit(day) {
+  return confirmDialog({
     title: t('past.editDayQ', { day: weekdayLabel(day) }),
     message: t('past.alreadyRecordedTonight', { day: weekdayLabel(day) }),
     okLabel: t('ui.edit'),
     cancelLabel: t('ui.cancel'),
   });
-  if (!ok) return false;
-  // The permission carries the work date, so it is spent when the date rolls at
-  // 4am — and spent again by the next Confirm, see grantAfter().
+}
+
+// The permission carries the work date, so it is spent when the date rolls at
+// 4am — and spent again by the next Confirm, see grantAfter().
+function grantEdit(day) {
   setGrant(day, grantAfter('edit', currentWorkDate()));
   repaint();
-  return true;
 }
 
 // ── Waiting for the first answers ────────────────────────────────────────────
@@ -234,7 +243,10 @@ function showDay(day, opts = {}) {
   swap(dayView.node, opts);
 }
 
-function openEditor(day) {
+// `copiedFrom`: the weekday whose list pre-fills this editor ("Copy day"). Only the
+// rows come across; the standing note stays the target's own, and shownDay is left
+// alone so Back returns to the source day while Save lands on the target.
+function openEditor(day, copiedFrom = null, editorApp = app) {
   view = 'editor';
   globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'editor' }));
   dayView = null;
@@ -243,12 +255,19 @@ function openEditor(day) {
   // the unsaved-work question asked from a second place, and there is already a
   // Back that asks it.
   stripHost.hidden = true;
+  // The panel is named by the tab of the day on screen, which a copy has left behind.
+  if (copiedFrom) screen.removeAttribute('aria-labelledby');
   // ⚠️ THE LABEL AND t(), NOT A TEMPLATE: this read «Edit Tuesday / Pastries» on the
   // Italian venue since 5 Aug 2026 — English words AND the stored day id (code review,
   // 29 Sep 2026).
   setHeader({ title: t('past.editDay', { day: weekdayLabel(day) }), sub: t('section.pastries'), back: true, edit: false });
   swap(renderEditor({
-    day, items: getItems(day), note: getNote(day), allDays: getDays(), app,
+    day,
+    items: copiedFrom ? getItems(copiedFrom) : getItems(day),
+    note: getNote(day),
+    allDays: getDays(),
+    app: editorApp,
+    copiedFrom,
   }));
 }
 
@@ -401,6 +420,7 @@ backBtn.addEventListener('click', handleBack);
 // cosmetic: the one screen that can change everything would have been the one
 // screen that never asked.
 saveBtn.addEventListener('click', () => headerSave?.());
+let copying = false;         // «Copy day» is mid-question; more taps add nothing
 let pencilWaiting = false;   // a tap is already waiting for the answers; more taps add nothing
 let waitToastText = null;    // what the «not arrived yet» toast said, so only it is taken down
 
@@ -433,6 +453,96 @@ editBtn.addEventListener('click', async () => {
   if (view !== 'day' || shownDay !== day) return;
   openEditor(day);
 });
+
+// Which weekday to copy `from` onto: a radio list inside the one styled dialog (its
+// `node` option exists for this, so the app keeps a single dialog). The next day is
+// preselected, as it is the usual target. Resolves to the weekday, or null.
+// The language is read here, inside the function, never at module top level.
+async function pickCopyTarget(from) {
+  const targets = otherWeekdays(from);
+  let chosen = targets[0];
+  const rows = targets.map((day, i) => {
+    const n = getItems(day).length;
+    const input = el('input', {
+      type: 'radio',
+      name: 'pas-copy-day',
+      value: day,
+      onchange: () => { chosen = day; },
+    });
+    input.checked = (i === 0);
+    return el('label', { class: 'pas-copy-day' }, [
+      input,
+      el('span', { class: 'pas-copy-day-name', text: weekdayLabel(day) }),
+      el('span', { class: 'pas-copy-day-count', text: n ? t('past.count', { n }) : t('past.copyDayNothing') }),
+    ]);
+  });
+  const ok = await confirmDialog({
+    title: t('past.copyDayQ', { day: weekdayLabel(from) }),
+    message: t('past.copyPickDay'),
+    okLabel: t('past.copyDayGo'),
+    cancelLabel: t('ui.cancel'),
+    node: el('div', { class: 'pas-copy-days', role: 'radiogroup', 'aria-label': t('past.copyOnto') }, rows),
+  });
+  return ok ? chosen : null;
+}
+
+function replaceAllowed(to, from) {
+  return confirmDialog({
+    title: t('past.copyReplaceQ', { day: weekdayLabel(to) }),
+    message: t('past.copyReplaces', { n: getItems(to).length, day: weekdayLabel(to), from: weekdayLabel(from) }),
+    okLabel: t('ui.replace'),
+    cancelLabel: t('ui.cancel'),
+  });
+}
+
+// Copy the shown day onto another weekday. NOTHING is written here: the copy opens
+// the TARGET's editor, pre-filled, and only that editor's own Save writes.
+async function copyShownDay() {
+  if (view !== 'day' || copying) return;
+  // Same rule as the pencil: until the answers are in, the list on screen may be
+  // only this phone's empty copy. Unlike the pencil it does not open by itself
+  // later — a picker appearing unasked would be odd — so it says to try again.
+  if (!ready()) { toast(t('past.copyNotLoadedYet')); return; }
+  const from = shownDay;
+  if (!getItems(from).length) { toast(t('past.nothingToCopy', { day: weekdayLabel(from) })); return; }
+  copying = true;
+  try {
+    const to = await pickCopyTarget(from);
+    if (!to) return;
+    // The dialogs take time, and a snapshot from another phone can land during them:
+    // the screen may have moved on, the source may be gone, the target may have filled
+    // up or been confirmed. So everything is looked at again after each answer, and
+    // each question is asked at most once.
+    let agreedToReplace = false;
+    let agreedToEdit = false;
+    for (;;) {
+      if (view !== 'day' || shownDay !== from) return;
+      if (!getItems(from).length) { toast(t('past.nothingToCopy', { day: weekdayLabel(from) })); return; }
+      if (getItems(to).length && !agreedToReplace) {
+        if (!(await replaceAllowed(to, from))) return;
+        agreedToReplace = true;
+      } else if (lockedFor(to) && !agreedToEdit) {
+        if (!(await askToEdit(to))) return;
+        agreedToEdit = true;
+      } else {
+        break;
+      }
+    }
+    // ⚠️ THE PERMISSION COMES WITH SAVE, not with opening. The person is looking at
+    // the source day when they throw a copy away, so a target unlocked here would stay
+    // open all night without anyone seeing it.
+    openEditor(to, from, agreedToEdit ? {
+      ...app,
+      saveDay: (...args) => { grantEdit(to); return app.saveDay(...args); },
+    } : app);
+  } finally {
+    copying = false;
+  }
+}
+
+// ⚠️ `?.`: this runs before initPastries below, so a stale pastries.html beside a
+// new bundle would otherwise lose the whole screen over one missing button.
+copyDayBtn?.addEventListener('click', copyShownDay);
 
 strip = renderStrip({
   host: stripHost,

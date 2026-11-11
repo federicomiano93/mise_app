@@ -726,6 +726,13 @@ body.calc-zoom-lock .scroll-area { overflow: hidden; }
   text-decoration: none;
 }
 .recipe-footer-btn:active { background: var(--accent-light); }
+/* ⚠️ THE ICON NEVER SHRINKS: at 296px «Impostazioni» beside it squeezed the gear to a dot, and half a bar is all a button gets. There the
+   button gives up some padding and the icon a little size, so icon and word both fit. */
+.recipe-footer-btn svg { flex: none; }
+@media (max-width: 320px) {
+  .recipe-footer-btn { gap: 6px; padding-inline: 8px; }
+  .recipe-footer-btn svg { width: 16px; height: 16px; }
+}
 
 /* Settings overlays (hub + clients/products editor) */
 #settings-overlay, #cp-overlay {
@@ -1140,7 +1147,7 @@ input.cp-prod-weight {
   align-items: center;
   gap: 8px;
   min-height: 44px;
-  padding: 2px 8px 2px 2px;
+  padding: 2px 2px 2px 12px;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   -webkit-user-select: none;
@@ -1148,7 +1155,8 @@ input.cp-prod-weight {
   -webkit-touch-callout: none;
 }
 .cp-reorder-row:last-child { border-bottom: 0; }
-/* The Home's grip pulls itself left into its row's padding; this row has 2px of it. */
+/* The grip sits on the RIGHT, as in the Recipe book (Federico, 3 Nov 2026): 12px of padding
+   before the name, 2px after the grip, and the Home grip's pull to the left cancelled. */
 .cp-reorder-grip { margin-left: 0; }
 .cp-reorder-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; color: var(--text); }
 .cp-reorder-amount { flex-shrink: 0; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--text2); }
@@ -2053,15 +2061,31 @@ input.cp-prod-weight {
   body[data-card="calculator"] #wa-overlay,
   body[data-card="calculator"] #cp-overlay,
   body[data-card="calculator"] #clientorders-overlay,
-  body[data-card="calculator"] .log-overlay {
+  body[data-card="calculator"] .log-overlay,
+  body[data-card="clients"] #cp-overlay,
+  body[data-card="clients"] #clientorders-overlay,
+  body[data-card="clients"] #cosettings-overlay {
     --app-max-width: 620px;
     --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));
+  }
+  /* The sales owner's Clients page (clients.html): its hub is the same 620px column,
+     centred. The gutter is re-declared on the layer, like the screens above. */
+  body[data-card="clients"] .settings-menu {
+    --app-max-width: 620px;
+    --app-gutter: max(0px, calc((100% - var(--app-max-width)) / 2));
+    max-width: 620px;
+    margin-inline: auto;
   }
   /* ⚠️ AND THE BODIES HAVE TO USE IT. Most of these screens pad their content with a
      flat 16px (.settings-menu, #cp-content, #logview-content…), so the header sat in
      its 620px column while the Settings cards ran the full 1180px under it (driven,
      29 Sep 2026). #recipe-content already carries the gutter itself — not twice. */
-  body[data-card="calculator"] .recipe-scroll > :not(#recipe-content) {
+  body[data-card="calculator"] .recipe-scroll > :not(#recipe-content),
+  body[data-card="clients"] .recipe-scroll > :not(#recipe-content) {
     padding-inline: max(16px, var(--app-gutter));
   }
 }
+
+/* The notification switch of clients.html is drawn into a host inside its card, so it is
+   not the head's next sibling: take the line above the first row off, as .set-head + .set-row does. */
+body[data-card="clients"] #clients-push-row > .set-row { border-top: 0; }

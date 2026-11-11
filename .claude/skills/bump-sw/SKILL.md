@@ -1,6 +1,6 @@
 ---
 name: bump-sw
-description: Bump the service worker cache version and keep the precache list complete. Use whenever any cached file (HTML, CSS, JS under js/, icons, fonts, manifest) has been added, edited, or removed in Mise, before committing. Installed PWAs keep serving the old cache until CACHE_NAME changes, so always run this when finishing a change that touches a file listed in sw.js. Also read it BEFORE changing sw.js itself (fetch, install, activate, the SDK cache) — it holds how the cache behaves and why.
+description: The CURRENT app only (Mise 2, app/ and shared/, registers no service worker until step 5, so a change there needs none of this). Bump the service worker cache version and keep the precache list complete. Use whenever any cached file (HTML, CSS, JS under js/, icons, fonts, manifest) has been added, edited, or removed in Mise, before committing. Installed PWAs keep serving the old cache until CACHE_NAME changes, so always run this when finishing a change that touches a file listed in sw.js. Also read it BEFORE changing sw.js itself (fetch, install, activate, the SDK cache) — it holds how the cache behaves and why.
 ---
 
 # Bump the service worker
