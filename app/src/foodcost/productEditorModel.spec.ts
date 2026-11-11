@@ -3,8 +3,8 @@ import { PRODUCT_MODEL, normalizeProduct } from '@mise/shared/foodcost-model';
 import type { Product } from '@mise/shared/foodcost-model';
 import { draftFromRecipe } from '@mise/shared/foodcost-model';
 import {
-  clearNumber, emptyWorking, isShown, readNumber, readQty, recipeLineKg, toProduct, vatRateOf, waitsForTables,
-  workingFrom, workingFromDraft,
+  clearNumber, emptyWorking, firstBadWeight, followsTotal, isShown, rawBoxText, readNumber, readQty, recipeLineKg, recipeLossHint,
+  recipeWeighing, settleRaw, toProduct, vatRateOf, waitsForTables, weightText, workingFrom, workingFromDraft,
 } from './productEditorModel';
 
 describe('reading a box', () => {
@@ -92,17 +92,153 @@ describe('a product’s own weighing in the working copy (model 3)', () => {
 
   it('travels from the product and back into what is saved, with no noWeightLoss and the current model', () => {
     const working = workingFrom(stored({ rawGrams: 1000, cookedGrams: 880, noWeightLoss: true }), 'GB');
-    expect(working.rawGrams).toBe(1000);
-    expect(working.cookedGrams).toBe(880);
+    expect(working.rawText).toBe('1000');
+    expect(working.cookedText).toBe('880');
     const saved = toProduct(working, 'p');
     expect(saved).toMatchObject({ rawGrams: 1000, cookedGrams: 880, noWeightLoss: false, model: PRODUCT_MODEL });
   });
 
   it('a new product and a draft start with no weighing', () => {
-    expect(emptyWorking()).toMatchObject({ rawGrams: null, cookedGrams: null });
+    expect(emptyWorking()).toMatchObject({ rawText: null, cookedText: '', cookingTyped: false });
     const draft = draftFromRecipe({ id: 'r', name: 'Loaf' });
     if (!draft) throw new Error('no draft');
-    expect(workingFromDraft(draft)).toMatchObject({ rawGrams: null, cookedGrams: null });
+    expect(workingFromDraft(draft)).toMatchObject({ rawText: null, cookedText: '', cookingTyped: false });
+    expect(toProduct(emptyWorking(), 'p')).toMatchObject({ rawGrams: null, cookedGrams: null });
+  });
+
+  it('a weight opens with at most one decimal and is handed back EXACTLY while its box is untouched', () => {
+    const working = workingFrom(stored({ cookedGrams: 416.6667 }), 'GB');
+    expect(working.cookedText).toBe('416.7');
+    expect(weightText(1030.449734)).toBe('1030.4');
+    expect(toProduct(working, 'p').cookedGrams).toBe(416.6667);
+    // Typed in, it is what the box says: a comma is a decimal point; empty is no loss; text that is not a number stays NaN.
+    expect(toProduct({ ...working, cookedText: '416,7' }, 'p').cookedGrams).toBe(416.7);
+    expect(toProduct({ ...working, cookedText: '' }, 'p').cookedGrams).toBeNull();
+    expect(toProduct({ ...working, cookedText: 'abc' }, 'p').cookedGrams).toBeNaN();
+  });
+
+  it('a raw box that follows the total saves no raw weight, even when the product opened with one apart', () => {
+    const working = workingFrom(stored({ rawGrams: 1234.56, cookedGrams: 880 }), 'GB');
+    expect(toProduct(working, 'p').rawGrams).toBe(1234.56);
+    expect(toProduct({ ...working, rawText: null }, 'p').rawGrams).toBeNull();
+  });
+});
+
+describe('the raw box following the total', () => {
+  const stored = (extra: object) => normalizeProduct({ id: 'p', name: 'Loaf', components: [{ recipeId: 'r', qtyKg: 1 }], model: 3, ...extra }) as Product;
+
+  it.each([
+    ['', true], ['  ', true], ['1000', true], ['1000.04', true], ['999.96', true], ['1000.06', false], ['999.9', false], ['abc', false],
+  ])('«%s» against a total of 1000 g follows it: %s', (text, follows) => {
+    expect(followsTotal(text, 1000)).toBe(follows);
+  });
+
+  it('is compared with the EXACT total, not the one-decimal figure the box shows', () => {
+    // 1000.04 g: the box shows 1000, but 1000.1 is 0.06 g away.
+    expect(followsTotal('1000.1', 1000.04)).toBe(false);
+    expect(followsTotal('1000.08', 1000.04)).toBe(true);
+  });
+
+  it('settleRaw hands a near-total weight back to the total, and returns the same object when nothing changes', () => {
+    const typed = { ...emptyWorking(), rawText: '1000.02' };
+    expect(settleRaw(typed, 1000).rawText).toBeNull();
+    expect(settleRaw({ ...emptyWorking(), rawText: '' }, 1000).rawText).toBeNull();
+    const apart = { ...emptyWorking(), rawText: '1200' };
+    expect(settleRaw(apart, 1000)).toBe(apart);
+    const following = emptyWorking();
+    expect(settleRaw(following, 1000)).toBe(following);
+  });
+
+  it('⚠️ settleRaw leaves a box as it opened: a stored raw weight 0.03 g off the total stays what it was', () => {
+    const working = workingFrom(stored({ rawGrams: 1000.03, cookedGrams: 900 }), 'GB');
+    expect(settleRaw(working, 1000)).toBe(working);
+    expect(toProduct(settleRaw(working, 1000), 'p').rawGrams).toBe(1000.03);
+  });
+
+  it('shows the total, to one decimal, until a weight is typed apart', () => {
+    expect(rawBoxText(emptyWorking(), 1030.449734)).toBe('1030.4');
+    expect(rawBoxText(emptyWorking(), 0)).toBe('');
+    expect(rawBoxText({ ...emptyWorking(), rawText: '12.' }, 1000)).toBe('12.');
+  });
+});
+
+describe('the weights Save refuses', () => {
+  it.each([
+    ['0', 'rawGrams'], ['abc', 'rawGrams'], ['20000000', 'rawGrams'], ['-1', 'rawGrams'],
+  ])('a raw weight of «%s» is refused', (text, field) => {
+    expect(firstBadWeight(toProduct({ ...emptyWorking(), rawText: text }, 'p'))).toBe(field);
+  });
+
+  it('names the cooked box for a bad cooked weight, and lets a good pair and an empty one through', () => {
+    expect(firstBadWeight(toProduct({ ...emptyWorking(), cookedText: '0' }, 'p'))).toBe('cookedGrams');
+    expect(firstBadWeight(toProduct({ ...emptyWorking(), cookedText: '10000001' }, 'p'))).toBe('cookedGrams');
+    expect(firstBadWeight(toProduct({ ...emptyWorking(), rawText: '1000', cookedText: '900' }, 'p'))).toBeNull();
+    expect(firstBadWeight(toProduct(emptyWorking(), 'p'))).toBeNull();
+  });
+});
+
+describe('the weighing a product of one recipe writes onto its recipe', () => {
+  const recipes = { Dough: { id: 'Dough', name: 'Dough', lossPct: 0 }, Other: { id: 'Other', name: 'Other', lossPct: 5 } };
+  const one = (extra: object) => ({
+    ...emptyWorking(),
+    components: [{ key: 'k', kind: 'recipe' as const, recipeId: 'Dough', qty: '1000', unit: 'g' as const }],
+    ...extra,
+  });
+
+  it('is nothing until a person typed in «Cottura»', () => {
+    expect(recipeWeighing(one({ cookedText: '900' }), 1000, recipes)).toBeNull();
+  });
+
+  it('is the product’s raw weight (typed apart, else the total) and its cooked one', () => {
+    const own = recipeWeighing(one({ cookedText: '900', cookingTyped: true }), 1000, recipes);
+    expect(own).toMatchObject({ recipeId: 'Dough', state: { raw: 1000, cooked: 900, touched: true } });
+    const apart = recipeWeighing(one({ rawText: '1200', cookedText: '900', cookingTyped: true }), 1000, recipes);
+    expect(apart?.state).toMatchObject({ raw: 1200, cooked: 900 });
+  });
+
+  it('is nothing for a mixed product, a missing recipe, or an ingredient alone', () => {
+    const mixed = one({
+      cookedText: '900',
+      cookingTyped: true,
+      components: [
+        { key: 'a', kind: 'recipe', recipeId: 'Dough', qty: '1000', unit: 'g' },
+        { key: 'b', kind: 'ingredient', ingredientId: 'flour', qty: '100', unit: 'g' },
+      ],
+    });
+    expect(recipeWeighing(mixed, 1100, recipes)).toBeNull();
+    expect(recipeWeighing(one({ cookedText: '900', cookingTyped: true }), 1000, {})).toBeNull();
+    const ingredientAlone = one({
+      cookedText: '900',
+      cookingTyped: true,
+      components: [{ key: 'a', kind: 'ingredient', ingredientId: 'flour', qty: '1000', unit: 'g' }],
+    });
+    expect(recipeWeighing(ingredientAlone, 1000, recipes)).toBeNull();
+    expect(recipeWeighing({ ...one({ cookedText: '900', cookingTyped: true }), components: [] }, 0, recipes)).toBeNull();
+  });
+
+  it('does not count packaging as a line: one recipe and a box is still a product of one recipe', () => {
+    const boxed = one({ cookedText: '900', cookingTyped: true, packaging: [{ key: 'p', ingredientId: 'box', qty: '1' }] });
+    expect(recipeWeighing(boxed, 1000, recipes)).toMatchObject({ recipeId: 'Dough', state: { raw: 1000, cooked: 900 } });
+  });
+
+  it('⚠️ rounds the lines’ total to a thousandth of a gram: 2.01 kg is 2010 g, not 2009.9999999999998', () => {
+    const noisy = recipeWeighing(one({ cookedText: '1800', cookingTyped: true }), 2.01 * 1000, recipes);
+    expect(noisy?.state.raw).toBe(2010);
+  });
+});
+
+describe('the hint that a recipe loses weight', () => {
+  const recipes = { A: { name: 'Plain', lossPct: 0 }, B: { name: 'Bread', lossPct: 12.5 }, C: { name: 'Roll', lossPct: 8 } };
+  const lines = (...ids: string[]) => ids.map((recipeId, i) => ({ key: `k${i}`, kind: 'recipe' as const, recipeId, qty: '1000', unit: 'g' as const }));
+
+  it('names the FIRST recipe of the lines that loses weight, while the cooked box is empty', () => {
+    expect(recipeLossHint({ ...emptyWorking(), components: lines('A', 'B', 'C') }, recipes)).toEqual({ name: 'Bread', pct: 12.5 });
+  });
+
+  it('says nothing once a cooked weight is typed, or when no recipe loses weight', () => {
+    expect(recipeLossHint({ ...emptyWorking(), components: lines('B'), cookedText: '900' }, recipes)).toBeNull();
+    expect(recipeLossHint({ ...emptyWorking(), components: lines('A') }, recipes)).toBeNull();
+    expect(recipeLossHint({ ...emptyWorking(), components: lines('B') }, {})).toBeNull();
   });
 });
 

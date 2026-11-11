@@ -9,7 +9,7 @@ import editorCss from './ProductEditor.module.css?raw';
 import rowCss from './ProductRow.module.css?raw';
 import sectionCss from './FoodcostSection.module.css?raw';
 import lineCss from './LineRow.module.css?raw';
-import weighCss from './WeighingPair.module.css?raw';
+import weighCss from './CookingSection.module.css?raw';
 import previewCss from './PreviewPanel.module.css?raw';
 import readCss from './ReadSections.module.css?raw';
 
@@ -175,6 +175,18 @@ describe('the amount boxes', () => {
     }
     expect(declaration(rule(lineCss, '.qty'), 'flex')).toBe('none');
     expect(declaration(rule(lineCss, '.qty'), 'font-variant-numeric')).toBe('tabular-nums');
+  });
+});
+
+describe('the «Cottura» pair', () => {
+  it('puts a box under the other rather than run it over its neighbour, and «use the total» has no frame', () => {
+    // jsdom has no layout: the slice's driver measures each box inside its cell at 1024, 360 and 296. These are the declarations that
+    // decide it — a cell free to shrink below its box (min-width: 0) keeps the two on one line and overlaps them.
+    expect(declaration(rule(weighCss, '.pair'), 'flex-wrap')).toBe('wrap');
+    expect(declaration(rule(weighCss, '.cell'), 'min-width')).toBeUndefined();
+    const link = rule(weighCss, '.useTotal');
+    expect(declaration(link, 'border')).toBe('0');
+    expect(declaration(link, 'background')).toBe('none');
   });
 });
 

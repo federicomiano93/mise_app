@@ -57,7 +57,7 @@ describe('a venue in Italy', () => {
       { recipes: [recipe('Dough')] },
     );
     renderFoodcost('/food-cost/product/Loaf', { source: fake, ...ITALY });
-    const made = await screen.findByRole('region', { name: 'Composto da' }, LOAD);
+    const made = await screen.findByRole('region', { name: 'Cottura' }, LOAD);
     expect(within(made).getByText('Calo', { selector: 'dt' }).parentElement).toHaveTextContent('12,00%');
   });
 });
@@ -80,7 +80,7 @@ describe('a venue in Britain', () => {
       { recipes: [recipe('Dough')] },
     );
     renderFoodcost('/food-cost/product/Loaf', { source: fake });
-    const made = await screen.findByRole('region', { name: 'Made of' }, LOAD);
+    const made = await screen.findByRole('region', { name: 'Baking' }, LOAD);
     expect(within(made).getByText('Oven loss', { selector: 'dt' }).parentElement).toHaveTextContent('12.00%');
   });
 });

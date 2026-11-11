@@ -206,10 +206,11 @@ describe('a product saved before model 3 (production today)', () => {
     // weight a person typed, never «999.99 g» (the conversion takes the roundest weight that keeps the cost).
     expect(rowOf(made, 'Dough')).toHaveTextContent('1.00 kg');
     expect(rowOf(made, 'Dough')).not.toHaveTextContent('900.00 g');
-    // The weighings are written in grams, as they are typed.
-    expect(rowOf(made, 'Raw dough')).toHaveTextContent('1000.00 g');
-    expect(rowOf(made, 'Cooked dough')).toHaveTextContent('900.00 g');
-    expect(rowOf(made, 'Oven loss')).toHaveTextContent('10.00%');
+    // The weighings are the product's own card since step 2b, written in grams, as they are typed.
+    const baking = cardNamed('Baking');
+    expect(rowOf(baking, 'Raw dough')).toHaveTextContent('1000.00 g');
+    expect(rowOf(baking, 'Cooked dough')).toHaveTextContent('900.00 g');
+    expect(rowOf(baking, 'Oven loss')).toHaveTextContent('10.00%');
   });
 
   it('(iii)(iv) Save without changes writes model 3 with the raw kilos and the cooked weight, no flag, no margin point, and the cost does not move', async () => {
@@ -239,9 +240,9 @@ describe('the cooking of a model 3 product, read', () => {
     const heavy = product('Heavy', { components: [{ recipeId: 'Dough', qtyKg: 1 }], cookedGrams: 1200, model: 3 });
     renderFoodcost('/food-cost/product/Heavy', { source: editorSource([heavy], { recipes: [DOUGH] }) });
     await pencil();
-    const made = cardNamed('Made of');
-    const warning = within(made).getByText('The cooked dough cannot weigh more than the raw dough.');
-    expect(within(made).queryByText('Oven loss', { selector: 'dt' })).not.toBeInTheDocument();
+    const baking = cardNamed('Baking');
+    const warning = within(baking).getByText('The cooked dough cannot weigh more than the raw dough.');
+    expect(within(baking).queryByText('Oven loss', { selector: 'dt' })).not.toBeInTheDocument();
     // Spoken, as the weighing pairs' notes it replaces were.
     expect(warning.closest('[aria-live="polite"]')).not.toBeNull();
   });
@@ -250,7 +251,7 @@ describe('the cooking of a model 3 product, read', () => {
     const fine = product('Fine', { components: [{ recipeId: 'Dough', qtyKg: 1 }], cookedGrams: 900, model: 3 });
     renderFoodcost('/food-cost/product/Fine', { source: editorSource([fine], { recipes: [DOUGH] }) });
     await pencil();
-    const region = cardNamed('Made of').querySelector('[aria-live="polite"]');
+    const region = cardNamed('Baking').querySelector('[aria-live="polite"]');
     expect(region).not.toBeNull();
     expect(region).toBeEmptyDOMElement();
   });
@@ -259,11 +260,11 @@ describe('the cooking of a model 3 product, read', () => {
     const fine = product('Fine', { components: [{ recipeId: 'Dough', qtyKg: 1 }], cookedGrams: 900, model: 3 });
     const { user } = renderFoodcost('/food-cost/product/Fine', { source: editorSource([fine], { recipes: [DOUGH] }) });
     await intoForm(user);
-    const made = cardNamed('Made of');
-    const region = rowOf(made, 'Cooked dough').closest('dl')?.parentElement?.querySelector('[aria-live="polite"]');
+    // The form's «Baking» card holds the boxes; its warning region is the one <div> (the result line above it is a <p>).
+    const region = cardNamed('Baking').querySelector('div[aria-live="polite"]');
     expect(region).toBeInstanceOf(HTMLElement);
     expect(region).toBeEmptyDOMElement();
-    const box = within(made).getByRole('textbox', { name: 'Quantity' });
+    const box = within(cardNamed('Made of')).getByRole('textbox', { name: 'Quantity' });
     await user.clear(box);
     await user.type(box, '0.5');
     expect(region).toHaveTextContent('The cooked dough cannot weigh more than the raw dough.');
@@ -273,6 +274,6 @@ describe('the cooking of a model 3 product, read', () => {
     const plain = product('Plain', { components: [{ recipeId: 'Dough', qtyKg: 1 }], model: 3 });
     renderFoodcost('/food-cost/product/Plain', { source: editorSource([plain], { recipes: [DOUGH] }) });
     await pencil();
-    expect(cardNamed('Made of')).toHaveTextContent('No oven loss.');
+    expect(cardNamed('Baking')).toHaveTextContent('No oven loss.');
   });
 });

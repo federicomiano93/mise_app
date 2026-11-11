@@ -397,6 +397,14 @@ export function normalizeProduct(raw: unknown): Product | null {
 // A weight in grams, as the rules keep it: above 0 and at most ten tonnes (the recipe's own bound,
 // catalogue-model MAX_WEIGHT_G) — anything else is «not said».
 const MAX_PRODUCT_GRAMS = 10000000;
+
+// POST-SWITCH (11 Nov 2026, step 2b): whether a weight a person typed can be saved — no weight at all (null), or a number above 0 and at most
+// ten tonnes, exactly what the products rules keep (`> 0`, `<= 10000000`; model-ceiling.spec.ts pins the number against firestore.rules).
+// ⚠️ NaN (text that is not a number) is refused: a number the rules would turn away must stop the save while the work is on screen.
+export function weighingAllowed(grams: number | null): boolean {
+  return grams === null || (Number.isFinite(grams) && grams > 0 && grams <= MAX_PRODUCT_GRAMS);
+}
+
 function gramsOf(value: unknown): number | null {
   const n = positiveNumber(value);
   return n !== null && n <= MAX_PRODUCT_GRAMS ? n : null;
