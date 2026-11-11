@@ -176,7 +176,7 @@ Aria does not support Preact. The numbers are below.
   from 1000px the card opens beside the list),
   `FromBookBox` + `FromBookDialog` (item 29: for whoever runs the place, the box above the list says how many recipes have no product and opens a dialog of ticks — «To create» ticked, «Maybe already in Food cost» not, a name is never a link — then a confirm and the create; the dialog's state lives in `FoodcostList`, which outlives the box; it is not an address, as the current app's overlay was not; `docs/parity/foodcost.md`, «Products from the recipe book as built»), `ProductEditor` (the product's own screen: a wrapper that follows the id in the address and waits
   for the product, and shows it to READ first — `ProductRead`: `ProductSummary`, then a closed «Full card» of plain text from `ReadSections`, following the stored product live; the pencil swaps it for
-  `ProductForm` and Save/Back swap it back, the choice kept in the wrapper's state and not in the address, a new product and one with nothing costed opening straight in the form — around `ProductForm`, keyed on the id, which copies the product once and works on
+  `ProductForm` and Save/Back swap it back, the choice kept in the wrapper's state and not in the address, a new product and one with nothing costed opening straight in the form (but a product saved before model 3 still waiting for the recipes, which opens to read, its pencil held) — around `ProductForm`, keyed on the id, which copies the product once and works on
   that copy, laid out in the same six `FullCard` cards — with `ProductAnswer`, `LineRow` (each line draws its money, `lineCost.ts`'s rate and amount in its own element above the note, in the read view too; `lineMoney()` in `lineNotes.ts` guards it; ⚠️ «— No price» replaces the note that said the same, never 0), `WeighingPair`, `NameSuggest`, `NumberBox`, the
   chooser `PickDialog` and the `VatGuideDialog`; the working copy's rules are in
   `productEditorModel.ts`; ⚠️ a recipe line carries a `unit` (g or kg, memory only, opened on grams) and its `qty` is the text in
@@ -191,7 +191,9 @@ Aria does not support Preact. The numbers are below.
   Its parity list is `docs/parity/foodcost.md`.
   ⚠️ PRODUCT MODEL 3 (step 2 of the Food cost plan, 11 Nov 2026): a product's recipe line is RAW kilos and the product owns its oven
   loss (`rawGrams`, `cookedGrams`). Products saved before are converted on read (`currentProduct`, which every cost function calls), so
-  `ProductEditor` opens a legacy product with recipe lines only once the recipes and the priced ingredients are in, and every save writes
+  `ProductEditor` opens a legacy product with recipe lines as a FORM only on the server's word about the recipes (or, with no signal
+  or a dead stream, on this phone's copy when it holds every recipe of the lines), and to READ on the copy after `COPY_WAIT_MS`, its
+  pencil held until the form may open; every save writes
   model 3, which the current app (model 2) cannot save over (`docs/parity/foodcost.md`, «The product's own oven loss as built»).
   Step 3d-7 slice B opens Food cost FROM a recipe. Two more addresses, `?recipe=<id>` (the ENTRY: `RecipeEntry.tsx` draws only
   «Loading…» and REPLACES itself, once, with the only product made with the recipe, the narrowed list, a new product drafted

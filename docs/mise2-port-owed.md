@@ -222,7 +222,8 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     **DONE 10 Nov 2026** (`feature/mise2-next-foodcost-card`; `docs/parity/foodcost.md`, «Read-first card and four-figure summary as built»): a product with something
     costed opens to READ (`ProductRead.tsx`: the summary, a closed «Full card» holding six framed cards of plain text, `ReadSections.tsx`); the pencil turns it
     into the form on a copy, Save returns to the read view of the saved product (a new one gets its own address), Back from a form opened by the pencil returns
-    to read; a new product and one with nothing costed open straight in the form. `PreviewPanel.tsx` is the four-figure summary (price, cost, margin, food cost
+    to read; a new product and one with nothing costed open straight in the form (since 11 Nov 2026 a product saved before model 3 still
+    waiting for the recipes opens to read, its pencil held: `docs/parity/foodcost.md`, «The product's own oven loss as built»). `PreviewPanel.tsx` is the four-figure summary (price, cost, margin, food cost
     against its target, ideal price with the net underneath; raw materials, packaging and labour behind «Details»), used by the phone's dialog and the top of the card
     (`ProductSummary.tsx`); `FullCard.tsx` lays the form out in the same six cards (Product, Made of with the weighings, Packaging, Work time, Price, Calculated costs).
     Keys: ADDED `fc.preview.cost` / `.ideal` / `.idealSub` / `.details` and eight read-view keys, DELETED `fc.preview.total` / `.idealGross` / `.idealNet` / `.idealBasis`,

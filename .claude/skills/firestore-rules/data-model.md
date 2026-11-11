@@ -245,7 +245,10 @@ the only other one is `client-accounts` (managers, or the account itself — aud
   `cookedGrams` (the batch out of the oven; absent = not weighed, no loss), both numbers > 0 and
   ≤ 10 000 000, a cooked weight heavier than the raw one kept (shown red). Mise 2 never writes
   `noWeightLoss`; it stays whitelisted because production carries it. A product below 3 is
-  converted ON READ (`fromLegacyProduct`, same cost to the last stored decimal) and written as 3
+  converted ON READ (`fromLegacyProduct`: the same cost to the last stored decimal from about 10
+  cents a raw kilo up; under it, mostly water, about a hundredth of a cent a kilo, half a cent at a
+  99% loss; a weighing past ten tonnes keeps its ratio a thousand times lighter, `rawGrams` written
+  apart) and written as 3
   at its next Save — never rewritten in bulk. The rules ceiling is 3, so the current app (2) can
   no longer save over a product Mise 2 has saved, and nothing lowers it back: reverting the app
   does not undo it.
