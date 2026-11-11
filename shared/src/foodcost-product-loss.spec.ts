@@ -174,6 +174,13 @@ describe('a product saved before the switch costs what it always cost', () => {
       const product = makeProduct(r, world, n, false);
       if (compareProduct(product, world.tables, out)) completeOnes += 1;
       if ((ported.productCooking(product, world.tables).lossPct || 0) > 0) losing += 1;
+      // A converted line opens in the gram box: it must be a weight a person could have typed (six decimals of a kilo).
+      const converted = ported.fromLegacyProduct(product, world.tables);
+      for (const line of converted ? converted.components : []) {
+        if (line.kind === 'ingredient') continue;
+        const millionths = line.qtyKg * 1e6;
+        if (Math.abs(millionths - Math.round(millionths)) > 1e-6) out.push(`${String(product.id)} raw kilos not typable: ${line.qtyKg}`);
+      }
       checked += 1;
     }
     expect(out.slice(0, 10)).toStrictEqual([]);
@@ -329,10 +336,12 @@ describe('a product the current app saved, converted on read', () => {
     packaging: [], sellingMode: 'weight', sellingPrice: 10, vatRate: 0, ...over,
   });
 
-  test('0.9 kg out of a recipe that loses 10% is about 1 kg of raw dough, and the batch still weighs 0.9 kg', () => {
+  test('0.9 kg out of a recipe that loses 10% is 1 kg of raw dough, and the batch still weighs 0.9 kg', () => {
     const p = ported.fromLegacyProduct(old(), TABLES) as ported.Product;
     expect(p.components[0]).toMatchObject({ recipeId: 'DOUGH10' });
-    expect((p.components[0] as ported.RecipeLine).qtyKg).toBeCloseTo(1, 4);
+    // Exactly 1 kg, the plan's own example: the exact cost-keeping weight is 0.99999 kg (the recipe's price per kilo is
+    // rounded), which the gram box would show as «999.99»; 1 kg costs the same to the fourth decimal.
+    expect((p.components[0] as ported.RecipeLine).qtyKg).toBe(1);
     expect([p.cookedGrams, p.rawGrams, p.model, p.noWeightLoss]).toStrictEqual([900, null, 3, false]);
     expect(ported.productCooking(p, TABLES).lossPct).toBe(10);
     // The money is the current app's: 0.9 kg × 2.2222 = 2.0000, and 2.0000 ÷ 0.9 kg a kilo.

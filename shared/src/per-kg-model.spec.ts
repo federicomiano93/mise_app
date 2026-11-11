@@ -419,11 +419,12 @@ describe('the port and the original answer the same, row by row', () => {
   test('POST-SWITCH too deep: the same cost and the same rows, the weights a hair apart from the conversion of the old kilos', () => {
     const input = cases.find(([label]) => label === 'too deep')?.[1];
     const old = legacy.costPerKg(input, tables as never);
-    // Change B: 3 kg finished of a recipe that loses 10% become q × finished price ÷ raw price raw kilos, not q ÷ 0.9. The
-    // prices are rounded to four decimals, so those kilos differ from q ÷ 0.9 by ~2 in 100 000, and so does every row cut
-    // from them (the total, the batch cost over 3 kg, is the original's to the last decimal).
+    // Change B: 3 kg finished of a recipe that loses 10% become the roundest raw kilos whose cost rounds to the line's old
+    // cost (near q × finished price ÷ raw price), not q ÷ 0.9. The prices are rounded to four decimals, so those kilos differ
+    // from q ÷ 0.9 by ~2 in 100 000, and so does every row cut from them (the total, the batch cost over 3 kg, is the
+    // original's to the last decimal).
     const moved: Record<string, Partial<ported.PerKgRow>> = {
-      'ing:FLOUR': { kg: 1.226163, cost: 2.4523 },
+      'ing:FLOUR': { kg: 1.226162, cost: 2.4523 },
       'label:level 5:no-recipe': { kg: 0.190516 },
     };
     expect(ported.costPerKg(input, tables as never)).toStrictEqual({

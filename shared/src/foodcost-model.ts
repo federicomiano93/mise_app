@@ -804,12 +804,27 @@ function legacyRawKg(line: RecipeLine, tables: CostTables): number {
   const plain = q / (1 - loss / 100);
   const finished = costRecipe(recipe, tables).pricePerKg;
   const rawRate = rawRecipeCost(recipe, tables).pricePerKg;
-  if (finished === null || rawRate === null) return plain;
+  // No price to keep: the raw weight to a hundredth of a gram, a number the gram box can show.
+  if (finished === null || rawRate === null) return roundTo(plain, 5);
   const exact = q * finished / rawRate;
-  if (Math.abs(exact / plain - 1) > 1e-3) return plain;
-  // Multiplying back can land one floating-point step off q × finished, and on an exact half of the fourth decimal that
-  // step would round the line's cost the other way: a hair either side settles it on the cost the line had.
+  if (Math.abs(exact / plain - 1) > 1e-3) return roundTo(plain, 5);
+  // ⚠️ A WEIGHT A PERSON COULD HAVE TYPED (found driving the app, 11 Nov 2026): the exact raw kilos opened in the gram box as
+  // «1030.449734», and 0.9 kg of a recipe that loses 10% as «999.99» instead of 1000. The line's cost is kept to its fourth
+  // decimal, and every raw weight whose cost rounds to that same figure keeps every figure of the product (the line, the
+  // batch, the per-kilo total, the food cost: the output kilos are the cooked weight, which the raw one does not touch). So
+  // the ROUNDEST such weight is taken: whole grams, then tenths, hundredths, thousandths of a gram (six decimals of a kilo,
+  // the most a typed line holds).
   const cost = roundTo(q * finished, 4);
+  for (const decimals of [3, 4, 5, 6]) {
+    const near = roundTo(exact, decimals);
+    const step = 10 ** -decimals;
+    for (const kg of [near, roundTo(near - step, decimals), roundTo(near + step, decimals)]) {
+      if (kg > 0 && roundTo(kg * rawRate, 4) === cost) return kg;
+    }
+  }
+  // A recipe so dear that no typable weight lands on the cost (over 100 € a kilo): the exact one. Multiplying back can land
+  // one floating-point step off q × finished, and on an exact half of the fourth decimal that step would round the line's
+  // cost the other way: a hair either side settles it on the cost the line had.
   for (const kg of [exact, exact * (1 + 1e-12), exact * (1 - 1e-12)]) {
     if (roundTo(kg * rawRate, 4) === cost) return kg;
   }
