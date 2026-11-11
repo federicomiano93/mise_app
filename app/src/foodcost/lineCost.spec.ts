@@ -32,7 +32,7 @@ const flourRow = (grams: number) => ({ label: 'Flour', grams, unit: 'g', kind: '
 const TABLES: CostTables = {
   ingredients: ING,
   recipes: {
-    // 1000 g of flour at 2/kg, 20% lost in the oven → 2.50 a kilo out.
+    // 1000 g of flour at 2/kg, 20% lost in the oven → 2.50 a kilo out, 2.00 a kilo RAW (a recipe line is raw kilos, model 3).
     DOUGH: { id: 'DOUGH', name: 'Dough', lossPct: 20, ingredients: [flourRow(1000)] },
     // One linked row and one labelled, unlinked row: priced, but only in part.
     CREAM: { id: 'CREAM', name: 'Cream', lossPct: 0, ingredients: [flourRow(500), { label: 'Water', grams: 100, unit: 'g' }] },
@@ -46,8 +46,8 @@ const pack = (ingredientId: string, qtyPcs: number) => ({ ingredientId, qtyPcs }
 
 // The money layout puts a no-break space before «€»: compared as a plain space.
 const plain = (view: LineCost): LineCost => ({ ...view, text: view.text.replace(/ /g, ' ') });
-const uk = (entry: object, kind: LineCostKind, options?: { noWeightLoss?: boolean }) =>
-  plain(lineCostView(english, BRITAIN, entry as Record<string, unknown>, kind, TABLES, options));
+const uk = (entry: object, kind: LineCostKind) =>
+  plain(lineCostView(english, BRITAIN, entry as Record<string, unknown>, kind, TABLES));
 const ita = (entry: object, kind: LineCostKind) =>
   plain(lineCostView(italiano, ITALY, entry as Record<string, unknown>, kind, TABLES));
 
@@ -55,8 +55,8 @@ describe('lineCostView', () => {
   it('a weighed line with a price: the rate per kilo and this amount; with no quantity only the rate', () => {
     expect(uk(ingLine('FLOUR', 500, 'g'), 'ingredient')).toEqual({ text: '£2.00/kg · this amount £1.00', noPrice: false });
     expect(uk(ingLine('FLOUR', 0, 'g'), 'ingredient').text).toBe('£2.00/kg');
-    expect(uk(recLine('DOUGH', 2), 'recipe').text).toBe('£2.50/kg · this amount £5.00');
-    expect(uk(recLine('DOUGH', 2), 'recipe', { noWeightLoss: true }).text).toBe('£2.00/kg · this amount £4.00');
+    // Model 3: a recipe line is raw kilos, costed at the raw price per kilo.
+    expect(uk(recLine('DOUGH', 2), 'recipe').text).toBe('£2.00/kg · this amount £4.00');
     expect(ita(ingLine('FLOUR', 500, 'g'), 'ingredient').text).toBe('2,00 €/kg · questa quantità 1,00 €');
   });
 

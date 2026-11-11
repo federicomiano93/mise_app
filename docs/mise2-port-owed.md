@@ -30,7 +30,7 @@ fails the switch. What is done AT the switch hour (rules deploy, the TTL command
 Data loss first:
 - [x] 1. Pastries row notes and «Copy day» (a Mise 2 day save erases the notes) — notes ported 8 Nov (PR #492); «Copy day» ported 8 Nov (`feature/mise2-copy-day`, PR into the release branch; `docs/parity/pastries.md`, «Copy day as built»)
 - [x] 2. Recipe categories written one word at a time (arrayUnion / arrayRemove), never the whole list — ported 8 Nov (PR into the release branch, `feature/mise2-port-data-loss`)
-- [x] 4. Food cost `noWeightLoss` kept by a Mise 2 product save — ported 8 Nov with the switch (`feature/mise2-port-data-loss`)
+- [x] 4. Food cost `noWeightLoss` kept by a Mise 2 product save — ported 8 Nov with the switch (`feature/mise2-port-data-loss`); superseded 11 Nov 2026 by product model 3: a save converts a flagged product (its lines as they were, no cooked weight) and drops the key (`docs/parity/foodcost.md`, «The product's own oven loss as built»)
 - [x] 6. Orders draft journal and corrections in flight (F-15, F-16) — ported 8 Nov (PR into the release branch; `docs/parity/orders.md`, «Draft journal and corrections in flight as built»)
 - [x] 3. `drafts/current.skipped` and «Order done» / «Close as not ordered» — ported 8 Nov (PR into the release branch; `docs/parity/orders.md`, «Closed as not ordered as built»)
 - [x] 5. Usage `hours` kept by Mise 2's usage write — already on this branch through PR #473 (`e1a4639d`), found on 8 Nov:
@@ -222,7 +222,8 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     **DONE 10 Nov 2026** (`feature/mise2-next-foodcost-card`; `docs/parity/foodcost.md`, «Read-first card and four-figure summary as built»): a product with something
     costed opens to READ (`ProductRead.tsx`: the summary, a closed «Full card» holding six framed cards of plain text, `ReadSections.tsx`); the pencil turns it
     into the form on a copy, Save returns to the read view of the saved product (a new one gets its own address), Back from a form opened by the pencil returns
-    to read; a new product and one with nothing costed open straight in the form. `PreviewPanel.tsx` is the four-figure summary (price, cost, margin, food cost
+    to read; a new product and one with nothing costed open straight in the form (since 11 Nov 2026 a product saved before model 3 still
+    waiting for the recipes opens to read, its pencil held: `docs/parity/foodcost.md`, «The product's own oven loss as built»). `PreviewPanel.tsx` is the four-figure summary (price, cost, margin, food cost
     against its target, ideal price with the net underneath; raw materials, packaging and labour behind «Details»), used by the phone's dialog and the top of the card
     (`ProductSummary.tsx`); `FullCard.tsx` lays the form out in the same six cards (Product, Made of with the weighings, Packaging, Work time, Price, Calculated costs).
     Keys: ADDED `fc.preview.cost` / `.ideal` / `.idealSub` / `.details` and eight read-view keys, DELETED `fc.preview.total` / `.idealGross` / `.idealNet` / `.idealBasis`,

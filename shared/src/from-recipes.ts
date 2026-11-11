@@ -16,9 +16,14 @@
 // renaming either side never breaks it.
 // ⚠️ A NAME IS NEVER A LINK. A product made by hand that already uses the recipe on a line, or bears its name, is only «maybe
 // already there»: shown unticked, his call.
+//
+// ⚠️⚠️ AFTER THE SWITCH (Mise 2, 10 Nov 2026: «il calo è del prodotto» — foodcost-model.ts says it all) the product a recipe
+// starts holds the whole recipe RAW on its line, and the recipe's oven loss as its own cooked weight: `productFromRecipe`, and so
+// the `kg` `recipesWithoutProducts` lists, part from js/foodcost/from-recipes.js there (from-recipes.spec.ts, odd-inputs.spec.ts:
+// «post-switch»). `wholeRecipeKg` stays the original's — what the whole recipe weighs once made.
 
 import { normalizeLossPct, normalizeSearchText, weighableTotalGrams } from './catalogue-model';
-import { PRODUCT_MODEL, productsUsingRecipe } from './foodcost-model';
+import { PRODUCT_MODEL, fittedWeighing, productsUsingRecipe } from './foodcost-model';
 import { roundTo } from './price-model';
 
 const PREFIX = 'recipe-';
@@ -73,25 +78,42 @@ export interface ProductFromRecipe {
   readonly foodCostTarget: null;
   readonly labourMinutes: null;
   readonly labourPeople: null;
+  // Mise 2 (post-switch): the product's own weighing — the recipe's oven loss as the batch's cooked weight (null when the recipe
+  // loses nothing), and no raw weight apart from the line but for a recipe past the rules' ten tonnes (fittedWeighing).
+  readonly rawGrams: number | null;
+  readonly cookedGrams: number | null;
   readonly model: number;
 }
 
 // The product a recipe starts: its name, and the whole recipe on the first line — the two things a recipe knows. ⚠️ Nothing
 // else: no way of selling, no pieces, no price, no VAT. A value nobody typed is one somebody saves and trusts.
+// ⚠️ MISE 2 (post-switch): the line is the whole recipe RAW, to the gram, and the cooked weight is that raw weight less the
+// recipe's own loss, to a tenth of a gram — so the product costs a kilo of what comes out exactly as the recipe's price per kilo
+// did before the switch, and «Cottura» shows the recipe's loss.
 export function productFromRecipe(recipe: unknown): ProductFromRecipe | null {
   const card = recipe as Loose | null | undefined;
   const recipeId = idText(card && card['id']);
   const id = recipeProductId(recipeId);
   const name = recipeName(recipe);
   if (!id || !name) return null;
+  const grams = weighableTotalGrams(recipe);
+  const rawKg = grams > 0 ? roundTo(grams / 1000, 3) : 0;
+  const loss = normalizeLossPct(card && card['lossPct']);
+  // ⚠️ ONLY WEIGHTS THE RULES ACCEPT (code reviews of 11 Nov 2026), or that recipe's product fails on every try: a cooked weight
+  // that rounds to nothing is no weight (a gram of dough losing 97% came out at 0 g), and one past ten tonnes keeps its ratio a
+  // thousand times lighter (fittedWeighing).
+  const cooked = rawKg > 0 && loss > 0 ? roundTo(rawKg * 1000 * (1 - loss / 100), 1) : 0;
+  const weighing = fittedWeighing(rawKg * 1000, cooked);
   return {
     id,
     name,
-    components: [{ recipeId, qtyKg: wholeRecipeKg(recipe) }],
+    components: [{ recipeId, qtyKg: rawKg }],
     packaging: [],
     sellingMode: null, piecesPerBatch: null, packSize: null, packUnit: null,
     sellingPrice: null, vatRate: null, foodCostTarget: null,
     labourMinutes: null, labourPeople: null,
+    rawGrams: weighing.rawGrams,
+    cookedGrams: weighing.cookedGrams,
     model: PRODUCT_MODEL,
   };
 }

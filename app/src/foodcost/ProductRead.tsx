@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { Pencil } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
-import { productionCost } from '@mise/shared/foodcost-model';
+import { currentProduct, productionCost } from '@mise/shared/foodcost-model';
 import type { CostTables, Product } from '@mise/shared/foodcost-model';
 import { countryOf } from '@mise/shared/market';
 import { useT } from '../i18n/useT';
@@ -21,9 +21,9 @@ import { FROM_PRODUCT, pushDepth } from './foodcostNav';
 import { PerKgBlock } from './PerKgBlock';
 import { ProductActions } from './ProductActions';
 import { ProductAnswer, SuggestedPrice } from './ProductAnswer';
-import { recipeIdsOn, workingFrom } from './productEditorModel';
+import { workingFrom } from './productEditorModel';
 import { ProductSummary } from './ProductSummary';
-import { ReadLabour, ReadMadeOf, ReadPackaging, ReadPrice, ReadProduct, ReadWeighings } from './ReadSections';
+import { ReadLabour, ReadMadeOf, ReadPackaging, ReadPrice, ReadProduct, ReadCooking } from './ReadSections';
 import { useProductExit } from './useProductExit';
 import shell from './ProductEditor.module.css';
 
@@ -37,6 +37,10 @@ type Props = {
   titleRef: Ref<HTMLHeadingElement>;
   // The pencil: the SAME product, as the form.
   onEdit: () => void;
+  // The form may not open yet (a product saved before the switch, ProductEditor): the pencil is held and a sentence under the
+  // name says why — 'coming' while the server's recipes may still arrive; 'failed' when the recipes stream died with a recipe of
+  // the product's lines missing from this phone (only a new visit to Food cost listens again, so «once they arrive» would be a lie).
+  editWaits?: 'coming' | 'failed' | null;
 };
 
 // Whether the summary has anything to show: something is costed. A fault in the cost model counts as «nothing».
@@ -56,7 +60,7 @@ export function summaryShows(product: unknown, tables: CostTables): boolean {
 // split alike.
 // ⚠️ NOTHING IN IT IS A CONTROL BUT THE BAR'S BUTTONS, THE BOX'S SUMMARY, «DETAILS», «COST PER 1 KG», HISTORY AND DELETE: a box
 // sneaking in would be a form that looks like text.
-export function ProductRead({ id, product, gone, origin, titleRef, onEdit }: Props) {
+export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdit, editWaits = null }: Props) {
   const { t } = useT();
   const store = useFoodcostStore();
   const snap = useFoodcost();
@@ -68,11 +72,17 @@ export function ProductRead({ id, product, gone, origin, titleRef, onEdit }: Pro
   const [confirm, confirmDialog] = useConfirm();
   const { leave, goBack } = useProductExit(id, origin);
   const titleId = useId();
+  const waitId = useId();
   const country = countryOf(location);
+  const waitNote = editWaits === 'failed' ? t('fc.editRecipesFailed') : editWaits === 'coming' ? t('fc.editWaitsForRecipes') : '';
 
+  // ⚠️ THE CURRENT PRODUCT (model 3): one saved before holds finished kilos on its recipe lines; every section below reads the
+  // converted one, so the lines show raw kilos, as the form will after the pencil. ProductEditor opens it only on recipes and
+  // prices it can trust (waitsForTables).
+  const product = useMemo(() => currentProduct(stored, snap.tables) ?? stored, [stored, snap.tables]);
   // The product as the form would open it: it gives each line the name and the note the form shows under it.
   const working = useMemo(() => workingFrom(product, country), [product, country]);
-  const recipeIds = recipeIdsOn(working);
+  const hasRecipeLine = working.components.some(line => line.kind === 'recipe');
   const loaded = { recipes: snap.recipesLoaded, ingredients: snap.ingredientsLoaded };
   // The box is open while there is no summary above it (nothing else to show): from the start, and again when the product stops
   // being costed while it is read (refreshRead of the current app). A person who closed it while a summary shows is not argued with.
@@ -129,8 +139,19 @@ export function ProductRead({ id, product, gone, origin, titleRef, onEdit }: Pro
         title={product.name || t('fc.untitledProduct')}
         titleId={titleId}
         titleRef={titleRef}
+        sub={waitNote ? <p id={waitId} className={shell.sub}>{waitNote}</p> : undefined}
         action={
-          <Button variant="primary" aria-label={t('fc.editProduct')} onPress={onEdit}>
+          // ⚠️ HELD WITH aria-disabled, NEVER THE disabled ATTRIBUTE (spec and third code review, 11 Nov 2026): browsers send a
+          // tap's pointer events to a disabled button, and React Aria starts a press on them that no click ever ends — the first
+          // tap once the pencil was free went into finishing that press and opened nothing; and a disabled button drops the focus.
+          // Held, it stays where it was, says why under the name and, tapped, in the status line (ProductEditor refuses it too).
+          <Button
+            variant="primary"
+            aria-label={t('fc.editProduct')}
+            aria-describedby={waitNote ? waitId : undefined}
+            aria-disabled={waitNote !== ''}
+            onPress={waitNote ? () => say(waitNote) : onEdit}
+          >
             <Pencil aria-hidden="true" />
           </Button>
         }
@@ -144,12 +165,12 @@ export function ProductRead({ id, product, gone, origin, titleRef, onEdit }: Pro
           </CardSection>
           <CardSection title={t('fc.madeOf')}>
             <ReadMadeOf product={product} working={working} tables={snap.tables} loaded={loaded} />
-            {recipeIds.length === 0 ? null : (
+            {hasRecipeLine ? (
               <>
-                <SubHeading>{t('fc.section.weighing')}</SubHeading>
-                <ReadWeighings product={product} recipes={snap.recipes} recipeIds={recipeIds} />
+                <SubHeading>{t('fc.cooking.title')}</SubHeading>
+                <ReadCooking product={product} tables={snap.tables} />
               </>
-            )}
+            ) : null}
           </CardSection>
           <CardSection title={t('fc.packaging')}>
             <ReadPackaging product={product} working={working} tables={snap.tables} loaded={loaded} />

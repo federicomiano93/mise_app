@@ -11,8 +11,11 @@ function subscribe(onChange: () => void): () => void {
 
 // ⚠️ `navigator.onLine` can say «online» on a Wi-Fi with no internet, but it never says
 // «offline» while the network works — so «No connection» is always true, and «Online» only
-// means «the device thinks it has a network». That is why this is a hint in the top bar and
-// nothing is ever blocked by it: saves are local-first (P20).
+// means «the device thinks it has a network». So it never blocks a save: saves are local-first
+// (P20). What «No connection» does open: Food cost's editor lets a product saved before the
+// switch be edited on this phone's copy of the recipes, only when it holds every recipe on the
+// product's lines (ProductEditor); a false «Online» only keeps that pencil held until the
+// server answers.
 export function useOnline(): boolean {
   return useSyncExternalStore(subscribe, () => navigator.onLine, () => true);
 }

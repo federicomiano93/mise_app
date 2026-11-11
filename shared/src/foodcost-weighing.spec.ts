@@ -315,4 +315,20 @@ describe.each([
     ];
     expect(m.otherProductsUsing(products, 'foc', 'p1'), 'only a literal true lays the loss aside').toBe(1);
   });
+
+  // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change G, so this runs for the port only. A product saved in the new
+  // shape (model 3) owns its loss and costs the recipe's raw price, so a recipe's loss moves nothing of what it costs: it is
+  // not counted. The current app's products (model 2, or none) are still read through the recipe's loss until their next Save.
+  test.runIf(m === ported)('POST-SWITCH: only a product still below model 3 is among those a recipe’s loss changes', () => {
+    const line = [{ recipeId: 'foc', qtyKg: 1 }];
+    const products = [
+      { id: 'new', model: 3, components: line },
+      { id: 'old', model: 2, components: line },
+      { id: 'none', components: line },
+      { id: 'old-finished', model: 2, noWeightLoss: true, components: line },
+    ];
+    expect(m.otherProductsUsing(products, 'foc', null), 'model 2 and no model, not model 3, not a finished one').toBe(2);
+    expect(m.otherProductsUsing(products, 'foc', 'old'), 'the product being edited is not "other"').toBe(1);
+    expect(m.otherProductsUsing([products[0]], 'foc', null)).toBe(0);
+  });
 });

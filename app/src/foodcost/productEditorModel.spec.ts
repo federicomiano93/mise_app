@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeProduct } from '@mise/shared/foodcost-model';
+import { PRODUCT_MODEL, normalizeProduct } from '@mise/shared/foodcost-model';
 import type { Product } from '@mise/shared/foodcost-model';
 import { draftFromRecipe } from '@mise/shared/foodcost-model';
 import {
-  clearNumber, emptyWorking, isShown, readNumber, readQty, recipeIdsOn, recipeLineKg, toProduct, vatRateOf, workingFrom,
-  workingFromDraft,
+  clearNumber, emptyWorking, isShown, readNumber, readQty, recipeLineKg, toProduct, vatRateOf, waitsForTables,
+  workingFrom, workingFromDraft,
 } from './productEditorModel';
 
 describe('reading a box', () => {
@@ -36,7 +36,8 @@ describe('the working copy', () => {
 
   it('round-trips a product, line for line, without leaving an id on a line', () => {
     const back = toProduct(workingFrom(stored, 'GB'), 'p1');
-    expect(back).toEqual({ ...stored, model: 2 });
+    // The model it is saved as is always the current one (workingFrom is handed the converted product).
+    expect(back).toEqual({ ...stored, model: PRODUCT_MODEL });
     expect(JSON.stringify(back)).not.toContain('line-');
   });
 
@@ -84,22 +85,42 @@ describe('the working copy', () => {
     expect(clearNumber(working, 'vatRate').vatOther).toBe('');
   });
 
-  it('lists each recipe once, in the order it first appears', () => {
-    const working = workingFrom(normalizeProduct({
-      id: 'p', name: 'x', components: [{ recipeId: 'a', qtyKg: 1 }, { kind: 'ingredient', ingredientId: 'i', qty: 1, unit: 'g' }, { recipeId: 'b', qtyKg: 1 }, { recipeId: 'a', qtyKg: 2 }],
-    }) as Product, 'GB');
-    expect(recipeIdsOn(working)).toEqual(['a', 'b']);
+});
+
+describe('a product’s own weighing in the working copy (model 3)', () => {
+  const stored = (extra: object) => normalizeProduct({ id: 'p', name: 'Loaf', components: [{ recipeId: 'r', qtyKg: 1 }], model: 3, ...extra }) as Product;
+
+  it('travels from the product and back into what is saved, with no noWeightLoss and the current model', () => {
+    const working = workingFrom(stored({ rawGrams: 1000, cookedGrams: 880, noWeightLoss: true }), 'GB');
+    expect(working.rawGrams).toBe(1000);
+    expect(working.cookedGrams).toBe(880);
+    const saved = toProduct(working, 'p');
+    expect(saved).toMatchObject({ rawGrams: 1000, cookedGrams: 880, noWeightLoss: false, model: PRODUCT_MODEL });
+  });
+
+  it('a new product and a draft start with no weighing', () => {
+    expect(emptyWorking()).toMatchObject({ rawGrams: null, cookedGrams: null });
+    const draft = draftFromRecipe({ id: 'r', name: 'Loaf' });
+    if (!draft) throw new Error('no draft');
+    expect(workingFromDraft(draft)).toMatchObject({ rawGrams: null, cookedGrams: null });
   });
 });
 
-describe('«Finished product, no weight loss» in the working copy', () => {
-  it('travels from the product and back into what is saved; a new product starts without it', () => {
-    expect(emptyWorking().noWeightLoss).toBe(false);
-    const stored = normalizeProduct({ name: 'Loaf', components: [{ recipeId: 'r', qtyKg: 1 }], noWeightLoss: true }) as Product;
-    const working = workingFrom(stored, 'GB');
-    expect(working.noWeightLoss).toBe(true);
-    expect(toProduct(working, 'p').noWeightLoss).toBe(true);
-    expect(toProduct({ ...working, noWeightLoss: false }, 'p').noWeightLoss).toBe(false);
+describe('waitsForTables', () => {
+  const recipeLine = { recipeId: 'r', qtyKg: 1 };
+  const ingredientLine = { kind: 'ingredient', ingredientId: 'i', qty: 100, unit: 'g' };
+  const make = (components: object[], model: number | undefined) =>
+    normalizeProduct({ id: 'p', name: 'x', components, ...(model === undefined ? {} : { model }) }) as Product;
+
+  it('a legacy product with a recipe line waits for the recipes and the prices', () => {
+    expect(waitsForTables(make([recipeLine], 2))).toBe(true);
+    expect(waitsForTables(make([ingredientLine, recipeLine], undefined))).toBe(true);
+  });
+  it('a legacy product with ingredient lines only does not', () => {
+    expect(waitsForTables(make([ingredientLine], 2))).toBe(false);
+  });
+  it('a model 3 product does not', () => {
+    expect(waitsForTables(make([recipeLine], 3))).toBe(false);
   });
 });
 

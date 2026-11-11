@@ -2245,9 +2245,10 @@ async function products() {
   await expectDenied('a product model sent as text', () => wholeWrite(`${P}/P1`, product({ model: '2' })));
   await expectDenied('a product model of zero', () => wholeWrite(`${P}/P1`, product({ model: 0 })));
   // ⚠️⚠️ The ceiling: a product saved by hand with a higher model could never be saved by
-  // any phone again (7 Oct 2026 security audit).
-  await expectDenied('⚠️⚠️ a product model above the app\'s (3)', () =>
-    wholeWrite(`${P}/P1`, product({ model: 3 })));
+  // any phone again (7 Oct 2026 security audit). Mise 2 writes 3 (10 Nov 2026), so 4 is the
+  // first number above the app's.
+  await expectDenied('⚠️⚠️ a product model above the app\'s (4)', () =>
+    wholeWrite(`${P}/P1`, product({ model: 4 })));
   await expectDenied('…nor 100, the old ceiling', () => createWrite(P, product({ model: 100 })));
 
   // ⚠️⚠️ THE OLD-PHONE GUARD. A product is written WHOLE; a phone on the version before
@@ -2284,6 +2285,45 @@ async function products() {
     wholeWrite(`${P}/P1`, product({ model: 2, noWeightLoss: 'true' })));
   await expectDenied('no weight loss sent as a number', () =>
     wholeWrite(`${P}/P1`, product({ model: 2, noWeightLoss: 1 })));
+
+  // ── Mise 2: the product owns its oven loss (model 3, 10 Nov 2026) ──
+  // The recipe lines hold RAW kilos and two weights in grams say what the batch loses. Its own
+  // document, so P1 stays at model 2 for every case above and below.
+  const OWN = `${P}/OWNLOSS`;
+  await expectAllowed('Mise 2 saves a product with its raw and cooked weights', () =>
+    wholeWrite(OWN, product({ model: 3, rawGrams: 790, cookedGrams: 690 })));
+  await expectAllowed('…with a cooked weight alone (the raw one is the lines\' total)', () =>
+    wholeWrite(OWN, product({ model: 3, cookedGrams: 690 })));
+  await expectAllowed('…with a weight that has decimals', () =>
+    wholeWrite(OWN, product({ model: 3, cookedGrams: 689.5 })));
+  await expectAllowed('…not weighed at all', () => wholeWrite(OWN, product({ model: 3 })));
+  await expectAllowed('…keeping a wrong pair in red: cooked heavier than raw', () =>
+    wholeWrite(OWN, product({ model: 3, rawGrams: 690, cookedGrams: 790 })));
+  await expectAllowed('a new product created by Mise 2', () =>
+    createWrite(P, product({ model: 3, cookedGrams: 880 })));
+  await expectDenied('a cooked weight of zero', () => wholeWrite(OWN, product({ model: 3, cookedGrams: 0 })));
+  await expectDenied('a negative raw weight', () => wholeWrite(OWN, product({ model: 3, rawGrams: -790 })));
+  await expectDenied('a weight sent as text', () => wholeWrite(OWN, product({ model: 3, cookedGrams: '690' })));
+  await expectDenied('a weight of null — absent is how «not said» is written', () =>
+    wholeWrite(OWN, product({ model: 3, rawGrams: null })));
+  await expectDenied('a weight above ten tonnes', () =>
+    wholeWrite(OWN, product({ model: 3, cookedGrams: 10000001 })));
+  // ⚠️⚠️ THE OLD-PHONE GUARD, ONE MODEL UP: the current app reads raw kilos as finished ones,
+  // so it must never write them back over a product Mise 2 has saved.
+  await seedDoc(`${P}/MODEL3`, product({ model: 3, cookedGrams: 690 }));
+  await expectDenied('⚠️⚠️ the current app (model 2) saving over a model-3 product', () =>
+    wholeWrite(`${P}/MODEL3`, product({ model: 2 })));
+  await expectDenied('…nor an older phone without the model', () => wholeWrite(`${P}/MODEL3`, product()));
+  await expectAllowed('Mise 2 saves it again', () =>
+    wholeWrite(`${P}/MODEL3`, product({ model: 3, cookedGrams: 700 })));
+  // A product the current app saved — finished kilos, maybe «no weight loss» — is brought up to
+  // 3 by Mise 2's first save, which drops the old flag; one never saved since goes up too.
+  await seedDoc(`${P}/MODEL2B`, product({ model: 2, noWeightLoss: true }));
+  await expectAllowed('Mise 2 brings a model-2 product up to 3', () =>
+    wholeWrite(`${P}/MODEL2B`, product({ model: 3, cookedGrams: 880 })));
+  await seedDoc(`${P}/NOMODEL`, product());
+  await expectAllowed('…and a product saved before the model existed', () =>
+    wholeWrite(`${P}/NOMODEL`, product({ model: 3 })));
 
   await expectAllowed('a member may delete a product', () => deleteWrite(`${P}/P2`));
 

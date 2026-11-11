@@ -26,13 +26,19 @@
 // ⚠️ THIS BLOCK IS DRAWN APART FROM «COMPOSTO DA», on purpose. That section used to show no money at all (Federico, 13 Sep 2026);
 // he REVERSED it on 7 Nov 2026 — each line there now shows its own rate and cost (line-cost). This block stays what it was: the
 // cost of ONE KILO of the finished product, cut into its parts.
+//
+// ⚠️⚠️ AFTER THE SWITCH (Mise 2, 10 Nov 2026: «il calo è del prodotto» — foodcost-model.ts says it all): the product's recipe
+// lines are RAW dough, so each is opened at the recipe's RAW price, its own loss laid aside; the kilo is a kilo of what comes out
+// of the PRODUCT's oven (its cooked weight), and `lossy` says the product loses — or a recipe inside one of its recipes does,
+// which still keeps its own loss. A product the current app saved is read converted (currentProduct), so its block reads as
+// it did. per-kg-model.spec.ts says where this file and js/foodcost/per-kg-model.js now part («post-switch»).
 
 import { ingredientDisplayName } from './ingredient-name';
 import { pricePerKg as ingredientPricePerKg, roundTo, positiveNumber } from './price-model';
 import { costRecipe } from './recipe-cost-model';
 import { linkOf } from './catalogue-model';
 import type { RowLink } from './catalogue-model';
-import { normalizeProduct, productionCost, unitsPerBatch, ingredientLineCost } from './foodcost-model';
+import { currentProduct, productCooking, productionCost, unitsPerBatch, ingredientLineCost } from './foodcost-model';
 import type { CostTables, IngredientLineReason } from './foodcost-model';
 
 // Why a line is in the block but not in the total. The screen turns each into words.
@@ -115,10 +121,10 @@ function labelKey(label: unknown): string {
 //            that the figure is not exact yet
 //   packagingLeftOut — the product has packaging but not yet a way of selling it, so its share of a kilo cannot be known: left
 //            out, as the card leaves it out
-//   lossy  — a recipe opened here loses weight in the oven, so its ingredients weigh more than the kilo they make: the screen
-//            says why the weights pass 1 kg
+//   lossy  — the product loses weight in the oven, or a recipe inside one of its recipes does, so the ingredients weigh more than
+//            the kilo they make: the screen says why the weights pass 1 kg
 export function costPerKg(product: unknown, tables: CostTables = {}): PerKgResult {
-  const p = normalizeProduct(product);
+  const p = currentProduct(product, tables);
   const empty: PerKgResult = { kg: null, total: null, partial: false, packagingLeftOut: false, lossy: false, rows: [] };
   if (!p) return empty;
 
@@ -132,7 +138,7 @@ export function costPerKg(product: unknown, tables: CostTables = {}): PerKgResul
   const perKg = 1 / batchKg;
   const rows: PerKgRow[] = [];
   const byKey = new Map<string, PerKgRow>();
-  let lossy = false;
+  let lossy = (productCooking(p, tables).lossPct || 0) > 0;
 
   function add(row: PerKgRow): void {
     const known = byKey.get(row.key);
@@ -185,8 +191,8 @@ export function costPerKg(product: unknown, tables: CostTables = {}): PerKgResul
       }
       const costedLink = link as RowLink;
       if (costedLink.kind === 'recipe') {
-        // A recipe inside: opened in its turn, with ITS OWN loss (only the product's own lines lose theirs on a finished product —
-        // batchTotals() says the same).
+        // A recipe inside: opened in its turn, with ITS OWN loss (only the product's own lines are raw dough, opened at the raw
+        // price — componentLineCost() says the same).
         openRecipe(lookup(tables.recipes, costedLink.refId), kg, depth + 1, new Set([...branch, costedLink.refId]), null);
         return;
       }
@@ -227,14 +233,14 @@ export function costPerKg(product: unknown, tables: CostTables = {}): PerKgResul
 
     const recipe = lookup(tables.recipes, component.recipeId) as { name?: unknown } | null;
     if (!recipe) continue; // gone: the card already says so
+    // Raw dough, opened at the raw price: the recipe's own loss laid aside, as componentLineCost() costs the line.
     const outKg = component.qtyKg * perKg;
-    const lossPct = p.noWeightLoss ? 0 : null;
-    const costed = costRecipe(lossPct === null ? recipe : { ...recipe, lossPct: 0 }, tables);
+    const costed = costRecipe({ ...recipe, lossPct: 0 }, tables);
     if (costed.pricePerKg === null) {
       uncounted(`recipe:${component.recipeId}`, recipe.name, outKg > 0 ? outKg : null, 'no-recipe');
       continue;
     }
-    if (outKg > 0) openRecipe(recipe, outKg, 1, new Set(), lossPct);
+    if (outKg > 0) openRecipe(recipe, outKg, 1, new Set(), 0);
   }
 
   // Packaging: so many pieces per unit sold, and so many units in a kilo. Only once the way of selling says how many units a batch

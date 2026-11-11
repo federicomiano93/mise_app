@@ -1,6 +1,6 @@
+import { productCooking } from '@mise/shared/foodcost-model';
 import type { CostTables, Product } from '@mise/shared/foodcost-model';
-import { fcMoney, fcNumber, fcWeight, weighingParams } from '@mise/shared/fc-number';
-import { readWeighing, startWeighing } from '@mise/shared/foodcost-weighing';
+import { fcMoney, fcNumber, fcWeight } from '@mise/shared/fc-number';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
@@ -102,7 +102,7 @@ export function ReadMadeOf({ product, working, tables, loaded }: Lines) {
         return {
           label: name.text,
           value,
-          cost: lineMoney(t, money, shown, tables, product.noWeightLoss).text,
+          cost: lineMoney(t, money, shown, tables).text,
           note: lineNote(t, money, shown, tables, loaded),
           missing: name.missing,
         };
@@ -112,39 +112,27 @@ export function ReadMadeOf({ product, working, tables, loaded }: Lines) {
 }
 
 // ── Weight and oven loss ──────────────────────────────────────────────────────────────────────────
-// What each recipe on the product carries today: raw and cooked weight, and the sentence the form shows under the boxes — and
-// the red warning of a wrong pair, which the person must see before an oven loss is trusted.
-export function ReadWeighings({ product, recipes, recipeIds }: {
-  product: Product;
-  recipes: Readonly<Record<string, unknown>>;
-  recipeIds: string[];
-}) {
+// What the PRODUCT weighs raw and cooked (model 3: the loss belongs to the product, not to its recipes), and the red warning of a
+// cooked weight heavier than the raw one, which the person must see before a cost per kilo is trusted. `product` is current.
+export function ReadCooking({ product, tables }: { product: Product; tables: CostTables }) {
   const { t } = useT();
   const money = useMoney();
-  if (product.noWeightLoss) return <p className={styles.line}>{t('fc.noWeightLoss')}</p>;
-  const known = recipeIds.filter(id => recipes[id] !== undefined);
+  const cooking = productCooking(product, tables);
+  if (cooking.cookedKg === null) return <p className={styles.line}>{t('fc.cooking.none')}</p>;
+  const rows: Row[] = [
+    { label: t('fc.rawDough'), value: gramsText(money, cooking.rawKg * 1000) },
+    { label: t('fc.cookedDough'), value: gramsText(money, cooking.cookedKg * 1000), invalid: cooking.heavier },
+  ];
+  if (cooking.lossPct !== null) rows.push({ label: t('fc.cooking.lossLabel'), value: `${fcNumber(cooking.lossPct, money)}%` });
   return (
-    <div className={styles.weighs}>
-      {known.map(id => {
-        const recipe = recipes[id] as { name?: unknown };
-        const state = startWeighing(recipe);
-        const shown = readWeighing(recipe, state);
-        return (
-          <div key={id} className={styles.weigh}>
-            {known.length > 1 ? <p className={styles.weighTitle}>{t('fc.weighFor', { name: String(recipe.name ?? '') })}</p> : null}
-            <ReadList
-              rows={[
-                { label: t('fc.rawDough'), value: gramsText(money, state.raw) },
-                { label: t('fc.cookedDough'), value: gramsText(money, state.cooked), invalid: shown.warning !== null },
-              ]}
-            />
-            <p className={styles.out}>{t(shown.message.key, weighingParams(shown.message.params, money))}</p>
-            {shown.warning === null ? null : (
-              <p className={styles.warn}>{t(shown.warning.key, weighingParams(shown.warning.params, money))}</p>
-            )}
-          </div>
-        );
-      })}
+    <div className={styles.block}>
+      <ReadList rows={rows} />
+      {/* ⚠️ SPOKEN (code review, 11 Nov 2026; P18): in the form the warning can appear while a line is typed, as the weighing pairs'
+          notes it replaces did, and those were announced. Present before it speaks: text added to a region already on the page is
+          announced. The food-cost answer stays silent on purpose (it would re-read every figure at each keystroke). */}
+      <div className={styles.live} aria-live="polite">
+        {cooking.heavier ? <p className={styles.warn}>{t('fc.lossCookedHeavier')}</p> : null}
+      </div>
     </div>
   );
 }
@@ -163,7 +151,7 @@ export function ReadPackaging({ product, working, tables, loaded }: Lines) {
         return {
           label: name.text,
           value: positive(line.qtyPcs) ? amountText(t, money, line.qtyPcs, 'pcs') : null,
-          cost: lineMoney(t, money, shown, tables, product.noWeightLoss).text,
+          cost: lineMoney(t, money, shown, tables).text,
           note: lineNote(t, money, shown, tables, loaded),
           missing: name.missing,
         };
