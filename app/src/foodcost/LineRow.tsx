@@ -1,3 +1,4 @@
+import { useId } from 'react';
 import { Trash2 } from 'lucide-react';
 import type { LineUnit } from '@mise/shared/foodcost-model';
 import { KILO_LINE_UNITS } from '@mise/shared/line-quantity';
@@ -14,6 +15,9 @@ type Props = {
   rowKey: string;
   kind: LineKind;
   name: LineName;
+  // Whom the ingredient is bought from (supplierOf), under the name. '' — a recipe, packaging, no supplier, not arrived yet —
+  // draws nothing.
+  supplier?: string;
   // The line's rate and what its amount costs (lineCost.ts), at the right-hand end of the amount row; '' draws nothing.
   cost: string;
   note: string;
@@ -47,8 +51,12 @@ const REMOVE_LABEL = {
 //
 // ⚠️ A QUANTITY TYPED IN IT NEVER REBUILDS THE ROW: the row is keyed by its own id, so the box under
 // the finger is the same box after every digit.
-export function LineRow({ rowKey, kind, name, cost, note, qty, unit, units, registerQty, onPick, onQty, onUnit, onRecipeUnit, onRemove }: Props) {
+export function LineRow({ rowKey, kind, name, supplier = '', cost, note, qty, unit, units, registerQty, onPick, onQty, onUnit, onRecipeUnit, onRemove }: Props) {
   const { t } = useT();
+  const supplierId = useId();
+  // POST-SWITCH (step 4 of the Food cost plan, 11 Nov 2026): only an ingredient line names its supplier. The kind is checked here
+  // too, so a caller handing a name to a recipe or packaging line still draws none.
+  const supplierShown = kind === 'ingredient' && supplier !== '' ? supplier : '';
 
   return (
     <li className={styles.line}>
@@ -58,6 +66,9 @@ export function LineRow({ rowKey, kind, name, cost, note, qty, unit, units, regi
           className={styles.name}
           data-missing={name.missing}
           aria-label={t('fc.aria.changeLine', { name: name.text })}
+          // The supplier is drawn outside the button (the button's name is «Change …», which the words drawn must stay inside), so
+          // it is linked as the button's description: a screen reader says it after the name.
+          aria-describedby={supplierShown === '' ? undefined : supplierId}
           onClick={onPick}
         >
           <span>{name.text}</span>
@@ -66,6 +77,8 @@ export function LineRow({ rowKey, kind, name, cost, note, qty, unit, units, regi
           <Trash2 aria-hidden="true" />
         </button>
       </div>
+      {/* Under the name, small and secondary; one line, cut with «…» at 296px rather than wrapped or pushed sideways. */}
+      {supplierShown === '' ? null : <p id={supplierId} className={styles.supplier}>{supplierShown}</p>}
       <div className={styles.amount}>
         <input
           ref={node => { registerQty(rowKey, node); }}

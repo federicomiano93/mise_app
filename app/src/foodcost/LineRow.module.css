@@ -115,6 +115,18 @@
   color: var(--ink-2);
 }
 
+/* Whom an ingredient is bought from (step 4), under the name: indented to the name's own text, smaller, --ink-2 on --surface
+   (above 4.5:1). One line with «…»: a long legal name never makes the card scroll sideways at 296px. */
+.supplier {
+  margin-top: calc(-1 * var(--s1));
+  padding: 0 var(--s3);
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .note {
   color: var(--warn-ink);
   font-size: var(--fs-sm);

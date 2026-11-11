@@ -27,7 +27,7 @@ const SECTIONS = ['Product', 'Made of', 'Baking', 'Packaging', 'Work', 'Price'];
 const HELP: Record<string, RegExp> = {
   'Summary per piece': /^The figures are for one piece\. Food cost is the cost of ingredients and packaging/,
   Product: /^Pieces per batch: how many finished pieces/,
-  'Made of': /^Write what goes into the dough, weighed raw\. Tap a name to change it\. On the right is what the amount written costs\.$/,
+  'Made of': /^Write what goes into the dough, weighed raw\. Tap a name to change it\. Under an ingredient is whom it is bought from\. On the right is what the amount written costs\.$/,
   Baking: /^Weigh the dough before and after the oven/,
   Packaging: /^Boxes, bags, cases, labels/,
   Work: /^The time to make one batch.*If you leave it empty/,
