@@ -51,14 +51,14 @@ describe('a venue in Italy', () => {
     expect(screen.getByRole('group', { name: 'Prezzo consigliato' })).toHaveTextContent('Con IVA al 20,00%, per un food cost del 25,00%.');
   });
 
-  it('writes the oven loss sentence as 12,00%, in the layout of the venue', async () => {
+  it('writes a product’s oven loss as 12,00%, in the layout of the venue', async () => {
     const fake = editorSource(
-      [product('Loaf', { components: [{ recipeId: 'Dough', qtyKg: 1 }] })],
-      { recipes: [recipe('Dough', { lossPct: 12, rawGrams: 1000, cookedGrams: 880 })] },
+      [product('Loaf', { components: [{ recipeId: 'Dough', qtyKg: 1 }], cookedGrams: 880, model: 3 })],
+      { recipes: [recipe('Dough')] },
     );
     renderFoodcost('/food-cost/product/Loaf', { source: fake, ...ITALY });
-    await screen.findByRole('region', { name: 'Composto da' }, LOAD);
-    expect(within(madeOf()).getByText('Calo peso in cottura: 12,00%')).toBeInTheDocument();
+    const made = await screen.findByRole('region', { name: 'Composto da' }, LOAD);
+    expect(within(made).getByText('Calo', { selector: 'dt' }).parentElement).toHaveTextContent('12,00%');
   });
 });
 
@@ -74,13 +74,13 @@ describe('a venue in Britain', () => {
     expect(within(packaging).getByText(`< £0.01 each · this amount £0.01`)).toBeInTheDocument();
   });
 
-  it('writes the oven loss as «12.00%» and the answer as «20.00%»', async () => {
+  it('writes a product’s oven loss as «12.00%»', async () => {
     const fake = editorSource(
-      [product('Loaf', { components: [{ recipeId: 'Dough', qtyKg: 1 }] })],
-      { recipes: [recipe('Dough', { lossPct: 12, rawGrams: 1000, cookedGrams: 880 })] },
+      [product('Loaf', { components: [{ recipeId: 'Dough', qtyKg: 1 }], cookedGrams: 880, model: 3 })],
+      { recipes: [recipe('Dough')] },
     );
     renderFoodcost('/food-cost/product/Loaf', { source: fake });
-    await screen.findByRole('region', { name: 'Made of' }, LOAD);
-    expect(within(madeOf()).getByText('Weight lost in the oven: 12.00%')).toBeInTheDocument();
+    const made = await screen.findByRole('region', { name: 'Made of' }, LOAD);
+    expect(within(made).getByText('Oven loss', { selector: 'dt' }).parentElement).toHaveTextContent('12.00%');
   });
 });

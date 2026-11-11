@@ -261,18 +261,23 @@ describe('the Food cost store', () => {
       'components', 'foodCostTarget', 'labourMinutes', 'labourPeople', 'model', 'name', 'packSize', 'packUnit',
       'packaging', 'piecesPerBatch', 'sellingMode', 'sellingPrice', 'vatRate',
     ]);
-    expect(doc.model).toBe(2);
+    expect(doc.model).toBe(3);
     expect(doc.vatRate).toBe(0);
     expect(doc).not.toHaveProperty('id');
   });
 
-  test('⚠️ noWeightLoss is written only when true: switching it off removes the key from the whole document', () => {
-    const on = toProductDocument(product({ id: 'p1', name: 'Loaf', noWeightLoss: true } as Product & { name: string }));
-    expect(on.noWeightLoss).toBe(true);
-    const off = toProductDocument(product({ id: 'p1', name: 'Loaf', noWeightLoss: false } as Product & { name: string }));
-    expect(off).not.toHaveProperty('noWeightLoss');
-    const missing = toProductDocument(product({ id: 'p1', name: 'Loaf' } as Product & { name: string }));
-    expect(missing).not.toHaveProperty('noWeightLoss');
+  test('⚠️ rawGrams and cookedGrams are written only when they are numbers (the rules refuse a null); noWeightLoss never again', () => {
+    const none = toProductDocument(product({ id: 'p1', name: 'Loaf' } as Product & { name: string }));
+    expect(none).not.toHaveProperty('rawGrams');
+    expect(none).not.toHaveProperty('cookedGrams');
+    const both = toProductDocument(product({ id: 'p1', name: 'Loaf', rawGrams: 1000, cookedGrams: 880 } as Product & { name: string }));
+    expect(both).toMatchObject({ rawGrams: 1000, cookedGrams: 880, model: 3 });
+    const cookedOnly = toProductDocument(product({ id: 'p1', name: 'Loaf', cookedGrams: 880 } as Product & { name: string }));
+    expect(cookedOnly).not.toHaveProperty('rawGrams');
+    expect(cookedOnly.cookedGrams).toBe(880);
+    // A product the current app saved with the flag on: the next save drops it from the document.
+    const flagged = toProductDocument(product({ id: 'p1', name: 'Loaf', noWeightLoss: true } as Product & { name: string }));
+    expect(flagged).not.toHaveProperty('noWeightLoss');
   });
 
   test('the margin point travels with the product', () => {
@@ -533,8 +538,8 @@ describe('the Food cost store', () => {
       expect(fake.writes.filter(w => w.kind === 'product')).toHaveLength(0);
       expect(fake.creates).toHaveLength(1);
       expect(fake.creates[0]!.id).toBe('recipe-r1');
-      expect(fake.creates[0]!.data).toEqual(toProductDocument(product({ id: 'recipe-r1', name: 'Brioche', components: [{ recipeId: 'r1', qtyKg: 0.9 }] })));
-      expect(fake.creates[0]!.data).toMatchObject({ name: 'Brioche', model: 2, sellingMode: null, sellingPrice: null, vatRate: null, packaging: [] });
+      expect(fake.creates[0]!.data).toEqual(toProductDocument(product({ id: 'recipe-r1', name: 'Brioche', components: [{ recipeId: 'r1', qtyKg: 1 }], cookedGrams: 900 })));
+      expect(fake.creates[0]!.data).toMatchObject({ name: 'Brioche', model: 3, sellingMode: null, sellingPrice: null, vatRate: null, packaging: [] });
       answer(fake, true);
       expect(await done).toEqual({ made: 1, skipped: 0, failed: 0 });
     });

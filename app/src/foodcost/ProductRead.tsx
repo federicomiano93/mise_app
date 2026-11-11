@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Ref } from 'react';
 import { Pencil } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router';
-import { productionCost } from '@mise/shared/foodcost-model';
+import { currentProduct, productionCost } from '@mise/shared/foodcost-model';
 import type { CostTables, Product } from '@mise/shared/foodcost-model';
 import { countryOf } from '@mise/shared/market';
 import { useT } from '../i18n/useT';
@@ -21,9 +21,9 @@ import { FROM_PRODUCT, pushDepth } from './foodcostNav';
 import { PerKgBlock } from './PerKgBlock';
 import { ProductActions } from './ProductActions';
 import { ProductAnswer, SuggestedPrice } from './ProductAnswer';
-import { recipeIdsOn, workingFrom } from './productEditorModel';
+import { workingFrom } from './productEditorModel';
 import { ProductSummary } from './ProductSummary';
-import { ReadLabour, ReadMadeOf, ReadPackaging, ReadPrice, ReadProduct, ReadWeighings } from './ReadSections';
+import { ReadLabour, ReadMadeOf, ReadPackaging, ReadPrice, ReadProduct, ReadCooking } from './ReadSections';
 import { useProductExit } from './useProductExit';
 import shell from './ProductEditor.module.css';
 
@@ -56,7 +56,7 @@ export function summaryShows(product: unknown, tables: CostTables): boolean {
 // split alike.
 // ⚠️ NOTHING IN IT IS A CONTROL BUT THE BAR'S BUTTONS, THE BOX'S SUMMARY, «DETAILS», «COST PER 1 KG», HISTORY AND DELETE: a box
 // sneaking in would be a form that looks like text.
-export function ProductRead({ id, product, gone, origin, titleRef, onEdit }: Props) {
+export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdit }: Props) {
   const { t } = useT();
   const store = useFoodcostStore();
   const snap = useFoodcost();
@@ -70,9 +70,13 @@ export function ProductRead({ id, product, gone, origin, titleRef, onEdit }: Pro
   const titleId = useId();
   const country = countryOf(location);
 
+  // ⚠️ THE CURRENT PRODUCT (model 3): one saved before holds finished kilos on its recipe lines; every section below reads the
+  // converted one, so the lines show raw kilos, as the form will after the pencil. ProductEditor opens it only once the recipes
+  // and the prices are in.
+  const product = useMemo(() => currentProduct(stored, snap.tables) ?? stored, [stored, snap.tables]);
   // The product as the form would open it: it gives each line the name and the note the form shows under it.
   const working = useMemo(() => workingFrom(product, country), [product, country]);
-  const recipeIds = recipeIdsOn(working);
+  const hasRecipeLine = working.components.some(line => line.kind === 'recipe');
   const loaded = { recipes: snap.recipesLoaded, ingredients: snap.ingredientsLoaded };
   // The box is open while there is no summary above it (nothing else to show): from the start, and again when the product stops
   // being costed while it is read (refreshRead of the current app). A person who closed it while a summary shows is not argued with.
@@ -144,12 +148,12 @@ export function ProductRead({ id, product, gone, origin, titleRef, onEdit }: Pro
           </CardSection>
           <CardSection title={t('fc.madeOf')}>
             <ReadMadeOf product={product} working={working} tables={snap.tables} loaded={loaded} />
-            {recipeIds.length === 0 ? null : (
+            {hasRecipeLine ? (
               <>
-                <SubHeading>{t('fc.section.weighing')}</SubHeading>
-                <ReadWeighings product={product} recipes={snap.recipes} recipeIds={recipeIds} />
+                <SubHeading>{t('fc.cooking.title')}</SubHeading>
+                <ReadCooking product={product} tables={snap.tables} />
               </>
-            )}
+            ) : null}
           </CardSection>
           <CardSection title={t('fc.packaging')}>
             <ReadPackaging product={product} working={working} tables={snap.tables} loaded={loaded} />

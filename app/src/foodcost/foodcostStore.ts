@@ -150,9 +150,11 @@ export function toProductDocument(product: Product): Record<string, unknown> {
     foodCostTarget: product.foodCostTarget ?? null,
     labourMinutes: product.labourMinutes ?? null,
     labourPeople: product.labourPeople ?? null,
-    // ⚠️ WRITTEN ONLY WHEN TRUE, like the current app: the product is saved WHOLE, so switching it off
-    // leaves the key out and removes it from the document, and no product ever carries a stored false.
-    ...(product.noWeightLoss === true ? { noWeightLoss: true } : {}),
+    // ⚠️ NEVER WRITTEN AGAIN (model 3): the product is saved WHOLE, so the key drains from every product saved. The rules
+    // still whitelist it for the products the current app saved.
+    // ⚠️ THE PRODUCT'S OWN WEIGHING is written only when it has a value: the rules refuse a null.
+    ...(product.rawGrams !== null ? { rawGrams: product.rawGrams } : {}),
+    ...(product.cookedGrams !== null ? { cookedGrams: product.cookedGrams } : {}),
     model: PRODUCT_MODEL,
   };
 }

@@ -12,6 +12,7 @@ import type { Origin } from './foodcostPath';
 import { ScrollTopContext, useBackToRecipe, useLeave, wantsTitleFocus } from './foodcostNav';
 import { NEW_OPENER, productOpener, useHandBack } from './handBack';
 import { ProductForm } from './ProductForm';
+import { waitsForTables } from './productEditorModel';
 import { ProductRead, summaryShows } from './ProductRead';
 import { useProductExit } from './useProductExit';
 import styles from './ProductEditor.module.css';
@@ -39,7 +40,7 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
   const { t } = useT();
   const { state } = useLocation();
   const navigate = useNavigate();
-  const { products, productsFromServer, recipes, recipesFromServer, tables } = useFoodcost();
+  const { products, productsFromServer, recipes, recipesFromServer, recipesLoaded, ingredientsLoaded, tables } = useFoodcost();
   const titleId = useId();
   const title = useRef<HTMLHeadingElement>(null);
 
@@ -65,7 +66,11 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
     setLastId(id);
     if (justSaved !== null && justSaved !== id) setJustSaved(null);
   }
-  const canOpen = product !== null && (answered || justSaved === id);
+  // ⚠️ A LEGACY PRODUCT WITH RECIPE LINES OPENS ONLY ONCE THE RECIPES AND THE PRICES ARE IN (ingredientsLoaded already means with
+  // their prices): it is converted with them, and opened on unconverted lines — the form copies once, Save writes them as raw
+  // kilos — would write a cost too low for ever. NO TIMEOUT: the store sets both flags even when a stream fails, so this cannot hang.
+  const canOpen = product !== null && (answered || justSaved === id)
+    && (!waitsForTables(product) || (recipesLoaded && ingredientsLoaded));
   const draftWaiting = draftFor !== null && !answered;
   // ⚠️ DECIDED ONCE: a recipe that arrives after the form opened plain must not swap the form for a
   // prefilled one (the key would change and what was typed would be lost).

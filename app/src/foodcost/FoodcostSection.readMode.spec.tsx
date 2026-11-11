@@ -278,29 +278,31 @@ describe('the read view is text, not a form', () => {
     expect(cardNamed('Imballaggio')).toHaveTextContent('Ancora niente');
   });
 
-  it('shows the oven-loss pair of a recipe, red and warned when the cooked weight is above the raw one', async () => {
-    const dough = recipe('Dough', { rawGrams: 1000, cookedGrams: 1200 });
-    const loaf = product('Loaf', { components: [{ recipeId: 'Dough', qtyKg: 1 }] });
-    await read('Loaf', editorSource([loaf], { recipes: [dough] }));
+  // Model 3: the loss belongs to the PRODUCT (rawGrams / cookedGrams), not to the recipes on it.
+  it('shows a product’s cooking, red and warned, with no loss row, when the cooked weight is above the raw one', async () => {
+    const loaf = product('Loaf', { components: [{ recipeId: 'Dough', qtyKg: 1 }], cookedGrams: 1200, model: 3 });
+    await read('Loaf', editorSource([loaf], { recipes: [recipe('Dough')] }));
     const made = cardNamed('Made of');
-    expect(within(made).getByRole('heading', { level: 4, name: 'Weight and oven loss' })).toBeInTheDocument();
+    expect(within(made).getByRole('heading', { level: 4, name: 'Baking' })).toBeInTheDocument();
     expect(rowOf(made, 'Raw dough')).toHaveTextContent('1000.00 g');
     expect(rowOf(made, 'Cooked dough')).toHaveTextContent('1200.00 g');
     expect(within(made).getByText('The cooked dough cannot weigh more than the raw dough.')).toBeInTheDocument();
+    expect(within(made).queryByText('Oven loss', { selector: 'dt' })).not.toBeInTheDocument();
   });
 
-  it('shows a sound pair without a warning, and «Finished product — no weight loss» in place of the pair', async () => {
-    const dough = recipe('Dough', { rawGrams: 1000, cookedGrams: 900, lossPct: 10 });
-    const sound = product('Sound', { components: [{ recipeId: 'Dough', qtyKg: 1 }] });
-    const finished = product('Finished', { components: [{ recipeId: 'Dough', qtyKg: 1 }], noWeightLoss: true });
-    const { user } = await read('Sound', editorSource([sound, finished], { recipes: [dough] }));
+  it('shows a sound weighing with its loss and no warning; a product with recipe lines and no cooked weight says «No oven loss.»', async () => {
+    const sound = product('Sound', { components: [{ recipeId: 'Dough', qtyKg: 1 }], cookedGrams: 900, model: 3 });
+    const plain = product('Plain loaf', { components: [{ recipeId: 'Dough', qtyKg: 1 }], model: 3 });
+    const { user } = await read('Sound', editorSource([sound, plain], { recipes: [recipe('Dough')] }));
     expect(within(cardNamed('Made of')).queryByText(/cannot weigh more/)).not.toBeInTheDocument();
-    expect(cardNamed('Made of')).toHaveTextContent('Weight lost in the oven: 10.00%');
+    expect(rowOf(cardNamed('Made of'), 'Raw dough')).toHaveTextContent('1000.00 g');
+    expect(rowOf(cardNamed('Made of'), 'Cooked dough')).toHaveTextContent('900.00 g');
+    expect(rowOf(cardNamed('Made of'), 'Oven loss')).toHaveTextContent('10.00%');
     await user.click(screen.getByRole('button', { name: 'Back' }));
-    await user.click(await screen.findByRole('button', { name: /^Finished/ }, LOAD));
+    await user.click(await screen.findByRole('button', { name: /^Plain loaf/ }, LOAD));
     await user.click(await screen.findByRole('button', { name: 'Open the card' }, LOAD));
     await screen.findByRole('button', { name: 'Edit product' }, LOAD);
-    expect(cardNamed('Made of')).toHaveTextContent('Finished product — no weight loss');
+    expect(cardNamed('Made of')).toHaveTextContent('No oven loss.');
     expect(within(cardNamed('Made of')).queryByText('Raw dough')).not.toBeInTheDocument();
   });
 

@@ -1,5 +1,5 @@
 import {
-  PRODUCT_MODEL, normalizeProduct, vatSelection,
+  PRODUCT_MODEL, isLegacyProduct, normalizeProduct, vatSelection,
 } from '@mise/shared/foodcost-model';
 import type {
   LineUnit, PackUnit, Product, ProductComponent, ProductDraft, SellingMode,
@@ -52,8 +52,9 @@ export interface Working {
   // The free box. Only read while the menu says 'other'.
   vatOther: string;
   foodCostTarget: string;
-  // «Finished product, no weight loss»: the recipes' oven loss is laid aside for this product.
-  noWeightLoss: boolean;
+  // The product's own weighing (model 3), handed back untouched: grams, or null. No box yet.
+  rawGrams: number | null;
+  cookedGrams: number | null;
 }
 
 // The numbers a product carries in a box, by the name the save limits know them by.
@@ -78,7 +79,7 @@ export function emptyWorking(): Working {
   return {
     name: '', components: [], packaging: [], sellingMode: '', piecesPerBatch: '', packSize: '', packUnit: '',
     labourMinutes: '', labourPeople: '', sellingPrice: '', vatSelect: '', vatOther: '', foodCostTarget: '',
-    noWeightLoss: false,
+    rawGrams: null, cookedGrams: null,
   };
 }
 
@@ -92,7 +93,8 @@ export function workingFromDraft(draft: ProductDraft): Working {
   };
 }
 
-// A copy of a stored product to edit. ⚠️ A STORED RATE THE COUNTRY'S MENU LACKS opens on «another
+// A copy of a stored product to edit. The caller passes currentProduct(...): a product saved before model 3 holds finished
+// kilos on its recipe lines, and only the converted one holds the raw kilos the lines now mean. ⚠️ A STORED RATE THE COUNTRY'S MENU LACKS opens on «another
 // rate», unchanged (vatSelection decides, in a test of its own).
 export function workingFrom(product: Product, country: unknown): Working {
   const vat = vatSelection(product.vatRate, country);
@@ -112,7 +114,8 @@ export function workingFrom(product: Product, country: unknown): Working {
     vatSelect: vat.select,
     vatOther: vat.other,
     foodCostTarget: text(product.foodCostTarget),
-    noWeightLoss: product.noWeightLoss === true,
+    rawGrams: product.rawGrams,
+    cookedGrams: product.cookedGrams,
   };
 }
 
@@ -182,7 +185,9 @@ export function toProduct(working: Working, id: string, name: string = working.n
     foodCostTarget: readNumber(working.foodCostTarget),
     labourMinutes: readNumber(working.labourMinutes),
     labourPeople: readNumber(working.labourPeople),
-    noWeightLoss: working.noWeightLoss,
+    rawGrams: working.rawGrams,
+    cookedGrams: working.cookedGrams,
+    noWeightLoss: false,
     model: PRODUCT_MODEL,
   };
 }
@@ -193,13 +198,12 @@ export function costable(working: Working, id: string): Product {
   return normalizeProduct(toProduct(working, id)) as Product;
 }
 
-// The recipes on the product, each once, in the order they first appear: one pair of weighings each.
-export function recipeIdsOn(working: Working): string[] {
-  const ids: string[] = [];
-  for (const line of working.components) {
-    if (line.kind === 'recipe' && !ids.includes(line.recipeId)) ids.push(line.recipeId);
-  }
-  return ids;
+// Whether a product must wait for the recipes and the prices before it is opened.
+// ⚠️ A legacy product with recipe lines is converted WITH the recipes and the prices; converted before they arrive, a recipe
+// line would keep its finished kilos and Save would write them as raw kilos — a cost too low, for ever. A legacy product with
+// ingredient lines only converts without the tables.
+export function waitsForTables(product: Product): boolean {
+  return isLegacyProduct(product) && product.components.some(line => line.kind !== 'ingredient');
 }
 
 // A number for a sentence, in the interface language's own digits and decimal sign, with no
