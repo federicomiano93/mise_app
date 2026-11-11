@@ -815,3 +815,46 @@ recipes) — and NO packaging. NOT a port: the current app's «Cost per 1 kg» c
   product with packaging, 2,22 € everywhere, no packaging row; an unpriced packaging leaves the kilo exact; an unpriced line still says
   «più di»); `FoodcostSection.perKg.spec.tsx` adapted (the packaging rows and the «not counted» sentence are gone; the piece-count layout
   is pinned on a counted ingredient instead).
+
+## Step 4 — supplier in the chooser and under the lines as built (11 Nov 2026)
+
+Federico's words: «Composto da deve essere molto intuitivo, e quando scegli un ingrediente deve dirti il fornitore». Mise 2 only,
+POST-SWITCH: NOT a port, the current app's Food cost never names a supplier. Stacked on step 3 (PR #535).
+
+- **The chooser** (`PickDialog.tsx`): each INGREDIENT option shows its supplier on a second, smaller line under the name (`--ink-2`,
+  `--fs-sm`, one line cut with «…», so a long legal name never makes the dialog scroll sideways at 296px). Ingredients «not in use»
+  too. A recipe shows none (bought from nobody), packaging shows none (its line already says its price). An ingredient with no
+  supplier shows nothing at all — no «—», no empty line. The supplier is INSIDE the option's button, so it is part of its spoken
+  name: «Flour, Molino Rossi» (a visually hidden comma keeps the two names apart for the ear).
+- **The lines of «Made of»** (`LineRow.tsx`, form only): under an ingredient line's name, its supplier in small secondary text, one
+  line with «…», between the name's row and the amount's row. It sits OUTSIDE the name's button (whose name is «Change: …») and is
+  that button's `aria-describedby`. Nothing for recipe lines, packaging lines or a missing supplier; `LineRow` checks the kind
+  itself, so a caller cannot put a supplier under a recipe.
+- **The link:** an ingredient has ONE supplier, its own `supplierId` (the ingredient card writes it, Orders files the ingredient
+  under it, the Recipe catalogue's link chooser names it the same way, `recipes/linkModel.ts`). No multi-supplier rule is needed. An
+  order line sent to another supplier «for this order only» (`line-supplier.ts`) is Orders' business and never moves the
+  ingredient. `NO_SUPPLIER_ID` is never a document, so «no supplier» shows nothing. A supplier switched off is still the one the
+  ingredient is bought from, so it is still named, as the Recipe catalogue does. `supplierOf.ts` is the one lookup (an OWN key, so
+  an id like `constructor` names nothing).
+- **The name** always through `supplierLabel()` (`@mise/shared/supplier-label`): the short name when there is one, else the name.
+  Supplier names are data, never translated.
+- **The data:** no supplier listener runs while Food cost is on screen (every section owns its data while it is open; the Recipe
+  catalogue's and Orders' listeners live only inside their sections), so `foodcostSource.ts` gained `watchSuppliers`, through
+  `backend.firestore()` like its other listeners, QUIET (warn) like the ingredients. The rule that lets a person read the suppliers
+  is the one Food cost already passes for the ingredients (`canReadOrdersData`): no rules change. The store holds them by id in
+  MEMORY ONLY (`suppliers`, `{}` until they arrive; no local copy, so no new storage key and nothing for `KEEP_PREFIXES`; Firestore's
+  own offline copy answers the listener offline), outside `tables` (names, not costs: nothing memoised on the tables recomputes). A
+  failure keeps what was held and says nothing. It is stopped with the section's other listeners.
+- **Never waits:** the chooser and the lines draw at once and gain the supplier when it arrives; offline with no copy, refused, or a
+  venue without Orders, they simply show none.
+- **«?» of «Made of»** (form): «Under an ingredient is whom it is bought from.» / «Sotto un ingrediente c’è il suo fornitore.» — the
+  sentence step 3 held back. The read view's «?» is unchanged: the read view does not show the supplier (see below).
+- **Choices made for Federico, which he must hear about:** (1) the READ view of the card does not show the supplier yet — only the
+  form and the chooser, as the approved design describes the row with the weight box; say if he wants it on the read view too.
+  (2) The chooser does not SEARCH by supplier (typing «Rossi» finds nothing new); say if he wants it. (3) Packaging names no
+  supplier, in the chooser or on its lines.
+- **Specs:** `FoodcostSection.supplier.spec.tsx` (new: chooser and lines, short name through `supplierLabel()`, recipe and packaging
+  none, no supplier / «no supplier» / unknown / `constructor` nothing, inactive ones named, before the suppliers arrive, a refused
+  read, Italian, a rename followed live, the box under the finger kept), `LineRow.spec.tsx` (new: the kind guard, the description),
+  `supplierOf.spec.ts` (new); `foodcostSource.spec.ts` and `foodcostStore.spec.ts` (the listener: path, quiet failure, stop, memory
+  only); `tidyCard` and `lineRows` adapted to the new «?» sentence.
