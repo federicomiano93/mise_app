@@ -1,7 +1,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import { editorSource, intoForm, recipe } from '../testing/foodcostEditorFixtures';
-import { bareProduct, LOAD, product, renderFoodcost } from '../testing/renderFoodcost';
+import { bareProduct, FLOUR, FLOUR_PRICES, LOAD, product, renderFoodcost } from '../testing/renderFoodcost';
 
 // The «Cost breakdown» section of the product editor (it was the «Cost per 1 kg» block until 11 Nov 2026) (current app f0735d88, 9af66dd5; tests/foodcost-per-kg-screen.test.mjs,
 // item 22 of docs/mise2-port-owed.md): one kilo of the product line by line, the recipes opened, every figure through fc-number
@@ -106,19 +106,24 @@ describe('the block', () => {
     expect(toggle()).toBe(button);
   });
 
-  it('counts pieces of packaging by the kilo', async () => {
+  // POST-SWITCH (11 Nov 2026, «solo l'impasto»): the kilo is the dough only. The current app counted the boxes here (ten pieces
+  // from a kilo: ten boxes at £0.25, a total of £4.50) and said «Packaging not counted: choose how it is sold.»; Mise 2 does neither.
+  it('leaves the packaging out: no packaging row, the total is the dough\'s', async () => {
     const sold = await open('/food-cost/product/Boxed', editorSource([product('Boxed', { packaging: [{ ingredientId: 'box', qtyPcs: 1 }] })]));
     await sold.user.click(toggle());
-    // Ten pieces from a kilo: ten boxes at £0.25.
-    expect(rowOf('Box')).toHaveTextContent('£2.50');
-    expect(rowOf('Box')).toHaveTextContent('10.00 pcs · £0.25 / each');
-    expect(within(block()).getByText('Total for 1 kg').parentElement).toHaveTextContent('£4.50');
+    expect(within(block()).queryByText('Box')).not.toBeInTheDocument();
+    expect(within(block()).getAllByRole('listitem')).toHaveLength(1);
+    expect(rowOf('Flour')).toHaveTextContent('£2.00');
+    expect(within(block()).getByText('Total for 1 kg').parentElement).toHaveTextContent('£2.00');
   });
 
-  it('says when packaging is left out for want of a way of selling', async () => {
-    await open('/food-cost/product/Loose', editorSource([product('Loose', { sellingMode: null, piecesPerBatch: null, packaging: [{ ingredientId: 'box', qtyPcs: 1 }] })]));
-    expect(within(block()).getByText('Packaging not counted: choose how it is sold.')).toBeInTheDocument();
+  it('says nothing about packaging when there is no way of selling yet, and the kilo is still exact', async () => {
+    const { user } = await open('/food-cost/product/Loose', editorSource([product('Loose', { sellingMode: null, piecesPerBatch: null, packaging: [{ ingredientId: 'box', qtyPcs: 1 }] })]));
+    await user.click(toggle());
+    expect(within(block()).queryByText(/Packaging not counted/)).not.toBeInTheDocument();
     expect(within(block()).queryByText('Box')).not.toBeInTheDocument();
+    expect(within(block()).queryByText(/not exact yet/)).not.toBeInTheDocument();
+    expect(within(block()).getByText('Total for 1 kg').parentElement).toHaveTextContent('£2.00');
   });
 
   it('opens a recipe that loses weight in the oven and says why the weights pass a kilo', async () => {
@@ -149,8 +154,14 @@ describe('a venue in Italy', () => {
   });
 
   it('writes a piece count and a price each in the venue layout', async () => {
-    const { user } = await open('/food-cost/product/Boxed', editorSource([product('Boxed', { packaging: [{ ingredientId: 'box', qtyPcs: 1 }] })]), ITALY);
+    // POST-SWITCH (11 Nov 2026, «solo l'impasto»): a counted ingredient of «Made of», no longer the packaging (now left out).
+    const egg = { id: 'egg', name: 'Egg', active: true, unit: 'pcs' };
+    const fake = editorSource([product('Eggy', { components: [FLOUR_LINE, { kind: 'ingredient', ingredientId: 'egg', qty: 10, unit: 'pcs' }] })], {
+      ingredients: [FLOUR, egg],
+      prices: { ...FLOUR_PRICES, egg: { priceUnit: 'pcs', pricePerUnit: 0.25 } },
+    });
+    const { user } = await open('/food-cost/product/Eggy', fake, ITALY);
     await user.click(toggle());
-    expect(rowOf('Box')).toHaveTextContent('10,00 pz · 0,25 € al pezzo');
+    expect(rowOf('Egg')).toHaveTextContent('10,00 pz · 0,25 € al pezzo');
   });
 });

@@ -301,6 +301,8 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   // 'foodcost-weighing' (otherProductsUsing), 'per-kg-model' and 'from-recipes' now parts from it on purpose. The spec of each
   // file marks where; odd-inputs.spec.ts holds the rest to what must stay true; foodcost-product-loss.spec.ts proves the cost
   // of every product saved before does not move.
+  // POST-SWITCH (11 Nov 2026, «solo l'impasto»): 'per-kg-model' also takes a third parameter, `{ packaging: false }` (the dough
+  // only, what every Mise 2 screen shows); it has a default, so the arity of costPerKg is still the original's 1.
   ['foodcost-weighing', foodcostWeighing, legacyFoodcostWeighing],
   ['calculator-dough-math', calculatorDoughMath, legacyCalculatorDoughMath],
   ['calculator-recipe-source', calculatorRecipeSource, legacyCalculatorRecipeSource],

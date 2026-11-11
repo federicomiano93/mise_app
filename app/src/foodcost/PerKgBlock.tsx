@@ -39,6 +39,8 @@ type Props = {
 // beside it.
 // ⚠️ DRAWN APART FROM «MADE OF», on purpose: that section shows each line's own rate and cost; this block is the whole
 // product's cost per kilo cut into parts. The total is the card's own cost, never a second sum (per-kg-model).
+// POST-SWITCH (11 Nov 2026, «solo l'impasto»): the DOUGH only — the lines of «Made of», no packaging row and no «packaging not
+// counted» sentence; the total is the summary's kilo row and the «Baking» line. The packaging stays per unit sold.
 export function PerKgBlock({ product, tables }: Props) {
   const { t } = useT();
   const money = useMoney();
@@ -46,7 +48,7 @@ export function PerKgBlock({ product, tables }: Props) {
   const [open, setOpen] = useState(false);
   const res = useMemo((): PerKgResult | null => {
     try {
-      const result = costPerKg(product, tables);
+      const result = costPerKg(product, tables, { packaging: false });
       return result.total === null ? null : result;
     } catch {
       return null;
@@ -102,7 +104,6 @@ export function PerKgBlock({ product, tables }: Props) {
             {/* ⚠️ NEUTRAL, NOT «IT COSTS MORE»: a row with no price adds neither cost nor weight in the cost model, so the
                 figure can be too high (water not linked) as well as too low. */}
             {res.partial ? <p className={styles.partial}>{t('fc.perKg.partial')}</p> : null}
-            {res.packagingLeftOut ? <p className={styles.note}>{t('fc.perKg.packagingLeftOut')}</p> : null}
             {res.lossy ? <p className={styles.note}>{t('fc.perKg.lossNote')}</p> : null}
           </>
         )}

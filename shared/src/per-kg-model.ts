@@ -32,6 +32,12 @@
 // of the PRODUCT's oven (its cooked weight), and `lossy` says the product loses — or a recipe inside one of its recipes does,
 // which still keeps its own loss. A product the current app saved is read converted (currentProduct), so its block reads as
 // it did. per-kg-model.spec.ts says where this file and js/foodcost/per-kg-model.js now part («post-switch»).
+//
+// ⚠️⚠️ POST-SWITCH (11 Nov 2026, «solo l'impasto»): Federico decided the cost of 1 kg is the DOUGH only — the lines of «Made of»
+// (ingredients and recipes), NO packaging. Every Mise 2 screen that shows the kilo (the summary's kilo row, the «Baking» result
+// line, «Cost breakdown») calls costPerKg with `{ packaging: false }`: the total is the lines' batch cost ÷ the batch's kilos,
+// `partial` is the lines' own, no packaging row, `packagingLeftOut` always false. Without the option (two arguments, as the
+// current app calls it) the answer is unchanged, so the pair stays paired by name and arity (the third parameter has a default).
 
 import { ingredientDisplayName } from './ingredient-name';
 import { pricePerKg as ingredientPricePerKg, roundTo, positiveNumber } from './price-model';
@@ -65,6 +71,12 @@ export interface PerKgRow {
   priceEach: number | null;
   cost: number | null;
   reason: PerKgReason | null;
+}
+
+// POST-SWITCH (11 Nov 2026, «solo l'impasto»): a type only, so the module's exports are still the original's.
+export interface PerKgOptions {
+  // false: the dough only — no packaging row, packaging out of the total and out of `partial`. Default true (the original).
+  packaging?: boolean;
 }
 
 export interface PerKgResult {
@@ -123,15 +135,22 @@ function labelKey(label: unknown): string {
 //            out, as the card leaves it out
 //   lossy  — the product loses weight in the oven, or a recipe inside one of its recipes does, so the ingredients weigh more than
 //            the kilo they make: the screen says why the weights pass 1 kg
-export function costPerKg(product: unknown, tables: CostTables = {}): PerKgResult {
+//
+// options.packaging false (POST-SWITCH, 11 Nov 2026, «solo l'impasto»): the same answer without packaging — total = the lines'
+// batch cost ÷ kg, partial = the lines' partial, no 'packaging' row, packagingLeftOut false.
+export function costPerKg(product: unknown, tables: CostTables = {}, options: PerKgOptions = {}): PerKgResult {
   const p = currentProduct(product, tables);
   const empty: PerKgResult = { kg: null, total: null, partial: false, packagingLeftOut: false, lossy: false, rows: [] };
   if (!p) return empty;
 
+  // POST-SWITCH (11 Nov 2026, «solo l'impasto»): `?.` because a junk third argument (null) must not throw where js/ does not.
+  const withPackaging = (options as PerKgOptions | null)?.packaging !== false;
   const cost = productionCost(p, tables);
   const batchKg = cost.batch.kg;
+  // The lines alone, or the lines and the packaging (the card's figure). batchCost is null exactly when the lines cost nothing.
+  const partial = withPackaging ? cost.partial : cost.batch.partial;
   if (!(batchKg > 0) || cost.batchCost === null) {
-    return { ...empty, kg: batchKg > 0 ? batchKg : null, partial: cost.partial };
+    return { ...empty, kg: batchKg > 0 ? batchKg : null, partial };
   }
 
   // Every amount on the product is per BATCH; multiplied by this it is per kilo.
@@ -244,9 +263,9 @@ export function costPerKg(product: unknown, tables: CostTables = {}): PerKgResul
   }
 
   // Packaging: so many pieces per unit sold, and so many units in a kilo. Only once the way of selling says how many units a batch
-  // makes — the card's own condition.
-  const units = unitsPerBatch(p, cost.batch);
-  const packagingLeftOut = p.packaging.length > 0 && !(units !== null && units > 0);
+  // makes — the card's own condition. POST-SWITCH (11 Nov 2026, «solo l'impasto»): none of it for the dough only.
+  const units = withPackaging ? unitsPerBatch(p, cost.batch) : null;
+  const packagingLeftOut = withPackaging && p.packaging.length > 0 && !(units !== null && units > 0);
   if (units !== null && units > 0) {
     const unitsPerKg = units * perKg;
     for (const item of p.packaging) {
@@ -270,8 +289,8 @@ export function costPerKg(product: unknown, tables: CostTables = {}): PerKgResul
 
   return {
     kg: batchKg,
-    total: roundTo(cost.batchCost * perKg, 4),
-    partial: cost.partial,
+    total: roundTo((withPackaging ? cost.batchCost : cost.batch.cost) * perKg, 4),
+    partial,
     packagingLeftOut,
     lossy,
     rows: rows.map(row => ({

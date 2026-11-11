@@ -144,14 +144,16 @@ export function PreviewPanel({
       {/* Under the ideal price: the same price without VAT, and the target it is for — or nothing, while there is no
           net figure to give. */}
       {idealSub === '' ? null : <p className={styles.sub}>{partial ? t('fc.preview.moreThan', { value: idealSub }) : idealSub}</p>}
-      {/* The cost of one kilo of what the oven gives back — the SAME figure «Baking» and «Cost breakdown» show. */}
+      {/* What the DOUGH costs per kilo of what the oven gives back, packaging left out — the SAME figure «Baking» and «Cost
+          breakdown» show (POST-SWITCH, 11 Nov 2026, «solo l'impasto»). «more than» only when a line of «Made of» has no cost:
+          an unpriced packaging makes the summary partial, never the kilo. */}
       {extras === null ? null : (
         <div className={styles.kgRow}>
           <span>{extras.cooked ? t('fc.cooking.cookedKgCost') : t('fc.preview.kgNoLoss')}</span>
           <b>
             {kilo === null
               ? DASH
-              : partial || extras.perKgPartial ? t('fc.preview.moreThan', { value: fcMoney(kilo, money) }) : fcMoney(kilo, money)}
+              : extras.perKgPartial ? t('fc.preview.moreThan', { value: fcMoney(kilo, money) }) : fcMoney(kilo, money)}
           </b>
         </div>
       )}

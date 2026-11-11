@@ -55,9 +55,10 @@ export function CookingSection({
   const ids = useId();
   const cooking = productCooking(product, tables);
   // ⚠️ A FAULT HERE MUST NOT TAKE THE FORM DOWN (P17), as in PerKgBlock: no cost per kilo simply means no sentence about it.
+  // POST-SWITCH (11 Nov 2026, «solo l'impasto»): the dough only, the figure of the summary's kilo row and of «Cost breakdown».
   const perKg = useMemo((): PerKgResult | null => {
     try {
-      const result = costPerKg(product, tables);
+      const result = costPerKg(product, tables, { packaging: false });
       return result.total === null ? null : result;
     } catch {
       return null;

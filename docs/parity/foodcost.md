@@ -781,3 +781,37 @@ Mise 2 only, post-switch: this is NOT a port, the current app keeps its «Full c
 - **Fixed on the way:** a read-view line that no longer exists is red again (`.row dt.missing`; the bare `.missing` lost to `.row dt`).
 - **Specs:** `FoodcostSection.lineRows.spec.tsx`, `lineUnits.spec.ts` (new); `tidyCard`, `editor.lines`, `lineCosts`, `foodcostCss`
   adapted.
+
+## Cost of 1 kg = dough only (11 Nov 2026)
+
+Federico's decision («Solo l'impasto», 11 Nov 2026): the cost of 1 kg counts the DOUGH only — the lines of «Made of» (ingredients and
+recipes) — and NO packaging. NOT a port: the current app's «Cost per 1 kg» counts the packaging. Lands in PR #535 (step 3).
+
+- **Why:** a product with 2.00 of flour and a 0.30 box on each of its 10 pieces, 900 g out of the oven, read «1 kg cooked costs 5.56»
+  ((2.00 + 3.00) ÷ 0.9). It now reads 2.22 (2.00 ÷ 0.9). The packaging is per unit sold, not per kilo of dough.
+- **The model** (`shared/src/per-kg-model.ts`): `costPerKg(product, tables, { packaging: false })` — total = `batchTotals`' cost of the
+  lines ÷ the batch's kilos (the cooked weight when there is one); `partial` = the lines' own (`batch.partial`), so only a line of «Made
+  of» without a cost makes it «more than», never a packaging item without a price per piece or a product with no way of selling; no
+  `packaging` row; `packagingLeftOut` always false. A cooked weight heavier than the raw one still gives no kilo. `PerKgOptions` is a
+  type only.
+- **The same figure in three places:** the summary's kilo row («1 kg cooked costs» / «1 kg costs (no oven loss)», card and phone dialog,
+  `summaryExtras.ts`), the «Baking» result line (`CookingSection.tsx`) and «Cost breakdown» (`PerKgBlock.tsx`: its rows are the lines of
+  «Made of», recipes still opened into their own ingredients, one row per ingredient; the total is the same figure; the sentence
+  «Packaging not counted: choose how it is sold.» is gone with its key `fc.perKg.packagingLeftOut`). The summary's kilo row no longer says
+  «more than» because the PIECE's cost is partial (`PreviewPanel.tsx`): only `perKgPartial`, the dough's.
+- **Unchanged on purpose:** the packaging per unit sold («Details» → «Packaging», the Packaging section, the piece's cost, food cost,
+  margin, ideal price, whole batch). A product SOLD BY THE KILO keeps its cost per kilo sold (`productionCost` / `costProduct`'s `unitCost`,
+  the summary's «Cost» row) WITH the packaging: that is what one kilo sold costs, not the dough's kilo, so on such a product the two rows
+  differ by the packaging.
+- **Texts:** the summary's «?» (`fc.help.sum`) now ends «The last line is what the dough costs for 1 kg of cooked product, packaging
+  excluded.» / «L’ultima riga è quanto costa l’impasto per 1 kg di prodotto cotto, imballaggio escluso.»
+- **Diverging on purpose** (marked `POST-SWITCH (11 Nov 2026, «solo l'impasto»)`): the pair stays paired by name and arity (the third
+  parameter has a default, `costPerKg.length` is still 1), and without the option the answer is still the original's, so every existing
+  both-files test and the odd-inputs comparison of `costPerKg` are unchanged. `per-kg-model.spec.ts` has a port-only block for the
+  option (js/ has none); `odd-inputs.spec.ts` holds `costPerKg (dough only)` to the `guards` rule; `parity.spec.ts` says why the arity
+  still matches.
+- **Specs:** `shared/src/per-kg-model.spec.ts` (Federico's example, packaging ignored, partial, no loss, cooked heavier → none, junk
+  options); `app/src/foodcost/FoodcostSection.doughKilo.spec.tsx` (new: the card, the dialog, the «Baking» line and «Cost breakdown» on a
+  product with packaging, 2,22 € everywhere, no packaging row; an unpriced packaging leaves the kilo exact; an unpriced line still says
+  «più di»); `FoodcostSection.perKg.spec.tsx` adapted (the packaging rows and the «not counted» sentence are gone; the piece-count layout
+  is pinned on a counted ingredient instead).
