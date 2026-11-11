@@ -1086,7 +1086,12 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         const read = await within(Promise.all([source.getRoster(), source.getAwayDays()]), LIST_READ_MS, null);
         if (read === null) return silent;
         const [roster, days] = read;
-        const away = awayUids(days.map(day => ({ ...day, uid: typeof day.uid === 'string' && day.uid !== '' ? day.uid : day.id })) as never);
+        // «Away» is judged on the store's own clock (deps.draft.nowIso), not the system's: the same instant the draft is stamped
+        // with, and a spec with a fixed day stays true after that day has passed.
+        const away = awayUids(
+          days.map(day => ({ ...day, uid: typeof day.uid === 'string' && day.uid !== '' ? day.uid : day.id })) as never,
+          Date.parse(deps.draft.nowIso()),
+        );
         if (!nobodyWillBeTold(roster, away, senderUid)) return silent;
         return { nobody: true, names: awayNames(roster, away, senderUid) };
       } catch (err) {
