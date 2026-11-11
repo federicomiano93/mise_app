@@ -20,13 +20,13 @@ describe('a product by its address', () => {
     renderFoodcost('/food-cost/product/Green', { source: sourceWith([product('Green', { name: 'Cornetto' })]) });
     expect(await screen.findByRole('heading', { level: 2, name: 'Cornetto' }, LOAD)).toBeInTheDocument();
     const region = screen.getByRole('region', { name: 'Cornetto' });
-    expect(within(region).getByRole('group', { name: 'Food cost' })).toHaveTextContent(/20\.00%.*On target/);
+    expect(within(region).getByRole('group', { name: /^Summary/ })).toHaveTextContent(/20\.00%.*On target/);
   });
 
   it('says what is missing when the product cannot be costed', async () => {
     renderFoodcost('/food-cost/product/Bare', { source: sourceWith([bareProduct('Bare')]) });
     const region = await screen.findByRole('region', { name: 'Bare' }, LOAD);
-    expect(within(region).getByRole('group', { name: 'Food cost' })).toHaveTextContent('Add at least one recipe or ingredient to this product');
+    expect(within(region).getByText('Still missing:').parentElement).toHaveTextContent('Add at least one recipe or ingredient to this product');
   });
 
   it('calls a product with no name «Untitled product»', async () => {

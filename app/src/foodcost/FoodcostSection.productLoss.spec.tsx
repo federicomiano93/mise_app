@@ -217,7 +217,7 @@ describe('a product saved before model 3 (production today)', () => {
     const fake = editorSource([LEGACY], { recipes: [DOUGH] });
     const { user } = renderFoodcost('/food-cost/product/Loaf', { source: fake });
     await pencil();
-    const costBefore = screen.getByRole('group', { name: 'Production cost' }).textContent;
+    const costBefore = screen.getByRole('group', { name: /^Summary/ }).textContent;
     await user.click(screen.getByRole('button', { name: 'Edit product' }));
     await user.click(await screen.findByRole('button', { name: 'Save' }, LOAD));
     await user.click(within(await screen.findByRole('alertdialog', undefined, LOAD)).getByRole('button', { name: 'Save' }));
@@ -231,7 +231,7 @@ describe('a product saved before model 3 (production today)', () => {
 
     // Back on the read view of what was saved (a model 3 product now): the same cost.
     await pencil();
-    expect(screen.getByRole('group', { name: 'Production cost' }).textContent).toBe(costBefore);
+    expect(screen.getByRole('group', { name: /^Summary/ }).textContent).toBe(costBefore);
   });
 });
 

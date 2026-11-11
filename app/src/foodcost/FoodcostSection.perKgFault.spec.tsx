@@ -13,12 +13,12 @@ vi.mock('@mise/shared/per-kg-model', async importOriginal => ({
 beforeAll(async () => { await import('./FoodcostSection'); }, 60_000);
 beforeEach(() => { window.localStorage.clear(); });
 
-it('hides the block when costPerKg throws, and keeps the answer and the form', async () => {
+it('hides the section when costPerKg throws, and keeps the summary and the form', async () => {
   const { user } = renderFoodcost('/food-cost/product/Green', { source: editorSource([product('Green')]) });
   await intoForm(user);
-  expect(screen.getByRole('group', { name: 'Production cost' })).toBeInTheDocument();
+  expect(screen.getByRole('group', { name: /^Summary/ })).toBeInTheDocument();
   expect(screen.queryByText("This part didn't load")).not.toBeInTheDocument();
-  const details = document.querySelector('details');
-  // Hidden, or never there: either way nobody sees a block with no figures.
-  expect(details === null || details.hidden).toBe(true);
+  const section = document.querySelector<HTMLElement>('section[aria-label="Cost breakdown"]');
+  // Hidden, or never there: either way nobody sees a section with no figures.
+  expect(section === null || section.hidden).toBe(true);
 });

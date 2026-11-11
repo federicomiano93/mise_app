@@ -267,7 +267,7 @@ describe('unknown is a dash, never a zero, and what is missing is named', () => 
     expect(figure('Packaging')).toHaveTextContent('—');
     expect(figure('Packaging')).not.toHaveTextContent('£0.00');
     expect(within(preview()).getByText('Give every packaging item a price per piece')).toBeInTheDocument();
-    expect(within(preview()).getByText('Part of this product is not priced yet, so it really costs more than this.')).toBeInTheDocument();
+    expect(within(preview()).getByText('1 line has no cost: the real cost is higher.')).toBeInTheDocument();
   });
 
   it('a priced box is shown apart from the materials, and the total holds both', async () => {
@@ -286,7 +286,7 @@ describe('unknown is a dash, never a zero, and what is missing is named', () => 
     const { user } = await loaded('/food-cost', editorSource([salty]));
     await user.click(screen.getByRole('button', { name: /^Salty/ }));
     await screen.findByRole('dialog', { name: 'Salty' }, LOAD);
-    expect(within(preview()).getByText('Part of this product is not priced yet, so it really costs more than this.')).toBeInTheDocument();
+    expect(within(preview()).getByText('1 line has no cost: the real cost is higher.')).toBeInTheDocument();
   });
 });
 
@@ -352,7 +352,7 @@ describe('the summary at the top of the card', () => {
     expect(row(box, 'Food cost')).toHaveTextContent('20.00% · target 25.00%');
     expect(row(box, 'Ideal price')).toHaveTextContent('£0.96');
     expect(within(box).getByText('£0.80 without VAT, for a 25.00% food cost')).toBeInTheDocument();
-    // The checklist is the answer panel's, not repeated here.
+    // Nothing is missing, so there is no checklist.
     expect(within(box).queryByText('Still missing:')).not.toBeInTheDocument();
   });
 
@@ -367,7 +367,7 @@ describe('the summary at the top of the card', () => {
     const partial = product('Half', { vatRate: null, components: [FLOUR_LINE, { kind: 'ingredient', ingredientId: 'salt', qty: 10, unit: 'g' }] });
     renderFoodcost('/food-cost/product/Half', { source: editorSource([partial]) });
     const box = await summary('Summary per piece');
-    expect(within(box).getByText('Part of this product is not priced yet, so it really costs more than this.')).toBeInTheDocument();
+    expect(within(box).getByText('1 line has no cost: the real cost is higher.')).toBeInTheDocument();
   });
 
   it('asks for a target in one line when there is none, and gives no net price', async () => {

@@ -23,6 +23,8 @@ const suggested = () => within(screen.getByRole('listbox', { name: 'Recipes to b
 const nameBox = () => screen.getByRole('combobox', { name: 'Name' });
 const chooser = () => screen.findByRole('dialog', undefined, LOAD);
 const madeOf = () => screen.getByRole('region', { name: 'Made of' });
+// The cost of one unit, in the summary at the top.
+const unitCost = () => within(screen.getByRole('group', { name: /^Summary/ })).getByText('Cost').closest('div');
 const packaging = () => screen.getByRole('region', { name: 'Packaging' });
 
 async function confirmSave(user: UserEvent) {
@@ -168,7 +170,7 @@ describe('packaging', () => {
     await user.type(pieces, '2');
     expect(within(packaging()).getByText('£0.25 each · this amount £0.50')).toBeInTheDocument();
     // The packaging adds to the cost of every piece sold: £0.20 + 2 × £0.25.
-    expect(screen.getByRole('group', { name: 'Production cost' })).toHaveTextContent('£0.70per piece');
+    expect(unitCost()).toHaveTextContent('£0.70');
   });
 
   it('says plainly that packaging priced by weight cannot be counted in pieces', async () => {
@@ -239,7 +241,7 @@ describe('typing a quantity', () => {
     expect(box).toHaveFocus();
     expect(box).toHaveValue('12.5');
     // …and the answers followed: 12.5 g of flour at £2.00 a kilo is £0.025 a batch of ten.
-    expect(screen.getByRole('group', { name: 'Production cost' })).toHaveTextContent('< £0.01per piece');
+    expect(unitCost()).toHaveTextContent('< £0.01');
   });
 
   it('keeps the other rows standing when one above them is removed', async () => {
@@ -258,7 +260,7 @@ describe('typing a quantity', () => {
   it('changes the unit of an ingredient line', async () => {
     const { user } = await open('/food-cost/product/Green', editorSource([product('Green')]));
     await user.selectOptions(within(madeOf()).getByRole('combobox', { name: 'Unit' }), 'kg');
-    expect(screen.getByRole('group', { name: 'Production cost' })).toHaveTextContent('£200.00per piece');
+    expect(unitCost()).toHaveTextContent('£200.00');
   });
 
   it('offers grams or kilos on a recipe line, opened on grams; packaging is pieces, with no unit to choose', async () => {
@@ -353,8 +355,8 @@ describe('a bare new product', () => {
     await user.click(within(await chooser()).getByRole('button', { name: 'Dough' }));
     // A new recipe line is in grams: 1000 g is the one kilo of the recipe.
     await user.type(within(madeOf()).getByRole('textbox', { name: 'Quantity' }), '1000');
-    expect(screen.getByRole('group', { name: 'Production cost' })).toHaveTextContent('£2.00whole batch');
-    expect(screen.getByRole('group', { name: 'Food cost' })).toHaveTextContent('Choose whether this is sold by the piece, by weight or by the pack');
+    expect(within(screen.getByRole('group', { name: 'Summary' })).getByText('Whole batch').closest('div')).toHaveTextContent('£2.00');
+    expect(screen.getByText('Still missing:').parentElement).toHaveTextContent('Choose whether this is sold by the piece, by weight or by the pack');
   });
 });
 

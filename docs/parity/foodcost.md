@@ -721,3 +721,38 @@ moves it to the product. Branch `feature/mise2-next-product-loss`.
   `fc.weightWarningLine`, `fc.saveWithWeightWarnings`, `fc.noWeightLoss`, `fc.noWeightLossHint`. Kept: `fc.lossCookedHeavier` (the weighing
   warning type names it) and `fc.cooking.blockHeavier` (the cost model's blocker text).
 - Specs: `FoodcostSection.cooking.spec.tsx` (the screens), `productEditorModel.spec.ts` (the pure rules).
+
+## Tidy card and «?» as built (step 3a, 11 Nov 2026)
+
+Mise 2 only, post-switch: this is NOT a port, the current app keeps its «Full card». The product's screen (read view and form) was tidied
+(Federico's approved mockup).
+
+- **Order, top to bottom:** the summary («Summary per piece / per kg / per pack» with a «?»), then Product, Made of, Baking, Packaging, Work,
+  Price (each a `CardSection` with a «?» from `ui/HelpToggle.tsx`), then the closed «Cost breakdown» (`PerKgBlock`, now a section with a
+  real button, `aria-expanded` / `aria-controls`, not a `details`), then «Margin history» and Delete. No «Full card» frame (`FullCard`
+  gone; `FullCard.tsx` became `CardSection.tsx`), no «Calculated costs» card (`ProductAnswer`'s box gone; `ProductAnswer.tsx` became
+  `SuggestedPrice.tsx`, which keeps only the «Suggested price» box).
+- **Summary** (`PreviewPanel`, shared with the phone's dialog, which has no «?» and keeps its title and checklist): the five rows, then the kilo
+  row («1 kg cooked costs X» with a cooked weight, «1 kg costs (no oven loss)» without; X is `costPerKg`, the figure of the «Baking» result line
+  and of «Cost breakdown», a dash while the cooked weight is heavier), then the partial warning, «Which?», and «Still missing:». `summaryExtras.ts`
+  carries the figures `productPreview` does not (kilo, whole batch, pieces of a batch sold by the piece, net price, labour shares).
+- **A partial cost:** «more than X» on Cost, Food cost, Ideal price and its net line, Raw materials, the kilo and the whole batch; «less than X» on
+  the margin; one line «1 line has no cost: the real cost is higher.» / «N lines have no cost: …» (N = the «Which?» entries) replaces
+  `fc.costPartial`.
+- **«Still missing:»** is in the card's summary now (the preview's list: blockers plus packaging price plus target). When nothing is costed no
+  summary is drawn and a small card with only that list takes its place (read view and form).
+- **«Details»** holds: Raw materials, Packaging, Labour (only with a labour figure), Price without VAT (new row: the net price of the removed
+  box's «answer» sentence), Whole batch («Whole batch (N pieces)» when sold by the piece), and the line «Labour X% · everything Y% of the net price»
+  (`fc.labourPctLine`, wording unchanged) when the labour share is known.
+- **Explanations moved behind the «?»** (`fc.help.*`, mockup wording; «Made of» without the supplier and «on the right» sentences for now):
+  the pack-size note, the pieces note, the packaging note, the labour note, the target note and the price note (all dropped as sentences, the
+  «?» texts say them); the summary's «?» says what the figures are per and what the food cost is. Warnings stay in sight: «Which?», cooked
+  heavier than raw, the oven-loss hint, the hourly cost not set, items that no longer exist.
+- **Renamed:** «Venduto/Sold» → «Come si vende / How it is sold»; «Tempo di lavoro / Work time» → «Lavoro / Work». The price section's fields
+  now run price, VAT (with its guide), target.
+- **Texts removed:** `fc.fullCard`, `fc.section.results`, `fc.productionCost`, `fc.wholeBatch`, `fc.wholeBatchWord`, `fc.costPartial`,
+  `fc.partOfThisProduct`, `fc.costSplit`, `fc.costTotal`, `fc.answerBasis`, `fc.perKg.title`, `fc.slightlyOverTarget`, `fc.packHoldsNote`,
+  `fc.howManyFinishedPieces`, `fc.packagingPerNote`, `fc.labourNote`, `fc.theShareOfThe`, `fc.thePriceOnThe`. Added: `ui.explanation`,
+  `fc.help.*`, `fc.preview.moreThan` / `lessThan` / `partialLines` / `kgNoLoss` / `netPrice` / `batch` / `batchPieces`, `fc.detail.*`.
+- **Specs:** `ui/HelpToggle.spec.tsx`, `FoodcostSection.tidyCard.spec.tsx` (new); `readMode`, `readFixes`, `editor*`, `perKg*`, `lineCosts`,
+  `preview`, `product`, `productLoss`, `twoDecimals` adapted to the summary and the new section names.

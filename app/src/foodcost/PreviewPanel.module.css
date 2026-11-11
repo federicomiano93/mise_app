@@ -97,13 +97,56 @@
   font-size: var(--fs-sm);
 }
 
+/* One short line: how many lines have no cost. The icon sits on the first line of text, not on the baseline. */
 .partial {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--s2);
+  margin: 0;
   color: var(--warn-ink);
   font-size: var(--fs-sm);
   font-weight: 600;
 }
 
+.partial svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin-top: 2px;
+}
+
+/* The cost of one kilo, under the five rows. */
+.kgRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+  padding: var(--s3) 0 var(--s1);
+  border-top: 1px solid var(--line-2);
+}
+
+.kgRow span {
+  min-width: 0;
+  font-weight: 650;
+}
+
+.kgRow b {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: var(--fs-lg);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.missingBox {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
 .missingTitle {
+  margin: 0;
   color: var(--ink-2);
   font-size: var(--fs-sm);
   font-weight: 600;
@@ -167,8 +210,14 @@
   transform: rotate(180deg);
 }
 
-.more > dl[hidden] {
+.moreBody[hidden] {
   display: none;
+}
+
+.moreBody {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
 }
 
 /* «Which?»: a small, low-key text button right under the partial-price warning, opening the list of what has no price (Federico,

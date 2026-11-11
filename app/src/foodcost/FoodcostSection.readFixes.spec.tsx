@@ -20,7 +20,6 @@ afterEach(() => {
 
 const pencil = () => screen.getByRole('button', { name: 'Edit product' });
 const saveBar = () => screen.getByRole('button', { name: 'Save' });
-const fullCard = () => document.querySelector('details[class*="full"]') as HTMLDetailsElement;
 const where = (router: { state: { location: { pathname: string; search: string } } }) =>
   router.state.location.pathname + router.state.location.search;
 
@@ -220,22 +219,24 @@ describe('read and form start at the top', () => {
   });
 });
 
-describe('«Full card» when the product stops being costed while it is read', () => {
-  it('opens; and a person who closed it while a summary showed is not argued with', async () => {
+describe('the summary when the product stops being costed while it is read', () => {
+  it('gives way to what is still missing, and comes back with the same «Details» state', async () => {
     const fake = editorSource([product('Green')]);
     const { user } = renderFoodcost('/food-cost/product/Green', { source: fake });
     await screen.findByRole('group', { name: 'Summary per piece' }, LOAD);
-    expect(fullCard().open).toBe(false);
+    expect(screen.queryByText('Still missing:')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Details' }));
 
-    // An unrelated change keeps a closed box closed.
-    await act(async () => { fake.push(); });
-    expect(fullCard().open).toBe(false);
-
-    // The price of the flour goes: nothing can be costed, the summary goes, the box opens.
+    // The price of the flour goes: nothing can be costed, the summary goes, the checklist takes its place — the sections stay.
     await act(async () => { fake.prices.clear(); fake.push(); });
     await waitFor(() => { expect(screen.queryByRole('group', { name: 'Summary per piece' })).not.toBeInTheDocument(); });
-    expect(fullCard().open).toBe(true);
-    expect(user).toBeDefined();
+    expect(screen.getByText('Still missing:')).toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Made of' })).toBeInTheDocument();
+
+    // The price comes back: the summary again, «Details» still open.
+    await act(async () => { fake.prices.set('flour', { priceUnit: 'kg', pricePerUnit: 2 }); fake.push(); });
+    await screen.findByRole('group', { name: 'Summary per piece' }, LOAD);
+    expect(screen.getByRole('button', { name: 'Details' })).toHaveAttribute('aria-expanded', 'true');
   });
 });
 

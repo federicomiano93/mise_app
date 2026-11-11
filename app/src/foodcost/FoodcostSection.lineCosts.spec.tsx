@@ -146,7 +146,7 @@ describe('«Which?» on the card', () => {
   it('is a button under the partial-price warning, closed by default, with aria-expanded and aria-controls', async () => {
     await read(salty(), 'Salty');
     const summary = screen.getByRole('group', { name: 'Summary per piece' });
-    const warning = within(summary).getByText('Part of this product is not priced yet, so it really costs more than this.');
+    const warning = within(summary).getByText('1 line has no cost: the real cost is higher.').closest('p') as HTMLElement;
     expect(warning.nextElementSibling).toContainElement(which());
     expect(which()).toHaveAttribute('aria-expanded', 'false');
     const list = document.getElementById(which().getAttribute('aria-controls') as string) as HTMLElement;

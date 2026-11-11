@@ -37,10 +37,10 @@ import { NameSuggest } from './NameSuggest';
 import { NumberBox } from './NumberBox';
 import { PickDialog } from './PickDialog';
 import type { Choice, PickMode } from './PickDialog';
-import { CardSection, CardStack, FullCard } from './FullCard';
+import { CardSection, CardStack } from './CardSection';
 import { CookingSection } from './CookingSection';
 import { ProductActions } from './ProductActions';
-import { ProductAnswer, SuggestedPrice } from './ProductAnswer';
+import { SuggestedPrice } from './SuggestedPrice';
 import { PerKgBlock } from './PerKgBlock';
 import { ProductSummary } from './ProductSummary';
 import {
@@ -659,210 +659,197 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
       <div className={shell.body}>
         <ProductSummary product={costed} tables={snap.tables} />
 
-        {/* «Full card» (Federico, 7 Nov 2026): inputs in the order they are filled, results last. The form's box cannot be closed,
-            so a field Save checks can never sit hidden inside it. */}
-        <FullCard read={false}>
-          <CardSection title={t('fc.section.product')}>
-            <div className={styles.field}>
-              <label htmlFor={`${ids}-name`} className={styles.label}>{t('fc.name')}</label>
-              <NameSuggest
-                id={`${ids}-name`}
-                value={working.name}
-                invalid={nameInvalid}
-                enabled={working.components.length === 0}
-                recipes={snap.recipes}
-                inputRef={nameBox}
-                onChange={text => { edit(current => ({ ...current, name: text })); }}
-                onPick={useRecipeForName}
-                onSeeAll={seeAllRecipes}
-              />
-              <p className={styles.nameNote} aria-live="polite">{nameNote}</p>
-            </div>
-
-            <div className={styles.field}>
-              <label htmlFor={`${ids}-mode`} className={styles.label}>{t('fc.sold')}</label>
-              <select
-                id={`${ids}-mode`}
-                className={styles.select}
-                value={working.sellingMode}
-                onChange={event => { edit(current => ({ ...current, sellingMode: event.target.value as SellingMode | '' })); }}
-              >
-                <option value="">{t('fc.choose')}</option>
-                <option value="piece">{t('fc.byThePiece')}</option>
-                <option value="weight">{t('fc.byWeightPerKg')}</option>
-                <option value="pack">{t('fc.byThePack')}</option>
-              </select>
-            </div>
-
-            {/* «By the pack»: what one pack holds, as a weight or as a number of pieces. */}
-            {packSizeShown(working) ? (
-              <div className={styles.field}>
-                <label htmlFor={`${ids}-packsize`} className={styles.label}>{t('fc.packHolds')}</label>
-                <div className={styles.row}>
-                  {numberBox('packSize', `${ids}-packsize`)}
-                  <select
-                    className={styles.select}
-                    aria-label={t('fc.aria.unit')}
-                    value={working.packUnit}
-                    onChange={event => { edit(current => ({ ...current, packUnit: event.target.value as PackUnit | '' })); }}
-                  >
-                    <option value="">{t('fc.choose')}</option>
-                    {PACK_UNITS.map(unit => (
-                      <option key={unit} value={unit}>{unit === 'pcs' ? t('fc.unit.pieces') : unit}</option>
-                    ))}
-                  </select>
-                </div>
-                <p className={styles.note}>{t('fc.packHoldsNote')}</p>
-              </div>
-            ) : null}
-
-            {/* The pieces box exists for what is sold by the piece, or by a pack counted in pieces; for anything else it is a
-                number that would mean nothing and invite being filled in. */}
-            {piecesShown(working) ? (
-              <div className={styles.field}>
-                <label htmlFor={`${ids}-pieces`} className={styles.label}>{t('fc.piecesPerBatch')}</label>
-                {numberBox('piecesPerBatch', `${ids}-pieces`)}
-                <p className={styles.note}>{t('fc.howManyFinishedPieces')}</p>
-              </div>
-            ) : null}
-          </CardSection>
-
-          <CardSection title={t('fc.madeOf')}>
-            {working.components.length === 0 ? null : (
-              <ul className={styles.lines}>
-                {working.components.map(line => renderLine(line, line.kind))}
-              </ul>
-            )}
-            <Button className={styles.add} onPress={addLine}>
-              {working.components.length > 0 ? t('fc.addRecipeOrIngredient') : t('fc.addRecipe')}
-            </Button>
-          </CardSection>
-
-          {/* The product's own baking, for EVERY product (step 2b): the loss is the product's, not its recipes'. */}
-          <CardSection title={t('fc.cooking.title')}>
-            <CookingSection
-              product={costed}
-              tables={snap.tables}
-              rawText={rawBoxText(working, totalGrams)}
-              cookedText={working.cookedText}
-              totalGrams={totalGrams}
-              rawApart={totalGrams > 0 && working.rawText !== null && !followsTotal(working.rawText, totalGrams)}
-              invalid={{ raw: badNumber === 'rawGrams', cooked: badNumber === 'cookedGrams' }}
-              hint={recipeLossHint(working, snap.recipes)}
-              sharedWith={sharedWith}
-              onRaw={setRaw}
-              onCooked={setCooked}
-              onRawBlur={settleRawBox}
-              onUseTotal={useTotal}
-              rawRef={rawBox}
-              cookedRef={cookedBox}
+        {/* The sections, in the order they are filled (11 Nov 2026: no «Full card» box around them any more, the figures are the
+            summary's and the last section is the closed «Cost breakdown»). Nothing here can be closed, so a field Save checks can
+            never sit hidden. */}
+        <CardSection title={t('fc.section.product')} help={t('fc.help.prod')}>
+          <div className={styles.field}>
+            <label htmlFor={`${ids}-name`} className={styles.label}>{t('fc.name')}</label>
+            <NameSuggest
+              id={`${ids}-name`}
+              value={working.name}
+              invalid={nameInvalid}
+              enabled={working.components.length === 0}
+              recipes={snap.recipes}
+              inputRef={nameBox}
+              onChange={text => { edit(current => ({ ...current, name: text })); }}
+              onPick={useRecipeForName}
+              onSeeAll={seeAllRecipes}
             />
-          </CardSection>
+            <p className={styles.nameNote} aria-live="polite">{nameNote}</p>
+          </div>
 
-          <CardSection title={t('fc.packaging')}>
-            {working.packaging.length === 0 ? null : (
-              <>
-                <p className={styles.label}>
-                  {t('fc.packagingQtyFor', { per: t(modeKey === null ? 'fc.packagingPer.unit' : PACKAGING_PER[modeKey]) })}
-                </p>
-                <ul className={styles.lines}>
-                  {working.packaging.map(line => renderLine(line, 'packaging'))}
-                </ul>
-              </>
-            )}
-            <Button className={styles.add} onPress={addPackaging}>{t('fc.addPackaging')}</Button>
-            <p className={styles.note}>{t('fc.packagingPerNote')}</p>
-          </CardSection>
+          <div className={styles.field}>
+            <label htmlFor={`${ids}-mode`} className={styles.label}>{t('fc.sold')}</label>
+            <select
+              id={`${ids}-mode`}
+              className={styles.select}
+              value={working.sellingMode}
+              onChange={event => { edit(current => ({ ...current, sellingMode: event.target.value as SellingMode | '' })); }}
+            >
+              <option value="">{t('fc.choose')}</option>
+              <option value="piece">{t('fc.byThePiece')}</option>
+              <option value="weight">{t('fc.byWeightPerKg')}</option>
+              <option value="pack">{t('fc.byThePack')}</option>
+            </select>
+          </div>
 
-          <CardSection title={t('fc.labour')}>
-            <div className={styles.pair}>
-              <div className={styles.field}>
-                <label htmlFor={`${ids}-minutes`} className={styles.label}>{t('fc.labourMinutes')}</label>
-                {numberBox('labourMinutes', `${ids}-minutes`)}
-              </div>
-              <div className={styles.field}>
-                <label htmlFor={`${ids}-people`} className={styles.label}>{t('fc.labourPeople')}</label>
-                {numberBox('labourPeople', `${ids}-people`, '1')}
-              </div>
-            </div>
-            <p className={styles.note}>{t('fc.labourNote')}</p>
-            {/* Minutes typed but no rate to turn them into money: say where the rate is set — and only to somebody who can set
-                it; an employee is simply shown no labour money. */}
-            <p className={styles.note} aria-live="polite">{labourNeedsRate ? t('fc.labourSetRate') : ''}</p>
-          </CardSection>
-
-          {/* ⚠️ IN THE ORDER THE SUM IS DONE: the VAT and the target first, then the price — with, under it, the price those two
-              suggest (13 Sep 2026). */}
-          <CardSection title={t('fc.section.price')}>
+          {/* «By the pack»: what one pack holds, as a weight or as a number of pieces. */}
+          {packSizeShown(working) ? (
             <div className={styles.field}>
-              <label htmlFor={`${ids}-vat`} className={styles.label}>{t('fc.vatRate')}</label>
+              <label htmlFor={`${ids}-packsize`} className={styles.label}>{t('fc.packHolds')}</label>
               <div className={styles.row}>
+                {numberBox('packSize', `${ids}-packsize`)}
                 <select
-                  id={`${ids}-vat`}
                   className={styles.select}
-                  value={working.vatSelect}
-                  onChange={event => { setVatSelect(event.target.value); }}
+                  aria-label={t('fc.aria.unit')}
+                  value={working.packUnit}
+                  onChange={event => { edit(current => ({ ...current, packUnit: event.target.value as PackUnit | '' })); }}
                 >
                   <option value="">{t('fc.choose')}</option>
-                  {vatChoices.map(choice => (
-                    <option key={choice.rate} value={String(choice.rate)}>
-                      {vatOptionText(choice.key, choice.rate)}
-                    </option>
+                  {PACK_UNITS.map(unit => (
+                    <option key={unit} value={unit}>{unit === 'pcs' ? t('fc.unit.pieces') : unit}</option>
                   ))}
-                  <option value="other">{t('fc.anotherRate')}</option>
                 </select>
-                <Button
-                  className={styles.guide}
-                  aria-label={t('fc.vatGuide.open')}
-                  onPress={() => { setGuideOpen(true); }}
-                >
-                  <BookOpen aria-hidden="true" />
-                </Button>
               </div>
-              {working.vatSelect === 'other' ? numberBox('vatRate', `${ids}-vatother`, undefined, true) : null}
             </div>
+          ) : null}
 
+          {/* The pieces box exists for what is sold by the piece, or by a pack counted in pieces; for anything else it is a
+              number that would mean nothing and invite being filled in. */}
+          {piecesShown(working) ? (
             <div className={styles.field}>
-              <label htmlFor={`${ids}-target`} className={styles.label}>{t('fc.foodCostTarget')}</label>
-              {numberBox('foodCostTarget', `${ids}-target`)}
-              <p className={styles.note}>{t('fc.theShareOfThe')}</p>
+              <label htmlFor={`${ids}-pieces`} className={styles.label}>{t('fc.piecesPerBatch')}</label>
+              {numberBox('piecesPerBatch', `${ids}-pieces`)}
             </div>
+          ) : null}
+        </CardSection>
 
-            <div className={styles.field}>
-              <label htmlFor={`${ids}-price`} className={styles.label}>{t('fc.sellingPriceVat', { currency: money.symbol })}</label>
-              {numberBox('sellingPrice', `${ids}-price`)}
-              <p className={styles.note}>{t('fc.thePriceOnThe')}</p>
-            </div>
-
-            <CardStack>
-              <SuggestedPrice
-                product={costed}
-                tables={snap.tables}
-                sellingPrice={costed.sellingPrice}
-                onUse={price => { setNumber('sellingPrice', String(price)); }}
-              />
-            </CardStack>
-          </CardSection>
-
-          <CardSection title={t('fc.section.results')}>
-            <CardStack>
-              <ProductAnswer product={costed} tables={snap.tables} />
-              <PerKgBlock product={costed} tables={snap.tables} />
-            </CardStack>
-          </CardSection>
-
-          {/* History and Delete stay at the bottom of the box, small and low-key; a new product has neither. */}
-          {id === null ? null : (
-            <ProductActions
-              onHistory={() => {
-                // On the split the history takes the product's place (so the list's rows still mean «replace what is open»); on a
-                // phone it is one level down and Back is the browser's.
-                void navigate(historyPath(id, origin), split ? { replace: true, state } : { state: { ...FROM_PRODUCT, ...pushDepth(state) } });
-              }}
-              onDelete={canManage ? () => { void remove(); } : null}
-            />
+        <CardSection title={t('fc.madeOf')} help={t('fc.help.made')}>
+          {working.components.length === 0 ? null : (
+            <ul className={styles.lines}>
+              {working.components.map(line => renderLine(line, line.kind))}
+            </ul>
           )}
-        </FullCard>
+          <Button className={styles.add} onPress={addLine}>
+            {working.components.length > 0 ? t('fc.addRecipeOrIngredient') : t('fc.addRecipe')}
+          </Button>
+        </CardSection>
+
+        {/* The product's own baking, for EVERY product (step 2b): the loss is the product's, not its recipes'. */}
+        <CardSection title={t('fc.cooking.title')} help={t('fc.help.bake')}>
+          <CookingSection
+            product={costed}
+            tables={snap.tables}
+            rawText={rawBoxText(working, totalGrams)}
+            cookedText={working.cookedText}
+            totalGrams={totalGrams}
+            rawApart={totalGrams > 0 && working.rawText !== null && !followsTotal(working.rawText, totalGrams)}
+            invalid={{ raw: badNumber === 'rawGrams', cooked: badNumber === 'cookedGrams' }}
+            hint={recipeLossHint(working, snap.recipes)}
+            sharedWith={sharedWith}
+            onRaw={setRaw}
+            onCooked={setCooked}
+            onRawBlur={settleRawBox}
+            onUseTotal={useTotal}
+            rawRef={rawBox}
+            cookedRef={cookedBox}
+          />
+        </CardSection>
+
+        <CardSection title={t('fc.packaging')} help={t('fc.help.pack')}>
+          {working.packaging.length === 0 ? null : (
+            <>
+              <p className={styles.label}>
+                {t('fc.packagingQtyFor', { per: t(modeKey === null ? 'fc.packagingPer.unit' : PACKAGING_PER[modeKey]) })}
+              </p>
+              <ul className={styles.lines}>
+                {working.packaging.map(line => renderLine(line, 'packaging'))}
+              </ul>
+            </>
+          )}
+          <Button className={styles.add} onPress={addPackaging}>{t('fc.addPackaging')}</Button>
+        </CardSection>
+
+        <CardSection title={t('fc.labour')} help={t('fc.help.work')}>
+          <div className={styles.pair}>
+            <div className={styles.field}>
+              <label htmlFor={`${ids}-minutes`} className={styles.label}>{t('fc.labourMinutes')}</label>
+              {numberBox('labourMinutes', `${ids}-minutes`)}
+            </div>
+            <div className={styles.field}>
+              <label htmlFor={`${ids}-people`} className={styles.label}>{t('fc.labourPeople')}</label>
+              {numberBox('labourPeople', `${ids}-people`, '1')}
+            </div>
+          </div>
+          {/* Minutes typed but no rate to turn them into money: say where the rate is set — and only to somebody who can set
+              it; an employee is simply shown no labour money. */}
+          <p className={styles.note} aria-live="polite">{labourNeedsRate ? t('fc.labourSetRate') : ''}</p>
+        </CardSection>
+
+        {/* The price first, then the VAT it includes and the target it is worked against; under them, the price those suggest
+            (13 Sep 2026). */}
+        <CardSection title={t('fc.section.price')} help={t('fc.help.price')}>
+          <div className={styles.field}>
+            <label htmlFor={`${ids}-price`} className={styles.label}>{t('fc.sellingPriceVat', { currency: money.symbol })}</label>
+            {numberBox('sellingPrice', `${ids}-price`)}
+          </div>
+
+          <div className={styles.field}>
+            <label htmlFor={`${ids}-vat`} className={styles.label}>{t('fc.vatRate')}</label>
+            <div className={styles.row}>
+              <select
+                id={`${ids}-vat`}
+                className={styles.select}
+                value={working.vatSelect}
+                onChange={event => { setVatSelect(event.target.value); }}
+              >
+                <option value="">{t('fc.choose')}</option>
+                {vatChoices.map(choice => (
+                  <option key={choice.rate} value={String(choice.rate)}>
+                    {vatOptionText(choice.key, choice.rate)}
+                  </option>
+                ))}
+                <option value="other">{t('fc.anotherRate')}</option>
+              </select>
+              <Button
+                className={styles.guide}
+                aria-label={t('fc.vatGuide.open')}
+                onPress={() => { setGuideOpen(true); }}
+              >
+                <BookOpen aria-hidden="true" />
+              </Button>
+            </div>
+            {working.vatSelect === 'other' ? numberBox('vatRate', `${ids}-vatother`, undefined, true) : null}
+          </div>
+
+          <div className={styles.field}>
+            <label htmlFor={`${ids}-target`} className={styles.label}>{t('fc.foodCostTarget')}</label>
+            {numberBox('foodCostTarget', `${ids}-target`)}
+          </div>
+
+          <CardStack>
+            <SuggestedPrice
+              product={costed}
+              tables={snap.tables}
+              sellingPrice={costed.sellingPrice}
+              onUse={price => { setNumber('sellingPrice', String(price)); }}
+            />
+          </CardStack>
+        </CardSection>
+        <PerKgBlock product={costed} tables={snap.tables} />
+
+        {/* History and Delete stay at the bottom of the box, small and low-key; a new product has neither. */}
+        {id === null ? null : (
+          <ProductActions
+            onHistory={() => {
+              // On the split the history takes the product's place (so the list's rows still mean «replace what is open»); on a
+              // phone it is one level down and Back is the browser's.
+              void navigate(historyPath(id, origin), split ? { replace: true, state } : { state: { ...FROM_PRODUCT, ...pushDepth(state) } });
+            }}
+            onDelete={canManage ? () => { void remove(); } : null}
+          />
+        )}
       </div>
 
       {picking === null ? null : (

@@ -38,16 +38,17 @@ describe('a venue in Italy', () => {
     expect(pizzico).not.toHaveTextContent(/[^,\d]0,00/);
   });
 
-  it('writes the answer, the production cost and the labour lines with two decimals and the comma', async () => {
+  it('writes the summary, the labour lines and the suggested price with two decimals and the comma', async () => {
     const fake = editorSource(
       [product('Loaf', { labourMinutes: 60, labourPeople: 1, foodCostTarget: 25 })],
       { settings: { labourCostPerHour: 12 } },
     );
     renderFoodcost('/food-cost/product/Loaf', { source: fake, ...ITALY });
-    const answer = await screen.findByRole('group', { name: 'Food cost' }, LOAD);
-    await vi.waitFor(() => { expect(answer).toHaveTextContent('Lavoro 120,00% · tutto 140,00%'); });
-    expect(answer).toHaveTextContent('20,00%');
-    expect(screen.getByRole('group', { name: 'Costo di produzione' })).toHaveTextContent('0,20 €');
+    const summary = await screen.findByRole('group', { name: /^Riepilogo/ }, LOAD);
+    await vi.waitFor(() => { expect(summary).toHaveTextContent('Lavoro 120,00% · tutto 140,00%'); });
+    expect(summary).toHaveTextContent('20,00%');
+    expect(within(summary).getByText('Materie prime').closest('div')).toHaveTextContent('0,20 €');
+    expect(within(summary).getByText('Costo').closest('div')).toHaveTextContent('1,40 €');
     expect(screen.getByRole('group', { name: 'Prezzo consigliato' })).toHaveTextContent('Con IVA al 20,00%, per un food cost del 25,00%.');
   });
 

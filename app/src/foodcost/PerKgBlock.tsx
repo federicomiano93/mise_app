@@ -1,12 +1,14 @@
-import { useMemo } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { fcMoney, fcNumber, fcWeight } from '@mise/shared/fc-number';
+import { productCooking } from '@mise/shared/foodcost-model';
 import type { CostTables } from '@mise/shared/foodcost-model';
 import { costPerKg } from '@mise/shared/per-kg-model';
 import type { PerKgReason, PerKgResult, PerKgRow } from '@mise/shared/per-kg-model';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
+import { Button } from '../ui/Button';
 import styles from './PerKgBlock.module.css';
 
 // Why a row is shown but not counted: keys, resolved when the block is drawn (a `t()` here at module load would
@@ -26,11 +28,12 @@ type Props = {
   tables: CostTables;
 };
 
-// The cost of ONE kilo of the finished product, line by line, the recipes on it opened into their own ingredients
+// «Cost breakdown» (11 Nov 2026): the last section of the product's screen, closed until pressed — the cost of ONE kilo of the
+// finished product, line by line, the recipes on it opened into their own ingredients
 // (the current app's «Cost per 1 kg»; Federico, 4 Nov 2026).
 //
-// ⚠️ ONE ELEMENT, ALWAYS MOUNTED: it keeps open/closed through every repaint, and a tapped summary keeps the focus while
-// the data listeners redraw the figures. With nothing to show it is `hidden`, not removed — removing it would forget
+// ⚠️ ONE ELEMENT, ALWAYS MOUNTED: it keeps open/closed through every repaint, and a tapped button keeps the focus while
+// the data listeners redraw the figures. A real button with aria-expanded and aria-controls, as «Details» in the summary. With nothing to show it is `hidden`, not removed — removing it would forget
 // whether it was open.
 // ⚠️ A FAULT HERE MUST NOT TAKE THE CARD DOWN (P17): the block is a reading aid, and the answer and the form are drawn
 // beside it.
@@ -39,6 +42,8 @@ type Props = {
 export function PerKgBlock({ product, tables }: Props) {
   const { t } = useT();
   const money = useMoney();
+  const bodyId = useId();
+  const [open, setOpen] = useState(false);
   const res = useMemo((): PerKgResult | null => {
     try {
       const result = costPerKg(product, tables);
@@ -60,39 +65,48 @@ export function PerKgBlock({ product, tables }: Props) {
     return parts.join(' · ');
   };
 
+  // Whether a cooked weight is typed names the kilo in the caption: «1 kg cooked» or «1 kg of product».
+  const cooked = useMemo(() => {
+    try {
+      return productCooking(product, tables).cookedKg !== null;
+    } catch {
+      return false;
+    }
+  }, [product, tables]);
+
   return (
-    <details className={styles.block} hidden={res === null}>
-      <summary className={styles.summary}>
-        <span>{t('fc.perKg.title')}</span>
-        <span className={styles.sum}>
-          <span className={styles.num}>{res === null ? '' : fcMoney(res.total, money)}</span>
-          <ChevronDown aria-hidden="true" className={styles.chevron} />
-        </span>
-      </summary>
-      {res === null ? null : (
-        <div className={styles.body}>
-          <ul className={styles.list}>
-            {res.rows.map(row => (
-              <li key={row.key} className={styles.row}>
-                <span className={styles.name}>{row.name}</span>
-                {/* Both the rows and the total are shown in cents: the total is worked out from the exact values, so the
-                    rows may differ from it by a cent; that is accepted (the owner, 8 Nov 2026). */}
-                {row.reason ? null : <span className={styles.cost}>{fcMoney(row.cost, money)}</span>}
-                <span className={styles.detail}>{rowDetail(row)}</span>
-              </li>
-            ))}
-          </ul>
-          <div className={styles.total}>
-            <span>{t('fc.perKg.total')}</span>
-            <span className={styles.num}>{fcMoney(res.total, money)}</span>
-          </div>
-          {/* ⚠️ NEUTRAL, NOT «IT COSTS MORE»: a row with no price adds neither cost nor weight in the cost model, so the
-              figure can be too high (water not linked) as well as too low. */}
-          {res.partial ? <p className={styles.partial}>{t('fc.perKg.partial')}</p> : null}
-          {res.packagingLeftOut ? <p className={styles.note}>{t('fc.perKg.packagingLeftOut')}</p> : null}
-          {res.lossy ? <p className={styles.note}>{t('fc.perKg.lossNote')}</p> : null}
-        </div>
-      )}
-    </details>
+    <section className={styles.block} hidden={res === null} aria-label={t('fc.detail.title')}>
+      <Button variant="bare" className={styles.toggle} aria-expanded={open} aria-controls={bodyId} onPress={() => { setOpen(value => !value); }}>
+        <span>{t('fc.detail.title')}</span>
+        <ChevronDown aria-hidden="true" className={styles.chevron} />
+      </Button>
+      <div id={bodyId} className={styles.body} hidden={!open}>
+        {res === null ? null : (
+          <>
+            <p className={styles.caption}>{t(cooked ? 'fc.detail.captionCooked' : 'fc.detail.captionRaw')}</p>
+            <ul className={styles.list}>
+              {res.rows.map(row => (
+                <li key={row.key} className={styles.row}>
+                  <span className={styles.name}>{row.name}</span>
+                  {/* Both the rows and the total are shown in cents: the total is worked out from the exact values, so the
+                      rows may differ from it by a cent; that is accepted (the owner, 8 Nov 2026). */}
+                  {row.reason ? null : <span className={styles.cost}>{fcMoney(row.cost, money)}</span>}
+                  <span className={styles.detail}>{rowDetail(row)}</span>
+                </li>
+              ))}
+            </ul>
+            <div className={styles.total}>
+              <span>{t('fc.perKg.total')}</span>
+              <span className={styles.num}>{fcMoney(res.total, money)}</span>
+            </div>
+            {/* ⚠️ NEUTRAL, NOT «IT COSTS MORE»: a row with no price adds neither cost nor weight in the cost model, so the
+                figure can be too high (water not linked) as well as too low. */}
+            {res.partial ? <p className={styles.partial}>{t('fc.perKg.partial')}</p> : null}
+            {res.packagingLeftOut ? <p className={styles.note}>{t('fc.perKg.packagingLeftOut')}</p> : null}
+            {res.lossy ? <p className={styles.note}>{t('fc.perKg.lossNote')}</p> : null}
+          </>
+        )}
+      </div>
+    </section>
   );
 }
