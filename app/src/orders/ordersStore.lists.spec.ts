@@ -222,6 +222,10 @@ async function timed() {
 const never = <T>() => new Promise<T>(() => {});
 const flush = () => new Promise(resolve => setTimeout(resolve, 0));
 
+// A holiday that never ends: the fixed «until 2026-11-10» these tests had went off at midnight on 11 Nov 2026 and failed
+// every run after it (isAway compares the date with today).
+const AWAY_FOR_EVER = '2099-12-31';
+
 describe('the reads before the write have a limit', () => {
   it('⚠️ reads that never answer do not hold the send: it goes with no name at the limit', async () => {
     const { source, store, limit } = await timed();
@@ -237,7 +241,7 @@ describe('the reads before the write have a limit', () => {
   it('⚠️ the warning gives up at the limit with the silent «go ahead»', async () => {
     const { source, store, limit } = await timed();
     source.roster = [{ uid: 'boss', role: 'owner', firstName: 'Ada', lastName: 'Rossi' }];
-    source.awayDays = [{ id: 'boss', until: '2026-11-10' }];
+    source.awayDays = [{ id: 'boss', until: AWAY_FOR_EVER }];
     source.getRoster = () => never();
     const asking = store.whoIsAway('staff');
     await flush();
@@ -291,14 +295,14 @@ describe('the warning before a send', () => {
     const { source, store } = await started();
     source.roster = [BOSS, { uid: 'staff', role: 'staff', firstName: 'Bo', lastName: '' }];
     await expect(store.whoIsAway('staff')).resolves.toStrictEqual({ nobody: false, names: [] });
-    source.awayDays = [{ id: 'boss', until: '2026-11-10' }];
+    source.awayDays = [{ id: 'boss', until: AWAY_FOR_EVER }];
     await expect(store.whoIsAway('staff')).resolves.toStrictEqual({ nobody: true, names: ['Ada Rossi'] });
   });
 
   it('somebody away with no name is \'\' (the screen has the word), never an address', async () => {
     const { source, store } = await started();
     source.roster = [{ uid: 'boss', role: 'manager', firstName: '', lastName: '' }];
-    source.awayDays = [{ id: 'boss', uid: 'boss', until: '2026-11-10' }];
+    source.awayDays = [{ id: 'boss', uid: 'boss', until: AWAY_FOR_EVER }];
     await expect(store.whoIsAway('staff')).resolves.toStrictEqual({ nobody: true, names: [''] });
   });
 
