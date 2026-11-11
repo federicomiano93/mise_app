@@ -31,7 +31,7 @@ import {
   timerNotification, orderNotification, orderRequestNotification,
   notificationTag, targetPage, cardForKind,
 } from './push-model.js';
-import { isAway, receivesOrderLists } from './away-model.js';
+import { isAway, receivesOrderLists, personName } from './away-model.js';
 import { isHiddenForStaff, mayBeTold } from './home-cards.js';
 import { membershipIn } from './onboarding.js';
 
@@ -108,6 +108,20 @@ async function clientNameInAddressBook(lid, clientId) {
     return client && typeof client.name === 'string' ? client.name.trim() : '';
   } catch (err) {
     logger.warn('Could not read the address book; the order\'s own name is used', { message: err && err.message });
+    return '';
+  }
+}
+
+// The name the SERVER wrote for a person when they joined: their roster row.
+// '' when there is no row, no name in it, or the read fails — the caller then uses a
+// title with no name in it at all, never text the sender typed (see notifyOrderRequest).
+async function rosterNameOf(lid, uid) {
+  if (typeof uid !== 'string' || !/^[A-Za-z0-9]{1,128}$/.test(uid)) return '';
+  try {
+    const snap = await getFirestore().doc(`locations/${lid}/members/${uid}`).get();
+    return snap.exists ? personName(snap.data()) : '';
+  } catch (err) {
+    logger.warn('Could not read the sender\'s roster row; the title carries no name', { message: err && err.message });
     return '';
   }
 }
@@ -266,8 +280,18 @@ export const notifyClientOrder = onDocumentCreated(
     // the rules can only check its length — so one client could arrive on the lock
     // screen as another. The address book is the bakery's; the order's own name is
     // only the fallback for a client the book no longer has.
+    //
+    // ⚠️⚠️ AND NO LONGER EVEN AS A FALLBACK (security audit, 2 Nov 2026). The bakery's
+    // own branch of the rules accepts any clientId and any date, so an employee could
+    // create an order for a client the book does not have and put up to 200 characters
+    // of their own on every phone in the venue — a fake order, or worse. A client the
+    // book does not know now arrives as a plain «New order», and the date is shown only
+    // when it is a real YYYY-MM-DD, so nothing typed by a phone reaches a lock screen.
     const bookName = await clientNameInAddressBook(lid, order.clientId);
-    const message = orderNotification(bookName ? { ...order, clientName: bookName } : order);
+    const message = orderNotification({
+      clientName: bookName,
+      date: typeof order.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(order.date) ? order.date : '',
+    });
     const tag = notificationTag('order', event.params.id);
     // Sent one at a time so a single dead registration is dropped by itself
     // rather than failing the batch for every phone that is fine.
@@ -462,7 +486,13 @@ export const notifyOrderRequest = onDocumentCreated(
     }
 
     const venue = await venueOf(lid);
-    const message = orderRequestNotification(request, venue.lang, venue.name);
+    // ⚠️ THE SENDER'S NAME FROM THE ROSTER, NOT FROM THE LIST (security audit, 2 Nov
+    // 2026). The rules tie fromUid to the writer, but fromName is free text they can
+    // only measure: an employee could send a list «from Federico» and every manager's
+    // lock screen would say so. The roster row was written by the server when that
+    // uid joined; without one the title simply carries no name.
+    const fromName = await rosterNameOf(lid, request.fromUid);
+    const message = orderRequestNotification({ ...request, fromName }, venue.lang, venue.name);
     const tag = notificationTag('orderRequest', event.params.id);
     const results = await Promise.all(targets.map(d => sendTo(d.id, message, {
       tag, url: targetPage('orderRequest'), path: d.ref.path,

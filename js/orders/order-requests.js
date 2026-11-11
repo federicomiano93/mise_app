@@ -19,7 +19,7 @@ import { confirmDialog } from './confirm-dialog.js';
 import { qtyWithUnit, sameUnit, entryUnit, recordUnit } from '../order-unit.js';
 import {
   groupRequest, isRequestDone, remainingIds, waitingRequests, liveDifference,
-  splitRequestsByAge, REQUEST_WINDOW_DAYS,
+  splitRequestsByAge, REQUEST_WINDOW_DAYS, shownSender,
 } from './order-request-model.js';
 
 const BACK_ICON =
@@ -50,7 +50,7 @@ function header(title, onBack, extra = null) {
   ]);
 }
 
-function requestCard(request, onOpen) {
+function requestCard(request, onOpen, roster) {
   const done = isRequestDone(request);
   const total = Object.keys(request.quantities || {}).length;
   const ticked = total - remainingIds(request).length;
@@ -61,7 +61,7 @@ function requestCard(request, onOpen) {
     onClick: () => onOpen(request.id),
   }, [
     el('div', { class: 'req-card-main' }, [
-      el('span', { class: 'req-card-from', text: t('orders.request.from', { who: request.fromName || t('orders.request.someone') }) }),
+      el('span', { class: 'req-card-from', text: t('orders.request.from', { who: shownSender(request, roster) || t('orders.request.someone') }) }),
       el('span', { class: 'req-card-when', text: dayLabel(request.date) }),
     ]),
     el('span', {
@@ -71,7 +71,8 @@ function requestCard(request, onOpen) {
   ]);
 }
 
-// requests: the raw list, newest first. callbacks: { onBack, onOpen }.
+// requests: the raw list, newest first. callbacks: { onBack, onOpen, roster }.
+// `roster` is a Map uid → roster row (or null while it loads): see shownSender.
 export function buildRequestListScreen(requests, callbacks) {
   const scroll = el('div', { class: 'preview-scroll' });
   const list = requests || [];
@@ -96,7 +97,7 @@ export function buildRequestListScreen(requests, callbacks) {
     // Still to do first, always. A finished list is a record; an unfinished one is
     // somebody waiting for their ingredients.
     [...waiting, ...finished].forEach(request => {
-      scroll.appendChild(requestCard(request, callbacks.onOpen));
+      scroll.appendChild(requestCard(request, callbacks.onOpen, callbacks.roster));
     });
   }
 
@@ -178,7 +179,7 @@ function itemRow(item, { differsTo, differsUnit = '', orderedQty, orderedUnit = 
   ]);
 }
 
-// request: one document. options: { ingredientsById, entries, canManage }.
+// request: one document. options: { ingredientsById, entries, canManage, roster }.
 // callbacks: { onBack, onToggle, onFinish, onDelete, onPlaced }.
 export function buildRequestScreen(request, options, callbacks) {
   const { ingredientsById = {}, entries = {}, orderedById = {}, orderedUnits = {},
@@ -193,7 +194,7 @@ export function buildRequestScreen(request, options, callbacks) {
   const scroll = el('div', { class: 'preview-scroll' });
 
   scroll.appendChild(el('div', { class: 'req-head' }, [
-    el('span', { class: 'req-head-from', text: t('orders.request.from', { who: request.fromName || t('orders.request.someone') }) }),
+    el('span', { class: 'req-head-from', text: t('orders.request.from', { who: shownSender(request, options && options.roster) || t('orders.request.someone') }) }),
     el('span', { class: 'req-head-when', text: dayLabel(request.date) }),
   ]));
 

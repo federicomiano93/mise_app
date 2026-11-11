@@ -1508,6 +1508,13 @@ async function configAndLogs() {
     () => mergeWrite(`${A}/config/labels`, { bakery: 'main', configRev: 1 }, asAccount(SAM)));
   await expectAllowed('…while the same employee still saves the calculator itself',
     () => mergeWrite(`${A}/config/calculator`, { bakery: 'main', configRev: 1 }, asAccount(SAM)));
+  // ⚠️ Any OTHER name used to pass the calculator branch, and delete is refused, so an
+  // employee could leave config/<anything> of up to 1 MB that nobody could remove
+  // (security audit, 2 Nov 2026).
+  await expectDenied('an employee cannot create a config document of any other name',
+    () => mergeWrite(`${A}/config/junk`, { bakery: 'main', configRev: 1 }, asAccount(SAM)));
+  await expectDenied('…nor can the owner',
+    () => mergeWrite(`${A}/config/junk`, { bakery: 'main', configRev: 1 }));
 
   await expectAllowed('labels: the profile the settings screen saves', () =>
     mergeWrite(`${A}/config/labels`, {
@@ -2509,6 +2516,18 @@ async function clientOrders() {
       bakery: 'main', clientId: 'c-three', clientName: 'CLIENT C',
       createdAt: 'now', linkToken: 'a'.repeat(43),
     }));
+  // ⚠️ NEVER A PERSON'S OWN ACCOUNT (security audit, 2 Nov 2026): a manager who named
+  // their own uid kept a client's menu and orders after being removed from the business.
+  await expectDenied('a manager CANNOT turn their own account into a client\'s', () =>
+    wholeWrite(`${L}/client-accounts/${MAYA.uid}`,
+      { bakery: 'main', clientId: 'c-three', clientName: 'CLIENT C', createdAt: 'now' },
+      asAccount(MAYA)));
+  await expectDenied('…nor the owner hand a client\'s grant to any member\'s account', () =>
+    wholeWrite(`${L}/client-accounts/${SAM.uid}`,
+      { bakery: 'main', clientId: 'c-three', clientName: 'CLIENT C', createdAt: 'now' }));
+  await expectDenied('…nor to the account of a member of another business', () =>
+    wholeWrite(`${L}/client-accounts/${BOB.uid}`,
+      { bakery: 'main', clientId: 'c-three', clientName: 'CLIENT C', createdAt: 'now' }));
   await expectDenied('a link token cannot become a payload of its own', () =>
     wholeWrite(`${L}/client-accounts/${NOBODY.uid}`, {
       bakery: 'main', clientId: 'c-three', clientName: 'CLIENT C',

@@ -18,8 +18,9 @@ or newer.
    going anywhere near this program. If Windows cannot print, nothing here will.
 
 2. **A dedicated account for the printer**, created in the app like any other member
-   of staff — an **employee**, not a manager or an owner. It can read the venue's
-   recipes and print jobs and nothing else, exactly like a phone on the counter.
+   of staff — an **employee**, not a manager or an owner. It can do what any
+   employee's phone can do — save doughs, orders and recipes too, not only labels —
+   so its password is a real login: keep the settings file private (below).
 
    ⚠️ Do not use your own account. If you ever change your password the printing
    stops, and nobody will connect the two.
@@ -47,6 +48,10 @@ or newer.
 
    ⚠️ **Not into this folder.** Everything in this repository is published on the
    web; a password saved here would go with it.
+
+   On a Mac or Linux the default is `~/.config/Mise/print-agent.json`, and the agent
+   refuses to start while other accounts on the computer can read it — run
+   `chmod 600 ~/.config/Mise/print-agent.json` once.
 
 2. Fill in the email, the password, the venue id and the printer share.
 

@@ -177,6 +177,8 @@ let itemsView = null;           // the open read-only product list, or null
 let summaryView = null;         // the open read-only order summary, or null (tablet)
 let requestListView = null;     // the list of sent order lists, or null
 let openRequestId = null;       // the sent list being worked through, or null
+let rosterByUid = null;         // uid → roster row, for the senders' names (ensureRosterNames)
+let rosterAsked = false;
 let requestView = null;         // that list's own screen, or null
 const placing = new Set();      // suppliers whose order is being written right now
 
@@ -1989,6 +1991,25 @@ function openRequestList() {
   globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'requests' }));
 }
 
+// The roster, read once per page, so a received list is shown under the name the
+// server wrote for its sender rather than the one the sender typed (shownSender in
+// order-request-model.js). Until it arrives — or if it never does — the typed name
+// stands in, and the screens are redrawn the moment it lands.
+function ensureRosterNames() {
+  if (rosterAsked) return;
+  rosterAsked = true;
+  getRosterOnce().then((people) => {
+    rosterByUid = new Map((people || []).map(p => [p.uid, p]));
+    if (requestListView) renderRequestList();
+    if (requestView) renderOpenRequest();
+  }).catch((err) => {
+    // Asked again at the next redraw: a read that failed on weak signal must not leave
+    // the typed names standing for the rest of the session.
+    rosterAsked = false;
+    console.warn('Could not read the roster for the senders’ names:', err);
+  });
+}
+
 // ⚠️⚠️ IT REPLACES IN PLACE, IT DOES NOT REMOVE AND RE-APPEND — and that one word
 // is the difference between working and unusable. Both screens are .req-overlay
 // at the same z-index, so DOM ORDER decides which is in front. Re-appending the
@@ -1999,10 +2020,12 @@ function openRequestList() {
 // Found by driving the app: three checks went red reporting an empty screen, and
 // the screen was not empty at all — it was the wrong one, in front.
 function renderRequestList() {
+  ensureRosterNames();
   const next = buildRequestListScreen(state.requests, {
     onBack: closeRequestList,
     onOpen: id => { openRequestId = id; renderOpenRequest(); },
     onRepaint: renderRequestList,
+    roster: rosterByUid,
   });
   if (requestListView) requestListView.replaceWith(next);
   else document.body.appendChild(next);
@@ -2063,7 +2086,9 @@ function renderOpenRequest() {
     return;
   }
 
+  ensureRosterNames();
   const next = buildRequestScreen(request, {
+    roster: rosterByUid,
     ingredientsById: lensById(),
     entries: state.entries,
     // ⚠️ WHAT WAS ACTUALLY BOUGHT, beside what was asked for. The person who sent

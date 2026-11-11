@@ -20,15 +20,18 @@
 //
 // ⚠️ IT SIGNS IN AS AN ORDINARY EMPLOYEE, never with a service account. A service
 // account key on a shop computer would bypass every Firestore rule in the database;
-// this account can read the venue's recipes and print jobs and nothing more, exactly
-// like any phone on the counter.
+// this account can do what any employee's phone on the counter can do, and no more.
+// ⚠️ THAT IS STILL A LOT (security audit, 2 Nov 2026): an employee saves doughs,
+// orders and recipes, not only labels. So the settings file holding its password is a
+// real login, and is treated as one — outside the repository, never in a shared temp
+// folder, and readable by this computer's user alone (see configPath and loadConfig).
 //
 // Run it:   node print-agent/agent.mjs
 // Set it up: see print-agent/README.md
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, statSync } from 'node:fs';
 import { writeFile, unlink, mkdtemp } from 'node:fs/promises';
-import { tmpdir, hostname } from 'node:os';
+import { tmpdir, hostname, homedir } from 'node:os';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
@@ -53,14 +56,33 @@ const CLEANUP_EVERY_MS = 30 * 60 * 1000;
 // so a credentials file that drifted in here would publish an account password on
 // the web the moment somebody committed it. The default is under LOCALAPPDATA and
 // it is not a suggestion.
+//
+// ⚠️ NEVER THE TEMP FOLDER (security audit, 2 Nov 2026). The last fallback used to be
+// tmpdir(), which on a Mac or Linux machine with neither variable set is /tmp: shared
+// by every account on the computer, so another user could read the password there or
+// plant a settings file of their own. ~/.config is the user's own.
 function configPath() {
   if (process.env.MISE_AGENT_CONFIG) return process.env.MISE_AGENT_CONFIG;
-  const base = process.env.LOCALAPPDATA || process.env.XDG_CONFIG_HOME || tmpdir();
+  const base = process.env.LOCALAPPDATA || process.env.XDG_CONFIG_HOME || join(homedir(), '.config');
   return join(base, 'Mise', 'print-agent.json');
+}
+
+// ⚠️ A PASSWORD FILE OTHER ACCOUNTS CAN READ IS REFUSED, on Mac and Linux. Windows
+// keeps %LOCALAPPDATA% private to the user already, and its mode bits mean nothing,
+// so the check is skipped there. The fix is one command, and the message says it.
+function refuseIfShared(path) {
+  if (process.platform === 'win32') return;
+  let mode;
+  try { mode = statSync(path).mode; } catch { return; }
+  if (mode & 0o077) {
+    die(`${path} can be read or changed by other accounts on this computer, and it holds a password.\n`
+      + `Run:  chmod 600 "${path}"  and start the agent again.`);
+  }
 }
 
 function loadConfig() {
   const path = configPath();
+  refuseIfShared(path);
   let raw;
   try {
     raw = readFileSync(path, 'utf8');

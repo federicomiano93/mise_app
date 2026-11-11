@@ -383,6 +383,26 @@ test('…and with nothing frozen either, it never shows a raw id', () => {
   assert.equal(orderRows(order, liveNameOf)[0].name, 'Deleted product');
 });
 
+// ⚠️ The order is written by the client's phone and the rules cannot look inside
+// `names`: a link holder sent numbers and maps, and the sort threw, so the bakery's
+// panel stopped drawing and hid every other client's order after it (audit, 2 Nov 2026).
+test('a name that is not text cannot break the list', () => {
+  const order = {
+    quantities: { 'p-a': 1, 'p-b': 2, 'p-c': 3, 'p-d': 4 },
+    names: { 'p-a': 5, 'p-b': { evil: true }, 'p-c': ['x'], 'p-d': 'Real' },
+  };
+  const rows = orderRows(order, () => '');
+  assert.equal(rows.length, 4);
+  assert.ok(rows.every(r => typeof r.name === 'string'), 'every name comes back as text');
+  assert.deepEqual(rows.map(r => r.name).sort(),
+    ['Deleted product', 'Deleted product', 'Deleted product', 'Real']);
+});
+
+test('…nor can a quantities or names field that is not a map', () => {
+  assert.deepEqual(orderRows({ quantities: 'abc', names: 7 }, liveNameOf), []);
+  assert.equal(orderRows({ quantities: { 'p-x': 1 }, names: 'abc' }, () => '')[0].name, 'Deleted product');
+});
+
 // ── Into the Calculator ──────────────────────────────────────────────────────
 
 test('an order becomes the Calculator\'s own quantity keys', () => {
