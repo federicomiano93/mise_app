@@ -115,11 +115,14 @@ export function lineNote(
 
   if ('kind' in line && line.kind === 'ingredient') {
     const entry = { kind: 'ingredient', ingredientId, qty: readQty(line.qty), unit: line.unit };
+    const cost = ingredientLineCost(entry, ingredient);
     // ⚠️ PIECES WITH NO PIECE WEIGHT WEIGH NOTHING: the line is left out of the raw dough (lineRawKg says null), so «Baking» and the
     // kilo are lighter for it. Said once, and INSTEAD of «Bought by weight — say what one piece weighs…», which asked for the same
-    // fact (step 3b, 11 Nov 2026).
-    if (line.unit === 'pcs' && entry.qty > 0 && lineRawKg(entry, tables) === null) return t('fc.line.noPieceWeightRaw');
-    const cost = ingredientLineCost(entry, ingredient);
+    // fact (step 3b, 11 Nov 2026). Bought by the kilo, the missing weight leaves the COST out too (code review, 11 Nov 2026): the
+    // note says so and where to fix it, or the rate beside it would read as a costed line.
+    if (line.unit === 'pcs' && entry.qty > 0 && lineRawKg(entry, tables) === null) {
+      return t(cost.reason === 'no-piece-price' ? 'fc.line.noPieceWeightRawCost' : 'fc.line.noPieceWeightRaw');
+    }
     return cost.reason === null || cost.reason === 'no-ingredient-price' ? '' : t(REASON_TEXT[cost.reason]);
   }
 

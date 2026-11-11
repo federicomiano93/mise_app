@@ -772,7 +772,9 @@ Mise 2 only, post-switch: this is NOT a port, the current app keeps its «Full c
   fixed text, like packaging. A new line opens on grams, or on pieces when grams do not convert (`openingUnit`). Recipe lines keep g/kg.
 - **Notes:** a pieces line with a quantity whose ingredient has no piece weight (`lineRawKg` null) says «No piece weight: it doesn’t
   count in the raw dough.» instead of «Bought by weight — say what one piece weighs…» (one note, not two; with no quantity the old note
-  stays). A recipe line whose recipe is gone says «Recipe deleted: choose another or remove the line.» (was a second «This recipe no
+  stays). Bought by the kilo, that line has no cost either, so its note reads «… doesn’t count in the raw dough or in the cost. Add it in
+  Ingredients and suppliers, or count it in grams.» (code review). The foot shows «—» also while the priced lines have no amount yet.
+  The Packaging «?» names the unit sold (a piece, a pack or 1 kg), no longer «each piece». A recipe line whose recipe is gone says «Recipe deleted: choose another or remove the line.» (was a second «This recipe no
   longer exists» under the name that already said it).
 - **«?»:** «Made of» gained «On the right is what the amount written costs.»; the read view has its own texts where the form's spoke of
   typing: `fc.help.madeRead`, `fc.help.bakeRead`, `fc.help.workRead`. Product, Packaging, Price and the summary read the same in both.

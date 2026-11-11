@@ -126,6 +126,11 @@ describe('the «Raw dough» foot', () => {
     expect(foot()).not.toHaveTextContent('£');
   });
 
+  it('shows a dash, not «£0.00», for a priced line with no amount yet', async () => {
+    await form(source([product('Fresh', { components: [{ kind: 'ingredient', ingredientId: 'flour', qty: 0, unit: 'g' }] })]), 'Fresh');
+    expect(foot().lastElementChild).toHaveTextContent('0.00 g · —');
+  });
+
   it('is not drawn without a line', async () => {
     await form(source([product('Empty', { components: [] })]), 'Empty');
     expect(within(madeOf()).queryByText('Raw dough')).not.toBeInTheDocument();
@@ -178,6 +183,9 @@ describe('an ingredient line offers only the units its price converts to', () =>
     const unit = within(line).getByRole('combobox', { name: 'Unit' });
     expect(unit).toHaveValue('pcs');
     expect(unitsOf(line)).toEqual(['g', 'kg', 'pcs']);
+    // Bought by the kilo, the missing piece weight leaves the cost out too: one note says both, and where to fix it.
+    expect(within(line).getByText('No piece weight: it doesn’t count in the raw dough or in the cost. Add it in Ingredients and suppliers, or count it in grams.')).toBeInTheDocument();
+    expect(within(line).getByText('£10.00/kg')).toBeInTheDocument();
     // Moved to a unit that converts, the odd one is gone from the menu.
     await user.selectOptions(unit, 'g');
     expect(unitsOf(lineOf(madeOf(), 'Butter'))).toEqual(['g', 'kg']);

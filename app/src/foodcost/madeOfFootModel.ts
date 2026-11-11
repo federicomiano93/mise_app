@@ -8,7 +8,8 @@ import type { CostTables } from '@mise/shared/foodcost-model';
 // line money, the foot and the summary are the same calls, so they cannot disagree.
 export interface MadeOfFoot {
   rawKg: number;
-  // null when not one line is costed: the foot shows a dash, never «0.00» (free).
+  // null when not one line costs anything yet (unpriced, or priced with no amount typed): the foot shows a dash, never «0.00» (free).
+  // The summary agrees: productionCost needs a batch cost above zero.
   cost: number | null;
   // A line has no cost (gone, unpriced, or a recipe priced in part): the foot says «more than», as the summary does.
   partial: boolean;
@@ -19,7 +20,7 @@ export function madeOfFoot(product: unknown, tables: CostTables): MadeOfFoot | n
   try {
     const cooking = productCooking(product, tables);
     const batch = batchTotals(product, tables);
-    const costed = batch.rows.some(row => row.cost !== null);
+    const costed = batch.rows.some(row => row.cost !== null && row.cost > 0);
     return { rawKg: cooking.rawTotalKg, cost: costed ? batch.cost : null, partial: batch.partial };
   } catch {
     return null;

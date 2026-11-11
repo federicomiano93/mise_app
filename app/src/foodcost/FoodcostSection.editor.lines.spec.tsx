@@ -227,7 +227,7 @@ describe('the notes under a line', () => {
     const { user } = await open('/food-cost/product/Eggs', editorSource([product('Eggs', { components: [
       { kind: 'ingredient', ingredientId: 'flour', qty: 3, unit: 'pcs' },
     ] })]));
-    expect(within(madeOf()).getByText('No piece weight: it doesn’t count in the raw dough.')).toBeInTheDocument();
+    expect(within(madeOf()).getByText(/^No piece weight: it doesn’t count in the raw dough or in the cost\. Add it in Ingredients and suppliers/)).toBeInTheDocument();
     expect(madeOf()).not.toHaveTextContent('Bought by weight');
     // With no quantity it weighs nothing anyway: the note that asks for a piece weight to cost it is the one left.
     await user.clear(within(madeOf()).getByRole('textbox', { name: 'Quantity' }));
