@@ -75,7 +75,7 @@ function refuseIfShared(path) {
   let mode;
   try { mode = statSync(path).mode; } catch { return; }
   if (mode & 0o077) {
-    die(`${path} can be read by other accounts on this computer, and it holds a password.\n`
+    die(`${path} can be read or changed by other accounts on this computer, and it holds a password.\n`
       + `Run:  chmod 600 "${path}"  and start the agent again.`);
   }
 }

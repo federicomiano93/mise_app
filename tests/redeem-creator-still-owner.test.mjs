@@ -56,7 +56,7 @@ test('a creator id that could bend the path is refused, not used', () => {
 });
 
 test('only an owner keeps the code alive, and a missing creator counts as not one', () => {
-  assert.match(BRANCH, /if \(creatorAccess !== 'owner'\) return \{ ok: false, status: 'revoked' \}/,
+  assert.match(BRANCH, /if \(creatorAccess !== 'owner'\) \{[\s\S]{0,400}return \{ ok: false, status: 'revoked' \}/,
     'the comparison must be exactly "not owner → refuse"; anything looser lets a demoted owner\'s link through');
   assert.match(BRANCH, /: false;/, 'a creator who cannot be read must count as no longer the owner');
 });
@@ -64,7 +64,7 @@ test('only an owner keeps the code alive, and a missing creator counts as not on
 test('the check runs before anything is written for the caller', () => {
   const check = BODY.indexOf("status: 'revoked'");
   assert.ok(check < BODY.indexOf('tx.set(userRef'), 'the membership is written before the creator is checked');
-  assert.ok(check < BODY.indexOf('tx.update(ref, { usedAt'), 'the code is spent before the creator is checked');
+  assert.ok(check < BODY.indexOf('tx.update(ref, { usedAt: Date.now(), usedBy: uid })'), 'the code is spent for the caller before the creator is checked');
 });
 
 test('a new customer\'s owner link is the only exception', () => {
@@ -101,4 +101,15 @@ test('the rules refuse a client grant on an account that has a users document', 
   const write = rules.slice(rules.indexOf('allow create, update:', at), rules.indexOf('allow delete:', at));
   assert.match(write, /&& !exists\(\/databases\/\$\(database\)\/documents\/users\/\$\(uid\)\)/,
     'a member can again name their own account as a client');
+});
+
+// A revoked code is SPENT, so an owner put back in charge cannot revive it, and a six-digit
+// guess that lands on one still counts towards the app-wide limit (code review, 2 Nov 2026).
+test('a code refused for its creator is spent and counted like any bad guess', () => {
+  const at = BODY.indexOf("if (creatorAccess !== 'owner') {");
+  assert.notEqual(at, -1, 'the creator refusal is gone');
+  const branch = BODY.slice(at, BODY.indexOf("status: 'revoked'", at));
+  assert.match(branch, /tx\.update\(ref, \{ usedAt: now \}\);/, 'the revoked code is not spent');
+  assert.match(branch, /if \(guardRef\) tx\.set\(guardRef, withWrongGuess\(guard, now\)\);/,
+    'a six-digit guess on a revoked code no longer counts towards the app-wide limit');
 });

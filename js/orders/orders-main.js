@@ -1991,15 +1991,6 @@ function openRequestList() {
   globalThis.window?.dispatchEvent(new CustomEvent('mise:screen', { detail: 'requests' }));
 }
 
-// ⚠️⚠️ IT REPLACES IN PLACE, IT DOES NOT REMOVE AND RE-APPEND — and that one word
-// is the difference between working and unusable. Both screens are .req-overlay
-// at the same z-index, so DOM ORDER decides which is in front. Re-appending the
-// list put it back at the END of <body>, i.e. ON TOP of the open list somebody
-// was ticking — so every tick threw the manager back to the list of lists, and so
-// did a colleague ticking anything from their own phone.
-//
-// Found by driving the app: three checks went red reporting an empty screen, and
-// the screen was not empty at all — it was the wrong one, in front.
 // The roster, read once per page, so a received list is shown under the name the
 // server wrote for its sender rather than the one the sender typed (shownSender in
 // order-request-model.js). Until it arrives — or if it never does — the typed name
@@ -2012,10 +2003,22 @@ function ensureRosterNames() {
     if (requestListView) renderRequestList();
     if (requestView) renderOpenRequest();
   }).catch((err) => {
+    // Asked again at the next redraw: a read that failed on weak signal must not leave
+    // the typed names standing for the rest of the session.
+    rosterAsked = false;
     console.warn('Could not read the roster for the senders’ names:', err);
   });
 }
 
+// ⚠️⚠️ IT REPLACES IN PLACE, IT DOES NOT REMOVE AND RE-APPEND — and that one word
+// is the difference between working and unusable. Both screens are .req-overlay
+// at the same z-index, so DOM ORDER decides which is in front. Re-appending the
+// list put it back at the END of <body>, i.e. ON TOP of the open list somebody
+// was ticking — so every tick threw the manager back to the list of lists, and so
+// did a colleague ticking anything from their own phone.
+//
+// Found by driving the app: three checks went red reporting an empty screen, and
+// the screen was not empty at all — it was the wrong one, in front.
 function renderRequestList() {
   ensureRosterNames();
   const next = buildRequestListScreen(state.requests, {

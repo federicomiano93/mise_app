@@ -702,7 +702,14 @@ export const redeemJoinCode = onCall(CALL, async (request) => {
       const creatorSnap = creator ? await tx.get(db().doc(`users/${creator}`)) : null;
       const creatorAccess = creatorSnap && creatorSnap.exists
         ? membershipIn(creatorSnap.data(), locationId) : false;
-      if (creatorAccess !== 'owner') return { ok: false, status: 'revoked' };
+      if (creatorAccess !== 'owner') {
+        // ⚠️ SPENT, NOT MERELY REFUSED: an owner put back in charge must not bring an
+        // old invitation back to life. And a six-digit guess that lands on one still
+        // counts towards the app-wide limit, like any other code that does not work.
+        tx.update(ref, { usedAt: now });
+        if (guardRef) tx.set(guardRef, withWrongGuess(guard, now));
+        return { ok: false, status: 'revoked' };
+      }
     }
 
     // ⚠️⚠️ A CODE MAY NOT LOWER SOMEBODY WHO IS ALREADY IN, AND THE WORST CASE IS

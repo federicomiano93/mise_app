@@ -780,8 +780,8 @@
       }
     },
     "dist/orders.js": {
-      "sha": "f017abfb2bfadb26",
-      "mapSha": "85d0288b1147e69c",
+      "sha": "094b228d53e1733c",
+      "mapSha": "3ed843dbcdcbeb14",
       "inputs": {
         "js/allergen-match.js": "db54e694c42039c0",
         "js/allergen-model.js": "50434c6cea85b7de",
@@ -865,7 +865,7 @@
         "js/orders/order-summary.js": "ae2df3d8e163c852",
         "js/orders/order-text.js": "40ad3ba8ddb014c3",
         "js/orders/orders-config.js": "c968ce3171a34b1f",
-        "js/orders/orders-main.js": "8f13de076f6f29b6",
+        "js/orders/orders-main.js": "ccc3329b244491c9",
         "js/orders/place-confirm.js": "61cd2d604037e847",
         "js/orders/preview.js": "daa32cf26e8b4e87",
         "js/orders/reminder-view.js": "098e912684c36b50",
