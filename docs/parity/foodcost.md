@@ -569,3 +569,73 @@ guard's `resource == null` branch applies. `foodcostStore.spec.ts` reads the whi
 offline rejects), `foodcostStore.spec.ts` (made / skipped / failed, the whitelist, a recipe twice, busy while running, no local copy touched); `FoodcostSection.fromBook.spec.tsx` (the box: shown, singular, who sees it,
 hidden when narrowed or before the products arrive; the choice: ticks, maybes, order, tick all, Back and Escape, keyboard, snapshot, 24px / 48px from the CSS; creating: the confirm, Cancel, Escape taken by the confirm,
 what is written, the new rows and the box following, focus, no duplicate, offline and refused with a retry, holding still; Italian). Fakes: `fakeFoodcostSource.createProductIfAbsent` (`refuse.create`).
+
+## The product's own oven loss as built (step 2, 11 Nov 2026)
+
+Step 2 of the approved Food cost plan (10 Nov 2026, «il calo è del prodotto»). NOT a port: the current app keeps the loss on the recipe; Mise 2
+moves it to the product. Branch `feature/mise2-next-product-loss`.
+
+**The model (product model 3, `shared/src/foodcost-model.ts`)**
+- A recipe line's `qtyKg` is RAW kilos, costed at the recipe's raw price per kilo (`costRecipe` with `lossPct: 0`). Ingredient and packaging
+  lines are unchanged.
+- The product owns its weighing: `cookedGrams` (the batch weighed out of the oven; null = no loss) and `rawGrams` (a raw weight typed apart
+  from the lines' total, for a dough made double; null = the total). `productCooking` answers the raw total, the raw weight, the cooked one,
+  the loss and the output kilos: the cooked weight, or the lines' total × cooked ÷ raw when the raw weight was typed. `productLossPct` has
+  two decimals.
+- The batch's kilos (`batchTotals`) are the output kilos, so `unitsPerBatch`, the weight-sold cost and `per-kg-model` count on the cooked
+  weight. A line whose weight is known counts in the raw total even without a price, so a partial product's kilo figure is a «more than». A
+  cooked weight heavier than the raw one gives no output kilos and the blocker `cooked-heavier`; a product sold by the piece is not blocked.
+- `compositionKey` (when a save records a margin point) also reads the two weights.
+
+**Products saved before (model 1, 2 or none) are converted on read**
+- `isLegacyProduct`, `fromLegacyProduct`, `currentProduct`: every cost function converts first. A product nobody saves again keeps following
+  its recipes' loss; a product saved by Mise 2 no longer does.
+- A recipe line becomes the raw kilos that keep its cost, as a weight a person could have typed: the ROUNDEST one (whole grams first,
+  then tenths, hundredths and thousandths of a gram) whose cost, rounded to four decimals like every line cost, equals the old line's,
+  looked for next to q × finished price ÷ raw price. That exact figure is used only within 0.1% of the plain q ÷ (1 − loss); otherwise,
+  and for a line with no price, the plain one to a hundredth of a gram. A recipe so dear (over 100 € a kilo) that no typable weight
+  lands on the cost keeps the exact weight. Found driving the app: the exact figure showed «1030.449734 g» in the box, and 0.9 kg of a
+  10%-loss dough became «999.99 g» instead of 1 kg. The cooked weight is the sum of the old kilos in
+  line order, nudged so its kilos round to the old batch kilos. «Finished product, no weight loss» (`noWeightLoss`) converts to its lines as
+  they were and no cooked weight; a line of a missing recipe keeps its kilos; a product with no loss gets no `cookedGrams`.
+- The batch cost and every line cost stay identical for every product, and for a product with every line priced every figure does
+  (production cost, food cost, preview, what has no price, one kilo). Proven by `shared/src/foodcost-product-loss.spec.ts` (5000 random
+  products; in the 4000 whose kilos are stored as the editor stores them, every converted recipe line is a whole number of thousandths
+  of a gram; a mutation run made it fail), and by a read-only
+  comparison on one venue's real data on 11 Nov 2026: 48 products, all model 2, 8 with a loss, no difference either read or saved as
+  model 3; its 56 recipe lines convert to whole grams (48) or one or two gram decimals (8). The data was read with GET requests into the
+  session's scratch folder and deleted; nothing of it is in the repo.
+- The recipe's own weighing (the catalogue card, `foodcost-weighing`, `catalogue-model.weightLoss`) is unchanged. `otherProductsUsing` («it
+  changes N other products too») counts only legacy products, the ones that still follow it.
+- `from-recipes.productFromRecipe`: the whole recipe in RAW kilos, `cookedGrams` the recipe's finished weight (to 0.1 g), model 3.
+
+**Diverging on purpose from the original** (the pairs stay paired by name, constants and arity)
+- Every TS-only branch says `POST-SWITCH (10 Nov 2026, «il calo è del prodotto»)`; a test that holds only for the original runs with
+  `test.runIf(m !== ported)`.
+- `odd-inputs.spec.ts` `POST_SWITCH`: `normalizeProduct(s)` is compared through a lens that takes the two new fields off; `batchTotals`,
+  `productionCost`, `costProduct`, `productPreview`, `unpricedParts`, `costPerKg`, `sortByMargin`, `productFromRecipe` and
+  `recipesWithoutProducts` must throw where the original throws and make no new NaN.
+- `foodcost-model.spec.ts` lists the six names only Mise 2 has (`lineRawKg`, `productLossPct`, `productCooking`, `isLegacyProduct`,
+  `fromLegacyProduct`, `currentProduct`). `componentLineCost` takes two parameters: the original's third, `{ noWeightLoss }`, has nothing to
+  do in model 3.
+
+**Rules** (`match /products/{id}`)
+- `rawGrams` and `cookedGrams` join the whitelist: optional, a number above 0 and at most 10,000,000. `null` is refused, so the store writes
+  them only with a value. `noWeightLoss` stays whitelisted: products saved before carry it; Mise 2 never writes it again, and a whole-document
+  save drains it.
+- The `model` ceiling is 3. ⚠️ Reverting cannot undo it: the old-phone guard refuses a lower `model` over a higher one, so the current app
+  (model 2) can no longer save over a product Mise 2 saved, and it reads such a product's raw lines as finished kilos (a batch and unit cost
+  too high by the loss). Deploy the rules FIRST at go-live. `tests/model-ceiling.test.mjs` and `shared/src/model-ceiling.spec.ts`: the
+  ceiling equals Mise 2's `PRODUCT_MODEL`, the current app's sits at or under it. `tests/rules/firestore-rules-check.mjs`: the two weights
+  accepted and refused, a model-2 or model-less save over a model-3 product refused, model 2 or none → 3 accepted.
+
+**App (2a)**
+- `ProductEditor` opens a legacy product with recipe lines (read view or form) only once the recipes and the priced ingredients are in
+  (`waitsForTables`), with no deadline: converted before them, a recipe line would keep its finished kilos and Save would write them as raw
+  ones. The form copies `currentProduct(...)`, so its recipe boxes show raw grams, and Save writes model 3 (`toProductDocument`: the two
+  weights only with a value, never `noWeightLoss`).
+- The switch «Finished product, no weight loss» and the per-recipe weighing pairs left the product form; slice 2b puts the product's own
+  «Cottura» there. Until then the form and the read view show the read-only «Cottura» block (`ReadCooking`): raw dough, cooked dough and
+  loss; «No oven loss.» without a cooked weight; the red «The cooked dough cannot weigh more than the raw dough.» when it is heavier.
+- The «too much of a recipe» note compares the raw line with the raw whole recipe.
+- New texts: `fc.cooking.title`, `fc.cooking.lossLabel`, `fc.cooking.none`, `fc.cooking.blockHeavier`.

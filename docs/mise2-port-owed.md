@@ -30,7 +30,7 @@ fails the switch. What is done AT the switch hour (rules deploy, the TTL command
 Data loss first:
 - [x] 1. Pastries row notes and «Copy day» (a Mise 2 day save erases the notes) — notes ported 8 Nov (PR #492); «Copy day» ported 8 Nov (`feature/mise2-copy-day`, PR into the release branch; `docs/parity/pastries.md`, «Copy day as built»)
 - [x] 2. Recipe categories written one word at a time (arrayUnion / arrayRemove), never the whole list — ported 8 Nov (PR into the release branch, `feature/mise2-port-data-loss`)
-- [x] 4. Food cost `noWeightLoss` kept by a Mise 2 product save — ported 8 Nov with the switch (`feature/mise2-port-data-loss`)
+- [x] 4. Food cost `noWeightLoss` kept by a Mise 2 product save — ported 8 Nov with the switch (`feature/mise2-port-data-loss`); superseded 11 Nov 2026 by product model 3: a save converts a flagged product (its lines as they were, no cooked weight) and drops the key (`docs/parity/foodcost.md`, «The product's own oven loss as built»)
 - [x] 6. Orders draft journal and corrections in flight (F-15, F-16) — ported 8 Nov (PR into the release branch; `docs/parity/orders.md`, «Draft journal and corrections in flight as built»)
 - [x] 3. `drafts/current.skipped` and «Order done» / «Close as not ordered» — ported 8 Nov (PR into the release branch; `docs/parity/orders.md`, «Closed as not ordered as built»)
 - [x] 5. Usage `hours` kept by Mise 2's usage write — already on this branch through PR #473 (`e1a4639d`), found on 8 Nov:
