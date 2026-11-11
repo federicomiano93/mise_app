@@ -40,7 +40,8 @@
   text-align: right;
 }
 
-.missing {
+/* A line whose recipe or item no longer exists. ⚠️ `.row dt.missing`, not `.missing`: the bare class lost to `.row dt` and stayed grey. */
+.row dt.missing {
   color: var(--danger-ink);
 }
 
@@ -49,10 +50,38 @@
   color: var(--danger-ink);
 }
 
-/* A line's own words (only part priced, no longer exists, priced by weight) under its row, and above them its money: the rate and
-   what the amount costs (lineCost.ts). Both left-aligned on a line of their own; they wrap at 296px. */
-.row dd.note,
-.row dd.cost {
+/* A line of «Made of» or of the packaging (step 3b, 11 Nov 2026): the name on a line of its own, then the amount with the money at
+   the right-hand end — the form's own layout — then the note. */
+.lineRow dt {
+  flex: 1 0 100%;
+  color: var(--ink);
+  font-size: var(--fs-md);
+  font-weight: 600;
+}
+
+.row dd.amount {
+  display: flex;
+  flex: 1 0 100%;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--s1) var(--s3);
+  font-weight: 400;
+  text-align: left;
+}
+
+/* The rate and what the amount costs (lineCost.ts): bold, tabular, pushed right; under the amount at 296px, never sideways. */
+.money {
+  min-width: 0;
+  margin-left: auto;
+  overflow-wrap: anywhere;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* A line's own words (only part priced, no longer exists, no piece weight) under its row, left-aligned on a line of their own; they
+   wrap at 296px. */
+.row dd.note {
   flex: 1 0 100%;
   color: var(--ink-2);
   font-size: var(--fs-sm);

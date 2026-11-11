@@ -1,5 +1,4 @@
 import { Trash2 } from 'lucide-react';
-import { LINE_UNITS } from '@mise/shared/foodcost-model';
 import type { LineUnit } from '@mise/shared/foodcost-model';
 import { KILO_LINE_UNITS } from '@mise/shared/line-quantity';
 import type { KiloLineUnit } from '@mise/shared/line-quantity';
@@ -15,12 +14,14 @@ type Props = {
   rowKey: string;
   kind: LineKind;
   name: LineName;
-  // The line's rate and what its amount costs (lineCost.ts), above the note; '' draws nothing.
+  // The line's rate and what its amount costs (lineCost.ts), at the right-hand end of the amount row; '' draws nothing.
   cost: string;
   note: string;
   qty: string;
   // Ingredient lines (g, kg, pieces) and recipe lines (g, kg); packaging has none.
   unit?: LineUnit;
+  // The units an ingredient line offers (lineUnits.ts: only those its price converts, plus its own). One alone is fixed text.
+  units?: readonly LineUnit[];
   registerQty: (key: string, node: HTMLInputElement | null) => void;
   onPick: () => void;
   onQty: (text: string) => void;
@@ -46,7 +47,7 @@ const REMOVE_LABEL = {
 //
 // ⚠️ A QUANTITY TYPED IN IT NEVER REBUILDS THE ROW: the row is keyed by its own id, so the box under
 // the finger is the same box after every digit.
-export function LineRow({ rowKey, kind, name, cost, note, qty, unit, registerQty, onPick, onQty, onUnit, onRecipeUnit, onRemove }: Props) {
+export function LineRow({ rowKey, kind, name, cost, note, qty, unit, units, registerQty, onPick, onQty, onUnit, onRecipeUnit, onRemove }: Props) {
   const { t } = useT();
 
   return (
@@ -77,8 +78,9 @@ export function LineRow({ rowKey, kind, name, cost, note, qty, unit, registerQty
           value={qty}
           onChange={event => { onQty(event.target.value); }}
         />
-        {/* An ingredient is added in grams, kilos or pieces, and a recipe in grams or kilos (stored in kilos whatever the
-            select says, and opened in grams: productEditorModel.ts); packaging is always pieces per unit sold. */}
+        {/* An ingredient is added in the units its price converts to (lineUnits.ts), and a recipe in grams or kilos (stored in kilos
+            whatever the select says, and opened in grams: productEditorModel.ts); packaging is always pieces per unit sold. A single
+            unit is fixed text, like packaging's: a menu of one is a control that does nothing. */}
         {kind === 'recipe' && unit !== undefined ? (
           <select
             className={styles.unit}
@@ -88,23 +90,24 @@ export function LineRow({ rowKey, kind, name, cost, note, qty, unit, registerQty
           >
             {KILO_LINE_UNITS.map(option => <option key={option} value={option}>{option}</option>)}
           </select>
-        ) : kind === 'ingredient' && unit !== undefined ? (
+        ) : kind === 'ingredient' && unit !== undefined && (units ?? [unit]).length > 1 ? (
           <select
             className={styles.unit}
             aria-label={t('fc.aria.unit')}
             value={unit}
             onChange={event => { onUnit(event.target.value as LineUnit); }}
           >
-            {LINE_UNITS.map(option => (
+            {(units ?? [unit]).map(option => (
               <option key={option} value={option}>{option === 'pcs' ? t('fc.unit.pieces') : option}</option>
             ))}
           </select>
         ) : (
-          <span className={styles.fixedUnit}>{t('fc.unit.pieces')}</span>
+          <span className={styles.fixedUnit}>{unit === undefined || unit === 'pcs' ? t('fc.unit.pieces') : unit}</span>
         )}
+        {/* The money at the row's right-hand end (step 3b, 11 Nov 2026; it was a line of its own under the row): what the amount typed
+            costs sits beside the amount. It drops under the box at 296px rather than push the row sideways. */}
+        {cost === '' ? null : <span className={styles.cost}>{cost}</span>}
       </div>
-      {/* The money, in its own element above the note (Federico, 7 Nov 2026): the note says what to DO. */}
-      {cost === '' ? null : <p className={styles.cost}>{cost}</p>}
       {note === '' ? null : <p className={styles.note}>{note}</p>}
     </li>
   );

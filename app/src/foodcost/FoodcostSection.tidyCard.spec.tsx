@@ -23,14 +23,21 @@ const SALT_LINE = { kind: 'ingredient', ingredientId: 'salt', qty: 20, unit: 'g'
 const GHOST_LINE = { kind: 'ingredient', ingredientId: 'ghost', qty: 5, unit: 'g' };
 
 const SECTIONS = ['Product', 'Made of', 'Baking', 'Packaging', 'Work', 'Price'];
+// The form's «?» texts; the read view says the same, except where a sentence only makes sense with boxes to type in (READ_HELP, step 3b).
 const HELP: Record<string, RegExp> = {
   'Summary per piece': /^The figures are for one piece\. Food cost is the cost of ingredients and packaging/,
   Product: /^Pieces per batch: how many finished pieces/,
-  'Made of': /^Write what goes into the dough, weighed raw\. Tap a name to change it\.$/,
+  'Made of': /^Write what goes into the dough, weighed raw\. Tap a name to change it\. On the right is what the amount written costs\.$/,
   Baking: /^Weigh the dough before and after the oven/,
   Packaging: /^Boxes, bags, cases, labels/,
-  Work: /^The time to make one batch/,
+  Work: /^The time to make one batch.*If you leave it empty/,
   Price: /^The price on the label, VAT included/,
+};
+const READ_HELP: Record<string, RegExp> = {
+  ...HELP,
+  'Made of': /^What goes into the dough, weighed raw\. On the right is what the amount written costs\.$/,
+  Baking: /^The dough weighed before and after the oven\..*With no cooked weight, the product does not lose weight\.$/,
+  Work: /^The time to make one batch, from weighing to the finished product\. Without it, labour is not counted\.$/,
 };
 
 const pencil = () => screen.getByRole('button', { name: 'Edit product' });
@@ -139,7 +146,7 @@ describe('the «?» of each section', () => {
     const text = document.getElementById(toggle.getAttribute('aria-controls') ?? '') as HTMLElement;
     expect(text).not.toBeNull();
     expect(text).not.toBeVisible();
-    expect(text.textContent).toMatch(HELP[title] as RegExp);
+    expect(text.textContent).toMatch(READ_HELP[title] as RegExp);
     await user.click(toggle);
     expect(toggle).toHaveAttribute('aria-expanded', 'true');
     expect(text).toBeVisible();

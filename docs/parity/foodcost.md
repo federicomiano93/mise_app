@@ -756,3 +756,26 @@ Mise 2 only, post-switch: this is NOT a port, the current app keeps its «Full c
   `fc.help.*`, `fc.preview.moreThan` / `lessThan` / `partialLines` / `kgNoLoss` / `netPrice` / `batch` / `batchPieces`, `fc.detail.*`.
 - **Specs:** `ui/HelpToggle.spec.tsx`, `FoodcostSection.tidyCard.spec.tsx` (new); `readMode`, `readFixes`, `editor*`, `perKg*`, `lineCosts`,
   `preview`, `product`, `productLoss`, `twoDecimals` adapted to the summary and the new section names.
+
+### Step 3b — the lines of «Made of» and of the packaging (11 Nov 2026)
+
+- **The money moved into the amount row:** each line's `lineCostView` text now sits after the unit, right-aligned (`margin-left: auto`,
+  weight 650, tabular figures), in the form (`LineRow`) and in the read view (`ReadSections`' `ReadLines`: the name on its own row, then
+  the amount with the money, then the note). The amount row wraps, so at 296px the money drops under the box, never sideways. Packaging
+  lines too. The note stays under the row. The rate stays in the same text for now: moving it under the name is step 4.
+- **«Raw dough» foot** (`MadeOfFoot.tsx` over `madeOfFootModel.ts`), the last thing of the lines, before «+ Add», read view and form, only
+  with at least one line: `productCooking`'s raw total through `fcWeight` (the very figure the «Baking» raw box follows) and `batchTotals`'
+  cost of the lines, packaging left out; «more than X» when `batchTotals` says partial, «—» when not one line is costed. On `--bg`, bold.
+- **Units an ingredient line offers** (`lineUnits.ts`, from the model's own `priceUnit` and `unitWeightKg`): priced per kilo or litre →
+  g, kg, plus pieces only with a piece weight; priced per piece → pieces, plus g and kg only with a piece weight; no price basis → all
+  three (nothing to convert from). The line's own unit is always offered, so a saved line outside the set keeps it. A single unit is
+  fixed text, like packaging. A new line opens on grams, or on pieces when grams do not convert (`openingUnit`). Recipe lines keep g/kg.
+- **Notes:** a pieces line with a quantity whose ingredient has no piece weight (`lineRawKg` null) says «No piece weight: it doesn’t
+  count in the raw dough.» instead of «Bought by weight — say what one piece weighs…» (one note, not two; with no quantity the old note
+  stays). A recipe line whose recipe is gone says «Recipe deleted: choose another or remove the line.» (was a second «This recipe no
+  longer exists» under the name that already said it).
+- **«?»:** «Made of» gained «On the right is what the amount written costs.»; the read view has its own texts where the form's spoke of
+  typing: `fc.help.madeRead`, `fc.help.bakeRead`, `fc.help.workRead`. Product, Packaging, Price and the summary read the same in both.
+- **Fixed on the way:** a read-view line that no longer exists is red again (`.row dt.missing`; the bare `.missing` lost to `.row dt`).
+- **Specs:** `FoodcostSection.lineRows.spec.tsx`, `lineUnits.spec.ts` (new); `tidyCard`, `editor.lines`, `lineCosts`, `foodcostCss`
+  adapted.

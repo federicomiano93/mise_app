@@ -159,21 +159,21 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
         <CardSection title={t('fc.section.product')} help={t('fc.help.prod')}>
           <ReadProduct product={product} working={working} />
         </CardSection>
-        <CardSection title={t('fc.madeOf')} help={t('fc.help.made')}>
+        <CardSection title={t('fc.madeOf')} help={t('fc.help.madeRead')}>
           <ReadMadeOf product={product} working={working} tables={snap.tables} loaded={loaded} />
         </CardSection>
         {/* ⚠️ WHENEVER THERE IS ANYTHING TO WEIGH OR A WEIGHT STORED (step 2b): a converted product whose recipe line was replaced
             by an ingredient still holds a cooked weight, and a card that needed a recipe line hid it from the person who must
             re-weigh it. */}
         {product.components.length > 0 || product.rawGrams !== null || product.cookedGrams !== null ? (
-          <CardSection title={t('fc.cooking.title')} help={t('fc.help.bake')}>
+          <CardSection title={t('fc.cooking.title')} help={t('fc.help.bakeRead')}>
             <ReadCooking product={product} tables={snap.tables} />
           </CardSection>
         ) : null}
         <CardSection title={t('fc.packaging')} help={t('fc.help.pack')}>
           <ReadPackaging product={product} working={working} tables={snap.tables} loaded={loaded} />
         </CardSection>
-        <CardSection title={t('fc.labour')} help={t('fc.help.work')}>
+        <CardSection title={t('fc.labour')} help={t('fc.help.workRead')}>
           <ReadLabour product={product} note={labourNeedsRate ? t('fc.labourSetRate') : ''} />
         </CardSection>
         <CardSection title={t('fc.section.price')} help={t('fc.help.price')}>

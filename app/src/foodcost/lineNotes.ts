@@ -1,4 +1,4 @@
-import { ingredientLineCost, packagingLineCost } from '@mise/shared/foodcost-model';
+import { ingredientLineCost, lineRawKg, packagingLineCost } from '@mise/shared/foodcost-model';
 import type { CostTables, IngredientLineReason, Table } from '@mise/shared/foodcost-model';
 import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import type { Money } from '@mise/shared/currency';
@@ -34,6 +34,10 @@ function lookup(table: Table | null | undefined, id: string): Doc | null {
 
 export function recipeOf(tables: CostTables, id: string): Doc | null {
   return lookup(tables.recipes, id);
+}
+
+export function ingredientOf(tables: CostTables, id: string): Doc | null {
+  return lookup(tables.ingredients, id);
 }
 
 export type LineName = { text: string; missing: boolean };
@@ -89,7 +93,9 @@ export function lineNote(
 ): string {
   if ('kind' in line && line.kind === 'recipe') {
     const recipe = lookup(tables.recipes, line.recipeId);
-    if (!recipe) return line.recipeId && loaded.recipes ? t('fc.thisRecipeNoLonger') : '';
+    // ⚠️ WHAT TO DO, not a second «This recipe no longer exists» under the name that already says it (step 3b, 11 Nov 2026); always in
+    // sight, never behind the «?».
+    if (!recipe) return line.recipeId && loaded.recipes ? t('fc.line.recipeDeleted') : '';
     const costed = costRecipe(recipe, tables);
     const priced = costed.pricePerKg !== null && costed.partial ? t('fc.thisRecipePartlyPriced') : '';
     // ⚠️ A NOTE only, never a block, and FIRST (current app a7f4c75d, 8 Nov 2026): more than 20 whole batches is almost
@@ -108,7 +114,12 @@ export function lineNote(
   if (!ingredient) return ingredientId && loaded.ingredients ? t('fc.thisItemNoLonger') : '';
 
   if ('kind' in line && line.kind === 'ingredient') {
-    const cost = ingredientLineCost({ kind: 'ingredient', ingredientId, qty: readQty(line.qty), unit: line.unit }, ingredient);
+    const entry = { kind: 'ingredient', ingredientId, qty: readQty(line.qty), unit: line.unit };
+    // ⚠️ PIECES WITH NO PIECE WEIGHT WEIGH NOTHING: the line is left out of the raw dough (lineRawKg says null), so «Baking» and the
+    // kilo are lighter for it. Said once, and INSTEAD of «Bought by weight — say what one piece weighs…», which asked for the same
+    // fact (step 3b, 11 Nov 2026).
+    if (line.unit === 'pcs' && entry.qty > 0 && lineRawKg(entry, tables) === null) return t('fc.line.noPieceWeightRaw');
+    const cost = ingredientLineCost(entry, ingredient);
     return cost.reason === null || cost.reason === 'no-ingredient-price' ? '' : t(REASON_TEXT[cost.reason]);
   }
 

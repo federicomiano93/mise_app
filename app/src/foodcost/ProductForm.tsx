@@ -32,7 +32,9 @@ import { FROM_PRODUCT, entryState, pushDepth } from './foodcostNav';
 import { useHandBack } from './handBack';
 import { LineRow } from './LineRow';
 import type { LineKind } from './LineRow';
-import { lineMoney, lineName, lineNote } from './lineNotes';
+import { ingredientOf, lineMoney, lineName, lineNote } from './lineNotes';
+import { lineUnits, openingUnit } from './lineUnits';
+import { MadeOfFoot } from './MadeOfFoot';
 import { NameSuggest } from './NameSuggest';
 import { NumberBox } from './NumberBox';
 import { PickDialog } from './PickDialog';
@@ -366,7 +368,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
           ...current,
           components: [...current.components, choice.kind === 'recipe'
             ? { key, kind: 'recipe', recipeId: choice.id, qty: '', unit: RECIPE_LINE_OPENS_IN }
-            : { key, kind: 'ingredient', ingredientId: choice.id, qty: '', unit: 'g' }],
+            : { key, kind: 'ingredient', ingredientId: choice.id, qty: '', unit: openingUnit(ingredientOf(snap.tables, choice.id)) }],
         }));
         focusQtyOf.current = key;
       },
@@ -600,6 +602,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
       note={lineNote(t, money, line, snap.tables, loaded)}
       qty={line.qty}
       unit={'unit' in line ? line.unit : undefined}
+      units={'kind' in line && line.kind === 'ingredient' ? lineUnits(ingredientOf(snap.tables, line.ingredientId), line.unit) : undefined}
       registerQty={registerQty}
       onPick={() => { changeLine(line.key, kind); }}
       onQty={text => { setQty(line.key, text); }}
@@ -731,6 +734,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
               {working.components.map(line => renderLine(line, line.kind))}
             </ul>
           )}
+          <MadeOfFoot product={costed} tables={snap.tables} />
           <Button className={styles.add} onPress={addLine}>
             {working.components.length > 0 ? t('fc.addRecipeOrIngredient') : t('fc.addRecipe')}
           </Button>
