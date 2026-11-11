@@ -1722,7 +1722,13 @@ service cloud.firestore {
         // which every save from the labels block below failed its own whitelist and
         // nothing could delete it — the printer settings were lost until somebody
         // opened the Firebase console. labels has its own block, and only that one.
-        allow create, update: if doc != 'labels'
+        //
+        // ⚠️⚠️ AND ONLY THE TWO DOCUMENTS THIS BLOCK IS FOR (security audit, 2 Nov 2026).
+        // `doc != 'labels'` let every OTHER name through on the calculator branch, and
+        // delete is refused below — so any employee with the Calculator could create
+        // config/<anything> holding up to 1 MB that nobody could ever remove from the
+        // app. The app writes config/calculator and config/orders and nothing else here.
+        allow create, update: if doc in ['calculator', 'orders']
           && (doc == 'orders'
               ? canManage(lid, 'orders')
               : writesCalculatorConfig(lid))

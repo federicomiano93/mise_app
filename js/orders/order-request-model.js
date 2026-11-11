@@ -51,6 +51,24 @@ export function senderName(member, email) {
   return t('orders.request.someone');
 }
 
+// The name a received list is shown under.
+//
+// ⚠️ THE ROSTER WINS OVER WHAT THE SENDER WROTE (security audit, 2 Nov 2026). The
+// rules tie `fromUid` to the account that wrote the list, but `fromName` is free text
+// they can only measure — so an employee could send a list «from Federico». The roster
+// row for `fromUid` is written by the server when the person joined, so it is the name
+// shown whenever it is there. `fromName` is only the fallback for a sender the roster
+// no longer has, or a roster that could not be read. '' when there is nothing at all:
+// the screen supplies the word.
+export function shownSender(request, rosterByUid) {
+  const row = request && rosterByUid instanceof Map ? rosterByUid.get(request.fromUid) : null;
+  const fromRoster = row
+    ? ([row.firstName, row.lastName].map(part => String(part || '').trim()).filter(Boolean).join(' ')
+      || String(row.email || '').trim())
+    : '';
+  return fromRoster || String((request && request.fromName) || '').trim();
+}
+
 // ── Freezing the list ─────────────────────────────────────────────────────────
 
 // Turn the chosen suppliers' slice of the shared draft into the document that is

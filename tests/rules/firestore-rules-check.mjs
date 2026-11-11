@@ -1473,6 +1473,13 @@ async function configAndLogs() {
     () => mergeWrite(`${A}/config/labels`, { bakery: 'main', configRev: 1 }, asAccount(SAM)));
   await expectAllowed('…while the same employee still saves the calculator itself',
     () => mergeWrite(`${A}/config/calculator`, { bakery: 'main', configRev: 1 }, asAccount(SAM)));
+  // ⚠️ Any OTHER name used to pass the calculator branch, and delete is refused, so an
+  // employee could leave config/<anything> of up to 1 MB that nobody could remove
+  // (security audit, 2 Nov 2026).
+  await expectDenied('an employee cannot create a config document of any other name',
+    () => mergeWrite(`${A}/config/junk`, { bakery: 'main', configRev: 1 }, asAccount(SAM)));
+  await expectDenied('…nor can the owner',
+    () => mergeWrite(`${A}/config/junk`, { bakery: 'main', configRev: 1 }));
 
   await expectAllowed('labels: the profile the settings screen saves', () =>
     mergeWrite(`${A}/config/labels`, {
