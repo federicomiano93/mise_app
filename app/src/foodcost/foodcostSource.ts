@@ -14,6 +14,8 @@
 //   • recipes — the catalogue's, READ to cost a product; and THREE fields of one written: the oven
 //     loss weighed on a product's recipe line. Nothing else of a recipe is ever written from here.
 //   • ingredients + ingredient-prices — Orders' (Suppliers'), READ for ingredient lines and packaging.
+//   • suppliers — Orders' (Suppliers'), READ for their names only: the chooser and the lines of «Made of» say whom an
+//     ingredient is bought from (POST-SWITCH, step 4 of the Food cost plan, 11 Nov 2026; the current app reads none).
 //
 // ⚠️ NO ROLE IS READ HERE, ON PURPOSE (the Stocktake's rule): the section gate and firestore.rules
 // decide; who may see the labour rate is decided by the store from the session, and enforced by
@@ -61,6 +63,9 @@ export interface FoodcostSource {
   // The ingredients with their prices laid on (withPrices), live. Nothing is emitted until the
   // ingredients themselves have arrived; a refused price read emits them unpriced.
   watchIngredients(onChange: (list: StoredDoc[]) => void, onError: (err: unknown) => void): () => void;
+  // The suppliers, live, for their names only (POST-SWITCH, step 4). Fails quietly in the store: a line then simply shows
+  // no supplier under its name.
+  watchSuppliers(onChange: (list: StoredDoc[]) => void, onError: (err: unknown) => void): () => void;
   // foodcost-settings/main, live: its fields, or null when it does not exist OR cannot be read.
   // `meta.fromServer` tells «the server says there is none» from «this phone's own database has no
   // copy» (offline, a device that never read it): only the first is an answer. A refusal counts as
@@ -89,6 +94,7 @@ const INGREDIENTS = 'ingredients';
 // What each ingredient COSTS. A separate collection, because Orders must read every ingredient to
 // work at all (js/price-model.js says why).
 const INGREDIENT_PRICES = 'ingredient-prices';
+const SUPPLIERS = 'suppliers';
 const SETTINGS = 'foodcost-settings';
 const SETTINGS_DOC = 'main';
 // How many margin points the history reads: the current app's `max = 30`.
@@ -130,6 +136,7 @@ export function createFirestoreFoodcostSource(
   const recipesPath = buildPath(locationId, RECIPES);
   const ingredientsPath = buildPath(locationId, INGREDIENTS);
   const pricesPath = buildPath(locationId, INGREDIENT_PRICES);
+  const suppliersPath = buildPath(locationId, SUPPLIERS);
   const settingsPath = buildPath(locationId, SETTINGS);
 
   // The venue stamp is applied HERE, never by a caller: the rules require `bakery` to name the
@@ -229,6 +236,18 @@ export function createFirestoreFoodcostSource(
         return () => { stopIngredients(); stopPrices(); };
       }, onError);
     },
+
+    // ⚠️ QUIET (warn), like the ingredients (POST-SWITCH, step 4, 11 Nov 2026): the same rule lets a person read both
+    // (canReadOrdersData), and a venue without Orders has no suppliers — a line then shows no supplier, never an error.
+    // Only while Food cost is on screen, like its other listeners: the store stops it with them.
+    watchSuppliers: (onChange, onError) => listen(kit => kit.fs.onSnapshot(
+      kit.fs.collection(kit.db, suppliersPath) as Query,
+      snap => onChange(docsOf(snap)),
+      err => {
+        console.warn('watchSuppliers failed:', err);
+        onError(err);
+      },
+    ), onError),
 
     // A refusal reads as «no rate»: the screen then simply shows no labour money.
     // ⚠️ includeMetadataChanges, for the same reason as the products: the server's answer identical

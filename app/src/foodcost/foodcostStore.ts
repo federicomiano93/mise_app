@@ -63,6 +63,11 @@ export interface FoodcostSnapshot {
   readonly recipesFailed: boolean;
   readonly ingredients: Readonly<Record<string, StoredDoc>>;
   readonly ingredientsLoaded: boolean;
+  // The suppliers by id, for their names only: whom an ingredient is bought from (POST-SWITCH, step 4 of the Food cost plan,
+  // 11 Nov 2026). {} until they arrive, and after a quiet failure: a line then simply shows no supplier. Memory only — no local
+  // copy (a venue's supplier names on the phone's storage would need a key of their own; Firestore's own offline copy answers
+  // the listener offline anyway).
+  readonly suppliers: Readonly<Record<string, StoredDoc>>;
   // What an hour of work costs — null until it arrives, and null for ever for anybody who does not
   // run the place (nothing is ever asked for them).
   readonly labourCostPerHour: number | null;
@@ -210,6 +215,7 @@ export function createFoodcostStore(
   let recipesFailed = false;
   let ingredients: Readonly<Record<string, StoredDoc>> = indexById(bootIngredients);
   let ingredientsLoaded = Array.isArray(bootIngredients);
+  let suppliers: Readonly<Record<string, StoredDoc>> = {};
   let labourCostPerHour: number | null = null;
   let settingsLoaded = !options.canManage;
   let inFlight = 0;
@@ -236,7 +242,7 @@ export function createFoodcostStore(
     }
     return {
       products, productsLoaded, productsFromServer, recipes, recipesLoaded, recipesFromServer, recipesFailed, ingredients,
-      ingredientsLoaded, labourCostPerHour, settingsLoaded, tables, unsent: inFlight > 0,
+      ingredientsLoaded, suppliers, labourCostPerHour, settingsLoaded, tables, unsent: inFlight > 0,
     };
   }
 
@@ -379,6 +385,16 @@ export function createFoodcostStore(
           ingredientsLoaded = true;
           changed();
         },
+      ));
+
+      // Names only, never a cost: not part of `tables`. ⚠️ QUIET, and a failure keeps what was held (POST-SWITCH, step 4): a
+      // supplier's name is a courtesy under a line, so nothing waits for it and nothing is said when it cannot be read.
+      stops.push(source.watchSuppliers(
+        remote => {
+          suppliers = indexById(remote);
+          changed();
+        },
+        () => {},
       ));
 
       // ⚠️ THE HOURLY LABOUR COST IS WATCHED ONLY FOR WHOEVER RUNS THE PLACE: an employee's listener

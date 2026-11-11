@@ -20,6 +20,7 @@ function fakeSource() {
   let products: { onChange: (list: StoredDoc[], meta: ProductsMeta) => void; onError: (err: unknown) => void } | null = null;
   let recipes: { onChange: (list: StoredDoc[], meta?: ProductsMeta) => void; onError: (err: unknown) => void } | null = null;
   let ingredients: { onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void } | null = null;
+  let suppliers: { onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void } | null = null;
   let settings: ((data: Record<string, unknown> | null, meta: { fromServer: boolean }) => void) | null = null;
   const stopped: string[] = [];
   const writes: { kind: string; args: unknown[]; pending: Pending }[] = [];
@@ -36,6 +37,7 @@ function fakeSource() {
     watchProducts: vi.fn((onChange, onError) => { products = { onChange, onError }; return () => stopped.push('products'); }),
     watchRecipes: vi.fn((onChange, onError) => { recipes = { onChange, onError }; return () => stopped.push('recipes'); }),
     watchIngredients: vi.fn((onChange, onError) => { ingredients = { onChange, onError }; return () => stopped.push('ingredients'); }),
+    watchSuppliers: vi.fn((onChange, onError) => { suppliers = { onChange, onError }; return () => stopped.push('suppliers'); }),
     watchSettings: vi.fn(onChange => { settings = onChange; return () => stopped.push('settings'); }),
     saveProduct: (id, data, snapshot) => write('product', id, data, snapshot),
     createProductIfAbsent: (id, data) => new Promise<boolean>((resolve, reject) => { creates.push({ id, data, resolve, reject }); }),
@@ -51,6 +53,8 @@ function fakeSource() {
     recipes: (list: StoredDoc[], fromServer?: boolean) => recipes!.onChange(list, fromServer === undefined ? undefined : { fromServer }),
     recipesFail: () => recipes!.onError(new Error('refused')),
     ingredients: (list: StoredDoc[]) => ingredients!.onChange(list),
+    suppliers: (list: StoredDoc[]) => suppliers!.onChange(list),
+    suppliersFail: () => suppliers!.onError(new Error('permission-denied')),
     settings: (data: Record<string, unknown> | null, fromServer = true) => settings!(data, { fromServer }),
   };
 }
@@ -87,7 +91,24 @@ describe('the Food cost store', () => {
     store.start();
     expect(fake.source.watchProducts).toHaveBeenCalledTimes(1);
     store.stop();
-    expect(fake.stopped.sort()).toEqual(['ingredients', 'products', 'recipes', 'settings']);
+    expect(fake.stopped.sort()).toEqual(['ingredients', 'products', 'recipes', 'settings', 'suppliers']);
+  });
+
+  // POST-SWITCH (step 4 of the Food cost plan): the suppliers, for the names under an ingredient. Memory only, quiet, never waited for.
+  test('the suppliers: {} until they arrive, then by id; never written to the phone; a failure keeps them and says nothing', () => {
+    const { fake, store, messages, storage } = setup();
+    store.start();
+    expect(store.getSnapshot().suppliers).toEqual({});
+    const before = store.getSnapshot();
+    fake.suppliers([{ id: 's1', name: 'Molino Rossi S.r.l.', shortName: 'Molino Rossi' }]);
+    expect(store.getSnapshot()).not.toBe(before);
+    expect(store.getSnapshot().suppliers).toEqual({ s1: { id: 's1', name: 'Molino Rossi S.r.l.', shortName: 'Molino Rossi' } });
+    // Names only: the cost tables are the SAME object, so nothing memoised on them recomputes.
+    expect(store.getSnapshot().tables).toBe(before.tables);
+    expect([...(storage as ReturnType<typeof fakeStorage>).data.keys()].some(key => key.includes('supplier'))).toBe(false);
+    fake.suppliersFail();
+    expect(store.getSnapshot().suppliers).toHaveProperty('s1');
+    expect(messages).toEqual([]);
   });
 
   test('start → stop → start listens again, once (React development mode)', () => {

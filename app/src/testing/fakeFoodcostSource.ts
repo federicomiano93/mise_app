@@ -18,6 +18,8 @@ export type FakeFoodcostSource = FoodcostSource & {
   products: Map<string, StoredDoc>;
   recipes: Map<string, StoredDoc>;
   ingredients: Map<string, StoredDoc>;
+  // Orders' suppliers, read for their names (step 4).
+  suppliers: Map<string, StoredDoc>;
   prices: Map<string, Record<string, unknown>>;
   settings: Record<string, unknown> | null;
   history: Map<string, StoredDoc[]>;
@@ -34,6 +36,11 @@ export type FakeFoodcostSource = FoodcostSource & {
   // The same for the ingredients and their prices (the cost tables arrive after the products).
   holdIngredients(): void;
   releaseIngredients(): void;
+  // The suppliers' first answer is held back until releaseSuppliers() (still loading, or offline with no copy).
+  holdSuppliers(): void;
+  releaseSuppliers(): void;
+  // The suppliers' stream fails now: every live watcher gets the error (refused, a venue without Orders).
+  failSuppliers(): void;
   // The server's answer about the recipes is held back until releaseRecipes(); meanwhile the watcher gets `cached` (when given),
   // marked as the browser's own copy — a phone whose copy predates a recipe, on slow Wi-Fi. Call it BEFORE the screen subscribes:
   // the copy is handed only to a watcher that subscribes while the hold is on.
@@ -47,6 +54,7 @@ export function fakeFoodcostSource(seed: {
   products?: StoredDoc[];
   recipes?: StoredDoc[];
   ingredients?: StoredDoc[];
+  suppliers?: StoredDoc[];
   prices?: Record<string, Record<string, unknown>>;
   settings?: Record<string, unknown> | null;
   history?: Record<string, StoredDoc[]>;
@@ -54,16 +62,19 @@ export function fakeFoodcostSource(seed: {
   const products = new Map((seed.products ?? []).map(doc => [doc.id, doc] as const));
   const recipes = new Map((seed.recipes ?? []).map(doc => [doc.id, doc] as const));
   const ingredients = new Map((seed.ingredients ?? []).map(doc => [doc.id, doc] as const));
+  const suppliers = new Map((seed.suppliers ?? []).map(doc => [doc.id, doc] as const));
   const prices = new Map(Object.entries(seed.prices ?? {}));
   const history = new Map(Object.entries(seed.history ?? {}));
   const productWatchers = new Set<ProductsListener>();
   const recipeWatchers = new Set<RecipesListener>();
   const ingredientWatchers = new Set<ListListener>();
+  const supplierWatchers = new Set<ListListener>();
   const settingsWatchers = new Set<(data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void>();
   const refuse = { save: false, create: false, loss: false, remove: false, rate: false, history: false, products: false, recipes: false };
   const saved: FakeFoodcostSource['saved'] = [];
   let held = false;
   let ingredientsHeld = false;
+  let suppliersHeld = false;
   let recipesHeld = false;
   let recipesCached: StoredDoc[] | null = null;
   let ids = 0;
@@ -72,19 +83,25 @@ export function fakeFoodcostSource(seed: {
   const priced = () => withPrices([...ingredients.values()], Object.fromEntries(prices)) as StoredDoc[];
 
   const fake: FakeFoodcostSource = {
-    products, recipes, ingredients, prices, history, refuse, saved,
+    products, recipes, ingredients, suppliers, prices, history, refuse, saved,
     settings: seed.settings === undefined ? null : seed.settings,
 
     push() {
       if (!held) for (const w of productWatchers) w.onChange([...products.values()], FROM_SERVER);
       if (!recipesHeld) for (const w of recipeWatchers) w.onChange([...recipes.values()], FROM_SERVER);
       if (!ingredientsHeld) for (const w of ingredientWatchers) w.onChange(priced());
+      if (!suppliersHeld) for (const w of supplierWatchers) w.onChange([...suppliers.values()]);
       for (const w of settingsWatchers) w(fake.settings, { fromServer: true });
     },
     hold() { held = true; },
     release() { held = false; fake.push(); },
     holdIngredients() { ingredientsHeld = true; },
     releaseIngredients() { ingredientsHeld = false; fake.push(); },
+    holdSuppliers() { suppliersHeld = true; },
+    releaseSuppliers() { suppliersHeld = false; fake.push(); },
+    failSuppliers() {
+      for (const w of [...supplierWatchers]) { supplierWatchers.delete(w); w.onError(refused()); }
+    },
     holdRecipes(cached) { recipesHeld = true; recipesCached = cached ?? null; },
     releaseRecipes() { recipesHeld = false; fake.push(); },
     failRecipes() {
@@ -131,6 +148,13 @@ export function fakeFoodcostSource(seed: {
       ingredientWatchers.add(listener);
       queueMicrotask(() => { if (ingredientWatchers.has(listener) && !ingredientsHeld) onChange(priced()); });
       return () => { ingredientWatchers.delete(listener); };
+    }),
+
+    watchSuppliers: vi.fn<FoodcostSource['watchSuppliers']>((onChange, onError) => {
+      const listener: ListListener = { onChange, onError };
+      supplierWatchers.add(listener);
+      queueMicrotask(() => { if (supplierWatchers.has(listener) && !suppliersHeld) onChange([...suppliers.values()]); });
+      return () => { supplierWatchers.delete(listener); };
     }),
 
     watchSettings: vi.fn<FoodcostSource['watchSettings']>(onChange => {
