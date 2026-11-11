@@ -1673,7 +1673,9 @@ Differences from the current app, on purpose:
 - **A deleted product's line always leaves the note.** The current app does it only from a page that holds no note of its own
   (Fornitori); in Mise 2 Orders is never on screen while «Ingredients & suppliers» deletes or merges a product.
 - **Not in this item:** the current app's `sendBeforeLeaving` (Back from Orders opened from a recipe waits for the server), which
-  belongs to item 32 of the checklist.
+  belonged to item 32 of the checklist and is NOT ported, by design: leaving Orders already sends what waits (`stop()`), see
+  `docs/parity/catalogue.md`, «Row menu and full screen as built» (10 Nov 2026), including the one open edge, a write the server refuses
+  after the screen is gone.
 
 ## Closed as not ordered as built (8 Nov 2026)
 

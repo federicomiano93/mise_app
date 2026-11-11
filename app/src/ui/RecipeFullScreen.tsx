@@ -9,7 +9,8 @@ type Props = {
   name: string;
   // Each row's label and its amount ALREADY WRITTEN («250 g», «3 pcs»): the caller knows its units.
   // `dividerAfter`: a line under the row (the Recipe book's dividers; the Calculator passes none, as its card draws none).
-  rows: readonly { name: string; amount: string; dividerAfter?: boolean }[];
+  // `note`: a second line under the row, ALREADY WRITTEN (the Recipe book's «→ 625 g + 625 g» of a row split in two; the Calculator passes none).
+  rows: readonly { name: string; amount: string; dividerAfter?: boolean; note?: string }[];
   // The closing line («Total dough», «Total»).
   total: { name: string; amount: string };
   // The localStorage key the text size is remembered under (ui/zoomStorage.ts).
@@ -22,7 +23,8 @@ type Props = {
 // kitchen. A native modal <dialog> (the Fullscreen API is refused by iOS for anything but video): the page
 // behind is inert, Tab stays inside, and it is named by the recipe.
 //
-// Opened by the visible button or a tap on the list or the total — never by Copy or Send (ResultCard). It
+// Opened by the visible button — in the Calculator also by a tap on the list or the total, in the Recipe book NEVER by a tap on a row
+// (that opens the row's menu, 7 Nov 2026) — never by Copy or Send (ResultCard). It
 // closes with ×, with Escape and when the configuration changes under it (ResultCard unmounts it): it is a copy
 // of the grams, and a baker must never keep weighing from numbers that no longer hold.
 //
@@ -76,11 +78,12 @@ export function RecipeFullScreen({ name, rows, total, storageKey, onClose }: Pro
           {rows.map((row, index) => (
             <li
               key={index}
-              className={row.dividerAfter === true && index < rows.length - 1 ? `${styles.row} ${styles.divided}` : styles.row}
+              className={[styles.row, row.dividerAfter === true && index < rows.length - 1 ? styles.divided : '', row.note === undefined ? '' : styles.withNote].filter(c => c !== '').join(' ')}
               data-divider-after={row.dividerAfter === true && index < rows.length - 1 ? 'true' : undefined}
             >
               <span className={styles.rowName}>{row.name}</span>
               <span className={styles.figure}>{row.amount}</span>
+              {row.note === undefined ? null : <span className={styles.note}>{row.note}</span>}
             </li>
           ))}
         </ul>

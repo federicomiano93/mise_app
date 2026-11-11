@@ -7,11 +7,15 @@
 //
 // PORTED: `mayOpenFoodCost`, `mayOpenOrders`, `recipeIdFromHash` (with its private `cleanId`).
 //
-// LEFT OUT: `recipeHash`, `foodCostHref`, `recipeHref`, `ordersHref` and `catalogueOriginFromHash` — they build
-// and read the page addresses of the current app (`foodcost.html#recipe=…`, `orders.html#from=…`); Mise 2 has
-// routes instead, and Orders is not built in Mise 2.
+// LEFT OUT: `recipeHash`, `foodCostHref`, `recipeHref`, `recipeSpotFromHash`, `ordersHref`, `ordersIngredientHref`,
+// `catalogueOriginFromHash` and `orderIngredientFromHash` — they build and read the page addresses of the current app
+// (`foodcost.html#recipe=…`, `orders.html#from=recipe:<id>&order=<id>`, 7 Nov 2026, PR #481); Mise 2 has routes instead. The
+// ingredient a recipe row orders travels in the address's QUERY (`ordersForIngredientPath`, below), read back with
+// `recipeIdParam`, which is as strict as the original's hash reader: an id with a slash, an empty one or one over 200
+// characters is no id at all.
 //
-// NEW IN MISE 2, NO ORIGINAL: `foodCostForRecipePath`, `recipeAddress`, `recipeIdParam` and `FROM_RECIPE_LINK`.
+// NEW IN MISE 2, NO ORIGINAL: `foodCostForRecipePath`, `ordersForIngredientPath`, `recipeAddress`, `recipeIdParam` and
+// `FROM_RECIPE_LINK`.
 // Mise 2 is one page with real routes, so a recipe's Food cost is `/food-cost?recipe=<id>` (a query, not the
 // fragment the current app needs for its service worker's sake: Mise 2's router owns the address) and the way
 // back is `/recipes/<id>`.
@@ -73,6 +77,18 @@ export const FROM_RECIPE_LINK = Object.freeze({ fromRecipeLink: true });
 export function foodCostForRecipePath(recipeId: unknown): string | null {
   const id = cleanId(recipeId);
   return id ? `/food-cost?recipe=${encodeURIComponent(id)}` : null;
+}
+
+// A recipe row's «Order» (Federico, 7 Nov 2026): that ingredient's supplier screen in Orders, with the recipe to go back to and the
+// ingredient whose quantity box takes the focus. Null when any of the three ids cannot be one, never half of the longer address.
+// ⚠️ THE SUPPLIER IS THE ONE THE RECIPE'S OWN COPY OF THE INGREDIENT NAMES; Orders re-checks that the ingredient is on that
+// screen and says so when it is not. app/src/orders/OrdersSection.fromRecipe.spec.tsx («the address») pins this against `supplierPath`.
+export function ordersForIngredientPath(supplierId: unknown, recipeId: unknown, ingredientId: unknown): string | null {
+  const supplier = cleanId(supplierId);
+  const recipe = cleanId(recipeId);
+  const ingredient = cleanId(ingredientId);
+  if (!supplier || !recipe || !ingredient) return null;
+  return `/orders/supplier/${encodeURIComponent(supplier)}?recipe=${encodeURIComponent(recipe)}&ingredient=${encodeURIComponent(ingredient)}`;
 }
 
 // The recipe's own address, or null for an id that cannot be one.

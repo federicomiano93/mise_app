@@ -4,8 +4,9 @@
 // the two «who is shown the button» tests (the others read the screens' source or the Food cost model).
 //
 // recipe-link.ts is a PARTIAL port, so parity.spec.ts does not pair it: the original also builds the page
-// addresses of the current app (`recipeHash`, `foodCostHref`, `recipeHref`, `ordersHref`,
-// `catalogueOriginFromHash`). The last block of this file stands in for what pairing would have checked.
+// addresses of the current app (`recipeHash`, `foodCostHref`, `recipeHref`, `recipeSpotFromHash`, `ordersHref`,
+// `ordersIngredientHref`, `catalogueOriginFromHash`, `orderIngredientFromHash`; the last four came with the recipe row's «Order»,
+// PR #481, item 32). The last block of this file stands in for what pairing would have checked.
 // The builders and `recipeIdParam` are new in Mise 2 and have no original: they are tested on their own.
 
 import { describe, expect, test } from 'vitest';
@@ -72,6 +73,35 @@ describe.each([
 });
 
 describe('the new builders and the parameter reader (Mise 2 only)', () => {
+  // A recipe row's «Order» (item 32): the address of the supplier screen, the recipe to go back to and the ingredient to focus.
+  test('the Order address names the supplier, the recipe and the ingredient, each encoded', () => {
+    expect(ported.ordersForIngredientPath('mill', 'r1', 'i1')).toBe('/orders/supplier/mill?recipe=r1&ingredient=i1');
+    expect(ported.ordersForIngredientPath('a b', 'x y&z', 'crème#1')).toBe(
+      `/orders/supplier/a%20b?recipe=x%20y%26z&ingredient=${encodeURIComponent('crème#1')}`);
+  });
+
+  test('⚠️ one unusable id and there is no address at all, never half of one', () => {
+    const bad = ['', '   ', 'a/b', 'x'.repeat(201), null, undefined];
+    for (const id of bad) {
+      expect(ported.ordersForIngredientPath(id, 'r1', 'i1'), `supplier ${String(id)}`).toBe(null);
+      expect(ported.ordersForIngredientPath('mill', id, 'i1'), `recipe ${String(id)}`).toBe(null);
+      expect(ported.ordersForIngredientPath('mill', 'r1', id), `ingredient ${String(id)}`).toBe(null);
+    }
+  });
+
+  test('the two ids come back out of the address as strictly as the original read them out of its hash', () => {
+    for (const [recipe, ingredient] of [['r1', 'i1'], ['a b&c', 'x y&z'], ['crème#1', '100%'], ['x'.repeat(200), 'y'.repeat(200)]]) {
+      const path = ported.ordersForIngredientPath('mill', recipe, ingredient) as string;
+      const search = path.slice(path.indexOf('?'));
+      expect(ported.recipeIdParam(search, 'recipe'), recipe).toBe(recipe);
+      expect(ported.recipeIdParam(search, 'ingredient'), ingredient).toBe(ingredient);
+    }
+    // What the original's strictId refuses and a query can carry, the reader refuses too: empty, blank, a slash, too long.
+    for (const bad of ['', '%20', 'x%2Fy', 'x'.repeat(201)]) {
+      expect(ported.recipeIdParam(`?recipe=r1&ingredient=${bad}`, 'ingredient'), bad).toBe(null);
+    }
+  });
+
   test('a recipe\'s Food cost and its own address, with the id encoded', () => {
     expect(ported.foodCostForRecipePath('abc123')).toBe('/food-cost?recipe=abc123');
     expect(ported.recipeAddress('abc123')).toBe('/recipes/abc123');
@@ -118,8 +148,9 @@ describe('the new builders and the parameter reader (Mise 2 only)', () => {
 });
 
 describe('the port against the original', () => {
-  const LEFT_OUT = ['recipeHash', 'foodCostHref', 'recipeHref', 'ordersHref', 'catalogueOriginFromHash'];
-  const ADDED = ['FROM_RECIPE_LINK', 'foodCostForRecipePath', 'recipeAddress', 'recipeIdParam'];
+  const LEFT_OUT = ['recipeHash', 'foodCostHref', 'recipeHref', 'recipeSpotFromHash', 'ordersHref', 'ordersIngredientHref',
+    'catalogueOriginFromHash', 'orderIngredientFromHash'];
+  const ADDED = ['FROM_RECIPE_LINK', 'foodCostForRecipePath', 'ordersForIngredientPath', 'recipeAddress', 'recipeIdParam'];
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;
   const shared = Object.keys(original).filter(name => !LEFT_OUT.includes(name)).sort();
@@ -128,13 +159,11 @@ describe('the port against the original', () => {
     for (const name of LEFT_OUT) expect(typeof original[name], name).toBe('function');
   });
 
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, items 23, 32): main added exports to js/recipe-link.js (recipeSpotFromHash, ordersIngredientHref), not yet in the port — remove .fails when ported
-  test.fails('exports exactly the same names, except those', () => {
+  test('exports exactly the same names, except those', () => {
     expect(Object.keys(port).sort()).toStrictEqual([...shared, ...ADDED].sort());
   });
 
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, items 23, 32): the arity check reads every export of js/recipe-link.js and the port lacks orderIngredientFromHash, ordersIngredientHref and recipeSpotFromHash — remove .fails when ported
-  test.fails('every function has the same name and the same number of required parameters', () => {
+  test('every function has the same name and the same number of required parameters', () => {
     for (const name of shared) {
       expect((port[name] as { name: string }).name, name).toBe((original[name] as { name: string }).name);
       expect((port[name] as { length: number }).length, `${name}: arity`).toBe((original[name] as { length: number }).length);

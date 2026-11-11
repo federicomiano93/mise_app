@@ -49,6 +49,7 @@ import * as recipeCostModel from './recipe-cost-model';
 import * as foodcostWeighing from './foodcost-weighing';
 import * as perKgModel from './per-kg-model';
 import * as fromRecipes from './from-recipes';
+import * as rowActions from './row-actions-model';
 import * as foodcostModel from './foodcost-model';
 import * as calculatorConfig from './calculator-config';
 import * as calculatorDoughMath from './calculator-dough-math';
@@ -129,6 +130,7 @@ import * as legacyRecipeCostModelJs from '../../js/catalogue/recipe-cost-model.j
 import * as legacyFoodcostWeighingJs from '../../js/foodcost/foodcost-weighing.js';
 import * as legacyPerKgModelJs from '../../js/foodcost/per-kg-model.js';
 import * as legacyFromRecipesJs from '../../js/foodcost/from-recipes.js';
+import * as legacyRowActionsJs from '../../js/catalogue/row-actions-model.js';
 import * as legacyFoodcostModelJs from '../../js/foodcost/foodcost-model.js';
 import * as legacySupplierLabelJs from '../../js/supplier-label.js';
 import * as legacyVatNumberJs from '../../js/vat-number.js';
@@ -205,6 +207,7 @@ const legacyRecipeCostModel = legacyRecipeCostModelJs as unknown as typeof recip
 const legacyFoodcostWeighing = legacyFoodcostWeighingJs as unknown as typeof foodcostWeighing;
 const legacyPerKgModel = legacyPerKgModelJs as unknown as typeof perKgModel;
 const legacyFromRecipes = legacyFromRecipesJs as unknown as typeof fromRecipes;
+const legacyRowActions = legacyRowActionsJs as unknown as typeof rowActions;
 const legacyFoodcostModel = legacyFoodcostModelJs as unknown as typeof foodcostModel;
 const legacyCalculatorConfig = legacyCalculatorConfigJs as unknown as typeof calculatorConfig;
 const legacyCalculatorDoughMath = legacyCalculatorDoughMathJs as unknown as typeof calculatorDoughMath;
@@ -4265,4 +4268,30 @@ describe('archive: odd inputs', () => {
   agree('groupHistoryByDay', m.groupHistoryByDay as AnyFn, l.groupHistoryByDay as AnyFn, product([undefined, null, [], 'abc',
     [{ date: '2026-07-13', supplierName: 'Etna' }, { weekStart: '2026-07-06' }, { date: '2026-07-13', supplierName: 'Alba' }, { quantities: {} }, null],
     [{ date: '2026-07-13', supplierName: 5 }, { date: '2026-07-13' }, { date: '2026-07-14', supplierName: 'b' }, { date: '2026-07-14', supplierName: 'B' }]]));
+});
+
+// ── row-actions-model (item 32: the recipe row's menu) ─────────────────────────
+
+describe('row-actions-model: odd inputs', () => {
+  const UNITS: readonly unknown[] = [...ODD, 'g', 'kg', 'l', 'dl', 'cl', 'ml', 'pcs', 'tsp', 'tbsp', 'pinch', 'to taste', 'To Taste', { toString: () => 'kg' }];
+  const AMOUNTS: readonly unknown[] = [...ODD, 2, 3, 1.5, 1250, 1251, 1.251, 0.001, 0.0004, '1250', ' 7 ', '1e3', 0.4, 1e21, 1e-9, { valueOf: () => 40 }, [8], ['8', '9'], new Date(0)];
+  agree('splitAmount', rowActions.splitAmount as AnyFn, legacyRowActions.splitAmount as AnyFn, product(AMOUNTS, UNITS));
+  agree('splitBlockReason', rowActions.splitBlockReason as AnyFn, legacyRowActions.splitBlockReason as AnyFn, product(AMOUNTS, UNITS));
+
+  const ROWS: readonly unknown[] = [...ODD, { label: 'Flour', refId: 'flour' }, { label: 'Flour', kind: 'ingredient', refId: 'flour' }, { kind: 'recipe', refId: 'some-recipe' },
+    { refId: 'salt' }, { label: 'typed by hand' }, { refId: 'missing' }, { refId: 'water' }, { refId: 'yeast' }, { refId: 'oil' }, { refId: '  flour  ' }, { refId: 5 },
+    { refId: 'flour', kind: 'weird' }, { refId: 'toString' }, { refId: '__proto__' }, { refId: ['flour'] }, { refId: { toString: () => 'flour' } },
+    Object.create({ refId: 'flour' }), { get refId(): unknown { throw new Error('boom'); } }];
+  const INGREDIENTS: readonly unknown[] = [...ODD, 'flour', {}, { flour: null }, { flour: { supplierId: 'mill' } }, { flour: { supplierId: 'mill' }, salt: { supplierId: 'mill', active: false } },
+    { flour: { supplierId: 'mill' }, yeast: { supplierId: 'gone' }, water: {}, oil: { supplierId: 'deli' }, salt: { supplierId: 'mill', active: false }, 5: { supplierId: 'mill' } },
+    { flour: { supplierId: 5 } }, { flour: { supplierId: ['mill'] } }, { flour: { supplierId: '' } }, { flour: { active: 0, supplierId: 'mill' } }, { flour: 'text' }, { flour: [] },
+    { flour: { supplierId: 'mill', active: null } }, { flour: { supplierId: 'toString' } }, Object.create({ flour: { supplierId: 'mill' } })];
+  const SUPPLIERS: readonly unknown[] = [...ODD, 'mill', {}, { mill: null }, { mill: { name: 'Mill' } }, { mill: { name: 'Mill' }, deli: { name: 'Deli', active: false } },
+    { mill: { active: false } }, { mill: { active: 0 } }, { mill: { active: null } }, { mill: 'text' }, { 5: { name: 'five' } }, Object.create({ mill: { name: 'Mill' } })];
+  agree('orderTargetOf', rowActions.orderTargetOf as AnyFn, legacyRowActions.orderTargetOf as AnyFn, [...product(ROWS, INGREDIENTS, SUPPLIERS)]);
+
+  const ROW_LISTS: readonly unknown[] = [...ODD, [null, undefined, 5, 'abc'], [{ label: 'Flour' }, { label: 'Flour' }, { label: ' Flour ' }, { label: 'Sugar' }],
+    [{ refId: 'a' }, { refId: 'a' }, { refId: 'b' }, { refId: 'a', kind: 'recipe' }, { label: 'a' }], [{ label: 5 }, { label: null }, { label: { toString: () => 'x' } }, {}],
+    ROWS, new Set([{ label: 'x' }]), Object.freeze([{ label: 'x' }]), 'abcdef', { length: 2, 0: { label: 'a' } }];
+  agree('rowKeysOf', rowActions.rowKeysOf as AnyFn, legacyRowActions.rowKeysOf as AnyFn, product(ROW_LISTS));
 });

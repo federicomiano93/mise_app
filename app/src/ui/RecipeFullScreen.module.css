@@ -89,6 +89,20 @@
   border-bottom: 1px solid var(--line);
 }
 
+/* A row split in two parts (display only): its own line under the amount, ending on the same edge. Only such a row may wrap. */
+.row.withNote {
+  flex-wrap: wrap;
+}
+
+.note {
+  flex-basis: 100%;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--ink-2);
+  text-align: right;
+}
+
 .rowName {
   min-width: 0;
   overflow-wrap: anywhere;

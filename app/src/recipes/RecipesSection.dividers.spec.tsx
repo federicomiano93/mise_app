@@ -251,7 +251,7 @@ describe('the reorder rows (review, 5 Nov 2026)', () => {
 describe('the full-screen view of a recipe (review, 5 Nov 2026)', () => {
   it('draws the line under the same row as the recipe page, never under the last', async () => {
     const { user } = renderRecipes('/recipes/r2', { source: sourceWith([PLAIN, DIVIDED]) });
-    const open = await screen.findByRole('button', { name: en['cat.viewRecipeFullScreen'] as string }, LOAD);
+    const open = await screen.findByRole('button', { name: en['cat.fullScreen'] as string }, LOAD);
     await user.click(open);
     const dialog = await screen.findByRole('dialog', { name: 'Brioche' });
     expect(within(dialog).getAllByRole('listitem').map(item => item.getAttribute('data-divider-after') === 'true')).toEqual([true, false, false]);

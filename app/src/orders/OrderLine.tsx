@@ -77,7 +77,7 @@ export function OrderLine({ row, entry, showStock, hint, onEdit, supplierName, o
   }
 
   return (
-    <li className={styles.line} data-filled={qty > 0} data-elsewhere={row.elsewhere} data-stock={showStock}>
+    <li className={styles.line} data-ingredient={id} data-filled={qty > 0} data-elsewhere={row.elsewhere} data-stock={showStock}>
       <div className={styles.main}>
         {onOpenCard ? (
           // ⚠️ A REAL BUTTON DRAWN LIKE THE NAME IT REPLACES, with its hit area grown by padding and a matching negative margin, so the

@@ -247,7 +247,7 @@ describe('the batch', () => {
 
 describe('the full-screen view', () => {
   const dialog = () => screen.queryByRole('dialog', { name: 'Focaccia' });
-  const opener = () => main().getByRole('button', { name: 'View recipe full screen' });
+  const opener = () => main().getByRole('button', { name: 'Full screen' });
 
   it('opens from the button, labelled by the recipe, with the rows and the total', async () => {
     const { user } = await open();
@@ -259,10 +259,11 @@ describe('the full-screen view', () => {
     expect(view.getByText('1720 g')).toBeInTheDocument();
   });
 
-  it('opens from a tap on the list, shows the scaled amounts and the words of the units', async () => {
+  // The row menu (item 32) took the tap on a row; the full screen opens from the button only (RecipesSection.rowMenu.spec.tsx).
+  it('shows the scaled amounts and the words of the units', async () => {
     window.localStorage.setItem('catalogue-scaled', JSON.stringify({ m: { target: 1500, ts: Date.now() } }));
     const { user } = await open([MIXED], 'm');
-    await user.click(within(table()).getByText('Eggs'));
+    await user.click(opener());
     const view = within(screen.getByRole('dialog', { name: 'Mixed' }));
     expect(view.getAllByRole('listitem').map(row => row.textContent)).toEqual([
       'Flour500 g', 'Eggs6 pcs', 'Milk1 l', 'Sugar4 tbsp', 'Pepper2 pinch', 'Saltto taste',
