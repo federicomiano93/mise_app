@@ -23,7 +23,7 @@
 // «post-switch»). `wholeRecipeKg` stays the original's — what the whole recipe weighs once made.
 
 import { normalizeLossPct, normalizeSearchText, weighableTotalGrams } from './catalogue-model';
-import { PRODUCT_MODEL, productsUsingRecipe } from './foodcost-model';
+import { PRODUCT_MODEL, fittedWeighing, productsUsingRecipe } from './foodcost-model';
 import { roundTo } from './price-model';
 
 const PREFIX = 'recipe-';
@@ -78,9 +78,9 @@ export interface ProductFromRecipe {
   readonly foodCostTarget: null;
   readonly labourMinutes: null;
   readonly labourPeople: null;
-  // Mise 2 (post-switch): the product's own weighing — no raw typed apart from the line, and the recipe's oven loss as the
-  // batch's cooked weight (null when the recipe loses nothing).
-  readonly rawGrams: null;
+  // Mise 2 (post-switch): the product's own weighing — the recipe's oven loss as the batch's cooked weight (null when the recipe
+  // loses nothing), and no raw weight apart from the line but for a recipe past the rules' ten tonnes (fittedWeighing).
+  readonly rawGrams: number | null;
   readonly cookedGrams: number | null;
   readonly model: number;
 }
@@ -99,6 +99,11 @@ export function productFromRecipe(recipe: unknown): ProductFromRecipe | null {
   const grams = weighableTotalGrams(recipe);
   const rawKg = grams > 0 ? roundTo(grams / 1000, 3) : 0;
   const loss = normalizeLossPct(card && card['lossPct']);
+  // ⚠️ ONLY WEIGHTS THE RULES ACCEPT (code reviews of 11 Nov 2026), or that recipe's product fails on every try: a cooked weight
+  // that rounds to nothing is no weight (a gram of dough losing 97% came out at 0 g), and one past ten tonnes keeps its ratio a
+  // thousand times lighter (fittedWeighing).
+  const cooked = rawKg > 0 && loss > 0 ? roundTo(rawKg * 1000 * (1 - loss / 100), 1) : 0;
+  const weighing = fittedWeighing(rawKg * 1000, cooked);
   return {
     id,
     name,
@@ -107,8 +112,8 @@ export function productFromRecipe(recipe: unknown): ProductFromRecipe | null {
     sellingMode: null, piecesPerBatch: null, packSize: null, packUnit: null,
     sellingPrice: null, vatRate: null, foodCostTarget: null,
     labourMinutes: null, labourPeople: null,
-    rawGrams: null,
-    cookedGrams: rawKg > 0 && loss > 0 ? roundTo(rawKg * 1000 * (1 - loss / 100), 1) : null,
+    rawGrams: weighing.rawGrams,
+    cookedGrams: weighing.cookedGrams,
     model: PRODUCT_MODEL,
   };
 }

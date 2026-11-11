@@ -5,20 +5,26 @@
 // (~/.claude/plans/inherited-twirling-platypus.md §3, §6–§9, step 2). What this file proves:
 //
 //   1. THE PROMISE OF THE CONVERSION, over thousands of random products saved the old way and run through BOTH this port
-//      and js/foodcost/foodcost-model.js as it is: a batch costs exactly what the current app says it costs; and a product
+//      and js/foodcost/foodcost-model.js as it is: a batch costs exactly what the current app says it costs (for a recipe
+//      under about 10 cents a raw kilo the weight wins, and a line may move by about a hundredth of a cent a kilo — section
+//      4); and a product
 //      whose every line has a price shows every figure the current app shows — per piece, per kilo, per pack, the food
 //      cost, the margin, the labour, the cost of one kilo. Only a PARTIAL product may move: Mise 2 counts the weight of
-//      every line, priced or not, which makes a partial cost per kilo a figure that can only be too low («più di»).
+//      every line, priced or not, which makes a partial cost per kilo usually too low («più di»); a row with no price INSIDE a
+//      recipe adds neither weight nor cost, so it can be too high as well.
 //   2. The new rules on their own: the loss with two decimals from two weights, a raw weight typed apart from the total (a
 //      dough made double), no cooked weight = no loss, a cooked weight heavier than the raw one blocks every figure that
 //      divides by kilos, pieces with no known weight count nothing.
 //   3. Conversions worked by hand, and that a converted product is never converted twice.
+//   4. The edges the code review of 11 Nov 2026 found: cheap recipes, prices that round to nothing, batches past the rules'
+//      ten tonnes, a cooked weight that rounds to nothing.
 
 import { beforeEach, describe, expect, test } from 'vitest';
 import * as ported from './foodcost-model';
 import * as perKg from './per-kg-model';
 import { productFromRecipe } from './from-recipes';
 import { costRecipe } from './recipe-cost-model';
+import { roundTo } from './price-model';
 import * as legacyJs from '../../js/foodcost/foodcost-model.js';
 import * as legacyPerKgJs from '../../js/foodcost/per-kg-model.js';
 import { setLanguage, t } from '../../js/i18n.js';
@@ -308,7 +314,7 @@ describe('the product owns its loss', () => {
     expect(ported.batchTotals(withSprinkles, TABLES).cost, '…still cost 10 × 0.02').toBe(4.935);
     const withRibbon = zulle({ cookedGrams: null, components: [...lines, { kind: 'ingredient', ingredientId: 'RIBBON', qty: 100, unit: 'g' }] });
     const batch = ported.batchTotals(withRibbon, TABLES);
-    expect([batch.cost, batch.kg, batch.partial], 'an unpriced line weighs: the kilo can only read too LOW').toStrictEqual([4.735, 0.89, true]);
+    expect([batch.cost, batch.kg, batch.partial], 'an unpriced line weighs: the kilo reads too LOW').toStrictEqual([4.735, 0.89, true]);
     expect(ported.lineRawKg({ kind: 'ingredient', ingredientId: 'EGG', qty: 4, unit: 'pcs' }, TABLES)).toBe(0.24);
     expect(ported.lineRawKg({ kind: 'ingredient', ingredientId: 'SPRINKLE', qty: 4, unit: 'pcs' }, TABLES)).toBeNull();
     expect(ported.lineRawKg({ kind: 'ingredient', ingredientId: 'GONE', qty: 4, unit: 'pcs' }, TABLES)).toBeNull();
@@ -394,5 +400,195 @@ describe('a product the current app saved, converted on read', () => {
     expect(ported.productionCost(asProduct, { ingredients: ING, recipes: { PANE: recipe } }).unitCost)
       .toBe(costRecipe(recipe, { ingredients: ING }).pricePerKg);
     expect(productFromRecipe({ ...recipe, lossPct: 0 })?.cookedGrams, 'a recipe that loses nothing').toBeNull();
+  });
+});
+
+// ── 4. The edges the code reviews found (11 Nov 2026) ────────────────────────
+
+describe('⚠️ the edges of the conversion', () => {
+  // One recipe of one ingredient at `rate` a kilo, `grams` of it, losing `loss`%; a product of `qtyKg` finished kilos of it.
+  const recipeOf = (rate: number | null, loss: number, grams: number): ported.CostTables => ({
+    ingredients: { I: rate === null ? { id: 'I', name: 'I' } : { id: 'I', name: 'I', priceUnit: 'kg', pricePerUnit: rate } },
+    recipes: { R: { id: 'R', name: 'R', lossPct: loss, ingredients: [{ label: 'x', grams, unit: 'g', kind: 'ingredient', refId: 'I' }] } },
+  });
+  const line = (qtyKg: number, over: Doc = {}): Doc => ({
+    id: 'P', name: 'P', model: 2, components: [{ recipeId: 'R', qtyKg }], packaging: [], sellingMode: 'weight', sellingPrice: 10, vatRate: 0,
+    ...over,
+  });
+  const rawOf = (p: unknown): number => ((p as ported.Product).components[0] as ported.RecipeLine).qtyKg;
+  // The two promises every converted line keeps whatever its price: never lighter than the kilos it held, and within 0.1% of the
+  // plain q ÷ (1 − loss) — a milligram either side at most past it — so the loss «Cottura» shows is the recipe's to within a
+  // tenth of a point (its two decimals add half a hundredth).
+  const weighs = (out: string[], tables: ported.CostTables, q: number, loss: number): number => {
+    const product = ported.fromLegacyProduct(line(q), tables) as ported.Product;
+    const raw = rawOf(product);
+    const plain = q / (1 - loss / 100);
+    const tag = `${JSON.stringify(tables.ingredients)} ${loss}% ${q} kg`;
+    if (raw < q) out.push(`${tag}: became ${raw} kg, lighter`);
+    if (Math.abs(raw - plain) > plain * 1e-3 + 2e-6) out.push(`${tag}: became ${raw} kg, the plain weight is ${plain}`);
+    // «No oven loss» (no cooked weight) is a loss of 0 — what a recipe losing under 0.1% may show.
+    const shown = ported.productCooking(product, tables).lossPct ?? 0;
+    if (q >= 0.001 && Math.abs(shown - loss) > 0.105) out.push(`${tag}: «Cottura» shows ${shown}%`);
+    return raw;
+  };
+
+  test('from 10 cents a raw kilo up: every line keeps its cost, its weight and its loss, and is a weight a person types', () => {
+    const r = seeded(20261111);
+    const out: string[] = [];
+    for (let n = 0; n < 6000; n++) {
+      // Leaning towards the cheap end, where four decimals of a price are coarsest.
+      const rate = Math.round((0.1 + r() ** 3 * 99.9) * 10000) / 10000;
+      const loss = Math.round((0.01 + r() * 39.99) * 100) / 100;
+      const tables = recipeOf(rate, loss, Math.round(1 + r() * 3000));
+      const q = Math.max(0.001, Math.round(r() * 12 * 1000) / 1000);
+      const raw = weighs(out, tables, q, loss);
+      if (Math.abs(raw * 1e6 - Math.round(raw * 1e6)) > 1e-6) out.push(`${rate}/kg ${loss}%: ${raw} kg is no typed weight`);
+      const mine = ported.batchTotals(line(q), tables).cost;
+      const theirs = legacy.batchTotals(line(q), tables).cost;
+      if (mine !== theirs) out.push(`${rate}/kg ${loss}% ${q} kg: Mise 2 ${mine} / current ${theirs}`);
+    }
+    expect(out.slice(0, 10)).toStrictEqual([]);
+  }, 60_000);
+
+  test('under 10 cents a raw kilo (mostly water) the weight is the dough\u2019s, and a line moves by about a hundredth of a cent a kilo', () => {
+    const r = seeded(11);
+    const out: string[] = [];
+    for (let n = 0; n < 3000; n++) {
+      const rate = Math.max(0.001, Math.round(r() * 0.1 * 10000) / 10000);
+      const loss = Math.round((0.01 + r() * 39.99) * 100) / 100;
+      const tables = recipeOf(rate, loss, Math.round(1 + r() * 3000));
+      const q = Math.max(0.001, Math.round(r() * 12 * 1000) / 1000);
+      weighs(out, tables, q, loss);
+      // Each price per kilo is rounded to four decimals, half a hundredth of a cent at most, and each total to its own: a kilo
+      // on the line moves by 0.00005 × (1 ÷ (1 − loss) + 1) at most — 0.013 cents at a 40% loss.
+      const moved = Math.abs((ported.batchTotals(line(q), tables).cost ?? 0) - (legacy.batchTotals(line(q), tables).cost ?? 0));
+      const bound = q * 0.00005 * (1 / (1 - loss / 100) + 1) + 0.0001;
+      if (moved > bound + 1e-6) out.push(`${rate}/kg ${loss}% ${q} kg: moved ${moved}, more than ${bound}`);
+    }
+    expect(out.slice(0, 10)).toStrictEqual([]);
+  }, 60_000);
+
+  test('a small line of a cheap recipe: the weight the dough had, never the roundest one on its cost (5 g never 6 g)', () => {
+    // The second review measured, before this rule: at 0.3 cents a kilo and a 10% loss, 5 g → 6 g raw («Cottura» 16.67%),
+    // 50 g → 56 g, 100 g → 111 g; at 20 cents, 5 g → 5.6 g (10.71%). The cost was the same every time.
+    const out: string[] = [];
+    for (const rate of [0.003, 0.2, 2]) {
+      for (const grams of [1, 5, 50, 100, 450]) weighs(out, recipeOf(rate, 10, 1000), grams / 1000, 10);
+    }
+    expect(out).toStrictEqual([]);
+    expect(rawOf(ported.fromLegacyProduct(line(0.005), recipeOf(0.003, 10, 1000)))).toBe(0.00556);
+  });
+
+  test('a loss of a few hundredths of a percent: the raw weight is never lighter than what came out of the oven, and keeps its cost', () => {
+    // The first review's sweep: with a 0.05–0.1% loss the roundest weight on the line's cost fell under the finished kilos even
+    // at 0.10–1.50 a kilo, and the product lost its loss — on a line saved with more decimals than whole grams.
+    const r = seeded(5);
+    const out: string[] = [];
+    for (let n = 0; n < 4000; n++) {
+      const rate = Math.round((0.1 + r() * 1.4) * 10000) / 10000;
+      const loss = Math.round((0.01 + r() * 0.09) * 100) / 100;
+      const tables = recipeOf(rate, loss, Math.round(1 + r() * 3000));
+      const q = Math.max(0.000001, Math.round(r() * 12 * 1e6) / 1e6);
+      const raw = rawOf(ported.fromLegacyProduct(line(q), tables));
+      if (raw < q) out.push(`${rate}/kg ${loss}%: ${q} kg became ${raw} kg`);
+      const mine = ported.batchTotals(line(q), tables).cost;
+      const theirs = legacy.batchTotals(line(q), tables).cost;
+      if (mine !== theirs) out.push(`${rate}/kg ${loss}% ${q} kg: Mise 2 ${mine} / current ${theirs}`);
+    }
+    expect(out.slice(0, 10)).toStrictEqual([]);
+  }, 60_000);
+
+  test('no price at all, on a line saved with more decimals than a milligram: the plain weight is never under it', () => {
+    // 1.2341 g of an unpriced recipe that loses 0.01%: the plain weight to the milligram, 1.234 g, would be lighter.
+    expect(rawOf(ported.fromLegacyProduct(line(0.0012341), recipeOf(null, 0.01, 1000)))).toBeGreaterThanOrEqual(0.0012341);
+  });
+
+  test('a recipe whose prices round to nothing: 5 kg out of a 20% loss is 6.25 kg raw, never one gram', () => {
+    // Twenty grams of water at a fifth of a cent a kilo: both prices per kilo round to 0, and every weight «keeps» a cost of 0.
+    const tables = recipeOf(0.002, 20, 20);
+    expect(costRecipe((tables.recipes as Record<string, Doc>)['R'], tables).pricePerKg, 'the premise').toBe(0);
+    const p = ported.fromLegacyProduct(line(5), tables) as ported.Product;
+    expect([rawOf(p), p.cookedGrams]).toStrictEqual([6.25, 5000]);
+  });
+
+  describe('⚠️ a batch past ten tonnes (grams typed into the old kilo box)', () => {
+    // 12000 «kilos» of a dough at 0.90 a raw kilo that loses 12%: what was meant is 12 kg.
+    const tables = recipeOf(0.9, 12, 1000);
+
+    test('keeps its loss as the same ratio inside the rules, and reads the same twice', () => {
+      const once = ported.currentProduct(line(12000), tables) as ported.Product;
+      expect(once.cookedGrams).toBe(12000);
+      expect(once.rawGrams).toBeCloseTo(rawOf(once), 6);
+      expect(rawOf(once)).toBeGreaterThan(12000);
+      expect(ported.productCooking(once, tables).lossPct).toBe(12);
+      expect(ported.currentProduct(once, tables)).toStrictEqual(once);
+    });
+
+    test('every figure is the current app\u2019s, sold by the kilo, by a pack in grams or by the piece', () => {
+      const ways: Doc[] = [
+        { sellingMode: 'weight', sellingPrice: 10 },
+        { sellingMode: 'pack', packSize: 250, packUnit: 'g', sellingPrice: 3 },
+        { sellingMode: 'piece', piecesPerBatch: 40, sellingPrice: 2 },
+      ];
+      // Every figure but the line's own quantity, which is raw kilos now and finished kilos there — by design.
+      const figures = (value: unknown): unknown => JSON.parse(JSON.stringify(value, (key, v: unknown) => (key === 'qty' ? undefined : v)));
+      for (const way of ways) {
+        const product = line(12000, way);
+        expect(figures(ported.batchTotals(product, tables)), JSON.stringify(way)).toStrictEqual(figures(legacy.batchTotals(product, tables)));
+        expect(figures(ported.costProduct(product, tables)), JSON.stringify(way)).toStrictEqual(figures(legacy.costProduct(product, tables)));
+      }
+    });
+
+    test('once the line is corrected, the two weights are the ones that were meant', () => {
+      const once = ported.currentProduct(line(12000), tables) as ported.Product;
+      const corrected = { ...once, components: [{ recipeId: 'R', qtyKg: roundTo(rawOf(once) / 1000, 6) }] };
+      const cooking = ported.productCooking(corrected, tables);
+      expect([cooking.lossPct, roundTo(cooking.outputKg ?? 0, 3)]).toStrictEqual([12, 12]);
+    });
+
+    test('many lines past ten tonnes: every line cost is the current app\u2019s, the batch weight to its fourth decimal', () => {
+      // The pair is fitted a thousand times lighter and the batch is the lines' total × cooked ÷ raw, rounded to six decimals,
+      // then four: a total sitting on a half of the fourth decimal can come out a tenth of a gram off, on tens of tonnes (third
+      // code review: 13 in 9,862 such products). Below ten tonnes nothing is fitted, and the weight is the current app's exactly.
+      const r = seeded(30);
+      const out: string[] = [];
+      let fitted = 0;
+      for (let n = 0; n < 3000; n++) {
+        const recipes: Record<string, Doc> = {};
+        const components: Doc[] = [];
+        const count = 1 + Math.floor(r() * 3);
+        for (let i = 0; i < count; i++) {
+          const id = `R${i}`;
+          const loss = r() < 0.3 ? 0 : Math.round(r() * 30 * 100) / 100;
+          recipes[id] = { id, name: id, lossPct: loss, ingredients: [{ label: 'x', grams: Math.round(1 + r() * 3000), unit: 'g', kind: 'ingredient', refId: 'I' }] };
+          components.push({ recipeId: id, qtyKg: Math.round(r() * 40000 * 1e5) / 1e5 });
+        }
+        const many: ported.CostTables = {
+          ingredients: { I: { id: 'I', name: 'I', priceUnit: 'kg', pricePerUnit: Math.round((0.1 + r() * 20) * 10000) / 10000 } }, recipes,
+        };
+        const p = line(0, { components });
+        const tag = JSON.stringify(components);
+        const isFitted = (ported.currentProduct(p, many) as ported.Product).rawGrams !== null;
+        if (isFitted) fitted += 1;
+        const mine = ported.batchTotals(p, many);
+        const theirs = legacy.batchTotals(p, many);
+        if (JSON.stringify(mine.rows.map(row => row.cost)) !== JSON.stringify(theirs.rows.map(row => row.cost))) out.push(`line costs ${tag}`);
+        if (mine.cost !== theirs.cost) out.push(`cost ${mine.cost} / ${theirs.cost} ${tag}`);
+        const gap = mine.kg === null || theirs.kg === null ? (mine.kg === theirs.kg ? 0 : Infinity) : Math.abs(mine.kg - theirs.kg);
+        if (gap > (isFitted ? 1e-4 + 1e-9 : 0)) out.push(`kg ${mine.kg} / ${theirs.kg} ${tag}`);
+      }
+      expect(out.slice(0, 10)).toStrictEqual([]);
+      expect(fitted, 'the sweep reaches past ten tonnes').toBeGreaterThan(1000);
+    }, 60_000);
+
+    test('a product made from a recipe past ten tonnes keeps the recipe\u2019s loss the same way', () => {
+      // Two rows of six tonnes: 12 t raw, 10.56 t cooked — past what the rules keep.
+      const made = productFromRecipe({ id: 'B', name: 'Big', lossPct: 12, ingredients: [flour(6000000), flour(6000000)] });
+      expect([made?.rawGrams, made?.cookedGrams]).toStrictEqual([12000, 10560]);
+    });
+  });
+
+  test('a gram of dough that loses 97%: the product made from it has no cooked weight (0 g is refused by the rules)', () => {
+    expect(productFromRecipe({ id: 'T', name: 'Tiny', lossPct: 97, ingredients: [flour(1)] })?.cookedGrams).toBeNull();
   });
 });

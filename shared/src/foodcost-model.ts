@@ -75,8 +75,9 @@ export type LineUnit = (typeof LINE_UNITS)[number];
 // them in silence. The rules refuse a save that does not carry this over a product that does. Raise it
 // only with a rules change.
 // ⚠️ 3 IN MISE 2 ONLY (10 Nov 2026), 2 in the current app: a model-3 product's recipe lines are RAW kilos, which the
-// current app would read as finished kilos and cost too low — so the rules refuse its save over a model-3 product, and
-// it can never write the raw lines back as finished ones. Products below 3 are converted on read (fromLegacyProduct).
+// current app would read as finished kilos and cost too HIGH by the loss — so the rules refuse its save over a model-3
+// product, and it can never write the raw lines back as finished ones. Products below 3 are converted on read
+// (fromLegacyProduct).
 export const PRODUCT_MODEL = 3;
 
 // The traffic light. Green up to the target, amber up to a tenth above it, red beyond. RELATIVE rather
@@ -401,6 +402,22 @@ function gramsOf(value: unknown): number | null {
   return n !== null && n <= MAX_PRODUCT_GRAMS ? n : null;
 }
 
+// A product's weighing as the rules can keep it, from the lines' raw total and the cooked weight, in grams.
+// ⚠️⚠️ A PAIR PAST THE RULES' TEN TONNES KEEPS ITS RATIO (second code review, 11 Nov 2026). Grams typed into the old kilo box
+// make batches of TONNES (16 such lines in production on 8 Nov). Dropping a cooked weight past ten tonnes took the loss away:
+// the batch was worked out on the raw kilos, a cost per kilo too low by the loss, and for ever after a Save. So the two
+// weights are divided by a thousand, as often as it takes, the raw one written apart from the lines' total: the batch is the
+// total × cooked ÷ raw (productCooking), so every figure stays the one the current app shows, and once somebody corrects the
+// line the two weights are the ones that were meant. Nothing to keep (no cooked weight) is two nulls.
+export function fittedWeighing(rawTotalGrams: number, cookedGrams: number): { rawGrams: number | null; cookedGrams: number | null } {
+  if (!(cookedGrams > 0) || !Number.isFinite(cookedGrams)) return { rawGrams: null, cookedGrams: null };
+  if (cookedGrams <= MAX_PRODUCT_GRAMS) return { rawGrams: null, cookedGrams };
+  if (!(rawTotalGrams >= cookedGrams) || !Number.isFinite(rawTotalGrams)) return { rawGrams: null, cookedGrams: null };
+  let scale = 1000;
+  while (rawTotalGrams / scale > MAX_PRODUCT_GRAMS) scale *= 1000;
+  return { rawGrams: rawTotalGrams / scale, cookedGrams: cookedGrams / scale };
+}
+
 export function normalizeProducts(list: unknown): Product[] {
   if (!Array.isArray(list)) return [];
   return list.map(normalizeProduct).filter((p): p is Product => !!p);
@@ -421,8 +438,10 @@ export function netPrice(gross: unknown, vatRate: unknown): number | null {
 //
 //   { cost, kg, reason }   — cost null, and a reason, when it cannot be costed
 //
-// ⚠️ AN UNPRICED LINE ADDS NO WEIGHT EITHER, the same rule as an unpriced recipe: a product would otherwise
-// look heavier and cheaper per kilo than it is.
+// ⚠️ AN UNPRICED LINE REPORTS NO WEIGHT HERE, the current app's rule, kept so the pair stays paired: there, a product would
+// otherwise have looked heavier and cheaper per kilo than it is. Mise 2's batch does not take its weight from here — it counts
+// every line whose weight is known, priced or not (lineRawKg, productCooking), and marks the figure partial when a price is
+// missing.
 // ⚠️ A LINE IN PIECES NEEDS A PRICE PER PIECE — or, bought by the kilo, what one piece weighs. «3 pieces»
 // of something bought by weight means nothing without it.
 // ⚠️ A PIECE WITH NO KNOWN WEIGHT ADDS ITS COST AND NO WEIGHT: a decoration bought by the piece is costed
@@ -462,7 +481,9 @@ export function ingredientLineCost(line: unknown, ingredient: unknown): Ingredie
 //
 // ⚠️ MISE 2 (post-switch): `kg` is what the batch weighs ONCE MADE — productCooking's output, 0 while it cannot be
 // known — and it counts EVERY line with a known weight, priced or not. The current app counted only the priced lines;
-// counting them all makes a partial cost per kilo a figure that can only be too LOW, which the card says («più di»).
+// counting them all keeps the weight of a product whose price is missing in part, so its cost per kilo is not exact yet —
+// usually too low (a line with no price adds weight and no cost), but a row with no price INSIDE a recipe adds neither,
+// so it can be too high as well (per-kg-model says the same): the card says the figure is partial.
 // A product below model 3 is converted first (currentProduct), so its cost is the one it always had.
 export function batchTotals(product: unknown, tables: CostTables = {}): BatchTotals {
   const p = currentProduct(product, tables);
@@ -726,7 +747,8 @@ function cookingOf(p: Product | null, tables: CostTables): ProductCooking {
 //   recipe line   its FINISHED kilos q become RAW: q ÷ (1 − the recipe's loss) — legacyRawKg says how, to the last decimal
 //   ingredient    never lost weight in the current app: it stays as it was
 //   cooked        the sum of every line's OLD kilos (what the old card took the batch to weigh), kept only below the raw
-//                 total — a product that lost nothing is simply «not weighed»
+//                 total — a product that lost nothing is simply «not weighed»; past the rules' ten tonnes, the same ratio a
+//                 thousand times lighter, the raw weight written apart (fittedWeighing)
 //   noWeightLoss  the recipes' loss was laid aside: every line stays as it was, so there is nothing to weigh
 //
 // ⚠️ THE COST IS THE ONE THE CURRENT APP SHOWED, BY CONSTRUCTION: each recipe line costs its raw kilos at the raw price
@@ -760,12 +782,15 @@ export function fromLegacyProduct(product: unknown, tables: CostTables = {}): Pr
     return { recipeId: component.recipeId, qtyKg };
   });
   const loses = cooked > 0 && raw - cooked > 1e-9;
+  // ⚠️ ONLY WEIGHTS THE RULES ACCEPT (code reviews of 11 Nov 2026): a cooked weight past ten tonnes would be refused at every
+  // Save; fittedWeighing keeps such a pair as the same ratio, so the product's figures do not move.
+  const weighing = loses ? fittedWeighing(raw * 1000, legacyCookedGrams(cooked)) : { rawGrams: null, cookedGrams: null };
   return {
     ...p,
     components,
     noWeightLoss: false,
-    rawGrams: null,
-    cookedGrams: loses ? legacyCookedGrams(cooked) : null,
+    rawGrams: weighing.rawGrams,
+    cookedGrams: weighing.cookedGrams,
     model: PRODUCT_MODEL,
   };
 }
@@ -793,8 +818,15 @@ export function currentProduct(product: unknown, tables: CostTables = {}): Produ
 // to four decimals; q ÷ (1 − loss) raw kilos at the price per kilo RAW, rounded too, can differ from it in that fourth
 // decimal. So the raw kilos come from the two prices themselves — q × finished ÷ raw — which on any real recipe is
 // q ÷ (1 − loss) to a fraction of a gram, and costs exactly what the line cost. Only where that would move the weight by
-// more than 0.1% (a recipe priced at a fraction of a cent a kilo, where four decimals are a coarse rounding) is it the
-// plain q ÷ (1 − loss), whose cost can then move in that fourth decimal.
+// more than 0.1% (a recipe under about 10 cents a raw kilo — mostly water — where four decimals are a coarse rounding of the
+// two prices) is the weight the plain q ÷ (1 − loss), whose cost can then move by the two prices' last decimals: at most
+// 0.00005 × (1 ÷ (1 − loss) + 1) a kilo on the line — about a hundredth of a cent for the usual losses, half a cent at a
+// 99% one (foodcost-product-loss.spec.ts, section 4). The weight, and the loss «Cottura» shows from it, are the dough's.
+// ⚠️ NEVER BELOW q (code review, 11 Nov 2026): a raw weight lighter than what came out of the oven is no weight at all, and with
+// a loss of a few hundredths of a percent the roundest weight on the line's cost could be.
+// ⚠️ NEVER MORE THAN 0.1% FROM THE PLAIN WEIGHT (second code review, 11 Nov 2026): where a price is coarse — a small line, a
+// cheap recipe — the roundest weight on the line's cost was far from the dough's (5 g of a 10% loss became 6 g raw, and
+// «Cottura» showed a 16.67% loss). So the loss «Cottura» shows is the recipe's to within a tenth of a point.
 function legacyRawKg(line: RecipeLine, tables: CostTables): number {
   const q = line.qtyKg;
   const recipe = lookup(tables.recipes, line.recipeId) as Loose | null;
@@ -802,33 +834,40 @@ function legacyRawKg(line: RecipeLine, tables: CostTables): number {
   const loss = normalizeLossPct(recipe.lossPct);
   if (!(loss > 0)) return q;
   const plain = q / (1 - loss / 100);
+  // The plain weight to the milligram, the most a typed line holds — never under q, for a line saved with more decimals.
+  const plainKg = Math.max(roundTo(plain, 6), q);
   const finished = costRecipe(recipe, tables).pricePerKg;
   const rawRate = rawRecipeCost(recipe, tables).pricePerKg;
-  // No price to keep: the raw weight to a hundredth of a gram, a number the gram box can show.
-  if (finished === null || rawRate === null) return roundTo(plain, 5);
+  // No price to keep — none at all, or one that rounds to nothing (code review, 11 Nov 2026: twenty grams of water at a fifth of
+  // a cent a kilo made a 5 kg line into 1 g, the first weight tried «keeping» a cost of 0): the plain weight.
+  if (finished === null || rawRate === null || !(finished > 0) || !(rawRate > 0)) return plainKg;
   const exact = q * finished / rawRate;
-  if (Math.abs(exact / plain - 1) > 1e-3) return roundTo(plain, 5);
+  const near = (kg: number): boolean => Math.abs(kg / plain - 1) <= 1e-3;
+  const fromPlain = !near(exact);
+  const cost = roundTo(q * finished, 4);
+  const keeps = (kg: number): boolean => kg >= q && roundTo(kg * rawRate, 4) === cost;
   // ⚠️ A WEIGHT A PERSON COULD HAVE TYPED (found driving the app, 11 Nov 2026): the exact raw kilos opened in the gram box as
   // «1030.449734», and 0.9 kg of a recipe that loses 10% as «999.99» instead of 1000. The line's cost is kept to its fourth
   // decimal, and every raw weight whose cost rounds to that same figure keeps every figure of the product (the line, the
   // batch, the per-kilo total, the food cost: the output kilos are the cooked weight, which the raw one does not touch). So
-  // the ROUNDEST such weight is taken: whole grams, then tenths, hundredths, thousandths of a gram (six decimals of a kilo,
-  // the most a typed line holds).
-  const cost = roundTo(q * finished, 4);
+  // the ROUNDEST such weight near the dough's is taken: whole grams, then tenths, hundredths, thousandths of a gram (six
+  // decimals of a kilo, the most a typed line holds) — looked for next to the plain weight when the exact one is not the dough's.
+  const start = fromPlain ? plain : exact;
   for (const decimals of [3, 4, 5, 6]) {
-    const near = roundTo(exact, decimals);
+    const round = roundTo(start, decimals);
     const step = 10 ** -decimals;
-    for (const kg of [near, roundTo(near - step, decimals), roundTo(near + step, decimals)]) {
-      if (kg > 0 && roundTo(kg * rawRate, 4) === cost) return kg;
+    for (const kg of [round, roundTo(round - step, decimals), roundTo(round + step, decimals)]) {
+      if (near(kg) && keeps(kg)) return kg;
     }
   }
-  // A recipe so dear that no typable weight lands on the cost (over 100 € a kilo): the exact one. Multiplying back can land
-  // one floating-point step off q × finished, and on an exact half of the fourth decimal that step would round the line's
-  // cost the other way: a hair either side settles it on the cost the line had.
+  if (fromPlain) return plainKg;
+  // A recipe so dear that no typable weight lands on the cost (over 100 € a kilo): the exact one, which sits within the 0.1%.
+  // Multiplying back can land one floating-point step off q × finished, and on an exact half of the fourth decimal that step
+  // would round the line's cost the other way: a hair either side settles it on the cost the line had.
   for (const kg of [exact, exact * (1 + 1e-12), exact * (1 - 1e-12)]) {
-    if (roundTo(kg * rawRate, 4) === cost) return kg;
+    if (keeps(kg)) return kg;
   }
-  return exact;
+  return Math.max(exact, q);
 }
 
 // Sold by weight, or by a pack that holds a weight — the two that divide by kilos.

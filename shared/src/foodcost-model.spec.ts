@@ -1133,7 +1133,8 @@ describe('the port against the original', () => {
   const ADAPTED = ['unpricedReasonText'];
   // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change D. Names that exist in the port only: the product's own
   // weighing and the conversion of a product saved before the switch. foodcost-product-loss.spec.ts proves them.
-  const POST_SWITCH_NAMES = ['lineRawKg', 'productLossPct', 'productCooking', 'isLegacyProduct', 'fromLegacyProduct', 'currentProduct'];
+  const POST_SWITCH_NAMES = ['lineRawKg', 'productLossPct', 'productCooking', 'isLegacyProduct', 'fromLegacyProduct', 'currentProduct',
+    'fittedWeighing'];
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;
   const shared = Object.keys(original).filter(name => !LEFT_OUT.includes(name)).sort();
