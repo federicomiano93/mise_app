@@ -145,6 +145,9 @@
   gap: var(--s2);
   min-height: var(--hit);
   padding: 0;
+  /* A bare Button keeps the browser's own grey box and border unless its class clears them. */
+  border: 0;
+  background: none;
   color: var(--ink);
   font: 600 var(--fs-sm)/1.3 var(--font);
   text-align: left;
@@ -180,6 +183,9 @@
   min-width: var(--hit);
   min-height: var(--hit);
   padding: 0 var(--s1);
+  /* A bare Button keeps the browser's own grey box and border unless its class clears them. */
+  border: 0;
+  background: none;
   color: var(--ink-2);
   font: 600 var(--fs-sm)/1.3 var(--font);
   text-decoration: underline;
