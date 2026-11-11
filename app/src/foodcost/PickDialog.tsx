@@ -11,6 +11,7 @@ import { useMoney } from '../session/useMoney';
 import { Button } from '../ui/Button';
 import { Dialog } from '../ui/Dialog';
 import { useFoodcost } from './FoodcostContext';
+import { supplierOf } from './supplierOf';
 import styles from './PickDialog.module.css';
 
 // What the chooser offers: recipes, ingredients, both (a line of «Made of»), or packaging.
@@ -34,7 +35,8 @@ const TITLE = {
   packaging: 'fc.pickPackaging',
 } as const satisfies Record<PickMode, MessageKey>;
 
-type Option = { id: string; name: string; invoiceName: string; meta: string };
+// `supplier`: whom an ingredient is bought from (supplierOf), '' for a recipe, for packaging and for an ingredient with none.
+type Option = { id: string; name: string; invoiceName: string; meta: string; supplier: string };
 
 const byName = (a: { name: string }, b: { name: string }): number => a.name.localeCompare(b.name);
 
@@ -46,10 +48,15 @@ const byName = (a: { name: string }, b: { name: string }): number => a.name.loca
 // «made of» section); what a product costs is read once, in «Production cost». The packaging list is
 // the one place a price shows, because packaging is counted in pieces and anything priced another
 // way must be flagged rather than look like it vanished.
+//
+// POST-SWITCH (step 4 of the Food cost plan, 11 Nov 2026; his words: «quando scegli un ingrediente deve dirti il fornitore»): an
+// ingredient says its supplier on a second, smaller line under its name, so two packs of the same flour from two suppliers can be
+// told apart. Not a recipe (bought from nobody) and not packaging (its line already says its price). An ingredient with no
+// supplier, or whose supplier has not arrived yet, has no second line at all: the chooser never waits for the suppliers.
 export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props) {
   const { t } = useT();
   const money = useMoney();
-  const { recipes, ingredients } = useFoodcost();
+  const { recipes, ingredients, suppliers } = useFoodcost();
   const [query, setQuery] = useState(initialQuery);
 
   const options = useMemo(() => {
@@ -59,18 +66,19 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
       name: ingredientDisplayName(item).trim(),
       invoiceName: String(item.name).trim(),
       meta: String(item.weight ?? '').trim(),
+      supplier: supplierOf(item, suppliers),
     });
     const packagingOption = (item: (typeof ingredients)[string]): Option => {
       const each = item.priceUnit === 'pcs' ? Number(item.pricePerUnit) : null;
       const meta = each ? t('fc.priceEach', { price: fcMoney(each, money) })
         : pricePerKg(item) !== null ? t('fc.pricedByWeight')
           : t('fc.notPriced');
-      return { id: item.id, name: ingredientDisplayName(item).trim(), invoiceName: String(item.name).trim(), meta };
+      return { id: item.id, name: ingredientDisplayName(item).trim(), invoiceName: String(item.name).trim(), meta, supplier: '' };
     };
     // ⚠️ AN ARCHIVED RECIPE IS NOT OFFERED (a NEW line); a line already made of one keeps costing and naming it elsewhere.
     const recipeOptions: Option[] = withoutArchived(Object.values(recipes))
       .filter(recipe => String(recipe.name ?? '').trim() !== '')
-      .map(recipe => ({ id: recipe.id, name: String(recipe.name).trim(), invoiceName: '', meta: '' }))
+      .map(recipe => ({ id: recipe.id, name: String(recipe.name).trim(), invoiceName: '', meta: '', supplier: '' }))
       .sort(byName);
 
     // Active, named, and never packaging: that has its own section.
@@ -97,7 +105,7 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
 
     const everyRecipeArchived = Object.keys(recipes).length > 0 && withoutArchived(Object.values(recipes)).length === 0;
     return { everyRecipeArchived, recipeOptions, ingredientOptions, packagingOptions, inactiveIngredientOptions, inactivePackagingOptions };
-  }, [recipes, ingredients, t, money]);
+  }, [recipes, ingredients, suppliers, t, money]);
 
   const wanted = normalizeSearchText(query);
   const matches = (option: Option): boolean => wanted === ''
@@ -165,7 +173,20 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
                     className={styles.row}
                     onClick={() => { onChoose({ kind: section.kind, id: option.id }); }}
                   >
-                    <span className={styles.name}>{option.name}</span>
+                    {/* The supplier is IN the button, so it is part of the option's accessible name: «Flour 00, Molino Rossi»
+                        (the comma is for the ear only, so the two names are not read as one). It is cut short with «…» rather
+                        than wrapped or pushed sideways at 296px; the whole name is still what is spoken. */}
+                    <span className={styles.label}>
+                      <span className={styles.name}>{option.name}</span>
+                      {option.supplier === '' ? null : (
+                        <span className={styles.supplier}>
+                          {/* The space stays OUTSIDE the hidden comma: inside it, it is dropped from the spoken name. At the start of
+                              its own line it is never drawn. */}
+                          <span className="visually-hidden">,</span>
+                          {` ${option.supplier}`}
+                        </span>
+                      )}
+                    </span>
                     {option.meta === '' ? null : <span className={styles.meta}>{option.meta}</span>}
                   </button>
                 </li>

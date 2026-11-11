@@ -48,6 +48,8 @@
 }
 
 .row {
+  /* Positioned: the hidden comma before a supplier (base.css .visually-hidden) sits against the row, not the scrolling list. */
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -80,6 +82,25 @@
   min-width: 0;
   overflow-wrap: anywhere;
   font-weight: 600;
+}
+
+/* The name and, under it, an ingredient's supplier (step 4). min-width 0 lets the supplier's ellipsis work inside the row. */
+.label {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* Smaller and secondary (--ink-2 on --surface and on the --sunken hover stays above 4.5:1), on ONE line: a long legal name is cut
+   with «…» at 296px instead of making the row tall or the dialog scroll sideways. */
+.supplier {
+  overflow: hidden;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 450;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .meta {
