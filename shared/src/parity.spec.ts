@@ -297,6 +297,10 @@ const PAIRS: readonly (readonly [string, object, object])[] = [
   ['ingredient-kind', ingredientKind, legacyIngredientKind],
   ['product-limits', productLimits, legacyProductLimits],
   ['vat-guide', vatGuide, legacyVatGuide],
+  // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): the names and arities below still match js/, but the BEHAVIOUR of
+  // 'foodcost-weighing' (otherProductsUsing), 'per-kg-model' and 'from-recipes' now parts from it on purpose. The spec of each
+  // file marks where; odd-inputs.spec.ts holds the rest to what must stay true; foodcost-product-loss.spec.ts proves the cost
+  // of every product saved before does not move.
   ['foodcost-weighing', foodcostWeighing, legacyFoodcostWeighing],
   ['calculator-dough-math', calculatorDoughMath, legacyCalculatorDoughMath],
   ['calculator-recipe-source', calculatorRecipeSource, legacyCalculatorRecipeSource],

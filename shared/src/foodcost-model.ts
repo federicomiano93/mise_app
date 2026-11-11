@@ -27,13 +27,23 @@
 // ⚠️ THE SELLING PRICE IS TYPED GROSS — with VAT, the number on the label, the one a person can check
 // against the till. The food cost is worked out on the NET price, because the VAT is never the business's
 // money. Getting this backwards makes every margin look better than it is, by exactly the VAT rate.
+//
+// ⚠️⚠️ AFTER THE SWITCH THIS PORT IS NO LONGER THE ORIGINAL (Federico, 10 Nov 2026: «il calo è del prodotto», which
+// reverses his 13 Sep choice that the loss belongs to the recipe; ~/.claude/plans/inherited-twirling-platypus.md §3, §8).
+// In Mise 2 the lines of «Made of» are what goes INTO the dough, weighed RAW, and a recipe line is costed at the recipe's
+// price per kilo RAW; the PRODUCT owns its loss: `cookedGrams`, the batch weighed out of the oven, and `rawGrams`, a raw
+// weight typed apart from the lines' total (a dough made double). The batch weighs what comes out (productCooking). A
+// product saved by the current app (`model` below 3) is converted ON READ by fromLegacyProduct, with the same cost to the
+// last stored decimal, and is saved in the new shape at the next Save — the database is never rewritten in bulk. Every
+// spec that runs this file against js/foodcost/foodcost-model.js says where the two now part («post-switch»).
 
 import { ingredientDisplayName } from './ingredient-name';
 import type { PriceTranslate } from './price-model';
 import { pricePerKg as ingredientPricePerKg, roundTo, positiveNumber } from './price-model';
 import { costRecipe, COST_REASON_TEXT, MAX_RECIPE_DEPTH } from './recipe-cost-model';
+import type { RecipeCost } from './recipe-cost-model';
 // How search text is compared: the catalogue's own rule, so a name found there is found here.
-import { normalizeSearchText, linkOf } from './catalogue-model';
+import { normalizeSearchText, linkOf, normalizeLossPct } from './catalogue-model';
 // The VAT menu moved to vat-rates.ts (as js/vat-rates.js in the current app) because the ingredient price
 // form's purchase-VAT field needs the same national menu. Re-exported from here UNCHANGED, as the original
 // does, so every import of VAT_RATES_BY_COUNTRY/vatRatesFor from this file keeps working.
@@ -64,7 +74,11 @@ export type LineUnit = (typeof LINE_UNITS)[number];
 // phone still on the version before ingredient lines and packs would save it back without them — deleting
 // them in silence. The rules refuse a save that does not carry this over a product that does. Raise it
 // only with a rules change.
-export const PRODUCT_MODEL = 2;
+// ⚠️ 3 IN MISE 2 ONLY (10 Nov 2026), 2 in the current app: a model-3 product's recipe lines are RAW kilos, which the
+// current app would read as finished kilos and cost too HIGH by the loss — so the rules refuse its save over a model-3
+// product, and it can never write the raw lines back as finished ones. Products below 3 are converted on read
+// (fromLegacyProduct).
+export const PRODUCT_MODEL = 3;
 
 // The traffic light. Green up to the target, amber up to a tenth above it, red beyond. RELATIVE rather
 // than a fixed number of points, so a 12% target and a 35% target both get a proportionate warning band
@@ -84,6 +98,9 @@ export const BLOCKER_TEXT = Object.freeze({
   'no-price': 'fc.enterTheSellingPrice',
   'no-recipe-cost': 'fc.theRecipesInThis',
   'no-weight': 'fc.theRecipesInThis2',
+  // Mise 2 only (post-switch): sold by weight, and the cooked weight typed is heavier than the raw one — the batch's
+  // weight is unknown until it is corrected (productCooking), so it takes the place of 'no-weight'.
+  'cooked-heavier': 'fc.cooking.blockHeavier',
   // Only the preview asks for these two (productPreview): the food cost itself needs neither.
   'no-target': 'fc.preview.needTarget',
   'no-packaging-price': 'fc.preview.needPackagingPrice',
@@ -95,6 +112,8 @@ export type Blocker = keyof typeof BLOCKER_TEXT;
 
 // A RECIPE line, in kilos per batch — the shape every product has had since the start, kept exactly so it
 // is written back unchanged. (`kind?: undefined` only lets the two lines be told apart by `kind`.)
+// ⚠️ MISE 2 (model 3): `qtyKg` is the RAW dough put into the batch. Below model 3 it was the FINISHED weight, and
+// fromLegacyProduct turns it into the raw one.
 export interface RecipeLine {
   kind?: undefined;
   recipeId: string;
@@ -134,7 +153,13 @@ export interface Product {
   labourMinutes: number | null;
   labourPeople: number | null;
   // «Finished product, no weight loss»: the recipes' oven loss is laid aside for this product's cost.
+  // ⚠️ READ ONLY TO CONVERT A PRODUCT BELOW MODEL 3 (its cooked weight = its raw one); Mise 2 never writes it.
   noWeightLoss: boolean;
+  // Mise 2 (model 3): the product's own weighing, in grams. `rawGrams` is a raw weight typed APART from the lines'
+  // total (a dough made double): null = the lines' total. `cookedGrams` is the batch weighed out of the oven: null = not
+  // weighed, which is «no loss». See productCooking.
+  rawGrams: number | null;
+  cookedGrams: number | null;
   model: number | null;
 }
 
@@ -361,8 +386,44 @@ export function normalizeProduct(raw: unknown): Product | null {
     // «Finished product, no weight loss» (Nov 2026). Only a literal true switches it on: missing, null or
     // anything else is «the recipes' own loss applies», the old behaviour.
     noWeightLoss: doc.noWeightLoss === true,
+    // The product's own weighing (Mise 2, model 3). Missing stays missing: no raw typed is «the lines' total», no
+    // cooked weight is «not weighed», and neither is ever a 0.
+    rawGrams: gramsOf(doc.rawGrams),
+    cookedGrams: gramsOf(doc.cookedGrams),
     model: Number.isInteger(doc.model) && (doc.model as number) > 0 ? doc.model as number : null,
   };
+}
+
+// A weight in grams, as the rules keep it: above 0 and at most ten tonnes (the recipe's own bound,
+// catalogue-model MAX_WEIGHT_G) — anything else is «not said».
+const MAX_PRODUCT_GRAMS = 10000000;
+
+// POST-SWITCH (11 Nov 2026, step 2b): whether a weight a person typed can be saved — no weight at all (null), or a number above 0 and at most
+// ten tonnes, exactly what the products rules keep (`> 0`, `<= 10000000`; model-ceiling.spec.ts pins the number against firestore.rules).
+// ⚠️ NaN (text that is not a number) is refused: a number the rules would turn away must stop the save while the work is on screen.
+export function weighingAllowed(grams: number | null): boolean {
+  return grams === null || (Number.isFinite(grams) && grams > 0 && grams <= MAX_PRODUCT_GRAMS);
+}
+
+function gramsOf(value: unknown): number | null {
+  const n = positiveNumber(value);
+  return n !== null && n <= MAX_PRODUCT_GRAMS ? n : null;
+}
+
+// A product's weighing as the rules can keep it, from the lines' raw total and the cooked weight, in grams.
+// ⚠️⚠️ A PAIR PAST THE RULES' TEN TONNES KEEPS ITS RATIO (second code review, 11 Nov 2026). Grams typed into the old kilo box
+// make batches of TONNES (16 such lines in production on 8 Nov). Dropping a cooked weight past ten tonnes took the loss away:
+// the batch was worked out on the raw kilos, a cost per kilo too low by the loss, and for ever after a Save. So the two
+// weights are divided by a thousand, as often as it takes, the raw one written apart from the lines' total: the batch is the
+// total × cooked ÷ raw (productCooking), so every figure stays the one the current app shows, and once somebody corrects the
+// line the two weights are the ones that were meant. Nothing to keep (no cooked weight) is two nulls.
+export function fittedWeighing(rawTotalGrams: number, cookedGrams: number): { rawGrams: number | null; cookedGrams: number | null } {
+  if (!(cookedGrams > 0) || !Number.isFinite(cookedGrams)) return { rawGrams: null, cookedGrams: null };
+  if (cookedGrams <= MAX_PRODUCT_GRAMS) return { rawGrams: null, cookedGrams };
+  if (!(rawTotalGrams >= cookedGrams) || !Number.isFinite(rawTotalGrams)) return { rawGrams: null, cookedGrams: null };
+  let scale = 1000;
+  while (rawTotalGrams / scale > MAX_PRODUCT_GRAMS) scale *= 1000;
+  return { rawGrams: rawTotalGrams / scale, cookedGrams: cookedGrams / scale };
 }
 
 export function normalizeProducts(list: unknown): Product[] {
@@ -385,8 +446,10 @@ export function netPrice(gross: unknown, vatRate: unknown): number | null {
 //
 //   { cost, kg, reason }   — cost null, and a reason, when it cannot be costed
 //
-// ⚠️ AN UNPRICED LINE ADDS NO WEIGHT EITHER, the same rule as an unpriced recipe: a product would otherwise
-// look heavier and cheaper per kilo than it is.
+// ⚠️ AN UNPRICED LINE REPORTS NO WEIGHT HERE, the current app's rule, kept so the pair stays paired: there, a product would
+// otherwise have looked heavier and cheaper per kilo than it is. Mise 2's batch does not take its weight from here — it counts
+// every line whose weight is known, priced or not (lineRawKg, productCooking), and marks the figure partial when a price is
+// missing.
 // ⚠️ A LINE IN PIECES NEEDS A PRICE PER PIECE — or, bought by the kilo, what one piece weighs. «3 pieces»
 // of something bought by weight means nothing without it.
 // ⚠️ A PIECE WITH NO KNOWN WEIGHT ADDS ITS COST AND NO WEIGHT: a decoration bought by the piece is costed
@@ -423,17 +486,23 @@ export function ingredientLineCost(line: unknown, ingredient: unknown): Ingredie
 //
 // Returns { cost, kg, partial, rows } — `rows` explains each line, so the screen can say WHICH line has no
 // price rather than only that something has none.
+//
+// ⚠️ MISE 2 (post-switch): `kg` is what the batch weighs ONCE MADE — productCooking's output, 0 while it cannot be
+// known — and it counts EVERY line with a known weight, priced or not. The current app counted only the priced lines;
+// counting them all keeps the weight of a product whose price is missing in part, so its cost per kilo is not exact yet —
+// usually too low (a line with no price adds weight and no cost), but a row with no price INSIDE a recipe adds neither,
+// so it can be too high as well (per-kg-model says the same): the card says the figure is partial.
+// A product below model 3 is converted first (currentProduct), so its cost is the one it always had.
 export function batchTotals(product: unknown, tables: CostTables = {}): BatchTotals {
-  const p = normalizeProduct(product) || { components: [], packaging: [], noWeightLoss: false };
+  const p = currentProduct(product, tables);
   let cost = 0;
-  let kg = 0;
   let partial = false;
   const rows: BatchRow[] = [];
 
-  p.components.forEach(component => {
+  (p ? p.components : []).forEach(component => {
     // ⚠️ THE ONE PLACE A LINE IS COSTED (current app 02839278): the card's own «rate and this amount» under
     // each line (componentLineCost) and this total are the very same call, so they cannot disagree.
-    const line = componentLineCost(component, tables, { noWeightLoss: p.noWeightLoss });
+    const line = componentLineCost(component, tables);
     const base = component.kind === 'ingredient'
       ? { kind: 'ingredient' as const, id: component.ingredientId, name: line.name, qty: component.qty, unit: component.unit }
       : { kind: 'recipe' as const, id: component.recipeId, name: line.name, qty: component.qtyKg };
@@ -443,11 +512,11 @@ export function batchTotals(product: unknown, tables: CostTables = {}): BatchTot
       return;
     }
     cost += line.cost;
-    kg += line.kg;
     rows.push({ ...base, cost: line.cost, reason: null } as BatchRow);
   });
 
-  return { cost: roundTo(cost, 4), kg: roundTo(kg, 4), partial, rows };
+  const out = p ? cookingOf(p, tables).outputKg : null;
+  return { cost: roundTo(cost, 4), kg: out === null ? 0 : roundTo(out, 4), partial, rows };
 }
 
 // What ONE line of «Made of» — a recipe or an ingredient added straight to the product — is priced at and
@@ -465,11 +534,12 @@ export function batchTotals(product: unknown, tables: CostTables = {}): BatchTot
 //
 // ⚠️ UNKNOWN IS null, NEVER 0. A rate may be known while the cost is not (a price per piece on a line counted
 // in grams): the screen shows the rate and says what is missing.
-// ⚠️ `noWeightLoss` lays the recipe's oven loss aside, exactly as batchTotals always has.
+// ⚠️ MISE 2 (post-switch): a recipe line is RAW dough, so it is ALWAYS costed at the recipe's price per kilo RAW — the
+// recipe's own loss is laid aside, as the current app did only for a product marked «no weight loss» (that third
+// argument is gone). Hand it a line of a CURRENT product (currentProduct): a line below model 3 holds finished kilos.
 export function componentLineCost(
   component: unknown,
   tables: CostTables = {},
-  { noWeightLoss = false }: { noWeightLoss?: boolean } = {},
 ): ComponentLineCost {
   const line = component as Loose | null | undefined;
   if (line && line.kind === 'ingredient') {
@@ -503,10 +573,9 @@ export function componentLineCost(
     return { name: '', rate: null, rateUnit: null, cost: null, kg: 0, partial: true, reason: 'missing-recipe' };
   }
   const qtyKg = Number(line && line.qtyKg) || 0;
-  // ⚠️ A FINISHED PRODUCT (`noWeightLoss`) loses nothing in the oven, so the loss of the recipe on its line is
-  // laid aside for THIS cost only — the recipe keeps its own number, and so does every other product built
-  // on it.
-  const costed = costRecipe(noWeightLoss ? { ...recipe, lossPct: 0 } : recipe, tables);
+  // ⚠️ RAW KILOS AT THE PRICE OF A RAW KILO: the loss of the recipe is laid aside for THIS cost only — the recipe keeps
+  // its own number (its label reads it), and the PRODUCT's loss decides what the batch weighs (productCooking).
+  const costed = rawRecipeCost(recipe, tables);
   if (costed.pricePerKg === null) {
     return { name: recipe.name, rate: null, rateUnit: null, cost: null, kg: 0, partial: true, reason: 'no-recipe-cost' };
   }
@@ -578,6 +647,235 @@ function lookup(table: unknown, id: unknown): unknown {
   const t = table as { get?: unknown } & Record<PropertyKey, unknown>;
   if (typeof t.get === 'function') return (t.get as (id: unknown) => unknown).call(table, id) || null;
   return Object.prototype.hasOwnProperty.call(table, id as PropertyKey) ? t[id as PropertyKey] : null;
+}
+
+// ── The product's own weighing (Mise 2, post-switch, 10 Nov 2026) ────────────
+//
+// Federico, 10 Nov 2026: «Impasto crudo deve essere il totale di "Composto da". Dal peso cotto l'app deve calcolare il
+// costo di 1 kg di impasto cotto», and the loss belongs to the PRODUCT: his Zulle (the Zulle recipe + almonds + icing
+// sugar, 790 g raw, 690 g cooked) loses as ONE dough, and the current app saved that as the Zulle recipe's own loss. The
+// approved mockup (plan §9) is the reference for every rule below.
+
+// A recipe costed per kilo RAW: its own loss laid aside (its label still reads it).
+function rawRecipeCost(recipe: Loose, tables: CostTables): RecipeCost {
+  return costRecipe({ ...recipe, lossPct: 0 }, tables);
+}
+
+// What ONE line of «Made of» weighs raw, WHATEVER ITS PRICE: a recipe line its kilos, an ingredient its grams or kilos,
+// pieces only through a known weight of one piece. null when that weight cannot be known — pieces with no piece weight,
+// or of an ingredient that is gone: the mockup's «Manca il peso di un pezzo: non conta nel crudo.»
+// ⚠️ THE KILOS ingredientLineCost COUNTS, ROUNDED THE SAME WAY, so a priced line weighs here what it weighs there.
+export function lineRawKg(component: unknown, tables: CostTables = {}): number | null {
+  if (!component || typeof component !== 'object') return null;
+  const line = component as Loose;
+  if (line.kind !== 'ingredient') {
+    const kg = Number(line.qtyKg);
+    return Number.isFinite(kg) && kg > 0 ? kg : 0;
+  }
+  const qty = Number(line.qty);
+  if (!Number.isFinite(qty) || qty <= 0) return 0;
+  if (line.unit === 'pcs') {
+    const ingredient = lookup(tables.ingredients, line.ingredientId) as Loose | null;
+    const pieceKg = ingredient ? positiveNumber(ingredient.unitWeightKg) : null;
+    return pieceKg === null ? null : roundTo(qty * pieceKg, 6);
+  }
+  return roundTo(line.unit === 'kg' ? qty : qty / 1000, 6);
+}
+
+// The loss of a product in percent, with TWO REAL DECIMALS, from two weights in the same unit: 790 down to 690 is 12.66.
+// (The recipe's weightLoss rounds to a tenth on purpose — the label prints it — and stays as it is.) null when either
+// weight is missing or the cooked one is heavier.
+export function productLossPct(rawWeight: unknown, cookedWeight: unknown): number | null {
+  const raw = positiveNumber(rawWeight);
+  const cooked = positiveNumber(cookedWeight);
+  if (raw === null || cooked === null || cooked > raw * (1 + 1e-9)) return null;
+  return Math.max(0, roundTo((raw - cooked) / raw * 100, 2));
+}
+
+export interface ProductCooking {
+  // Every line with a known weight, raw (lineRawKg): what «Impasto crudo» is filled with.
+  rawTotalKg: number;
+  // The raw weight the loss is measured on: the one typed apart from the total (rawGrams), else the total.
+  rawKg: number;
+  // A raw weight was typed apart from the total: the screen offers «usa il totale».
+  rawTyped: boolean;
+  // The batch weighed out of the oven, or null — not weighed, which is «no loss».
+  cookedKg: number | null;
+  // The cooked weight is heavier than the raw one: kept and shown in red, and what the batch weighs is unknown until it is
+  // corrected — a typo must never make a kilo look cheaper.
+  heavier: boolean;
+  // Two decimals; null when not weighed, or heavier.
+  lossPct: number | null;
+  // What one batch weighs once made: the lines' total × cooked ÷ raw (so a raw weight typed apart from the total — a
+  // dough made double — counts through the ratio); the total itself when not weighed; null while the cooked weight is
+  // heavier.
+  outputKg: number | null;
+}
+
+// The two weights of a product, read: the «Cottura» section and every kilo the batch weighs.
+export function productCooking(product: unknown, tables: CostTables = {}): ProductCooking {
+  return cookingOf(currentProduct(product, tables), tables);
+}
+
+// productCooking for a product that is already current.
+function cookingOf(p: Product | null, tables: CostTables): ProductCooking {
+  // ⚠️ ADDED UP IN THE LINES' ORDER AND NOT ROUNDED: for a product that loses nothing this is the very sum the current app
+  // divided by, so every figure stays the same to its last decimal (a screen formats it).
+  let rawTotalKg = 0;
+  for (const component of p ? p.components : []) {
+    const kg = lineRawKg(component, tables);
+    if (kg !== null) rawTotalKg += kg;
+  }
+  const typed = p ? p.rawGrams : null;
+  const rawKg = typed !== null ? typed / 1000 : rawTotalKg;
+  const cookedKg = p && p.cookedGrams !== null ? p.cookedGrams / 1000 : null;
+  // A hair of tolerance: a cooked weight typed equal to a total added up from several lines is not «heavier».
+  const heavier = cookedKg !== null && rawKg > 0 && cookedKg > rawKg * (1 + 1e-9);
+  const weighed = cookedKg !== null && rawKg > 0 && !heavier;
+  let outputKg: number | null = rawTotalKg;
+  if (heavier) outputKg = null;
+  // Weighed on the lines' own total: what came out IS the cooked weight — no ratio, so nothing to round.
+  else if (weighed) outputKg = typed === null ? cookedKg : roundTo(rawTotalKg * (cookedKg as number) / rawKg, 6);
+  return {
+    rawTotalKg,
+    rawKg,
+    rawTyped: typed !== null,
+    cookedKg,
+    heavier,
+    lossPct: weighed ? productLossPct(rawKg, cookedKg) : null,
+    outputKg,
+  };
+}
+
+// ── Products saved before the switch (model below 3) ─────────────────────────
+//
+// ⚠️⚠️ CONVERTED ON READ, NEVER REWRITTEN IN BULK (his choice, plan §5): the cost model reads every product through
+// currentProduct, so a product the current app saved is costed and shown in the new shape, and the next Save writes it.
+//
+//   recipe line   its FINISHED kilos q become RAW: q ÷ (1 − the recipe's loss) — legacyRawKg says how, to the last decimal
+//   ingredient    never lost weight in the current app: it stays as it was
+//   cooked        the sum of every line's OLD kilos (what the old card took the batch to weigh), kept only below the raw
+//                 total — a product that lost nothing is simply «not weighed»; past the rules' ten tonnes, the same ratio a
+//                 thousand times lighter, the raw weight written apart (fittedWeighing)
+//   noWeightLoss  the recipes' loss was laid aside: every line stays as it was, so there is nothing to weigh
+//
+// ⚠️ THE COST IS THE ONE THE CURRENT APP SHOWED, BY CONSTRUCTION: each recipe line costs its raw kilos at the raw price
+// instead of its finished kilos at the finished price — the same money — and the batch weighs its old kilos again (raw total
+// × cooked ÷ raw total). The one figure that moves is the weight of a PARTIAL product: the current app left an unpriced
+// line's kilos out of it, Mise 2 counts every line with a known weight (batchTotals says why). A recipe that is gone keeps
+// its kilos: its loss can no longer be known.
+export function isLegacyProduct(product: unknown): boolean {
+  const p = normalizeProduct(product);
+  return !!p && isLegacy(p);
+}
+
+function isLegacy(p: Product): boolean {
+  return p.model === null || p.model < PRODUCT_MODEL;
+}
+
+export function fromLegacyProduct(product: unknown, tables: CostTables = {}): Product | null {
+  const p = normalizeProduct(product);
+  if (!p || !isLegacy(p)) return p;
+  let raw = 0;
+  let cooked = 0;
+  const components = p.components.map<ProductComponent>(component => {
+    if (component.kind === 'ingredient') {
+      const kg = lineRawKg(component, tables);
+      if (kg !== null) { raw += kg; cooked += kg; }
+      return component;
+    }
+    const qtyKg = p.noWeightLoss ? component.qtyKg : legacyRawKg(component, tables);
+    raw += qtyKg;
+    cooked += component.qtyKg;
+    return { recipeId: component.recipeId, qtyKg };
+  });
+  const loses = cooked > 0 && raw - cooked > 1e-9;
+  // ⚠️ ONLY WEIGHTS THE RULES ACCEPT (code reviews of 11 Nov 2026): a cooked weight past ten tonnes would be refused at every
+  // Save; fittedWeighing keeps such a pair as the same ratio, so the product's figures do not move.
+  const weighing = loses ? fittedWeighing(raw * 1000, legacyCookedGrams(cooked)) : { rawGrams: null, cookedGrams: null };
+  return {
+    ...p,
+    components,
+    noWeightLoss: false,
+    rawGrams: weighing.rawGrams,
+    cookedGrams: weighing.cookedGrams,
+    model: PRODUCT_MODEL,
+  };
+}
+
+// The cooked weight of a product saved before the switch, in grams: the old kilos, to the microgram (the next Save writes
+// it). ⚠️ What every figure divides by is the batch's kilos to FOUR decimals, and grams turned back into kilos can land one
+// floating-point step away from the sum the current app rounded — which, on an exact half of the fourth decimal, would round
+// the other way. So the grams are the first of these that give back the old four decimals.
+function legacyCookedGrams(cookedKg: number): number {
+  const kg = roundTo(cookedKg, 4);
+  const grams = cookedKg * 1000;
+  const fits = [roundTo(grams, 6), grams, grams * (1 + 1e-12), grams * (1 - 1e-12)].find(g => roundTo(g / 1000, 4) === kg);
+  return fits === undefined ? roundTo(grams, 6) : fits;
+}
+
+// The product as Mise 2 reads it: normalised, and converted when it was saved before the switch (fromLegacyProduct
+// leaves a current one as it is). ⚠️ Every reader of a stored product's LINES or WEIGHTS goes through this, with the
+// recipes and ingredients loaded — a line below model 3 holds finished kilos.
+export function currentProduct(product: unknown, tables: CostTables = {}): Product | null {
+  return fromLegacyProduct(product, tables);
+}
+
+// The raw kilos of a recipe line saved before the switch.
+// ⚠️ TO THE LAST STORED DECIMAL: the current app costed q finished kilos at the recipe's price per kilo FINISHED, rounded
+// to four decimals; q ÷ (1 − loss) raw kilos at the price per kilo RAW, rounded too, can differ from it in that fourth
+// decimal. So the raw kilos come from the two prices themselves — q × finished ÷ raw — which on any real recipe is
+// q ÷ (1 − loss) to a fraction of a gram, and costs exactly what the line cost. Only where that would move the weight by
+// more than 0.1% (a recipe under about 10 cents a raw kilo — mostly water — where four decimals are a coarse rounding of the
+// two prices) is the weight the plain q ÷ (1 − loss), whose cost can then move by the two prices' last decimals: at most
+// 0.00005 × (1 ÷ (1 − loss) + 1) a kilo on the line — about a hundredth of a cent for the usual losses, half a cent at a
+// 99% one (foodcost-product-loss.spec.ts, section 4). The weight, and the loss «Cottura» shows from it, are the dough's.
+// ⚠️ NEVER BELOW q (code review, 11 Nov 2026): a raw weight lighter than what came out of the oven is no weight at all, and with
+// a loss of a few hundredths of a percent the roundest weight on the line's cost could be.
+// ⚠️ NEVER MORE THAN 0.1% FROM THE PLAIN WEIGHT (second code review, 11 Nov 2026): where a price is coarse — a small line, a
+// cheap recipe — the roundest weight on the line's cost was far from the dough's (5 g of a 10% loss became 6 g raw, and
+// «Cottura» showed a 16.67% loss). So the loss «Cottura» shows is the recipe's to within a tenth of a point.
+function legacyRawKg(line: RecipeLine, tables: CostTables): number {
+  const q = line.qtyKg;
+  const recipe = lookup(tables.recipes, line.recipeId) as Loose | null;
+  if (!(q > 0) || !recipe) return q;
+  const loss = normalizeLossPct(recipe.lossPct);
+  if (!(loss > 0)) return q;
+  const plain = q / (1 - loss / 100);
+  // The plain weight to the milligram, the most a typed line holds — never under q, for a line saved with more decimals.
+  const plainKg = Math.max(roundTo(plain, 6), q);
+  const finished = costRecipe(recipe, tables).pricePerKg;
+  const rawRate = rawRecipeCost(recipe, tables).pricePerKg;
+  // No price to keep — none at all, or one that rounds to nothing (code review, 11 Nov 2026: twenty grams of water at a fifth of
+  // a cent a kilo made a 5 kg line into 1 g, the first weight tried «keeping» a cost of 0): the plain weight.
+  if (finished === null || rawRate === null || !(finished > 0) || !(rawRate > 0)) return plainKg;
+  const exact = q * finished / rawRate;
+  const near = (kg: number): boolean => Math.abs(kg / plain - 1) <= 1e-3;
+  const fromPlain = !near(exact);
+  const cost = roundTo(q * finished, 4);
+  const keeps = (kg: number): boolean => kg >= q && roundTo(kg * rawRate, 4) === cost;
+  // ⚠️ A WEIGHT A PERSON COULD HAVE TYPED (found driving the app, 11 Nov 2026): the exact raw kilos opened in the gram box as
+  // «1030.449734», and 0.9 kg of a recipe that loses 10% as «999.99» instead of 1000. The line's cost is kept to its fourth
+  // decimal, and every raw weight whose cost rounds to that same figure keeps every figure of the product (the line, the
+  // batch, the per-kilo total, the food cost: the output kilos are the cooked weight, which the raw one does not touch). So
+  // the ROUNDEST such weight near the dough's is taken: whole grams, then tenths, hundredths, thousandths of a gram (six
+  // decimals of a kilo, the most a typed line holds) — looked for next to the plain weight when the exact one is not the dough's.
+  const start = fromPlain ? plain : exact;
+  for (const decimals of [3, 4, 5, 6]) {
+    const round = roundTo(start, decimals);
+    const step = 10 ** -decimals;
+    for (const kg of [round, roundTo(round - step, decimals), roundTo(round + step, decimals)]) {
+      if (near(kg) && keeps(kg)) return kg;
+    }
+  }
+  if (fromPlain) return plainKg;
+  // A recipe so dear that no typable weight lands on the cost (over 100 € a kilo): the exact one, which sits within the 0.1%.
+  // Multiplying back can land one floating-point step off q × finished, and on an exact half of the fourth decimal that step
+  // would round the line's cost the other way: a hair either side settles it on the cost the line had.
+  for (const kg of [exact, exact * (1 + 1e-12), exact * (1 - 1e-12)]) {
+    if (keeps(kg)) return kg;
+  }
+  return Math.max(exact, q);
 }
 
 // Sold by weight, or by a pack that holds a weight — the two that divide by kilos.
@@ -668,7 +966,7 @@ function saleUnitOf(p: Product): SaleUnit {
 // packaging of every unit it makes once that number is known. `unit` is 'piece', 'kg' or 'pack' exactly
 // when `unitCost` is a number.
 export function productionCost(product: unknown, tables: CostTables = {}): ProductionCost {
-  const p = normalizeProduct(product);
+  const p = currentProduct(product, tables);
   const batch = batchTotals(p, tables);
   const packaging = packagingPerUnit(p, tables);
   const units = p ? unitsPerBatch(p, batch) : null;
@@ -751,7 +1049,7 @@ Pick<CostResult, 'labourUnitCost' | 'totalUnitCost' | 'labourPct' | 'totalCostPc
 // foodCostPct is null whenever anything needed is missing, and `blockers` says what. It is never guessed
 // and never shown as 0 — a food cost of nothing would be read as a product that costs nothing to make.
 export function costProduct(product: unknown, tables: CostTables = {}): CostResult {
-  const p = normalizeProduct(product);
+  const p = currentProduct(product, tables);
   const batch = batchTotals(p, tables);
   const packaging = packagingPerUnit(p, tables);
   const blockers: Blocker[] = [];
@@ -769,7 +1067,9 @@ export function costProduct(product: unknown, tables: CostTables = {}): CostResu
   // A batch of nothing cannot be divided. Reported as its own reason rather than folded into "no
   // components": the components may be there and simply unpriced.
   if (p && p.components.length && batch.cost <= 0) blockers.push('no-recipe-cost');
-  if (p && byWeight(p) && batch.kg <= 0) blockers.push('no-weight');
+  // Mise 2: a cooked weight heavier than the raw one leaves the batch's weight unknown (productCooking) — the thing to fix
+  // is that weight, so it is named instead of 'no-weight'.
+  if (p && byWeight(p) && batch.kg <= 0) blockers.push(cookingOf(p, tables).heavier ? 'cooked-heavier' : 'no-weight');
 
   const base: CostResult = {
     unitCost: null, netUnitPrice: null, foodCostPct: null, margin: null,
@@ -874,7 +1174,7 @@ export interface ProductPreview {
 // ADAPTED: the translator is the LAST argument (the original reads js/i18n.js itself). It is only used for the
 // two names of a line that no longer exists, inside `unpriced`.
 export function productPreview(product: unknown, tables: CostTables = {}, t: PriceTranslate): ProductPreview {
-  const p = normalizeProduct(product);
+  const p = currentProduct(product, tables);
   const cost = productionCost(p, tables);
   const result = costProduct(p, tables);
   const unitCost = cost.unitCost;
@@ -959,7 +1259,7 @@ export function unpricedReasonText(reason: unknown, t: PriceTranslate): string {
 }
 
 export function unpricedParts(product: unknown, tables: CostTables = {}, t: PriceTranslate): UnpricedPart[] {
-  const p = normalizeProduct(product);
+  const p = currentProduct(product, tables);
   if (!p) return [];
   const out: UnpricedPart[] = [];
   const keys = new Set<string>();
@@ -1002,7 +1302,7 @@ export function unpricedParts(product: unknown, tables: CostTables = {}, t: Pric
   };
 
   p.components.forEach(component => {
-    const line = componentLineCost(component, tables, { noWeightLoss: p.noWeightLoss });
+    const line = componentLineCost(component, tables);
     if (component.kind === 'ingredient') {
       if (line.reason === 'missing-ingredient') add(t('fc.thisItemNoLonger'), '', 'gone');
       else if (line.cost === null) add(line.name, '', line.reason as string);
@@ -1086,9 +1386,11 @@ export function nameMatches(product: unknown, query: unknown): boolean {
 // the product, and that erosion leaves NO point on this series. The history therefore answers "what did we
 // decide, and when", not "what did it cost every week". Revisit after two or three months of real use; the
 // fix is a periodic snapshot, which was deliberately not built now.
-export function snapshotWorthTaking(before: unknown, after: unknown): boolean {
-  const a = normalizeProduct(before);
-  const b = normalizeProduct(after);
+// ⚠️ MISE 2: both sides are read through currentProduct (`tables` is what converts a product below model 3), so the first
+// Save of a product the current app wrote — its lines turned raw, nothing typed — is not taken for a new composition.
+export function snapshotWorthTaking(before: unknown, after: unknown, tables: CostTables = {}): boolean {
+  const a = currentProduct(before, tables);
+  const b = currentProduct(after, tables);
   if (!b) return false;
   if (!a) return true;                                  // the first save is a point
   if (a.sellingPrice !== b.sellingPrice) return true;
@@ -1107,6 +1409,8 @@ function compositionKey(product: Product): string {
       ? `i:${c.ingredientId}:${c.qty}:${c.unit}`
       : `r:${c.recipeId}:${c.qtyKg}`)),
     ...product.packaging.map(p => `p:${p.ingredientId}:${p.qtyPcs}`),
+    // Mise 2: the two weights decide what the batch weighs, so what a kilo costs.
+    `w:${product.rawGrams ?? ''}:${product.cookedGrams ?? ''}`,
   ];
   return parts.sort().join('|');
 }

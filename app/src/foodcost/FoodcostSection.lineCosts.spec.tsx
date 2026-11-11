@@ -45,13 +45,14 @@ describe('the form', () => {
     expect(box).toHaveFocus();
   });
 
-  it('follows the unit, and a recipe line shows its rate per kilo of what comes out', async () => {
+  it('follows the unit, and a recipe line shows its RAW rate per kilo (model 3)', async () => {
     const fake = editorSource([product('Mixed', { components: [{ recipeId: 'Dough', qtyKg: 2 }, FLOUR_LINE] })],
       { recipes: [recipe('Dough', { lossPct: 20 })] });
     const { user } = await form(fake, 'Mixed');
     const madeOf = cardNamed('Made of');
-    // A kilo of flour (£2.00) losing 20% in the oven: £2.50 a kilo out, so 2 kg is £5.00.
-    expect(within(madeOf).getByText('£2.50/kg · this amount £5.00')).toBeInTheDocument();
+    // Model 3: this is a LEGACY product (model 2), so its 2 finished kg open as 2 ÷ 0.8 = 2.5 raw kg, at the raw £2.00 a kilo: £5.00
+    // (the very cost the current app showed).
+    expect(within(madeOf).getByText('£2.00/kg · this amount £5.00')).toBeInTheDocument();
     const units = within(madeOf).getAllByRole('combobox', { name: 'Unit' });
     await user.selectOptions(units[1] as HTMLElement, 'kg');
     expect(within(madeOf).getByText(/^£2\.00\/kg · this amount £2,?000\.00$/)).toBeInTheDocument();

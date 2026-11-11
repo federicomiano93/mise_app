@@ -4,15 +4,12 @@ import { BookOpen, Check } from 'lucide-react';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import {
-  PACK_UNITS, costProduct, productSnapshot, productsUsingRecipe, snapshotWorthTaking, vatRatesFor, vatSelection,
+  PACK_UNITS, costProduct, currentProduct, productCooking, productSnapshot, productsUsingRecipe, snapshotWorthTaking, vatRatesFor, vatSelection,
 } from '@mise/shared/foodcost-model';
+import { otherProductsUsing, readWeighing, weighingPatches } from '@mise/shared/foodcost-weighing';
 import type { LineUnit, PackUnit, Product, ProductDraft, SellingMode } from '@mise/shared/foodcost-model';
-import {
-  startWeighing, typeCooked, typeRaw, weighingPatches, weighingsChangeCost, withWeighings, otherProductsUsing, readWeighing,
-} from '@mise/shared/foodcost-weighing';
-import type { WeighingState } from '@mise/shared/foodcost-weighing';
-import { weighingParams } from '@mise/shared/fc-number';
 import type { KiloLineUnit } from '@mise/shared/line-quantity';
+import { normalizeLossPct } from '@mise/shared/catalogue-model';
 import { countryOf } from '@mise/shared/market';
 import { firstInvalidNumber } from '@mise/shared/product-limits';
 import { isSectionAllowed } from '@mise/shared/sections';
@@ -40,20 +37,20 @@ import { NameSuggest } from './NameSuggest';
 import { NumberBox } from './NumberBox';
 import { PickDialog } from './PickDialog';
 import type { Choice, PickMode } from './PickDialog';
-import { CardSection, CardStack, FullCard, SubHeading } from './FullCard';
+import { CardSection, CardStack, FullCard } from './FullCard';
+import { CookingSection } from './CookingSection';
 import { ProductActions } from './ProductActions';
 import { ProductAnswer, SuggestedPrice } from './ProductAnswer';
 import { PerKgBlock } from './PerKgBlock';
 import { ProductSummary } from './ProductSummary';
 import {
-  NUMBER_KEY, RECIPE_LINE_OPENS_IN, clearNumber, costable, emptyWorking, isNumberField, isShown, newLineKey, packSizeShown,
-  piecesShown, plainNumber, recipeIdsOn, recipeLineKg, toProduct, vatRateOf, workingFrom, workingFromDraft,
+  NUMBER_KEY, RECIPE_LINE_OPENS_IN, clearNumber, costable, emptyWorking, firstBadWeight, followsTotal, isNumberField, isShown, newLineKey,
+  packSizeShown, piecesShown, plainNumber, rawBoxText, recipeLineKg, recipeLossHint, recipeWeighing, settleRaw, toProduct, vatRateOf,
+  workingFrom, workingFromDraft,
 } from './productEditorModel';
-import type { NumberField, Working, WorkingComponent } from './productEditorModel';
+import type { NumberField, WeightField, Working, WorkingComponent } from './productEditorModel';
 import { VatGuideDialog } from './VatGuideDialog';
 import { useProductExit } from './useProductExit';
-import { WeighingPair } from './WeighingPair';
-import { SettingSwitch } from '../ui/SettingSwitch';
 import shell from './ProductEditor.module.css';
 import styles from './ProductForm.module.css';
 
@@ -87,7 +84,9 @@ const NUMBER_LABEL = {
   sellingPrice: 'fc.sellingPriceIncludingVat',
   vatRate: 'fc.anotherVatRateAs',
   foodCostTarget: 'fc.foodCostTargetAs',
-} as const satisfies Record<NumberField, MessageKey>;
+  rawGrams: 'fc.rawDough',
+  cookedGrams: 'fc.cookedDough',
+} as const satisfies Record<NumberField | WeightField, MessageKey>;
 
 const PACKAGING_PER = {
   piece: 'fc.packagingPer.piece',
@@ -102,8 +101,6 @@ const VAT_WORDS: Readonly<Record<string, MessageKey>> = {
   'fc.vat.minimum': 'fc.vat.minimum',
   'fc.vat.zero': 'fc.vat.zero',
 };
-
-const noExtra: { raw?: string; cooked?: string } = {};
 
 // One product, on one page.
 //
@@ -134,17 +131,20 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
   const ids = useId();
   const titleId = `${ids}-title`;
 
-  // ⚠️ ASKED HERE, WHERE THE FIELDS ARE DRAWN: the venue — and so its country — arrives with the
-  // session. The country decides the VAT menu; the section switch decides whether the weighing boxes
-  // are offered at all (a venue with Food cost on and the catalogue off can read its recipes but not
-  // write them, and a weighing whose save is always refused would still record a margin point).
-  // ⚠️ THE VENUE'S SECTION, NOT THE ROLE'S: the owner of the sales side has no catalogue and may still write these three
-  // numbers (weighsRecipeLoss in firestore.rules). Asking the role's sections hid the boxes from the very person meant to use them.
+  // ⚠️ ASKED HERE, WHERE THE FIELDS ARE DRAWN: the venue — and so its country — arrives with the session, and decides the VAT menu.
   const country = countryOf(location);
+  // ⚠️ THE VENUE'S SECTION, NOT THE ROLE'S: a product made of one recipe writes that recipe's weighing too, and only a venue that has the
+  // catalogue section may (a venue with Food cost on and the catalogue off can read its recipes but not write them, and a write that is
+  // always refused would still record a margin point). The owner of the sales side has no catalogue role and may still write these three
+  // numbers (weighsRecipeLoss in firestore.rules): asking the role's sections would hide the write from the very person meant to make it.
   const canWeigh = isSectionAllowed(location, 'catalogue');
 
-  // What the product was when this form opened: what a margin point is compared with.
-  const [initial] = useState(product);
+  // What the product was when this form opened: what a margin point is compared with. ⚠️ THE CONVERTED PRODUCT (model 3): a product
+  // saved before holds finished kilos on its recipe lines, and the copy below must hold the raw kilos they now mean. ProductEditor
+  // mounts the form only once the server has answered about the recipes (waitsForTables) — or, with no signal or a recipes
+  // stream that died, on this phone's copy, which is then all there will be, and only when it holds every recipe on the product's
+  // lines (recipesOnLinesHere).
+  const [initial] = useState(() => (product === null ? null : currentProduct(product, snap.tables)));
   const [working, setWorking] = useState<Working>(() => {
     if (initial) return workingFrom(initial, country);
     return draft ? workingFromDraft(draft) : emptyWorking();
@@ -186,43 +186,15 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
 
   // ── What is typed, and what it costs ───────────────────────────────────────────────────────────
   const [showNameError, setShowNameError] = useState(false);
-  const [badNumber, setBadNumber] = useState<NumberField | null>(null);
+  const [badNumber, setBadNumber] = useState<NumberField | WeightField | null>(null);
   const [nameNote, setNameNote] = useState('');
   const [picking, setPicking] = useState<Picking | null>(null);
   const [guideOpen, setGuideOpen] = useState(false);
 
-  // The weighing typed on each recipe, held per recipe id OUTSIDE the rows: two lines carrying the
-  // same recipe agree, and a rebuild loses nothing. An untouched one is read again from the recipe
-  // each time, so a weighing saved on another phone shows up here.
-  const [weighings, setWeighings] = useState<Readonly<Record<string, WeighingState>>>({});
-  // What a person is typing in a weighing box right now (a half-typed «12.» is never rewritten).
-  const [typedWeights, setTypedWeights] = useState<Readonly<Record<string, { raw?: string; cooked?: string }>>>({});
-
-  const recipeIds = recipeIdsOn(working);
-  const recipeKey = recipeIds.join('\n');
-  const states = useMemo(() => {
-    const out: Record<string, WeighingState> = {};
-    for (const recipeId of recipeIds) {
-      const recipe = snap.recipes[recipeId];
-      if (!recipe) continue;
-      const held = weighings[recipeId];
-      out[recipeId] = held?.touched ? held : startWeighing(recipe);
-    }
-    return out;
-    // `recipeIds` is read through its key.
-  }, [snap.recipes, weighings, recipeKey]);
-  // What Save would write onto the recipes, right now.
-  // ⚠️ A FINISHED PRODUCT WRITES NO WEIGHINGS: with the switch on there are no boxes, and whatever was
-  // typed before it was switched on is not saved onto the recipes either.
-  const patches = useMemo(
-    () => (working.noWeightLoss ? {} : weighingPatches(snap.recipes, states, recipeIds)),
-    [snap.recipes, states, recipeKey, working.noWeightLoss],
-  );
-  // ⚠️ EVERY NUMBER ON THIS SCREEN COMES FROM HERE: the stored recipes with the weighings typed on
-  // this product laid over them. Reading the stored tables would keep showing the old cost per kilo
-  // until after Save.
-  const live = useMemo(() => withWeighings(snap.tables, patches), [snap.tables, patches]);
   const costed = useMemo(() => costable(working, productId), [working, productId]);
+  // The lines' raw total in grams: what the raw box shows while nothing is typed apart, and what «use the total» brings back.
+  const cooking = productCooking(costed, snap.tables);
+  const totalGrams = cooking.rawTotalKg * 1000;
 
   // A product deleted on another phone while this screen is open and nobody has typed on it: say so
   // and go back to the list. With typing on it, it is kept (Save would put it back).
@@ -313,10 +285,10 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
 
   // ── Focus ──────────────────────────────────────────────────────────────────────────────────────
   const nameBox = useRef<HTMLInputElement>(null);
+  const rawBox = useRef<HTMLInputElement>(null);
+  const cookedBox = useRef<HTMLInputElement>(null);
   const numberBoxes = useRef<Partial<Record<NumberField, HTMLInputElement | null>>>({});
   const boxRef = (field: NumberField) => (node: HTMLInputElement | null) => { numberBoxes.current[field] = node; };
-  // The cooked box of each weighing on screen, for Save to point at when its warning stands.
-  const cookedBoxes = useRef(new Map<string, HTMLInputElement>());
   const qtyBoxes = useRef(new Map<string, HTMLInputElement>());
   const registerQty = useCallback((key: string, node: HTMLInputElement | null) => {
     if (node) qtyBoxes.current.set(key, node); else qtyBoxes.current.delete(key);
@@ -342,6 +314,27 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
   const setNumber = (field: NumberField, text: string) => {
     if (badNumber === field) setBadNumber(null);
     edit(current => ({ ...current, [NUMBER_KEY[field]]: text }));
+  };
+
+  // ⚠️ A TYPED BOX IS «A PERSON TYPED IN COTTURA» (cookingTyped): only then does a product made of one recipe write that recipe's weighing.
+  const setRaw = (text: string) => {
+    if (badNumber === 'rawGrams') setBadNumber(null);
+    edit(current => ({ ...current, rawText: text, cookingTyped: true }));
+  };
+
+  const setCooked = (text: string) => {
+    if (badNumber === 'cookedGrams') setBadNumber(null);
+    edit(current => ({ ...current, cookedText: text, cookingTyped: true }));
+  };
+
+  // Leaving the raw box: empty, or within 0.05 g of the total, goes back to following the total. Not a change a person made, so it marks nothing.
+  const settleRawBox = () => { setWorking(current => settleRaw(current, totalGrams)); };
+
+  const useTotal = () => {
+    if (badNumber === 'rawGrams') setBadNumber(null);
+    edit(current => ({ ...current, rawText: null, cookingTyped: true }));
+    // The button disappears: the focus goes where the weight it brought back is.
+    rawBox.current?.focus();
   };
 
   const setVatSelect = (value: string) => {
@@ -474,40 +467,6 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
     setPicking({ mode: 'recipe', query: typed, apply: choice => { useRecipeForName(choice.id); } });
   };
 
-  const typeWeighing = (recipeId: string, box: 'raw' | 'cooked', text: string) => {
-    touched.current = true;
-    setDirtyBoth(true);
-    setTypedWeights(current => ({ ...current, [recipeId]: { ...current[recipeId], [box]: text } }));
-    setWeighings(current => {
-      const held = current[recipeId];
-      const base = held?.touched ? held : startWeighing(snap.recipes[recipeId]);
-      const value = text.replace(',', '.');
-      return { ...current, [recipeId]: box === 'raw' ? typeRaw(base, value) : typeCooked(base, value) };
-    });
-  };
-
-  // The weighings on screen whose boxes carry a warning, with the sentence to say. A finished product has no boxes, so none.
-  const weighWarnings = () => {
-    const out: { recipeId: string; name: string; warning: string }[] = [];
-    if (working.noWeightLoss || !canWeigh) return out;
-    for (const recipeId of recipeIds) {
-      const recipe = snap.recipes[recipeId];
-      const weighing = states[recipeId];
-      if (!recipe || !weighing) continue;
-      const { warning } = readWeighing(recipe, weighing);
-      if (warning) out.push({ recipeId, name: String(recipe.name ?? '').trim(), warning: t(warning.key, weighingParams(warning.params, money)) });
-    }
-    return out;
-  };
-
-  const leaveWeighingBox = (recipeId: string, box: 'raw' | 'cooked') => {
-    setTypedWeights(current => {
-      const { [box]: dropped, ...kept } = current[recipeId] ?? noExtra;
-      void dropped;
-      return { ...current, [recipeId]: kept };
-    });
-  };
-
   // ── Save and delete ────────────────────────────────────────────────────────────────────────────
   async function save() {
     if (asking.current || askingLeave.current || leaving.current) return;
@@ -527,7 +486,8 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
     // refusal arrives later, and the rollback throws the product away. A value in a box that is not
     // shown (pieces on a product sold by weight) means nothing, so it is cleared rather than asked
     // about — nobody could find the box to correct it.
-    let next = working;
+    // ⚠️ A RAW WEIGHT WITHIN 0.05 g OF THE TOTAL IS THE TOTAL, settled here as well as at blur: Save never depends on the box having lost the focus.
+    let next = settleRaw(working, totalGrams);
     let invalid = firstInvalidNumber(toProduct(next, productId, name));
     while (invalid !== null && isNumberField(invalid) && !isShown(next, invalid)) {
       next = clearNumber(next, invalid);
@@ -540,28 +500,30 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
       say(t('fc.checkNumber', { field: field === null ? invalid : t(NUMBER_LABEL[field]) }));
       return;
     }
+    // The two weights of «Cottura» are numbers the products rules bound too (above 0, at most ten tonnes).
+    const badWeight = firstBadWeight(toProduct(next, productId, name));
+    if (badWeight !== null) {
+      setBadNumber(badWeight);
+      reveal(badWeight === 'rawGrams' ? rawBox.current : cookedBox.current);
+      say(t('fc.checkNumber', { field: t(NUMBER_LABEL[badWeight]) }));
+      return;
+    }
     if (next !== working) setWorking(next);
 
-    // ⚠️ A WRONG WEIGHING NEVER BLOCKS THE SAVE (owner, Nov 2026: «in ogni caso posso salvare lo stesso»; current app df7e6313). It is
+    // ⚠️ A COOKED WEIGHT HEAVIER THAN THE RAW ONE NEVER BLOCKS THE SAVE (owner, Nov 2026: «in ogni caso posso salvare lo stesso»). It is
     // pointed at — scrolled to, focused, named — and then the usual question says so in its own words, so one tap on Save keeps the
-    // numbers as typed. Both warnings (cooked heavier than raw, a loss past the cap) are about the cooked weight.
-    const weighIssues = weighWarnings();
-    const [firstIssue] = weighIssues;
-    if (firstIssue) {
-      reveal(cookedBoxes.current.get(firstIssue.recipeId));
-      say(t('fc.checkWeighing', { name: firstIssue.name }));
+    // numbers as typed.
+    const heavier = productCooking(costable(next, productId), snap.tables).heavier;
+    if (heavier) {
+      reveal(cookedBox.current);
+      say(t('fc.cooking.check'));
     }
-    const question = weighIssues.length > 0
-      ? t('fc.saveWithWeightWarnings', {
-        lines: weighIssues.map(issue => t('fc.weightWarningLine', { name: issue.name, warning: issue.warning })).join('\n'),
-      }).split('\n')
-      : t('fc.saveTheseChanges');
 
     asking.current = true;
     try {
       const ok = await confirm({
         title: t('fc.saveProduct'),
-        message: question,
+        message: heavier ? t('fc.cooking.saveAnyway').split('\n') : t('fc.saveTheseChanges'),
         okLabel: t('ui.save'),
         cancelLabel: t('common.cancel'),
       });
@@ -574,17 +536,10 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
     // A margin is recorded only when the PRICE or the COMPOSITION changed, and only when there is a
     // real answer to record. Renaming a product records nothing — a history of non-events cannot
     // answer «when did this change?».
-    // ⚠️ A WEIGHING COUNTS AS A CHANGE: it is typed on this very screen, on purpose, and it moves what
-    // this product costs. The OTHER products using the same recipe record no point — the same gap as
-    // an ingredient price drifting.
-    const result = costProduct(clean, live);
-    // Switching «no weight loss» on or off moves the cost, so it is a change worth a point as well.
-    // ⚠️ …BUT NOT A KEPT WRONG PAIR: it writes two numbers and leaves the loss alone, so nothing the product costs moved.
-    const weighedIds = working.noWeightLoss ? [] : recipeIds;
-    const worthRecording = snapshotWorthTaking(initial, clean) || weighingsChangeCost(snap.recipes, states, weighedIds)
-      || (!!initial && !!initial.noWeightLoss !== !!clean.noWeightLoss);
+    const result = costProduct(clean, snap.tables);
+    const worthRecording = snapshotWorthTaking(initial, clean, snap.tables);
     const point = result.foodCostPct !== null && worthRecording
-      ? productSnapshot(clean, result, new Date().toISOString(), live) as unknown as Record<string, unknown>
+      ? productSnapshot(clean, result, new Date().toISOString(), snap.tables) as unknown as Record<string, unknown>
       : null;
 
     // Saved: nothing is unsaved any more, so leaving asks nothing.
@@ -592,7 +547,11 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
     setDirtyBoth(false);
     // ⚠️ BACK TO THE READ VIEW OF THE SAVED PRODUCT, not the list (7 Nov 2026). saveProduct returns the id — minted for a new
     // product — so the page can find it again.
-    const savedId = store.saveProduct({ product: clean, snapshot: point, lossPatches: patches });
+    // ⚠️ A PRODUCT OF ONE RECIPE WRITES THAT RECIPE'S WEIGHING TOO, only when a person typed in «Cottura» here (recipeWeighing): a converted
+    // product's cooked weight is the product's, and opening and saving it must not move the recipe.
+    const weighing = canWeigh ? recipeWeighing(next, totalGrams, snap.recipes) : null;
+    const lossPatches = weighing === null ? {} : weighingPatches(snap.recipes, { [weighing.recipeId]: weighing.state }, [weighing.recipeId]);
+    const savedId = store.saveProduct({ product: clean, snapshot: point, lossPatches });
     announceAction('foodcost-saved');
     say(initial === null ? t('fc.productAdded') : t('fc.productSaved'));
     onSaved(savedId);
@@ -624,8 +583,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
   const modeKey = working.sellingMode === '' ? null : working.sellingMode;
   const vatChoices = vatRatesFor(country);
   const nameInvalid = showNameError && working.name.trim() === '';
-  const labourNeedsRate = (costed.labourMinutes ?? 0) > 0 && canManage && snap.settingsLoaded && !(Number(live.labourCostPerHour) > 0);
-  const recipeCount = recipeIds.length;
+  const labourNeedsRate = (costed.labourMinutes ?? 0) > 0 && canManage && snap.settingsLoaded && !(Number(snap.tables.labourCostPerHour) > 0);
   const heading = id === null ? t('fc.newProduct') : (initial?.name ?? '') || t('fc.untitledProduct');
 
   // A phone with no local copies has not heard the recipes or the prices yet: a line is not «gone»
@@ -637,9 +595,9 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
       key={line.key}
       rowKey={line.key}
       kind={kind}
-      name={lineName(t, line, live, loaded)}
-      cost={lineMoney(t, money, line, live, working.noWeightLoss).text}
-      note={lineNote(t, money, line, live, loaded)}
+      name={lineName(t, line, snap.tables, loaded)}
+      cost={lineMoney(t, money, line, snap.tables).text}
+      note={lineNote(t, money, line, snap.tables, loaded)}
       qty={line.qty}
       unit={'unit' in line ? line.unit : undefined}
       registerQty={registerQty}
@@ -658,6 +616,17 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
     const word = VAT_WORDS[key];
     return word === undefined ? `${plainNumber(rate, locale)}%` : t(word, { rate: String(rate) });
   };
+
+  // The note under the pair: this Save changes the recipe's loss, and a product saved before the switch is still costed through it.
+  const recipeWrite = canWeigh ? recipeWeighing(working, totalGrams, snap.recipes) : null;
+  const recipeReading = recipeWrite === null ? null : readWeighing(snap.recipes[recipeWrite.recipeId], recipeWrite.state);
+  // ⚠️ ONLY WHEN THE LOSS ITSELF MOVES: two new weights that work out to the loss the recipe already holds change nothing for anyone.
+  const patchedLoss = recipeReading?.patch?.lossPct;
+  const storedLoss = recipeWrite === null ? 0 : normalizeLossPct((snap.recipes[recipeWrite.recipeId] as { lossPct?: unknown } | null | undefined)?.lossPct);
+  const sharedWith = recipeWrite !== null && recipeReading !== null && !recipeReading.keepsOnly
+    && patchedLoss !== undefined && patchedLoss !== storedLoss
+    ? otherProductsUsing(snap.products, recipeWrite.recipeId, id)
+    : 0;
 
   const numberBox = (field: NumberField, domId: string, placeholder?: string, unlabelled = false) => (
     <NumberBox
@@ -688,7 +657,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
       />
 
       <div className={shell.body}>
-        <ProductSummary product={costed} tables={live} />
+        <ProductSummary product={costed} tables={snap.tables} />
 
         {/* «Full card» (Federico, 7 Nov 2026): inputs in the order they are filled, results last. The form's box cannot be closed,
             so a field Save checks can never sit hidden inside it. */}
@@ -767,44 +736,27 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
             <Button className={styles.add} onPress={addLine}>
               {working.components.length > 0 ? t('fc.addRecipeOrIngredient') : t('fc.addRecipe')}
             </Button>
-            {/* The weighings sit in the SAME card as the lines, under their own sub-heading, one pair per recipe however many
-                lines carry it. */}
-            {recipeCount > 0 ? <SubHeading>{t('fc.section.weighing')}</SubHeading> : null}
-            {recipeCount > 0 ? (
-              <div className={styles.switchRow}>
-                <span className={styles.switchWords}>
-                  <span id={`${ids}-noloss`} className={styles.switchTitle}>{t('fc.noWeightLoss')}</span>
-                  <span id={`${ids}-noloss-hint`} className={styles.note}>{t('fc.noWeightLossHint')}</span>
-                </span>
-                <SettingSwitch
-                  selected={working.noWeightLoss}
-                  onChange={on => { edit(current => ({ ...current, noWeightLoss: on })); }}
-                  labelledBy={`${ids}-noloss`}
-                  describedBy={`${ids}-noloss-hint`}
-                />
-              </div>
-            ) : null}
-            {canWeigh && !working.noWeightLoss ? recipeIds.map(recipeId => {
-              const recipe = snap.recipes[recipeId];
-              const weighing = states[recipeId];
-              if (!recipe || !weighing) return null;
-              return (
-                <WeighingPair
-                  key={recipeId}
-                  recipe={recipe}
-                  title={recipeCount > 1 ? t('fc.weighFor', { name: String(recipe.name ?? '') }) : null}
-                  state={weighing}
-                  typed={typedWeights[recipeId] ?? noExtra}
-                  others={otherProductsUsing(snap.products, recipeId, id)}
-                  onRaw={text => { typeWeighing(recipeId, 'raw', text); }}
-                  onCooked={text => { typeWeighing(recipeId, 'cooked', text); }}
-                  onBlur={box => { leaveWeighingBox(recipeId, box); }}
-                  cookedRef={node => {
-                    if (node) cookedBoxes.current.set(recipeId, node); else cookedBoxes.current.delete(recipeId);
-                  }}
-                />
-              );
-            }) : null}
+          </CardSection>
+
+          {/* The product's own baking, for EVERY product (step 2b): the loss is the product's, not its recipes'. */}
+          <CardSection title={t('fc.cooking.title')}>
+            <CookingSection
+              product={costed}
+              tables={snap.tables}
+              rawText={rawBoxText(working, totalGrams)}
+              cookedText={working.cookedText}
+              totalGrams={totalGrams}
+              rawApart={totalGrams > 0 && working.rawText !== null && !followsTotal(working.rawText, totalGrams)}
+              invalid={{ raw: badNumber === 'rawGrams', cooked: badNumber === 'cookedGrams' }}
+              hint={recipeLossHint(working, snap.recipes)}
+              sharedWith={sharedWith}
+              onRaw={setRaw}
+              onCooked={setCooked}
+              onRawBlur={settleRawBox}
+              onUseTotal={useTotal}
+              rawRef={rawBox}
+              cookedRef={cookedBox}
+            />
           </CardSection>
 
           <CardSection title={t('fc.packaging')}>
@@ -885,7 +837,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
             <CardStack>
               <SuggestedPrice
                 product={costed}
-                tables={live}
+                tables={snap.tables}
                 sellingPrice={costed.sellingPrice}
                 onUse={price => { setNumber('sellingPrice', String(price)); }}
               />
@@ -894,8 +846,8 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
 
           <CardSection title={t('fc.section.results')}>
             <CardStack>
-              <ProductAnswer product={costed} tables={live} />
-              <PerKgBlock product={costed} tables={live} />
+              <ProductAnswer product={costed} tables={snap.tables} />
+              <PerKgBlock product={costed} tables={snap.tables} />
             </CardStack>
           </CardSection>
 

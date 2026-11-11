@@ -24,10 +24,18 @@
 // until a person has written BOTH weights the system takes the recipe's whole weight, that is, NO loss.
 // Filling the raw box with the total — and costing with it — made one typed cooked weight enough to invent a
 // loss nobody had measured.
+//
+// ⚠️⚠️ AFTER THE SWITCH (Mise 2, 10 Nov 2026) Federico reversed the 13 Sep choice: «il calo è del prodotto».
+// The product owns its raw and cooked weights (foodcost-model.ts, productCooking) and a recipe's loss no longer
+// moves what a product saved in the new shape costs. What stays here is the recipe's OWN weighing — its label
+// still reads it, and a product made of one recipe writes its loss back onto that recipe — and
+// `otherProductsUsing`, which now counts only the products still read through a recipe's loss (post-switch:
+// foodcost-weighing.spec.ts says where this file and js/foodcost/foodcost-weighing.js part).
 
 import {
   weightLoss, normalizeWeight, normalizeLossPct, MAX_LOSS_PCT,
 } from './catalogue-model';
+import { isLegacyProduct } from './foodcost-model';
 
 // Anything at all may arrive (a document is data), so what is read off a recipe is `unknown` and read the
 // way the original reads it.
@@ -252,10 +260,14 @@ export function restoreAfterRefusal(now: unknown, prev: unknown, patch: unknown)
 // opening them. Said on screen, because the loss belongs to the recipe.
 // ⚠️ NOT THE FINISHED PRODUCTS: one marked «no weight loss» lays the loss aside, so a loss typed here moves nothing of what
 // it costs.
+// ⚠️ MISE 2 (post-switch, 10 Nov 2026): NOR A PRODUCT SAVED IN THE NEW SHAPE (model 3) — its lines are raw dough at the raw
+// price and it owns its loss, so a recipe's loss moves nothing of what it costs. Only a product the current app saved, still
+// read through the recipe's loss until its next Save (fromLegacyProduct), is counted.
 export function otherProductsUsing(products: unknown, recipeId: unknown, productId: unknown): number {
   type Card = { id?: unknown; noWeightLoss?: unknown; components?: readonly ({ recipeId?: unknown } | null | undefined)[] } | null | undefined;
   return ((products || []) as readonly Card[]).filter(p => p
     && p.id !== productId
     && p.noWeightLoss !== true
+    && isLegacyProduct(p)
     && (p.components || []).some(c => c && c.recipeId === recipeId)).length;
 }

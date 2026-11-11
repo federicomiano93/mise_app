@@ -87,7 +87,7 @@ describe('a new product', () => {
       expect(screen.queryByRole('combobox', { name: 'Name' })).not.toBeInTheDocument();
       expect(await screen.findByRole('button', { name: /^Cornetto/ }, LOAD)).toBeInTheDocument();
       expect(fake.saved).toHaveLength(1);
-      expect(fake.saved[0]).toMatchObject({ kind: 'product', data: { name: 'Cornetto', model: 2 }, snapshot: null });
+      expect(fake.saved[0]).toMatchObject({ kind: 'product', data: { name: 'Cornetto', model: 3 }, snapshot: null });
       expect(actions).toContain('foodcost-saved');
     } finally {
       window.removeEventListener('mise:action', listen);
@@ -205,7 +205,7 @@ describe('saving a product that exists', () => {
     expect(fake.saved[0]).toMatchObject({
       kind: 'product',
       id: 'Green',
-      data: { sellingPrice: 2.4, model: 2 },
+      data: { sellingPrice: 2.4, model: 3 },
       snapshot: { foodCostPct: 10, sellingPrice: 2.4 },
     });
   });
@@ -477,7 +477,7 @@ describe('a phone that has not heard the recipes or the prices yet', () => {
   }
 
   it('calls a recipe «no longer exists» only once the recipes have answered', async () => {
-    const fake = editorSource([product('Late', { components: [{ recipeId: 'dough', qtyKg: 1 }] })]);
+    const fake = editorSource([product('Late', { components: [{ recipeId: 'dough', qtyKg: 1 }], model: 3 })]);
     fake.recipes.set('dough', { id: 'dough', name: 'Dough', ingredients: [], lossPct: 0 });
     const arrive = holdFirst('watchRecipes', fake);
     await openProduct('Late', fake);

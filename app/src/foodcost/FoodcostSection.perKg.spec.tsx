@@ -80,8 +80,9 @@ describe('the block', () => {
     const { user } = await open('/food-cost/product/Salty', editorSource([product('Salty', { components: [FLOUR_LINE, SALT_LINE] })]));
     await user.click(block().querySelector('summary') as HTMLElement);
     const salt = rowOf('Salt');
-    // 20 g beside a batch that weighs a kilo (an unpriced weight is not in it), shown but not counted: no cost of its own.
-    expect(salt).toHaveTextContent('20.00 g · no price, not counted');
+    // Model 3: the batch weighs every line with a known weight, the unpriced salt too (1.02 kg), so 20 g of it is 19.61 g in a kilo
+    // (the current app left an unpriced line's kilos out). Shown but not counted: no cost of its own.
+    expect(salt).toHaveTextContent('19.61 g · no price, not counted');
     expect(salt).not.toHaveTextContent('£');
     const note = within(block()).getByText('Some lines are not counted: the cost of 1 kg is not exact yet.');
     expect(note).toBeInTheDocument();
@@ -95,8 +96,8 @@ describe('the block', () => {
     const flourBox = within(screen.getByRole('region', { name: 'Made of' })).getAllByRole('textbox', { name: 'Quantity' })[0] as HTMLElement;
     await user.clear(flourBox);
     await user.type(flourBox, '500');
-    // 20 g beside a 500 g batch: 40 g in a kilo.
-    expect(rowOf('Salt')).toHaveTextContent('40.00 g');
+    // 20 g beside a 520 g batch (the salt's weight counts, model 3): 38.46 g in a kilo.
+    expect(rowOf('Salt')).toHaveTextContent('38.46 g');
     expect(block().open).toBe(true);
     expect(block().querySelector('summary')).toBe(summary);
   });
@@ -134,11 +135,12 @@ describe('a venue in Italy', () => {
   it('writes every figure with two decimals and the comma, and the reasons in Italian', async () => {
     const { user } = await open('/food-cost/product/Salty', editorSource([product('Salty', { components: [FLOUR_LINE, SALT_LINE] })]), ITALY);
     expect(block().querySelector('summary')).toHaveTextContent('Costo per 1 kg');
-    expect(block().querySelector('summary')).toHaveTextContent('2,00 €');
+    // Model 3: the unpriced salt's 20 g weigh in the batch (1,02 kg), so a kilo costs 1,96 €.
+    expect(block().querySelector('summary')).toHaveTextContent('1,96 €');
     await user.click(block().querySelector('summary') as HTMLElement);
-    expect(rowOf('Flour')).toHaveTextContent('1,00 kg · 2,00 € / kg');
-    expect(rowOf('Salt')).toHaveTextContent('20,00 g · nessun prezzo, non conteggiato');
-    expect(within(block()).getByText('Totale per 1 kg').parentElement).toHaveTextContent('2,00 €');
+    expect(rowOf('Flour')).toHaveTextContent('980,39 g · 2,00 € / kg');
+    expect(rowOf('Salt')).toHaveTextContent('19,61 g · nessun prezzo, non conteggiato');
+    expect(within(block()).getByText('Totale per 1 kg').parentElement).toHaveTextContent('1,96 €');
     expect(within(block()).getByText('Alcune righe non sono conteggiate: il costo di 1 kg non è ancora esatto.')).toBeInTheDocument();
   });
 

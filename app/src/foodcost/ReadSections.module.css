@@ -85,33 +85,19 @@
   font-size: var(--fs-sm);
 }
 
-.weighs {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s3);
-  align-self: stretch;
-}
-
-.weigh {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s1);
-}
-
-.weighTitle {
-  margin: 0;
-  font-weight: 600;
-}
-
-.out {
-  margin: 0;
-  color: var(--ink);
-  font-size: var(--fs-sm);
-}
-
 .warn {
   margin: 0;
   color: var(--danger-ink);
   font-size: var(--fs-sm);
   font-weight: 600;
+}
+
+/* The cooking warning's live region, always on the page. Empty, it takes no room: it cancels the block's gap, and the warning
+   puts the gap back above itself. */
+.live {
+  margin-top: calc(-1 * var(--s2));
+}
+
+.live > .warn {
+  padding-top: var(--s2);
 }

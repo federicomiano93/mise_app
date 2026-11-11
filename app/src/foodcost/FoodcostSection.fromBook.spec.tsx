@@ -20,7 +20,8 @@ afterEach(() => {
 const recipe = (id: string, name: string, extra: Record<string, unknown> = {}) =>
   ({ id, name, ingredients: [{ label: 'Flour', grams: 1000, unit: 'g' }], ...extra });
 
-// Brioche weighs 1.53 kg once made (1 kg + 700 g, less 10% in the oven); Pizza has nothing weighable.
+// Brioche is 1.70 kg raw (1 kg + 700 g) and 1.53 kg once made, less 10% in the oven (model 3: the product's line is the raw whole, its
+// cooked weight is the recipe's loss); Pizza has nothing weighable.
 const BRIOCHE = recipe('r1', 'Brioche', { lossPct: 10, ingredients: [{ label: 'Flour', grams: 1, unit: 'kg' }, { label: 'Water', grams: 700, unit: 'g' }] });
 const PIZZA = recipe('r2', 'Pizza', { ingredients: [{ label: 'Eggs', grams: 3, unit: 'pcs' }] });
 const FOCACCIA = recipe('r3', 'Focaccia');
@@ -130,7 +131,7 @@ describe('the choice', () => {
     expect(within(dialog).getByRole('heading', { name: 'Maybe already in Food cost · 2' })).toBeInTheDocument();
 
     expect(tick(/^Brioche/)).toBeChecked();
-    expect(tick(/^Brioche/)).toHaveAccessibleName('Brioche Whole recipe: 1.53 kg');
+    expect(tick(/^Brioche/)).toHaveAccessibleName('Brioche Whole recipe: 1.70 kg');
     expect(tick(/^Pizza/)).toBeChecked();
     expect(tick(/^Pizza/)).toHaveAccessibleName('Pizza Whole recipe: weight to fill in');
     expect(tick(/^Cream/)).not.toBeChecked();
@@ -251,9 +252,9 @@ describe('creating', () => {
     expect(await screen.findByText('2 products created')).toBeInTheDocument();
     expect(fake.saved.map(s => [s.kind, s.id])).toEqual([['create', 'recipe-r1'], ['create', 'recipe-r2']]);
     expect(fake.saved[0]!.data).toEqual({
-      name: 'Brioche', components: [{ recipeId: 'r1', qtyKg: 1.53 }], packaging: [],
+      name: 'Brioche', components: [{ recipeId: 'r1', qtyKg: 1.7 }], packaging: [],
       sellingMode: null, piecesPerBatch: null, packSize: null, packUnit: null, sellingPrice: null, vatRate: null, foodCostTarget: null,
-      labourMinutes: null, labourPeople: null, model: 2,
+      labourMinutes: null, labourPeople: null, cookedGrams: 1530, model: 3,
     });
     expect(fake.saved[1]!.data).toMatchObject({ name: 'Pizza', components: [{ recipeId: 'r2', qtyKg: 0 }] });
     // No margin point: nothing is priced yet.
@@ -364,7 +365,7 @@ describe('in Italian', () => {
 
     const dialog = await screen.findByRole('dialog', { name: 'Schede dal Ricettario' });
     expect(within(dialog).getByRole('heading', { name: 'Da creare · 2' })).toBeInTheDocument();
-    expect(within(dialog).getByRole('checkbox', { name: 'Brioche Ricetta intera: 1,53 kg' })).toBeChecked();
+    expect(within(dialog).getByRole('checkbox', { name: 'Brioche Ricetta intera: 1,70 kg' })).toBeChecked();
     expect(within(dialog).getByRole('checkbox', { name: 'Pizza Ricetta intera: peso da scrivere' })).toBeChecked();
     expect(within(dialog).getByRole('button', { name: 'Togli tutte' })).toBeInTheDocument();
     await user.click(within(dialog).getByRole('button', { name: 'Crea 2 schede' }));

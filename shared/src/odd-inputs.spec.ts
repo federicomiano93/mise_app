@@ -275,13 +275,93 @@ function show(value: unknown): string {
 // Nothing is owed any more: item 26 (the cost on every line and «Which?») was the last, ported on 10 Nov 2026.
 const PORT_OWED = new Set<string>([]);
 
+// POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): Mise 2 answers differently from the current app ON PURPOSE for
+// these names — the product's own weighing (rawGrams, cookedGrams), the batch weighing every line whose weight is known,
+// the recipe lines being raw kilos (foodcost-model.ts says it all). A strict comparison would fail on every product with
+// a partial cost, so each name is held to what must still be true:
+//   'lens'     the answer is the original's once the two new fields are taken off (and they are null or a positive number)
+//   'guards'   the port throws exactly where the original throws (the same error name), and its answer holds no NaN that
+//              the original's answer for the same input does not hold at the same place
+// What must NOT move, the cost of every product saved before the switch, is proved by foodcost-product-loss.spec.ts.
+const POST_SWITCH = new Map<string, 'lens' | 'guards'>([
+  ['normalizeProduct', 'lens'], ['normalizeProducts', 'lens'],
+  ['batchTotals', 'guards'], ['productionCost', 'guards'], ['costProduct', 'guards'], ['productPreview', 'guards'],
+  ['unpricedParts', 'guards'], ['costPerKg', 'guards'], ['sortByMargin', 'guards'], ['productFromRecipe', 'guards'],
+  ['recipesWithoutProducts', 'guards'],
+]);
+
+// The new fields of a normalised product, taken off: what is left is the original's shape. A problem with either field
+// (not null, not a positive number) is returned as text.
+function takeOffOwnWeighing(value: unknown, problems: string[]): unknown {
+  if (Array.isArray(value)) return value.map(item => takeOffOwnWeighing(item, problems));
+  if (!value || typeof value !== 'object') return value;
+  const { rawGrams, cookedGrams, ...rest } = value as Record<string, unknown>;
+  for (const [field, grams] of [['rawGrams', rawGrams], ['cookedGrams', cookedGrams]] as const) {
+    if (grams !== null && !(typeof grams === 'number' && grams > 0)) problems.push(`${field} is ${show(grams)}`);
+  }
+  return rest;
+}
+
+// Everything reachable from any argument ever handed to a function: an answer that echoes one of them (a recipe handed
+// back inside `maybe`, a table) is not the function's doing, so the NaN search does not go into it. Only ever grows:
+// a fresh object a function builds is never an argument.
+const ECHOED = new WeakSet<object>();
+function markEchoed(value: unknown): void {
+  if (!value || typeof value !== 'object' || ECHOED.has(value)) return;
+  ECHOED.add(value);
+  for (const [, next] of entriesOf(value)) markEchoed(next);
+}
+
+// An object's own values by key; a getter that throws reads as undefined (the function under test meets it, not this walk).
+function entriesOf(value: object): [string, unknown][] {
+  try {
+    if (value instanceof Map) return [...value].flatMap(([key, item], i) => [[`${i}k`, key], [`${i}v`, item]] as [string, unknown][]);
+    if (value instanceof Set) return [...value].map((item, i) => [String(i), item] as [string, unknown]);
+    return Object.keys(value).map(key => {
+      try { return [key, (value as Record<string, unknown>)[key]] as [string, unknown]; } catch { return [key, undefined] as [string, unknown]; }
+    });
+  } catch {
+    return [];
+  }
+}
+
+// The places in an answer that hold a NaN, outside everything handed in.
+function nanPaths(value: unknown, path = '', seen = new WeakSet<object>(), found: string[] = []): string[] {
+  if (typeof value === 'number') {
+    if (Number.isNaN(value)) found.push(path || '(the answer)');
+    return found;
+  }
+  if (!value || typeof value !== 'object' || ECHOED.has(value) || seen.has(value)) return found;
+  seen.add(value);
+  for (const [key, next] of entriesOf(value)) nanPaths(next, `${path}.${key}`, seen, found);
+  return found;
+}
+
 // Calls both functions with every argument list and reports every disagreement at once.
 function agree(name: string, mine: AnyFn, theirs: AnyFn, argLists: readonly (readonly unknown[])[]): void {
-  (PORT_OWED.has(name) ? test.fails : test)(`${name}: the same answer for ${argLists.length} odd inputs`, () => {
+  const postSwitch = POST_SWITCH.get(name);
+  (PORT_OWED.has(name) ? test.fails : test)(`${name}: the same answer for ${argLists.length} odd inputs${postSwitch ? ` (post-switch: ${postSwitch})` : ''}`, () => {
     const disagreements: string[] = [];
     for (const args of argLists) {
-      const a = outcome(() => mine(...args));
+      let a = outcome(() => mine(...args));
       const b = outcome(() => theirs(...args));
+      if (postSwitch === 'lens') {
+        const problems: string[] = [];
+        if ('returned' in a) a = { returned: takeOffOwnWeighing(a.returned, problems) };
+        if (problems.length > 0) disagreements.push(`${name}(${args.map(show).join(', ')}): ${problems.join(', ')}`);
+      } else if (postSwitch === 'guards') {
+        args.forEach(markEchoed);
+        const threwA = 'threw' in a ? a.threw : null;
+        const threwB = 'threw' in b ? b.threw : null;
+        if (threwA !== threwB) {
+          disagreements.push(`${name}(${args.map(show).join(', ')}): ported ${show(a)} / current ${show(b)}`);
+        } else if ('returned' in a) {
+          const owned = new Set('returned' in b ? nanPaths(b.returned) : []);
+          const extra = nanPaths(a.returned).filter(path => !owned.has(path));
+          if (extra.length > 0) disagreements.push(`${name}(${args.map(show).join(', ')}): NaN at ${extra.slice(0, 3).join(', ')} only in the port`);
+        }
+        continue;
+      }
       // Two answers that are the very same value (or the very same object) need no deep comparison:
       // skipping it only saves the time of the long lists of the pricing models.
       if ('returned' in a && 'returned' in b && Object.is(a.returned, b.returned)) continue;

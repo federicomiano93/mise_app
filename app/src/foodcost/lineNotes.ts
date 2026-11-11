@@ -62,18 +62,18 @@ export function lineName(
 
 // The money under a line (lineCost.ts): its rate and what the amount typed costs. ⚠️ A FAULT HERE MUST NOT TAKE THE LINES
 // DOWN (P17): the money is a reading aid drawn inside every row; on a fault the line simply shows none, like the summary and
-// the per-kilo box. `noWeightLoss` lays the recipes' oven loss aside, as the batch total does.
+// the per-kilo box.
 export function lineMoney(
-  t: Translate, money: Money, line: WorkingComponent | WorkingPackaging, tables: CostTables, noWeightLoss: boolean,
+  t: Translate, money: Money, line: WorkingComponent | WorkingPackaging, tables: CostTables,
 ): LineCost {
   try {
     if ('kind' in line && line.kind === 'recipe') {
-      return lineCostView(t, money, { recipeId: line.recipeId, qtyKg: recipeLineKg(line) }, 'recipe', tables, { noWeightLoss });
+      return lineCostView(t, money, { recipeId: line.recipeId, qtyKg: recipeLineKg(line) }, 'recipe', tables);
     }
     if ('kind' in line) {
-      return lineCostView(t, money, { kind: 'ingredient', ingredientId: line.ingredientId, qty: readQty(line.qty), unit: line.unit }, 'ingredient', tables, { noWeightLoss });
+      return lineCostView(t, money, { kind: 'ingredient', ingredientId: line.ingredientId, qty: readQty(line.qty), unit: line.unit }, 'ingredient', tables);
     }
-    return lineCostView(t, money, { ingredientId: line.ingredientId, qtyPcs: readQty(line.qty) }, 'packaging', tables, { noWeightLoss });
+    return lineCostView(t, money, { ingredientId: line.ingredientId, qtyPcs: readQty(line.qty) }, 'packaging', tables);
   } catch {
     return { text: '', noPrice: false };
   }
@@ -95,7 +95,8 @@ export function lineNote(
     // ⚠️ A NOTE only, never a block, and FIRST (current app a7f4c75d, 8 Nov 2026): more than 20 whole batches is almost
     // surely grams typed as kilos — production had 16 such lines in 11 products, every cost ×1000.
     const qtyKg = recipeLineKg(line as Extract<WorkingComponent, { kind: 'recipe' }>);
-    const whole = wholeRecipeKg(recipe);
+    // Model 3: a recipe line is RAW kilos, so it is measured against the RAW whole recipe, its own oven loss laid aside.
+    const whole = wholeRecipeKg({ ...recipe, lossPct: 0 });
     const tooMuch = tooMuchOfRecipe(qtyKg, whole)
       ? t('fc.line.tooMuchRecipe', { qty: fcWeight(qtyKg, money), whole: fcWeight(whole, money), grams: fcWeight(qtyKg / 1000, money) })
       : '';

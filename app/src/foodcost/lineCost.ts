@@ -45,7 +45,6 @@ export function lineCostView(
   entry: Entry,
   kind: LineCostKind,
   tables: CostTables,
-  { noWeightLoss = false }: { noWeightLoss?: boolean } = {},
 ): LineCost {
   let rate: number | null;
   let rateUnit: 'kg' | 'pcs' | null;
@@ -60,7 +59,7 @@ export function lineCostView(
     ({ rate, rateUnit, cost, reason } = packagingLineCost(entry, ingredient));
     qty = entry.qtyPcs;
   } else {
-    const line = componentLineCost(kind === 'ingredient' ? { ...entry, kind: 'ingredient' } : entry, tables, { noWeightLoss });
+    const line = componentLineCost(kind === 'ingredient' ? { ...entry, kind: 'ingredient' } : entry, tables);
     if (line.reason === 'missing-recipe' || line.reason === 'missing-ingredient') return NONE;
     ({ rate, rateUnit, cost, reason } = line);
     qty = kind === 'recipe' ? entry.qtyKg : entry.qty;

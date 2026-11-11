@@ -43,11 +43,6 @@ export function FullCard({ read, openNow = false, children }: BoxProps) {
   );
 }
 
-// A smaller heading inside a card («Weight and oven loss» in Made of).
-export function SubHeading({ children }: { children: ReactNode }) {
-  return <h4 className={styles.subTitle}>{children}</h4>;
-}
-
 // A card's content that takes the card's whole width (the card centres nothing: its other children sit at their own size).
 export function CardStack({ children }: { children: ReactNode }) {
   return <div className={styles.stack}>{children}</div>;

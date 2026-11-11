@@ -178,7 +178,11 @@ describe.each([
       components: [{ recipeId: 'DOUGH', qtyKg: 10 }, { recipeId: 'MYSTERY', qtyKg: 5 }],
     }), TABLES);
     expect(out.cost).toBe(32);
-    expect(out.kg, 'an uncosted recipe must not add weight either').toBe(10);
+    // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change C moves it. The batch weighs what it weighs once made,
+    // and every line with a known weight counts, priced or not: 10 kg of dough + the 5 kg of the unpriced recipe (no loss,
+    // so raw = finished) = 15. js/ left the uncosted recipe's kilos out (10), which made a partial cost per kilo too high.
+    expect(out.kg, m === ported ? 'an uncosted recipe still weighs what it weighs' : 'an uncosted recipe must not add weight either')
+      .toBe(m === ported ? 15 : 10);
     expect(out.partial).toBe(true);
     expect(out.rows[1]?.reason).toBe('no-recipe-cost');
   });
@@ -496,7 +500,10 @@ describe.each([
       { kind: 'ingredient', ingredientId: 'GONE', qty: 50, unit: 'g' },
     ] }), TABLES);
     expect(out.cost).toBe(32);
-    expect(out.kg, 'the unpriced sprinkles weigh nothing here').toBe(10);
+    // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change C moves it. Both ingredient lines are 50 g of a known
+    // weight, one with no price and one that is gone: 10 + 0.05 + 0.05 = 10.1 kg. js/ counted only the priced line (10).
+    expect(out.kg, m === ported ? 'the unpriced sprinkles are still in the pan' : 'the unpriced sprinkles weigh nothing here')
+      .toBe(m === ported ? 10.1 : 10);
     expect(out.partial).toBe(true);
     expect(out.rows.slice(1).map(r => r.reason)).toStrictEqual(['no-ingredient-price', 'missing-ingredient']);
   });
@@ -606,8 +613,10 @@ describe.each([
     expect(draft.packUnit).toBe(null);
   });
 
-  test('the product model is 2, and the units are the closed lists the rules know', () => {
-    expect(m.PRODUCT_MODEL).toBe(2);
+  test('the product model is 2 (3 in the port), and the units are the closed lists the rules know', () => {
+    // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change D. A model-3 product holds RAW recipe kilos, which the
+    // current app would read as finished ones; the port writes 3 and the rules refuse the old app's save over it.
+    expect(m.PRODUCT_MODEL).toBe(m === ported ? 3 : 2);
     expect(Object.isFrozen(m.SELLING_MODES) && Object.isFrozen(m.PACK_UNITS) && Object.isFrozen(m.LINE_UNITS)).toBe(true);
   });
 
@@ -1066,7 +1075,11 @@ describe.each([
   // Not in the original tests: the shapes the rest of Mise 2 relies on.
 
   test('the blockers’ dictionary keys are the current app’s, frozen', () => {
-    expect({ ...m.BLOCKER_TEXT }).toStrictEqual({
+    // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change D. The port has one more blocker, 'cooked-heavier' (sold
+    // by weight with a cooked weight heavier than the raw one); it is taken out here so the rest is still the original's.
+    const { 'cooked-heavier': heavier, ...rest } = { ...m.BLOCKER_TEXT } as Record<string, string>;
+    expect(heavier).toBe(m === ported ? 'fc.cooking.blockHeavier' : undefined);
+    expect(rest).toStrictEqual({
       'no-components': 'fc.addAtLeastOne',
       'no-selling-mode': 'fc.chooseWhetherThisIs',
       'no-pieces': 'fc.sayHowManyPieces',
@@ -1118,6 +1131,10 @@ describe('the port against the original', () => {
   // longer exists, unpricedReasonText is the one place a reason becomes words. The first two keep the original's
   // `tables = {}` default, which also keeps their counted arity at the original's 1, so only the third counts one more.
   const ADAPTED = ['unpricedReasonText'];
+  // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change D. Names that exist in the port only: the product's own
+  // weighing and the conversion of a product saved before the switch. foodcost-product-loss.spec.ts proves them.
+  const POST_SWITCH_NAMES = ['lineRawKg', 'productLossPct', 'productCooking', 'isLegacyProduct', 'fromLegacyProduct', 'currentProduct',
+    'fittedWeighing', 'weighingAllowed'];
   const original = legacyJs as unknown as Record<string, unknown>;
   const port = ported as unknown as Record<string, unknown>;
   const shared = Object.keys(original).filter(name => !LEFT_OUT.includes(name)).sort();
@@ -1127,15 +1144,25 @@ describe('the port against the original', () => {
   });
 
   test('exports exactly the same names, except those', () => {
-    expect(Object.keys(port).sort()).toStrictEqual(shared);
+    expect(Object.keys(port).sort()).toStrictEqual([...shared, ...POST_SWITCH_NAMES].sort());
   });
 
   test('every non-function export is strictly equal and frozen the same way', () => {
     for (const name of shared) {
       if (typeof original[name] === 'function') continue;
-      expect(port[name], name).toStrictEqual(original[name]);
+      // POST-SWITCH (10 Nov 2026, «il calo è del prodotto»): change D. Two constants part from the original on purpose;
+      // each is asserted on its own below, and the frozen-ness is still compared for them.
+      if (name !== 'BLOCKER_TEXT' && name !== 'PRODUCT_MODEL') expect(port[name], name).toStrictEqual(original[name]);
       expect(Object.isFrozen(port[name]), `${name}: frozen`).toBe(Object.isFrozen(original[name]));
     }
+  });
+
+  test('POST-SWITCH: PRODUCT_MODEL is 3 in the port and 2 in the original; BLOCKER_TEXT has exactly one more entry', () => {
+    // Change D (10 Nov 2026, «il calo è del prodotto»).
+    expect([ported.PRODUCT_MODEL, legacy.PRODUCT_MODEL]).toStrictEqual([3, 2]);
+    const { 'cooked-heavier': extra, ...rest } = { ...ported.BLOCKER_TEXT } as Record<string, string>;
+    expect(extra).toBe('fc.cooking.blockHeavier');
+    expect(rest).toStrictEqual({ ...legacy.BLOCKER_TEXT });
   });
 
   test('the preview, the net ideal price and the search answer as the original does, junk included', () => {

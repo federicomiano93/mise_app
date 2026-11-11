@@ -9,8 +9,10 @@ import type { FoodcostSource, ProductsMeta, RecipeLossPatch, StoredDoc } from '.
 type ProductsListener = { onChange: (list: StoredDoc[], meta: ProductsMeta) => void; onError: (err: unknown) => void };
 type ListListener = { onChange: (list: StoredDoc[]) => void; onError: (err: unknown) => void };
 type RecipesListener = { onChange: (list: StoredDoc[], meta?: ProductsMeta) => void; onError: (err: unknown) => void };
-// This fake is a database that is online: every answer comes from the server.
+// This fake is a database that is online: every answer comes from the server — but for the recipes held back with a cached
+// list (holdRecipes), which arrive first as the browser's own copy.
 const FROM_SERVER: ProductsMeta = { fromServer: true };
+const FROM_CACHE: ProductsMeta = { fromServer: false };
 
 export type FakeFoodcostSource = FoodcostSource & {
   products: Map<string, StoredDoc>;
@@ -20,7 +22,8 @@ export type FakeFoodcostSource = FoodcostSource & {
   settings: Record<string, unknown> | null;
   history: Map<string, StoredDoc[]>;
   // The next calls of this kind fail.
-  refuse: { save: boolean; create: boolean; loss: boolean; remove: boolean; rate: boolean; history: boolean; products: boolean };
+  // `recipes`: the recipes' stream fails when it is opened.
+  refuse: { save: boolean; create: boolean; loss: boolean; remove: boolean; rate: boolean; history: boolean; products: boolean; recipes: boolean };
   // Every write that reached the source, in order.
   saved: { kind: 'product' | 'create' | 'loss' | 'remove' | 'rate'; id?: string; data?: unknown; snapshot?: unknown }[];
   // Tells every watcher again (as another phone's write would).
@@ -31,6 +34,13 @@ export type FakeFoodcostSource = FoodcostSource & {
   // The same for the ingredients and their prices (the cost tables arrive after the products).
   holdIngredients(): void;
   releaseIngredients(): void;
+  // The server's answer about the recipes is held back until releaseRecipes(); meanwhile the watcher gets `cached` (when given),
+  // marked as the browser's own copy — a phone whose copy predates a recipe, on slow Wi-Fi. Call it BEFORE the screen subscribes:
+  // the copy is handed only to a watcher that subscribes while the hold is on.
+  holdRecipes(cached?: StoredDoc[]): void;
+  releaseRecipes(): void;
+  // The recipes stream dies now (after the copy, say): every live watcher gets the error, as Firestore's listener would.
+  failRecipes(): void;
 };
 
 export function fakeFoodcostSource(seed: {
@@ -50,10 +60,12 @@ export function fakeFoodcostSource(seed: {
   const recipeWatchers = new Set<RecipesListener>();
   const ingredientWatchers = new Set<ListListener>();
   const settingsWatchers = new Set<(data: Record<string, unknown> | null, meta: { readonly fromServer: boolean }) => void>();
-  const refuse = { save: false, create: false, loss: false, remove: false, rate: false, history: false, products: false };
+  const refuse = { save: false, create: false, loss: false, remove: false, rate: false, history: false, products: false, recipes: false };
   const saved: FakeFoodcostSource['saved'] = [];
   let held = false;
   let ingredientsHeld = false;
+  let recipesHeld = false;
+  let recipesCached: StoredDoc[] | null = null;
   let ids = 0;
 
   const refused = () => Object.assign(new Error('permission-denied'), { code: 'permission-denied' });
@@ -65,7 +77,7 @@ export function fakeFoodcostSource(seed: {
 
     push() {
       if (!held) for (const w of productWatchers) w.onChange([...products.values()], FROM_SERVER);
-      for (const w of recipeWatchers) w.onChange([...recipes.values()], FROM_SERVER);
+      if (!recipesHeld) for (const w of recipeWatchers) w.onChange([...recipes.values()], FROM_SERVER);
       if (!ingredientsHeld) for (const w of ingredientWatchers) w.onChange(priced());
       for (const w of settingsWatchers) w(fake.settings, { fromServer: true });
     },
@@ -73,6 +85,11 @@ export function fakeFoodcostSource(seed: {
     release() { held = false; fake.push(); },
     holdIngredients() { ingredientsHeld = true; },
     releaseIngredients() { ingredientsHeld = false; fake.push(); },
+    holdRecipes(cached) { recipesHeld = true; recipesCached = cached ?? null; },
+    releaseRecipes() { recipesHeld = false; fake.push(); },
+    failRecipes() {
+      for (const w of [...recipeWatchers]) { recipeWatchers.delete(w); w.onError(refused()); }
+    },
 
     newProductId: () => `fake-${++ids}`,
 
@@ -95,7 +112,17 @@ export function fakeFoodcostSource(seed: {
     watchRecipes: vi.fn<FoodcostSource['watchRecipes']>((onChange, onError) => {
       const listener: RecipesListener = { onChange, onError };
       recipeWatchers.add(listener);
-      queueMicrotask(() => { if (recipeWatchers.has(listener)) onChange([...recipes.values()], FROM_SERVER); });
+      queueMicrotask(() => {
+        if (!recipeWatchers.has(listener)) return;
+        if (refuse.recipes) {
+          recipeWatchers.delete(listener);
+          onError(refused());
+        } else if (!recipesHeld) {
+          onChange([...recipes.values()], FROM_SERVER);
+        } else if (recipesCached !== null) {
+          onChange(recipesCached, FROM_CACHE);
+        }
+      });
       return () => { recipeWatchers.delete(listener); };
     }),
 
