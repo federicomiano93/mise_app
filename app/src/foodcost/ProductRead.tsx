@@ -14,7 +14,7 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { useFoodcost, useFoodcostStore } from './FoodcostContext';
-import { CardSection, CardStack, FullCard, SubHeading } from './FullCard';
+import { CardSection, CardStack, FullCard } from './FullCard';
 import { historyPath } from './foodcostPath';
 import type { Origin } from './foodcostPath';
 import { FROM_PRODUCT, pushDepth } from './foodcostNav';
@@ -82,7 +82,6 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
   const product = useMemo(() => currentProduct(stored, snap.tables) ?? stored, [stored, snap.tables]);
   // The product as the form would open it: it gives each line the name and the note the form shows under it.
   const working = useMemo(() => workingFrom(product, country), [product, country]);
-  const hasRecipeLine = working.components.some(line => line.kind === 'recipe');
   const loaded = { recipes: snap.recipesLoaded, ingredients: snap.ingredientsLoaded };
   // The box is open while there is no summary above it (nothing else to show): from the start, and again when the product stops
   // being costed while it is read (refreshRead of the current app). A person who closed it while a summary shows is not argued with.
@@ -165,13 +164,15 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
           </CardSection>
           <CardSection title={t('fc.madeOf')}>
             <ReadMadeOf product={product} working={working} tables={snap.tables} loaded={loaded} />
-            {hasRecipeLine ? (
-              <>
-                <SubHeading>{t('fc.cooking.title')}</SubHeading>
-                <ReadCooking product={product} tables={snap.tables} />
-              </>
-            ) : null}
           </CardSection>
+          {/* ⚠️ WHENEVER THERE IS ANYTHING TO WEIGH OR A WEIGHT STORED (step 2b): a converted product whose recipe line was replaced
+              by an ingredient still holds a cooked weight, and a card that needed a recipe line hid it from the person who must
+              re-weigh it. */}
+          {product.components.length > 0 || product.rawGrams !== null || product.cookedGrams !== null ? (
+            <CardSection title={t('fc.cooking.title')}>
+              <ReadCooking product={product} tables={snap.tables} />
+            </CardSection>
+          ) : null}
           <CardSection title={t('fc.packaging')}>
             <ReadPackaging product={product} working={working} tables={snap.tables} loaded={loaded} />
           </CardSection>

@@ -1,0 +1,149 @@
+/* The product's own «Cottura»: the raw and the cooked dough side by side (they wrap under each other on a phone too narrow for both),
+   what the weighing means for the cost of a kilo, and the warnings. */
+
+.cooking {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  align-self: stretch;
+  min-width: 0;
+}
+
+.pair {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+}
+
+/* ⚠️ NO `min-width: 0` ON THE CELL (driven 11 Nov 2026): a cell allowed to shrink below its box stayed on the line at 360px and its box
+   ran 23px over the cooked one, the «g» hidden under it. Held at its content's width, a cell goes under its neighbour whenever the two
+   boxes cannot both show a whole weight. */
+.cell {
+  display: flex;
+  flex: 1 1 110px;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.label {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.box {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* 18px type on purpose: a field under 16px makes iOS zoom the page in when it is focused.
+   ⚠️ SIZED IN `ch`, NOT GUESSED IN PIXELS (owner, Nov 2026: «il peso non si vede tutto», current app df7e6313). 1ch is the width
+   of a «0» in the box's own font and tabular-nums makes every digit exactly 1ch: nine of them ("12345.678", exactly nine characters) need 9ch,
+   plus 2 × var(--s2) of padding and 2 × 1.5px of border. The padding is var(--s2), not var(--s3), for the same reason; the pair
+   wraps under itself rather than clip a weight. */
+.input {
+  width: 100%;
+  min-width: calc(9ch + 2 * var(--s2) + 3px);
+  min-height: var(--hit);
+  padding: 0 var(--s2);
+  border: 1.5px solid var(--line-2);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  color: var(--ink);
+  font: 450 var(--fs-lg) var(--mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.input::placeholder {
+  color: var(--ink-3);
+}
+
+.input:focus {
+  border-color: var(--accent);
+}
+
+/* A wrong pair is KEPT, so its box stays red as long as the warning stands. Red text is --danger-ink on the card (above the
+   4.5:1 small text needs); the frame is a second ring, not only a colour change. */
+.input[data-invalid="true"] {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger);
+}
+
+.unit {
+  color: var(--ink-2);
+}
+
+/* «use the total»: a small, low-key text button under the raw box, with a full-height target. A `bare` button has no look of its own
+   (ui/Button): the browser's frame and grey fill come off here, or it draws as a grey box. */
+.useTotal {
+  align-self: flex-start;
+  min-width: var(--hit);
+  min-height: var(--hit);
+  padding: 0 var(--s1);
+  border: 0;
+  background: none;
+  color: var(--ink-2);
+  font: 600 var(--fs-sm)/1.3 var(--font);
+  text-align: left;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.useTotal[data-focus-visible] {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The result line is always on the page (it is a live region); empty, it takes no room: it cancels the column's gap. */
+.out {
+  margin: 0;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+}
+
+.out:empty {
+  margin-top: calc(-1 * var(--s2));
+}
+
+.out strong {
+  font-weight: 700;
+}
+
+/* The warning and the hint share one live region, always on the page. Empty, it takes no room: it cancels the gap, and what it holds
+   puts the gap back above itself. */
+.live {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin-top: calc(-1 * var(--s2));
+}
+
+.live > * {
+  margin: 0;
+}
+
+.live > :first-child {
+  margin-top: var(--s2);
+}
+
+.warn {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  color: var(--danger-ink);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+}
+
+.warn svg {
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+
+.hint,
+.shared {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}

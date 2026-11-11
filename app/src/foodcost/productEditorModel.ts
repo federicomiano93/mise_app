@@ -1,9 +1,12 @@
 import {
-  PRODUCT_MODEL, isLegacyProduct, normalizeProduct, vatSelection,
+  PRODUCT_MODEL, isLegacyProduct, normalizeProduct, vatSelection, weighingAllowed,
 } from '@mise/shared/foodcost-model';
 import type {
   LineUnit, PackUnit, Product, ProductComponent, ProductDraft, SellingMode,
 } from '@mise/shared/foodcost-model';
+import { normalizeLossPct } from '@mise/shared/catalogue-model';
+import { startWeighing, typeCooked, typeRaw } from '@mise/shared/foodcost-weighing';
+import type { WeighingState } from '@mise/shared/foodcost-weighing';
 import { kilosFromTyped, typedFromKilos } from '@mise/shared/line-quantity';
 import type { KiloLineUnit } from '@mise/shared/line-quantity';
 
@@ -52,14 +55,32 @@ export interface Working {
   // The free box. Only read while the menu says 'other'.
   vatOther: string;
   foodCostTarget: string;
-  // The product's own weighing (model 3), handed back untouched: grams, or null. No box yet.
+  // The product's own weighing (model 3), as the text of its two «Cottura» boxes. `rawText` is null while the raw box FOLLOWS the lines'
+  // total (nothing typed apart: the saved product holds no `rawGrams`); `cookedText` is empty for «no loss».
+  rawText: string | null;
+  cookedText: string;
+  // What the boxes opened with: their text and the exact grams behind it. ⚠️ UNTOUCHED MEANS UNCHANGED (the recipe line's `stored`
+  // pattern): a box shows at most one decimal, so a box left as it opened hands the stored grams back EXACTLY — 416.6667 stays
+  // 416.6667 through a rename-only save, which then records no margin point.
+  opened: OpenedWeighing;
+  // A person typed in a «Cottura» box (or tapped «use the total») on THIS screen. Only then does a product made of one recipe write
+  // that recipe's weighing too: opening a converted product and saving it must not move the recipe.
+  cookingTyped: boolean;
+}
+
+export interface OpenedWeighing {
+  rawText: string | null;
   rawGrams: number | null;
+  cookedText: string;
   cookedGrams: number | null;
 }
 
 // The numbers a product carries in a box, by the name the save limits know them by.
 export type NumberField =
   | 'piecesPerBatch' | 'packSize' | 'labourMinutes' | 'labourPeople' | 'sellingPrice' | 'vatRate' | 'foodCostTarget';
+
+// The two weights of «Cottura», which Save checks the way it checks a number box (weighingAllowed).
+export type WeightField = 'rawGrams' | 'cookedGrams';
 
 let lastKey = 0;
 export const newLineKey = (): string => `line-${++lastKey}`;
@@ -75,11 +96,18 @@ function openRecipeLine(recipeId: string, qtyKg: number): WorkingComponent {
   return { key: newLineKey(), kind: 'recipe', recipeId, qty, unit: RECIPE_LINE_OPENS_IN, stored: { qty, kg: qtyKg } };
 }
 
+// A stored weight as its box opens: at most one decimal, written like the recipe lines write grams (String, a «.», no grouping).
+export function weightText(grams: number): string {
+  return String(Math.round(grams * 10) / 10);
+}
+
+const NOTHING_WEIGHED: OpenedWeighing = { rawText: null, rawGrams: null, cookedText: '', cookedGrams: null };
+
 export function emptyWorking(): Working {
   return {
     name: '', components: [], packaging: [], sellingMode: '', piecesPerBatch: '', packSize: '', packUnit: '',
     labourMinutes: '', labourPeople: '', sellingPrice: '', vatSelect: '', vatOther: '', foodCostTarget: '',
-    rawGrams: null, cookedGrams: null,
+    rawText: null, cookedText: '', opened: NOTHING_WEIGHED, cookingTyped: false,
   };
 }
 
@@ -98,6 +126,12 @@ export function workingFromDraft(draft: ProductDraft): Working {
 // rate», unchanged (vatSelection decides, in a test of its own).
 export function workingFrom(product: Product, country: unknown): Working {
   const vat = vatSelection(product.vatRate, country);
+  const opened: OpenedWeighing = {
+    rawText: product.rawGrams === null ? null : weightText(product.rawGrams),
+    rawGrams: product.rawGrams,
+    cookedText: product.cookedGrams === null ? '' : weightText(product.cookedGrams),
+    cookedGrams: product.cookedGrams,
+  };
   return {
     name: product.name,
     components: product.components.map<WorkingComponent>(line => (line.kind === 'ingredient'
@@ -114,8 +148,10 @@ export function workingFrom(product: Product, country: unknown): Working {
     vatSelect: vat.select,
     vatOther: vat.other,
     foodCostTarget: text(product.foodCostTarget),
-    rawGrams: product.rawGrams,
-    cookedGrams: product.cookedGrams,
+    rawText: opened.rawText,
+    cookedText: opened.cookedText,
+    opened,
+    cookingTyped: false,
   };
 }
 
@@ -164,6 +200,82 @@ export function isShown(working: Working, field: NumberField): boolean {
   return true;
 }
 
+// A «Cottura» box → grams: the stored grams, exactly, while the box is as it opened; else what it says (empty → null, not a number → NaN).
+function weightOf(text: string | null, openedText: string | null, openedGrams: number | null): number | null {
+  if (text === openedText) return openedGrams;
+  return text === null ? null : readNumber(text);
+}
+
+// How far a raw weight typed may sit from the lines' total and still count as the total, in grams.
+const FOLLOWS_TOTAL_G = 0.05;
+
+// Whether a raw box's text means «the lines' total»: empty, or within 0.05 g of it (compared with the EXACT total, not the one-decimal
+// figure the box shows). Text that is not a number is a weight typed apart.
+export function followsTotal(text: string, totalGrams: number): boolean {
+  const typed = readNumber(text);
+  return typed === null || Math.abs(typed - totalGrams) <= FOLLOWS_TOTAL_G;
+}
+
+// The raw box handed back to following the total when what it holds means that — at blur AND at Save, so Save never depends on the
+// box having lost the focus first. ⚠️ A BOX LEFT AS IT OPENED is not touched (a stored raw weight 0.03 g off the total stays what it
+// was), and the SAME object comes back when nothing changes, so a caller can tell.
+export function settleRaw(working: Working, totalGrams: number): Working {
+  const text = working.rawText;
+  if (text === null || text === working.opened.rawText || !followsTotal(text, totalGrams)) return working;
+  return { ...working, rawText: null };
+}
+
+// What the raw box shows: the text typed, else the lines' total (at most one decimal), empty while there is nothing to total.
+export function rawBoxText(working: Working, totalGrams: number): string {
+  if (working.rawText !== null) return working.rawText;
+  return totalGrams > 0 ? weightText(totalGrams) : '';
+}
+
+// The first weight of «Cottura» the rules would refuse, or null.
+export function firstBadWeight(product: Product): WeightField | null {
+  if (!weighingAllowed(product.rawGrams)) return 'rawGrams';
+  if (!weighingAllowed(product.cookedGrams)) return 'cookedGrams';
+  return null;
+}
+
+const recipeOf = (recipes: Readonly<Record<string, unknown>>, recipeId: string): unknown =>
+  (Object.prototype.hasOwnProperty.call(recipes, recipeId) ? recipes[recipeId] : null);
+
+// The recipe a product made of ONE recipe writes its weighing onto (plan 2b: «come oggi»): only when a person typed in «Cottura» on
+// this screen, the product has exactly one line, that line is a recipe, and the recipe exists. Packaging does not count as a line.
+// The raw weight is the product's (typed apart, else the lines' total), the cooked one its own ('' for none: no patch).
+export function recipeWeighing(
+  working: Working, totalGrams: number, recipes: Readonly<Record<string, unknown>>,
+): { recipeId: string; state: WeighingState } | null {
+  if (!working.cookingTyped || working.components.length !== 1) return null;
+  const [line] = working.components;
+  if (!line || line.kind !== 'recipe') return null;
+  const recipe = recipeOf(recipes, line.recipeId);
+  if (!recipe) return null;
+  const product = toProduct(settleRaw(working, totalGrams), '');
+  // ⚠️ The lines' total is a float product (2.01 kg → 2009.9999999999998 g): a thousandth of a gram keeps that noise off the recipe.
+  const raw = product.rawGrams ?? Math.round(totalGrams * 1000) / 1000;
+  const cooked = product.cookedGrams;
+  return {
+    recipeId: line.recipeId,
+    state: typeCooked(typeRaw(startWeighing(recipe), raw), cooked === null || Number.isNaN(cooked) ? '' : cooked),
+  };
+}
+
+// The first recipe line (in order) whose recipe loses weight in the oven, while the cooked box is empty: a new product made of a
+// recipe that loses weight must never show a no-loss cost unannounced (third code review).
+export function recipeLossHint(working: Working, recipes: Readonly<Record<string, unknown>>): { name: string; pct: number } | null {
+  if (working.cookedText.trim() !== '') return null;
+  for (const line of working.components) {
+    if (line.kind !== 'recipe') continue;
+    const recipe = recipeOf(recipes, line.recipeId);
+    if (!recipe || typeof recipe !== 'object') continue;
+    const pct = normalizeLossPct((recipe as { lossPct?: unknown }).lossPct);
+    if (pct > 0) return { name: String((recipe as { name?: unknown }).name ?? ''), pct };
+  }
+  return null;
+}
+
 // The working copy → a product, with its numbers read from their boxes and its lines stripped of
 // the ids that live only here. A number that is not a number stays NaN (it is refused at Save, and
 // every cost model reads it as «not said»).
@@ -185,8 +297,8 @@ export function toProduct(working: Working, id: string, name: string = working.n
     foodCostTarget: readNumber(working.foodCostTarget),
     labourMinutes: readNumber(working.labourMinutes),
     labourPeople: readNumber(working.labourPeople),
-    rawGrams: working.rawGrams,
-    cookedGrams: working.cookedGrams,
+    rawGrams: weightOf(working.rawText, working.opened.rawText, working.opened.rawGrams),
+    cookedGrams: weightOf(working.cookedText, working.opened.cookedText, working.opened.cookedGrams),
     noWeightLoss: false,
     model: PRODUCT_MODEL,
   };

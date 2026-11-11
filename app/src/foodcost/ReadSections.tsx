@@ -113,7 +113,8 @@ export function ReadMadeOf({ product, working, tables, loaded }: Lines) {
 
 // ── Weight and oven loss ──────────────────────────────────────────────────────────────────────────
 // What the PRODUCT weighs raw and cooked (model 3: the loss belongs to the product, not to its recipes), and the red warning of a
-// cooked weight heavier than the raw one, which the person must see before a cost per kilo is trusted. `product` is current.
+// cooked weight heavier than the raw one, which the person must see before a cost per kilo is trusted. `product` is current. The
+// read view's «Cottura» card; the form has the boxes (CookingSection).
 export function ReadCooking({ product, tables }: { product: Product; tables: CostTables }) {
   const { t } = useT();
   const money = useMoney();
@@ -127,11 +128,10 @@ export function ReadCooking({ product, tables }: { product: Product; tables: Cos
   return (
     <div className={styles.block}>
       <ReadList rows={rows} />
-      {/* ⚠️ SPOKEN (code review, 11 Nov 2026; P18): in the form the warning can appear while a line is typed, as the weighing pairs'
-          notes it replaces did, and those were announced. Present before it speaks: text added to a region already on the page is
-          announced. The food-cost answer stays silent on purpose (it would re-read every figure at each keystroke). */}
+      {/* ⚠️ SPOKEN (code review, 11 Nov 2026; P18): a cooked weight can turn heavier than the raw one while the card is on screen (the
+          recipe changed elsewhere). Present before it speaks: text added to a region already on the page is announced. */}
       <div className={styles.live} aria-live="polite">
-        {cooking.heavier ? <p className={styles.warn}>{t('fc.lossCookedHeavier')}</p> : null}
+        {cooking.heavier ? <p className={styles.warn}>{t('fc.cooking.heavier')}</p> : null}
       </div>
     </div>
   );

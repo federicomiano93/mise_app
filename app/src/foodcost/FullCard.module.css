@@ -80,12 +80,6 @@
   font-weight: 650;
 }
 
-.subTitle {
-  margin: var(--s1) 0 0;
-  font-size: var(--fs-sm);
-  font-weight: 650;
-}
-
 .stack {
   display: flex;
   flex-direction: column;

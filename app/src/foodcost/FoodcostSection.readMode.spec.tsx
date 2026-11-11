@@ -38,7 +38,7 @@ async function confirmSave(user: Awaited<ReturnType<typeof read>>['user']) {
   await user.click(within(asked).getByRole('button', { name: 'Save' }));
 }
 
-const SECTIONS = ['Product', 'Made of', 'Packaging', 'Work time', 'Price', 'Calculated costs'];
+const SECTIONS = ['Product', 'Made of', 'Baking', 'Packaging', 'Work time', 'Price', 'Calculated costs'];
 
 describe('which view a product opens in', () => {
   it('a product with something costed opens to READ: the summary, a closed «Full card», the pencil', async () => {
@@ -160,7 +160,7 @@ describe('the pencil and the way back', () => {
 });
 
 describe('the Full card', () => {
-  it('holds the six sections in the order they are filled in, results last, in the read view and in the form', async () => {
+  it('holds the seven sections in the order they are filled in, results last, in the read view and in the form', async () => {
     const { user } = await read();
     expect(cardTitles()).toEqual(SECTIONS);
     await user.click(pencil());
@@ -272,7 +272,7 @@ describe('the read view is text, not a form', () => {
     const fake = editorSource([product('Plain', { sellingPrice: null })]);
     renderFoodcost('/food-cost/product/Plain', { source: fake, ...ITALY });
     expect(await screen.findByRole('button', { name: 'Modifica il prodotto' }, LOAD)).toBeInTheDocument();
-    expect(cardTitles()).toEqual(['Prodotto', 'Composto da', 'Imballaggio', 'Tempo di lavoro', 'Prezzo', 'Costi calcolati']);
+    expect(cardTitles()).toEqual(['Prodotto', 'Composto da', 'Cottura', 'Imballaggio', 'Tempo di lavoro', 'Prezzo', 'Costi calcolati']);
     expect(within(fullCard()).getByText('Scheda completa')).toBeInTheDocument();
     expect(cardNamed('Prezzo')).toHaveTextContent('Non inserito');
     expect(cardNamed('Imballaggio')).toHaveTextContent('Ancora niente');
@@ -282,8 +282,7 @@ describe('the read view is text, not a form', () => {
   it('shows a product’s cooking, red and warned, with no loss row, when the cooked weight is above the raw one', async () => {
     const loaf = product('Loaf', { components: [{ recipeId: 'Dough', qtyKg: 1 }], cookedGrams: 1200, model: 3 });
     await read('Loaf', editorSource([loaf], { recipes: [recipe('Dough')] }));
-    const made = cardNamed('Made of');
-    expect(within(made).getByRole('heading', { level: 4, name: 'Baking' })).toBeInTheDocument();
+    const made = cardNamed('Baking');
     expect(rowOf(made, 'Raw dough')).toHaveTextContent('1000.00 g');
     expect(rowOf(made, 'Cooked dough')).toHaveTextContent('1200.00 g');
     expect(within(made).getByText('The cooked dough cannot weigh more than the raw dough.')).toBeInTheDocument();
@@ -294,16 +293,16 @@ describe('the read view is text, not a form', () => {
     const sound = product('Sound', { components: [{ recipeId: 'Dough', qtyKg: 1 }], cookedGrams: 900, model: 3 });
     const plain = product('Plain loaf', { components: [{ recipeId: 'Dough', qtyKg: 1 }], model: 3 });
     const { user } = await read('Sound', editorSource([sound, plain], { recipes: [recipe('Dough')] }));
-    expect(within(cardNamed('Made of')).queryByText(/cannot weigh more/)).not.toBeInTheDocument();
-    expect(rowOf(cardNamed('Made of'), 'Raw dough')).toHaveTextContent('1000.00 g');
-    expect(rowOf(cardNamed('Made of'), 'Cooked dough')).toHaveTextContent('900.00 g');
-    expect(rowOf(cardNamed('Made of'), 'Oven loss')).toHaveTextContent('10.00%');
+    expect(within(cardNamed('Baking')).queryByText(/cannot weigh more/)).not.toBeInTheDocument();
+    expect(rowOf(cardNamed('Baking'), 'Raw dough')).toHaveTextContent('1000.00 g');
+    expect(rowOf(cardNamed('Baking'), 'Cooked dough')).toHaveTextContent('900.00 g');
+    expect(rowOf(cardNamed('Baking'), 'Oven loss')).toHaveTextContent('10.00%');
     await user.click(screen.getByRole('button', { name: 'Back' }));
     await user.click(await screen.findByRole('button', { name: /^Plain loaf/ }, LOAD));
     await user.click(await screen.findByRole('button', { name: 'Open the card' }, LOAD));
     await screen.findByRole('button', { name: 'Edit product' }, LOAD);
-    expect(cardNamed('Made of')).toHaveTextContent('No oven loss.');
-    expect(within(cardNamed('Made of')).queryByText('Raw dough')).not.toBeInTheDocument();
+    expect(cardNamed('Baking')).toHaveTextContent('No oven loss.');
+    expect(within(cardNamed('Baking')).queryByText('Raw dough')).not.toBeInTheDocument();
   });
 
   it('draws the notes the form draws under a line: a recipe nobody priced says «No price», never a cost', async () => {
