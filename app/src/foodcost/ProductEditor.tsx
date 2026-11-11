@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from 'react-router';
 import { draftFromRecipe } from '@mise/shared/foodcost-model';
 import type { Product } from '@mise/shared/foodcost-model';
 import { useT } from '../i18n/useT';
+import { useOnline } from '../shell/useOnline';
 import { FormBar } from '../ui/FormBar';
 import { useFoodcost, useFoodcostStore } from './FoodcostContext';
 import { useCopyWait } from './copyWait';
@@ -12,7 +13,7 @@ import type { Origin } from './foodcostPath';
 import { ScrollTopContext, useBackToRecipe, useLeave, wantsTitleFocus } from './foodcostNav';
 import { NEW_OPENER, productOpener, useHandBack } from './handBack';
 import { ProductForm } from './ProductForm';
-import { waitsForTables } from './productEditorModel';
+import { recipesOnLinesHere, waitsForTables } from './productEditorModel';
 import { ProductRead, summaryShows } from './ProductRead';
 import { useProductExit } from './useProductExit';
 import styles from './ProductEditor.module.css';
@@ -40,7 +41,7 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
   const { t } = useT();
   const { state } = useLocation();
   const navigate = useNavigate();
-  const { products, productsFromServer, recipes, recipesFromServer, recipesLoaded, ingredientsLoaded, tables } = useFoodcost();
+  const { products, productsFromServer, recipes, recipesFromServer, recipesFailed, recipesLoaded, ingredientsLoaded, tables } = useFoodcost();
   const titleId = useId();
   const title = useRef<HTMLHeadingElement>(null);
 
@@ -66,11 +67,26 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
     setLastId(id);
     if (justSaved !== null && justSaved !== id) setJustSaved(null);
   }
-  // ⚠️ A LEGACY PRODUCT WITH RECIPE LINES OPENS ONLY ONCE THE RECIPES AND THE PRICES ARE IN (ingredientsLoaded already means with
-  // their prices): it is converted with them, and opened on unconverted lines — the form copies once, Save writes them as raw
-  // kilos — would write a cost too low for ever. NO TIMEOUT: the store sets both flags even when a stream fails, so this cannot hang.
-  const canOpen = product !== null && (answered || justSaved === id)
-    && (!waitsForTables(product) || (recipesLoaded && ingredientsLoaded));
+  // ⚠️⚠️ A LEGACY PRODUCT WITH RECIPE LINES IS CONVERTED WITH THE RECIPES (code reviews, 11 Nov 2026), and this phone's copy of
+  // them can be older than the server's: a recipe added since is missing — its line keeps its finished kilos and loses nothing —
+  // and a loss changed since moves every raw weight. The FORM copies the product once and Save writes it: a wrong cost for ever
+  // (the current app cannot correct it, the rules keep it off a model-3 product). So, once the recipes and the prices are in
+  // (ingredientsLoaded already means with their prices):
+  //  - the FORM opens on the SERVER'S word about the recipes — or, with no signal or a recipes stream that died, on the copy, but
+  //    only when it holds every recipe on the product's lines (third review: a copy missing one, offline, would be saved as a
+  //    line that loses nothing);
+  //  - the READ view, which re-converts on every change and saves nothing, opens on the copy after COPY_WAIT_MS, its pencil held
+  //    with a sentence saying why until the form may open. So a server that never answers (a Wi-Fi with no internet) still
+  //    shows the product, and nobody edits it on a stale recipe. A recipes stream that died without one of the lines' recipes
+  //    says so instead of «once they arrive»: nothing listens again until a new visit to Food cost (FoodcostContext).
+  const online = useOnline();
+  const recipesAnswered = useCopyWait(recipesFromServer);
+  const waits = product !== null && waitsForTables(product);
+  const tablesIn = recipesLoaded && ingredientsLoaded;
+  const copyWillDo = (recipesFailed || !online) && product !== null && recipesOnLinesHere(product, recipes);
+  const formTrusted = !waits || (tablesIn && (recipesFromServer || copyWillDo));
+  const readable = !waits || (tablesIn && (formTrusted || recipesAnswered));
+  const canOpen = product !== null && (answered || justSaved === id) && readable;
   const draftWaiting = draftFor !== null && !answered;
   // ⚠️ DECIDED ONCE: a recipe that arrives after the form opened plain must not swap the form for a
   // prefilled one (the key would change and what was typed would be lost).
@@ -102,7 +118,8 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
     ? chosen
     : !hasForm ? null
       : justSaved !== null && justSaved === id ? { id, edit: false, fromRead: false }
-        : { id, edit: id === null || product === null || !summaryShows(product, tables), fromRead: false };
+        // A product whose form may not open yet is read, whatever it shows (above).
+        : { id, edit: formTrusted && (id === null || product === null || !summaryShows(product, tables)), fromRead: false };
   if (mode !== null && mode !== chosen) setChosen(mode);
 
   // The focus follows a switch the person made (the pencil, Save, Back from the form): to the new view's own title.
@@ -116,7 +133,7 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
     title.current?.focus();
   }, [mode?.edit, mode?.id]);
   const edit = () => {
-    if (product === null) return;
+    if (product === null || !formTrusted) return;
     switched.current = true;
     setChosen({ id, edit: true, fromRead: true });
   };
@@ -179,6 +196,7 @@ export function ProductEditor({ id, origin }: { id: string | null; origin: Origi
         origin={formOrigin}
         titleRef={title}
         onEdit={edit}
+        editWaits={formTrusted ? null : recipesFailed ? 'failed' : 'coming'}
       />
     );
   }

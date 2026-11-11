@@ -16,6 +16,14 @@
   color: var(--ink-2);
 }
 
+/* Under the name in the read view's bar: why the pencil is held. */
+.sub {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+  overflow-wrap: anywhere;
+}
+
 .body {
   display: flex;
   flex-direction: column;

@@ -214,8 +214,12 @@ describe('the Food cost store', () => {
   test('the borrowed collections fail quietly: only the wait ends', () => {
     const { fake, store, messages } = setup();
     store.start();
+    expect(store.getSnapshot().recipesFailed).toBe(false);
     fake.recipesFail();
     expect(store.getSnapshot().recipesLoaded).toBe(true);
+    // …and says the server's word about a recipe will never come (a legacy product stops waiting for it).
+    expect(store.getSnapshot().recipesFailed).toBe(true);
+    expect(store.getSnapshot().recipesFromServer).toBe(false);
     expect(messages).toEqual([]);
   });
 

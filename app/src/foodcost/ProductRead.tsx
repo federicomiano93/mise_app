@@ -37,6 +37,10 @@ type Props = {
   titleRef: Ref<HTMLHeadingElement>;
   // The pencil: the SAME product, as the form.
   onEdit: () => void;
+  // The form may not open yet (a product saved before the switch, ProductEditor): the pencil is held and a sentence under the
+  // name says why — 'coming' while the server's recipes may still arrive; 'failed' when the recipes stream died with a recipe of
+  // the product's lines missing from this phone (only a new visit to Food cost listens again, so «once they arrive» would be a lie).
+  editWaits?: 'coming' | 'failed' | null;
 };
 
 // Whether the summary has anything to show: something is costed. A fault in the cost model counts as «nothing».
@@ -56,7 +60,7 @@ export function summaryShows(product: unknown, tables: CostTables): boolean {
 // split alike.
 // ⚠️ NOTHING IN IT IS A CONTROL BUT THE BAR'S BUTTONS, THE BOX'S SUMMARY, «DETAILS», «COST PER 1 KG», HISTORY AND DELETE: a box
 // sneaking in would be a form that looks like text.
-export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdit }: Props) {
+export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdit, editWaits = null }: Props) {
   const { t } = useT();
   const store = useFoodcostStore();
   const snap = useFoodcost();
@@ -68,11 +72,13 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
   const [confirm, confirmDialog] = useConfirm();
   const { leave, goBack } = useProductExit(id, origin);
   const titleId = useId();
+  const waitId = useId();
   const country = countryOf(location);
+  const waitNote = editWaits === 'failed' ? t('fc.editRecipesFailed') : editWaits === 'coming' ? t('fc.editWaitsForRecipes') : '';
 
   // ⚠️ THE CURRENT PRODUCT (model 3): one saved before holds finished kilos on its recipe lines; every section below reads the
-  // converted one, so the lines show raw kilos, as the form will after the pencil. ProductEditor opens it only once the recipes
-  // and the prices are in.
+  // converted one, so the lines show raw kilos, as the form will after the pencil. ProductEditor opens it only on recipes and
+  // prices it can trust (waitsForTables).
   const product = useMemo(() => currentProduct(stored, snap.tables) ?? stored, [stored, snap.tables]);
   // The product as the form would open it: it gives each line the name and the note the form shows under it.
   const working = useMemo(() => workingFrom(product, country), [product, country]);
@@ -133,8 +139,19 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
         title={product.name || t('fc.untitledProduct')}
         titleId={titleId}
         titleRef={titleRef}
+        sub={waitNote ? <p id={waitId} className={shell.sub}>{waitNote}</p> : undefined}
         action={
-          <Button variant="primary" aria-label={t('fc.editProduct')} onPress={onEdit}>
+          // ⚠️ HELD WITH aria-disabled, NEVER THE disabled ATTRIBUTE (spec and third code review, 11 Nov 2026): browsers send a
+          // tap's pointer events to a disabled button, and React Aria starts a press on them that no click ever ends — the first
+          // tap once the pencil was free went into finishing that press and opened nothing; and a disabled button drops the focus.
+          // Held, it stays where it was, says why under the name and, tapped, in the status line (ProductEditor refuses it too).
+          <Button
+            variant="primary"
+            aria-label={t('fc.editProduct')}
+            aria-describedby={waitNote ? waitId : undefined}
+            aria-disabled={waitNote !== ''}
+            onPress={waitNote ? () => say(waitNote) : onEdit}
+          >
             <Pencil aria-hidden="true" />
           </Button>
         }

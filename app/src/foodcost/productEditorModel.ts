@@ -201,9 +201,15 @@ export function costable(working: Working, id: string): Product {
 // Whether a product must wait for the recipes and the prices before it is opened.
 // ⚠️ A legacy product with recipe lines is converted WITH the recipes and the prices; converted before they arrive, a recipe
 // line would keep its finished kilos and Save would write them as raw kilos — a cost too low, for ever. A legacy product with
-// ingredient lines only converts without the tables.
+// ingredient lines only converts without the tables. ProductEditor says how long it waits.
 export function waitsForTables(product: Product): boolean {
   return isLegacyProduct(product) && product.components.some(line => line.kind !== 'ingredient');
+}
+
+// Whether every recipe on the product's lines is in `recipes`: this phone's copy, all there will be with no signal or with a
+// recipes stream that died — so ProductEditor opens the form on it only then.
+export function recipesOnLinesHere(product: Product, recipes: Readonly<Record<string, unknown>>): boolean {
+  return product.components.every(line => line.kind === 'ingredient' || recipes[line.recipeId] !== undefined);
 }
 
 // A number for a sentence, in the interface language's own digits and decimal sign, with no

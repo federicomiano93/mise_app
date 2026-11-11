@@ -471,6 +471,8 @@ export const en = {
   'fc.preview.close': 'Close',
   'fc.fullCard': 'Full card',
   'fc.editProduct': 'Edit product',
+  'fc.editWaitsForRecipes': 'You can edit it once the latest recipes arrive.',
+  'fc.editRecipesFailed': 'The recipes didn’t load: leave Food cost and come back to edit it.',
   'fc.section.product': 'Product',
   'fc.section.weighing': 'Weight and oven loss',
   'fc.section.price': 'Price',

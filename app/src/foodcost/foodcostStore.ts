@@ -59,6 +59,8 @@ export interface FoodcostSnapshot {
   readonly recipesLoaded: boolean;
   // The SERVER has answered about the recipes once: only then is «no such recipe» the truth.
   readonly recipesFromServer: boolean;
+  // The recipes' stream died: the server's word about a recipe will never come, so nothing may wait for it.
+  readonly recipesFailed: boolean;
   readonly ingredients: Readonly<Record<string, StoredDoc>>;
   readonly ingredientsLoaded: boolean;
   // What an hour of work costs — null until it arrives, and null for ever for anybody who does not
@@ -205,6 +207,7 @@ export function createFoodcostStore(
   let recipes: Readonly<Record<string, StoredDoc>> = indexById(bootRecipes);
   let recipesLoaded = Array.isArray(bootRecipes);
   let recipesFromServer = false;
+  let recipesFailed = false;
   let ingredients: Readonly<Record<string, StoredDoc>> = indexById(bootIngredients);
   let ingredientsLoaded = Array.isArray(bootIngredients);
   let labourCostPerHour: number | null = null;
@@ -232,8 +235,8 @@ export function createFoodcostStore(
       tables = { recipes, ingredients, labourCostPerHour };
     }
     return {
-      products, productsLoaded, productsFromServer, recipes, recipesLoaded, recipesFromServer, ingredients, ingredientsLoaded,
-      labourCostPerHour, settingsLoaded, tables, unsent: inFlight > 0,
+      products, productsLoaded, productsFromServer, recipes, recipesLoaded, recipesFromServer, recipesFailed, ingredients,
+      ingredientsLoaded, labourCostPerHour, settingsLoaded, tables, unsent: inFlight > 0,
     };
   }
 
@@ -359,6 +362,7 @@ export function createFoodcostStore(
           changed();
         },
         () => {
+          recipesFailed = true;
           recipesLoaded = true;
           changed();
         },

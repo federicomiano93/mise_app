@@ -1,9 +1,10 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, screen, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import { currentProduct } from '@mise/shared/foodcost-model';
 import type { Product } from '@mise/shared/foodcost-model';
-import { editorSource, recipe } from '../testing/foodcostEditorFixtures';
+import { editorSource, intoForm, recipe } from '../testing/foodcostEditorFixtures';
 import { FLOUR, FLOUR_PRICES, LOAD, product, renderFoodcost } from '../testing/renderFoodcost';
+import { COPY_WAIT_MS } from './copyWait';
 
 // Product model 3: the oven loss belongs to the PRODUCT (rawGrams / cookedGrams) and a recipe line is RAW kilos. What the SCREENS do
 // with a product saved before (model 2): it waits for the recipes and the prices, shows the converted lines, and Save writes model 3.
@@ -14,6 +15,7 @@ beforeAll(async () => { await import('./FoodcostSection'); }, 60_000);
 beforeEach(() => { window.localStorage.clear(); });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   window.localStorage.clear();
 });
@@ -53,6 +55,147 @@ describe('a product saved before model 3 (production today)', () => {
 
     act(() => { fake.releaseIngredients(); });
     expect(await pencil()).toBeInTheDocument();
+  });
+
+  // ⚠️ Code reviews, 11 Nov 2026: the recipes' «loaded» flag is true on this phone's own copy, which can be older than the server's
+  // — a recipe added since is missing, a loss changed since is stale. Opened on it, the FORM would copy the wrong raw kilos and Save
+  // would write them, a wrong cost for ever. The READ view (which saves nothing) opens on the copy after the short wait, its pencil
+  // held until the form may open: on the server's word or — with no signal or a stream that died — on a copy holding every recipe
+  // of the product's lines. Held means aria-disabled: the pencil keeps its place and the focus, and a tap says why.
+  const WAIT_NOTE = 'You can edit it once the latest recipes arrive.';
+  const FAILED_NOTE = 'The recipes didn’t load: leave Food cost and come back to edit it.';
+  const editButton = () => screen.getByRole('button', { name: 'Edit product' });
+  const setOnline = (online: boolean) => {
+    vi.stubGlobal('navigator', { ...navigator, onLine: online });
+    act(() => { window.dispatchEvent(new Event(online ? 'online' : 'offline')); });
+  };
+
+  it('(v) ⚠️ a copy of the recipes older than the recipe on its line (slow Wi-Fi): read only after the short wait, the pencil held', async () => {
+    const fake = editorSource([LEGACY], { recipes: [DOUGH] });
+    // The server's answer is held back; the browser's own copy, which has never heard of «Dough», comes first.
+    fake.holdRecipes([]);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    renderFoodcost('/food-cost/product/Loaf', { source: fake });
+    // React holds a revealed section back for a few hundred ms of its own: let the product's screen mount first.
+    await act(async () => { await vi.advanceTimersByTimeAsync(600); });
+    expect(screen.getAllByText('Loading…').length).toBeGreaterThan(0);
+    await act(async () => { await vi.advanceTimersByTimeAsync(COPY_WAIT_MS * 3); });
+    // Nothing is costed without its recipe, which would open the FORM: it is read, and the pencil says why it is held.
+    expect(editButton()).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText(WAIT_NOTE)).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Name' })).not.toBeInTheDocument();
+
+    vi.useRealTimers();
+    act(() => { fake.releaseRecipes(); });
+    await waitFor(() => { expect(editButton()).not.toHaveAttribute('aria-disabled', 'true'); });
+    expect(screen.queryByText(WAIT_NOTE)).not.toBeInTheDocument();
+    expect(rowOf(cardNamed('Made of'), 'Dough')).toHaveTextContent('1.00 kg');
+  });
+
+  it('(vi) …a copy holding every recipe (a loss may have changed since): read on the copy after the short wait, the pencil held', async () => {
+    const fake = editorSource([LEGACY], { recipes: [DOUGH] });
+    fake.holdRecipes([DOUGH]);
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    const { user } = renderFoodcost('/food-cost/product/Loaf', { source: fake });
+    await act(async () => { await vi.advanceTimersByTimeAsync(600); });
+    expect(screen.queryByRole('button', { name: 'Edit product' })).not.toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(COPY_WAIT_MS); });
+    // Read on the copy, converted with it.
+    expect(rowOf(cardNamed('Made of'), 'Dough')).toHaveTextContent('1.00 kg');
+    const held = editButton();
+    expect(held).toHaveAttribute('aria-disabled', 'true');
+    expect(held).toHaveAccessibleDescription(WAIT_NOTE);
+
+    vi.useRealTimers();
+    // A tap on the held pencil opens nothing, and says why in the status line.
+    await user.click(held);
+    expect(screen.queryByRole('combobox', { name: 'Name' })).not.toBeInTheDocument();
+    await waitFor(() => { expect(screen.getAllByRole('status').some(node => node.textContent?.includes(WAIT_NOTE))).toBe(true); });
+    act(() => { fake.releaseRecipes(); });
+    // The server's word frees the SAME button: a tap that came before swallows nothing, and the focus never moves.
+    await waitFor(() => { expect(held).not.toHaveAttribute('aria-disabled', 'true'); });
+    await user.click(held);
+    expect(await screen.findByRole('combobox', { name: 'Name' }, LOAD)).toBeInTheDocument();
+  });
+
+  it('(vii) …it never hangs: a recipes stream that died reads it on what this phone has, the pencil held for a missing recipe', async () => {
+    const fake = editorSource([LEGACY], { recipes: [DOUGH] });
+    fake.refuse.recipes = true;
+    renderFoodcost('/food-cost/product/Loaf', { source: fake });
+    // No copy of «Dough» at all: nothing costed, which would open the form — it is read, the pencil held. Nothing listens
+    // again until a new visit, so the sentence says that, not «once they arrive».
+    const held = await pencil();
+    expect(held).toHaveAttribute('aria-disabled', 'true');
+    expect(held).toHaveAccessibleDescription(FAILED_NOTE);
+    expect(screen.queryByText(WAIT_NOTE)).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Name' })).not.toBeInTheDocument();
+  });
+
+  it('(vii) …and a stream that dies after a copy holding every recipe opens the form on that copy, all there will be', async () => {
+    const fake = editorSource([LEGACY], { recipes: [DOUGH] });
+    fake.holdRecipes([DOUGH]);
+    const { user } = renderFoodcost('/food-cost/product/Loaf', { source: fake });
+    expect(await pencil()).toHaveAttribute('aria-disabled', 'true');
+    act(() => { fake.failRecipes(); });
+    await waitFor(() => { expect(editButton()).not.toHaveAttribute('aria-disabled', 'true'); });
+    await intoForm(user);
+  });
+
+  it('(viii) …nor with no signal: a copy holding every recipe of its lines opens at once', async () => {
+    vi.stubGlobal('navigator', { ...navigator, onLine: false });
+    const fake = editorSource([LEGACY], { recipes: [DOUGH] });
+    fake.holdRecipes([DOUGH]);
+    const { user } = renderFoodcost('/food-cost/product/Loaf', { source: fake });
+    await intoForm(user);
+  });
+
+  it('(viii) ⚠️ …but a copy missing a recipe of its lines is only read: saved offline, that line would lose nothing for ever', async () => {
+    vi.stubGlobal('navigator', { ...navigator, onLine: false });
+    const fake = editorSource([LEGACY], { recipes: [DOUGH] });
+    fake.holdRecipes([]);
+    renderFoodcost('/food-cost/product/Loaf', { source: fake });
+    expect(await pencil()).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByText(WAIT_NOTE)).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Name' })).not.toBeInTheDocument();
+  });
+
+  it('(ix) nothing typed is lost when the signal comes back before the server has answered (P20)', async () => {
+    vi.stubGlobal('navigator', { ...navigator, onLine: false });
+    const fake = editorSource([LEGACY], { recipes: [DOUGH] });
+    fake.holdRecipes([DOUGH]);
+    const { user } = renderFoodcost('/food-cost/product/Loaf', { source: fake });
+    await intoForm(user);
+    const name = screen.getByRole('combobox', { name: 'Name' });
+    await user.clear(name);
+    await user.type(name, 'Loaf typed offline');
+    setOnline(true);
+    expect(screen.getByRole('combobox', { name: 'Name' })).toBe(name);
+    expect(name).toHaveValue('Loaf typed offline');
+  });
+
+  it('(x) the signal going after the product opened frees the pencil, on a copy holding every recipe', async () => {
+    const fake = editorSource([LEGACY], { recipes: [DOUGH] });
+    fake.holdRecipes([DOUGH]);
+    const { user } = renderFoodcost('/food-cost/product/Loaf', { source: fake });
+    const button = await pencil();
+    expect(button).toHaveAttribute('aria-disabled', 'true');
+    setOnline(false);
+    await waitFor(() => { expect(button).not.toHaveAttribute('aria-disabled', 'true'); });
+    await user.click(button);
+    expect(await screen.findByRole('combobox', { name: 'Name' }, LOAD)).toBeInTheDocument();
+  });
+
+  it('(xi) a pencil held again (the signal back, the server not heard yet) keeps the focus', async () => {
+    vi.stubGlobal('navigator', { ...navigator, onLine: false });
+    const fake = editorSource([LEGACY], { recipes: [DOUGH] });
+    fake.holdRecipes([DOUGH]);
+    renderFoodcost('/food-cost/product/Loaf', { source: fake });
+    const button = await pencil();
+    expect(button).not.toHaveAttribute('aria-disabled', 'true');
+    act(() => { button.focus(); });
+    setOnline(true);
+    await waitFor(() => { expect(button).toHaveAttribute('aria-disabled', 'true'); });
+    expect(button).toHaveFocus();
   });
 
   it('(ii) reads the line in RAW kilos, with the raw weight, the cooked weight and the loss of the product', async () => {
@@ -97,8 +240,33 @@ describe('the cooking of a model 3 product, read', () => {
     renderFoodcost('/food-cost/product/Heavy', { source: editorSource([heavy], { recipes: [DOUGH] }) });
     await pencil();
     const made = cardNamed('Made of');
-    expect(within(made).getByText('The cooked dough cannot weigh more than the raw dough.')).toBeInTheDocument();
+    const warning = within(made).getByText('The cooked dough cannot weigh more than the raw dough.');
     expect(within(made).queryByText('Oven loss', { selector: 'dt' })).not.toBeInTheDocument();
+    // Spoken, as the weighing pairs' notes it replaces were.
+    expect(warning.closest('[aria-live="polite"]')).not.toBeNull();
+  });
+
+  it('(d) the live region is on the page before the warning, so the warning is announced when a line makes it true', async () => {
+    const fine = product('Fine', { components: [{ recipeId: 'Dough', qtyKg: 1 }], cookedGrams: 900, model: 3 });
+    renderFoodcost('/food-cost/product/Fine', { source: editorSource([fine], { recipes: [DOUGH] }) });
+    await pencil();
+    const region = cardNamed('Made of').querySelector('[aria-live="polite"]');
+    expect(region).not.toBeNull();
+    expect(region).toBeEmptyDOMElement();
+  });
+
+  it('(d) in the form too: the region is there first, and lowering the dough under the cooked weight puts the warning in it', async () => {
+    const fine = product('Fine', { components: [{ recipeId: 'Dough', qtyKg: 1 }], cookedGrams: 900, model: 3 });
+    const { user } = renderFoodcost('/food-cost/product/Fine', { source: editorSource([fine], { recipes: [DOUGH] }) });
+    await intoForm(user);
+    const made = cardNamed('Made of');
+    const region = rowOf(made, 'Cooked dough').closest('dl')?.parentElement?.querySelector('[aria-live="polite"]');
+    expect(region).toBeInstanceOf(HTMLElement);
+    expect(region).toBeEmptyDOMElement();
+    const box = within(made).getByRole('textbox', { name: 'Quantity' });
+    await user.clear(box);
+    await user.type(box, '0.5');
+    expect(region).toHaveTextContent('The cooked dough cannot weigh more than the raw dough.');
   });
 
   it('(d) a product with recipe lines and no cooked weight says «No oven loss.»', async () => {

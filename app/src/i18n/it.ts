@@ -428,6 +428,8 @@ export const it: Messages = {
   'fc.preview.close': 'Chiudi',
   'fc.fullCard': 'Scheda completa',
   'fc.editProduct': 'Modifica il prodotto',
+  'fc.editWaitsForRecipes': 'Potrai modificarlo appena arrivano le ricette aggiornate.',
+  'fc.editRecipesFailed': 'Le ricette non si sono caricate: esci da Food cost e rientra per modificarlo.',
   'fc.section.product': 'Prodotto',
   'fc.section.weighing': 'Peso e calo in cottura',
   'fc.section.price': 'Prezzo',

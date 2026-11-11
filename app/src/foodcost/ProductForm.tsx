@@ -130,7 +130,9 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
 
   // What the product was when this form opened: what a margin point is compared with. ⚠️ THE CONVERTED PRODUCT (model 3): a product
   // saved before holds finished kilos on its recipe lines, and the copy below must hold the raw kilos they now mean. ProductEditor
-  // mounts the form only once the recipes and the prices are in (waitsForTables), so the conversion is the real one.
+  // mounts the form only once the server has answered about the recipes (waitsForTables) — or, with no signal or a recipes
+  // stream that died, on this phone's copy, which is then all there will be, and only when it holds every recipe on the product's
+  // lines (recipesOnLinesHere).
   const [initial] = useState(() => (product === null ? null : currentProduct(product, snap.tables)));
   const [working, setWorking] = useState<Working>(() => {
     if (initial) return workingFrom(initial, country);

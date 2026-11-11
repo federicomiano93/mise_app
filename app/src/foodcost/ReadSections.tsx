@@ -127,7 +127,12 @@ export function ReadCooking({ product, tables }: { product: Product; tables: Cos
   return (
     <div className={styles.block}>
       <ReadList rows={rows} />
-      {cooking.heavier ? <p className={styles.warn}>{t('fc.lossCookedHeavier')}</p> : null}
+      {/* ⚠️ SPOKEN (code review, 11 Nov 2026; P18): in the form the warning can appear while a line is typed, as the weighing pairs'
+          notes it replaces did, and those were announced. Present before it speaks: text added to a region already on the page is
+          announced. The food-cost answer stays silent on purpose (it would re-read every figure at each keystroke). */}
+      <div className={styles.live} aria-live="polite">
+        {cooking.heavier ? <p className={styles.warn}>{t('fc.lossCookedHeavier')}</p> : null}
+      </div>
     </div>
   );
 }
