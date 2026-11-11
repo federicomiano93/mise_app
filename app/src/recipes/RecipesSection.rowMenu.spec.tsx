@@ -77,7 +77,8 @@ describe('a tap on an ingredient row', () => {
     expect(items[1]).toHaveFocus();
     await user.keyboard('{Escape}');
     await waitFor(() => { expect(screen.queryByRole('menu')).not.toBeInTheDocument(); });
-    expect(rowButton('Flour')).toHaveFocus();
+    // React Aria gives the focus back one animation frame after the menu unmounts: a slow CI runner checks before that frame.
+    await waitFor(() => { expect(rowButton('Flour')).toHaveFocus(); });
   });
 
   it('the row is a button that says it opens a menu, and the table stays a table', async () => {
@@ -116,7 +117,8 @@ describe('«Split into 2 parts»', () => {
     await waitFor(() => { expect(screen.queryByRole('menu')).not.toBeInTheDocument(); });
     expect(within(table()).getByText('→ 625 g + 625')).toBeInTheDocument();
     // The focus is back on the row, the split is on screen only: the total is unchanged.
-    expect(rowButton('Flour')).toHaveFocus();
+    // React Aria gives the focus back one animation frame after the menu unmounts: a slow CI runner checks before that frame.
+    await waitFor(() => { expect(rowButton('Flour')).toHaveFocus(); });
     expect(within(table()).getByText('Total').closest('tr')).toHaveTextContent(/^Total1461g$/);
 
     await user.click(rowButton('Flour'));
