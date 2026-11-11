@@ -187,7 +187,14 @@ export function PickDialog({ mode, initialQuery = '', onChoose, onClose }: Props
                         </span>
                       )}
                     </span>
-                    {option.meta === '' ? null : <span className={styles.meta}>{option.meta}</span>}
+                    {/* With a supplier before it, the weight gets a comma for the ear too: «Flour, Molino Rossi, 25 kg», never a supplier
+                        heard as «Molino Rossi 25 kg». Without one the option is spoken as before. */}
+                    {option.meta === '' ? null : (
+                      <span className={styles.meta}>
+                        {option.supplier === '' ? null : <span className="visually-hidden">,</span>}
+                        {option.supplier === '' ? option.meta : ` ${option.meta}`}
+                      </span>
+                    )}
                   </button>
                 </li>
               ))}

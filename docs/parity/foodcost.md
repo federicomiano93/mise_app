@@ -825,7 +825,8 @@ POST-SWITCH: NOT a port, the current app's Food cost never names a supplier. Sta
   `--fs-sm`, one line cut with «…», so a long legal name never makes the dialog scroll sideways at 296px). Ingredients «not in use»
   too. A recipe shows none (bought from nobody), packaging shows none (its line already says its price). An ingredient with no
   supplier shows nothing at all — no «—», no empty line. The supplier is INSIDE the option's button, so it is part of its spoken
-  name: «Flour, Molino Rossi» (a visually hidden comma keeps the two names apart for the ear).
+  name: «Flour, Molino Rossi» (a visually hidden comma keeps the two names apart for the ear, and one more before a pack weight:
+  «Salt, Bianchi, 1 kg»; an option without a supplier is spoken as before).
 - **The lines of «Made of»** (`LineRow.tsx`, form only): under an ingredient line's name, its supplier in small secondary text, one
   line with «…», between the name's row and the amount's row. It sits OUTSIDE the name's button (whose name is «Change: …») and is
   that button's `aria-describedby`. Nothing for recipe lines, packaging lines or a missing supplier; `LineRow` checks the kind

@@ -96,6 +96,12 @@ describe('the chooser names an ingredient’s supplier', () => {
     expect(supplierLabel).toHaveBeenCalledWith(ROSSI);
   });
 
+  it('the pack weight after a supplier is a separate thing for the ear: «Salt, Bianchi Imballaggi, 1 kg»', async () => {
+    const { dialog } = await openChooser(source({ ingredients: [...INGREDIENTS.filter(item => item.id !== 'salt'), { ...SALT, supplierId: 'bianchi' }] }));
+    await waitFor(() => { expect(optionOf(dialog, 'Salt')).toHaveTextContent('Bianchi'); });
+    expect(optionOf(dialog, 'Salt')).toHaveAccessibleName('Salt, Bianchi Imballaggi, 1 kg');
+  });
+
   it('a recipe names none, even with a stray supplierId', async () => {
     const { dialog } = await openChooser(source());
     await waitFor(() => { expect(optionOf(dialog, 'Flour')).toHaveTextContent('Molino Rossi'); });
