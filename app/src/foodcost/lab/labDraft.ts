@@ -88,6 +88,9 @@ export function parseDraft(text: string | null): LabDraft | null {
       cooked: isTyped(data.cooked) ? data.cooked : '',
       pieces: orNull(data.pieces),
       minutes: orNull(data.minutes),
+      // A draft from before the oven pause has neither field: zero paused time. «ovenSince» only means something on the oven step.
+      ovenSince: data.step === 'oven' && typeof data.ovenSince === 'number' && Number.isFinite(data.ovenSince) && data.ovenSince > 0 ? data.ovenSince : null,
+      ovenPausedMs: typeof data.ovenPausedMs === 'number' && Number.isFinite(data.ovenPausedMs) && data.ovenPausedMs > 0 ? Math.min(data.ovenPausedMs, 1e11) : 0,
       minutesFrozen: typeof frozen === 'number' && Number.isFinite(frozen) && frozen >= 1 ? Math.round(frozen) : null,
       people: typeof data.people === 'number' && Number.isFinite(data.people) ? clampPeople(data.people) : null,
     };

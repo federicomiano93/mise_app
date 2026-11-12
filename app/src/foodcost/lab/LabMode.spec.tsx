@@ -115,7 +115,7 @@ describe('the flow, step by step', () => {
 
     // In forno: the clock, the hint.
     expect(within(lab()).getByRole('heading', { name: 'In the oven' })).toBeInTheDocument();
-    expect(within(lab()).getByText('The timer keeps running. You can leave and come back.')).toBeInTheDocument();
+    expect(within(lab()).getByText('Oven time does not count as labour. You can leave and come back.')).toBeInTheDocument();
     await next(user);
 
     // Impasto cotto: 927 g of 1,030 g raw is a 10.00% loss.
@@ -382,12 +382,12 @@ describe('leaving and coming back', () => {
       sellingPrice: null, vatRate: null, foodCostTarget: null, labourMinutes: null, labourPeople: null, noWeightLoss: false,
       rawGrams: null, cookedGrams: null, model: 3,
     }), Date.now() - (3_600_000 + 12 * 60_000 + 34_000));
-    window.localStorage.setItem(KEY, serializeDraft({ ...draft, step: 'oven' }));
+    window.localStorage.setItem(KEY, serializeDraft({ ...draft, step: 'raw' }));
     const { user } = await openCard();
     expect(screen.getByText(/^In the lab · 1:12:3\d$/)).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Resume' }));
     await screen.findByRole('dialog', { name: 'Produce in the lab' }, LOAD);
-    expect(within(lab()).getByRole('heading', { name: 'In the oven' })).toBeInTheDocument();
+    expect(within(lab()).getByRole('heading', { name: 'Raw dough' })).toBeInTheDocument();
     expect(within(lab()).getByRole('timer', { name: 'Timer' })).toHaveTextContent(/^1:12:3\d$/);
   });
 

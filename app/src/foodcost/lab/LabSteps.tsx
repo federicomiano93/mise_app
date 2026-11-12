@@ -23,7 +23,9 @@ type Props = {
   numbers: LabNumbers;
   field: FieldId | null;
   presets: Presets;
+  // Wall time since «Inizia» (the 24-hour rule), and the oven visit in progress (the big clock of «In forno»).
   elapsedMs: number;
+  ovenMs: number;
   titleRef: Ref<HTMLHeadingElement>;
   titleId: string;
   onSelect: (field: FieldId) => void;
@@ -221,13 +223,14 @@ function RawStep({ draft, numbers, field, titleRef, titleId, onSelect, onKey, on
 
 // ── In forno ────────────────────────────────────────────────────────────────────────────────────
 
-function OvenStep({ elapsedMs, titleRef, titleId }: Props) {
+function OvenStep({ ovenMs, titleRef, titleId }: Props) {
   const { t } = useT();
   return (
     <div className={styles.oven}>
       <Flame aria-hidden="true" className={styles.ovenIcon} />
       <Title id={titleId} titleRef={titleRef}>{t('lab.step.oven')}</Title>
-      <p className={styles.ovenClock} aria-hidden="true">{formatClock(elapsedMs)}</p>
+      <p className={styles.ovenFor}>{t('lab.ovenFor')}</p>
+      <p className={styles.ovenClock}>{formatClock(ovenMs)}</p>
       <p className={styles.note}>{t('lab.ovenHint')}</p>
     </div>
   );

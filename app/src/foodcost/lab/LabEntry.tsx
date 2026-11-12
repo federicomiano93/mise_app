@@ -2,9 +2,10 @@ import { Scale, Timer } from 'lucide-react';
 import { useT } from '../../i18n/useT';
 import { useSession } from '../../session/SessionContext';
 import { Button } from '../../ui/Button';
-import { elapsedMs, formatClock } from './labClock';
+import { formatClock } from './labClock';
 import { useConfirm } from '../../ui/useConfirm';
 import { clearDraft, labDraftKey, useLabDraft } from './labDraft';
+import { labourMs } from './labModel';
 import { useNow } from './useNow';
 import styles from './LabEntry.module.css';
 
@@ -45,7 +46,7 @@ export function LabEntry({ productId, held, onHeld, onOpen }: Props) {
       {open ? (
         <div className={styles.banner}>
           <Timer aria-hidden="true" />
-          <span className={styles.bannerText}>{t('lab.banner', { time: formatClock(elapsedMs(draft.startedAt, now)) })}</span>
+          <span className={styles.bannerText}>{t(draft.ovenSince === null ? 'lab.banner' : 'lab.bannerOven', { time: formatClock(labourMs(draft, now)) })}</span>
           <Button variant="secondary" aria-disabled={held !== ''} onPress={press}>{t('lab.resume')}</Button>
           <Button variant="bare" className={styles.abandon} onPress={() => { void abandon(); }}>{t('lab.cancel.action')}</Button>
         </div>

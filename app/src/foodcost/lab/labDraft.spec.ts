@@ -86,6 +86,25 @@ describe('a draft is never trusted', () => {
   const good = (): Record<string, unknown> => JSON.parse(serializeDraft(aDraft())) as Record<string, unknown>;
   const read = (data: unknown) => parseDraft(JSON.stringify(data));
 
+  it('reads an old draft without the oven fields as zero paused time', () => {
+    const old = good();
+    delete old.ovenSince;
+    delete old.ovenPausedMs;
+    const draft = read({ ...old, step: 'oven' });
+    expect(draft?.ovenPausedMs).toBe(0);
+    expect(draft?.ovenSince).toBeNull();
+  });
+
+  it('keeps the oven visit, only on the oven step, and clamps nonsense', () => {
+    const inOven = read({ ...good(), step: 'oven', ovenSince: 1_700_000_100_000, ovenPausedMs: 5000 });
+    expect(inOven?.ovenSince).toBe(1_700_000_100_000);
+    expect(inOven?.ovenPausedMs).toBe(5000);
+    // A visit "in progress" on another step means nothing.
+    expect(read({ ...good(), step: 'raw', ovenSince: 1_700_000_100_000 })?.ovenSince).toBeNull();
+    expect(read({ ...good(), ovenPausedMs: -5 })?.ovenPausedMs).toBe(0);
+    expect(read({ ...good(), ovenPausedMs: 'x' })?.ovenPausedMs).toBe(0);
+  });
+
   it('reads a sound draft', () => {
     expect(read(good())).not.toBeNull();
   });

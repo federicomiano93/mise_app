@@ -892,10 +892,19 @@ time and the people into the product's card. Mise 2 only, POST-SWITCH: NOT a por
   leaving and on unmount.
 - **Raw:** preset with the total of the lines; a number typed apart offers «Usa il totale (X g)», else «È il totale degli ingredienti». The
   total counts EVERY line: weighed lines at their weight, lines never weighed at their saved amount (what the save would leave in the card).
-- **The clock** (`labClock.ts`): `now − startedAt`, repainted every second and on `visibilitychange`/`focus`, so screen-off, leaving the app
+- **The clock** (`labClock.ts`; the labour clock is that minus the oven time, below): `now − startedAt`, repainted every second and on `visibilitychange`/`focus`, so screen-off, leaving the app
   and a reload lose nothing. A start in the future (clock set back) reads 0:00:00. The labour minutes follow the timer (whole minutes, at least
   1); leaving «Tempo e persone» without typing freezes the reading so the Result and the Save do not grow under the eyes; typing a number turns
   the timer off for it, «Dal cronometro» puts it back.
+- **The oven pauses the labour clock** (the owner's decision, 12 Nov 2026, «No, fermalo» to «should oven time count as labour?»; it SUPERSEDES the
+  approved design's «il cronometro continua»). The draft stores `ovenSince` (the instant «In forno» was entered, null on any other step) and
+  `ovenPausedMs` (the oven time of the visits already left); the labour clock is `now − startedAt − oven time` (`labourMs`), never a count of ticks.
+  Leaving the oven by ANY route (Avanti, Indietro, a dot) goes through `goToStep`, which adds the visit to the total; entering starts a new one.
+  Exiting the lab on «In forno» keeps it paused until the person comes back and leaves the step; screen-off and reload read the same two instants.
+  A draft without the fields reads as zero paused time. The top-bar clock and the card banner show the labour clock; on the oven step the top
+  clock is frozen and muted (accessible name «Cronometro, in pausa mentre è in forno»), the banner appends «· in forno», and the big clock of
+  «In forno» is the oven visit («In forno da»). «Dal cronometro» minutes are the labour clock only (whole minutes, at least 1); the 24-hour rule
+  for old drafts still counts the wall time since «Inizia».
 - **The draft** (`labDraft.ts`): step, weights, ticks, added lines, raw, cooked, pieces, minutes, people, start instant, in `localStorage` under
   `foodcost-lab-draft:<venue>:<product>`, written at every change once «Inizia» is pressed (never before) and by «Esci». Parsed field by field,
   numbers clamped, an unsound draft is none (and removed). ⚠️ **Not under `KEEP_PREFIXES`, on purpose** (the brief said to use it): a key under

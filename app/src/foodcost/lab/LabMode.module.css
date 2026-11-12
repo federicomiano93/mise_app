@@ -605,6 +605,13 @@
   color: var(--warn-ink);
 }
 
+.ovenFor {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: var(--fs-lg);
+  font-weight: 600;
+}
+
 .ovenClock {
   margin: 0;
   font: 650 clamp(var(--fs-3xl), 18vw, calc(var(--fs-3xl) * 3))/1 var(--mono);

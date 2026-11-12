@@ -21,7 +21,7 @@ import { groupedNumber, gramsText, peopleText } from './labFormat';
 import { fcNumber } from '@mise/shared/fc-number';
 import { useMoney } from '../../session/useMoney';
 import {
-  addLine, baseProduct, cookedKept, goToStep, isStale, labNumbers, lineField, newDraft, nextUnticked, resolveStep, soldByPieces, startDraft,
+  addLine, baseProduct, cookedKept, goToStep, isStale, labNumbers, labourMs, ovenVisitMs, lineField, newDraft, nextUnticked, resolveStep, soldByPieces, startDraft,
   stepPeople, stepsFor, toggleTick, typeInto,
 } from './labModel';
 import type { FieldId, LabDraft, LabStepId, Presets } from './labModel';
@@ -234,7 +234,7 @@ export function LabMode({ productId, onClose }: Props) {
     const stale = isStale(draft.startedAt, Date.now());
     setDraft({
       ...draft,
-      minutes: stale ? String(Math.min(999999, timerMinutes(elapsedMs(draft.startedAt, Date.now())))) : null,
+      minutes: stale ? String(Math.min(999999, timerMinutes(labourMs(draft, Date.now())))) : null,
       minutesFrozen: null,
     });
   };
@@ -319,7 +319,10 @@ export function LabMode({ productId, onClose }: Props) {
   };
 
   // ── What is drawn ───────────────────────────────────────────────────────────────────────────
-  const elapsed = elapsedMs(draft.startedAt, now);
+  // The top clock is the LABOUR clock: frozen, and muted like before the start, while the flow is in the oven.
+  const inOven = step === 'oven';
+  const labour = labourMs(draft, now);
+  const wall = elapsedMs(draft.startedAt, now);
   const last = index === steps.length - 1;
   const whole = field === 'pieces' || field === 'minutes'
     || (field !== null && draft.lines.some(line => lineField(line.key) === field && line.ref.kind === 'ingredient' && line.ref.unit === 'pcs'));
@@ -377,9 +380,9 @@ export function LabMode({ productId, onClose }: Props) {
                     </>
                   ) : <p className={styles.productName}>{base.name}</p>}
                 </div>
-                <div className={styles.clock} role="timer" aria-label={t('lab.clock')} data-idle={!started}>
+                <div className={styles.clock} role="timer" aria-label={t(inOven ? 'lab.clockPaused' : 'lab.clock')} data-idle={!started || inOven}>
                   <Timer aria-hidden="true" />
-                  <span>{formatClock(started ? elapsed : 0)}</span>
+                  <span>{formatClock(started ? labour : 0)}</span>
                 </div>
               </div>
 
@@ -391,7 +394,8 @@ export function LabMode({ productId, onClose }: Props) {
                   numbers={numbers}
                   field={field}
                   presets={presets}
-                  elapsedMs={elapsed}
+                  elapsedMs={wall}
+                  ovenMs={ovenVisitMs(draft, now)}
                   titleRef={titleRef}
                   titleId={titleId}
                   onSelect={setField}

@@ -62,6 +62,11 @@ export interface LabDraft {
   minutes: string | null;
   // The labour time as the timer read when the person left «Tempo e persone» without typing one.
   minutesFrozen: number | null;
+  // THE OVEN PAUSES THE LABOUR CLOCK (owner's decision, 12 Nov 2026: «fermalo»; it supersedes the approved design's «il cronometro
+  // continua»). `ovenSince` is the instant «In forno» was entered (null on any other step); `ovenPausedMs` is the oven time of the visits
+  // already left. Two stored instants and a total, never a count of ticks: screen-off, leaving the app and a reload keep working.
+  ovenSince: number | null;
+  ovenPausedMs: number;
   // null = the person never pressed the stepper: the card's own number stands, unchanged (1.5 stays 1.5, 25 stays 25).
   people: number | null;
 }
@@ -110,6 +115,8 @@ export function newDraft(product: Product): LabDraft {
     pieces: null,
     minutes: null,
     minutesFrozen: null,
+    ovenSince: null,
+    ovenPausedMs: 0,
     people: null,
   };
 }
@@ -195,6 +202,20 @@ export function stepPeople(draft: LabDraft, cardPeople: number | null, delta: nu
   return { ...draft, people: clampPeople(shown + delta) };
 }
 
+// Oven time so far: the visits already left plus the one in progress.
+export function pausedMs(draft: LabDraft, now: number): number {
+  const visiting = draft.ovenSince === null ? 0 : elapsedMs(draft.ovenSince, now);
+  return Math.max(0, draft.ovenPausedMs) + visiting;
+}
+
+// The oven visit in progress, in milliseconds (the big clock of «In forno»).
+export const ovenVisitMs = (draft: LabDraft, now: number): number => elapsedMs(draft.ovenSince, now);
+
+// THE LABOUR CLOCK: wall time since «Inizia» minus the oven time. Never negative.
+export function labourMs(draft: LabDraft, now: number): number {
+  return Math.max(0, elapsedMs(draft.startedAt, now) - pausedMs(draft, now));
+}
+
 export const isStale = (startedAt: number | null, now: number): boolean => elapsedMs(startedAt, now) > STALE_MS;
 
 // Moving between steps. Leaving «Tempo e persone» with no minutes typed freezes the timer's reading there (the figure the person
@@ -202,8 +223,12 @@ export const isStale = (startedAt: number | null, now: number): boolean => elaps
 export function goToStep(draft: LabDraft, step: LabStepId, now: number): LabDraft {
   if (step === draft.step) return draft;
   let next: LabDraft = { ...draft, step };
+  // Leaving «In forno» by ANY route adds that visit to the oven total; entering it starts a new visit. The freeze below reads the
+  // labour clock AFTER this, so it is the figure the person saw.
+  if (draft.step === 'oven') next = { ...next, ovenPausedMs: draft.ovenPausedMs + elapsedMs(draft.ovenSince, now), ovenSince: null };
+  if (step === 'oven') next = { ...next, ovenSince: now };
   if (draft.step === 'time' && draft.minutes === null && draft.startedAt !== null && !isStale(draft.startedAt, now)) {
-    next = { ...next, minutesFrozen: timerMinutes(elapsedMs(draft.startedAt, now)) };
+    next = { ...next, minutesFrozen: timerMinutes(labourMs(next, now)) };
   }
   if (step === 'time') next = { ...next, minutesFrozen: null };
   return next;
@@ -220,7 +245,7 @@ function withGrams(component: ProductComponent, value: number): ProductComponent
 // The labour minutes in force: typed, else the frozen reading, else the timer now. Whole minutes, 1 to the rules' ceiling.
 export function minutesOf(draft: LabDraft, now: number, cardMinutes: number | null = null): number {
   const typed = parseTyped(draft.minutes);
-  const fallback = isStale(draft.startedAt, now) ? (cardMinutes ?? 1) : timerMinutes(elapsedMs(draft.startedAt, now));
+  const fallback = isStale(draft.startedAt, now) ? (cardMinutes ?? 1) : timerMinutes(labourMs(draft, now));
   const value = typed !== null && typed > 0 ? typed : (draft.minutesFrozen ?? fallback);
   return Math.min(MAX_MINUTES, Math.max(1, Math.round(value)));
 }

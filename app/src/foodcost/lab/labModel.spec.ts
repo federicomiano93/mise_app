@@ -4,7 +4,7 @@ import type { CostTables, Product } from '@mise/shared/foodcost-model';
 import { costable, workingFrom } from '../productEditorModel';
 import { summaryExtras } from '../summaryExtras';
 import {
-  addLine, applyLab, changedLineCount, clampPeople, goToStep, labNumbers, lineField, minutesOf, newDraft, nextUnticked, peopleShown, rawShown,
+  addLine, applyLab, changedLineCount, clampPeople, goToStep, labNumbers, labourMs, lineField, minutesOf, ovenVisitMs, pausedMs, newDraft, nextUnticked, peopleShown, rawShown,
   resolveStep, soldByPieces, startDraft, stepPeople, stepsFor, toggleTick, typeInto,
 } from './labModel';
 import type { LabDraft, Presets } from './labModel';
@@ -531,5 +531,65 @@ describe('a line ticked as planned compares with the LATEST saved line', () => {
     expect((out.components[2] as { qty: number }).qty).toBe(10);
     // Unchanged elsewhere: exactly the saved number.
     expect(applyLab(card, ticked, TABLES, NOW).components[2]).toEqual(card.components[2]);
+  });
+});
+
+describe('the oven pauses the labour clock (owner decision: «fermalo»)', () => {
+  const MIN = 60_000;
+  const started = startDraft(newDraft(product()), NOW);
+  // Ingredients for 10 minutes, oven for 40, then back to work for 5: 15 minutes of labour in 55 of wall time.
+  const inOven = goToStep(started, 'oven', NOW + 10 * MIN);
+  const afterOven = goToStep(inOven, 'cooked', NOW + 50 * MIN);
+
+  it('is wall time minus oven time, and stands still in the oven', () => {
+    expect(labourMs(started, NOW + 10 * MIN)).toBe(10 * MIN);
+    expect(inOven.ovenSince).toBe(NOW + 10 * MIN);
+    expect(labourMs(inOven, NOW + 10 * MIN)).toBe(10 * MIN);
+    expect(labourMs(inOven, NOW + 30 * MIN)).toBe(10 * MIN);
+    expect(ovenVisitMs(inOven, NOW + 30 * MIN)).toBe(20 * MIN);
+    expect(afterOven.ovenSince).toBeNull();
+    expect(afterOven.ovenPausedMs).toBe(40 * MIN);
+    expect(labourMs(afterOven, NOW + 55 * MIN)).toBe(15 * MIN);
+  });
+
+  it('adds up two separate oven visits (back and forth)', () => {
+    const again = goToStep(goToStep(afterOven, 'oven', NOW + 55 * MIN), 'cooked', NOW + 65 * MIN);
+    expect(again.ovenPausedMs).toBe(50 * MIN);
+    expect(pausedMs(again, NOW + 70 * MIN)).toBe(50 * MIN);
+    expect(labourMs(again, NOW + 70 * MIN)).toBe(20 * MIN);
+  });
+
+  it('every way out of the oven ends the visit: Indietro, Avanti, a dot all go through goToStep', () => {
+    for (const target of ['raw', 'cooked', 'result'] as const) {
+      const left = goToStep(inOven, target, NOW + 30 * MIN);
+      expect(left.ovenSince).toBeNull();
+      expect(left.ovenPausedMs).toBe(20 * MIN);
+    }
+  });
+
+  it('a draft left on the oven step keeps counting the visit: exit and resume later', () => {
+    // Stored while in the oven, resumed 90 minutes after the start: still paused, and labour is still 10 minutes.
+    expect(labourMs(inOven, NOW + 90 * MIN)).toBe(10 * MIN);
+    expect(ovenVisitMs(inOven, NOW + 90 * MIN)).toBe(80 * MIN);
+    // Leaving the step then adds the whole visit.
+    expect(goToStep(inOven, 'cooked', NOW + 90 * MIN).ovenPausedMs).toBe(80 * MIN);
+  });
+
+  it('the minutes from the timer exclude the oven', () => {
+    expect(minutesOf(afterOven, NOW + 55 * MIN, 99)).toBe(15);
+    expect(applyLab(product(), afterOven, TABLES, NOW + 55 * MIN).labourMinutes).toBe(15);
+    // And the figure frozen on leaving «Tempo e persone» is the labour one.
+    const atTime = goToStep(afterOven, 'time', NOW + 56 * MIN);
+    expect(goToStep(atTime, 'result', NOW + 60 * MIN).minutesFrozen).toBe(20);
+  });
+
+  it('the 24-hour rule still counts wall time since «Inizia», oven included', () => {
+    const longOven = goToStep(goToStep(started, 'oven', NOW + MIN), 'cooked', NOW + 25 * 3_600_000);
+    // Only about a minute of labour, but 25 hours since the start: the card minutes stand.
+    expect(minutesOf(longOven, NOW + 25 * 3_600_000, 40)).toBe(40);
+  });
+
+  it('never goes negative', () => {
+    expect(labourMs({ ...started, ovenPausedMs: 10 * 3_600_000 }, NOW + MIN)).toBe(0);
   });
 });
