@@ -126,7 +126,7 @@ function device() {
     letSavesThrough: () => { hold = false; },
     refuseSaves: (on = true) => { refuse = on; },
     refusedNote: () => JSON.parse(storage.getItem(REFUSED_NOTE_KEY) ?? 'null') as null | {
-      lid: string; uid: string; told: boolean; entries: Record<string, { row: DraftEntry; base: DraftEntry }>;
+      lid: string; uid: string; at: number; told: boolean; entries: Record<string, { row: DraftEntry; base: DraftEntry; air?: DraftEntry[] }>;
       days: Record<string, { day: string; base: string }>;
     },
     journalNote: () => JSON.parse(storage.getItem(DRAFT_JOURNAL_KEY) ?? 'null') as null | { entries: Record<string, unknown> },
@@ -407,6 +407,100 @@ describe('a draft write refused after the person left Orders', () => {
     await settle();
     errors.mockRestore();
     expect(d.refusedNote()?.entries.flour?.row.qty).toBe(6);
+  });
+
+  it('⚠️ as real Firestore does it: the new opening still SHOWS the refused number until the take-back; judged after it, handed back', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const d = device();
+    const first = d.openPage();
+    await first.answer(server());
+    d.holdSaves();
+    first.type('flour', { qty: 5 });
+    await first.pause();
+    first.leave();
+    const second = d.openPage();
+    // One Firestore for both stores: the old store's queued 5 is laid over this listener too.
+    await second.answer(server({ flour: QTY(5) }));
+    expect(second.entries.flour?.qty).toBe(5);
+    d.held[0]?.reject(new Error('permission-denied'));
+    await settle();
+    expect(second.page.said).toBe(1);
+    expect(second.page.back).toBe(0); // not judged on a copy that still shows the refused write
+    expect(d.refusedNote()).not.toBeNull();
+    second.snapshot(server()); // Firestore takes the 5 back
+    await settle();
+    await settle();
+    errors.mockRestore();
+    expect(second.page.back).toBe(1);
+    expect(second.entries.flour?.qty).toBe(5);
+    expect(d.refusedNote()).toBeNull();
+  });
+
+  it('⚠️ «ordered since?» counts from the KEYSTROKE, not from a refusal that came hours later (an offline tablet)', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const d = device();
+    const page = d.openPage();
+    await page.answer(server());
+    d.holdSaves();
+    page.type('flour', { qty: 5 }); // 10:00, offline
+    await page.pause();
+    page.leave();
+    d.clock.now = START + 2 * 60 * 60 * 1000; // 12:00: back online, refused
+    d.held[0]?.reject(new Error('permission-denied'));
+    await settle();
+    errors.mockRestore();
+    expect(d.refusedNote()?.at).toBe(START);
+    // 11:00: a colleague, not seeing the tablet's 5, ordered flour (placing emptied the line again).
+    d.history.records = [d.placedAt(START + 60 * 60 * 1000, { flour: 5 })];
+    d.letSavesThrough();
+    const next = d.openPage();
+    await next.answer(server());
+    expect(next.page.said).toBe(1);
+    expect(next.entries.flour).toBeUndefined();
+  });
+
+  it('⚠️ «5, then 6» with both refused: the 6 comes back on a line that still reads empty', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const d = device();
+    const page = d.openPage();
+    await page.answer(server());
+    d.holdSaves();
+    page.type('flour', { qty: 5 });
+    await page.pause(); // the 5 in the air, shown back to this phone
+    page.snapshot(server({ flour: QTY(5) }));
+    page.type('flour', { qty: 6 });
+    page.leave(); // the 6 goes too, with the 5 as its base
+    d.held[0]?.reject(new Error('permission-denied'));
+    d.held[1]?.reject(new Error('permission-denied'));
+    await settle();
+    errors.mockRestore();
+    expect(d.refusedNote()?.entries.flour).toEqual({ row: QTY(6), base: QTY(5), air: [QTY(0)] });
+    d.letSavesThrough();
+    const next = d.openPage();
+    await next.answer(server());
+    expect(next.entries.flour?.qty).toBe(6);
+    expect(next.page.back).toBe(1);
+  });
+
+  it('«5, then 6», the 5 landed and the 6 refused: the 6 comes back on the 5', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const d = device();
+    const page = d.openPage();
+    await page.answer(server());
+    d.holdSaves();
+    page.type('flour', { qty: 5 });
+    await page.pause();
+    page.snapshot(server({ flour: QTY(5) }));
+    page.type('flour', { qty: 6 });
+    page.leave();
+    d.held[0]?.resolve();
+    d.held[1]?.reject(new Error('permission-denied'));
+    await settle();
+    errors.mockRestore();
+    d.letSavesThrough();
+    const next = d.openPage();
+    await next.answer(server({ flour: QTY(5) }));
+    expect(next.entries.flour?.qty).toBe(6);
   });
 
   it('a write that LANDS after leaving notes nothing', async () => {

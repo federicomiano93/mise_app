@@ -1793,9 +1793,12 @@ so it says it on the way back in. Rare in practice (access taken away while a wr
 **What happens now** (`app/src/orders/draftSync.ts`, `app/src/orders/refusedNote.ts`):
 - A write refused after `stopJournal()` leaves the draft journal (as before: a refused value there would be replayed at every
   opening, for ever) and goes to a note of its own, `orders-draft-refused` (`noteRefused`): field group by field group, with what
-  the server held when the write left (`base`, taken in `saveNow` before Firestore shows the write here). Not a group a later
-  write still in the air carries (that one answers for itself), and not a value that already came back from this note on the
-  same opening (`told`: final, see below).
+  the server held when the write left (`base`, taken in `saveNow` before Firestore shows the write here) and, for «5, then 6»
+  with both in the air, what the earlier write took as its base (`air`: when the 6 left, this phone already showed the 5). Not a
+  group a later write still in the air carries (that one answers for itself), and not a value that already came back from this
+  note on the same opening (`told`: final, see below). Its clock (`at`) starts when the number was first claimed
+  (`claimedSince`), never when the refusal came: an offline tablet can hear it hours later, and «was it ordered since?» must count
+  from the keystroke, as the journal's does.
 - The next opening of Orders reads it at `startJournal()` (`lookForRefused`) and, if nobody has been told, marks it told and says
   so ONCE (`onRefusedEarlier` → the store's `refusedEarlier` → `RefusedEarlierAlert`, an alert dialog through `ui/useAlert`
   above the routes, so on whatever screen Orders opens). A reopening, or React's development mode starting twice, does not say
@@ -1814,8 +1817,11 @@ so it says it on the way back in. Rare in practice (access taken away while a wr
   that can never be saved must not come back for ever. A NEW number typed on that line is a new refusal, and is said again.
 - **Refused while a newer opening is already on screen** (the old store lives on until its last write is answered): the old store
   signals it (`refusedNoted`, a `window` event of the page, `mise:orders-draft-refused`), and the open one, listening only while
-  started (`onRefusedNoted`), says it and judges it at once. When the draft journal of that opening has already brought the same
-  number back (its write was still in the air, so its claim was still noted), it is said and not handed back twice.
+  started (`onRefusedNoted`), says it and judges it. ⚠️ Both stores share one Firestore, which lays the old store's queued write
+  over the new listener too, and takes it back only in a snapshot AFTER the refusal: so when the open screen still shows the
+  refused number it is judged on the next snapshot (`refusedOnNext`), never at once («already holding it» would read as «it
+  arrived» and the number would vanish). When the draft journal of that opening has already brought the same number back, it is
+  said and not handed back twice.
 
 **The words** (`ord.refusedEarlier.title` / `.message`; the current app's title, word for word; its message without «if you go back
 to the recipe now, it will be lost», which no longer applies): «Quantity not saved» — «The quantity you typed could not be saved in
@@ -1838,6 +1844,12 @@ read; refused while a new opening is on screen, with and without the journal hav
 a write that lands; no person). `refusedNote.spec.ts` (venue, person, age, junk, keep-list). `ordersStore.journal.spec.ts` (the
 flag, «not saved», the signal only while started, another person). `OrdersSection.fromRecipe.spec.tsx` (end to end: Order from a
 recipe, 7, Back, refused; Orders again says it once, the 7 on its line as not saved; Italian).
+
+**Known limits, accepted (code review, 12 Nov 2026), the same as a refusal on screen today:** a number handed back stays this
+phone's claim while Orders stays open, judged once: a colleague placing that order later does not release it, and the next change
+on that phone sends it (an unattended kiosk could hold it for hours); and when a later snapshot releases it (a colleague typed the
+same number), «not saved» and the busy marker stay until the next save answers or Orders closes. Both are the refusal path's own
+behaviour, left as the current app has it.
 
 **Not covered by a spec:** a refusal that arrives when no Orders is opened again within 24 hours (the note ages out, as the draft
 journal does: a number typed before a weekend is not put back into a live order); the alert on the lab tablet and a phone (axe

@@ -13,7 +13,8 @@
 //
 // THE SHAPE is the draft journal's own (`entries[id] = { row, base }`, `days[supplierId] = { day, base }`), so the same judge
 // (draftSync.ts stillOurs) decides what may come back: `row` is what was refused, `base` what the server held for those
-// fields when the write left. `told` says the next opening has already said it.
+// fields when the write left, and `air` what the earlier writes of the same chain took as theirs. `told` says the next opening
+// has already said it.
 //
 // ⚠️ NOT IN KEEP_PREFIXES (shared/src/local-data.ts, js/local-data.js), ON PURPOSE: signing out or switching venue wipes it, as
 // it wipes the draft journal and Firestore's own queue of unsent writes. It is also stamped with the venue AND the person,
@@ -99,7 +100,11 @@ export function readRefusedNote(lid: string, uid: string, now: number, storage: 
     const line = isPlainObject(claim) ? claim : {};
     const row = cleanFields(line.row);
     const base = cleanFields(line.base);
-    if (row && base) entries[id] = { row, base };
+    if (!row || !base) continue;
+    entries[id] = { row, base };
+    // What earlier writes of the same chain took as their base («5, then 6», draftSync.ts noteRefused).
+    const air = (Array.isArray(line.air) ? line.air : []).map(cleanFields).filter((seen): seen is NotedFields => Boolean(seen));
+    if (air.length) entries[id].air = air;
   }
   const days: Record<string, NotedDay> = {};
   for (const [id, claim] of Object.entries(isPlainObject(note.days) ? note.days : {})) {
