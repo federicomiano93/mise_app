@@ -42,14 +42,14 @@ async function open(fields: Record<string, unknown> | null = {}, session: Record
 describe('how it is sold', () => {
   it('offers the three ways, with no default', async () => {
     await open(null);
-    const mode = screen.getByRole('combobox', { name: 'Sold' });
+    const mode = screen.getByRole('combobox', { name: 'How it is sold' });
     expect(options(mode)).toEqual(['— Choose —', 'By the piece', 'By weight (per kg)', 'By the pack']);
     expect(mode).toHaveValue('');
   });
 
   it('shows the pieces box for a piece and the pack boxes for a pack, and nothing for weight', async () => {
     const { user } = await open(null);
-    const mode = screen.getByRole('combobox', { name: 'Sold' });
+    const mode = screen.getByRole('combobox', { name: 'How it is sold' });
     const pieces = () => screen.queryByRole('textbox', { name: 'Pieces per batch' });
     const packSize = () => screen.queryByRole('textbox', { name: 'One pack holds' });
 
@@ -72,7 +72,6 @@ describe('how it is sold', () => {
     expect(options(unit)).toEqual(['— Choose —', 'g', 'kg', 'pieces']);
     await user.selectOptions(unit, 'pcs');
     expect(pieces()).toBeInTheDocument();
-    expect(screen.getByText('The weight in one pack, or how many pieces.')).toBeInTheDocument();
   });
 
   it('says packaging is counted per the way the product is sold, once there is a line', async () => {
@@ -228,9 +227,13 @@ describe('the VAT guide', () => {
 
 describe('the selling price and the target', () => {
   it('labels the price with the venue\'s currency, and says it includes VAT', async () => {
-    await open(null);
+    const { user } = await open(null);
     expect(screen.getByText('Selling price, including VAT (£)')).toBeInTheDocument();
-    expect(screen.getByText('The price on the label. The app takes the VAT off before working out the food cost.')).toBeInTheDocument();
+    // What the price is lives behind the section's «?», closed until pressed.
+    const help = screen.getByText(/^The price on the label, VAT included/);
+    expect(help).not.toBeVisible();
+    await user.click(screen.getByRole('button', { name: 'Explanation: Price' }));
+    expect(help).toBeVisible();
   });
 
   it('labels it with the venue\'s own currency in Italy', async () => {
@@ -280,7 +283,7 @@ describe('the suggested price', () => {
     const { user } = await open({ sellingPrice: 1.2 });
     await user.click(within(suggestion() as HTMLElement).getByRole('button', { name: 'Use this price' }));
     expect(priceBox()).toHaveValue('0.96');
-    expect(screen.getByRole('group', { name: 'Food cost' })).toHaveTextContent('25.00%');
+    expect(within(screen.getByRole('group', { name: /^Summary/ })).getByText('Food cost').closest('div')).toHaveTextContent('25.00%');
     expect(within(suggestion() as HTMLElement).getByText('This is the selling price.')).toBeInTheDocument();
     expect(within(suggestion() as HTMLElement).queryByRole('button')).not.toBeInTheDocument();
     // The button has just gone: the focus stays in the box that says so, not lost to the page.

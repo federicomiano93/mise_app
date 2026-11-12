@@ -12,6 +12,7 @@ import lineCss from './LineRow.module.css?raw';
 import weighCss from './CookingSection.module.css?raw';
 import previewCss from './PreviewPanel.module.css?raw';
 import readCss from './ReadSections.module.css?raw';
+import footCss from './MadeOfFoot.module.css?raw';
 
 // What a stylesheet decides and jsdom cannot see: jsdom applies no layout, so a row too short to
 // tap, a card that clips the bar stuck to its top or a pane that does not scroll on its own is
@@ -201,15 +202,31 @@ describe('a wrong dough weighing', () => {
 });
 
 describe('the money under a line and the «Which?» list', () => {
-  it('the money is quiet secondary text that wraps at 296px (muted token, small size), never a warning colour', () => {
+  it('the money sits at the right-hand end of the amount row, bold and tabular, and wraps at 296px — never a warning colour (step 3b)', () => {
     const body = rule(lineCss, '.cost');
-    expect(declaration(body, 'color')).toBe('var(--ink-2)');
-    expect(declaration(body, 'font-size')).toBe('var(--fs-sm)');
+    expect(declaration(body, 'margin-left')).toBe('auto');
+    expect(declaration(body, 'font-weight')).toBe('650');
+    expect(declaration(body, 'font-variant-numeric')).toBe('tabular-nums');
+    expect(declaration(body, 'color')).toBe('var(--ink)');
     expect(declaration(body, 'overflow-wrap')).toBe('anywhere');
-    expect(contrast('--ink-2', '--surface')).toBeGreaterThanOrEqual(4.5);
-    const read = rule(readCss, '.row dd.cost');
-    expect(declaration(read, 'flex')).toBe('1 0 100%');
-    expect(declaration(read, 'color')).toBe('var(--ink-2)');
+    expect(declaration(body, 'min-width')).toBe('0');
+    expect(declaration(rule(lineCss, '.amount'), 'flex-wrap')).toBe('wrap');
+    const read = rule(readCss, '.money');
+    expect(declaration(read, 'margin-left')).toBe('auto');
+    expect(declaration(read, 'font-weight')).toBe('650');
+    expect(declaration(read, 'font-variant-numeric')).toBe('tabular-nums');
+    expect(declaration(rule(readCss, '.row dd.amount'), 'flex-wrap')).toBe('wrap');
+  });
+
+  it('the foot of «Made of» is bold on the page ground, its figures pushed right and tabular', () => {
+    const foot = rule(footCss, '.foot');
+    expect(declaration(foot, 'background')).toBe('var(--bg)');
+    expect(declaration(foot, 'font-weight')).toBe('650');
+    expect(declaration(foot, 'flex-wrap')).toBe('wrap');
+    expect(contrast('--ink', '--bg')).toBeGreaterThanOrEqual(4.5);
+    const value = rule(footCss, '.value');
+    expect(declaration(value, 'margin-left')).toBe('auto');
+    expect(declaration(value, 'font-variant-numeric')).toBe('tabular-nums');
   });
 
   it('«Which?» is a target as tall and wide as a thumb, quiet text with a visible focus ring', () => {
@@ -223,7 +240,7 @@ describe('the money under a line and the «Which?» list', () => {
   });
 
   it('use nothing the lab tablet (Chrome 101) lacks', () => {
-    for (const css of [lineCss, previewCss, readCss]) {
+    for (const css of [lineCss, previewCss, readCss, footCss]) {
       expect(withoutComments(css)).not.toMatch(/:has\(|color-mix|@container|container-type/);
     }
   });

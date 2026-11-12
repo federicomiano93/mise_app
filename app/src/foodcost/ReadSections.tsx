@@ -5,6 +5,7 @@ import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { useMoney } from '../session/useMoney';
 import { lineMoney, lineName, lineNote } from './lineNotes';
+import { MadeOfFoot } from './MadeOfFoot';
 import type { Loaded } from './lineNotes';
 import { piecesShown } from './productEditorModel';
 import type { Working } from './productEditorModel';
@@ -31,11 +32,6 @@ type Row = {
   label: string;
   // null → «Not set».
   value: string | null;
-  // The line's rate and what its amount costs (lineCost.ts), under the row and above the note.
-  cost?: string;
-  // The cost-model's words about the line («this recipe is only part priced»), under the row.
-  note?: string;
-  missing?: boolean;
   invalid?: boolean;
 };
 
@@ -45,12 +41,41 @@ function ReadList({ rows }: { rows: Row[] }) {
     <dl className={styles.list}>
       {rows.map((row, index) => (
         <div key={index} className={styles.row}>
-          <dt className={row.missing ? styles.missing : undefined}>{row.label}</dt>
+          <dt>{row.label}</dt>
           <dd className={row.invalid ? styles.invalid : undefined}>
             {row.value === null || row.value === '' ? <span className={styles.empty}>{t('fc.notSet')}</span> : row.value}
           </dd>
-          {row.cost ? <dd className={styles.cost}>{row.cost}</dd> : null}
-          {row.note ? <dd className={styles.note}>{row.note}</dd> : null}
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+// One line of «Made of» or of the packaging, read: its name on top, the amount below it with the money at the right-hand end (step
+// 3b, 11 Nov 2026 — the form's own layout), and the note under both.
+type LineItem = {
+  name: string;
+  missing: boolean;
+  // null → «Not set».
+  amount: string | null;
+  // The line's rate and what its amount costs (lineCost.ts); '' when there is nothing to say.
+  cost: string;
+  // What the person must act on (lineNotes.ts); '' when nothing.
+  note: string;
+};
+
+function ReadLines({ items }: { items: LineItem[] }) {
+  const { t } = useT();
+  return (
+    <dl className={styles.list}>
+      {items.map((item, index) => (
+        <div key={index} className={`${styles.row} ${styles.lineRow}`}>
+          <dt className={item.missing ? styles.missing : undefined}>{item.name}</dt>
+          <dd className={styles.amount}>
+            {item.amount === null ? <span className={styles.empty}>{t('fc.notSet')}</span> : <span>{item.amount}</span>}
+            {item.cost ? <span className={styles.money}>{item.cost}</span> : null}
+          </dd>
+          {item.note ? <dd className={styles.note}>{item.note}</dd> : null}
         </div>
       ))}
     </dl>
@@ -89,25 +114,27 @@ export function ReadMadeOf({ product, working, tables, loaded }: Lines) {
   const { t } = useT();
   const money = useMoney();
   if (product.components.length === 0) return <NothingYet />;
+  const items = product.components.map((line, index): LineItem => {
+    // The working copy was made from the same product, line for line: it carries the name and the note the form would show.
+    const shown = working.components[index];
+    if (!shown) return { name: '', missing: false, amount: null, cost: '', note: '' };
+    const name = lineName(t, shown, tables, loaded);
+    const amount = line.kind === 'ingredient'
+      ? (positive(line.qty) ? amountText(t, money, line.qty, line.unit) : null)
+      : (positive(line.qtyKg) ? fcWeight(line.qtyKg, money) : null);
+    return {
+      name: name.text,
+      missing: name.missing,
+      amount,
+      cost: lineMoney(t, money, shown, tables).text,
+      note: lineNote(t, money, shown, tables, loaded),
+    };
+  });
   return (
-    <ReadList
-      rows={product.components.map((line, index) => {
-        // The working copy was made from the same product, line for line: it carries the name and the note the form would show.
-        const shown = working.components[index];
-        if (!shown) return { label: '', value: null };
-        const name = lineName(t, shown, tables, loaded);
-        const value = line.kind === 'ingredient'
-          ? (positive(line.qty) ? amountText(t, money, line.qty, line.unit) : null)
-          : (positive(line.qtyKg) ? fcWeight(line.qtyKg, money) : null);
-        return {
-          label: name.text,
-          value,
-          cost: lineMoney(t, money, shown, tables).text,
-          note: lineNote(t, money, shown, tables, loaded),
-          missing: name.missing,
-        };
-      })}
-    />
+    <div className={styles.block}>
+      <ReadLines items={items} />
+      <MadeOfFoot product={product} tables={tables} />
+    </div>
   );
 }
 
@@ -143,17 +170,17 @@ export function ReadPackaging({ product, working, tables, loaded }: Lines) {
   const money = useMoney();
   if (product.packaging.length === 0) return <NothingYet />;
   return (
-    <ReadList
-      rows={product.packaging.map((line, index) => {
+    <ReadLines
+      items={product.packaging.map((line, index): LineItem => {
         const shown = working.packaging[index];
-        if (!shown) return { label: '', value: null };
+        if (!shown) return { name: '', missing: false, amount: null, cost: '', note: '' };
         const name = lineName(t, shown, tables, loaded);
         return {
-          label: name.text,
-          value: positive(line.qtyPcs) ? amountText(t, money, line.qtyPcs, 'pcs') : null,
+          name: name.text,
+          missing: name.missing,
+          amount: positive(line.qtyPcs) ? amountText(t, money, line.qtyPcs, 'pcs') : null,
           cost: lineMoney(t, money, shown, tables).text,
           note: lineNote(t, money, shown, tables, loaded),
-          missing: name.missing,
         };
       })}
     />

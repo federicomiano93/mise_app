@@ -11,9 +11,16 @@
   background: var(--surface);
 }
 
-.top,
+.top {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+}
+
+/* The amount row wraps: at 296px the money drops under the box and the unit, still right-aligned, never sideways. */
 .amount {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--s2);
 }
@@ -114,12 +121,14 @@
   overflow-wrap: anywhere;
 }
 
-/* The rate and what the amount typed costs (Federico, 7 Nov 2026): secondary text, quiet like the note but not a warning.
-   It wraps at 296px, never sideways; the figures keep their width (tabular). The gap above the note comes from the line's. */
+/* The rate and what the amount typed costs (Federico, 7 Nov 2026), at the right-hand end of the amount row (step 3b, 11 Nov 2026):
+   the row's figure, so bold, with figures that keep their width (tabular). It wraps under the box at 296px, never sideways. */
 .cost {
-  margin: 0;
-  color: var(--ink-2);
-  font-size: var(--fs-sm);
+  min-width: 0;
+  margin-left: auto;
+  color: var(--ink);
+  font-weight: 650;
   font-variant-numeric: tabular-nums;
+  text-align: right;
   overflow-wrap: anywhere;
 }

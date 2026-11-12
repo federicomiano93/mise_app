@@ -32,7 +32,7 @@ describe('the form', () => {
     return view;
   }
 
-  it('draws the rate and the amount under a line, above its note, and follows the quantity typed', async () => {
+  it('draws the rate and the amount at the end of the line\'s amount row, and follows the quantity typed', async () => {
     const { user } = await form();
     const madeOf = cardNamed('Made of');
     expect(within(madeOf).getByText('£2.00/kg · this amount £2.00')).toBeInTheDocument();
@@ -107,7 +107,7 @@ describe('the read view', () => {
     return view;
   }
 
-  it('draws the same money line under each row, in its own element above the note, and still no control', async () => {
+  it('draws the same money at the end of each amount row, above the note, and still no control', async () => {
     const half = recipe('Half', { ingredients: [
       { kind: 'ingredient', refId: 'flour', unit: 'g', grams: 1000, label: 'Flour' },
       { kind: 'ingredient', refId: 'salt', unit: 'g', grams: 20, label: 'Salt' },
@@ -119,10 +119,13 @@ describe('the read view', () => {
     expect(within(madeOf).getByText('— No price')).toBeInTheDocument();
     expect(within(madeOf).getByText('£2.00/kg · this amount £2.00', { exact: true })).toBeInTheDocument();
     expect(within(cardNamed('Packaging')).getByText('£0.25 each · this amount £0.50')).toBeInTheDocument();
-    // The money line comes BEFORE the note under the same row.
-    const row = within(madeOf).getByText('Only part of this recipe has a price').parentElement as HTMLElement;
-    const lines = Array.from(row.querySelectorAll('dd')).map(node => node.textContent);
-    expect(lines.indexOf('£2.00/kg · this amount £2.00 · not exact yet')).toBeLessThan(lines.indexOf('Only part of this recipe has a price'));
+    // The money is at the end of the amount row (step 3b), which comes BEFORE the note under the same row.
+    const note = within(madeOf).getByText('Only part of this recipe has a price');
+    const row = note.parentElement as HTMLElement;
+    const amountRow = within(row).getByText('£2.00/kg · this amount £2.00 · not exact yet').closest('dd') as HTMLElement;
+    expect(amountRow).toHaveTextContent(/^1\.00 kg£2\.00\/kg/);
+    const lines = Array.from(row.querySelectorAll('dd'));
+    expect(lines.indexOf(amountRow)).toBeLessThan(lines.indexOf(note));
     expect(madeOf.querySelector('input, select, textarea')).toBeNull();
   });
 
@@ -146,7 +149,7 @@ describe('«Which?» on the card', () => {
   it('is a button under the partial-price warning, closed by default, with aria-expanded and aria-controls', async () => {
     await read(salty(), 'Salty');
     const summary = screen.getByRole('group', { name: 'Summary per piece' });
-    const warning = within(summary).getByText('Part of this product is not priced yet, so it really costs more than this.');
+    const warning = within(summary).getByText('1 line has no cost: the real cost is higher.').closest('p') as HTMLElement;
     expect(warning.nextElementSibling).toContainElement(which());
     expect(which()).toHaveAttribute('aria-expanded', 'false');
     const list = document.getElementById(which().getAttribute('aria-controls') as string) as HTMLElement;

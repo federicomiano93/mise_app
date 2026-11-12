@@ -8,6 +8,7 @@ import { Dialog } from '../ui/Dialog';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useFoodcost } from './FoodcostContext';
 import { PreviewPanel, previewCaption } from './PreviewPanel';
+import { summaryExtras } from './summaryExtras';
 
 type Props = {
   // The product whose figures are shown.
@@ -36,6 +37,8 @@ export function ProductPreviewDialog({ id, onOpen, onClose }: Props) {
   const product = useMemo(() => products.find(candidate => candidate.id === id) ?? null, [products, id]);
   const preview = useMemo(() => (product === null ? null : productPreview(product, tables, foodcostTranslate(t))), [product, tables, t]);
 
+  const extras = useMemo(() => (product === null ? null : summaryExtras(product, tables)), [product, tables]);
+
   const gone = product === null;
   useEffect(() => {
     if (!gone) return;
@@ -59,7 +62,7 @@ export function ProductPreviewDialog({ id, onOpen, onClose }: Props) {
         </>
       }
     >
-      <PreviewPanel preview={preview} money={money} />
+      <PreviewPanel preview={preview} money={money} extras={extras} />
     </Dialog>
   );
 }

@@ -288,6 +288,9 @@ const POST_SWITCH = new Map<string, 'lens' | 'guards'>([
   ['batchTotals', 'guards'], ['productionCost', 'guards'], ['costProduct', 'guards'], ['productPreview', 'guards'],
   ['unpricedParts', 'guards'], ['costPerKg', 'guards'], ['sortByMargin', 'guards'], ['productFromRecipe', 'guards'],
   ['recipesWithoutProducts', 'guards'],
+  // POST-SWITCH (11 Nov 2026, «solo l'impasto»): the dough-only kilo every Mise 2 screen asks for (costPerKg's third argument,
+  // which js/ does not have) is held to the same guards against the original's two-argument answer.
+  ['costPerKg (dough only)', 'guards'],
 ]);
 
 // The new fields of a normalised product, taken off: what is left is the original's shape. A problem with either field
@@ -2839,6 +2842,8 @@ describe('foodcost-model: odd inputs', () => {
   agree('packagingLineCost', m.packagingLineCost as AnyFn, l.packagingLineCost as AnyFn, product(
     [...ODD, { qtyPcs: 3 }, { qtyPcs: '2' }, { qtyPcs: -1 }, { qtyPcs: NaN }, { ingredientId: 'BOX', qtyPcs: 2 }], [...ODD, ...Object.values(FC_ING), ...ING_CARDS.slice(0, 40)]));
   agree('costPerKg', perKgModel.costPerKg as AnyFn, legacyPerKgModel.costPerKg as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
+  agree('costPerKg (dough only)', (p: unknown, tables: unknown) => perKgModel.costPerKg(p, tables as never, { packaging: false }),
+    legacyPerKgModel.costPerKg as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
   agree('labourBatchCost', m.labourBatchCost as AnyFn, l.labourBatchCost as AnyFn, [...product(HAND_WRITTEN, FC_TABLES), ...product(PRODUCTS, FEW_TABLES)]);
 
   // unitsPerBatch is handed the product as the screen holds it: raw documents and normalised ones, with every kind of batch.

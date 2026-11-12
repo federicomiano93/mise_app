@@ -22,8 +22,9 @@ const saveBar = () => screen.getByRole('button', { name: 'Save' });
 const question = () => screen.findByRole('alertdialog', undefined, LOAD);
 const nameBox = () => screen.getByRole('combobox', { name: 'Name' });
 const priceBox = () => screen.getByRole('textbox', { name: 'Selling price, including VAT (£)' });
-const productionCost = () => screen.queryByRole('group', { name: 'Production cost' });
-const answer = () => screen.getByRole('group', { name: 'Food cost' });
+// The summary at the top of the card: its heading names it («Summary per piece»), each figure is a row (a term and its value).
+const summary = () => screen.getByRole('group', { name: /^Summary/ });
+const figure = (label: string | RegExp) => within(summary()).getByText(label).closest('div') as HTMLElement;
 
 async function confirmSave(user: UserEvent) {
   const asked = await question();
@@ -105,27 +106,30 @@ describe('a new product', () => {
   });
 });
 
-describe('the production cost', () => {
-  it('is not drawn at all while nothing is priced, never «£0.00»', async () => {
+describe('the cost in the summary', () => {
+  it('is not drawn at all while nothing is priced, never «£0.00» — only what is still missing', async () => {
     await openNew();
-    expect(productionCost()).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: /^Summary/ })).not.toBeInTheDocument();
     expect(screen.queryByText(/£0\.00/)).not.toBeInTheDocument();
+    expect(screen.getByText('Still missing:')).toBeInTheDocument();
   });
 
   it.each([
-    ['per piece', {}, '£0.20per piece', 'Whole batch: £2.00'],
-    ['per kg', { sellingMode: 'weight', piecesPerBatch: null }, '£2.00per kg', 'Whole batch: £2.00'],
-    ['per pack', { sellingMode: 'pack', packSize: 500, packUnit: 'g', piecesPerBatch: null }, '£1.00per pack', 'Whole batch: £2.00'],
-  ])('says it %s', async (_way, fields, value, batch) => {
+    ['per piece', {}, '£0.20', 'Summary per piece', 'Whole batch (10 pieces)', '£2.00'],
+    ['per kg', { sellingMode: 'weight', piecesPerBatch: null }, '£2.00', 'Summary per kg', 'Whole batch', '£2.00'],
+    ['per pack', { sellingMode: 'pack', packSize: 500, packUnit: 'g', piecesPerBatch: null }, '£1.00', 'Summary per pack', 'Whole batch', '£2.00'],
+  ])('says it %s, with the whole batch under «Details»', async (_way, fields, cost, caption, batchLabel, batch) => {
     await openProduct('Green', editorSource([product('Green', fields)]));
-    const box = productionCost();
-    expect(box).toHaveTextContent(value);
-    expect(box).toHaveTextContent(batch);
+    expect(summary()).toHaveAccessibleName(caption);
+    expect(figure('Cost')).toHaveTextContent(cost);
+    expect(figure(batchLabel)).toHaveTextContent(batch);
   });
 
   it('says the whole batch while the way of selling is not said', async () => {
     await openProduct('Green', editorSource([product('Green', { sellingMode: null, piecesPerBatch: null })]));
-    expect(productionCost()).toHaveTextContent('£2.00whole batch');
+    expect(summary()).toHaveAccessibleName('Summary');
+    expect(figure('Cost')).toHaveTextContent('—');
+    expect(figure('Whole batch')).toHaveTextContent('£2.00');
   });
 
   it('says it is only part when a line has no price — the cost is then too low', async () => {
@@ -134,37 +138,39 @@ describe('the production cost', () => {
       { kind: 'ingredient', ingredientId: 'salt', qty: 10, unit: 'g' },
     ] })]);
     await openProduct('Green', fake);
-    expect(productionCost()).toHaveTextContent('Part of this product is not priced yet, so it really costs more than this.');
+    expect(within(summary()).getByText('1 line has no cost: the real cost is higher.')).toBeInTheDocument();
+    expect(figure('Cost')).toHaveTextContent('more than £0.20');
   });
 });
 
-describe('the food cost answer', () => {
+describe('the food cost in the summary', () => {
   it('shows the percentage, the figures and the traffic light as a word', async () => {
     await openProduct();
-    const box = answer();
-    expect(box).toHaveTextContent('20.00%');
-    expect(box).toHaveTextContent('£0.20 to make per piece · £1.00 net · £0.80 margin');
-    expect(box).toHaveTextContent('On target');
-    expect(box).toHaveAttribute('data-status', 'green');
+    const row = figure('Food cost');
+    expect(row).toHaveTextContent('20.00% · target 25.00%');
+    expect(row).toHaveTextContent('On target');
+    expect(row).toHaveAttribute('data-status', 'green');
+    expect(figure(/^Margin/)).toHaveTextContent('£0.80');
+    expect(figure('Price without VAT')).toHaveTextContent('£1.00');
   });
 
   it.each([
-    ['slightly over target', 0.77, 'amber'],
+    ['slightly over', 0.77, 'amber'],
     ['over target', 0.5, 'red'],
   ])('says %s', async (word, price, status) => {
     await openProduct('Green', editorSource([product('Green', { sellingPrice: price, vatRate: 0 })]));
-    expect(answer()).toHaveAttribute('data-status', status);
-    expect(answer()).toHaveTextContent(new RegExp(word, 'i'));
+    expect(figure('Food cost')).toHaveAttribute('data-status', status);
+    expect(figure('Food cost')).toHaveTextContent(new RegExp(word, 'i'));
   });
 
   it('lists everything still missing, not just the first thing', async () => {
     await openNew();
-    const box = answer();
-    expect(box).toHaveTextContent('Not costed yet');
-    const listed = within(box).getAllByRole('listitem').map(item => item.textContent);
+    const listed = within(screen.getByText('Still missing:').parentElement as HTMLElement).getAllByRole('listitem').map(item => item.textContent);
     const expected = costProduct({ components: [], packaging: [] }, {}).blockers;
     expect(expected.length).toBeGreaterThan(2);
-    expect(listed).toHaveLength(expected.length);
+    // The summary's list is the blockers plus the target, which only the summary needs (it is why there is no ideal price).
+    expect(listed).toHaveLength(expected.length + 1);
+    expect(listed).toContain('Enter a food cost target');
     expect(listed).toContain('Add at least one recipe or ingredient to this product');
     expect(listed).toContain('Choose the VAT rate');
     expect(listed).toContain('Enter the selling price');
@@ -174,7 +180,7 @@ describe('the food cost answer', () => {
     const { user } = await openProduct();
     await user.clear(priceBox());
     await user.type(priceBox(), '2,4');
-    expect(answer()).toHaveTextContent('10.00%');
+    expect(figure('Food cost')).toHaveTextContent('10.00%');
   });
 
   it('says a partly priced product is really higher than it looks', async () => {
@@ -183,12 +189,13 @@ describe('the food cost answer', () => {
       { kind: 'ingredient', ingredientId: 'salt', qty: 10, unit: 'g' },
     ] })]);
     await openProduct('Green', fake);
-    expect(answer()).toHaveTextContent('Part of this product is not priced yet, so the real food cost is higher than this.');
+    expect(figure('Food cost')).toHaveTextContent('more than 20.00%');
+    expect(figure(/^Margin/)).toHaveTextContent('less than £0.80');
   });
 
   it('is not a live region (it would re-read every figure at each keystroke): only the suggested price speaks', async () => {
     await openProduct();
-    expect(answer().closest('[aria-live]')).toBeNull();
+    expect(summary().closest('[aria-live]')).toBeNull();
     expect(screen.getByRole('group', { name: 'Suggested price' }).closest('[aria-live="polite"]')).not.toBeNull();
   });
 });
@@ -274,7 +281,7 @@ describe('a number the database would refuse', () => {
     const pieces = screen.getByRole('textbox', { name: 'Pieces per batch' });
     await user.clear(pieces);
     await user.type(pieces, '0');
-    await user.selectOptions(screen.getByRole('combobox', { name: 'Sold' }), 'weight');
+    await user.selectOptions(screen.getByRole('combobox', { name: 'How it is sold' }), 'weight');
     expect(screen.queryByRole('textbox', { name: 'Pieces per batch' })).not.toBeInTheDocument();
 
     await user.click(saveBar());
@@ -505,17 +512,18 @@ describe('the work time', () => {
 
   it('shows what the work costs to whoever runs the place, once the rate is known', async () => {
     await openProduct('Worked', editorSource([WORKED], { settings: { labourCostPerHour: 12 } }));
-    const box = await screen.findByRole('group', { name: 'Production cost' });
-    await vi.waitFor(() => { expect(box).toHaveTextContent('£0.20 ingredients and packaging · £1.20 labour'); });
-    expect(box).toHaveTextContent('With labour: £1.40 per piece');
-    expect(answer()).toHaveTextContent('Labour 120.00% · everything 140.00% of the net price');
+    await vi.waitFor(() => { expect(figure('Labour')).toHaveTextContent('£1.20'); });
+    expect(figure('Cost')).toHaveTextContent('£1.40');
+    expect(figure('Raw materials')).toHaveTextContent('£0.20');
+    expect(figure(/^Margin/)).toHaveTextContent('Margin (without VAT, before labour)');
+    expect(summary()).toHaveTextContent('Labour 120.00% · everything 140.00% of the net price');
     expect(screen.queryByText('Set the hourly labour cost in Settings to see what the work costs.')).not.toBeInTheDocument();
   });
 
   it('says where the rate is set when there are minutes and no rate — to whoever can set it', async () => {
     await openProduct('Worked', editorSource([WORKED], { settings: null }));
     expect(await screen.findByText('Set the hourly labour cost in Settings to see what the work costs.')).toBeInTheDocument();
-    expect(productionCost()).not.toHaveTextContent('labour');
+    expect(within(summary()).queryByText('Labour')).not.toBeInTheDocument();
   });
 
   it('does not say the rate is missing while the rate has not been heard yet', async () => {
@@ -528,7 +536,7 @@ describe('the work time', () => {
     await openProduct('Worked', fake);
     expect(screen.queryByText('Set the hourly labour cost in Settings to see what the work costs.')).not.toBeInTheDocument();
     act(() => { arrive(); });
-    await screen.findByRole('group', { name: 'Production cost' });
+    await screen.findByRole('group', { name: /^Summary/ });
     expect(screen.queryByText('Set the hourly labour cost in Settings to see what the work costs.')).not.toBeInTheDocument();
   });
 
@@ -537,8 +545,8 @@ describe('the work time', () => {
     await openProduct('Worked', fake, { session: EMPLOYEE });
     expect(screen.getByRole('textbox', { name: 'Minutes of work for one batch' })).toHaveValue('60');
     expect(screen.getByRole('textbox', { name: 'People working on it' })).toHaveValue('1');
-    expect(productionCost()).not.toHaveTextContent(/labour/i);
-    expect(answer()).not.toHaveTextContent(/labour/i);
+    expect(within(summary()).queryByText('Labour')).not.toBeInTheDocument();
+    expect(summary()).not.toHaveTextContent('Labour 120');
     expect(screen.queryByText('Set the hourly labour cost in Settings to see what the work costs.')).not.toBeInTheDocument();
     expect(fake.watchSettings).not.toHaveBeenCalled();
   });

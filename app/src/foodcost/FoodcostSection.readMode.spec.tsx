@@ -21,8 +21,8 @@ const ITALY = { lang: 'it', session: { language: 'it', location: { country: 'IT'
 const pencil = () => screen.getByRole('button', { name: 'Edit product' });
 const saveBar = () => screen.getByRole('button', { name: 'Save' });
 const nameBox = () => screen.getByRole('combobox', { name: 'Name' });
-const fullCard = () => document.querySelector('details[class*="full"]') as HTMLDetailsElement;
-const cardTitles = () => screen.getAllByRole('heading', { level: 3 }).map(heading => heading.textContent);
+// The section titles, in page order (the summary's own caption is a level-3 heading too, and is not a section).
+const cardTitles = () => screen.getAllByRole('heading', { level: 3 }).map(heading => heading.textContent).filter(title => !/^(Summary|Riepilogo)/.test(title ?? ''));
 const cardNamed = (name: string) => screen.getByRole('region', { name });
 const rowOf = (scope: HTMLElement, label: string): HTMLElement =>
   within(scope).getByText(label, { selector: 'dt' }).parentElement as HTMLElement;
@@ -38,29 +38,29 @@ async function confirmSave(user: Awaited<ReturnType<typeof read>>['user']) {
   await user.click(within(asked).getByRole('button', { name: 'Save' }));
 }
 
-const SECTIONS = ['Product', 'Made of', 'Baking', 'Packaging', 'Work time', 'Price', 'Calculated costs'];
+const SECTIONS = ['Product', 'Made of', 'Baking', 'Packaging', 'Work', 'Price'];
 
 describe('which view a product opens in', () => {
-  it('a product with something costed opens to READ: the summary, a closed «Full card», the pencil', async () => {
+  it('a product with something costed opens to READ: the summary, the sections right under it with no «Full card» frame, the pencil', async () => {
     await read();
     expect(screen.getByRole('heading', { level: 2, name: 'Green' })).toBeInTheDocument();
     expect(pencil()).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Save' })).not.toBeInTheDocument();
     expect(screen.getByRole('group', { name: 'Summary per piece' })).toBeInTheDocument();
-    expect(fullCard().open).toBe(false);
-    expect(within(fullCard()).getByText('Full card')).toBeInTheDocument();
+    expect(screen.queryByText('Full card')).not.toBeInTheDocument();
+    expect(cardTitles()).toEqual(SECTIONS);
   });
 
-  it('a NEW product opens straight in the form (nothing to read), without a Full-card chevron or a pencil', async () => {
+  it('a NEW product opens straight in the form (nothing to read), without a frame or a pencil', async () => {
     renderFoodcost('/food-cost/new', { source: editorSource([]) });
     await screen.findByRole('combobox', { name: 'Name' }, LOAD);
     expect(screen.queryByRole('button', { name: 'Edit product' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
-    expect(document.querySelector('details[class*="full"]')).toBeNull();
-    expect(screen.getByText('Full card')).toBeInTheDocument();
+    expect(document.querySelector('details')).toBeNull();
+    expect(screen.queryByText('Full card')).not.toBeInTheDocument();
   });
 
-  it('a product with nothing costed opens straight in the form too, and Save brings it to READ with the box open', async () => {
+  it('a product with nothing costed opens straight in the form too, and Save brings it to READ with the sections and what is missing', async () => {
     const { user, source: fake } = renderFoodcost('/food-cost/product/Bare', { source: editorSource([bareProduct('Bare')]) });
     await screen.findByRole('combobox', { name: 'Name' }, LOAD);
     expect(screen.queryByRole('button', { name: 'Edit product' })).not.toBeInTheDocument();
@@ -69,9 +69,10 @@ describe('which view a product opens in', () => {
     await confirmSave(user);
     await screen.findByRole('button', { name: 'Edit product' }, LOAD);
     expect(screen.getByRole('heading', { level: 2, name: 'Bare!' })).toBeInTheDocument();
-    // No summary above it (nothing costed), so the box is the only thing to see: open.
+    // No summary above it (nothing costed): only what is still missing, and the sections, all in sight.
     expect(screen.queryByRole('group', { name: /^Summary/ })).not.toBeInTheDocument();
-    expect(fullCard().open).toBe(true);
+    expect(screen.getByText('Still missing:')).toBeInTheDocument();
+    expect(cardTitles()).toEqual(['Product', 'Made of', 'Packaging', 'Work', 'Price']);
     expect(fake.saved).toHaveLength(1);
   });
 });
@@ -159,46 +160,40 @@ describe('the pencil and the way back', () => {
   });
 });
 
-describe('the Full card', () => {
-  it('holds the seven sections in the order they are filled in, results last, in the read view and in the form', async () => {
+describe('the sections', () => {
+  it('come in the order they are filled in, the last one is the closed «Cost breakdown», in the read view and in the form', async () => {
     const { user } = await read();
     expect(cardTitles()).toEqual(SECTIONS);
+    expect(screen.getByRole('button', { name: 'Cost breakdown' })).toHaveAttribute('aria-expanded', 'false');
     await user.click(pencil());
     await screen.findByRole('combobox', { name: 'Name' });
     expect(cardTitles()).toEqual(SECTIONS);
-    // The form's inputs come in the order they are filled: name, how it is sold, then the VAT before the target before the price.
-    const order = [nameBox(), screen.getByRole('combobox', { name: 'Sold' }), screen.getByRole('combobox', { name: 'VAT rate' }),
-      screen.getByRole('textbox', { name: 'Food cost target (%)' }), screen.getByRole('textbox', { name: 'Selling price, including VAT (£)' })];
+    expect(screen.getByRole('button', { name: 'Cost breakdown' })).toHaveAttribute('aria-expanded', 'false');
+    // The form's inputs come in the order they are filled: name, how it is sold, then the price before the VAT before the target.
+    const order = [nameBox(), screen.getByRole('combobox', { name: 'How it is sold' }),
+      screen.getByRole('textbox', { name: 'Selling price, including VAT (£)' }), screen.getByRole('combobox', { name: 'VAT rate' }),
+      screen.getByRole('textbox', { name: 'Food cost target (%)' })];
     order.reduce((before, next) => {
       expect(before.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       return next;
     });
   });
 
-  it('is a native details in the read view: it opens from its summary, by keyboard too', async () => {
+  it('sit in no frame: no «Full card», no native details, in the read view or in the form', async () => {
     const { user } = await read();
-    expect(fullCard().open).toBe(false);
-    await user.click(within(fullCard()).getByText('Full card'));
-    expect(fullCard().open).toBe(true);
-    await user.click(within(fullCard()).getByText('Full card'));
-    expect(fullCard().open).toBe(false);
+    expect(screen.queryByText('Full card')).not.toBeInTheDocument();
+    expect(document.querySelector('details')).toBeNull();
+    await user.click(pencil());
+    await screen.findByRole('combobox', { name: 'Name' });
+    expect(screen.queryByText('Full card')).not.toBeInTheDocument();
+    expect(document.querySelector('details')).toBeNull();
   });
 
-  it('keeps itself open while the stored product changes under it', async () => {
-    const { user, fake } = await read();
-    await user.click(within(fullCard()).getByText('Full card'));
+  it('redraw in place while the stored product changes under them', async () => {
+    const { fake } = await read();
     fake.products.set('Green', product('Green', { sellingPrice: 2.4 }));
     await act(async () => { fake.push(); });
     await waitFor(() => { expect(rowOf(cardNamed('Price'), 'Selling price, including VAT (£)')).toHaveTextContent('£2.40'); }, LOAD);
-    expect(fullCard().open).toBe(true);
-  });
-
-  it('is never collapsible in the form (a field Save checks can never sit hidden): a label, no details', async () => {
-    const { user } = await read();
-    await user.click(pencil());
-    await screen.findByRole('combobox', { name: 'Name' });
-    expect(document.querySelector('details[class*="full"]')).toBeNull();
-    expect(screen.getByText('Full card')).toBeInTheDocument();
   });
 });
 
@@ -224,8 +219,8 @@ describe('the read view is text, not a form', () => {
     for (const label of ['VAT rate', 'Food cost target (%)', 'Selling price, including VAT (£)']) {
       expect(rowOf(price, label)).toHaveTextContent('Not set');
     }
-    expect(rowOf(cardNamed('Work time'), 'Minutes of work for one batch')).toHaveTextContent('Not set');
-    expect(rowOf(cardNamed('Work time'), 'People working on it')).toHaveTextContent('Not set');
+    expect(rowOf(cardNamed('Work'), 'Minutes of work for one batch')).toHaveTextContent('Not set');
+    expect(rowOf(cardNamed('Work'), 'People working on it')).toHaveTextContent('Not set');
     expect(price).not.toHaveTextContent('£0.00');
     await user.click(screen.getByRole('button', { name: 'Back' }));
     await user.click(await screen.findByRole('button', { name: /^Zero/ }, LOAD));
@@ -243,15 +238,15 @@ describe('the read view is text, not a form', () => {
       labourMinutes: 7.5, labourPeople: 2,
     });
     await read('Rich', editorSource([rich], { recipes: [recipe('Dough')] }), ITALY);
-    expect(rowOf(cardNamed('Prodotto'), 'Venduto')).toHaveTextContent('A confezione');
+    expect(rowOf(cardNamed('Prodotto'), 'Come si vende')).toHaveTextContent('A confezione');
     expect(rowOf(cardNamed('Prodotto'), 'Una confezione contiene')).toHaveTextContent('0,50 kg');
     const made = cardNamed('Composto da');
     expect(within(made).getAllByText('Flour')[0]!.parentElement).toHaveTextContent('2,50 kg');
     const doughs = within(made).getAllByText('Dough', { selector: 'dt' }).map(label => label.parentElement?.textContent);
     expect(doughs).toEqual([expect.stringContaining('12,50 g'), expect.stringContaining('1,25 kg')]);
     expect(rowOf(cardNamed('Imballaggio'), 'Box')).toHaveTextContent('3,00 pz');
-    expect(rowOf(cardNamed('Tempo di lavoro'), 'Minuti di lavoro per un’infornata')).toHaveTextContent('7,5');
-    expect(rowOf(cardNamed('Tempo di lavoro'), 'Persone al lavoro')).toHaveTextContent('2');
+    expect(rowOf(cardNamed('Lavoro'), 'Minuti di lavoro per un’infornata')).toHaveTextContent('7,5');
+    expect(rowOf(cardNamed('Lavoro'), 'Persone al lavoro')).toHaveTextContent('2');
     expect(rowOf(cardNamed('Prezzo'), 'Aliquota IVA')).toHaveTextContent('22,00%');
     expect(rowOf(cardNamed('Prezzo'), 'Obiettivo di food cost (%)')).toHaveTextContent('32,50%');
     expect(rowOf(cardNamed('Prezzo'), 'Prezzo di vendita, IVA inclusa (€)')).toHaveTextContent('6,50 €');
@@ -272,8 +267,9 @@ describe('the read view is text, not a form', () => {
     const fake = editorSource([product('Plain', { sellingPrice: null })]);
     renderFoodcost('/food-cost/product/Plain', { source: fake, ...ITALY });
     expect(await screen.findByRole('button', { name: 'Modifica il prodotto' }, LOAD)).toBeInTheDocument();
-    expect(cardTitles()).toEqual(['Prodotto', 'Composto da', 'Cottura', 'Imballaggio', 'Tempo di lavoro', 'Prezzo', 'Costi calcolati']);
-    expect(within(fullCard()).getByText('Scheda completa')).toBeInTheDocument();
+    expect(cardTitles()).toEqual(['Prodotto', 'Composto da', 'Cottura', 'Imballaggio', 'Lavoro', 'Prezzo']);
+    expect(screen.getByRole('button', { name: 'Dettaglio costi' })).toBeInTheDocument();
+    expect(screen.queryByText('Scheda completa')).not.toBeInTheDocument();
     expect(cardNamed('Prezzo')).toHaveTextContent('Non inserito');
     expect(cardNamed('Imballaggio')).toHaveTextContent('Ancora niente');
   });
@@ -317,17 +313,16 @@ describe('the read view is text, not a form', () => {
   it('says where to set the hourly cost, to whoever can set it — and only to them', async () => {
     const worked = product('Worked', { labourMinutes: 30, labourPeople: 1 });
     await read('Worked', editorSource([worked]), { session: MANAGER });
-    await waitFor(() => { expect(cardNamed('Work time')).toHaveTextContent('Set the hourly labour cost in Settings'); }, LOAD);
+    await waitFor(() => { expect(cardNamed('Work')).toHaveTextContent('Set the hourly labour cost in Settings'); }, LOAD);
   });
 
-  it('shows «Cost per 1 kg» once, in the Calculated costs card, closed, as in the form', async () => {
+  it('shows «Cost breakdown» once, last, closed — and no «Calculated costs» card (the figures are the summary’s)', async () => {
     await read();
-    const results = cardNamed('Calculated costs');
-    expect(within(results).getAllByText('Cost per 1 kg')).toHaveLength(1);
-    expect(within(results).getByRole('group', { name: 'Production cost' })).toBeInTheDocument();
-    expect(within(results).getByRole('group', { name: 'Food cost' })).toBeInTheDocument();
-    expect(results.querySelector('details')).not.toHaveAttribute('open');
-    expect(screen.getAllByText('Cost per 1 kg')).toHaveLength(1);
+    expect(screen.getAllByRole('button', { name: 'Cost breakdown' })).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Cost breakdown' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('region', { name: 'Calculated costs' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Production cost' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: 'Food cost' })).not.toBeInTheDocument();
   });
 
   it('keeps the suggested price in the Price card but with no «Use this price» — and says when it is already the selling price', async () => {

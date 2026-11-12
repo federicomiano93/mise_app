@@ -14,13 +14,13 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useMediaQuery } from '../ui/useMediaQuery';
 import { useFoodcost, useFoodcostStore } from './FoodcostContext';
-import { CardSection, CardStack, FullCard } from './FullCard';
+import { CardSection, CardStack } from './CardSection';
 import { historyPath } from './foodcostPath';
 import type { Origin } from './foodcostPath';
 import { FROM_PRODUCT, pushDepth } from './foodcostNav';
 import { PerKgBlock } from './PerKgBlock';
 import { ProductActions } from './ProductActions';
-import { ProductAnswer, SuggestedPrice } from './ProductAnswer';
+import { SuggestedPrice } from './SuggestedPrice';
 import { workingFrom } from './productEditorModel';
 import { ProductSummary } from './ProductSummary';
 import { ReadLabour, ReadMadeOf, ReadPackaging, ReadPrice, ReadProduct, ReadCooking } from './ReadSections';
@@ -52,14 +52,16 @@ export function summaryShows(product: unknown, tables: CostTables): boolean {
   }
 }
 
-// A product opened to READ (Federico, 7 Nov 2026; current app 18679a38): the summary, then «Full card» — a closed box of framed
-// cards, every section as plain text — and the pencil in the bar turns the same product into the form.
+// A product opened to READ (Federico, 7 Nov 2026; current app 18679a38): the summary, then the sections — Product, Made of, Baking,
+// Packaging, Work, Price — as plain text, then a closed «Cost breakdown»; the pencil in the bar turns the same product into the form.
+// Since 11 Nov 2026 there is no «Full card» box around them: every section sits right under the summary, and each explains itself
+// behind its «?».
 //
 // ⚠️ IT FOLLOWS THE STORED PRODUCT, LIVE (f8770132): a read view holds nothing typed, so a price, a recipe or the product itself
 // changing elsewhere simply redraws it — no copy, no question. A product deleted elsewhere closes it, on a phone and on the
 // split alike.
-// ⚠️ NOTHING IN IT IS A CONTROL BUT THE BAR'S BUTTONS, THE BOX'S SUMMARY, «DETAILS», «COST PER 1 KG», HISTORY AND DELETE: a box
-// sneaking in would be a form that looks like text.
+// ⚠️ NOTHING IN IT IS A CONTROL BUT THE BAR'S BUTTONS, THE «?» OF EACH SECTION, «DETAILS», «WHICH?», «COST BREAKDOWN», HISTORY AND
+// DELETE: a box sneaking in would be a form that looks like text.
 export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdit, editWaits = null }: Props) {
   const { t } = useT();
   const store = useFoodcostStore();
@@ -83,10 +85,6 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
   // The product as the form would open it: it gives each line the name and the note the form shows under it.
   const working = useMemo(() => workingFrom(product, country), [product, country]);
   const loaded = { recipes: snap.recipesLoaded, ingredients: snap.ingredientsLoaded };
-  // The box is open while there is no summary above it (nothing else to show): from the start, and again when the product stops
-  // being costed while it is read (refreshRead of the current app). A person who closed it while a summary shows is not argued with.
-  const noSummary = !summaryShows(product, snap.tables);
-
   const leaving = useRef(false);
   const asking = useRef(false);
   const mounted = useRef(true);
@@ -158,48 +156,41 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
 
       <div className={shell.body}>
         <ProductSummary product={product} tables={snap.tables} />
-        <FullCard read openNow={noSummary}>
-          <CardSection title={t('fc.section.product')}>
-            <ReadProduct product={product} working={working} />
+        <CardSection title={t('fc.section.product')} help={t('fc.help.prod')}>
+          <ReadProduct product={product} working={working} />
+        </CardSection>
+        <CardSection title={t('fc.madeOf')} help={t('fc.help.madeRead')}>
+          <ReadMadeOf product={product} working={working} tables={snap.tables} loaded={loaded} />
+        </CardSection>
+        {/* ⚠️ WHENEVER THERE IS ANYTHING TO WEIGH OR A WEIGHT STORED (step 2b): a converted product whose recipe line was replaced
+            by an ingredient still holds a cooked weight, and a card that needed a recipe line hid it from the person who must
+            re-weigh it. */}
+        {product.components.length > 0 || product.rawGrams !== null || product.cookedGrams !== null ? (
+          <CardSection title={t('fc.cooking.title')} help={t('fc.help.bakeRead')}>
+            <ReadCooking product={product} tables={snap.tables} />
           </CardSection>
-          <CardSection title={t('fc.madeOf')}>
-            <ReadMadeOf product={product} working={working} tables={snap.tables} loaded={loaded} />
-          </CardSection>
-          {/* ⚠️ WHENEVER THERE IS ANYTHING TO WEIGH OR A WEIGHT STORED (step 2b): a converted product whose recipe line was replaced
-              by an ingredient still holds a cooked weight, and a card that needed a recipe line hid it from the person who must
-              re-weigh it. */}
-          {product.components.length > 0 || product.rawGrams !== null || product.cookedGrams !== null ? (
-            <CardSection title={t('fc.cooking.title')}>
-              <ReadCooking product={product} tables={snap.tables} />
-            </CardSection>
-          ) : null}
-          <CardSection title={t('fc.packaging')}>
-            <ReadPackaging product={product} working={working} tables={snap.tables} loaded={loaded} />
-          </CardSection>
-          <CardSection title={t('fc.labour')}>
-            <ReadLabour product={product} note={labourNeedsRate ? t('fc.labourSetRate') : ''} />
-          </CardSection>
-          <CardSection title={t('fc.section.price')}>
-            <CardStack>
-              <ReadPrice product={product} />
-              <SuggestedPrice product={product} tables={snap.tables} sellingPrice={product.sellingPrice} onUse={null} />
-            </CardStack>
-          </CardSection>
-          <CardSection title={t('fc.section.results')}>
-            <CardStack>
-              <ProductAnswer product={product} tables={snap.tables} />
-              <PerKgBlock product={product} tables={snap.tables} />
-            </CardStack>
-          </CardSection>
-          <ProductActions
-            onHistory={() => {
-              // On the split the history takes the product's place (so the list's rows still mean «replace what is open»); on a
-              // phone it is one level down and Back is the browser's.
-              void navigate(historyPath(id, origin), split ? { replace: true, state } : { state: { ...FROM_PRODUCT, ...pushDepth(state) } });
-            }}
-            onDelete={canManage ? () => { void remove(); } : null}
-          />
-        </FullCard>
+        ) : null}
+        <CardSection title={t('fc.packaging')} help={t('fc.help.pack')}>
+          <ReadPackaging product={product} working={working} tables={snap.tables} loaded={loaded} />
+        </CardSection>
+        <CardSection title={t('fc.labour')} help={t('fc.help.workRead')}>
+          <ReadLabour product={product} note={labourNeedsRate ? t('fc.labourSetRate') : ''} />
+        </CardSection>
+        <CardSection title={t('fc.section.price')} help={t('fc.help.price')}>
+          <CardStack>
+            <ReadPrice product={product} />
+            <SuggestedPrice product={product} tables={snap.tables} sellingPrice={product.sellingPrice} onUse={null} />
+          </CardStack>
+        </CardSection>
+        <PerKgBlock product={product} tables={snap.tables} />
+        <ProductActions
+          onHistory={() => {
+            // On the split the history takes the product's place (so the list's rows still mean «replace what is open»); on a
+            // phone it is one level down and Back is the browser's.
+            void navigate(historyPath(id, origin), split ? { replace: true, state } : { state: { ...FROM_PRODUCT, ...pushDepth(state) } });
+          }}
+          onDelete={canManage ? () => { void remove(); } : null}
+        />
       </div>
       {confirmDialog}
     </section>

@@ -349,6 +349,89 @@ describe.each([
   });
 });
 
+// POST-SWITCH (11 Nov 2026, «solo l'impasto»): Federico decided the cost of 1 kg is the DOUGH only — the lines of «Made of», no
+// packaging. Mise 2's screens call costPerKg with `{ packaging: false }`; js/ has no such option (it ignores a third argument),
+// so these run against the port alone. Without the option the answer is still the original's (the block above, both files).
+describe('POST-SWITCH: the dough only ({ packaging: false }), the port alone', () => {
+  const doughOnly = { packaging: false } as const;
+  const BOXED_TABLES = { ...TABLES, ingredients: { ...INGREDIENTS, BOX: { id: 'BOX', name: 'Box', priceUnit: 'pcs', pricePerUnit: 0.3 } } };
+  // Federico's example: a kilo of flour (2.00), a box at 0.30 on each of the 10 pieces, 900 g out of the oven (model 3).
+  const bun = (over: Doc = {}): Doc => product({
+    components: [{ kind: 'ingredient', ingredientId: 'FLOUR', qty: 1000, unit: 'g' }],
+    packaging: [{ ingredientId: 'BOX', qtyPcs: 1 }],
+    piecesPerBatch: 10, cookedGrams: 900, model: 3,
+    ...over,
+  });
+
+  test('Federico\'s example: 2.00 of flour over 900 g cooked is 2.2222 a kilo, not (2.00 + 3.00) ÷ 0.9 = 5.5556', () => {
+    expect(ported.costPerKg(bun(), BOXED_TABLES).total, 'with the packaging, as the current app counts it').toBe(5.5556);
+    const result = ported.costPerKg(bun(), BOXED_TABLES, doughOnly);
+    expect(result).toStrictEqual({
+      kg: 0.9, total: 2.2222, partial: false, packagingLeftOut: false, lossy: true,
+      rows: [{ key: 'ing:FLOUR', kind: 'ingredient', name: 'Flour', kg: 1.111111, pcs: null, pricePerKg: 2, priceEach: null, cost: 2.2222, reason: null }],
+    });
+  });
+
+  test('the packaging is ignored: no packaging row, the total is the lines\' batch cost ÷ kg, and the rows add up to it', () => {
+    const cases = [
+      bun(),
+      bun({ sellingMode: 'weight', piecesPerBatch: null }),
+      bun({ sellingMode: null, piecesPerBatch: null }),
+      product({ packaging: [{ ingredientId: 'BAG', qtyPcs: 1 }, { ingredientId: 'FILM', qtyPcs: 1 }, { ingredientId: 'NOPRICE', qtyPcs: 1 }] }),
+      product({ components: [{ recipeId: 'FILLED', qtyKg: 2.3 }, { recipeId: 'DOUGH', qtyKg: 1.1 }], packaging: [{ ingredientId: 'BAG', qtyPcs: 2 }] }),
+    ];
+    for (const p of cases) {
+      const result = ported.costPerKg(p, BOXED_TABLES, doughOnly);
+      const batch = portedCard.batchTotals(p, BOXED_TABLES);
+      near(result.total, batch.cost / batch.kg);
+      near(sumOf(counted(result), 'cost'), result.total as number);
+      expect(result.rows.some(r => r.kind === 'packaging'), JSON.stringify(p)).toBe(false);
+      expect(result.packagingLeftOut).toBe(false);
+    }
+    // The default is unchanged: the packaging is in, and so is its row.
+    expect(ported.costPerKg(product({ packaging: [{ ingredientId: 'BAG', qtyPcs: 1 }] }), TABLES).total).toBe(4.2);
+    expect(ported.costPerKg(product({ packaging: [{ ingredientId: 'BAG', qtyPcs: 1 }] }), TABLES, doughOnly).total).toBe(3.2);
+    expect(ported.costPerKg(product({ packaging: [{ ingredientId: 'BAG', qtyPcs: 1 }] }), TABLES, { packaging: true }).total).toBe(4.2);
+  });
+
+  test('partial: a line of «Made of» with no cost makes it partial; a packaging item with none, or no way of selling, does not', () => {
+    const vanilla = ported.costPerKg(bun({ components: [
+      { kind: 'ingredient', ingredientId: 'FLOUR', qty: 1000, unit: 'g' },
+      { kind: 'ingredient', ingredientId: 'NOPRICE', qty: 50, unit: 'g' },
+    ] }), BOXED_TABLES, doughOnly);
+    expect(vanilla.partial).toBe(true);
+    expect(row(vanilla, 'Vanilla').reason).toBe('no-price');
+    // 2.00 over the 900 g cooked: the vanilla's 50 g weigh in the raw dough, not in what came out.
+    expect(vanilla.total).toBe(2.2222);
+
+    const film = bun({ packaging: [{ ingredientId: 'FILM', qtyPcs: 1 }] });
+    expect(ported.costPerKg(film, BOXED_TABLES).partial, 'with the packaging').toBe(true);
+    expect(ported.costPerKg(film, BOXED_TABLES, doughOnly).partial).toBe(false);
+    const notSold = bun({ sellingMode: null, piecesPerBatch: null });
+    expect(ported.costPerKg(notSold, BOXED_TABLES).packagingLeftOut, 'with the packaging').toBe(true);
+    expect(ported.costPerKg(notSold, BOXED_TABLES, doughOnly)).toMatchObject({ partial: false, packagingLeftOut: false, total: 2.2222 });
+  });
+
+  test('no oven loss: the dough\'s cost over the raw dough', () => {
+    const result = ported.costPerKg(bun({ cookedGrams: null }), BOXED_TABLES, doughOnly);
+    expect([result.kg, result.total, result.lossy]).toStrictEqual([1, 2, false]);
+  });
+
+  test('a cooked weight heavier than the raw one: no kilo at all, with or without the packaging', () => {
+    const heavier = bun({ cookedGrams: 1200 });
+    expect(ported.costPerKg(heavier, BOXED_TABLES, doughOnly)).toMatchObject({ kg: null, total: null, rows: [] });
+    expect(ported.costPerKg(heavier, BOXED_TABLES).total).toBeNull();
+  });
+
+  test('nothing costed: no total; junk options read as the default and never throw', () => {
+    expect(ported.costPerKg(bun({ components: [] }), BOXED_TABLES, doughOnly).total).toBeNull();
+    expect(ported.costPerKg(null, BOXED_TABLES, doughOnly).total).toBeNull();
+    for (const junk of [null, undefined, {}, 0, 'no']) {
+      expect(ported.costPerKg(bun(), BOXED_TABLES, junk as never).total, String(junk)).toBe(5.5556);
+    }
+  });
+});
+
 describe('the port and the original answer the same, row by row', () => {
   const tables = { ...TABLES, recipes: { ...TABLES.recipes, ...depthChain() } };
   const cases: [string, unknown][] = [
