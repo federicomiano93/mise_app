@@ -233,6 +233,27 @@ describe('the Food cost source, as firestore.rules expect it', () => {
     expect(seen).toEqual([[{ labourCostPerHour: 14 }, true], [null, false], [null, true]]);
   });
 
+  // POST-SWITCH (step 4 of the Food cost plan): the suppliers, read for their names. Quiet, like the ingredients, and stopped by
+  // the function it returns.
+  test('the suppliers: the venue’s collection, every document with its id; a refusal warns and tells onError; stop ends it', async () => {
+    const { kit, live } = fakeKit();
+    const source = createFirestoreFoodcostSource(() => Promise.resolve(kit), 'bakery');
+    const seen: StoredDoc[][] = [];
+    const onError = vi.fn();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const stop = source.watchSuppliers(list => seen.push(list), onError);
+    await settle();
+    const [listener] = live('locations/bakery/suppliers');
+    listener!.next(collectionSnap([{ id: 's1', name: 'Molino Rossi S.r.l.', shortName: 'Molino Rossi' }]));
+    expect(seen).toEqual([[{ id: 's1', name: 'Molino Rossi S.r.l.', shortName: 'Molino Rossi' }]]);
+    listener!.error(new Error('permission-denied'));
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith('watchSuppliers failed:', expect.any(Error));
+    warn.mockRestore();
+    stop();
+    expect(live('locations/bakery/suppliers')).toHaveLength(0);
+  });
+
   test('a stop before Firestore has loaded means nothing is ever subscribed', async () => {
     const { kit, fs } = fakeKit();
     let release!: (k: FirestoreKit) => void;

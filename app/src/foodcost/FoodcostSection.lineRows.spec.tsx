@@ -246,7 +246,7 @@ describe('the «?» of «Made of»', () => {
 
   it('the form says what to type and that the money is on the right', async () => {
     await form(source([product('Green')]), 'Green', ITALY);
-    expect(help().textContent).toBe('Scrivi quello che metti nell’impasto, pesato crudo. Tocca un nome per cambiarlo. A destra c’è quanto costa la quantità scritta.');
+    expect(help().textContent).toBe('Scrivi quello che metti nell’impasto, pesato crudo. Tocca un nome per cambiarlo. Sotto un ingrediente c’è il suo fornitore. A destra c’è quanto costa la quantità scritta.');
   });
 
   it('the read view drops what only the form can do', async () => {

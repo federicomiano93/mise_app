@@ -451,7 +451,7 @@ export const it: Messages = {
   'fc.help.sumPer.pack': 'una confezione',
   'fc.help.sum': 'Il food cost è il costo di ingredienti e imballaggio diviso il prezzo senza IVA; il lavoro entra nel costo, non nel food cost. L’ultima riga è quanto costa l’impasto per 1 kg di prodotto cotto, imballaggio escluso.',
   'fc.help.prod': 'Pezzi per infornata: quanti pezzi finiti escono da quello che c’è in «Composto da».',
-  'fc.help.made': 'Scrivi quello che metti nell’impasto, pesato crudo. Tocca un nome per cambiarlo. A destra c’è quanto costa la quantità scritta.',
+  'fc.help.made': 'Scrivi quello che metti nell’impasto, pesato crudo. Tocca un nome per cambiarlo. Sotto un ingrediente c’è il suo fornitore. A destra c’è quanto costa la quantità scritta.',
   'fc.help.madeRead': 'Quello che va nell’impasto, pesato crudo. A destra c’è quanto costa la quantità scritta.',
   'fc.help.bake': 'Pesa l’impasto prima e dopo il forno. Il crudo è già il totale di «Composto da»: cambialo solo se hai pesato un impasto diverso, per esempio doppio. Se il prodotto non cala, lascia vuoto il cotto.',
   'fc.help.bakeRead': 'L’impasto pesato prima e dopo il forno. Il crudo è il totale di «Composto da», a meno che sia stato pesato un impasto diverso, per esempio doppio. Senza peso cotto, il prodotto non cala.',

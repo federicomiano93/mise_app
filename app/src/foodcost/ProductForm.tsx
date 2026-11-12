@@ -34,6 +34,7 @@ import { LineRow } from './LineRow';
 import type { LineKind } from './LineRow';
 import { ingredientOf, lineMoney, lineName, lineNote } from './lineNotes';
 import { lineUnits, openingUnit } from './lineUnits';
+import { supplierOf } from './supplierOf';
 import { MadeOfFoot } from './MadeOfFoot';
 import { NameSuggest } from './NameSuggest';
 import { NumberBox } from './NumberBox';
@@ -598,6 +599,7 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
       rowKey={line.key}
       kind={kind}
       name={lineName(t, line, snap.tables, loaded)}
+      supplier={'kind' in line && line.kind === 'ingredient' ? supplierOf(ingredientOf(snap.tables, line.ingredientId), snap.suppliers) : ''}
       cost={lineMoney(t, money, line, snap.tables).text}
       note={lineNote(t, money, line, snap.tables, loaded)}
       qty={line.qty}

@@ -494,7 +494,7 @@ export const en = {
   'fc.help.sumPer.pack': 'one pack',
   'fc.help.sum': 'Food cost is the cost of ingredients and packaging divided by the price without VAT; labour goes into the cost, not into the food cost. The last line is what the dough costs for 1 kg of cooked product, packaging excluded.',
   'fc.help.prod': 'Pieces per batch: how many finished pieces come out of what is in “Made of”.',
-  'fc.help.made': 'Write what goes into the dough, weighed raw. Tap a name to change it. On the right is what the amount written costs.',
+  'fc.help.made': 'Write what goes into the dough, weighed raw. Tap a name to change it. Under an ingredient is whom it is bought from. On the right is what the amount written costs.',
   'fc.help.madeRead': 'What goes into the dough, weighed raw. On the right is what the amount written costs.',
   'fc.help.bake': 'Weigh the dough before and after the oven. The raw weight is already the total of “Made of”: change it only if you weighed a different dough, for example a double one. If the product does not lose weight, leave the cooked weight empty.',
   'fc.help.bakeRead': 'The dough weighed before and after the oven. The raw weight is the total of “Made of”, unless a different dough was weighed, for example a double one. With no cooked weight, the product does not lose weight.',
