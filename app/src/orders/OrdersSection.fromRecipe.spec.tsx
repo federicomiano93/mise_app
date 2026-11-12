@@ -181,6 +181,50 @@ describe('«Order» on a recipe row', () => {
     errors.mockRestore();
   });
 
+  it('⚠️ the alert at the next opening keeps the focus: from the recipe door OK leaves it in the ingredient box, never on the body', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const view = show('/recipes/r1');
+    await orderFlour(view);
+    const first = await quantityBox();
+    await waitFor(() => { expect(first).toHaveFocus(); });
+    await view.user.keyboard('7');
+    view.orders.refuseWrites = true;
+    await view.user.click(backButton());
+    await waitFor(() => { expect(where(view.router)).toBe('/recipes/r1'); });
+    await waitFor(() => { expect(view.orders.writes.at(-1)?.entries?.['i-flour']).toMatchObject({ qty: 7 }); });
+    await waitFor(() => { expect(view.orders.draft?.entries).toBeUndefined(); });
+    // Orders again, by the recipe door this time.
+    view.orders.refuseWrites = false;
+    await screen.findByRole('table', undefined, LOAD);
+    await view.user.click(rowButton('Flour'));
+    await view.user.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Order' }));
+    const notice = await screen.findByRole('alertdialog', { name: 'Quantity not saved' }, LOAD);
+    await view.user.click(within(notice).getByRole('button', { name: 'OK' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).toBeNull(); });
+    const box = await quantityBox();
+    await waitFor(() => { expect(box).toHaveFocus(); });
+    errors.mockRestore();
+  });
+
+  it('⚠️ the alert at the next opening, on the list: OK hands the focus to the screen, never leaves it on the body', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const view = show('/orders/supplier/s-alp');
+    const box = await screen.findByLabelText('Flour quantity to order', undefined, LOAD);
+    await view.user.click(box);
+    await view.user.keyboard('4');
+    view.orders.refuseWrites = true;
+    await view.router.navigate('/recipes/r1');
+    await waitFor(() => { expect(view.orders.writes.at(-1)?.entries?.['i-flour']).toMatchObject({ qty: 4 }); });
+    await waitFor(() => { expect(view.orders.draft?.entries).toBeUndefined(); });
+    await view.router.navigate('/orders');
+    const notice = await screen.findByRole('alertdialog', { name: 'Quantity not saved' }, LOAD);
+    await view.user.click(within(notice).getByRole('button', { name: 'OK' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).toBeNull(); });
+    await waitFor(() => { expect(document.activeElement).not.toBe(document.body); });
+    expect(document.activeElement).toBe(screen.getByRole('heading', { level: 1 }));
+    errors.mockRestore();
+  });
+
   it('says «Quantità non salvata» in Italian', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const view = show('/orders/supplier/s-alp', { lang: 'it', session: { language: 'it' } });
