@@ -436,6 +436,56 @@ describe('a draft write refused after the person left Orders', () => {
     expect(d.refusedNote()).toBeNull();
   });
 
+  it('⚠️ the 24 hours also run out between the alert and the first server word: nothing comes back, the note is gone', async () => {
+    const d = device();
+    await refusedAfterLeaving(d);
+    d.clock.now = START + 23 * 60 * 60 * 1000;
+    const next = d.openPage();
+    expect(next.page.said).toBe(1);
+    d.clock.now = START + 25 * 60 * 60 * 1000; // the page waited offline
+    await next.answer(server());
+    expect(next.entries.flour).toBeUndefined();
+    expect(next.page.back).toBe(0);
+    expect(d.refusedNote()).toBeNull();
+  });
+
+  it('⚠️ the 24 hours also stop a retry after the orders could not be read', async () => {
+    const d = device();
+    await refusedAfterLeaving(d);
+    d.clock.now = START + 23 * 60 * 60 * 1000;
+    const next = d.openPage();
+    d.history.fail = true;
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    await next.answer(server());
+    errors.mockRestore();
+    expect(d.retries.length).toBeGreaterThan(0);
+    d.clock.now = START + 25 * 60 * 60 * 1000;
+    d.history.fail = false;
+    d.retries.splice(0).forEach(run => { run(); });
+    await settle();
+    await settle();
+    expect(next.entries.flour).toBeUndefined();
+    expect(d.refusedNote()).toBeNull();
+  });
+
+  it('⚠️ a number cleared and then typed again on purpose is not «final»: refused after leaving, it is noted and said', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const d = device();
+    await refusedAfterLeaving(d);
+    const next = d.openPage();
+    await next.answer(server());
+    expect(next.entries.flour?.qty).toBe(5);
+    next.type('flour', { qty: 0 }); // cleared to what the server holds
+    d.refuseSaves();
+    next.type('flour', { qty: 5 }); // the same number, typed again on purpose
+    next.leave();
+    await settle();
+    await settle();
+    errors.mockRestore();
+    expect(d.refusedNote()?.entries.flour?.row.qty).toBe(5);
+    expect(d.refusedNote()?.told).toBe(false);
+  });
+
   it('⚠️ «ordered since?» counts from the KEYSTROKE, not from a refusal that came hours later (an offline tablet)', async () => {
     const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const d = device();

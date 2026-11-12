@@ -627,6 +627,15 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     const left = refusedLeft;
     const read = refusedRead;
     if (!journal || !left || !read) return false;
+    // ⚠️ THE 24 HOURS, AGAIN HERE (as settleRestored): not only when the note is read — a page can wait offline for days, and
+    // the server's first word may come long after the alert.
+    const expire = () => {
+      refusedLeft = null;
+      refusedRead = null;
+      releaseRefusedNote(read);
+      return false;
+    };
+    if (journal.now() - left.at > DRAFT_JOURNAL_MAX_AGE_MS) return expire();
     const asked = refusedAsk;
     const asJournal: DraftJournal = { at: left.at, entries: left.entries, days: left.days };
     let ordered = new Set<string>();
@@ -640,6 +649,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
         return null;
       }
       if (asked !== refusedAsk) return false;
+      if (journal.now() - left.at > DRAFT_JOURNAL_MAX_AGE_MS) return expire();
     }
     // Time has passed: `known` has moved on with every snapshot, and typing or a clear has taken lines out of `left`.
     const { entries, days } = stillOurs(asJournal, known);
@@ -679,7 +689,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     const anything = !isEmpty(back.entries) || !isEmpty(back.days);
     if (anything) {
       refused.push(back);
-      told.push(back);
+      told.push(structuredClone(back)); // a copy: change() may take a claimed group out of it (releaseToldGroups)
       // Claimed since it was first typed, as far as anyone can tell: a refusal noted from it again counts from there.
       claimedSince = claimedSince ? Math.min(claimedSince, left.at) : left.at;
     }
@@ -702,6 +712,22 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
         return;
       }
     });
+  }
+
+  // «Final» (`told`) holds while the person keeps what came back. Once the screen no longer claims a group (cleared to the
+  // server's value, nothing of it in the air), typing the same number again is a NEW deliberate act and a refusal of it is
+  // said, not swallowed by a match on the value alone.
+  function releaseToldGroups() {
+    for (const write of told) {
+      for (const [id, row] of Object.entries(write.entries)) {
+        for (const field of Object.keys(row) as Field[]) {
+          const group: readonly Field[] = field === 'stock' ? ['stock'] : GROUP;
+          if (group.some(other => other in (pending.entries[id] ?? {}) || inAir(id, other))) continue;
+          delete row[field];
+        }
+        if (isEmpty(row)) delete write.entries[id];
+      }
+    }
   }
 
   // `known` reads as a refused row: Firestore may still be showing that very write, its take-back on its way (refusedOnNext).
@@ -999,6 +1025,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       // Claim exactly what differs from the server now: a line put back to the server's value is released at once.
       pending = differences(entries, days);
       claimedSinceNow();
+      releaseToldGroups();
       for (const note of [restored, refusedLeft]) {
         if (!note) continue;
         for (const [id, row] of Object.entries(pending.entries)) {
