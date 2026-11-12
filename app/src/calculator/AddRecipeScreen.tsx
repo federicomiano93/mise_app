@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { catalogueChoices } from '@mise/shared/calculator-recipe-source';
 import { withoutArchived } from '@mise/shared/recipe-shelf';
@@ -35,6 +35,7 @@ export function AddRecipeScreen() {
   const editor = useRecipesEditor();
   const [reading, setReading] = useState<Reading>({ status: 'loading' });
   const [busy, setBusy] = useState(false);
+  const headingId = useId();
   const pick = useRef(0);
   const mounted = useRef(true);
   useEffect(() => {
@@ -91,8 +92,8 @@ export function AddRecipeScreen() {
     >
       {reading.status === 'denied' ? null : <p className={styles.intro}>{t('calc.addFrom.intro')}</p>}
 
-      <section className={styles.group} aria-labelledby="add-recipe-from" aria-busy={reading.status === 'loading' || busy}>
-        <h3 id="add-recipe-from" className={styles.heading}>{t('calc.addFrom.catalogue')}</h3>
+      <section className={styles.group} aria-labelledby={headingId} aria-busy={reading.status === 'loading' || busy}>
+        <h3 id={headingId} className={styles.heading}>{t('calc.addFrom.catalogue')}</h3>
         {reading.status === 'loading' ? <p role="status" className={styles.note}>{t('calc.addFrom.loading')}</p> : null}
         <div role="alert">
           {reading.status === 'failed' ? <p className={styles.note}>{t('calc.addFrom.failed')}</p> : null}

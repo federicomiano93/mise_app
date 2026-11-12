@@ -290,13 +290,18 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
 34. **Recipe dividers** (#458): DONE (`bc5184d4`, `c894d3ae`, `cd6c7e4b`). **Recipe PDF lab format** (#456): DONE (`0341a5c2`, `8f19cf8f`).
 35. **Recipe categories on screens**: DONE (`b2521628`, `7bd878b3`); write path owed (item 2).
 
-## G. Calculator (29 Oct - 1 Nov fixes, PRs #424 and the release #428) — parity marked PORT OWED: calculator-recipe-source, log-time
+## G. Calculator (29 Oct - 1 Nov fixes, PRs #424 and the release #428) — ALL DONE (38 on 8 Nov 2026; 36, 37, 39, 40 on 12 Nov 2026)
 
-Mise 2: NONE of the following (`catalogueChoices`, `rowsToStamp`, `showsSourceProblem`, `ingredientCount`, `localLogDate`, `localLogTime`,
-`logStampText`, `isWeighableUnit` absent from shared; no reorder in `app/src/calculator`). Files: `shared/src/{calculator-recipe-source,log-time,
-log-model}.ts`, `app/src/calculator/*`. Size M for the group.
+What was missing when this was written: `catalogueChoices`, `rowsToStamp`, `showsSourceProblem`, `ingredientCount`, `localLogDate`, `localLogTime`,
+`logStampText`, `isWeighableUnit` absent from shared; no reorder in `app/src/calculator`. Files: `shared/src/{calculator-recipe-source,log-time,
+log-model,calculator-config}.ts`, `app/src/calculator/*`. The parity markers of calculator-recipe-source and log-time are gone (the pairs agree).
+What was built and every difference: `docs/parity/calculator.md`, «Calculator ports 36, 37, 39, 40 as built».
 36. Reorder a recipe's ingredients (`71627519`, `262efcfe`, `33a22947`) — `docs/parity/calculator.md:353` «not in Mise 2 yet».
+    **DONE 12 Nov 2026** (`feature/mise2-next-calculator-ports`): `moveIngredient` and the key-claiming rule in `shared/src/calculator-config.ts`
+    (paired), the mode in `RecipeScreen` reusing `recipes/ReorderRows`.
 37. «Add a recipe» offers the recipe book's recipes first (`a221c160`), linking never writes back an older copy (`56864739`, `97ac8fe3`, `e0b92090`).
+    **DONE 12 Nov 2026** (same branch): `catalogueChoices`, `rowsToStamp` in `shared/src/calculator-recipe-source.ts` (paired); the choice at
+    `/recipes/new` (`AddRecipeScreen`).
 38. A linked recipe with litres / ml rows calculates, 1 ml = 1 g (`e7f3dac0`, `rowGrams` rounding), a linked tab that cannot calculate says why
     (`6713adab`), problem line first and speaks once (`1342cb79`), linked recipe counts its own rows (`535bcdb2`, #424).
     **DONE 8 Nov 2026** (`feature/mise2-number-ports`): `isWeighable`, `rowGrams`, `ingredientCount`, `showsSourceProblem` in
@@ -304,7 +309,12 @@ log-model}.ts`, `app/src/calculator/*`. Size M for the group.
     `ingredientCount` are now in the port; `catalogueChoices` and `rowsToStamp` (item 37) are what keeps its parity markers.
 39. Dough history: dates in the venue's language (`021a49ff`), says how much a «from a total» dough is (`b00983dc`), opened dough shows its total once
     (`4b235f3d`), unsaved-changes question in the venue's language (`66e76c84`), labelled grams / leavening fields and Back buttons (`6c70cb38`, `7d5683b8`).
+    **DONE 12 Nov 2026** (same branch): `localLogDate`, `localLogTime`, `logStampText` (`shared/src/log-time.ts`) and `doughAmountLine`
+    (`shared/src/log-model.ts`), paired; `LogOrder` says the total. The dates, the question, the labels and the Back buttons were ALREADY right
+    in Mise 2 by its own design (evidence file by file: `docs/parity/calculator.md`, «Calculator ports 36, 37, 39, 40 as built»).
 40. Calculator `config` cached «no config» never taken for the server's answer (`d3eb57f3`, `3d98a3e4`) — check Mise 2's calculator store. Size S.
+    **DONE 12 Nov 2026**: checked — ALREADY so by design (`calculatorSource.watchConfig`, `calculatorStore.readConfig` / `saveConfig` / `applyConfig`);
+    `calculatorStore.cachedNoConfig.spec.ts` pins the scenario. Nothing to port.
 
 ## H. Smaller / verify
 
@@ -333,8 +343,6 @@ What each one means for the people using Mise 2 until it is ported:
   (Items 21, 22, 24, 25 and 28 are done: weighing units, the «Cost per 1 kg» block, the list search and the phone preview, the
   read-first card with four figures and «Details», and two decimals on the screens Mise 2 has.)
 - 23. Food cost recipe link with several products (a check).
-- 36-37, 39-40. Calculator: reorder a recipe's ingredients, «Add a recipe» from the book, the dough history's dates and
-  totals, the cached «no config».
 - 41-43. Staff / join codes / roles screens (people, invitations incl. #475 role-first invite, the join form) and the
   kiosk (#406 keep-screen-on, the kiosk lines already in shared). Until built: new people cannot join; existing accounts work.
 - 47. The `order-sent` usage statistic.
