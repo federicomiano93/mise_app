@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, useSyncExternalStore } 
 import type { ReactNode } from 'react';
 import { useDataServices } from '../data/DataContext';
 import { markBusy } from '../session/busy';
+import { dropOrphanLabDrafts } from '../session/pendingLabWork';
 import { useSession } from '../session/SessionContext';
 import { browserFoodcostDeps, createFoodcostStore } from './foodcostStore';
 import type { FoodcostDeps, FoodcostSnapshot, FoodcostStore } from './foodcostStore';
@@ -31,6 +32,7 @@ export function FoodcostProvider({ children, deps }: { children: ReactNode; deps
   return (
     <FoodcostContext.Provider value={store}>
       <BusyWhileUnsent />
+      <DropOrphanLabDrafts locationId={locationId} />
       {children}
     </FoodcostContext.Provider>
   );
@@ -44,6 +46,17 @@ export function FoodcostProvider({ children, deps }: { children: ReactNode; deps
 function BusyWhileUnsent() {
   const { unsent } = useFoodcost();
   useEffect(() => (unsent ? markBusy() : undefined), [unsent]);
+  return null;
+}
+
+// ⚠️ A LAB DRAFT OF A PRODUCT THAT NO LONGER EXISTS (deleted on another device) is removed once the SERVER has answered about the products:
+// before that, a missing product may only be a partial local copy. Otherwise the sign-out would ask about it for ever, with nobody able to
+// cancel it (the banner lives on the product's card, which is gone).
+function DropOrphanLabDrafts({ locationId }: { locationId: string }) {
+  const { products, productsFromServer } = useFoodcost();
+  useEffect(() => {
+    if (productsFromServer) dropOrphanLabDrafts(locationId, new Set(products.map(product => product.id)));
+  }, [locationId, products, productsFromServer]);
   return null;
 }
 
