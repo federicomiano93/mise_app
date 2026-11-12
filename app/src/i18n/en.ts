@@ -2376,6 +2376,8 @@ export const en = {
   'ord.noSuppliersYet': 'No suppliers yet',
   'ord.noSuppliersYetSub': 'Add your suppliers and ingredients in Ingredients & suppliers.',
   'ord.saveFailed': 'Could not save the order — check your network. Keep this page open.',
+  'ord.refusedEarlier.title': 'Quantity not saved',
+  'ord.refusedEarlier.message': 'The quantity you typed could not be saved in Orders before you left. Check the order before you send it.',
   'ord.liveLost': 'Lost the live connection for {what}. What you see may be out of date — reload the page.',
   'ord.live.draft': 'the order in progress',
   'ord.live.suppliers': 'suppliers',

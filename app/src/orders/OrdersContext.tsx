@@ -15,11 +15,12 @@ const OrdersContext = createContext<OrdersStore | null>(null);
 
 export function OrdersProvider({ children, deps }: { children: ReactNode; deps?: OrdersDeps }) {
   const services = useDataServices();
-  const { locationId, location, canManage } = useSession();
+  const { locationId, location, canManage, user } = useSession();
   // The section is drawn only for a ready session (SectionRoute), so a venue is always open here.
   if (!locationId) throw new Error('Orders needs an open venue.');
-  // The venue goes in too: the note of typed quantities that outlives the page is one venue's (F-15).
-  const [store] = useState(() => createOrdersStore(services.orders(locationId), deps, locationId));
+  // The venue goes in too: the note of typed quantities that outlives the page is one venue's (F-15). And the person: a quantity
+  // the server refused after Orders closed is said at the next opening of THIS person in THIS venue only (refusedNote.ts).
+  const [store] = useState(() => createOrdersStore(services.orders(locationId), deps, locationId, user?.uid ?? ''));
 
   useEffect(() => {
     store.start();

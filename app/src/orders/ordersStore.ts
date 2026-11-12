@@ -113,6 +113,10 @@ export interface OrdersSnapshot {
   // How many times quantities left by the last page came back from this device's note (F-15): the section then looks again
   // for orders typed on an earlier day and never placed (the current app's `cameBack`).
   readonly draftCameBack: number;
+  // A quantity the server refused after the person had left Orders, on an earlier opening (item 6 of docs/mise2-port-owed.md):
+  // the section says so ONCE, with an alert, until refusedEarlierSaid(). What may come back is then on screen as a refusal on
+  // this opening would be (draftSaveFailed), once the server has answered.
+  readonly refusedEarlier: boolean;
   // The suppliers whose order is being recorded right now: their «Order placed…» is off (parity X1).
   readonly placing: readonly string[];
   // The order records of the live window (the last two months, step 3f-2b), as stored. Empty until they arrive.
@@ -259,8 +263,16 @@ export interface OrdersDeps {
     now(): number;
     retryLater(run: () => void, ms: number): void;
     onPageHidden(run: () => void): () => void;
+    // A draft write refused after Orders closed was just noted (refusedNote.ts): an opening of Orders already on screen hears
+    // it at once (the old store lives on until its last write is answered, the new one is another object). Absent: it is
+    // heard at the next opening only.
+    refusedNoted?(): void;
+    onRefusedNoted?(run: () => void): () => void;
   };
 }
+
+// The page-wide signal of refusedNoted / onRefusedNoted: two stores of the same page, nothing that leaves it.
+const REFUSED_NOTED_EVENT = 'mise:orders-draft-refused';
 
 export interface OrdersStore {
   getSnapshot(): OrdersSnapshot;
@@ -274,6 +286,8 @@ export interface OrdersStore {
   // section within 800 ms of a keystroke loses nothing. Safe to call start → stop → start (React's development mode does).
   start(): void;
   stop(): void;
+  // The alert about a quantity refused after an earlier opening has been dismissed (refusedEarlier).
+  refusedEarlierSaid(): void;
   // Changes one line of the order, LOCAL-FIRST. `supplier` is the supplier whose screen the row is on (the pseudo
   // «No supplier» included); `ingredient` is the row's line as the lens filed it.
   editLine(supplier: StoredDoc, ingredient: LensIngredient, edit: LineEdit): void;
@@ -368,6 +382,11 @@ export function browserOrdersDeps(): OrdersDeps {
       now: () => Date.now(),
       retryLater: (run, ms) => { setTimeout(run, ms); },
       onPageHidden: run => watchPageHidden(run),
+      refusedNoted: () => { window.dispatchEvent(new Event(REFUSED_NOTED_EVENT)); },
+      onRefusedNoted: run => {
+        window.addEventListener(REFUSED_NOTED_EVENT, run);
+        return () => { window.removeEventListener(REFUSED_NOTED_EVENT, run); };
+      },
     },
   };
 }
@@ -379,13 +398,14 @@ export function orderable(lines: readonly LensIngredient[]): LensIngredient[] {
   return lines.map(line => ((line as { active?: unknown }).active === false ? { ...line, active: true } : line));
 }
 
-// `venue` is the open venue's id: the note of typed quantities is one venue's (F-15). '' keeps no note.
-export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = browserOrdersDeps(), venue = ''): OrdersStore {
+// `venue` is the open venue's id: the note of typed quantities is one venue's (F-15). '' keeps no note. `person` is the signed-in
+// person's uid: a write refused after Orders closed is noted for that venue and that person only. '' notes none.
+export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = browserOrdersDeps(), venue = '', person = ''): OrdersStore {
   let snapshot: OrdersSnapshot = {
     suppliers: [], suppliersLoaded: false, suppliersBroken: false,
     ingredients: [], ingredientsLoaded: false, ingredientsBroken: false,
     config: normalizeOrdersConfig(null), configLoaded: false, configAnswered: false, deliveryCheck: deliveryCheckOf(null),
-    draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false, draftCameBack: 0,
+    draft: EMPTY_DRAFT, draftLoaded: false, draftBroken: false, draftSaveFailed: false, draftCameBack: 0, refusedEarlier: false,
     serverSeen: { suppliers: false, ingredients: false, draft: false, history: false },
     placing: [],
     history: [], historyLoaded: false, historyBroken: false, suggester: NO_SUGGESTIONS,
@@ -401,6 +421,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
   let stopped = false;
   // The page-hidden listener (F-15), while the section is started.
   let stopHidden: (() => void) | null = null;
+  // Hears a refusal noted by an earlier opening's store, while the section is started (item 6).
+  let stopRefusedWatch: (() => void) | null = null;
   // The first day of the live window, fixed when the listeners start: the older pages are fetched from BEFORE it, so the two
   // never overlap and never leave a gap.
   let windowStart = liveHistoryStart(parseISODate(deps.today()));
@@ -473,6 +495,16 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
         holdBusy();
         set({ draft: view, draftCameBack: snapshot.draftCameBack + 1 });
       },
+      person,
+      // Said once by the section (an alert), whatever then comes back.
+      onRefusedEarlier: () => { if (!snapshot.refusedEarlier) set({ refusedEarlier: true }); },
+      // ⚠️ EXACTLY AS onResult(false) ABOVE: on screen, «not saved», unsaved (rule 2), sent with the next change or on leaving.
+      onRefusedBack: view => {
+        holdBusy();
+        set({ draftSaveFailed: true, draft: view });
+        say({ kind: 'draft-not-saved' });
+      },
+      refusedNoted: deps.journal.refusedNoted,
     } : undefined,
   });
 
@@ -730,6 +762,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       stopped = false;
       // This opening owns the note again: it is read afresh at the first snapshot or keystroke (draftSync.ts, journalLive).
       sync.startJournal();
+      // A refusal noted by the store of an earlier opening, still waiting for its last write, while this one is on screen.
+      stopRefusedWatch = deps.journal?.onRefusedNoted?.(() => { sync.lookForRefused(); }) ?? null;
       // Switching app or locking the screen: what waits for its pause goes now, while the page is still alive (pageHidden.ts).
       stopHidden = deps.journal?.onPageHidden(() => { sync.sendWaiting(); }) ?? null;
       // Fixed before the first older page is asked for; once a page is in, the window it was cut from stays.
@@ -796,6 +830,10 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       openPrices();
     },
 
+    refusedEarlierSaid() {
+      if (snapshot.refusedEarlier) set({ refusedEarlier: false });
+    },
+
     setPriceReader(on) {
       priceReader = on;
       if (on) openPrices();
@@ -808,6 +846,8 @@ export function createOrdersStore(source: OrdersSource, deps: OrdersDeps = brows
       stops = [];
       stopHidden?.();
       stopHidden = null;
+      stopRefusedWatch?.();
+      stopRefusedWatch = null;
       // ⚠️ BEFORE THE FLUSH: from now on this sync judges nothing and never rewrites the note (a new opening owns it); its
       // writes still in the air only take their own fields out of it when answered.
       sync.stopJournal();

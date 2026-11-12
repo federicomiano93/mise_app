@@ -145,6 +145,58 @@ describe('«Order» on a recipe row', () => {
     expect(await quantityBox()).toHaveValue(7);
   });
 
+  it('⚠️ REFUSED BY THE SERVER AFTER BACK: the next Orders says «Quantity not saved» once, then shows the 7 as not saved', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const view = show('/recipes/r1');
+    await orderFlour(view);
+    const box = await quantityBox();
+    await waitFor(() => { expect(box).toHaveFocus(); });
+    await view.user.keyboard('7');
+    // The person no longer has the right to write the order (access taken away while it was on its way).
+    view.orders.refuseWrites = true;
+    await view.user.click(backButton());
+    await waitFor(() => { expect(where(view.router)).toBe('/recipes/r1'); });
+    await waitFor(() => { expect(view.orders.writes.at(-1)?.entries?.['i-flour']).toMatchObject({ qty: 7 }); });
+    // Refused after the screen had gone: nothing on screen could say it.
+    await waitFor(() => { expect(view.orders.draft?.entries).toBeUndefined(); });
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+
+    // Orders again, by any door: said as it opens.
+    await view.router.navigate('/orders');
+    const notice = await screen.findByRole('alertdialog', { name: 'Quantity not saved' }, LOAD);
+    expect(notice).toHaveTextContent('The quantity you typed could not be saved in Orders before you left. Check the order before you send it.');
+    await view.user.click(within(notice).getByRole('button', { name: 'OK' }));
+    await waitFor(() => { expect(screen.queryByRole('alertdialog')).toBeNull(); });
+    // Then exactly as a refusal on screen: the 7 is back on its line, and the page says the order is not saved.
+    await view.router.navigate('/orders/supplier/s-alp');
+    expect(await quantityBox()).toHaveValue(7);
+    expect(await screen.findByText('Could not save the order — check your network. Keep this page open.')).toBeInTheDocument();
+
+    // Said once: another trip to Orders does not say it again.
+    await view.router.navigate('/recipes/r1');
+    await screen.findByRole('table', undefined, LOAD);
+    await view.router.navigate('/orders');
+    expect(await screen.findAllByRole('button', { name: /Alpine Mills/ }, LOAD)).not.toHaveLength(0);
+    expect(screen.queryByRole('alertdialog')).toBeNull();
+    errors.mockRestore();
+  });
+
+  it('says «Quantità non salvata» in Italian', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const view = show('/orders/supplier/s-alp', { lang: 'it', session: { language: 'it' } });
+    const box = await screen.findByLabelText('Quantità da ordinare di Flour', undefined, LOAD);
+    await view.user.click(box);
+    await view.user.keyboard('4');
+    view.orders.refuseWrites = true;
+    await view.router.navigate('/recipes/r1');
+    await waitFor(() => { expect(view.orders.writes.at(-1)?.entries?.['i-flour']).toMatchObject({ qty: 4 }); });
+    await waitFor(() => { expect(view.orders.draft?.entries).toBeUndefined(); });
+    await view.router.navigate('/orders');
+    const notice = await screen.findByRole('alertdialog', { name: 'Quantità non salvata' }, LOAD);
+    expect(notice).toHaveTextContent('Non sono riuscito a salvare in Ordini la quantità che hai scritto prima di uscire. Controlla l’ordine prima di inviarlo.');
+    errors.mockRestore();
+  });
+
   it('opened by its address alone (a reload), Back replaces it with the recipe', async () => {
     const view = show('/orders/supplier/s-alp?recipe=r1&ingredient=i-flour');
     const box = await quantityBox();

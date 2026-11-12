@@ -18,6 +18,7 @@ import { NoticesProvider } from './NoticesContext';
 import { OrdersProvider, useOrders, useOrdersStore } from './OrdersContext';
 import { IngredientsList } from './IngredientsList';
 import { OrdersList } from './OrdersList';
+import { RefusedEarlierAlert } from './RefusedEarlierAlert';
 import { DaySendScreen } from './DaySendScreen';
 import { HistoryEditScreen } from './HistoryEditScreen';
 import { IncomingMissingScreen } from './IncomingMissingScreen';
@@ -68,6 +69,8 @@ export default function OrdersSection() {
       <StatusMessageProvider>
         <PendingLatchProvider>
           <OrdersScreen />
+          {/* Above the routes: said once per opening, whichever screen of Orders it opens on. */}
+          <RefusedEarlierAlert />
         </PendingLatchProvider>
       </StatusMessageProvider>
     </OrdersProvider>
