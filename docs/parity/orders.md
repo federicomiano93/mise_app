@@ -1675,7 +1675,7 @@ Differences from the current app, on purpose:
 - **Not in this item:** the current app's `sendBeforeLeaving` (Back from Orders opened from a recipe waits for the server), which
   belonged to item 32 of the checklist and is NOT ported, by design: leaving Orders already sends what waits (`stop()`), see
   `docs/parity/catalogue.md`, «Row menu and full screen as built» (10 Nov 2026), including the one open edge, a write the server refuses
-  after the screen is gone.
+  after the screen is gone (closed 12 Nov 2026: «Refused after leaving Orders as built», the last section).
 
 ## Closed as not ordered as built (8 Nov 2026)
 
@@ -1780,3 +1780,66 @@ Item 12 of `docs/mise2-port-owed.md` (the current app's PR #474, `feature/mise2-
 - **Lights only on the server's word (a difference from the current app, on purpose):** the tag and the reorder wait for the SERVER's answer for today's records and the draft (Orders: `serverSeen.history` and `serverSeen.draft`; Suppliers: `meta.fromServer`), not for the phone's saved copy. A copy can lack an order placed this morning on another phone, and the supplier would flash as due and jump to the top. Offline with no server answer nobody is lit and the usual order stays (the safe side); a dead draft stream still counts as arrived with no closes. The «Order today» strip is left as it was.
 - **Known effect:** the list is drawn first in the usual order (from the saved copy or the first snapshot), so the due rows move up ONCE when the server answers.
 - Specs: `shared/src/due-first.spec.ts`, `OrdersSection.dueToday.spec.tsx`, `SuppliersSection.dueToday.spec.tsx`, the source and store specs of Suppliers. The two old Orders specs that counted buttons by the exact name «Alpine Mills» now match the name's start, because a lit row's name ends with the tag.
+
+## Refused after leaving Orders as built (12 Nov 2026)
+
+Item 6 of `docs/mise2-port-owed.md`, its «STILL OPEN» paragraph (found 10 Nov 2026 by item 32). Data loss of one quantity:
+leaving Orders sends what waits and does not wait for the answer (`ordersStore.stop()`), so a draft write the SERVER refused after
+the person had left (the bottom bar, Back to a recipe, Home, any exit) was reported to listeners already gone, and the quantity
+was lost without a word. The current app asks «Quantità non salvata» (`orders.fromRecipe.refusedTitle` / `refusedMessage`,
+`js/orders/orders-main.js` `leaveSupplier`) before it lets the person go back to the recipe; Mise 2 does not wait on the way out,
+so it says it on the way back in. Rare in practice (access taken away while a write is on its way).
+
+**What happens now** (`app/src/orders/draftSync.ts`, `app/src/orders/refusedNote.ts`):
+- A write refused after `stopJournal()` leaves the draft journal (as before: a refused value there would be replayed at every
+  opening, for ever) and goes to a note of its own, `orders-draft-refused` (`noteRefused`): field group by field group, with what
+  the server held when the write left (`base`, taken in `saveNow` before Firestore shows the write here). Not a group a later
+  write still in the air carries (that one answers for itself), and not a value that already came back from this note on the
+  same opening (`told`: final, see below).
+- The next opening of Orders reads it at `startJournal()` (`lookForRefused`) and, if nobody has been told, marks it told and says
+  so ONCE (`onRefusedEarlier` → the store's `refusedEarlier` → `RefusedEarlierAlert`, an alert dialog through `ui/useAlert`
+  above the routes, so on whatever screen Orders opens). A reopening, or React's development mode starting twice, does not say
+  it again.
+- On the SERVER's first snapshot (never the phone's own copy) it is judged as the draft journal is judged (`judgeRefused`, with
+  the journal's own `stillOurs` and `orderedSince` of the last seven days of orders, read from the server): a line comes back only
+  where it still reads as it did when the write left and no order has named it since. A colleague's number, an order placed, a
+  number typed on this opening, a «Clear quantities» and a write in the air all win (`forgetIn`, the hand-back's «typed over»).
+  Day stamps only when every refused quantity came back. Orders unreadable: it waits, asked again 30 s later. Judged, the lines
+  leave the stored note.
+- What comes back is handed back EXACTLY as the refusal path (F-16) hands back a refusal on screen: in the claims, on screen, out
+  of the journal (`refused` / `wasRefused`), `draftSaveFailed` and the message `draft-not-saved` (the status line's «Could not save
+  the order…»), unsaved for rule 2 (`holdBusy`). Never sent by a timer: it goes with the next change, or on leaving.
+- **A second refusal is final**, as it is for a refusal on screen (tried once more on leaving): a value that came back from the note
+  and is refused again after leaving is not noted again (`told`). It was said twice by then (the alert and the status line); a value
+  that can never be saved must not come back for ever. A NEW number typed on that line is a new refusal, and is said again.
+- **Refused while a newer opening is already on screen** (the old store lives on until its last write is answered): the old store
+  signals it (`refusedNoted`, a `window` event of the page, `mise:orders-draft-refused`), and the open one, listening only while
+  started (`onRefusedNoted`), says it and judges it at once. When the draft journal of that opening has already brought the same
+  number back (its write was still in the air, so its claim was still noted), it is said and not handed back twice.
+
+**The words** (`ord.refusedEarlier.title` / `.message`; the current app's title, word for word; its message without «if you go back
+to the recipe now, it will be lost», which no longer applies): «Quantity not saved» — «The quantity you typed could not be saved in
+Orders before you left. Check the order before you send it.»; «Quantità non salvata» — «Non sono riuscito a salvare in Ordini la
+quantità che hai scritto prima di uscire. Controlla l’ordine prima di inviarlo.» One button, OK (`common.ok`): there is nothing to
+choose. OK, Escape or leaving Orders all end it the same way.
+
+**The note** (`refusedNote.ts`, new in Mise 2, no original): key `orders-draft-refused`, version 1, the draft journal's shape
+(`entries[id] = { row, base }`, `days[id] = { day, base }`) plus `told`, stamped with the venue AND the person's uid; a note for
+another venue or another person is thrown away unread; 24 hours, as the journal; trusts nothing it reads, never throws. A key of
+its own because the journal is a FULL, paired port both apps read, whose reader drops what it does not know. NOT in
+`KEEP_PREFIXES`: sign-out and a venue switch wipe it in both apps (`shared/src/local-data.spec.ts` runs both files).
+`createOrdersStore` takes the person as a fourth argument (`OrdersContext` passes `user.uid`); without one nothing is noted.
+
+**Specs:** `draftSync.refused.spec.ts` (kept with its base and out of the journal; said once at the next opening, before the
+server's word, and handed back after it, not sent by itself; a reopening does not say it again; another venue and another person
+never see it; refused again after coming back: final; a new number: said again; the main road, refused on screen and once more
+on leaving; a colleague's number and an order placed keep it out; typing on the new opening beats it; orders unreadable, then
+read; refused while a new opening is on screen, with and without the journal having brought it back; a later write in the air;
+a write that lands; no person). `refusedNote.spec.ts` (venue, person, age, junk, keep-list). `ordersStore.journal.spec.ts` (the
+flag, «not saved», the signal only while started, another person). `OrdersSection.fromRecipe.spec.tsx` (end to end: Order from a
+recipe, 7, Back, refused; Orders again says it once, the 7 on its line as not saved; Italian).
+
+**Not covered by a spec:** a refusal that arrives when no Orders is opened again within 24 hours (the note ages out, as the draft
+journal does: a number typed before a weekend is not put back into a live order); the alert on the lab tablet and a phone (axe
+and the widths are the `mise2-check` drive, not run here); a refusal noted while the draft cannot be read at all on the next
+opening (the alert is said, nothing can come back until the server answers).

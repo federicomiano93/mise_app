@@ -117,6 +117,10 @@ worker's rollback, has the exact order):
    bar, Back to a recipe, Home) is lost without a word — `draftSync.ts` reports the refusal after `stopJournal()`, to listeners already gone. The current
    app asks «Quantità non salvata» (`orders.fromRecipe.refusedTitle`, `js/orders/orders-main.js`). Rare (access revoked mid-send) and older than item 32. Owed: keep the
    refused change in the local journal and say so on the next Orders screen (or Home). Size S-M. DATA LOSS: yes, one quantity.
+   **DONE 12 Nov 2026** (branch `feature/mise2-next-draft-refused`): kept on the device in a note of its own (`orders-draft-refused`,
+   one venue's and one person's, wiped by sign-out and a venue switch), said once with an alert «Quantity not saved» / «Quantità non
+   salvata» at the next opening of Orders, then handed back as a refusal on screen; a second refusal stays final. What was built and
+   every choice: `docs/parity/orders.md`, «Refused after leaving Orders as built».
 7. **Stocktake «Close month» guard** — PR #442/#440 (`6538e1db`, `2e4ee2a1`, `5df661d3`). Core data fix ported on the stack (PR #443,
    `app/src/stocktake/stocktakeModel.ts` has `withoutEmptyMaps`, `monthReady`). Mise 2: PARTIAL. Owed: move both plus `LIST_STATUS` /
    `listStatus` into `shared/src/inventory-model.ts` (parity marked PORT OWED: inventory-model), the «No products» wording only when both answers prove
@@ -283,7 +287,7 @@ foodcost-model.ts`, `foodcost-weighing.ts`, new shared per-kg and line-cost mode
     button only, split in two, «Order»), `recipeReturn.ts` origin `'order'`, and in Orders `recipeOrigin.ts` + `SupplierOrderScreen.tsx` (quantity box
     focused, Back to the recipe). Twelve `cat.*` / `ord.fromRecipe.notFound` keys worded as the current app's. **Back does NOT wait for the typed
     quantity to be sent** (8ed7a0ad, f0803349): by design, because the draft is local-first and leaving Orders sends what waits at once — with ONE
-    open edge, a write the SERVER refuses after the screen is gone (see the parity doc).
+    open edge, a write the SERVER refuses after the screen is gone (see the parity doc) — closed 12 Nov 2026 with item 6.
 33. **Grip on the right** (#476, `1b87d33a`, `5249713b`): DONE in Mise 2 by design (`docs/parity/catalogue.md:1565`, `ReorderRows.tsx`); the
     parity doc lines 92 / calculator.md 78 should say «name, amount, grip». Docs only.
     **DONE 10 Nov 2026**: `docs/parity/catalogue.md` (item 92) and `docs/parity/calculator.md` (the reorder paragraph) now say «name, amount (grams), grip».
