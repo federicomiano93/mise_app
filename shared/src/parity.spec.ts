@@ -380,13 +380,9 @@ function frozenTree(value: unknown, seen: WeakSet<object> = new WeakSet()): Froz
   return { frozen: Object.isFrozen(value), children };
 }
 
+// Empty since item 36, 37 and 39 landed (calculator-recipe-source and log-time are paired again). A key goes here as
+// `<pair> :: <check title>` with a `// PORT OWED (…, item N)` line above it naming an item of docs/mise2-port-owed.md.
 const PORT_OWED = new Set<string>([
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 37): main added catalogueChoices and more exports to js/calculator-recipe-source.js, not yet in the port — remove its key when ported
-  'calculator-recipe-source :: exports exactly the same names',
-  'calculator-recipe-source :: every export is a function in both or a value in both',
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 39): main added localLogDate and more exports to js/log-time.js, not yet in the port — remove its key when ported
-  'log-time :: exports exactly the same names',
-  'log-time :: every export is a function in both or a value in both',
 ]);
 
 describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
