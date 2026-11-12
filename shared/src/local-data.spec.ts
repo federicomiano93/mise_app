@@ -36,6 +36,13 @@ describe.each([
     expect(doomed.sort()).toStrictEqual([...LOCATION_DATA].sort());
   });
 
+  // Mise 2's note of Orders quantities the server refused after the person had left Orders (app/src/orders/refusedNote.ts):
+  // one venue's, one person's order on a device that may be shared. Either app's sign-out or venue switch must wipe it, so it
+  // must never join the keep-list (the key is written out here: shared/ does not import app/).
+  test('the note of Orders quantities refused after leaving Orders is cleared', () => {
+    expect(m.keysToClear(['orders-draft-refused'])).toStrictEqual(['orders-draft-refused']);
+  });
+
   test('Firebase’s own session storage is NEVER cleared', () => {
     const keys = [
       'firebase:authUser:AIzaSyXXXX:[DEFAULT]',

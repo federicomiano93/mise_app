@@ -11,6 +11,8 @@ afterEach(cleanup);
 afterEach(() => {
   try {
     globalThis.localStorage?.removeItem('orders-draft-claims');
+    // And the note of quantities refused after Orders closed (orders/refusedNote.ts), for the same reason.
+    globalThis.localStorage?.removeItem('orders-draft-refused');
   } catch {
     /* no storage: nothing noted */
   }
