@@ -38,6 +38,24 @@ export function LeaveDialog({ flow, role, title, message, children, actions }: P
     );
   }
 
+  if (flow.step === 'lab') {
+    return (
+      <Dialog
+        isOpen
+        onClose={flow.close}
+        role="alertdialog"
+        title={t('lab.leave.title')}
+        message={t('lab.leave.message')}
+        actions={
+          <>
+            <Button key="lab-stay" variant="primary" autoFocus onPress={flow.close}>{t('lab.leave.stay')}</Button>
+            <Button key="lab-leave" variant="danger" onPress={flow.goOn}>{t('lab.leave.go')}</Button>
+          </>
+        }
+      />
+    );
+  }
+
   return (
     <Dialog
       isOpen={flow.step === 'ask'}

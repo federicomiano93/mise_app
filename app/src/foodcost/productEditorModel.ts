@@ -1,8 +1,8 @@
 import {
-  PRODUCT_MODEL, isLegacyProduct, normalizeProduct, vatSelection, weighingAllowed,
+  PRODUCT_MODEL, costProduct, isLegacyProduct, normalizeProduct, productSnapshot, snapshotWorthTaking, vatSelection, weighingAllowed,
 } from '@mise/shared/foodcost-model';
 import type {
-  LineUnit, PackUnit, Product, ProductComponent, ProductDraft, SellingMode,
+  CostTables, LineUnit, PackUnit, Product, ProductComponent, ProductDraft, SellingMode,
 } from '@mise/shared/foodcost-model';
 import { normalizeLossPct } from '@mise/shared/catalogue-model';
 import { startWeighing, typeCooked, typeRaw } from '@mise/shared/foodcost-weighing';
@@ -308,6 +308,17 @@ export function toProduct(working: Working, id: string, name: string = working.n
 // «not said» and never NaN.
 export function costable(working: Working, id: string): Product {
   return normalizeProduct(toProduct(working, id)) as Product;
+}
+
+// The margin point a save records, or null. A margin is recorded only when the PRICE or the COMPOSITION changed, and only when there is a
+// real answer to record; renaming a product records nothing — a history of non-events cannot answer «when did this change?». The ONE
+// place this is decided: the card's Save and the lab's Save both call it, so they cannot record differently.
+export function marginPointFor(
+  initial: Product | null, clean: Product, tables: CostTables, nowIso: string,
+): Record<string, unknown> | null {
+  const result = costProduct(clean, tables);
+  if (result.foodCostPct === null || !snapshotWorthTaking(initial, clean, tables)) return null;
+  return productSnapshot(clean, result, nowIso, tables) as unknown as Record<string, unknown>;
 }
 
 // Whether a product must wait for the recipes and the prices before it is opened.

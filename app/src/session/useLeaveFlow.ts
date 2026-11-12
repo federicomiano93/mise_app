@@ -1,9 +1,10 @@
 import { useRef, useState } from 'react';
-import { useSessionStore } from './SessionContext';
+import { hasLabDraft } from './pendingLabWork';
+import { useSession, useSessionStore } from './SessionContext';
 
 // What LeaveDialog needs to draw the flow; the rest of the hook's result is for the caller.
 export interface LeaveStep {
-  readonly step: 'closed' | 'ask' | 'unsent';
+  readonly step: 'closed' | 'ask' | 'unsent' | 'lab';
   close(): void;
   // «Go on anyway», on the «Not sent yet» step.
   goOn(): void;
@@ -24,6 +25,7 @@ export interface LeaveStep {
 // One dialog keeps the button that opened it as the place to return to, whichever way it ends.
 export function useLeaveFlow<Arg = void>(leave: (value: Arg) => void | Promise<void>) {
   const store = useSessionStore();
+  const { locationId } = useSession();
   const [step, setStep] = useState<LeaveStep['step']>('closed');
   const [checking, setChecking] = useState(false);
   const [target, setTarget] = useState<{ value: Arg } | null>(null);
@@ -65,12 +67,24 @@ export function useLeaveFlow<Arg = void>(leave: (value: Arg) => void | Promise<v
       setStep('unsent');
       return;
     }
+    // ⚠️ A LAB PRODUCTION IN PROGRESS lives in this device's local copy, which both leavings wipe (Food cost lab mode,
+    // session/pendingLabWork.ts): say so, once, after the question about unsent changes.
+    if (hasLabDraft(locationId)) {
+      setTarget({ value });
+      setStep('lab');
+      return;
+    }
     close();
     await run(value);
   }
 
   function goOn() {
     const pending = target;
+    // «Go on anyway» to unsent changes still has the lab question to answer.
+    if (step === 'unsent' && pending && hasLabDraft(locationId)) {
+      setStep('lab');
+      return;
+    }
     close();
     if (pending) void run(pending.value);
   }

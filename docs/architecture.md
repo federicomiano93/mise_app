@@ -189,6 +189,17 @@ Aria does not support Preact. The numbers are below.
   Stocktake's (a feature never imports from another feature's folder). The money comes from the
   venue's country (`session/useMoney.ts`), the percentages and dates from the interface language.
   Its parity list is `docs/parity/foodcost.md`.
+  ⚠️ LAB MODE (step 5 of the Food cost plan, `app/src/foodcost/lab/`, 12 Nov 2026): a full-screen, one-step-at-a-time flow for producing a batch,
+  opened ONLY from the READ view of a saved product (`LabEntry` under the summary: a big «Produce in the lab» and, when a production is open, a
+  banner with the live clock and «Resume»; the edit form has no door, so unsaved edits can never be lost or mixed in) and drawn by `LabMode` +
+  `LabSteps` on React Aria's `ModalOverlay` (so the chooser and the save question stack on it). Pure parts, all under Node: `labModel.ts` (the steps
+  with / without «Pieces made», the draft and its moves, `applyLab` — the LATEST saved product with the day's weights laid on it — and `labNumbers`,
+  which reads every figure from the SAME shared functions the card reads, so the lab has no sum of its own), `labClock.ts` (the clock is
+  `now − startedAt`, never a count of ticks), `keypadRules.ts` (six digits, one comma, Backspace), `labDraft.ts` (the draft in `localStorage` under
+  `foodcost-lab-draft:<venue>:<product>`, parsed field by field, clamped, a corrupt one removed — NOT under `KEEP_PREFIXES`, so a sign-out or a
+  venue switch wipes it, like the Recipe book's mix in progress; both ask first when one exists, `session/pendingLabWork.ts`) and `labSave.ts` (the plan of «Save to the card»: same limits and the same
+  margin point as the card's Save, `marginPointFor` of `productEditorModel.ts`, written through `store.saveProduct`). `docs/parity/foodcost.md`,
+  «Lab mode as built».
   ⚠️ PRODUCT MODEL 3 (step 2 of the Food cost plan, 11 Nov 2026): a product's recipe line is RAW kilos and the product owns its oven
   loss (`rawGrams`, `cookedGrams`). Products saved before are converted on read (`currentProduct`, which every cost function calls), so
   `ProductEditor` opens a legacy product with recipe lines as a FORM only on the server's word about the recipes (or, with no signal

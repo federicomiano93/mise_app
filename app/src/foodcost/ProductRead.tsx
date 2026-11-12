@@ -18,6 +18,8 @@ import { CardSection, CardStack } from './CardSection';
 import { historyPath } from './foodcostPath';
 import type { Origin } from './foodcostPath';
 import { FROM_PRODUCT, pushDepth } from './foodcostNav';
+import { LabEntry } from './lab/LabEntry';
+import { LabMode } from './lab/LabMode';
 import { PerKgBlock } from './PerKgBlock';
 import { ProductActions } from './ProductActions';
 import { SuggestedPrice } from './SuggestedPrice';
@@ -72,6 +74,8 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
   const { state } = useLocation();
   const split = useMediaQuery(SPLIT_QUERY);
   const [confirm, confirmDialog] = useConfirm();
+  // Lab mode on screen (Food cost plan step 5). It opens from the SAVED product, so the read view — which holds no edits — is its only door.
+  const [labOpen, setLabOpen] = useState(false);
   const { leave, goBack } = useProductExit(id, origin);
   const titleId = useId();
   const waitId = useId();
@@ -156,6 +160,7 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
 
       <div className={shell.body}>
         <ProductSummary product={product} tables={snap.tables} />
+        <LabEntry productId={id} held={waitNote} onHeld={() => say(waitNote)} onOpen={() => { setLabOpen(true); }} />
         <CardSection title={t('fc.section.product')} help={t('fc.help.prod')}>
           <ReadProduct product={product} working={working} />
         </CardSection>
@@ -193,6 +198,7 @@ export function ProductRead({ id, product: stored, gone, origin, titleRef, onEdi
         />
       </div>
       {confirmDialog}
+      {labOpen ? <LabMode productId={id} onClose={() => { setLabOpen(false); }} /> : null}
     </section>
   );
 }

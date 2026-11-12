@@ -1,0 +1,54 @@
+/* The card's door to lab mode: a banner (when a production is open) over a big full-width button. */
+
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+.banner svg {
+  flex: none;
+  width: var(--fs-xl);
+  height: var(--fs-xl);
+}
+
+.bannerText {
+  flex: 1 1 140px;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.big {
+  gap: var(--s3);
+  font-size: var(--fs-lg);
+}
+
+.big svg {
+  width: var(--fs-xl);
+  height: var(--fs-xl);
+}
+
+/* Quiet on purpose: giving a production up is rare, and it asks first. 44px tall, no box. */
+.abandon {
+  min-height: 44px;
+  padding: 0 var(--s2);
+  background: transparent;
+  border: 0;
+  color: var(--accent-ink);
+  font: 500 var(--fs-sm)/1 var(--font);
+  text-decoration: underline;
+  cursor: pointer;
+}
