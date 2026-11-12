@@ -755,6 +755,7 @@ export const en = {
   'calc.restoreThisVersionIt': 'Restore this version? It is added on top as the new current version — the history is kept.',
   'calc.traysOfWeight': { one: '{trays} tray × {g} g', other: '{trays} trays × {g} g' },
   'calc.traysTypedPart': '+ {g} g typed by hand',
+  'calc.historyTotal': 'Total dough: {g} g',
   // New in Mise 2: the current app builds these three by joining pieces («calc.edited» is « (edited)», «calc.current»
   // is « · current», «calc.occasional» is «  ·  occasional», «calc.calculatedBy» is «Calculated by: »); a message
   // with its placeholders is one sentence a translator can move around.
@@ -804,6 +805,14 @@ export const en = {
   'calc.notSavedOutOfDate': 'Not saved: this app is out of date. Reload it and try again.',
   'calc.notSavedCheckConnection': 'Not saved: check the connection and try again.',
   'calc.addARecipe': 'Add a recipe',
+  'calc.addFrom.intro': 'Pick a recipe from the Recipe catalogue: its ingredients come from there. Or write a new one just for the calculator.',
+  'calc.addFrom.blank': '+ New recipe, written here',
+  'calc.addFrom.catalogue': 'From the Recipe catalogue',
+  'calc.addFrom.used': 'Already in the calculator',
+  'calc.addFrom.loading': 'Loading the Recipe catalogue…',
+  'calc.addFrom.none': 'The Recipe catalogue has no recipes yet.',
+  'calc.addFrom.failed': 'The Recipe catalogue could not be loaded: check the connection.',
+  'calc.addFrom.linking': 'Linking the recipe…',
   'calc.chooseWhichToShow': 'Choose which to show',
 
   // The Clients editor.
@@ -841,6 +850,10 @@ export const en = {
   'calc.clientsOrder': 'Clients, in the order they are listed',
 
   // The Recipes editor (words copied from the current app; the last eleven are new in Mise 2).
+  'calc.reorderIngredients': 'Reorder',
+  'calc.reorderDone': 'Done',
+  'calc.reorderHint': 'Hold an ingredient and drag it to its place. With a keyboard, use the up and down arrows.',
+  'calc.moveIngredient': 'Move «{name}»',
   'calc.addIngredient': '+ Add ingredient',
   'calc.addRecipe': '+ Add recipe',
   'calc.couldNotSaveCheck': 'Could not save. Check your connection and try again.',

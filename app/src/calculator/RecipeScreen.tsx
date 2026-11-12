@@ -1,19 +1,21 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Navigate } from 'react-router';
-import { usesOrders } from '@mise/shared/calculator-config';
+import { moveIngredient, usesOrders } from '@mise/shared/calculator-config';
 import { isLinked } from '@mise/shared/calculator-recipe-source';
 import type { ResolvedRecipe } from '@mise/shared/calculator-recipe-source';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
 import { KEEP_FOCUS } from '../shell/Page';
+import { ReorderRows } from '../recipes/ReorderRows';
 import { Button } from '../ui/Button';
 import { recipesPath } from './calculatorPath';
 import { DecimalBox } from './DecimalBox';
 import { ADD_RECIPE_ROW_OPENER, recipeOpener, useHandBack } from './handBack';
 import { LeaveningBox } from './LeaveningBox';
 import { useRecipesEditor } from './recipesEditorContext';
-import { isBlank, isEmptyRecipe } from './recipesModel';
+import { dropMove, isBlank, isEmptyRecipe, stepMove } from './recipesModel';
+import type { DropPosition } from './recipesModel';
 import type { EditableRecipe } from './recipesModel';
 import { RecipesSaveButton } from './RecipesSaveButton';
 import { SettingsPage } from './SettingsPage';
@@ -141,6 +143,62 @@ function Ingredients({ recipe }: { recipe: EditableRecipe }) {
   const [added, setAdded] = useState<number | null>(null);
   const linked = isLinked(recipe);
 
+  // ── Reordering (current app 71627519): a MODE, as in the recipe book. Each row is a grip, its name and its grams — nothing
+  // to type in, so nothing can change by accident while a row is carried. Turning it on or off is not an edit; a move is.
+  // ⚠️ The rows have no identity of their own (a new one has no key yet), so while the mode is on each carries a number for
+  // the grip's focus and for the drag: `order` holds those numbers in the rows' present order and moves with them.
+  const hintId = useId();
+  const [reordering, setReordering] = useState(false);
+  const [order, setOrder] = useState<readonly number[]>([]);
+  const [focusGrip, setFocusGrip] = useState<{ key: number } | null>(null);
+  const reorderButton = useRef<HTMLButtonElement>(null);
+  const count = recipe.ingredients.length;
+  const ids = useMemo(() => (order.length === count ? order : Array.from({ length: count }, (_, index) => index)), [order, count]);
+  const rows = useMemo(
+    () => ids.map((key, index) => ({ key, row: { ...recipe.ingredients[index] } })),
+    [ids, recipe.ingredients],
+  );
+  // A recipe that was linked, or lost rows, while the mode was on is no longer one to reorder.
+  const canReorder = !linked && count > 1;
+  const reorderOn = reordering && canReorder;
+
+  // Save found a name missing: the mode ends so the blank box is there to be marked and reached (the reorder rows have no
+  // name box to highlight).
+  useEffect(() => {
+    if (editor.errorTick > 0) setReordering(false);
+  }, [editor.errorTick]);
+
+  // ⚠️ A linked recipe is read-only, so the mode must not outlive the change of source (current app 262efcfe): unlinked again
+  // later, the recipe would otherwise come back already in the mode.
+  useEffect(() => {
+    if (!canReorder) setReordering(false);
+  }, [canReorder]);
+
+  const toggleReorder = () => {
+    // The row added last no longer owes the focus: the boxes are drawn again when the mode ends, and an `autoFocus` box would
+    // take it from the button (and open the keyboard).
+    setAdded(null);
+    if (reorderOn) {
+      setReordering(false);
+      setFocusGrip(null);
+      // ⚠️ THE FOCUS GOES TO THE BUTTON, not left where it was: a tap does not focus a button everywhere (Safari), so the
+      // focus may still be on a grip that is about to go, and it would fall to the page's body.
+      reorderButton.current?.focus();
+      return;
+    }
+    setOrder(Array.from({ length: count }, (_, index) => index));
+    setReordering(true);
+    setFocusGrip({ key: 0 });
+  };
+  const go = (move: { from: number; to: number } | null, focus: number) => {
+    if (move === null) return;
+    editor.moveIngredient(recipe.id, move.from, move.to);
+    setOrder(moveIngredient(ids, move.from, move.to));
+    setFocusGrip({ key: focus });
+  };
+  const stepRow = (key: number, delta: -1 | 1) => { go(stepMove(ids, key, delta), key); };
+  const dropRow = (moved: number, target: number, position: DropPosition) => { go(dropMove(ids, moved, target, position), moved); };
+
   if (linked) {
     const resolved = editor.resolved(recipe);
     return (
@@ -169,60 +227,88 @@ function Ingredients({ recipe }: { recipe: EditableRecipe }) {
 
   return (
     <section className={styles.field} aria-labelledby={headingId}>
-      <h3 id={headingId} className={styles.label}>{t('ui.ingredients')}</h3>
-      <datalist id={listId}>
-        {editor.ingredientNames.map(name => <option key={name} value={name} />)}
-      </datalist>
-      {recipe.ingredients.map((row, index) => {
-        const invalid = editor.showErrors && isBlank(row.label);
-        const n = index + 1;
-        return (
-          <div key={index} className={styles.card}>
-            <div className={styles.nameRow}>
-              <input
-                type="text"
-                list={listId}
-                className={invalid ? `${styles.input} ${styles.invalid}` : styles.input}
-                value={row.label}
-                placeholder={t('calc.ingredient')}
-                aria-label={t('calc.ingredientN', { n })}
-                aria-invalid={invalid ? true : undefined}
-                autoComplete="off"
-                autoFocus={added === index}
-                onChange={event => { editor.patchIngredient(recipe.id, index, { label: event.target.value }); }}
-              />
-              <Button
-                variant="bare"
-                className={styles.del}
-                aria-label={t('calc.removeIngredientN', { n })}
-                onPress={() => { editor.removeIngredient(recipe.id, index); }}
-              >
-                <Trash2 aria-hidden="true" />
-              </Button>
-            </div>
-            <div className={styles.withUnit}>
-              <DecimalBox
-                id={`${listId}-grams-${index}`}
-                className={styles.input}
-                value={row.grams}
-                min={0}
-                step={0.1}
-                inputMode="decimal"
-                label={t('calc.ingredientGramsN', { n })}
-                onText={text => { editor.patchIngredient(recipe.id, index, { grams: Number(text) || 0 }); }}
-              />
-              <span className={styles.unit} aria-hidden="true">g</span>
-            </div>
-            {usesOrders(recipe.logic) && row.key && recipe.leaveningKey === row.key ? (
-              // The answer is chosen once, in the Leavening box below; a row that IS the leavening says so quietly.
-              <p className={styles.hint}>{t('calc.thisIsTheLeavening')}</p>
-            ) : null}
+      <div className={styles.ingHead}>
+        <h3 id={headingId} className={styles.label}>{t('ui.ingredients')}</h3>
+        {/* ABSENT, not disabled, with fewer than two rows: there is nothing to put in another order. */}
+        {canReorder ? (
+          <Button ref={reorderButton} variant="secondary" className={styles.reorder} aria-pressed={reorderOn} onPress={toggleReorder}>
+            {t(reorderOn ? 'calc.reorderDone' : 'calc.reorderIngredients')}
+          </Button>
+        ) : null}
+      </div>
+      {reorderOn ? (
+        <>
+          <p id={hintId} className={styles.hint}>{t('calc.reorderHint')}</p>
+          <div className={styles.reorderFrame}>
+            <ReorderRows
+              rows={rows}
+              labelledBy={headingId}
+              hintId={hintId}
+              onDrop={dropRow}
+              onStep={stepRow}
+              focusGrip={focusGrip}
+              moveLabel={name => t('calc.moveIngredient', { name })}
+            />
           </div>
-        );
-      })}
-      <Button className={styles.add} onPress={() => { setAdded(editor.addIngredient(recipe.id)); }}>
-        {t('calc.addIngredient')}
-      </Button>
+        </>
+      ) : null}
+      {reorderOn ? null : (
+        <>
+          <datalist id={listId}>
+            {editor.ingredientNames.map(name => <option key={name} value={name} />)}
+          </datalist>
+          {recipe.ingredients.map((row, index) => {
+            const invalid = editor.showErrors && isBlank(row.label);
+            const n = index + 1;
+            return (
+              <div key={index} className={styles.card}>
+                <div className={styles.nameRow}>
+                  <input
+                    type="text"
+                    list={listId}
+                    className={invalid ? `${styles.input} ${styles.invalid}` : styles.input}
+                    value={row.label}
+                    placeholder={t('calc.ingredient')}
+                    aria-label={t('calc.ingredientN', { n })}
+                    aria-invalid={invalid ? true : undefined}
+                    autoComplete="off"
+                    autoFocus={added === index}
+                    onChange={event => { editor.patchIngredient(recipe.id, index, { label: event.target.value }); }}
+                  />
+                  <Button
+                    variant="bare"
+                    className={styles.del}
+                    aria-label={t('calc.removeIngredientN', { n })}
+                    onPress={() => { editor.removeIngredient(recipe.id, index); }}
+                  >
+                    <Trash2 aria-hidden="true" />
+                  </Button>
+                </div>
+                <div className={styles.withUnit}>
+                  <DecimalBox
+                    id={`${listId}-grams-${index}`}
+                    className={styles.input}
+                    value={row.grams}
+                    min={0}
+                    step={0.1}
+                    inputMode="decimal"
+                    label={t('calc.ingredientGramsN', { n })}
+                    onText={text => { editor.patchIngredient(recipe.id, index, { grams: Number(text) || 0 }); }}
+                  />
+                  <span className={styles.unit} aria-hidden="true">g</span>
+                </div>
+                {usesOrders(recipe.logic) && row.key && recipe.leaveningKey === row.key ? (
+                  // The answer is chosen once, in the Leavening box below; a row that IS the leavening says so quietly.
+                  <p className={styles.hint}>{t('calc.thisIsTheLeavening')}</p>
+                ) : null}
+              </div>
+            );
+          })}
+          <Button className={styles.add} onPress={() => { setAdded(editor.addIngredient(recipe.id)); }}>
+            {t('calc.addIngredient')}
+          </Button>
+        </>
+      )}
     </section>
   );
 }

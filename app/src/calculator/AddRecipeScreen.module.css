@@ -1,0 +1,110 @@
+/* «Add a recipe»: the recipe book's recipes by name, then «New recipe, written here». Rows are 48px tall at least and
+   wrap their text down to a 296px phone. */
+
+.intro {
+  margin: 0 0 var(--s4);
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--fs-md);
+  font-weight: 650;
+}
+
+.rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background: var(--surface);
+}
+
+.rows li + li {
+  border-top: 1px solid var(--line);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+  width: 100%;
+  min-height: var(--hit);
+  padding: var(--s2) var(--s4);
+  border: 0;
+  border-radius: var(--r-md);
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.row:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.row[aria-disabled="true"] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+@media (hover: hover) {
+  .row:hover:not([aria-disabled="true"]) {
+    background: var(--sunken);
+  }
+}
+
+.text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.name {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.sub {
+  color: var(--ink-2);
+  font-size: var(--fs-sm);
+}
+
+.chevron {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  color: var(--ink-3);
+}
+
+.note {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+.note:empty {
+  display: none;
+}
+
+.status {
+  margin: 0;
+  color: var(--ink-2);
+}
+
+/* «New recipe, written here» comes last, where the list screen keeps its own «+ Add recipe». */
+.blank {
+  align-self: flex-start;
+  margin-top: var(--s4);
+}

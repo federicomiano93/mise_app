@@ -513,6 +513,22 @@ export function recipeSpec(recipe: unknown): { amounts: Record<string, number>; 
   return { amounts, leaveningKey, baselinePct };
 }
 
+// The ingredients in a new order: the one at `from` moved to `to`. A NEW list holding the SAME row objects, so each row
+// keeps its `key` (the leavening is found by it). An index outside the list, or a move to where it already is, gives the
+// list back as it was (a copy).
+// ⚠️ A deliberate copy of the Catalogue's moveRow (catalogue-model.ts), as in the current app: a feature may not import
+// from another feature's folder.
+export function moveIngredient<T>(list: readonly T[] | null | undefined, from: unknown, to: unknown): T[] {
+  const rows = Array.isArray(list) ? list.slice() : [];
+  const a = Math.trunc(Number(from));
+  const b = Math.trunc(Number(to));
+  if (!Number.isInteger(a) || !Number.isInteger(b) || a === b
+    || a < 0 || b < 0 || a >= rows.length || b >= rows.length) return rows;
+  const [row] = rows.splice(a, 1);
+  rows.splice(b, 0, row as T);
+  return rows;
+}
+
 // The saved independent WhatsApp lists (empty array for a missing/garbage config).
 export function getWhatsappLists(config: unknown): WhatsappList[] {
   const c = config as { whatsappLists?: unknown } | null | undefined;
@@ -1030,17 +1046,30 @@ function normalizeRecipe(raw: any, index: number): Recipe | null {
   const id = String(raw.id || ('r-' + (slug(name) || index)));
   const logic: Logic = (LOGICS as unknown[]).includes(raw.logic) ? raw.logic : 'orders';
 
-  const ingredients: RecipeIngredient[] = [];
+  // ⚠️ ROWS THAT ALREADY HAVE A KEY CLAIM IT FIRST, then the new ones (no key yet) get theirs. A new row's key is made
+  // from its name, and when two rows ask for the same key the first one in the list used to win. Since the ingredients
+  // can be reordered (29 Oct 2026), a new «Yeast» dragged above the saved Yeast would have taken the key `yeast` — and
+  // the leavening, which is found by that key, would have moved onto the new row, changing every dough. Rows that all
+  // have keys, or none, are keyed exactly as before.
+  type Keyed = { row: RecipeIngredient; i: number; saved: boolean };
   const usedKeys = new Set<string>();
   const rawIngs: any[] = Array.isArray(raw.ingredients) ? raw.ingredients : [];
+  const rows: Keyed[] = [];
   rawIngs.forEach((ri, i) => {
     const row = normalizeIngredientRow(ri, i);
-    if (!row) return;
-    let key = row.key;
-    while (usedKeys.has(key)) key = key + '-' + i; // keep keys unique within the recipe
-    usedKeys.add(key);
-    ingredients.push({ key, label: row.label, grams: row.grams });
+    if (row) rows.push({ row, i, saved: !!ri.key });
   });
+  const keyOf = new Map<Keyed, string>();
+  for (const pass of [true, false]) {
+    for (const r of rows) {
+      if (r.saved !== pass) continue;
+      let key = r.row.key;
+      while (usedKeys.has(key)) key = key + '-' + r.i; // keep keys unique within the recipe
+      usedKeys.add(key);
+      keyOf.set(r, key);
+    }
+  }
+  const ingredients: RecipeIngredient[] = rows.map(r => ({ key: keyOf.get(r) as string, label: r.row.label, grams: r.row.grams }));
 
   const leaveningKey = (raw.leaveningKey && usedKeys.has(String(raw.leaveningKey)))
     ? String(raw.leaveningKey) : null;

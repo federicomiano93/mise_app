@@ -351,7 +351,7 @@ steps is at the end.
     per phone). Typing an ingredient name updates the leavening select without a re-render (focus must not be
     lost). Back from a fresh empty recipe asks to discard it; the list returns focus to the row edited.
     **Reorder the ingredients** (current app since PR «feat(calculator): reorder a recipe's ingredients»,
-    29 Oct 2026, not in Mise 2 yet): beside «Ingredients», a «Reorder» / «Done» toggle (hidden under 2 rows,
+    29 Oct 2026; in Mise 2 since the «Calculator ports 36, 37, 39, 40 as built» section below): beside «Ingredients», a «Reorder» / «Done» toggle (hidden under 2 rows,
     absent on a recipe linked to the Catalogue, read-only there); in the mode each row is name, grams,
     grip (the grip on the right since #476, `1b87d33a`), moved by a held drag (200 ms on touch) or ArrowUp/ArrowDown on the grip (the focus follows the
     row); «+ Add ingredient» hidden meanwhile; the hint «Hold an ingredient and drag it to its place. With a
@@ -1005,8 +1005,8 @@ Port of the current app's #424 (`e7f3dac0`, `6713adab`, `1342cb79`) and `535bcdb
 - Settings › Recipes counts a linked recipe's rows from the recipe book (`ingredientCount`, from the editor's
   `resolved(recipe)`), still counting a row it cannot weigh, and shows no count at all while the linked recipe has not been
   read («0 ingredients» before).
-- Still owed in this group: items 36, 37 (`catalogueChoices`, `rowsToStamp`: the parity markers of calculator-recipe-source stay),
-  39 and 40.
+- Still owed in this group when this was written: items 36, 37, 39 and 40 — done in the «Calculator ports 36, 37, 39, 40 as
+  built» section below.
 
 ## Clients-only save as built (9 Nov 2026, slice 3 of the partial-owner roles, invisible: no screen uses it yet)
 
@@ -1055,3 +1055,81 @@ The sales owner (`owner-sales`, «Titolare vendita») runs the clients but has n
 - **Driven:** `algprobe/mise-drive/drive-mise2-clients.mjs` (the sales owner in both languages at 1024/360/296: edit, save and read back, link made and
   turned off, discard question, read-only orders, history, deadline, `/calculator` landing, no-document, empty and offline walks; the manager and the
   kitchen owner as non-regression).
+
+## Calculator ports 36, 37, 39, 40 as built (12 Nov 2026) — differences from the current app, on purpose
+
+Items 36, 37, 39 and 40 of `docs/mise2-port-owed.md` (the current app's 29 Oct – 1 Nov 2026 fixes). Branch
+`feature/mise2-next-calculator-ports`, on top of `feature/mise2-next`.
+
+**36 — Reorder a recipe's ingredients** (`71627519`, `262efcfe`, `33a22947`).
+- Settings › Recipes › one recipe: «Reorder» / «Done» beside the «Ingredients» heading, absent under two rows and absent on a
+  recipe linked to the recipe book. The mode REUSES `recipes/ReorderRows` (grip on the right: name, grams, grip) — one reorder
+  component for the whole app; the only change to it is an optional `moveLabel`, so the grip is called «Move «{name}»» from the
+  Calculator's own key (`calc.moveIngredient`, same words as the recipe book's `cat.moveRow`).
+- Only the working copy changes: `moveIngredient` (shared, paired with the original) moves the SAME row objects, so keys, grams
+  and the leavening are untouched; Save stores the new order, Back asks the usual unsaved-changes question. Turning the mode on
+  or off is not an edit; a move is (Save wakes, the leave guard is on).
+- Keyboard: React Aria's own drag (Enter, arrows, Enter) and the arrow keys on a grip (one place; the focus follows the moved
+  grip); entering puts the focus on the first grip, leaving on the «Done» button. Difference from the current app: the held drag
+  is React Aria's (the recipe book's), not Sortable's 200 ms touch hold.
+- `normalizeRecipe` lets rows that already have a key claim it first (`262efcfe`), so a NEW «Yeast» dragged above the saved one
+  never takes the leavening; `chooseLeavening` (shared and the editor's `recipesModel`) gives a keyless pick a key no other row has.
+- Save refusing a blank name leaves the mode, so the blank box can be marked and reached (the reorder rows have no name box).
+  A recipe that becomes linked while the mode is on leaves it, and does not come back on unlinking (`33a22947`'s rule: the mode
+  must not outlive a change of source; a failed link changes nothing — the mode is local to the screen and the link edits only on success).
+- Rows without a name read «(no name)» (the recipe book's `cat.unnamedRow`).
+
+**37 — «Add a recipe» offers the recipe book first** (`a221c160`, `56864739`, `97ac8fe3`, `e0b92090`).
+- `/calculator/settings/recipes/new` is now the CHOICE (before: it made an empty recipe at once): the book's recipes by name
+  (`catalogueChoices`, an unnamed one last), the ones the calculator already has marked «Already in the calculator» (never hidden),
+  and «+ New recipe, written here» last. Reached from «+ Add recipe» (after the limit question, which still comes first and
+  still makes the recipe hidden when four are shown) and from the empty Calculator's «Add a recipe». Back is a step back: to the
+  list (focus on «+ Add recipe») or to the empty Calculator. The recipe the choice makes REPLACES the choice in the history, so
+  Back from the recipe goes where the choice was opened from.
+- A recipe of the book is added named after it, linked, `logic: 'total'` («from a total», as the book's own «Import into
+  Calculator» makes it) — in the working copy only; nothing is saved until Save.
+- Difference, on purpose: archived recipes of the recipe book are not offered (the picker of «Where the ingredients come from»
+  already left them out; the current app has no archive). If every recipe is archived the screen says so (`cat.shelf.allArchived`).
+  No search box (the current app has none either).
+- ⚠️ A linked recipe never lands an older copy: the stamp of row ids (`rowsToStamp`, now used by `calculatorSource.stampRowIds`) is
+  a transaction on the recipe as the SERVER holds it now, writing only when a row lacks its id — Mise 2 already had the
+  transaction by design; the pure rule is now the shared function, paired with the original.
+- The wait: linking gives up after 10 s (`LINK_TIMEOUT_MS`) with «Could not link that recipe — check the connection and try
+  again.»; a recipe gone says `calc.sourceMissing`. While a pick links the whole choice waits (rows `aria-disabled`, the new-recipe
+  button disabled, a status line «Linking the recipe…»); a pick left behind (Back, the screen closed) adds nothing and says
+  nothing — the editor asks `isCurrent()` once the stamp has answered. Difference from the current app: the buttons stay in
+  the page and ignore taps (focus stays where it was) instead of being redrawn.
+- The picker of the SOURCE box follows the same rules (timeout, `calc.sourceMissing`; a pick left behind — the picker closed OR
+  the screen left — changes nothing), and, as in the current app, a recipe with no name yet takes the book's name when linked.
+- A book the rules refuse (`permission-denied`) offers only the new recipe, with no intro; any other failure says
+  `calc.addFrom.failed`.
+- Not in the current app, so not here: the Save-while-linking case (`e0b92090`) — the choice has no Save.
+
+**39 — Dough history.**
+- Dates in the venue's language (`021a49ff`): ALREADY done in Mise 2 by its own design (`app/src/calculator/logStamp.ts`, 13 Oct 2026,
+  used by `LogBody` for the list card, the opened dough and every version). What changed here: the rule now lives ONCE, in
+  `shared/src/log-time.ts` (`localLogDate`, `localLogTime`, `logStampText`), paired with the original; `logStamp.ts` is gone and
+  `LogBody.stamp` calls `logStampText`. `logStampText(at, lang = 'en')` takes the language as an argument (the original reads the
+  open venue's module variable); `localLogTime` gained the original's «minute over 59 is shown as stored» check.
+- A «from a total» dough says how much it is (`b00983dc`): `doughAmountLine` (`shared/src/log-model.ts`, paired) and `LogOrder`
+  draw «Total dough: 1,650 g» (`calc.historyTotal`) — or the grams typed on top of the products of an «orders + total» dough
+  («+ 400 g typed by hand»). It read «No products entered.».
+- The opened dough shows its total once (`4b235f3d`): `LogOrder` gets `sheetFollows` from `LogBody` (the sheet card under it already
+  says «Total dough»), so there neither the total line nor «No products entered.» is drawn; the typed-grams line still is.
+- The unsaved-changes question in the venue's language (`66e76c84`): ALREADY so by design. Every editor asks with `t(…)` INSIDE
+  its `useCallback` at the moment of asking (`RecipesEditor.discardQuestion`, `ClientsEditor`, `SettingsEditor`, `WhatsappEditor`),
+  never a constant made at module load.
+- Labelled grams and leavening % fields (`6c70cb38`): ALREADY so. The grams box is named `calc.ingredientGramsN` («Ingredient 3,
+  weight in grams» — a number, not the typed name: two rows with the same name stay apart), the leavening % box by its
+  `<label htmlFor>` «Start at» (`LeaveningBox.tsx`). DIFFERENCE, on purpose: the current app's longer name «Start at: leavening percentage»
+  (`calc.leaveningStartPct`) is not used — the visible label already names the box, and twelve specs and the drivers find it as «Start at».
+- Back buttons named (`7d5683b8`): ALREADY so by construction — `FormBar` takes `backLabel` as a required prop (`ui/FormBar.tsx`),
+  and every Calculator screen draws its Back through `SettingsPage` / `SettingsEditor` / `FormBar` with `t('ui.back')`.
+
+**40 — A cached «no config» is never the server's answer** (`d3eb57f3`, `3d98a3e4`). ALREADY so, by design; nothing ported.
+- `calculatorSource.watchConfig` listens with `includeMetadataChanges` and passes `fromServer: !snap.metadata.fromCache`
+  (`calculatorSource.ts`, pinned by `calculatorSource.spec.ts`); `calculatorStore.readConfig` ignores a cached «no document»
+  (`if (!fromServer) return`), so the screen stays on «Loading…» and saving stays locked; `saveConfig` is STRICTER than the
+  current app (a cached DOCUMENT paints the screen but does not unlock a write: `configFromServer`); `applyConfig` keeps the SAME
+  object for the same document, so a metadata-only resend repaints nothing (`3d98a3e4`).
+- New: `calculatorStore.cachedNoConfig.spec.ts` pins the audit's whole scenario end to end through the store.

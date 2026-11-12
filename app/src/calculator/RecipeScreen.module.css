@@ -178,3 +178,21 @@
   font-weight: 600;
   overflow-wrap: anywhere;
 }
+
+/* The Ingredients heading with «Reorder» at its end. */
+.ingHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s3);
+}
+
+.ingHead .reorder {
+  padding: 0 var(--s4);
+}
+
+/* The rows in reorder mode (recipes/ReorderRows draws them with no border of its own). */
+.reorderFrame {
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}

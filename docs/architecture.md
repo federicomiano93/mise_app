@@ -258,8 +258,9 @@ Aria does not support Preact. The numbers are below.
   a `SettingsEditor` (a working copy, Save disabled until it differs, the question, the discard question through
   `useBlocker`, `markBusy` while dirty, a second tap ignored while a save is in the air); Clients
   (`ClientsEditor` › `ClientList` with a React Aria `GridList` drag-and-drop reorder, `ClientScreen`,
-  `ProductCard`) and Recipes (`RecipesEditor` › `RecipeList`, an accordion, and `RecipeScreen` with `SourceBox`,
-  `LeaveningBox` and the `CataloguePicker`) hold ONE working copy ABOVE their list and detail, so moving between
+  `ProductCard`) and Recipes (`RecipesEditor` › `RecipeList`, an accordion, `AddRecipeScreen` — the choice at `/recipes/new`, the recipe
+  book's recipes first, 12 Nov 2026 — and `RecipeScreen` with `SourceBox`, `LeaveningBox`, the `CataloguePicker` and, for a
+  recipe's own rows, a Reorder mode that reuses `recipes/ReorderRows`) hold ONE working copy ABOVE their list and detail, so moving between
   them keeps the edits, and ONE blocker each (a router supports one) asking both «leave without saving?» and
   «discard this new …?». All of them save through ONE path, `useSaveConfig` (a port of `saveConfigOrSay`), and
   write over the LATEST configuration only what they own. ⚠️ They open only once the SERVER has answered
@@ -538,9 +539,9 @@ vat-rates, ingredient-kind, product-limits, vat-guide, foodcost-weighing, photo-
 catalogue-photo-model (the Catalogue's table of those keys and its two lookups `photoErrorKey` / `noRecipeKey`; not paired, it also exports the table),
 calculator-dough-math, calculator-recipe-source, calculator-order-text, calculator-order-prefill (adapted: `prefillNote` takes the translate function as an argument, so it is not paired), client-order-model (adapted: `orderRows` takes the deleted-product word as an argument, so it is not paired), client-order-history (adapted: `linesLabel` and `emptyWords` take the translate function as an argument, so it is not paired), calculator-recipe-text (one documented difference: the line
 `Flour uniqua blue`, one venue's data, is written like every other), confirm-flow, log-time,
-calculator-config (partial: the read side; leaves out the save path `reconcileConfigWrite` / `saveFailureKey` and
+calculator-config (partial: the read side, plus `moveIngredient`; leaves out the save path `reconcileConfigWrite` / `saveFailureKey` and
 `orderPrefillLabel`; `formatGrams` and `normalizeConfig` take the language as an argument), log-model (partial: the
-write half, `workDayIndex` and `typedTotalOf`; leaves out the list and edit half, the legacy migration and `dayLabel`;
+write half, `workDayIndex`, `typedTotalOf` and `doughAmountLine`; leaves out the list and edit half, the legacy migration and `dayLabel`;
 `buildLogText` takes its two words as an argument), guided-model (the whole model; `stepRows`, `overdueText` and `progressText` take their word / the translator as an argument), zoom-steps (partial: the
 arithmetic; leaves out the storage and DOM halves), calculator-tab-keys (new in Mise 2, no original: the
 `localStorage` keys of a Calculator tab and the stale-tab and lock decisions, pinned against the current app's

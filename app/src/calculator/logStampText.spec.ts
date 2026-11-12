@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { logTimestamp } from '@mise/shared/log-time';
-import { localDate, localTime } from './logStamp';
+import { localLogDate as localDate, localLogTime as localTime, logStampText, logTimestamp } from '@mise/shared/log-time';
 
-// The stored text is English (log-time.ts); an Italian screen says it in Italian (found on the lab tablet, 13 Oct 2026).
+// The stored text is English; the saying of it lives in shared/src/log-time.ts since item 39 (it was app/src/calculator/logStamp.ts); an Italian screen says it in Italian (found on the lab tablet, 13 Oct 2026).
 describe('a dough\'s «when» in the interface language', () => {
   it('says the stored English date in Italian', () => {
     expect(localDate('Tuesday 13 October', 'it')).toBe('martedì 13 ottobre');
@@ -38,5 +37,17 @@ describe('a dough\'s «when» in the interface language', () => {
         expect(localTime(at.time, 'it')).toBe(`${String(hour).padStart(2, '0')}:07`);
       }
     }
+  });
+});
+
+describe('the «when» line of a version', () => {
+  it('is the date and the time, said in the language the screen is in', () => {
+    const at = { date: 'Tuesday 13 October', time: '11:11 PM' };
+    expect(logStampText(at, 'it')).toBe('martedì 13 ottobre — 23:11');
+    expect(logStampText(at, 'en')).toBe('Tuesday 13 October — 11:11 PM');
+  });
+
+  it('a version with no time stamp has an empty line either side of the dash, as the current app draws it', () => {
+    expect(logStampText(undefined, 'it')).toBe(' — ');
   });
 });

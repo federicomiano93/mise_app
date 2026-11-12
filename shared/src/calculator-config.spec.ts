@@ -1060,8 +1060,7 @@ describe('the port against the original', () => {
     for (const name of LEFT_OUT) expect(original[name] !== undefined, name).toBe(true);
   });
 
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 36): main added `moveIngredient` (the lab-format export) to js/calculator-config.js, not yet in the port — remove .fails when ported
-  test.fails('exports exactly the same names, except those', () => {
+  test('exports exactly the same names, except those', () => {
     expect(Object.keys(port).sort()).toStrictEqual(shared);
   });
 

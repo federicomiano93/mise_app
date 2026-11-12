@@ -27,7 +27,7 @@
 
 import { CONFIG_MODEL, NEEDS_CALCULATOR_SAVE, clientsOnlyWrite, needsCalculatorSave, reconcileConfigWrite } from '@mise/shared/calculator-config';
 import type { CalculatorConfig } from '@mise/shared/calculator-config';
-import { withRowIds } from '@mise/shared/guided-model';
+import { rowsToStamp } from '@mise/shared/calculator-recipe-source';
 import { buildPath } from '@mise/shared/location-id';
 import type { Query } from 'firebase/firestore';
 import type { FirestoreKit } from '../session/firebaseBackend';
@@ -281,8 +281,10 @@ export function createFirestoreCalculatorSource(
         const snap = await tx.get(ref);
         if (!snap.exists()) throw Object.assign(new Error(`Catalogue recipe ${id} no longer exists`), { code: 'not-found' });
         const rows: unknown[] = Array.isArray(snap.data().ingredients) ? snap.data().ingredients : [];
-        const stamped = withRowIds(rows);
-        if (stamped.some((row, i) => row !== rows[i])) tx.set(ref, { ingredients: stamped }, { merge: true });
+        // null when every row already has its id (shared rowsToStamp, the current app's rule): then nothing is written.
+        const stamped = rowsToStamp(rows);
+        if (stamped === null) return rows;
+        tx.set(ref, { ingredients: stamped }, { merge: true });
         return stamped;
       });
     },

@@ -617,8 +617,7 @@ describe('the port against the original', () => {
     for (const name of LEFT_OUT) expect(original[name] !== undefined, name).toBe(true);
   });
 
-  // PORT OWED (release branch, 8 Nov 2026; deferred until after the switch, item 39): main added an export to js/log-model.js (the dough history says how much a from-a-total dough is), not yet in the port — remove .fails when ported
-  test.fails('exports exactly the same names, except those, plus dayLabelParts', () => {
+  test('exports exactly the same names, except those, plus dayLabelParts', () => {
     expect(Object.keys(port).sort()).toStrictEqual([...shared, 'dayLabelParts'].sort());
   });
 

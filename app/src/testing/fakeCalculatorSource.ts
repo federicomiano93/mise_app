@@ -1,5 +1,5 @@
 import { NEEDS_CALCULATOR_SAVE, clientsOnlyWrite, needsCalculatorSave, reconcileConfigWrite } from '@mise/shared/calculator-config';
-import { withRowIds } from '@mise/shared/guided-model';
+import { rowsToStamp } from '@mise/shared/calculator-recipe-source';
 import type { AnswerMeta, CalculatorSource, StoredDoc } from '../calculator/calculatorSource';
 
 // A Calculator source for the specs, in memory: the configuration, the catalogue recipes and the logs are
@@ -36,6 +36,9 @@ export type FakeCalculatorSource = CalculatorSource & {
   stamps: { id: string; ingredients: unknown[] }[];
   // How many times the whole catalogue was read.
   catalogueReads(): number;
+  // Row-id stamps wait (offline, slow) until settleStamps(); the recipe is read when they settle, as the server would.
+  holdStamps(): void;
+  settleStamps(): void;
   // Configuration saves wait (offline, slow) until settleConfigSaves().
   holdConfigSaves(): void;
   settleConfigSaves(): void;
@@ -69,6 +72,8 @@ export function fakeCalculatorSource(seed: {
   const savedConfigs: Record<string, unknown>[] = [];
   const stamps: { id: string; ingredients: unknown[] }[] = [];
   let catalogueReads = 0;
+  let stampsHeld = false;
+  let heldStamps: Array<() => void> = [];
   let configSavesHeld = false;
   let heldConfigSaves: Array<() => void> = [];
   let held = false;
@@ -214,17 +219,27 @@ export function fakeCalculatorSource(seed: {
 
     // Like the real transaction: stamps the recipe AS STORED NOW, and writes only when a row lacked an id.
     stampRowIds(id) {
-      if (refuse.stamp) return Promise.reject(refused());
-      const doc = recipes.get(id);
-      if (!doc) return Promise.reject(Object.assign(new Error('not-found'), { code: 'not-found' }));
-      const rows: unknown[] = Array.isArray(doc.ingredients) ? doc.ingredients as unknown[] : [];
-      const stamped = withRowIds(rows);
-      if (stamped.some((row, i) => row !== rows[i])) {
+      const run = (): Promise<unknown[]> => {
+        if (refuse.stamp) return Promise.reject(refused());
+        const doc = recipes.get(id);
+        if (!doc) return Promise.reject(Object.assign(new Error('not-found'), { code: 'not-found' }));
+        const rows: unknown[] = Array.isArray(doc.ingredients) ? doc.ingredients as unknown[] : [];
+        const stamped = rowsToStamp(rows);
+        if (stamped === null) return Promise.resolve(rows);
         stamps.push({ id, ingredients: [...stamped] });
         recipes.set(id, { ...doc, ingredients: stamped });
         for (const listener of recipeWatchers) if (listener.id === id) tellRecipe(listener, FROM_SERVER);
-      }
-      return Promise.resolve(stamped);
+        return Promise.resolve(stamped);
+      };
+      if (stampsHeld) return new Promise<unknown[]>((resolve, reject) => { heldStamps.push(() => { run().then(resolve, reject); }); });
+      return run();
+    },
+    holdStamps() { stampsHeld = true; },
+    settleStamps() {
+      stampsHeld = false;
+      const waiting = heldStamps;
+      heldStamps = [];
+      for (const settle of waiting) settle();
     },
 
     logWatcherCount: () => logWatchers.size,

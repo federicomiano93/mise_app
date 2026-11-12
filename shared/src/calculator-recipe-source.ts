@@ -24,7 +24,7 @@
 // pointing at a Catalogue recipe). The data moved before the code could read it once, in July, and the app
 // was left with no weights at all, for everybody.
 
-import { ridOf } from './guided-model';
+import { ridOf, withRowIds } from './guided-model';
 // The Catalogue's own unit table, never a copy of it: a second table is a second place for kg to drift.
 import { ingredientGrams, isWeighableUnit, keepRows } from './catalogue-model';
 
@@ -115,6 +115,36 @@ export function linkedRecipeIds(recipes: unknown): string[] {
 
 export function isLinked(recipe: unknown): boolean {
   return !!String((recipe as Tab)?.catalogueId || '').trim();
+}
+
+// A Catalogue recipe's rows with an id stamped on each row that lacks one, or null when every row already has its own —
+// and then nothing needs writing. withRowIds hands back the very same row object for a row it keeps, which is what
+// tells the two apart.
+export function rowsToStamp(rows: unknown): unknown[] | null {
+  const current: unknown[] = Array.isArray(rows) ? rows : [];
+  const stamped = withRowIds(current);
+  return stamped.every((row, i) => row === current[i]) ? null : stamped;
+}
+
+export interface CatalogueChoice {
+  id: string;
+  name: string;
+  used: boolean;
+}
+
+// The Catalogue recipes «+ Add recipe» offers, by name (an unnamed one last), each marked `used` when a Calculator
+// recipe already takes it — linked, or imported as 'cat-<id>'. Marked, never hidden: a second tab of the same recipe
+// with another logic is legitimate.
+export function catalogueChoices(catalogue: unknown, calculatorRecipes: unknown): CatalogueChoice[] {
+  const used = new Set(linkedRecipeIds(calculatorRecipes));
+  for (const r of (calculatorRecipes || []) as { id?: unknown }[]) {
+    const id = String(r?.id || '');
+    if (id.startsWith('cat-')) used.add(id.slice(4));
+  }
+  return ((catalogue || []) as { id?: unknown; name?: unknown }[])
+    .filter(c => c && String(c.id || '').trim())
+    .map(c => ({ id: c.id as string, name: String(c.name || '').trim(), used: used.has(c.id as string) }))
+    .sort((a, b) => (Number(!a.name) - Number(!b.name)) || a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true }));
 }
 
 // How many ingredients the Recipes list says a recipe has, from the recipe as it resolves.
@@ -276,8 +306,12 @@ export function chooseLeavening(recipe: unknown, value: unknown, linkedRows: rea
     const ing = index >= 0 ? own[index] : own.find(i => i && i.key === picked);
     if (!ing) return false;
     // An ingredient with no key cannot be pointed at yet; it gets one the moment it is chosen.
+    // ⚠️ A KEY NO OTHER ROW HAS: rows can be reordered, so «name-<index>» may already be the key of an older row, and
+    // two rows sharing it would hand the leavening to whichever comes first.
     if (!ing.key) {
-      ing.key = (ing.label || 'ing').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + own.indexOf(ing);
+      let key = (ing.label || 'ing').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '-' + own.indexOf(ing);
+      while (own.some(o => o && o !== ing && o.key === key)) key += '-x';
+      ing.key = key;
     }
     tab.leaveningKey = ing.key;
   }
