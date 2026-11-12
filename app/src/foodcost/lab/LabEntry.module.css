@@ -1,0 +1,41 @@
+/* The card's door to lab mode: a banner (when a production is open) over a big full-width button. */
+
+.entry {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.banner {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r-md);
+  background: var(--accent-tint);
+  color: var(--accent-ink);
+}
+
+.banner svg {
+  flex: none;
+  width: var(--fs-xl);
+  height: var(--fs-xl);
+}
+
+.bannerText {
+  flex: 1;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.big {
+  gap: var(--s3);
+  font-size: var(--fs-lg);
+}
+
+.big svg {
+  width: var(--fs-xl);
+  height: var(--fs-xl);
+}
