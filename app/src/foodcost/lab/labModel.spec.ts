@@ -8,6 +8,7 @@ import {
   resolveStep, soldByPieces, startDraft, stepPeople, stepsFor, toggleTick, typeInto,
 } from './labModel';
 import type { LabDraft, Presets } from './labModel';
+import { planLabSave } from './labSave';
 
 // The lab's pure heart: the steps, the ticks, the typing, and the product the weights make.
 
@@ -96,7 +97,7 @@ describe('a new draft', () => {
     expect(clampPeople(Number.NaN)).toBe(1);
     expect(clampPeople(2.6)).toBe(3);
     // The stepper: from the card's number, by one, within 1 to 20.
-    expect(stepPeople(newDraft(product({ labourPeople: 20 })), 20, 1).people).toBe(20);
+    expect(stepPeople(newDraft(product({ labourPeople: 20 })), 20, 1).people).toBeNull();
     expect(stepPeople(newDraft(product()), 2, -1).people).toBe(1);
   });
 
@@ -469,5 +470,66 @@ describe('a resumed step that no longer exists', () => {
     // The lab calls goToStep with the RESOLVED step: from 'time' (mapped from 'pieces') the reading is frozen.
     const stored = { ...started, step: 'pieces' as const };
     expect(goToStep({ ...stored, step: resolveStep(noPieces, stored.step) }, 'result', NOW + 5 * 60_000).minutesFrozen).toBe(5);
+  });
+});
+
+describe('a product whose lines are in the tonnes (grams typed in a kilo box, converted with a raw weight apart)', () => {
+  // 20,000 kg of flour on the lines, but a raw weight of 20,000 g held apart and 18,000 g cooked: the real total is over the ten-tonne limit.
+  const tonnes = product({
+    components: [
+      { kind: 'ingredient', ingredientId: 'FLOUR', qty: 20000, unit: 'kg' },
+      { kind: 'ingredient', ingredientId: 'FLOUR', qty: 20000, unit: 'kg' },
+    ],
+    rawGrams: 40000,
+    cookedGrams: 36000,
+    sellingMode: 'weight',
+    piecesPerBatch: null,
+  });
+  const started = startDraft(newDraft(tonnes), NOW);
+
+  it('keeps the raw and cooked weights EXACTLY when raw is untouched and no line weight changed', () => {
+    const out = applyLab(tonnes, started, TABLES, NOW);
+    expect(out.rawGrams).toBe(40000);
+    expect(out.cookedGrams).toBe(36000);
+    expect(planLabSave(tonnes, TABLES, started, NOW, new Date(NOW).toISOString()).ok).toBe(true);
+    // Ticking the line as planned does not count as a change either.
+    expect(applyLab(tonnes, toggleTick(started, 'l0'), TABLES, NOW).rawGrams).toBe(40000);
+  });
+
+  it('a cooked weight typed still wins, and the raw stays', () => {
+    const out = applyLab(tonnes, typed(started, 'cooked', '17000'), TABLES, NOW);
+    expect(out.rawGrams).toBe(40000);
+    expect(out.cookedGrams).toBe(17000);
+  });
+
+  it('refuses a scaled cooked weight that goes past the limits, naming the cooked weight', () => {
+    // A line weight changes, so the cooked weight is scaled to the real (tonnes) total.
+    const changed = typed(started, lineField('l0'), '999');
+    expect(planLabSave(tonnes, TABLES, changed, NOW, new Date(NOW).toISOString())).toEqual({ ok: false, reason: 'badCooked' });
+  });
+});
+
+describe('the people stepper at its limits', () => {
+  it('does nothing when the button is unavailable: 25 on the card is not lowered to 20 by «+»', () => {
+    const draft = newDraft(product({ labourPeople: 25 }));
+    expect(stepPeople(draft, 25, 1)).toBe(draft);
+    expect(stepPeople(newDraft(product()), 1, -1).people).toBeNull();
+    expect(stepPeople(draft, 25, -1).people).toBe(19);
+  });
+});
+
+describe('a line ticked as planned compares with the LATEST saved line', () => {
+  it('writes what was weighed when the saved weight changed meanwhile on another device', () => {
+    const card = product();
+    const ticked = ['l2'].reduce(toggleTick, startDraft(newDraft(card), NOW));
+    expect(ticked.weighed.l2).toBe('10');
+    // Elsewhere the salt became 14 g: the tick said "10", and 10 is what was weighed here.
+    const elsewhere = product({
+      components: card.components.map((line, index) => (index === 2 && line.kind === 'ingredient' ? { ...line, qty: 14 } : line)),
+    });
+    const out = applyLab(elsewhere, ticked, TABLES, NOW);
+    expect((out.components[2] as { qty: number }).qty).toBe(10);
+    // Unchanged elsewhere: exactly the saved number.
+    expect(applyLab(card, ticked, TABLES, NOW).components[2]).toEqual(card.components[2]);
   });
 });

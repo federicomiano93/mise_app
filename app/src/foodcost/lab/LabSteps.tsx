@@ -10,7 +10,7 @@ import { useFoodcost } from '../FoodcostContext';
 import { supplierOf } from '../supplierOf';
 import { Keypad } from './Keypad';
 import { formatClock } from './labClock';
-import { groupedNumber, gramsText } from './labFormat';
+import { groupedNumber, gramsText, peopleText } from './labFormat';
 import { MAX_PEOPLE, STALE_MS, lineField, peopleShown, rawShown, soldByPieces, weighingUnit } from './labModel';
 import type { FieldId, LabDraft, LabLine, LabNumbers, LabStepId, Presets } from './labModel';
 import { typedText } from './keypadRules';
@@ -345,7 +345,7 @@ function ResultStep({ numbers, base, titleRef, titleId }: Props) {
     cooked ? t('lab.res.cooked', { grams: gramsText(numbers.cookedGrams ?? 0, locale) }) : t('lab.res.cookedNone'),
   ];
   if (soldByPieces(base) && numbers.pieces !== null) summary.push(t('lab.n.pieces', { n: numbers.pieces }));
-  summary.push(t('lab.n.minutes', { n: numbers.minutes }), t('lab.n.people', { n: numbers.people }));
+  summary.push(t('lab.n.minutes', { n: numbers.minutes }), peopleText(t, numbers.people, locale));
 
   return (
     <div className={styles.result}>

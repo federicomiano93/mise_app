@@ -16,7 +16,7 @@ import type { LabDraft } from './labModel';
 // ⚠️ THE MARGIN POINT is the card's own (marginPointFor): recorded when the composition changes, which the two weights are part of.
 export type LabSavePlan =
   | { ok: true; product: Product; snapshot: Record<string, unknown> | null; changedLines: number; before: Product }
-  | { ok: false; reason: 'gone' | 'invalid' | 'tooMany' };
+  | { ok: false; reason: 'gone' | 'invalid' | 'tooMany' | 'badRaw' | 'badCooked' };
 
 export function planLabSave(
   stored: Product | null | undefined, tables: CostTables, draft: LabDraft, now: number, nowIso: string,
@@ -26,7 +26,11 @@ export function planLabSave(
   const product = applyLab(before, draft, tables, now);
   // The rules refuse more than 100 lines: said here, while the work is on screen and the draft is intact.
   if (product.components.length > MAX_COMPONENTS) return { ok: false, reason: 'tooMany' };
-  if (firstInvalidNumber(product) !== null || firstBadWeight(product) !== null) return { ok: false, reason: 'invalid' };
+  // The two weights first, named: a cooked weight scaled out of the rules' limits must not be blamed on «a weight» in general.
+  const badWeight = firstBadWeight(product);
+  if (badWeight === 'cookedGrams') return { ok: false, reason: 'badCooked' };
+  if (badWeight === 'rawGrams') return { ok: false, reason: 'badRaw' };
+  if (firstInvalidNumber(product) !== null) return { ok: false, reason: 'invalid' };
   return {
     ok: true,
     product,

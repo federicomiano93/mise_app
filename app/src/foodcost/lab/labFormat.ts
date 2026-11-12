@@ -12,3 +12,14 @@ export function groupedNumber(value: number, locale: string): string {
 }
 
 export const gramsText = (grams: number, locale: string): string => `${groupedNumber(grams, locale)} g`;
+
+// «2 persone», «1 persona», and a fractional number of people the card holds («1,5 persone») in the venue's own number format. The plural
+// message picks its form from a NUMBER, so only a whole number goes through it; a fraction is always the plural form.
+export function peopleText(
+  t: (key: 'lab.n.people' | 'lab.n.peopleFraction', params: { n: number | string }) => string, people: number, locale: string,
+): string {
+  if (Number.isInteger(people)) return t('lab.n.people', { n: people });
+  const italian = locale.toLowerCase().startsWith('it');
+  const shown = String(Math.round(people * 100) / 100).replace('.', italian ? ',' : '.');
+  return t('lab.n.peopleFraction', { n: shown });
+}

@@ -17,7 +17,7 @@ import type { Choice } from '../PickDialog';
 import { Keypad } from './Keypad';
 import { clearDraft, labDraftKey, readDraft, writeDraft } from './labDraft';
 import { elapsedMs, formatClock, timerMinutes } from './labClock';
-import { groupedNumber, gramsText } from './labFormat';
+import { groupedNumber, gramsText, peopleText } from './labFormat';
 import { fcNumber } from '@mise/shared/fc-number';
 import { useMoney } from '../../session/useMoney';
 import {
@@ -240,8 +240,12 @@ export function LabMode({ productId, onClose }: Props) {
   };
 
   // ── Save ────────────────────────────────────────────────────────────────────────────────────
-  const refusal = (reason: 'gone' | 'invalid' | 'tooMany'): string => (
-    reason === 'gone' ? t('fc.productDeleted') : reason === 'tooMany' ? t('lab.save.tooMany') : t('lab.save.invalid')
+  const refusal = (reason: 'gone' | 'invalid' | 'tooMany' | 'badRaw' | 'badCooked'): string => (
+    reason === 'gone' ? t('fc.productDeleted')
+      : reason === 'tooMany' ? t('lab.save.tooMany')
+        : reason === 'badCooked' ? t('lab.save.badCooked')
+          : reason === 'badRaw' ? t('lab.save.badRaw')
+            : t('lab.save.invalid')
   );
 
   async function save() {
@@ -267,7 +271,7 @@ export function LabMode({ productId, onClose }: Props) {
       if (soldByPieces(product) && product.piecesPerBatch !== null) lines.push(t('lab.save.pieces', { n: groupedNumber(product.piecesPerBatch, locale) }));
       lines.push(t('lab.save.labour', {
         minutes: t('lab.n.minutes', { n: product.labourMinutes ?? 1 }),
-        people: t('lab.n.people', { n: product.labourPeople ?? 1 }),
+        people: peopleText(t, product.labourPeople ?? 1, locale),
       }));
       const ok = await confirm({
         title: t('lab.save.title', { name: product.name }),

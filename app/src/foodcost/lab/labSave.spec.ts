@@ -78,7 +78,7 @@ describe('planning the save', () => {
   it('refuses a weight the rules would refuse, while the work is still on screen', () => {
     // The keypad cannot type this; a draft forged in storage could.
     const forged = { ...started, cooked: '99999999' };
-    expect(planLabSave(bread, TABLES, forged, NOW, ISO)).toEqual({ ok: false, reason: 'invalid' });
+    expect(planLabSave(bread, TABLES, forged, NOW, ISO)).toEqual({ ok: false, reason: 'badCooked' });
   });
 
   it('refuses more than the 100 lines of the rules, keeping the work on screen', () => {

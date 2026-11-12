@@ -179,6 +179,40 @@ describe('the people of the card', () => {
   });
 });
 
+describe('the people stepper and the people the card holds', () => {
+  it('prints a fractional number of people in the save question, and an unavailable button changes nothing', async () => {
+    const { user, fake } = await openLab(source({ labourPeople: 25 }));
+    await start(user);
+    await dot(user, 'Time and people');
+    // Shown as 20 (the most), and «+» does nothing: the card keeps its 25.
+    await user.click(within(lab()).getByRole('button', { name: 'One person more' }));
+    expect(within(lab()).getByRole('status', { name: 'People' })).toHaveTextContent('20');
+    const asked = await saveFromResult(user);
+    expect(within(asked).getByText(/^Work: 1 minute, 25 people$/)).toBeInTheDocument();
+    await user.click(within(asked).getByRole('button', { name: 'Save' }));
+    await screen.findByRole('heading', { name: 'Saved to the card' }, LOAD);
+    expect(fake.saved.find(item => item.kind === 'product')?.data).toMatchObject({ labourPeople: 25 });
+  });
+
+  it('writes 1.5 people in the venue number format', async () => {
+    const { user } = await openLab(source({ labourPeople: 1.5 }));
+    await start(user);
+    const asked = await saveFromResult(user);
+    expect(within(asked).getByText('Work: 1 minute, 1.5 people')).toBeInTheDocument();
+  });
+});
+
+describe('orphan drafts', () => {
+  it('a draft of a product that no longer exists is removed once the products are known; the one of this card stays', async () => {
+    const GONE = labDraftKey('bakery', 'Gone');
+    window.localStorage.setItem(GONE, serializeDraft(startDraft(newDraft(CARD), Date.now() - 60_000)));
+    seedDraft(60_000);
+    await openCard();
+    await waitFor(() => { expect(window.localStorage.getItem(GONE)).toBeNull(); });
+    expect(window.localStorage.getItem(KEY)).not.toBeNull();
+  });
+});
+
 describe('a line over the rules\' limit', () => {
   it('keeps the production open and says why', async () => {
     const line = { kind: 'ingredient', ingredientId: 'flour', qty: 1, unit: 'g' };

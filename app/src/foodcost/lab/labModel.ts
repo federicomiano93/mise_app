@@ -189,7 +189,10 @@ export function typeInto(draft: LabDraft, field: FieldId, key: string, presets: 
 
 // One press of the stepper: from the shown number, by one, within 1 to 20. The only way `people` stops following the card.
 export function stepPeople(draft: LabDraft, cardPeople: number | null, delta: number): LabDraft {
-  return { ...draft, people: clampPeople(peopleShown(draft, cardPeople) + delta) };
+  const shown = peopleShown(draft, cardPeople);
+  // An unavailable button does nothing at all (it is only aria-disabled, so it still fires): 25 on the card is not lowered to 20 by «+».
+  if ((delta > 0 && shown >= MAX_PEOPLE) || (delta < 0 && shown <= 1)) return draft;
+  return { ...draft, people: clampPeople(shown + delta) };
 }
 
 export const isStale = (startedAt: number | null, now: number): boolean => elapsedMs(startedAt, now) > STALE_MS;
@@ -260,7 +263,9 @@ export function applyLab(latest: Product, draft: LabDraft, tables: CostTables, n
     const saved = components[index];
     // ⚠️ A LINE LEFT «AS PLANNED» (ticked without typing) KEEPS ITS SAVED NUMBER EXACTLY: the planned text is rounded for the screen
     // (four decimals, grams), and writing it back could move 0.1234567 kg to 0.123457 — a change nobody made.
-    const asPlanned = line.planned !== null && draft.weighed[line.key] === typedText(line.planned);
+    // Compared with the LATEST saved line's own planned text, not the one taken at «Inizia»: a weight changed meanwhile on another device
+    // is then written over by what was weighed here, never silently kept under a "same as planned" tick.
+    const asPlanned = saved !== undefined && draft.weighed[line.key] === typedText(plannedOf(saved));
     if (value !== null && saved && !asPlanned) components[index] = withGrams(saved, value);
   }
   const base: Product = { ...latest, components: [...components, ...added] };
@@ -268,7 +273,11 @@ export function applyLab(latest: Product, draft: LabDraft, tables: CostTables, n
   const total = productCooking(base, tables).rawTotalKg * 1000;
   const typedRaw = parseTyped(draft.raw);
   const rawApart = typedRaw !== null && typedRaw > 0 && !followsTotal(draft.raw ?? '', total);
-  const rawGrams = rawApart ? typedRaw : null;
+  // ⚠️ RAW UNTOUCHED AND NO LINE WEIGHT CHANGED KEEPS THE CARD'S RAW AND COOKED WEIGHTS EXACTLY: a product converted from grams typed in
+  // a kilo box holds a raw weight APART from its lines' total (÷ 1000); dropping it would scale the cooked weight to the real total,
+  // tonnes, and the rules would refuse the save.
+  const linesUnchanged = base.components.length === latest.components.length && changedLineCount(latest, base) === 0;
+  const rawGrams = rawApart ? typedRaw : (typedRaw === null && linesUnchanged ? latest.rawGrams : null);
   const cooked = parseTyped(draft.cooked);
   const pieces = parseTyped(draft.pieces);
   return {
