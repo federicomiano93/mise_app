@@ -1855,3 +1855,13 @@ behaviour, left as the current app has it.
 journal does: a number typed before a weekend is not put back into a live order); the alert on the lab tablet and a phone (axe
 and the widths are the `mise2-check` drive, not run here); a refusal noted while the draft cannot be read at all on the next
 opening (the alert is said, nothing can come back until the server answers).
+
+**Review fixes (13 Nov 2026).** (1) The 24 hours are checked again when the refused number is put back, not only when the note is
+read: a page that waited offline past the limit after the alert brings nothing back and the note is released (`draftSync.refused.spec.ts`,
+both the first answer and the retry). (2) The alert no longer takes the focus away from the one-time moves of the supplier screen:
+from the recipe door the ingredient's quantity box (and, from the list, the title) takes the focus only once the alert is settled
+(`OrdersSection.fromRecipe.spec.tsx`; not checked on a real tablet). (3) «Second refusal is final» holds while the person keeps what
+came back; clearing it and typing the same number again on purpose is a new act, and a refusal of it is noted and said. **One more
+intended behaviour:** if the person leaves Orders before the server answers the opening that showed the alert, the next opening
+puts the number back with only the status line and no second alert (pinned by «a reopening before the server answered does not say
+it again»).
