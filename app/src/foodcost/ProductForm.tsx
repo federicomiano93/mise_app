@@ -4,7 +4,7 @@ import { BookOpen, Check } from 'lucide-react';
 import { useBlocker, useLocation, useNavigate } from 'react-router';
 import type { BlockerFunction } from 'react-router';
 import {
-  PACK_UNITS, costProduct, currentProduct, productCooking, productSnapshot, productsUsingRecipe, snapshotWorthTaking, vatRatesFor, vatSelection,
+  PACK_UNITS, currentProduct, productCooking, productsUsingRecipe, vatRatesFor, vatSelection,
 } from '@mise/shared/foodcost-model';
 import { otherProductsUsing, readWeighing, weighingPatches } from '@mise/shared/foodcost-weighing';
 import type { LineUnit, PackUnit, Product, ProductDraft, SellingMode } from '@mise/shared/foodcost-model';
@@ -47,7 +47,7 @@ import { SuggestedPrice } from './SuggestedPrice';
 import { PerKgBlock } from './PerKgBlock';
 import { ProductSummary } from './ProductSummary';
 import {
-  NUMBER_KEY, RECIPE_LINE_OPENS_IN, clearNumber, costable, emptyWorking, firstBadWeight, followsTotal, isNumberField, isShown, newLineKey,
+  NUMBER_KEY, RECIPE_LINE_OPENS_IN, clearNumber, costable, emptyWorking, firstBadWeight, followsTotal, isNumberField, isShown, marginPointFor, newLineKey,
   packSizeShown, piecesShown, plainNumber, rawBoxText, recipeLineKg, recipeLossHint, recipeWeighing, settleRaw, toProduct, vatRateOf,
   workingFrom, workingFromDraft,
 } from './productEditorModel';
@@ -536,14 +536,8 @@ export function ProductForm({ id, product, draft, origin, titleRef, onSaved, onB
     }
 
     const clean = toProduct(next, productId, name);
-    // A margin is recorded only when the PRICE or the COMPOSITION changed, and only when there is a
-    // real answer to record. Renaming a product records nothing — a history of non-events cannot
-    // answer «when did this change?».
-    const result = costProduct(clean, snap.tables);
-    const worthRecording = snapshotWorthTaking(initial, clean, snap.tables);
-    const point = result.foodCostPct !== null && worthRecording
-      ? productSnapshot(clean, result, new Date().toISOString(), snap.tables) as unknown as Record<string, unknown>
-      : null;
+    // The margin point (productEditorModel.marginPointFor): only when the price or the composition changed.
+    const point = marginPointFor(initial, clean, snap.tables, new Date().toISOString());
 
     // Saved: nothing is unsaved any more, so leaving asks nothing.
     leaving.current = true;
