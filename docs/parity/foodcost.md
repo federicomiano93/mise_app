@@ -927,6 +927,16 @@ time and the people into the product's card. Mise 2 only, POST-SWITCH: NOT a por
     Result («calo della scheda») and the save question («Cottura: crudo X g, cotto Y g (calo della scheda, 12,00%)») say so. **Pieces** only when entered (> 0) and only
     for a product sold by pieces. **Minutes** always. **People**: the card's number UNTOUCHED until the stepper is pressed (1.5 stays 1.5, 25 stays 25, none stays none); a press moves it by one from the rounded value, within 1 to 20.
   - **A line ticked without typing writes back EXACTLY its stored quantity** (the planned text is rounded for the screen; the saved number is not touched), so «N righe cambiano» counts only real changes. **More than 100 lines** (the rules' limit) stops the save with a message and keeps the draft; the draft is cleared only once `saveProduct` has accepted the write locally. A raw weight the card held apart is replaced by the lab's.
+  - **Raw untouched and no line weight changed keeps the card's raw AND cooked weights exactly** (second review): a product converted from grams
+    typed in a kilo box holds a raw weight APART from its lines' total, and dropping it scaled the cooked weight to a total in the tonnes, past the
+    rules' ten-tonne limit. A scaled weight still out of the limits is refused with a message naming the cooked (or raw) weight.
+  - **A line ticked as planned** is compared with the LATEST saved line's own planned text, so a weight changed meanwhile on another device is
+    overwritten by what was weighed here, not silently kept. **The stepper's unavailable buttons do nothing** (25 on the card is not lowered to 20);
+    a fractional number of people is written in the venue's number format.
+  - **Orphan drafts:** only a draft that parses counts for the sign-out question; once the SERVER has answered about the products, Food cost removes
+    the drafts of this venue whose product no longer exists (`dropOrphanLabDrafts`).
+  - **Known limit:** a refusal by the server after the local save arrives later, as with the card's own Save (the store takes the product back and
+    says so); the lab has already cleared its draft by then.
   - **The save question margin note** («Lo Storico dei margini ne tiene traccia.») is shown only when a margin point will really be recorded.
   - **A resumed step that no longer exists** (e.g. «Pezzi ottenuti» after the way of selling changed) is mapped to the next one first; the selected box and the minutes freeze follow the mapped step.
   - **The step dots** are at least 44px wide; under 360px (they would need 332px) they give way to the step name and its number.
