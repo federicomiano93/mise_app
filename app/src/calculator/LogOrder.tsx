@@ -1,4 +1,5 @@
 import { formatGrams } from '@mise/shared/calculator-config';
+import { doughAmountLine } from '@mise/shared/log-model';
 import type { LogLine, LogVersion, OccasionalClient } from '@mise/shared/log-model';
 import { useT } from '../i18n/useT';
 import styles from './LogOrder.module.css';
@@ -17,9 +18,13 @@ const unit = (kind: unknown): string => (kind === 'kg' ? 'kg' : 'pz');
 // rebuilt from its lines, grouped by client with the zero ones left out, then the occasional clients, the trays and
 // the extra dough. ⚠️ EVERY FIELD IS READ DEFENSIVELY: a hand-made or damaged document draws what it can and never
 // throws (a list of fifty must not die for one).
-export function LogOrder({ version }: { version: LogVersion | null }) {
+//
+// `sheetFollows`: the sheet card is drawn right under it (the opened dough). That card already says «Total dough», so the
+// order block says neither the total nor «No products entered» over it (current app 4b235f3d); the list card, with no
+// sheet under it, says the total itself.
+export function LogOrder({ version, sheetFollows = false }: { version: LogVersion | null; sheetFollows?: boolean }) {
   if (!version) return <div />;
-  return version.legacy || !version.sheet ? <LegacyText text={version.text} /> : <Items version={version} />;
+  return version.legacy || !version.sheet ? <LegacyText text={version.text} /> : <Items version={version} sheetFollows={sheetFollows} />;
 }
 
 function LegacyText({ text }: { text: unknown }) {
@@ -35,7 +40,7 @@ function LegacyText({ text }: { text: unknown }) {
   );
 }
 
-function Items({ version }: { version: LogVersion }) {
+function Items({ version, sheetFollows }: { version: LogVersion; sheetFollows: boolean }) {
   const { t, locale } = useT();
   const groups = new Map<string, LogLine[]>();
   for (const line of list<LogLine>(version.items)) {
@@ -51,7 +56,13 @@ function Items({ version }: { version: LogVersion }) {
   const trays = sheet && num(sheet.trayWeight_g) > 0 && sheet.trays !== undefined ? num(sheet.trays) : null;
   const typed = trays === null || !sheet ? 0 : num(sheet.total_g) - trays * num(sheet.trayWeight_g);
   const extra = sheet ? num(sheet.extra_g) : 0;
-  const empty = groups.size === 0 && occasional.length === 0 && trays === null && extra <= 0;
+  // ⚠️ A «FROM A TOTAL» DOUGH SAYS ITS TOTAL (doughAmountLine explains why), never «No products entered». Where the sheet
+  // card follows it says the total itself, so there the order block says nothing about it — and not «No products
+  // entered» either.
+  const amount = doughAmountLine(version);
+  const amountShown = amount !== null && (amount.kind === 'typed' || !sheetFollows);
+  const empty = groups.size === 0 && occasional.length === 0 && trays === null && !amountShown && extra <= 0
+    && !(amount !== null && sheetFollows);
 
   return (
     <div className={styles.order}>
@@ -79,6 +90,13 @@ function Items({ version }: { version: LogVersion }) {
           {typed > 0 ? <p className={styles.item}>{t('calc.traysTypedPart', { g: formatGrams(typed, locale) })}</p> : null}
         </div>
       )}
+      {amount !== null && amountShown ? (
+        <p className={styles.item}>
+          {amount.kind === 'total'
+            ? <strong>{t('calc.historyTotal', { g: formatGrams(amount.g, locale) })}</strong>
+            : t('calc.traysTypedPart', { g: formatGrams(amount.g, locale) })}
+        </p>
+      ) : null}
       {extra > 0 ? <p className={styles.item}>{`${t('calc.logExtraDough')}${formatGrams(extra, locale)} g`}</p> : null}
       {empty ? <p className={styles.item}>{t('calc.noProductsEntered')}</p> : null}
     </div>

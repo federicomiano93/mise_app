@@ -1,5 +1,5 @@
 import {
-  DEFAULT_TRAY_WEIGHT, LOGICS, MAX_VISIBLE_RECIPES, isValidTrayWeight, normalizeTrayWeight, usesTrays,
+  DEFAULT_TRAY_WEIGHT, LOGICS, MAX_VISIBLE_RECIPES, isValidTrayWeight, moveIngredient, normalizeTrayWeight, usesTrays,
 } from '@mise/shared/calculator-config';
 import type { Logic, Recipe, RecipeIngredient } from '@mise/shared/calculator-config';
 import { isLinked } from '@mise/shared/calculator-recipe-source';
@@ -86,6 +86,36 @@ export function addIngredient(recipe: EditableRecipe): EditableRecipe {
   return { ...recipe, ingredients: [...recipe.ingredients, { key: '', label: '', grams: 0 }] };
 }
 
+// One ingredient moved to another place (the reorder mode). The SAME row objects move (shared moveIngredient), so every
+// row keeps its key and the leavening, found by that key, still points at the same ingredient: only the order changes.
+// A move that changes nothing (out of range, the same place) gives back the very recipe it was handed.
+export function moveIngredientIn(recipe: EditableRecipe, from: number, to: number): EditableRecipe {
+  const moved = moveIngredient(recipe.ingredients, from, to);
+  return moved.every((row, index) => row === recipe.ingredients[index]) ? recipe : { ...recipe, ingredients: moved };
+}
+
+// Where a row goes when React Aria says it was dropped «before» / «after» another (or «on» it, which is no place in a flat
+// list). `keys` are the rows' identities in their present order. null when nothing moves. The same arithmetic as the
+// recipe book's dropWorkingRow (recipes/editorModel.ts), over plain keys.
+export type DropPosition = 'before' | 'after' | 'on';
+export function dropMove(keys: readonly number[], moved: number, target: number, position: DropPosition): { from: number; to: number } | null {
+  if (position === 'on' || moved === target) return null;
+  const from = keys.indexOf(moved);
+  const at = keys.indexOf(target);
+  if (from < 0 || at < 0) return null;
+  // The index the row takes once it has left its old place: the rows after it shift one up.
+  const slot = position === 'before' ? at : at + 1;
+  const to = from < slot ? slot - 1 : slot;
+  return to === from ? null : { from, to };
+}
+
+// One place up (-1) or down (1) for the row with this key: the arrow keys on a grip. null at either end.
+export function stepMove(keys: readonly number[], key: number, delta: -1 | 1): { from: number; to: number } | null {
+  const from = keys.indexOf(key);
+  const to = from + delta;
+  return from < 0 || to < 0 || to >= keys.length ? null : { from, to };
+}
+
 // Removing the ingredient that is the leavening leaves the recipe with none.
 export function removeIngredient(recipe: EditableRecipe, index: number): EditableRecipe {
   const row = recipe.ingredients[index];
@@ -111,8 +141,14 @@ export function leaveningRows(recipe: EditableRecipe, linkedRows: readonly Recip
 }
 
 // The key a new leavening row gets: its name as a slug, then its position (the current app's).
-export const keyForRow = (label: string, index: number): string =>
-  `${(label || 'ing').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${index}`;
+//
+// ⚠️ A KEY NO OTHER ROW HAS (current app 262efcfe): rows can be reordered, so «name-<index>» may already be the key of an
+// older row, and two rows sharing it would hand the leavening to whichever comes first.
+export function keyForRow(label: string, index: number, taken: readonly string[] = []): string {
+  let key = `${(label || 'ing').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${index}`;
+  while (taken.includes(key)) key += '-x';
+  return key;
+}
 
 // «Which ingredient makes the dough rise»: '' is «nothing rises», a real answer.
 //
@@ -130,7 +166,7 @@ export function chooseLeavening(
     const index = picked.startsWith('#') ? Number(picked.slice(1)) : recipe.ingredients.findIndex(row => row.key === picked);
     const row = recipe.ingredients[index];
     if (!row) return recipe;
-    const key = row.key || keyForRow(row.label, index);
+    const key = row.key || keyForRow(row.label, index, recipe.ingredients.filter(other => other !== row).map(other => other.key));
     next = { ...patchIngredient(recipe, index, { key }), leaveningKey: key };
   }
   const pct = next.leaveningDefaultPct || 1;

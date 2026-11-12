@@ -683,6 +683,7 @@ export const it: Messages = {
   'calc.restoreThisVersionIt': 'Vuoi ripristinare questa versione? Viene aggiunta sopra come nuova versione attuale — lo storico resta.',
   'calc.traysOfWeight': { one: '{trays} teglia × {g} g', other: '{trays} teglie × {g} g' },
   'calc.traysTypedPart': '+ {g} g scritti a mano',
+  'calc.historyTotal': 'Impasto totale: {g} g',
   // New in Mise 2: see the English file.
   'calc.logVersionCount': 'v{n} · modificato',
   'calc.versionCurrent': 'attuale',
@@ -765,6 +766,10 @@ export const it: Messages = {
   'calc.clientsOrder': 'Clienti, nell’ordine dell’elenco',
 
   // The Recipes editor (words copied from the current app; the last eleven are new in Mise 2).
+  'calc.reorderIngredients': 'Riordina',
+  'calc.reorderDone': 'Fine',
+  'calc.reorderHint': 'Tieni premuto un ingrediente e trascinalo al suo posto. Con la tastiera usa le frecce su e giù.',
+  'calc.moveIngredient': 'Sposta «{name}»',
   'calc.addIngredient': '+ Aggiungi ingrediente',
   'calc.addRecipe': '+ Aggiungi ricetta',
   'calc.couldNotSaveCheck': 'Salvataggio non riuscito. Controlla la connessione e riprova.',

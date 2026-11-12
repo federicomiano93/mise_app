@@ -30,6 +30,8 @@ export interface RecipesEditorState {
   addIngredient(recipeId: string): number;
   patchIngredient(recipeId: string, index: number, patch: Partial<RecipeIngredient>): void;
   removeIngredient(recipeId: string, index: number): void;
+  // The reorder mode: the ingredient at `from` goes to `to`. Only the order changes, so the leavening and the dough don't.
+  moveIngredient(recipeId: string, from: number, to: number): void;
   chooseLeavening(recipeId: string, picked: string): void;
   // «Show in the calculator»: refused (and said) when four are already shown.
   setVisible(recipeId: string, visible: boolean): Promise<void>;

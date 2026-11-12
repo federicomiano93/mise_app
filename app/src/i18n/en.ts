@@ -755,6 +755,7 @@ export const en = {
   'calc.restoreThisVersionIt': 'Restore this version? It is added on top as the new current version — the history is kept.',
   'calc.traysOfWeight': { one: '{trays} tray × {g} g', other: '{trays} trays × {g} g' },
   'calc.traysTypedPart': '+ {g} g typed by hand',
+  'calc.historyTotal': 'Total dough: {g} g',
   // New in Mise 2: the current app builds these three by joining pieces («calc.edited» is « (edited)», «calc.current»
   // is « · current», «calc.occasional» is «  ·  occasional», «calc.calculatedBy» is «Calculated by: »); a message
   // with its placeholders is one sentence a translator can move around.
@@ -841,6 +842,10 @@ export const en = {
   'calc.clientsOrder': 'Clients, in the order they are listed',
 
   // The Recipes editor (words copied from the current app; the last eleven are new in Mise 2).
+  'calc.reorderIngredients': 'Reorder',
+  'calc.reorderDone': 'Done',
+  'calc.reorderHint': 'Hold an ingredient and drag it to its place. With a keyboard, use the up and down arrows.',
+  'calc.moveIngredient': 'Move «{name}»',
   'calc.addIngredient': '+ Add ingredient',
   'calc.addRecipe': '+ Add recipe',
   'calc.couldNotSaveCheck': 'Could not save. Check your connection and try again.',

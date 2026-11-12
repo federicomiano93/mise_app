@@ -21,7 +21,7 @@ import { RecipeScreen } from './RecipeScreen';
 import { RecipesEditorContext } from './recipesEditorContext';
 import type { RecipesEditorState } from './recipesEditorContext';
 import {
-  addIngredient, chooseLeavening, firstBadTray, firstInvalid, isBlank, isEmptyRecipe, isFull, linkTo, newRecipe, patchIngredient,
+  addIngredient, chooseLeavening, firstBadTray, firstInvalid, isBlank, isEmptyRecipe, isFull, linkTo, moveIngredientIn, newRecipe, patchIngredient,
   patchRecipe, removeIngredient, sameRecipes, settleRecipes, toEditable, unlink, visibleCount,
 } from './recipesModel';
 import type { EditableRecipe } from './recipesModel';
@@ -362,6 +362,9 @@ export function RecipesEditor({ target }: { target: SettingsTarget }) {
     },
     removeIngredient: (recipeId, index) => {
       edit(known => known.map(recipe => (recipe.id === recipeId ? removeIngredient(recipe, index) : recipe)));
+    },
+    moveIngredient: (recipeId, from, to) => {
+      edit(known => known.map(recipe => (recipe.id === recipeId ? moveIngredientIn(recipe, from, to) : recipe)));
     },
     chooseLeavening: (recipeId, picked) => {
       edit(known => known.map(recipe => (recipe.id === recipeId ? chooseLeavening(recipe, picked, linkedRows(recipe)) : recipe)));

@@ -20,6 +20,9 @@ type Props = {
   onStep: (key: number, delta: -1 | 1) => void;
   // The grip that is owed the focus. An object, so asking twice for the same row asks twice.
   focusGrip: { key: number } | null;
+  // What a grip is called, from the row's name. The recipe book's «Move «{name}»» unless the caller says otherwise (the
+  // Calculator's recipes say it with their own key, which is the same sentence).
+  moveLabel?: (name: string) => string;
 };
 
 // The rows of a recipe in REORDER MODE: each is a grip, the name and the amount — nothing to type in, so nothing can
@@ -32,7 +35,7 @@ type Props = {
 // never hears them (a first version of this file was exactly that, and moved nothing). Every other key is left alone, so
 // Enter and Space reach the drag, and a drag that is under way owns the arrows (its listener is on the
 // document, before this one).
-export function ReorderRows({ rows, labelledBy, hintId, onDrop, onStep, focusGrip }: Props) {
+export function ReorderRows({ rows, labelledBy, hintId, onDrop, onStep, focusGrip, moveLabel }: Props) {
   const { t, lang } = useT();
   const nameOf = (item: EditRow): string => {
     const label = String(item.row.label ?? '').trim();
@@ -183,7 +186,7 @@ export function ReorderRows({ rows, labelledBy, hintId, onDrop, onStep, focusGri
                   slot="drag"
                   ref={gripRef(item.key)}
                   className={styles.grip}
-                  aria-label={t('cat.moveRow', { name })}
+                  aria-label={moveLabel ? moveLabel(name) : t('cat.moveRow', { name })}
                 >
                   <GripVertical aria-hidden="true" />
                 </Button>
