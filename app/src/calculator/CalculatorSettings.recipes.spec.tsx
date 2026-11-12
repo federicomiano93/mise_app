@@ -193,6 +193,7 @@ describe('at most four shown', () => {
 
     await user.click(main().getByRole('button', { name: '+ Add recipe' }));
     await user.click(within(await question('There are already 4 recipes in the calculator: the new one will be created hidden.')).getByRole('button', { name: 'Create hidden' }));
+    await user.click(await main().findByRole('button', { name: '+ New recipe, written here' }, LOAD));
     await waitFor(() => { expect(pathOf(view)).toMatch(/^\/calculator\/settings\/recipes\/r-[0-9a-z]+$/); });
     await user.type(await main().findByRole('textbox', { name: 'Recipe name' }, LOAD), 'Fresh');
     await user.click(main().getByRole('button', { name: 'Back' }));
@@ -203,6 +204,9 @@ describe('at most four shown', () => {
   it('«Add recipe» with room asks nothing and creates it shown', async () => {
     const { user, ...view } = await open(LIST);
     await user.click(main().getByRole('button', { name: '+ Add recipe' }));
+    // Nothing is asked: the choice of recipe opens, and «New recipe, written here» makes the new one, shown.
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+    await user.click(await main().findByRole('button', { name: '+ New recipe, written here' }, LOAD));
     await waitFor(() => { expect(pathOf(view)).toMatch(/^\/calculator\/settings\/recipes\/r-[0-9a-z]+$/); });
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
     await user.type(await main().findByRole('textbox', { name: 'Recipe name' }, LOAD), 'Fresh');
@@ -242,6 +246,7 @@ describe('deleting a recipe', () => {
   it('an unnamed recipe is asked about with the plain sentence', async () => {
     const { user } = await open(LIST, { config: configOf({ recipes: [], clients: [] }) });
     await user.click(main().getByRole('button', { name: '+ Add recipe' }));
+    await user.click(await main().findByRole('button', { name: '+ New recipe, written here' }, LOAD));
     await user.click(await main().findByRole('button', { name: '+ Add ingredient' }, LOAD));
     await user.click(main().getByRole('button', { name: 'Back' }));
     await user.click(within(head('Unnamed recipe').closest('div') as HTMLElement).getByRole('button', { name: 'Delete recipe' }));

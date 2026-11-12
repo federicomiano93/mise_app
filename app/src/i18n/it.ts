@@ -729,6 +729,14 @@ export const it: Messages = {
   'calc.notSavedOutOfDate': 'Non salvato: l’app su questo dispositivo è da aggiornare. Ricaricala e riprova.',
   'calc.notSavedCheckConnection': 'Non salvato: controlla la connessione e riprova.',
   'calc.addARecipe': 'Aggiungi una ricetta',
+  'calc.addFrom.intro': 'Scegli una ricetta del Ricettario: gli ingredienti arrivano da lì. Oppure scrivine una nuova solo per il calcolatore.',
+  'calc.addFrom.blank': '+ Ricetta nuova, scritta qui',
+  'calc.addFrom.catalogue': 'Dal Ricettario',
+  'calc.addFrom.used': 'Già nel calcolatore',
+  'calc.addFrom.loading': 'Sto caricando il Ricettario…',
+  'calc.addFrom.none': 'Il Ricettario non ha ancora ricette.',
+  'calc.addFrom.failed': 'Non riesco a caricare il Ricettario: controlla la connessione.',
+  'calc.addFrom.linking': 'Sto collegando la ricetta…',
   'calc.chooseWhichToShow': 'Scegli quali mostrare',
 
   // The Clients editor.

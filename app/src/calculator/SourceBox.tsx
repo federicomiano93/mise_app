@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { isLinked } from '@mise/shared/calculator-recipe-source';
 import { PartBoundary } from '../errors/PartBoundary';
 import { useT } from '../i18n/useT';
@@ -20,10 +20,14 @@ export function SourceBox({ recipe }: { recipe: EditableRecipe }) {
   const linked = isLinked(recipe);
   const resolved = linked ? editor.resolved(recipe) : null;
 
+  // The pick in flight. Closing the picker while it links makes a late answer stale: it changes nothing (current app e0b92090).
+  const pick = useRef(0);
   async function choose(source: StoredDoc): Promise<void> {
-    const ok = await editor.link(recipe.id, source);
+    const mine = ++pick.current;
+    const result = await editor.link(recipe.id, source, () => pick.current === mine);
+    if (result.status === 'stale') return;
     setPicking(false);
-    if (!ok) await editor.say(t('calc.sourceLinkFailed'));
+    if (result.status === 'failed') await editor.say(t(result.message));
   }
 
   return (
@@ -56,7 +60,7 @@ export function SourceBox({ recipe }: { recipe: EditableRecipe }) {
       ) : null}
       {picking ? (
         <PartBoundary>
-          <CataloguePicker onChoose={choose} onClose={() => { setPicking(false); }} />
+          <CataloguePicker onChoose={choose} onClose={() => { pick.current += 1; setPicking(false); }} />
         </PartBoundary>
       ) : null}
     </div>

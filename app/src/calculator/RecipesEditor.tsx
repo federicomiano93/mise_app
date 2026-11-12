@@ -16,16 +16,23 @@ import type { SettingsTarget } from './calculatorPath';
 import type { StoredDoc } from './calculatorSource';
 import { useCalculator, useCalculatorStore } from './CalculatorContext';
 import { recipeOpener, useHandBack } from './handBack';
+import { AddRecipeScreen } from './AddRecipeScreen';
 import { RecipeList } from './RecipeList';
 import { RecipeScreen } from './RecipeScreen';
 import { RecipesEditorContext } from './recipesEditorContext';
-import type { RecipesEditorState } from './recipesEditorContext';
+import type { AddResult, LinkResult, RecipesEditorState } from './recipesEditorContext';
 import {
   addIngredient, chooseLeavening, firstBadTray, firstInvalid, isBlank, isEmptyRecipe, isFull, linkTo, moveIngredientIn, newRecipe, patchIngredient,
   patchRecipe, removeIngredient, sameRecipes, settleRecipes, toEditable, unlink, visibleCount,
 } from './recipesModel';
 import type { EditableRecipe } from './recipesModel';
 import { useSaveConfig } from './useSaveConfig';
+
+// How long linking a Catalogue recipe may wait for the database before it says it could not (current app 56864739): offline,
+// the transaction waits for ever, and a person staring at «Linking…» cannot tell it from a slow line.
+const LINK_TIMEOUT_MS = 10_000;
+
+type StampFailure = 'calc.sourceLinkFailed' | 'calc.sourceMissing';
 
 // The Recipes editor (a port of js/recipes.js): ONE working copy of the whole recipe list, held HERE, above the list
 // and the recipe screen, so going from the list to a recipe and back keeps every edit. Nothing is saved until Save;
@@ -217,16 +224,11 @@ export function RecipesEditor({ target }: { target: SettingsTarget }) {
     leaveToHub();
   }, [discardQuestion, leaveToHub]);
 
-  // ── «Add a recipe» from the work view: /recipes/new makes the recipe and shows it at its own address ──
-  const madeFor = useRef<string | null>(null);
-  useEffect(() => {
-    if (target.kind !== 'new' || madeFor.current === location.key) return;
-    madeFor.current = location.key;
-    const fresh = newRecipe(copy.current.length, !isFull(copy.current));
-    edit(known => [...known, fresh]);
-    setFreshId(fresh.id);
-    void navigate(recipeSettingsPath(fresh.id), { replace: true, state });
-  }, [target.kind, location.key, edit, navigate, state]);
+  // ── «Add a recipe»: /recipes/new is the CHOICE (the Catalogue's recipes first, or a new one written here); the recipe it
+  // makes replaces the choice in the history, so Back from the recipe goes where the choice was opened from ──
+  const showRecipe = useCallback((recipeId: string) => {
+    void navigate(recipeSettingsPath(recipeId), { replace: true, state });
+  }, [navigate, state]);
 
   function open(recipeId: string) {
     if (target.kind === 'one' && target.id === recipeId) return;
@@ -237,6 +239,13 @@ export function RecipesEditor({ target }: { target: SettingsTarget }) {
       });
     });
   }
+
+  // The recipe a new row of the list stands for: last in the order, hidden when four are already shown.
+  const newOne = useCallback((): EditableRecipe => newRecipe(copy.current.length, !isFull(copy.current)), []);
+  const adopt = useCallback((fresh: EditableRecipe) => {
+    edit(known => [...known, fresh]);
+    setFreshId(fresh.id);
+  }, [edit]);
 
   async function save() {
     if (busy.current || askingLeave.current) return;
@@ -316,24 +325,53 @@ export function RecipesEditor({ target }: { target: SettingsTarget }) {
     return catalogueRead.current;
   }, [store]);
 
+  // The Catalogue recipe's rows, each with a stable id, as the SERVER holds the recipe NOW.
+  // ⚠️ NEVER A COPY READ EARLIER (current app 56864739): the list the picker shows may be older than the recipe, and writing
+  // that copy back would undo a correction made meanwhile in the recipe book. The store's stamp is a transaction on the
+  // recipe as it is, writing only when a row lacks its id (calculatorSource `stampRowIds`, rowsToStamp).
+  const stamp = useCallback(async (catalogueId: string): Promise<{ rows: unknown[] } | { failed: StampFailure }> => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => { reject(Object.assign(new Error('Linking timed out'), { code: 'timeout' })); }, LINK_TIMEOUT_MS);
+    });
+    try {
+      return { rows: await Promise.race([store.stampRowIds(catalogueId), timeout]) };
+    } catch (error) {
+      console.error('Could not give the Catalogue rows stable ids:', error);
+      return { failed: (error as { code?: unknown } | null)?.code === 'not-found' ? 'calc.sourceMissing' : 'calc.sourceLinkFailed' };
+    } finally {
+      clearTimeout(timer);
+    }
+  }, [store]);
+
   // ⚠️ LINKING STAMPS A STABLE id ON EVERY CATALOGUE ROW FIRST, and that order is the whole reason this is not a
   // one-line assignment. The recipes in the Catalogue may carry no row ids (they predate the guided-mixing work that
   // mints them on save), and the Calculator finds the leavening BY that id: without this step it would fall back to
   // matching by NAME, which is the defect being designed out.
   // ⚠️ THE ROWS USED AFTER THE LINK ARE THE ONES THE STORE HANDS BACK, not the picker's copy: the stamp reads the
   // recipe as the server holds it now, and the picker's list may be older (the Catalogue was edited meanwhile).
-  const link = useCallback(async (recipeId: string, source: StoredDoc): Promise<boolean> => {
-    try {
-      const stamped = await store.stampRowIds(source.id);
-      if (!mounted.current) return false;
-      setChosen(known => ({ ...known, [source.id]: { ...source, ingredients: stamped } }));
-      edit(known => known.map(recipe => (recipe.id === recipeId ? linkTo(recipe, source.id) : recipe)));
-      return true;
-    } catch (error) {
-      console.error('Could not give the Catalogue rows stable ids:', error);
-      return false;
-    }
-  }, [store, edit]);
+  const link = useCallback(async (recipeId: string, source: StoredDoc, isCurrent: () => boolean): Promise<LinkResult> => {
+    const stamped = await stamp(source.id);
+    // ⚠️ A PICK LEFT BEHIND CHANGES NOTHING (current app e0b92090): the person went Back while the line was slow.
+    if (!mounted.current || !isCurrent()) return { status: 'stale' };
+    if ('failed' in stamped) return { status: 'failed', message: stamped.failed };
+    setChosen(known => ({ ...known, [source.id]: { ...source, ingredients: stamped.rows } }));
+    edit(known => known.map(recipe => (recipe.id === recipeId ? linkTo(recipe, source.id) : recipe)));
+    return { status: 'linked' };
+  }, [stamp, edit]);
+
+  const addFromCatalogue = useCallback(async (source: StoredDoc, isCurrent: () => boolean): Promise<AddResult> => {
+    const stamped = await stamp(source.id);
+    if (!mounted.current || !isCurrent()) return { status: 'stale' };
+    if ('failed' in stamped) return { status: 'failed', message: stamped.failed };
+    // ⚠️ «FROM A TOTAL», AS THE CATALOGUE'S OWN «Import into Calculator» MAKES IT: a Catalogue recipe is written as amounts
+    // for one dough, and «from orders» would leave the tab empty in a venue with no clients in the Calculator. The logic is
+    // changed in the list row like any other. Named after the recipe: a blank name would make Save refuse it.
+    const fresh = linkTo({ ...newOne(), name: String(source.name ?? '').trim(), logic: 'total' }, source.id);
+    setChosen(known => ({ ...known, [source.id]: { ...source, ingredients: stamped.rows } }));
+    adopt(fresh);
+    return { status: 'added', id: fresh.id };
+  }, [stamp, newOne, adopt]);
 
   const catalogueById = useMemo(() => ({ ...chosen, ...linked }), [chosen, linked]);
   const resolved = (recipe: EditableRecipe): ResolvedRecipe => resolveRecipe(recipe, catalogueById);
@@ -378,20 +416,23 @@ export function RecipesEditor({ target }: { target: SettingsTarget }) {
       }
       edit(known => patchRecipe(known, recipeId, { visible }));
     },
-    addRecipe: async () => {
+    askToAdd: async () => {
       // At the limit the new recipe can only be created hidden: say so before making it.
-      const full = isFull(copy.current);
-      if (full && !(await confirm({
+      if (!isFull(copy.current)) return true;
+      const ok = await confirm({
         title: t('calc.recipe.addLimitConfirm', { n: MAX_VISIBLE_RECIPES }),
         okLabel: t('calc.recipe.createHidden'),
         cancelLabel: t('common.cancel'),
-      }))) return null;
-      if (!mounted.current) return null;
-      const fresh = newRecipe(copy.current.length, !full);
-      edit(known => [...known, fresh]);
-      setFreshId(fresh.id);
+      });
+      return ok && mounted.current;
+    },
+    addBlankRecipe: () => {
+      const fresh = newOne();
+      adopt(fresh);
       return fresh.id;
     },
+    addFromCatalogue,
+    showRecipe,
     deleteRecipe: async recipeId => {
       const recipe = find(recipeId);
       if (!recipe) return false;
@@ -435,6 +476,7 @@ export function RecipesEditor({ target }: { target: SettingsTarget }) {
   return (
     <RecipesEditorContext.Provider value={value}>
       {target.kind === 'one' ? <RecipeScreen key={target.id} recipeId={target.id} /> : null}
+      {target.kind === 'new' ? <AddRecipeScreen /> : null}
       {target.kind === 'list' ? <RecipeList /> : null}
       {confirmDialog}
       {alertDialog}

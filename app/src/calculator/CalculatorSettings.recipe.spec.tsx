@@ -30,6 +30,14 @@ async function open(path: string, { config = configOf(), lang = 'en' as 'en' | '
 
 type View = Awaited<ReturnType<typeof open>>;
 
+// Since item 37 /recipes/new is the CHOICE of recipe (CalculatorSettings.addRecipe.spec.tsx); «New recipe, written here»
+// makes the empty recipe the tests of this block are about.
+async function openBlank(options: Parameters<typeof open>[1] = {}) {
+  const view = await open(`${LIST}/new`, options);
+  await view.user.click(await main().findByRole('button', { name: '+ New recipe, written here' }, LOAD));
+  return view;
+}
+
 async function saveAndConfirm(user: View['user']) {
   await user.click(saveButton());
   await user.click(within(await question('Save these changes?')).getByRole('button', { name: 'Save' }));
@@ -189,8 +197,8 @@ describe('the leavening box', () => {
 });
 
 describe('a new recipe', () => {
-  it('/recipes/new makes an empty one and shows it at its own address, with placeholders', async () => {
-    const view = await open(`${LIST}/new`);
+  it('«New recipe, written here» makes an empty one and shows it at its own address, with placeholders', async () => {
+    const view = await openBlank();
     await waitFor(() => { expect(pathOf(view)).toMatch(/^\/calculator\/settings\/recipes\/r-[0-9a-z]+$/); });
     expect(nameBox()).toHaveValue('');
     expect(nameBox()).toHaveAttribute('placeholder', 'Recipe name');
@@ -199,7 +207,7 @@ describe('a new recipe', () => {
   });
 
   it('left untouched it asks to be discarded; Cancel keeps it, Discard drops it', async () => {
-    const { user, ...view } = await open(`${LIST}/new`);
+    const { user, ...view } = await openBlank();
     await waitFor(() => { expect(pathOf(view)).toMatch(/r-[0-9a-z]+$/); });
     const here = pathOf(view);
     await user.click(main().getByRole('button', { name: 'Back' }));
@@ -217,6 +225,7 @@ describe('a new recipe', () => {
   it('the browser\'s Back asks the same', async () => {
     const { user, ...view } = await open(LIST);
     await user.click(main().getByRole('button', { name: '+ Add recipe' }));
+    await user.click(await main().findByRole('button', { name: '+ New recipe, written here' }, LOAD));
     await main().findByRole('textbox', { name: 'Recipe name' }, LOAD);
     act(() => { void view.router.navigate(-1); });
     await user.click(within(await question(DISCARD)).getByRole('button', { name: 'Discard' }));
@@ -229,6 +238,7 @@ describe('a new recipe', () => {
     const view = renderCalculator('/calculator', { source });
     const add = async () => {
       await view.user.click(await main().findByRole('button', { name: 'Add a recipe' }, LOAD));
+      await view.user.click(await main().findByRole('button', { name: '+ New recipe, written here' }, LOAD));
       await main().findByRole('textbox', { name: 'Recipe name' }, LOAD);
     };
     const LEAVE = 'You have unsaved changes. Leave without saving? Your changes will be lost.';
@@ -250,7 +260,7 @@ describe('a new recipe', () => {
   });
 
   it('with a name and an ingredient it is kept: Save writes it with the current app\'s defaults and returns to the list', async () => {
-    const { user, source, ...view } = await open(`${LIST}/new`);
+    const { user, source, ...view } = await openBlank();
     await user.type(await main().findByRole('textbox', { name: 'Recipe name' }, LOAD), 'Pizza');
     await user.click(main().getByRole('button', { name: '+ Add ingredient' }));
     await user.type(ingredientBox(1), 'Flour');
@@ -302,7 +312,7 @@ describe('required fields', () => {
   });
 
   it('a recipe with no ingredient at all is refused too', async () => {
-    const { user } = await open(`${LIST}/new`);
+    const { user } = await openBlank();
     await user.type(await main().findByRole('textbox', { name: 'Recipe name' }, LOAD), 'Pizza');
     await user.click(saveButton());
     await question('Please give every recipe a name and at least one named ingredient before saving.');
@@ -315,6 +325,7 @@ describe('required fields', () => {
     await user.clear(await main().findByRole('textbox', { name: 'Recipe name' }, LOAD));
     await user.click(main().getByRole('button', { name: 'Back' }));
     await user.click(main().getByRole('button', { name: '+ Add recipe' }));
+    await user.click(await main().findByRole('button', { name: '+ New recipe, written here' }, LOAD));
     await main().findByRole('textbox', { name: 'Recipe name' }, LOAD);
     await user.click(saveButton());
     await user.click(within(await screen.findByRole('alertdialog', undefined, LOAD)).getByRole('button', { name: 'OK' }));

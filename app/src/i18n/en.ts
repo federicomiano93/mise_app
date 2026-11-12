@@ -805,6 +805,14 @@ export const en = {
   'calc.notSavedOutOfDate': 'Not saved: this app is out of date. Reload it and try again.',
   'calc.notSavedCheckConnection': 'Not saved: check the connection and try again.',
   'calc.addARecipe': 'Add a recipe',
+  'calc.addFrom.intro': 'Pick a recipe from the Recipe catalogue: its ingredients come from there. Or write a new one just for the calculator.',
+  'calc.addFrom.blank': '+ New recipe, written here',
+  'calc.addFrom.catalogue': 'From the Recipe catalogue',
+  'calc.addFrom.used': 'Already in the calculator',
+  'calc.addFrom.loading': 'Loading the Recipe catalogue…',
+  'calc.addFrom.none': 'The Recipe catalogue has no recipes yet.',
+  'calc.addFrom.failed': 'The Recipe catalogue could not be loaded: check the connection.',
+  'calc.addFrom.linking': 'Linking the recipe…',
   'calc.chooseWhichToShow': 'Choose which to show',
 
   // The Clients editor.

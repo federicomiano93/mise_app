@@ -171,7 +171,8 @@ describe('the list', () => {
         })],
         createdAtMs: NOW - 30_000,
       }),
-      logOf('none', { dough: 'None', versions: [versionOf({ items: [], sheet: sheetOf('None') })], createdAtMs: NOW - 90_000 }),
+      // No product and no total: nothing at all to say (a dough with a total says it — CalculatorSection.logAmount.spec.tsx).
+      logOf('none', { dough: 'None', versions: [versionOf({ items: [], sheet: sheetOf('None', { total_g: 0 }) })], createdAtMs: NOW - 90_000 }),
     ]);
     const [full, none] = await main().findAllByRole('listitem', undefined, LOAD);
     expect(within(full!).getByText('Walk-in · occasional')).toBeInTheDocument();

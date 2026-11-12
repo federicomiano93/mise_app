@@ -81,7 +81,9 @@ describe('the empty states', () => {
     expect(await screen.findByText('No recipes yet', undefined, LOAD)).toBeInTheDocument();
     expect(main().getByRole('button', { name: 'Settings' })).toBeInTheDocument();
     await view.user.click(main().getByRole('button', { name: 'Add a recipe' }));
-    // A fresh recipe is made and opened at its own address.
+    // It opens the CHOICE (the recipe book's recipes first); a new recipe written here is made and opened at its own address.
+    await waitFor(() => { expect(pathOf(view)).toBe('/calculator/settings/recipes/new'); });
+    await view.user.click(await main().findByRole('button', { name: '+ New recipe, written here' }, LOAD));
     await waitFor(() => { expect(pathOf(view)).toMatch(/^\/calculator\/settings\/recipes\/r-[0-9a-z]+$/); });
   });
 

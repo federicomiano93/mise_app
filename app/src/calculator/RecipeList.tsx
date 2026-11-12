@@ -10,7 +10,7 @@ import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { FROM_PARENT } from './calculatorNav';
-import { SETTINGS_PATH, recipeSettingsPath } from './calculatorPath';
+import { SETTINGS_PATH, newRecipePath, recipeSettingsPath } from './calculatorPath';
 import { DecimalBox } from './DecimalBox';
 import { ADD_RECIPE_ROW_OPENER, recipeOpener, useHandBack } from './handBack';
 import { useRecipesEditor } from './recipesEditorContext';
@@ -58,11 +58,11 @@ export function RecipeList() {
   }, [handBack]);
 
   const navigate = useNavigate();
+  // «Add recipe» opens the CHOICE (the recipe book's recipes first, or a new one written here), after the limit question.
   async function addRecipe() {
-    const id = await editor.addRecipe();
-    if (id === null) return;
+    if (!(await editor.askToAdd())) return;
     handBack.expect(ADD_RECIPE_ROW_OPENER);
-    void navigate(recipeSettingsPath(id), { state: FROM_PARENT });
+    void navigate(newRecipePath, { state: FROM_PARENT });
   }
 
   return (
