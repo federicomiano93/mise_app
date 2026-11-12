@@ -1099,7 +1099,8 @@ Items 36, 37, 39 and 40 of `docs/mise2-port-owed.md` (the current app's 29 Oct �
   button disabled, a status line «Linking the recipe…»); a pick left behind (Back, the screen closed) adds nothing and says
   nothing — the editor asks `isCurrent()` once the stamp has answered. Difference from the current app: the buttons stay in
   the page and ignore taps (focus stays where it was) instead of being redrawn.
-- The picker of the SOURCE box follows the same rules (timeout, `calc.sourceMissing`, a pick left behind changes nothing).
+- The picker of the SOURCE box follows the same rules (timeout, `calc.sourceMissing`; a pick left behind — the picker closed OR
+  the screen left — changes nothing), and, as in the current app, a recipe with no name yet takes the book's name when linked.
 - A book the rules refuse (`permission-denied`) offers only the new recipe, with no intro; any other failure says
   `calc.addFrom.failed`.
 - Not in the current app, so not here: the Save-while-linking case (`e0b92090`) — the choice has no Save.
@@ -1120,7 +1121,8 @@ Items 36, 37, 39 and 40 of `docs/mise2-port-owed.md` (the current app's 29 Oct �
   never a constant made at module load.
 - Labelled grams and leavening % fields (`6c70cb38`): ALREADY so. The grams box is named `calc.ingredientGramsN` («Ingredient 3,
   weight in grams» — a number, not the typed name: two rows with the same name stay apart), the leavening % box by its
-  `<label htmlFor>` «Start at» (`LeaveningBox.tsx`). Left as they are: renaming them would break the drivers that find them by name.
+  `<label htmlFor>` «Start at» (`LeaveningBox.tsx`). DIFFERENCE, on purpose: the current app's longer name «Start at: leavening percentage»
+  (`calc.leaveningStartPct`) is not used — the visible label already names the box, and twelve specs and the drivers find it as «Start at».
 - Back buttons named (`7d5683b8`): ALREADY so by construction — `FormBar` takes `backLabel` as a required prop (`ui/FormBar.tsx`),
   and every Calculator screen draws its Back through `SettingsPage` / `SettingsEditor` / `FormBar` with `t('ui.back')`.
 

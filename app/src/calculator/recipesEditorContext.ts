@@ -33,6 +33,9 @@ export interface RecipesEditorState {
   // Changes each time a refused save has been read out, so the screen on show moves the focus to the first marked
   // field.
   readonly checkTick: number;
+  // Changes the moment a refused Save marks the empty fields (before the sentence is said), so a screen showing something
+  // without those fields (the reorder mode) can give way to them.
+  readonly errorTick: number;
   // The recipe added in this visit and not yet left: leaving it empty asks to drop it.
   readonly freshId: string | null;
   // The list row open in place (at most one); kept when going to a recipe and back.

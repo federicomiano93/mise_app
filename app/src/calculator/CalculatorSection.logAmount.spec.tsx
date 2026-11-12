@@ -79,3 +79,17 @@ describe('the opened dough', () => {
     expect(await main().findAllByText('+ 400 g typed by hand', undefined, LOAD)).toHaveLength(2);
   });
 });
+
+describe('a damaged document', () => {
+  it('still draws what it can: a null line or a list that is not a list never takes the card away', async () => {
+    const damaged = logOf('d', {
+      dough: 'Damaged',
+      versions: [versionOf({ items: [null, { name: 'Loaf', clientName: 'Cafe', qty: 2, weightG: 100, kind: 'number' }], occasional: [null, { name: 'Walk-in', products: [null] }], sheet: sheetOf('Damaged', { total_g: 500 }) })],
+    });
+    const oddLists = logOf('e', { dough: 'Odd lists', versions: [versionOf({ items: {}, occasional: 'x', sheet: sheetOf('Odd lists', { total_g: 700 }) })] });
+    await open('/calculator/log', [damaged, oddLists]);
+    expect(await main().findByRole('button', { name: 'Damaged' }, LOAD)).toBeInTheDocument();
+    expect(await main().findByRole('button', { name: 'Odd lists' }, LOAD)).toBeInTheDocument();
+    expect(await main().findByText('Total dough: 700 g', undefined, LOAD)).toBeInTheDocument();
+  });
+});

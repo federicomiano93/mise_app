@@ -98,6 +98,11 @@
   display: none;
 }
 
+.status {
+  margin: 0;
+  color: var(--ink-2);
+}
+
 /* «New recipe, written here» comes last, where the list screen keeps its own «+ Add recipe». */
 .blank {
   align-self: flex-start;

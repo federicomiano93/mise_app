@@ -77,6 +77,7 @@ export function RecipesEditor({ target }: { target: SettingsTarget }) {
   const [freshId, setFreshId] = useState<string | null>(null);
   const [showErrors, setShowErrors] = useState(false);
   const [checkTick, setCheckTick] = useState(0);
+  const [errorTick, setErrorTick] = useState(0);
   const [saving, setSaving] = useState(false);
   // The Catalogue recipes the person chose from, as stamped: a recipe linked in this visit is not watched by the
   // store until it is saved, so its rows come from here until then.
@@ -257,6 +258,7 @@ export function RecipesEditor({ target }: { target: SettingsTarget }) {
       const invalid = firstInvalid(copy.current);
       if (invalid !== null) {
         setShowErrors(true);
+        setErrorTick(tick => tick + 1);
         open(invalid);
         await alert({ message: t('calc.pleaseGiveEveryRecipe'), okLabel: t('common.ok') });
         if (mounted.current) setCheckTick(tick => tick + 1);
@@ -356,7 +358,10 @@ export function RecipesEditor({ target }: { target: SettingsTarget }) {
     if (!mounted.current || !isCurrent()) return { status: 'stale' };
     if ('failed' in stamped) return { status: 'failed', message: stamped.failed };
     setChosen(known => ({ ...known, [source.id]: { ...source, ingredients: stamped.rows } }));
-    edit(known => known.map(recipe => (recipe.id === recipeId ? linkTo(recipe, source.id) : recipe)));
+    // A recipe with no name yet takes the recipe book's (current app a221c160): Save would refuse it for want of one.
+    edit(known => known.map(recipe => (recipe.id === recipeId
+      ? linkTo(isBlank(recipe.name) ? { ...recipe, name: String(source.name ?? '').trim() } : recipe, source.id)
+      : recipe)));
     return { status: 'linked' };
   }, [stamp, edit]);
 
@@ -386,6 +391,7 @@ export function RecipesEditor({ target }: { target: SettingsTarget }) {
     saving,
     showErrors,
     checkTick,
+    errorTick,
     freshId,
     openId,
     setOpenId,

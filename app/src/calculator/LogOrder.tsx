@@ -59,7 +59,13 @@ function Items({ version, sheetFollows }: { version: LogVersion; sheetFollows: b
   // ⚠️ A «FROM A TOTAL» DOUGH SAYS ITS TOTAL (doughAmountLine explains why), never «No products entered». Where the sheet
   // card follows it says the total itself, so there the order block says nothing about it — and not «No products
   // entered» either.
-  const amount = doughAmountLine(version);
+  // Cleaned first: the original reads `qty` of every line, and a damaged document must still draw what it can.
+  const amount = doughAmountLine({
+    sheet: version.sheet,
+    items: list<LogLine>(version.items).filter(Boolean),
+    occasional: list<OccasionalClient>(version.occasional).filter(Boolean)
+      .map(occ => ({ ...occ, products: list<NonNullable<OccasionalClient['products']>[number]>(occ.products).filter(Boolean) })),
+  });
   const amountShown = amount !== null && (amount.kind === 'typed' || !sheetFollows);
   const empty = groups.size === 0 && occasional.length === 0 && trays === null && !amountShown && extra <= 0
     && !(amount !== null && sheetFollows);

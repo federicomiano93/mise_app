@@ -37,11 +37,7 @@ export function AddRecipeScreen() {
   const [busy, setBusy] = useState(false);
   const headingId = useId();
   const pick = useRef(0);
-  const mounted = useRef(true);
-  useEffect(() => {
-    mounted.current = true;
-    return () => { mounted.current = false; pick.current += 1; };
-  }, []);
+  useEffect(() => () => { pick.current += 1; }, []);
 
   // The editor hands back the SAME read to every caller, so a development double-mount reads the Catalogue once.
   const { loadCatalogue } = editor;
@@ -79,8 +75,10 @@ export function AddRecipeScreen() {
     await editor.say(t(result.message));
   }
 
+  const made = useRef(false);
   function addBlank() {
-    if (busy) return;
+    if (busy || made.current) return;
+    made.current = true;
     editor.showRecipe(editor.addBlankRecipe());
   }
 
@@ -92,7 +90,8 @@ export function AddRecipeScreen() {
     >
       {reading.status === 'denied' ? null : <p className={styles.intro}>{t('calc.addFrom.intro')}</p>}
 
-      <section className={styles.group} aria-labelledby={headingId} aria-busy={reading.status === 'loading' || busy}>
+      {reading.status === 'denied' ? null : (
+      <section className={styles.group} aria-labelledby={headingId}>
         <h3 id={headingId} className={styles.heading}>{t('calc.addFrom.catalogue')}</h3>
         {reading.status === 'loading' ? <p role="status" className={styles.note}>{t('calc.addFrom.loading')}</p> : null}
         <div role="alert">
@@ -123,9 +122,10 @@ export function AddRecipeScreen() {
             })}
           </ul>
         ) : null}
-        {/* Said once the choice is waiting, and moved to by the status role: a screen reader hears it. */}
-        <div role="status" className={styles.note}>{busy ? t('calc.addFrom.linking') : ''}</div>
       </section>
+      )}
+      {/* Present before it has anything to say, so a screen reader hears it when a pick starts linking. */}
+      <div role="status" className={styles.status}>{busy ? t('calc.addFrom.linking') : ''}</div>
 
       <Button className={styles.blank} isDisabled={busy} onPress={addBlank}>
         {t('calc.addFrom.blank')}

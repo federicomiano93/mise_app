@@ -312,3 +312,37 @@ describe('how the choice is reached and left', () => {
     await waitFor(() => { expect(pathOf(view)).toBe(LIST); });
   });
 });
+
+describe('review fixes', () => {
+  it('a book the rules refuse draws no heading over nothing', async () => {
+    const source = fakeCalculatorSource({ config: configOf(), recipes: BOOK });
+    source.refuse.catalogue = true;
+    await open(NEW, { source });
+    await waitFor(() => { expect(main().queryByText('Loading the Recipe catalogue…')).not.toBeInTheDocument(); }, LOAD);
+    expect(main().queryByText('From the Recipe catalogue')).not.toBeInTheDocument();
+  });
+
+  it('a nameless recipe linked from its source box takes the book\'s name (Save would refuse it)', async () => {
+    const { user } = await open(NEW);
+    await user.click(await main().findByRole('button', { name: BLANK }, LOAD));
+    await main().findByRole('heading', { level: 2, name: 'Edit recipe' }, LOAD);
+    await user.selectOptions(main().getByRole('combobox', { name: 'Where the ingredients come from' }), 'catalogue');
+    const dialog = await screen.findByRole('dialog', undefined, LOAD);
+    await user.click(await within(dialog).findByRole('button', { name: 'Pane' }, LOAD));
+    await waitFor(() => { expect(main().getByRole('textbox', { name: 'Recipe name' })).toHaveValue('Pane'); });
+  });
+
+  it('⚠️ a source-box pick left behind by leaving the screen changes nothing and says nothing', async () => {
+    const { user, source, ...view } = await open(`${LIST}/focaccia`);
+    await user.selectOptions(main().getByRole('combobox', { name: 'Where the ingredients come from' }), 'catalogue');
+    const dialog = await screen.findByRole('dialog', undefined, LOAD);
+    await within(dialog).findByRole('button', { name: 'Pane' }, LOAD);
+    source.holdStamps();
+    source.refuse.stamp = true;
+    await user.click(within(dialog).getByRole('button', { name: 'Pane' }));
+    act(() => { void view.router.navigate(LIST); });
+    source.settleStamps();
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  });
+});

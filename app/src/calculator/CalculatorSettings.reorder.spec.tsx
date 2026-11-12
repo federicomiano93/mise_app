@@ -245,3 +245,31 @@ describe('Save refusing a blank name', () => {
     expect(main().queryAllByRole('button', { name: /^Move «/ })).toHaveLength(0);
   });
 });
+
+describe('after a row was added', () => {
+  it('⚠️ «Done» keeps the focus on the button, not in the box of the row added last', async () => {
+    const { user } = await open(`${LIST}/focaccia`);
+    await user.click(main().getByRole('button', { name: '+ Add ingredient' }));
+    await user.type(main().getByRole('combobox', { name: 'Ingredient 5' }), 'Honey');
+    await enter(user);
+    await user.click(reorderButton('Done'));
+    expect(reorderButton()).toHaveFocus();
+  });
+
+  it('⚠️ a SECOND refused Save, made inside the mode, leaves the mode again', async () => {
+    const { user } = await open(`${LIST}/focaccia`);
+    await user.click(main().getByRole('button', { name: '+ Add ingredient' }));
+    const refuse = async () => {
+      await user.click(saveButton());
+      const alert = await screen.findByRole('alertdialog', undefined, LOAD);
+      await user.click(within(alert).getByRole('button', { name: 'OK' }));
+    };
+    await refuse();
+    await waitFor(() => { expect(main().getByRole('combobox', { name: 'Ingredient 5' })).toHaveAttribute('aria-invalid', 'true'); });
+    await user.click(reorderButton());
+    await waitFor(() => { expect(grips()).toHaveLength(5); });
+    await refuse();
+    await waitFor(() => { expect(main().getByRole('combobox', { name: 'Ingredient 5' })).toHaveAttribute('aria-invalid', 'true'); });
+    expect(grips()).toHaveLength(0);
+  });
+});

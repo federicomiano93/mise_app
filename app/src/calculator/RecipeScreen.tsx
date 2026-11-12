@@ -165,8 +165,8 @@ function Ingredients({ recipe }: { recipe: EditableRecipe }) {
   // Save found a name missing: the mode ends so the blank box is there to be marked and reached (the reorder rows have no
   // name box to highlight).
   useEffect(() => {
-    if (editor.showErrors) setReordering(false);
-  }, [editor.showErrors]);
+    if (editor.errorTick > 0) setReordering(false);
+  }, [editor.errorTick]);
 
   // ⚠️ A linked recipe is read-only, so the mode must not outlive the change of source (current app 262efcfe): unlinked again
   // later, the recipe would otherwise come back already in the mode.
@@ -175,6 +175,9 @@ function Ingredients({ recipe }: { recipe: EditableRecipe }) {
   }, [canReorder]);
 
   const toggleReorder = () => {
+    // The row added last no longer owes the focus: the boxes are drawn again when the mode ends, and an `autoFocus` box would
+    // take it from the button (and open the keyboard).
+    setAdded(null);
     if (reorderOn) {
       setReordering(false);
       setFocusGrip(null);
