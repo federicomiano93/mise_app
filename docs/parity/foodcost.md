@@ -884,6 +884,12 @@ time and the people into the product's card. Mise 2 only, POST-SWITCH: NOT a por
 - **Ticks:** a 60px button, «Fatto: <name>», `aria-pressed`. Ticking without typing puts the planned weight; ticking moves the selection to the
   next unticked line. A line added in the lab shows «nuovo» as planned and cannot be ticked until something is weighed. Under a line's name:
   its supplier (`supplierOf` → `supplierLabel()`), or «Ricetta» for a recipe line.
+- **Giving a production up** (review, 12 Nov 2026): a small «Annulla produzione» in the card's banner, next to «Riprendi», asks first
+  («Annullare la produzione in corso?» — «I pesi scritti finora si perdono. La scheda non cambia.» — «No» / «Annulla produzione», danger) and
+  clears the draft. A draft older than 24 hours does not let «Tempo» follow the timer: the card's minutes stand (still editable), «Dal cronometro»
+  types the timer's reading in on request.
+- **Lab mode holds the app and the screen** like the Recipe book's mix (`markBusy()` + the screen wake lock, owner `foodcost-lab`), released on
+  leaving and on unmount.
 - **Raw:** preset with the total of the lines; a number typed apart offers «Usa il totale (X g)», else «È il totale degli ingredienti». The
   total counts EVERY line: weighed lines at their weight, lines never weighed at their saved amount (what the save would leave in the card).
 - **The clock** (`labClock.ts`): `now − startedAt`, repainted every second and on `visibilitychange`/`focus`, so screen-off, leaving the app
@@ -894,7 +900,9 @@ time and the people into the product's card. Mise 2 only, POST-SWITCH: NOT a por
   `foodcost-lab-draft:<venue>:<product>`, written at every change once «Inizia» is pressed (never before) and by «Esci». Parsed field by field,
   numbers clamped, an unsound draft is none (and removed). ⚠️ **Not under `KEEP_PREFIXES`, on purpose** (the brief said to use it): a key under
   it survives a sign-out and a venue switch, so a venue's half-made batch would outlive the person and the venue it belongs to; every other
-  per-venue key of Mise 2 (Recipe book's mix, Food cost's copies) is wiped by them. The cost: signing out mid-production drops the draft. The
+  per-venue key of Mise 2 (Recipe book's mix, Food cost's copies) is wiped by them. The cost: signing out or switching venue mid-production drops the draft, so BOTH ASK FIRST when a
+  draft exists for the open venue (`session/pendingLabWork.ts`, a step in `useLeaveFlow`/`LeaveDialog`: «C'è una produzione in laboratorio non salvata:
+  uscendo si perde.» — «Resta» / «Esci comunque»; after the unsent-changes question when both apply). The
   key carries the venue and the product. Adding a keep prefix would also mean editing `js/local-data.js` (bug-fix-only current app) and the
   shared list; say if he wants it kept across a sign-out.
 - **The numbers are the card's** (`labModel.labNumbers`): `applyLab` lays the day's weights on a COPY of the saved product, and `productCooking`,
@@ -913,8 +921,15 @@ time and the people into the product's card. Mise 2 only, POST-SWITCH: NOT a por
     saved line has no id: a line deleted elsewhere meanwhile gets no weight and is NOT brought back (the other change wins); a line added
     elsewhere keeps its saved amount; a line never weighed keeps its saved amount; a line added in the lab with nothing weighed is dropped.
   - **Raw** is stored only when the typed raw differs from the lines' total by more than 0.05 g (else empty, as the card does). **Cooked**
-    empty = not weighed = null (an old cooked weight against a new raw one would be a false loss). **Pieces** only when entered (> 0) and only
-    for a product sold by pieces. **Minutes / people** always (people 1 to 20). A raw weight the card held apart is replaced by the lab's.
+    empty KEEPS THE CARD'S OVEN LOSS (review, 12 Nov 2026; first version wrote «not weighed», which erased the loss of every converted
+    product and recorded a fake margin improvement): the card's cooked weight is scaled to the new raw total (cooked x new raw / old raw, four
+    decimals), the card's own number when the raw weight did not move; a product with no cooked weight stays without one. The cooked step, the
+    Result («calo della scheda») and the save question («Cottura: crudo X g, cotto Y g (calo della scheda, 12,00%)») say so. **Pieces** only when entered (> 0) and only
+    for a product sold by pieces. **Minutes** always. **People**: the card's number UNTOUCHED until the stepper is pressed (1.5 stays 1.5, 25 stays 25, none stays none); a press moves it by one from the rounded value, within 1 to 20.
+  - **A line ticked without typing writes back EXACTLY its stored quantity** (the planned text is rounded for the screen; the saved number is not touched), so «N righe cambiano» counts only real changes. **More than 100 lines** (the rules' limit) stops the save with a message and keeps the draft; the draft is cleared only once `saveProduct` has accepted the write locally. A raw weight the card held apart is replaced by the lab's.
+  - **The save question margin note** («Lo Storico dei margini ne tiene traccia.») is shown only when a margin point will really be recorded.
+  - **A resumed step that no longer exists** (e.g. «Pezzi ottenuti» after the way of selling changed) is mapped to the next one first; the selected box and the minutes freeze follow the mapped step.
+  - **The step dots** are at least 44px wide; under 360px (they would need 332px) they give way to the step name and its number.
   - **Margin history:** the same `marginPointFor` the card's Save now calls (extracted into `productEditorModel.ts`, one decision): a point
     when the price or the composition changes, and the two weights are part of the composition; nothing for a change of the work only.
   - **Recipe weighing:** a product made of ONE recipe does NOT write the recipe's loss from the lab (the card does, only when a person typed

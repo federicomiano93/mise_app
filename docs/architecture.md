@@ -197,7 +197,7 @@ Aria does not support Preact. The numbers are below.
   which reads every figure from the SAME shared functions the card reads, so the lab has no sum of its own), `labClock.ts` (the clock is
   `now − startedAt`, never a count of ticks), `keypadRules.ts` (six digits, one comma, Backspace), `labDraft.ts` (the draft in `localStorage` under
   `foodcost-lab-draft:<venue>:<product>`, parsed field by field, clamped, a corrupt one removed — NOT under `KEEP_PREFIXES`, so a sign-out or a
-  venue switch wipes it, like the Recipe book's mix in progress) and `labSave.ts` (the plan of «Save to the card»: same limits and the same
+  venue switch wipes it, like the Recipe book's mix in progress; both ask first when one exists, `session/pendingLabWork.ts`) and `labSave.ts` (the plan of «Save to the card»: same limits and the same
   margin point as the card's Save, `marginPointFor` of `productEditorModel.ts`, written through `store.saveProduct`). `docs/parity/foodcost.md`,
   «Lab mode as built».
   ⚠️ PRODUCT MODEL 3 (step 2 of the Food cost plan, 11 Nov 2026): a product's recipe line is RAW kilos and the product owns its oven
