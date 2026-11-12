@@ -905,6 +905,14 @@ time and the people into the product's card. Mise 2 only, POST-SWITCH: NOT a por
   clock is frozen and muted (accessible name «Cronometro, in pausa mentre è in forno»), the banner appends «· in forno», and the big clock of
   «In forno» is the oven visit («In forno da»). «Dal cronometro» minutes are the labour clock only (whole minutes, at least 1); the 24-hour rule
   for old drafts still counts the wall time since «Inizia».
+- **Phones, below 720px** (emulator drive of 12 Nov 2026: 360 and 296 failed, 1024 was clean; the tablet rules are untouched, the phone rules are
+  a block at the end of `LabMode.module.css`): the step's content is ONE scroll area above the keypad, docked under it with 52px keys, so nothing
+  can sit under the keypad. Steps with a keypad scroll their `fields`; «Inizia», «In forno» and «Risultato» scroll their own `ScrollRegion`. Every
+  scroll area is a labelled region and a tab stop (axe `scrollable-region-focusable`). The selected box is scrolled into view (`nearest`).
+  An ingredient is two rows: the name across the full width, wrapping by words (supplier under it, «…» only when really long), then the 48px
+  tick, the planned amount and the weighed box. «Tempo» and its note share a line and «Persone» sits on one line beside its stepper right under the
+  box, so the stepper is always above the fold. The bottom buttons share the width; under 360px «Indietro» is a 56px arrow with its name kept.
+  `labNarrowCss.spec.ts` pins these and the tablet's old values.
 - **The draft** (`labDraft.ts`): step, weights, ticks, added lines, raw, cooked, pieces, minutes, people, start instant, in `localStorage` under
   `foodcost-lab-draft:<venue>:<product>`, written at every change once «Inizia» is pressed (never before) and by «Esci». Parsed field by field,
   numbers clamped, an unsound draft is none (and removed). ⚠️ **Not under `KEEP_PREFIXES`, on purpose** (the brief said to use it): a key under

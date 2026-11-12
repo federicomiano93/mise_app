@@ -81,13 +81,22 @@ function FieldButton({ id, selected, label, value, placeholder, unit, size, onSe
 }
 
 // The fields on one side, the keypad on the other (under them on a phone).
-function WithKeypad({ children, onKey, allowComma }: { children: ReactNode; onKey: (key: string) => void; allowComma: boolean }) {
+// ⚠️ ON A PHONE THE FIELDS ARE THE ONE SCROLL AREA of the step (it takes the height left between the top bar and the keypad), the keypad is
+// docked under it and never covers anything: whatever does not fit is reached by scrolling. The area is a labelled region and a tab stop,
+// because a scroll container a keyboard cannot reach is an accessibility fault (axe: scrollable-region-focusable).
+function WithKeypad({ children, label, onKey, allowComma }: { children: ReactNode; label: string; onKey: (key: string) => void; allowComma: boolean }) {
   return (
     <div className={styles.work}>
-      <div className={styles.fields}>{children}</div>
+      <div className={styles.fields} role="region" aria-label={label} tabIndex={0}>{children}</div>
       <div className={styles.padCell}><Keypad onKey={onKey} allowComma={allowComma} /></div>
     </div>
   );
+}
+
+// A step with no keypad (Inizia, In forno, Risultato): its content scrolls inside a labelled, focusable region on a phone, and is laid out as
+// it always was on the tablet.
+function ScrollRegion({ label, children }: { label: string; children: ReactNode }) {
+  return <div className={styles.scroll} role="region" aria-label={label} tabIndex={0}>{children}</div>;
 }
 
 // ── Inizia ──────────────────────────────────────────────────────────────────────────────────────
@@ -100,6 +109,7 @@ function StartStep({ base, numbers, onStart }: Props) {
   ];
   if (soldByPieces(base) && base.piecesPerBatch !== null) parts.push(t('lab.n.pieces', { n: base.piecesPerBatch }));
   return (
+    <ScrollRegion label={t('lab.enter')}>
     <div className={styles.start}>
       <p className={styles.kicker}>{t('lab.enter')}</p>
       <h2 className={styles.startName}>{base.name}</h2>
@@ -110,6 +120,7 @@ function StartStep({ base, numbers, onStart }: Props) {
       </Button>
       <p className={styles.startHint}>{t('lab.startHint')}</p>
     </div>
+    </ScrollRegion>
   );
 }
 
@@ -136,7 +147,7 @@ function IngredientsStep(props: Props) {
   };
 
   return (
-    <WithKeypad onKey={onKey} allowComma={allowComma}>
+    <WithKeypad label={t('lab.step.ingredients')} onKey={onKey} allowComma={allowComma}>
       <div className={styles.head}>
         <Title id={titleId} titleRef={titleRef}>{t('lab.step.ingredients')}</Title>
         <p className={styles.counter}>{t('lab.counter', { done, total: draft.lines.length })}</p>
@@ -201,7 +212,7 @@ function RawStep({ draft, numbers, field, titleRef, titleId, onSelect, onKey, on
   const { t, locale } = useT();
   const apart = numbers.product.rawGrams !== null;
   return (
-    <WithKeypad onKey={onKey} allowComma={allowComma}>
+    <WithKeypad label={t('lab.step.raw')} onKey={onKey} allowComma={allowComma}>
       <Title id={titleId} titleRef={titleRef}>{t('lab.step.raw')}</Title>
       <FieldButton
         id="raw"
@@ -226,6 +237,7 @@ function RawStep({ draft, numbers, field, titleRef, titleId, onSelect, onKey, on
 function OvenStep({ ovenMs, titleRef, titleId }: Props) {
   const { t } = useT();
   return (
+    <ScrollRegion label={t('lab.step.oven')}>
     <div className={styles.oven}>
       <Flame aria-hidden="true" className={styles.ovenIcon} />
       <Title id={titleId} titleRef={titleRef}>{t('lab.step.oven')}</Title>
@@ -233,6 +245,7 @@ function OvenStep({ ovenMs, titleRef, titleId }: Props) {
       <p className={styles.ovenClock}>{formatClock(ovenMs)}</p>
       <p className={styles.note}>{t('lab.ovenHint')}</p>
     </div>
+    </ScrollRegion>
   );
 }
 
@@ -243,7 +256,7 @@ function CookedStep({ draft, numbers, field, titleRef, titleId, onSelect, onKey,
   const money = useMoney();
   const typed = numbers.cookedGrams !== null && !numbers.cookedKept;
   return (
-    <WithKeypad onKey={onKey} allowComma={allowComma}>
+    <WithKeypad label={t('lab.step.cooked')} onKey={onKey} allowComma={allowComma}>
       <Title id={titleId} titleRef={titleRef}>{t('lab.step.cooked')}</Title>
       <FieldButton id="cooked" selected={field === 'cooked'} label={t('lab.step.cooked')} value={draft.cooked} unit="g" size="xl" onSelect={onSelect} />
       {/* A live region that is always on the page, filled once there is something to say. */}
@@ -262,7 +275,7 @@ function CookedStep({ draft, numbers, field, titleRef, titleId, onSelect, onKey,
 function PiecesStep({ draft, base, field, presets, titleRef, titleId, onSelect, onKey, allowComma }: Props) {
   const { t, locale } = useT();
   return (
-    <WithKeypad onKey={onKey} allowComma={allowComma}>
+    <WithKeypad label={t('lab.step.pieces')} onKey={onKey} allowComma={allowComma}>
       <Title id={titleId} titleRef={titleRef}>{t('lab.step.pieces')}</Title>
       <FieldButton id="pieces" selected={field === 'pieces'} label={t('lab.step.pieces')} value={draft.pieces ?? presets.pieces} size="xl" onSelect={onSelect} />
       {base.piecesPerBatch === null ? null : <p className={styles.note}>{t('lab.cardPieces', { n: groupedNumber(base.piecesPerBatch, locale) })}</p>}
@@ -280,24 +293,29 @@ function TimeStep({ draft, base, numbers, elapsedMs, field, titleRef, titleId, o
   const people = peopleShown(draft, base.labourPeople);
   const minutes = draft.minutes ?? String(numbers.minutes);
   return (
-    <WithKeypad onKey={onKey} allowComma={allowComma}>
+    <WithKeypad label={t('lab.step.time')} onKey={onKey} allowComma={allowComma}>
       <Title id={titleId} titleRef={titleRef}>{t('lab.step.time')}</Title>
       <div className={styles.timeGroup}>
-        <p className={styles.fieldLabel} aria-hidden="true">{t('lab.minutesLabel')}</p>
+        {/* «Tempo» with its note on one line on a phone (so «Persone» is never pushed below the fold); on the tablet the note sits under the box. */}
+        <div className={styles.timeHead}>
+          <p className={styles.fieldLabel} aria-hidden="true">{t('lab.minutesLabel')}</p>
+          <div className={styles.timeNote}>
+            {typed || stale ? (
+              <Button variant="bare" className={styles.inlineButton} onPress={onFromTimer}>
+                <Timer aria-hidden="true" />
+                <span>{t('lab.fromTimer')}</span>
+              </Button>
+            ) : (
+              <p className={styles.note}>
+                <Timer aria-hidden="true" className={styles.noteIcon} />
+                <span>{t('lab.fromTimer')}</span>
+              </p>
+            )}
+          </div>
+        </div>
         <FieldButton id="minutes" selected={field === 'minutes'} label={t('lab.minutesLabel')} value={minutes} unit={t('lab.minutesUnit')} size="md" onSelect={onSelect} />
-        {typed || stale ? (
-          <Button variant="bare" className={styles.inlineButton} onPress={onFromTimer}>
-            <Timer aria-hidden="true" />
-            <span>{t('lab.fromTimer')}</span>
-          </Button>
-        ) : (
-          <p className={styles.note}>
-            <Timer aria-hidden="true" className={styles.noteIcon} />
-            <span>{t('lab.fromTimer')}</span>
-          </p>
-        )}
       </div>
-      <div className={styles.timeGroup} role="group" aria-labelledby={`${titleId}-people`}>
+      <div className={`${styles.timeGroup} ${styles.peopleRow}`} role="group" aria-labelledby={`${titleId}-people`}>
         <p className={styles.fieldLabel} id={`${titleId}-people`}>{t('lab.people')}</p>
         <div className={styles.stepper}>
           <button
@@ -351,6 +369,7 @@ function ResultStep({ numbers, base, titleRef, titleId }: Props) {
   summary.push(t('lab.n.minutes', { n: numbers.minutes }), peopleText(t, numbers.people, locale));
 
   return (
+    <ScrollRegion label={t('lab.step.result')}>
     <div className={styles.result}>
       <Title id={titleId} titleRef={titleRef}>{t('lab.step.result')}</Title>
       <ul className={styles.tiles}>
@@ -374,6 +393,7 @@ function ResultStep({ numbers, base, titleRef, titleId }: Props) {
       </ul>
       <p className={styles.resultLine}>{summary.join(' · ')}</p>
     </div>
+    </ScrollRegion>
   );
 }
 

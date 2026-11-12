@@ -846,3 +846,161 @@
   color: var(--ink-2);
   font-size: var(--fs-sm);
 }
+
+/* ── Structure added for phones (review of PR #537) ────────────────────────────────────────────────────────────────────────
+   The rules above are the tablet's and are left exactly as they were. These base rules give the new elements their tablet look; the block
+   at the very end overrides them below 720px. */
+
+/* A step with no keypad: on the tablet it is laid out as before (the body scrolls, if ever); on a phone it is the step's own scroll area. */
+.scroll {
+  display: flex;
+  flex: 1 0 auto;
+  flex-direction: column;
+  min-width: 0;
+}
+
+/* «Tempo»: on the tablet its label, box and note keep their old order (the note under the box) through `display: contents` and `order`. */
+.timeHead {
+  display: contents;
+}
+
+.timeNote {
+  order: 2;
+}
+
+.timeGroup .field {
+  order: 1;
+}
+
+.backIcon {
+  display: none;
+}
+
+/* ── Phones: below 720px the fields scroll above a docked keypad ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 719px) {
+  .body {
+    padding: var(--s2) var(--s3);
+  }
+
+  .work {
+    gap: var(--s2);
+  }
+
+  .scroll {
+    flex: 1 1 0;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
+  /* «Tempo» and its note on one line, then the box, then «Persone» on one line: the stepper is never pushed out of sight. */
+  .timeHead {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--s2);
+  }
+
+  .timeNote,
+  .timeGroup .field {
+    order: 0;
+  }
+
+  .peopleRow {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .field[data-size="line"] {
+    min-height: 52px;
+  }
+
+  .field[data-size="md"] {
+    min-height: 72px;
+    font-size: var(--fs-2xl);
+  }
+
+  .field[data-size="xl"] {
+    min-height: 96px;
+  }
+
+  .stepperButton {
+    width: 56px;
+    height: 56px;
+  }
+
+  .stepperValue {
+    min-width: 56px;
+    font-size: var(--fs-2xl);
+  }
+
+  /* An ingredient is two rows: the name across the whole width (wrapping by words), then the tick, the planned amount and the weighed box. */
+  .line {
+    grid-template-columns: 48px minmax(0, 1fr) minmax(96px, 128px);
+    grid-template-areas:
+      "name name name"
+      "tick planned field";
+    min-height: 0;
+  }
+
+  .lineTitle {
+    overflow-wrap: break-word;
+  }
+
+  .tick {
+    width: 48px;
+    height: 48px;
+  }
+
+  .tick svg {
+    width: 28px;
+    height: 28px;
+  }
+
+  /* Both buttons share the width and fit at 296. */
+  .bottom {
+    gap: var(--s2);
+    padding: var(--s2) var(--s3);
+  }
+
+  .primaryBig,
+  .secondaryBig {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 56px;
+    padding: 0 var(--s3);
+    font-size: var(--fs-lg);
+    line-height: 1.15;
+    text-align: center;
+  }
+}
+
+/* Under 360px «Indietro» is the arrow alone, 56px square; its name stays for assistive technology. */
+@media (max-width: 359px) {
+  .bottom .secondaryBig {
+    position: relative;
+    flex: 0 0 56px;
+    width: 56px;
+    padding: 0;
+  }
+
+  .backIcon {
+    display: block;
+    width: 28px;
+    height: 28px;
+  }
+
+  .backText {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    border: 0;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+}

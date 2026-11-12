@@ -1,5 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Check, Timer, X } from 'lucide-react';
+import { Check, ChevronLeft, Timer, X } from 'lucide-react';
 import { Dialog as AriaDialog, Modal, ModalOverlay } from 'react-aria-components';
 import type { Product } from '@mise/shared/foodcost-model';
 import { useT } from '../../i18n/useT';
@@ -80,6 +80,7 @@ export function LabMode({ productId, onClose }: Props) {
   const money = useMoney();
   const [confirm, confirmDialog] = useConfirm();
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const key = labDraftKey(locationId ?? '', productId);
 
@@ -152,6 +153,13 @@ export function LabMode({ productId, onClose }: Props) {
     }
     titleRef.current?.focus();
   }, [step, phase]);
+
+  // The box the keypad types into is brought into view inside the step's scroll area when it is selected (a phone shows only part of a long
+  // list above the keypad). `nearest` moves nothing when it is already in sight. Not every browser engine has it (jsdom does not).
+  useEffect(() => {
+    const selected = bodyRef.current?.querySelector('[aria-current="true"]');
+    if (selected instanceof HTMLElement && typeof selected.scrollIntoView === 'function') selected.scrollIntoView({ block: 'nearest' });
+  }, [field, step]);
 
   const presets: Presets = {
     raw: numbers === null ? '' : typedText(Math.round(numbers.totalGrams * 10) / 10),
@@ -386,7 +394,7 @@ export function LabMode({ productId, onClose }: Props) {
                 </div>
               </div>
 
-              <div className={styles.body}>
+              <div className={styles.body} ref={bodyRef}>
                 <StepBody
                   step={step}
                   draft={draft}
@@ -414,7 +422,9 @@ export function LabMode({ productId, onClose }: Props) {
                 <div className={styles.bottom}>
                   {index >= 2 ? (
                     <Button variant="bare" className={styles.secondaryBig} onPress={() => { go(steps[index - 1] ?? 'ingredients'); }}>
-                      {t('ui.back')}
+                      <ChevronLeft aria-hidden="true" className={styles.backIcon} />
+                      {/* Under 360px «Indietro» is the arrow alone — its name stays for assistive technology (the visually-hidden recipe). */}
+                      <span className={styles.backText}>{t('ui.back')}</span>
                     </Button>
                   ) : <span />}
                   {last ? (
