@@ -108,7 +108,7 @@
 .dotItem {
   display: flex;
   flex: 1 1 0;
-  min-width: 0;
+  min-width: 44px;
 }
 
 .dotItem[data-state="current"] {
@@ -151,6 +151,25 @@
 .dot[data-state="future"] span {
   background: var(--sunken);
   box-shadow: inset 0 0 0 2px var(--ink-3);
+}
+
+/* The name of the step, for the phones too narrow for seven 44px buttons (7 x 44 + gaps = 332px; the bar has 336 at 360 and 272 at 296). */
+.stepName {
+  display: none;
+  margin: 0;
+  font-size: var(--fs-lg);
+  font-weight: 650;
+  text-align: center;
+}
+
+@media (max-width: 359px) {
+  .dotsNav {
+    display: none;
+  }
+
+  .stepName {
+    display: block;
+  }
 }
 
 @media (min-width: 720px) {

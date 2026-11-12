@@ -4,8 +4,8 @@ import type { CostTables, Product } from '@mise/shared/foodcost-model';
 import { costable, workingFrom } from '../productEditorModel';
 import { summaryExtras } from '../summaryExtras';
 import {
-  addLine, applyLab, changedLineCount, clampPeople, goToStep, labNumbers, lineField, minutesOf, newDraft, nextUnticked, rawShown, setPeople,
-  soldByPieces, startDraft, stepsFor, toggleTick, typeInto,
+  addLine, applyLab, changedLineCount, clampPeople, goToStep, labNumbers, lineField, minutesOf, newDraft, nextUnticked, peopleShown, rawShown,
+  resolveStep, soldByPieces, startDraft, stepPeople, stepsFor, toggleTick, typeInto,
 } from './labModel';
 import type { LabDraft, Presets } from './labModel';
 
@@ -86,16 +86,18 @@ describe('a new draft', () => {
     expect(draft.lines.map(line => line.planned)).toEqual([600, 500, 10, 2]);
     expect(draft.startedAt).toBeNull();
     expect(draft.step).toBe('start');
-    expect(draft.people).toBe(2);
+    expect(peopleShown(draft, 2)).toBe(2);
   });
 
   it('starts from one person when the card says none, and clamps a silly number of people', () => {
-    expect(newDraft(product({ labourPeople: null })).people).toBe(1);
+    expect(peopleShown(newDraft(product({ labourPeople: null })), null)).toBe(1);
     expect(clampPeople(0)).toBe(1);
     expect(clampPeople(99)).toBe(20);
     expect(clampPeople(Number.NaN)).toBe(1);
     expect(clampPeople(2.6)).toBe(3);
-    expect(setPeople(newDraft(product()), 25).people).toBe(20);
+    // The stepper: from the card's number, by one, within 1 to 20.
+    expect(stepPeople(newDraft(product({ labourPeople: 20 })), 20, 1).people).toBe(20);
+    expect(stepPeople(newDraft(product()), 2, -1).people).toBe(1);
   });
 
   it('«Inizia» stores the start instant and goes to «Ingredienti»', () => {
@@ -220,9 +222,62 @@ describe('the product with today\'s weights', () => {
     expect(rawShown(started, 0)).toBe('');
   });
 
-  it('stores the cooked weight, and nothing when it was not weighed (an old cooked weight against a new raw one would be a false loss)', () => {
+  it('stores the cooked weight typed', () => {
     expect(applyLab(base, typed(started, 'cooked', '1080'), TABLES, NOW).cookedGrams).toBe(1080);
-    expect(applyLab(product({ cookedGrams: 900 }), started, TABLES, NOW).cookedGrams).toBeNull();
+  });
+
+  it('with no cooked weight typed, KEEPS the oven loss of the card: its cooked weight scaled to the new raw total', () => {
+    // 1230 g raw down to 1107 g cooked on the card: a 10% loss.
+    const withLoss = product({ cookedGrams: 1107 });
+    const draft = startDraft(newDraft(withLoss), NOW);
+    // The raw weight did not move: the number of the card, untouched.
+    expect(applyLab(withLoss, draft, TABLES, NOW).cookedGrams).toBe(1107);
+    // Salt 10 g to 130 g: the raw total moves to 1350 g, the cooked weight follows, the loss stays 10%.
+    const heavier = typed(draft, lineField('l2'), '<<130');
+    const out = applyLab(withLoss, heavier, TABLES, NOW);
+    expect(productCooking(out, TABLES).lossPct).toBe(10);
+    expect(out.cookedGrams).toBeCloseTo(1215, 3);
+    expect(labNumbers(withLoss, heavier, TABLES, NOW).cookedKept).toBe(true);
+    // A cooked weight typed wins and is not "kept".
+    expect(labNumbers(withLoss, typed(draft, 'cooked', '1000'), TABLES, NOW).cookedKept).toBe(false);
+  });
+
+  it('keeps the loss percent of a product with a loss when one line changes', () => {
+    const lossy = product({ cookedGrams: 984 });
+    const out = applyLab(lossy, typed(startDraft(newDraft(lossy), NOW), lineField('l1'), '<<<600'), TABLES, NOW);
+    expect(productCooking(out, TABLES).lossPct).toBe(productCooking(lossy, TABLES).lossPct);
+  });
+
+  it('a product with no cooked weight stays without one', () => {
+    expect(applyLab(base, started, TABLES, NOW).cookedGrams).toBeNull();
+    expect(labNumbers(base, started, TABLES, NOW).cookedKept).toBe(false);
+  });
+
+  it('keeps the people of the card untouched: 1.5 stays 1.5, 25 stays 25, none stays none', () => {
+    const saved = (people: number | null) => {
+      const card = product({ labourPeople: people });
+      return applyLab(card, startDraft(newDraft(card), NOW), TABLES, NOW).labourPeople;
+    };
+    expect(saved(1.5)).toBe(1.5);
+    expect(saved(25)).toBe(25);
+    expect(saved(null)).toBeNull();
+    // A press moves it, from the rounded value.
+    expect(stepPeople(newDraft(product()), 1.5, 1).people).toBe(3);
+    expect(stepPeople(newDraft(product()), 25, -1).people).toBe(19);
+  });
+
+  it('writes back EXACTLY the stored quantity of a line ticked without typing', () => {
+    const awkward = product({
+      components: [
+        { recipeId: 'DOUGH', qtyKg: 0.1234567 },
+        { kind: 'ingredient', ingredientId: 'FLOUR', qty: 0.7654321, unit: 'kg' },
+        { kind: 'ingredient', ingredientId: 'SALT', qty: 10.123456, unit: 'g' },
+      ],
+    });
+    const ticked = ['l0', 'l1', 'l2'].reduce(toggleTick, startDraft(newDraft(awkward), NOW));
+    const out = applyLab(awkward, ticked, TABLES, NOW);
+    expect(out.components).toEqual(awkward.components);
+    expect(changedLineCount(awkward, out)).toBe(0);
   });
 
   it('stores the pieces only when entered, and only for a product sold by pieces', () => {
@@ -234,7 +289,7 @@ describe('the product with today\'s weights', () => {
   });
 
   it('stores the minutes and the people', () => {
-    const draft = setPeople(typed(started, 'minutes', '35'), 3);
+    const draft = stepPeople(typed(started, 'minutes', '35'), 2, 1);
     const out = applyLab(base, draft, TABLES, NOW);
     expect(out.labourMinutes).toBe(35);
     expect(out.labourPeople).toBe(3);
@@ -289,9 +344,10 @@ describe('the product with today\'s weights', () => {
 describe('the lab\'s figures are the card\'s', () => {
   const base = product();
   const started = startDraft(newDraft(base), NOW);
-  const weighed = setPeople(
+  const weighed = stepPeople(
     typed(typed(typed(typed(typed(typed(started, lineField('l1'), '480'), lineField('l2'), '12'), 'raw', '1300'), 'cooked', '1100'), 'pieces', '22'), 'minutes', '35'),
-    3,
+    2,
+    1,
   );
 
   it('equal the shared model on the same weights typed into the card\'s own working copy', () => {
@@ -380,6 +436,18 @@ describe('the labour minutes', () => {
     expect(goToStep(left, 'time', NOW + 91 * 60_000).minutesFrozen).toBeNull();
   });
 
+  it('do not follow the timer when the production is older than a day: the card minutes stand, and typing still works', () => {
+    const later = NOW + 25 * 3_600_000;
+    expect(minutesOf(started, later, 40)).toBe(40);
+    expect(applyLab(base, started, TABLES, later).labourMinutes).toBe(40);
+    expect(minutesOf(started, later, null)).toBe(1);
+    expect(minutesOf(typed(started, 'minutes', '50'), later, 40)).toBe(50);
+    // Leaving the time step freezes nothing then.
+    expect(goToStep(goToStep(started, 'time', later), 'result', later).minutesFrozen).toBeNull();
+    // Just under a day still follows.
+    expect(minutesOf(started, NOW + 23 * 3_600_000, 40)).toBe(23 * 60);
+  });
+
   it('typed minutes are not frozen over, and a typed zero falls back to the timer', () => {
     const typedOnes = typed(goToStep(started, 'time', NOW), 'minutes', '50');
     expect(goToStep(typedOnes, 'result', NOW + 60 * 60_000).minutesFrozen).toBeNull();
@@ -388,5 +456,18 @@ describe('the labour minutes', () => {
 
   it('are at most the rules\' ceiling', () => {
     expect(minutesOf(typed(started, 'minutes', '999999'), NOW)).toBe(100000);
+  });
+});
+
+describe('a resumed step that no longer exists', () => {
+  it('is mapped to the next one that does, and leaving it freezes the minutes as the time step would', () => {
+    const noPieces = stepsFor(product({ sellingMode: 'weight' }));
+    expect(resolveStep(noPieces, 'pieces')).toBe('time');
+    expect(resolveStep(noPieces, 'raw')).toBe('raw');
+    expect(resolveStep(['start', 'result'], 'oven')).toBe('result');
+    const started = startDraft(newDraft(product()), NOW);
+    // The lab calls goToStep with the RESOLVED step: from 'time' (mapped from 'pieces') the reading is frozen.
+    const stored = { ...started, step: 'pieces' as const };
+    expect(goToStep({ ...stored, step: resolveStep(noPieces, stored.step) }, 'result', NOW + 5 * 60_000).minutesFrozen).toBe(5);
   });
 });

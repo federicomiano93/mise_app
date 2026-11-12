@@ -1,7 +1,7 @@
 import type { CostTables, Product } from '@mise/shared/foodcost-model';
 import { firstInvalidNumber } from '@mise/shared/product-limits';
 import { firstBadWeight, marginPointFor } from '../productEditorModel';
-import { applyLab, baseProduct, changedLineCount } from './labModel';
+import { MAX_COMPONENTS, applyLab, baseProduct, changedLineCount } from './labModel';
 import type { LabDraft } from './labModel';
 
 // What «Salva nella scheda» is about to do, worked out BEFORE the confirmation (so the list shows the truth) and used for the write
@@ -16,7 +16,7 @@ import type { LabDraft } from './labModel';
 // ⚠️ THE MARGIN POINT is the card's own (marginPointFor): recorded when the composition changes, which the two weights are part of.
 export type LabSavePlan =
   | { ok: true; product: Product; snapshot: Record<string, unknown> | null; changedLines: number; before: Product }
-  | { ok: false; reason: 'gone' | 'invalid' };
+  | { ok: false; reason: 'gone' | 'invalid' | 'tooMany' };
 
 export function planLabSave(
   stored: Product | null | undefined, tables: CostTables, draft: LabDraft, now: number, nowIso: string,
@@ -24,6 +24,8 @@ export function planLabSave(
   const before = baseProduct(stored, tables);
   if (before === null) return { ok: false, reason: 'gone' };
   const product = applyLab(before, draft, tables, now);
+  // The rules refuse more than 100 lines: said here, while the work is on screen and the draft is intact.
+  if (product.components.length > MAX_COMPONENTS) return { ok: false, reason: 'tooMany' };
   if (firstInvalidNumber(product) !== null || firstBadWeight(product) !== null) return { ok: false, reason: 'invalid' };
   return {
     ok: true,

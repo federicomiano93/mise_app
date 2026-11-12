@@ -3,22 +3,26 @@ import { Check, Timer, X } from 'lucide-react';
 import { Dialog as AriaDialog, Modal, ModalOverlay } from 'react-aria-components';
 import type { Product } from '@mise/shared/foodcost-model';
 import { useT } from '../../i18n/useT';
+import { markBusy } from '../../session/busy';
 import { useSession } from '../../session/SessionContext';
 import { announceAction } from '../../telemetry/usage';
 import { Button } from '../../ui/Button';
 import { useStatusMessage } from '../../ui/StatusMessage';
 import { useConfirm } from '../../ui/useConfirm';
+import { acquireWakeLock, releaseWakeLock } from '../../ui/wakeLock';
 import { useFoodcost, useFoodcostStore } from '../FoodcostContext';
 import { openingUnit } from '../lineUnits';
 import { PickDialog } from '../PickDialog';
 import type { Choice } from '../PickDialog';
 import { Keypad } from './Keypad';
 import { clearDraft, labDraftKey, readDraft, writeDraft } from './labDraft';
-import { elapsedMs, formatClock } from './labClock';
+import { elapsedMs, formatClock, timerMinutes } from './labClock';
 import { groupedNumber, gramsText } from './labFormat';
+import { fcNumber } from '@mise/shared/fc-number';
+import { useMoney } from '../../session/useMoney';
 import {
-  addLine, baseProduct, goToStep, labNumbers, lineField, newDraft, nextUnticked, setPeople, soldByPieces, startDraft, stepsFor,
-  toggleTick, typeInto, LAB_STEPS,
+  addLine, baseProduct, cookedKept, goToStep, isStale, labNumbers, lineField, newDraft, nextUnticked, resolveStep, soldByPieces, startDraft,
+  stepPeople, stepsFor, toggleTick, typeInto,
 } from './labModel';
 import type { FieldId, LabDraft, LabStepId, Presets } from './labModel';
 import { planLabSave } from './labSave';
@@ -26,6 +30,8 @@ import { padKeyOf, typedText } from './keypadRules';
 import { StepBody } from './LabSteps';
 import { useNow } from './useNow';
 import styles from './LabMode.module.css';
+
+const WAKE_OWNER = 'foodcost-lab';
 
 type Props = {
   productId: string;
@@ -71,6 +77,7 @@ export function LabMode({ productId, onClose }: Props) {
   const store = useFoodcostStore();
   const snap = useFoodcost();
   const { locationId } = useSession();
+  const money = useMoney();
   const [confirm, confirmDialog] = useConfirm();
   const titleRef = useRef<HTMLHeadingElement>(null);
   const titleId = useId();
@@ -80,11 +87,16 @@ export function LabMode({ productId, onClose }: Props) {
   const stored = snap.products.find(candidate => candidate.id === productId) ?? null;
   const lastStored = useRef<Product | null>(stored);
   if (stored !== null) lastStored.current = stored;
-  const base = baseProduct(stored ?? lastStored.current, snap.tables);
+  const shownProduct = stored ?? lastStored.current;
+  // Stable between clock ticks: the cost model runs only when the product or the prices change.
+  const base = useMemo(() => baseProduct(shownProduct, snap.tables), [shownProduct, snap.tables]);
 
   const [draft, setDraft] = useState<LabDraft | null>(() => readDraft(key) ?? (base === null ? null : newDraft(base)));
   const [phase, setPhase] = useState<'flow' | 'saved'>('flow');
-  const [field, setField] = useState<FieldId | null>(() => (draft === null ? null : defaultField(draft.step, draft)));
+  // ⚠️ DERIVED FROM THE RESOLVED STEP: a resumed draft may name a step this product no longer has.
+  const [field, setField] = useState<FieldId | null>(() => (draft === null || base === null
+    ? null
+    : defaultField(resolveStep(stepsFor(base), draft.step), draft)));
   const [picking, setPicking] = useState(false);
   const [savedName, setSavedName] = useState('');
   const asking = useRef(false);
@@ -97,6 +109,17 @@ export function LabMode({ productId, onClose }: Props) {
   const started = draft !== null && draft.startedAt !== null;
   const now = useNow(started && phase === 'flow');
 
+  // The screen stays lit while the lab is open, and a reload the app starts by itself waits for it (like the Recipe book's mix).
+  useEffect(() => {
+    if (phase !== 'flow') return undefined;
+    acquireWakeLock(WAKE_OWNER);
+    const release = markBusy();
+    return () => {
+      releaseWakeLock(WAKE_OWNER);
+      release();
+    };
+  }, [phase]);
+
   // Written at every change once the clock runs; never before «Inizia», never after the save cleared it.
   useEffect(() => {
     if (draft !== null && phase === 'flow') writeDraft(key, draft);
@@ -108,14 +131,16 @@ export function LabMode({ productId, onClose }: Props) {
 
   const steps = useMemo(() => (base === null ? [] : stepsFor(base)), [base]);
   // A resumed draft may name a step this product no longer has («Pezzi ottenuti» after the way of selling changed): the next one.
-  const step: LabStepId = draft === null ? 'start' : steps.includes(draft.step)
-    ? draft.step
-    : steps.find(candidate => LAB_STEPS.indexOf(candidate) > LAB_STEPS.indexOf(draft.step)) ?? 'result';
+  const step: LabStepId = draft === null ? 'start' : resolveStep(steps, draft.step);
   const index = steps.indexOf(step);
 
+  // The figures change with the clock only where the minutes follow the timer (the time step and the result): elsewhere the cost model
+  // is not run again every second on a slow tablet.
+  const followsTimer = draft !== null && draft.minutes === null && draft.minutesFrozen === null && (step === 'time' || step === 'result');
+  const clockKey = followsTimer ? now : 0;
   const numbers = useMemo(
-    () => (base === null || draft === null ? null : labNumbers(base, draft, snap.tables, now)),
-    [base, draft, snap.tables, now],
+    () => (base === null || draft === null ? null : labNumbers(base, draft, snap.tables, clockKey === 0 ? Date.now() : clockKey)),
+    [base, draft, snap.tables, clockKey],
   );
 
   // After a step change the heading takes the focus, so a screen reader says where it is. Not on opening: the dialog does its own.
@@ -161,7 +186,8 @@ export function LabMode({ productId, onClose }: Props) {
   if (base === null || draft === null || numbers === null) return null;
 
   const go = (target: LabStepId) => {
-    const next = goToStep(draft, target, Date.now());
+    // From the RESOLVED step, so leaving «Tempo e persone» freezes the minutes even when the stored step was a vanished one.
+    const next = goToStep({ ...draft, step }, target, Date.now());
     setDraft(next);
     setField(defaultField(target, next));
   };
@@ -203,9 +229,21 @@ export function LabMode({ productId, onClose }: Props) {
   };
 
   const useTotal = () => { setDraft({ ...draft, raw: null }); };
-  const fromTimer = () => { setDraft({ ...draft, minutes: null, minutesFrozen: null }); };
+  // «Dal cronometro»: the timer's reading. A production older than a day has none by default, so the reading is typed in explicitly.
+  const fromTimer = () => {
+    const stale = isStale(draft.startedAt, Date.now());
+    setDraft({
+      ...draft,
+      minutes: stale ? String(Math.min(999999, timerMinutes(elapsedMs(draft.startedAt, Date.now())))) : null,
+      minutesFrozen: null,
+    });
+  };
 
   // ── Save ────────────────────────────────────────────────────────────────────────────────────
+  const refusal = (reason: 'gone' | 'invalid' | 'tooMany'): string => (
+    reason === 'gone' ? t('fc.productDeleted') : reason === 'tooMany' ? t('lab.save.tooMany') : t('lab.save.invalid')
+  );
+
   async function save() {
     if (asking.current || base === null || draft === null) return;
     asking.current = true;
@@ -213,7 +251,7 @@ export function LabMode({ productId, onClose }: Props) {
       const nowMs = Date.now();
       const first = planLabSave(store.getSnapshot().products.find(candidate => candidate.id === productId), store.getSnapshot().tables, draft, nowMs, new Date(nowMs).toISOString());
       if (!first.ok) {
-        say(first.reason === 'gone' ? t('fc.productDeleted') : t('lab.save.invalid'));
+        say(refusal(first.reason));
         return;
       }
       const product = first.product;
@@ -221,7 +259,10 @@ export function LabMode({ productId, onClose }: Props) {
         first.changedLines === 0 ? t('lab.save.madeSame') : t('lab.save.madeChanges', { n: first.changedLines }),
         product.cookedGrams === null
           ? t('lab.save.cookingNone', { raw: gramsText(numbers?.rawGrams ?? 0, locale) })
-          : t('lab.save.cooking', { raw: gramsText(numbers?.rawGrams ?? 0, locale), cooked: gramsText(product.cookedGrams, locale) }),
+          : cookedKept(first.before, draft) && numbers?.lossPct != null
+            // No cooked weight typed: the card's loss stays, and the question says so.
+            ? t('lab.save.cookingKept', { raw: gramsText(numbers.rawGrams, locale), cooked: gramsText(product.cookedGrams, locale), pct: fcNumber(numbers.lossPct, money) })
+            : t('lab.save.cooking', { raw: gramsText(numbers?.rawGrams ?? 0, locale), cooked: gramsText(product.cookedGrams, locale) }),
       ];
       if (soldByPieces(product) && product.piecesPerBatch !== null) lines.push(t('lab.save.pieces', { n: groupedNumber(product.piecesPerBatch, locale) }));
       lines.push(t('lab.save.labour', {
@@ -234,7 +275,8 @@ export function LabMode({ productId, onClose }: Props) {
         body: (
           <>
             <ul className={styles.sumList}>{lines.map(line => <li key={line}>{line}</li>)}</ul>
-            <p className={styles.sumNote}>{t('lab.save.note')}</p>
+            {/* Only when a margin point will really be recorded. */}
+            {first.snapshot === null ? null : <p className={styles.sumNote}>{t('lab.save.note')}</p>}
           </>
         ),
         okLabel: t('ui.save'),
@@ -245,10 +287,17 @@ export function LabMode({ productId, onClose }: Props) {
       const after = Date.now();
       const final = planLabSave(store.getSnapshot().products.find(candidate => candidate.id === productId), store.getSnapshot().tables, draft, after, new Date(after).toISOString());
       if (!final.ok) {
-        say(final.reason === 'gone' ? t('fc.productDeleted') : t('lab.save.invalid'));
+        say(refusal(final.reason));
         return;
       }
-      store.saveProduct({ product: final.product, snapshot: final.snapshot, lossPatches: {} });
+      // ⚠️ THE DRAFT IS CLEARED ONLY ONCE THE SAVE IS ACCEPTED LOCALLY, as the card does: saveProduct is local-first (a later refusal
+      // by the server is the store's own message and rollback), but if it throws here the production stays open.
+      try {
+        store.saveProduct({ product: final.product, snapshot: final.snapshot, lossPatches: {} });
+      } catch {
+        say(t('lab.save.failed'));
+        return;
+      }
       announceAction('foodcost-saved');
       clearDraft(key);
       setSavedName(final.product.name);
@@ -294,6 +343,11 @@ export function LabMode({ productId, onClose }: Props) {
                 </Button>
                 <div className={styles.center}>
                   {started ? (
+                    <>
+                    {/* Under 360px seven 44px buttons do not fit: the dots give way to the name of the step you are on. */}
+                    <p className={styles.stepName} aria-hidden="true">
+                      {t(STEP_TITLE[step as keyof typeof STEP_TITLE])} · {t('lab.counter', { done: index, total: steps.length - 1 })}
+                    </p>
                     <nav aria-label={t('lab.steps')} className={styles.dotsNav}>
                       <ol className={styles.dots}>
                         {steps.filter(candidate => candidate !== 'start').map(candidate => {
@@ -316,6 +370,7 @@ export function LabMode({ productId, onClose }: Props) {
                         })}
                       </ol>
                     </nav>
+                    </>
                   ) : <p className={styles.productName}>{base.name}</p>}
                 </div>
                 <div className={styles.clock} role="timer" aria-label={t('lab.clock')} data-idle={!started}>
@@ -343,7 +398,7 @@ export function LabMode({ productId, onClose }: Props) {
                   allowComma={!whole}
                   onUseTotal={useTotal}
                   onFromTimer={fromTimer}
-                  onPeople={people => { setDraft(setPeople(draft, people)); }}
+                  onPeople={delta => { setDraft(stepPeople(draft, base.labourPeople, delta)); }}
                 />
               </div>
 

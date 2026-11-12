@@ -1,4 +1,5 @@
 import { useMemo, useSyncExternalStore } from 'react';
+import { LAB_DRAFT_PREFIX } from '../../session/pendingLabWork';
 import { MAX_DIGITS } from './keypadRules';
 import { LAB_STEPS, clampPeople } from './labModel';
 import type { LabDraft, LabLine, LabLineRef, LabStepId } from './labModel';
@@ -9,10 +10,10 @@ import type { LabDraft, LabLine, LabLineRef, LabStepId } from './labModel';
 // weights and ingredient ids. A sign-out or a venue switch wipes every key outside the keep list (shared/local-data), which is what
 // stops one business's half-made batch from being offered to the next person on a shared tablet. The key carries the venue and the
 // product as well, so even a wipe that missed could not offer it elsewhere. The cost: signing out in the middle of a production drops
-// it — the sign-out already warns about unsaved work.
+// it — which is why the sign-out and the venue switch ASK FIRST when a draft exists (session/pendingLabWork.ts, useLeaveFlow).
 // ⚠️ NEVER READ BACK ON TRUST: the JSON is parsed field by field, every number clamped, and anything unsound makes the draft «none»
 // (and removes it) rather than a screen that crashes at the oven. A draft is not stored before «Inizia».
-export const LAB_DRAFT_PREFIX = 'foodcost-lab-draft:';
+export { LAB_DRAFT_PREFIX };
 
 export const labDraftKey = (locationId: string, productId: string): string => `${LAB_DRAFT_PREFIX}${locationId}:${productId}`;
 
@@ -88,7 +89,7 @@ export function parseDraft(text: string | null): LabDraft | null {
       pieces: orNull(data.pieces),
       minutes: orNull(data.minutes),
       minutesFrozen: typeof frozen === 'number' && Number.isFinite(frozen) && frozen >= 1 ? Math.round(frozen) : null,
-      people: clampPeople(data.people),
+      people: typeof data.people === 'number' && Number.isFinite(data.people) ? clampPeople(data.people) : null,
     };
   } catch {
     return null;

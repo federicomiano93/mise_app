@@ -3,7 +3,8 @@ import { useT } from '../../i18n/useT';
 import { useSession } from '../../session/SessionContext';
 import { Button } from '../../ui/Button';
 import { elapsedMs, formatClock } from './labClock';
-import { labDraftKey, useLabDraft } from './labDraft';
+import { useConfirm } from '../../ui/useConfirm';
+import { clearDraft, labDraftKey, useLabDraft } from './labDraft';
 import { useNow } from './useNow';
 import styles from './LabEntry.module.css';
 
@@ -22,10 +23,23 @@ type Props = {
 export function LabEntry({ productId, held, onHeld, onOpen }: Props) {
   const { t } = useT();
   const { locationId } = useSession();
-  const draft = useLabDraft(labDraftKey(locationId ?? '', productId));
+  const key = labDraftKey(locationId ?? '', productId);
+  const draft = useLabDraft(key);
+  const [confirm, confirmDialog] = useConfirm();
   const open = draft !== null && draft.startedAt !== null;
   const now = useNow(open);
   const press = held === '' ? onOpen : onHeld;
+  // A started production can be given up: a small, low-key action that asks first. The card is not touched.
+  const abandon = async () => {
+    const ok = await confirm({
+      title: t('lab.cancel.title'),
+      message: t('lab.cancel.message'),
+      okLabel: t('lab.cancel.action'),
+      cancelLabel: t('lab.cancel.no'),
+      danger: true,
+    });
+    if (ok) clearDraft(key);
+  };
   return (
     <div className={styles.entry}>
       {open ? (
@@ -33,12 +47,14 @@ export function LabEntry({ productId, held, onHeld, onOpen }: Props) {
           <Timer aria-hidden="true" />
           <span className={styles.bannerText}>{t('lab.banner', { time: formatClock(elapsedMs(draft.startedAt, now)) })}</span>
           <Button variant="secondary" aria-disabled={held !== ''} onPress={press}>{t('lab.resume')}</Button>
+          <Button variant="bare" className={styles.abandon} onPress={() => { void abandon(); }}>{t('lab.cancel.action')}</Button>
         </div>
       ) : null}
       <Button variant="secondary" block className={styles.big} aria-disabled={held !== ''} onPress={press}>
         <Scale aria-hidden="true" />
         <span>{t('lab.enter')}</span>
       </Button>
+      {confirmDialog}
     </div>
   );
 }

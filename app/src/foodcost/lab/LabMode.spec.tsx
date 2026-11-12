@@ -432,7 +432,8 @@ describe('Italian', () => {
     expect(within(asked).getByText('Salvare nella scheda di Green?')).toBeInTheDocument();
     expect(within(asked).getByText('Composto da: resta uguale')).toBeInTheDocument();
     expect(within(asked).getByText('Cottura: crudo 1.020 g, cotto non pesato')).toBeInTheDocument();
-    expect(within(asked).getByText('Lo Storico dei margini ne tiene traccia.')).toBeInTheDocument();
+    // Nothing changes, so no margin point will be recorded: the note is not there.
+    expect(within(asked).queryByText('Lo Storico dei margini ne tiene traccia.')).not.toBeInTheDocument();
     await user.click(within(asked).getByRole('button', { name: 'Annulla' }));
     expect(fake.saved.filter(item => item.kind === 'product')).toHaveLength(0);
   });

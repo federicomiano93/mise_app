@@ -11,7 +11,7 @@ import { supplierOf } from '../supplierOf';
 import { Keypad } from './Keypad';
 import { formatClock } from './labClock';
 import { groupedNumber, gramsText } from './labFormat';
-import { MAX_PEOPLE, lineField, rawShown, soldByPieces, weighingUnit } from './labModel';
+import { MAX_PEOPLE, STALE_MS, lineField, peopleShown, rawShown, soldByPieces, weighingUnit } from './labModel';
 import type { FieldId, LabDraft, LabLine, LabNumbers, LabStepId, Presets } from './labModel';
 import { typedText } from './keypadRules';
 import styles from './LabMode.module.css';
@@ -34,7 +34,8 @@ type Props = {
   allowComma: boolean;
   onUseTotal: () => void;
   onFromTimer: () => void;
-  onPeople: (people: number) => void;
+  // ±1: the stepper's press. The number itself is the draft's business (it stays the card's until a press).
+  onPeople: (delta: number) => void;
 };
 
 // The body of each step. Every figure arrives in `numbers` (labModel.labNumbers): nothing is worked out here.
@@ -237,14 +238,17 @@ function OvenStep({ elapsedMs, titleRef, titleId }: Props) {
 function CookedStep({ draft, numbers, field, titleRef, titleId, onSelect, onKey, allowComma }: Props) {
   const { t } = useT();
   const money = useMoney();
-  const typed = numbers.cookedGrams !== null;
+  const typed = numbers.cookedGrams !== null && !numbers.cookedKept;
   return (
     <WithKeypad onKey={onKey} allowComma={allowComma}>
       <Title id={titleId} titleRef={titleRef}>{t('lab.step.cooked')}</Title>
       <FieldButton id="cooked" selected={field === 'cooked'} label={t('lab.step.cooked')} value={draft.cooked} unit="g" size="xl" onSelect={onSelect} />
       {/* A live region that is always on the page, filled once there is something to say. */}
       <p className={styles.loss} aria-live="polite" data-bad={numbers.heavier}>
-        {typed && numbers.heavier ? t('lab.heavier') : typed && numbers.lossPct !== null ? t('lab.loss', { pct: fcNumber(numbers.lossPct, money) }) : ''}
+        {typed && numbers.heavier ? t('lab.heavier')
+          : typed && numbers.lossPct !== null ? t('lab.loss', { pct: fcNumber(numbers.lossPct, money) })
+            // Nothing typed: the card's loss stays — said here, so leaving the box empty is a choice and never a surprise.
+            : numbers.cookedKept && numbers.lossPct !== null ? t('lab.cookedKept', { pct: fcNumber(numbers.lossPct, money) }) : ''}
       </p>
     </WithKeypad>
   );
@@ -265,9 +269,12 @@ function PiecesStep({ draft, base, field, presets, titleRef, titleId, onSelect, 
 
 // ── Tempo e persone ─────────────────────────────────────────────────────────────────────────────
 
-function TimeStep({ draft, numbers, field, titleRef, titleId, onSelect, onKey, onFromTimer, onPeople, allowComma }: Props) {
+function TimeStep({ draft, base, numbers, elapsedMs, field, titleRef, titleId, onSelect, onKey, onFromTimer, onPeople, allowComma }: Props) {
   const { t } = useT();
   const typed = draft.minutes !== null;
+  // A production older than a day does not follow the timer: the card's minutes stand, and the button is one tap away.
+  const stale = elapsedMs > STALE_MS;
+  const people = peopleShown(draft, base.labourPeople);
   const minutes = draft.minutes ?? String(numbers.minutes);
   return (
     <WithKeypad onKey={onKey} allowComma={allowComma}>
@@ -275,7 +282,7 @@ function TimeStep({ draft, numbers, field, titleRef, titleId, onSelect, onKey, o
       <div className={styles.timeGroup}>
         <p className={styles.fieldLabel} aria-hidden="true">{t('lab.minutesLabel')}</p>
         <FieldButton id="minutes" selected={field === 'minutes'} label={t('lab.minutesLabel')} value={minutes} unit={t('lab.minutesUnit')} size="md" onSelect={onSelect} />
-        {typed ? (
+        {typed || stale ? (
           <Button variant="bare" className={styles.inlineButton} onPress={onFromTimer}>
             <Timer aria-hidden="true" />
             <span>{t('lab.fromTimer')}</span>
@@ -294,18 +301,18 @@ function TimeStep({ draft, numbers, field, titleRef, titleId, onSelect, onKey, o
             type="button"
             className={styles.stepperButton}
             aria-label={t('lab.personLess')}
-            aria-disabled={draft.people <= 1}
-            onClick={() => { onPeople(draft.people - 1); }}
+            aria-disabled={people <= 1}
+            onClick={() => { onPeople(-1); }}
           >
             <Minus aria-hidden="true" />
           </button>
-          <output className={styles.stepperValue} aria-label={t('lab.people')}>{draft.people}</output>
+          <output className={styles.stepperValue} aria-label={t('lab.people')}>{people}</output>
           <button
             type="button"
             className={styles.stepperButton}
             aria-label={t('lab.personMore')}
-            aria-disabled={draft.people >= MAX_PEOPLE}
-            onClick={() => { onPeople(draft.people + 1); }}
+            aria-disabled={people >= MAX_PEOPLE}
+            onClick={() => { onPeople(1); }}
           >
             <Plus aria-hidden="true" />
           </button>
@@ -328,7 +335,7 @@ function ResultStep({ numbers, base, titleRef, titleId }: Props) {
   const cooked = numbers.cookedGrams !== null;
 
   const loss = numbers.lossPct !== null ? `${fcNumber(numbers.lossPct, money)}%` : dash;
-  const lossSub = numbers.heavier ? t('lab.res.lossHeavier') : numbers.lossPct === null ? t('lab.res.lossNone') : '';
+  const lossSub = numbers.heavier ? t('lab.res.lossHeavier') : numbers.lossPct === null ? t('lab.res.lossNone') : numbers.cookedKept ? t('lab.res.lossKept') : '';
   const kilo = numbers.perKg === null ? dash : more(fcMoney(numbers.perKg, money), numbers.perKgPartial);
   const unitCost = numbers.unitCost === null ? dash : more(fcMoney(numbers.unitCost, money), partial);
   const withLabour = numbers.totalUnitCost === null ? '' : t('lab.res.withLabour', { cost: more(fcMoney(numbers.totalUnitCost, money), partial) });

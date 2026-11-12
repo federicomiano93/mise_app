@@ -26,6 +26,11 @@ export function stepsFor(product: Pick<Product, 'sellingMode' | 'packUnit'>): La
 }
 
 export const MAX_PEOPLE = 20;
+// A production older than this does not let «Tempo» follow the timer: a batch started yesterday and never closed would write
+// thousands of minutes. The card's own minutes stand, still editable, and «Dal cronometro» is one tap away.
+export const STALE_MS = 24 * 3_600_000;
+// The rules' ceiling for the lines of «Composto da» (firestore.rules, products: components.size() <= 100).
+export const MAX_COMPONENTS = 100;
 // The rules' ceiling for the minutes of a batch (shared/product-limits).
 export const MAX_MINUTES = 100000;
 
@@ -57,7 +62,8 @@ export interface LabDraft {
   minutes: string | null;
   // The labour time as the timer read when the person left «Tempo e persone» without typing one.
   minutesFrozen: number | null;
-  people: number;
+  // null = the person never pressed the stepper: the card's own number stands, unchanged (1.5 stays 1.5, 25 stays 25).
+  people: number | null;
 }
 
 export type FieldId = 'raw' | 'cooked' | 'pieces' | 'minutes' | `line:${string}`;
@@ -104,8 +110,20 @@ export function newDraft(product: Product): LabDraft {
     pieces: null,
     minutes: null,
     minutesFrozen: null,
-    people: clampPeople(product.labourPeople ?? 1),
+    people: null,
   };
+}
+
+// A resumed draft may name a step this product no longer has («Pezzi ottenuti» after the way of selling changed): the next one that
+// exists. Everything that depends on «where we are» is derived from THIS, never from the raw stored step.
+export function resolveStep(steps: readonly LabStepId[], stored: LabStepId): LabStepId {
+  if (steps.includes(stored)) return stored;
+  return steps.find(candidate => LAB_STEPS.indexOf(candidate) > LAB_STEPS.indexOf(stored)) ?? 'result';
+}
+
+// The people the stepper shows: the person's, else the card's (rounded and kept in 1 to 20 for the DISPLAY only).
+export function peopleShown(draft: LabDraft, cardPeople: number | null): number {
+  return draft.people ?? clampPeople(cardPeople ?? 1);
 }
 
 export function startDraft(draft: LabDraft, now: number): LabDraft {
@@ -169,16 +187,19 @@ export function typeInto(draft: LabDraft, field: FieldId, key: string, presets: 
   return { ...draft, weighed: { ...draft.weighed, [field.slice(5)]: next } };
 }
 
-export function setPeople(draft: LabDraft, people: number): LabDraft {
-  return { ...draft, people: clampPeople(people) };
+// One press of the stepper: from the shown number, by one, within 1 to 20. The only way `people` stops following the card.
+export function stepPeople(draft: LabDraft, cardPeople: number | null, delta: number): LabDraft {
+  return { ...draft, people: clampPeople(peopleShown(draft, cardPeople) + delta) };
 }
+
+export const isStale = (startedAt: number | null, now: number): boolean => elapsedMs(startedAt, now) > STALE_MS;
 
 // Moving between steps. Leaving «Tempo e persone» with no minutes typed freezes the timer's reading there (the figure the person
 // saw), so the Result and the Save do not keep growing under their eyes; coming back to the step lets the timer run again.
 export function goToStep(draft: LabDraft, step: LabStepId, now: number): LabDraft {
   if (step === draft.step) return draft;
   let next: LabDraft = { ...draft, step };
-  if (draft.step === 'time' && draft.minutes === null && draft.startedAt !== null) {
+  if (draft.step === 'time' && draft.minutes === null && draft.startedAt !== null && !isStale(draft.startedAt, now)) {
     next = { ...next, minutesFrozen: timerMinutes(elapsedMs(draft.startedAt, now)) };
   }
   if (step === 'time') next = { ...next, minutesFrozen: null };
@@ -194,9 +215,10 @@ function withGrams(component: ProductComponent, value: number): ProductComponent
 }
 
 // The labour minutes in force: typed, else the frozen reading, else the timer now. Whole minutes, 1 to the rules' ceiling.
-export function minutesOf(draft: LabDraft, now: number): number {
+export function minutesOf(draft: LabDraft, now: number, cardMinutes: number | null = null): number {
   const typed = parseTyped(draft.minutes);
-  const value = typed !== null && typed > 0 ? typed : (draft.minutesFrozen ?? timerMinutes(elapsedMs(draft.startedAt, now)));
+  const fallback = isStale(draft.startedAt, now) ? (cardMinutes ?? 1) : timerMinutes(elapsedMs(draft.startedAt, now));
+  const value = typed !== null && typed > 0 ? typed : (draft.minutesFrozen ?? fallback);
   return Math.min(MAX_MINUTES, Math.max(1, Math.round(value)));
 }
 
@@ -236,23 +258,46 @@ export function applyLab(latest: Product, draft: LabDraft, tables: CostTables, n
     if (index < 0) continue;
     taken.add(index);
     const saved = components[index];
-    if (value !== null && saved) components[index] = withGrams(saved, value);
+    // ⚠️ A LINE LEFT «AS PLANNED» (ticked without typing) KEEPS ITS SAVED NUMBER EXACTLY: the planned text is rounded for the screen
+    // (four decimals, grams), and writing it back could move 0.1234567 kg to 0.123457 — a change nobody made.
+    const asPlanned = line.planned !== null && draft.weighed[line.key] === typedText(line.planned);
+    if (value !== null && saved && !asPlanned) components[index] = withGrams(saved, value);
   }
   const base: Product = { ...latest, components: [...components, ...added] };
 
   const total = productCooking(base, tables).rawTotalKg * 1000;
   const typedRaw = parseTyped(draft.raw);
   const rawApart = typedRaw !== null && typedRaw > 0 && !followsTotal(draft.raw ?? '', total);
+  const rawGrams = rawApart ? typedRaw : null;
   const cooked = parseTyped(draft.cooked);
   const pieces = parseTyped(draft.pieces);
   return {
     ...base,
-    rawGrams: rawApart ? typedRaw : null,
-    cookedGrams: cooked !== null && cooked > 0 ? cooked : null,
+    rawGrams,
+    cookedGrams: cooked !== null && cooked > 0 ? cooked : keptCooked(latest, { ...base, rawGrams }, tables),
+
     piecesPerBatch: soldByPieces(latest) && pieces !== null && pieces > 0 ? pieces : latest.piecesPerBatch,
-    labourMinutes: minutesOf(draft, now),
-    labourPeople: clampPeople(draft.people),
+    labourMinutes: minutesOf(draft, now, latest.labourMinutes),
+    labourPeople: draft.people ?? latest.labourPeople,
   };
+}
+
+// ⚠️ NO COOKED WEIGHT TYPED KEEPS THE CARD'S OVEN LOSS (review, 12 Nov 2026): every product converted from before the switch has a loss,
+// and writing «not weighed» would make every kilo look cheaper and record a margin improvement nobody earned. The card's cooked weight is
+// scaled to the new raw weight (cooked × new raw ÷ old raw), so the loss in percent stays what the card says; if the raw weight did not
+// move it is the card's own number, untouched. A product with no cooked weight stays without one.
+function keptCooked(before: Product, after: Product, tables: CostTables): number | null {
+  if (before.cookedGrams === null) return null;
+  const oldRaw = productCooking(before, tables).rawKg * 1000;
+  const newRaw = productCooking(after, tables).rawKg * 1000;
+  if (!(oldRaw > 0) || !(newRaw > 0) || Math.abs(newRaw - oldRaw) < 1e-9) return before.cookedGrams;
+  return round4(newRaw * before.cookedGrams / oldRaw);
+}
+
+// Whether the Result and the save question must say the loss is the card's.
+export function cookedKept(latest: Product, draft: LabDraft): boolean {
+  const cooked = parseTyped(draft.cooked);
+  return (cooked === null || cooked <= 0) && latest.cookedGrams !== null;
 }
 
 // How many lines of «Composto da» the save changes: a different amount, or a line added.
@@ -286,6 +331,8 @@ export interface LabNumbers {
   totalUnitCost: number | null;
   // A line has no cost: every figure above is too LOW.
   partial: boolean;
+  // The loss is the card's, scaled: no cooked weight was typed.
+  cookedKept: boolean;
   pieces: number | null;
   minutes: number;
   people: number;
@@ -311,6 +358,7 @@ export function labNumbers(latest: Product, draft: LabDraft, tables: CostTables,
     unitCost: cost.unitCost,
     totalUnitCost: cost.totalUnitCost,
     partial: cost.partial,
+    cookedKept: cookedKept(latest, draft),
     pieces: soldByPieces(product) ? product.piecesPerBatch : null,
     minutes: product.labourMinutes ?? 1,
     people: product.labourPeople ?? 1,

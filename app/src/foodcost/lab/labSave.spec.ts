@@ -81,6 +81,14 @@ describe('planning the save', () => {
     expect(planLabSave(bread, TABLES, forged, NOW, ISO)).toEqual({ ok: false, reason: 'invalid' });
   });
 
+  it('refuses more than the 100 lines of the rules, keeping the work on screen', () => {
+    const line = bread.components[1] as Product['components'][number];
+    const many = { ...bread, components: Array.from({ length: 100 }, () => line) };
+    expect(planLabSave(many, TABLES, startDraft(newDraft(many), NOW), NOW, ISO).ok).toBe(true);
+    const added = { ...many, components: [...many.components, line] };
+    expect(planLabSave(added, TABLES, startDraft(newDraft(added), NOW), NOW, ISO)).toEqual({ ok: false, reason: 'tooMany' });
+  });
+
   it('keeps a kilo line in kilos and a gram line in grams in what it will write', () => {
     const draft = typed(typed(started, lineField('l0'), '1050'), lineField('l1'), '11');
     const plan = planLabSave(bread, TABLES, draft, NOW, ISO);
