@@ -859,3 +859,74 @@ POST-SWITCH: NOT a port, the current app's Food cost never names a supplier. Sta
   read, Italian, a rename followed live, the box under the finger kept), `LineRow.spec.tsx` (new: the kind guard, the description),
   `supplierOf.spec.ts` (new); `foodcostSource.spec.ts` and `foodcostStore.spec.ts` (the listener: path, quiet failure, stop, memory
   only); `tidyCard` and `lineRows` adapted to the new «?» sentence.
+
+## Lab mode as built (step 5, 12 Nov 2026)
+
+Federico's words: the lab tablet needs a way to produce a batch step by step and put the real weights, the cooked weight, the pieces, the
+time and the people into the product's card. Mise 2 only, POST-SWITCH: NOT a port (the current app has no lab mode). Stacked on steps 2-4
+(`feature/mise2-next`). Code: `app/src/foodcost/lab/`.
+
+- **The door** (`LabEntry.tsx`, in `ProductRead.tsx` right under the summary): a big full-width «Produci in laboratorio» (Lucide `Scale`); with
+  a production open, a tinted banner above it, «In laboratorio · 0:12:34» (live clock) and «Riprendi». The big button never starts a second
+  production over an open one: it opens the open one. Held (`aria-disabled`, the same sentence in the status line) while the pencil is held.
+- **Unsaved card edits: the safe option.** The lab opens from the SAVED product, and only from the READ view, which holds no edits. The edit
+  form has no button, so nothing typed on the card can be lost or mixed in, and the form's stale working copy can never overwrite what the
+  lab saved. A product that opens straight in the form (nothing costed yet) reaches the lab after its first Save.
+- **The flow** (`LabMode.tsx`, `LabSteps.tsx`): Inizia, Ingredienti, Impasto crudo, In forno, Impasto cotto, Pezzi ottenuti (only when sold by
+  the piece or in a pack counted in pieces: `soldByPieces`), Tempo e persone, Risultato. Full screen on React Aria's `ModalOverlay`, so the
+  ingredient chooser (`PickDialog`, reused) and the save question stack on it. Top bar: «Esci», the step dots (buttons named by the step,
+  `aria-current="step"`; on a phone a row of their own under the bar) or the product's name before the start, the clock. Bottom bar: «Indietro»
+  from the second step, «Avanti», «Salva nella scheda» on the last.
+- **Keypad** (`Keypad.tsx`, `keypadRules.ts`): 7 8 9 / 4 5 6 / 1 2 3 / , 0 ⌫ (⌫ named «Cancella una cifra»), six digits at most, one comma, no
+  leading zero; the boxes are BUTTONS (the tablet's keyboard never opens), the selected one has the accent border; a physical keyboard types
+  digits, `,`/`.` and Backspace too (a native `window` listener, off while a dialog is open or the focus is in a text field). The comma does
+  nothing in pieces and minutes. A digit typed into a box that shows a preset REPLACES it; ⌫ eats from it.
+- **Ticks:** a 60px button, «Fatto: <name>», `aria-pressed`. Ticking without typing puts the planned weight; ticking moves the selection to the
+  next unticked line. A line added in the lab shows «nuovo» as planned and cannot be ticked until something is weighed. Under a line's name:
+  its supplier (`supplierOf` → `supplierLabel()`), or «Ricetta» for a recipe line.
+- **Raw:** preset with the total of the lines; a number typed apart offers «Usa il totale (X g)», else «È il totale degli ingredienti». The
+  total counts EVERY line: weighed lines at their weight, lines never weighed at their saved amount (what the save would leave in the card).
+- **The clock** (`labClock.ts`): `now − startedAt`, repainted every second and on `visibilitychange`/`focus`, so screen-off, leaving the app
+  and a reload lose nothing. A start in the future (clock set back) reads 0:00:00. The labour minutes follow the timer (whole minutes, at least
+  1); leaving «Tempo e persone» without typing freezes the reading so the Result and the Save do not grow under the eyes; typing a number turns
+  the timer off for it, «Dal cronometro» puts it back.
+- **The draft** (`labDraft.ts`): step, weights, ticks, added lines, raw, cooked, pieces, minutes, people, start instant, in `localStorage` under
+  `foodcost-lab-draft:<venue>:<product>`, written at every change once «Inizia» is pressed (never before) and by «Esci». Parsed field by field,
+  numbers clamped, an unsound draft is none (and removed). ⚠️ **Not under `KEEP_PREFIXES`, on purpose** (the brief said to use it): a key under
+  it survives a sign-out and a venue switch, so a venue's half-made batch would outlive the person and the venue it belongs to; every other
+  per-venue key of Mise 2 (Recipe book's mix, Food cost's copies) is wiped by them. The cost: signing out mid-production drops the draft. The
+  key carries the venue and the product. Adding a keep prefix would also mean editing `js/local-data.js` (bug-fix-only current app) and the
+  shared list; say if he wants it kept across a sign-out.
+- **The numbers are the card's** (`labModel.labNumbers`): `applyLab` lays the day's weights on a COPY of the saved product, and `productCooking`,
+  `productionCost` and `summaryExtras` read it — the very functions the card reads. Three tiles: «Calo» (two decimals like the card; «—» with
+  «il cotto pesa più del crudo» / «cotto non pesato»), «1 kg di cotto» (the dough only, `summaryExtras.perKg`; «1 kg di impasto» when no cooked
+  weight is typed), «1 pezzo» / «1 kg venduto» / «1 confezione» (`productionCost.unitCost`, sub-line «con il lavoro X» from `totalUnitCost`; the
+  tile is left out while the way of selling is not said). A line without a cost prefixes «più di» (the existing `fc.preview.moreThan`) and says
+  «manca un prezzo».
+- **Save** (`labSave.ts`, `LabMode.save`): the question lists «Composto da: i pesi di oggi, N righe cambiano» (or «resta uguale»), «Cottura»,
+  «Pezzi per infornata» (by the piece only) and «Lavoro»; an alertdialog, Escape cancels. After «Salva» the plan is made AGAIN on the product as
+  it is NOW, then written by `store.saveProduct` — the card's own local-first path (a cloud failure is the store's: it takes the product back and
+  says so). Checks as the card's Save: the number limits (`firstInvalidNumber`) and the two weights (`firstBadWeight`) stop the save while the
+  work is on screen; a cooked weight heavier than the raw one does not (the question adds «Vuoi salvare lo stesso?»).
+  - **Lines** keep their own unit: a kilo line gets kilos (6 decimals at most), a gram line grams, a piece line pieces, a recipe line kilos.
+  - **Latest product, lines matched by what they are** (the recipe, or the ingredient and its unit; the nth of a kind to the nth), because a
+    saved line has no id: a line deleted elsewhere meanwhile gets no weight and is NOT brought back (the other change wins); a line added
+    elsewhere keeps its saved amount; a line never weighed keeps its saved amount; a line added in the lab with nothing weighed is dropped.
+  - **Raw** is stored only when the typed raw differs from the lines' total by more than 0.05 g (else empty, as the card does). **Cooked**
+    empty = not weighed = null (an old cooked weight against a new raw one would be a false loss). **Pieces** only when entered (> 0) and only
+    for a product sold by pieces. **Minutes / people** always (people 1 to 20). A raw weight the card held apart is replaced by the lab's.
+  - **Margin history:** the same `marginPointFor` the card's Save now calls (extracted into `productEditorModel.ts`, one decision): a point
+    when the price or the composition changes, and the two weights are part of the composition; nothing for a change of the work only.
+  - **Recipe weighing:** a product made of ONE recipe does NOT write the recipe's loss from the lab (the card does, only when a person typed
+    in «Cottura» on that screen). The lab saves the product's own weights; the recipe is not moved.
+- **After the save:** «Salvato nella scheda», «Calo, costi e tempo sono nella scheda di X.», «Nuova produzione» (a fresh draft, back at Inizia)
+  and «Torna alla scheda»; the draft is cleared. «Esci» mid-production keeps everything and shows «La produzione resta aperta: la riprendi
+  dalla scheda.»
+- **Not built / to know:** no service worker (step 5 of the release); no new field and no rules change (every written field already exists:
+  `components`, `rawGrams`, `cookedGrams`, `piecesPerBatch`, `labourMinutes`, `labourPeople`); the draft is not synced between tablets.
+- **Specs:** `labClock.spec.ts` (clock from the start instant, a reload, a start in the future), `keypadRules.spec.ts`, `labModel.spec.ts` (steps
+  with / without pieces, ticks, typing, the mapping onto the product, the lab's figures equal to the shared model on the card's own working
+  copy, the counts, the minutes), `labDraft.spec.ts` (round trip, corrupt, clamps, no storage, not under `KEEP_PREFIXES`), `labSave.spec.ts`,
+  `LabMode.spec.tsx` (the whole flow on the real card with the fake source: door, steps, keypad and keyboard, tick, add a line, the save
+  question, the write and its margin point, Esci / Riprendi, a clock after a reload, a corrupt draft, Italian). They do NOT measure layout
+  (jsdom): 1024, 360 and 296 wide, the real tablet's Chrome 101 and the feel of the keypad are for a driver and Federico.
