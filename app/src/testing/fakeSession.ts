@@ -16,6 +16,8 @@ type FakeStore = SessionStore & {
   switchLocation: Mock<SessionStore['switchLocation']>;
   changesStillWaiting: Mock<SessionStore['changesStillWaiting']>;
   refreshLocation: Mock<SessionStore['refreshLocation']>;
+  redeemJoinCode: Mock<SessionStore['redeemJoinCode']>;
+  openJoinedVenue: Mock<SessionStore['openJoinedVenue']>;
 };
 
 // By default: the owner of one venue, signed in and ready, in English.
@@ -53,6 +55,9 @@ export function fakeStore(partial: Partial<Session> = {}): FakeStore {
     switchLocation: vi.fn<SessionStore['switchLocation']>(() => Promise.resolve()),
     changesStillWaiting: vi.fn<SessionStore['changesStillWaiting']>(() => Promise.resolve(false)),
     refreshLocation: vi.fn<SessionStore['refreshLocation']>(() => Promise.resolve()),
+    // By default the server accepts the code for the venue `joined`; a spec makes it refuse with mockRejectedValue.
+    redeemJoinCode: vi.fn<SessionStore['redeemJoinCode']>(() => Promise.resolve('joined')),
+    openJoinedVenue: vi.fn<SessionStore['openJoinedVenue']>(() => Promise.resolve()),
     set(next) {
       // A spec that moves `canManage` alone means the venue's powers moved with it; a partial owner
       // says `canManageVenue` out loud.

@@ -48,6 +48,11 @@ export interface SessionBackend {
   // Is something typed on this phone still waiting to reach the server? true after `ms` with
   // nothing confirmed (usually: no signal).
   changesStillWaiting(ms?: number): Promise<boolean>;
+  // Calls a Cloud Function (an «https callable», region us-central1) and resolves with what it returned; rejects with the
+  // SDK's error (its `code`, `message` and `details`) when it fails or `timeoutMs` passes. The Functions SDK is loaded on
+  // first use. In the session's interface since staff slice 1: joining with a code changes WHICH VENUES this account has,
+  // and that is the session's business (session.ts redeemJoinCode).
+  callFunction(name: string, data: unknown, timeoutMs: number): Promise<unknown>;
 }
 
 // The two Storage methods the session uses, so a spec can pass a Map-backed fake.
