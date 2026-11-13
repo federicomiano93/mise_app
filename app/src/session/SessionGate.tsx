@@ -63,16 +63,22 @@ export function SessionGate({ children }: { children: ReactNode }) {
   const showJoin = joinShown(session.status, join);
 
   // ⚠️ A PENDING INVITATION IS FORGOTTEN ON SIGN-OUT, from wherever it came (this window's own «Log out» also clears the
-  // stored copy in session.ts; another tab's sign-out arrives only as this status). Only a sign-out: a window that OPENS
-  // signed out with a link must keep it for after the sign-in.
-  const hadAccount = useRef(false);
+  // stored copy in session.ts; another tab's sign-out arrives only as this status), AND WHEN ANOTHER PERSON TAKES THE
+  // PLACE of the signed-in one with no sign-out step between (code review, 13 Nov 2026): the key is for the first one's
+  // account. Only these: a window that OPENS signed out with a link must keep it for after the sign-in.
+  const lastUid = useRef<string | null>(null);
+  const uid = session.user?.uid ?? null;
   useEffect(() => {
-    if (session.user) { hadAccount.current = true; return; }
-    if (session.status === 'signed-out' && hadAccount.current) {
-      hadAccount.current = false;
+    if (uid) {
+      if (lastUid.current && lastUid.current !== uid) flowStore.cancel();
+      lastUid.current = uid;
+      return;
+    }
+    if (session.status === 'signed-out' && lastUid.current) {
+      lastUid.current = null;
       flowStore.cancel();
     }
-  }, [session.status, session.user, flowStore]);
+  }, [session.status, uid, flowStore]);
 
   // The join form went away (Back, or the venue opened) onto the app or the venue picker: the focus goes to that screen, once
   // it is drawn, never left on the page. («No location yet» puts it on its own button: `returned`.)

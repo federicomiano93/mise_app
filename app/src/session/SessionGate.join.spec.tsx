@@ -254,6 +254,14 @@ describe('a pending invitation is forgotten on sign-out', () => {
     expect(storage.map.has(PENDING_INVITE_KEY)).toBe(false);
   });
 
+  // Another person taking the place of the signed-in one with no sign-out step (an expired session, the form, a different account).
+  test('another person signed in with no sign-out between: forgotten too', async () => {
+    const { store, flow, storage } = draw(NO_ACCESS, { invited: TOKEN });
+    act(() => { store.set({ status: 'loading', user: { uid: 'somebody-else', email: 'else@club.test', isAnonymous: false } }); });
+    expect(flow.getSnapshot().invited).toBe('');
+    expect(storage.map.has(PENDING_INVITE_KEY)).toBe(false);
+  });
+
   // The person a link is for may open it signed out: it must wait for the sign-in.
   test('a window that OPENS signed out keeps it, and offers it once signed in', async () => {
     const { store, flow } = draw({ status: 'loading', user: null }, { invited: TOKEN });
