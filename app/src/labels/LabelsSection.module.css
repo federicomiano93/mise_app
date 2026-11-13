@@ -216,7 +216,9 @@
   font-weight: 600;
 }
 
-.chevron {
+/* Qualified, so it outranks base.css's `svg.lucide` size of 20px. */
+.row .chevron,
+.choice .chevron {
   flex: none;
   width: 18px;
   height: 18px;

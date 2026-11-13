@@ -218,5 +218,31 @@ describe('Back, one level at a time: label → recipe list → the two choices �
     await user.click(await card('HACCP label').findByRole('button', { name: 'Back' }, LOAD));
     await waitFor(() => { expect(router.state.location.pathname).toBe('/labels'); });
     expect(router.state.historyAction).toBe('REPLACE');
+    // The Back button that held the focus is gone with the list: the focus goes to the choice, never to the page's body.
+    await waitFor(() => { expect(main().getByRole('link', { name: 'HACCP label' })).toHaveFocus(); });
+  });
+
+  it('Back from a label puts the list where it was scrolled, after the shell has put it at the top', async () => {
+    const { user } = open({ path: '/labels/product' });
+    const main = screen.getByRole('main');
+    // jsdom does not scroll: the position is planted on the shell's scroll area, as the Stocktake's scroll spec does.
+    Object.defineProperty(main, 'scrollTop', { value: 0, writable: true });
+    const bun = await card('Product label').findByRole('button', { name: 'Mystery bun' }, LOAD);
+    main.scrollTop = 640;
+    await user.click(bun);
+    expect(await screen.findByText('No label can be made', undefined, LOAD)).toBeInTheDocument();
+    await user.click(within(main).getByRole('button', { name: 'Back' }));
+    const again = await card('Product label').findByRole('button', { name: 'Mystery bun' }, LOAD);
+    await waitFor(() => { expect(again).toHaveFocus(); });
+    expect(main.scrollTop).toBe(640);
+  });
+});
+
+describe('a broken recipes feed', () => {
+  it('is said, as the Recipe catalogue says it, instead of passing for an empty list', async () => {
+    const source = fakeRecipesSource({ recipes: [], ingredients: INGREDIENTS });
+    source.refuse.recipes = true;
+    renderRecipes('/labels/product', { source, session: { location: { country: 'GB' } } });
+    expect(await screen.findByText('Live sync interrupted — recipes may be out of date.', undefined, LOAD)).toBeInTheDocument();
   });
 });

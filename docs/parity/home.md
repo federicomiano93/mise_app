@@ -414,3 +414,18 @@ on a phone, current in the rail, the usage names, `STAFF_CARDS` unchanged); `lab
 the search, the HACCP category, each kind opening its own screen, a refused label refused the same way, Back at every level with
 the focus, the browser's Back, the keyboard, a list opened by address); `shell/railHeight.spec.ts` (ten items, the new steps).
 **Not driven yet:** the emulator at 1024 / 360 / 296 with axe-core, and the real tablet (SM-T550) and phone — on Federico's PC.
+
+### Labels card — review fixes (13 Nov 2026)
+
+- **A list opened by its address** (a bookmark, a reload): its Back replaces it with the choices and now marks the move
+  (`BACK_TO_CHOICES`), so the choices give the focus to the choice instead of leaving it on the page's body.
+- **Back from a label keeps the list's place.** Coming back is a change of section, so the shell puts its scroll area at the top
+  in its own effect, which runs after the list's: the list writes its scroll position down at the tap and, a frame later, puts it
+  back and focuses the row without scrolling.
+- **A broken recipes feed is said** («Live sync interrupted — recipes may be out of date.»), as the Recipe catalogue says it,
+  instead of passing for «No recipes yet».
+- Left as they are, for Federico: the label's «Allergens / Nutrition / Both» choice is kept only while the Recipe catalogue stays
+  open, so from «Labels» each label starts on the default again; «Product label» lists every recipe that is not archived, also
+  those whose label can only be refused (allergens off, ingredients not declared), which the label screen then explains; the
+  «Recipes» switch in «Sections for employees» now hides «Labels» too, and its name does not say so; the choices' Back replaces
+  the screen with the Home, so the history holds the Home twice after a visit from the rail.

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ChevronRight, Search, ShieldCheck, Tag } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { Link, Navigate, useLocation, useNavigate, useNavigationType } from 'react-router';
@@ -9,11 +9,14 @@ import { categoryOf, withoutArchived } from '@mise/shared/recipe-shelf';
 import { PartBoundary } from '../errors/PartBoundary';
 import type { MessageKey } from '../i18n/en';
 import { useT } from '../i18n/useT';
-import { RecipesProvider, useRecipes } from '../recipes/RecipesContext';
+import { RecipesProvider, useRecipes, useRecipesStore } from '../recipes/RecipesContext';
+import { messageText } from '../recipes/recipesMessages';
 import { FROM_LABELS_HACCP, FROM_LABELS_PRODUCT } from '../recipes/recipesNav';
 import { haccpPath, labelPath } from '../recipes/recipesPath';
 import { KEEP_FOCUS, Page } from '../shell/Page';
+import { ScrollAreaContext } from '../shell/scrollArea';
 import { FormBar } from '../ui/FormBar';
+import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { LABELS_PATH, LABEL_KINDS, labelListPath, parseLabelsPath } from './labelsPath';
 import type { LabelKind } from './labelsPath';
 import styles from './LabelsSection.module.css';
@@ -45,14 +48,27 @@ export default function LabelsSection() {
         ) : (
           // The recipes are listened to only while a list is on screen (P14): the choices need none of them.
           <RecipesProvider>
-            <PartBoundary resetKey={view.label}>
-              <RecipeList key={view.label} kind={view.label} />
-            </PartBoundary>
+            <StatusMessageProvider>
+              <StoreMessages />
+              <PartBoundary resetKey={view.label}>
+                <RecipeList key={view.label} kind={view.label} />
+              </PartBoundary>
+            </StatusMessageProvider>
           </RecipesProvider>
         )}
       </div>
     </Page>
   );
+}
+
+// What the store reports (the recipes' feed broken) is said in the status message, as the Recipe catalogue says it: without it a
+// refused read on an empty phone would read as «No recipes yet».
+function StoreMessages() {
+  const { t } = useT();
+  const store = useRecipesStore();
+  const say = useStatusMessage();
+  useEffect(() => store.onMessage(message => { say(messageText(t, message)); }), [store, say, t]);
+  return null;
 }
 
 // ── Where the focus goes back to ─────────────────────────────────────────────
@@ -62,13 +78,19 @@ export default function LabelsSection() {
 // A module variable because the whole section is unmounted while the label is open; it holds a kind, a search and an id —
 // nothing of the venue's that could outlive a venue switch, which reloads the page anyway.
 let owedChoice: LabelKind | null = null;
-let owedRow: { kind: LabelKind; id: string; query: string } | null = null;
+let owedRow: { kind: LabelKind; id: string; query: string; top: number } | null = null;
 
 // What the choices put in the navigation's state: the list one level down knows the choices are one step behind it.
 // KEEP_FOCUS: the page leaves the focus alone, and the list puts it on its own title.
 const FROM_CHOICES = { ...KEEP_FOCUS, fromChoices: true } as const;
 
 const cameFromChoices = (state: unknown): boolean => typeof state === 'object' && state !== null && 'fromChoices' in state;
+
+// What a list opened by its address puts in the state when its Back REPLACES it with the choices: a return like a POP, so the choices
+// hand the focus back (the Back button that held it is gone with the list).
+const BACK_TO_CHOICES = { ...KEEP_FOCUS, backToChoices: true } as const;
+
+const backToChoices = (state: unknown): boolean => typeof state === 'object' && state !== null && 'backToChoices' in state;
 
 // What each kind says. KEYS, resolved while drawing (a constant holding the words would freeze the language the page booted in).
 const KIND: Readonly<Record<LabelKind, { title: MessageKey; sub: MessageKey; icon: LucideIcon }>> = {
@@ -85,15 +107,16 @@ function Choices() {
   const { t } = useT();
   const navigate = useNavigate();
   const navigationType = useNavigationType();
+  const { state } = useLocation();
   const titleId = useId();
   const links = useRef(new Map<LabelKind, HTMLAnchorElement>());
 
-  // Back from a list (the browser's Back, a POP) gives the focus back to the choice that opened it. Any other arrival leaves it
-  // to the page, which puts it on the h1.
+  // Back from a list (the browser's Back, a POP, or the replace of a list opened by its address) gives the focus back to the
+  // choice that opened it. Any other arrival leaves it to the page, which puts it on the h1.
   useEffect(() => {
     const owed = owedChoice;
     owedChoice = null;
-    if (owed !== null && navigationType === 'POP') links.current.get(owed)?.focus();
+    if (owed !== null && (navigationType === 'POP' || backToChoices(state))) links.current.get(owed)?.focus();
   }, []);
 
   return (
@@ -168,6 +191,7 @@ function RecipeList({ kind }: { kind: LabelKind }) {
   const titleId = useId();
   const title = useRef<HTMLHeadingElement>(null);
   const rows = useRef(new Map<string, HTMLButtonElement>());
+  const scrollArea = useContext(ScrollAreaContext);
 
   // Back from a label (a POP) brings back the search as it was and owes the focus to the row that opened it. Read here, and
   // forgotten by the effect below (an initializer must not change anything: Strict Mode runs it twice).
@@ -190,11 +214,23 @@ function RecipeList({ kind }: { kind: LabelKind }) {
   useEffect(() => {
     if (returning === null && cameFromChoices(state) && navigationType !== 'POP') title.current?.focus();
   }, []);
+  //
+  // ⚠️ AFTER THE SHELL'S RESET, IN THE NEXT FRAME. Coming back from the label is a change of SECTION (Recipes → Labels), so the
+  // shell puts its scroll area at the top — in its own effect, which runs AFTER this child's. Focused here, the row would scroll
+  // into view and then be scrolled away, the focus ring out of sight. So the place written down at the tap is put back, and the
+  // row focused without scrolling, a frame later. `delivered` is set inside the frame: Strict Mode cancels the first one.
   const delivered = useRef(false);
   useEffect(() => {
     if (!ready || returning === null || delivered.current) return;
-    delivered.current = true;
-    (rows.current.get(returning.id) ?? title.current)?.focus();
+    const frame = requestAnimationFrame(() => {
+      delivered.current = true;
+      const area = scrollArea.element();
+      if (area) area.scrollTop = returning.top;
+      const row = rows.current.get(returning.id);
+      if (row) row.focus({ preventScroll: area !== null });
+      else title.current?.focus();
+    });
+    return () => { cancelAnimationFrame(frame); };
   }, [ready]);
 
   // One level up. From the choices, the entry behind this one IS the choices: the browser's Back. Opened by its address, there
@@ -203,11 +239,11 @@ function RecipeList({ kind }: { kind: LabelKind }) {
   const leave = useCallback(() => {
     owedChoice = kind;
     if (fromChoices) void navigate(-1);
-    else void navigate(LABELS_PATH, { replace: true, state: KEEP_FOCUS });
+    else void navigate(LABELS_PATH, { replace: true, state: BACK_TO_CHOICES });
   }, [navigate, fromChoices, kind]);
 
   const open = (id: string) => {
-    owedRow = { kind, id, query };
+    owedRow = { kind, id, query, top: scrollArea.element()?.scrollTop ?? 0 };
     if (kind === 'product') void navigate(labelPath(id), { state: FROM_LABELS_PRODUCT });
     else void navigate(haccpPath(id), { state: FROM_LABELS_HACCP });
   };
