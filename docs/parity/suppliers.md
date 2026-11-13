@@ -1314,7 +1314,7 @@ defects in the Suppliers lists; this is what was done about each, and what the d
 
 - **Rows jump when prices land (current-app `76be75d1`) — fixed.** Measured: at 360 px the rows below moved by up to 325 px when an owner's
   prices arrived after the rows (first row to move: index 5-8). `ItemRow` now keeps the room for a price, unseen, until the prices have
-  answered: a sample price (`£12.50 / kg`, in the venue's money and the «each»/«al pezzo» wording) as the last part of the meta line,
+  answered: a sample price (`£12.50 / kg`: always per kilo, in the venue's money, never the «each»/«al pezzo» wording) as the last part of the meta line,
   `visibility: hidden` and `aria-hidden` (class `.priceRoom`, attribute `data-price-room`). It is drawn only for a person who may write
   prices (`useMayWritePrices`) while `pricesReadable` is false and the row has no price of its own, so an employee gets no gap; a row that
   turns out to have no price gives the room back (as in the current app). The least visible change: no new line, no new element in the
@@ -1342,5 +1342,6 @@ defects in the Suppliers lists; this is what was done about each, and what the d
   app's: unreachable after 10 s without an answer, or at once with an empty copy and `navigator.onLine === false`; an empty copy while
   online stays «Loading…». It goes back to the rows the moment the list answers. Specs: `suppliersStore.status.spec.ts` (clock, copy,
   online), `SuppliersSection.notArrived.spec.tsx` (three tabs, supplier screen, same region, Italian).
+- **Not in scope:** the card screens opened by address (`IngredientCardScreen.tsx`, `SupplierCardScreen.tsx`) still say «Loading…» with no signal.
 - **Differences left for him to decide (not built):** no per-row «Disattiva» / «Riattiva» (the switch is only on the card); no hand-made
   pencil (Mise 2 shows the inverse «Da fattura» tag); a reactivated row leaves the «Non in uso» group at once.

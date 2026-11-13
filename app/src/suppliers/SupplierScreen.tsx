@@ -8,6 +8,8 @@ import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
+import { SPLIT_QUERY } from '../ui/split';
+import { useMediaQuery } from '../ui/useMediaQuery';
 import { useConfirm } from '../ui/useConfirm';
 import { useCopyWait } from './copyWait';
 import { ItemRow, ItemRows } from './ItemRow';
@@ -40,6 +42,8 @@ export function SupplierScreen({ id }: { id: string }) {
   const say = useStatusMessage();
   const store = useSuppliersStore();
   const snapshot = useSuppliers();
+  // On the tablet's split the list beside the supplier says «Loading…» / «has not arrived» already.
+  const split = useMediaQuery(SPLIT_QUERY);
   const deletions = useSupplierDeletions();
   const [confirm, confirmDialog] = useConfirm();
   const [runDelete, deleteDialog] = useDeleteSupplier();
@@ -103,7 +107,7 @@ export function SupplierScreen({ id }: { id: string }) {
     }
     return (
       <section className={styles.waiting}>
-        <NoAnswerYet status={snapshot.suppliersStatus} roomy />
+        <NoAnswerYet status={snapshot.suppliersStatus} roomy quiet={split} />
       </section>
     );
   }
