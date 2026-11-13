@@ -56,7 +56,8 @@ describe('a tap on an ingredient row', () => {
     const { user } = await open();
     await user.click(rowButton('Flour'));
     expect(menu()).toHaveAccessibleName('Actions for Flour');
-    expect(within(menu()).getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Split into 2 parts', 'Order']);
+    // «Calculate from this ingredient» came with 14 Nov 2026 (RecipesSection.fromRow.spec.tsx).
+    expect(within(menu()).getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Split into 2 parts', 'Calculate from this ingredient', 'Order']);
     expect(screen.queryByRole('dialog', { name: 'Focaccia' })).not.toBeInTheDocument();
   });
 
@@ -174,13 +175,13 @@ describe('«Order»', () => {
   it('⚠️ is absent — not disabled — where the venue does not use Orders', async () => {
     const { user } = await open({ session: { location: { sections: { orders: false } } } });
     await user.click(rowButton('Flour'));
-    expect(within(menu()).getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Split into 2 parts']);
+    expect(within(menu()).getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Split into 2 parts', 'Calculate from this ingredient']);
   });
 
   it('is there for the kitchen owner, who is let into Orders', async () => {
     const { user } = await open({ session: { role: 'owner-kitchen', canManage: true, canManageVenue: false, isOwner: true } });
     await user.click(rowButton('Flour'));
-    expect(within(menu()).getAllByRole('menuitem')).toHaveLength(2);
+    expect(within(menu()).getAllByRole('menuitem').map(item => item.textContent)).toContain('Order');
   });
 
 });

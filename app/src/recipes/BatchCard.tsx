@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { BookCheck } from 'lucide-react';
 import { batchWarning, formatWeight, rebaseAmounts, weighableTotalGrams } from '@mise/shared/catalogue-model';
-import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
+import type { CatalogueRecipe, RowScale } from '@mise/shared/catalogue-model';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { useStatusMessage } from '../ui/StatusMessage';
@@ -14,6 +14,8 @@ type Props = {
   recipe: CatalogueRecipe;
   // The batch applied now, in grams, or null for the recipe as written.
   target: number | null;
+  // The row the batch was worked out from («Calculate from this ingredient»: it shows exactly the amount typed), or null.
+  row?: RowScale | null;
   // Whether this person may change the recipe: the very flag that draws the recipe's «Edit» pencil (RecipeView). «Use as base
   // recipe» is a save of the recipe, so it is offered to exactly the same people.
   canEdit: boolean;
@@ -34,7 +36,7 @@ type Props = {
 // «Use as base recipe» (NEW IN MISE 2, 14 Nov 2026; the owner: «I calculate 4500 g of a recipe and I want those 4500 g to become
 // the default recipe»): under «Clear», only while a batch is applied and only for whoever may edit the recipe. It asks first, with
 // both totals, then saves the recipe with exactly the amounts on screen (see useAsBase below).
-export function BatchCard({ recipe, target, canEdit }: Props) {
+export function BatchCard({ recipe, target, row = null, canEdit }: Props) {
   const { t, locale } = useT();
   const store = useRecipesStore();
   const say = useStatusMessage();
@@ -45,11 +47,19 @@ export function BatchCard({ recipe, target, canEdit }: Props) {
   const askingBase = useRef(false);
   // What is typed. It starts from the batch that is applied; a live redraw of the recipe keeps it.
   const [text, setText] = useState(target !== null ? String(Math.round(target)) : '');
+  // ⚠️ THE BOX FOLLOWS A BATCH SET ELSEWHERE: «Calculate from this ingredient» sets the total from the row menu, and the box must
+  // show it (a live change of that row's recipe moves it too). Adjusted while drawing, when the batch moves, never on a redraw that
+  // leaves it where it was — so what is being typed is kept.
+  const [shownFor, setShownFor] = useState(target);
+  if (shownFor !== target) {
+    setShownFor(target);
+    setText(target !== null ? String(Math.round(target)) : '');
+  }
 
   // ⚠️ THE QUESTION NAMES NUMBERS, SO A CHANGE UNDER IT CLOSES IT: the recipe changed on another phone, or the batch was cleared
   // or changed, while «Use as base?» was open — its totals are no longer what would be saved. Answering «no» saves nothing, and
   // the person asks again over what the screen shows now (as the Export sheet closes on the same change).
-  useEffect(() => { dismissBase(); }, [recipe, target, dismissBase]);
+  useEffect(() => { dismissBase(); }, [recipe, target, row?.index, row?.amount, dismissBase]);
 
   // ⚠️ THE AMOUNTS SAVED ARE THE AMOUNTS SHOWN: rebaseAmounts answers each row's number from the very function the table draws
   // from (scaleCatalogue), in the row's own unit and with the same rounding — pieces, ml, kg and sub-recipe rows alike; a «to
@@ -61,7 +71,7 @@ export function BatchCard({ recipe, target, canEdit }: Props) {
   // Then the batch is cleared — the recipe as written now IS what was on screen — and «Recipe saved.» is said.
   async function useAsBase() {
     if (askingBase.current || target === null) return;
-    const amounts = rebaseAmounts(recipe, target);
+    const amounts = rebaseAmounts(recipe, target, row);
     if (amounts === null) return;
     askingBase.current = true;
     try {

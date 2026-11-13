@@ -1046,6 +1046,83 @@ describe('rebaseAmounts: the batch shown becomes the recipe (Mise 2 only)', () =
   });
 });
 
+// ── «Calculate from this ingredient» (Mise 2 only, 14 Nov 2026): no original in js/ ─────────────────────────────────
+
+describe('scaleFromRow: the whole recipe from one ingredient’s amount (Mise 2 only)', () => {
+  // The owner's recipe: sugar 800 g → 1000 g.
+  const OWNER = { id: 'o', name: 'Brioche', ingredients: [
+    { label: 'Flour', grams: 2000, unit: 'g' }, { label: 'Butter', grams: 800, unit: 'g' }, { label: 'Sugar', grams: 800, unit: 'g' },
+    { label: 'Eggs', grams: 775, unit: 'g' },
+  ] };
+  const MIXED = { id: 'm', name: 'Mixed', ingredients: [
+    { label: 'Flour', grams: 250, unit: 'g' }, { label: 'Eggs', grams: 3, unit: 'pcs' }, { label: 'Milk', grams: 0.5, unit: 'l' },
+    { label: 'Cream', grams: 120, unit: 'ml' }, { label: 'Salt', grams: 0, unit: 'to taste' },
+    { label: 'Base', grams: 330, unit: 'g', kind: 'recipe', refId: 'r9' },
+  ] };
+  const sum = (list: readonly (number | null)[]) => list.reduce<number>((a, b) => a + (b ?? 0), 0);
+
+  test('the owner’s example: sugar 800 g → 1000 g gives butter 1000 g, flour 2500 g, a total of about 5469 g', () => {
+    const out = ported.scaleFromRow(OWNER, 2, 1000)!;
+    expect(out.amounts).toStrictEqual([2500, 1000, 1000, 969]);
+    expect(out.amount).toBe(1000);
+    expect(out.target).toBeCloseTo(5468.75, 9);
+    expect(sum(out.amounts), 'the rows add up to the total shown').toBe(Math.round(out.target));
+  });
+
+  test('⚠️ the chosen row is EXACT even when it is the largest row (the rounding residual never lands on it)', () => {
+    const recipe = { ingredients: [{ label: 'A', grams: 333 }, { label: 'B', grams: 333 }, { label: 'C', grams: 334 }] };
+    for (const wanted of [101, 500, 777, 1001, 12345]) {
+      const out = ported.scaleFromRow(recipe, 2, wanted)!;
+      expect(out.amounts[2], String(wanted)).toBe(wanted);
+      expect(sum(out.amounts), String(wanted)).toBe(Math.round(out.target));
+    }
+  });
+
+  test('the others are proportional, each rounded in its own unit as scaleCatalogue does today', () => {
+    const out = ported.scaleFromRow(MIXED, 0, 500)!; // ×2
+    expect(out.amounts).toStrictEqual([500, 6, 1, 240, null, 660]);
+    expect(out.target).toBe(2400);
+    const byTotal = ported.scaleCatalogue(MIXED, out.target);
+    out.amounts.forEach((value, i) => { if (i !== 0) expect(value, String(i)).toBe(byTotal[i]); });
+  });
+
+  test('from a pieces row, a millilitre row, a litre row and a sub-recipe row', () => {
+    expect(ported.scaleFromRow(MIXED, 1, 4)!.amounts[1]).toBe(4);
+    expect(ported.scaleFromRow(MIXED, 1, 4)!.target).toBeCloseTo(1200 * 4 / 3, 9);
+    expect(ported.scaleFromRow(MIXED, 3, 180)!.amounts).toStrictEqual([375, 5, 0.75, 180, null, 495]);
+    expect(ported.scaleFromRow(MIXED, 2, 0.75)!.amounts[2]).toBe(0.75);
+    expect(ported.scaleFromRow(MIXED, 5, 495)!.amounts).toStrictEqual([375, 5, 0.75, 180, null, 495]);
+  });
+
+  test('the amount typed is rounded only to what its unit shows: 3.6 pieces read 4, 1.23456 l reads 1.235', () => {
+    expect(ported.scaleFromRow(MIXED, 1, 3.6)!.amount).toBe(4);
+    expect(ported.scaleFromRow(MIXED, 2, 1.23456)!.amount).toBe(1.235);
+  });
+
+  test('nothing to scale from: no row there, «to taste», 0, a junk or tiny amount, nothing weighable — null, never NaN', () => {
+    for (const index of [-1, 6, 1.5, '0', null, NaN]) expect(ported.scaleFromRow(MIXED, index, 100), String(index)).toBe(null);
+    expect(ported.scaleFromRow(MIXED, 4, 5), '«to taste»').toBe(null);
+    expect(ported.scaleFromRow({ ingredients: [{ label: 'A', grams: 0 }, { label: 'B', grams: 5 }] }, 0, 10), 'a row with no amount').toBe(null);
+    for (const amount of [0, -3, 0.4, NaN, Infinity, 'abc', null, undefined]) expect(ported.scaleFromRow(OWNER, 2, amount), String(amount)).toBe(null);
+    expect(ported.scaleFromRow({ ingredients: [{ label: 'Eggs', grams: 6, unit: 'pcs' }] }, 0, 12), 'nothing weighable').toBe(null);
+    for (const odd of [null, undefined, 5, 'x', {}, { ingredients: 'x' }, { ingredients: [null] }]) expect(ported.scaleFromRow(odd, 0, 10), String(odd)).toBe(null);
+  });
+
+  test('scaledAmounts: from the row when it can, otherwise by the total as the batch box does', () => {
+    expect(ported.scaledAmounts(OWNER, 5468.75, { index: 2, amount: 1000 })).toStrictEqual([2500, 1000, 1000, 969]);
+    expect(ported.scaledAmounts(OWNER, 4500)).toStrictEqual(ported.scaleCatalogue(OWNER, 4500));
+    expect(ported.scaledAmounts(OWNER, 4500, null)).toStrictEqual(ported.scaleCatalogue(OWNER, 4500));
+    expect(ported.scaledAmounts(OWNER, 4500, { index: 9, amount: 1000 }), 'the row is gone').toStrictEqual(ported.scaleCatalogue(OWNER, 4500));
+  });
+
+  test('«Use as base recipe» on top of it saves the chosen row exactly, and the others as shown', () => {
+    const out = ported.scaleFromRow(OWNER, 2, 1000)!;
+    expect(ported.rebaseAmounts(OWNER, out.target, { index: 2, amount: 1000 })).toStrictEqual([2500, 1000, 1000, 969]);
+    const mixed = ported.scaleFromRow(MIXED, 3, 180)!;
+    expect(ported.rebaseAmounts(MIXED, mixed.target, { index: 3, amount: 180 })).toStrictEqual([375, 5, 0.75, 180, 0, 495]);
+  });
+});
+
 // ── The LINKED import (owner's decision, 18 Oct 2026): the port only, the current app still copies ──────────────────
 //
 // The tests above that run against both files stay true for both. These are what Mise 2 adds: the Calculator tab an
@@ -1406,8 +1483,10 @@ describe('the port against the original', () => {
   // `supplierLabel` is js/supplier-label.js's, copied into the model and exported (step 3d-6 A2) for the link line.
   // `nameTaken` is not an export of catalogue-model.js: its original is in ingredient-suggest.js (tested above).
   // `calculatorImportKind` is new in Mise 2 with the linked import (18 Oct 2026).
-  // `rebaseAmounts` is new in Mise 2 with «Use as base recipe» (14 Nov 2026).
-  const ADDED = ['unitTextKey', 'nameTaken', 'supplierLabel', 'calculatorImportKind', 'calculatorRefusal', 'rebaseAmounts'];
+  // `rebaseAmounts` is new in Mise 2 with «Use as base recipe», `scaleFromRow` and `scaledAmounts` with «Calculate from this
+  // ingredient» (14 Nov 2026).
+  const ADDED = ['unitTextKey', 'nameTaken', 'supplierLabel', 'calculatorImportKind', 'calculatorRefusal', 'rebaseAmounts', 'scaleFromRow',
+    'scaledAmounts'];
   // One more parameter each: batchWarning's translator; mergeImportedRecipe's catalogue rows, so a linked copy keeps its
   // yeast knob (Mise 2 only, 18 Oct 2026).
   const ARITY_DIFFERS = ['batchWarning', 'mergeImportedRecipe'];

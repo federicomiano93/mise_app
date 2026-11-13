@@ -283,6 +283,43 @@ describe('the Recipe catalogue store', () => {
     expect(JSON.parse(data.get(SCALED_KEY)!)).toEqual({});
   });
 
+  test('a batch worked out from a row remembers the row (key and amount), in the current app’s entry with one more field', () => {
+    let now = NOW;
+    const { store, data } = makeStore({}, () => now);
+    store.setScaledTarget('r1', 5468.75, { key: 'name:Sugar#1', amount: 1000 });
+    expect(store.scaledTarget('r1')).toBe(5468.75);
+    expect(store.scaledBy('r1')).toEqual({ key: 'name:Sugar#1', amount: 1000 });
+    expect(JSON.parse(data.get(SCALED_KEY)!)).toEqual({ r1: { target: 5468.75, ts: NOW, by: { key: 'name:Sugar#1', amount: 1000 } } });
+    // Older than 12 hours: no batch, no row.
+    now = NOW + SCALED_TTL_MS + 1;
+    expect(store.scaledBy('r1')).toBeNull();
+    now = NOW;
+    // A total typed in the batch box replaces the entry and forgets the row.
+    store.setScaledTarget('r1', 4000);
+    expect(store.scaledBy('r1')).toBeNull();
+    expect(JSON.parse(data.get(SCALED_KEY)!)).toEqual({ r1: { target: 4000, ts: NOW } });
+    // A junk row is not remembered (the batch still is).
+    for (const by of [{ key: '', amount: 5 }, { key: 'k', amount: 0 }, { key: 'k', amount: Number.NaN }, { key: 'k', amount: -1 }]) {
+      store.setScaledTarget('r1', 100, by);
+      expect(store.scaledBy('r1'), JSON.stringify(by)).toBeNull();
+      expect(store.scaledTarget('r1')).toBe(100);
+    }
+  });
+
+  test('a stored row is read back only when well formed; the current app’s plain entry has none', () => {
+    const { store } = makeStore({ [SCALED_KEY]: JSON.stringify({
+      a: { target: 900, ts: NOW, by: { key: 'name:Sugar#1', amount: 1000 } },
+      b: { target: 900, ts: NOW },
+      c: { target: 900, ts: NOW, by: { key: 5, amount: 'x' } },
+      d: { target: 900, ts: NOW, by: 'junk' },
+    }) });
+    expect(store.scaledBy('a')).toEqual({ key: 'name:Sugar#1', amount: 1000 });
+    for (const id of ['b', 'c', 'd']) {
+      expect(store.scaledBy(id), id).toBeNull();
+      expect(store.scaledTarget(id), id).toBe(900);
+    }
+  });
+
   test('a batch of nothing, of a negative or of junk is not remembered', () => {
     const { store } = makeStore();
     store.setScaledTarget('r1', 0);

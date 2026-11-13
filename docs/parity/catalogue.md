@@ -2006,3 +2006,49 @@ each unit as shown, «to taste» kept, the round trip through `baseAmounts`, odd
 totals and Cancel, the saved rows equal to the rows read for every unit and a sub-recipe row with no other field sent or changed, the
 batch cleared and «Recipe saved.» with the focus on the box, the all-grams sum, a refused save, a change under the open question,
 Italian, an employee, and the card with `canEdit` false). Not driven on the emulator or a device yet.
+
+## Scale by ingredient as built (14 Nov 2026) — NEW IN MISE 2, no original in the current app
+
+The owner (14 Nov 2026): calculate the whole recipe from the amount of ONE ingredient (sugar 800 g → «I want 1000 g of sugar»).
+
+**What it does.**
+- **The row menu** (`RowMenu.tsx`) gains «Calculate from this ingredient» / «Calcola da questo ingrediente», after «Split into 2 parts»
+  and before «Order». It is ABSENT (not disabled) on a row it cannot work from: no amount or 0, «to taste», or a recipe with nothing
+  weighable (the batch is remembered as grams, like the batch box's, which is also absent then). Offered to everybody: it only changes
+  what is shown.
+- **The dialog** (`FromRowDialog.tsx`, `ui/Dialog`): «How much {name} do you want?» / «Quanto {name} vuoi?», one number box labelled
+  «Amount ({unit})» / «Quantità ({unit})» in the row's OWN unit (g, pcs, ml, kg…), focused at opening, the unit after it; «Calculate» /
+  «Cancel». Enter calculates. An empty box, 0 or an amount that rounds to 0 in its unit says «Enter an amount greater than 0.»; a batch
+  over 10 tonnes (`MAX_FROM_ROW_TARGET_G`, the database's bound on a weighing) says «That would be more than 10 tonnes of dough. Check
+  the amount.» — both under the box, in a live region present empty, tied by `aria-describedby`, the box `aria-invalid`. Past 100 kg or
+  50 times the recipe the batch box's own louder question follows (`batchWarning`, never a block). Cancel, and a calculation, give the
+  focus back to the row's name button.
+- **The calculation** (`scaleFromRow` of `shared/src/catalogue-model.ts`, Mise 2 only): factor = typed ÷ the row's amount. ⚠️ THE CHOSEN
+  ROW SHOWS EXACTLY THE AMOUNT TYPED (rounded only to what its unit shows: whole g / pcs / ml, kg and l to the gram); the others are
+  rounded as `scaleCatalogue` rounds them today — each in its own unit, and for an all-grams recipe the exact-sum rounding with the
+  residual on the largest OTHER row, so the rows still add up to the total. The owner's example: sugar 800 → 1000 g gives butter 1000 g,
+  flour 2500 g, total 5469 g. `scaledAmounts` is the ONE rule the table, the full screen, the export and «Use as base recipe» draw a batch
+  with.
+- **Remembered** in the batch's own place (`catalogue-scaled`, 12 h, this device), with one more field: `{ target, ts, by: { key,
+  amount } }`, `key` being the row's `rowKeysOf` key (the linked record or the typed name), so a row added above it elsewhere does not
+  lose it. ⚠️ The current app reads `target` and `ts` only and keeps the entry whole: it shows such a batch by its total. On every draw the
+  batch is worked out again from the row's CURRENT amount (`recipeScale.ts`, `resolveScale`): the row still reads what was typed and the
+  total follows; a row gone or no longer usable falls back to the remembered total, with no row named.
+- **On screen** the batch box shows the new total (the box now follows a batch set elsewhere; a redraw that leaves the batch where it was
+  keeps what is being typed), and a line under the ingredient table says «Calculated from {name}: {amount}» / «Calcolata su {name}:
+  {amount}» with a quiet «Undo» / «Annulla» back to the base recipe (the focus then goes to that ingredient). A total typed in the box
+  afterwards replaces it (the line goes). «Use as base recipe» works on it and saves the typed row exactly.
+
+**Deliberate limits.**
+- The row menu is still not in the full-screen view (its rows are read-only text, as decided with item 32); the full screen SHOWS the batch
+  worked out from a row, the chosen row exact.
+- A guided mix started from such a batch takes its total (`targetGrams`, the current app's session shape), so in an all-grams recipe the
+  chosen row can read a gram off inside the mix.
+
+**Specs.** `shared/src/catalogue-model.spec.ts` («scaleFromRow: the whole recipe from one ingredient’s amount»: the owner's example, the
+chosen row exact even when largest, proportional others, pieces, ml, l and sub-recipe rows, rounding the typed amount, odd inputs → null,
+`scaledAmounts`, `rebaseAmounts` on top); `app/src/recipes/recipesStore.spec.ts` (the row remembered, forgotten by a typed total, junk
+ignored, the current app's plain entry); `app/src/recipes/RecipesSection.fromRow.spec.tsx` (the owner's example with the box and the line,
+the labelled focused box, the refusals, the louder question, Cancel, absent on 0 and «to taste», pieces, ml and a sub-recipe row, Undo,
+remembered, replaced by a typed total, the full screen, «Use as base recipe» on top, Italian); `RecipesSection.rowMenu.spec.tsx` (the
+third item). Not driven on the emulator or a device yet.

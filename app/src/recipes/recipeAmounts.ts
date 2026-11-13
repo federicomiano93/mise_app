@@ -1,5 +1,5 @@
-import { baseAmounts, roundInUnit, scaleCatalogue, unitDecimals, unitOf, unitTextKey, weighableTotalGrams } from '@mise/shared/catalogue-model';
-import type { CatalogueRecipe } from '@mise/shared/catalogue-model';
+import { baseAmounts, roundInUnit, scaledAmounts, unitDecimals, unitOf, unitTextKey, weighableTotalGrams } from '@mise/shared/catalogue-model';
+import type { CatalogueRecipe, RowScale } from '@mise/shared/catalogue-model';
 import type { MessageKey } from '../i18n/en';
 import type { MessageParams } from '../i18n/i18n';
 
@@ -45,9 +45,11 @@ export function unitWord(t: Translate, unit: string): string {
 // recipe as written otherwise. `locale` is the interface's (useT().locale), for the decimal mark. The total is the WEIGHABLE mass in grams (weight and volume rows):
 // when scaled it is the target, at base the recipe's own. Pieces and «to taste» rows are shown above
 // but never enter it.
-export function recipeAmounts(recipe: CatalogueRecipe, target: number | null, t: Translate, locale: string): RecipeAmounts {
+// `row`: the batch was worked out from that row («Calculate from this ingredient»), which then shows exactly the amount typed
+// (shared `scaledAmounts`, the one rule «Use as base recipe» saves by too).
+export function recipeAmounts(recipe: CatalogueRecipe, target: number | null, t: Translate, locale: string, row?: RowScale | null): RecipeAmounts {
   const goal = target !== null && target > 0 ? target : null;
-  const amounts = goal !== null ? scaleCatalogue(recipe, goal) : baseAmounts(recipe);
+  const amounts = goal !== null ? scaledAmounts(recipe, goal, row) : baseAmounts(recipe);
   const rows = recipe.ingredients.map((ing, index): AmountRow => {
     const value = amounts[index] ?? null;
     return value === null
