@@ -2189,6 +2189,8 @@ export const it: Messages = {
   'ord.noSuppliersYet': 'Ancora nessun fornitore',
   'ord.noSuppliersYetSub': 'Aggiungi i tuoi fornitori e ingredienti in Ingredienti e fornitori.',
   'ord.saveFailed': 'Non è stato possibile salvare l’ordine — controlla la rete. Tieni aperta questa pagina.',
+  'ord.refusedEarlier.title': 'Quantità non salvata',
+  'ord.refusedEarlier.message': 'Non sono riuscito a salvare in Ordini la quantità che hai scritto prima di uscire. Controlla l’ordine prima di inviarlo.',
   'ord.liveLost': 'Persa la connessione dal vivo per {what}. Quello che vedi potrebbe non essere aggiornato — ricarica la pagina.',
   'ord.live.draft': 'l’ordine in corso',
   'ord.live.suppliers': 'i fornitori',

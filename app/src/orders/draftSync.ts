@@ -17,6 +17,8 @@ import {
   DRAFT_JOURNAL_MAX_AGE_MS, historyLookBackDay, orderedSince, readJournal, writeJournal,
 } from '@mise/shared/draft-journal';
 import type { DraftJournal, JournalStorage, NotedFields, NotedLine } from '@mise/shared/draft-journal';
+import { readRefusedNote, writeRefusedNote } from './refusedNote';
+import type { RefusedNote } from './refusedNote';
 
 // One line of the order, as stored: `qty` and `stock` are whole numbers; `unit` only when the line is not in the card's
 // own unit ('' = back to the card's unit); `supplierId` only when the line is ordered from another supplier this time
@@ -83,6 +85,16 @@ export interface DraftJournalDeps {
   retryLater(run: () => void, ms: number): void;
   // Lines came back from the note: what the screens draw now. The section can then look again for orders never placed.
   onCameBack(view: DraftView): void;
+  // ── A write the server refused after the section closed (item 6 of docs/mise2-port-owed.md, refusedNote.ts) ──
+  // The signed-in person's uid: such a write is noted for this venue AND this person. Absent or '': not noted.
+  readonly person?: string;
+  // An earlier opening noted a refusal nobody has been told about: the section says so now (once).
+  onRefusedEarlier?(): void;
+  // Lines refused after an earlier opening closed are back on screen, held as a refusal on this opening would hold them:
+  // what the screens draw now.
+  onRefusedBack?(view: DraftView): void;
+  // A refusal was just noted after the section closed: an opening of Orders already on screen looks at once (lookForRefused).
+  refusedNoted?(): void;
 }
 
 // Debounce to limit Firestore writes (P14): one write per pause in the typing, never one per keystroke.
@@ -121,6 +133,9 @@ export interface DraftSync {
   // both.
   stopJournal(): void;
   startJournal(): void;
+  // Reads what earlier openings had refused after they closed (refusedNote.ts): said once, then judged on the server's word and
+  // handed back as a refusal. Called by startJournal, and again when another opening has just noted one.
+  lookForRefused(): void;
   // These lines (and these suppliers' day stamps) leave THIS phone now, before their clear is written: from the screen's
   // copy, from the baseline and from what this phone claims. `quantitiesOnly` keeps each line's stock reading (a «Clear
   // quantities», draft.js clearQuantities); otherwise the whole line goes (an order was recorded, draft.js clearSupplier).
@@ -210,6 +225,9 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
   // The writes in the air, as sent: a snapshot never releases their fields (it may be Firestore showing this phone's own
   // write before the server answers), and a refused one hands them back.
   const flights: Array<{ entries: Rows; days: MutableDays }> = [];
+  // Each write's base as it left, and the bases of the earlier writes it corrected (noteRefused).
+  const flightBases = new Map<object, { entries: Rows; days: MutableDays }>();
+  const flightAlternatives = new Map<object, Record<string, Row[]>>();
   // The same writes as answers to wait for (settle).
   const answers = new Set<Promise<unknown>>();
   // The last snapshot, so the screen can be redrawn when a refusal hands typing back.
@@ -246,6 +264,40 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
   let epoch = 0;
   // Writes the server said no to (wasRefused).
   const refused: Array<{ entries: Rows; days: MutableDays }> = [];
+
+  // ── A write refused after the section closed (item 6 of docs/mise2-port-owed.md) ──────────────────────────────────────
+  //
+  // ⚠️ LEAVING ORDERS DOES NOT WAIT FOR THE SERVER (ordersStore.stop sends what waits and goes): a refusal that comes back
+  // afterwards reached nobody, and the quantity was gone without a word. The current app asks «Quantità non salvata» before it
+  // lets the person go. So such a refusal is noted on this device (refusedNote.ts, never in the draft journal: a refused value
+  // there would be replayed at every opening), the next opening says so, and then judges it as the journal is judged — on the
+  // SERVER's word and the orders placed since — and hands back what may come back exactly as a refusal on screen is handed back:
+  // on screen, «not saved», out of the journal, sent with the next change or on leaving. Never sent by itself.
+  const person = journal?.person ?? '';
+  let refusedLeft: RefusedNote | null = null; // what earlier openings had refused, waiting for the server's word
+  // The same, as read: typing takes lines out of `refusedLeft`, but every line read is judged and leaves storage.
+  let refusedRead: RefusedNote | null = null;
+  let refusedAsk = 0; // tells a judgement that began before a stop or a newer reading
+  let serverAnswered = false; // the server's first snapshot has come since this opening started
+  // What came back from that note on THIS opening. Refused again after leaving, it is final, as any refusal is final once it
+  // has been tried again on leaving: it was already said, and a value that can never be saved must not come back for ever.
+  const told: Array<{ entries: Rows; days: MutableDays }> = [];
+  // ⚠️ A REFUSAL HEARD WHILE THIS OPENING IS ON SCREEN IS JUDGED ON THE NEXT SNAPSHOT, not at once (code review, 12 Nov 2026).
+  // Both stores share one Firestore: while the old store's write was queued, Firestore laid it over THIS listener too, so
+  // `known` still holds the refused number, and the snapshot that takes it back comes after the refusal. Judged at once,
+  // «already holding it» read as «it arrived» and the number vanished. Set only when `known` reads as the refused row.
+  let refusedOnNext = false;
+  // Since when what this phone claims has been claimed (ms; 0 = nothing claimed): what a refusal is noted from, so «was it
+  // ordered since?» counts from the keystroke, as the journal's own clock does — not from the refusal, which may come hours
+  // later from a tablet that was offline (code review, 12 Nov 2026).
+  let claimedSince = 0;
+
+  // Starts the claim's clock at the first claim, and stops it once nothing is claimed.
+  function claimedSinceNow() {
+    const claiming = !isEmpty(pending.entries) || !isEmpty(pending.days);
+    if (!claiming) claimedSince = 0;
+    else if (!claimedSince && journal) claimedSince = journal.now();
+  }
 
   function disarm() {
     if (timer !== null) deps.clearTimer(timer);
@@ -480,16 +532,231 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     writeJournal(journal.venue, note, journal.storage());
   }
 
-  // A line typed on this page beats what the last page left for it, whatever comes later.
-  function forgetRestored(id: string, fields: readonly Field[]) {
-    const left = restored?.entries[id];
-    if (!left || !restored) return;
+  // A line typed on this page beats what the last page left for it, whatever comes later — in the journal's note and in the
+  // note of refusals alike.
+  function forgetIn(note: { entries: Record<string, NotedLine> } | null, id: string, fields: readonly Field[]) {
+    const left = note?.entries[id];
+    if (!left || !note) return;
     for (const field of fields) {
       delete left.row[field];
       delete left.base[field];
     }
     if (left.air) left.air = left.air.filter(seen => !fields.some(field => field in seen));
-    if (isEmpty(left.row)) delete restored.entries[id];
+    if (isEmpty(left.row)) delete note.entries[id];
+  }
+  const forgetRestored = (id: string, fields: readonly Field[]) => { forgetIn(restored, id, fields); };
+
+  // A write refused after the section closed: noted for the next opening, field group by field group, with what the server
+  // held when it left (`base`, for stillOurs). Not a group a later write still in the air carries (that one answers for
+  // itself), and not one that already came back from this note on this opening (`told`: final).
+  function noteRefused(
+    sent: { entries: Rows; days: MutableDays },
+    base: { entries: Rows; days: MutableDays },
+    alternatives: Record<string, Row[]>,
+    sentAt: number,
+  ) {
+    if (!journal || !person) return;
+    const storage = journal.storage();
+    const note = readRefusedNote(journal.venue, person, journal.now(), storage)
+      ?? { at: sentAt, told: false, entries: {}, days: {} };
+    // The oldest wins: more orders count as «placed since», and the 24 hours run out sooner — both the safe side.
+    note.at = Math.min(note.at, sentAt);
+    let added = false;
+    for (const [id, row] of Object.entries(sent.entries)) {
+      const sides: Field[][] = [GROUP.filter(field => field in row), 'stock' in row ? ['stock'] : []];
+      for (const fields of sides) {
+        if (fields.length === 0 || fields.some(field => inAir(id, field))) continue;
+        if (told.some(write => write.entries[id] !== undefined && fields.every(field => write.entries[id]?.[field] === row[field]))) continue;
+        const line: NotedLine = note.entries[id] ?? { row: {}, base: {} };
+        const rowOut = line.row as Row;
+        const baseOut = line.base as Row;
+        for (const field of fields) {
+          rowOut[field] = row[field] as number | string;
+          baseOut[field] = base.entries[id]?.[field] ?? (field === 'qty' || field === 'stock' ? 0 : '');
+        }
+        // ⚠️ «5, THEN 6» WITH BOTH IN THE AIR: when the 6 left, `known` already showed the 5 (Firestore lays this phone's own
+        // write over its listener), so its base is 5 — right if the 5 landed, wrong if it was refused too. What the earlier
+        // writes' own bases said goes in `air`, which stillOurs accepts as well (code review, 12 Nov 2026).
+        const seen = (alternatives[id] ?? [])
+          .filter(other => fields.every(field => field in other))
+          .map(other => Object.fromEntries(fields.map(field => [field, other[field]])) as NotedFields)
+          .filter(other => fields.some(field => other[field] !== baseOut[field]));
+        if (seen.length > 0) line.air = [...(line.air ?? []), ...seen];
+        note.entries[id] = line;
+        added = true;
+      }
+    }
+    for (const [id, day] of Object.entries(sent.days)) {
+      if (dayInAir(id) || told.some(write => write.days[id] === day)) continue;
+      note.days[id] = { day, base: base.days[id] ?? '' };
+      added = true;
+    }
+    if (!added) return;
+    // Something new nobody has been told about.
+    writeRefusedNote(journal.venue, person, { ...note, told: false }, storage);
+    journal.refusedNoted?.();
+  }
+
+  // Takes what was judged out of the STORED note (an older opening may have added to it meanwhile): only the very values read.
+  function releaseRefusedNote(judged: RefusedNote) {
+    if (!journal) return;
+    const storage = journal.storage();
+    const note = readRefusedNote(journal.venue, person, journal.now(), storage);
+    if (!note) return;
+    for (const [id, { row }] of Object.entries(judged.entries)) {
+      const line = note.entries[id];
+      if (!line) continue;
+      for (const field of Object.keys(row) as Field[]) {
+        if (line.row[field] !== row[field]) continue;
+        delete line.row[field];
+        delete line.base[field];
+        if (line.air) line.air = line.air.filter(seen => !(field in seen));
+      }
+      if (line.air?.length === 0) delete line.air;
+      if (isEmpty(line.row)) delete note.entries[id];
+    }
+    for (const [id, { day }] of Object.entries(judged.days)) if (note.days[id]?.day === day) delete note.days[id];
+    writeRefusedNote(journal.venue, person, note, storage);
+  }
+
+  // The server has answered: what earlier openings had refused comes back where the line still reads as it did when the write
+  // left and no order has named it since (the journal's own judge, stillOurs + orderedSince), handed back as the refusal path
+  // below hands back — never over a value typed on this page or a write in the air. Says whether anything came back, or null
+  // when the orders could not be read (the note then waits, and is asked again).
+  async function judgeRefused(): Promise<boolean | null> {
+    const left = refusedLeft;
+    const read = refusedRead;
+    if (!journal || !left || !read) return false;
+    // ⚠️ THE 24 HOURS, AGAIN HERE (as settleRestored): not only when the note is read — a page can wait offline for days, and
+    // the server's first word may come long after the alert.
+    const expire = () => {
+      refusedLeft = null;
+      refusedRead = null;
+      releaseRefusedNote(read);
+      return false;
+    };
+    if (journal.now() - left.at > DRAFT_JOURNAL_MAX_AGE_MS) return expire();
+    const asked = refusedAsk;
+    const asJournal: DraftJournal = { at: left.at, entries: left.entries, days: left.days };
+    let ordered = new Set<string>();
+    // Read only when a line may come back, which is rare.
+    if (!isEmpty(stillOurs(asJournal, known).entries)) {
+      try {
+        ordered = orderedSince(await journal.ordersSince(historyLookBackDay(left.at)), left.at);
+      } catch (err) {
+        if (asked !== refusedAsk) return false;
+        console.error('The orders could not be checked, the refused quantities wait:', err);
+        return null;
+      }
+      if (asked !== refusedAsk) return false;
+      if (journal.now() - left.at > DRAFT_JOURNAL_MAX_AGE_MS) return expire();
+    }
+    // Time has passed: `known` has moved on with every snapshot, and typing or a clear has taken lines out of `left`.
+    const { entries, days } = stillOurs(asJournal, known);
+    refusedLeft = null;
+    for (const id of Object.keys(entries)) {
+      if (!ordered.has(id)) continue;
+      const row = entries[id] ?? {};
+      for (const field of GROUP) delete row[field];
+      if (isEmpty(row)) delete entries[id];
+    }
+    const back: { entries: Rows; days: MutableDays } = { entries: {}, days: {} };
+    for (const [id, row] of Object.entries(entries)) {
+      const held: Row = pending.entries[id] ?? {};
+      const groupHeld = GROUP.some(field => field in held);
+      const handed: Row = {};
+      for (const field of Object.keys(row) as Field[]) {
+        const typedOver = (field === 'stock' ? 'stock' in held : groupHeld) || inAir(id, field);
+        if (!typedOver) handed[field] = row[field] as number | string;
+      }
+      if (isEmpty(handed)) continue;
+      Object.assign(held, handed);
+      pending.entries[id] = held;
+      back.entries[id] = handed;
+    }
+    // ⚠️ A day stamp means nothing without its lines (settleRestored): only when every refused quantity came back.
+    const quantities = (rows: readonly Row[]) => rows.filter(row => GROUP.some(field => field in row)).length;
+    const typed = quantities(Object.values(left.entries).map(({ row }) => row as Row));
+    const backCount = quantities(Object.values(back.entries));
+    if (backCount > 0 && backCount === typed) {
+      for (const [id, day] of Object.entries(days)) {
+        if (id in pending.days || dayInAir(id)) continue;
+        pending.days[id] = day;
+        back.days[id] = day;
+      }
+    }
+    // As refused on this opening: never noted in the journal (wasRefused), and final if refused again after leaving.
+    const anything = !isEmpty(back.entries) || !isEmpty(back.days);
+    if (anything) {
+      refused.push(back);
+      told.push(structuredClone(back)); // a copy: change() may take a claimed group out of it (releaseToldGroups)
+      // Claimed since it was first typed, as far as anyone can tell: a refusal noted from it again counts from there.
+      claimedSince = claimedSince ? Math.min(claimedSince, left.at) : left.at;
+    }
+    refusedRead = null;
+    releaseRefusedNote(read);
+    saveJournal();
+    // ⚠️ SAID IN THE SAME STEP AS IT IS HANDED BACK (code review): a newer reading in between must not leave it on screen
+    // without «not saved» and without the busy marker that keeps a reload from throwing it away.
+    if (anything) journal.onRefusedBack?.(view());
+    return anything;
+  }
+
+  function checkRefused() {
+    if (!journal || !refusedLeft || !journalLive) return;
+    const asked = refusedAsk;
+    void judgeRefused().then(back => {
+      if (asked !== refusedAsk) return;
+      if (back === null) {
+        journal.retryLater(() => { if (asked === refusedAsk) checkRefused(); }, ORDERS_RETRY_MS);
+        return;
+      }
+    });
+  }
+
+  // «Final» (`told`) holds while the person keeps what came back. Once the screen no longer claims a group (cleared to the
+  // server's value, nothing of it in the air), typing the same number again is a NEW deliberate act and a refusal of it is
+  // said, not swallowed by a match on the value alone.
+  function releaseToldGroups() {
+    for (const write of told) {
+      for (const [id, row] of Object.entries(write.entries)) {
+        for (const field of Object.keys(row) as Field[]) {
+          const group: readonly Field[] = field === 'stock' ? ['stock'] : GROUP;
+          if (group.some(other => other in (pending.entries[id] ?? {}) || inAir(id, other))) continue;
+          delete row[field];
+        }
+        if (isEmpty(row)) delete write.entries[id];
+      }
+    }
+  }
+
+  // `known` reads as a refused row: Firestore may still be showing that very write, its take-back on its way (refusedOnNext).
+  function showsRefused(note: RefusedNote): boolean {
+    return Object.entries(note.entries).some(([id, { row }]) => {
+      const there = stored(known.entries[id]);
+      const sides: Field[][] = [GROUP.filter(field => field in row), 'stock' in row ? ['stock'] : []];
+      return sides.some(fields => fields.length > 0 && fields.every(field => row[field] === there[field]));
+    });
+  }
+
+  function lookForRefused() {
+    if (!journal || !person || !journalLive) return;
+    const storage = journal.storage();
+    const note = readRefusedNote(journal.venue, person, journal.now(), storage);
+    // A newer reading replaces the one being judged (it holds it, plus what was noted since).
+    refusedAsk += 1;
+    refusedLeft = note;
+    refusedRead = note ? JSON.parse(JSON.stringify(note)) as RefusedNote : null;
+    if (!note) return;
+    if (!note.told) {
+      // Marked before it is said: a second opening (or React's development mode starting twice) does not say it again.
+      writeRefusedNote(journal.venue, person, { ...note, told: true }, storage);
+      journal.onRefusedEarlier?.();
+    }
+    refusedOnNext = false;
+    if (!serverAnswered) return;
+    if (showsRefused(note)) refusedOnNext = true;
+    else checkRefused();
   }
 
   // What this phone's screen holds that the server does not — or will not once the writes in the air have landed.
@@ -569,8 +836,34 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     if (!isEmpty(sent.entries)) payload.entries = sent.entries as MutableEntries;
     if (!isEmpty(sent.days)) payload.days = sent.days;
 
+    // What the server held for those fields as the write leaves (before Firestore shows it here): the base a refusal after
+    // the section closed is noted with (noteRefused).
+    const sentBase: { entries: Rows; days: MutableDays } = { entries: {}, days: {} };
+    for (const [id, row] of Object.entries(sent.entries)) {
+      const there = stored(known.entries[id]);
+      sentBase.entries[id] = Object.fromEntries(Object.keys(row).map(field => [field, there[field as Field]])) as Row;
+    }
+    for (const id of Object.keys(sent.days)) sentBase.days[id] = known.days[id] ?? '';
+    // What the writes still in the air took as their base for the same lines (noteRefused: «5, then 6»).
+    const sentAlternatives: Record<string, Row[]> = {};
+    for (const flight of flights) {
+      const before = flightBases.get(flight);
+      if (!before) continue;
+      for (const id of Object.keys(sent.entries)) {
+        const other = before.entries[id];
+        if (other) (sentAlternatives[id] ??= []).push(other, ...(flightAlternatives.get(flight)?.[id] ?? []));
+      }
+    }
+    const sentAt = claimedSince || (journal ? journal.now() : 0);
+
     flights.push(sent);
-    const land = () => { flights.splice(flights.indexOf(sent), 1); };
+    flightBases.set(sent, sentBase);
+    flightAlternatives.set(sent, sentAlternatives);
+    const land = () => {
+      flights.splice(flights.indexOf(sent), 1);
+      flightBases.delete(sent);
+      flightAlternatives.delete(sent);
+    };
     const answer = deps.save(payload);
     const settled = answer.then(() => undefined, () => undefined);
     answers.add(settled);
@@ -606,6 +899,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       for (const [id, day] of Object.entries(sent.days)) {
         if (!dayInAir(id) && pending.days[id] === day) delete pending.days[id];
       }
+      claimedSinceNow();
       if (journalLive) saveJournal(); else releaseStored(sent);
     }, (err: unknown) => {
       land();
@@ -636,7 +930,13 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       }
       known = { entries, days };
       refused.push(sent);
-      if (journalLive) saveJournal(); else releaseStored(sent);
+      if (journalLive) saveJournal();
+      else {
+        // ⚠️ THE SECTION IS GONE, SO NOBODY HEARD THIS REFUSAL: it leaves the journal (it could never be saved, and would be
+        // replayed for ever) and goes to the note of refusals, which the next opening says and judges (item 6).
+        releaseStored(sent);
+        noteRefused(sent, sentBase, sentAlternatives, sentAt);
+      }
       throw err;
     });
   }
@@ -702,6 +1002,17 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
         settleStarted = true;
         checkNote();
       }
+      // So do the refusals noted after an earlier opening closed — and one heard while this opening is on screen waits for the
+      // snapshot after it (refusedOnNext), the one that takes the refused write back.
+      if (fromServer && !serverAnswered) {
+        serverAnswered = true;
+        refusedOnNext = false;
+        if (refusedLeft) checkRefused();
+      } else if (refusedOnNext && serverAnswered) {
+        refusedOnNext = false;
+        if (refusedLeft) checkRefused();
+      }
+      claimedSinceNow();
       // …but anything typed here and not yet written goes back ON TOP, or the snapshot would erase it mid-keystroke.
       return view();
     },
@@ -713,12 +1024,15 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       openJournal();
       // Claim exactly what differs from the server now: a line put back to the server's value is released at once.
       pending = differences(entries, days);
-      if (restored) {
+      claimedSinceNow();
+      releaseToldGroups();
+      for (const note of [restored, refusedLeft]) {
+        if (!note) continue;
         for (const [id, row] of Object.entries(pending.entries)) {
-          if (GROUP.some(field => field in row)) forgetRestored(id, GROUP);
-          if ('stock' in row) forgetRestored(id, ['stock']);
+          if (GROUP.some(field => field in row)) forgetIn(note, id, GROUP);
+          if ('stock' in row) forgetIn(note, id, ['stock']);
         }
-        for (const id of Object.keys(pending.days)) delete restored.days[id];
+        for (const id of Object.keys(pending.days)) delete note.days[id];
       }
       // …and note it before anything else can happen.
       saveJournal(true);
@@ -732,6 +1046,12 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     stopJournal() {
       journalLive = false;
       epoch += 1;
+      // The refusals noted earlier, likewise: left in storage for the next opening (already said: `told`).
+      refusedAsk += 1;
+      refusedLeft = null;
+      refusedRead = null;
+      refusedOnNext = false;
+      serverAnswered = false;
       // Forgotten here, not in storage: the note stays for the next opening, which reads it afresh.
       restored = null;
       journalOpen = false;
@@ -741,7 +1061,10 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
 
     startJournal() {
       journalLive = true;
+      lookForRefused();
     },
+
+    lookForRefused,
 
     flush,
 
@@ -768,11 +1091,17 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
     // the lines back on screen, which is the truth (they are still in the draft) and is said by the caller.
     forget(ingredientIds, supplierIds, { quantitiesOnly = false } = {}) {
       // What the last page left for these lines goes too: an order placed (or a «clear») beats a number typed before it.
+      // So does what an earlier opening had refused: it must not come back over the clear.
       for (const id of ingredientIds) {
-        if (quantitiesOnly) forgetRestored(id, GROUP);
-        else if (restored) delete restored.entries[id];
+        if (quantitiesOnly) {
+          forgetRestored(id, GROUP);
+          forgetIn(refusedLeft, id, GROUP);
+        } else {
+          if (restored) delete restored.entries[id];
+          if (refusedLeft) delete refusedLeft.entries[id];
+        }
       }
-      if (restored) for (const id of supplierIds) delete restored.days[id];
+      for (const note of [restored, refusedLeft]) if (note) for (const id of supplierIds) delete note.days[id];
       const entries: MutableEntries = { ...known.entries };
       const stored = (lastDoc?.entries && typeof lastDoc.entries === 'object' ? lastDoc.entries : {}) as Record<string, DraftEntry>;
       const shown: Record<string, DraftEntry> = { ...stored };
@@ -806,6 +1135,7 @@ export function createDraftSync(deps: DraftSyncDeps): DraftSync {
       }
       known = { entries, days };
       if (lastDoc) lastDoc = { ...lastDoc, entries: shown, days: shownDays };
+      claimedSinceNow();
       saveJournal();
       return view();
     },

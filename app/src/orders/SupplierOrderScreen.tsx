@@ -85,9 +85,12 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   // «What they sell» button (a layout effect, so before this one), and the title must not take it away.
   const screen = useRef<HTMLElement>(null);
   const shown = supplier !== undefined;
+  // ⚠️ NOT WHILE «QUANTITY NOT SAVED» IS ON SCREEN (refusedEarlier): the alert's modal holds the focus and gives it back to the
+  // body when it closes, which would undo this one-time move. It waits for the alert to be settled, then takes the focus.
+  const alertUp = snapshot.refusedEarlier;
   useEffect(() => {
-    if (shown && cameFromList(state) && !screen.current?.contains(document.activeElement)) title.current?.focus();
-  }, [shown]);
+    if (shown && !alertUp && cameFromList(state) && !screen.current?.contains(document.activeElement)) title.current?.focus();
+  }, [shown, alertUp]);
 
   // The ingredient a recipe row asked for: its quantity box takes the focus, once, when the supplier first shows.
   // ⚠️ Looked for in the rows as drawn: a line switched off and folded away (a closed «Not in use» group) is not found, and neither is
@@ -100,7 +103,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
   const asked = useRef(false);
   const tripDone = typeof state === 'object' && state !== null && 'recipeFocusDone' in state;
   useEffect(() => {
-    if (origin === null || wanted === null || asked.current || tripDone) return;
+    if (origin === null || wanted === null || asked.current || tripDone || alertUp) return;
     asked.current = true;
     const markDone = () => { void navigate({ pathname, search }, { replace: true, state: { ...(typeof state === 'object' && state !== null ? state : {}), ...KEEP_FOCUS, recipeFocusDone: true } }); };
     if (!shown) {
@@ -118,7 +121,7 @@ export function SupplierOrderScreen({ id, lens }: { id: string; lens: OrdersLens
       box.focus({ preventScroll: true });
     }
     markDone();
-  }, [shown]);
+  }, [shown, alertUp]);
 
   // The column names stick right under the bar, whose height changes with the title's lines and the width.
   const barHeight = useHeight();

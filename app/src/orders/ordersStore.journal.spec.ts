@@ -177,3 +177,95 @@ describe('ordersStore — the note of typed quantities (F-15)', () => {
     expect(d.storage.getItem(DRAFT_JOURNAL_KEY)).not.toBeNull(); // left for the next opening
   });
 });
+
+// Item 6 of docs/mise2-port-owed.md: a draft write refused after the section closed. What the sync decides is
+// draftSync.refused.spec.ts; here, that the store hands it the person, says it once (refusedEarlier) and draws what comes back
+// as a refusal on screen (draftSaveFailed, «draft-not-saved»), and hears another opening's refusal only while started.
+describe('ordersStore — a draft write refused after Orders closed', () => {
+  function withSignal(d: ReturnType<typeof device>) {
+    const heard = new Set<() => void>();
+    return {
+      heard,
+      open(source: FakeOrdersSource, person = 'u1') {
+        let timer: (() => void) | null = null;
+        const deps: OrdersDeps = {
+          markBusy: () => () => undefined,
+          today: () => TODAY,
+          draft: { nowIso: () => new Date(NOW).toISOString(), setTimer: run => { timer = run; return 1; }, clearTimer: () => { timer = null; } },
+          online: () => true,
+          journal: {
+            storage: () => d.storage,
+            now: () => NOW,
+            retryLater: run => { d.retries.push(run); },
+            onPageHidden: () => () => undefined,
+            refusedNoted: () => { for (const run of [...heard]) run(); },
+            onRefusedNoted: run => { heard.add(run); return () => { heard.delete(run); }; },
+          },
+        };
+        const store = createOrdersStore(source, deps, VENUE, person);
+        const messages: string[] = [];
+        store.onMessage(message => { messages.push(message.kind); });
+        store.start();
+        stops.push(() => store.stop());
+        return { store, messages, autosave: async () => { const run = timer; timer = null; run?.(); await settle(); } };
+      },
+    };
+  }
+
+  it('says it once at the next opening, then draws it as a refusal: on screen, «not saved»', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const d = device();
+    const signal = withSignal(d);
+    const first = fakeOrdersSource({ suppliers: [mill], ingredients: [flour], draft: { entries: {}, days: {} } });
+    const page = signal.open(first);
+    await settle();
+    expect(signal.heard.size).toBe(1); // heard only while started
+    page.store.editLine(mill, flour, { qty: 4 });
+    first.refuseWrites = true;
+    page.store.stop(); // leaving sends the 4; the server says no once the section is gone
+    expect(signal.heard.size).toBe(0);
+    await settle();
+    await settle();
+    expect(page.messages).toEqual(['draft-not-saved']); // said to nobody: the screen is gone
+
+    const server = fakeOrdersSource({ suppliers: [mill], ingredients: [flour], draft: { entries: {}, days: {} } });
+    const next = signal.open(server);
+    expect(next.store.getSnapshot().refusedEarlier).toBe(true);
+    await settle();
+    await settle();
+    errors.mockRestore();
+    const snap = next.store.getSnapshot();
+    expect(snap.draft.entries.flour?.qty).toBe(4);
+    expect(snap.draftSaveFailed).toBe(true);
+    expect(next.messages).toEqual(['draft-not-saved']);
+    // Not sent by itself.
+    await next.autosave();
+    expect(server.writes).toEqual([]);
+    next.store.refusedEarlierSaid();
+    expect(next.store.getSnapshot().refusedEarlier).toBe(false);
+    // A later opening: nothing more to say.
+    next.store.stop();
+    expect(signal.open(fakeOrdersSource({ suppliers: [mill], ingredients: [flour], draft: { entries: {}, days: {} } })).store.getSnapshot().refusedEarlier).toBe(false);
+  });
+
+  it('⚠️ another person signed in on this device never hears of it', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const d = device();
+    const signal = withSignal(d);
+    const first = fakeOrdersSource({ suppliers: [mill], ingredients: [flour], draft: { entries: {}, days: {} } });
+    const page = signal.open(first, 'u1');
+    await settle();
+    page.store.editLine(mill, flour, { qty: 4 });
+    first.refuseWrites = true;
+    page.store.stop();
+    await settle();
+    await settle();
+    errors.mockRestore();
+    const other = signal.open(fakeOrdersSource({ suppliers: [mill], ingredients: [flour], draft: { entries: {}, days: {} } }), 'u2');
+    await settle();
+    await settle();
+    expect(other.store.getSnapshot().refusedEarlier).toBe(false);
+    expect(other.store.getSnapshot().draft.entries.flour).toBeUndefined();
+    expect(other.store.getSnapshot().draftSaveFailed).toBe(false);
+  });
+});
