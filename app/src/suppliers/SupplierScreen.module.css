@@ -48,14 +48,9 @@
   font-weight: 650;
 }
 
-.loading,
 .nothing {
   padding: var(--s3);
   color: var(--ink-2);
-}
-
-.waiting .loading {
-  padding: var(--s6);
 }
 
 .failed {

@@ -1565,6 +1565,8 @@ export const it: Messages = {
   'sup.dueToday': 'Da ordinare oggi',
   'sup.notInUseGroup': 'Non in uso ({n})',
   'sup.loadFailed': 'Non è stato possibile caricare i fornitori. Controlla la connessione e riprova.',
+  'sup.notArrived.title': 'Questo elenco non è ancora arrivato',
+  'sup.notArrived.sub': 'Controlla la connessione: comparirà qui appena arriva.',
   'sup.pane.suppliers.title': 'Scegli un fornitore',
   'sup.pane.suppliers.text': 'Tocca un fornitore a sinistra: i suoi dati e tutto quello che vende si aprono qui.',
   'sup.whatTheySell': 'Cosa vendono',

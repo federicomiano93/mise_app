@@ -14,6 +14,7 @@ import { useDueSuppliers } from '../shell/useDueSuppliers';
 import { useFocusAcrossReorder } from '../shell/useFocusAcrossReorder';
 import { Button } from '../ui/Button';
 import { ItemRow, ItemRows } from './ItemRow';
+import { NoAnswerYet } from './NoAnswerYet';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import { suppliersFromInvoices } from './invoiceTag';
 import { useMayImport } from './invoiceImport/useMayImport';
@@ -147,6 +148,7 @@ export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, open
 
   const suppliersTab = tab === 'suppliers';
   const loaded = suppliersTab ? snapshot.suppliersLoaded : snapshot.ingredientsLoaded;
+  const status = suppliersTab ? snapshot.suppliersStatus : snapshot.ingredientsStatus;
   const broken = suppliersTab ? snapshot.suppliersBroken : snapshot.ingredientsBroken;
 
   function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
@@ -223,7 +225,7 @@ export function SuppliersList({ tab, openSupplierId, onTab, onOpenSupplier, open
         <p role="status" className={broken ? styles.failed : styles.quiet}>{broken ? t('sup.loadFailed') : null}</p>
 
         {!loaded ? (
-          <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>
+          <NoAnswerYet status={status} roomy />
         ) : suppliersTab ? (
           <SupplierRows
             suppliers={snapshot.suppliers}

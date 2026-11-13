@@ -20,11 +20,13 @@ import { ingredientDisplayName } from '@mise/shared/ingredient-name';
 import { cleanUnit, sameUnit, storedUnitFor } from '@mise/shared/order-unit';
 import { normalizeFavourites } from '@mise/shared/favourite-suppliers';
 import { INGREDIENT_DRAINED_FIELDS, PRICE_FIELDS, withPrices } from '@mise/shared/price-model';
+import { listStatus } from '@mise/shared/list-status';
 import { supplierLabel } from '@mise/shared/supplier-label';
 import { DEFAULT_WEEK_START, weekStartOf } from '@mise/shared/work-week';
 import { todayISO } from '@mise/shared/day';
 import { markBusy as markBusyOfSession } from '../session/busy';
 import { priceWriteOf } from './priceSave';
+import type { ListStatus } from '@mise/shared/list-status';
 import type { PricePatch } from '@mise/shared/price-model';
 import type { PlacedRecord } from '@mise/shared/reminders';
 import type { IngredientUsage, PanelKey, StoredDoc, SuppliersMeta, SuppliersSource } from './suppliersSource';
@@ -63,6 +65,11 @@ export interface SuppliersSnapshot {
   // category delete rewrites) the whole truth; a copy in the browser's own database can miss ingredients.
   readonly ingredientsFromServer: boolean;
   readonly ingredientsBroken: boolean;
+  // What each list may say while it has no row to draw (shared listStatus, the current app's): `waiting` → «Loading…», `unreachable` →
+  // «This list has not arrived yet» (10 s without an answer, or an empty copy with the phone offline), `answered` → the rows or
+  // the empty state. Back to `answered` the moment the list answers.
+  readonly suppliersStatus: ListStatus;
+  readonly ingredientsStatus: ListStatus;
   // Whether the prices REALLY answered (parity S24). False for a person the rules refuse.
   readonly pricesReadable: boolean;
   // Whether the SERVER has answered the prices once (parity C28): only then is a price missing from the list really «no
@@ -100,7 +107,15 @@ export interface SuppliersDeps {
   markBusy(): () => void;
   // The local day as 'YYYY-MM-DD' when the screen starts watching (a spec passes its own); defaults to the device's.
   today?(): string;
+  // The clock of the «has not arrived» wait (a spec passes a fake one), and navigator.onLine; default to the browser's.
+  setTimer?(callback: () => void, ms: number): unknown;
+  clearTimer?(handle: unknown): void;
+  online?(): boolean | undefined;
 }
+
+// ⚠️ How long a list may say «Loading…» before it says it has not arrived (the current app's 10 s in registry-main.js). Counted from the
+// moment the section starts watching. The Firestore SDK itself gives up on the server after 10 s and answers from its copy.
+export const STALL_MS = 10_000;
 
 // What the supplier card saves (parity S82), as the card builds it.
 export type SupplierPayload = Readonly<Record<string, unknown>> & { readonly name: string };
@@ -198,6 +213,10 @@ export function browserSuppliersDeps(): SuppliersDeps {
   return { markBusy: markBusyOfSession };
 }
 
+const browserSetTimer = (callback: () => void, ms: number): unknown => setTimeout(callback, ms);
+const browserClearTimer = (handle: unknown): void => { clearTimeout(handle as ReturnType<typeof setTimeout>); };
+const browserOnline = (): boolean | undefined => (typeof navigator === 'undefined' ? undefined : navigator.onLine);
+
 export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDeps = browserSuppliersDeps()): SuppliersStore {
   let suppliers: readonly StoredDoc[] = [];
   let suppliersLoaded = false;
@@ -208,6 +227,12 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
   let ingredientsLoaded = false;
   let ingredientsFromServer = false;
   let ingredientsBroken = false;
+  // The last answer of each list was the phone's own copy saying «none» (not an answer: registry-main.js listAnswered).
+  let suppliersEmptyCopy = false;
+  let ingredientsEmptyCopy = false;
+  // STALL_MS have passed since the section started watching.
+  let stalled = false;
+  let stallTimer: unknown = null;
   let prices: Record<string, Record<string, unknown>> = {};
   let pricesReadable = false;
   let pricesFromServer = false;
@@ -231,10 +256,18 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
 
   function build(): SuppliersSnapshot {
     return {
-      suppliers, suppliersLoaded, suppliersFromServer, suppliersBroken, ingredients, ingredientsLoaded, ingredientsFromServer, ingredientsBroken, pricesReadable, pricesFromServer, prices,
+      suppliers, suppliersLoaded, suppliersFromServer, suppliersBroken, ingredients, ingredientsLoaded, ingredientsFromServer, ingredientsBroken,
+      suppliersStatus: statusOf(suppliersLoaded, suppliersBroken, suppliersEmptyCopy),
+      ingredientsStatus: statusOf(ingredientsLoaded, ingredientsBroken, ingredientsEmptyCopy),
+      pricesReadable, pricesFromServer, prices,
       storedCategories, favourites, configLoaded, weekStartsOn,
       placed, placedLoaded, placedBroken, closed, draftLoaded, draftBroken,
     };
+  }
+
+  // The store exists only inside an open venue, so its language is known: never `starting`.
+  function statusOf(loaded: boolean, failed: boolean, emptyCopy: boolean): ListStatus {
+    return listStatus({ venueOpen: true, loaded, failed, emptyCopy, stalled, online: (deps.online ?? browserOnline)() });
   }
 
   function changed(): void {
@@ -323,10 +356,19 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
     start() {
       if (started) return;
       started = true;
+      // ⚠️ THE WAIT HAS AN END: without a timer a bad signal says «Loading…» for ever. Nothing to say if both lists have answered.
+      stalled = false;
+      stallTimer = (deps.setTimer ?? browserSetTimer)(() => {
+        stallTimer = null;
+        if (suppliersLoaded && ingredientsLoaded) return;
+        stalled = true;
+        changed();
+      }, STALL_MS);
       stops = [
         source.watchSuppliers((list, meta) => {
           suppliers = list;
           if (believable(list, meta)) suppliersLoaded = true;
+          suppliersEmptyCopy = list.length === 0 && !meta.fromServer;
           if (meta.fromServer) suppliersFromServer = true;
           suppliersBroken = false;
           changed();
@@ -340,6 +382,7 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
           rawIngredients = list;
           relayIngredients();
           if (believable(list, meta)) ingredientsLoaded = true;
+          ingredientsEmptyCopy = list.length === 0 && !meta.fromServer;
           if (meta.fromServer) ingredientsFromServer = true;
           ingredientsBroken = false;
           changed();
@@ -414,6 +457,8 @@ export function createSuppliersStore(source: SuppliersSource, deps: SuppliersDep
     },
 
     stop() {
+      if (stallTimer !== null) (deps.clearTimer ?? browserClearTimer)(stallTimer);
+      stallTimer = null;
       for (const stopOne of stops) stopOne();
       stops = [];
       started = false;

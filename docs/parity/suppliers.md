@@ -1306,3 +1306,41 @@ Branch `feature/mise2-next-invoice-per-piece`, a 1:1 port of the current app's `
 - **Differences:** none in behaviour or numbers. `invoice-pieces-cost.spec.ts` does not repeat the check of the printed «0,464» (`formatPricePerUnit`
   takes a translator in `shared/`; the «each» / «al pezzo» text of a per-piece rate is pinned in `price-write.spec.ts`, its three decimals in `price-model.spec.ts`). No UI change: the import screen shows no
   new text.
+
+## Item 16 fixes as built (13 Nov 2026)
+
+Port-owed item 16 was verified on an emulator by `algprobe/mise-drive/drive-mise2-verify16.mjs` (IT 1024 / 360 / 296, EN 360). It found three
+defects in the Suppliers lists; this is what was done about each, and what the driver measured that was NOT a defect.
+
+- **Rows jump when prices land (current-app `76be75d1`) — fixed.** Measured: at 360 px the rows below moved by up to 325 px when an owner's
+  prices arrived after the rows (first row to move: index 5-8). `ItemRow` now keeps the room for a price, unseen, until the prices have
+  answered: a sample price (`£12.50 / kg`, in the venue's money and the «each»/«al pezzo» wording) as the last part of the meta line,
+  `visibility: hidden` and `aria-hidden` (class `.priceRoom`, attribute `data-price-room`). It is drawn only for a person who may write
+  prices (`useMayWritePrices`) while `pricesReadable` is false and the row has no price of its own, so an employee gets no gap; a row that
+  turns out to have no price gives the room back (as in the current app). The least visible change: no new line, no new element in the
+  flow, the same meta text the price would have used. Pinned by `SuppliersSection.priceRoom.spec.tsx` (markup, employee, price landing,
+  supplier screen) and `suppliersCss.spec.ts` (`visibility`, never `display`). ⚠️ jsdom lays nothing out: the HEIGHT is for the driver.
+  ⚠️ A price writer whose prices are refused (or whose price stream died) keeps the room for good, like the current app (`pricesLoaded`
+  is `pricesReadable === true` there too).
+- **1024 split: open an ingredient card, Back with no change, the list moved 2008 → 1709 — not an app defect (driver artefact), pinned.**
+  The section never writes the scroll on a move between two screens that are both beside the list (`SuppliersSection.tsx`, the layout
+  effect on `pathname`), and `handBack.deliver()` focuses a row that is already in view. The 299 px is the driver's own `press()`: it
+  calls `scrollIntoView({ block: 'center' })` on the Back button before clicking, and at 1024 that button sits at the top of the
+  sticky right-hand pane (about 85 px down a 768 px high viewport: 384 − 85 = 299, the exact shift), so the browser scrolls the page to
+  centre it. At 360 / 296 the page is at the top when the card is open, so the same call moves nothing and the app's own restore
+  (`listTop`) brings the place back. A real tap does not scroll. `SuppliersSection.scroll.spec.tsx` now pins Back on the split (an
+  ingredient card and a supplier): the scroll stays and the row takes the focus. NOT yet re-driven in a browser: the driver's Back press
+  has to click without `scrollIntoView` to show it (`rowPress` and `press` both centre their target).
+- **No «has not arrived» state after 10 s — added.** `shared/src/list-status.ts` is a port of `LIST_STATUS` / `listStatus` in
+  `js/orders/registry.js` (`list-status.spec.ts` runs the same cases against the TS and the `js/` function, cut out of the file because
+  `registry.js` needs the DOM to load). `suppliersStore` keeps a 10 s clock from `start()` (`STALL_MS`, cleared by `stop()`), whether
+  each list's last answer was the phone's empty copy, and puts `suppliersStatus` / `ingredientsStatus` in the snapshot. `NoAnswerYet`
+  (one status region, the same element across «Loading…» and the not-arrived words, architecture rule 6) replaces the bare «Loading…»
+  in the three lists and on a supplier's own screen (the supplier waiting, and what it sells). Texts `sup.notArrived.title` / `.sub`,
+  copied from `orders.registry.notArrived.*`: «This list has not arrived yet» / «Check your connection: it will appear here as soon as it
+  arrives.»; «Questo elenco non è ancora arrivato» / «Controlla la connessione: comparirà qui appena arriva.» The rule is the current
+  app's: unreachable after 10 s without an answer, or at once with an empty copy and `navigator.onLine === false`; an empty copy while
+  online stays «Loading…». It goes back to the rows the moment the list answers. Specs: `suppliersStore.status.spec.ts` (clock, copy,
+  online), `SuppliersSection.notArrived.spec.tsx` (three tabs, supplier screen, same region, Italian).
+- **Differences left for him to decide (not built):** no per-row «Disattiva» / «Riattiva» (the switch is only on the card); no hand-made
+  pencil (Mise 2 shows the inverse «Da fattura» tag); a reactivated row leaves the «Non in uso» group at once.

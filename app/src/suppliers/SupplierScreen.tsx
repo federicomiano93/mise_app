@@ -11,6 +11,7 @@ import { useStatusMessage } from '../ui/StatusMessage';
 import { useConfirm } from '../ui/useConfirm';
 import { useCopyWait } from './copyWait';
 import { ItemRow, ItemRows } from './ItemRow';
+import { NoAnswerYet } from './NoAnswerYet';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import type { StoredDoc } from './suppliersSource';
 import { ADD_INGREDIENT_OPENER, SEARCH_OPENER, supplierItemOpener, supplierOpener, useHandBack } from './handBack';
@@ -101,8 +102,8 @@ export function SupplierScreen({ id }: { id: string }) {
       );
     }
     return (
-      <section className={styles.waiting} aria-busy="true">
-        <p className={styles.loading}>{t('session.loading')}</p>
+      <section className={styles.waiting}>
+        <NoAnswerYet status={snapshot.suppliersStatus} roomy />
       </section>
     );
   }
@@ -230,7 +231,7 @@ export function SupplierScreen({ id }: { id: string }) {
           <span>{t('sup.addIngredient')}</span>
         </Button>
         {!snapshot.ingredientsLoaded ? (
-          <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>
+          <NoAnswerYet status={snapshot.ingredientsStatus} />
         ) : snapshot.ingredientsBroken ? (
           <p className={styles.failed}>{t('sup.loadFailed')}</p>
         ) : mine.length === 0 ? (
