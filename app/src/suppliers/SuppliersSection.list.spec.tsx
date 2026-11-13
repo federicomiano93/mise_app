@@ -204,7 +204,8 @@ describe('the ingredients and packaging lists', () => {
       refusePrices: true,
     });
     await loaded('/suppliers', source, { session: { location: { country: 'GB' } } });
-    expect(main().queryByText(/£/)).not.toBeInTheDocument();
+    // (The unseen room kept for a price that never lands is not a price: ItemRow.priceRoom.spec.tsx.)
+    expect(main().queryAllByText(/£/).filter(node => !node.closest('[data-price-room]'))).toHaveLength(0);
     expect(main().getByText('Zed')).toBeInTheDocument();
     expect(main().queryByText(/Could not load/)).not.toBeInTheDocument();
   });

@@ -89,6 +89,9 @@ export type FakeSuppliersSource = SuppliersSource & {
   // Holds back the first answers until release() (Firestore still loading).
   hold(): void;
   release(): void;
+  // Holds back only the answers of the PRICES until releasePrices() (the rows have drawn, the money has not landed yet).
+  holdPrices(): void;
+  releasePrices(): void;
   // Holds back only the answers of the records and the draft (the «To order today» data) until releaseDue().
   holdDue(): void;
   releaseDue(): void;
@@ -121,6 +124,7 @@ export function fakeSuppliersSource(
   const draftWatchers = new Set<DraftListener>();
   let held = false;
   let dueHeld = false;
+  let pricesHeld = false;
   let writeHold: Promise<void> | null = null;
   let panelHold: Promise<void> | null = null;
   let usageHold: Promise<void> | null = null;
@@ -133,7 +137,7 @@ export function fakeSuppliersSource(
   function tellSuppliers() { for (const w of [...supplierWatchers]) w.onChange([...suppliers.values()], meta()); }
   function tellIngredients() { for (const w of [...ingredientWatchers]) w.onChange([...ingredients.values()], meta()); }
   const priceMeta = (): SuppliersMeta => ({ fromServer: !fake.pricesFromCache && !fake.fromCache });
-  function tellPrices() { for (const w of [...priceWatchers]) w(fake.refusePrices ? {} : priceMap(), !fake.refusePrices, priceMeta()); }
+  function tellPrices() { if (pricesHeld) return; for (const w of [...priceWatchers]) w(fake.refusePrices ? {} : priceMap(), !fake.refusePrices, priceMeta()); }
   function tellConfig() { for (const w of [...configWatchers]) w.onChange(fake.ordersConfig ? { ...fake.ordersConfig } : null, meta()); }
   function tellPlaced() { if (dueHeld) return; for (const w of [...placedWatchers]) w.onChange(fake.placedRecords.map(row => ({ ...row })), meta()); }
   function tellDraftDoc() { if (dueHeld) return; for (const w of [...draftWatchers]) w.onChange(fake.draftDoc ? { ...fake.draftDoc } : null, meta()); }
@@ -222,7 +226,7 @@ export function fakeSuppliersSource(
     watchPrices(onChange) {
       priceWatchers.add(onChange);
       queueMicrotask(() => {
-        if (!priceWatchers.has(onChange) || held) return;
+        if (!priceWatchers.has(onChange) || held || pricesHeld) return;
         onChange(fake.refusePrices ? {} : priceMap(), !fake.refusePrices, priceMeta());
       });
       return () => { priceWatchers.delete(onChange); };
@@ -428,6 +432,8 @@ export function fakeSuppliersSource(
       return () => { panelHold = null; release(); };
     },
     hold() { held = true; },
+    holdPrices() { pricesHeld = true; },
+    releasePrices() { pricesHeld = false; tellPrices(); },
     holdDue() { dueHeld = true; },
     releaseDue() { dueHeld = false; tellPlaced(); tellDraftDoc(); },
     release() {

@@ -118,3 +118,14 @@ describe('an empty status line is collapsed, never display: none (a screen reade
     expect(declaration(body, 'clip-path')).toBe('inset(50%)');
   });
 });
+
+// The room an ItemRow keeps for a price that has not landed (SuppliersSection.priceRoom.spec.tsx pins the markup): laid out
+// like the real price so the line wraps the same, only hidden — `display: none` would give the room back and let the rows jump.
+describe('the unseen room for a price', () => {
+  it('is hidden with visibility, never taken out of the layout', () => {
+    const body = rule(itemRowCss, '.priceRoom');
+    expect(declaration(body, 'visibility')).toBe('hidden');
+    expect(declaration(body, 'display')).toBeUndefined();
+    expect(declaration(body, 'position')).toBeUndefined();
+  });
+});
