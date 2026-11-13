@@ -642,9 +642,14 @@ body.cat-zoom-lock { overflow: hidden; }
 /* A card head with a button at its top right (the Ingredients card's full-screen button). */
 .cat-sec-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .cat-sec-top .cat-sec-head { flex: 1; min-width: 0; }
-/* 44px hit area (the ui-check driver flags smaller); the negative margin keeps the head's height
-   close to the other cards'. */
-.cat-zoom-open { flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: -6px -6px -6px 0; padding: 0; border: 1px solid var(--cat-border); border-radius: 50%; background: var(--cat-surface); color: var(--cat-text-2); cursor: pointer; transition: transform .06s ease; }
+/* 44px hit area (the ui-check driver flags smaller), but the drawn circle is 36px, inset 4px in
+   it (::before), so the head stays close to the other cards' height. ⚠️ NO NEGATIVE MARGIN: the old
+   -6px pushed the 44px circle over the card's top border, past the ingredient list's right edge and
+   onto its top border (his screenshot, 13 Nov 2026). Now the circle sits 6px under the card's top
+   and 4px above the list, its right edge 4px inside the list's. isolation keeps the ::before
+   (z -1) above the card's background and under the icon. */
+.cat-zoom-open { position: relative; isolation: isolate; flex: none; display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin: 2px 0 0; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--cat-text-2); cursor: pointer; transition: transform .06s ease; }
+.cat-zoom-open::before { content: ''; position: absolute; inset: 4px; z-index: -1; border: 1px solid var(--cat-border); border-radius: 50%; background: var(--cat-surface); }
 @media (hover: hover) { .cat-zoom-open:hover { color: var(--cat-text); } }
 .cat-zoom-open:focus-visible { outline: 2px solid var(--cat-accent); outline-offset: 2px; }
 .cat-zoom-open:active { transform: scale(.97); }
