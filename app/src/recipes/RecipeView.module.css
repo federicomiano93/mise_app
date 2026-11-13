@@ -303,6 +303,13 @@
   margin-top: var(--s3);
 }
 
+/* «Use as base recipe», right under Clear: a quiet, link-like button (it changes the recipe, so it does not compete with
+   Calculate), still the full touch height. Its own line, so on a phone it never sits beside Clear. */
+.useAsBase {
+  display: flex;
+  margin-top: var(--s2);
+}
+
 /* Delete, the very end of the page: a small icon on the right, as low-key as it can be and still a 48px target. */
 .deleteIcon {
   display: flex;

@@ -64,6 +64,9 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
   const target = store.scaledTarget(recipe.id);
   const hasWeight = weighableTotalGrams(recipe) > 0;
   const { canManage, location, role } = useSession();
+  // Who may change this recipe: everybody who sees the section (employees write recipes too, step 3d-6), so the pencil is drawn
+  // for all of them. ONE flag for every way of changing the recipe from this screen — «Edit» and «Use as base recipe».
+  const canEdit = true;
   const navigate = useNavigate();
   const { state } = useLocation();
   const recipeReturn = useRecipeReturn();
@@ -135,7 +138,7 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
         title={recipe.name === '' ? t('cat.noName') : recipe.name}
         titleId={titleId}
         titleRef={titleRef}
-        action={
+        action={canEdit ? (
           <Button
             ref={editButton}
             variant="secondary"
@@ -147,13 +150,13 @@ export function RecipeView({ recipe, titleRef, onBack }: Props) {
             <Pencil aria-hidden="true" />
             {t('ui.edit')}
           </Button>
-        }
+        ) : undefined}
       />
       <div className={styles.body}>
         {archived ? <ArchivedBanner canManage={canManage} restoreRef={restoreButton} onRestore={restore} /> : null}
         <IngredientsCard recipe={recipe} target={target} />
         {/* A recipe of pieces and «to taste» has nothing to scale by weight: the whole card goes. */}
-        {hasWeight ? <BatchCard recipe={recipe} target={target} /> : null}
+        {hasWeight ? <BatchCard recipe={recipe} target={target} canEdit={canEdit} /> : null}
         {/* ⚠️ A DOOR: drawn only for whoever Food cost lets in — the very question its own gate asks (shared recipe-link), asked on
             every draw, so a session that arrives late or changes venue redraws it. Absent, not disabled, for anyone else. */}
         {mayOpenFoodCost(location, canManage, role) ? <FoodCostCard recipe={recipe} /> : null}

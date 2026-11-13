@@ -987,6 +987,65 @@ describe.each([
   });
 });
 
+// ── «Use as base recipe» (Mise 2 only, 14 Nov 2026): no original in js/ ──────────────────────────────────────────
+//
+// The amounts saved must be the very numbers the screen showed at that batch, row by row and unit by unit. The screen draws
+// from scaleCatalogue, so every expectation below is checked against scaleCatalogue's own answer as well as against the
+// numbers a baker would read.
+
+describe('rebaseAmounts: the batch shown becomes the recipe (Mise 2 only)', () => {
+  const ALL_GRAMS = { id: 'b', name: 'Brioche', ingredients: [
+    { label: 'Flour', grams: 2000, unit: 'g' }, { label: 'Butter', grams: 800, unit: 'g' }, { label: 'Sugar', grams: 800, unit: 'g' },
+    { label: 'Eggs', grams: 775, unit: 'g' },
+  ] };
+  const MIXED = { id: 'm', name: 'Mixed', ingredients: [
+    { label: 'Flour', grams: 250, unit: 'g' }, { label: 'Eggs', grams: 3, unit: 'pcs' }, { label: 'Milk', grams: 0.5, unit: 'l' },
+    { label: 'Cream', grams: 120, unit: 'ml' }, { label: 'Butter', grams: 0.2, unit: 'kg' }, { label: 'Sugar', grams: 2, unit: 'tbsp' },
+    { label: 'Salt', grams: 3, unit: 'to taste' }, { label: 'Base', grams: 330, unit: 'g', kind: 'recipe', refId: 'r9', rid: 'x1' },
+  ] };
+
+  test('all in grams: whole grams equal to the screen, adding up exactly to the batch', () => {
+    const out = ported.rebaseAmounts(ALL_GRAMS, 4500)!;
+    expect(out).toStrictEqual(ported.scaleCatalogue(ALL_GRAMS, 4500));
+    expect(out.every(Number.isInteger)).toBe(true);
+    expect(out.reduce((a, b) => a + b, 0)).toBe(4500);
+  });
+
+  test('mixed units: each row in its own unit as shown — pieces, ml, kg and litre decimals, a sub-recipe row', () => {
+    const out = ported.rebaseAmounts(MIXED, 2000)!;
+    const shown = ported.scaleCatalogue(MIXED, 2000);
+    // 250 g + 0.5 l + 120 ml + 0.2 kg + 330 g = 1400 g, so ×(2000 / 1400).
+    expect(out).toStrictEqual([357, 4, 0.714, 171, 0.286, 3, 3, 471]);
+    out.forEach((value, i) => { if (shown[i] !== null) expect(value, String(i)).toBe(shown[i]); });
+    expect(ported.unitDecimals('kg')).toBe(3);
+  });
+
+  test('a «to taste» row has no number on screen, so it keeps the amount it has', () => {
+    expect(ported.rebaseAmounts(MIXED, 2000)![6]).toBe(3);
+    expect(ported.scaleCatalogue(MIXED, 2000)[6]).toBe(null);
+  });
+
+  test('saving the result and drawing it at base reads the same numbers again (the round trip)', () => {
+    const out = ported.rebaseAmounts(MIXED, 2000)!;
+    const saved = { ...MIXED, ingredients: MIXED.ingredients.map((row, i) => ({ ...row, grams: out[i]! })) };
+    const before = ported.scaleCatalogue(MIXED, 2000);
+    const after = ported.baseAmounts(saved);
+    expect(after).toStrictEqual(before);
+  });
+
+  test('nothing to make a base of: no target, a junk target, nothing weighable — null, never NaN', () => {
+    for (const target of [0, -5, NaN, Infinity, 'abc', null, undefined]) expect(ported.rebaseAmounts(ALL_GRAMS, target), String(target)).toBe(null);
+    expect(ported.rebaseAmounts({ ingredients: [{ label: 'Eggs', grams: 6, unit: 'pcs' }] }, 1000)).toBe(null);
+    for (const odd of [null, undefined, 5, 'x', {}, { ingredients: 'x' }]) expect(ported.rebaseAmounts(odd, 1000), String(odd)).toBe(null);
+  });
+
+  test('it answers amounts only and never touches the recipe it is handed', () => {
+    const copy = JSON.parse(JSON.stringify(MIXED)) as typeof MIXED;
+    ported.rebaseAmounts(MIXED, 2000);
+    expect(MIXED).toStrictEqual(copy);
+  });
+});
+
 // ── The LINKED import (owner's decision, 18 Oct 2026): the port only, the current app still copies ──────────────────
 //
 // The tests above that run against both files stay true for both. These are what Mise 2 adds: the Calculator tab an
@@ -1347,7 +1406,8 @@ describe('the port against the original', () => {
   // `supplierLabel` is js/supplier-label.js's, copied into the model and exported (step 3d-6 A2) for the link line.
   // `nameTaken` is not an export of catalogue-model.js: its original is in ingredient-suggest.js (tested above).
   // `calculatorImportKind` is new in Mise 2 with the linked import (18 Oct 2026).
-  const ADDED = ['unitTextKey', 'nameTaken', 'supplierLabel', 'calculatorImportKind', 'calculatorRefusal'];
+  // `rebaseAmounts` is new in Mise 2 with «Use as base recipe» (14 Nov 2026).
+  const ADDED = ['unitTextKey', 'nameTaken', 'supplierLabel', 'calculatorImportKind', 'calculatorRefusal', 'rebaseAmounts'];
   // One more parameter each: batchWarning's translator; mergeImportedRecipe's catalogue rows, so a linked copy keeps its
   // yeast knob (Mise 2 only, 18 Oct 2026).
   const ARITY_DIFFERS = ['batchWarning', 'mergeImportedRecipe'];

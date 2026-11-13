@@ -1967,3 +1967,42 @@ artefact:** with the menu OPEN, `scrollable-region-focusable` on `#main`. The me
 open the page behind it is hidden from assistive technology and the keyboard (the modal pattern), so axe sees a scrolling `#main` with
 nothing focusable in it. With the menu closed the same page passes. A later driver that runs axe with a React Aria popover open will see
 the same flag.
+
+## Use as base recipe as built (14 Nov 2026) — NEW IN MISE 2, no original in the current app
+
+The owner (14 Nov 2026): «I calculate 4500 g of a recipe and I want those 4500 g to become the default recipe». The current app has no
+such action; it is frozen, so it gets none.
+
+**What it does.**
+- **Where.** A quiet button «Use as base recipe» / «Usa come ricetta base» (Lucide `BookCheck`) in the batch card, right under «Clear —
+  back to base recipe» (`cat.clearBackToBase`), its own line. Drawn ONLY while a batch is applied (the remembered `catalogue-scaled`
+  target) and only for whoever sees the recipe's «Edit» pencil: `RecipeView` holds ONE flag, `canEdit`, that draws both. Today that is
+  everybody who sees the section (employees write recipes too, 3d-6), so no role sees the recipe without it; the card's own spec draws it
+  with `canEdit` false to pin the rule for the day one does.
+- **The question** (`useConfirm`, never the browser's): «Use as base recipe?» — «The quantities of this recipe become the calculated
+  ones: total {new} (was {old}). This cannot be undone. Continue?», «Use as base» / «Cancel» (IT «Usare come ricetta base?», «Le quantità
+  di questa ricetta diventano quelle calcolate: totale {new} (prima {old}). Non si può annullare. Continuare?», «Usa come base» /
+  «Annulla»). Both totals are written like the Total line («4500 g»). ⚠️ `{new}` is the total the recipe WILL have — the rows as shown,
+  added up. All in grams that is the batch itself (the rows are rounded to add up to it); with kg, litre or ml rows each row is rounded in
+  its own unit, so it can be a gram or two off the batch typed (2000 g typed on the spec's mixed recipe saves 1999 g). The question says
+  what is saved. The question has its own `useConfirm` and is CLOSED (answered «no») when the recipe or the batch changes under it.
+- **What is saved** (`rebaseAmounts` of `shared/src/catalogue-model.ts`, beside `scaleCatalogue`, Mise 2 only): each row's number from
+  the very function the table draws from (`scaleCatalogue`), so pieces, spoons, ml, kg / l (three decimals) and sub-recipe rows are
+  saved exactly as read; a «to taste» row keeps its amount. Only `ingredients[].grams` changes: every row is spread, so its name, unit,
+  link, row id and divider stay. The save is the editor's own store write (`store.saveRecipe`, local-first): it sends the name, the rows
+  and the label weight and shelf life as they were; the oven loss and its weighings, the steps and closing message (`KEPT_FIELDS`), the
+  category, the image label's texts and the archived flag are NOT sent, so they stay as stored. A refusal puts the recipe back and the
+  section says the editor's sentence («Couldn’t save “{name}” — check your connection.», `recipe-not-saved`).
+- **After.** The batch is cleared (the recipe as written now IS what was on screen), «Recipe saved.» is said, and the focus goes to the
+  batch box (the button pressed is gone). ⚠️ A REFUSED save puts the recipe back but NOT the batch: the screen then shows the recipe as
+  it was before, at its base, and the batch has to be typed again.
+
+**Left as is.** A guided mix started from a scaled recipe keeps its snapshot; a recipe rebased while a mix of it is running does not
+change that mix.
+
+**Specs.** `shared/src/catalogue-model.spec.ts` («rebaseAmounts: the batch shown becomes the recipe»: all grams adding up to the batch,
+each unit as shown, «to taste» kept, the round trip through `baseAmounts`, odd inputs → null, the recipe untouched) and the export list;
+`app/src/recipes/RecipesSection.useAsBase.spec.tsx` (absent without a batch and right under Clear with one, the question with both
+totals and Cancel, the saved rows equal to the rows read for every unit and a sub-recipe row with no other field sent or changed, the
+batch cleared and «Recipe saved.» with the focus on the box, the all-grams sum, a refused save, a change under the open question,
+Italian, an employee, and the card with `canEdit` false). Not driven on the emulator or a device yet.
