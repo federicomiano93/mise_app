@@ -38,8 +38,10 @@ export function useListCopy(): ListCopy | null {
     const timer = window.setTimeout(() => {
       const storage = storageOrNull();
       // ⚠️ NOT WHILE THE DEVICE IS MOVING TO ANOTHER VENUE: switchLocation wipes this phone's data, writes the new venue's id under
-      // `active-location`, then awaits the offline-database wipe before reloading — with Orders still mounted. A timer firing in
-      // that gap would put the old venue's names back after the wipe. A missing key does not stop the write.
+      // `active-location`, then awaits the offline-database wipe before reloading. Since 13 Nov 2026 the app (Orders included)
+      // is taken off the screen before any of that (session.ts `leaving`), so this timer is stopped first; the check stays as
+      // a second lock. A timer firing in that gap would put the old venue's names back after the wipe. A missing key does not
+      // stop the write.
       let active: string | null = null;
       try { active = storage?.getItem(ACTIVE_LOCATION_KEY) ?? null; } catch { active = null; }
       if (active !== null && active !== '' && active !== locationId) return;

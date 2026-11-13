@@ -107,6 +107,10 @@ export function SessionGate({ children }: { children: ReactNode }) {
 
   // Keyed on the flow's formKey: a NEW invitation gets a new form; the same form survives every status it is held through.
   if (showJoin) return <JoinScreen key={join.formKey} />;
+  // ⚠️ LEAVING THE VENUE (session.ts `leaving`): the app is taken off the screen BEFORE Firestore is stopped, so every
+  // section's listener unsubscribes first instead of being errored by terminate() — and a section that would mount now (the
+  // Home, after a join form closes) never starts a listener on a client that is going away.
+  if (session.leaving) return <LoadingScreen />;
 
   switch (session.status) {
     case 'loading':

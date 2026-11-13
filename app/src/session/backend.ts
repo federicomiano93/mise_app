@@ -76,5 +76,9 @@ export interface SessionEnv {
   isBusy(): boolean;
   // Loads a language's messages so the first screen inside a venue is drawn in its language.
   preloadLanguage(lang: Language): Promise<unknown>;
+  // Resolves once the screens have had the time to redraw after the session changed. Used before Firestore is stopped on a
+  // change of venue: the app is taken off the screen first, so every listener of every section unsubscribes BEFORE the
+  // client is terminated (session.ts `leaving`).
+  letScreensClose(): Promise<void>;
   warn(message: string, detail?: unknown): void;
 }

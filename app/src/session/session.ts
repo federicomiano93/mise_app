@@ -59,6 +59,12 @@ export interface Session {
   // The venue's interface language once a venue is open; null above every venue, where the
   // phone's language is used instead (his decision, 1 Oct 2026).
   readonly language: Language | null;
+  // The page is about to leave the open venue (a switch of venue, or a join that adds another): this phone's copy is being
+  // wiped and a reload follows. The gate takes the app off the screen the moment this is true (SessionGate), so every
+  // section's listeners unsubscribe BEFORE Firestore is terminated — terminate() errors every listener still live
+  // («Firestore shutting down»), and a section that mounts after it is told «The client has already been terminated»: both
+  // reached the console and the error reports at every switch of venue (found driving staff slice 1, 13 Nov 2026).
+  readonly leaving: boolean;
 }
 
 // ⚠️ canManage, canManageVenue, isOwner and isAppAdmin START false AND MUST: every screen draws from this object
@@ -66,6 +72,7 @@ export interface Session {
 export const INITIAL_SESSION: Session = Object.freeze({
   status: 'loading', user: null, locationId: null, location: null, options: [], optionNames: {},
   name: '', role: DEFAULT_ROLE, canManage: false, canManageVenue: false, isOwner: false, isAppAdmin: false, language: null,
+  leaving: false,
 });
 
 // Keys shared with the current app (js/firebase.js), same meaning.
@@ -343,6 +350,18 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     });
   }
 
+  // ⚠️ THE SCREENS GO FIRST, THEN THE DATA (see `leaving`). The person already said yes to leaving (useLeaveFlow asked about
+  // anything unsent), so the venue's screens close, their listeners stop, and only then is this phone's copy wiped — in that
+  // order, so nothing a closing screen writes to localStorage survives the clear either.
+  async function leaveVenue(locationId: string): Promise<void> {
+    setSession({ leaving: true });
+    await env.letScreensClose();
+    clearLocalData();
+    write(env.local, ACTIVE_LOCATION_KEY, locationId);
+    await backend.wipeOfflineCache();
+    env.reload();
+  }
+
   function assertMine(locationId: string): void {
     if (!locationsOf(userDoc).includes(locationId)) throw new Error(`Not your venue: ${locationId}`);
   }
@@ -379,10 +398,7 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     // surviving the switch would quietly repaint the screen with the wrong venue's data.
     async switchLocation(locationId) {
       assertMine(locationId);
-      clearLocalData();
-      write(env.local, ACTIVE_LOCATION_KEY, locationId);
-      await backend.wipeOfflineCache();
-      env.reload();
+      await leaveVenue(locationId);
     },
     changesStillWaiting: ms => backend.changesStillWaiting(ms),
     async redeemJoinCode(code, kind, firstName, lastName) {
@@ -406,10 +422,7 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       // told before the form opened if something typed here had not reached the server yet (useLeaveFlow).
       if (session.status === 'ready') {
         if (session.locationId === locationId) return;
-        clearLocalData();
-        write(env.local, ACTIVE_LOCATION_KEY, locationId);
-        await backend.wipeOfflineCache();
-        env.reload();
+        await leaveVenue(locationId);
         return;
       }
       let fresh: DocData | null = null;

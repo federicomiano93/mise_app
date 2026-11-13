@@ -76,6 +76,8 @@ function setup(world: World, { local = {}, session = {}, now = 1_000_000, busy =
     isBusy: busy,
     preloadLanguage: vi.fn(async lang => { calls.push(`preload ${lang}`); }),
     warn: () => {},
+    // Written down with what the session said at that moment, so a spec sees that the app was told to leave first.
+    letScreensClose: vi.fn(async () => { calls.push(`screens closed (leaving: ${String(store.getSnapshot().leaving)})`); }),
   };
   const store: SessionStore = createSession(backend, env);
   const states: string[] = [];
@@ -451,7 +453,23 @@ describe('leaving', () => {
     await s.store.switchLocation('restaurant');
     expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('restaurant');
     expect(s.localStore.getItem('orders-draft')).toBeNull();
-    expect(s.calls.slice(-2)).toEqual(['wipe', 'reload']);
+    expect(s.calls.slice(-3)).toEqual(['screens closed (leaving: true)', 'wipe', 'reload']);
+  });
+
+  // ⚠️ terminate() errors every listener still live, and the to-do list said so in the console (and the error reports) at
+  // every switch: the app must be off the screen, its listeners stopped, BEFORE the wipe (session.ts `leaving`).
+  test('switching venue: the app is told to leave, and given the time to close, before Firestore is stopped', async () => {
+    const s = setup(world(docs), { local: { [ACTIVE_LOCATION_KEY]: 'bakery' } });
+    s.auth(ALICE);
+    await settle();
+    expect(s.store.getSnapshot().leaving).toBe(false);
+    vi.mocked(s.backend.wipeOfflineCache).mockImplementationOnce(async () => {
+      expect(s.store.getSnapshot().leaving).toBe(true);
+      expect(s.env.letScreensClose).toHaveBeenCalledOnce();
+      return 'cleared';
+    });
+    await s.store.switchLocation('restaurant');
+    expect(s.backend.wipeOfflineCache).toHaveBeenCalledOnce();
   });
 
   test('the picker opens only one of yours', async () => {
@@ -562,7 +580,7 @@ describe('joining with a code (staff slice 1)', () => {
     await s.store.openJoinedVenue('newplace', 'alice');
     expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('newplace');
     expect(s.localStore.getItem('orders-draft')).toBeNull();
-    expect(s.calls.slice(-2)).toEqual(['wipe', 'reload']);
+    expect(s.calls.slice(-3)).toEqual(['screens closed (leaving: true)', 'wipe', 'reload']);
   });
 
   // The call can take a minute: a sign-out and another sign-in meanwhile must not have the OTHER person's venue switched.
