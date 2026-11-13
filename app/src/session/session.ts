@@ -26,7 +26,7 @@ import {
 } from '@mise/shared/local-data';
 import { locationDocPath } from '@mise/shared/location-id';
 import { sameData } from '@mise/shared/same-data';
-import { markJustJoined } from '@mise/shared/install-hint';
+import { JUST_JOINED_KEY, markJustJoined } from '@mise/shared/install-hint';
 import type { Language } from '../i18n/i18n';
 import type { DocData, SessionBackend, SessionEnv, SessionUser } from './backend';
 import { PENDING_INVITE_KEY } from './joinFlow';
@@ -392,21 +392,7 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     const verdict = offlineCacheVerdict(read(env.local, OFFLINE_CACHE_OWNER_KEY), user.uid);
     if (verdict === 'claim') write(env.local, OFFLINE_CACHE_OWNER_KEY, user.uid);
     if (verdict === 'wipe' && read(env.session, WIPE_FAILED_KEY) !== user.uid) {
-      clearLocalData();
-      void backend.wipeOfflineCache().then(result => {
-        // ⚠️ FIRESTORE COULD NOT EVEN BE LOADED (no signal on its first download): nothing was
-        // wiped, and the once-per-opening guard below must NOT be spent on it — after a reload
-        // with the signal back the wipe would be skipped and the previous person's copy read
-        // (code review, 11 Oct 2026). Nothing can be read without Firestore either, so this is
-        // the «could not check your access» screen, whose «Try again» reloads and wipes first.
-        if (result === 'unavailable') {
-          setSession({ ...INITIAL_SESSION, status: 'error', user });
-          return;
-        }
-        if (result === 'cleared') write(env.local, OFFLINE_CACHE_OWNER_KEY, user.uid);
-        else write(env.session, WIPE_FAILED_KEY, user.uid);
-        env.reload();
-      });
+      void wipeForNewPerson(user);
       return;
     }
 
@@ -416,6 +402,32 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       env.warn('The session could not be resolved', err);
       setSession({ ...INITIAL_SESSION, status: 'error', user });
     });
+  }
+
+  // ⚠️ THE PREVIOUS PERSON'S SCREENS GO FIRST HERE TOO (see `leaving`): a different person signing in while the other's venue
+  // is still on screen (an expired session, another tab) must not have Firestore stopped under that venue's live listeners.
+  async function wipeForNewPerson(user: SessionUser): Promise<void> {
+    setSession({ leaving: true });
+    await env.letScreensClose();
+    // ⚠️ `just-joined` IS A FACT ABOUT THIS PERSON'S JOIN, kept across a wipe that cannot run (see below).
+    const justJoined = read(env.local, JUST_JOINED_KEY) !== null;
+    clearLocalData();
+    const result = await backend.wipeOfflineCache();
+    // ⚠️ FIRESTORE COULD NOT EVEN BE LOADED (no signal on its first download): nothing was
+    // wiped, and the once-per-opening guard below must NOT be spent on it — after a reload
+    // with the signal back the wipe would be skipped and the previous person's copy read
+    // (code review, 11 Oct 2026). Nothing can be read without Firestore either, so this is
+    // the «could not check your access» screen, whose «Try again» reloads and wipes first.
+    // The clear above took the install question with it, though the person has just joined: it goes back, or «Try again»
+    // would open the Home without ever asking it.
+    if (result === 'unavailable') {
+      if (justJoined) markJustJoined(env.local);
+      setSession({ ...INITIAL_SESSION, status: 'error', user });
+      return;
+    }
+    if (result === 'cleared') write(env.local, OFFLINE_CACHE_OWNER_KEY, user.uid);
+    else write(env.session, WIPE_FAILED_KEY, user.uid);
+    env.reload();
   }
 
   // ⚠️ THE SCREENS GO FIRST, THEN THE DATA (see `leaving`). The person already said yes to leaving (useLeaveFlow asked about
@@ -462,7 +474,17 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       // venue, and the next person to pick up a shared phone must not find it waiting (session/joinFlow.ts). First,
       // before anything that can fail, and before the reload below starts the next page from this window's storage.
       write(env.session, PENDING_INVITE_KEY, null);
-      await backend.signOut();
+      // ⚠️ THE SCREENS CLOSE BEFORE THE ACCOUNT GOES, and Firestore is stopped only after that (see `leaving`): the wipe below
+      // terminates Firestore, which errors every live listener, and nothing may rely on React having unmounted by then.
+      setSession({ leaving: true });
+      await env.letScreensClose();
+      try {
+        await backend.signOut();
+      } catch (err) {
+        // Still signed in: the app comes back as it was.
+        setSession({ leaving: false });
+        throw err;
+      }
       clearLocalData();
       // Only a clear that worked forgets whose data this is: after a failed one the record
       // stays, so the next person's first boot catches it and tries again.

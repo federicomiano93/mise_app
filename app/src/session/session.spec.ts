@@ -155,7 +155,8 @@ describe('somebody else\'s offline copy', () => {
     const s = setup(world(docs), { local: { [OFFLINE_CACHE_OWNER_KEY]: 'bob', 'recipes-cache': 'x', 'active-location': 'bakery', 'device-id': 'd1' } });
     s.auth(ALICE);
     await settle();
-    expect(s.calls).toEqual(['wipe', 'reload']);
+    // The screens close first, with the session saying so (see `leaving`).
+    expect(s.calls).toEqual(['screens closed (leaving: true)', 'wipe', 'reload']);
     expect(s.localStore.getItem('recipes-cache')).toBeNull();
     expect(s.localStore.getItem('device-id')).toBe('d1');
     expect(s.localStore.getItem('active-location')).toBe('bakery');
@@ -194,6 +195,44 @@ describe('somebody else\'s offline copy', () => {
     expect(s.localStore.getItem(OFFLINE_CACHE_OWNER_KEY)).toBe('bob');
     expect(s.env.reload).not.toHaveBeenCalled();
     expect(s.calls.some(c => c.startsWith('readPreferCache'))).toBe(false);
+  });
+
+  // ⚠️ A person who has just joined and lands on «could not check your access»: «Try again» reloads, and the clear that comes
+  // with the next page's wipe must not take the install question with it.
+  test('a wipe that could not load Firestore keeps «just-joined», so the install question is still asked after «Try again»', async () => {
+    const w = world(docs);
+    w.wipeWorks = 'unavailable';
+    const s = setup(w, { local: { [OFFLINE_CACHE_OWNER_KEY]: 'bob', 'prices-cache': 'x', 'just-joined': '1' } });
+    s.auth(ALICE);
+    await settle();
+    expect(s.store.getSnapshot().status).toBe('error');
+    expect(s.localStore.getItem('prices-cache')).toBeNull();
+    expect(s.localStore.getItem('just-joined')).toBe('1');
+  });
+
+  test('a wipe that works does not hand a stale «just-joined» to the next person', async () => {
+    const s = setup(world(docs), { local: { [OFFLINE_CACHE_OWNER_KEY]: 'bob', 'just-joined': '1' } });
+    s.auth(ALICE);
+    await settle();
+    expect(s.localStore.getItem('just-joined')).toBeNull();
+  });
+
+  test('a sign-out says the screens are leaving BEFORE the account goes and the copy is wiped', async () => {
+    const s = setup(world(docs));
+    s.auth(ALICE);
+    await settle();
+    s.calls.length = 0;
+    await s.store.signOut();
+    expect(s.calls).toEqual(['screens closed (leaving: true)', 'signOut', 'wipe', 'reload']);
+  });
+
+  test('a sign-out that fails leaves the app on screen as it was', async () => {
+    const s = setup(world(docs));
+    s.auth(ALICE);
+    await settle();
+    vi.mocked(s.backend.signOut).mockRejectedValueOnce(new Error('offline'));
+    await expect(s.store.signOut()).rejects.toThrow('offline');
+    expect(s.store.getSnapshot()).toMatchObject({ status: 'ready', leaving: false });
   });
 
   test('a sign-out whose wipe could not load Firestore keeps the owner on record', async () => {

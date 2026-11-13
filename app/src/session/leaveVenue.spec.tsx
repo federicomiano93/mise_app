@@ -68,6 +68,7 @@ function setup() {
   const db = fakeFirestore();
   const docs: Record<string, DocData> = {
     'users/alice': { locations: { bakery: 'owner', restaurant: 'owner' } },
+    'users/bob': { locations: { bakery: true } },
     'locations/bakery': { name: 'Bakery' },
     'locations/restaurant': { name: 'Restaurant' },
   };
@@ -111,7 +112,7 @@ function setup() {
   );
   store.start();
   act(() => { auth(ALICE); });
-  return { db, store, backend, env, flow };
+  return { db, store, backend, env, flow, auth: (user: SessionUser | null) => { auth(user); } };
 }
 
 afterEach(() => { vi.restoreAllMocks(); });
@@ -147,6 +148,40 @@ describe('leaving a venue stops every listener before Firestore is stopped', () 
     expect(s.backend.wipeOfflineCache).toHaveBeenCalledOnce();
     expect(screen.queryByText('the to-do list')).not.toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Loading…');
+    expect(errors).not.toHaveBeenCalled();
+  });
+
+  // ⚠️ SIGN-OUT used to rely on React unmounting the screens in a microtask before the wipe terminated Firestore.
+  test('signing out: the to-do list has unsubscribed when the wipe runs, and nothing reaches the console', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const s = setup();
+    await screen.findByText('the to-do list');
+    vi.mocked(s.backend.wipeOfflineCache).mockImplementationOnce(async () => {
+      expect(s.db.live.size).toBe(0);
+      s.db.terminate();
+      return 'cleared';
+    });
+    await act(async () => { await s.store.signOut(); });
+    expect(s.backend.wipeOfflineCache).toHaveBeenCalledOnce();
+    expect(s.env.reload).toHaveBeenCalledOnce();
+    expect(errors).not.toHaveBeenCalled();
+  });
+
+  // Somebody else signing in while this person's venue is still on screen (an expired session in another tab): this phone's
+  // copy is wiped, and it used to be wiped under the open screens.
+  test('a different person signing in: the to-do list has unsubscribed when the wipe runs, and nothing reaches the console', async () => {
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const s = setup();
+    await screen.findByText('the to-do list');
+    vi.mocked(s.backend.wipeOfflineCache).mockImplementationOnce(async () => {
+      expect(s.db.live.size).toBe(0);
+      s.db.terminate();
+      return 'cleared';
+    });
+    act(() => { s.auth({ uid: 'bob', email: 'bob@club.test', isAnonymous: false }); });
+    await waitFor(() => { expect(s.env.reload).toHaveBeenCalledOnce(); });
+    expect(s.backend.wipeOfflineCache).toHaveBeenCalledOnce();
+    expect(screen.queryByText('the to-do list')).not.toBeInTheDocument();
     expect(errors).not.toHaveBeenCalled();
   });
 });
