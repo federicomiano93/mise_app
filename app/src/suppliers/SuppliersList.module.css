@@ -125,11 +125,6 @@
   color: var(--danger-ink);
 }
 
-.loading {
-  padding: var(--s6);
-  color: var(--ink-2);
-}
-
 .nothing {
   padding: var(--s3);
   color: var(--ink-2);

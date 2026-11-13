@@ -19,6 +19,8 @@
 // recipe-cost-model.spec.ts and foodcost-model.spec.ts also compare the names, constants, frozen-ness and
 // function shapes of everything they do port).
 //
+// list-status.ts is not paired either: it is the two functions `LIST_STATUS` and `listStatus` of js/orders/registry.js, the whole
+// Ingredients & Suppliers screen (list-status.spec.ts cuts them out of that file and runs the same cases on both).
 // list-copy.ts is not paired either: it leaves out the page logic of js/orders/list-copy.js (list-copy.spec.ts says which).
 // The Calculator's partial ports are not paired either, for the same reason: calculator-config.ts (it leaves
 // out the save path and `orderPrefillLabel`), log-model.ts (the legacy migration and `dayLabel`, which has

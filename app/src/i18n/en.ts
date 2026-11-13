@@ -1691,6 +1691,9 @@ export const en = {
   'sup.dueToday': 'To order today',
   'sup.notInUseGroup': 'Not in use ({n})',
   'sup.loadFailed': 'Could not load the suppliers. Check your connection and try again.',
+  // Said in place of «Loading…» after 10 s without an answer (the current app's orders.registry.notArrived.*).
+  'sup.notArrived.title': 'This list has not arrived yet',
+  'sup.notArrived.sub': 'Check your connection: it will appear here as soon as it arrives.',
   'sup.pane.suppliers.title': 'Choose a supplier',
   'sup.pane.suppliers.text': 'Tap a supplier on the left: its details and everything it sells open here.',
   'sup.whatTheySell': 'What they sell',

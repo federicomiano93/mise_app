@@ -8,9 +8,12 @@ import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
 import { useStatusMessage } from '../ui/StatusMessage';
+import { SPLIT_QUERY } from '../ui/split';
+import { useMediaQuery } from '../ui/useMediaQuery';
 import { useConfirm } from '../ui/useConfirm';
 import { useCopyWait } from './copyWait';
 import { ItemRow, ItemRows } from './ItemRow';
+import { NoAnswerYet } from './NoAnswerYet';
 import { FoldedGroup, useFoldedOpen } from '../ui/FoldedGroup';
 import type { StoredDoc } from './suppliersSource';
 import { ADD_INGREDIENT_OPENER, SEARCH_OPENER, supplierItemOpener, supplierOpener, useHandBack } from './handBack';
@@ -39,6 +42,8 @@ export function SupplierScreen({ id }: { id: string }) {
   const say = useStatusMessage();
   const store = useSuppliersStore();
   const snapshot = useSuppliers();
+  // On the tablet's split the list beside the supplier says «Loading…» / «has not arrived» already.
+  const split = useMediaQuery(SPLIT_QUERY);
   const deletions = useSupplierDeletions();
   const [confirm, confirmDialog] = useConfirm();
   const [runDelete, deleteDialog] = useDeleteSupplier();
@@ -101,8 +106,8 @@ export function SupplierScreen({ id }: { id: string }) {
       );
     }
     return (
-      <section className={styles.waiting} aria-busy="true">
-        <p className={styles.loading}>{t('session.loading')}</p>
+      <section className={styles.waiting}>
+        <NoAnswerYet status={snapshot.suppliersStatus} roomy quiet={split} />
       </section>
     );
   }
@@ -230,7 +235,7 @@ export function SupplierScreen({ id }: { id: string }) {
           <span>{t('sup.addIngredient')}</span>
         </Button>
         {!snapshot.ingredientsLoaded ? (
-          <p className={styles.loading} aria-busy="true">{t('session.loading')}</p>
+          <NoAnswerYet status={snapshot.ingredientsStatus} />
         ) : snapshot.ingredientsBroken ? (
           <p className={styles.failed}>{t('sup.loadFailed')}</p>
         ) : mine.length === 0 ? (

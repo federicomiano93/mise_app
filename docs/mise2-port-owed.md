@@ -166,6 +166,11 @@ worker's rollback, has the exact order):
     **switch an ingredient off from its row, fold unused, mark hand-made** (`4de37fec`, `89fad957`, `d2dad140`, `c20f812b`, `a9e55262`,
     `2bd4e58e`, `c2b95402`) — «Not in use» group DONE in Orders (`564980cd`, branch `feature/mise2-ingredient-not-in-use`); NOT verified: the
     empty-flash fixes, the scroll/focus keep on Deactivate/Reactivate, «hand-made» mark, the card stopping resending `active`. Size S (verification).
+    **VERIFIED 13 Nov 2026** (`drive-mise2-verify16.mjs`), three defects found, FIXED on `feature/mise2-next-suppliers-16` (`docs/parity/suppliers.md`,
+    «Item 16 fixes as built»): the rows jump when prices land (the price room, kept unseen); the 1024 Back scroll shift (a driver artefact — the
+    driver's own `scrollIntoView` on the sticky Back button; pinned, to re-drive); the missing «has not arrived» state (`shared/src/list-status.ts`).
+    **STILL A DIFFERENCE, for him to decide (not built):** no per-row Disattiva/Riattiva (the switch is only on the card); no hand-made pencil
+    (Mise 2 shows the inverse «Da fattura» tag); a reactivated row leaves the «Non in uso» group at once.
 17. **Update gate held on invoice import / Pastries editor** (`7fe1b955`, `2ae76d58`) — DONE with the service worker (8 Nov 2026):
     the invoice import and the Pastries editor hold `markBusy()`, and so does every editor (`app/src/session/busy.ts` lists them). Before: remember
     `markBusy()` in every editor (already in piano-mise-2).
@@ -340,7 +345,8 @@ not be ticked above. To bring one forward, delete its number here and port it; t
 to its markers, with his decision in the line.
 
 What each one means for the people using Mise 2 until it is ported:
-- 16. Suppliers: the empty-flash, scroll and focus fixes and the «hand-made» mark are not verified in Mise 2.
+- 16. Suppliers: verified and fixed (13 Nov 2026). Still different: no Disattiva/Riattiva on a row (only on the card), no hand-made pencil
+  (Mise 2 shows «Da fattura» on the invoice ones instead), and a reactivated row leaves the «Non in uso» group at once.
 - 26. Food cost step B (the cost on every «Made of» line, «No price», the «Which?» list of what has no price), and the two
   decimals on those screens when they are built: Mise 2's lines keep their own notes (a recipe or an item with no price is
   said, no money under a recipe or ingredient line; packaging shows its price each and total).

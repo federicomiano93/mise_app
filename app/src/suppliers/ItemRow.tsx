@@ -10,6 +10,8 @@ import { useSession } from '../session/SessionContext';
 import { useMoney } from '../session/useMoney';
 import { fromInvoice } from './invoiceTag';
 import { pricePerUnitText } from './priceText';
+import { useSuppliers } from './SuppliersContext';
+import { useMayWritePrices } from './useMayWritePrices';
 import type { StoredDoc } from './suppliersSource';
 import styles from './ItemRow.module.css';
 
@@ -48,11 +50,21 @@ export function ItemRow({ item, supplier, onOpen, isOpen, opener, register, inNo
   const { location } = useSession();
   const money = useMoney();
   const packaging = isPackaging(item);
-  const meta = [
+  const mayPrice = useMayWritePrices();
+  const { pricesReadable } = useSuppliers();
+  const price = pricePerUnitText(item, money, t);
+  const named = [
     supplier === undefined ? '' : (supplier === '' ? t('sup.noSupplier') : supplier),
     typeof item.brand === 'string' ? item.brand : '',
-    pricePerUnitText(item, money, t),
-  ].filter(part => part !== '').join(' · ');
+  ].filter(part => part !== '');
+  const meta = [...named, price].filter(part => part !== '').join(' · ');
+  // ⚠️ THE ROWS DRAW BEFORE THE PRICES, AND A PRICE CAN WRAP ITS LINE (port of current-app fix 76be75d1; measured in Mise 2:
+  // rows below moved by up to 325 px at 360 px when an owner's prices landed). So until the prices have answered, a row
+  // without a price yet keeps the room for one, unseen: a sample price at the end of the meta line. An employee (no price
+  // reader) never gets it, so no empty gap; a row that turns out to have no price gives the room back.
+  const room = price === '' && mayPrice && !pricesReadable
+    ? `${named.length > 0 ? ' · ' : ''}${pricePerUnitText({ pricePerUnit: 12.5, priceUnit: 'kg' }, money, t)}`
+    : '';
   const off = item.active === false;
   const offTag = off && !inNotInUse;
   const node = useCallback((button: HTMLButtonElement | null) => { register(opener, button); }, [register, opener]);
@@ -73,7 +85,12 @@ export function ItemRow({ item, supplier, onOpen, isOpen, opener, register, inNo
       >
         <span className={styles.main}>
           <span className={styles.name}>{ingredientDisplayName(item)}</span>
-          {meta !== '' ? <span className={styles.meta}>{meta}</span> : null}
+          {meta !== '' || room !== '' ? (
+            <span className={styles.meta}>
+              {meta}
+              {room !== '' ? <span className={styles.priceRoom} aria-hidden="true" data-price-room="">{room}</span> : null}
+            </span>
+          ) : null}
           {packTag || invoiceTag || offTag || undeclared ? (
             <span className={styles.tags}>
               {packTag ? <span className={styles.tag}>{t('sup.packagingTag')}</span> : null}

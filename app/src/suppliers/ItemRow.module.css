@@ -74,6 +74,11 @@
   font-size: var(--fs-sm);
 }
 
+/* The room kept for a price that has not landed yet: laid out like the real one, never seen or read. */
+.priceRoom {
+  visibility: hidden;
+}
+
 /* Switched off: dimmed in the ink, never by opacity (the words keep their contrast), and told in a word as well. */
 .row[data-off="true"] .name {
   color: var(--ink-2);

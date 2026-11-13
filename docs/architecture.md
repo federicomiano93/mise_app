@@ -526,7 +526,7 @@ Pure logic only, no DOM types. Each module is a PORT of a `js/` file, and its sp
 against BOTH files (`describe.each` over the TypeScript port and the `js/` original), so the two
 apps cannot drift apart while both are live. `parity.spec.ts` compares the full ports export by
 export (names, constants, frozen-ness, function names and arity); a partial port (`membership`,
-`location-id`, `pastries-model`, `recipe-allergen-model`, `price-model`, `inventory-value`, `catalogue-model`, `recipe-link`, `records-link`, `recipe-cost-model`, `foodcost-model`, `list-copy`) is not paired and its spec says why, and
+`location-id`, `pastries-model`, `recipe-allergen-model`, `price-model`, `inventory-value`, `catalogue-model`, `recipe-link`, `records-link`, `recipe-cost-model`, `foodcost-model`, `list-copy`, `list-status`) is not paired and its spec says why, and
 compares what it does port with the `js/` file itself. `records-link` (step 3f-8b) has NO original at all: the addresses and navigation states of the doors from Orders to the cards of «Ingredients & suppliers» (`ingredientCardAddress`, `newIngredientAddress`, `supplierScreenAddress`, `fromOrdersList`, `fromOrdersSupplier`); `app/src/suppliers/ordersDoors.spec.ts` pins them against `suppliersPath.ts` and `suppliersNav.ts`. `currency` is an ADAPTED port, also not paired:
 the original keeps the venue's money in a module variable (`setCurrency`), and Mise 2 never keeps a
 venue fact in a module variable, so the port is stateless (`moneyOf(symbol, layout)` returns the
