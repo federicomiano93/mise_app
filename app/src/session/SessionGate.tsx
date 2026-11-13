@@ -1,9 +1,15 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { keepJoinForm } from '@mise/shared/join-hold';
 import { I18nContext } from '../i18n/I18nContext';
 import type { Language } from '../i18n/i18n';
 import { announceScreen, markLoaded } from '../telemetry/usage';
 import { ChooseVenueScreen } from './ChooseVenueScreen';
+import { focusMain } from './focusMain';
+import { InviteQuestion } from './InviteQuestion';
+import { useJoinFlow, useJoinFlowStore } from './JoinFlowContext';
+import type { JoinFlowState } from './joinFlow';
+import { JoinScreen } from './JoinScreen';
 import { LoadingScreen } from './LoadingScreen';
 import { NoAccessScreen } from './NoAccessScreen';
 import { useSession } from './SessionContext';
@@ -20,6 +26,30 @@ const GATE_SCREENS: Partial<Record<SessionStatus, string>> = {
   error: 'session-error',
 };
 
+// Is the join form (staff slice 1) the screen to draw?
+//
+//   no-access        — opened by «I have a join code», or by an invitation this window holds (the code is filled in: the
+//                      person with no venue is exactly who a link is for), or still showing the server's last answer;
+//   ready, choose-   — only once opened, after «Add it» (InviteQuestion): somebody in a venue is ASKED first;
+//   location
+//   loading, error   — ⚠️ only a form that has been SENT (js/join-hold.js, fix 9e0a2dac): the session may move while the
+//                      code is checked, and the answer must land on the form that asked, not on a screen nobody can see;
+//   signed-out       — never.
+export function joinShown(status: SessionStatus, join: JoinFlowState): boolean {
+  switch (status) {
+    case 'no-access':
+      return join.open || join.invited !== '' || join.sent !== null;
+    case 'ready':
+    case 'choose-location':
+      return join.open;
+    case 'loading':
+    case 'error':
+      return keepJoinForm(join.sent, status, join.invited);
+    case 'signed-out':
+      return false;
+  }
+}
+
 // The door. One screen per thing the session can be, and only `ready` lets the app through.
 //
 // ⚠️ THE APP IS NEVER DRAWN BEFORE THE SESSION SAYS A VENUE IS OPEN. Drawing it first and hiding
@@ -28,6 +58,28 @@ const GATE_SCREENS: Partial<Record<SessionStatus, string>> = {
 // a venue that is not open yet.
 export function SessionGate({ children }: { children: ReactNode }) {
   const session = useSession();
+  const flowStore = useJoinFlowStore();
+  const join = useJoinFlow();
+  const showJoin = joinShown(session.status, join);
+
+  // ⚠️ A PENDING INVITATION IS FORGOTTEN ON SIGN-OUT, from wherever it came (this window's own «Log out» also clears the
+  // stored copy in session.ts; another tab's sign-out arrives only as this status). Only a sign-out: a window that OPENS
+  // signed out with a link must keep it for after the sign-in.
+  const hadAccount = useRef(false);
+  useEffect(() => {
+    if (session.user) { hadAccount.current = true; return; }
+    if (session.status === 'signed-out' && hadAccount.current) {
+      hadAccount.current = false;
+      flowStore.cancel();
+    }
+  }, [session.status, session.user, flowStore]);
+
+  // Back from a join form opened inside a venue: the app is drawn again, and the focus goes to its screen.
+  const joinWasShown = useRef(false);
+  useEffect(() => {
+    if (joinWasShown.current && !showJoin && session.status === 'ready') setTimeout(() => { focusMain(); }, 0);
+    joinWasShown.current = showJoin;
+  }, [showJoin, session.status]);
 
   // The screens of the gate tell the usage record where the person is. `loading` is a wait, not a
   // screen, and `ready` is the shell's: it names the section.
@@ -36,12 +88,16 @@ export function SessionGate({ children }: { children: ReactNode }) {
   // first render instead, a visit that starts signed out would count the time it takes to type
   // a password as «load time». markLoaded keeps the first call (the shell's own is in
   // InVenueLanguage below).
+  // The join form is `join`, and nothing more: never the code, never the venue it is for.
   useEffect(() => {
-    const name = GATE_SCREENS[session.status];
+    const name = showJoin ? 'join' : GATE_SCREENS[session.status];
     if (!name) return;
     announceScreen(name);
     markLoaded();
-  }, [session.status]);
+  }, [session.status, showJoin]);
+
+  // Keyed on the flow's formKey: a NEW invitation gets a new form; the same form survives every status it is held through.
+  if (showJoin) return <JoinScreen key={join.formKey} />;
 
   switch (session.status) {
     case 'loading':
@@ -49,13 +105,13 @@ export function SessionGate({ children }: { children: ReactNode }) {
     case 'signed-out':
       return <SignInScreen />;
     case 'choose-location':
-      return <ChooseVenueScreen />;
+      return <><ChooseVenueScreen /><InviteQuestion /></>;
     case 'no-access':
       return <NoAccessScreen />;
     case 'error':
       return <SessionErrorScreen />;
     case 'ready':
-      return <InVenueLanguage language={session.language}>{children}</InVenueLanguage>;
+      return <InVenueLanguage language={session.language}>{children}<InviteQuestion /></InVenueLanguage>;
   }
 }
 
