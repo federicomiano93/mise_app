@@ -567,7 +567,7 @@ export const it: Messages = {
   'join.tooMany': 'Troppi tentativi. Aspetta un po’ e riprova.',
   'join.offline': 'Non riesco a raggiungere il server. Controlla la connessione e riprova.',
   'join.failed': 'Non è stato possibile controllare il codice. Riprova tra un momento.',
-  'join.opening': 'Sei dentro. Apertura…',
+  'join.opening': 'Fatto, sei dentro. Sto aprendo…',
   'join.discard.title': 'Vuoi scartare le modifiche?',
   'help.enterYourFirstName': 'Inserisci il tuo nome.',
   'help.enterYourSurname': 'Inserisci il tuo cognome.',

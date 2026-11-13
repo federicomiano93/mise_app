@@ -19,8 +19,8 @@ import styles from './JoinScreen.module.css';
 
 type Field = 'first' | 'last' | 'code';
 type Problem = { field: Field; key: NameProblemKey | 'join.shapeHint' };
-// The server's answer, kept as a key so it is worded in the language on screen when it is drawn. `id` makes two identical
-// refusals in a row two announcements, not one.
+// The server's answer, kept as a key so it is worded in the language on screen when it is drawn. Each answer is a new state
+// (`id`), and the wait in between empties the alert, so two identical refusals in a row are spoken twice.
 type Notice = { id: number; refusal: JoinRefusal } | { id: number; busy: 'join.checking' | 'join.opening' };
 
 // The join form of an account that is ALREADY SIGNED IN (staff slice 1, docs/parity/staff-plan.md): a port of joinScreen in
@@ -234,18 +234,18 @@ export function JoinScreen() {
           {fieldError('code')}
         </TextField>
 
-        {/* The wait is said in a live region that is there before it speaks (a region inserted already filled is not
-            announced reliably); the refusal is an alert, a new one per answer. */}
+        {/* Both are live regions that are there before they speak (a region inserted already filled is not announced reliably).
+            The refusal is an alert; the wait before it empties it, so the same refusal twice is spoken twice. */}
         <p className={styles.wait} data-filled={notice !== null && 'busy' in notice ? 'true' : undefined} role="status">
           {notice !== null && 'busy' in notice ? t(notice.busy) : null}
         </p>
-        {notice !== null && 'refusal' in notice ? (
-          <p key={notice.id} className={styles.notice} data-kind="error" role="alert">
-            {notice.refusal.key === 'join.tooManyMinutes'
+        <p className={styles.notice} data-kind="error" data-filled={notice !== null && 'refusal' in notice ? 'true' : undefined} role="alert">
+          {notice !== null && 'refusal' in notice
+            ? (notice.refusal.key === 'join.tooManyMinutes'
               ? t(notice.refusal.key, { n: notice.refusal.n })
-              : t(notice.refusal.key)}
-          </p>
-        ) : null}
+              : t(notice.refusal.key))
+            : null}
+        </p>
 
         <Button type="submit" variant="primary" block isPending={sending}>{t('join.join')}</Button>
       </form>

@@ -6,6 +6,7 @@ import { I18nProvider } from '../i18n/I18nProvider';
 import { SCREEN_EVENT } from '../telemetry/usage';
 import { fakeStore } from '../testing/fakeSession';
 import { memoryStorage } from '../testing/renderWithSession';
+import { findSpokenAlert, spokenAlerts } from '../testing/spokenAlert';
 import { markBusy } from './busy';
 import { ASK_RETRY_MS } from './InviteQuestion';
 import { JoinFlowProvider } from './JoinFlowContext';
@@ -102,7 +103,7 @@ describe('an invitation opened with no venue', () => {
     await user.type(screen.getByLabelText('Your first name'), 'Luca');
     await user.type(screen.getByLabelText('Your surname'), 'Rossi');
     await user.click(screen.getByRole('button', { name: 'Join' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('You are already in this business.');
+    expect(await findSpokenAlert()).toHaveTextContent('You are already in this business.');
     expect(screen.getByLabelText('Your first name')).toHaveValue('Luca');
   });
 });
@@ -126,7 +127,7 @@ describe('⚠️ the form stays on screen until the server answers (fix 9e0a2dac
     act(() => { store.set({ status: 'loading' }); });
     await act(async () => { refuse(Object.assign(new Error('x'), { code: 'functions/permission-denied' })); });
     // The refusal lands on the form that asked, still on screen through the session's own move.
-    expect(await screen.findByRole('alert')).toHaveTextContent('That code does not work. Ask for a new one.');
+    expect(await findSpokenAlert()).toHaveTextContent('That code does not work. Ask for a new one.');
     expect(screen.getByLabelText('Code')).toHaveValue('123456');
   });
 

@@ -5,6 +5,7 @@ import { redeemFailureText } from '@mise/shared/join-code';
 import { install } from '../telemetry/errorReport';
 import { ACTION_EVENT, SCREEN_EVENT } from '../telemetry/usage';
 import { memoryStorage, renderWithSession } from '../testing/renderWithSession';
+import { findSpokenAlert, spokenAlerts } from '../testing/spokenAlert';
 import { isBusy } from './busy';
 import { createJoinFlow, PENDING_INVITE_KEY } from './joinFlow';
 import { JoinScreen } from './JoinScreen';
@@ -119,7 +120,7 @@ describe('JoinScreen: every field checked before the network', () => {
     expect(store.redeemJoinCode).not.toHaveBeenCalled();
     expect(screen.getByLabelText(label)).toHaveFocus();
     expect(screen.getByLabelText(label)).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByRole('alert')).toHaveTextContent(message);
+    expect(await findSpokenAlert()).toHaveTextContent(message);
   });
 
   test('typing in the field clears its problem', async () => {
@@ -205,7 +206,7 @@ describe('JoinScreen: a joined venue that does not open on this page', () => {
     await fill(user);
     await user.click(screen.getByRole('button', { name: 'Join' }));
     await waitFor(() => { expect(reload).toHaveBeenCalledOnce(); });
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(spokenAlerts()).toEqual([]);
     expect(flow.getSnapshot()).toMatchObject({ invited: '', open: false });
     expect(isBusy()).toBe(false);
     vi.unstubAllGlobals();
@@ -242,7 +243,7 @@ describe('JoinScreen: under React’s StrictMode (the dev server mounts every sc
     store.redeemJoinCode.mockRejectedValue(fnError('permission-denied', 'x'));
     await fill(user, { code: '123456' });
     await user.click(screen.getByRole('button', { name: 'Join' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('That code does not work. Ask for a new one.');
+    expect(await findSpokenAlert()).toHaveTextContent('That code does not work. Ask for a new one.');
     expect(screen.getByRole('button', { name: 'Back' })).toBeEnabled();
   });
 });
@@ -280,7 +281,7 @@ describe('JoinScreen: every refusal, in the app’s own words', () => {
     store.redeemJoinCode.mockRejectedValue(error);
     await fill(user, { code: '654321' });
     await user.click(screen.getByRole('button', { name: 'Join' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(words);
+    expect(await findSpokenAlert()).toHaveTextContent(words);
     // Still the same form, everything in its boxes, ready for another try.
     expect(screen.getByLabelText('Your first name')).toHaveValue('Luca');
     expect(screen.getByLabelText('Code')).toHaveValue('654321');
@@ -303,7 +304,7 @@ describe('JoinScreen: every refusal, in the app’s own words', () => {
     await user.type(screen.getByLabelText('Il tuo cognome'), 'Rossi');
     await user.type(screen.getByLabelText('Codice'), '123456');
     await user.click(screen.getByRole('button', { name: 'Entra' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent(words);
+    expect(await findSpokenAlert()).toHaveTextContent(words);
   });
 
   test('«already in this business» drops the invitation, which no retry could change', async () => {
@@ -311,7 +312,7 @@ describe('JoinScreen: every refusal, in the app’s own words', () => {
     store.redeemJoinCode.mockRejectedValue(fnError('failed-precondition', 'x', { reason: 'already-member' }));
     await fill(user);
     await user.click(screen.getByRole('button', { name: 'Join' }));
-    await screen.findByRole('alert');
+    await findSpokenAlert();
     expect(flow.getSnapshot().invited).toBe('');
     expect(storage.map.has(PENDING_INVITE_KEY)).toBe(false);
     expect(flow.getSnapshot().sent).toEqual({ busy: false, invited: TOKEN });
@@ -322,19 +323,24 @@ describe('JoinScreen: every refusal, in the app’s own words', () => {
     store.redeemJoinCode.mockRejectedValue(fnError('unavailable', 'x'));
     await fill(user);
     await user.click(screen.getByRole('button', { name: 'Join' }));
-    await screen.findByRole('alert');
+    await findSpokenAlert();
     expect(flow.getSnapshot().invited).toBe(TOKEN);
     nothingHeardOf(TOKEN);
   });
 
-  test('two refusals in a row are two announcements', async () => {
+  // ⚠️ A live region inserted already filled is not announced reliably: the alert is in the page, empty, before it speaks.
+  test('the alert is there empty before the answer, and the same one is filled by each refusal', async () => {
     const { user, store } = draw();
     store.redeemJoinCode.mockRejectedValue(fnError('permission-denied', 'x'));
+    const region = screen.getAllByRole("alert").find(el => el.className.includes("notice")) as HTMLElement;
+    expect(region).toBeEmptyDOMElement();
     await fill(user, { code: '123456' });
     await user.click(screen.getByRole('button', { name: 'Join' }));
-    const first = await screen.findByRole('alert');
+    await waitFor(() => { expect(region).toHaveTextContent('That code does not work. Ask for a new one.'); });
+    expect(screen.getAllByRole('alert')).toContain(region);
     await user.click(screen.getByRole('button', { name: 'Join' }));
-    await waitFor(() => { expect(screen.getByRole('alert')).not.toBe(first); });
+    await waitFor(() => { expect(region).toHaveTextContent('That code does not work. Ask for a new one.'); });
+    expect(screen.getAllByRole('alert')).toContain(region);
   });
 });
 
