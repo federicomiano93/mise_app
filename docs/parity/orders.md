@@ -1361,7 +1361,8 @@ telefono» in Settings. Port: `order-request-model` in full. No rule changed, an
 - Somebody WITH a name, sending for the first time from a phone with no signal, goes out as «Qualcuno» for good, because the rules never
   let a list's name change. Their next list carries the name.
 - A venue with no list at all, opening with no signal, gets the «nobody was told» blocks only once the server answers.
-- `order-sent` (the usage statistic) is still missing in Mise 2, from step 3f-3; `order-request` is in. Owed with Statistics.
+- `order-sent` (the usage statistic): DONE 13 Nov 2026 (port-owed item 47), once per recorded supplier from `PlaceConfirmScreen`;
+  `order-request` was already in.
 - On the split, one list open and a supplier tapped on the left, Back may land on the lists rather than on that list (suspected, the
   same shape as History's editor).
 - For step 3g: the Home's badge (30 days) and a push tap landing on the lists. For step 3f-8: the `orderLists` switch itself.

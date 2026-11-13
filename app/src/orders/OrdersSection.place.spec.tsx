@@ -517,6 +517,98 @@ describe('several suppliers at once', () => {
   });
 });
 
+describe('the `order-sent` usage statistic (port-owed item 47)', () => {
+  // The current app announces it once per supplier, right past placeOrder's point of no return: in the record = counted.
+  const heard = (): { names: string[]; stop: () => void } => {
+    const names: string[] = [];
+    const listen = (event: Event) => { names.push(String((event as CustomEvent).detail)); };
+    window.addEventListener('mise:action', listen);
+    return { names, stop: () => { window.removeEventListener('mise:action', listen); } };
+  };
+
+  it('is announced once when one supplier’s order is recorded', async () => {
+    const { names, stop } = heard();
+    try {
+      const source = seeded(FILLED);
+      const view = await atSupplier('s-alp', source);
+      await toConfirm(view);
+      await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
+      await view.user.click(await dialogButton('Yes, sent'));
+      await waitFor(() => { expect(source.records.has(recordId('s-alp'))).toBe(true); });
+      await waitFor(() => { expect(view.router.state.location.pathname).toBe('/orders'); });
+      expect(names.filter(name => name === 'order-sent')).toHaveLength(1);
+    } finally { stop(); }
+  });
+
+  it('is not announced when the record is refused, and is once the retry lands', async () => {
+    const { names, stop } = heard();
+    try {
+      const source = seeded(FILLED);
+      const view = await atSupplier('s-alp', source);
+      await toConfirm(view);
+      source.fail.record = true;
+      await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
+      await view.user.click(await dialogButton('Yes, sent'));
+      await screen.findByText('Alpine Mills — NOT recorded, the rows are still there. Try again.');
+      expect(names).not.toContain('order-sent');
+      source.fail.record = false;
+      await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
+      await view.user.click(await dialogButton('Yes, sent'));
+      await waitFor(() => { expect(source.records.has(recordId('s-alp'))).toBe(true); });
+      await waitFor(() => { expect(names.filter(name => name === 'order-sent')).toHaveLength(1); });
+    } finally { stop(); }
+  });
+
+  it('is announced when the order is recorded even if the rows could not be cleared', async () => {
+    const { names, stop } = heard();
+    try {
+      const source = seeded(FILLED);
+      const view = await atSupplier('s-alp', source);
+      await toConfirm(view);
+      source.fail.clear = true;
+      await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
+      await view.user.click(await dialogButton('Yes, sent'));
+      await screen.findByText(/^Alpine Mills — order saved to History, but the rows could not be cleared\./);
+      expect(names.filter(name => name === 'order-sent')).toHaveLength(1);
+    } finally { stop(); }
+  });
+
+  it('is not announced offline, where nothing is recorded', async () => {
+    const { names, stop } = heard();
+    try {
+      const source = seeded(FILLED);
+      const view = await atSupplier('s-alp', source);
+      await toConfirm(view);
+      vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+      await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
+      await view.user.click(await dialogButton('Yes, sent'));
+      await screen.findByText('You’re offline — reconnect to record this order.');
+      expect(names).not.toContain('order-sent');
+    } finally { stop(); }
+  });
+
+  it('counts each recorded supplier of a several-supplier order, and not the one refused', async () => {
+    const { names, stop } = heard();
+    try {
+      const source = seeded(BOTH);
+      const view = await atList(source);
+      await view.user.click(screen.getByRole('button', { name: 'Order placed…' }));
+      await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
+      const recordOrder = source.recordOrder.bind(source);
+      let calls = 0;
+      source.recordOrder = (id, merge) => {
+        calls += 1;
+        if (calls === 2) return Promise.reject(new Error('unavailable'));
+        return recordOrder(id, merge);
+      };
+      await view.user.click(screen.getByRole('button', { name: 'Order placed' }));
+      await view.user.click(await dialogButton('Yes, sent'));
+      await screen.findByText('Zed — NOT recorded, the rows are still there. Alpine Mills saved.');
+      expect(names.filter(name => name === 'order-sent')).toHaveLength(1);
+    } finally { stop(); }
+  });
+});
+
 describe('«Clear quantities…» from the list', () => {
   it('opens a picker with NOTHING ticked and the action off, then clears only the ticked suppliers and keeps the stock', async () => {
     const source = seeded(BOTH);

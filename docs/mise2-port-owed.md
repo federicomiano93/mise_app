@@ -334,6 +334,9 @@ What was built and every difference: `docs/parity/calculator.md`, «Calculator p
 45. **`app-version` real release reported** (`bb9e5532`) — Mise 2 telemetry versions are `m2-…`: no port.
 46. **Tooling only (no port)**: #480 session-start hook, #441/#340/#423 firebase-tools/node 24/CI, #379, #403, #451.
 47. **Orders flag**: `order-sent` usage statistic still missing in Mise 2 (parity orders.md:1363).
+    **DONE 13 Nov 2026** (`feature/mise2-next-order-sent-stat`): `PlaceConfirmScreen` announces `order-sent` once per supplier that
+    reached the record (saved, or saved but not cleared), as the current app's placeOrder does past its point of no return; a refused,
+    clashing or offline supplier is not counted. Specs: `OrdersSection.place.spec.tsx`, «the `order-sent` usage statistic».
 
 ## Deferred until AFTER the switch (his decision, 8 Nov 2026; `mise2-go-live-presto.md`)
 
@@ -355,7 +358,6 @@ What each one means for the people using Mise 2 until it is ported:
 - 23. Food cost recipe link with several products (a check).
 - 41-43. Staff / join codes / roles screens (people, invitations incl. #475 role-first invite, the join form) and the
   kiosk (#406 keep-screen-on, the kiosk lines already in shared). Until built: new people cannot join; existing accounts work.
-- 47. The `order-sent` usage statistic.
 
 Deferred too, with no item number:
 - Reminder notifications: order reminders stop arriving with the switch, also for The Italian Club (warn them first: a
