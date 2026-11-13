@@ -41,6 +41,12 @@ export interface JoinFlowState {
   // The form was just left by Back or Cancel: the screen it returns to puts the focus on the button that opened it, so a
   // keyboard is never left on the page itself.
   readonly returned: boolean;
+  // Staff slice 2. Signed out, an invitation opens the form for a NEW account; somebody who already has one steps over to the
+  // sign-in screen («Sign in with that email», or Back) and the invitation goes WITH them, to be offered after the sign-in
+  // (the current app's way, js/auth-gate.js). While this is true the signed-out gate draws the sign-in form, not the join form.
+  readonly signInFirst: boolean;
+  // The email to put in the sign-in form when it was reached by «Sign in with that email». Memory only, never stored.
+  readonly signInEmail: string;
 }
 
 export interface JoinFlow {
@@ -54,6 +60,9 @@ export interface JoinFlow {
   openForm(): void;
   // Back or Cancel: the invitation is forgotten and the form closes.
   cancel(): void;
+  // Signed out, from the form for a new account: to the sign-in form, KEEPING the invitation (see `signInFirst`). `email` is
+  // the address that already has an account, to fill in.
+  signInInstead(email?: string): void;
   // The venue opened: the form closes.
   finish(): void;
   // «Join» was tapped: the form is held on screen until the answer (js/join-hold.js).
@@ -76,7 +85,9 @@ function storedInvite(storage: KeyValueStorage): string {
 }
 
 export function createJoinFlow(storage: KeyValueStorage): JoinFlow {
-  let state: JoinFlowState = Object.freeze({ invited: storedInvite(storage), open: false, sent: null, formKey: 0, returned: false });
+  let state: JoinFlowState = Object.freeze({
+    invited: storedInvite(storage), open: false, sent: null, formKey: 0, returned: false, signInFirst: false, signInEmail: '',
+  });
   const listeners = new Set<() => void>();
 
   function set(next: Partial<JoinFlowState>): void {
@@ -104,7 +115,8 @@ export function createJoinFlow(storage: KeyValueStorage): JoinFlow {
       // A form still being checked is never replaced (js/join-hold.js): the new invitation waits,
       // and answered() gives it its own form once the check is over.
       const fresh = state.sent?.busy ? {} : { formKey: state.formKey + 1, sent: null };
-      set({ invited: token, returned: false, ...fresh });
+      // A NEW invitation is a new reason to show the form, even to somebody who had stepped over to sign in.
+      set({ invited: token, returned: false, signInFirst: false, ...fresh });
     },
     forget(only) {
       if (only !== undefined && only !== state.invited) return;
@@ -112,16 +124,19 @@ export function createJoinFlow(storage: KeyValueStorage): JoinFlow {
       if (state.invited) set({ invited: '' });
     },
     openForm() {
-      set({ open: true, sent: null, formKey: state.formKey + 1, returned: false });
+      set({ open: true, sent: null, formKey: state.formKey + 1, returned: false, signInFirst: false, signInEmail: '' });
     },
     cancel() {
       store(null);
-      set({ invited: '', open: false, sent: null, returned: true });
+      set({ invited: '', open: false, sent: null, returned: true, signInFirst: false, signInEmail: '' });
+    },
+    signInInstead(email = '') {
+      set({ open: false, sent: null, returned: true, signInFirst: true, signInEmail: email.trim() });
     },
     // The invitation that was used is forgotten by name the moment the server says yes (forget(only)); one opened since is
     // kept, and asked about once the venue is open.
     finish() {
-      set({ open: false, sent: null, returned: false });
+      set({ open: false, sent: null, returned: false, signInFirst: false, signInEmail: '' });
     },
     sending() {
       set({ sent: Object.freeze({ busy: true, invited: state.invited }) });

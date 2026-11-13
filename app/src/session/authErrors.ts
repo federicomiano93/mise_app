@@ -1,8 +1,8 @@
 import type { MessageKey } from '../i18n/en';
 
 // Firebase's error codes, in words that tell you what to DO about it. A port of MESSAGES in
-// js/auth-gate.js (the current app), entry for entry — except the two sign-up codes
-// (`auth/email-already-in-use`, `auth/weak-password`), which arrive with joining in step 3g.
+// js/auth-gate.js (the current app), entry for entry; the two sign-up codes (`auth/email-already-in-use`,
+// `auth/weak-password`) came with the join form for a new account (staff slice 2). A sign-in never yields them.
 //
 // ⚠️ FOUR CODES SHARE ONE SENTENCE ON PURPOSE. Firebase reports a bad sign-in under several
 // codes depending on whether the project has email-enumeration protection switched on, and the
@@ -19,9 +19,11 @@ const MESSAGES: ReadonlyMap<string, MessageKey> = new Map<string, MessageKey>([
   ['auth/too-many-requests', 'auth.err.tooMany'],
   ['auth/network-request-failed', 'auth.err.offline'],
   ['auth/missing-password', 'auth.enterPassword'],
+  ['auth/email-already-in-use', 'auth.err.emailTaken'],
+  ['auth/weak-password', 'auth.err.weakPassword'],
 ]);
 
-function codeOf(error: unknown): string {
+export function authCodeOf(error: unknown): string {
   if (typeof error !== 'object' || error === null || !('code' in error)) return '';
   return typeof error.code === 'string' ? error.code : '';
 }
@@ -29,7 +31,7 @@ function codeOf(error: unknown): string {
 // The sentence for a failed sign-in. Anything unknown is the generic one — never blank, never
 // the raw Firebase text.
 export function signInErrorKey(error: unknown): MessageKey {
-  return MESSAGES.get(codeOf(error)) ?? 'auth.err.generic';
+  return MESSAGES.get(authCodeOf(error)) ?? 'auth.err.generic';
 }
 
 // What to say when «Forgot your password?» fails, or null for «say it went through».
@@ -40,6 +42,6 @@ export function signInErrorKey(error: unknown): MessageKey {
 // turn the reset button into a way to find out who has an account. Only what says nothing about
 // accounts is told apart: no connection, a badly typed address, too many tries.
 export function resetFailureKey(error: unknown): MessageKey | null {
-  if (codeOf(error) === 'auth/user-not-found') return null;
+  if (authCodeOf(error) === 'auth/user-not-found') return null;
   return signInErrorKey(error);
 }

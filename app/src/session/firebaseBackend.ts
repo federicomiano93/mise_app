@@ -195,6 +195,12 @@ export function createFirebaseBackend(hostname: string): FirebaseBackend {
       return dataOf(await fs.getDocFromServer(fs.doc(db, path)));
     },
     signIn: async (email, password) => { await signInWithEmailAndPassword(auth, email, password); },
+    // ⚠️ ON THE DEFAULT APP, ON PURPOSE (js/firebase.js signUp): the person creating the account IS the person at the phone,
+    // and it is signed in at once. The opposite of createLinkAccount above, which must not touch the signed-in session.
+    async signUp(email, password) {
+      const { user } = await createUserWithEmailAndPassword(auth, email, password);
+      return { uid: user.uid, email: user.email, isAnonymous: user.isAnonymous };
+    },
     sendReset: email => sendPasswordResetEmail(auth, email),
     signOut: () => signOut(auth),
     // ⚠️ terminate() stops every listener, which is why every caller reloads straight after.

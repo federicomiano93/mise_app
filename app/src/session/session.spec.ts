@@ -53,6 +53,13 @@ function setup(world: World, { local = {}, session = {}, now = 1_000_000, busy =
       return world.server.get(path) ?? null;
     },
     signIn: vi.fn(async () => {}),
+    signUp: vi.fn(async (email: string) => {
+      calls.push('signUp');
+      const user = { uid: 'newbie', email, isAnonymous: false };
+      // Firebase announces the new account BEFORE its promise resolves.
+      authCallback(user);
+      return user;
+    }),
     sendReset: vi.fn(async () => {}),
     signOut: vi.fn(async () => { calls.push('signOut'); }),
     wipeOfflineCache: vi.fn(async () => {
@@ -639,5 +646,183 @@ describe('the venue read again from the server (refreshLocation, step 3d-9)', ()
     const before = s.calls.length;
     await s.store.refreshLocation();
     expect(s.calls.slice(before).some(call => call.startsWith('readFromServer'))).toBe(false);
+  });
+});
+
+describe('joining with a NEW account (staff slice 2)', () => {
+  const JUST_JOINED = 'just-joined';
+  const NEWBIE = { uid: 'newbie', email: 'anna@club.test', isAnonymous: false };
+
+  test('the email is trimmed, the password passed untouched', async () => {
+    const s = setup(world({}));
+    s.auth(null);
+    await settle();
+    await s.store.signUp('  anna@club.test ', ' pass word ');
+    expect(s.backend.signUp).toHaveBeenCalledWith('anna@club.test', ' pass word ');
+  });
+
+  // ⚠️⚠️ A shared tablet holding somebody else's copy: an ordinary sign-in would wipe it and RELOAD, cutting the join off.
+  test('the new account\'s sign-in is HELD: no read, no wipe, no reload; `loading` with the account', async () => {
+    const s = setup(world({}), { local: { [OFFLINE_CACHE_OWNER_KEY]: 'previous-person', 'orders-draft': 'x' } });
+    s.auth(null);
+    await settle();
+    const made = await s.store.signUp('anna@club.test', 'a long password');
+    await settle();
+    expect(made).toEqual(NEWBIE);
+    expect(s.store.getSnapshot()).toMatchObject({ status: 'loading', user: NEWBIE });
+    expect(s.calls.filter(c => c.startsWith('readPreferCache') || c === 'wipe' || c === 'reload')).toEqual([]);
+    expect(s.localStore.getItem(OFFLINE_CACHE_OWNER_KEY)).toBe('previous-person');
+  });
+
+  test('the code accepted, on a phone holding somebody else\'s copy: wiped, the owner recorded, the venue remembered, the guide marked, a reload', async () => {
+    const s = setup(world({}), { local: { [OFFLINE_CACHE_OWNER_KEY]: 'previous-person', 'orders-draft': 'x', [ACTIVE_LOCATION_KEY]: 'old' } });
+    s.auth(null);
+    await settle();
+    await s.store.signUp('anna@club.test', 'a long password');
+    vi.mocked(s.backend.wipeOfflineCache).mockImplementationOnce(async () => {
+      s.calls.push('wipe');
+      // ⚠️ Marked AFTER the last clear, or the clear takes it.
+      expect(s.localStore.getItem(JUST_JOINED)).toBeNull();
+      return 'cleared';
+    });
+    await s.store.openJoinedVenue('newplace', 'newbie');
+    expect(s.calls.slice(-2)).toEqual(['wipe', 'reload']);
+    expect(s.localStore.getItem('orders-draft')).toBeNull();
+    expect(s.localStore.getItem(OFFLINE_CACHE_OWNER_KEY)).toBe('newbie');
+    expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('newplace');
+    expect(s.localStore.getItem(JUST_JOINED)).toBe('1');
+  });
+
+  test('the code accepted, on a phone with nobody\'s copy: claimed, no wipe, the guide marked, a reload', async () => {
+    const s = setup(world({}));
+    s.auth(null);
+    await settle();
+    await s.store.signUp('anna@club.test', 'a long password');
+    await s.store.openJoinedVenue('newplace', 'newbie');
+    expect(s.backend.wipeOfflineCache).not.toHaveBeenCalled();
+    expect(s.localStore.getItem(OFFLINE_CACHE_OWNER_KEY)).toBe('newbie');
+    expect(s.localStore.getItem(JUST_JOINED)).toBe('1');
+    expect(s.env.reload).toHaveBeenCalledOnce();
+  });
+
+  test('a wipe another tab blocks is tried once more at the next opening, not in a loop', async () => {
+    const w = world({});
+    w.wipeWorks = false;
+    const s = setup(w, { local: { [OFFLINE_CACHE_OWNER_KEY]: 'previous-person' } });
+    s.auth(null);
+    await settle();
+    await s.store.signUp('anna@club.test', 'a long password');
+    await s.store.openJoinedVenue('newplace', 'newbie');
+    expect(s.localStore.getItem(OFFLINE_CACHE_OWNER_KEY)).toBe('previous-person');
+    expect(s.sessionStore.getItem(WIPE_FAILED_KEY)).toBe('newbie');
+    expect(s.env.reload).toHaveBeenCalledOnce();
+  });
+
+  test('the code refused, then the form left: the account is resolved as any sign-in — here, «No venue yet»', async () => {
+    const s = setup(world({}));
+    s.auth(null);
+    await settle();
+    await s.store.signUp('anna@club.test', 'a long password');
+    await settle();
+    expect(s.store.getSnapshot().status).toBe('loading');
+    s.store.releaseSignUp();
+    await settle();
+    expect(s.store.getSnapshot()).toMatchObject({ status: 'no-access', user: NEWBIE });
+    expect(s.localStore.getItem(OFFLINE_CACHE_OWNER_KEY)).toBe('newbie');
+  });
+
+  test('…and on a phone holding somebody else\'s copy: that copy is wiped and the page starts again', async () => {
+    const s = setup(world({}), { local: { [OFFLINE_CACHE_OWNER_KEY]: 'previous-person' } });
+    s.auth(null);
+    await settle();
+    await s.store.signUp('anna@club.test', 'a long password');
+    s.store.releaseSignUp();
+    await settle();
+    expect(s.calls.slice(-2)).toEqual(['wipe', 'reload']);
+    expect(s.localStore.getItem(OFFLINE_CACHE_OWNER_KEY)).toBe('newbie');
+  });
+
+  test('a refused sign-up holds nothing: the next sign-in is an ordinary one', async () => {
+    const s = setup(world({ 'users/alice': { locations: { bakery: true } }, 'locations/bakery': {} }));
+    s.auth(null);
+    await settle();
+    vi.mocked(s.backend.signUp).mockRejectedValueOnce(Object.assign(new Error('taken'), { code: 'auth/email-already-in-use' }));
+    await expect(s.store.signUp('alice@club.test', 'a long password')).rejects.toMatchObject({ code: 'auth/email-already-in-use' });
+    s.auth(ALICE);
+    await settle();
+    expect(s.store.getSnapshot()).toMatchObject({ status: 'ready', locationId: 'bakery' });
+  });
+
+  test('a sign-out while held ends the hold', async () => {
+    const s = setup(world({ 'users/alice': { locations: { bakery: true } }, 'locations/bakery': {} }));
+    s.auth(null);
+    await settle();
+    await s.store.signUp('anna@club.test', 'a long password');
+    s.auth(null);
+    await settle();
+    expect(s.store.getSnapshot().status).toBe('signed-out');
+    s.auth(ALICE);
+    await settle();
+    expect(s.store.getSnapshot()).toMatchObject({ status: 'ready', locationId: 'bakery' });
+    // Nothing is held any more: releasing changes nothing.
+    s.store.releaseSignUp();
+    await settle();
+    expect(s.store.getSnapshot()).toMatchObject({ status: 'ready', locationId: 'bakery' });
+  });
+
+  test('an answer for another account moves nothing', async () => {
+    const s = setup(world({}));
+    s.auth(null);
+    await settle();
+    await s.store.signUp('anna@club.test', 'a long password');
+    await s.store.openJoinedVenue('newplace', 'somebody-else');
+    expect(s.env.reload).not.toHaveBeenCalled();
+    expect(s.localStore.getItem(JUST_JOINED)).toBeNull();
+  });
+});
+
+describe('every join marks the install guide for the Home, after the last clear (staff slice 2)', () => {
+  const JUST_JOINED = 'just-joined';
+
+  test('no venue yet, opened on the page: marked, and the clear for the new venue does not take it', async () => {
+    const w = world({ 'users/alice': { locations: {} }, 'locations/newplace': { name: 'New place' } },
+      { 'users/alice': { locations: {} } });
+    const s = setup(w, { local: { [ACTIVE_LOCATION_KEY]: 'gone', 'orders-draft': 'x' } });
+    s.auth(ALICE);
+    await settle();
+    w.server.set('users/alice', { locations: { newplace: true } });
+    await s.store.openJoinedVenue('newplace', 'alice');
+    expect(s.store.getSnapshot()).toMatchObject({ status: 'ready', locationId: 'newplace' });
+    expect(s.localStore.getItem('orders-draft')).toBeNull();
+    expect(s.localStore.getItem(JUST_JOINED)).toBe('1');
+  });
+
+  test('from inside another venue: marked after the wipe, before the reload', async () => {
+    const s = setup(world({ 'users/alice': { locations: { bakery: true } }, 'locations/bakery': {} }),
+      { local: { [ACTIVE_LOCATION_KEY]: 'bakery' } });
+    s.auth(ALICE);
+    await settle();
+    vi.mocked(s.env.reload).mockImplementationOnce(() => { expect(s.localStore.getItem(JUST_JOINED)).toBe('1'); });
+    await s.store.openJoinedVenue('newplace', 'alice');
+    expect(s.env.reload).toHaveBeenCalledOnce();
+  });
+
+  test('the server could not be read: marked before the reload', async () => {
+    const w = world({ 'users/alice': { locations: {} } }, { 'users/alice': { locations: {} } });
+    const s = setup(w);
+    s.auth(ALICE);
+    await settle();
+    await s.store.openJoinedVenue('newplace', 'alice');
+    expect(s.localStore.getItem(JUST_JOINED)).toBe('1');
+    expect(s.env.reload).toHaveBeenCalledOnce();
+  });
+
+  test('a switch of venue that is not a join marks nothing', async () => {
+    const s = setup(world({ 'users/alice': { locations: { bakery: 'owner', restaurant: 'owner' } }, 'locations/bakery': {} }),
+      { local: { [ACTIVE_LOCATION_KEY]: 'bakery' } });
+    s.auth(ALICE);
+    await settle();
+    await s.store.switchLocation('restaurant');
+    expect(s.localStore.getItem(JUST_JOINED)).toBeNull();
   });
 });

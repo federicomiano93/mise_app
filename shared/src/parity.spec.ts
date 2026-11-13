@@ -19,9 +19,10 @@
 // recipe-cost-model.spec.ts and foodcost-model.spec.ts also compare the names, constants, frozen-ness and
 // function shapes of everything they do port).
 //
-// join-link.ts and credentials.ts are not paired either (staff slice 1): partial ports that leave out what looks a word up in
-// the dictionary (join-link.ts: `codeShapeHint`, `expiresInWords`) or comes with a later slice (credentials.ts: the password and
-// email checks; its `nameProblem` returns the key, not the words). join-link.spec.ts and credentials.spec.ts compare what they port.
+// join-link.ts and credentials.ts are not paired either (staff slice 1): join-link.ts is a partial port that leaves out what looks
+// a word up in the dictionary (`codeShapeHint`, `expiresInWords`); credentials.ts is FULL since staff slice 2 but ADAPTED (its
+// `nameProblem`, `passwordProblem`, `confirmProblem` and `emailConfirmProblem` return the key, not the words). join-link.spec.ts and
+// credentials.spec.ts compare what they port. install-hint.ts IS paired (staff slice 2): a full port of js/install-hint.js.
 // list-status.ts is not paired either: it is the two functions `LIST_STATUS` and `listStatus` of js/orders/registry.js, the whole
 // Ingredients & Suppliers screen (list-status.spec.ts cuts them out of that file and runs the same cases on both).
 // list-copy.ts is not paired either: it leaves out the page logic of js/orders/list-copy.js (list-copy.spec.ts says which).
@@ -110,6 +111,7 @@
 import { describe, expect, test } from 'vitest';
 import * as joinCode from './join-code';
 import * as joinHold from './join-hold';
+import * as installHint from './install-hint';
 import * as pushModel from './push-model';
 import * as homeCards from './home-cards';
 import * as awayModel from './away-model';
@@ -194,6 +196,7 @@ import * as fromRecipes from './from-recipes';
 import * as rowActionsModel from './row-actions-model';
 import * as legacyJoinCode from '../../js/join-code.js';
 import * as legacyJoinHold from '../../js/join-hold.js';
+import * as legacyInstallHint from '../../js/install-hint.js';
 import * as legacyPushModel from '../../js/push-model.js';
 import * as legacyHomeCards from '../../js/home-cards.js';
 import * as legacyAwayModel from '../../js/away-model.js';
@@ -280,6 +283,7 @@ import * as legacyRowActionsModel from '../../js/catalogue/row-actions-model.js'
 const PAIRS: readonly (readonly [string, object, object])[] = [
   ['join-code', joinCode, legacyJoinCode],
   ['join-hold', joinHold, legacyJoinHold],
+  ['install-hint', installHint, legacyInstallHint],
   ['push-model', pushModel, legacyPushModel],
   ['home-cards', homeCards, legacyHomeCards],
   ['away-model', awayModel, legacyAwayModel],
@@ -437,9 +441,9 @@ describe.each(PAIRS)('parity: %s', (_name, tsModule, jsModule) => {
   });
 });
 
-test('all eighty-four models are compared', () => {
+test('all eighty-five models are compared', () => {
   expect(PAIRS.map(([name]) => name)).toStrictEqual(
-    ['join-code', 'join-hold', 'push-model', 'home-cards', 'away-model', 'away-reminder', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
+    ['join-code', 'join-hold', 'install-hint', 'push-model', 'home-cards', 'away-model', 'away-reminder', 'allergen-model', 'sections', 'firebase-target', 'local-data', 'same-data',
       'error-model', 'device-model', 'usage-model', 'pastries-log-model', 'pastries-lock', 'pack-size', 'order-unit', 'ingredient-name',
       'order-cost', 'inventory-model', 'inventory-outbox', 'inventory-purchases', 'vat-rates', 'ingredient-kind', 'product-limits',
       'vat-guide', 'foodcost-weighing', 'calculator-dough-math', 'calculator-recipe-source', 'calculator-recipe-text', 'calculator-order-text',

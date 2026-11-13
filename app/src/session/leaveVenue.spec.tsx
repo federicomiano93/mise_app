@@ -77,6 +77,7 @@ function setup() {
     readPreferCache: async path => ({ data: docs[path] ?? null, cached: false }),
     readFromServer: async path => docs[path] ?? null,
     signIn: async () => {},
+    signUp: async () => ALICE,
     sendReset: async () => {},
     signOut: async () => {},
     wipeOfflineCache: vi.fn(async () => { db.terminate(); return 'cleared' as const; }),

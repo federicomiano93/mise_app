@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { act, screen, waitFor } from '@testing-library/react';
-import { renderWithSession } from '../testing/renderWithSession';
+import { memoryStorage, renderWithSession } from '../testing/renderWithSession';
+import { createJoinFlow, PENDING_INVITE_KEY } from './joinFlow';
 import { SignInScreen } from './SignInScreen';
+
+const TOKEN = 'aB3dEf6hIj9lMn2pQr5tUv8xYz1CdEf4';
 
 const SIGNED_OUT = { status: 'signed-out', user: null } as const;
 const draw = (lang: 'en' | 'it' = 'en') => renderWithSession(<SignInScreen />, { session: SIGNED_OUT, lang });
@@ -41,15 +44,38 @@ describe('SignInScreen: what is on it', () => {
     expect(email()).toHaveFocus();
   });
 
-  it('leaves out the entrances that come with the invitations (step 3g)', () => {
+  // Staff slice 2: the two entrances of the current app's sign-in screen.
+  it('has «I have a join code», which opens the join form', async () => {
+    const { user, flow } = draw();
+    await user.click(screen.getByRole('button', { name: 'I have a join code' }));
+    expect(flow.getSnapshot().open).toBe(true);
+  });
+
+  it('has the door to the install guide: a real link to the current app\'s own page, at the site\'s root', () => {
     draw();
-    expect(screen.queryByText('I have a join code')).not.toBeInTheDocument();
-    expect(screen.queryByText('How to install the app')).not.toBeInTheDocument();
+    const link = screen.getByRole('link', { name: 'How to install the app' });
+    expect(link.getAttribute('href')).toBe(new URL('install-guide.html', window.location.href).href);
+  });
+
+  it('says nothing about an invitation when none is waiting', () => {
+    draw();
+    expect(screen.queryByText('Sign in, and we will add the business to your account.')).not.toBeInTheDocument();
+  });
+
+  it('with an invitation waiting, says it will be added; with «Sign in with that email», fills it in and asks for the password', () => {
+    const flow = createJoinFlow(memoryStorage({ [PENDING_INVITE_KEY]: TOKEN }));
+    flow.signInInstead('  anna@club.test ');
+    renderWithSession(<SignInScreen />, { session: SIGNED_OUT, joinFlow: flow });
+    expect(screen.getByText('Sign in, and we will add the business to your account.')).toBeInTheDocument();
+    expect(email()).toHaveValue('anna@club.test');
+    expect(password()).toHaveFocus();
   });
 
   it('speaks Italian', () => {
     draw('it');
     expect(screen.getByText('Accedi per aprire il tuo locale.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Ho un codice di accesso' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Come installare l’app' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Accedi' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Password dimenticata?' })).toBeInTheDocument();
   });

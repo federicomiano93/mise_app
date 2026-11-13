@@ -10,6 +10,8 @@ type FakeStore = SessionStore & {
   // Updates the snapshot and tells every subscriber, like the real store does.
   set(partial: Partial<Session>): void;
   signIn: Mock<SessionStore['signIn']>;
+  signUp: Mock<SessionStore['signUp']>;
+  releaseSignUp: Mock<SessionStore['releaseSignUp']>;
   sendReset: Mock<SessionStore['sendReset']>;
   signOut: Mock<SessionStore['signOut']>;
   chooseLocation: Mock<SessionStore['chooseLocation']>;
@@ -49,6 +51,9 @@ export function fakeStore(partial: Partial<Session> = {}): FakeStore {
     },
     start: vi.fn(),
     signIn: vi.fn<SessionStore['signIn']>(() => Promise.resolve()),
+    // By default the account is created; a spec makes Firebase refuse with mockRejectedValue.
+    signUp: vi.fn<SessionStore['signUp']>(email => Promise.resolve({ uid: 'new-uid', email: email.trim(), isAnonymous: false })),
+    releaseSignUp: vi.fn<SessionStore['releaseSignUp']>(),
     sendReset: vi.fn<SessionStore['sendReset']>(() => Promise.resolve()),
     signOut: vi.fn<SessionStore['signOut']>(() => Promise.resolve()),
     chooseLocation: vi.fn<SessionStore['chooseLocation']>(() => Promise.resolve()),

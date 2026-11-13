@@ -275,9 +275,13 @@ describe('a pending invitation is forgotten on sign-out', () => {
 });
 
 describe('joinShown', () => {
-  const flow = { invited: '', open: false, sent: null, formKey: 0, returned: false };
-  test('signed out: never', () => {
-    expect(joinShown('signed-out', { ...flow, open: true, invited: TOKEN, sent: { busy: true } })).toBe(false);
+  const flow = { invited: '', open: false, sent: null, formKey: 0, returned: false, signInFirst: false, signInEmail: '' };
+  // Staff slice 2: signed out, the form for a NEW account.
+  test('signed out: opened, or an invitation — unless the person stepped over to sign in', () => {
+    expect(joinShown('signed-out', flow)).toBe(false);
+    expect(joinShown('signed-out', { ...flow, open: true })).toBe(true);
+    expect(joinShown('signed-out', { ...flow, invited: TOKEN })).toBe(true);
+    expect(joinShown('signed-out', { ...flow, invited: TOKEN, signInFirst: true })).toBe(false);
   });
   test('in a venue or on the picker: only once opened', () => {
     expect(joinShown('ready', { ...flow, invited: TOKEN })).toBe(false);
@@ -292,5 +296,82 @@ describe('joinShown', () => {
   test('loading or error: only a form that has been sent', () => {
     expect(joinShown('loading', { ...flow, open: true })).toBe(false);
     expect(joinShown('error', { ...flow, sent: { busy: true, invited: '' } })).toBe(true);
+  });
+});
+
+describe('signed out: the form for a NEW account (staff slice 2)', () => {
+  const SIGNED_OUT: Partial<Session> = { status: 'signed-out', user: null, locationId: null, location: null, options: [] };
+  const NEWBIE = { uid: 'new-uid', email: 'anna.b@club.test', isAnonymous: false };
+
+  async function fillNew(user: ReturnType<typeof draw>['user'], code = '') {
+    await user.type(screen.getByLabelText('Your first name'), 'Anna');
+    await user.type(screen.getByLabelText('Your surname'), 'Bianchi');
+    await user.type(screen.getByLabelText('Your email'), 'anna.b@club.test');
+    await user.type(screen.getByLabelText('Repeat your email'), 'anna.b@club.test');
+    await user.type(screen.getByLabelText('Choose a password (at least 10 characters)'), 'Tr1cky-Secret-42');
+    await user.type(screen.getByLabelText('Repeat the password'), 'Tr1cky-Secret-42');
+    if (code) await user.type(screen.getByLabelText('Code'), code);
+  }
+
+  test('the sign-in screen\'s «I have a join code» opens it; Back comes back to sign-in', async () => {
+    const { user, screens, stop } = draw(SIGNED_OUT);
+    await user.click(screen.getByRole('button', { name: 'I have a join code' }));
+    expect(screen.getByRole('heading', { level: 1, name: 'Join with a code' })).toBeInTheDocument();
+    expect(screens).toContain('join');
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    stop();
+  });
+
+  // The plan's «works on its own»: a brand-new person joins from a link with no account.
+  test('a link opened with nobody signed in goes straight to it, the code filled in', () => {
+    draw(SIGNED_OUT, { invited: TOKEN });
+    expect(screen.getByRole('heading', { level: 1, name: 'You have been invited' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Your email')).toBeInTheDocument();
+    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
+  });
+
+  // ⚠️ fix 9e0a2dac: the sign-up moves the session (signed-out → loading → no-access) while the code is still checked.
+  test('the form stays through every move its own sign-up causes, and the refusal lands on it, for that account', async () => {
+    const { user, store } = draw(SIGNED_OUT, { invited: TOKEN });
+    let refuse: (error: unknown) => void = () => {};
+    store.signUp.mockImplementation(async () => {
+      store.set({ status: 'loading', user: NEWBIE });
+      return NEWBIE;
+    });
+    store.redeemJoinCode.mockImplementation(() => new Promise((_resolve, reject) => { refuse = reject; }));
+    await fillNew(user);
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+    await waitFor(() => { expect(store.redeemJoinCode).toHaveBeenCalled(); });
+    act(() => { store.set({ ...NO_ACCESS, user: NEWBIE }); });
+    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
+    await act(async () => { refuse(Object.assign(new Error('x'), { code: 'functions/permission-denied' })); });
+    expect(await findSpokenAlert()).toHaveTextContent('That code does not work. Ask for a new one.');
+    expect(screen.getByText('anna.b@club.test')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Your email')).not.toBeInTheDocument();
+    // A late answer of the session does not wipe it either.
+    act(() => { store.set({ status: 'loading', user: NEWBIE }); });
+    act(() => { store.set({ ...NO_ACCESS, user: NEWBIE }); });
+    expect(spokenAlerts()).toHaveLength(1);
+  });
+
+  test('Back on a link: to sign-in, which says the invitation waits; after the sign-in, it is offered', async () => {
+    const { user, store, flow } = draw(SIGNED_OUT, { invited: TOKEN });
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByText('Sign in, and we will add the business to your account.')).toBeInTheDocument();
+    expect(flow.getSnapshot().invited).toBe(TOKEN);
+    act(() => { store.set({ status: 'loading', user: { uid: 'u1', email: 'owner@club.test', isAnonymous: false } }); });
+    act(() => { store.set({ ...NO_ACCESS }); });
+    expect(screen.getByRole('heading', { level: 1, name: 'You have been invited' })).toBeInTheDocument();
+    expect(screen.getByText('owner@club.test')).toBeInTheDocument();
+  });
+
+  test('on the sign-in screen, «I have a join code» opens the form again with the waiting invitation', async () => {
+    const { user } = draw(SIGNED_OUT, { invited: TOKEN });
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await user.click(screen.getByRole('button', { name: 'I have a join code' }));
+    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
+    expect(screen.getByLabelText('Your email')).toBeInTheDocument();
   });
 });

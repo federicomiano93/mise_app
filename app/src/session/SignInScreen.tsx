@@ -6,6 +6,8 @@ import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { resetFailureKey, signInErrorKey } from './authErrors';
 import { GateScreen } from './GateScreen';
+import { InstallGuideLink } from './InstallGuideLink';
+import { useJoinFlow, useJoinFlowStore } from './JoinFlowContext';
 import { useSessionStore } from './SessionContext';
 import styles from './SignInScreen.module.css';
 
@@ -18,12 +20,22 @@ type Notice =
 
 type FieldProblem = 'auth.enterEmail' | 'auth.typeEmailFirst' | 'auth.enterPassword';
 
-// The sign-in form. A port of signInScreen in js/auth-gate.js, minus the two entrances that come
-// with the invitations (join code, install guide: step 3g).
+// The sign-in form. A port of signInScreen in js/auth-gate.js, with its two other doors since staff slice 2:
+//
+//  · «I have a join code» — ⚠️ THE ONLY WAY IN FOR SOMEBODY WHO HAS NEVER BEEN HERE. Without it a new employee holding a code
+//    has nowhere to type it: the form above asks for a password they do not have yet. It opens the join form for a NEW account
+//    (JoinScreen), with an invitation's code filled in when this window holds one.
+//  · «How to install the app» — the current app's own guide page (InstallGuideLink).
+//
+// Reached from the join form by «Sign in with that email» or Back with an invitation, it says the invitation waits («Sign in,
+// and we will add the business to your account.»), and the email that already has an account is filled in.
 export function SignInScreen() {
   const { t } = useT();
   const store = useSessionStore();
-  const [email, setEmail] = useState('');
+  const join = useJoinFlow();
+  const flowStore = useJoinFlowStore();
+  // Read once: the address «Sign in with that email» brought, to type the password for.
+  const [email, setEmail] = useState(() => join.signInEmail);
   const [password, setPassword] = useState('');
   const [emailProblem, setEmailProblem] = useState<FieldProblem | null>(null);
   const [passwordProblem, setPasswordProblem] = useState<FieldProblem | null>(null);
@@ -92,6 +104,8 @@ export function SignInScreen() {
 
   return (
     <GateScreen subtitle={t('auth.signIn.sub')}>
+      {/* Not a live region: it is what the screen says when it opens, read with it. */}
+      {join.invited ? <p className={styles.waiting}>{t('join.signInAndAdd')}</p> : null}
       <form className={styles.form} noValidate onSubmit={event => { void submit(event); }}>
         <TextField
           className={styles.field}
@@ -99,7 +113,8 @@ export function SignInScreen() {
           name="email"
           autoComplete="username"
           inputMode="email"
-          autoFocus
+          // With the email already filled in, the cursor goes where the person types next.
+          autoFocus={!join.signInEmail}
           validationBehavior="aria"
           value={email}
           onChange={value => { setEmail(value); setEmailProblem(null); }}
@@ -123,7 +138,7 @@ export function SignInScreen() {
           isInvalid={passwordProblem !== null}
         >
           <Label className={styles.label}>{t('auth.password')}</Label>
-          <Input ref={passwordRef} className={styles.input} />
+          <Input ref={passwordRef} className={styles.input} autoFocus={!!join.signInEmail} />
           <FieldError className={styles.error}>
             {passwordProblem === null ? null : <span role="alert">{t(passwordProblem)}</span>}
           </FieldError>
@@ -147,6 +162,13 @@ export function SignInScreen() {
           {t('auth.forgot')}
         </Button>
       </form>
+
+      <div className={styles.ways}>
+        <Button variant="secondary" block isDisabled={signingIn} onPress={() => { flowStore.openForm(); }}>
+          {t('auth.iHaveACode')}
+        </Button>
+        <InstallGuideLink />
+      </div>
     </GateScreen>
   );
 }
