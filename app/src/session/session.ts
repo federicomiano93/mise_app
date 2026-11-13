@@ -212,9 +212,13 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     const language = venueLanguage(location);
     try { await env.preloadLanguage(language); } catch { /* the app falls back to English */ }
 
+    const optionNames = options.length > 1 ? await readLocationNames(options) : {};
+    // ⚠️ AFTER THE LAST AWAIT: a sign-out, or somebody else signing in, may have come while the venue, its language and its
+    // names were being read. That session is not this person's to open; a «ready» for the old user would show their venue
+    // to the next one (code review, 13 Nov 2026). Also the guard for resolveMembership and chooseLocation, which come here.
+    if (signedInUid !== user.uid) return;
     setSession({
-      status: 'ready', user, locationId, location, options,
-      optionNames: options.length > 1 ? await readLocationNames(options) : {},
+      status: 'ready', user, locationId, location, options, optionNames,
       name: typeof location?.name === 'string' && location.name ? location.name : locationId,
       role: roleOf(userDoc, locationId),
       canManage: canManage(userDoc, locationId),
@@ -279,7 +283,13 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     setSession({ status: 'signed-out' });
   }
 
+  // Who the browser's sign-in says is there, updated the moment it says so. Not session.user: a different person arriving
+  // can wait for a cache wipe and a reload before the session shows anybody else, and a venue opening for the one who
+  // left must not be published in that gap.
+  let signedInUid: string | null = null;
+
   function onAuth(user: SessionUser | null): void {
+    signedInUid = user && !user.isAnonymous ? user.uid : null;
     if (!user) { signedOut(); return; }
 
     // ⚠️ A LEFTOVER ANONYMOUS SESSION IS NOT A SIGNED-IN PERSON. Phones that used the app before

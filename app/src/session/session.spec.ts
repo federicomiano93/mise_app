@@ -267,6 +267,25 @@ describe('which venue opens', () => {
     expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('bakery');
   });
 
+  // ⚠️ The venue's language is loaded before the session is published, and that takes a moment: a sign-out (or another person)
+  // arriving meanwhile must not be answered with a «ready» for the person who left (code review, 13 Nov 2026).
+  test('a sign-out, or another person, arriving while the venue opens: no ready session for the one who left', async () => {
+    for (const next of [null, { uid: 'bob', email: null, isAnonymous: false }]) {
+      const docs = { 'users/alice': { locations: { bakery: true } }, 'users/bob': { locations: {} }, 'locations/bakery': { name: 'The Bakery' } };
+      const s = setup(world(docs));
+      let release: () => void = () => {};
+      vi.mocked(s.env.preloadLanguage).mockImplementation(() => new Promise<void>(resolve => { release = resolve; }));
+      s.auth(ALICE);
+      await settle();
+      s.auth(next);
+      await settle();
+      release();
+      await settle();
+      expect(s.states).not.toContain('ready');
+      expect(s.store.getSnapshot().status).not.toBe('ready');
+    }
+  });
+
   test('a venue whose document cannot be read still opens: name = id, English, every section', async () => {
     const w = world({ 'users/alice': { locations: { bakery: true } } });
     w.failReads = new Set(['locations/bakery']);
