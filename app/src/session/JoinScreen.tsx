@@ -102,6 +102,14 @@ export function JoinScreen() {
     return () => { mounted.current = false; };
   }, []);
 
+  // ⚠️ SOMEBODY ELSE SIGNED IN (another tab) while the form for a new account is up: a sign-up now would REPLACE that person's
+  // session in every tab (code review, 13 Nov 2026). The form is opened again as the form for the account now signed in — the
+  // invitation, if any, still filled in. Not while this form's own sign-up runs (inFlight), nor once it made its account.
+  const someoneSignedIn = session.user !== null && session.status !== 'loading' && session.status !== 'signed-out';
+  useEffect(() => {
+    if (newAccount && someoneSignedIn && !inFlight.current) flowStore.openForm();
+  }, [newAccount, someoneSignedIn, flowStore]);
+
   // ⚠️ THE FORM IS GONE (Back, «Sign in with a different account», a new invitation): an account it created and is holding still
   // is resolved now, as any sign-in is (session.ts releaseSignUp; nothing happens when nothing is held).
   useEffect(() => () => { store.releaseSignUp(); }, [store]);
@@ -448,7 +456,7 @@ export function JoinScreen() {
             {t('join.signInInstead')}
           </Button>
         ) : null}
-        <InstallGuideLink />
+        <InstallGuideLink isDisabled={sending} />
         <Button variant="quiet" isDisabled={sending} onPress={() => { void back(); }}>{t('auth.back')}</Button>
       </div>
       {confirmDialog}

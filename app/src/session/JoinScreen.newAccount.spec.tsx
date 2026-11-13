@@ -170,6 +170,8 @@ describe('joining with a new account', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Creating your account…');
     expect(screen.getByLabelText('Your email')).toHaveAttribute('readonly');
     expect(screen.getByRole('button', { name: 'Back' })).toBeDisabled();
+    // Leaving the page now would cut the join off half-way: the guide's door is off too.
+    expect(screen.getByRole('link', { name: 'How to install the app' })).toHaveAttribute('aria-disabled', 'true');
     expect(isBusy()).toBe(true);
     await act(async () => { made({ uid: 'new-uid', email: 'anna.b@club.test', isAnonymous: false }); });
     expect(screen.getByRole('status')).toHaveTextContent('Checking your code…');
@@ -300,6 +302,18 @@ describe('the ways out', () => {
     expect(await screen.findByRole('alertdialog', { name: 'Discard changes?' })).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(flow.getSnapshot().open).toBe(true);
+  });
+
+  // ⚠️ A sign-up now would replace that person's session in every tab (code review, 13 Nov 2026).
+  test('somebody signed in from another tab: the form becomes the form for that account, nothing is created', async () => {
+    const { store, flow } = draw({ invited: TOKEN });
+    const before = flow.getSnapshot().formKey;
+    act(() => { store.set({ status: 'loading', user: { uid: 'x', email: 'x@club.test', isAnonymous: false } }); });
+    expect(flow.getSnapshot().formKey).toBe(before);
+    act(() => { store.set({ status: 'no-access', user: { uid: 'x', email: 'x@club.test', isAnonymous: false } }); });
+    expect(flow.getSnapshot()).toMatchObject({ open: true, invited: TOKEN });
+    expect(flow.getSnapshot().formKey).toBeGreaterThan(before);
+    expect(store.signUp).not.toHaveBeenCalled();
   });
 
   // The session holds a new account's sign-in still while its form is up (session.ts signUpHeld): the form going away lets

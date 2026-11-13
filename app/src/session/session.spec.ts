@@ -770,6 +770,25 @@ describe('joining with a NEW account (staff slice 2)', () => {
     expect(s.store.getSnapshot()).toMatchObject({ status: 'ready', locationId: 'bakery' });
   });
 
+  // ⚠️ reload() does not stop the script: the form closes after the yes and releases the hold (code review, 13 Nov 2026).
+  test('after the yes, the form releasing the hold (or a late sign-in event) resolves nothing on the page that is reloading', async () => {
+    for (const owner of ['previous-person', '']) {
+      const s = setup(world({}), { local: owner ? { [OFFLINE_CACHE_OWNER_KEY]: owner } : {} });
+      s.auth(null);
+      await settle();
+      await s.store.signUp('anna@club.test', 'a long password');
+      await s.store.openJoinedVenue('newplace', 'newbie');
+      const before = s.calls.length;
+      s.store.releaseSignUp();
+      s.auth(NEWBIE);
+      await settle();
+      expect(s.calls.slice(before), owner).toEqual([]);
+      expect(s.store.getSnapshot().status, owner).toBe('loading');
+      expect(s.env.reload, owner).toHaveBeenCalledOnce();
+      expect(s.localStore.getItem(JUST_JOINED), owner).toBe('1');
+    }
+  });
+
   test('an answer for another account moves nothing', async () => {
     const s = setup(world({}));
     s.auth(null);

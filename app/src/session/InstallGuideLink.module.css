@@ -22,3 +22,9 @@
     color: var(--accent-press);
   }
 }
+
+/* Off while the join form is being sent: dimmed like a disabled button, still in the page. */
+.link[aria-disabled="true"] {
+  color: var(--ink-3);
+  cursor: default;
+}

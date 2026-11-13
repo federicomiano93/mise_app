@@ -308,9 +308,14 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
   // and reloads (joinedWithNewAccount), leaving the form runs the ordinary sign-in (releaseSignUp).
   let signUpHeld = false;
   let heldUser: SessionUser | null = null;
+  // ⚠️ THE JOIN IS DONE AND THE PAGE IS STARTING AGAIN (joinedWithNewAccount). window.location.reload() does not stop this script:
+  // the form then closes, releases the hold, and the ordinary sign-in would run on a page whose Firestore is already stopped
+  // («Could not check your access» flashing up, or a second wipe that takes `just-joined` with it — code review, 13 Nov 2026).
+  // From here nothing is resolved any more: the next page does it.
+  let joinReloading = false;
 
   function releaseSignUp(): void {
-    if (!signUpHeld) return;
+    if (!signUpHeld || joinReloading) return;
     signUpHeld = false;
     const user = heldUser;
     heldUser = null;
@@ -323,6 +328,7 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
   async function joinedWithNewAccount(locationId: string, uid: string): Promise<void> {
     const user = heldUser;
     if (!user || user.uid !== uid || signedInUid !== uid) return;
+    joinReloading = true;
     clearLocalData();
     write(env.local, ACTIVE_LOCATION_KEY, locationId);
     const verdict = offlineCacheVerdict(read(env.local, OFFLINE_CACHE_OWNER_KEY), uid);
@@ -361,7 +367,8 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       return;
     }
 
-    // The account a sign-up has just created: noted, not resolved (see signUpHeld).
+    // The account a sign-up has just created: noted, not resolved (see signUpHeld). After the join, nothing is (joinReloading).
+    if (joinReloading) return;
     if (signUpHeld) {
       heldUser = user;
       setSession({ ...INITIAL_SESSION, status: 'loading', user });
