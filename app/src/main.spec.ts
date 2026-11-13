@@ -11,6 +11,20 @@ describe('main.tsx', () => {
     expect(main).toContain('createRoot(');
   });
 
+  // ⚠️⚠️ A JOIN LINK'S TOKEN IS A KEY TO A VENUE. ES modules run in import order: imported first, joinLinkBoot takes the
+  // token out of the address bar and the history entry before the router (created as router.ts is imported) or the
+  // telemetry can read it (docs/parity/staff-plan.md, «Security»).
+  test('reads the join link before anything else is imported', () => {
+    const imports = [...main.matchAll(/^import\s.*?from\s+'([^']+)'|^import\s+'([^']+)'/gm)].map(m => m[1] ?? m[2]);
+    expect(imports[0]).toBe('./session/joinLinkBoot');
+  });
+
+  test('hands the page’s join flow to the screens, inside the session', () => {
+    expect(main).toMatch(/<JoinFlowProvider flow=\{joinFlow\}>/);
+    expect(main.indexOf('<SessionProvider')).toBeLessThan(main.indexOf('<JoinFlowProvider'));
+    expect(main.indexOf('<JoinFlowProvider')).toBeLessThan(main.indexOf('<SessionGate>'));
+  });
+
   // ⚠️ AN ERROR DURING BOOT IS CAUGHT ONLY IF THE LISTENERS ARE ALREADY ON. Started after the
   // session, an error in the sign-in or the first read would be lost.
   test('starts the telemetry before the session', () => {

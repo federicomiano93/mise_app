@@ -368,6 +368,7 @@ Deferred too, with no item number:
   phone that did not register cannot do it from Mise 2 until the switch exists.
 - `order.html` stays served as it is (client links already sent): the Pages build keeps it, see `docs/switch-runbook.md`.
 - The 3-month order-list clean-up function (F9, a separate task): until it exists nothing is deleted, as today.
+- The app-admin hub (create a customer business, its owner link, re-send, delete) stops with the switch until ported: no new business from the app meanwhile (existing ones unaffected; a one-off script if needed). Its own slice after 41-43 (his decision D10, 13 Nov 2026, `docs/parity/staff-plan.md`).
 
 ## Settings 3g-2 (was the WIP branch left out of the release branch)
 

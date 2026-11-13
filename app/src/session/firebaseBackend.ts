@@ -60,9 +60,7 @@ export interface FirebaseBackend extends SessionBackend {
   // Creates the account behind a client's ordering link and resolves with its uid, WITHOUT touching the
   // signed-in person's own session (see the function). Rejects when Auth refuses or cannot be reached.
   createLinkAccount(email: string, password: string): Promise<string>;
-  // Calls a Cloud Function (an «https callable», region us-central1) and resolves with what it returned; rejects with the
-  // SDK's error (its `code` and `message`) when it fails or `timeoutMs` passes. The Functions SDK is loaded on first use.
-  callFunction(name: string, data: unknown, timeoutMs: number): Promise<unknown>;
+  // callFunction is in SessionBackend (backend.ts).
 }
 
 function startFirestore(fs: FirestoreSdk, app: FirebaseApp): Firestore {

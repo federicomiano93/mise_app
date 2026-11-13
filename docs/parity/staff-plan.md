@@ -227,3 +227,45 @@ Recommended: leave all four as they are during the port. Look at the third one l
 - The link is `index.html#join=<token>`: read before the hash router mounts, because `#join=` is not a route.
 - Slice 5: the rest screen must hold `markBusy()` (or an equivalent the shell's reload asks), so neither the 30-second copy check nor a waiting service worker reloads under it.
 - Each slice goes through the `mise2-check` gates and the code review before its PR.
+
+---
+
+## Staff slice 1 as built (13 Nov 2026)
+
+Branch `feature/mise2-next-staff-1`, one PR into `feature/mise2-next`. No server, rules or current-app change: Mise 2 calls the live `redeemJoinCode`.
+
+**What a person sees**
+
+- **«No location yet»** says «If you were given a code, type it here.» (the current app's words) and has **«I have a join code»** above «Try again».
+- **The join form**: «Enter your code» (or «You have been invited» with the code filled in), the sentence «The code will be used for this account:» with the email, «Sign in with a different account», first name, surname, code, **Join**, **Back**.
+- **Every field is checked before anything is sent**: the empty or wrong one is outlined, the reason is under it, the cursor goes there.
+- **While the code is checked** the form stays: «Checking…», the boxes read-only, Back and «Sign in with a different account» off. The gate keeps this form through every status the session passes meanwhile (`joinShown` + the ported `keepJoinForm`).
+- **Refusals in the app's words**, Italian or English (`session/joinErrors.ts`): «That code does not work. Ask for a new one.» for every refusal of a code; «You are already in this business…»; «Six-digit codes are paused…»; and the new ones listed under «Choices made».
+- **Success**: «You’re in. Opening…», then the venue opens, read from the server (no «No location yet» flash, no reload). From inside another venue it is a switch of venue (the phone's copy cleared, a reload).
+- **A link opened by somebody with no venue** goes straight to the form, code filled in.
+- **A link opened by somebody in a venue or on the venue picker** is a question: «You opened an invitation — Add this business to owner@…?», «Not now» / «Add it». «Add it» goes through the same «Not sent yet» and lab checks as switching venue, then the form replaces the app; Back brings the app back.
+- **A link opened while signed out** waits: the sign-in screen as today; after signing in, the form or the question. (Joining with a NEW account is slice 2.)
+
+**Security, as built**
+
+- `session/joinLinkBoot.ts` is main.tsx's **first import** (pinned by `main.spec.ts`): the token is read and the address is rewritten with `history.replaceState` (same history entry, no Back to it) before the router or the telemetry exist. A malformed `#join=` is removed too. A link opened in a tab already running the app is caught on `popstate`/`hashchange` before the router's own listener: the entry the browser made becomes the screen the app was on, with the router's own history state, and the router is never told (an entry without its index would make it skip «Leave?» on a later Back). That entry stays as a copy of the screen before it: the first Back after such a link shows the same screen once more.
+- **What no page can do**: the browser's own global history and address-bar suggestions keep the address it was asked to open, `#join=…` included (the plan's «never reaches the browser history» holds for the tab's Back history and the address bar, not for that list). The current app has the same exposure, for longer; a link is single use and dies in 24 hours.
+- The invitation then lives in **sessionStorage `pending-invite`** (the current app's key and rule: survives the session's own reloads, dies with the window), validated on every read.
+- **Forgotten**: the moment the server says yes; on Back, «Not now», Escape, «Stay»; on «already in this business»; on sign-out (`session.ts signOut` clears it first, and the gate forgets it whenever a signed-in session becomes signed-out, e.g. from another tab). A window that opens signed out keeps it for after the sign-in.
+- **Never logged**: nothing in the flow writes to the console; the usage line names the screen `join` only. Specs install the real error reporter and watch every console method, uncaught errors, rejections and usage events: no code, no token.
+- One call per tap (a ref, not only the button's pending look): each call spends one of the account's five tries an hour.
+- The venue is opened only for the account that sent the code: a sign-out and another sign-in during the call move nothing.
+- A newer invitation opened while a code is checked is kept (only the one that was used is forgotten).
+
+**Choices made (not fixed by the plan)**
+
+- «Sign in with a different account» **forgets the link** (the plan: «forget it on sign-out»). The person opens the link again after signing in. The current app carried it over; slice 2 may revisit with the sign-up form.
+- «I have a join code» is a **secondary** full-width button above the primary «Try again» (the current app: a link above it).
+- The invitation question **waits while anybody is typing** (`markBusy`), and «Add it» asks «Not sent yet» first when something has not reached the server: the join ends in a switch of venue.
+- After the server's yes, if the venue cannot be opened on the page, the page reloads instead of reporting a failure (the join did happen).
+- A new invitation opened while the form has unsent typing gets a fresh form (the typed names go), as in the current app.
+- New texts (EN / IT): `join.tooManyMinutes` «Too many tries. Wait {n} minute(s) and try again.» / «Troppi tentativi. Aspetta {n} minuto/minuti e riprova.»; `join.tooMany` «Too many tries. Wait a while and try again.» / «Troppi tentativi. Aspetta un po’ e riprova.»; `join.offline` «Could not reach the server. Check the connection and try again.» / «Non riesco a raggiungere il server. Controlla la connessione e riprova.»; `join.failed` «Could not check the code. Try again in a moment.» / «Non è stato possibile controllare il codice. Riprova tra un momento.»; `join.opening` «You’re in. Opening…» / «Fatto, sei dentro. Sto aprendo…»; `join.discard.title` «Discard changes?» / «Vuoi scartare le modifiche?».
+
+**Ported to shared (tests run against the `js/` originals)**: `join-hold` (full, paired), `join-link` (partial), `credentials` (partial, `nameProblem` returns the key).
+
+**Not done here**: driving it on the emulator and a device (Federico, before merge); the install-guide door and the one-time visit (slice 2); the sign-in screen's «I have a join code» (slice 2).

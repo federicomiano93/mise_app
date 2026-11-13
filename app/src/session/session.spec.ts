@@ -5,6 +5,7 @@ import {
 } from './session';
 import type { DocData, KeyValueStorage, SessionBackend, SessionEnv, SessionUser } from './backend';
 import { OFFLINE_CACHE_OWNER_KEY } from '@mise/shared/local-data';
+import { PENDING_INVITE_KEY } from './joinFlow';
 
 // Every step of the session against a fake backend: a "server" and a "phone's copy" that can
 // disagree, as they do in a kitchen with patchy signal.
@@ -17,6 +18,8 @@ interface World {
   failReads?: Set<string>;
   // true (default) = 'cleared', false = 'busy' (another tab), 'unavailable' = Firestore not loadable.
   wipeWorks?: boolean | 'unavailable';
+  // What a Cloud Function call answers.
+  answer?: unknown;
 }
 
 function memoryStorage(initial: Record<string, string> = {}): KeyValueStorage & { map: Map<string, string> } {
@@ -58,6 +61,7 @@ function setup(world: World, { local = {}, session = {}, now = 1_000_000, busy =
       return world.wipeWorks === false ? 'busy' as const : 'cleared' as const;
     }),
     changesStillWaiting: vi.fn(async () => false),
+    callFunction: vi.fn(async (name: string) => { calls.push(`call ${name}`); return world.answer ?? null; }),
   };
   const localStore = memoryStorage(local);
   const sessionStore = memoryStorage(session);
@@ -263,6 +267,25 @@ describe('which venue opens', () => {
     expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('bakery');
   });
 
+  // ⚠️ The venue's language is loaded before the session is published, and that takes a moment: a sign-out (or another person)
+  // arriving meanwhile must not be answered with a «ready» for the person who left (code review, 13 Nov 2026).
+  test('a sign-out, or another person, arriving while the venue opens: no ready session for the one who left', async () => {
+    for (const next of [null, { uid: 'bob', email: null, isAnonymous: false }]) {
+      const docs = { 'users/alice': { locations: { bakery: true } }, 'users/bob': { locations: {} }, 'locations/bakery': { name: 'The Bakery' } };
+      const s = setup(world(docs));
+      let release: () => void = () => {};
+      vi.mocked(s.env.preloadLanguage).mockImplementation(() => new Promise<void>(resolve => { release = resolve; }));
+      s.auth(ALICE);
+      await settle();
+      s.auth(next);
+      await settle();
+      release();
+      await settle();
+      expect(s.states).not.toContain('ready');
+      expect(s.store.getSnapshot().status).not.toBe('ready');
+    }
+  });
+
   test('a venue whose document cannot be read still opens: name = id, English, every section', async () => {
     const w = world({ 'users/alice': { locations: { bakery: true } } });
     w.failReads = new Set(['locations/bakery']);
@@ -445,6 +468,123 @@ describe('leaving', () => {
     const s = setup(world({}));
     await s.store.signIn('  alice@club.test ', ' pass word ');
     expect(s.backend.signIn).toHaveBeenCalledWith('alice@club.test', ' pass word ');
+  });
+});
+
+describe('joining with a code (staff slice 1)', () => {
+  const TOKEN = 'aB3dEf6hIj9lMn2pQr5tUv8xYz1CdEf4';
+
+  // ⚠️ A pending invitation is a key to a venue: the next person to pick up a shared phone must not find it waiting.
+  test('sign-out forgets a pending invitation before it signs out', async () => {
+    const s = setup(world({ 'users/alice': { locations: { bakery: true } }, 'locations/bakery': {} }),
+      { session: { [PENDING_INVITE_KEY]: TOKEN, other: 'kept' } });
+    s.auth(ALICE);
+    await settle();
+    vi.mocked(s.backend.signOut).mockImplementation(async () => {
+      expect(s.sessionStore.getItem(PENDING_INVITE_KEY)).toBeNull();
+    });
+    await s.store.signOut();
+    expect(s.sessionStore.getItem(PENDING_INVITE_KEY)).toBeNull();
+    expect(s.sessionStore.getItem('other')).toBe('kept');
+    expect(s.backend.signOut).toHaveBeenCalledOnce();
+  });
+
+  test('the code goes to the live function redeemJoinCode, with the name, and the venue it names comes back', async () => {
+    const w = world({});
+    w.answer = { locationId: 'newplace', role: 'staff' };
+    const s = setup(w);
+    await expect(s.store.redeemJoinCode('123456', 'digits', 'Luca', 'Rossi')).resolves.toBe('newplace');
+    expect(s.backend.callFunction).toHaveBeenCalledWith(
+      'redeemJoinCode', { code: '123456', kind: 'digits', firstName: 'Luca', lastName: 'Rossi' }, 60_000);
+  });
+
+  test('an answer that names no venue is not a success', async () => {
+    for (const answer of [null, {}, { locationId: '' }, { locationId: 7 }, 'newplace']) {
+      const w = world({});
+      w.answer = answer;
+      const s = setup(w);
+      await expect(s.store.redeemJoinCode('123456', 'digits', 'A', 'B'), String(answer)).rejects.toThrow(/named no venue/);
+    }
+  });
+
+  test('a refusal reaches the caller untouched', async () => {
+    const w = world({});
+    const s = setup(w);
+    const refusal = Object.assign(new Error('That code does not work.'), { code: 'functions/permission-denied' });
+    vi.mocked(s.backend.callFunction).mockRejectedValueOnce(refusal);
+    await expect(s.store.redeemJoinCode('123456', 'digits', 'A', 'B')).rejects.toBe(refusal);
+  });
+
+  // ⚠️ users/{uid} was written on the server: this phone's copy still says «no venue».
+  test('no venue yet: the new venue is read from the SERVER and opens, with no reload', async () => {
+    const w = world({ 'users/alice': { locations: {} }, 'locations/newplace': { name: 'New place', language: 'it' } },
+      { 'users/alice': { locations: {} } });
+    const s = setup(w);
+    s.auth(ALICE);
+    await settle();
+    expect(s.store.getSnapshot().status).toBe('no-access');
+    w.server.set('users/alice', { locations: { newplace: true } });
+    await s.store.openJoinedVenue('newplace', 'alice');
+    expect(s.calls).toContain('readFromServer users/alice');
+    expect(s.store.getSnapshot()).toMatchObject({ status: 'ready', locationId: 'newplace', name: 'New place', role: 'staff', language: 'it' });
+    expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('newplace');
+    expect(s.env.reload).not.toHaveBeenCalled();
+  });
+
+  test('the server’s answer cannot be read: the page starts again on the new venue', async () => {
+    const w = world({ 'users/alice': { locations: {} } }, { 'users/alice': { locations: {} } });
+    const s = setup(w);
+    s.auth(ALICE);
+    await settle();
+    s.backend.readFromServer = vi.fn(async () => { throw new Error('offline'); });
+    await s.store.openJoinedVenue('newplace', 'alice');
+    expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('newplace');
+    expect(s.env.reload).toHaveBeenCalledOnce();
+  });
+
+  test('the server does not list the venue yet: the page starts again on it rather than opening «no venue»', async () => {
+    const w = world({ 'users/alice': { locations: {} } }, { 'users/alice': { locations: {} } });
+    const s = setup(w);
+    s.auth(ALICE);
+    await settle();
+    await s.store.openJoinedVenue('newplace', 'alice');
+    expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('newplace');
+    expect(s.env.reload).toHaveBeenCalledOnce();
+  });
+
+  // ⚠️ An owner adding a second business: exactly a switch of venue, so the old venue's copy does not survive.
+  test('already in another venue: a switch — the old copy wiped, the new venue remembered, a reload', async () => {
+    const s = setup(world({ 'users/alice': { locations: { bakery: true } }, 'locations/bakery': {} }),
+      { local: { [ACTIVE_LOCATION_KEY]: 'bakery', 'orders-draft': 'x' } });
+    s.auth(ALICE);
+    await settle();
+    expect(s.store.getSnapshot()).toMatchObject({ status: 'ready', locationId: 'bakery' });
+    await s.store.openJoinedVenue('newplace', 'alice');
+    expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('newplace');
+    expect(s.localStore.getItem('orders-draft')).toBeNull();
+    expect(s.calls.slice(-2)).toEqual(['wipe', 'reload']);
+  });
+
+  // The call can take a minute: a sign-out and another sign-in meanwhile must not have the OTHER person's venue switched.
+  test('another account signed in by the time the answer comes: nothing moves', async () => {
+    const s = setup(world({ 'users/alice': { locations: { bakery: true } }, 'locations/bakery': {} }),
+      { local: { [ACTIVE_LOCATION_KEY]: 'bakery', 'orders-draft': 'x' } });
+    s.auth(ALICE);
+    await settle();
+    await s.store.openJoinedVenue('newplace', 'bob');
+    expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('bakery');
+    expect(s.localStore.getItem('orders-draft')).toBe('x');
+    expect(s.backend.wipeOfflineCache).not.toHaveBeenCalled();
+    expect(s.env.reload).not.toHaveBeenCalled();
+  });
+
+  test('nobody signed in: nothing moves', async () => {
+    const s = setup(world({}));
+    s.auth(null);
+    await settle();
+    await s.store.openJoinedVenue('newplace', 'alice');
+    expect(s.store.getSnapshot().status).toBe('signed-out');
+    expect(s.env.reload).not.toHaveBeenCalled();
   });
 });
 

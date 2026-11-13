@@ -28,6 +28,7 @@ import { locationDocPath } from '@mise/shared/location-id';
 import { sameData } from '@mise/shared/same-data';
 import type { Language } from '../i18n/i18n';
 import type { DocData, SessionBackend, SessionEnv, SessionUser } from './backend';
+import { PENDING_INVITE_KEY } from './joinFlow';
 
 export type SessionStatus = 'loading' | 'signed-out' | 'choose-location' | 'no-access' | 'error' | 'ready';
 
@@ -104,7 +105,17 @@ export interface SessionStore {
   // would otherwise bring: the session reads the venue once, when it opens. Never rejects: offline, or with no venue
   // open, it changes nothing (the check made when the app next opens catches up).
   refreshLocation(): Promise<void>;
+  // Staff slice 1. Asks the live Cloud Function `redeemJoinCode` to let this account into the venue a code names, and
+  // resolves with that venue's id; rejects with the function's own error (session/joinErrors.ts reads it).
+  // ⚠️ The code goes to the function and NOWHERE ELSE: nothing here logs, reports or keeps it.
+  redeemJoinCode(code: string, kind: 'digits' | 'link', firstName: string, lastName: string): Promise<string>;
+  // Opens the venue the account `uid` has just joined (see the function). Nothing moves if another account is signed in by
+  // now: the join was this one's.
+  openJoinedVenue(locationId: string, uid: string): Promise<void>;
 }
+
+// A cold function's first call outlives anything shorter (settings/settingsSource.ts uses the same).
+export const JOIN_TIMEOUT_MS = 60_000;
 
 const userPath = (uid: string) => `users/${uid}`;
 const adminPath = (uid: string) => `admins/${uid}`;
@@ -201,9 +212,13 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     const language = venueLanguage(location);
     try { await env.preloadLanguage(language); } catch { /* the app falls back to English */ }
 
+    const optionNames = options.length > 1 ? await readLocationNames(options) : {};
+    // ⚠️ AFTER THE LAST AWAIT: a sign-out, or somebody else signing in, may have come while the venue, its language and its
+    // names were being read. That session is not this person's to open; a «ready» for the old user would show their venue
+    // to the next one (code review, 13 Nov 2026). Also the guard for resolveMembership and chooseLocation, which come here.
+    if (signedInUid !== user.uid) return;
     setSession({
-      status: 'ready', user, locationId, location, options,
-      optionNames: options.length > 1 ? await readLocationNames(options) : {},
+      status: 'ready', user, locationId, location, options, optionNames,
       name: typeof location?.name === 'string' && location.name ? location.name : locationId,
       role: roleOf(userDoc, locationId),
       canManage: canManage(userDoc, locationId),
@@ -268,7 +283,13 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     setSession({ status: 'signed-out' });
   }
 
+  // Who the browser's sign-in says is there, updated the moment it says so. Not session.user: a different person arriving
+  // can wait for a cache wipe and a reload before the session shows anybody else, and a venue opening for the one who
+  // left must not be published in that gap.
+  let signedInUid: string | null = null;
+
   function onAuth(user: SessionUser | null): void {
+    signedInUid = user && !user.isAnonymous ? user.uid : null;
     if (!user) { signedOut(); return; }
 
     // ⚠️ A LEFTOVER ANONYMOUS SESSION IS NOT A SIGNED-IN PERSON. Phones that used the app before
@@ -289,8 +310,10 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     // next tap clears it. Mise 2 is ONE page that never reloads by itself: asked only at boot,
     // the previous person's prices and stocktakes would be served from the cache to the next one
     // for the whole shift (code review, 11 Oct 2026). The current app's reason for waiting — a
-    // join replacing the person mid-page — does not exist here until step 3g brings the join,
-    // which must then finish and reload so this check runs on a clean page.
+    // join replacing the person mid-page — does not exist here until staff slice 2 brings the join
+    // with a NEW account, which must then finish and reload so this check runs on a clean page.
+    // (Staff slice 1 joins with the account already signed in: the person does not change, so
+    // openJoinedVenue opens the new venue without a reload.)
     const verdict = offlineCacheVerdict(read(env.local, OFFLINE_CACHE_OWNER_KEY), user.uid);
     if (verdict === 'claim') write(env.local, OFFLINE_CACHE_OWNER_KEY, user.uid);
     if (verdict === 'wipe' && read(env.session, WIPE_FAILED_KEY) !== user.uid) {
@@ -334,6 +357,10 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     signIn: (email, password) => backend.signIn(String(email || '').trim(), String(password || '')),
     sendReset: email => backend.sendReset(String(email || '').trim()),
     async signOut() {
+      // ⚠️ A PENDING INVITATION IS FORGOTTEN ON SIGN-OUT (docs/parity/staff-plan.md, «Security»): it is a key to a
+      // venue, and the next person to pick up a shared phone must not find it waiting (session/joinFlow.ts). First,
+      // before anything that can fail, and before the reload below starts the next page from this window's storage.
+      write(env.session, PENDING_INVITE_KEY, null);
       await backend.signOut();
       clearLocalData();
       // Only a clear that worked forgets whose data this is: after a failed one the record
@@ -358,6 +385,49 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       env.reload();
     },
     changesStillWaiting: ms => backend.changesStillWaiting(ms),
+    async redeemJoinCode(code, kind, firstName, lastName) {
+      const answer = await backend.callFunction('redeemJoinCode', { code, kind, firstName, lastName }, JOIN_TIMEOUT_MS);
+      const locationId = answer && typeof answer === 'object' ? (answer as { locationId?: unknown }).locationId : undefined;
+      // The function answers { locationId, role } on success. Anything else is not a success, whatever it says.
+      if (typeof locationId !== 'string' || !locationId) throw new Error('The join answer named no venue.');
+      return locationId;
+    },
+    // ⚠️⚠️ THE NEW VENUE IS READ FROM THE SERVER, NOT FROM THIS PHONE'S COPY. users/{uid} is written by the function, on
+    // the server; this phone's copy still says the account belongs nowhere (or only to its other venues), and a session
+    // started from it would open «No venue yet» again, or the OLD venue. The current app reloads the page instead, and
+    // pays for the same stale copy with the 30-second check's second reload.
+    async openJoinedVenue(locationId, uid) {
+      const user = session.user;
+      // ⚠️ THE ACCOUNT THAT SENT THE CODE, compared: the call can take a minute, and a sign-out and another sign-in meanwhile
+      // must not have THAT person's venue switched (and their unsent writes wiped) by somebody else's join.
+      if (!user || user.uid !== uid) return;
+      // ⚠️ ANOTHER VENUE IS OPEN (an owner adding a second business, asked first by InviteQuestion): its screens and
+      // this phone's copy of its data must not survive into the new one — exactly a switch of venue. The person was
+      // told before the form opened if something typed here had not reached the server yet (useLeaveFlow).
+      if (session.status === 'ready') {
+        if (session.locationId === locationId) return;
+        clearLocalData();
+        write(env.local, ACTIVE_LOCATION_KEY, locationId);
+        await backend.wipeOfflineCache();
+        env.reload();
+        return;
+      }
+      let fresh: DocData | null = null;
+      try {
+        fresh = await backend.readFromServer(userPath(user.uid));
+      } catch { /* offline the instant after joining: the reload below asks again */ }
+      // Signed out, or somebody else signed in, while the server was asked: that session is not this one's to move.
+      if (session.user?.uid !== user.uid) return;
+      if (!fresh || !locationsOf(fresh).includes(locationId)) {
+        // The server's answer could not be read (or has not caught up): start again on this venue, as the current
+        // app always does.
+        write(env.local, ACTIVE_LOCATION_KEY, locationId);
+        env.reload();
+        return;
+      }
+      userDoc = fresh;
+      await enterLocation(locationId, locationsOf(fresh), user);
+    },
     async refreshLocation() {
       const id = session.locationId;
       if (session.status !== 'ready' || id === null) return;

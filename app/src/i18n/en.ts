@@ -587,10 +587,56 @@ export const en = {
   'session.loading': 'Loading…',
   'picker.title': 'Choose location',
   'picker.sub': 'You have access to more than one.',
-  // ⚠️ The current app adds «If you were given a code, type it here.», pointing at its join-code
-  // field. Mise 2 brings that field in step 3g; until then the screen says who can let you in.
+  // The current app's words since staff slice 1 brought the join-code button to this screen.
   'noAccess.title': 'No location yet',
-  'noAccess.body': 'This account is not linked to a location. Ask the owner of your venue to add you.',
+  'noAccess.body': 'This account is not linked to a location. If you were given a code, type it here.',
+
+  // Joining with a code or a link (staff slice 1, docs/parity/staff-plan.md). Copied from the
+  // current app's js/i18n.js, key for key, except the six marked NEW.
+  'auth.iHaveACode': 'I have a join code',
+  'auth.back': 'Back',
+  'auth.otherAccount': 'Sign in with a different account',
+  'join.title.invited': 'You have been invited',
+  'join.title.have': 'Enter your code',
+  'join.sub.prefill': 'Your code is already filled in. Add your name to finish.',
+  'join.sub.have': 'Type the code you were given.',
+  'join.firstName': 'Your first name',
+  'join.lastName': 'Your surname',
+  'join.forAccount': 'The code will be used for this account:',
+  'join.code': 'Code',
+  'join.join': 'Join',
+  'join.checking': 'Checking…',
+  'join.shapeHint': 'Enter your six-digit code, or open the link you were sent.',
+  // ⚠️ Every refusal of a CODE says this one sentence (session/joinErrors.ts): «expired» would confirm it existed.
+  'join.badCode': 'That code does not work. Ask for a new one.',
+  // ⚠️ Not a fault with the code, and it must not sound like one: an owner checking their own invitation sees this.
+  'join.alreadyMember': 'You are already in this business. A code cannot change what you can do here.',
+  'join.digitsPaused': 'Six-digit codes are paused for a while, for safety. Ask for an invitation link instead.',
+  // NEW: the server's own English for its rate limit, now in the language on screen.
+  'join.tooManyMinutes': {
+    one: 'Too many tries. Wait {n} minute and try again.',
+    other: 'Too many tries. Wait {n} minutes and try again.',
+  },
+  // NEW: the same, when the server's answer carried no number.
+  'join.tooMany': 'Too many tries. Wait a while and try again.',
+  // NEW: no answer at all (no signal, a timeout).
+  'join.offline': 'Could not reach the server. Check the connection and try again.',
+  // NEW: any other failure.
+  'join.failed': 'Could not check the code. Try again in a moment.',
+  // NEW: said between the server's yes and the venue on screen.
+  'join.opening': 'You’re in. Opening…',
+  // NEW: Back with typing in the form.
+  'join.discard.title': 'Discard changes?',
+  'help.enterYourFirstName': 'Enter your first name.',
+  'help.enterYourSurname': 'Enter your surname.',
+  'help.thatFirstNameNeeds': 'That first name needs letters in it.',
+  'help.thatSurnameNeedsLetters': 'That surname needs letters in it.',
+  // Somebody already signed in who opens an invitation link is asked first, with the account named.
+  'invite.title': 'You opened an invitation',
+  'invite.message': 'Add this business to {who}?',
+  'invite.ok': 'Add it',
+  'invite.cancel': 'Not now',
+  'invite.thisAccount': 'this account',
   'help.couldNotCheckYour': 'Could not check your access',
   'help.thisUsuallyMeansNo': 'This usually means no connection. Check it and try again.',
 

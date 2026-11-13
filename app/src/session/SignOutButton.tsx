@@ -15,7 +15,13 @@ import styles from './SignOutButton.module.css';
 // button.
 //
 // `small` is the look for a title line (Settings): an icon and a word, muted, no box.
-export function SignOutButton({ variant = 'secondary' }: { variant?: 'secondary' | 'quiet' | 'small' }) {
+//
+// `label` replaces «Log out» on the button only (the join form's «Sign in with a different account», current-app fix
+// 1a3567b9): the question it asks is the same, because what it does is the same.
+// `isDisabled`: the join form switches it off while its code is being checked.
+export function SignOutButton({ variant = 'secondary', label, isDisabled = false }: {
+  variant?: 'secondary' | 'quiet' | 'small'; label?: string; isDisabled?: boolean;
+}) {
   const { t } = useT();
   const store = useSessionStore();
   const flow = useLeaveFlow(() => store.signOut());
@@ -28,7 +34,7 @@ export function SignOutButton({ variant = 'secondary' }: { variant?: 'secondary'
           {t('auth.logOut')}
         </Button>
       ) : (
-        <Button variant={variant} onPress={flow.open}>{t('auth.logOut')}</Button>
+        <Button variant={variant} isDisabled={isDisabled} onPress={flow.open}>{label ?? t('auth.logOut')}</Button>
       )}
       <LeaveFailed failed={flow.failed} />
       <LeaveDialog

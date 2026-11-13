@@ -10,6 +10,9 @@ import { SCREEN_EVENT } from '../telemetry/usage';
 import { fakeStore } from '../testing/fakeSession';
 import { SessionGate } from './SessionGate';
 import { SessionProvider } from './SessionContext';
+import { JoinFlowProvider } from './JoinFlowContext';
+import { createJoinFlow } from './joinFlow';
+import { memoryStorage } from '../testing/renderWithSession';
 import type { Session } from './session';
 
 // The real loadLanguage, wrapped so one spec can make Italian fail to load.
@@ -33,7 +36,9 @@ function draw(session: Partial<Session>, lang: Language = 'en') {
   const view = render(
     <I18nProvider initialLanguage={lang} initialMessages={en}>
       <SessionProvider store={store}>
-        <SessionGate><App /></SessionGate>
+        <JoinFlowProvider flow={createJoinFlow(memoryStorage())}>
+          <SessionGate><App /></SessionGate>
+        </JoinFlowProvider>
       </SessionProvider>
     </I18nProvider>,
   );

@@ -7,6 +7,9 @@ import { markLoaded } from '../telemetry/usage';
 import { fakeStore } from '../testing/fakeSession';
 import { SessionGate } from './SessionGate';
 import { SessionProvider } from './SessionContext';
+import { JoinFlowProvider } from './JoinFlowContext';
+import { createJoinFlow } from './joinFlow';
+import { memoryStorage } from '../testing/renderWithSession';
 import type { Session } from './session';
 
 // The page's load time (usage.ts, markLoaded) is when the FIRST screen is up. Marked at the
@@ -23,7 +26,9 @@ function draw(session: Partial<Session>, lang: Language = 'en') {
   render(
     <I18nProvider initialLanguage={lang} initialMessages={en}>
       <SessionProvider store={store}>
-        <SessionGate><p>the app</p></SessionGate>
+        <JoinFlowProvider flow={createJoinFlow(memoryStorage())}>
+          <SessionGate><p>the app</p></SessionGate>
+        </JoinFlowProvider>
       </SessionProvider>
     </I18nProvider>,
   );
