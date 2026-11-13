@@ -1,3 +1,7 @@
+// ⚠️⚠️ FIRST, BEFORE EVERY OTHER IMPORT: a join link's token is read and taken out of the address bar and the history
+// entry here, before the router (created as router.ts is imported) or the telemetry can see it (session/joinLinkBoot.ts;
+// main.spec.ts pins the order).
+import { joinFlow, setJoinLinkReturn } from './session/joinLinkBoot';
 import '@fontsource-variable/geist';
 import '@fontsource-variable/geist-mono';
 import './styles/tokens.css';
@@ -16,6 +20,7 @@ import { createFirebaseBackend } from './session/firebaseBackend';
 import { createSession } from './session/session';
 import { SessionGate } from './session/SessionGate';
 import { SessionProvider } from './session/SessionContext';
+import { JoinFlowProvider } from './session/JoinFlowContext';
 import { browserServiceWorkerEnv, watchServiceWorker } from './shell/serviceWorker';
 import { installViewportHeight } from './shell/viewportHeight';
 import { createTelemetrySinks } from './telemetry/sinks';
@@ -49,6 +54,9 @@ store.subscribe(() => {
   if (store.getSnapshot().status === 'signed-out') backend.preloadFirestore();
 });
 
+// A join link opened in a tab already running the app puts back the screen the app was on (joinLinkBoot.ts).
+setJoinLinkReturn(() => `#${router.state.location.pathname}${router.state.location.search}`);
+
 // The session starts listening NOW, in parallel with the language loading below: by the time
 // the first screen is drawn the session has often already answered who is signed in.
 store.start();
@@ -79,11 +87,13 @@ void loadLanguage(wanted).then(({ lang, messages }) => {
       <AppBoundary>
         <I18nProvider initialLanguage={lang} initialMessages={messages}>
           <SessionProvider store={store}>
-            <DataProvider services={services}>
-              <SessionGate>
-                <RouterProvider router={router} onError={onRouteError} />
-              </SessionGate>
-            </DataProvider>
+            <JoinFlowProvider flow={joinFlow}>
+              <DataProvider services={services}>
+                <SessionGate>
+                  <RouterProvider router={router} onError={onRouteError} />
+                </SessionGate>
+              </DataProvider>
+            </JoinFlowProvider>
           </SessionProvider>
         </I18nProvider>
       </AppBoundary>
