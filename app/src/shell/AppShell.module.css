@@ -105,20 +105,28 @@
 
 /* ⚠️ A SHORT WINDOW GETS SHORTER ITEMS, NOT A SCROLLING RAIL. The lab tablet in landscape shows 648px under Chrome's
    bars, and the rail at 64px an item needed 700: the account at its foot was cut and the rail grew a scrollbar
-   (driven 13 Oct 2026). Since the Home joined the rail (step 3g-1) an owner sees NINE items, so there are two steps:
-   up to 800px of height 56px an item (the rail needs 696), up to 720px 48px with tighter padding (it needs 624 —
-   the lab tablet's 648 fits). 48px is still the touch target of every other control. railHeight.spec.ts adds it up. */
-@media (max-height: 800px) {
+   (driven 13 Oct 2026). Since «Labels» joined the rail after Recipes (13 Nov 2026) an owner sees TEN items, so there are
+   three steps: up to 835px of height 56px an item (the rail needs 756), up to 755px 48px with tighter padding (it needs
+   676), and up to 675px the same 48px items without the brand letter at the top, which is only decoration (it needs 616 —
+   the lab tablet's 648 fits). 48px is the touch target of every other control, so the items never go below it.
+   railHeight.spec.ts adds it up. */
+@media (max-height: 835px) {
   .railItem {
     min-height: 56px;
   }
 }
 
-@media (max-height: 720px) {
+@media (max-height: 755px) {
   .railItem {
     min-height: 48px;
     padding: 3px 2px;
     gap: 2px;
+  }
+}
+
+@media (max-height: 675px) {
+  .mark {
+    display: none;
   }
 }
 

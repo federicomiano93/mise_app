@@ -37,6 +37,7 @@ export const en = {
   'section.more': 'More',
   'section.home': 'Home',
   'section.clients': 'Clients',
+  'section.labels': 'Labels',
   'clients.received.sub': 'What your clients asked for, to read',
   // new: the Clients door's line when the configuration stream broke before the server answered.
   'clients.couldNotLoad': 'The clients could not be loaded. Check your connection and reopen this page.',
@@ -3006,6 +3007,12 @@ export const en = {
   'lab.saved.body': 'Loss, costs and time are on the card of {name}.',
   'lab.saved.again': 'New production',
   'lab.saved.back': 'Back to the card',
+
+  // «Labels» (13 Nov 2026): the two choices and the list of recipes for each (labels/LabelsSection.tsx).
+  'labels.choose': 'Which label?',
+  'labels.product': 'Product label',
+  'labels.product.sub': 'Ingredients and allergens, for what you sell.',
+  'labels.haccp.sub': 'Date, use-by date and lot, for what the lab prepares and keeps.',
 } as const satisfies Record<string, Message>;
 
 export type MessageKey = keyof typeof en;
