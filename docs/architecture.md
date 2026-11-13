@@ -121,7 +121,17 @@ Aria does not support Preact. The numbers are below.
   'foodcost', 'prices')`: the venue has Food cost and the person runs a side or is shown the card). The session carries `role` (any of
   the five values), `canManage` (an owner, a manager and BOTH partial owners) and `canManageVenue` (owner and manager only: Settings'
   «The venue», the ingredient panel switches, the recipe photo switch). The screens above a venue (sign-in, picker, no access, error)
-  and `SessionGate` live here too.
+  and `SessionGate` live here too. Staff slice 1 (13 Nov 2026, `docs/parity/staff-plan.md`) adds joining with a code or a link for an
+  account already signed in: `joinLinkBoot.ts` is main.tsx's FIRST import (main.spec.ts pins it) and takes a `#join=<token>` out of the
+  address bar and the history entry before the router or the telemetry exist, and again on `popstate`/`hashchange` for a link opened in
+  a running tab (putting back the screen the app was on); `joinFlow.ts` holds the invitation (sessionStorage `pending-invite`, the
+  current app's key; NOT a localStorage key, so not a KEEP_PREFIXES matter) and the form's state, forgotten after joining, on
+  Cancel/«Not now» and on sign-out (session.ts `signOut` clears the stored copy; SessionGate forgets it when a signed-in session goes
+  signed-out); `JoinScreen.tsx` is the form (it stays on screen until the server answers: `joinShown` + `keepJoinForm`, fix
+  9e0a2dac), `joinErrors.ts` says every refusal in the app's words, `InviteQuestion.tsx` asks somebody already in a venue first
+  (through `useLeaveFlow`, waiting while anybody is typing), and `session.ts` gained `redeemJoinCode` (the live callable, through
+  `backend.callFunction`, now in `SessionBackend`) and `openJoinedVenue` (the new venue read from the SERVER; a switch with a reload
+  when another venue is open). The code never reaches the console, an error report or a usage line (the screen is named `join`).
 - `shell/` — the frame: the dark rail (700px and wider), the phone tab bar, the top bar (venue,
   date, connection), `Page` (one h1, the tab title, focus on navigation; an optional `action` — ONE small control on the title line, today only Settings' «Log out», whose failure message wraps under the line), the placeholders, More,
   Not found, Not available, the offline banner. Step 3g-2 adds the holiday, held here so the Home, Settings and the reminder agree:
@@ -535,7 +545,7 @@ are); its spec runs each case against the `js/` module after `setCurrency` and a
 `moneyOf`, and demands the same text. `odd-inputs.spec.ts` feeds every export odd inputs and compares
 the two. A quirk of the original that no real input can reach is
 copied, not tidied, and marked where it sits: fixing it is a bug fix to BOTH files at once, and
-`odd-inputs.spec.ts` fails until they agree. Today: join-code, push-model, home-cards, away-model, away-reminder (full, paired: step 3g-2; the once-a-day rule and `dayFromISO`; its key `away-reminded-date` is NOT in the keep-list),
+`odd-inputs.spec.ts` fails until they agree. Today: join-code, join-hold (full, paired: staff slice 1), join-link (partial: `JOIN_PAGE`, `joinLinkFor`, `readJoinToken`, `kindOfTyped`; leaves out `codeShapeHint` and `expiresInWords`, which use the dictionary; not paired), credentials (partial and adapted: `MAX_NAME_LENGTH`, `cleanName`, and `nameProblem` returning the dictionary KEY; the password and email checks come with staff slice 2; not paired), push-model, home-cards, away-model, away-reminder (full, paired: step 3g-2; the once-a-day rule and `dayFromISO`; its key `away-reminded-date` is NOT in the keep-list),
 allergen-model, unpriced-rows (full, paired: which recipe rows Food cost cannot price, booleans only; 10 Nov 2026), row-actions-model (full, paired: the recipe row's menu, `splitAmount`, `splitBlockReason`, `orderTargetOf`, `rowKeysOf`; item 32, 10 Nov 2026), sections, firebase-target, local-data, same-data, error-model, device-model,
 usage-model, venue-features, market, recipe-label-model, membership (the five roles, `canManage`, `canManageVenue`, `worksOnClients`), location-id, pastries-model, pastries-log-model, pastries-lock, pack-size,
 order-unit, ingredient-name, order-cost, inventory-model, inventory-outbox, inventory-purchases,
