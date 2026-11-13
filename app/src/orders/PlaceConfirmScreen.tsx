@@ -13,6 +13,7 @@ import { markBusy } from '../session/busy';
 import { useSession } from '../session/SessionContext';
 import { Button } from '../ui/Button';
 import { FormBar } from '../ui/FormBar';
+import { announceAction } from '../telemetry/usage';
 import { useStatusMessage } from '../ui/StatusMessage';
 import { useAlert } from '../ui/useAlert';
 import { useConfirm } from '../ui/useConfirm';
@@ -341,6 +342,9 @@ function ConfirmBody({ ids, ready, lens, leave, toList, alert, alertDialog }: Bo
     // These are in the record now: off the screen, and never recorded twice.
     const done = [...saved, ...notCleared].map(outcome => outcome.supplierId);
     if (done.length > 0) setRecorded(before => [...before, ...done]);
+    // The usage statistic: one `order-sent` per supplier that reached the record, as the current app's placeOrder announces
+    // it past its point of no return (js/orders/orders-main.js). A refused or clashing supplier is not in the record.
+    done.forEach(() => { announceAction('order-sent'); });
 
     for (const outcome of clashes) {
       if (outcome.kind !== 'unit-conflict') continue;
