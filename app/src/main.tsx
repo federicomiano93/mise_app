@@ -54,8 +54,14 @@ store.subscribe(() => {
   if (store.getSnapshot().status === 'signed-out') backend.preloadFirestore();
 });
 
-// A join link opened in a tab already running the app puts back the screen the app was on (joinLinkBoot.ts).
-setJoinLinkReturn(() => `#${router.state.location.pathname}${router.state.location.search}`);
+// A join link opened in a tab already running the app puts back the screen the app was on, with the router's own history
+// state for it (its key and index), read after every move the router makes (joinLinkBoot.ts).
+let routerHistoryState: unknown = window.history.state;
+router.subscribe(() => { routerHistoryState = window.history.state; });
+setJoinLinkReturn(() => ({
+  fragment: `#${router.state.location.pathname}${router.state.location.search}`,
+  state: routerHistoryState,
+}));
 
 // The session starts listening NOW, in parallel with the language loading below: by the time
 // the first screen is drawn the session has often already answered who is signed in.

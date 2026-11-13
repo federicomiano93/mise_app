@@ -48,12 +48,13 @@ export interface JoinFlow {
   subscribe(listener: () => void): () => void;
   // A token read from a link. Anything that is not a well-formed link token is ignored.
   remember(token: string): void;
-  // Drops the invitation from memory and from the window's storage. The form stays as it is.
-  forget(): void;
+  // Drops the invitation from memory and from the window's storage. The form stays as it is. With `only`, it drops it only
+  // if it is still that one: a NEWER invitation opened meanwhile is kept for its own form.
+  forget(only?: string): void;
   openForm(): void;
   // Back or Cancel: the invitation is forgotten and the form closes.
   cancel(): void;
-  // The venue opened: nothing more to keep.
+  // The venue opened: the form closes.
   finish(): void;
   // «Join» was tapped: the form is held on screen until the answer (js/join-hold.js).
   sending(): void;
@@ -105,7 +106,8 @@ export function createJoinFlow(storage: KeyValueStorage): JoinFlow {
       const fresh = state.sent?.busy ? {} : { formKey: state.formKey + 1, sent: null };
       set({ invited: token, returned: false, ...fresh });
     },
-    forget() {
+    forget(only) {
+      if (only !== undefined && only !== state.invited) return;
       store(null);
       if (state.invited) set({ invited: '' });
     },
@@ -116,9 +118,10 @@ export function createJoinFlow(storage: KeyValueStorage): JoinFlow {
       store(null);
       set({ invited: '', open: false, sent: null, returned: true });
     },
+    // The invitation that was used is forgotten by name the moment the server says yes (forget(only)); one opened since is
+    // kept, and asked about once the venue is open.
     finish() {
-      store(null);
-      set({ invited: '', open: false, sent: null, returned: false });
+      set({ open: false, sent: null, returned: false });
     },
     sending() {
       set({ sent: Object.freeze({ busy: true, invited: state.invited }) });
@@ -144,7 +147,7 @@ export interface AddressWindow {
 }
 
 // Does this fragment carry a `join` field at all, well-formed or not?
-function hasJoinField(hash: string): boolean {
+export function hasJoinField(hash: string): boolean {
   if (hash.length < 2) return false;
   try {
     return new URLSearchParams(hash.slice(1)).has('join');
@@ -160,13 +163,14 @@ function hasJoinField(hash: string): boolean {
 // something a stranger put in the address, and left there the router would read `join=…` as a page
 // and draw «Not found».
 //
-// `returnTo` is the fragment to put back (the screen the app was on, when a link is opened in a tab
-// already running the app); '' at start-up, where the app opens at its start.
-export function takeJoinLink(win: AddressWindow, returnTo = ''): string {
+// `returnTo` is the fragment to put back and `state` the history state to give the entry (the screen the app was on and the
+// router's own record of it, when a link is opened in a tab already running the app); '' and null at start-up, where the app
+// opens at its start.
+export function takeJoinLink(win: AddressWindow, returnTo = '', state: unknown = null): string {
   if (!hasJoinField(win.location.hash)) return '';
   const token = readJoinToken(win.location.href);
   try {
-    win.history.replaceState(null, '', `${win.location.pathname}${win.location.search}${returnTo}`);
+    win.history.replaceState(state, '', `${win.location.pathname}${win.location.search}${returnTo}`);
   } catch { /* a browser that refuses: nothing else can be done, and the token is still only in this window */ }
   return token;
 }

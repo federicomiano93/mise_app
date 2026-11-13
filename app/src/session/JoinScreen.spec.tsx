@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { act, screen, waitFor } from '@testing-library/react';
 import { redeemFailureText } from '@mise/shared/join-code';
@@ -157,10 +158,14 @@ describe('JoinScreen: sending', () => {
     const { user, store, flow } = draw();
     let answer: (value: string) => void = () => {};
     store.redeemJoinCode.mockImplementation(() => new Promise(resolve => { answer = resolve; }));
+    // The live region is there, empty, BEFORE it speaks (a region inserted already filled is not announced reliably).
+    const waitRegion = screen.getByRole('status');
+    expect(waitRegion).toBeEmptyDOMElement();
     await fill(user, { code: '123456' });
     await user.click(screen.getByRole('button', { name: 'Join' }));
 
     expect(screen.getByRole('status')).toHaveTextContent('Checking…');
+    expect(screen.getByRole('status')).toBe(waitRegion);
     expect(screen.getByRole('button', { name: /Join/ })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByLabelText('Your first name')).toHaveAttribute('readonly');
     expect(screen.getByLabelText('Code')).toHaveValue('123456');
@@ -170,7 +175,7 @@ describe('JoinScreen: sending', () => {
     expect(flow.getSnapshot().sent).toEqual({ busy: true, invited: '' });
 
     await act(async () => { answer('joined'); });
-    await waitFor(() => { expect(store.openJoinedVenue).toHaveBeenCalledWith('joined'); });
+    await waitFor(() => { expect(store.openJoinedVenue).toHaveBeenCalledWith('joined', 'u1'); });
     expect(isBusy()).toBe(false);
   });
 
@@ -180,7 +185,7 @@ describe('JoinScreen: sending', () => {
     store.openJoinedVenue.mockImplementation(() => new Promise(resolve => { opened = resolve; }));
     await fill(user);
     await user.click(screen.getByRole('button', { name: 'Join' }));
-    await waitFor(() => { expect(store.openJoinedVenue).toHaveBeenCalledWith('joined'); });
+    await waitFor(() => { expect(store.openJoinedVenue).toHaveBeenCalledWith('joined', 'u1'); });
     // Forgotten the moment it was used, before the venue has even opened.
     expect(flow.getSnapshot().invited).toBe('');
     expect(storage.map.has(PENDING_INVITE_KEY)).toBe(false);
@@ -226,6 +231,34 @@ describe('JoinScreen: one call per answer', () => {
     expect(store.redeemJoinCode).toHaveBeenCalledTimes(2);
     await act(async () => { refuse(fnError('permission-denied', 'x')); });
     expect(isBusy()).toBe(false);
+  });
+});
+
+describe('JoinScreen: under React’s StrictMode (the dev server mounts every screen twice)', () => {
+  test('a refusal is still said and the form comes back', async () => {
+    const flow = createJoinFlow(memoryStorage());
+    flow.openForm();
+    const { user, store } = renderWithSession(<StrictMode><JoinScreen /></StrictMode>, { session: NO_ACCESS, joinFlow: flow });
+    store.redeemJoinCode.mockRejectedValue(fnError('permission-denied', 'x'));
+    await fill(user, { code: '123456' });
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('That code does not work. Ask for a new one.');
+    expect(screen.getByRole('button', { name: 'Back' })).toBeEnabled();
+  });
+});
+
+describe('JoinScreen: a newer invitation opened while the code is checked', () => {
+  test('is kept, whatever the answer to the older one', async () => {
+    const NEWER = 'zZ9dEf6hIj9lMn2pQr5tUv8xYz1CdEf4';
+    const { user, store, flow } = draw({ invited: TOKEN });
+    let answer: (value: string) => void = () => {};
+    store.redeemJoinCode.mockImplementation(() => new Promise(resolve => { answer = resolve; }));
+    await fill(user);
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+    act(() => { flow.remember(NEWER); });
+    await act(async () => { answer('joined'); });
+    await waitFor(() => { expect(store.openJoinedVenue).toHaveBeenCalled(); });
+    expect(flow.getSnapshot().invited).toBe(NEWER);
   });
 });
 

@@ -505,7 +505,7 @@ describe('joining with a code (staff slice 1)', () => {
     await settle();
     expect(s.store.getSnapshot().status).toBe('no-access');
     w.server.set('users/alice', { locations: { newplace: true } });
-    await s.store.openJoinedVenue('newplace');
+    await s.store.openJoinedVenue('newplace', 'alice');
     expect(s.calls).toContain('readFromServer users/alice');
     expect(s.store.getSnapshot()).toMatchObject({ status: 'ready', locationId: 'newplace', name: 'New place', role: 'staff', language: 'it' });
     expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('newplace');
@@ -518,7 +518,7 @@ describe('joining with a code (staff slice 1)', () => {
     s.auth(ALICE);
     await settle();
     s.backend.readFromServer = vi.fn(async () => { throw new Error('offline'); });
-    await s.store.openJoinedVenue('newplace');
+    await s.store.openJoinedVenue('newplace', 'alice');
     expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('newplace');
     expect(s.env.reload).toHaveBeenCalledOnce();
   });
@@ -528,7 +528,7 @@ describe('joining with a code (staff slice 1)', () => {
     const s = setup(w);
     s.auth(ALICE);
     await settle();
-    await s.store.openJoinedVenue('newplace');
+    await s.store.openJoinedVenue('newplace', 'alice');
     expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('newplace');
     expect(s.env.reload).toHaveBeenCalledOnce();
   });
@@ -540,17 +540,30 @@ describe('joining with a code (staff slice 1)', () => {
     s.auth(ALICE);
     await settle();
     expect(s.store.getSnapshot()).toMatchObject({ status: 'ready', locationId: 'bakery' });
-    await s.store.openJoinedVenue('newplace');
+    await s.store.openJoinedVenue('newplace', 'alice');
     expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('newplace');
     expect(s.localStore.getItem('orders-draft')).toBeNull();
     expect(s.calls.slice(-2)).toEqual(['wipe', 'reload']);
+  });
+
+  // The call can take a minute: a sign-out and another sign-in meanwhile must not have the OTHER person's venue switched.
+  test('another account signed in by the time the answer comes: nothing moves', async () => {
+    const s = setup(world({ 'users/alice': { locations: { bakery: true } }, 'locations/bakery': {} }),
+      { local: { [ACTIVE_LOCATION_KEY]: 'bakery', 'orders-draft': 'x' } });
+    s.auth(ALICE);
+    await settle();
+    await s.store.openJoinedVenue('newplace', 'bob');
+    expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('bakery');
+    expect(s.localStore.getItem('orders-draft')).toBe('x');
+    expect(s.backend.wipeOfflineCache).not.toHaveBeenCalled();
+    expect(s.env.reload).not.toHaveBeenCalled();
   });
 
   test('nobody signed in: nothing moves', async () => {
     const s = setup(world({}));
     s.auth(null);
     await settle();
-    await s.store.openJoinedVenue('newplace');
+    await s.store.openJoinedVenue('newplace', 'alice');
     expect(s.store.getSnapshot().status).toBe('signed-out');
     expect(s.env.reload).not.toHaveBeenCalled();
   });

@@ -61,7 +61,11 @@ export function JoinScreen() {
   // the state, which a second event in the same moment would still see as «not sending».
   const inFlight = useRef(false);
   const mounted = useRef(true);
-  useEffect(() => () => { mounted.current = false; }, []);
+  // Set again on every mount: React's StrictMode (the dev server) mounts, unmounts and mounts again.
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
 
   // ⚠️ WHICH ACCOUNT THE CODE WILL JOIN, SAID BEFORE IT IS SPENT (current-app fix 1a3567b9, his note of 3 Nov 2026). The code
   // is redeemed for whoever is signed in on this device — on a shared kitchen phone that may be a former employee, or the
@@ -111,6 +115,9 @@ export function JoinScreen() {
     // The kind decides how the code is normalised as well as what it is called: case is folded for digits and KEPT for a
     // link, where folding destroys it.
     const kind = kindOfTyped(code) ?? 'digits';
+    // Who sends it, and for which invitation: both are compared when the answer comes back.
+    const sender = session.user?.uid ?? '';
+    const invitation = flowStore.getSnapshot().invited;
     const typed = normalizeTyped(code, kind);
     setProblem(null);
     inFlight.current = true;
@@ -126,7 +133,7 @@ export function JoinScreen() {
       const refusal = joinRefusal(error);
       // ⚠️ «ALREADY IN THIS BUSINESS» CANNOT BE CHANGED BY TRYING AGAIN, so the invitation is dropped (the current app does the
       // same): left in place it would be offered again for the life of the window. The code itself is untouched on the server.
-      if (refusal.key === 'join.alreadyMember') flowStore.forget();
+      if (refusal.key === 'join.alreadyMember') flowStore.forget(invitation);
       flowStore.answered();
       inFlight.current = false;
       release();
@@ -138,10 +145,10 @@ export function JoinScreen() {
     }
     // ⚠️ FORGOTTEN THE MOMENT IT HAS BEEN USED, before anything else can fail: it is single use, and a secret with no reason
     // to still be around should not be.
-    flowStore.forget();
+    flowStore.forget(invitation);
     if (mounted.current) say({ busy: 'join.opening' });
     try {
-      await store.openJoinedVenue(locationId);
+      await store.openJoinedVenue(locationId, sender);
       flowStore.finish();
     } catch {
       // ⚠️ THE JOIN SUCCEEDED; only opening the venue on this page did not. Saying «could not check the code» now would be
@@ -229,7 +236,7 @@ export function JoinScreen() {
 
         {/* The wait is said in a live region that is there before it speaks (a region inserted already filled is not
             announced reliably); the refusal is an alert, a new one per answer. */}
-        <p className={notice !== null && 'busy' in notice ? styles.notice : styles.quiet} data-kind="busy" role="status">
+        <p className={styles.wait} data-filled={notice !== null && 'busy' in notice ? 'true' : undefined} role="status">
           {notice !== null && 'busy' in notice ? t(notice.busy) : null}
         </p>
         {notice !== null && 'refusal' in notice ? (

@@ -592,7 +592,7 @@ export const en = {
   'noAccess.body': 'This account is not linked to a location. If you were given a code, type it here.',
 
   // Joining with a code or a link (staff slice 1, docs/parity/staff-plan.md). Copied from the
-  // current app's js/i18n.js, key for key, except the five marked NEW.
+  // current app's js/i18n.js, key for key, except the six marked NEW.
   'auth.iHaveACode': 'I have a join code',
   'auth.back': 'Back',
   'auth.otherAccount': 'Sign in with a different account',
@@ -625,6 +625,7 @@ export const en = {
   'join.failed': 'Could not check the code. Try again in a moment.',
   // NEW: said between the server's yes and the venue on screen.
   'join.opening': 'You’re in. Opening…',
+  // NEW: Back with typing in the form.
   'join.discard.title': 'Discard changes?',
   'help.enterYourFirstName': 'Enter your first name.',
   'help.enterYourSurname': 'Enter your surname.',

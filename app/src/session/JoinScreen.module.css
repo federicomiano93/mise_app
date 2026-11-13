@@ -72,14 +72,18 @@
   color: var(--danger-ink);
 }
 
-.notice[data-kind="busy"] {
-  background: var(--sunken);
-  color: var(--ink-2);
+/* The wait: ONE live region, always in the page and always this class, so it exists before it speaks. Empty, it takes no
+   room (no padding) but is never display:none, which can take a region out of the accessibility tree. */
+.wait {
+  width: 100%;
+  border-radius: var(--r-md);
+  font-size: var(--fs-sm);
 }
 
-/* The empty live region takes no room. */
-.quiet:empty {
-  display: none;
+.wait[data-filled="true"] {
+  padding: var(--s3) var(--s4);
+  background: var(--sunken);
+  color: var(--ink-2);
 }
 
 .ways {

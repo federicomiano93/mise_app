@@ -124,7 +124,8 @@ Aria does not support Preact. The numbers are below.
   and `SessionGate` live here too. Staff slice 1 (13 Nov 2026, `docs/parity/staff-plan.md`) adds joining with a code or a link for an
   account already signed in: `joinLinkBoot.ts` is main.tsx's FIRST import (main.spec.ts pins it) and takes a `#join=<token>` out of the
   address bar and the history entry before the router or the telemetry exist, and again on `popstate`/`hashchange` for a link opened in
-  a running tab (putting back the screen the app was on); `joinFlow.ts` holds the invitation (sessionStorage `pending-invite`, the
+  a running tab (that entry becomes the screen the app was on, with the router's own history state, and the event is stopped
+  before the router hears it); `joinFlow.ts` holds the invitation (sessionStorage `pending-invite`, the
   current app's key; NOT a localStorage key, so not a KEEP_PREFIXES matter) and the form's state, forgotten after joining, on
   Cancel/«Not now» and on sign-out (session.ts `signOut` clears the stored copy; SessionGate forgets it when a signed-in session goes
   signed-out); `JoinScreen.tsx` is the form (it stays on screen until the server answers: `joinShown` + `keepJoinForm`, fix

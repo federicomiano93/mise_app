@@ -109,8 +109,9 @@ export interface SessionStore {
   // resolves with that venue's id; rejects with the function's own error (session/joinErrors.ts reads it).
   // ⚠️ The code goes to the function and NOWHERE ELSE: nothing here logs, reports or keeps it.
   redeemJoinCode(code: string, kind: 'digits' | 'link', firstName: string, lastName: string): Promise<string>;
-  // Opens the venue this account has just joined (see the function).
-  openJoinedVenue(locationId: string): Promise<void>;
+  // Opens the venue the account `uid` has just joined (see the function). Nothing moves if another account is signed in by
+  // now: the join was this one's.
+  openJoinedVenue(locationId: string, uid: string): Promise<void>;
 }
 
 // A cold function's first call outlives anything shorter (settings/settingsSource.ts uses the same).
@@ -385,9 +386,11 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     // the server; this phone's copy still says the account belongs nowhere (or only to its other venues), and a session
     // started from it would open «No venue yet» again, or the OLD venue. The current app reloads the page instead, and
     // pays for the same stale copy with the 30-second check's second reload.
-    async openJoinedVenue(locationId) {
+    async openJoinedVenue(locationId, uid) {
       const user = session.user;
-      if (!user) return;
+      // ⚠️ THE ACCOUNT THAT SENT THE CODE, compared: the call can take a minute, and a sign-out and another sign-in meanwhile
+      // must not have THAT person's venue switched (and their unsent writes wiped) by somebody else's join.
+      if (!user || user.uid !== uid) return;
       // ⚠️ ANOTHER VENUE IS OPEN (an owner adding a second business, asked first by InviteQuestion): its screens and
       // this phone's copy of its data must not survive into the new one — exactly a switch of venue. The person was
       // told before the form opened if something typed here had not reached the server yet (useLeaveFlow).

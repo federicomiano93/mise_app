@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
 import { isBusy } from './busy';
-import { focusMain } from './focusMain';
+import { focusMainSoon } from './focusMain';
 import { useJoinFlow, useJoinFlowStore } from './JoinFlowContext';
 import { LeaveDialog } from './LeaveDialog';
 import { useSession } from './SessionContext';
@@ -49,7 +49,7 @@ export function InviteQuestion() {
     flowStore.forget();
     flow.close();
     // The question opened by itself, on no button: the focus goes to the screen, not to the page.
-    setTimeout(() => { focusMain(); }, 0);
+    focusMainSoon();
   }
 
   if (!invited && !asking) return null;

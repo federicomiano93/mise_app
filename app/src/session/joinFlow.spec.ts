@@ -29,10 +29,12 @@ describe('takeJoinLink: the token leaves the address at once', () => {
     expect(replaced.join('')).not.toContain(TOKEN);
   });
 
-  test('a link opened in a tab already running the app puts back the screen it was on', () => {
+  test('a link opened in a tab already running the app puts back the screen it was on, with its history state', () => {
     const { win, replaced } = fakeWindow(`https://app.test/index.html#join=${TOKEN}`);
-    expect(takeJoinLink(win, '#/orders')).toBe(TOKEN);
+    const state = { usr: null, key: 'k1', idx: 3 };
+    expect(takeJoinLink(win, '#/orders', state)).toBe(TOKEN);
     expect(replaced).toEqual(['/index.html#/orders']);
+    expect(win.history.replaceState).toHaveBeenCalledWith(state, '', '/index.html#/orders');
   });
 
   // Not a usable token, but still something a stranger put in the address: taken out, and never handed on.
@@ -113,6 +115,15 @@ describe('createJoinFlow: forgotten after joining and after Cancel', () => {
     expect(storage.map.has(PENDING_INVITE_KEY)).toBe(false);
   });
 
+  test('forget(only) keeps a NEWER invitation', () => {
+    const flow = createJoinFlow(memoryStorage());
+    flow.remember(OTHER);
+    flow.forget(TOKEN);
+    expect(flow.getSnapshot().invited).toBe(OTHER);
+    flow.forget(OTHER);
+    expect(flow.getSnapshot().invited).toBe('');
+  });
+
   test('cancel forgets it and closes the form, marking the return', () => {
     const storage = memoryStorage();
     const flow = createJoinFlow(storage);
@@ -123,12 +134,13 @@ describe('createJoinFlow: forgotten after joining and after Cancel', () => {
     expect(storage.map.has(PENDING_INVITE_KEY)).toBe(false);
   });
 
-  test('finish forgets it and closes the form', () => {
+  test('after joining: the used invitation forgotten by name, then the form closed', () => {
     const storage = memoryStorage();
     const flow = createJoinFlow(storage);
     flow.remember(TOKEN);
     flow.openForm();
     flow.sending();
+    flow.forget(TOKEN);
     flow.finish();
     expect(flow.getSnapshot()).toMatchObject({ invited: '', open: false, sent: null, returned: false });
     expect(storage.map.has(PENDING_INVITE_KEY)).toBe(false);

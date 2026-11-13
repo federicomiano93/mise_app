@@ -5,7 +5,7 @@ import { I18nContext } from '../i18n/I18nContext';
 import type { Language } from '../i18n/i18n';
 import { announceScreen, markLoaded } from '../telemetry/usage';
 import { ChooseVenueScreen } from './ChooseVenueScreen';
-import { focusMain } from './focusMain';
+import { focusMainSoon } from './focusMain';
 import { InviteQuestion } from './InviteQuestion';
 import { useJoinFlow, useJoinFlowStore } from './JoinFlowContext';
 import type { JoinFlowState } from './joinFlow';
@@ -74,11 +74,14 @@ export function SessionGate({ children }: { children: ReactNode }) {
     }
   }, [session.status, session.user, flowStore]);
 
-  // Back from a join form opened inside a venue: the app is drawn again, and the focus goes to its screen.
+  // The join form went away (Back, or the venue opened) onto the app or the venue picker: the focus goes to that screen, once
+  // it is drawn, never left on the page. («No location yet» puts it on its own button: `returned`.)
   const joinWasShown = useRef(false);
   useEffect(() => {
-    if (joinWasShown.current && !showJoin && session.status === 'ready') setTimeout(() => { focusMain(); }, 0);
+    const was = joinWasShown.current;
     joinWasShown.current = showJoin;
+    if (!was || showJoin || (session.status !== 'ready' && session.status !== 'choose-location')) return undefined;
+    return focusMainSoon();
   }, [showJoin, session.status]);
 
   // The screens of the gate tell the usage record where the person is. `loading` is a wait, not a

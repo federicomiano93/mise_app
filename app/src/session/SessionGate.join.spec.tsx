@@ -74,8 +74,10 @@ describe('«No venue yet» gains «I have a join code»', () => {
     store.openJoinedVenue.mockImplementation(async () => { store.set({ status: 'ready', locationId: 'joined' }); });
     await user.click(screen.getByRole('button', { name: 'Join' }));
     await waitFor(() => { expect(screen.getByRole('heading', { name: 'the app' })).toBeInTheDocument(); });
-    expect(store.openJoinedVenue).toHaveBeenCalledWith('joined');
+    expect(store.openJoinedVenue).toHaveBeenCalledWith('joined', 'u1');
     expect(flow.getSnapshot().open).toBe(false);
+    // The venue's screen gets the focus, not the page.
+    await waitFor(() => { expect(screen.getByRole('heading', { name: 'the app' })).toHaveFocus(); });
   });
 });
 
@@ -207,7 +209,7 @@ describe('somebody already in a venue who opens a link is asked first, with the 
     await user.type(await screen.findByLabelText('Your first name'), 'Luca');
     await user.type(screen.getByLabelText('Your surname'), 'Rossi');
     await user.click(screen.getByRole('button', { name: 'Join' }));
-    await waitFor(() => { expect(store.openJoinedVenue).toHaveBeenCalledWith('joined'); });
+    await waitFor(() => { expect(store.openJoinedVenue).toHaveBeenCalledWith('joined', 'u1'); });
     expect(store.redeemJoinCode).toHaveBeenCalledWith(TOKEN, 'link', 'Luca', 'Rossi');
   });
 
@@ -216,9 +218,13 @@ describe('somebody already in a venue who opens a link is asked first, with the 
     expect(await screen.findByRole('alertdialog')).toHaveTextContent('Add this business to this account?');
   });
 
-  test('on the venue picker too', async () => {
-    draw({ status: 'choose-location', locationId: null, options: ['a', 'b'], optionNames: { a: 'A', b: 'B' } }, { invited: TOKEN });
+  test('on the venue picker too; Back from the form returns to the picker with the focus on it', async () => {
+    const { user } = draw({ status: 'choose-location', locationId: null, options: ['a', 'b'], optionNames: { a: 'A', b: 'B' } }, { invited: TOKEN });
     expect(await screen.findByRole('alertdialog', { name: 'You opened an invitation' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Add it' }));
+    await user.click(await screen.findByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(document.activeElement).not.toBe(document.body); });
+    expect(screen.getByRole('main')).toContainElement(document.activeElement as HTMLElement);
   });
 
   // ⚠️ The form replaces the app: an editor's unsaved typing would go with it.

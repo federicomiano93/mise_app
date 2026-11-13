@@ -40,10 +40,18 @@ describe('joinLinkBoot', () => {
     expect(window.history.length).toBe(historyLength);
   });
 
-  test('a link opened in the tab while the app runs: taken out, and the screen the app was on put back', () => {
-    boot.setJoinLinkReturn(() => '#/orders');
+  // ⚠️ The router must never hear of the entry the browser made for the link: an entry with no index of the router's would
+  // make it skip every «Leave?» question on a later Back across it (code review, 13 Nov 2026).
+  test('a link opened in the tab while the app runs: taken out, the screen put back with the router’s state, the router not told', () => {
+    const routerState = { usr: null, key: 'k7', idx: 4 };
+    boot.setJoinLinkReturn(() => ({ fragment: '#/orders', state: routerState }));
+    const router = vi.fn();
+    window.addEventListener('popstate', router);
     window.history.pushState(null, '', `/mise_app/index.html#join=${LATER}`);
     window.dispatchEvent(new PopStateEvent('popstate'));
+    window.removeEventListener('popstate', router);
+    expect(router).not.toHaveBeenCalled();
+    expect(window.history.state).toEqual(routerState);
     expect(window.location.hash).toBe('#/orders');
     expect(window.location.href).not.toContain(LATER);
     expect(boot.joinFlow.getSnapshot().invited).toBe(LATER);
@@ -58,10 +66,14 @@ describe('joinLinkBoot', () => {
     expect(boot.joinFlow.getSnapshot().invited).toBe(TOKEN);
   });
 
-  test('an ordinary move of the app is left alone', () => {
+  test('an ordinary move of the app is left alone, and the router hears it', () => {
+    const router = vi.fn();
+    window.addEventListener('popstate', router);
     window.history.pushState(null, '', '/mise_app/index.html#/recipes');
     window.dispatchEvent(new PopStateEvent('popstate'));
+    window.removeEventListener('popstate', router);
     expect(window.location.hash).toBe('#/recipes');
+    expect(router).toHaveBeenCalledOnce();
   });
 
   test('a router that cannot say where it is: the app’s start', () => {
