@@ -65,6 +65,33 @@ describe('the scroll on the tablet\'s split', () => {
   });
 });
 
+describe('Back on the tablet\'s split with nothing changed (item 16, found by a driver at 1024)', () => {
+  // The driver saw the list move from 2008 to 1709 after an untouched open + Back. The section never writes the scroll on a move
+  // between two screens that are both beside the list; the 299 px was the driver's own Back press, which first called
+  // scrollIntoView({ block: 'center' }) on a button that is stuck to the top of the right-hand pane, and a browser scrolls the
+  // page for that. So the section's half is pinned here: it leaves the place alone, and hands the focus back to the row.
+  it('keeps the place in the list and puts the focus back on the row, for an ingredient and for a supplier', async () => {
+    split();
+    const { user } = await loaded('/suppliers/suppliers');
+    await user.click(screen.getByRole('tab', { name: 'Ingredients' }));
+    const main = scrolledTo(1200);
+    await user.click(rowOf(/^Anise/));
+    await screen.findByRole('heading', { level: 2, name: 'Edit ingredient' }, LOAD);
+    expect(main.scrollTop).toBe(1200);
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(rowOf(/^Anise/)).toHaveFocus(); });
+    expect(main.scrollTop).toBe(1200);
+
+    await user.click(screen.getByRole('tab', { name: 'Suppliers' }));
+    scrolledTo(900);
+    await user.click(rowOf(/^Bbb/));
+    await screen.findByRole('region', { name: 'Bbb' }, LOAD);
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => { expect(rowOf(/^Bbb/)).toHaveFocus(); });
+    expect(main.scrollTop).toBe(900);
+  });
+});
+
 describe('the scroll on a phone', () => {
   it('opens a supplier at the top, and Back brings the list to the place it was left at, with the focus on its row', async () => {
     const { user } = await loaded();
