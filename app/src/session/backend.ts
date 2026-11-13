@@ -37,6 +37,11 @@ export interface SessionBackend {
   // The server's answer, never the cache. Rejects offline.
   readFromServer(path: string): Promise<DocData | null>;
   signIn(email: string, password: string): Promise<void>;
+  // Creates an account with this email and password AND SIGNS IT IN on this page, replacing nobody (it is reached only signed
+  // out), and resolves with it. Staff slice 2: the join form for a new account. Rejects with Firebase's `auth/…` error.
+  // ⚠️ IT GRANTS NOTHING: a brand-new account has no users/{uid}, so every rule refuses it until redeemJoinCode writes the
+  // membership on the server.
+  signUp(email: string, password: string): Promise<SessionUser>;
   sendReset(email: string): Promise<void>;
   signOut(): Promise<void>;
   // Stops Firestore and deletes its offline database. Never rejects:
@@ -76,5 +81,9 @@ export interface SessionEnv {
   isBusy(): boolean;
   // Loads a language's messages so the first screen inside a venue is drawn in its language.
   preloadLanguage(lang: Language): Promise<unknown>;
+  // Resolves once the screens have had the time to redraw after the session changed. Used before Firestore is stopped on a
+  // change of venue: the app is taken off the screen first, so every listener of every section unsubscribes BEFORE the
+  // client is terminated (session.ts `leaving`).
+  letScreensClose(): Promise<void>;
   warn(message: string, detail?: unknown): void;
 }

@@ -1,0 +1,30 @@
+/* The install guide's door: the look of a quiet button (ui/Button.module.css .quiet), as a real link. The 48px touch height
+   stays, the box does not. */
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: var(--hit);
+  padding: 0 var(--s4);
+  border-radius: var(--r-md);
+  color: var(--accent-ink);
+  font: 600 var(--fs-md)/1 var(--font);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) {
+  .link:hover {
+    background: var(--sunken);
+    color: var(--accent-press);
+  }
+}
+
+/* Off while the join form is being sent: dimmed like a disabled button, still in the page. */
+.link[aria-disabled="true"] {
+  color: var(--ink-3);
+  cursor: default;
+}

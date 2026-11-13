@@ -25,6 +25,8 @@ describe('SignOutButton', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Log out' }));
 
     await waitFor(() => { expect(store.signOut).toHaveBeenCalledTimes(1); });
+    // ⚠️ «Log out» never keeps an invitation: only the join form's own button asks for that.
+    expect(store.signOut).toHaveBeenCalledWith();
     expect(store.changesStillWaiting).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
   });

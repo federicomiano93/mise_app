@@ -6,6 +6,7 @@ import { Page } from '../shell/Page';
 import { useFocusOnBack } from '../shell/away/useFocusOnBack';
 import { StatusMessageProvider, useStatusMessage } from '../ui/StatusMessage';
 import { AwayBand } from './AwayBand';
+import { InstallHint } from './InstallHint';
 import { TodoCard } from './TodoCard';
 import { TodosProvider, useTodosStore } from './TodosContext';
 import styles from './HomeSection.module.css';
@@ -39,6 +40,8 @@ export default function HomeSection() {
           </div>
         </StatusMessageProvider>
       </TodosProvider>
+      {/* After a join, once: the install guide (staff slice 2). It draws nothing but its question, and guards itself. */}
+      <InstallHint />
     </Page>
   );
 }

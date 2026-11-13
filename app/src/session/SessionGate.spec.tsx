@@ -54,32 +54,32 @@ describe('SessionGate: one screen per status', () => {
     draw({ status: 'loading' });
     expect(screen.getByRole('status')).toHaveTextContent('Loading…');
     expect(screen.getByRole('main')).toHaveAttribute('aria-busy', 'true');
-    expect(screen.queryByText(/the app/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/the app:/)).not.toBeInTheDocument();
   });
 
   it('shows the sign-in form when nobody is signed in', () => {
     draw({ status: 'signed-out', user: null });
     expect(screen.getByRole('heading', { level: 1, name: 'Mise' })).toBeInTheDocument();
     expect(screen.getByLabelText('Email')).toBeInTheDocument();
-    expect(screen.queryByText(/the app/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/the app:/)).not.toBeInTheDocument();
   });
 
   it('shows the venue picker when the account has several and has not chosen', () => {
     draw({ status: 'choose-location', options: ['a', 'b'], optionNames: { a: 'A', b: 'B' } });
     expect(screen.getByRole('heading', { level: 1, name: 'Choose location' })).toBeInTheDocument();
-    expect(screen.queryByText(/the app/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/the app:/)).not.toBeInTheDocument();
   });
 
   it('shows «No location yet» for an account with no venue', () => {
     draw({ status: 'no-access', options: [] });
     expect(screen.getByRole('heading', { level: 1, name: 'No location yet' })).toBeInTheDocument();
-    expect(screen.queryByText(/the app/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/the app:/)).not.toBeInTheDocument();
   });
 
   it('shows «Could not check your access» when the session could not be read', () => {
     draw({ status: 'error' });
     expect(screen.getByRole('heading', { level: 1, name: 'Could not check your access' })).toBeInTheDocument();
-    expect(screen.queryByText(/the app/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/the app:/)).not.toBeInTheDocument();
   });
 
   it('lets the app through only when the session is ready', () => {
@@ -115,7 +115,7 @@ describe('SessionGate: the venue\'s language comes first', () => {
 
     // At once: the loading screen, not an English app.
     expect(screen.getByRole('status')).toBeInTheDocument();
-    expect(screen.queryByText(/the app/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/the app:/)).not.toBeInTheDocument();
 
     // The Italian messages are a dynamic import: under a loaded CI machine it can take longer than
     // findBy's default second, which made this spec flaky.

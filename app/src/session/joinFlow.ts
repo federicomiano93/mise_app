@@ -41,6 +41,15 @@ export interface JoinFlowState {
   // The form was just left by Back or Cancel: the screen it returns to puts the focus on the button that opened it, so a
   // keyboard is never left on the page itself.
   readonly returned: boolean;
+  // Staff slice 2. Signed out, an invitation opens the form for a NEW account; somebody who already has one steps over to the
+  // sign-in screen («Sign in with that email», or Back) and the invitation goes WITH them, to be offered after the sign-in
+  // (the current app's way, js/auth-gate.js). While this is true the signed-out gate draws the sign-in form, not the join form.
+  readonly signInFirst: boolean;
+  // The email to put in the sign-in form when it was reached by «Sign in with that email». Memory only, never stored.
+  readonly signInEmail: string;
+  // The invitation is HELD but the form was left on purpose (Back, once an account had been made for it): «No location yet» must
+  // not open the form again by itself, only through «I have a join code», which then has the code filled in.
+  readonly parked: boolean;
 }
 
 export interface JoinFlow {
@@ -54,6 +63,18 @@ export interface JoinFlow {
   openForm(): void;
   // Back or Cancel: the invitation is forgotten and the form closes.
   cancel(): void;
+  // Signed out, from the form for a new account: to the sign-in form, KEEPING the invitation (see `signInFirst`). `email` is
+  // the address that already has an account, to fill in.
+  signInInstead(email?: string): void;
+  // Back from the form for an account that was made but whose code was refused: the form closes and the invitation is KEPT
+  // (the current app's way), parked, so the account's «No location yet» offers it again through «I have a join code».
+  leave(): void;
+  // The person is about to sign out with «Sign in with a different account»: the invitation is to be kept through that sign-out
+  // (and only that one), for the sign-in screen and the form for a new account. `false` takes it back (the sign-out failed).
+  holdThroughSignOut(on?: boolean): void;
+  // The session says nobody is signed in any more (from this window or another): the invitation is forgotten — unless
+  // holdThroughSignOut said it should go along.
+  signedOut(): void;
   // The venue opened: the form closes.
   finish(): void;
   // «Join» was tapped: the form is held on screen until the answer (js/join-hold.js).
@@ -76,8 +97,12 @@ function storedInvite(storage: KeyValueStorage): string {
 }
 
 export function createJoinFlow(storage: KeyValueStorage): JoinFlow {
-  let state: JoinFlowState = Object.freeze({ invited: storedInvite(storage), open: false, sent: null, formKey: 0, returned: false });
+  let state: JoinFlowState = Object.freeze({
+    invited: storedInvite(storage), open: false, sent: null, formKey: 0, returned: false, signInFirst: false, signInEmail: '', parked: false,
+  });
   const listeners = new Set<() => void>();
+  // Not state: nothing draws from it. Set for one sign-out by holdThroughSignOut.
+  let holdOnSignOut = false;
 
   function set(next: Partial<JoinFlowState>): void {
     state = Object.freeze({ ...state, ...next });
@@ -91,7 +116,7 @@ export function createJoinFlow(storage: KeyValueStorage): JoinFlow {
     } catch { /* private mode: the invitation lives as long as the page, which is the safe way to fail */ }
   }
 
-  return {
+  const flow: JoinFlow = {
     getSnapshot: () => state,
     subscribe(listener) {
       listeners.add(listener);
@@ -104,7 +129,8 @@ export function createJoinFlow(storage: KeyValueStorage): JoinFlow {
       // A form still being checked is never replaced (js/join-hold.js): the new invitation waits,
       // and answered() gives it its own form once the check is over.
       const fresh = state.sent?.busy ? {} : { formKey: state.formKey + 1, sent: null };
-      set({ invited: token, returned: false, ...fresh });
+      // A NEW invitation is a new reason to show the form, even to somebody who had stepped over to sign in.
+      set({ invited: token, returned: false, signInFirst: false, parked: false, ...fresh });
     },
     forget(only) {
       if (only !== undefined && only !== state.invited) return;
@@ -112,16 +138,36 @@ export function createJoinFlow(storage: KeyValueStorage): JoinFlow {
       if (state.invited) set({ invited: '' });
     },
     openForm() {
-      set({ open: true, sent: null, formKey: state.formKey + 1, returned: false });
+      set({ open: true, sent: null, formKey: state.formKey + 1, returned: false, signInFirst: false, signInEmail: '', parked: false });
     },
     cancel() {
       store(null);
-      set({ invited: '', open: false, sent: null, returned: true });
+      set({ invited: '', open: false, sent: null, returned: true, signInFirst: false, signInEmail: '', parked: false });
+    },
+    signInInstead(email = '') {
+      set({ open: false, sent: null, returned: true, signInFirst: true, signInEmail: email.trim(), parked: false });
+    },
+    leave() {
+      set({ open: false, sent: null, returned: true, signInFirst: false, signInEmail: '', parked: true });
+    },
+    holdThroughSignOut(on = true) {
+      holdOnSignOut = on;
+    },
+    signedOut() {
+      if (!holdOnSignOut) {
+        flow.cancel();
+        return;
+      }
+      holdOnSignOut = false;
+      // A fresh form for whoever comes next: the signed-out gate draws the form for a new account with the link filled in.
+      set({
+        open: false, sent: null, formKey: state.formKey + 1, returned: false, signInFirst: false, signInEmail: '', parked: false,
+      });
     },
     // The invitation that was used is forgotten by name the moment the server says yes (forget(only)); one opened since is
     // kept, and asked about once the venue is open.
     finish() {
-      set({ open: false, sent: null, returned: false });
+      set({ open: false, sent: null, returned: false, signInFirst: false, signInEmail: '', parked: false });
     },
     sending() {
       set({ sent: Object.freeze({ busy: true, invited: state.invited }) });
@@ -138,6 +184,7 @@ export function createJoinFlow(storage: KeyValueStorage): JoinFlow {
       set({ sent: Object.freeze({ busy: false, invited: sent?.invited ?? '' }) });
     },
   };
+  return flow;
 }
 
 // What takeJoinLink needs of the window: the address, and the way to rewrite it without a visit.

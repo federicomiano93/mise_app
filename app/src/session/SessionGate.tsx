@@ -29,16 +29,20 @@ const GATE_SCREENS: Partial<Record<SessionStatus, string>> = {
 // Is the join form (staff slice 1) the screen to draw?
 //
 //   no-access        — opened by «I have a join code», or by an invitation this window holds (the code is filled in: the
-//                      person with no venue is exactly who a link is for), or still showing the server's last answer;
+//                      person with no venue is exactly who a link is for) unless the form was left on purpose with the
+//                      invitation kept (`parked`), or still showing the server's last answer;
 //   ready, choose-   — only once opened, after «Add it» (InviteQuestion): somebody in a venue is ASKED first;
 //   location
 //   loading, error   — ⚠️ only a form that has been SENT (js/join-hold.js, fix 9e0a2dac): the session may move while the
-//                      code is checked, and the answer must land on the form that asked, not on a screen nobody can see;
-//   signed-out       — never.
+//                      code is checked, and the answer must land on the form that asked, not on a screen nobody can see —
+//                      for a new account, the sign-up itself moves it (signed-out → loading, held by session.ts);
+//   signed-out       — staff slice 2, the form for a NEW account: opened by «I have a join code» on the sign-in screen, or by
+//                      an invitation this window holds (whoever opens a link signed out has, most often, no account yet: the
+//                      current app's way) — unless the person stepped over to sign in, which takes the invitation along.
 export function joinShown(status: SessionStatus, join: JoinFlowState): boolean {
   switch (status) {
     case 'no-access':
-      return join.open || join.invited !== '' || join.sent !== null;
+      return join.open || (join.invited !== '' && !join.parked) || join.sent !== null;
     case 'ready':
     case 'choose-location':
       return join.open;
@@ -46,7 +50,7 @@ export function joinShown(status: SessionStatus, join: JoinFlowState): boolean {
     case 'error':
       return keepJoinForm(join.sent, status, join.invited);
     case 'signed-out':
-      return false;
+      return join.open || (join.invited !== '' && !join.signInFirst);
   }
 }
 
@@ -76,7 +80,9 @@ export function SessionGate({ children }: { children: ReactNode }) {
     }
     if (session.status === 'signed-out' && lastUid.current) {
       lastUid.current = null;
-      flowStore.cancel();
+      // The join form's «Sign in with a different account» keeps the link (joinFlow holdThroughSignOut); every other
+      // sign-out forgets it.
+      flowStore.signedOut();
     }
   }, [session.status, uid, flowStore]);
 
@@ -107,6 +113,10 @@ export function SessionGate({ children }: { children: ReactNode }) {
 
   // Keyed on the flow's formKey: a NEW invitation gets a new form; the same form survives every status it is held through.
   if (showJoin) return <JoinScreen key={join.formKey} />;
+  // ⚠️ LEAVING THE VENUE (session.ts `leaving`): the app is taken off the screen BEFORE Firestore is stopped, so every
+  // section's listener unsubscribes first instead of being errored by terminate() — and a section that would mount now (the
+  // Home, after a join form closes) never starts a listener on a client that is going away.
+  if (session.leaving) return <LoadingScreen />;
 
   switch (session.status) {
     case 'loading':

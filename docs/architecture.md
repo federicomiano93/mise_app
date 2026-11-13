@@ -133,6 +133,13 @@ Aria does not support Preact. The numbers are below.
   (through `useLeaveFlow`, waiting while anybody is typing), and `session.ts` gained `redeemJoinCode` (the live callable, through
   `backend.callFunction`, now in `SessionBackend`) and `openJoinedVenue` (the new venue read from the SERVER; a switch with a reload
   when another venue is open). The code never reaches the console, an error report or a usage line (the screen is named `join`).
+  Staff slice 2 (13 Nov 2026) adds joining with a NEW account: signed out, «I have a join code» on the sign-in screen (or a link)
+  opens `JoinScreen` in its new-account kind (email and password twice, `@mise/shared/credentials`); `session.signUp` creates and
+  signs in the account and HOLDS that sign-in (`signUpHeld`: no read, no wipe, no reload) until the join ends — a yes wipes a
+  previous person's copy if any, marks `just-joined` and reloads; leaving the form calls `releaseSignUp`. `InstallGuideLink` is the
+  door to the current app's `install-guide.html` (`installGuide.ts`), and `home/InstallHint.tsx` asks once on the Home after a
+  join. Since the same day a change of venue first sets `leaving` (the gate draws the loading screen, `env.letScreensClose()`
+  waits) so every section's listeners stop BEFORE Firestore is terminated.
 - `shell/` — the frame: the dark rail (700px and wider), the phone tab bar, the top bar (venue,
   date, connection), `Page` (one h1, the tab title, focus on navigation; an optional `action` — ONE small control on the title line, today only Settings' «Log out», whose failure message wraps under the line), the placeholders, More,
   Not found, Not available, the offline banner. Step 3g-2 adds the holiday, held here so the Home, Settings and the reminder agree:
@@ -546,7 +553,7 @@ are); its spec runs each case against the `js/` module after `setCurrency` and a
 `moneyOf`, and demands the same text. `odd-inputs.spec.ts` feeds every export odd inputs and compares
 the two. A quirk of the original that no real input can reach is
 copied, not tidied, and marked where it sits: fixing it is a bug fix to BOTH files at once, and
-`odd-inputs.spec.ts` fails until they agree. Today: join-code, join-hold (full, paired: staff slice 1), join-link (partial: `JOIN_PAGE`, `joinLinkFor`, `readJoinToken`, `kindOfTyped`; leaves out `codeShapeHint` and `expiresInWords`, which use the dictionary; not paired), credentials (partial and adapted: `MAX_NAME_LENGTH`, `cleanName`, and `nameProblem` returning the dictionary KEY; the password and email checks come with staff slice 2; not paired), push-model, home-cards, away-model, away-reminder (full, paired: step 3g-2; the once-a-day rule and `dayFromISO`; its key `away-reminded-date` is NOT in the keep-list),
+`odd-inputs.spec.ts` fails until they agree. Today: join-code, join-hold (full, paired: staff slice 1), join-link (partial: `JOIN_PAGE`, `joinLinkFor`, `readJoinToken`, `kindOfTyped`; leaves out `codeShapeHint` and `expiresInWords`, which use the dictionary; not paired), credentials (FULL since staff slice 2, and adapted: `nameProblem`, `passwordProblem`, `confirmProblem` and `emailConfirmProblem` return the dictionary KEY; not paired), install-hint (full, paired: staff slice 2; the once-only install-guide question after a join, its key `just-joined` NOT in the keep-list), push-model, home-cards, away-model, away-reminder (full, paired: step 3g-2; the once-a-day rule and `dayFromISO`; its key `away-reminded-date` is NOT in the keep-list),
 allergen-model, unpriced-rows (full, paired: which recipe rows Food cost cannot price, booleans only; 10 Nov 2026), row-actions-model (full, paired: the recipe row's menu, `splitAmount`, `splitBlockReason`, `orderTargetOf`, `rowKeysOf`; item 32, 10 Nov 2026), sections, firebase-target, local-data, same-data, error-model, device-model,
 usage-model, venue-features, market, recipe-label-model, membership (the five roles, `canManage`, `canManageVenue`, `worksOnClients`), location-id, pastries-model, pastries-log-model, pastries-lock, pack-size,
 order-unit, ingredient-name, order-cost, inventory-model, inventory-outbox, inventory-purchases,

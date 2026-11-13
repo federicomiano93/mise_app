@@ -189,3 +189,94 @@ describe('createJoinFlow: the sent form (js/join-hold.js)', () => {
     expect(heard).toHaveBeenCalledTimes(2);
   });
 });
+
+describe('createJoinFlow: stepping over to sign in (staff slice 2)', () => {
+  test('signInInstead closes the form and KEEPS the invitation, in memory and in the window\'s storage', () => {
+    const storage = memoryStorage({ [PENDING_INVITE_KEY]: TOKEN });
+    const flow = createJoinFlow(storage);
+    flow.openForm();
+    flow.signInInstead('  anna@club.test ');
+    expect(flow.getSnapshot()).toMatchObject({
+      open: false, sent: null, invited: TOKEN, signInFirst: true, signInEmail: 'anna@club.test', returned: true,
+    });
+    expect(storage.map.get(PENDING_INVITE_KEY)).toBe(TOKEN);
+  });
+
+  test('the email is never written to storage', () => {
+    const storage = memoryStorage();
+    const flow = createJoinFlow(storage);
+    flow.signInInstead('anna@club.test');
+    expect([...storage.map.values()].join(' ')).not.toContain('anna@club.test');
+  });
+
+  test('opening the form, Cancel, finishing and a NEW invitation each end it', () => {
+    const flow = createJoinFlow(memoryStorage());
+    flow.signInInstead('anna@club.test');
+    flow.openForm();
+    expect(flow.getSnapshot()).toMatchObject({ signInFirst: false, signInEmail: '' });
+    flow.signInInstead('anna@club.test');
+    flow.cancel();
+    expect(flow.getSnapshot()).toMatchObject({ signInFirst: false, signInEmail: '' });
+    flow.signInInstead();
+    flow.finish();
+    expect(flow.getSnapshot().signInFirst).toBe(false);
+    flow.remember(TOKEN);
+    flow.signInInstead();
+    flow.remember(OTHER);
+    expect(flow.getSnapshot()).toMatchObject({ signInFirst: false, invited: OTHER });
+  });
+
+  test('the same invitation opened again does not take the person back from the sign-in form', () => {
+    const flow = createJoinFlow(memoryStorage());
+    flow.remember(TOKEN);
+    flow.signInInstead();
+    flow.remember(TOKEN);
+    expect(flow.getSnapshot().signInFirst).toBe(true);
+  });
+});
+
+describe('the invitation through a sign-out, and parked', () => {
+  const TOKEN = 'aB3dEf6hIj9lMn2pQr5tUv8xYz1CdEf4';
+  const held = () => {
+    const storage = memoryStorage({ [PENDING_INVITE_KEY]: TOKEN });
+    return { flow: createJoinFlow(storage), storage };
+  };
+
+  test('signedOut() forgets the invitation unless holdThroughSignOut() said to keep it, once', () => {
+    const plain = held();
+    plain.flow.signedOut();
+    expect(plain.flow.getSnapshot().invited).toBe('');
+    expect(plain.storage.map.has(PENDING_INVITE_KEY)).toBe(false);
+
+    const kept = held();
+    kept.flow.holdThroughSignOut();
+    kept.flow.signedOut();
+    expect(kept.flow.getSnapshot()).toMatchObject({ invited: TOKEN, open: false, signInFirst: false, parked: false });
+    expect(kept.storage.map.get(PENDING_INVITE_KEY)).toBe(TOKEN);
+    kept.flow.signedOut();
+    expect(kept.flow.getSnapshot().invited).toBe('');
+  });
+
+  test('holdThroughSignOut(false) takes it back', () => {
+    const { flow } = held();
+    flow.holdThroughSignOut();
+    flow.holdThroughSignOut(false);
+    flow.signedOut();
+    expect(flow.getSnapshot().invited).toBe('');
+  });
+
+  test('leave() closes the form and parks the invitation; opening the form or a new link unparks it; cancel forgets it', () => {
+    const { flow, storage } = held();
+    flow.leave();
+    expect(flow.getSnapshot()).toMatchObject({ invited: TOKEN, open: false, parked: true, returned: true });
+    expect(storage.map.get(PENDING_INVITE_KEY)).toBe(TOKEN);
+    flow.openForm();
+    expect(flow.getSnapshot().parked).toBe(false);
+    flow.leave();
+    flow.remember('Zz3dEf6hIj9lMn2pQr5tUv8xYz1CdEf4');
+    expect(flow.getSnapshot().parked).toBe(false);
+    flow.leave();
+    flow.cancel();
+    expect(flow.getSnapshot()).toMatchObject({ invited: '', parked: false });
+  });
+});

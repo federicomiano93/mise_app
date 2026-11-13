@@ -26,6 +26,7 @@ import {
 } from '@mise/shared/local-data';
 import { locationDocPath } from '@mise/shared/location-id';
 import { sameData } from '@mise/shared/same-data';
+import { JUST_JOINED_KEY, markJustJoined } from '@mise/shared/install-hint';
 import type { Language } from '../i18n/i18n';
 import type { DocData, SessionBackend, SessionEnv, SessionUser } from './backend';
 import { PENDING_INVITE_KEY } from './joinFlow';
@@ -59,6 +60,12 @@ export interface Session {
   // The venue's interface language once a venue is open; null above every venue, where the
   // phone's language is used instead (his decision, 1 Oct 2026).
   readonly language: Language | null;
+  // The page is about to leave the open venue (a switch of venue, or a join that adds another): this phone's copy is being
+  // wiped and a reload follows. The gate takes the app off the screen the moment this is true (SessionGate), so every
+  // section's listeners unsubscribe BEFORE Firestore is terminated — terminate() errors every listener still live
+  // («Firestore shutting down»), and a section that mounts after it is told «The client has already been terminated»: both
+  // reached the console and the error reports at every switch of venue (found driving staff slice 1, 13 Nov 2026).
+  readonly leaving: boolean;
 }
 
 // ⚠️ canManage, canManageVenue, isOwner and isAppAdmin START false AND MUST: every screen draws from this object
@@ -66,6 +73,7 @@ export interface Session {
 export const INITIAL_SESSION: Session = Object.freeze({
   status: 'loading', user: null, locationId: null, location: null, options: [], optionNames: {},
   name: '', role: DEFAULT_ROLE, canManage: false, canManageVenue: false, isOwner: false, isAppAdmin: false, language: null,
+  leaving: false,
 });
 
 // Keys shared with the current app (js/firebase.js), same meaning.
@@ -91,10 +99,20 @@ export interface SessionStore {
   // Starts listening to the sign-in state. Call once.
   start(): void;
   signIn(email: string, password: string): Promise<void>;
+  // Staff slice 2: creates an account (and signs it in) for somebody joining with a code, and resolves with it; rejects with
+  // Firebase's `auth/…` error. ⚠️ FROM THE MOMENT IT IS CALLED, THE SESSION HOLDS STILL for that account: the sign-in it causes
+  // is NOT resolved (no read, no cache wipe, no reload) until the join is over — openJoinedVenue on a yes, releaseSignUp when
+  // the person leaves the form (see the function).
+  signUp(email: string, password: string): Promise<SessionUser>;
+  // The join form of a new account is gone (Back, sign-out, a new invitation): the account it created is resolved as any
+  // sign-in is. Does nothing when no sign-up is held.
+  releaseSignUp(): void;
   sendReset(email: string): Promise<void>;
   // Signs out, wipes this phone's copies and reloads. The caller asks first when
   // changesStillWaiting() says something typed has not reached the server yet.
-  signOut(): Promise<void>;
+  // `keepInvitation`: the pending invitation link stays in this window's storage through this sign-out (the join form's «Sign in
+  // with a different account»); any other sign-out forgets it.
+  signOut(options?: { keepInvitation?: boolean }): Promise<void>;
   // The picker's choice, when no venue is open yet.
   chooseLocation(locationId: string): Promise<void>;
   // Moves to another of YOUR venues: wipes this phone's copies and reloads.
@@ -110,8 +128,10 @@ export interface SessionStore {
   // ⚠️ The code goes to the function and NOWHERE ELSE: nothing here logs, reports or keeps it.
   redeemJoinCode(code: string, kind: 'digits' | 'link', firstName: string, lastName: string): Promise<string>;
   // Opens the venue the account `uid` has just joined (see the function). Nothing moves if another account is signed in by
-  // now: the join was this one's.
-  openJoinedVenue(locationId: string, uid: string): Promise<void>;
+  // now: the join was this one's. Every way it opens marks `just-joined`, so the Home offers the install guide once.
+  // `null` is a join the server had ALREADY accepted (the form's earlier reply was lost, and the retry was told «already a member»):
+  // the venue is not known here, so the next page resolves it from the account's own document.
+  openJoinedVenue(locationId: string | null, uid: string): Promise<void>;
 }
 
 // A cold function's first call outlives anything shorter (settings/settingsSource.ts uses the same).
@@ -283,6 +303,52 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     setSession({ status: 'signed-out' });
   }
 
+  // ── Staff slice 2: the sign-up's own sign-in, held ─────────────────────────────────────────────────────────────────────
+  // ⚠️⚠️ WHY IT IS HELD. Creating an account signs it in, and a sign-in by somebody other than whose data this phone's copy
+  // holds WIPES the copy and RELOADS the page (onAuth below). For a sign-up that is the join's FIRST step: the reload would cut
+  // the code's check off half-way, or throw away the form that must come back with the refusal (current-app fix 9e0a2dac). So
+  // while a sign-up is held, its sign-in is only noted (`loading`, with the account) and nothing is read: the account is brand
+  // new and has nothing to read anyway (no users/{uid}, every rule refuses it). The join ends it — a yes runs the wipe check
+  // and reloads (joinedWithNewAccount), leaving the form runs the ordinary sign-in (releaseSignUp).
+  let signUpHeld = false;
+  let heldUser: SessionUser | null = null;
+  // ⚠️ THE JOIN IS DONE AND THE PAGE IS STARTING AGAIN (joinedWithNewAccount). window.location.reload() does not stop this script:
+  // the form then closes, releases the hold, and the ordinary sign-in would run on a page whose Firestore is already stopped
+  // («Could not check your access» flashing up, or a second wipe that takes `just-joined` with it — code review, 13 Nov 2026).
+  // From here nothing is resolved any more: the next page does it.
+  let joinReloading = false;
+
+  function releaseSignUp(): void {
+    if (!signUpHeld || joinReloading) return;
+    signUpHeld = false;
+    const user = heldUser;
+    heldUser = null;
+    if (user && signedInUid === user.uid) onAuth(user);
+  }
+
+  // The code was accepted for the account the form has just created. The current app reloads after every join; here it must,
+  // for a reason of its own: the sign-in was held, so the previous person's copy (if any) is still on this phone. It is wiped
+  // NOW, before the page starts again on the new venue, and the install guide is marked for the Home only after the last clear.
+  async function joinedWithNewAccount(locationId: string | null, uid: string): Promise<void> {
+    const user = heldUser;
+    if (!user || user.uid !== uid || signedInUid !== uid) return;
+    joinReloading = true;
+    clearLocalData();
+    // No venue named: nothing is remembered, and the next page opens the one this account belongs to.
+    write(env.local, ACTIVE_LOCATION_KEY, locationId);
+    const verdict = offlineCacheVerdict(read(env.local, OFFLINE_CACHE_OWNER_KEY), uid);
+    if (verdict === 'claim') write(env.local, OFFLINE_CACHE_OWNER_KEY, uid);
+    if (verdict === 'wipe' && read(env.session, WIPE_FAILED_KEY) !== uid) {
+      // As onAuth's own wipe: the owner is recorded only after a clear that worked; a busy database is tried once more at the
+      // next opening; Firestore not loadable at all spends nothing, and the next opening tries again.
+      const result = await backend.wipeOfflineCache();
+      if (result === 'cleared') write(env.local, OFFLINE_CACHE_OWNER_KEY, uid);
+      else if (result === 'busy') write(env.session, WIPE_FAILED_KEY, uid);
+    }
+    markJustJoined(env.local);
+    env.reload();
+  }
+
   // Who the browser's sign-in says is there, updated the moment it says so. Not session.user: a different person arriving
   // can wait for a cache wipe and a reload before the session shows anybody else, and a venue opening for the one who
   // left must not be published in that gap.
@@ -290,13 +356,27 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
 
   function onAuth(user: SessionUser | null): void {
     signedInUid = user && !user.isAnonymous ? user.uid : null;
-    if (!user) { signedOut(); return; }
+    if (!user) {
+      // A sign-out ends any sign-up held: there is no account left to join with.
+      signUpHeld = false;
+      heldUser = null;
+      signedOut();
+      return;
+    }
 
     // ⚠️ A LEFTOVER ANONYMOUS SESSION IS NOT A SIGNED-IN PERSON. Phones that used the app before
     // real accounts still hold one; treated as a sign-in it parks the phone on "No venue yet"
     // and never shows the form. Dropping it comes back through here with nobody signed in.
     if (user.isAnonymous) {
       backend.signOut().catch(err => env.warn('Could not clear the old session', err));
+      return;
+    }
+
+    // The account a sign-up has just created: noted, not resolved (see signUpHeld). After the join, nothing is (joinReloading).
+    if (joinReloading) return;
+    if (signUpHeld) {
+      heldUser = user;
+      setSession({ ...INITIAL_SESSION, status: 'loading', user });
       return;
     }
 
@@ -310,28 +390,14 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     // next tap clears it. Mise 2 is ONE page that never reloads by itself: asked only at boot,
     // the previous person's prices and stocktakes would be served from the cache to the next one
     // for the whole shift (code review, 11 Oct 2026). The current app's reason for waiting — a
-    // join replacing the person mid-page — does not exist here until staff slice 2 brings the join
-    // with a NEW account, which must then finish and reload so this check runs on a clean page.
+    // join replacing the person mid-page — is met here by HOLDING that one sign-in (signUpHeld, staff
+    // slice 2): the join with a new account then runs this same check itself and reloads.
     // (Staff slice 1 joins with the account already signed in: the person does not change, so
     // openJoinedVenue opens the new venue without a reload.)
     const verdict = offlineCacheVerdict(read(env.local, OFFLINE_CACHE_OWNER_KEY), user.uid);
     if (verdict === 'claim') write(env.local, OFFLINE_CACHE_OWNER_KEY, user.uid);
     if (verdict === 'wipe' && read(env.session, WIPE_FAILED_KEY) !== user.uid) {
-      clearLocalData();
-      void backend.wipeOfflineCache().then(result => {
-        // ⚠️ FIRESTORE COULD NOT EVEN BE LOADED (no signal on its first download): nothing was
-        // wiped, and the once-per-opening guard below must NOT be spent on it — after a reload
-        // with the signal back the wipe would be skipped and the previous person's copy read
-        // (code review, 11 Oct 2026). Nothing can be read without Firestore either, so this is
-        // the «could not check your access» screen, whose «Try again» reloads and wipes first.
-        if (result === 'unavailable') {
-          setSession({ ...INITIAL_SESSION, status: 'error', user });
-          return;
-        }
-        if (result === 'cleared') write(env.local, OFFLINE_CACHE_OWNER_KEY, user.uid);
-        else write(env.session, WIPE_FAILED_KEY, user.uid);
-        env.reload();
-      });
+      void wipeForNewPerson(user);
       return;
     }
 
@@ -341,6 +407,46 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       env.warn('The session could not be resolved', err);
       setSession({ ...INITIAL_SESSION, status: 'error', user });
     });
+  }
+
+  // ⚠️ THE PREVIOUS PERSON'S SCREENS GO FIRST HERE TOO (see `leaving`): a different person signing in while the other's venue
+  // is still on screen (an expired session, another tab) must not have Firestore stopped under that venue's live listeners.
+  async function wipeForNewPerson(user: SessionUser): Promise<void> {
+    setSession({ leaving: true });
+    await env.letScreensClose();
+    // ⚠️ `just-joined` IS A FACT ABOUT THIS PERSON'S JOIN, kept across a wipe that cannot run (see below).
+    const justJoined = read(env.local, JUST_JOINED_KEY) !== null;
+    clearLocalData();
+    const result = await backend.wipeOfflineCache();
+    // ⚠️ FIRESTORE COULD NOT EVEN BE LOADED (no signal on its first download): nothing was
+    // wiped, and the once-per-opening guard below must NOT be spent on it — after a reload
+    // with the signal back the wipe would be skipped and the previous person's copy read
+    // (code review, 11 Oct 2026). Nothing can be read without Firestore either, so this is
+    // the «could not check your access» screen, whose «Try again» reloads and wipes first.
+    // The clear above took the install question with it, though the person has just joined: it goes back, or «Try again»
+    // would open the Home without ever asking it.
+    if (result === 'unavailable') {
+      if (justJoined) markJustJoined(env.local);
+      setSession({ ...INITIAL_SESSION, status: 'error', user });
+      return;
+    }
+    if (result === 'cleared') write(env.local, OFFLINE_CACHE_OWNER_KEY, user.uid);
+    else write(env.session, WIPE_FAILED_KEY, user.uid);
+    env.reload();
+  }
+
+  // ⚠️ THE SCREENS GO FIRST, THEN THE DATA (see `leaving`). The person already said yes to leaving (useLeaveFlow asked about
+  // anything unsent), so the venue's screens close, their listeners stop, and only then is this phone's copy wiped — in that
+  // order, so nothing a closing screen writes to localStorage survives the clear either.
+  // `justJoined`: the venue was just joined, so the Home offers the install guide once (marked after the clear, or it goes).
+  async function leaveVenue(locationId: string, { justJoined = false } = {}): Promise<void> {
+    setSession({ leaving: true });
+    await env.letScreensClose();
+    clearLocalData();
+    write(env.local, ACTIVE_LOCATION_KEY, locationId);
+    await backend.wipeOfflineCache();
+    if (justJoined) markJustJoined(env.local);
+    env.reload();
   }
 
   function assertMine(locationId: string): void {
@@ -355,13 +461,35 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     },
     start() { backend.onAuthChange(onAuth); },
     signIn: (email, password) => backend.signIn(String(email || '').trim(), String(password || '')),
+    async signUp(email, password) {
+      // ⚠️ HELD BEFORE THE CALL: Firebase may announce the new account before its promise resolves.
+      signUpHeld = true;
+      try {
+        return await backend.signUp(String(email || '').trim(), String(password || ''));
+      } catch (err) {
+        // No account was made (taken, offline, refused): nothing to hold.
+        releaseSignUp();
+        throw err;
+      }
+    },
+    releaseSignUp,
     sendReset: email => backend.sendReset(String(email || '').trim()),
-    async signOut() {
+    async signOut({ keepInvitation = false } = {}) {
       // ⚠️ A PENDING INVITATION IS FORGOTTEN ON SIGN-OUT (docs/parity/staff-plan.md, «Security»): it is a key to a
       // venue, and the next person to pick up a shared phone must not find it waiting (session/joinFlow.ts). First,
       // before anything that can fail, and before the reload below starts the next page from this window's storage.
-      write(env.session, PENDING_INVITE_KEY, null);
-      await backend.signOut();
+      if (!keepInvitation) write(env.session, PENDING_INVITE_KEY, null);
+      // ⚠️ THE SCREENS CLOSE BEFORE THE ACCOUNT GOES, and Firestore is stopped only after that (see `leaving`): the wipe below
+      // terminates Firestore, which errors every live listener, and nothing may rely on React having unmounted by then.
+      setSession({ leaving: true });
+      await env.letScreensClose();
+      try {
+        await backend.signOut();
+      } catch (err) {
+        // Still signed in: the app comes back as it was.
+        setSession({ leaving: false });
+        throw err;
+      }
       clearLocalData();
       // Only a clear that worked forgets whose data this is: after a failed one the record
       // stays, so the next person's first boot catches it and tries again.
@@ -379,10 +507,7 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     // surviving the switch would quietly repaint the screen with the wrong venue's data.
     async switchLocation(locationId) {
       assertMine(locationId);
-      clearLocalData();
-      write(env.local, ACTIVE_LOCATION_KEY, locationId);
-      await backend.wipeOfflineCache();
-      env.reload();
+      await leaveVenue(locationId);
     },
     changesStillWaiting: ms => backend.changesStillWaiting(ms),
     async redeemJoinCode(code, kind, firstName, lastName) {
@@ -397,6 +522,15 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     // started from it would open «No venue yet» again, or the OLD venue. The current app reloads the page instead, and
     // pays for the same stale copy with the 30-second check's second reload.
     async openJoinedVenue(locationId, uid) {
+      // The account the form created a moment ago (staff slice 2): its sign-in is still held.
+      if (signUpHeld) {
+        await joinedWithNewAccount(locationId, uid);
+        return;
+      }
+      if (locationId === null) {
+        env.reload();
+        return;
+      }
       const user = session.user;
       // ⚠️ THE ACCOUNT THAT SENT THE CODE, compared: the call can take a minute, and a sign-out and another sign-in meanwhile
       // must not have THAT person's venue switched (and their unsent writes wiped) by somebody else's join.
@@ -406,10 +540,7 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       // told before the form opened if something typed here had not reached the server yet (useLeaveFlow).
       if (session.status === 'ready') {
         if (session.locationId === locationId) return;
-        clearLocalData();
-        write(env.local, ACTIVE_LOCATION_KEY, locationId);
-        await backend.wipeOfflineCache();
-        env.reload();
+        await leaveVenue(locationId, { justJoined: true });
         return;
       }
       let fresh: DocData | null = null;
@@ -422,10 +553,16 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
         // The server's answer could not be read (or has not caught up): start again on this venue, as the current
         // app always does.
         write(env.local, ACTIVE_LOCATION_KEY, locationId);
+        markJustJoined(env.local);
         env.reload();
         return;
       }
       userDoc = fresh;
+      // ⚠️ THE CLEAR enterLocation WOULD MAKE, MADE HERE FIRST, so `just-joined` is written after it and survives: entering a
+      // venue that is not the remembered one empties localStorage of everything outside KEEP_PREFIXES, the flag included.
+      if (shouldClearLocalData(read(env.local, ACTIVE_LOCATION_KEY), locationId)) clearLocalData();
+      write(env.local, ACTIVE_LOCATION_KEY, locationId);
+      markJustJoined(env.local);
       await enterLocation(locationId, locationsOf(fresh), user);
     },
     async refreshLocation() {
