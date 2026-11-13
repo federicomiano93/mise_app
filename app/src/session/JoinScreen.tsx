@@ -244,21 +244,29 @@ export function JoinScreen() {
       say({ busy: 'join.checking' });
     }
 
-    let locationId: string;
+    let locationId: string | null;
     try {
       locationId = await store.redeemJoinCode(typed, kind, firstName, lastName);
     } catch (error) {
       const refusal = joinRefusal(error);
-      // ⚠️ «ALREADY IN THIS BUSINESS» CANNOT BE CHANGED BY TRYING AGAIN, so the invitation is dropped (the current app does the
-      // same): left in place it would be offered again for the life of the window. The code itself is untouched on the server.
-      if (refusal.key === 'join.alreadyMember') flowStore.forget(invitation);
-      done();
-      if (mounted.current) {
-        // The account exists now: the form becomes the form for it (see the header).
-        if (madeNow) setCreated(madeNow);
-        say({ refusal });
+      // ⚠️ AN ACCOUNT THIS FORM CREATED CANNOT HAVE BEEN IN THE BUSINESS BEFORE: «already in this business» for it means the
+      // server accepted an earlier try whose reply was lost (a timeout, a dropped connection), so this IS the join, done —
+      // not a refusal to leave the person stuck on (code review, 13 Nov 2026). The venue is not named in that answer: the next
+      // page finds it from the account's own document.
+      const alreadyJoined = refusal.key === 'join.alreadyMember' && (madeNow ?? created) !== null;
+      if (!alreadyJoined) {
+        // ⚠️ «ALREADY IN THIS BUSINESS» CANNOT BE CHANGED BY TRYING AGAIN, so the invitation is dropped (the current app does the
+        // same): left in place it would be offered again for the life of the window. The code itself is untouched on the server.
+        if (refusal.key === 'join.alreadyMember') flowStore.forget(invitation);
+        done();
+        if (mounted.current) {
+          // The account exists now: the form becomes the form for it (see the header).
+          if (madeNow) setCreated(madeNow);
+          say({ refusal });
+        }
+        return;
       }
-      return;
+      locationId = null;
     }
     // ⚠️ FORGOTTEN THE MOMENT IT HAS BEEN USED, before anything else can fail: it is single use, and a secret with no reason
     // to still be around should not be.
@@ -290,6 +298,10 @@ export function JoinScreen() {
     // person who already has an account must not lose the link on the way to the form that lets them use it. After the sign-in
     // it is offered as for anybody signed in (slice 1). Everywhere else, Back is Cancel and forgets it («Security»).
     if (newAccount && prefill) flowStore.signInInstead();
+    // ⚠️ AN ACCOUNT WAS MADE FOR THIS FORM AND ITS CODE REFUSED: the invitation is KEPT (the current app's way, decision taken as
+    // recommended, 13 Nov 2026), parked, so that «No location yet» offers it again through «I have a join code». It is forgotten
+    // only by a join or a sign-out.
+    else if (created !== null && flowStore.getSnapshot().invited) flowStore.leave();
     else flowStore.cancel();
   }
 
@@ -307,7 +319,7 @@ export function JoinScreen() {
           <p id="join-for-address" className={styles.address}>{account}</p>
         </div>
       ) : null}
-      {newAccount ? null : <SignOutButton variant="quiet" label={t('auth.otherAccount')} isDisabled={sending} />}
+      {newAccount ? null : <SignOutButton variant="quiet" label={t('auth.otherAccount')} isDisabled={sending} keepInvitation />}
 
       <form
         className={styles.form}

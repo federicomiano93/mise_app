@@ -19,6 +19,11 @@ export function useJoinFlowStore(): JoinFlow {
   return flow;
 }
 
+// For a button that is drawn with or without a join flow around it (the sign-out button, on the join form and in Settings).
+export function useOptionalJoinFlowStore(): JoinFlow | null {
+  return useContext(JoinFlowContext);
+}
+
 export function useJoinFlow(): JoinFlowState {
   const flow = useJoinFlowStore();
   return useSyncExternalStore(flow.subscribe, flow.getSnapshot);

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { en } from '../i18n/en';
 import { I18nProvider } from '../i18n/I18nProvider';
@@ -275,7 +275,7 @@ describe('a pending invitation is forgotten on sign-out', () => {
 });
 
 describe('joinShown', () => {
-  const flow = { invited: '', open: false, sent: null, formKey: 0, returned: false, signInFirst: false, signInEmail: '' };
+  const flow = { invited: '', open: false, sent: null, formKey: 0, returned: false, signInFirst: false, signInEmail: '', parked: false };
   // Staff slice 2: signed out, the form for a NEW account.
   test('signed out: opened, or an invitation — unless the person stepped over to sign in', () => {
     expect(joinShown('signed-out', flow)).toBe(false);
@@ -293,6 +293,11 @@ describe('joinShown', () => {
     expect(joinShown('no-access', { ...flow, invited: TOKEN })).toBe(true);
     expect(joinShown('no-access', { ...flow, sent: { busy: false, invited: '' } })).toBe(true);
   });
+  test('no venue: an invitation held but PARKED does not open the form by itself, an opened one does', () => {
+    expect(joinShown('no-access', { ...flow, invited: TOKEN, parked: true })).toBe(false);
+    expect(joinShown('no-access', { ...flow, invited: TOKEN, parked: true, open: true })).toBe(true);
+  });
+
   test('loading or error: only a form that has been sent', () => {
     expect(joinShown('loading', { ...flow, open: true })).toBe(false);
     expect(joinShown('error', { ...flow, sent: { busy: true, invited: '' } })).toBe(true);
@@ -355,6 +360,30 @@ describe('signed out: the form for a NEW account (staff slice 2)', () => {
     expect(spokenAlerts()).toHaveLength(1);
   });
 
+  // The account was made and its code refused; then somebody else signs in (another tab). The first person's form must not stay
+  // up for the second, and nothing may be sent again — no second account, no second code check.
+  test('the made account is refused, then a different person signs in: the form closes and nothing is called again', async () => {
+    const { user, store } = draw(SIGNED_OUT, { invited: TOKEN });
+    store.signUp.mockImplementation(async () => {
+      store.set({ status: 'loading', user: NEWBIE });
+      return NEWBIE;
+    });
+    store.redeemJoinCode.mockRejectedValueOnce(Object.assign(new Error('x'), { code: 'functions/permission-denied' }));
+    await fillNew(user);
+    await user.click(screen.getByRole('button', { name: 'Join' }));
+    act(() => { store.set({ ...NO_ACCESS, user: NEWBIE }); });
+    await findSpokenAlert();
+    expect(screen.getByText('anna.b@club.test')).toBeInTheDocument();
+    const other = { uid: 'other-uid', email: 'other@club.test', isAnonymous: false };
+    act(() => { store.set({ status: 'loading', user: other }); });
+    act(() => { store.set({ ...NO_ACCESS, user: other }); });
+    expect(screen.queryByLabelText('Code')).not.toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'No location yet' })).toBeInTheDocument();
+    expect(screen.getByText('other@club.test')).toBeInTheDocument();
+    expect(store.signUp).toHaveBeenCalledOnce();
+    expect(store.redeemJoinCode).toHaveBeenCalledOnce();
+  });
+
   test('Back on a link: to sign-in, which says the invitation waits; after the sign-in, it is offered', async () => {
     const { user, store, flow } = draw(SIGNED_OUT, { invited: TOKEN });
     await user.click(screen.getByRole('button', { name: 'Back' }));
@@ -373,5 +402,59 @@ describe('signed out: the form for a NEW account (staff slice 2)', () => {
     await user.click(screen.getByRole('button', { name: 'I have a join code' }));
     expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
     expect(screen.getByLabelText('Your email')).toBeInTheDocument();
+  });
+});
+
+// The invitation link is kept in two places, both the current app's behaviour (his decision pending, taken as recommended,
+// 13 Nov 2026): after Back from an account that was made but whose code was refused, and through «Sign in with a different
+// account» (that button only).
+describe('the invitation is kept in two places', () => {
+  const NEWBIE = { uid: 'new-uid', email: 'anna.b@club.test', isAnonymous: false };
+
+  test('Back from the made-but-refused form: «No location yet» for that account, and «I have a join code» has the link filled in', async () => {
+    const { user, store, flow, storage } = draw({ ...NO_ACCESS, user: NEWBIE }, { invited: TOKEN });
+    act(() => { flow.leave(); });
+    expect(screen.getByRole('heading', { level: 1, name: 'No location yet' })).toBeInTheDocument();
+    expect(flow.getSnapshot().invited).toBe(TOKEN);
+    expect(storage.map.get(PENDING_INVITE_KEY)).toBe(TOKEN);
+    await user.click(screen.getByRole('button', { name: 'I have a join code' }));
+    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
+    expect(store.signOut).not.toHaveBeenCalled();
+  });
+
+  test('a join forgets it; so does a plain sign-out', async () => {
+    const { store, flow, storage } = draw({ ...NO_ACCESS, user: NEWBIE }, { invited: TOKEN });
+    act(() => { flow.leave(); });
+    act(() => { store.set({ status: 'signed-out', user: null }); });
+    expect(flow.getSnapshot().invited).toBe('');
+    expect(storage.map.has(PENDING_INVITE_KEY)).toBe(false);
+  });
+
+  test('«Sign in with a different account» keeps it: the sign-out is asked to, and the new-account form comes with the code filled in', async () => {
+    const { user, store, flow, storage } = draw(NO_ACCESS, { invited: TOKEN });
+    await user.click(screen.getByRole('button', { name: 'Sign in with a different account' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Log out' }));
+    await waitFor(() => { expect(store.signOut).toHaveBeenCalledWith({ keepInvitation: true }); });
+    act(() => { store.set({ status: 'signed-out', user: null }); });
+    expect(flow.getSnapshot().invited).toBe(TOKEN);
+    expect(storage.map.get(PENDING_INVITE_KEY)).toBe(TOKEN);
+    expect(screen.getByRole('heading', { level: 1, name: 'You have been invited' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Code')).toHaveValue(TOKEN);
+    // Back is the way to sign in, with the link still held.
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(screen.getByLabelText('Email')).toBeInTheDocument();
+    expect(screen.getByText('Sign in, and we will add the business to your account.')).toBeInTheDocument();
+    expect(flow.getSnapshot().invited).toBe(TOKEN);
+  });
+
+  test('the keeping is for that one sign-out: a later one forgets the link', async () => {
+    const { user, store, flow } = draw(NO_ACCESS, { invited: TOKEN });
+    store.signOut.mockRejectedValueOnce(new Error('offline'));
+    await user.click(screen.getByRole('button', { name: 'Sign in with a different account' }));
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Log out' }));
+    await waitFor(() => { expect(store.signOut).toHaveBeenCalledTimes(1); });
+    // It failed, so nobody signed out the way the button meant; a sign-out from anywhere else now forgets the link.
+    act(() => { store.set({ status: 'signed-out', user: null }); });
+    expect(flow.getSnapshot().invited).toBe('');
   });
 });

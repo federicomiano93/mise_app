@@ -110,7 +110,9 @@ export interface SessionStore {
   sendReset(email: string): Promise<void>;
   // Signs out, wipes this phone's copies and reloads. The caller asks first when
   // changesStillWaiting() says something typed has not reached the server yet.
-  signOut(): Promise<void>;
+  // `keepInvitation`: the pending invitation link stays in this window's storage through this sign-out (the join form's «Sign in
+  // with a different account»); any other sign-out forgets it.
+  signOut(options?: { keepInvitation?: boolean }): Promise<void>;
   // The picker's choice, when no venue is open yet.
   chooseLocation(locationId: string): Promise<void>;
   // Moves to another of YOUR venues: wipes this phone's copies and reloads.
@@ -127,7 +129,9 @@ export interface SessionStore {
   redeemJoinCode(code: string, kind: 'digits' | 'link', firstName: string, lastName: string): Promise<string>;
   // Opens the venue the account `uid` has just joined (see the function). Nothing moves if another account is signed in by
   // now: the join was this one's. Every way it opens marks `just-joined`, so the Home offers the install guide once.
-  openJoinedVenue(locationId: string, uid: string): Promise<void>;
+  // `null` is a join the server had ALREADY accepted (the form's earlier reply was lost, and the retry was told «already a member»):
+  // the venue is not known here, so the next page resolves it from the account's own document.
+  openJoinedVenue(locationId: string | null, uid: string): Promise<void>;
 }
 
 // A cold function's first call outlives anything shorter (settings/settingsSource.ts uses the same).
@@ -325,11 +329,12 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
   // The code was accepted for the account the form has just created. The current app reloads after every join; here it must,
   // for a reason of its own: the sign-in was held, so the previous person's copy (if any) is still on this phone. It is wiped
   // NOW, before the page starts again on the new venue, and the install guide is marked for the Home only after the last clear.
-  async function joinedWithNewAccount(locationId: string, uid: string): Promise<void> {
+  async function joinedWithNewAccount(locationId: string | null, uid: string): Promise<void> {
     const user = heldUser;
     if (!user || user.uid !== uid || signedInUid !== uid) return;
     joinReloading = true;
     clearLocalData();
+    // No venue named: nothing is remembered, and the next page opens the one this account belongs to.
     write(env.local, ACTIVE_LOCATION_KEY, locationId);
     const verdict = offlineCacheVerdict(read(env.local, OFFLINE_CACHE_OWNER_KEY), uid);
     if (verdict === 'claim') write(env.local, OFFLINE_CACHE_OWNER_KEY, uid);
@@ -469,11 +474,11 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
     },
     releaseSignUp,
     sendReset: email => backend.sendReset(String(email || '').trim()),
-    async signOut() {
+    async signOut({ keepInvitation = false } = {}) {
       // ⚠️ A PENDING INVITATION IS FORGOTTEN ON SIGN-OUT (docs/parity/staff-plan.md, «Security»): it is a key to a
       // venue, and the next person to pick up a shared phone must not find it waiting (session/joinFlow.ts). First,
       // before anything that can fail, and before the reload below starts the next page from this window's storage.
-      write(env.session, PENDING_INVITE_KEY, null);
+      if (!keepInvitation) write(env.session, PENDING_INVITE_KEY, null);
       // ⚠️ THE SCREENS CLOSE BEFORE THE ACCOUNT GOES, and Firestore is stopped only after that (see `leaving`): the wipe below
       // terminates Firestore, which errors every live listener, and nothing may rely on React having unmounted by then.
       setSession({ leaving: true });
@@ -520,6 +525,10 @@ export function createSession(backend: SessionBackend, env: SessionEnv): Session
       // The account the form created a moment ago (staff slice 2): its sign-in is still held.
       if (signUpHeld) {
         await joinedWithNewAccount(locationId, uid);
+        return;
+      }
+      if (locationId === null) {
+        env.reload();
         return;
       }
       const user = session.user;

@@ -553,6 +553,17 @@ describe('joining with a code (staff slice 1)', () => {
     expect(s.backend.signOut).toHaveBeenCalledOnce();
   });
 
+  // «Sign in with a different account» on the join form keeps the link through its own sign-out, and only that one.
+  test('sign-out with keepInvitation leaves the pending invitation in place', async () => {
+    const s = setup(world({ 'users/alice': { locations: { bakery: true } }, 'locations/bakery': {} }),
+      { session: { [PENDING_INVITE_KEY]: TOKEN } });
+    s.auth(ALICE);
+    await settle();
+    await s.store.signOut({ keepInvitation: true });
+    expect(s.sessionStore.getItem(PENDING_INVITE_KEY)).toBe(TOKEN);
+    expect(s.backend.signOut).toHaveBeenCalledOnce();
+  });
+
   test('the code goes to the live function redeemJoinCode, with the name, and the venue it names comes back', async () => {
     const w = world({});
     w.answer = { locationId: 'newplace', role: 'staff' };
@@ -729,6 +740,19 @@ describe('joining with a NEW account (staff slice 2)', () => {
     expect(s.localStore.getItem('orders-draft')).toBeNull();
     expect(s.localStore.getItem(OFFLINE_CACHE_OWNER_KEY)).toBe('newbie');
     expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBe('newplace');
+    expect(s.localStore.getItem(JUST_JOINED)).toBe('1');
+  });
+
+  // The server accepted an earlier try whose reply was lost: the retry knows no venue, and the next page finds it.
+  test('a join the server had already accepted (no venue named): the same wipe-and-reload, nothing remembered', async () => {
+    const s = setup(world({}), { local: { [OFFLINE_CACHE_OWNER_KEY]: 'previous-person', [ACTIVE_LOCATION_KEY]: 'old' } });
+    s.auth(null);
+    await settle();
+    await s.store.signUp('anna@club.test', 'a long password');
+    await s.store.openJoinedVenue(null, 'newbie');
+    expect(s.calls.slice(-2)).toEqual(['wipe', 'reload']);
+    expect(s.localStore.getItem(ACTIVE_LOCATION_KEY)).toBeNull();
+    expect(s.localStore.getItem(OFFLINE_CACHE_OWNER_KEY)).toBe('newbie');
     expect(s.localStore.getItem(JUST_JOINED)).toBe('1');
   });
 

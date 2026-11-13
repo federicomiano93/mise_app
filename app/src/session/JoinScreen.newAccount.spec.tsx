@@ -267,6 +267,42 @@ describe('the account was created, and only the code was refused', () => {
     expect(store.redeemJoinCode).toHaveBeenLastCalledWith('654321', 'digits', 'Anna', 'Bianchi');
   });
 
+  // ⚠️ The server accepted the first try, but its reply was lost (a timeout, a dropped connection): the retry is told «already a
+  // member» for an account that cannot have been one before. That IS the join: the form must not leave the person stuck on it.
+  test('«already in this business» for the account this form made is the join done: the page opens on it, no refusal', async () => {
+    const { user, store, flow } = draw({ invited: TOKEN });
+    store.redeemJoinCode.mockRejectedValueOnce(Object.assign(new Error('timed out'), { code: 'functions/deadline-exceeded' }));
+    await fill(user);
+    await user.click(join());
+    await findSpokenAlert();
+    store.redeemJoinCode.mockRejectedValueOnce(fnError('failed-precondition', 'x', { reason: 'already-member' }));
+    await user.click(join());
+    await waitFor(() => { expect(store.openJoinedVenue).toHaveBeenCalledWith(null, 'new-uid'); });
+    expect(store.signUp).toHaveBeenCalledOnce();
+    expect(screen.queryByText(/already in this business/)).not.toBeInTheDocument();
+    expect(flow.getSnapshot().invited).toBe('');
+  });
+
+  test('«already in this business» on the FIRST try of a new account is not mistaken for that: it is the same join, and opens', async () => {
+    const { user, store } = draw();
+    store.redeemJoinCode.mockRejectedValueOnce(fnError('failed-precondition', 'x', { reason: 'already-member' }));
+    await fill(user, { code: '123456' });
+    await user.click(join());
+    await waitFor(() => { expect(store.openJoinedVenue).toHaveBeenCalledWith(null, 'new-uid'); });
+  });
+
+  test('Back from the form for the made account keeps the invitation, parked', async () => {
+    const { user, store, flow, storage } = draw({ invited: TOKEN });
+    store.redeemJoinCode.mockRejectedValueOnce(fnError('permission-denied', 'That code does not work.'));
+    await fill(user);
+    await user.click(join());
+    await findSpokenAlert();
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    await user.click(await screen.findByRole('button', { name: 'Discard' }));
+    expect(flow.getSnapshot()).toMatchObject({ invited: TOKEN, open: false, parked: true });
+    expect(storage.map.get(PENDING_INVITE_KEY)).toBe(TOKEN);
+  });
+
   test('the same refusal twice is spoken twice', async () => {
     const { user, store } = draw();
     store.redeemJoinCode.mockRejectedValue(fnError('permission-denied', 'That code does not work.'));

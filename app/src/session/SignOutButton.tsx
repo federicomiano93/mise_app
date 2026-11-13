@@ -1,6 +1,7 @@
 import { LogOut } from 'lucide-react';
 import { useT } from '../i18n/useT';
 import { Button } from '../ui/Button';
+import { useOptionalJoinFlowStore } from './JoinFlowContext';
 import { useSessionStore } from './SessionContext';
 import { LeaveDialog } from './LeaveDialog';
 import { LeaveFailed } from './LeaveFailed';
@@ -19,12 +20,24 @@ import styles from './SignOutButton.module.css';
 // `label` replaces «Log out» on the button only (the join form's «Sign in with a different account», current-app fix
 // 1a3567b9): the question it asks is the same, because what it does is the same.
 // `isDisabled`: the join form switches it off while its code is being checked.
-export function SignOutButton({ variant = 'secondary', label, isDisabled = false }: {
-  variant?: 'secondary' | 'quiet' | 'small'; label?: string; isDisabled?: boolean;
+// `keepInvitation`: the invitation link this window holds goes through THIS sign-out (the join form's «Sign in with a different
+// account» only, never «Log out»), so the person lands on the new-account form with the code still filled in.
+export function SignOutButton({ variant = 'secondary', label, isDisabled = false, keepInvitation = false }: {
+  variant?: 'secondary' | 'quiet' | 'small'; label?: string; isDisabled?: boolean; keepInvitation?: boolean;
 }) {
   const { t } = useT();
   const store = useSessionStore();
-  const flow = useLeaveFlow(() => store.signOut());
+  const invitation = useOptionalJoinFlowStore();
+  const flow = useLeaveFlow(async () => {
+    if (!keepInvitation) { await store.signOut(); return; }
+    invitation?.holdThroughSignOut();
+    try {
+      await store.signOut({ keepInvitation: true });
+    } catch (err) {
+      invitation?.holdThroughSignOut(false);
+      throw err;
+    }
+  });
 
   return (
     <>

@@ -29,7 +29,8 @@ const GATE_SCREENS: Partial<Record<SessionStatus, string>> = {
 // Is the join form (staff slice 1) the screen to draw?
 //
 //   no-access        — opened by «I have a join code», or by an invitation this window holds (the code is filled in: the
-//                      person with no venue is exactly who a link is for), or still showing the server's last answer;
+//                      person with no venue is exactly who a link is for) unless the form was left on purpose with the
+//                      invitation kept (`parked`), or still showing the server's last answer;
 //   ready, choose-   — only once opened, after «Add it» (InviteQuestion): somebody in a venue is ASKED first;
 //   location
 //   loading, error   — ⚠️ only a form that has been SENT (js/join-hold.js, fix 9e0a2dac): the session may move while the
@@ -41,7 +42,7 @@ const GATE_SCREENS: Partial<Record<SessionStatus, string>> = {
 export function joinShown(status: SessionStatus, join: JoinFlowState): boolean {
   switch (status) {
     case 'no-access':
-      return join.open || join.invited !== '' || join.sent !== null;
+      return join.open || (join.invited !== '' && !join.parked) || join.sent !== null;
     case 'ready':
     case 'choose-location':
       return join.open;
@@ -79,7 +80,9 @@ export function SessionGate({ children }: { children: ReactNode }) {
     }
     if (session.status === 'signed-out' && lastUid.current) {
       lastUid.current = null;
-      flowStore.cancel();
+      // The join form's «Sign in with a different account» keeps the link (joinFlow holdThroughSignOut); every other
+      // sign-out forgets it.
+      flowStore.signedOut();
     }
   }, [session.status, uid, flowStore]);
 
