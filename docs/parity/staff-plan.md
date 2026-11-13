@@ -134,7 +134,7 @@ Sizes: **S** = a short session, **M** = one session. **About five sessions in al
 
 **D2. How the role is chosen.**
 
-- Today it is a drop-down. Recommended: a **short list of six choices**, each with its one-line meaning («Can invite people and change every setting», …), **none chosen at the start**.
+- Today it is a drop-down. Recommended: a **short list of six choices**, each with the one-line meaning the current app already uses, **none chosen at the start**.
 - Why: the iPhone picker and stray-key problems (`ff7046a8`) cannot happen with a list. And the owner sees what each role can do **before** sending, not only in the question afterwards.
 
 **D3. Who may invite.**
